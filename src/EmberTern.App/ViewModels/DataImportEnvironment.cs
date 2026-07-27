@@ -74,6 +74,22 @@ public sealed class DataImportEnvironment
     /// table can be.</summary>
     public Func<string, CancellationToken, Task>? DropTableAsync { get; init; }
 
+    /// <summary>
+    /// ⭐ Reports that this run CREATED a table, so the rest of the application can reflect it — today the
+    /// metadata tree, which inserts one leaf in place.
+    /// <para>
+    /// It is a statement of fact ("this table now exists"), not a command ("refresh yourself"): the module knows
+    /// exactly what it changed, and telling the tree to re-read all thirteen categories to rediscover one table
+    /// is what makes a create cost over a second of frozen UI. The name, not a Firebird or metadata type,
+    /// because a ViewModel may name neither (rule #1).
+    /// </para>
+    /// </summary>
+    public Action<string>? TableCreated { get; init; }
+
+    /// <summary>The counterpart: a table this run created has been dropped again after a failed import. Without
+    /// it the tree would keep offering an object that no longer exists.</summary>
+    public Action<string>? TableDropped { get; init; }
+
     // ── Data lane (THE user's working transaction) ──────────────────────────────────────────────────────
 
     /// <summary>Builds the writer for one run. The configuration decides which one — the real writer, wrapped in

@@ -101,6 +101,65 @@ public partial class MetadataNodeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Inserts ONE leaf into a loaded group at its sorted position — the single-object counterpart of
+    /// <see cref="SetLeaves"/>, for when the application already knows exactly what changed (a table the
+    /// Data Import module just created). Returns true when the leaf is also DISPLAYED, i.e. it passes the
+    /// active filter (<paramref name="displayed"/> null = no filter, everything shows).
+    /// <para>
+    /// ⭐ Why not just reload the category: one <c>Insert</c> raises ONE collection change instead of the
+    /// <c>Clear</c> + N <c>Add</c>s a reload costs, and it needs no round trip to the catalog. It is the
+    /// same reasoning as <c>ApplyTriggerActiveStateInPlace</c>, one step further.
+    /// </para>
+    /// <para>
+    /// Ordering is ordinal on the object name, matching the reader's <c>ORDER BY</c> for the ASCII,
+    /// upper-cased identifiers Firebird stores. An exotic name could land a position off under a different
+    /// server collation — cosmetic, and the next full refresh restores the server's own order.
+    /// </para>
+    /// </summary>
+    internal bool InsertLeafInPlace(MetadataNodeViewModel leaf, Func<MetadataNodeViewModel, bool>? displayed)
+    {
+        var index = 0;
+        while (index < _allLeaves.Count
+               && string.CompareOrdinal(_allLeaves[index].GroupLabel, leaf.GroupLabel) < 0)
+        {
+            index++;
+        }
+        _allLeaves.Insert(index, leaf);
+
+        if (displayed is not null && !displayed(leaf))
+        {
+            return false;
+        }
+
+        // Position within Children = how many PRECEDING master-list entries are currently displayed.
+        var at = 0;
+        for (var i = 0; i < index; i++)
+        {
+            if (displayed is null || displayed(_allLeaves[i])) at++;
+        }
+        Children.Insert(at, leaf);
+        return true;
+    }
+
+    /// <summary>Removes the named leaf from a loaded group, in place. Returns true if it was there.
+    /// The counterpart of <see cref="InsertLeafInPlace"/> — the import drops a table it created when the
+    /// run failed, and a tree that kept showing it would be lying.</summary>
+    internal bool RemoveLeafInPlace(string name)
+    {
+        var leaf = _allLeaves.FirstOrDefault(
+            l => l.Object is { } o && string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (leaf is null) return false;
+
+        _allLeaves.Remove(leaf);
+        Children.Remove(leaf);
+        return true;
+    }
+
+    /// <summary>True when a leaf with this object name is already in the master list.</summary>
+    internal bool HasLeaf(string name)
+        => _allLeaves.Any(l => l.Object is { } o && string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
+
     // Rebuild Children to only the leaves matching the predicate (or the full set when
     // null). Rebuilds in place so the tree's VSP only ever sees rows that are actually
     // shown — no zero-height hidden containers.

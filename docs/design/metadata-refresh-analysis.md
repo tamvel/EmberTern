@@ -1,5 +1,10 @@
 # Mechanizm metadanych — analiza, pomiary i rekomendacja
 
+> **📍 STATUS (2026-07-27, po wykonaniu): WARSTWA 1 ZROBIONA, OBJAW 1 NAPRAWIONY. Warstwa 2 i Warstwa 3
+> pozostają na osobny etap infrastrukturalny po zamknięciu Data Import.** Co dokładnie weszło, z nowymi
+> pomiarami i z jedną decyzją użytkownika, która odwróciła rekomendację §5 — **patrz §7 na końcu**.
+> Sekcje 0–6 zostawiono jak były: to jest zapis analizy sprzed zmiany i punkt odniesienia dla pomiarów.
+
 **Zlecone przez użytkownika 2026-07-27, przed etapem I9. Dokument ANALITYCZNY — zero zmian w implementacji.**
 Powstał, bo objawy zgłoszone przy okazji Data Import wyglądały na problem szerszy niż jeden moduł, a
 użytkownik wprost odrzucił „doklejanie kolejnego `Refresh()`" na rzecz poprawy u źródła.
@@ -275,3 +280,93 @@ szukać dalej. Jeżeli jest wielokrotnie większa — decyduje rozmiar katalogu 
 
 **Narzędzie pomiarowe:** `tools/probes/MetadataPerfProbe` (poza rozwiązaniem, jak pozostałe sondy). Buduje
 własną bazę scratch na ścieżce ASCII (#149), nigdy nie dotyka bazy laboratoryjnej. Część B nie wymaga serwera.
+
+---
+
+## 7. Co zostało wykonane (2026-07-27)
+
+Zakres sesji był węższy niż cały raport i został wyznaczony przez użytkownika: **Warstwa 1 + naprawa
+objawu 1 + ponowny pomiar**. Warstwa 2 (pojęcie „co się zmieniło" jako pierwszorzędne) i Warstwa 3
+(higiena) **nie zostały wykonane** i czekają na osobny etap infrastrukturalny po zamknięciu Data Import.
+
+### 7.1. ⭐ Decyzja użytkownika, która odwróciła rekomendację §5
+
+Raport rekomendował, żeby objaw 1 (nowa tabela nie pojawia się w drzewie) **poczekał na Warstwę 2**, bo
+jest kosmetyczny. Użytkownik tę rekomendację **odrzucił**: to zwykły błąd UX i ma być naprawiony teraz —
+ale **bez** dopisywania 21. wywołania `RefreshAsync()`.
+
+Obie połowy tego polecenia dało się spełnić naraz, bo moduł importu **zna nazwę tabeli, którą właśnie
+utworzył**. Zamiast kazać drzewu przeczytać wszystko od nowa, mówi mu, co się stało — i drzewo wstawia
+jeden liść w posortowane miejsce. To jest **wąski, jednoobiektowy precedens** dokładnie tej samej myśli,
+którą Warstwa 2 ma uogólnić, a nie sama Warstwa 2: nie ma tu żadnego wspólnego pojęcia zmiany, żadnego
+protokołu, żadnej zmiany w pozostałych 20 ścieżkach DDL. Te zostają na etap infrastrukturalny.
+
+### 7.2. Co się zmieniło w kodzie
+
+| Miejsce | Zmiana |
+|---|---|
+| `MetadataExplorerViewModel.BeginSidebarBulkUpdate` / `EndSidebarBulkUpdate` | Istniejąca blokada `SidebarFlatController.BeginUpdate/EndUpdate` udostępniona poza ścieżkę filtrowania. |
+| `MetadataExplorerViewModel.LoadGroupAsync` | Podmiana liści + ponowne nałożenie filtra objęte blokadą. To jest **cała Warstwa 1** — jedno miejsce, przez które przechodzi każde ładowanie kategorii. |
+| `MetadataExplorerViewModel.RefreshAsync` | Cała pętla 13 kategorii objęta blokadą (zagnieżdżanie jest bezpieczne), więc jedno odświeżenie = jedna reprojekcja zamiast trzynastu. |
+| `ConnectionNodeViewModel.LoadCategoriesAsync` | To samo dla prefetchu przy połączeniu. |
+| `MetadataNodeViewModel.InsertLeafInPlace` / `RemoveLeafInPlace` / `HasLeaf` | Wstawienie/usunięcie **jednego** liścia w posortowanym miejscu, z poszanowaniem aktywnego filtra. |
+| `MetadataExplorerViewModel.ApplyObjectAddedInPlace` / `ApplyObjectRemovedInPlace` | Punktowa aktualizacja drzewa: liść, licznik `(N)`, licznik dopasowań filtra, indeks nazw i sygnał `ObjectsChanged` dla edytorów. |
+| `DataImportEnvironment.TableCreated` / `TableDropped` | Moduł importu **zgłasza fakt** („ta tabela istnieje"), nie wydaje polecenia („odśwież się"). |
+
+⚠ **Świadomy koszt, dokładnie ten, który §5 zapowiadał:** `EndUpdate` robi pełną reprojekcję, więc obiekty
+wierszy są tworzone od nowa i lista wraca na górę. Nie jest to nowe zachowanie przy odświeżaniu — `RefreshAsync`
+i tak kończyło się `ApplyFilterAsync`, czyli pełną reprojekcją — a przy połączeniu nie ma czego zachowywać.
+Ujawnił to jeden istniejący test (`ConnectionExpandBindingProbe.AutoExpandOnConnect_ReflectedInFlatList`),
+który trzymał **referencję** do wiersza sprzed połączenia; test pobiera teraz wiersz ponownie, bo bada
+odwzorowanie stanu, a nie tożsamość obiektu. **Skakanie drzewa usuwa dopiero Warstwa 2.**
+
+### 7.3. Pomiar po zmianie (`tools/probes/MetadataPerfProbe`, ta sama maszyna, ten sam schemat)
+
+**Projekcja pełnego odświeżenia — to jest liczba, o którą chodziło:**
+
+| rozwiniętych kategorii | PRZED (ms) | PO (ms) |
+|---:|---:|---:|
+| 0 | 6 | **2** |
+| 1 | **1 424** | **2** |
+| 2 | **1 733** | **4** |
+
+Sekundowe zawieszenie UI przy odświeżaniu z rozwiniętą kategorią **przestało istnieć**. (Poprzedni pomiar
+dla jednej kategorii dał 1 142 ms, dziś 1 424 ms — ta sama wielkość, zwykły rozrzut obciążonej maszyny;
+istotne jest, że wynik po zmianie to jednostki milisekund niezależnie od liczby rozwiniętych kategorii.)
+
+**Jeden dodany obiekt, dwie drogi:**
+
+|  | koszt projekcji | odczyt katalogu |
+|---|---:|---|
+| pełne `RefreshAsync` (już pod blokadą) | 1,8 ms na kategorię | **13 zapytań, ~164 ms** |
+| wstawienie liścia w miejscu (to, co weszło) | **1,3 ms** | **żadnego** |
+
+**Katalog, pomiar powtórzony:** 13 kategorii, `COUNT`-only 58 ms · pełne listy **164 ms** (poprzednio 172 ms),
+jedno okrążenie ~3,0 ms. Bez zmian — bo w katalogu nic nie zmieniano.
+
+⚠ **Uczciwa granica tej naprawy:** wstawienie jednego liścia to jedno zdarzenie kolekcji, ale
+`SidebarFlatController` na każdą zmianę dzieci przepina **cały** blok liści właściciela — pomiar pokazał
+4 803 powiadomienia na jedno wstawienie do kategorii z 2 400 obiektami. To jest **liniowe** (dawniej byłoby
+5,76 mln), więc nie boli, ale prawdziwie przyrostowe wstawienie jednego wiersza należy do Warstwy 2 razem
+z zachowaniem przewinięcia.
+
+### 7.4. Czy start aplikacji się poprawił — **nie, i to jest zmierzone, nie zgadnięte**
+
+Nie poprawił się w sposób odczuwalny i nie mógł: **przy połączeniu wszystkie kategorie są zwinięte**
+(`RestoreExpandState` przywraca rozwinięcie folderów i połączeń, **nie kategorii**), a dla zwiniętej
+kategorii reprojekcja ma wczesne wyjście — wiersz „0 rozwiniętych kategorii" w tabeli wyżej to 6 ms → 2 ms.
+Warstwa 1 zdejmuje ból **odświeżania**, nie **startu**.
+
+**Koszt startu pozostaje nierozstrzygnięty** — dokładnie tak, jak mówi §6, i tam jest instrument
+(`EMBERTERN_PERF_DIAG=1`). Zostaje jako zadanie do przyszłego sprintu Metadata Explorer; główni kandydaci
+to przebudowa modelu semantycznego edytorów po `NotifyMetadataReady` i odtwarzanie zakładek przestrzeni
+roboczej, a nie mechanizm metadanych.
+
+### 7.5. Co zostaje do sprintu Metadata Explorer
+
+1. **Warstwa 2** — „co się zmieniło" jako pierwszorzędne pojęcie: uogólnienie punktowej aktualizacji na
+   wszystkie 20 ścieżek DDL, przyrostowe przepięcie jednego wiersza w projekcji, i zachowanie przewinięcia
+   oraz zaznaczenia (to, czego Warstwa 1 nie robi).
+2. **Warstwa 3** — uzgodnić prefetch z `RefreshAsync` (martwa gałąź `LoadCountAsync`), kategoria `Domain`
+   (79 ms, skan `RDB$FIELDS`), kategoria `User` (odpytuje bazę bezpieczeństwa).
+3. **Koszt startu** — zmierzyć na realnej bazie instrumentem z §6 i dopiero wtedy decydować.

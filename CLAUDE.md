@@ -30,7 +30,8 @@ verbatim, in the archive below.
 | **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next, and the remaining-scope table for I6–I12. **§3.8 holds the OPEN UX findings from the I5 review (U1–U10) — read it before touching the surface's layout.** | **Every Data Import session — read the status block + §3.8 + your etap's row in §6 first.** |
 | **`docs/design/data-import-i9-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I9** implementation session — the first etap that adds a new SOURCE (`.xlsx`), and therefore **the first real test of the "one pipeline for every source" pillar**: if adding a provider requires touching anything below `IImportProvider`, that is a stop-and-report. Carries the input state, the reuse inventory, REK-6's seven binding provider guidelines (all measured, incl. SAX-not-DOM at 77× memory and "place values by `CellReference`, never positionally"), the standing "no global UI work" rule, and the DoD incl. the live run and the owed **first real file with dates** (an explicit I0 measurement gap). Replace it with the I10 equivalent once I9 closes. | When starting etap I9. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (252 entries, #1–#265), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (254 entries, #1–#267), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -276,6 +277,45 @@ noted.
 
 ## Current state
 
+- **✅ METADATA REFRESH — LAYER 1 SHIPPED + THE TREE NOW SHOWS AN IMPORTED TABLE IMMEDIATELY (2026-07-27).**
+  A short session between Data Import I8 and I9, scoped by the user to: fix the reported bug, apply **Layer 1**
+  of [docs/design/metadata-refresh-analysis.md](docs/design/metadata-refresh-analysis.md), re-measure, update
+  docs — and explicitly **NOT** start the Metadata Explorer infrastructure rebuild (Layer 2), which is its own
+  stage after Data Import closes. Suite **5717 green** (+13), build 0/0, smoke clean.
+  **⭐ Layer 1 is the whole lesson: the bulk guard already existed and was wired to ONE of the two mass
+  mutations.** `SidebarFlatController.BeginUpdate/EndUpdate` — whose own comment names *"an O(n²) storm"* —
+  was applied to the FILTER rebuild only; `MetadataNodeViewModel.SetLeaves` (`Clear()` + one `Add` per object)
+  ran unguarded, so each `Add` re-spliced the owner's entire child block. Now called from `LoadGroupAsync`
+  (covering every caller), `RefreshAsync` (13 re-projections → 1) and the connect-time prefetch; nesting-safe.
+  **Measured (`tools/probes/MetadataPerfProbe`, 2 400-table schema): a full refresh with one category expanded
+  1 424 ms → 2 ms; with two, 1 733 ms → 4 ms.**
+  **⭐ The bug fix reversed the report's own recommendation, on the user's call:** the report advised deferring
+  "the new table is not in the tree" to Layer 2; the user rejected that (ordinary UX bug, fix it now) while
+  keeping the ban on a 21st `Metadata.RefreshAsync()`. Both hold at once because **the import knows the name of
+  the table it created** — `DataImportEnvironment.TableCreated`/`TableDropped` report a FACT ("this table
+  exists"), never a command ("refresh"), and `MetadataExplorerViewModel.ApplyObjectAddedInPlace`/
+  `ApplyObjectRemovedInPlace` insert/remove **one leaf at its sorted position** (**1.3 ms, zero catalog round
+  trips**, vs 13 queries ≈164 ms + a full re-projection). Three details make a targeted update correct and each
+  is pinned: **idempotent** (a later refresh may already hold it); an **active filter** means the leaf enters the
+  master list always and the displayed list only if it matches, with match count + zero-match visibility
+  re-derived; an **unloaded** category has no leaves but does have an `(N)` label, so its count moves instead.
+  The name index is **patched**, not invalidated (dropping it would cost 13 catalog reads to forget one name we
+  were holding). ⚠ **Scope:** a narrow precedent beside the existing `ApplyTriggerActiveStateInPlace` — **not** a
+  change protocol; the other 20 DDL paths were untouched.
+  ⚠ **Startup did NOT improve, and that is measured, not assumed:** `RestoreExpandState` restores folder +
+  connection expansion but **not** category expansion, so at connect every category is collapsed and the
+  projection already had an early exit (the "0 expanded" row: 6 ms → 2 ms). Layer 1 fixes *refreshing*, not
+  *starting*; the startup cost stays unresolved, instrument `EMBERTERN_PERF_DIAG=1`, suspects = the
+  semantic-model rebuild after `NotifyMetadataReady` and workspace tab restore.
+  ⚠ **Accepted trade-off:** `EndUpdate` re-projects everything, so `SidebarRow` objects are recreated and the
+  list scrolls to top — already true of every refresh (it ends in `ApplyFilterAsync`, which does exactly this),
+  but it broke `ConnectionExpandBindingProbe.AutoExpandOnConnect_ReflectedInFlatList`, which held a row
+  **instance** across a connect; it re-resolves the row now (the probe is about mirroring, not identity).
+  Removing the tree's "jumping" is Layer 2's job. **Still open for the Metadata Explorer stage:** Layer 2
+  (first-class "what changed" across all DDL paths + incremental splicing + scroll/selection preserved),
+  Layer 3 (reconcile the prefetch with `RefreshAsync`'s dead `LoadCountAsync` branch · `Domain` 79 ms
+  `RDB$FIELDS` scan · `User` security-DB round trip), and the startup measurement. Gotchas **#266 / #267**;
+  narrative: [docs/history/09-...](docs/history/09-object-editors-and-metadata-tree.md).
 - **🔴 I8 REVIEW FOUND A CRASH — FIXED 2026-07-27, and its two lessons generalise well past this module
   (gotchas #264 / #265).** Symptom: new table → Validate passes → **Import closes the whole application**.
   Diagnosed in a minute from `%TEMP%\EmberTern-debug.log`, which the app's own `AppDomain.UnhandledException`
@@ -2177,8 +2217,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5704 as of 2026-07-27
-  (`feat/data-import`, etap I8)** — all green in ONE `dotnet test` run (~8s).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5717 as of 2026-07-27
+  (`feat/data-import`, after I8 + the metadata-refresh Layer 1 session)** — all green in ONE `dotnet test`
+  run (~11s).
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).
@@ -2981,7 +3022,7 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (252 entries, organized thematically) lives in
+The **complete** catalog (254 entries, organized thematically) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -3180,7 +3221,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (252 entries, #1–#265), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (254 entries, #1–#267), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

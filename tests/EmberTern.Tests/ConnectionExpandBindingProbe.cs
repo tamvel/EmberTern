@@ -160,11 +160,19 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
             node.IsConnected = true;
             for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
 
+            // ⚠ Re-resolve the row rather than reusing the instance captured above. The connect-time
+            // category prefetch now runs under the sidebar's bulk guard (the Layer-1 fix for the
+            // quadratic re-projection), and EndUpdate re-projects the whole list — so the row OBJECT is
+            // replaced. That is the guard's documented trade-off, not a behaviour change: a manual
+            // Refresh already ended in a full re-projection via ApplyFilterAsync. What this probe is
+            // about is the MIRRORING, which is a property of the projection, not of a row's identity.
+            var expandedRow = vm.Metadata.SidebarRows.First(r => ReferenceEquals(r.Node, node));
+
             log.AppendLine($"VM IsExpanded = {node.IsExpanded}");
-            log.AppendLine($"row.IsExpanded = {row.IsExpanded}");
+            log.AppendLine($"row.IsExpanded = {expandedRow.IsExpanded}");
 
             Assert.True(node.IsExpanded, "VM should auto-expand on connect.\n" + log);
-            Assert.True(row.IsExpanded, "the SidebarRow must mirror the node's expansion.\n" + log);
+            Assert.True(expandedRow.IsExpanded, "the SidebarRow must mirror the node's expansion.\n" + log);
 
             window.Close();
             try { Directory.Delete(tempDir, recursive: true); } catch { }

@@ -4125,6 +4125,15 @@ public partial class MainWindowViewModel : ViewModelBase
             CreateTableAsync = (sql, ct) => _ddlExecutor.ExecuteAsync(sql, ct),
             DropTableAsync = (sql, ct) => _ddlExecutor.ExecuteAsync(sql, ct),
 
+            // ⭐ The tree learns about the table from the operation that made it, not from a full refresh.
+            // A 21st `Metadata.RefreshAsync()` would have been correct in a minute and would have cost a
+            // catalog re-read of all 13 categories plus a quadratic re-projection of every expanded one —
+            // over a second of frozen UI to discover a single table this code already knows the name of.
+            TableCreated = name =>
+                Metadata.ApplyObjectAddedInPlace(new MetadataObject(name, MetadataObjectKind.Table)),
+            TableDropped = name =>
+                Metadata.ApplyObjectRemovedInPlace(new MetadataObject(name, MetadataObjectKind.Table)),
+
             // Batched is the only mode that finishes a transaction on its own, so it is the only one that gets
             // the decorator — Manual and AutoCommitOnSuccess run through byte-identical code (§4.5).
             CreateWriter = configuration =>

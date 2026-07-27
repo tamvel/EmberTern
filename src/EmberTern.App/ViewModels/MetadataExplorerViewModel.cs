@@ -247,40 +247,185 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Reflect a newly CREATED object in the tree without a full <see cref="RefreshAsync"/> — insert one leaf
+    /// into its category at the sorted position, in place.
+    /// <para>
+    /// ⭐ <b>Why this exists rather than a 21st <c>RefreshAsync</c> call.</b> A full refresh re-reads all 13
+    /// categories and replaces every category's leaves one <c>Add</c> at a time, which re-projects the sidebar
+    /// per added leaf — measured at over a second on the UI thread with one big category expanded. The caller
+    /// here already KNOWS what changed, so it says so: one insert, no catalog round trip, and the scroll
+    /// position, selection and expanded groups survive. Same idea as
+    /// <see cref="ApplyTriggerActiveStateInPlace"/>, which already did this for trigger activation.
+    /// </para>
+    /// <para>
+    /// A category that is not loaded has no leaves to insert into — its <c>(N)</c> label is bumped instead, so
+    /// it stays truthful until its first expand fetches the real list.
+    /// </para>
+    /// </summary>
+    internal void ApplyObjectAddedInPlace(MetadataObject obj)
+    {
+        var filter = (FilterText ?? string.Empty).Trim();
+        Func<MetadataNodeViewModel, bool>? displayed = filter.Length == 0
+            ? null
+            : leaf => !leaf.IsPlaceholder && leaf.GroupLabel.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var group in LoadedGroupsOfKind(obj.Kind))
+        {
+            if (!group.IsLoaded)
+            {
+                // Unloaded: no leaf list to touch, but the count is on screen and must stay right.
+                group.Count = (group.Count ?? 0) + 1;
+                AddToNameCache(group, obj.Name);
+                continue;
+            }
+
+            // Idempotent: a second report of the same object must not double the leaf (a refresh may
+            // already have picked it up).
+            if (group.HasLeaf(obj.Name)) continue;
+
+            group.InsertLeafInPlace(MetadataNodeViewModel.CreateLeaf(this, obj), displayed);
+            group.Count = group.AllLeaves.Count;
+            RefreshFilterCounters(group, displayed);
+            AddToNameCache(group, obj.Name);
+        }
+
+        // The loaded object set changed — open editors rebuild their semantic model, so the new object
+        // starts resolving for highlighting / Ctrl-nav / completion without waiting for a refresh.
+        RaiseObjectsChanged();
+    }
+
+    /// <summary>The counterpart of <see cref="ApplyObjectAddedInPlace"/>: an object the application itself
+    /// DROPPED (the import undoing a table it created) leaves the tree the same way it entered it.</summary>
+    internal void ApplyObjectRemovedInPlace(MetadataObject obj)
+    {
+        var filter = (FilterText ?? string.Empty).Trim();
+        Func<MetadataNodeViewModel, bool>? displayed = filter.Length == 0
+            ? null
+            : leaf => !leaf.IsPlaceholder && leaf.GroupLabel.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var group in LoadedGroupsOfKind(obj.Kind))
+        {
+            if (!group.IsLoaded)
+            {
+                group.Count = Math.Max(0, (group.Count ?? 0) - 1);
+                RemoveFromNameCache(group, obj.Name);
+                continue;
+            }
+
+            if (!group.RemoveLeafInPlace(obj.Name)) continue;
+
+            group.Count = group.AllLeaves.Count;
+            RefreshFilterCounters(group, displayed);
+            RemoveFromNameCache(group, obj.Name);
+        }
+
+        RaiseObjectsChanged();
+    }
+
+    // Every category node of this kind under a CONNECTED connection (there is one active connection, but
+    // the loop mirrors ApplyTriggerActiveStateInPlace rather than assuming it).
+    private IEnumerable<MetadataNodeViewModel> LoadedGroupsOfKind(MetadataObjectKind kind)
+    {
+        foreach (var connection in Connections)
+        {
+            if (!connection.IsConnected) continue;
+            foreach (var group in connection.Children)
+            {
+                if (group.IsGroup && group.Kind == kind) yield return group;
+            }
+        }
+    }
+
+    // While a filter is active the label shows the MATCH count and a zero-match category hides; an in-place
+    // change must keep both honest. No filter → the two are already null/visible and stay that way.
+    private static void RefreshFilterCounters(MetadataNodeViewModel group, Func<MetadataNodeViewModel, bool>? displayed)
+    {
+        if (displayed is null) return;
+        group.FilterMatchCount = group.Children.Count;
+        group.IsVisible = group.Children.Count > 0;
+    }
+
+    // The name index feeds the filter and type-ahead for categories that were never expanded. We know the one
+    // name that changed, so patch it rather than dropping the whole index (which would cost 13 catalog reads
+    // on the next keystroke). A cache that was never built stays unbuilt — it will read the new state anyway.
+    private void AddToNameCache(MetadataNodeViewModel group, string name)
+    {
+        if (_nameCache is null || !_nameCache.TryGetValue(group, out var names)) return;
+        if (names.Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase))) return;
+        var updated = new List<string>(names) { name };
+        updated.Sort(StringComparer.Ordinal);
+        _nameCache[group] = updated;
+    }
+
+    private void RemoveFromNameCache(MetadataNodeViewModel group, string name)
+    {
+        if (_nameCache is null || !_nameCache.TryGetValue(group, out var names)) return;
+        _nameCache[group] = names
+            .Where(n => !string.Equals(n, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Suspends the sidebar's flat projection for a bulk load, then re-projects ONCE. Pair the two in a
+    /// <c>try/finally</c>; nesting is safe, so an outer loop and the individual loads inside it may both use it.
+    /// <para>
+    /// ⭐ <b>Why the load path needs it.</b> Replacing a category's leaves is a mass mutation — <c>Clear</c>
+    /// then one <c>Add</c> per object — and each <c>Add</c> re-splices the whole child block, so the projection
+    /// is quadratic in the object count: measured 878 ms for one 2 400-leaf category, and 1 142 ms for a whole
+    /// refresh with a single category expanded, all on the UI thread. The guard already existed and was applied
+    /// to the FILTER path only; this is the same guard on the other mass mutation.
+    /// </para>
+    /// </summary>
+    internal void BeginSidebarBulkUpdate() => _sidebar.BeginUpdate();
+
+    internal void EndSidebarBulkUpdate() => _sidebar.EndUpdate();
+
     [RelayCommand(CanExecute = nameof(CanRefresh))]
     public async Task RefreshAsync()
     {
         Diagnostics.RefreshTrace.Log("RefreshTree", "begin");
-        // Only connected nodes have anything to refresh.
-        foreach (var connection in Connections)
+        // ⭐ ONE projection for the whole refresh. Each LoadGroupAsync guards itself too (so an expand or the
+        // connect-time prefetch is covered wherever it is called from), but the guard is nesting-safe, so
+        // wrapping the loop collapses 13 re-projections into one.
+        BeginSidebarBulkUpdate();
+        try
         {
-            if (!connection.IsConnected)
+            // Only connected nodes have anything to refresh.
+            foreach (var connection in Connections)
             {
-                continue;
-            }
-
-            foreach (var group in connection.Children)
-            {
-                if (!group.IsGroup)
+                if (!connection.IsConnected)
                 {
                     continue;
                 }
 
-                // Lazy model: a group is either LOADED (user expanded it → it holds the
-                // real leaf list) or NOT loaded (still showing only its COUNT). Reload
-                // the full list for loaded/expanded groups; for the rest just re-fetch
-                // the COUNT so the "(N)" label stays current without dragging the whole
-                // list back. LoadGroupAsync clears+repopulates only AFTER its fetch
-                // succeeds, so a transient error keeps the old data instead of blanking.
-                if (group.IsLoaded || group.IsExpanded)
+                foreach (var group in connection.Children)
                 {
-                    await LoadGroupAsync(group).ConfigureAwait(true);
-                }
-                else
-                {
-                    await LoadCountAsync(group).ConfigureAwait(true);
+                    if (!group.IsGroup)
+                    {
+                        continue;
+                    }
+
+                    // Lazy model: a group is either LOADED (user expanded it → it holds the
+                    // real leaf list) or NOT loaded (still showing only its COUNT). Reload
+                    // the full list for loaded/expanded groups; for the rest just re-fetch
+                    // the COUNT so the "(N)" label stays current without dragging the whole
+                    // list back. LoadGroupAsync clears+repopulates only AFTER its fetch
+                    // succeeds, so a transient error keeps the old data instead of blanking.
+                    if (group.IsLoaded || group.IsExpanded)
+                    {
+                        await LoadGroupAsync(group).ConfigureAwait(true);
+                    }
+                    else
+                    {
+                        await LoadCountAsync(group).ConfigureAwait(true);
+                    }
                 }
             }
+        }
+        finally
+        {
+            EndSidebarBulkUpdate();
         }
 
         // Schema may have changed — drop the cached object-name index so the next
@@ -343,27 +488,41 @@ public partial class MetadataExplorerViewModel : ViewModelBase
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var objects = await _reader.ListAsync(group.Kind).ConfigureAwait(true);
             Diagnostics.ScrollTrace.Rebuild($"LoadGroup {group.Kind} ({objects.Count} leaves — Children rebuilt)");
-            // SetLeaves loads the master list AND sets Children to the full set; the
-            // active filter (if any) is re-applied just below via ApplyFilterToGroup.
-            group.SetLeaves(objects.Select(obj => MetadataNodeViewModel.CreateLeaf(this, obj)));
-            group.Count = objects.Count;
-            group.MarkLoaded();
-            // The loaded object set grew — bump the generation and let open editors refresh their
-            // semantic model so this category's objects (e.g. views / procedures referenced in FROM)
-            // begin resolving.
-            RaiseObjectsChanged();
-            sw.Stop();
-            Diagnostics.PerfTrace.LogGroupLoad(group.Kind.ToString(), objects.Count, sw.ElapsedMilliseconds);
-
-            // Filter ONLY the group we just loaded — never the whole tree. The old global
-            // ApplyFilter() here was the cause of the "expanding one category expands the
-            // others" bug (#4): loading a category re-ran the global filter, which
-            // re-expanded every other loaded matching group. A single group's filtering
-            // touches no siblings and changes no other branch's expand state.
-            var filter = (FilterText ?? string.Empty).Trim();
-            if (filter.Length > 0)
+            // ⭐ The mass mutation goes under the bulk guard — see BeginSidebarBulkUpdate. Without it every
+            // one of the N Adds below re-splices the whole child block (Θ(N²) on the UI thread); with it the
+            // sidebar re-projects once. The guard is held across the filter re-application as well, so one
+            // load costs exactly one projection instead of two.
+            BeginSidebarBulkUpdate();
+            try
             {
-                ApplyFilterToGroup(group, hasFilter: true, filter);
+                // SetLeaves loads the master list AND sets Children to the full set; the
+                // active filter (if any) is re-applied just below via ApplyFilterToGroup.
+                group.SetLeaves(objects.Select(obj => MetadataNodeViewModel.CreateLeaf(this, obj)));
+                group.Count = objects.Count;
+                group.MarkLoaded();
+                // The loaded object set grew — bump the generation and let open editors refresh their
+                // semantic model so this category's objects (e.g. views / procedures referenced in FROM)
+                // begin resolving.
+                RaiseObjectsChanged();
+                sw.Stop();
+                Diagnostics.PerfTrace.LogGroupLoad(group.Kind.ToString(), objects.Count, sw.ElapsedMilliseconds);
+
+                // Filter ONLY the group we just loaded — never the whole tree. The old global
+                // ApplyFilter() here was the cause of the "expanding one category expands the
+                // others" bug (#4): loading a category re-ran the global filter, which
+                // re-expanded every other loaded matching group. A single group's filtering
+                // touches no siblings and changes no other branch's expand state.
+                // ⚠ Order matters: ApplyFilterToGroup branches on IsLoaded, so MarkLoaded above must
+                // already have run or a filtered load would count from the name cache instead of its leaves.
+                var filter = (FilterText ?? string.Empty).Trim();
+                if (filter.Length > 0)
+                {
+                    ApplyFilterToGroup(group, hasFilter: true, filter);
+                }
+            }
+            finally
+            {
+                EndSidebarBulkUpdate();
             }
         }
         catch (MetadataReadException ex)

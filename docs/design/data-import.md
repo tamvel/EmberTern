@@ -61,8 +61,9 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **✅ I7.5 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-26)** | Data Import ma **własną transakcję na własnym przyłączeniu** (amendment §4.5): wspólny `FirebirdSessionConnection` wydzielony z Debuggera przez kompozycję, `ImportSessionConnection`, `PendingWorkRegistry` jako **jedyny właściciel** pytania o niezatwierdzoną pracę. Sonda **13/13 ALL PASS** |
 | **✅ I8 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Nowa tabela: `ColumnTypeInferencer` (skan CAŁEGO źródła), `ImportNewTable` (jedyny właściciel „definicja → SQL"), edytowalna siatka typów z kolumną „Podstawa", podgląd DDL, `CREATE` na linii **Ddl** przed pierwszym wierszem, `DROP` przy niepowodzeniu, `IMP0028` |
 | **🔴 I8 — POPRAWKA PO PRZEGLĄDZIE (2026-07-27): „Importuj" na nowej tabeli ZAMYKAŁO APLIKACJĘ** | Zgłoszone przez użytkownika; **dwa niezależne defekty, oba w I8**, oba naprawione i zapinowane. Szczegóły w bloku niżej |
+| **✅ I8 — DOMKNIĘCIE PO PRZEGLĄDZIE (2026-07-27): nowa tabela pojawia się w drzewie od razu** | Drugie zgłoszenie z ręcznego QA: import przechodził, tabela powstawała, dane wchodziły — ale **Explorer metadanych jej nie pokazywał** do ręcznego odświeżenia. Naprawione **bez 21. wywołania `RefreshAsync()`**: moduł zgłasza fakt (`DataImportEnvironment.TableCreated` / `TableDropped`), a drzewo wstawia/usuwa **jeden liść w miejscu**. Przy okazji, w tej samej sesji, **Warstwa 1** z raportu — patrz blok niżej |
 | **Następny etap** | **I9** — XLSX (`EmberTern.Export.Office` → `EmberTern.Office`, `XlsxImportProvider`, 7 wytycznych z REK-6) |
-| **Testy** | **5704 zielone**, 0 niepowodzeń (I8 dodał **+97**, w tym **+11 regresyjnych po awarii z przeglądu**; wszystkich testów importu jest teraz **440**) |
+| **Testy** | **5717 zielonych**, 0 niepowodzeń (I8 dodał **+97**, w tym **+11 regresyjnych po awarii z przeglądu**; domknięcie po przeglądzie **+13**) |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **sekcja G z I8**) przeciwko FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, **kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, a Rollback cofa wiersze i NIE cofa tabeli** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
@@ -94,6 +95,36 @@ zanim ktokolwiek zobaczyłby komunikat serwera. Znalezione przy okazji, nie prze
 Test rzuca typ, którego nikt nigdy nie wpisałby na białą listę, **z każdego współpracownika po kolei**
 (create · read · count · write · commit · rollback · drop · tables), więc wywali się w dniu, w którym ktoś
 znów zawęzi którykolwiek `catch`. Gotchy **#264** i **#265**.
+
+### ✅ I8 — drugie zgłoszenie z przeglądu: nowa tabela nie pojawiała się w drzewie (2026-07-27)
+
+**Objaw:** import przechodzi, tabela powstaje, dane są w środku — ale Explorer metadanych pokazuje ją
+dopiero po ręcznym odświeżeniu. **Przyczyna, bez zagadki:** `CREATE TABLE` leci na linii Ddl i **nikt nie
+zawiadamiał drzewa**; pozostałe ścieżki DDL robią to jawnie (20 wywołań `Metadata.RefreshAsync()`).
+
+⭐ **Dlaczego nie dopisano dwudziestego pierwszego.** Użytkownik zlecił wcześniej analizę mechanizmu
+metadanych ([metadata-refresh-analysis.md](metadata-refresh-analysis.md)) i pomiar pokazał, że pełne
+odświeżenie kosztuje **13 zapytań do katalogu (~164 ms) plus ponad sekundę na wątku UI**, gdy jakaś
+kategoria jest rozwinięta. Moduł importu **zna nazwę tabeli, którą właśnie utworzył**, więc mówi to
+wprost — `DataImportEnvironment.TableCreated` / `TableDropped` — a `MetadataExplorerViewModel` wstawia
+albo usuwa **jeden liść w posortowanym miejscu** (`ApplyObjectAddedInPlace` /
+`ApplyObjectRemovedInPlace`, wąski precedens obok istniejącego `ApplyTriggerActiveStateInPlace`).
+Zmierzone: **1,3 ms i zero okrążeń do bazy**.
+
+⚠ **To NIE jest „Warstwa 2" z raportu** — nie ma tu wspólnego pojęcia zmiany ani protokołu, a pozostałych
+20 ścieżek DDL nikt nie ruszał. Uogólnienie to osobny etap infrastrukturalny **po** zamknięciu Data Import.
+
+**Delegat niesie NAZWĘ, nie typ metadanych** — z tego samego powodu, dla którego istnieje cały
+`DataImportEnvironment` (reguła #1). I jest **stwierdzeniem faktu** („ta tabela istnieje"), nie poleceniem
+(„odśwież się"): kto zna zmianę, ten ją opisuje, a nie każe drugiej stronie odkrywać ją od nowa.
+
+**Zgłoszenie tworzenia idzie zaraz po udanym `CREATE`, nie na końcu przebiegu** — tabela przeżywa nieudany
+import (§0.5, gotcha #213), więc jej istnienie nie jest warunkowane wierszami. Symetrycznie: udany `DROP`
+po nieudanym imporcie zgłasza usunięcie, żeby drzewo nie oferowało obiektu, którego już nie ma.
+
+**Przy okazji tej samej sesji weszła Warstwa 1 z raportu** (blokada `BeginUpdate/EndUpdate` na ścieżce
+ładowania): projekcja pełnego odświeżenia **1 424 ms → 2 ms** przy jednej rozwiniętej kategorii. Szczegóły
+i pełne pomiary — [metadata-refresh-analysis.md §7](metadata-refresh-analysis.md).
 
 ### ⭐ I8 as-built — cztery rzeczy warte zapamiętania
 

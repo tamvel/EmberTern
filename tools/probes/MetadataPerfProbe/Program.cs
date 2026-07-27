@@ -106,12 +106,21 @@ Console.WriteLine();
 Console.WriteLine("RefreshAsync reloads EVERY category (after connect they are all IsLoaded), so the cost is");
 Console.WriteLine("the sum over all 13 — and each one pays the quadratic price only while it is EXPANDED.");
 Console.WriteLine();
+Console.WriteLine("BEFORE = the load path unguarded (as it was until 2026-07-27).");
+Console.WriteLine("AFTER  = the load path under the bulk guard, which is what LoadGroupAsync + RefreshAsync");
+Console.WriteLine("         + the connect-time prefetch now do.");
+Console.WriteLine();
+Console.WriteLine($"{"expanded categories",21} {"BEFORE (ms)",13} {"AFTER (ms)",12}");
 
-MeasureWholeRefresh(expandedCategories: 0);
-MeasureWholeRefresh(expandedCategories: 1);
-MeasureWholeRefresh(expandedCategories: 2);
+foreach (var expanded in new[] { 0, 1, 2 })
+{
+    var before = MeasureWholeRefresh(expanded, guarded: false);
+    var after = MeasureWholeRefresh(expanded, guarded: true);
+    Console.WriteLine(string.Format(
+        CultureInfo.InvariantCulture, "{0,21} {1,13:F0} {2,12:F0}", expanded, before, after));
+}
 
-static void MeasureWholeRefresh(int expandedCategories)
+static double MeasureWholeRefresh(int expandedCategories, bool guarded)
 {
     // Realistic category sizes for an ERP schema of ~2 400 tables.
     (string Name, int Count)[] sizes =
@@ -149,22 +158,79 @@ static void MeasureWholeRefresh(int expandedCategories)
     }
 
     var sw = Stopwatch.StartNew();
+    // RefreshAsync wraps the whole 13-category loop; each LoadGroupAsync also wraps itself (nesting-safe).
+    if (guarded) controller.BeginUpdate();
     for (var i = 0; i < sizes.Length; i++)
     {
+        if (guarded) controller.BeginUpdate();
         // Exactly MetadataNodeViewModel.SetLeaves: clear, then add one at a time.
         groups[i].Children.Clear();
         foreach (var leaf in MakeLeaves(sizes[i].Count)) groups[i].Children.Add(leaf);
+        if (guarded) controller.EndUpdate();
     }
+    if (guarded) controller.EndUpdate();
     sw.Stop();
 
-    Console.WriteLine(string.Format(
-        CultureInfo.InvariantCulture,
-        "  expanded categories: {0}   →   projection cost of one full Refresh: {1,8:F0} ms",
-        expandedCategories, sw.Elapsed.TotalMilliseconds));
+    return sw.Elapsed.TotalMilliseconds;
 }
 
 static List<Node> MakeLeaves(int n)
     => Enumerable.Range(0, n).Select(i => new Node("O" + i.ToString(CultureInfo.InvariantCulture), false)).ToList();
+
+Console.WriteLine();
+Console.WriteLine("── B3. ONE object added, the two ways ──────────────────────────────────────────────────");
+Console.WriteLine();
+Console.WriteLine("The Data Import bug: a table was created and the tree did not show it. The obvious repair is");
+Console.WriteLine("a full RefreshAsync; the one that shipped inserts a single leaf in place, because the module");
+Console.WriteLine("already knows the name. Below: the PROJECTION cost of each (the full refresh also pays ~172 ms");
+Console.WriteLine("of catalog reads that the in-place insert does not pay at all).");
+Console.WriteLine();
+
+MeasureOneObjectAdded();
+
+static void MeasureOneObjectAdded()
+{
+    const int Leaves = 2400;
+
+    var group = new Node("Tables", isContainer: true) { IsExpanded = true };
+    var root = new Node("connection", isContainer: true) { IsExpanded = true };
+    root.Children.Add(group);
+    var roots = new System.Collections.ObjectModel.ObservableCollection<object> { root };
+
+    using var controller = new SidebarFlatController(
+        roots,
+        childrenSelector: o => ((Node)o).IsContainer ? ((Node)o).Children.Cast<object>() : null,
+        isContainer: o => ((Node)o).IsContainer,
+        hasChildren: o => ((Node)o).Children.Count > 0,
+        isExpanded: o => ((Node)o).IsExpanded,
+        setExpanded: (o, v) => ((Node)o).IsExpanded = v);
+
+    foreach (var leaf in MakeLeaves(Leaves)) group.Children.Add(leaf);
+
+    // (1) The full-refresh repair: re-read and replace the category's leaves, now guarded.
+    var sw = Stopwatch.StartNew();
+    controller.BeginUpdate();
+    group.Children.Clear();
+    foreach (var leaf in MakeLeaves(Leaves + 1)) group.Children.Add(leaf);
+    controller.EndUpdate();
+    sw.Stop();
+
+    // (2) What shipped: MetadataNodeViewModel.InsertLeafInPlace — one Insert at the sorted position.
+    var notifications = 0;
+    controller.Rows.CollectionChanged += (_, _) => notifications++;
+    var sw2 = Stopwatch.StartNew();
+    group.Children.Insert(1200, new Node("IMPORT_NOWA", isContainer: false));
+    sw2.Stop();
+
+    Console.WriteLine(string.Format(
+        CultureInfo.InvariantCulture,
+        "  full refresh of the category ({0} leaves, guarded): {1,6:F1} ms  + a catalog round trip",
+        Leaves, sw.Elapsed.TotalMilliseconds));
+    Console.WriteLine(string.Format(
+        CultureInfo.InvariantCulture,
+        "  one leaf inserted in place:                        {0,6:F1} ms  + no catalog round trip ({1} row notifications)",
+        sw2.Elapsed.TotalMilliseconds, notifications));
+}
 
 Console.WriteLine();
 

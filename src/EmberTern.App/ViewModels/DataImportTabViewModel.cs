@@ -547,6 +547,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             var sql = ImportNewTable.BuildCreateSql(tableName, configuration.Target.NewTableColumns);
             await _environment.CreateTableAsync(sql, CancellationToken.None).ConfigureAwait(true);
 
+            // The table exists now and is committed (Ddl lane), so say so — the metadata tree adds it without
+            // re-reading the catalog. Reported here rather than at the end of the run on purpose: the table
+            // survives a failed import (§0.5, gotcha #213), so its existence is not conditional on the rows.
+            _environment.TableCreated?.Invoke(tableName);
+
             SetStatus(
                 string.Format(CultureInfo.CurrentCulture, UiStrings.ImportCreatedTableFormat, tableName),
                 MessageSeverity.Success);
@@ -626,6 +631,9 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
             await _environment.DropTableAsync(
                 ImportNewTable.BuildDropSql(createdTable), CancellationToken.None).ConfigureAwait(true);
+
+            // Undone — and the tree is told, so it does not keep a leaf for a table that is gone.
+            _environment.TableDropped?.Invoke(createdTable);
 
             SetStatus(
                 string.Format(CultureInfo.CurrentCulture, UiStrings.ImportDroppedTableFormat, createdTable),
