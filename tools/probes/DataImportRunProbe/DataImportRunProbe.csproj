@@ -39,6 +39,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
     <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+    <!-- Etap I9 (section H): the XLSX provider lives here, and section H builds a real workbook to read. -->
+    <ProjectReference Include="..\..\..\src\EmberTern.Office\EmberTern.Office.csproj" />
   </ItemGroup>
 
 </Project>

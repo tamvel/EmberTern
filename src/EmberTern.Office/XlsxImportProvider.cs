@@ -59,7 +59,7 @@ public sealed class XlsxImportProvider : IImportProvider
         if (source is null) throw new ArgumentNullException(nameof(source));
 
         using var stream = await source.OpenStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = SpreadsheetDocument.Open(stream, isEditable: false);
+        using var document = Open(stream, source);
 
         var workbookPart = document.WorkbookPart;
         if (workbookPart?.Workbook?.Sheets is null) return Array.Empty<SourceSheet>();
@@ -100,7 +100,7 @@ public sealed class XlsxImportProvider : IImportProvider
         var options = configuration.Spreadsheet ?? new SpreadsheetOptions();
 
         using var stream = await source.OpenStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = SpreadsheetDocument.Open(stream, isEditable: false);
+        using var document = Open(stream, source);
 
         var workbookPart = document.WorkbookPart;
         var worksheetPart = ResolveWorksheet(workbookPart, options.SheetIndex);
@@ -163,7 +163,7 @@ public sealed class XlsxImportProvider : IImportProvider
         var last = options.LastRow;
 
         using var stream = await source.OpenStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = SpreadsheetDocument.Open(stream, isEditable: false);
+        using var document = Open(stream, source);
 
         var workbookPart = document.WorkbookPart;
         var worksheetPart = ResolveWorksheet(workbookPart, options.SheetIndex);
@@ -200,6 +200,33 @@ public sealed class XlsxImportProvider : IImportProvider
 
             if (reader.ElementType != typeof(Row)) continue;
             if (reader.LoadCurrentElement() is Row row) yield return row;
+        }
+    }
+
+    /// <summary>
+    /// Opens the workbook, turning "this is not an OOXML package" into a sentence the user can act on.
+    /// <para>
+    /// ⚠ Found by running this provider over the machine's real spreadsheets: a file NAMED <c>.xlsx</c> is not
+    /// necessarily one. An old workbook saved under the new extension is still BIFF, and
+    /// <c>SpreadsheetDocument.Open</c> answers with <c>FileFormatException: File contains corrupted data</c> —
+    /// which reads as "your file is damaged" when the true answer is "this is the old format, and I0 measured
+    /// that this library cannot read it at all" (findings §3.5). Saying so is the honest refusal §0 asks for;
+    /// passing the raw message on is not.
+    /// </para>
+    /// </summary>
+    private static SpreadsheetDocument Open(Stream stream, IImportSource source)
+    {
+        try
+        {
+            return SpreadsheetDocument.Open(stream, isEditable: false);
+        }
+        catch (Exception ex) when (ex is FileFormatException or OpenXmlPackageException or InvalidDataException)
+        {
+            throw new InvalidDataException(
+                $"'{source.DisplayName}' is not a readable .xlsx workbook. A file saved in the older Excel " +
+                "format keeps working under an .xlsx name, but it cannot be read as one — open it in Excel " +
+                "and use Save As to write a real .xlsx.",
+                ex);
         }
     }
 

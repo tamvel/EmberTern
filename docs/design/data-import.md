@@ -62,9 +62,10 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **✅ I8 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Nowa tabela: `ColumnTypeInferencer` (skan CAŁEGO źródła), `ImportNewTable` (jedyny właściciel „definicja → SQL"), edytowalna siatka typów z kolumną „Podstawa", podgląd DDL, `CREATE` na linii **Ddl** przed pierwszym wierszem, `DROP` przy niepowodzeniu, `IMP0028` |
 | **🔴 I8 — POPRAWKA PO PRZEGLĄDZIE (2026-07-27): „Importuj" na nowej tabeli ZAMYKAŁO APLIKACJĘ** | Zgłoszone przez użytkownika; **dwa niezależne defekty, oba w I8**, oba naprawione i zapinowane. Szczegóły w bloku niżej |
 | **✅ I8 — DOMKNIĘCIE PO PRZEGLĄDZIE (2026-07-27): nowa tabela pojawia się w drzewie od razu** | Drugie zgłoszenie z ręcznego QA: import przechodził, tabela powstawała, dane wchodziły — ale **Explorer metadanych jej nie pokazywał** do ręcznego odświeżenia. Naprawione **bez 21. wywołania `RefreshAsync()`**: moduł zgłasza fakt (`DataImportEnvironment.TableCreated` / `TableDropped`), a drzewo wstawia/usuwa **jeden liść w miejscu**. Przy okazji, w tej samej sesji, **Warstwa 1** z raportu — patrz blok niżej |
-| **Następny etap** | **I9** — XLSX (`EmberTern.Export.Office` → `EmberTern.Office`, `XlsxImportProvider`, 7 wytycznych z REK-6) |
-| **Testy** | **5717 zielonych**, 0 niepowodzeń (I8 dodał **+97**, w tym **+11 regresyjnych po awarii z przeglądu**; domknięcie po przeglądzie **+13**) |
-| **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **sekcja G z I8**) przeciwko FB5 `WI-V5.0.3.1683` — **20/20 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, **kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, a Rollback cofa wiersze i NIE cofa tabeli** |
+| **✅ I9 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | XLSX: `EmberTern.Export.Office` → **`EmberTern.Office`** (D1), `XlsxImportProvider` (7 wytycznych REK-6), rozgałęzienie sekcji Format po **`Capabilities`**, `SourceErrorValue` domykający R20. ⭐ **Filar „jeden pipeline dla każdego źródła" utrzymał się: pipeline, konwerter, walidator, mapowanie i writer NIE zostały zmienione** |
+| **Następny etap** | **I10** — schowek (App czyta, Core parsuje) + `XlsImportProvider` (BIFF8, nowa zależność) |
+| **Testy** | **5763 zielone**, 0 niepowodzeń (I9 dodał **+46**). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
+| **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **G z I8** + **H z I9**) przeciwko FB5 `WI-V5.0.3.1683` — **25/25 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, Rollback cofa wiersze i NIE cofa tabeli — **oraz (I9): arkusz → tabela istniejąca, arkusz → tabela nowa, prawdziwa komórka daty typuje się na `DATE` i wraca z bazy tym samym dniem (2026-04-03), a `#N/A` zostaje odrzucone przez kolumnę VARCHAR** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
 | **⭐ Kamień milowy** | **MVP (I0–I7) DOSTARCZONE: CSV/TXT → istniejąca tabela działa end-to-end**, z walidacją, raportem, decyzją transakcyjną i pamięcią ostatniej konfiguracji. **I8 dokłada drugi wariant celu — tabelę, której jeszcze nie ma.** Wszystko dalej (I9–I12) jest przyrostowe. |
@@ -125,6 +126,50 @@ po nieudanym imporcie zgłasza usunięcie, żeby drzewo nie oferowało obiektu, 
 **Przy okazji tej samej sesji weszła Warstwa 1 z raportu** (blokada `BeginUpdate/EndUpdate` na ścieżce
 ładowania): projekcja pełnego odświeżenia **1 424 ms → 2 ms** przy jednej rozwiniętej kategorii. Szczegóły
 i pełne pomiary — [metadata-refresh-analysis.md §7](metadata-refresh-analysis.md).
+
+### ⭐ I9 as-built — cztery rzeczy warte zapamiętania
+
+1. **⭐⭐ Filar się utrzymał, i to jest jedyny wynik tego etapu, który naprawdę się liczy.** I9 był
+   pierwszym etapem dokładającym nowe ŹRÓDŁO, czyli pierwszym realnym testem §1.4. **Pipeline, konwerter,
+   walidator, planer mapowania i writer nie zostały tknięte.** Cała wiedza o skoroszycie mieści się w
+   `XlsxImportProvider`; wszystko poniżej `IImportProvider` nadal nie wie, że arkusze istnieją. Sonda H
+   pokazuje to najdobitniej: sekcja przeprowadza tę samą podróż, co sekcje A–G, i jedynym nowym elementem
+   jest provider. Domknęło się przy okazji ryzyko z reguły #2 — `IImportProvider` ma wreszcie **drugą**
+   implementację produkcyjną (§4.3 zapowiadał ten stan jako przejściowy).
+2. **⭐ Defekt w heurystyce sondy I0, znaleziony i NIE przeniesiony do produkcji.** Sonda pytała
+   `code.Contains('d')`. Własny format z prawdziwego pliku użytkownika —
+   `#,##0\ [$€-1];[Red]\-#,##0\ [$€-1]`, opisany w I0 jako *„waluta, NIE data"* — odpowiada na to
+   **TWIERDZĄCO**, bo `[Red]` zawiera „d". Sonda tego nie wykryła, bo żaden wiersz nie używał tego stylu
+   (zmierzone: „komórki będące liczbą z formatem daty: **0**"). W produkcji zamieniłoby to kolumnę z
+   pieniędzmi na daty — po cichu, czyli §0.1 w najgorszej postaci. `SpreadsheetNumberFormats` **parsuje**
+   kod formatu (literały w cudzysłowach, escapy, sekcje nawiasowe — `[Red]` odrzucone, `[h]` przyjęte jako
+   czas), zamiast go przeszukiwać. ⭐ Morał ogólniejszy: **sonda dowodzi tego, co przypadkiem wykonała** —
+   jej „PASS" nie jest dowodem poprawności heurystyki, tylko tego, że dane wejściowe jej nie ruszyły.
+3. **⭐ R20 domknięte NOŚNIKIEM, nie nową regułą.** `ImportErrorKind.SourceErrorValue` istniał od I2 (z R20
+   w komentarzu), `UiStrings` i mapowanie w raporcie też — brakowało wyłącznie wartości, którą provider
+   mógłby powiedzieć „ta komórka jest błędem". Nowy `SourceErrorValue` (Core, **świadomie niezależny od
+   formatu pliku** — `RawRecord` jest walutą wspólną dla źródeł) plus jedna gałąź w `ImportValueConverter`
+   **PRZED** gałęziami typów docelowych. Kolejność jest tu istotą rzeczy: gałąź tekstowa zwraca
+   `Ok(text)` bezwarunkowo, więc gdyby odmowa zależała od typu kolumny, `"#N/A"` wylądowałoby w VARCHAR jako
+   dane. Sprawdzone na żywym silniku (sonda **H1b**).
+4. **⭐ Epoka Excela poniżej 1900-03-01 nie jest epoką OLE.** Serial 1 to w Excelu 1900-01-01, w
+   `FromOADate` 1899-12-31, a do tego Excel niesie widmowy **1900-02-29**, którego nigdy nie było. Ślepe
+   `FromOADate` przesunęłoby każdą datę ze stycznia i lutego 1900 o dobę — bez słowa. Korekta jest jawna, a
+   widmowy dzień **zostaje liczbą**: konwerter odmówi go dla kolumny DATE z uczciwym komunikatem, zamiast
+   wymyślić datę, której nie ma w kalendarzu (§0.1).
+
+⚠ **Domknięta luka pomiarowa z I0 (R3).** I0 uczciwie zapisał, że w pliku użytkownika **nie było ani jednej
+komórki daty**, więc obsługa dat była zaprojektowana na arkuszu wygenerowanym. W tej sesji produkcyjny
+provider przepuścił **osiem prawdziwych skoroszytów z dysku użytkownika**: plik `Fantomy…` odtworzył pomiary
+I0 co do joty (kolumna „Nr technologii" = `double×4999 + string×1`), a `Wyceny.xlsx` **ma prawdziwe komórki
+dat** — kolumna „Termin", ~450 dat na siedmiu arkuszach, roczniki 2021–2026, odczytane poprawnie. Luka
+zamknięta na realnym wyjściu z Excela, nie na wygenerowanym.
+
+⚠ **Znalezione przy okazji, warte zapamiętania:** plik o rozszerzeniu `.xlsx` **nie musi nim być**.
+`Wynagrodzenie.xlsx` z dysku użytkownika to stary format pod nową nazwą i `SpreadsheetDocument.Open` odpowiada
+`FileFormatException: File contains corrupted data` — czyli „twój plik jest uszkodzony", podczas gdy prawdziwa
+odpowiedź brzmi „to stary format, a ta biblioteka go nie czyta" (I0 §3.5). Provider tłumaczy to na zdanie, z
+którym da się coś zrobić.
 
 ### ⭐ I8 as-built — cztery rzeczy warte zapamiętania
 
@@ -207,7 +252,7 @@ opróżnienie tabeli to dane, nie schemat) i wspomniany `BatchedCommitImportWrit
 | ~~**I6**~~ ✅ | sekcja **Cel** (istniejąca tabela) + panel **Mapowanie** + przeliczanie łańcuchowe z anulowaniem | dostarczone; układ rozstrzygnięty przed implementacją, więc I6 wstawił się w gotową ramę |
 | ~~**I7**~~ ✅ | Dostarczone — patrz „I7 as-built" wyżej | pas **B** powstał tutaj, razem z zakładkami Błędy/Raport; **KONIEC MVP** |
 | ~~**I8**~~ ✅ | Dostarczone — patrz „I8 as-built" wyżej. Ponadto: **`IMP0028 NewTableAlreadyExists`** (zajęta nazwa blokuje **przed** przebiegiem, bo `CREATE` jest pierwszą rzeczą, którą import robi — inaczej zielony pasek i natychmiast surowy błąd serwera) | wstawiło się w kafelek Cel z I6 bez przebudowy |
-| **I9** | XLSX + `EmberTern.Export.Office` → `EmberTern.Office`; `XlsxImportProvider` (7 wytycznych); rozgałęzienie sekcji Format po `Capabilities` | zamyka `DataImportXlsxProbe` |
+| ~~**I9**~~ ✅ | Dostarczone — patrz „I9 as-built" wyżej. Ponadto: **`SourceErrorValue`** (nośnik domykający R20) i **`ListSheetsAsync`** na porcie, dzięki czemu powierzchnia pyta o arkusze *dostawcę*, a nie zna typu skoroszytu | `DataImportXlsxProbe` **usunięta** — jej rolę przejął kod produkcyjny + sekcja H w `DataImportRunProbe` |
 | **I10** | schowek (App czyta, Core parsuje) + `XlsImportProvider` (BIFF8, nowa zależność) | — |
 | **I11** | **nazwane profile (UI)** — selektor, „Zapisz jako…", zmiana nazwy, usuwanie | ⭐ **dowód projektu**: jeżeli wymaga zmiany choćby jednego modelu, §4.8 zostało po drodze naruszone |
 | **I12** | domknięcie: `docs/history/`, `docs/gotchas.md`, CLAUDE.md, audyt UI w obu paletach + **1366×768**, pomiar na 1 M wierszy | audyt UI wchłania to, co zostanie z U1–U10 |
@@ -439,7 +484,7 @@ ustawienie tej właściwości w `Fully()`.
 | `docs/design/data-import-i0-findings.md` | archiwum dowodowe pomiarów I0 | zamknięty, 8 rekomendacji zaakceptowanych |
 | `tools/probes/DataImportWriteProbe` | sonda ścieżki zapisu (I0, surowy sterownik) | ✅ **I4 zamknięty — do usunięcia.** Jej rolę przejęła `DataImportProbe`, która sprawdza to samo, ale **kodem produkcyjnym** |
 | `tools/probes/DataImportProbe` | ⭐ weryfikacja na żywo **kodu produkcyjnego** (I4) | **trzymać** — to jest regresyjny dowód warstwy Firebirda; uruchamiać po każdej zmianie writera lub mappera |
-| `tools/probes/DataImportXlsxProbe` | sonda odczytu `.xlsx` | **trzymać do I9**, potem usunąć |
+| ~~`tools/probes/DataImportXlsxProbe`~~ | sonda odczytu `.xlsx` | **usunięta w I9** — zastąpiona kodem produkcyjnym, `XlsxImportProviderTests` i sekcją H `DataImportRunProbe` |
 | `docs/history/` + `docs/gotchas.md` + CLAUDE.md (pełny wpis) | narracja i katalog gotch | **planowo w I12** (wiersz „Domknięcie" w §6) |
 
 ---

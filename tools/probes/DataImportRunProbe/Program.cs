@@ -5,10 +5,14 @@
 // Requires the local FB5 DefaultInstance on localhost:3050 and Lab/EmberTern_Lab.fdb.
 
 using System.Globalization;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Import;
 using EmberTern.Core.Import.Providers;
 using EmberTern.Firebird;
+using EmberTern.Office;
 
 var labPath = Path.GetFullPath(Path.Combine(
     AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "Lab", "EmberTern_Lab.fdb"));
@@ -480,6 +484,272 @@ await DropIfExistsAsync(newTable);
         Pass("G6 Rollback undoes the rows, NOT the table", $"table still there, {afterRollback} rows (§0.5)");
     else
         Fail("G6 Rollback undoes the rows, NOT the table", $"exists={survived}, rows={afterRollback}, expected true/4");
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════
+Section("H — etap I9: the SAME journey, from a workbook");
+
+// ⭐ The point of this section is how little of it is new. Only the provider changes; the target reader, the
+// pipeline, the writer, the transaction and the report are the ones sections A–G already proved. If reading a
+// sheet needed anything else, the "one pipeline for every source" pillar (§1.4) would not be true.
+var xlsxProvider = new XlsxImportProvider();
+const string xlsxNewTable = "IMP_NEW_XLSX_PROBE";
+var workbookPath = Path.Combine(Path.GetTempPath(), $"embertern-i9-probe-{Guid.NewGuid():N}.xlsx");
+var errorBookPath = Path.Combine(Path.GetTempPath(), $"embertern-i9-error-{Guid.NewGuid():N}.xlsx");
+var sheetDate = new DateTime(2026, 4, 3);
+
+// Two workbooks on purpose: one clean, one carrying a single #N/A. Putting the error cell in the same sheet
+// would also feed it to the type inferencer, and then H2 would be testing two things at once.
+BuildProbeWorkbook(workbookPath, sheetDate);
+BuildErrorWorkbook(errorBookPath);
+
+try
+{
+    // ── H1: a workbook into the EXISTING table ──────────────────────────────────────────────────────────
+    await ResetAsync();
+    {
+        var configuration = ConfigurationFor(ImportTransactionMode.Manual) with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Xlsx, workbookPath),
+            Delimited = null,
+            Spreadsheet = new SpreadsheetOptions { HasHeader = true, FirstDataRow = 2 },
+        };
+
+        var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
+        var outcome = await ImportPipeline.RunAsync(
+            configuration, target, xlsxProvider, new FileImportSource(workbookPath), writer, charset);
+
+        await importSession.CommitAsync();
+
+        var actual = await CountCommittedAsync();
+        if (outcome.RowsWritten == 3 && actual == 3 && outcome.RowsFailed == 0)
+            Pass("H1 workbook -> existing table", $"{outcome.RowsWritten} written, {actual} in the table");
+        else
+            Fail("H1 workbook -> existing table", $"report {outcome.RowsWritten}/{outcome.RowsFailed} failed, table {actual}");
+    }
+
+    // ── H1b: R20 on a live engine, against a VARCHAR column ─────────────────────────────────────────────
+    await ResetAsync();
+    {
+        var configuration = ConfigurationFor(ImportTransactionMode.Manual) with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Xlsx, errorBookPath),
+            Delimited = null,
+            Spreadsheet = new SpreadsheetOptions { HasHeader = true, FirstDataRow = 2 },
+        };
+
+        var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
+        var outcome = await ImportPipeline.RunAsync(
+            configuration, target, xlsxProvider, new FileImportSource(errorBookPath), writer, charset);
+
+        await importSession.CommitAsync();
+
+        // ⭐ The sheet's last row has #N/A in NAME, a VARCHAR column — the exact case R20 names. A text column
+        // accepts anything, so if the refusal were left to the target type this row would land with "#N/A"
+        // sitting in it as though it were data.
+        var actual = await CountCommittedAsync();
+        if (actual == 3 && outcome.RowsFailed == 1
+            && outcome.Errors.Any(e => e.Kind == ImportErrorKind.SourceErrorValue))
+            Pass("H1b #N/A refused by a VARCHAR column", $"{actual} rows in, 1 refused — R20 holds on the engine");
+        else
+            Fail("H1b #N/A refused by a VARCHAR column",
+                $"rows {actual}, failed {outcome.RowsFailed}, kinds {string.Join("/", outcome.Errors.Select(e => e.Kind))}");
+    }
+
+    // ── H2/H3/H4: a workbook into a table that does not exist yet (I8 + I9 together) ─────────────────────
+    await DropIfExistsAsync(xlsxNewTable);
+    {
+        var inferConfiguration = ImportConfiguration.Empty with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Xlsx, workbookPath),
+            Delimited = null,
+            Spreadsheet = new SpreadsheetOptions { HasHeader = true, FirstDataRow = 2 },
+            Culture = newTableCulture,
+        };
+
+        var sheetSource = new FileImportSource(workbookPath);
+        var schema = await xlsxProvider.ReadSchemaAsync(sheetSource, inferConfiguration, CancellationToken.None);
+
+        var inference = await ColumnTypeInferencer.InferAsync(
+            schema, xlsxProvider, sheetSource, inferConfiguration,
+            ColumnTypeInferencer.DefaultScanLimit, CancellationToken.None);
+
+        var inferred = inference.Columns.Select(c => c.Definition).ToList();
+        var types = inferred.Select(ImportNewTable.TypeText).ToArray();
+
+        // ⭐⭐ THE I9 claim: inference works on a sheet with NO change, because the provider hands over native
+        // values and ColumnTypeInferencer asks ImportValueConverter — the same class either way. A real Excel
+        // DATE cell must therefore become a DATE column without anyone parsing a date string.
+        if (types.Length == 6 && types[5] == "DATE")
+            Pass("H2 a real date CELL types as DATE", string.Join(", ", types));
+        else
+            Fail("H2 a real date CELL types as DATE", string.Join(", ", types));
+
+        await ddlExecutor.ExecuteAsync(ImportNewTable.BuildCreateSql(xlsxNewTable, inferred), CancellationToken.None);
+        var created = await targetReader.ReadTargetAsync(xlsxNewTable, CancellationToken.None);
+
+        var runConfiguration = inferConfiguration with
+        {
+            Target = TargetDescriptor.New(xlsxNewTable, inferred),
+            Mapping = inferred.Select((c, i) => new ColumnMapping
+            {
+                TargetColumnName = c.Name,
+                SourceFieldName = schema.Fields[i].Name,
+                SourceFieldIndex = i,
+            }).ToArray(),
+            ErrorPolicy = ImportErrorPolicy.SkipInvalidRows,
+        };
+
+        var writer = new FirebirdImportWriter(importSession, runConfiguration.ErrorPolicy);
+        var outcome = await ImportPipeline.RunAsync(
+            runConfiguration, created!, xlsxProvider, sheetSource, writer, charset);
+
+        await importSession.CommitAsync();
+
+        var landed = await CountInAsync(xlsxNewTable);
+        if (landed == 3 && outcome.RowsWritten == 3 && outcome.RowsFailed == 0)
+            Pass("H3 workbook -> a table that did not exist", $"{outcome.RowsWritten} written, {landed} in {xlsxNewTable}");
+        else
+            Fail("H3 workbook -> a table that did not exist",
+                $"report {outcome.RowsWritten}/{outcome.RowsFailed} failed, table {landed}");
+
+        // ⭐ The date round trip, end to end: a serial number in a workbook, a DATE column in Firebird, and the
+        // same calendar day coming back out. Anything else here would be §0.1 with extra steps.
+        if (transactionService.IsActive) await transactionService.CommitAsync();
+        await transactionService.BeginTransactionAsync();
+        var connection = connectionService.RequireOpenConnection();
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT MIN(DATA) FROM {xlsxNewTable}";
+            cmd.Transaction = transactionService.ActiveTransaction;
+            var scalar = await cmd.ExecuteScalarAsync();
+            var readBack = scalar is DateTime dt ? dt : default;
+
+            if (readBack == sheetDate)
+                Pass("H4 the date survives the round trip", $"sheet {sheetDate:yyyy-MM-dd} == database {readBack:yyyy-MM-dd}");
+            else
+                Fail("H4 the date survives the round trip", $"sheet {sheetDate:yyyy-MM-dd}, database {readBack:yyyy-MM-dd}");
+        }
+        await transactionService.CommitAsync();
+    }
+}
+finally
+{
+    await DropIfExistsAsync(xlsxNewTable);
+    try { File.Delete(workbookPath); } catch (IOException) { }
+    try { File.Delete(errorBookPath); } catch (IOException) { }
+}
+
+// The clean workbook: the five columns IMP_TARGET wants, plus a sixth holding a REAL date cell — a serial
+// number carrying a date number-format, which I0 measured is the only signal a date exists at all.
+static void BuildProbeWorkbook(string path, DateTime date)
+{
+    using var document = SpreadsheetDocument.Create(path, SpreadsheetDocumentType.Workbook);
+    var workbookPart = document.AddWorkbookPart();
+    workbookPart.Workbook = new Workbook();
+
+    var stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>();
+    stylesPart.Stylesheet = new Stylesheet(
+        new Fonts(new Font()),
+        new Fills(new Fill(new PatternFill { PatternType = PatternValues.None })),
+        new Borders(new Border()),
+        new CellStyleFormats(new CellFormat()),
+        new CellFormats(
+            new CellFormat(),
+            new CellFormat { NumberFormatId = 14, ApplyNumberFormat = true })); // built-in date format
+
+    static Cell Text(string reference, string value) => new()
+    {
+        CellReference = reference,
+        DataType = CellValues.InlineString,
+        InlineString = new InlineString(new Text(value)),
+    };
+    static Cell Num(string reference, string value, uint style = 0) => new()
+    {
+        CellReference = reference,
+        CellValue = new CellValue(value),
+        StyleIndex = style,
+    };
+    static Row Line(uint index, params Cell[] cells)
+    {
+        var row = new Row { RowIndex = index };
+        foreach (var cell in cells) row.Append(cell);
+        return row;
+    }
+
+    var serial = date.ToOADate().ToString(CultureInfo.InvariantCulture);
+    var sheetData = new SheetData();
+
+    sheetData.Append(Line(1,
+        Text("A1", "ID"), Text("B1", "CODE"), Text("C1", "NAME"),
+        Text("D1", "QTY"), Text("E1", "PRICE"), Text("F1", "DATA")));
+    sheetData.Append(Line(2,
+        Num("A2", "1"), Text("B2", "X1"), Text("C2", "Widget 1"),
+        Num("D2", "5"), Num("E2", "1.50"), Num("F2", serial, 1)));
+    sheetData.Append(Line(3,
+        Num("A3", "2"), Text("B3", "X2"), Text("C3", "Widget 2"),
+        Num("D3", "12"), Num("E3", "22.75"), Num("F3", serial, 1)));
+    sheetData.Append(Line(4,
+        Num("A4", "3"), Text("B4", "X3"), Text("C4", "Widget 3"),
+        Num("D4", "7"), Num("E4", "3.05"), Num("F4", serial, 1)));
+
+    Finish(workbookPart, sheetData);
+}
+
+// The workbook whose last row carries a single #N/A, in a column whose target is VARCHAR.
+static void BuildErrorWorkbook(string path)
+{
+    using var document = SpreadsheetDocument.Create(path, SpreadsheetDocumentType.Workbook);
+    var workbookPart = document.AddWorkbookPart();
+    workbookPart.Workbook = new Workbook();
+
+    static Cell Text(string reference, string value) => new()
+    {
+        CellReference = reference,
+        DataType = CellValues.InlineString,
+        InlineString = new InlineString(new Text(value)),
+    };
+    static Cell Num(string reference, string value) => new()
+    {
+        CellReference = reference,
+        CellValue = new CellValue(value),
+    };
+    static Row Line(uint index, params Cell[] cells)
+    {
+        var row = new Row { RowIndex = index };
+        foreach (var cell in cells) row.Append(cell);
+        return row;
+    }
+
+    var sheetData = new SheetData();
+    sheetData.Append(Line(1,
+        Text("A1", "ID"), Text("B1", "CODE"), Text("C1", "NAME"), Text("D1", "QTY"), Text("E1", "PRICE")));
+    sheetData.Append(Line(2,
+        Num("A2", "1"), Text("B2", "X1"), Text("C2", "Widget 1"), Num("D2", "5"), Num("E2", "1.50")));
+    sheetData.Append(Line(3,
+        Num("A3", "2"), Text("B3", "X2"), Text("C3", "Widget 2"), Num("D3", "12"), Num("E3", "22.75")));
+    sheetData.Append(Line(4,
+        Num("A4", "3"), Text("B4", "X3"), Text("C4", "Widget 3"), Num("D4", "7"), Num("E4", "3.05")));
+    sheetData.Append(Line(5,
+        Num("A5", "4"),
+        Text("B5", "X4"),
+        new Cell { CellReference = "C5", DataType = CellValues.Error, CellValue = new CellValue("#N/A") },
+        Num("D5", "9"), Num("E5", "4.20")));
+
+    Finish(workbookPart, sheetData);
+}
+
+static void Finish(WorkbookPart workbookPart, SheetData sheetData)
+{
+    var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+    worksheetPart.Worksheet = new Worksheet(sheetData);
+    workbookPart.Workbook.AppendChild(new Sheets(new Sheet
+    {
+        Id = workbookPart.GetIdOfPart(worksheetPart),
+        SheetId = 1U,
+        Name = "Arkusz1",
+    }));
+    workbookPart.Workbook.Save();
 }
 
 // ── The offered clean-up: roll back, THEN drop (§0.5) ────────────────────────────────────────────────────

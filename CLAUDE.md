@@ -31,7 +31,7 @@ verbatim, in the archive below.
 | **`docs/design/data-import-i9-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I9** implementation session — the first etap that adds a new SOURCE (`.xlsx`), and therefore **the first real test of the "one pipeline for every source" pillar**: if adding a provider requires touching anything below `IImportProvider`, that is a stop-and-report. Carries the input state, the reuse inventory, REK-6's seven binding provider guidelines (all measured, incl. SAX-not-DOM at 77× memory and "place values by `CellReference`, never positionally"), the standing "no global UI work" rule, and the DoD incl. the live run and the owed **first real file with dates** (an explicit I0 measurement gap). Replace it with the I10 equivalent once I9 closes. | When starting etap I9. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (254 entries, #1–#267), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (255 entries, #1–#268), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -178,8 +178,10 @@ src/
     e.g. FirebirdConnectionService.cs / FirebirdQueryExecutor.cs / TransactionService.cs /
     FirebirdMetadataReader.cs / FirebirdDdlReader.cs / FirebirdCatalogReader.cs /
     FirebirdTraceService.cs / FirebirdSessionReader.cs / FirebirdScriptExecutor.cs
-  EmberTern.Export.Office/   # the ONE place a NuGet dep is allowed for export (XLSX only);
-                             # DocumentFormat.OpenXml, streaming writer
+  EmberTern.Office/          # the ONE place a NuGet dep on an Office format is allowed, in BOTH
+                             # directions: DocumentFormat.OpenXml, the streaming XLSX writer
+                             # (XlsxExporter) and, since etap I9, the streaming SAX reader
+                             # (XlsxImportProvider). Renamed from EmberTern.Export.Office in I9.
   EmberTern.App/             # WinExe, Avalonia 12.0.3, CommunityToolkit.Mvvm 8.4.2
     Program.cs, App.axaml(.cs), UiStrings.cs, app.manifest
     ViewModels/ Views/ Themes/ (Colors.axaml + ControlStyles.axaml — the ONLY theme sources)
@@ -277,6 +279,43 @@ noted.
 
 ## Current state
 
+- **✅ DATA IMPORT I9 — XLSX DELIVERED (2026-07-27), awaits the user's visual confirmation in both palettes.
+  Next: I10 clipboard + `.xls` · I11 named profiles · I12 close-out.** Branch `feat/data-import`, suite
+  **5763 green** (+46), build 0/0, `DataImportRunProbe` **25/25 ALL PASS** on FB5 `WI-V5.0.3.1683`.
+  **⭐⭐ The result that matters is what did NOT change.** I9 was the first etap to add a new SOURCE, and
+  therefore the first real test of the "one pipeline for every source" pillar (§1.4). **The pipeline,
+  converter, validator, mapping planner and writer were not touched** — all workbook knowledge lives in
+  `XlsxImportProvider` (project `EmberTern.Export.Office` → **`EmberTern.Office`**, decision D1). Probe
+  section H makes it visible: the same journey as sections A–G, one new provider. It also closed a rule-#2
+  debt — `IImportProvider` finally has a **second** production implementation (§4.3 called the single one
+  transitional).
+  **⭐ A defect in I0's own probe heuristic, found and NOT carried into production.** The probe asked
+  `code.Contains('d')`. The custom format from the user's real file — `#,##0\ [$€-1];[Red]\-#,##0\ [$€-1]`,
+  which I0 itself labelled *"currency, NOT a date"* — answers **TRUE**, because `[Red]` contains a `d`. The
+  probe never noticed because no cell used that style (it measured "numeric cells with a date format: **0**").
+  In production that turns a money column into dates, silently — §0.1's worst class. `SpreadsheetNumberFormats`
+  **parses** the format code (quoted literals, escapes, bracketed sections — `[Red]` rejected, `[h]` accepted
+  as elapsed time) instead of searching it. ⚠ **The general lesson: a probe proves what it happened to
+  execute.** Its PASS is not evidence the heuristic is right, only that the input never exercised it.
+  **⭐ R20 closed with a CARRIER, not a new rule.** `ImportErrorKind.SourceErrorValue` had existed since I2
+  (naming R20 in its own comment), with the UiString and the report mapping already wired — only the value a
+  provider could use to say "this cell is an error" was missing. New `SourceErrorValue` (Core, deliberately
+  source-neutral — `RawRecord` is the currency shared by every source) plus one branch in
+  `ImportValueConverter` **before** the target-type branches. The order is the substance: the text branch
+  returns `Ok(text)` unconditionally, so if the refusal depended on the column type, `"#N/A"` would land in a
+  VARCHAR as data. Verified on the live engine (probe **H1b**).
+  **⚠ I0's owed measurement gap (R3) is closed on REAL Excel output.** I0 honestly recorded that the user's
+  file held *no* date cells, so date handling was designed against a generated sheet. The production provider
+  was run over **eight real workbooks from the user's disk**: `Fantomy…` reproduced I0's measurements exactly
+  (column "Nr technologii" = `double×4999 + string×1`), and **`Wyceny.xlsx` has genuine date cells** — column
+  "Termin", ~450 dates across seven sheets, vintages 2021–2026, all read correctly. The round trip is proven
+  end to end by probe **H4** (sheet `2026-04-03` == database `2026-04-03`).
+  ⚠ Also found in passing: **a file named `.xlsx` need not be one** (`Wynagrodzenie.xlsx` is the old format
+  under the new name; `SpreadsheetDocument.Open` says *"File contains corrupted data"*, which reads as "your
+  file is damaged" when the truth is "this is BIFF and this library cannot read it"). The provider translates
+  it into a sentence the user can act on. And Excel's pre-1900-03-01 epoch is **not** OLE's (serial 1 differs
+  by a day, plus the phantom 1900-02-29): the correction is explicit and the phantom day stays a number rather
+  than becoming a silently shifted date.
 - **✅ METADATA REFRESH — LAYER 1 SHIPPED + THE TREE NOW SHOWS AN IMPORTED TABLE IMMEDIATELY (2026-07-27).**
   A short session between Data Import I8 and I9, scoped by the user to: fix the reported bug, apply **Layer 1**
   of [docs/design/metadata-refresh-analysis.md](docs/design/metadata-refresh-analysis.md), re-measure, update
@@ -2217,12 +2256,22 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5717 as of 2026-07-27
-  (`feat/data-import`, after I8 + the metadata-refresh Layer 1 session)** — all green in ONE `dotnet test`
-  run (~11s).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5763 as of 2026-07-27
+  (`feat/data-import`, after Data Import I9)** — green in two partitions (5723 + the 40-test
+  `ConnectionExpandBindingProbe`), ~11s.
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).
+  **⚠ 2026-07-27, I9 session — the hang REPRODUCED, and the instrument named a suspect.** A plain
+  `dotnet test` hung; a first `--blame-hang` run went clean; a later one caught it and reported the test
+  running at the moment of the hang as **`ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`**
+  (vstest prints its own caveat that this may or may not be the cause). Two facts worth carrying: the hang is
+  **after** the tests finish, not a failing test — the aborted run had already reported *5677 passed, 0
+  failed, 6 s* before it stopped exiting; and it is in the headless-Avalonia probe class, consistent with
+  #94/#226/#261. **Nothing was changed on this evidence** (it is one observation and the session's task was
+  I9), but a future investigation now has a named starting point and a dump under
+  `tests/EmberTern.Tests/TestResults/`. Practical workflow meanwhile: run the two partitions, always with
+  `--blame-hang`.
   **⚠ The intermittent full-suite hang the user keeps hitting is NOT claimed fixed.** It did not reproduce
   during the 2026-07-26 investigation (5568 green in ~9s, repeatedly, and the probe class alone in 6s), so
   nothing was restructured on a hypothesis. What that investigation *did* find and fix is a real defect with
@@ -3022,7 +3071,7 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (254 entries, organized thematically) lives in
+The **complete** catalog (255 entries, organized thematically) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -3221,7 +3270,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (254 entries, #1–#267), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (255 entries, #1–#268), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a
