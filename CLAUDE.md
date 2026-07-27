@@ -279,8 +279,12 @@ noted.
 
 ## Current state
 
-- **✅ DATA IMPORT I9 — XLSX DELIVERED (2026-07-27), awaits the user's visual confirmation in both palettes.
-  Next: I10 clipboard + `.xls` · I11 named profiles · I12 close-out.** Branch `feat/data-import`, suite
+- **🏁 DATA IMPORT I9 — XLSX CLOSED AND USER-ACCEPTED (2026-07-27).** Confirmed visually in both palettes;
+  the user checked the sheet picker, the hiding of CSV/TXT-only settings, "treat date cells as dates" and a
+  full XLSX run — no visual or functional findings.
+  **Next: I10 clipboard + `.xls` · I11 named profiles · I12 close-out. ⛔ User directive on closing I9: no
+  further refactors and no architectural changes — the module is carried to the end on the frozen design.**
+  Branch `feat/data-import`, suite
   **5763 green** (+46), build 0/0, `DataImportRunProbe` **25/25 ALL PASS** on FB5 `WI-V5.0.3.1683`.
   **⭐⭐ The result that matters is what did NOT change.** I9 was the first etap to add a new SOURCE, and
   therefore the first real test of the "one pipeline for every source" pillar (§1.4). **The pipeline,
@@ -2271,7 +2275,9 @@ noted.
   #94/#226/#261. **Nothing was changed on this evidence** (it is one observation and the session's task was
   I9), but a future investigation now has a named starting point and a dump under
   `tests/EmberTern.Tests/TestResults/`. Practical workflow meanwhile: run the two partitions, always with
-  `--blame-hang`.
+  `--blame-hang`. **📋 Ratified by the user on closing I9: this is its OWN infrastructure task and is
+  explicitly NOT to be picked up inside Data Import** — record findings here, never detour a module etap
+  into it.
   **⚠ The intermittent full-suite hang the user keeps hitting is NOT claimed fixed.** It did not reproduce
   during the 2026-07-26 investigation (5568 green in ~9s, repeatedly, and the probe class alone in 6s), so
   nothing was restructured on a hypothesis. What that investigation *did* find and fix is a real defect with

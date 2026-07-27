@@ -97,9 +97,10 @@ podważa projekt, oznacza: ZATRZYMAJ ETAP I ZGŁOŚ — nigdy cichy redesign.
   I10 kończy się zgłoszeniem „implementacja gotowa — oczekuje wizualnego potwierdzenia",
   a etap zamyka dopiero przegląd użytkownika w OBU paletach.
 
-  ⚠ ZALEGŁOŚĆ Z I9: potwierdzenie wzrokowe sekcji Źródło i format w wariancie ARKUSZA (wybór
-  arkusza, zniknięte separatory i kodowanie, „traktuj komórki dat jako daty") w obu paletach —
-  jeśli jeszcze się nie odbyło, zrób je PRZED rozpoczęciem I10.
+  ⛔ DYREKTYWA UŻYTKOWNIKA WYDANA PRZY ZAMYKANIU I9: nie dokładamy już nowych refaktorów ani zmian
+  architektonicznych. Moduł ma zostać konsekwentnie dowieziony do końca zgodnie z zamrożonym
+  projektem. Jeżeli coś wygląda na wymagające zmiany architektury — to jest właśnie przypadek
+  „ZATRZYMAJ ETAP I ZGŁOŚ", a nie zaproszenie do przeprojektowania.
 
   Jeżeli w trakcie kontekst zacznie się wyczerpywać, zatrzymaj etap w bezpiecznym miejscu,
   zaktualizuj dokumentację i przygotuj handover — nie kończ w połowie bez zapisu stanu.
