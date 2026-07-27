@@ -27,7 +27,7 @@ verbatim, in the archive below.
 | **`docs/design/firebird-debugger.md`** | **The debugger's behaviour authority (v2, decisions ratified 2026-07-17).** ⚠ *Its "nothing implemented" framing dated from the design phase and was corrected 2026-07-25 — the debugger is built (P1/P2, D1–D13, D15, functions-as-root, the Draft model); sections amended by delivery say so in place (§9.1, §9.3.1, §12.14).* Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
-| **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next, and the remaining-scope table for I6–I12. **§3.8 holds the OPEN UX findings from the I5 review (U1–U10) — read it before touching the surface's layout.** | **Every Data Import session — read the status block + §3.8 + your etap's row in §6 first.** |
+| **`docs/design/data-import.md`** | **🔒 FROZEN ARCHITECTURE of the Data Import module — CLOSED and merged (2026-07-27).** How the module is built and why, in the present tense: one working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and what stays deliberately open with a reason for each. The etap-by-etap narrative lives in `docs/history/21-data-import.md`. | Before touching the import module — §0 and the relevant architecture section. |
 | **`docs/history/21-data-import.md`** | The Data Import module’s **narrative** — etap by etap, why each decision went the way it did, the I12 close-out (1 M-row measurement, the UI audit, the last defect) and the closing table of what stays OPEN with a reason for each. Written in I12, when ~520 lines of it moved out of CLAUDE.md. | On demand — when you need the backstory on an import behaviour. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
@@ -76,8 +76,9 @@ git push private <branch>
 
 **Branch hygiene (2026-07-26):** the repo carries only branches that are still needed. `feat/completion-matching`,
 `feat/firebird-debugger`, `feat/save-and-close` and `feat/sql-data-export` were all provably merged into
-`master` and were deleted locally and from **both** remotes. Live branches: **`master`** + the working branch
-**`feat/data-import`**. ⚠ One residue: **`private`'s default branch (HEAD) still points at
+`master` and were deleted locally and from **both** remotes. **Live branch: `master` alone** — `feat/data-import`
+joined it on 2026-07-27 when the Data Import module closed (merged `--no-ff`, so the module's history stays one
+readable arc). ⚠ One residue: **`private`'s default branch (HEAD) still points at
 `feat/completion-matching`**, so GitHub refuses to delete it — it stays until the user switches the default
 to `master` in the GitHub repo settings (a repo-settings change, deliberately left to the user).
 
@@ -280,11 +281,11 @@ noted.
 
 ## Current state
 
-- **🏁 DATA IMPORT — I0–I12 DELIVERED; I12 (the close-out) awaits the user's confirmation (2026-07-27).**
-  Branch `feat/data-import`, suite **5854 green** (5813 + the 41-test `ConnectionExpandBindingProbe`), build
-  0/0, smoke clean. **Full narrative: [docs/history/21-data-import.md](docs/history/21-data-import.md)** —
-  ~520 lines of etap-by-etap record moved there in I12, which is where it belongs; architecture (🔒 frozen):
-  [docs/design/data-import.md](docs/design/data-import.md), whose „📍 STAN IMPLEMENTACJI" block is the handover.
+- **🏁 DATA IMPORT — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-27).** Suite **5856 green**
+  (5815 + the 41-test `ConnectionExpandBindingProbe`), build 0/0, smoke clean. **Full narrative:
+  [docs/history/21-data-import.md](docs/history/21-data-import.md)** — the etap-by-etap record lives there,
+  moved out of CLAUDE.md and out of the design doc at close-out; architecture (🔒 frozen):
+  [docs/design/data-import.md](docs/design/data-import.md) — architecture only, in the present tense.
   **What it is:** a tool tab (toolbar, beside the Script Executor) that imports Clipboard / TXT / CSV / XLS /
   XLSX into an existing or a newly created table. One working surface with collapsible sections, **deliberately
   NOT a wizard** (the same import runs repeatedly; the gate is a readiness strip, not Next buttons) · **one
@@ -2015,10 +2016,10 @@ noted.
   `WorkspaceTabViewModel.SavableEditor`. Build 0/0, tests green (`DataLossGuardTests` +save cases).
   Full detail: [docs/history/08-...](docs/history/08-data-loss-sidebar-and-searchable-combo.md);
   gotcha #231 (decide from the loop's tally, not the batch dialog's `IProgress`-lagged counters).
-- **Active branch: `feat/editor-language-frontend`** — holds the editor-language-front-end rebuild
-  (Etaps 0–6 + UX Polish incl. P8), the 2026-07-14 **UX & Stabilization Sprint** (transaction/
-  attachment model rewrite), **and** a 2026-07-14 **UX Polish follow-up sprint** (below). Not yet
-  merged to `master`.
+- **⚠ Corrected 2026-07-27:** an entry here used to claim `feat/editor-language-frontend` was an active,
+  unmerged branch holding the editor rebuild. It has not existed for a long time — that work (Etaps 0–6 +
+  UX Polish incl. P8, the 2026-07-14 UX & Stabilization Sprint, and its follow-up sprint below) is **on
+  `master`**. See "Git remotes & push workflow" for the live branch list.
 - **UX Polish follow-up sprint (2026-07-14) — DONE** (4 tasks + 2 review fixes, separate commits):
   **(1) trigger context variables** — NEW/OLD/INSERTING/UPDATING/DELETING get a distinct semantic
   highlight (new `SemanticHighlightClass.ContextVariable`, higher-chroma amber `#E5C07B`). Done
@@ -2037,9 +2038,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5851 as of 2026-07-27
-  (`feat/data-import`, after I11 named profiles + its three review seams)** — green in two partitions (5811 + the
-  40-test `ConnectionExpandBindingProbe`), ~13s.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5856 as of 2026-07-27
+  (`master`, after the Data Import module closed and merged)** — green in two partitions (5815 + the
+  41-test `ConnectionExpandBindingProbe`), ~14s.
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).
