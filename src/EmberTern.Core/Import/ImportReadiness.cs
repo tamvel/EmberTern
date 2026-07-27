@@ -136,6 +136,51 @@ public sealed record ImportReadinessReport(IReadOnlyList<ReadinessItem> Items)
         }
     }
 
+    /// <summary>
+    /// ⭐ <b>The order the strip reads in: everything that BLOCKS the import first, then everything that merely
+    /// informs — each group keeping the order it was found in.</b>
+    /// <para>
+    /// It exists because the strip has a ceiling (three findings, then „…and N more"), and a ceiling turns an
+    /// order into a <em>selection</em>: whatever is last is what disappears. Evaluation order is by section
+    /// (environment → source → target → mapping → transaction), which is the right order to <em>read</em> but
+    /// the wrong one to <em>cut</em> — a new table always raises the non-blocking
+    /// <see cref="ImportDiagnosticCode.NewTableWillBeCommitted"/> in the Target section, i.e. before every
+    /// mapping finding, so it could push blocking mapping errors out of the visible part of a list whose whole
+    /// job is to say why the run is refused.
+    /// </para>
+    /// <para>
+    /// <b>This is still ONE order, and it lives here rather than in the surface</b> — the same reason
+    /// <see cref="CanValidate"/> does. A view that cut the list by its own rule would be a second opinion about
+    /// which problem matters most, and the strip and a report would eventually disagree.
+    /// </para>
+    /// <para>
+    /// The sort is <b>stable</b>, so within each group nothing is re-ranked and a collapsed strip is always a
+    /// true prefix of the expanded one.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<ReadinessItem> Prioritized
+    {
+        get
+        {
+            if (_prioritized is not null) return _prioritized;
+
+            var ordered = new List<ReadinessItem>(Items.Count);
+            foreach (var item in Items)
+            {
+                if (item.IsBlocking) ordered.Add(item);
+            }
+            foreach (var item in Items)
+            {
+                if (!item.IsBlocking) ordered.Add(item);
+            }
+
+            _prioritized = ordered;
+            return _prioritized;
+        }
+    }
+
+    private IReadOnlyList<ReadinessItem>? _prioritized;
+
     /// <summary>The loudest severity recorded for <paramref name="section"/>, or <c>null</c> when the section
     /// has nothing to say — which is what the strip renders as a ✓.</summary>
     public ImportSeverity? SeverityFor(ImportSection section)

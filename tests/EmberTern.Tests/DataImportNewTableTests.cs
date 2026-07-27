@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Import;
 using EmberTern.Core.Metadata;
@@ -310,6 +311,50 @@ public class DataImportNewTableTests : IDisposable
 
         Assert.Equal(200, vm.Target.NewColumns[0].Size);
         Assert.Equal("BIGINT", vm.Target.NewColumns[1].Type);
+    }
+
+    /// <summary>
+    /// ⭐ A basis that is the same for every column is a fact about the GRID, so it is said once — on the
+    /// section's line — instead of once per row.
+    /// <para>
+    /// The case is the ordinary one: every restored column reports „from the restored configuration", and a
+    /// column as wide as the column-name column then repeated one identical sentence for as many rows as the
+    /// table has. That is the defect I11 fixed for <c>IMP0018</c> (one fact stated twice trains the user to read
+    /// neither), multiplied by the row count.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ABasisSharedByEveryColumn_IsSaidOnceForTheSection_NotOncePerRow()
+    {
+        var (vm, _, _) = await NewTableVmAsync();
+
+        vm.ApplyConfiguration(ImportConfiguration.Empty with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Csv, WriteFile("new.csv", "KOD;ILOSC\nA1;5\n")),
+            Target = TargetDescriptor.New("IMP_NEW", new[]
+            {
+                new ImportColumnDefinition { Name = "KOD", BasicType = "VARCHAR", Size = 200 },
+                new ImportColumnDefinition { Name = "ILOSC", BasicType = "BIGINT" },
+            }),
+        });
+
+        Assert.False(vm.Target.HasPerColumnBasis);
+        Assert.All(vm.Target.NewColumns, row => Assert.Equal(string.Empty, row.Basis));
+        Assert.Equal(UiStrings.ImportNewTableBasisRestored, vm.Target.InferenceBasisText);
+    }
+
+    /// <summary>The other half: where the evidence really is per column (R19's mixed columns — the measured
+    /// norm) it stays beside the type it explains, and the grid's „Basis" column stays.</summary>
+    [Fact]
+    public async Task AnEvidenceThatDiffersPerColumn_StaysInTheGrid()
+    {
+        var (vm, _, _) = await NewTableVmAsync(csv: "KOD;ILOSC\nA1;5\nA2;12\nA3;nie wiem\n");
+
+        Assert.True(vm.Target.HasPerColumnBasis);
+        Assert.All(vm.Target.NewColumns, row => Assert.NotEqual(string.Empty, row.Basis));
+
+        // And the section line keeps saying what it always said — how many rows the proposal rests on.
+        Assert.Contains("3", vm.Target.InferenceBasisText, StringComparison.Ordinal);
     }
 
     // ── 2. Readiness, and the dry run that creates nothing ──────────────────────────────────────────────

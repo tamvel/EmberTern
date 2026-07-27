@@ -33,7 +33,32 @@
     enabled-looking control with nothing behind it would be a lie the readiness strip could not correct.
   -->
 
-  <Grid x:Name="SurfaceLayout" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
+  <Grid x:Name="SurfaceLayout">
+    <!--
+      ⭐ Written out rather than as the shorthand string for ONE reason: the work row needs a FLOOR.
+
+      Every band except the work area is Auto, so each takes what its content wants and the star takes what is
+      left — and „what is left" can be nothing. In the „New table" variant the Target tile is the tallest band
+      on the surface (the type grid plus, on demand, the DDL preview), and with the bottom panel below it
+      holding an absolute height, Mapping and the converted preview were squeezed to zero: the panels the star
+      row exists to protect disappeared entirely, which is why the Mapping chip read as pointing at nothing.
+      That is §3.8's U5, left open at I5 „to be re-checked when Target and Mapping actually occupy space".
+
+      MinHeight is only half of it — a floor nothing can reach is not a floor. The other half is in
+      ApplyBottomPanel, which clamps the bottom panel so the floor stays reachable: of the two bands competing
+      for the space, the bottom panel is the one whose height WE chose, so it is the one that yields.
+    -->
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />   <!-- C — message banner -->
+      <RowDefinition Height="Auto" />   <!-- B — command bar -->
+      <RowDefinition Height="Auto" />   <!-- D — readiness strip -->
+      <RowDefinition Height="Auto" />   <!-- E1 — source -->
+      <RowDefinition Height="Auto" />   <!-- E2 — target -->
+      <RowDefinition Height="*" MinHeight="150" />  <!-- F — the work area. THE STAR, and now with a floor. -->
+      <RowDefinition Height="Auto" />   <!-- the bottom panel's splitter -->
+      <RowDefinition Height="Auto" />   <!-- G — bottom tabs -->
+      <RowDefinition Height="Auto" />   <!-- H — status -->
+    </Grid.RowDefinitions>
 
     <!-- ══ Band C — the ONE message surface. Never a locally-coloured TextBlock (§9.1 point 5). ══ -->
     <controls:MessageBanner Grid.Row="0"
@@ -620,8 +645,12 @@
                            Classes="field-label" Margin="0" />
                 <TextBlock Grid.Column="4" Text="{x:Static app:UiStrings.ImportNewTableColumnNullable}"
                            Classes="field-label" Margin="0" />
+                <!-- ⭐ The caption goes with its cells. When every column shares one basis it is said once on
+                     the section's line above, and a column header naming an empty column would be exactly the
+                     kind of thing that reads as a control with nothing behind it. -->
                 <TextBlock Grid.Column="5" Text="{x:Static app:UiStrings.ImportNewTableColumnBasis}"
-                           Classes="field-label" Margin="0" />
+                           Classes="field-label" Margin="0"
+                           IsVisible="{Binding HasPerColumnBasis}" />
               </Grid>
 
               <ScrollViewer Grid.Row="1" MaxHeight="170">
@@ -660,6 +689,7 @@
                         <TextBlock Grid.Column="5" Text="{Binding Basis}" FontSize="11"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                    ToolTip.Tip="{Binding Basis}"
+                                   IsVisible="{Binding $parent[ItemsControl].((vm:ImportTargetSectionViewModel)DataContext).HasPerColumnBasis}"
                                    Foreground="{DynamicResource SubtleForegroundBrush}" />
                       </Grid>
                     </DataTemplate>
@@ -692,7 +722,7 @@
          Two halves of one job, split by a draggable splitter: the mapping decides which field feeds
          which column, and the preview shows what that decision produces. The empty state names the
          next step rather than saying "no data" (§9.4). -->
-    <Grid Grid.Row="5" ColumnDefinitions="*,4,*">
+    <Grid Grid.Row="5" x:Name="WorkArea" ColumnDefinitions="*,4,*">
 
     <Grid Grid.Column="0" x:Name="MappingPanel" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
 

@@ -188,8 +188,11 @@ public sealed partial class ImportReadinessViewModel : ViewModelBase
     {
         if (report is null) throw new ArgumentNullException(nameof(report));
 
+        // ⭐ Core's PRIORITIZED order, not its raw evaluation order — because the cap below turns an order into
+        // a selection, and what must never be cut is a reason the run is refused. The rule itself lives in
+        // Core (§ ImportReadinessReport.Prioritized); this only renders it.
         Items.Clear();
-        foreach (var item in report.Items) Items.Add(new ImportReadinessItemViewModel(item));
+        foreach (var item in report.Prioritized) Items.Add(new ImportReadinessItemViewModel(item));
 
         Sections.Clear();
         foreach (var section in AllSections)
@@ -214,7 +217,8 @@ public sealed partial class ImportReadinessViewModel : ViewModelBase
     /// <para>
     /// The findings keep Core's order, so the ones that survive the cut are the ones Core put first — the cap
     /// never re-ranks anything, because a second ordering here is exactly how a strip and a report start
-    /// disagreeing about which problem matters most.
+    /// disagreeing about which problem matters most. Core's order is <c>Prioritized</c>, i.e. blocking first,
+    /// which is what makes "the first three" the right three to keep.
     /// </para>
     /// </summary>
     private void PublishVisibleItems()

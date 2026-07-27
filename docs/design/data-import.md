@@ -69,6 +69,7 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **🔁 I11 — SZEW PO PRZEGLĄDZIE (2026-07-27)** | Dwie uwagi użytkownika z oglądu UI, obie zasadne, obie o **wyjściu** z profilu: (1) nie dało się wrócić do pracy **bez** profilu — doszła stała pozycja **„(no profile)"** na czele listy, która **odłącza i ZOSTAWIA decyzje**; (2) nie było jak wyczyścić powierzchni — doszedł przycisk **`Reset`**, który przywraca domyślne **i** odłącza profil. To są świadomie **dwie różne akcje**, nie jedna. Plus trzecia uwaga: **wyraźniejsze oddzielenie** grupy profili od grupy wykonania. Szczegóły w bloku „⭐ I11 as-built" |
 | **⛔ DYREKTYWA UŻYTKOWNIKA PRZY ZAMYKANIU I11 (2026-07-27)** | **Nie wracamy już do kosmetyki Data Import.** Użytkownik zamknął etap ze świadomym stwierdzeniem, że nie wszystko wygląda docelowo, ale pozostałe uwagi są **czysto UX** i naturalnie należą do planowanego **globalnego sprintu UX** całej aplikacji (wymiana kontrolek Avalonia, zagęszczenie, ujednolicenie zachowań). Do modułu wracamy **wyłącznie przy rzeczywistym błędzie funkcjonalnym** |
 | **🔁 I11 — DRUGI PRZEGLĄD (2026-07-27)** | Pięć uwag o ergonomii powierzchni, wszystkie w granicach modułu. ⭐ Dwie okazały się **defektem, nie kwestią gustu**: chipy `Target` i `Mapping` naprawdę nic nie robiły w zwyczajnych stanach, bo celowały w kontrolkę wyłączoną albo w wiersz, którego nie ma. Poza tym: usunięte zdublowane ostrzeżenie §0.5, `Existing/New table` w jednej siatce ze wspólnymi kolumnami, kolumna `Basis` przycięta z podpowiedzią, tytuł panelu Mapowanie. Szczegóły w bloku „⭐ Drugi przegląd I11" |
+| **🔁 I11 — TRZECI PRZEGLĄD (2026-07-27), przygotowanie do scalenia** | Cztery poprawki wybrane przez użytkownika z audytu; **żadna nie tknęła modeli ani pipeline'u.** ⭐ **U5 DOMKNIĘTY** — wiersz roboczy dostał podłogę (`MinHeight`) i, co ważniejsze, **zacisk, który tę podłogę czyni osiągalną**: `ApplyBottomPanel` przycina dolny panel, bo z dwóch pasów walczących o resztę miejsca to jego wysokość wybraliśmy my, a nie treść. Do tego: chip `Transaction` otwiera listę (jedyna sekcja, która nie jest pasem powierzchni, więc `BringIntoView` był tam zawsze pusty), wspólna „Podstawa" mówiona **raz dla sekcji** zamiast raz na wiersz, oraz `ImportReadinessReport.Prioritized` — sufit paska nie może już schować błędu blokującego za ostrzeżeniem. Szczegóły w bloku „⭐ Trzeci przegląd I11" |
 | **Następny etap** | **I12** — domknięcie modułu (dokumentacja, audyt UI w obu paletach, pomiar na 1 M wierszy) |
 | **Testy** | **5846 zielonych**, 0 niepowodzeń (I11 dodał **+45**: 16 do magazynu, 25 w nowym `DataImportProfileTests`, 4 na `ImportTargetFocus` z drugiego przeglądu; szew po I10 dodał +16; I10 +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **G z I8** + **H z I9** + **I z I10**) przeciwko FB5 `WI-V5.0.3.1683` — **33/33 ALL PASS**; sekcja I dokłada: detektor proponuje TAB dla wklejenia z Excela (3/3 rekordy zgodne co do 5 pól), wklejenie importuje się **bez pliku na dysku**, `.xls` → tabela istniejąca i → tabela nowa, `#N/A` z BIFF odrzucone przez kolumnę VARCHAR, data z `.xls` wraca z bazy tym samym dniem (2026-05-14), oraz **prawdziwy skoroszyt napisany przez Excela** (`Nadgodziny2.xls`: 3 arkusze, 20 pól, 1073 wiersze, ostatni numer 1074). Wcześniejsze: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, Rollback cofa wiersze i NIE cofa tabeli — **oraz (I9): arkusz → tabela istniejąca, arkusz → tabela nowa, prawdziwa komórka daty typuje się na `DATE` i wraca z bazy tym samym dniem (2026-04-03), a `#N/A` zostaje odrzucone przez kolumnę VARCHAR** |
@@ -129,6 +130,58 @@ ten etap ma orzec, że jej nie ruszył** — a to jest jedyny produkt I11. Konse
 selektora nie obiecuje wymiany plikami. Gałąź `ConnectionId == null` w `ListNamed` **zostaje**, bo to nullowalne
 pole zapisanego rekordu — profil, którego żadne zapytanie nie zwraca, jest danymi nieosiągalnymi, nie brakującą
 funkcją.
+
+#### ⭐ Trzeci przegląd I11 — cztery poprawki przed scaleniem (2026-07-27)
+
+Pełny audyt powierzchni dał więcej uwag; użytkownik wybrał z niego **cztery** i świadomie odrzucił resztę
+(m.in. zmianę układu `Existing table` / `New table` — po ponownej analizie uznał, że opcje pojawiające się po
+prawej stronie uzasadniają obecny układ). Żadna poprawka nie tknęła `ImportConfiguration`, pipeline'u,
+konwertera, walidatora, planera ani writera.
+
+**1. ⭐ Wiersz roboczy dostał podłogę — to zamyka U5 i jest DEFEKTEM UKŁADU, nie zmianą UX.**
+Wszystkie pasy poza roboczym są `Auto`, więc gwiazdka bierze to, co zostanie — a zostać może **nic**. W
+wariancie „New table" kafelek Cel jest najwyższym pasem powierzchni (siatka typów plus, na żądanie, podgląd
+DDL), a pod nim dolny panel trzyma wysokość bezwzględną: Mapowanie i Podgląd po konwersji **znikały
+całkowicie**. To jest dokładnie powód, dla którego chip `Mapping` „wyglądał na martwy" mimo naprawy z drugiego
+przeglądu — celował poprawnie w panel o zerowej wysokości.
+
+⚠ **`MinHeight` to tylko połowa.** Podłoga, do której nie da się dojść, nie jest podłogą: gdyby sama deklaracja
+weszła bez niczego więcej, przy ciasnej powierzchni siatka wypchnęłaby na zewnątrz pas statusu. Druga połowa
+jest w `ApplyBottomPanel` (§ jedyny punkt renormalizacji, #240): **dolny panel jest przycinany** do tego, co
+zostaje po pasach `Auto` i po podłodze. Z dwóch pasów walczących o resztę miejsca ustępuje ten, którego
+wysokość **wybraliśmy my** — zapisana wartość nigdy nie jest nadpisywana, tylko chwilowo przycięta, więc wraca
+sama, gdy kafelek Cel zmaleje.
+
+**2. Chip `Transaction` — otwiera listę.** Nawigował poprawnie od drugiego przeglądu, ale to jedyna „sekcja",
+która **nie jest pasem tej powierzchni** — mieszka w pasku poleceń, kilka pikseli nad chipem. Tam
+`BringIntoView` jest zawsze pusty, a obwódka focusa na `ComboBoksie` to całość informacji zwrotnej. Otwarcie
+listy jest tym, czym „zabierz mnie do tej decyzji" może być dla pickera: pokazuje samą decyzję i **dalej nie
+zmienia żadnego ustawienia**.
+
+**3. ⭐ „Podstawa" wspólna dla wszystkich kolumn mówiona jest RAZ.** Po odtworzeniu profilu każdy wiersz
+dostawał „from the restored configuration", więc kolumna szeroka jak kolumna nazwy powtarzała jedno zdanie tyle
+razy, ile tabela ma kolumn — a linia sekcji, która powinna nieść to raz, była celowo pusta. To ta sama wada,
+którą drugi przegląd usunął dla `IMP0018` (jeden fakt powiedziany dwa razy uczy, żeby nie czytać żadnego),
+pomnożona przez liczbę wierszy. Reguła jest ogólna, nie dotyczy tylko odtworzenia: **jeżeli podstawa jest
+identyczna dla całej siatki, jest faktem o siatce, nie o kolumnie** — schodzi na linię sekcji, a nagłówek
+kolumny znika razem z komórkami (nagłówek nad pustą kolumną to właśnie „atrapa"). Gdzie dowód jest naprawdę per
+kolumna — a R19 zmierzył, że kolumny mieszane są normą — zostaje przy typie, który tłumaczy.
+
+⚠ **Reszta zostawiona świadomie:** ukryta kolumna nie odzyskuje swojej szerokości (proporcje `3*` są wspólne dla
+nagłówka i wierszy, a zwinięcie ich wymagałoby konwertera `bool → GridLength` — nowego typu na zamknięcie
+modułu). Po ukryciu nagłówka to czyta się jak margines, nie jak martwa kolumna.
+
+**4. ⭐ Sufit paska gotowości nie może już schować błędu za ostrzeżeniem.** Pasek pokazuje trzy wyniki i chowa
+resztę, więc jego kolejność nie jest kwestią smaku — **decyduje o tym, co znika**. Kolejność ewaluacji jest
+sekcjami (środowisko → źródło → cel → mapowanie → transakcja): dobra do *czytania*, zła do *cięcia*, bo nowa
+tabela **zawsze** podnosi nieblokujące `IMP0018` w sekcji Cel, czyli przed każdym wynikiem mapowania — i w
+zwykłej kolejności zabierało ono jeden z trzech widocznych slotów błędom, które tłumaczą, czemu bieg jest
+odmówiony.
+
+`ImportReadinessReport.Prioritized` — blokujące najpierw, reszta potem, **stabilnie w obrębie grupy** — leży w
+**Core**, nie w powierzchni, z tego samego powodu co `CanValidate`: widok cinający listę własną regułą byłby
+drugą opinią o tym, co najważniejsze, i pasek z raportem zaczęłyby się w końcu różnić. Stabilność sortowania
+jest tym, co utrzymuje zwinięty pasek **prawdziwym prefiksem** rozwiniętego.
 
 #### ⭐ Drugi przegląd I11 — ergonomia powierzchni (2026-07-27)
 
@@ -1221,9 +1274,14 @@ Błędy (2)                                    [Eksportuj raport…] [Kopiuj]
 > do §3.1 (z powodem odejścia od makiety v2), a tabela niżej zostaje jako zapis, **co** zgłoszono i **jak**
 > to rozstrzygnięto.
 >
-> **Otwarte zostają dwa punkty i oba są świadomie poza tym szwem: U4** (gęstość globalna → sprint UX całego
-> EmberTerna po zamknięciu modułu) i **U5** (responsywność układu I6/I7 → weryfikowana przy I6, gdy sekcja
-> Cel i panel Mapowanie faktycznie zajmą miejsce).
+> **U5 — ZAMKNIĘTY 2026-07-27** (trzeci przegląd I11). Weryfikacja, na którą czekał, wypadła negatywnie i to
+> dobrze, że czekał: gdy sekcja Cel faktycznie zajęła miejsce — w wariancie „New table", z siatką typów i
+> podglądem DDL — **powierzchnia robocza schodziła do zera**, bo wiersz `*` nie miał podłogi. Domknięte
+> `MinHeight` na wierszu roboczym **plus** zacisk dolnego panelu w `ApplyBottomPanel`, bez którego podłoga
+> byłaby nieosiągalna (szczegóły w bloku „⭐ Trzeci przegląd I11").
+>
+> **Otwarty zostaje jeden punkt, świadomie poza modułem: U4** (gęstość globalna → sprint UX całego
+> EmberTerna po zamknięciu modułu).
 
 #### Uwagi użytkownika
 

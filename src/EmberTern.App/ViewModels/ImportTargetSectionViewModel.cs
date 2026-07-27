@@ -113,8 +113,26 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
     public ObservableCollection<ImportNewTableColumnRowViewModel> NewColumns { get; }
 
     /// <summary>How many rows the inference was based on, plus whether the safety limit stopped it — ⭐ always
-    /// visible (§3.4), because a type is worth exactly as much as the evidence behind it.</summary>
+    /// visible (§3.4), because a type is worth exactly as much as the evidence behind it. It also carries the
+    /// basis itself whenever every column shares one (see <see cref="HasPerColumnBasis"/>).</summary>
     [ObservableProperty] private string _inferenceBasisText = string.Empty;
+
+    /// <summary>
+    /// ⭐ False when every column's basis is the SAME sentence — in which case it is said once, on the section
+    /// line, and the grid's „Basis" column disappears.
+    /// <para>
+    /// The case that forced it is the ordinary one: a restored profile gives every column „from the restored
+    /// configuration", so a column as wide as the column-name column repeated one identical sentence forty
+    /// times while the line that should have carried it once was deliberately blank. That is the same defect
+    /// I11 fixed for <c>IMP0018</c> — one fact stated twice trains the user to read neither — only multiplied
+    /// by the number of rows.
+    /// </para>
+    /// <para>
+    /// A per-column basis is still the norm for a real inference (R19 measured mixed columns as the rule), and
+    /// there it stays exactly where it was: the evidence belongs beside the type it explains.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private bool _hasPerColumnBasis;
 
     /// <summary>True while the source is being scanned for types. The scan reads the WHOLE source (R19), so it
     /// is the one part of this section the user can be left waiting on.</summary>
@@ -179,29 +197,73 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
     {
         if (inference is null) throw new ArgumentNullException(nameof(inference));
 
+        // The bases are resolved BEFORE the rows are built, because whether each row keeps its own is a
+        // property of the whole set, not of any one row.
+        var bases = new List<string>(inference.Columns.Count);
+        foreach (var column in inference.Columns)
+        {
+            bases.Add(ImportNewTableColumnRowViewModel.DescribeBasis(column.Evidence));
+        }
+        var shared = SharedBasis(bases);
+
         using (SuspendChangeNotifications())
         {
             NewColumns.Clear();
-            foreach (var column in inference.Columns)
+            for (var i = 0; i < inference.Columns.Count; i++)
             {
-                NewColumns.Add(new ImportNewTableColumnRowViewModel(column, OnColumnEdited));
+                NewColumns.Add(new ImportNewTableColumnRowViewModel(
+                    inference.Columns[i].Definition,
+                    shared is null ? bases[i] : string.Empty,
+                    OnColumnEdited));
             }
         }
 
         OnPropertyChanged(nameof(HasNewColumns));
+        HasPerColumnBasis = shared is null && inference.Columns.Count > 0;
 
         InferenceBasisText = inference.Columns.Count == 0
             ? string.Empty
-            : string.Format(
-                CultureInfo.CurrentCulture,
-                inference.ScanTruncated
-                    ? UiStrings.ImportNewTableInferenceTruncatedFormat
-                    : UiStrings.ImportNewTableInferenceFormat,
-                inference.RowsAnalysed);
+            : Join(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    inference.ScanTruncated
+                        ? UiStrings.ImportNewTableInferenceTruncatedFormat
+                        : UiStrings.ImportNewTableInferenceFormat,
+                    inference.RowsAnalysed),
+                shared);
 
         OnPropertyChanged(nameof(CreateTableSql));
         RaiseChanged();
     }
+
+    /// <summary>
+    /// The one sentence every column gives as its basis, or <c>null</c> when they differ — the question
+    /// „is this evidence about a column, or about the whole grid?".
+    /// <para>
+    /// An empty basis counts as differing on purpose: a row the user added by hand has no evidence, and hoisting
+    /// somebody else's onto the section line would claim it covers that row too.
+    /// </para>
+    /// </summary>
+    private static string? SharedBasis(IReadOnlyList<string> bases)
+    {
+        if (bases.Count == 0) return null;
+
+        var first = bases[0];
+        if (string.IsNullOrWhiteSpace(first)) return null;
+
+        foreach (var basis in bases)
+        {
+            if (!string.Equals(basis, first, StringComparison.Ordinal)) return null;
+        }
+        return first;
+    }
+
+    /// <summary>Two facts on the section's one line, in the order they are read: how the types were arrived at,
+    /// then what they all rest on.</summary>
+    private static string Join(string first, string? second)
+        => string.IsNullOrEmpty(second) ? first
+            : string.IsNullOrEmpty(first) ? second
+            : first + " · " + second;
 
     /// <summary>An edit to any cell is a decision: it reaches the record and re-runs the chain, exactly like
     /// choosing a different table would.</summary>
@@ -304,13 +366,27 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
                 // is a fact about a file that was read at some other time, and reprinting it here would claim
                 // the current source said something it may never have said (§4.8.2 keeps evidence out of the
                 // profile for exactly this reason). The coordinator re-infers when the source stops matching.
+                //
+                // ⭐ And because that makes the basis identical for EVERY column, it is said ONCE — on the
+                // section's line — instead of once per row. Where the sentence is the same for the whole grid it
+                // is a fact about the grid, not about any column in it.
                 foreach (var column in target.NewTableColumns)
                 {
                     NewColumns.Add(new ImportNewTableColumnRowViewModel(
-                        column, UiStrings.ImportNewTableBasisRestored, OnColumnEdited));
+                        column, string.Empty, OnColumnEdited));
                 }
+                InferenceBasisText = NewColumns.Count == 0
+                    ? string.Empty
+                    : UiStrings.ImportNewTableBasisRestored;
+            }
+            else
+            {
                 InferenceBasisText = string.Empty;
             }
+
+            // Either way there is nothing per-column to explain: a restored grid shares one basis, and an
+            // existing table has no inferred types at all.
+            HasPerColumnBasis = false;
 
             OnPropertyChanged(nameof(HasNewColumns));
 

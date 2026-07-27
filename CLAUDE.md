@@ -31,7 +31,7 @@ verbatim, in the archive below.
 | **`docs/design/data-import-i12-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I12** session — the module's close-out (documentation, a UI audit in both palettes, a 1 M-row performance measurement). Each etap's prompt replaces the previous one, so this file is the only live prompt. ⚠ I12 **closes** the module: it adds no capability at all, and anything that looks like new functionality belongs to a later stage, not here. | When starting etap I12. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (259 entries, #1–#272), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (261 entries, #1–#274), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -280,9 +280,48 @@ noted.
 
 ## Current state
 
-- **🏁 DATA IMPORT I11 — CLOSED AND USER-ACCEPTED (2026-07-27). Next: I12, the module's close-out.** Branch
-  `feat/data-import`, suite **5846 green** (+45), build 0/0, smoke clean. Accepted after two review rounds, with
-  the user noting that not everything looks the way they will ultimately want it.
+- **🔁 DATA IMPORT — THIRD REVIEW ROUND DELIVERED (2026-07-27), awaits the user's visual confirmation; then I12.**
+  Branch `feat/data-import`, suite **5851 green** (+5), build 0/0, smoke clean. A full ergonomics audit produced
+  more findings; the user selected **four** and explicitly declined the rest — including the `Existing table` /
+  `New table` layout, which they re-examined and kept, because the options appearing to the right of each
+  variant justify it. **No model, no pipeline, no converter, no validator, no planner, no writer was touched** —
+  the fourth etap in a row that has held.
+  **⭐⭐ U5 IS CLOSED, and it was a layout DEFECT rather than a matter of taste.** Every band except the work
+  area is `Auto`, so the star takes what is left — and what is left can be **nothing**. In the „New table"
+  variant the Target tile is the tallest band on the surface (type grid + optional DDL preview) and the bottom
+  panel below it holds an absolute height, so **Mapping and the converted preview vanished entirely**. That is
+  why the `Mapping` chip still „felt dead" after the second review had fixed its navigation: it was resolving
+  correctly onto a panel of zero height. ⚠ **`MinHeight` is only half the fix — a floor you cannot reach is not
+  a floor.** The other half is in `ApplyBottomPanel` (the one re-normalization point, #240): the bottom panel is
+  **clamped** to what remains after the Auto bands and the floor. Of the two bands competing for the remainder,
+  the one that yields is the one whose height *we* chose; the stored height is never overwritten, only clamped,
+  so it returns by itself when the Target tile shrinks.
+  **⭐ The `Transaction` chip now opens its picker.** It navigated correctly already, but it is the one „section"
+  that is **not a band of this surface** — it lives in the command bar, a few pixels above its own chip, where
+  `BringIntoView` is always a no-op and a `ComboBox`'s focus ring is the entire feedback. Opening the list is
+  what „take me to this decision" can mean for a picker, and it still changes no setting.
+  **⭐ A basis shared by every column is said ONCE, for the section.** After restoring a profile each row read
+  „from the restored configuration", so a column as wide as the column-name column repeated one sentence per
+  table column while the section line that should carry it once was deliberately blank — the same defect the
+  second review fixed for `IMP0018` (one fact stated twice trains the user to read neither), multiplied by the
+  row count. The rule is general: **if the basis is identical for the whole grid it is a fact about the grid,
+  not about a column**, so it moves to the section line and the column's header disappears with its cells (a
+  header over an empty column is exactly what reads as a dummy). Where the evidence really is per column — R19
+  measured mixed columns as the norm — it stays beside the type it explains. ⚠ Deliberately left: the hidden
+  column does not reclaim its width (the `3*` proportions are shared by header and rows; collapsing them needs a
+  `bool → GridLength` converter, a new type at close-out). With the header gone it reads as margin.
+  **⭐ `ImportReadinessReport.Prioritized` — the cap can no longer hide a blocking error behind a warning.** The
+  strip shows three findings and hides the rest, so its order is not taste: it decides what disappears.
+  Evaluation order is by section, which is right to *read* and wrong to *cut* — a new table **always** raises the
+  non-blocking `IMP0018` in the Target section, i.e. ahead of every mapping finding, so it took one of the three
+  visible slots from the errors explaining why the run is refused. Blocking first, stable within each group, and
+  **in Core** for the same reason `CanValidate` is: a view cutting the list by its own rule would be a second
+  opinion about what matters most. Stability is what keeps a collapsed strip a true **prefix** of the expanded one.
+  ⚠ Two of the four are view-level and cannot be proven by the suite — per the project's QA rule they are
+  „implementation done, awaits visual confirmation", not „fixed".
+- **🏁 DATA IMPORT I11 — CLOSED AND USER-ACCEPTED (2026-07-27).** Suite was **5846 green** (+45) at that point.
+  Accepted after two review rounds, with the user noting that not everything looks the way they will ultimately
+  want it.
   **⛔ STANDING DIRECTIVE FROM THE CLOSE: do NOT return to Data Import cosmetics.** The remaining wishes are
   *purely* UX and belong to the planned **app-wide UX sprint** (Avalonia control replacement, density,
   behavioural consistency) — the same sprint U4/U5 already wait in. Come back to this module **only for a real
@@ -2458,9 +2497,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5846 as of 2026-07-27
-  (`feat/data-import`, after I11 named profiles + its two review seams)** — green in two partitions (5806 + the
-  40-test `ConnectionExpandBindingProbe`), ~16s.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5851 as of 2026-07-27
+  (`feat/data-import`, after I11 named profiles + its three review seams)** — green in two partitions (5811 + the
+  40-test `ConnectionExpandBindingProbe`), ~13s.
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).
@@ -3474,7 +3513,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (259 entries, #1–#272), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (261 entries, #1–#274), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

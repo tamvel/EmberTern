@@ -462,4 +462,85 @@ public class ImportReadinessTests
         Assert.All(report.Blocking, item => Assert.True(Enum.IsDefined(item.Section)));
         Assert.All(report.Blocking, item => Assert.NotEqual(string.Empty, item.CodeText));
     }
+
+    // ── The order the strip is allowed to CUT in ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐ The strip shows three findings and hides the rest, so its order is not a matter of taste — it decides
+    /// what disappears. Blocking first; anything that merely informs can wait behind „…and N more".
+    /// </summary>
+    [Fact]
+    public void Prioritized_PutsEveryBlockingItemBeforeEveryNonBlockingOne()
+    {
+        var configuration = Ready() with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Csv, ""),
+            Behavior = new ImportBehaviorOptions { TrimTooLongValues = true },
+        };
+        var report = ImportReadiness.Evaluate(Input(configuration, target: Target("TR_A")));
+
+        Assert.Contains(report.Prioritized, i => i.IsBlocking);
+        Assert.Contains(report.Prioritized, i => !i.IsBlocking);
+
+        var seenNonBlocking = false;
+        foreach (var item in report.Prioritized)
+        {
+            if (!item.IsBlocking) seenNonBlocking = true;
+            else Assert.False(seenNonBlocking, "a blocking item came after a non-blocking one");
+        }
+    }
+
+    /// <summary>Within each group nothing is re-ranked, so a collapsed strip stays a true prefix of the
+    /// expanded one and the strip cannot disagree with a report about what came first.</summary>
+    [Fact]
+    public void Prioritized_IsStable_AndLosesNothing()
+    {
+        var configuration = Ready() with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Csv, ""),
+            Target = TargetDescriptor.Existing(""),
+            Behavior = new ImportBehaviorOptions { TrimTooLongValues = true },
+        };
+        var report = ImportReadiness.Evaluate(Input(configuration) with { IsConnected = false });
+
+        Assert.Equal(report.Items.Count, report.Prioritized.Count);
+        Assert.Equal(
+            report.Items.Where(i => i.IsBlocking).Select(i => i.Code),
+            report.Prioritized.Where(i => i.IsBlocking).Select(i => i.Code));
+        Assert.Equal(
+            report.Items.Where(i => !i.IsBlocking).Select(i => i.Code),
+            report.Prioritized.Where(i => !i.IsBlocking).Select(i => i.Code));
+    }
+
+    /// <summary>
+    /// ⭐ The case that prompted it. A NEW table ALWAYS raises the non-blocking „will be created and committed"
+    /// note, and it is raised in the Target section — i.e. before every mapping finding. In evaluation order it
+    /// therefore took one of the three visible slots away from the errors explaining why the run is refused.
+    /// </summary>
+    [Fact]
+    public void ANewTablesCommitNote_DoesNotOutrankTheErrorsThatBlockTheRun()
+    {
+        var configuration = Ready() with
+        {
+            Target = TargetDescriptor.New("NEW_T", new[]
+            {
+                new ImportColumnDefinition { Name = "A", BasicType = "VARCHAR", Size = 10 },
+            }),
+            Mapping = Array.Empty<ColumnMapping>(),
+        };
+
+        var report = ImportReadiness.Evaluate(new ImportReadinessInput
+        {
+            Configuration = configuration,
+            Schema = Schema(),
+            Target = ImportNewTable.Project("NEW_T", configuration.Target.NewTableColumns),
+        });
+
+        Assert.True(Has(report, ImportDiagnosticCode.NewTableWillBeCommitted));
+        Assert.Contains(report.Prioritized.Take(3), i => i.IsBlocking);
+
+        // In the raw evaluation order the note comes first; in the order the strip cuts by, it does not.
+        Assert.Equal(ImportDiagnosticCode.NewTableWillBeCommitted, report.Items.First().Code);
+        Assert.True(report.Prioritized.First().IsBlocking);
+    }
 }
