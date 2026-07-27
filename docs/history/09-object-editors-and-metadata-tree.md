@@ -438,3 +438,78 @@ The trigger-category context menu was reorganized from four flat items (Activate
 
 **Multi-select (Ctrl/Shift) feasibility — analyzed, NOT implemented (verdict: MEDIUM risk, deferred to a separate task).** The sidebar `ListBox` is `SelectionMode="Single"`; selection has two single-item consumers — `OnSidebarListSelectionChanged` → `Metadata.SelectedConnection` (titlebar Edit/Copy/Delete/Connect), and `DetectFolderContext` → the "+" add-connection folder. Sidebar selection is NOT persisted. Drag & drop is pointer-based and **decoupled** from selection (reads the pointed row via `FindRowVmAtPointer`, never `SelectedItems`; only Folder/Connection rows drag — trigger leaves don't), so DnD is largely unaffected: the only effect of `Multiple` mode is the Avalonia default press-collapse (can't drag a *group* of connections — not a requested feature). The real sharp edge is **selection volatility on full re-projection**: `SidebarFlatController.RebuildRows()` (fired by `ApplyFilter`'s `EndUpdate` / root reload) does `Rows.Clear()` + recreates `SidebarRow` instances → the ListBox drops `SelectedItems`, so a multi-selection evaporates on a filter keystroke or reconnect (incremental expand/collapse splices *should* preserve it — unverified, needs a headless probe). "Selected trigger operations" are cheap once selection exists — the bulk pipeline is already name-list-shaped (`TriggerBulkRequest(Kind, activate, visibleOnly, names)`), so "Selected" is just a third name source + gating. Implementing multi-select needs: `SelectionMode="Multiple"`, `SelectedItems`→`SelectedConnection` reconciliation, a "Selected" command + `TriggerBulkRequest` variant + owner plumbing + gating + unit tests + a **headless probe** characterizing selection survival across splice vs. full rebuild. Not high-risk, but above the do-it-inline bar — recommended as its own scoped follow-up.
 
+
+---
+
+### Metadata refresh — Layer 1 (the bulk guard) + a targeted in-place tree update (shipped 2026-07-27, branch `feat/data-import`)
+
+A session sandwiched between Data Import's I8 and I9, opened by the user with a deliberately narrow scope:
+fix the reported bug, apply **Layer 1** of the measurement report
+([docs/design/metadata-refresh-analysis.md](../design/metadata-refresh-analysis.md)), re-measure, update
+the docs — and **do not** start the Metadata Explorer infrastructure rebuild (Layer 2), which the user
+scheduled as its own stage after the import module closes. Build 0/0, suite **5717 green** (+13), smoke
+clean.
+
+**The reported bug.** Data Import creates a table on the Ddl lane, the import succeeds, the rows are there
+— and the Object Explorer does not show the new table until the user refreshes by hand. No mystery in the
+cause: the module never told the tree anything. Every other DDL path in the app calls
+`Metadata.RefreshAsync()`; there are twenty such calls.
+
+**⭐ The decision that shaped the fix — and it reversed the report's own recommendation.** The report had
+advised leaving this symptom for Layer 2, on the grounds that it is cosmetic (a manual refresh works) and
+that a twenty-first `RefreshAsync()` would deepen the very cause of the *other* symptom. The user rejected
+the deferral — it is an ordinary UX bug and should be fixed now — while keeping the ban on the blind
+refresh. Both halves turned out to be satisfiable at once, because **the import knows the name of the
+table it just created**. So it says so: `DataImportEnvironment.TableCreated` / `TableDropped` carry a
+name, and `MetadataExplorerViewModel.ApplyObjectAddedInPlace` / `ApplyObjectRemovedInPlace` insert or
+remove **one leaf at its sorted position**. Measured: **1.3 ms and no catalog round trip**, against 13
+queries (~164 ms) plus a full re-projection for the refresh.
+
+Three details separate a correct targeted update from a naive one, and each was pinned by a test:
+it is **idempotent** (a later refresh may already have the object); an **active filter** means `Children`
+holds only matches, so the leaf enters the master list always and the displayed list only when it matches,
+with the category's match count and zero-match visibility re-derived; and an **unloaded** category has no
+leaves to insert into but does have an `(N)` label, so its count moves instead. The name index that feeds
+the filter and type-ahead is **patched** rather than dropped — invalidating it would have cost 13 catalog
+reads on the next keystroke, to forget one name we were holding.
+
+⚠ Scope, stated so a future session does not mistake it: this is a **narrow precedent**, the sibling of the
+existing `ApplyTriggerActiveStateInPlace`, not a general change protocol. The other twenty DDL paths were
+not touched.
+
+**Layer 1 — the guard that already existed, on the path that never had it.** `SidebarFlatController` has
+carried an explicit `BeginUpdate`/`EndUpdate` bulk guard for a long time, with a comment naming the exact
+failure it prevents (*"an O(n²) storm"*) — wired to the FILTER rebuild only. The other mass mutation,
+`MetadataNodeViewModel.SetLeaves` (`Children.Clear()` then one `Add` per object), ran unguarded, so every
+`Add` re-spliced the owner's whole child block while the category was expanded. The fix was to call the
+existing pair from `LoadGroupAsync` (so every caller is covered wherever it is invoked from),
+`RefreshAsync` (collapsing 13 re-projections into one) and the connect-time prefetch. Nesting is safe, so
+the inner and outer guards compose.
+
+**Re-measured with `tools/probes/MetadataPerfProbe`, extended with a before/after column:**
+
+| expanded categories | before | after |
+|---:|---:|---:|
+| 0 | 6 ms | 2 ms |
+| 1 | **1 424 ms** | **2 ms** |
+| 2 | **1 733 ms** | **4 ms** |
+
+⚠ **Startup did not improve, and that is measured rather than assumed.** `RestoreExpandState` restores
+folder and connection expansion but **not** category expansion, so at connect every category is collapsed
+and the projection already had an early exit — the "0 expanded" row above. Layer 1 removes the pain of
+*refreshing*, not of *starting*. The startup cost stays unresolved, with the instrument already in the
+app (`EMBERTERN_PERF_DIAG=1`) and the remaining suspects named in the report: the semantic-model rebuild
+after `NotifyMetadataReady`, and workspace tab restore.
+
+⚠ **One accepted trade-off, and it broke a test in a useful way.** `EndUpdate` re-projects the whole list,
+so `SidebarRow` objects are recreated and the ListBox scrolls to the top. That was already true of every
+refresh (it ends in `ApplyFilterAsync`, which does exactly this), but
+`ConnectionExpandBindingProbe.AutoExpandOnConnect_ReflectedInFlatList` had captured a row **instance**
+before connecting and asserted on it afterwards. The probe now re-resolves the row: what it is about is the
+projection *mirroring* the node's state, not a row's identity. Removing the tree's "jumping" is Layer 2's
+job, and the report says so.
+
+**Left for the Metadata Explorer stage:** Layer 2 (a first-class "what changed" concept across all DDL
+paths, incremental splicing, scroll/selection preserved), Layer 3 (reconcile the prefetch with
+`RefreshAsync`'s dead `LoadCountAsync` branch; the `Domain` category's 79 ms `RDB$FIELDS` scan; the `User`
+category's security-database round trip), and the unmeasured startup cost. Gotchas **#266** and **#267**.

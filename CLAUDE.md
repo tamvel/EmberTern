@@ -27,8 +27,12 @@ verbatim, in the archive below.
 | **`docs/design/firebird-debugger.md`** | **The debugger's behaviour authority (v2, decisions ratified 2026-07-17).** ⚠ *Its "nothing implemented" framing dated from the design phase and was corrected 2026-07-25 — the debugger is built (P1/P2, D1–D13, D15, functions-as-root, the Draft model); sections amended by delivery say so in place (§9.1, §9.3.1, §12.14).* Feasibility (Firebird has **no** debug API — verified), the Fidelity Law §F, the client-interpreter + `EXECUTE BLOCK` harness, harness declaration rules, frame savepoints, exception control flow, per-session connection + transaction, nested frames/call stack, local routines (no temporary metadata), cursor bridge, UI/UX, panels, reuse map, prerequisites P1/P2 + milestones D1–D14, Fidelity Boundaries, and a live-engine verification log. | When working on the debugger. |
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (245 entries, #1–#258), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
-| **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
+| **`docs/design/data-import.md`** | **🔒 FROZEN ARCHITECTURE of the Data Import module — CLOSED and merged (2026-07-27).** How the module is built and why, in the present tense: one working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and what stays deliberately open with a reason for each. The etap-by-etap narrative lives in `docs/history/21-data-import.md`. | Before touching the import module — §0 and the relevant architecture section. |
+| **`docs/history/21-data-import.md`** | The Data Import module’s **narrative** — etap by etap, why each decision went the way it did, the I12 close-out (1 M-row measurement, the UI audit, the last defect) and the closing table of what stays OPEN with a reason for each. Written in I12, when ~520 lines of it moved out of CLAUDE.md. | On demand — when you need the backstory on an import behaviour. |
+| **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
+| **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (264 entries, #1–#277), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
 
@@ -53,6 +57,72 @@ src\EmberTern.App\bin\Debug\net9.0\EmberTern.exe
 ```
 
 Solution file is `.slnx` (not `.sln`) — .NET 10 default. App AssemblyName is `EmberTern`, so avares URIs use `avares://EmberTern/...`. `Directory.Build.props` sets `net10.0`, `Nullable=enable`, `TreatWarningsAsErrors=true` for every project.
+
+## Git remotes & push workflow (user directive, 2026-07-26)
+
+The repository is mirrored to **two** remotes. Both must receive every accepted milestone.
+
+| Remote | URL | Role |
+|---|---|---|
+| `origin` | `https://vm-srv-app-git-02.streamsoft.pl:3000/GGronski/EmberTern.git` | company Gitea (HTTPS, Git Credential Manager) |
+| `private` | `git@github.com:tamvel/EmberTern.git` | the user's personal GitHub (SSH) |
+
+**The rule: after every ACCEPTED etap / milestone, push to both.**
+
+```bash
+git push origin <branch>
+git push private <branch>
+```
+
+**Branch hygiene (2026-07-26):** the repo carries only branches that are still needed. `feat/completion-matching`,
+`feat/firebird-debugger`, `feat/save-and-close` and `feat/sql-data-export` were all provably merged into
+`master` and were deleted locally and from **both** remotes. **Live branch: `master` alone** — `feat/data-import`
+joined it on 2026-07-27 when the Data Import module closed (merged `--no-ff`, so the module's history stays one
+readable arc). ⚠ One residue: **`private`'s default branch (HEAD) still points at
+`feat/completion-matching`**, so GitHub refuses to delete it — it stays until the user switches the default
+to `master` in the GitHub repo settings (a repo-settings change, deliberately left to the user).
+
+**⛔ Never change the remote configuration without the user's explicit decision** — not the URLs, not a
+`pushurl`, not a rename. A dual-`pushurl` "one push reaches both" variant was considered and **rejected on
+purpose**: when GitHub is unreachable (no network, VPN, expired key) it makes *every* push report failure,
+including the company one, so a company push would depend on GitHub's availability. Two explicit pushes keep
+failures isolated.
+
+### ✅ SSH — resolved 2026-07-26: git uses the system OpenSSH (durable fix APPLIED)
+
+The binding configuration from now on is:
+
+```bash
+git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"
+```
+
+**Applied globally on the user's explicit decision (2026-07-26) and verified**: `git push private` and
+`git ls-remote private` both authenticate with **no** `GIT_SSH_COMMAND` prefix. **`GIT_SSH_COMMAND` is no
+longer needed and should not be added to commands** — a plain `git push private <branch>` is the workflow.
+
+**Why it was needed** (keep — it explains the setting and warns against undoing it): there are **two
+independent SSH agents** on this machine, and with `core.sshCommand` unset git talks to the wrong one.
+
+- The key lives in the **Windows OpenSSH agent service** (`ssh-agent`, Automatic). In PowerShell/CMD,
+  `ssh` and `ssh-add` resolve to `C:\Windows\System32\OpenSSH\*` and DO see it.
+- **Git for Windows bundles its own ssh** (`C:\Program Files\Git\usr\bin\ssh.exe`), which reads
+  `SSH_AUTH_SOCK` and therefore does **not** see the Windows agent.
+
+Measured 2026-07-26 (before the fix): `ssh -T git@github.com` in PowerShell → *"Hi tamvel! You've
+successfully authenticated"*, while git's bundled ssh on the same host → **`Permission denied (publickey)`**.
+So **a green `ssh -T` proves nothing** about whether `git push private` will work — if pushes to `private`
+ever start failing with `Permission denied (publickey)`, check `git config --global --get core.sshCommand`
+FIRST (an unset/overwritten value re-opens exactly this trap).
+
+**After a reboot** the agent forgets the key (it is passphrase-protected). Unlock it once per system session
+**from PowerShell or CMD**, so it lands in the Windows agent:
+
+```bash
+ssh-add ~/.ssh/id_ed25519
+```
+
+Running `ssh-add` inside Git Bash targets the *other* agent and will not help git or the Windows tooling.
+Check what is loaded with `ssh-add -l` (PowerShell).
 
 ## Laboratory Database
 
@@ -109,8 +179,11 @@ src/
     e.g. FirebirdConnectionService.cs / FirebirdQueryExecutor.cs / TransactionService.cs /
     FirebirdMetadataReader.cs / FirebirdDdlReader.cs / FirebirdCatalogReader.cs /
     FirebirdTraceService.cs / FirebirdSessionReader.cs / FirebirdScriptExecutor.cs
-  EmberTern.Export.Office/   # the ONE place a NuGet dep is allowed for export (XLSX only);
-                             # DocumentFormat.OpenXml, streaming writer
+  EmberTern.Office/          # the ONE place a NuGet dep on an Office format is allowed, in BOTH
+                             # directions: DocumentFormat.OpenXml (the streaming XLSX writer XlsxExporter
+                             # and, since I9, the streaming SAX reader XlsxImportProvider) plus, since I10,
+                             # ExcelDataReader for legacy .xls (XlsImportProvider). Renamed from
+                             # EmberTern.Export.Office in I9.
   EmberTern.App/             # WinExe, Avalonia 12.0.3, CommunityToolkit.Mvvm 8.4.2
     Program.cs, App.axaml(.cs), UiStrings.cs, app.manifest
     ViewModels/ Views/ Themes/ (Colors.axaml + ControlStyles.axaml — the ONLY theme sources)
@@ -208,7 +281,135 @@ noted.
 
 ## Current state
 
-- **🏁 CURRENT STATE (2026-07-25) — THE FIREBIRD DEBUGGER IS CLOSED.** Everything planned for it is delivered
+- **🏁 DATA IMPORT — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-27).** Suite **5856 green**
+  (5815 + the 41-test `ConnectionExpandBindingProbe`), build 0/0, smoke clean. **Full narrative:
+  [docs/history/21-data-import.md](docs/history/21-data-import.md)** — the etap-by-etap record lives there,
+  moved out of CLAUDE.md and out of the design doc at close-out; architecture (🔒 frozen):
+  [docs/design/data-import.md](docs/design/data-import.md) — architecture only, in the present tense.
+  **What it is:** a tool tab (toolbar, beside the Script Executor) that imports Clipboard / TXT / CSV / XLS /
+  XLSX into an existing or a newly created table. One working surface with collapsible sections, **deliberately
+  NOT a wizard** (the same import runs repeatedly; the gate is a readiness strip, not Next buttons) · **one
+  pipeline for every source** (a provider yields `SourceSchema` + `RawRecord`) · **`ImportConfiguration` is the
+  single representation of every user decision**, so surface state, pipeline input and profile payload are the
+  same record — enforced by a reflection round-trip test that fails the suite when a new setting bypasses it ·
+  rows go to the module's **own transaction on its own attachment** (I7.5), `CREATE TABLE` to the **Ddl** lane
+  (gotcha #213 — and the UI says out loud that Rollback will not remove that table) · named profiles, a
+  converted preview that IS the real pipeline, and a report whose numbers equal `SELECT COUNT(*)`.
+  **Live verification that exists and must keep passing:** `tools/probes/DataImportProbe` (20/20) and
+  `tools/probes/DataImportRunProbe` (33/33) on FB5 `WI-V5.0.3.1683`.
+  **⭐ Three results worth carrying out of the module.** (1) **The „one pipeline for every source" pillar held
+  three times** — I9 (XLSX), I10 (XLS + clipboard) and the post-I10 seam touched neither the pipeline, the
+  converter, the validator, the mapping planner nor the writer; I10 was the harder test because it arrived with
+  a **dependency**, and that dependency reached exactly one project. (2) **I11 was the design's own audit and
+  the account balanced** — named profiles required **no model change at all**, which is what §4.8 had staked
+  itself on. (3) **A million rows go through in 14.0 s (71 437 rows/s) with a FLAT managed heap** (~1 MB across
+  the run, peak working set 66.6 MB on a 36.6 MB file) — the shape is the proof, not the number; the I0
+  defaults (batch 500 / commit 10 000) **hold**, and `Batched` costs 40% throughput, which is the price of the
+  *mode*, not of the number.
+  ⚠ **Open after the module, each with its reason, in the history file's closing table** — the app-wide UX
+  sprint (U4 density, **U5 responsiveness**, + the remaining I11 review wishes), profile `.json` exchange, a
+  „modified" marker on the selected profile, the platform-wide charset audit, and the full-suite hang
+  (#94/#226/#261). None is a Data Import defect; each is somebody else's task.
+  **⭐⭐ THE SURFACE IS SPLIT BY RESPONSIBILITY: the top half is where the import is DESIGNED, the bottom panel
+  is where RESULTS land** (user's call, 2026-07-27, and it is the decision that finally settled U5). „Preview
+  after conversion" is a *result* — what the pipeline produces — so it is a **bottom tab** beside Source
+  preview / Errors / Report, needed as it is in both target variants. The work area now belongs entirely to
+  configuration: **Existing table → Mapping at full width; New table → `Table types | Mapping`** with a
+  splitter, so the user sets the proportion. The type grid moved out of the `Auto` Target tile into that left
+  half, which is what made the tile thin again.
+  **⭐ The generated `CREATE TABLE` is the FIFTH BOTTOM TAB (`DDL`), shown only in the „new table" variant** —
+  the same configuration/results principle carried to its end: the statement is an *artefact* of the
+  configuration, so it belongs with Source preview / Preview after conversion / Errors / Report. It is **live**
+  (rendered from `CreateTableSql`, computed through the same `ImportNewTable.BuildCreateSql` the run calls), so
+  there is no button, no command and no „is it showing" state to keep in sync. Last on the strip on purpose —
+  a hidden tab still holds its index and the run reveals Report by index.
+  **⭐ It renders through the SAME read-only SQL surface as the other eleven DDL previews** — an
+  `AvaloniaEdit.TextEditor` + `SqlEditorBehavior.AttachReadOnlyHighlighting` (shared XSHD lexical layer + the
+  semantic accent layer from the one language front-end), **never a second renderer**. A plain text block had
+  made this the only place in the application showing colourless SQL. Read-only in the strict sense the seam
+  guarantees (no completion, no squiggles, no ergonomics); no line numbers; text **pushed** from the VM, since
+  a two-way `TextEditor.Text` binding is flaky — the same workaround every DDL preview uses.
+  ⚠ **Two worse answers came first and neither should be retried.** Disclosed *inline* in the types column, it
+  complicated that column permanently for something read rarely. Opened in the **SQL Editor**, it was technically
+  clean but a **UX regression the user rejected**: the DDL is part of configuring *this* import, so reaching it
+  must not switch modules or move the active tab. `OpenSqlInEditor`, `ShowCreateTableDdlCommand` and the
+  `OpenSqlAsSavedQuery` generalization were all removed with it.
+  ⚠ **Two earlier attempts failed and are worth knowing before re-opening this.** A `MinHeight` floor on the
+  work row plus a clamp on the bottom panel was built and **reverted** — honouring the floor made the bottom
+  panel give way, so the middle grew and the panel stopped being useful. The lesson the user drew, and it is
+  the load-bearing one: **it was never a height problem, it was configuration and results interleaved and
+  fighting over the same pixels.** Do not answer a space complaint here by adding a floor or another vertical
+  section; ask first what is a *decision* and what is an *outcome*. Gotcha #274 carries the postscript.
+  **⛔ STANDING DIRECTIVE: do NOT return to Data Import cosmetics.** Come back only for a real functional
+  defect.
+- **✅ METADATA REFRESH — LAYER 1 SHIPPED + THE TREE NOW SHOWS AN IMPORTED TABLE IMMEDIATELY (2026-07-27).**
+  A short session between Data Import I8 and I9, scoped by the user to: fix the reported bug, apply **Layer 1**
+  of [docs/design/metadata-refresh-analysis.md](docs/design/metadata-refresh-analysis.md), re-measure, update
+  docs — and explicitly **NOT** start the Metadata Explorer infrastructure rebuild (Layer 2), which is its own
+  stage after Data Import closes. Suite **5717 green** (+13), build 0/0, smoke clean.
+  **⭐ Layer 1 is the whole lesson: the bulk guard already existed and was wired to ONE of the two mass
+  mutations.** `SidebarFlatController.BeginUpdate/EndUpdate` — whose own comment names *"an O(n²) storm"* —
+  was applied to the FILTER rebuild only; `MetadataNodeViewModel.SetLeaves` (`Clear()` + one `Add` per object)
+  ran unguarded, so each `Add` re-spliced the owner's entire child block. Now called from `LoadGroupAsync`
+  (covering every caller), `RefreshAsync` (13 re-projections → 1) and the connect-time prefetch; nesting-safe.
+  **Measured (`tools/probes/MetadataPerfProbe`, 2 400-table schema): a full refresh with one category expanded
+  1 424 ms → 2 ms; with two, 1 733 ms → 4 ms.**
+  **⭐ The bug fix reversed the report's own recommendation, on the user's call:** the report advised deferring
+  "the new table is not in the tree" to Layer 2; the user rejected that (ordinary UX bug, fix it now) while
+  keeping the ban on a 21st `Metadata.RefreshAsync()`. Both hold at once because **the import knows the name of
+  the table it created** — `DataImportEnvironment.TableCreated`/`TableDropped` report a FACT ("this table
+  exists"), never a command ("refresh"), and `MetadataExplorerViewModel.ApplyObjectAddedInPlace`/
+  `ApplyObjectRemovedInPlace` insert/remove **one leaf at its sorted position** (**1.3 ms, zero catalog round
+  trips**, vs 13 queries ≈164 ms + a full re-projection). Three details make a targeted update correct and each
+  is pinned: **idempotent** (a later refresh may already hold it); an **active filter** means the leaf enters the
+  master list always and the displayed list only if it matches, with match count + zero-match visibility
+  re-derived; an **unloaded** category has no leaves but does have an `(N)` label, so its count moves instead.
+  The name index is **patched**, not invalidated (dropping it would cost 13 catalog reads to forget one name we
+  were holding). ⚠ **Scope:** a narrow precedent beside the existing `ApplyTriggerActiveStateInPlace` — **not** a
+  change protocol; the other 20 DDL paths were untouched.
+  ⚠ **Startup did NOT improve, and that is measured, not assumed:** `RestoreExpandState` restores folder +
+  connection expansion but **not** category expansion, so at connect every category is collapsed and the
+  projection already had an early exit (the "0 expanded" row: 6 ms → 2 ms). Layer 1 fixes *refreshing*, not
+  *starting*; the startup cost stays unresolved, instrument `EMBERTERN_PERF_DIAG=1`, suspects = the
+  semantic-model rebuild after `NotifyMetadataReady` and workspace tab restore.
+  ⚠ **Accepted trade-off:** `EndUpdate` re-projects everything, so `SidebarRow` objects are recreated and the
+  list scrolls to top — already true of every refresh (it ends in `ApplyFilterAsync`, which does exactly this),
+  but it broke `ConnectionExpandBindingProbe.AutoExpandOnConnect_ReflectedInFlatList`, which held a row
+  **instance** across a connect; it re-resolves the row now (the probe is about mirroring, not identity).
+  Removing the tree's "jumping" is Layer 2's job. **Still open for the Metadata Explorer stage:** Layer 2
+  (first-class "what changed" across all DDL paths + incremental splicing + scroll/selection preserved),
+  Layer 3 (reconcile the prefetch with `RefreshAsync`'s dead `LoadCountAsync` branch · `Domain` 79 ms
+  `RDB$FIELDS` scan · `User` security-DB round trip), and the startup measurement. Gotchas **#266 / #267**;
+  narrative: [docs/history/09-...](docs/history/09-object-editors-and-metadata-tree.md).
+- **📋 BACKLOG (do NOT start) — GLOBAL UI DENSITY / an EmberTern-wide UX sprint.** Raised by the user during
+  the Data Import I5 review (2026-07-26) and, in the same breath, **deliberately scheduled for AFTER the
+  Data Import module closes**. The finding: EmberTern's ordinary form controls are too tall app-wide —
+  `TextBox`, `ComboBox`, `CheckBox`, `Button`, vertical spacing, form row heights — and it must **not** be
+  patched per module. **Confirmed in code:** `Themes/ControlStyles.axaml` has **no implicit style at all**
+  for `TextBox` / `ComboBox` / `CheckBox` / `RadioButton` / `NumericUpDown` / bare `Button`, so every one
+  sits on FluentTheme's defaults (`MinHeight` 32 px); density was only ever applied **ad hoc, one control at
+  a time** (`DataGridCell` FontSize 11 + tight padding, `DataGridRow` and `TabItem` `MinHeight="0"`). The
+  precedent and the intent exist; the generalisation does not. **⭐ The user's ratified sequencing, which
+  reverses my earlier "density first" recommendation — do not re-propose it:** one task at a time; finish
+  Data Import to the accepted architecture first, then run a dedicated UX sprint that looks at **every**
+  surface at once (SQL Editor, Debugger, Activity Monitor, Session Manager, Script Executor, Data Import and
+  the rest) and designs the new global control style from that whole view — not extrapolated from one form.
+  Mixing the two makes the scope unreadable and the progress unmeasurable. **⛔ Standing instruction (user,
+  2026-07-26, on closing I5): from here on a module etap delivers the module — do NOT initiate global UI
+  changes or style refactors.** Avalonia control rebuilds, density, styles and responsiveness all wait for
+  the sprint. A **small remark about one specific screen** (the kind that produced `Border.settings-group`)
+  may still be fixed in passing; anything that would touch the app as a whole may not. The working line:
+  *a control's height* is the sprint, *two controls stacked instead of side by side* is the module.
+- **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
+  binding a string containing a character the **connection** charset cannot represent stores `?` with **no
+  error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and
+  `ConnectionProfile.Charset` defaults to `WIN1250`. Triage found it reaches `FirebirdDataEditor` (Table Data
+  inline edit/insert) and `FirebirdQueryExecutor` (Smart SQL Parameters); the **statement-TEXT path
+  (`FirebirdDdlExecutor`) is unmeasured and could silently corrupt user SOURCE CODE — measure it first**.
+  Ratified: a **separate architectural audit**, ONE shared guard (natural home: `CharsetCatalog`, with
+  `EncoderExceptionFallback`, never per-module fixes), plus an entry in `docs/gotchas.md`. Deferred by the
+  user; escalates if the DDL path is confirmed. Evidence: `data-import-i0-findings.md` §2.8.
+- **🏁 PREVIOUS STATE (2026-07-25) — THE FIREBIRD DEBUGGER IS CLOSED.** Everything planned for it is delivered
   and user-QA-confirmed: P1/P2, D1–D13, D15 (D15.6 dropped, D15.7 background), functions-as-root (standalone +
   packaged), the **Draft model** (Seams A + B), the **launch-config rebuild** (C3.1–C3.3b), and **Seam 6d**
   (a compiled object refreshes the other tabs showing it). **Two items stay deliberately deferred, each with a
@@ -1815,10 +2016,10 @@ noted.
   `WorkspaceTabViewModel.SavableEditor`. Build 0/0, tests green (`DataLossGuardTests` +save cases).
   Full detail: [docs/history/08-...](docs/history/08-data-loss-sidebar-and-searchable-combo.md);
   gotcha #231 (decide from the loop's tally, not the batch dialog's `IProgress`-lagged counters).
-- **Active branch: `feat/editor-language-frontend`** — holds the editor-language-front-end rebuild
-  (Etaps 0–6 + UX Polish incl. P8), the 2026-07-14 **UX & Stabilization Sprint** (transaction/
-  attachment model rewrite), **and** a 2026-07-14 **UX Polish follow-up sprint** (below). Not yet
-  merged to `master`.
+- **⚠ Corrected 2026-07-27:** an entry here used to claim `feat/editor-language-frontend` was an active,
+  unmerged branch holding the editor rebuild. It has not existed for a long time — that work (Etaps 0–6 +
+  UX Polish incl. P8, the 2026-07-14 UX & Stabilization Sprint, and its follow-up sprint below) is **on
+  `master`**. See "Git remotes & push workflow" for the live branch list.
 - **UX Polish follow-up sprint (2026-07-14) — DONE** (4 tasks + 2 review fixes, separate commits):
   **(1) trigger context variables** — NEW/OLD/INSERTING/UPDATING/DELETING get a distinct semantic
   highlight (new `SemanticHighlightClass.ContextVariable`, higher-chroma amber `#E5C07B`). Done
@@ -1837,16 +2038,36 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **4293, all green in ONE
-  `dotnet test` run** (`dotnet test EmberTern.slnx`, ~10s). The two-partition workaround is no longer
-  needed: `ConnectionExpandBindingProbe` now uses **one shared `HeadlessUnitTestSession` for the whole
-  class** instead of `StartNew` per test — which is what gotcha #94 always prescribed, and is now
-  **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into a `TextEditor`
-  throw cross-thread from every session after the first (gotcha #226). It also cut that class from 16s to
-  5s. *(The old "intermittently hangs alongside the rest of the suite" caveat is **not** claimed fixed —
-  the hang simply does not reproduce now, for the author or the user, across repeated full runs; if it
-  returns, investigate then with concrete evidence rather than pre-emptively re-splitting.)* Smoke: clean
-  (app launches).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5856 as of 2026-07-27
+  (`master`, after the Data Import module closed and merged)** — green in two partitions (5815 + the
+  41-test `ConnectionExpandBindingProbe`), ~14s.
+  `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
+  prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
+  a `TextEditor` throw cross-thread from every session after the first (#226).
+  **⚠ 2026-07-27, I9 session — the hang REPRODUCED, and the instrument named a suspect.** A plain
+  `dotnet test` hung; a first `--blame-hang` run went clean; a later one caught it and reported the test
+  running at the moment of the hang as **`ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`**
+  (vstest prints its own caveat that this may or may not be the cause). Two facts worth carrying: the hang is
+  **after** the tests finish, not a failing test — the aborted run had already reported *5677 passed, 0
+  failed, 6 s* before it stopped exiting; and it is in the headless-Avalonia probe class, consistent with
+  #94/#226/#261. **Nothing was changed on this evidence** (it is one observation and the session's task was
+  I9), but a future investigation now has a named starting point and a dump under
+  `tests/EmberTern.Tests/TestResults/`. Practical workflow meanwhile: run the two partitions, always with
+  `--blame-hang`. **📋 Ratified by the user on closing I9: this is its OWN infrastructure task and is
+  explicitly NOT to be picked up inside Data Import** — record findings here, never detour a module etap
+  into it.
+  **⚠ The intermittent full-suite hang the user keeps hitting is NOT claimed fixed.** It did not reproduce
+  during the 2026-07-26 investigation (5568 green in ~9s, repeatedly, and the probe class alone in 6s), so
+  nothing was restructured on a hypothesis. What that investigation *did* find and fix is a real defect with
+  a plausible mechanism: the shared session was held in a `static readonly` field and **never disposed**,
+  and Avalonia's own contract says *"Disposing unit test session stops internal dispatcher loop"* — i.e. it
+  left a thread spinning a dispatcher loop after the last test. Ownership moved to an `IClassFixture`
+  (`HeadlessSessionFixture`), still ONE session (gotcha #261). **When it next hangs, do not re-run and hope
+  — run the instrument**, which turns an infinite wait into a two-minute named failure:
+  ```bash
+  dotnet test EmberTern.slnx --blame-hang --blame-hang-timeout 120s
+  ```
+  Smoke: clean (app launches).
 - **Script Executor — Dev Mode integration DONE (2026-07-16; impl, awaits user visual confirmation).**
   The Script Executor no longer ignores Developer Mode. An **all-DDL script under auto-commit** begins
   its transaction with the Dev Mode-aware DDL wait policy (`FirebirdDdlExecutor.BuildDdlTransactionOptions`
@@ -2634,7 +2855,7 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (245 entries, organized thematically) lives in
+The **complete** catalog (255 entries, organized thematically) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -2833,10 +3054,10 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (245 entries, #1–#258), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (264 entries, #1–#277), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
-  session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a
+  session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a
   specific feature or fix; nothing here is loaded automatically.
 - **`docs/design/*.md`** (other files) — frozen, feature-specific design docs for already-shipped
   work: `script-executor-and-smart-parameters.md`, `execution-modes-and-export-framework.md`,

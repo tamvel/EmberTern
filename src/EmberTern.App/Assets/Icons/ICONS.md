@@ -54,6 +54,7 @@ Disabled state is conveyed by button `Opacity`, not a separate color.
 | `Icon.Braces` | Actions/braces.svg | Format SQL (`{ }` code) | SQL editor toolbar (Neutral) |
 | `Icon.Hammer` | Actions/hammer.svg | Compile / build DDL | Pola + New Table toolbar — accent **primary** CTA button (OnAccent) |
 | `Icon.TablePlus` | Actions/table-plus.svg (composed) | New Table | Connection toolbar (IconColor_Table). No Lucide `table-plus` exists → composed from Lucide table grid + plus. |
+| `Icon.Import` | Actions/import.svg (composed) | Data Import | Main toolbar, beside the Script Executor (Accent). Composed: an arrow descending **into a table grid**. Deliberately NOT `Icon.Download` — that tray means "fetch a file to disk", while this module puts rows into a TABLE, so the glyph rhymes with `Icon.Table`/`Icon.TablePlus`. |
 | `Icon.PencilRuler` | Actions/pencil-ruler.svg | Design / edit table structure | Pola field-edit toggle (Neutral; blue selection bg when checked) |
 | `Icon.FolderPlus` | Actions/folder-plus.svg | New folder | Connection toolbar (Neutral) |
 | `Icon.PlugZap` | Connection/plug-zap.svg | Connect | Connection toolbar (Accent) |

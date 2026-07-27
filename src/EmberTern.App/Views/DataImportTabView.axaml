@@ -1,0 +1,1152 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="clr-namespace:EmberTern.App"
+             xmlns:controls="clr-namespace:EmberTern.App.Controls"
+             xmlns:vm="clr-namespace:EmberTern.App.ViewModels"
+             xmlns:ae="using:AvaloniaEdit"
+
+             x:Name="ImportRoot"
+             x:Class="EmberTern.App.Views.DataImportTabView"
+             x:DataType="vm:DataImportTabViewModel"
+             Background="{DynamicResource BackgroundBrush}">
+
+  <!--
+    Data Import — ONE working surface with collapsible sections, deliberately NOT a wizard (decision D7).
+
+    ⭐ LAYOUT, ratified 2026-07-26 after the first visual review of I5 (§3.8). Two things drive it:
+
+    1. THE STAR BELONGS TO THE WORK, NOT TO THE CONFIGURATION. Until this review the configuration
+       ScrollViewer was the '*' row and the preview was nailed to 190 px — backwards, and the reason the
+       preview was "practically invisible". Configuration has a natural size and folds away; mapping and
+       preview are where the user spends the session, so they get every pixel that is left.
+
+    2. THE SECTIONS SPLIT BY HOW OFTEN A DECISION CHANGES, not by subject. The file (and later the target
+       table) changes on every run and therefore stays live at all times; the separator/encoding/date format
+       are set once and fold away. Collapsing the picker with them would make the commonest action in the
+       module cost an expand + a collapse, and §1.2 promises a repeat import is one F5.
+
+    Bands are §3.1's. Band A (the "Data Import" header) was REMOVED — no other EmberTern module carries one
+    and the tab title already says it; the one fact it was supposed to carry (connection + lane) moved to
+    band H, where the transaction mode joins it in I7.
+
+    Etap I5 delivers C, D, E1, F(empty state), G and H. The command bar (B) and the target tile (E2) have
+    their rows reserved here so I6/I7 drop in rather than restructure — but nothing renders in them yet: an
+    enabled-looking control with nothing behind it would be a lie the readiness strip could not correct.
+  -->
+
+  <!--
+    ⚠ The work row deliberately has NO MinHeight, and that is a user decision (2026-07-27), not an oversight.
+
+    A floor was added here to close §3.8/U5 — in the „New table" variant the Target tile is the tallest band on
+    the surface, so the star row could be squeezed to nothing. Seen running, the cure read worse than the
+    disease: honouring the floor forced the bottom panel to give way, the middle of the window became too tall,
+    and the bottom panel stopped being useful. The user reverted it and ratified where the real fix belongs —
+    the app-wide UX sprint, where control heights come down and the surface regains the ~100 px that make this
+    a non-problem. **Do not re-add a floor here, and do not answer the height problem by adding another
+    vertical section.** U5 is OPEN again, on purpose, and belongs to that sprint.
+  -->
+  <Grid x:Name="SurfaceLayout" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
+
+    <!-- ══ Band C — the ONE message surface. Never a locally-coloured TextBlock (§9.1 point 5). ══ -->
+    <controls:MessageBanner Grid.Row="0"
+                            Classes="docked"
+                            Severity="{Binding StatusSeverity}"
+                            Message="{Binding StatusMessage}"
+                            IsVisible="{Binding HasStatusMessage}" />
+
+    <!-- ══ Band B — command bar (§3.1) ══════════════════════════════════════════════════════════
+         The timer is DOCKED RIGHT, outside the button panel, so a running import never shifts the
+         buttons under the pointer — the Script Executor's pattern, reused rather than re-invented. -->
+    <Border Grid.Row="1" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
+      <DockPanel LastChildFill="True">
+
+        <TextBlock DockPanel.Dock="Right" Text="{Binding Timer.ElapsedDisplay}" FontSize="11"
+                   FontFamily="Consolas,Menlo,monospace" Margin="8,0,4,0" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   IsVisible="{Binding Timer.IsRunning}" />
+
+        <!-- The live counters sit beside the timer, so "what is happening" reads as one thing. -->
+        <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressText}" FontSize="12"
+                   Margin="8,0" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   IsVisible="{Binding IsRunning}" />
+        <!-- Indeterminate when the row count is unknown: a streaming import cannot know it without reading
+             the file twice, and inventing a percentage would be a number that is not true. -->
+        <ProgressBar DockPanel.Dock="Right" Width="140" Height="6" VerticalAlignment="Center"
+                     Minimum="0" Maximum="100" Value="{Binding ProgressPercent}"
+                     IsIndeterminate="{Binding IsProgressIndeterminate}"
+                     IsVisible="{Binding IsRunning}" />
+
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+
+          <!-- ══ Named profiles (etap I11) ══════════════════════════════════════════════════════════
+               ⭐ This is the slot §4.8.4 reserved back in the MVP — the leftmost position of band B, before
+               Importuj — precisely so that adding the selector would not rearrange the toolbar. It did not:
+               everything to the right of this block is untouched.
+
+               The selector carries its own scope sentence as a tooltip, because the list deliberately does NOT
+               show profiles saved on other connections and a restriction the user cannot see is
+               indistinguishable from a profile that has gone missing. -->
+          <TextBlock Text="{x:Static app:UiStrings.ImportProfileLabel}" Classes="field-label"
+                     VerticalAlignment="Center" Margin="0" />
+          <ComboBox x:Name="ProfilePicker" MinWidth="170" VerticalAlignment="Center" FontSize="12"
+                    ItemsSource="{Binding Profiles}"
+                    SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
+                    IsEnabled="{Binding IsConfigurationEnabled}"
+                    ToolTip.Tip="{Binding ProfileScopeNote}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ImportProfileRowViewModel">
+                <TextBlock Text="{Binding Display}" FontSize="12" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+
+          <Button Classes="flat" Command="{Binding SaveProfileAsCommand}"
+                  IsEnabled="{Binding IsConfigurationEnabled}"
+                  Content="{x:Static app:UiStrings.ImportProfileSaveAs}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportProfileSaveAsTooltip}" />
+
+          <!-- Rename and delete act on the SELECTED profile, so they are icon-only secondary actions and
+               disable themselves when there is nothing selected — their CanExecute says so, not a binding here. -->
+          <Button Classes="icon" Command="{Binding RenameProfileCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportProfileRenameTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.Pencil}"
+                              Foreground="{DynamicResource AccentIconBrush}" />
+          </Button>
+          <Button Classes="icon" Command="{Binding DeleteProfileCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportProfileDeleteTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.Trash}"
+                              Foreground="{DynamicResource DangerIconBrush}" />
+          </Button>
+
+          <!-- Reset belongs on THIS side of the divider: it is about the configuration as a whole and it
+               detaches the profile, so it is part of managing profiles, not of running an import. Labelled
+               rather than icon-only because the user's report was that they could not find a way to do it —
+               an unlabelled glyph would not have fixed that. -->
+          <Button Classes="flat" Command="{Binding ResetConfigurationCommand}"
+                  IsEnabled="{Binding IsConfigurationEnabled}"
+                  Content="{x:Static app:UiStrings.ImportReset}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportResetTooltip}" />
+
+          <!-- ⭐ The bar's PRINCIPAL boundary: managing the configuration on the left, running it on the right.
+               Deliberately wider than the separator further right (which only divides settings WITHIN the
+               execution group), because these two groups are not peers — a profile is superordinate to the whole
+               import configuration, so its break should read as the stronger of the two. -->
+          <Border Width="1" Margin="12,2" Background="{DynamicResource BorderBrush}" />
+
+          <Button Classes="primary" Command="{Binding ImportCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportRunTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.Import}" Width="14" Height="14"
+                                Foreground="{DynamicResource OnAccentBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportRun}" />
+            </StackPanel>
+          </Button>
+
+          <Button Classes="flat" Command="{Binding ValidateCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportValidateTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
+                                Foreground="{DynamicResource SuccessIconBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportValidate}" />
+            </StackPanel>
+          </Button>
+
+          <!-- ⭐ Refresh sits with the other surface-level actions, not by the file picker, because it re-reads
+               every fact the surface holds — the source, the table list AND the target — and then re-runs the one
+               recalculation chain. Icon only: it is a secondary action beside Import and Validate, and the shared
+               refresh mark (used by the metadata tree, Session Manager and Table Data) already says what it does. -->
+          <Button Classes="icon" Command="{Binding RefreshCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportRefreshTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
+                              Foreground="{DynamicResource AccentIconBrush}" />
+          </Button>
+
+          <!-- Only visible while there is something to cancel: a permanently disabled Stop teaches nothing. -->
+          <Button Classes="icon" Command="{Binding CancelRunCommand}"
+                  IsVisible="{Binding IsRunning}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportCancelTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
+          </Button>
+
+          <!-- ⭐ Commit / Rollback live HERE, in the top command bar beside Import and Validate.
+               Every main action in EmberTern is taken from the top toolbar, and after an import the
+               transaction decision IS a main action — it was previously only in the Report tab, where it
+               read as a footnote while a red "transaction is open" line read as a failure. They appear only
+               once THIS module's run has left a transaction open, so the buttons never offer to commit work
+               the import did not do. -->
+          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}"
+                  IsVisible="{Binding Report.TransactionLeftOpen}" />
+
+          <TextBlock Text="{x:Static app:UiStrings.ImportTransactionOpenMarker}"
+                     VerticalAlignment="Center" FontSize="12"
+                     Foreground="{DynamicResource WarningBrush}"
+                     ToolTip.Tip="{x:Static app:UiStrings.ImportTransactionOpenMarkerTooltip}"
+                     IsVisible="{Binding Report.TransactionLeftOpen}" />
+
+          <Button Classes="flat" Command="{Binding CommitCommand}"
+                  IsVisible="{Binding Report.TransactionLeftOpen}"
+                  IsEnabled="{Binding !IsRunning}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportCommitTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
+                                Foreground="{DynamicResource SuccessIconBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportCommit}" />
+            </StackPanel>
+          </Button>
+          <Button Classes="flat" Command="{Binding RollbackCommand}"
+                  IsVisible="{Binding Report.TransactionLeftOpen}"
+                  IsEnabled="{Binding !IsRunning}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportRollbackTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
+                                Foreground="{DynamicResource DangerIconBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportRollback}" />
+            </StackPanel>
+          </Button>
+
+          <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
+
+          <!-- The mode carries its consequence as a tooltip, where the decision is taken (§0.5) — the
+               Script Executor's `Sequenced` precedent. -->
+          <TextBlock Text="{x:Static app:UiStrings.ImportTransactionLabel}" Classes="field-label"
+                     VerticalAlignment="Center" Margin="0" />
+          <ComboBox x:Name="TransactionModePicker" SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="170"
+                    VerticalAlignment="Center" FontSize="12"
+                    IsEnabled="{Binding IsConfigurationEnabled}"
+                    ToolTip.Tip="{Binding TransactionModeDescription}">
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportTransactionManual}" />
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportTransactionAutoCommit}" />
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportTransactionBatched}" />
+          </ComboBox>
+
+          <TextBlock Text="{x:Static app:UiStrings.ImportErrorPolicyLabel}" Classes="field-label"
+                     VerticalAlignment="Center" Margin="0" />
+          <ComboBox SelectedIndex="{Binding ErrorPolicyIndex, Mode=TwoWay}" MinWidth="180"
+                    VerticalAlignment="Center" FontSize="12"
+                    IsEnabled="{Binding IsConfigurationEnabled}">
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportErrorPolicyStop}" />
+            <ComboBoxItem Content="{x:Static app:UiStrings.ImportErrorPolicySkip}" />
+          </ComboBox>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- ══ Band D — readiness strip: every gap at once, each one clickable to its cause ══════════ -->
+    <Border Grid.Row="2" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,5">
+      <StackPanel Spacing="4">
+
+        <!-- The chips: one per section, ✓ when the section has nothing to say. These carry §3.2's promise
+             that every gap is visible at once — which is what lets the findings below be capped. -->
+        <StackPanel Orientation="Horizontal" Spacing="14">
+          <TextBlock Text="{x:Static app:UiStrings.ImportReadinessHeader}"
+                     Classes="field-label" VerticalAlignment="Center" />
+          <ItemsControl ItemsSource="{Binding Readiness.Sections}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="14" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ImportReadinessSectionViewModel">
+                <!-- A chip is a status light AND a way in: it shows the section's state and takes the
+                     user there. One behaviour for all five, so the row can be read rather than learned. -->
+                <Button Classes="flat" Padding="4,2"
+                        ToolTip.Tip="{Binding FocusHint}"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).FocusSectionCommand}"
+                        CommandParameter="{Binding Section}">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <!-- A brush is looked up WITH the theme variant, never without: a variant-less lookup
+                         returns UNSET and the icon then paints nothing while every state looks healthy
+                         (gotcha #250). -->
+                    <controls:SvgIcon Width="13" Height="13" VerticalAlignment="Center"
+                                      Data="{Binding GeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+                      <controls:SvgIcon.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="BrushKey" />
+                          <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </controls:SvgIcon.Foreground>
+                    </controls:SvgIcon>
+                    <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- When everything is green the strip collapses to one line (§3.2). -->
+        <TextBlock Text="{Binding Readiness.Summary}" Classes="subtle" FontSize="12"
+                   IsVisible="{Binding !Readiness.HasItems}" />
+
+        <!-- The findings — CAPPED (U6). Bound to VisibleItems, never Items: the cap is the VM's decision and
+             the view must not be a second place that decides how much to show. -->
+        <ItemsControl ItemsSource="{Binding Readiness.VisibleItems}" IsVisible="{Binding Readiness.HasItems}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ImportReadinessItemViewModel">
+              <Button Classes="flat" Padding="2,1" HorizontalAlignment="Left"
+                      ToolTip.Tip="{Binding Code}"
+                      Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).FocusSectionCommand}"
+                      CommandParameter="{Binding Section}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <controls:SvgIcon Width="13" Height="13" VerticalAlignment="Top" Margin="0,2,0,0"
+                                    Data="{Binding GeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+                    <controls:SvgIcon.Foreground>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="BrushKey" />
+                        <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                      </MultiBinding>
+                    </controls:SvgIcon.Foreground>
+                  </controls:SvgIcon>
+                  <!-- The message carries the severity colour too, exactly as MessageBanner does — the
+                       whole point of the shared map is that a finding reads the same wherever it shows. -->
+                  <TextBlock Text="{Binding Message}" FontSize="12" TextWrapping="Wrap" MaxWidth="900">
+                    <TextBlock.Foreground>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="BrushKey" />
+                        <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                      </MultiBinding>
+                    </TextBlock.Foreground>
+                  </TextBlock>
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- "… and N more problems" — the strip admits it cut the list, and gives it back in one click. -->
+        <Button Classes="flat" Padding="2,1" HorizontalAlignment="Left"
+                IsVisible="{Binding Readiness.HasHiddenItems}"
+                ToolTip.Tip="{x:Static app:UiStrings.ImportReadyExpandTooltip}"
+                Command="{Binding Readiness.ToggleExpandedCommand}">
+          <TextBlock Text="{Binding Readiness.MoreText}" Classes="subtle" FontSize="12" />
+        </Button>
+      </StackPanel>
+    </Border>
+
+    <!-- ══ Band E1 — SOURCE tile (§3.3) ═════════════════════════════════════════════════════════
+         One row in the settled state: the picker is ALWAYS live, only the format options fold. -->
+    <Border Grid.Row="3" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
+      <StackPanel x:Name="SourceTile" Spacing="5" DataContext="{Binding Source}" x:DataType="vm:ImportSourceSectionViewModel">
+
+        <!-- The always-live row. -->
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+          <RadioButton Grid.Column="0" GroupName="ImportSourceKind"
+                       Content="{x:Static app:UiStrings.ImportSourceFile}"
+                       IsChecked="{Binding UseFile, Mode=TwoWay}" VerticalAlignment="Center" />
+          <TextBox Grid.Column="1" x:Name="SourcePathBox" Text="{Binding FilePath, Mode=TwoWay}"
+                   IsEnabled="{Binding UseFile}" FontSize="12" VerticalAlignment="Center" />
+          <Button Grid.Column="2" Classes="icon" VerticalAlignment="Center"
+                  IsEnabled="{Binding UseFile}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportSourceBrowseTooltip}"
+                  Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).BrowseCommand}">
+            <controls:SvgIcon Data="{StaticResource Icon.Folder}"
+                              Foreground="{DynamicResource AccentIconBrush}" />
+          </Button>
+          <!-- Choosing the clipboard READS it: the command points the surface at the clipboard and runs the one
+               recalculation chain with a Refresh trigger. The tooltip says so, because a control with a side
+               effect should announce it rather than let the user find out. -->
+          <RadioButton Grid.Column="3" GroupName="ImportSourceKind"
+                       Content="{x:Static app:UiStrings.ImportSourceClipboard}"
+                       IsChecked="{Binding !UseFile}" VerticalAlignment="Center"
+                       ToolTip.Tip="{x:Static app:UiStrings.ImportSourceUseClipboardTooltip}"
+                       Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).UseClipboardCommand}" />
+
+          <!-- Format options disclosure — the debugger launch panel's idiom (chevron + title, no Expander). -->
+          <Button Grid.Column="4" Classes="flat" Padding="6,2" VerticalAlignment="Center"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportFormatOptionsTooltip}"
+                  Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).ToggleFormatOptionsCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="14" Height="14"
+                                VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="14" Height="14"
+                                VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportFormatOptionsHeader}"
+                         FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </Grid>
+
+        <!-- The thin facts line: what the source is, and how it is being read. Both are read-only statements,
+             so they share one subtle row instead of two full-height ones. For the clipboard the facts carry the
+             READ TIME, which is what tells the user whether a live source is current. -->
+        <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsExpanded}">
+          <TextBlock Text="{Binding SourceFacts}" Classes="subtle" FontSize="11"
+                     IsVisible="{Binding SourceFacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Text="·" Classes="subtle" FontSize="11"
+                     IsVisible="{Binding SourceFacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Text="{Binding SummaryText}" Classes="subtle" FontSize="11"
+                     TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <!-- ── The folding half: parsing | culture, side by side (§3.3) ─────────────────────────
+             Fields that are always read together share a ROW (U7): densifying horizontally costs no
+             control height, which is what the module is allowed to change. Control heights themselves
+             belong to the app-wide UX sprint, not here. -->
+        <Grid x:Name="FormatOptionsPane" ColumnDefinitions="*,10,*" IsVisible="{Binding IsExpanded}">
+
+          <!-- ── Parsing: HOW THE FILE IS READ ──
+               The two groups are cards, not captions: one subject per card, so "how the text is
+               read" and "how the values are interpreted" are told apart by looking, not by
+               inferring where one caption stops applying. -->
+          <Border Grid.Column="0" Classes="settings-group">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{x:Static app:UiStrings.ImportParsingHeader}" Classes="group-header" />
+
+            <!-- ⭐ Sheet picker — shown when the PROVIDER says the source has sheets, never when a file
+                 extension says so (§3.3). The whole spreadsheet variant of this card is these two rows plus
+                 the row window below, which both variants share. -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" IsVisible="{Binding SupportsSheets}">
+              <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportSheetLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding Sheets}"
+                        SelectedItem="{Binding SelectedSheet, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Name}"
+                        HorizontalAlignment="Left" MinWidth="220" FontSize="12" />
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                  ColumnSpacing="8" RowSpacing="4">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static app:UiStrings.ImportDelimiterLabel}"
+                         Classes="field-label" VerticalAlignment="Center"
+                         IsVisible="{Binding SupportsDelimiters}" />
+              <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                          IsVisible="{Binding SupportsDelimiters}">
+                <ComboBox ItemsSource="{Binding DelimiterOptions}" SelectedItem="{Binding Delimiter, Mode=TwoWay}"
+                          DisplayMemberBinding="{Binding Display}" Width="110" FontSize="12" />
+                <CheckBox Content="{x:Static app:UiStrings.ImportAutoDetectLabel}"
+                          IsChecked="{Binding AutoDetectDelimiter, Mode=TwoWay}" FontSize="11"
+                          VerticalAlignment="Center" />
+              </StackPanel>
+
+              <!-- The evidence behind the proposal — an automat that explains itself earns trust. -->
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DelimiterEvidence}"
+                         Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                         IsVisible="{Binding DelimiterEvidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static app:UiStrings.ImportEncodingLabel}"
+                         Classes="field-label" VerticalAlignment="Center"
+                         IsVisible="{Binding SupportsEncoding}" />
+              <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                          IsVisible="{Binding SupportsEncoding}">
+                <ComboBox ItemsSource="{Binding EncodingOptions}" SelectedItem="{Binding Encoding, Mode=TwoWay}"
+                          DisplayMemberBinding="{Binding Display}" Width="110" FontSize="12" />
+                <CheckBox Content="{x:Static app:UiStrings.ImportAutoDetectLabel}"
+                          IsChecked="{Binding AutoDetectEncoding, Mode=TwoWay}" FontSize="11"
+                          VerticalAlignment="Center" />
+              </StackPanel>
+
+              <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding EncodingEvidence}"
+                         Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                         IsVisible="{Binding EncodingEvidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </Grid>
+
+            <!-- Qualifier + line ending: two narrow pickers that are always read together. -->
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding SupportsDelimiters}">
+              <TextBlock Text="{x:Static app:UiStrings.ImportQuoteLabel}" Classes="field-label"
+                         VerticalAlignment="Center" />
+              <ComboBox ItemsSource="{Binding QuoteOptions}" SelectedItem="{Binding Quote, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}" Width="70" FontSize="12" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportLineEndingLabel}" Classes="field-label"
+                         VerticalAlignment="Center" />
+              <ComboBox ItemsSource="{Binding LineEndingOptions}" SelectedItem="{Binding LineEnding, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}" Width="90" FontSize="12" />
+            </StackPanel>
+
+            <!-- Row window: header flag and the first/last row bounds describe one thing. -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <CheckBox Content="{x:Static app:UiStrings.ImportHasHeaderLabel}"
+                        IsChecked="{Binding HasHeader, Mode=TwoWay}" FontSize="12"
+                        VerticalAlignment="Center" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportFirstDataRowLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <NumericUpDown Value="{Binding FirstDataRow, Mode=TwoWay}"
+                             Minimum="1" Increment="1" Width="90" FontSize="12" FormatString="0" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportLastRowLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <TextBox Text="{Binding LastRowText, Mode=TwoWay}" Width="100" FontSize="12"
+                       PlaceholderText="{x:Static app:UiStrings.ImportLastRowPlaceholder}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding SupportsDelimiters}">
+              <CheckBox Content="{x:Static app:UiStrings.ImportTrimWhitespaceLabel}"
+                        IsChecked="{Binding TrimWhitespace, Mode=TwoWay}" FontSize="12"
+                        VerticalAlignment="Center" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportNullTokenLabel}" Classes="field-label"
+                         VerticalAlignment="Center" />
+              <TextBox Text="{Binding NullToken, Mode=TwoWay}" Width="110" FontSize="12"
+                       PlaceholderText="{x:Static app:UiStrings.ImportNullTokenPlaceholder}" />
+            </StackPanel>
+
+            <!-- The spreadsheet's own value question: a date cell is a NUMBER plus a date format, and nothing
+                 else distinguishes it (I0 / R3). Turning this off shows the raw Excel serial. -->
+            <CheckBox Content="{x:Static app:UiStrings.ImportDatesAsDatesLabel}"
+                      IsChecked="{Binding DatesAsDates, Mode=TwoWay}" FontSize="12"
+                      IsVisible="{Binding SupportsSheets}" />
+          </StackPanel>
+          </Border>
+
+          <!-- ── Culture: HOW THE VALUES ARE INTERPRETED. Declared, never sniffed (§0.4) ──
+               Pairs that are read together share a row, so this went from five rows to three. -->
+          <Border Grid.Column="2" Classes="settings-group">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{x:Static app:UiStrings.ImportCultureHeader}" Classes="group-header" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{x:Static app:UiStrings.ImportDecimalSeparatorLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <ComboBox ItemsSource="{Binding DecimalSeparatorOptions}"
+                        SelectedItem="{Binding DecimalSeparator, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}" Width="80" FontSize="12" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportThousandsSeparatorLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <ComboBox ItemsSource="{Binding ThousandsSeparatorOptions}"
+                        SelectedItem="{Binding ThousandsSeparator, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}" Width="90" FontSize="12" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{x:Static app:UiStrings.ImportDateOrderLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <ComboBox ItemsSource="{Binding DateOrderOptions}" SelectedItem="{Binding DateOrder, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}" Width="150" FontSize="12" />
+              <TextBlock Text="{x:Static app:UiStrings.ImportDateSeparatorLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <ComboBox ItemsSource="{Binding DateSeparatorOptions}"
+                        SelectedItem="{Binding DateSeparator, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}" Width="80" FontSize="12" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{x:Static app:UiStrings.ImportTimeSeparatorLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <ComboBox ItemsSource="{Binding TimeSeparatorOptions}"
+                        SelectedItem="{Binding TimeSeparator, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Display}" Width="80" FontSize="12" />
+            </StackPanel>
+          </StackPanel>
+          </Border>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <!-- ══ Band E2 — TARGET tile (§3.4) ═════════════════════════════════════════════════════════
+         Two variants, one tile, read top-down: an EXISTING table has a shape to obey, a NEW one has a
+         shape to choose. Only the chosen variant's detail occupies space, so the tile stays one thin
+         line until there is something to say — the star row still belongs to the WORK (§3.1), which is
+         why the type grid is height-capped and scrolls rather than growing without limit. -->
+    <Border Grid.Row="4" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
+      <StackPanel x:Name="TargetTile" Spacing="5" DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel">
+
+        <!-- ── The target CHOICE: two variants, ONE grid ─────────────────────────────────────────
+             ⭐ One grid rather than two stacked ones, because the two radios are a single choice and have
+             to read as one. Sharing the column definitions is what does it: the radio column sizes to the
+             wider of the two labels, so both inputs start at the SAME x — as two separate grids they each
+             measured their own label and the inputs sat a few pixels apart, which is what made the pair
+             look ragged and unrelated. The facts line moved out from BETWEEN them (it was splitting the
+             choice in half and spending a row on it) to below the pair, where it belongs to the answer
+             rather than to the question. -->
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" RowDefinitions="Auto,Auto"
+              ColumnSpacing="8" RowSpacing="3">
+
+          <RadioButton Grid.Row="0" Grid.Column="0" GroupName="ImportTargetKind"
+                       Content="{x:Static app:UiStrings.ImportTargetExistingTable}"
+                       IsChecked="{Binding IsExistingTable, Mode=TwoWay}"
+                       VerticalAlignment="Center" FontSize="12" />
+
+          <controls:SearchableComboBox Grid.Row="0" Grid.Column="1" x:Name="TargetPicker"
+                                       ItemsSource="{Binding Tables}"
+                                       SelectedItem="{Binding SelectedTable, Mode=TwoWay}"
+                                       IsEnabled="{Binding IsExistingTable}"
+                                       Watermark="{x:Static app:UiStrings.ImportTargetTableWatermark}"
+                                       FilterWatermark="{x:Static app:UiStrings.ImportTargetFilterWatermark}"
+                                       HorizontalAlignment="Left" MinWidth="360" />
+
+          <CheckBox Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2" VerticalAlignment="Center"
+                    Content="{x:Static app:UiStrings.ImportTargetEmptyFirst}"
+                    ToolTip.Tip="{x:Static app:UiStrings.ImportTargetEmptyFirstTooltip}"
+                    IsVisible="{Binding IsExistingTable}"
+                    IsChecked="{Binding EmptyBeforeImport, Mode=TwoWay}" FontSize="12" />
+
+          <RadioButton Grid.Row="1" Grid.Column="0" GroupName="ImportTargetKind"
+                       Content="{x:Static app:UiStrings.ImportTargetNewTable}"
+                       IsChecked="{Binding IsNewTable, Mode=TwoWay}"
+                       VerticalAlignment="Center" FontSize="12" />
+
+          <TextBox Grid.Row="1" Grid.Column="1" x:Name="NewTableNameBox"
+                   Text="{Binding NewTableName, Mode=TwoWay}"
+                   IsEnabled="{Binding IsNewTable}"
+                   PlaceholderText="{x:Static app:UiStrings.ImportTargetNewTableWatermark}"
+                   HorizontalAlignment="Left" MinWidth="360" FontSize="12" />
+
+          <!-- ⚠ §0.5: the CREATE is committed before the first row (gotcha #213), so this is the only
+               way to undo it — and it is off by default, like every option that destroys something. -->
+          <CheckBox Grid.Row="1" Grid.Column="2" VerticalAlignment="Center"
+                    Content="{x:Static app:UiStrings.ImportNewTableDropOnFailure}"
+                    ToolTip.Tip="{x:Static app:UiStrings.ImportNewTableDropOnFailureTooltip}"
+                    IsVisible="{Binding IsNewTable}"
+                    IsChecked="{Binding DropTableOnFailure, Mode=TwoWay}" FontSize="12" />
+
+          <!-- „Show DDL" moved to the Table types panel with the preview it toggles — a toggle in one band
+               and the thing it reveals in another is how a control stops looking connected to anything. -->
+        </Grid>
+
+        <TextBlock Text="{Binding FactsText}" Classes="subtle" FontSize="11"
+                   TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding FactsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <!-- ⭐ The type grid, its basis line and the DDL preview used to hang HERE, under the choice, which
+             made this Auto band the tallest thing on the surface in the „new table" variant and left the work
+             area with whatever was over. They moved into the work area (band F) in the configuration/results
+             split of 2026-07-27: the columns about to be created are a CONFIGURATION decision, so they belong
+             beside Mapping, not above it. What stays here is the choice itself and the facts about it. -->
+      </StackPanel>
+    </Border>
+
+    <!-- ══ Band F — the work area: THE CONFIGURATION, at full height ════════════════════════════
+         ⭐ Ratified 2026-07-27 — the split that reorganised the whole surface: **the top half is where the
+         import is DESIGNED, the bottom panel is where RESULTS land.** Before it, „Preview after conversion"
+         (a result — what the pipeline produces) sat in the work area competing for space with Mapping (a
+         decision), while the type grid — also a decision — sat above in an Auto band. Configuration and
+         outcome were interleaved and fought over the same pixels.
+
+         Now:
+           • EXISTING table → the work area is Mapping, full width. Nothing to share it with.
+           • NEW table      → Table types | Mapping, split by a draggable splitter, so the user sets the
+                              proportion. Both halves are configuration; both are about the same import.
+           • either way     → the converted preview is a BOTTOM TAB beside Source preview / Errors / Report.
+
+         The column widths are re-normalized in ONE place (ApplyWorkAreaLayout), the way the bottom panel's
+         rows are — a splitter turns a star column into absolute pixels the moment it is dragged, so a
+         variant switch has to set BOTH columns or the layout keeps whatever the last drag left (#240). -->
+    <Grid Grid.Row="5" x:Name="WorkArea" ColumnDefinitions="*,4,*">
+
+      <!-- ── The new table's columns: the left half, and only in that variant ───────────────────── -->
+      <Grid Grid.Column="0" x:Name="TypesPanel" Margin="12,8" RowDefinitions="Auto,*"
+            DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel"
+            IsVisible="{Binding IsNewTable}">
+
+        <!-- Title + the basis, in the same shape Mapping and the preview use: a title says what the region
+             IS, the subtle line beside it says how it currently stands. -->
+        <!-- ⚠ No „Show DDL" button. The generated statement is a bottom TAB now, always current — so there is
+             no disclosure to toggle, nothing to navigate to, and no state saying whether it is on screen. -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,0,0,6">
+          <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableTypesTitle}"
+                     Classes="group-header" VerticalAlignment="Center" Margin="0" />
+          <!-- ⭐ Always visible (§3.4): the number of rows the types rest on. REK-7 makes that the WHOLE
+               source, and a type is worth exactly as much as the evidence behind it. -->
+          <TextBlock Grid.Column="1" Text="{Binding InferenceBasisText}" Classes="subtle" FontSize="12"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </Grid>
+
+        <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportNewTableEmpty}"
+                   Classes="subtle" FontSize="12" TextWrapping="Wrap" MaxWidth="560"
+                   HorizontalAlignment="Center" VerticalAlignment="Top"
+                   IsVisible="{Binding !HasNewColumns}" />
+
+        <!-- ⭐ The grid is EDITABLE, not merely shown (§0.3). Once the CREATE has run the table is
+             committed and beyond a Rollback, so this is the last moment a wrong type costs nothing.
+             ⚠ It fills the panel: no wrapper row for the DDL (which is not here any more) and no MaxHeight
+             on the scroller. Both mattered — the cap SURVIVED the move to the work area for one round, and
+             a Stretch-aligned control that cannot use its space gets CENTRED in it, so the grid floated with
+             blank bands above and below while every property looked correct. -->
+        <Border Grid.Row="1" IsVisible="{Binding HasNewColumns}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
+            <Grid RowDefinitions="Auto,*">
+
+              <Grid Grid.Row="0" ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,5"
+                    Background="{DynamicResource ElevatedPanelBrush}">
+                <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableColumnName}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.ImportNewTableColumnType}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="2" Text="{x:Static app:UiStrings.ImportNewTableColumnSize}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.ImportNewTableColumnScale}"
+                           Classes="field-label" Margin="0" />
+                <TextBlock Grid.Column="4" Text="{x:Static app:UiStrings.ImportNewTableColumnNullable}"
+                           Classes="field-label" Margin="0" />
+                <!-- ⭐ The caption goes with its cells. When every column shares one basis it is said once on
+                     the section's line above, and a column header naming an empty column would be exactly the
+                     kind of thing that reads as a control with nothing behind it. -->
+                <TextBlock Grid.Column="5" Text="{x:Static app:UiStrings.ImportNewTableColumnBasis}"
+                           Classes="field-label" Margin="0"
+                           IsVisible="{Binding HasPerColumnBasis}" />
+              </Grid>
+
+              <ScrollViewer Grid.Row="1">
+                <ItemsControl x:Name="NewTableColumnRows" ItemsSource="{Binding NewColumns}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ImportNewTableColumnRowViewModel">
+                      <Grid ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,3">
+
+                        <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="12" />
+
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding TypeOptions}"
+                                  SelectedItem="{Binding Type, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" FontSize="12" />
+
+                        <!-- Size and Scale are enabled by the SHARED FieldTypeRules, so "does VARCHAR
+                             take a length" has one answer app-wide (§4.6). -->
+                        <NumericUpDown Grid.Column="2" Value="{Binding Size, Mode=TwoWay}"
+                                       IsEnabled="{Binding IsSizeEnabled}" ShowButtonSpinner="False"
+                                       Minimum="1" FormatString="0" FontSize="12" />
+                        <NumericUpDown Grid.Column="3" Value="{Binding Scale, Mode=TwoWay}"
+                                       IsEnabled="{Binding IsScaleEnabled}" ShowButtonSpinner="False"
+                                       Minimum="0" FormatString="0" FontSize="12" />
+
+                        <CheckBox Grid.Column="4" IsChecked="{Binding IsNullable, Mode=TwoWay}"
+                                  VerticalAlignment="Center" />
+
+                        <!-- ⭐ "Basis" answers "where did that type come from" — and for a mixed column
+                             (R19, the measured norm) it names the value and the row that decided it, so
+                             the user can check their own file rather than take our word (§0.6).
+                             ⚠ One line, trimmed, with the full sentence on hover: wrapping made a long
+                             basis two or three lines tall, which set the height of its whole row and let
+                             the explanation dominate the grid it was only annotating. Trimming changes
+                             nothing about what is available — the text is one hover away, and §0.6 is
+                             about the evidence being reachable, not about it being the widest thing on
+                             screen. -->
+                        <TextBlock Grid.Column="5" Text="{Binding Basis}" FontSize="11"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding Basis}"
+                                   IsVisible="{Binding $parent[ItemsControl].((vm:ImportTargetSectionViewModel)DataContext).HasPerColumnBasis}"
+                                   Foreground="{DynamicResource SubtleForegroundBrush}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+
+          <!-- ⚠ Two things used to sit HERE and both are gone, for the same reason in two sizes: one screen
+               should say a thing once, and a panel should hold only what is being worked on.
+
+               §0.5's sentence ("this CREATE is committed and a rollback will not remove it") was a second
+               banner repeating what the readiness strip already carries as IMP0018 — from Core, and naming
+               the table besides.
+
+               The generated CREATE TABLE was disclosed inline. It is consulted rarely, yet its panel
+               complicated this column permanently: the types grid shared its space with something almost
+               always empty. „Show DDL" now opens the statement in the SQL Editor, where it can be read,
+               edited and run — and where it costs nothing until it is asked for. -->
+      </Grid>
+
+      <!-- Only there when there is a left half to divide. -->
+      <GridSplitter Grid.Column="1" x:Name="WorkSplitter" ResizeDirection="Columns" Width="4"
+                    VerticalAlignment="Stretch" Background="{DynamicResource BorderBrush}"
+                    IsVisible="{Binding Target.IsNewTable}" />
+
+    <Grid Grid.Column="2" x:Name="MappingPanel" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
+
+      <TextBlock Text="{x:Static app:UiStrings.ImportMappingEmpty}"
+                 Classes="subtle" FontSize="12" MaxWidth="560"
+                 HorizontalAlignment="Center" VerticalAlignment="Top" TextWrapping="Wrap"
+                 IsVisible="{Binding !HasTarget}" />
+
+      <Grid RowDefinitions="Auto,*,Auto" IsVisible="{Binding HasTarget}">
+
+        <!-- Title + headline + the two re-plan strategies + the filter.
+             ⭐ The TITLE is new and it is why this row changed shape: the preview half already had one and
+             this half had only its dynamic headline, so the work area read as one undivided surface with a
+             status line floating in it. Both halves now name themselves the same way, with the same weight
+             (the shared `group-header`), and the dynamic count stays subtle beside the name — a title says
+             what the region IS, a headline says how it is doing. -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,6">
+          <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportMappingTitle}"
+                     Classes="group-header" VerticalAlignment="Center" Margin="0" />
+          <TextBlock Grid.Column="1" Text="{Binding Headline}" Classes="subtle" FontSize="12"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="2" Classes="flat" FontSize="12"
+                  Content="{x:Static app:UiStrings.ImportMappingMatchByPosition}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportMappingMatchByPositionTooltip}"
+                  Command="{Binding MatchByPositionCommand}" />
+          <Button Grid.Column="3" Classes="flat" FontSize="12"
+                  Content="{x:Static app:UiStrings.ImportMappingClear}"
+                  Command="{Binding ClearMappingCommand}" />
+          <CheckBox Grid.Column="4" VerticalAlignment="Center" FontSize="12"
+                    Content="{x:Static app:UiStrings.ImportMappingOnlyUnmapped}"
+                    IsChecked="{Binding ShowOnlyUnmapped, Mode=TwoWay}" />
+        </Grid>
+
+        <!-- The grid. Orientation is TARGET → SOURCE: the target column is the side with requirements
+             (NOT NULL, a type, a length); the source field is the choice (§3.5). -->
+        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
+          <Grid RowDefinitions="Auto,*">
+
+            <!-- Column captions. Same proportions as the rows below, so they stay aligned. -->
+            <Grid Grid.Row="0" ColumnDefinitions="2*,3*,2*,3*" ColumnSpacing="10" Margin="8,5"
+                  Background="{DynamicResource ElevatedPanelBrush}">
+              <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportMappingColumnTarget}"
+                         Classes="field-label" Margin="0" />
+              <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.ImportMappingColumnSource}"
+                         Classes="field-label" Margin="0" />
+              <TextBlock Grid.Column="2" Text="{x:Static app:UiStrings.ImportMappingColumnType}"
+                         Classes="field-label" Margin="0" />
+              <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.ImportMappingColumnNote}"
+                         Classes="field-label" Margin="0" />
+            </Grid>
+
+            <ScrollViewer Grid.Row="1">
+            <ItemsControl x:Name="MappingRows" ItemsSource="{Binding VisibleRows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ImportMappingRowViewModel">
+                  <Grid ColumnDefinitions="2*,3*,2*,3*" ColumnSpacing="10" Margin="8,4">
+
+                    <!-- Target column. A required column says so, because leaving it unmapped BLOCKS the
+                         import rather than merely warning. -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding TargetColumnName}" FontSize="12" VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="*" FontSize="12" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource ErrorBrush}"
+                                 IsVisible="{Binding IsRequired}" />
+                    </StackPanel>
+
+                    <!-- Source field + the identity unlock, which is the only way a GENERATED ALWAYS
+                         column becomes mappable (R10).
+                         ⚠ A GRID, not a StackPanel, and the ComboBox carries NO MinWidth: a StackPanel does
+                         not constrain its children, so a picker with a minimum width wider than the column
+                         simply overflowed into the "Target type" column beside it. The star column makes the
+                         picker shrink instead — each column keeps its own space. -->
+                    <Grid Grid.Column="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                      <ComboBox Grid.Column="0"
+                                ItemsSource="{Binding Options}"
+                                SelectedItem="{Binding SelectedOption, Mode=TwoWay}"
+                                DisplayMemberBinding="{Binding Display}"
+                                IsEnabled="{Binding IsPickerEnabled}"
+                                HorizontalAlignment="Stretch" FontSize="12" />
+                      <CheckBox Grid.Column="1"
+                                Content="{x:Static app:UiStrings.ImportMappingUnlockIdentity}"
+                                IsChecked="{Binding IsIdentityUnlocked, Mode=TwoWay}"
+                                IsVisible="{Binding NeedsIdentityOverride}"
+                                ToolTip.Tip="{Binding LockReason}"
+                                FontSize="11" VerticalAlignment="Center" />
+                      <!-- Origin, in the debugger's ValueOrigin vocabulary: "matched" is quiet because it
+                           rests on a provable fact; "assumed" is an ACCENT — worth a look, not an error. -->
+                      <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="11"
+                                 VerticalAlignment="Center" FontStyle="Italic"
+                                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                                 IsVisible="{Binding IsAutomatic}" />
+                      <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="11"
+                                 VerticalAlignment="Center" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource AccentBrush}"
+                                 IsVisible="{Binding IsAssumed}" />
+                    </Grid>
+
+                    <TextBlock Grid.Column="2" Text="{Binding TypeText}" FontSize="12"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource SubtleForegroundBrush}" />
+
+                    <!-- The note: either why the column is locked, or what the planner said about it.
+                         Both are reasons, and a blocked control without one is a UX defect (§9.1.3). -->
+                    <TextBlock Grid.Column="3" FontSize="11" VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="{Binding LockReason}"
+                               Foreground="{DynamicResource SubtleForegroundBrush}"
+                               IsVisible="{Binding !IsPickerEnabled}" />
+                    <TextBlock Grid.Column="3" FontSize="11" VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="{Binding DiagnosticText}"
+                               IsVisible="{Binding HasDiagnostic}">
+                      <TextBlock.Foreground>
+                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                          <Binding Path="DiagnosticBrushKey" />
+                          <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                        </MultiBinding>
+                      </TextBlock.Foreground>
+                    </TextBlock>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            </ScrollViewer>
+          </Grid>
+        </Border>
+
+        <!-- The source fields nobody consumes — how "I forgot a column" becomes visible BEFORE the
+             import instead of after it. -->
+        <TextBlock Grid.Row="2" Text="{Binding UnusedFieldsText}" Classes="subtle" FontSize="11"
+                   Margin="0,6,0,0" TextWrapping="Wrap"
+                   IsVisible="{Binding HasUnusedFields}" />
+      </Grid>
+    </Grid>
+
+    </Grid>
+
+    <!-- ══ The bottom panel's splitter (U2) ═════════════════════════════════════════════════════
+         Always visible while the surface is — deliberately NOT bound to !IsBottomPanelCollapsed, which is
+         the state its own double-click toggles; binding a splitter's visibility to what it toggles is
+         gotcha #240 part 3, and it cost three commits in the debugger. -->
+    <GridSplitter Grid.Row="6" x:Name="BottomSplitter" Height="4"
+                  ResizeDirection="Rows" HorizontalAlignment="Stretch"
+                  Background="{DynamicResource BorderBrush}" />
+
+    <!-- ══ Band G — bottom tabs. Collapse renormalizes BOTH grid rows (gotcha #240). ═════════════
+         Three tabs, one question each: what the file HOLDS (raw records), what the CURRENT settings
+         would reject (found without running anything), and what a run actually DID. The Errors tab
+         carries its count — a tab that hides how much it has to say has to be opened to find out.
+         The chevron overlays the strip and the tab CONTENTS carry the collapse binding, exactly as in
+         the debugger, so a collapsed panel measures down to the strip alone. -->
+    <Border Grid.Row="7" ClipToBounds="True" Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+            DoubleTapped="OnBottomPanelDoubleTapped">
+      <Grid>
+        <Button Classes="icon" ZIndex="1"
+                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0"
+                ToolTip.Tip="{x:Static app:UiStrings.ImportBottomPanelToggleTooltip}"
+                Command="{Binding ToggleBottomPanelCommand}">
+          <Panel>
+            <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14"
+                              Foreground="{DynamicResource SubtleForegroundBrush}"
+                              IsVisible="{Binding !IsBottomPanelCollapsed}" />
+            <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14"
+                              Foreground="{DynamicResource SubtleForegroundBrush}"
+                              IsVisible="{Binding IsBottomPanelCollapsed}" />
+          </Panel>
+        </Button>
+
+        <TabControl x:Name="BottomTabs" Padding="0">
+
+          <!-- ── Source preview: the provider's own records, before anything was converted ── -->
+          <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportSourcePreviewTab}">
+          <Grid IsVisible="{Binding !IsBottomPanelCollapsed}">
+            <TextBlock Text="{x:Static app:UiStrings.ImportSourcePreviewEmpty}"
+                       Classes="subtle" Margin="12,10" FontSize="12"
+                       IsVisible="{Binding !PreviewRows.Count}" />
+            <DataGrid x:Name="SourcePreviewGrid"
+                      ItemsSource="{Binding PreviewRows}"
+                      IsVisible="{Binding PreviewRows.Count}"
+                      IsReadOnly="True"
+                      AutoGenerateColumns="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="All"
+                      CanUserSortColumns="False"
+                      FontSize="12" />
+          </Grid>
+          </TabItem>
+
+          <!-- ── Preview after conversion (§3.6) — "exactly what reaches the database" ──────────────
+               ⭐ It lives HERE, not in the work area, since the configuration/results split of 2026-07-27.
+               It is a RESULT — what the pipeline produces from the current settings — and it is needed in
+               both target variants, so putting it beside Mapping made a decision and its consequence fight
+               over the same pixels while the work area lost half its width to it. The bottom panel is where
+               outcomes belong, next to Source preview, Errors and Report.
+
+               Filled by the REAL pipeline (bounded provider + a writer that keeps rows instead of sending
+               them), which is the only way §3.6's claim can be true.
+               ⛔ The shared filter panel and the aggregation bar are deliberately NOT wired: a filter here
+                  would suggest it changes what gets imported. Filtering before import is its own planned
+                  feature (§9.5) — a boundary, not an oversight. -->
+          <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportPreviewTitle}">
+          <Panel IsVisible="{Binding !IsBottomPanelCollapsed}">
+          <Grid RowDefinitions="Auto,*" Margin="12,8"
+                DataContext="{Binding ConvertedPreview}" x:DataType="vm:ImportConvertedPreviewViewModel">
+
+            <TextBlock Grid.Row="0" Text="{Binding Headline}" Classes="subtle" FontSize="12"
+                       Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding HasRows}" />
+
+            <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportPreviewEmpty}"
+                       Classes="subtle" FontSize="12" MaxWidth="420" TextWrapping="Wrap"
+                       HorizontalAlignment="Center" VerticalAlignment="Top"
+                       IsVisible="{Binding !HasRows}" />
+
+            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                    IsVisible="{Binding HasRows}">
+              <DataGrid x:Name="ConvertedPreviewGrid"
+                        ItemsSource="{Binding Rows}"
+                        IsReadOnly="True"
+                        AutoGenerateColumns="False"
+                        HeadersVisibility="Column"
+                        GridLinesVisibility="All"
+                        CanUserSortColumns="False"
+                        FontSize="12" />
+            </Border>
+          </Grid>
+          </Panel>
+          </TabItem>
+
+          <!-- ── Errors: what the CURRENT settings would reject, found without running anything ──
+               Same row type and same four columns as the report's list — one problem reads the same
+               wherever it is shown. -->
+          <TabItem Classes="bottom-tab" Header="{Binding ConvertedPreview.ProblemsTabHeader}">
+          <Grid IsVisible="{Binding !IsBottomPanelCollapsed}">
+            <TextBlock Text="{x:Static app:UiStrings.ImportErrorsEmpty}"
+                       Classes="subtle" Margin="12,10" FontSize="12"
+                       IsVisible="{Binding !ConvertedPreview.HasProblems}" />
+            <DataGrid ItemsSource="{Binding ConvertedPreview.Problems}"
+                      IsVisible="{Binding ConvertedPreview.HasProblems}"
+                      IsReadOnly="True" AutoGenerateColumns="False" HeadersVisibility="Column"
+                      GridLinesVisibility="All" CanUserSortColumns="False" FontSize="12"
+                      DoubleTapped="OnProblemDoubleTapped">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnRow}"
+                                    Binding="{Binding SourceRowNumber}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnColumn}"
+                                    Binding="{Binding ColumnName}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnValue}"
+                                    Binding="{Binding RawValue}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnReason}"
+                                    Binding="{Binding Reason}" IsReadOnly="True" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+          </TabItem>
+
+          <!-- ── Report: what a run DID, and the transaction decision beside the numbers (§3.7) ── -->
+          <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportReportTab}">
+          <Panel IsVisible="{Binding !IsBottomPanelCollapsed}">
+          <Grid RowDefinitions="Auto,*"
+                DataContext="{Binding Report}" x:DataType="vm:ImportRunReportViewModel">
+
+            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.ImportReportEmpty}"
+                       Classes="subtle" Margin="12,10" FontSize="12"
+                       IsVisible="{Binding !HasReport}" />
+
+            <StackPanel Grid.Row="0" Spacing="4" Margin="12,8" IsVisible="{Binding HasReport}">
+              <!-- The headline carries the severity colour through the shared MessageBanner table, so the
+                   report describes a state the same way every other surface does (§9.3). -->
+              <TextBlock Text="{Binding Headline}" FontSize="12" TextWrapping="Wrap">
+                <TextBlock.Foreground>
+                  <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                    <Binding Path="SeverityBrushKey" />
+                    <Binding ElementName="ImportRoot" Path="ActualThemeVariant" />
+                  </MultiBinding>
+                </TextBlock.Foreground>
+              </TextBlock>
+
+              <TextBlock Text="{Binding Note}" Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                         IsVisible="{Binding HasNote}" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                <!-- ⚠ Commit / Rollback are NOT here any more. They moved to the top command bar after the
+                     I7 review: in EmberTern every main action is taken from the toolbar, and hiding the
+                     transaction decision at the bottom of the window made a successful import read as a
+                     failure — the only thing in view was a red "a working transaction is open" line. The
+                     Report tab reports; the toolbar acts. -->
+
+                <!-- Export goes through the SHARED export framework — CSV / XLSX / clipboard for free,
+                     without one line of new serialization (§4.6). -->
+                <Button Classes="flat" FontSize="12"
+                        Content="{x:Static app:UiStrings.ImportReportExport}"
+                        IsEnabled="{Binding HasProblems}"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).ExportReportCommand}" />
+                <Button Classes="flat" FontSize="12"
+                        Content="{x:Static app:UiStrings.ImportReportCopy}"
+                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).CopyReportCommand}" />
+              </StackPanel>
+            </StackPanel>
+
+            <DataGrid Grid.Row="1" ItemsSource="{Binding Problems}"
+                      IsVisible="{Binding HasProblems}"
+                      IsReadOnly="True" AutoGenerateColumns="False" HeadersVisibility="Column"
+                      GridLinesVisibility="All" CanUserSortColumns="False" FontSize="12"
+                      ToolTip.Tip="{x:Static app:UiStrings.ImportReportRevealTooltip}"
+                      DoubleTapped="OnProblemDoubleTapped">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnRow}"
+                                    Binding="{Binding SourceRowNumber}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnColumn}"
+                                    Binding="{Binding ColumnName}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnValue}"
+                                    Binding="{Binding RawValue}" IsReadOnly="True" />
+                <DataGridTextColumn Header="{x:Static app:UiStrings.ImportReportColumnReason}"
+                                    Binding="{Binding Reason}" IsReadOnly="True" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+          </Panel>
+          </TabItem>
+
+          <!-- ── DDL: the exact CREATE TABLE this import will run ────────────────────────────────────
+               ⭐ A TAB rather than a button, decided after two worse answers. It was first disclosed inline
+               in the types column — a panel almost always empty, complicating that column permanently — and
+               then briefly opened in the SQL Editor, which was worse in a different way: **the generated DDL
+               is part of configuring THIS import, so reaching it must not switch modules or move the active
+               tab.** Here it costs no space until selected, never navigates anywhere, and sits with the other
+               artefacts of the run.
+
+               Rendered LIVE from `CreateTableSql`, which is computed from the grid above through the same
+               `ImportNewTable.BuildCreateSql` the run itself calls — so it cannot go stale and there is no
+               refresh to forget. Selectable, so copying it needs no button of its own.
+
+               ⚠ Visible only in the „new table" variant: in the other one there is no statement to generate,
+               and a permanently empty tab is a promise nothing keeps. It is LAST on the strip on purpose —
+               a hidden tab still occupies its index, and the run reveals the Report by index. -->
+          <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportDdlTab}"
+                   IsVisible="{Binding Target.IsNewTable}">
+          <Panel IsVisible="{Binding !IsBottomPanelCollapsed}">
+          <Grid RowDefinitions="Auto,*" Margin="12,8"
+                DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel">
+
+            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.ImportDdlLive}"
+                       Classes="subtle" FontSize="11" Margin="0,0,0,6"
+                       IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+            <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportDdlEmpty}"
+                       Classes="subtle" FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                       HorizontalAlignment="Center" VerticalAlignment="Top"
+                       IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+
+            <!-- ⭐ The SAME read-only SQL surface the other eleven DDL previews use — an AvaloniaEdit
+                 TextEditor with `SqlEditorBehavior.AttachReadOnlyHighlighting`, so generated SQL reads
+                 identically wherever EmberTern shows it: the shared XSHD lexical layer plus the SEMANTIC
+                 accent layer, from the one Lexer/Parser/SemanticModel front-end. Not a second renderer, and
+                 not a plain text block that would be the only SQL in the application without colour.
+                 ⚠ Read-only in the strict sense the seam guarantees: `AttachReadOnlyHighlighting` deliberately
+                 does NOT wire completion, squiggles or typing ergonomics — a preview must not offer to edit
+                 what it is only showing. Line numbers are off: this is one short statement, not a document.
+                 Its Text is PUSHED from the VM in code-behind (two-way TextEditor.Text binding is flaky —
+                 the same gotcha every other DDL preview works around). -->
+            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                    IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <ae:TextEditor x:Name="DdlEditor"
+                             ShowLineNumbers="False"
+                             IsReadOnly="True"
+                             FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                             FontSize="13"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             Background="{DynamicResource BackgroundBrush}"
+                             Foreground="{DynamicResource ForegroundBrush}" />
+            </Border>
+          </Grid>
+          </Panel>
+          </TabItem>
+        </TabControl>
+      </Grid>
+    </Border>
+
+    <!-- ══ Band H — where the rows land, then the numbers. Never adjectives (§9.1 point 4) ══════ -->
+    <Border Grid.Row="8" Background="{DynamicResource ElevatedPanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12,4">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock Text="{Binding DestinationStatus}" FontSize="12"
+                   Foreground="{DynamicResource SubtleForegroundBrush}" />
+        <TextBlock Text="│" FontSize="12" Foreground="{DynamicResource BorderBrush}" />
+        <TextBlock Text="{Binding SurfaceStatus}" FontSize="12"
+                   Foreground="{DynamicResource SubtleForegroundBrush}" />
+
+        <!-- The quiet restore note (§4.8.4): an automatic restore the user cannot see is a configuration
+             they did not choose, so it says so — and offers to forget it in one click. -->
+        <TextBlock Text="│" FontSize="12" Foreground="{DynamicResource BorderBrush}"
+                   IsVisible="{Binding RestoredLastConfiguration}" />
+        <TextBlock Text="{x:Static app:UiStrings.ImportRestoredLastConfiguration}" FontSize="12"
+                   FontStyle="Italic" VerticalAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   IsVisible="{Binding RestoredLastConfiguration}" />
+        <Button Classes="flat" Padding="4,0" FontSize="11" VerticalAlignment="Center"
+                Content="{x:Static app:UiStrings.ImportForgetLastConfiguration}"
+                IsVisible="{Binding RestoredLastConfiguration}"
+                Command="{Binding ForgetLastConfigurationCommand}" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

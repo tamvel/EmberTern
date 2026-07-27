@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The one place a NuGet dependency on an Office format is allowed — in BOTH directions.
+       It was named EmberTern.Export.Office while it only wrote workbooks; etap I9 made import read
+       from it too (XlsxImportProvider), so the name dropped "Export" (design decision D1). Core
+       stays zero-dep; this project references Core and implements IExporter / IImportProvider. -->
+  <ItemGroup>
+    <ProjectReference Include="..\EmberTern.Core\EmberTern.Core.csproj" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
+    <!-- Etap I10 (design D2, R5): the legacy .xls (BIFF8) reader. I0 measured that DocumentFormat.OpenXml
+         cannot open a .xls at all, so the format genuinely needs a second library — the one remaining NuGet
+         decision in the module. ExcelDataReader is MIT and forward-only, which is what design R8 requires:
+         measured over a 60 000-row BIFF sheet the heap stayed FLAT at 26.7 MB from row 15 000 to row 60 000. -->
+    <PackageReference Include="ExcelDataReader" Version="3.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EmberTern.Tests" />
+  </ItemGroup>
+</Project>

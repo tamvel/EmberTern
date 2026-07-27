@@ -406,6 +406,11 @@ public partial class MainWindow : Window
         }
         state.ResultsPanelHeight = _resultsHeight;
         state.ResultsMaximized = _resultsMaximized;
+        // Data Import's bottom panel. The remembered values live on the VM (the import tab is
+        // transient, so the view they belong to may already be gone at close) — read them, don't
+        // reach into a control.
+        state.ImportPreviewPanelHeight = _currentVm.ImportPanelHeight;
+        state.ImportPreviewPanelCollapsed = _currentVm.ImportPanelCollapsed;
         try
         {
             _workspaceStore?.Save(state);
@@ -497,6 +502,8 @@ public partial class MainWindow : Window
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
+            _currentVm.ImportFilePickRequested -= OnImportFilePickRequested;
+            _currentVm.ImportClipboardReadRequested -= OnImportClipboardReadRequested;
             _currentVm.RecompileDependentsRequested -= OnRecompileDependentsRequested;
             _currentVm.SmartParametersRequested -= OnSmartParametersRequested;
             _currentVm.EditorFocusRequested -= OnEditorFocusRequested;
@@ -520,6 +527,8 @@ public partial class MainWindow : Window
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.BatchResultsRequested += OnBatchResultsRequested;
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
+            _currentVm.ImportFilePickRequested += OnImportFilePickRequested;
+            _currentVm.ImportClipboardReadRequested += OnImportClipboardReadRequested;
             _currentVm.RecompileDependentsRequested += OnRecompileDependentsRequested;
             _currentVm.SmartParametersRequested += OnSmartParametersRequested;
             _currentVm.EditorFocusRequested += OnEditorFocusRequested;
@@ -619,6 +628,36 @@ public partial class MainWindow : Window
         });
 
         return file?.Path.LocalPath;
+    }
+
+    // VM → View Open-file picker for Data Import. Returns the chosen absolute path or null on cancel;
+    // everything the VM does with it is Core work on a path string. StorageProvider stays here (rule #1).
+    private async Task<string?> OnImportFilePickRequested()
+    {
+        var picker = StorageProvider;
+        if (picker is null) return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = UiStrings.ImportSourceBrowseTooltip,
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("CSV / TXT") { Patterns = new[] { "*.csv", "*.txt", "*.tsv" } },
+                new FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx", "*.xls" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        return files.Count > 0 ? files[0].Path.LocalPath : null;
+    }
+
+    // VM → View: the clipboard's text. App owns Avalonia's clipboard, Core receives a plain string — which
+    // is exactly why the clipboard is not a second parser (design §1.5).
+    private async Task<string?> OnImportClipboardReadRequested()
+    {
+        var clipboard = Clipboard;
+        return clipboard is null ? null : await clipboard.TryGetTextAsync();
     }
 
     // VM → View: open the shared Export dialog for a grid's data source. The dialog owns its own
@@ -1331,6 +1370,14 @@ public partial class MainWindow : Window
         var height = s?.ResultsPanelHeight ?? DefaultResultsHeight;
         if (height < MinResultsHeight) height = MinResultsHeight;
         _resultsHeight = height;
+
+        // Data Import's bottom panel — seeded onto the VM, which hands it to an import tab whenever
+        // one is opened (the tab itself is never restored; only this preference is).
+        if (_currentVm is not null && s is not null)
+        {
+            _currentVm.ImportPanelHeight = s.ImportPreviewPanelHeight;
+            _currentVm.ImportPanelCollapsed = s.ImportPreviewPanelCollapsed;
+        }
 
         if (s?.SidebarCollapsed == true)
         {

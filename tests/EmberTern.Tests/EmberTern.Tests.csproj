@@ -6,6 +6,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <!-- TEST-ONLY, and only ever a WRITER: it authors the BIFF8 fixtures XlsImportProviderTests reads back
+         through the production provider, exactly as those tests' .xlsx counterparts author theirs with
+         DocumentFormat.OpenXml. Nothing in src/ references it — the product reads .xls with ExcelDataReader. -->
+    <PackageReference Include="NPOI" Version="2.7.2" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="Avalonia.Headless" Version="12.0.3" />

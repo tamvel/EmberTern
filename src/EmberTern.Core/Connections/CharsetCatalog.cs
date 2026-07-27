@@ -29,9 +29,16 @@ public static class CharsetCatalog
     // Maps a Firebird charset name (as stored in ConnectionProfile.Charset) to a .NET Encoding.
     // Used when we need to decode bytes ourselves (e.g. system catalog source BLOBs whose stored
     // bytes may not match the connection charset). Falls back to UTF-8 for unknown / NONE.
+    //
+    // The UTF16LE / UTF16BE names are NOT Firebird connection charsets and deliberately do not appear
+    // in Supported (the connection picker's list). They exist because this is the one owner of
+    // "charset name -> Encoding" in the codebase, and Data Import has to decode FILES, whose byte-order
+    // mark can legitimately say UTF-16. A second name->Encoding map elsewhere is how the two would drift.
     public static Encoding Resolve(string? firebirdCharset) => (firebirdCharset ?? "").ToUpperInvariant() switch
     {
         "UTF8" or "UNICODE_FSS" => Encoding.UTF8,
+        "UTF16LE" => Encoding.Unicode,
+        "UTF16BE" => Encoding.BigEndianUnicode,
         "WIN1250" => Encoding.GetEncoding("windows-1250"),
         "WIN1251" => Encoding.GetEncoding("windows-1251"),
         "WIN1252" => Encoding.GetEncoding("windows-1252"),

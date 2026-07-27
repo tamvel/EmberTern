@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.Core.Export;
 using EmberTern.Core.Export.Sql;
-using EmberTern.Export.Office;
+using EmberTern.Office;
 
 namespace EmberTern.App.Export;
 

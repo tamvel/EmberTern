@@ -138,10 +138,20 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         // ~2k TreeViewItems per category). LoadGroupAsync marks the category loaded, so a
         // later expand renders from memory and never re-queries. Sequential because the
         // FbConnection services one command at a time (Task.WhenAll throws).
+        // One sidebar projection for the whole prefetch rather than one per category. LoadGroupAsync guards
+        // itself as well; the guard is nesting-safe, so this only collapses the 13 re-projections into one.
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        foreach (var cat in categories)
+        metadata.BeginSidebarBulkUpdate();
+        try
         {
-            await metadata.LoadGroupAsync(cat).ConfigureAwait(true);
+            foreach (var cat in categories)
+            {
+                await metadata.LoadGroupAsync(cat).ConfigureAwait(true);
+            }
+        }
+        finally
+        {
+            metadata.EndSidebarBulkUpdate();
         }
         sw.Stop();
         Diagnostics.PerfTrace.LogCategoryLoad(Profile.Name, categories.Count, sw.ElapsedMilliseconds);

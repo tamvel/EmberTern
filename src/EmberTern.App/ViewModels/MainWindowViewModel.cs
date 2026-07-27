@@ -38,6 +38,17 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly FolderStore _folderStore;
     private readonly ParameterHistoryStore _parameterHistory;
     private readonly WatchStore _watchStore;
+    private readonly EmberTern.Core.Import.ImportProfileStore _importProfiles;
+
+    // ⭐ The ONE owner of "does the application hold anything uncommitted". Before I7.5 that question had a
+    // single answer (the console transaction) and the guards asked it directly; Data Import's own
+    // transaction made it a question with several, and the shell must not grow a list of module names to
+    // answer it.
+    private readonly PendingWorkRegistry _pendingWork = new();
+
+    // The import tab is near-singleton, so there is at most one of each of these at a time.
+    private ImportSessionConnection? _importSession;
+    private ImportSessionWork? _importPendingWork;
     private FolderState _folderState = new();
     private readonly FirebirdConnectionService _service;
     // Data lane (connection #1): SQL Editor F5, data preview/edit.
@@ -155,6 +166,10 @@ public partial class MainWindowViewModel : ViewModelBase
         // Same shared settings.dat — debugger Watch expressions persist per routine (Stage X / D5).
         _watchStore = new WatchStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
+        // Same shared settings.dat — the Data Import module's implicit "last used" configuration (§4.8.4), which
+        // is the same store its named profiles will use in I11.
+        _importProfiles = new EmberTern.Core.Import.ImportProfileStore(
+            System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
         _folderState = _folderStore.Load();
         _service = service;
         _transactionService = transactionService;
@@ -242,6 +257,9 @@ public partial class MainWindowViewModel : ViewModelBase
         _service.ActiveConnectionChanged += OnActiveConnectionChanged;
         _service.ActiveProfileUpdated += OnActiveProfileUpdated;
         _transactionService.TransactionStateChanged += OnTransactionStateChanged;
+        // The console's transaction is a pending-work source like any other — registered once, here, so the
+        // guards never name it again.
+        _pendingWork.Register(new ConsoleTransactionWork(_transactionService));
         ReloadConnections();
         UpdateStatusFromConnection();
     }
@@ -336,6 +354,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ActiveGlobalSearch))]
     [NotifyPropertyChangedFor(nameof(IsScriptExecutorTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveScriptExecutor))]
+    [NotifyPropertyChangedFor(nameof(IsDataImportTabActive))]
+    [NotifyPropertyChangedFor(nameof(ActiveDataImport))]
     [NotifyPropertyChangedFor(nameof(IsDebuggerTabActive))]
     [NotifyPropertyChangedFor(nameof(ActiveDebugger))]
     [NotifyPropertyChangedFor(nameof(IsClosableTabActive))]
@@ -431,6 +451,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsScriptExecutorTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ScriptExecutor };
     public ScriptExecutorTabViewModel? ActiveScriptExecutor
         => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.ScriptExecutor } t ? t.ScriptExecutor : null;
+
+    public bool IsDataImportTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.DataImport };
+    public DataImportTabViewModel? ActiveDataImport
+        => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.DataImport } t ? t.DataImport : null;
 
     public bool IsGlobalSearchTabActive => SelectedWorkspaceTab is { Kind: WorkspaceTabKind.GlobalSearch };
     public GlobalSearchTabViewModel? ActiveGlobalSearch
@@ -1647,7 +1671,11 @@ public partial class MainWindowViewModel : ViewModelBase
             // Live tools + transient sessions are never persisted. A Debugger tab is a
             // transient debug session (rolled back on close), not a document — it must not
             // be captured (else an empty tab is "restored" on the next launch of the app).
-            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor or WorkspaceTabKind.Debugger) continue;
+            // Live-tool tabs are session-transient and are never persisted. Data Import belongs here for the
+            // same reason the Script Executor does — and omitting it would not merely fail to restore the tab,
+            // it would fall through and be captured as a Ddl tab, so the next launch would "restore" an empty
+            // one (the exact bug the Debugger tab had).
+            if (tab.Kind is WorkspaceTabKind.SecurityManager or WorkspaceTabKind.TraceMonitor or WorkspaceTabKind.SessionManager or WorkspaceTabKind.GlobalSearch or WorkspaceTabKind.ScriptExecutor or WorkspaceTabKind.DataImport or WorkspaceTabKind.Debugger) continue;
 
             if (tab.Kind == WorkspaceTabKind.Query)
             {
@@ -2100,6 +2128,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 _ = sm.DisposeAsync(); // stop the MON$ poll timer on disconnect (best-effort)
             else if (t.Kind == WorkspaceTabKind.ScriptExecutor && t.ScriptExecutor is { } se)
                 se.Detach(); // unsubscribe from the transaction-state event
+            else if (t.Kind == WorkspaceTabKind.DataImport)
+                ReleaseImportSession(); // the import's attachment must not outlive the profile (I7.5)
             else if (t.Kind == WorkspaceTabKind.Debugger && t.Debugger is { } dbg)
                 _ = dbg.DisposeAsync(); // roll back + close the debug session's attachment (§4.4) — a debug tab is bound to this DB (best-effort)
         }
@@ -2350,15 +2380,12 @@ public partial class MainWindowViewModel : ViewModelBase
         return allSaved;
     }
 
-    private bool AnyTransactionActive => _transactionService.IsActive;
+    // Asked of the registry, never of a named module — that is the whole point of it existing.
+    private bool AnyTransactionActive => _pendingWork.HasWork;
 
     private void AppendActiveTransactionLines(System.Text.StringBuilder sb)
     {
-        if (_transactionService.IsActive)
-        {
-            sb.AppendLine("  • " + string.Format(CultureInfo.CurrentCulture,
-                UiStrings.UnsavedTransactionDataFormat, _transactionService.StatementCount));
-        }
+        foreach (var line in _pendingWork.Describe()) sb.AppendLine("  • " + line);
     }
 
     /// <summary>
@@ -4005,6 +4032,194 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(newTab);
     }
 
+    // ---- Data Import (clipboard / TXT / CSV / XLSX into a table) ----
+
+    public bool CanOpenDataImport => _service.IsConnected;
+
+    /// <summary>The view supplies the file picker and the clipboard read — the VM never touches an Avalonia
+    /// dialog or clipboard type (rule #1). Mirrors <see cref="GlobalSearchRequested"/>.</summary>
+    public event Func<Task<string?>>? ImportFilePickRequested;
+
+    public event Func<Task<string?>>? ImportClipboardReadRequested;
+
+    /// <summary>
+    /// Remembered height + collapse state of the Data Import bottom panel, held here because the import tab
+    /// is transient: the view that owns the splitter may be gone by the time the workspace is saved, so the
+    /// value cannot live on it. <see cref="MainWindow"/> reads and seeds these exactly as it does
+    /// <c>ResultsPanelHeight</c>; an import tab picks them up when it opens and writes them back as the user
+    /// drags.
+    /// <para>
+    /// Deliberately NOT part of <c>ImportConfiguration</c> — a panel height is a layout preference, not a
+    /// decision about an import (§4.8.2).
+    /// </para>
+    /// </summary>
+    public double ImportPanelHeight { get; set; } = DefaultImportPanelHeight;
+
+    public bool ImportPanelCollapsed { get; set; }
+
+    private const double DefaultImportPanelHeight = 190;
+
+    [RelayCommand(CanExecute = nameof(CanOpenDataImport))]
+    private async Task OpenDataImportAsync()
+    {
+        // Near-singleton per connection, exactly like the Script Executor: the same import is run over and
+        // over, so a second tab would be two states for one job.
+        foreach (var tab in WorkspaceTabs)
+        {
+            if (tab.Kind == WorkspaceTabKind.DataImport)
+            {
+                SelectTab(tab);
+                return;
+            }
+        }
+
+        // The environment facts readiness needs are read as DELEGATES rather than snapshotted, so the strip
+        // reflects the connection and transaction as they are now — not as they were when the tab opened.
+        // The connection name is read the same way, for the same reason: it is what band H states about
+        // where the rows are going.
+        // The table list and the target's shape are read on the METADATA lane (read-only, implicit
+        // per-command transactions) — nothing about choosing a target may touch the user's working
+        // transaction. Passed as delegates, like the environment facts above, so the VM stays testable
+        // without a database and no Firebird type reaches a ViewModel (rule #1).
+        var targetReader = new FirebirdImportTargetReader(_metadataReader, _metadataLane);
+
+        // ⭐ I7.5: the module's OWN attachment and OWN transaction, on the same fundament the debugger uses.
+        // It used to write into THE user working transaction, which meant its Commit could also persist
+        // whatever the SQL Editor had left uncommitted — a button must do exactly what it says, so the
+        // possibility was removed rather than warned about (design §4.5 as amended).
+        ImportSessionConnection importSession;
+        try
+        {
+            importSession = await _service.CreateImportSessionAsync().ConfigureAwait(true);
+        }
+        catch (ConnectionFailedException ex)
+        {
+            SetError(ex.Message);
+            return;
+        }
+
+        var targetPreparer = new FirebirdImportTargetPreparer(importSession);
+        var connectionId = _service.ActiveProfile?.Id;
+
+        var environment = new DataImportEnvironment(
+            () => _service.IsConnected,
+            () => _service.ActiveProfile?.Name ?? string.Empty)
+        {
+            // ⭐ The CONNECTION charset, not the column's: I0 measured that a character it cannot represent is
+            // stored as '?' with no error at all, even into a UTF8 column (design R1).
+            ConnectionCharset = () => _service.ActiveProfile?.Charset ?? string.Empty,
+
+            // ⭐ The clipboard is a SOURCE the recalculation chain reads, so it has to be answerable before the
+            // tab's first chain run — which is why it belongs in the environment and not, like the file picker,
+            // in an event wired after construction. That is what lets a surface opened on a clipboard
+            // configuration read the clipboard by itself.
+            ReadClipboardAsync = ImportClipboardReadRequested is null
+                ? null
+                : () => ImportClipboardReadRequested.Invoke(),
+
+            ListTablesAsync = async ct =>
+            {
+                var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table, ct).ConfigureAwait(false);
+                return tables.Select(t => t.Name).ToList();
+            },
+            ReadTargetAsync = (table, ct) => targetReader.ReadTargetAsync(table, ct),
+
+            // ⭐ I8 — the new table's CREATE (and its DROP on failure) go to the **Ddl** lane: autonomous,
+            // auto-committed, WAIT-bounded. Not a preference — gotcha #213: a Firebird transaction cannot use
+            // an object whose DDL it has not committed, so creating the table inside the import's own
+            // transaction would make every INSERT fail with "table unknown". The price, that a Rollback cannot
+            // remove the table, is stated in the Target section, in the readiness strip and in the report
+            // (§0.5). It is the SAME executor the object editors compile through — nothing new (§4.6).
+            CreateTableAsync = (sql, ct) => _ddlExecutor.ExecuteAsync(sql, ct),
+            DropTableAsync = (sql, ct) => _ddlExecutor.ExecuteAsync(sql, ct),
+
+            // ⭐ The tree learns about the table from the operation that made it, not from a full refresh.
+            // A 21st `Metadata.RefreshAsync()` would have been correct in a minute and would have cost a
+            // catalog re-read of all 13 categories plus a quadratic re-projection of every expanded one —
+            // over a second of frozen UI to discover a single table this code already knows the name of.
+            TableCreated = name =>
+                Metadata.ApplyObjectAddedInPlace(new MetadataObject(name, MetadataObjectKind.Table)),
+            TableDropped = name =>
+                Metadata.ApplyObjectRemovedInPlace(new MetadataObject(name, MetadataObjectKind.Table)),
+
+
+            // Batched is the only mode that finishes a transaction on its own, so it is the only one that gets
+            // the decorator — Manual and AutoCommitOnSuccess run through byte-identical code (§4.5).
+            CreateWriter = configuration =>
+            {
+                var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
+                return configuration.Transaction == EmberTern.Core.Import.ImportTransactionMode.Batched
+                    ? new BatchedCommitImportWriter(writer, importSession, configuration.CommitEveryRows)
+                    : writer;
+            },
+            CountTargetRowsAsync = (table, ct) => targetPreparer.CountRowsAsync(table, ct),
+            EmptyTargetAsync = (table, ct) => targetPreparer.EmptyAsync(table, ct),
+            CommitAsync = () => importSession.CommitAsync(),
+            RollbackAsync = () => importSession.RollbackAsync(),
+
+            // "Last used" is the implicit profile (§4.8.4) — the same store the named ones use, which is the
+            // whole point: I11 built nothing new for them, it only gave the store's list a name column and a UI.
+            LoadLastUsed = () => _importProfiles.GetLastUsed(connectionId),
+            SaveLastUsed = configuration => _importProfiles.SaveLastUsed(connectionId, configuration),
+
+            // Named profiles (etap I11). The connection id is resolved HERE and never reaches the surface:
+            // which database this is, is not a decision about how to read a file (§4.8.2).
+            ListProfiles = () => _importProfiles.ListNamed(connectionId),
+            SaveProfile = (name, configuration) => _importProfiles.SaveNamed(connectionId, name, configuration),
+            RenameProfile = (id, name) => _importProfiles.Rename(id, name),
+            DeleteProfile = id => _importProfiles.Delete(id),
+        };
+
+        var import = new DataImportTabViewModel(environment);
+
+        if (ImportFilePickRequested is not null)
+            import.FilePickRequested += () => ImportFilePickRequested.Invoke();
+        import.CopyToClipboardRequested += text => ClipboardWriteRequested?.Invoke(text);
+
+        // Hand the tab the remembered panel layout, and follow it back as the user drags. The tab is
+        // near-singleton and transient, so this VM is where the value outlives it.
+        import.BottomPanelHeight = ImportPanelHeight;
+        import.IsBottomPanelCollapsed = ImportPanelCollapsed;
+        import.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DataImportTabViewModel.BottomPanelHeight)) ImportPanelHeight = import.BottomPanelHeight;
+            else if (e.PropertyName == nameof(DataImportTabViewModel.IsBottomPanelCollapsed)) ImportPanelCollapsed = import.IsBottomPanelCollapsed;
+        };
+
+        // While the tab lives, its unsettled rows are the application's business. Teardown goes through the
+        // same per-kind dispatch every other tool tab uses (below) — the registry answers "is anything
+        // uncommitted", the dispatch answers "whose resource is this to close".
+        _importSession = importSession;
+        _importPendingWork = new ImportSessionWork(importSession);
+        _pendingWork.Register(_importPendingWork);
+
+        var newTab = WorkspaceTabViewModel.CreateDataImport(this, import, _service.ActiveProfile?.Id);
+        WorkspaceTabs.Add(newTab);
+        SelectTab(newTab);
+    }
+
+    /// <summary>
+    /// Ends the import's session: it stops being a pending-work source and its attachment is closed (which
+    /// rolls back anything unsettled).
+    /// <para>
+    /// ⚠ By the time this runs the decision must already have been taken. The close and disconnect guards ask
+    /// the registry FIRST and offer Commit / Rollback / Cancel; this is the teardown that follows, not a place
+    /// where data is silently discarded.
+    /// </para>
+    /// </summary>
+    private void ReleaseImportSession()
+    {
+        if (_importPendingWork is not null)
+        {
+            _pendingWork.Unregister(_importPendingWork);
+            _importPendingWork = null;
+        }
+
+        var session = _importSession;
+        _importSession = null;
+        if (session is not null) _ = session.DisposeAsync();
+    }
+
     // ---- Global Search (metadata names + source bodies) ----
 
     public bool CanOpenGlobalSearch => _service.IsConnected;
@@ -4679,6 +4894,8 @@ public partial class MainWindowViewModel : ViewModelBase
             se.Detach(); // unsubscribe from the transaction-state event
         else if (tab.Kind == WorkspaceTabKind.Debugger && tab.Debugger is { } dbg)
             _ = dbg.DisposeAsync(); // roll back + close the debug session's attachment (§4.4, best-effort)
+        else if (tab.Kind == WorkspaceTabKind.DataImport)
+            ReleaseImportSession(); // roll back + close the import's own attachment (I7.5)
 
         if (wasSelected && WorkspaceTabs.Count > 0)
         {
@@ -6497,10 +6714,14 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool CanRollbackAll => _transactionService.IsActive || _transactionService.IsError;
 
     [RelayCommand(CanExecute = nameof(CanCommitAll))]
-    private Task CommitAllAsync() => CommitTransactionAsync();
+    // "Commit everything" at disconnect/exit settles every source, not just the console: the user was shown
+    // every line and answered about all of them at once. The TOOLBAR's Commit stays deliberately narrower —
+    // it is the console's button, and making it settle the import would re-create, in the other direction,
+    // exactly the cross-module commit I7.5 removed.
+    private Task CommitAllAsync() => _pendingWork.CommitAllAsync();
 
     [RelayCommand(CanExecute = nameof(CanRollbackAll))]
-    private Task RollbackAllAsync() => RollbackTransactionAsync();
+    private Task RollbackAllAsync() => _pendingWork.RollbackAllAsync();
 
     [RelayCommand]
     private Task CommitAsync() => CommitTransactionAsync();
@@ -6702,6 +6923,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OpenGlobalSearchCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanOpenScriptExecutor));
         OpenScriptExecutorCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanOpenDataImport));
+        OpenDataImportCommand.NotifyCanExecuteChanged();
     }
 
     internal IReadOnlyDictionary<string, ConnectionWorkspace> WorkspacesByConnection

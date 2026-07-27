@@ -821,6 +821,99 @@ END^
 
 SET TERM ; ^
 
+/* ---------- Data Import — write-path zoo (etap I4) ------------------
+   One table per failure class the import report has to name correctly, so the
+   probe can prove that a refusal maps to the right ImportErrorKind AND to the
+   right SOURCE row number. The classes come from the I0 measurements
+   (docs/design/data-import-i0-findings.md §2.6): NOT NULL, uniqueness,
+   CHECK, foreign key, string truncation, numeric overflow.
+   Kept separate from the ORDERS/CUSTOMERS zoo on purpose — an import probe
+   inserts and deletes freely, and it must never disturb the objects the
+   debugger and metadata tests rely on.                                 */
+
+CREATE TABLE IMP_TARGET (
+  ID     INTEGER      NOT NULL PRIMARY KEY,     /* uniqueness + NOT NULL      */
+  CODE   VARCHAR(10)  NOT NULL,                 /* truncation at 10 chars     */
+  NAME   VARCHAR(20),
+  QTY    SMALLINT,                              /* overflow above 32767       */
+  PRICE  NUMERIC(9,2),
+  CONSTRAINT IMP_TARGET_QTY_CHK CHECK (QTY IS NULL OR QTY >= 0)
+);
+
+/* A UNIQUE index alongside the PK: I0 measured both violations as the SAME GDS
+   code at every depth, so this exists to prove the mapper reports "uniqueness"
+   for either without pretending to know which one it was.                 */
+CREATE UNIQUE INDEX IMP_TARGET_CODE_UQ ON IMP_TARGET (CODE);
+
+/* Foreign key pair — a child row naming a parent that does not exist.     */
+CREATE TABLE IMP_PARENT (
+  ID INTEGER NOT NULL PRIMARY KEY
+);
+
+CREATE TABLE IMP_CHILD (
+  ID        INTEGER NOT NULL PRIMARY KEY,
+  PARENT_ID INTEGER,
+  CONSTRAINT IMP_CHILD_FK FOREIGN KEY (PARENT_ID) REFERENCES IMP_PARENT (ID)
+);
+
+/* GENERATED ALWAYS identity — an INSERT naming this column is REJECTED unless
+   it carries OVERRIDING SYSTEM VALUE, which is what the writer must emit.  */
+CREATE TABLE IMP_IDENTITY (
+  ID   INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  NOTE VARCHAR(20)
+);
+
+/* A MULTI-ACTION BEFORE trigger. Deliberately not a plain BEFORE INSERT:
+   RDB$TRIGGER_TYPE is bit-encoded, so a reader testing `type = 1` would miss
+   this one — and a multi-action trigger is exactly the kind that rewrites an
+   imported value without the user knowing (design R6).                    */
+CREATE TABLE IMP_TRIGGERED (
+  ID   INTEGER NOT NULL PRIMARY KEY,
+  NOTE VARCHAR(20)
+);
+
+/* ⭐ Server-side failure zone. The import validates NOT NULL, length and numeric
+   range on the CLIENT, before the round trip — which is correct and is what §0
+   asks for, but it means those classes normally never reach the server, so the
+   GDS-vector discrimination could not be exercised live at all.
+   This trigger manufactures exactly those failures INSIDE the engine, where the
+   client cannot possibly have foreseen them: a value the trigger lengthens past
+   the column, an arithmetic result that overflows, a column the trigger nulls.
+   That is what lets the probe prove the three-way split of GDS 335544321
+   (truncation / overflow / transliteration) against a real engine.        */
+CREATE TABLE IMP_SRV (
+  ID    INTEGER     NOT NULL PRIMARY KEY,
+  MODE  VARCHAR(10),
+  CODE  VARCHAR(10),
+  NAME  VARCHAR(20) NOT NULL,
+  QTY   SMALLINT
+);
+
+SET TERM ^ ;
+
+CREATE TRIGGER IMP_TRG_BIU FOR IMP_TRIGGERED
+ACTIVE BEFORE INSERT OR UPDATE POSITION 0
+AS
+BEGIN
+  NEW.NOTE = 'SET BY TRIGGER';
+END^
+
+CREATE TRIGGER IMP_SRV_BI FOR IMP_SRV
+ACTIVE BEFORE INSERT POSITION 0
+AS
+BEGIN
+  IF (NEW.MODE = 'TRUNC') THEN
+    NEW.CODE = NEW.CODE || '-0123456789ABCDEF';
+  IF (NEW.MODE = 'OVER') THEN
+    NEW.QTY = NEW.QTY * 30000;
+  IF (NEW.MODE = 'NULL') THEN
+    NEW.NAME = NULL;
+END^
+
+SET TERM ; ^
+
+INSERT INTO IMP_PARENT (ID) VALUES (1);
+
 /* ---------- Descriptions (exercise COMMENT ON metadata) ------------ */
 
 COMMENT ON TABLE  CUSTOMERS              IS 'Customers master table (lab).';

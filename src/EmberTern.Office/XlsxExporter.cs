@@ -8,7 +8,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using EmberTern.Core.Export;
 
-namespace EmberTern.Export.Office;
+namespace EmberTern.Office;
 
 /// <summary>
 /// Excel (.xlsx) exporter — a streaming SpreadsheetML writer built on the OpenXML SDK

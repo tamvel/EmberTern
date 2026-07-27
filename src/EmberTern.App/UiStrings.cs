@@ -118,6 +118,481 @@ internal static class UiStrings
     // ─── Script Executor ──────────────────────────────────────────────────────
     public const string ScriptExecutorTabTitle = "Script Executor";
     public const string ToolbarScriptExecutorTooltip = "Script Executor (migrations & multi-object DDL)";
+
+    // ---- Data Import (etap I5: the tab, the frame, the readiness strip, Source & format) ----
+    // Core returns codes only (rule #6); every sentence the module shows lives here.
+
+    public const string DataImportTabTitle = "Data Import";
+    public const string ToolbarDataImportTooltip = "Import data (clipboard, TXT, CSV, XLSX) into a table";
+
+    // Section titles — also the readiness strip's chip labels.
+    public const string ImportSectionSource = "Source";
+    public const string ImportSectionFormat = "Format";
+    public const string ImportSectionTarget = "Target";
+    public const string ImportSectionMapping = "Mapping";
+    public const string ImportSectionTransaction = "Transaction";
+
+    // Source & format section.
+    //
+    // ⭐ The section splits by HOW OFTEN a decision changes, not by what it is about (U1/U5, ratified
+    // 2026-07-26). The file (or clipboard) changes on every single run; the separator, encoding and date
+    // format are set once and then survive for months. So the picker stays live at all times and only these
+    // options fold away — otherwise the commonest action in the module (point at the next file) would cost
+    // an expand and a collapse, and §1.2's promise that a repeat import is one F5 would be false.
+    public const string ImportSourceHeader = "SOURCE";
+    // Deliberately not "Format": that word also reads as "which format is this file", i.e. the source kind,
+    // which is decided by the picker beside it. And not "Import parameters" either — the transaction mode and
+    // the error policy are import parameters too, and they live in the command bar.
+    public const string ImportFormatOptionsHeader = "Format options";
+    public const string ImportFormatOptionsTooltip = "Separator, encoding, dates and number formats";
+    public const string ImportSourceFile = "File";
+    public const string ImportSourceClipboard = "Clipboard";
+    public const string ImportSourceNoFile = "no file chosen";
+    public const string ImportSourceBrowseTooltip = "Choose a file…";
+    // Choosing the clipboard READS it — that is the whole point of it being a live source, and a control with a
+    // side effect should say so rather than let the user discover it.
+    public const string ImportSourceUseClipboardTooltip =
+        "Use the clipboard as the source, and read it now · Ctrl+V re-reads it";
+    public const string ImportParsingHeader = "Parsing";
+    public const string ImportCultureHeader = "Data culture";
+    public const string ImportDelimiterLabel = "Column separator";
+    public const string ImportQuoteLabel = "Text qualifier";
+    public const string ImportEncodingLabel = "Encoding";
+    public const string ImportLineEndingLabel = "Line ending";
+    public const string ImportAutoDetectLabel = "detect automatically";
+    public const string ImportHasHeaderLabel = "First record holds column names";
+    public const string ImportFirstDataRowLabel = "First data row";
+    public const string ImportLastRowLabel = "Last row";
+    // Never "2147483647" — an implementation detail in the UI is what §8 point 7 criticises.
+    public const string ImportLastRowPlaceholder = "(to the end)";
+    public const string ImportTrimWhitespaceLabel = "Trim whitespace around values";
+    // ── Spreadsheet sources (etap I9). Shown only when the provider declares sheets. ──
+    public const string ImportSheetLabel = "Sheet";
+    public const string ImportDatesAsDatesLabel = "Treat date cells as dates (otherwise: Excel serial number)";
+
+    public const string ImportNullTokenLabel = "NULL value";
+    public const string ImportNullTokenPlaceholder = "(empty field)";
+    public const string ImportDecimalSeparatorLabel = "Decimal separator";
+    public const string ImportThousandsSeparatorLabel = "Thousands separator";
+    public const string ImportDateOrderLabel = "Date format";
+    public const string ImportDateSeparatorLabel = "Date separator";
+    public const string ImportTimeSeparatorLabel = "Time separator";
+    public const string ImportDelimiterTab = "Tab";
+    public const string ImportSeparatorNone = "(none)";
+    public const string ImportSeparatorSpace = "space";
+    public const string ImportLineEndingAuto = "auto";
+    public const string ImportChangeButton = "Change";
+
+    // Detection evidence — an automatic decision that explains itself builds trust; a silent one does not.
+    public const string ImportDelimiterEvidenceFormat = "{0}/{1} records have the same field count ({2} fields)";
+    public const string ImportEncodingEvidenceBom = "byte-order mark";
+    public const string ImportEncodingEvidenceAscii = "pure ASCII — the file does not distinguish encodings";
+    public const string ImportEncodingEvidenceHeuristic = "no BOM → heuristic over the file's bytes";
+
+    public const string ImportSummaryDelimiterFormat = "\"{0}\"";
+    public const string ImportSummaryNoHeader = "no header";
+    public const string ImportFileFactsFormat = "{0:N1} KB · {1:g}";
+    public const string ImportFileMissing = "file not found";
+    // The clipboard's facts carry the READ TIME, not a last-write time it does not have: for a live source that
+    // is the question ("is what I see still what I copied?"), and it is also what makes a refresh visibly
+    // acknowledge itself when the pasted content happens to be identical.
+    public const string ImportClipboardFactsFormat = "clipboard: {0} lines · {1:N1} KB · read {2:T}";
+    public const string ImportClipboardEmpty = "clipboard is empty";
+    // (There is deliberately no "format not supported yet" string any more. It refused .xls until etap I10 gave
+    // that format a provider, and every source kind the surface can resolve now has one — a message for a state
+    // that can no longer occur is worse than none, because the next reader of the code has to work out when it
+    // fires before discovering it never does.)
+
+    // Readiness strip.
+    public const string ImportReadinessHeader = "Ready:";
+    public const string ImportReadySummary = "Ready to import";
+    public const string ImportReadySummaryWithRowsFormat = "Ready to import — {0:N0} rows previewed";
+    public const string ImportReadyBlocked = "Not ready yet";
+
+    public const string ImportReadyNoSource = "No source chosen — pick a file or paste from the clipboard.";
+    public const string ImportReadySourceMissingFormat = "The file is gone: {0}";
+    public const string ImportReadySourceUnreadable = "The source could not be read.";
+    public const string ImportReadySourceHasNoFields = "The source has no fields yet.";
+    public const string ImportReadySourceOptionsMismatch = "The format settings do not match this kind of source.";
+    public const string ImportReadyNoTarget = "No target table chosen.";
+    public const string ImportReadyTargetNotFoundFormat = "Table {0} is not in this database.";
+    public const string ImportReadyNewTableHasNoColumns = "The new table has no columns defined.";
+    public const string ImportReadyNewTableWillBeCommittedFormat =
+        "Table {0} will be created and COMMITTED before any row is written — a rollback will not remove it.";
+    // Refused here rather than by the engine: the CREATE is the first thing the run does, so without this the
+    // user would meet a raw server error immediately after being told everything was ready (§0).
+    public const string ImportReadyNewTableAlreadyExistsFormat =
+        "A table named {0} already exists — choose another name, or import into the existing table.";
+    public const string ImportReadyBeforeInsertTriggersFormat =
+        "{0} BEFORE INSERT trigger(s) on the target can overwrite imported values.";
+    public const string ImportReadyTargetWillBeEmptiedFormat = "{0} will be emptied before the import.";
+    public const string ImportReadyNothingMapped = "No column is mapped — there is nothing to import.";
+    public const string ImportReadyRequiredColumnNotMappedFormat =
+        "Column {0} is NOT NULL with no default and is unmapped — every row would fail.";
+    public const string ImportReadyUnsupportedColumnTypeFormat = "Column {0} has a type this build cannot write.";
+    public const string ImportReadyColumnsNotMappedFormat = "{0} target column(s) not mapped.";
+    public const string ImportReadyFieldsUnusedFormat = "{0} source field(s) unused.";
+    public const string ImportReadyAmbiguousNameFormat = "Two source fields match column {0} — pick one.";
+    public const string ImportReadyMappingDroppedFormat = "Field {0} no longer exists; its mapping was dropped.";
+    public const string ImportReadyColumnNotWritableFormat = "Column {0} is computed and can never be written.";
+    public const string ImportReadyIdentityOverrideFormat =
+        "Column {0} is GENERATED ALWAYS — the INSERT will carry OVERRIDING SYSTEM VALUE.";
+    public const string ImportReadyPairingAssumedFormat = "Column {0} was paired by position — worth a look.";
+    public const string ImportReadyNotConnected = "Not connected.";
+    public const string ImportReadyUserTransactionOpen =
+        "A working transaction is open — commit or roll it back before importing.";
+    public const string ImportReadyBatchedNotAtomicFormat =
+        "Batched mode is NOT atomic: it commits every {0:N0} rows, and a committed batch stays applied.";
+    public const string ImportReadyTrimmingEnabled =
+        "Value trimming is on — over-long values will be SHORTENED, and every one is reported.";
+    public const string ImportReadyLongTransactionFormat =
+        "About {0:N0} rows in one transaction — it will stay open for a while. Consider Batched mode.";
+    public const string ImportReadyNotRepresentableFormat =
+        "{0} sampled value(s) carry characters this connection's charset cannot store — connect in UTF8 to keep them.";
+
+    // The readiness strip's ceiling (U6). The chips carry §3.2's "every gap at once"; this only caps how
+    // many findings are spelled out, so the strip cannot take the whole surface exactly when there is most
+    // to fix.
+    public const string ImportReadyMoreItemsFormat = "… and {0} more problem(s)";
+    public const string ImportReadyShowFewer = "Show fewer";
+    public const string ImportReadyExpandTooltip = "Show every finding";
+    /// <summary>A chip is a status light AND a way in — so it says which, rather than leaving the user to
+    /// guess whether it is a filter, a tab, a shortcut or an indicator (§3.2).</summary>
+    public const string ImportReadyChipHintFormat = "Go to {0}";
+    public const string ImportReadyChipFormatHint = "Show or hide the format options";
+
+    // Band H, left half — where the rows land. The lane is a constant because it is one: rows always go to
+    // the Data lane as the one user working transaction (§4.5).
+    public const string ImportDestinationFormat = "{0} · {1} lane";
+    /// <summary>Band H once the command bar exists: where the rows land, on which lane, and what then happens
+    /// to the transaction (§3.1).</summary>
+    public const string ImportDestinationWithModeFormat = "{0} · {1} lane · transaction: {2}";
+    public const string ImportDestinationDataLane = "Data";
+    public const string ImportDestinationNotConnected = "Not connected";
+
+    // The work area's empty state. Every area on this surface names the NEXT STEP rather than reporting an
+    // absence (§9.4) — "no data" tells the user something they can already see.
+    public const string ImportWorkAreaEmpty =
+        "Choose a target table to map its columns. The mapping grid and the converted preview appear here.";
+
+    // ---- Data Import, etap I6: the Target tile (§3.4) and the Mapping panel (§3.5) ----
+
+    public const string ImportTargetExistingTable = "Existing table";
+    public const string ImportTargetTableWatermark = "Choose a table…";
+    public const string ImportTargetFilterWatermark = "Type to filter…";
+    public const string ImportTargetColumnsFormat = "{0} columns";
+    public const string ImportTargetNoPrimaryKey = "primary key: none";
+    public const string ImportTargetPrimaryKeyFormat = "primary key: {0}";
+    // Triggers are NAMED, not counted: a count says something is there, the names say what will rewrite the
+    // values on the way in (R6).
+    public const string ImportTargetNoBeforeInsertTriggers = "BEFORE INSERT triggers: none";
+    public const string ImportTargetBeforeInsertTriggersFormat = "BEFORE INSERT triggers: {0}";
+    public const string ImportTargetEmptyFirst = "Empty the table before importing";
+    public const string ImportTargetEmptyFirstTooltip =
+        "DELETE FROM in the SAME transaction as the rows — a rollback takes the deletion with it.";
+
+    // ---- Data Import, etap I8: a table that does not exist yet (§3.4) ----
+
+    public const string ImportTargetNewTable = "New table";
+    public const string ImportTargetNewTableWatermark = "Name for the new table…";
+
+    // ⚠ §0.5 / gotcha #213 — the module's most important honest sentence ("the CREATE is committed before the
+    // first row, so a rollback cannot take the table with it") is NOT here any more. It lives in exactly one
+    // place: Core's IMP0018, rendered by the readiness strip, which additionally names the table. There used to
+    // be a second copy as a banner under the type grid, and saying one fact twice on one screen is how a warning
+    // stops being read. If it ever needs to be louder, make the strip louder — do not add a second sentence.
+    public const string ImportNewTableDropOnFailure = "Drop the table if the import fails";
+    public const string ImportNewTableDropOnFailureTooltip =
+        "On failure: roll back the imported rows, then DROP the table on the DDL connection. You are asked first.";
+    /// <summary>The DDL bottom tab — shown only in the „new table" variant, because in the other one there is
+    /// no statement to generate and a permanently empty tab is a promise nothing keeps.</summary>
+    public const string ImportDdlTab = "DDL";
+
+    /// <summary>Said inside the tab, once: it is regenerated from the grid above, so it can be read as current
+    /// rather than as something that had to be refreshed.</summary>
+    public const string ImportDdlLive =
+        "Generated from the types above — this is the statement the import will run.";
+
+    public const string ImportDdlEmpty = "Name the new table and choose a source — the CREATE TABLE appears here.";
+
+    // The type grid.
+    public const string ImportNewTableColumnName = "Column";
+    public const string ImportNewTableColumnType = "Type";
+    public const string ImportNewTableColumnSize = "Size";
+    public const string ImportNewTableColumnScale = "Scale";
+    public const string ImportNewTableColumnNullable = "NULL";
+    public const string ImportNewTableColumnBasis = "Basis";
+    public const string ImportNewTableEmpty =
+        "Name the new table and choose a source — its columns are proposed from the file, and you can correct every type before anything is created.";
+
+    // ⭐ Always visible (§3.4): the types are worth exactly as much as the evidence behind them, and REK-7 makes
+    // that evidence the WHOLE source rather than a sample.
+    public const string ImportNewTableInferenceFormat = "Types inferred from {0:N0} rows analysed — editable:";
+    public const string ImportNewTableInferenceTruncatedFormat =
+        "Types inferred from the first {0:N0} rows (safety limit reached) — editable:";
+
+    // The "Basis" cell — why this column has this type.
+    public const string ImportNewTableBasisNoValues = "no values — text";
+    public const string ImportNewTableBasisTextFormat = "text, {0:N0} values, longest {1}";
+    public const string ImportNewTableBasisMatchedFormat = "{0:N0} values, all {1}";
+    // R19: a mixed column is the norm, not the exception — so it names the value that decided it and the row
+    // the user can open their file at (§0.6).
+    public const string ImportNewTableBasisMixedFormat =
+        "mixed — {0} until row {1} “{2}”; text, longest {3}";
+    public const string ImportNewTableBasisRestored = "from the restored configuration";
+
+    public const string ImportNewTableKindInteger = "whole numbers";
+    public const string ImportNewTableKindDecimal = "decimals";
+    public const string ImportNewTableKindDate = "dates";
+    public const string ImportNewTableKindTimestamp = "dates with time";
+    public const string ImportNewTableKindTime = "times";
+    public const string ImportNewTableKindBoolean = "true/false";
+    public const string ImportNewTableKindText = "text";
+
+    // Creating and dropping.
+    public const string ImportCreatingTableFormat = "Creating table {0}…";
+    public const string ImportCreatedTableFormat = "Table {0} created and committed.";
+    public const string ImportCreateTableFailedFormat = "Table {0} could not be created: {1}";
+    /// <summary>⚠ Its own heading. The shared confirmation used to be titled "Empty the table before importing"
+    /// for every question the module asked, so this one appeared under the name of a different action.</summary>
+    public const string ImportConfirmDropTableTitle = "Drop the created table";
+    public const string ImportConfirmDropTableConfirm = "Drop table";
+    public const string ImportConfirmDropTableFormat =
+        "The import into {0} did not succeed.\n\nRoll back the imported rows and DROP the table?\n\n" +
+        "The table was committed when it was created, so this is the only way to remove it.";
+    public const string ImportDroppedTableFormat = "Table {0} dropped.";
+    public const string ImportDropTableFailedFormat = "Table {0} could not be dropped: {1}";
+    // §0.5 / §0.6 — the report never leaves the created table unsaid, whether or not it was dropped.
+    public const string ImportReportCreatedTableFormat = "created table {0} (a rollback does not remove it)";
+
+    // Mapping panel.
+    public const string ImportMappingHeadlineFormat = "Mapped {0} of {1} columns.";
+    public const string ImportMappingMatchByPosition = "Match by position";
+    public const string ImportMappingMatchByPositionTooltip =
+        "Pair column 1 with field 1, and so on — for a source whose names say nothing";
+    public const string ImportMappingClear = "Clear";
+    public const string ImportMappingOnlyUnmapped = "Only unmapped";
+    public const string ImportMappingDoNotImport = "— do not import —";
+    public const string ImportMappingFieldLabelFormat = "{0}  {1}";
+    public const string ImportMappingUnusedFieldsFormat = "Source fields nobody uses: {0}";
+    public const string ImportMappingColumnTarget = "Target column";
+    public const string ImportMappingColumnSource = "Source field";
+    public const string ImportMappingColumnType = "Target type";
+    public const string ImportMappingColumnNote = "Note";
+    public const string ImportMappingEmpty =
+        "Choose a target table above — its columns will appear here, already matched by name where the names agree.";
+
+    // Why a column's picker is disabled. A blocked control that does not say why is a UX defect (§9.1.3).
+    public const string ImportMappingLockedComputed = "COMPUTED BY — Firebird rejects an INSERT naming it.";
+    public const string ImportMappingLockedUnsupportedFormat = "Type {0} is not supported by the import.";
+    public const string ImportMappingLockedIdentity =
+        "Identity GENERATED ALWAYS — tick to override it; the INSERT then carries OVERRIDING SYSTEM VALUE.";
+    public const string ImportMappingUnlockIdentity = "override";
+
+    // Mapping origin (§9.3 — the debugger's ValueOrigin vocabulary, reused rather than reinvented).
+    public const string ImportMappingOriginMatched = "matched";
+    public const string ImportMappingOriginAssumed = "assumed";
+
+    // Bottom panel + surface status.
+    public const string ImportSourcePreviewTab = "Source preview";
+    public const string ImportSourcePreviewEmpty = "Choose a file or paste from the clipboard.";
+    public const string ImportSourcePreviewRaggedTooltip =
+        "This record has a different number of fields than the header — usually a wrong column separator.";
+    public const string ImportRowNumberColumn = "#";
+    /// <summary>Gutter marker for a record whose field count disagrees with the rest of the file (§3.6).</summary>
+    public const string ImportRaggedMarker = "⚠";
+    public const string ImportSurfaceStatusNoSource = "No source yet.";
+    public const string ImportSurfaceStatusFormat = "{0} fields · {1:N0} rows previewed{2}";
+    public const string ImportSurfaceStatusMore = "+";
+    public const string ImportBottomPanelToggleTooltip = "Collapse / expand the bottom panel";
+
+    // ---- Data Import, etap I7: the command bar (§3.1 band B), the run, and the report (§3.7) ----
+
+    public const string ImportRun = "Import";
+    public const string ImportRunTooltip = "Read the source and write the rows into the target table · F5";
+    public const string ImportValidate = "Validate";
+    public const string ImportValidateTooltip =
+        "Run everything except the write — same pipeline, same conversion, same checks · Ctrl+F5";
+    public const string ImportCancel = "Cancel";
+    public const string ImportCancelTooltip = "Stop after the current batch · Esc";
+
+    // Refresh names what it does to the WORLD, not to the screen: it re-reads every fact the surface holds. The
+    // tooltip lists the cases because that is what makes the button discoverable — a bare "Refresh" leaves the
+    // user guessing what exactly gets re-read. (Icon only, so there is deliberately no label constant: the
+    // shared refresh mark already carries the meaning, and the command bar has no room to spare.)
+    public const string ImportRefreshTooltip =
+        "Read the source, the table list and the target again, then recompute everything: mapping, readiness and "
+        + "the preview. Use it when the file has changed on disk, the clipboard now holds something else, or a "
+        + "table has been added or dropped · Ctrl+R (Ctrl+V re-reads the clipboard)";
+    public const string ImportRunCancelled = "Cancelled. Rows already written stay in the open transaction.";
+
+    public const string ImportTransactionLabel = "Transaction";
+    public const string ImportTransactionManual = "Manual";
+    public const string ImportTransactionAutoCommit = "Commit on success";
+    public const string ImportTransactionBatched = "Batched";
+    public const string ImportTransactionManualDescription =
+        "The transaction stays open. You commit or roll back after reading the report.";
+    public const string ImportTransactionAutoCommitDescription =
+        "Commits automatically when every row went in and nothing was cancelled; otherwise it stays open for you.";
+    public const string ImportTransactionBatchedDescriptionFormat =
+        "Commits every {0:N0} rows — NOT atomic: a later failure cannot roll back what was already committed.";
+
+    public const string ImportErrorPolicyLabel = "Errors";
+    public const string ImportErrorPolicyStop = "Stop at the first";
+    public const string ImportErrorPolicySkip = "Skip the row and continue";
+
+    public const string ImportProgressFormat = "{0:N0} read · {1:N0} written · {2:N0} failed";
+
+    public const string ImportConfirmEmptyFormat =
+        "Empty table {0} before importing? The DELETE runs in the same transaction, so Rollback takes it back too.";
+    public const string ImportConfirmEmptyCountFormat =
+        "This deletes {0:N0} row(s) from {1} before importing. The DELETE runs in the same transaction, so Rollback takes it back too.";
+
+    // The converted preview (§3.6).
+    public const string ImportMappingTitle = "Mapping";
+
+    /// <summary>Title of the work area's left half in the „new table" variant — the columns about to be
+    /// created. It names a CONFIGURATION subject, which is why it lives beside Mapping rather than beside the
+    /// preview: the work area is where the import is designed, the bottom panel is where results land.</summary>
+    public const string ImportNewTableTypesTitle = "Table types";
+
+    public const string ImportPreviewTitle = "Preview after conversion";
+    public const string ImportPreviewHeadlineFormat = "{0:N0} row(s) after conversion — this is what reaches the database.";
+    public const string ImportPreviewHeadlineProblemsFormat =
+        "{0:N0} row(s) after conversion — {1:N0} would be rejected. Failed rows show their RAW values.";
+    public const string ImportPreviewEmpty =
+        "Choose a source and a target table, and map at least one column — the converted rows appear here.";
+    public const string ImportPreviewFailedTooltip = "This row would be rejected; the values shown are the raw ones.";
+
+    // The Errors / Report bottom tabs (§3.1 band G).
+    public const string ImportErrorsTab = "Errors";
+    public const string ImportErrorsTabCountFormat = "Errors ({0})";
+    public const string ImportErrorsEmpty = "Nothing in the previewed rows would be rejected.";
+    public const string ImportReportTab = "Report";
+    public const string ImportReportEmpty = "Run an import or a validation — what happened appears here.";
+    public const string ImportReportExport = "Export report…";
+    public const string ImportReportCopy = "Copy";
+    public const string ImportReportColumnRow = "Row";
+    public const string ImportReportColumnColumn = "Column";
+    public const string ImportReportColumnValue = "Value";
+    public const string ImportReportColumnReason = "Reason";
+    public const string ImportReportRevealTooltip = "Double-click to show this row in the converted preview";
+
+    public const string ImportReportImportedFormat =
+        "Imported {0:N0} of {1:N0} row(s). {2:N0} rejected. Time {3}.";
+    public const string ImportReportCancelledFormat =
+        "Cancelled — {0:N0} of {1:N0} row(s) written. {2:N0} rejected. Time {3}.";
+    public const string ImportReportValidatedFormat =
+        "Validated {0:N0} of {1:N0} row(s). {2:N0} would be rejected. Nothing was written. Time {3}.";
+    public const string ImportReportValidatedCancelledFormat =
+        "Validation cancelled — {0:N0} of {1:N0} row(s) checked. {2:N0} would be rejected. Time {3}.";
+    /// <summary>§0.6: an open transaction is never described as a finished import.</summary>
+    public const string ImportReportTransactionOpen = "Transaction OPEN — commit or roll back.";
+    public const string ImportReportRowsCommittedFormat =
+        "{0:N0} row(s) already committed — Rollback cannot take those back.";
+    public const string ImportReportShortenedFormat = "{0:N0} value(s) were shortened to fit.";
+    public const string ImportReportListTruncatedFormat = "The list stops at {0:N0} entries; the counts are exact.";
+    public const string ImportCommit = "Commit";
+    public const string ImportCommitTooltip = "Commit the rows this import wrote";
+    public const string ImportRollback = "Rollback";
+    public const string ImportRollbackTooltip = "Roll back everything this import wrote";
+    /// <summary>Toolbar marker: the import left a transaction open and the decision is pending. Amber, not
+    /// red — a pending decision is not a failure, and after a clean import the red readiness line was being
+    /// read as "the import did not work".</summary>
+    public const string UnsavedImportRowsFormat = "Data Import: {0:N0} row(s) written but not committed";
+    public const string ImportTransactionOpenMarker = "● transaction open";
+    public const string ImportTransactionOpenMarkerTooltip =
+        "This import's rows are written but not persisted. Commit keeps them, Rollback discards them.";
+    public const string ImportCommitted = "Committed.";
+    public const string ImportRolledBack = "Rolled back.";
+    public const string ImportRestoredLastConfiguration = "restored the last configuration";
+    public const string ImportForgetLastConfiguration = "Clear";
+
+    // ---- Data Import: named profiles (etap I11) ----
+
+    public const string ImportProfileLabel = "Profile";
+    /// <summary>The standing first row. ⚠ Named for what it IS — no profile attached — and deliberately NOT
+    /// „default configuration", which would promise defaults it does not restore. Restoring them is Reset.</summary>
+    public const string ImportProfileNone = "(no profile)";
+    public const string ImportProfileDetached =
+        "Working without a profile. The decisions on the surface are unchanged — use Reset to clear them.";
+    /// <summary>Says which profiles the selector holds. A restriction the user cannot see is indistinguishable
+    /// from a profile that has gone missing (§4.8.3).</summary>
+    public const string ImportProfileScopeFormat =
+        "Profiles saved on {0}, plus any that are not tied to a connection. A profile saved on another " +
+        "connection is not offered — it names a table this database may not have.";
+    /// <summary>Appended in the list to a profile that is not tied to a connection and is therefore offered
+    /// everywhere.</summary>
+    public const string ImportProfilePortableSuffix = "  · any connection";
+    /// <summary>Appended to a profile written by a newer build. It stays in the list on purpose — hiding it
+    /// would look exactly like a deletion.</summary>
+    public const string ImportProfileUnreadableSuffix = "  · newer version";
+    public const string ImportProfileUnreadableFormat =
+        "Profile {0} was saved by a newer version of EmberTern and was not loaded. Applying only the parts " +
+        "this build understands would silently change decisions you did not take.";
+    public const string ImportProfileLoadedFormat = "Loaded profile {0}.";
+
+    public const string ImportProfileSaveAs = "Save as…";
+    public const string ImportProfileSaveAsTooltip = "Save the current decisions as a named profile";
+    public const string ImportProfileSaveAsTitle = "Save the import profile";
+    public const string ImportProfileNameLabel = "Profile name";
+    public const string ImportProfileSaveConfirm = "Save";
+    public const string ImportProfileSavedFormat = "Saved profile {0}.";
+    public const string ImportProfileOverwriteTitle = "Overwrite the profile";
+    public const string ImportProfileOverwriteFormat =
+        "A profile named {0} already exists. Overwrite it with the decisions currently on the surface?";
+    public const string ImportProfileOverwriteConfirm = "Overwrite";
+
+    public const string ImportProfileRenameTooltip = "Rename the selected profile";
+    public const string ImportProfileRenameTitle = "Rename the profile";
+    public const string ImportProfileRenameConfirm = "Rename";
+    public const string ImportProfileRenamedFormat = "Renamed to {0}.";
+    public const string ImportProfileNameTakenFormat = "A profile named {0} already exists.";
+
+    public const string ImportProfileDeleteTooltip = "Delete the selected profile";
+    public const string ImportProfileDeleteTitle = "Delete the profile";
+    public const string ImportProfileDeleteFormat =
+        "Delete profile {0}? Only the saved decisions are removed — nothing on the surface changes and no " +
+        "data is touched.";
+    public const string ImportProfileDeleteConfirm = "Delete";
+    public const string ImportProfileDeletedFormat = "Deleted profile {0}.";
+
+    /// <summary>Start again: every decision back to its default, and no profile attached. The counterpart to
+    /// „(no profile)", which only detaches.</summary>
+    public const string ImportReset = "Reset";
+    public const string ImportResetTooltip =
+        "Start a new configuration — clears every decision, restores the defaults and detaches from the profile";
+    public const string ImportResetTitle = "Start a new configuration";
+    public const string ImportResetQuestion =
+        "Clear every decision on this surface and start again? Saved profiles are not affected, and no data " +
+        "is touched.";
+    public const string ImportResetConfirm = "Start again";
+    public const string ImportResetDone = "New configuration — defaults restored, no profile attached.";
+
+    // ---- Data Import: ImportErrorKind → one sentence. The ONE table (rule #6). ----
+
+    public const string ImportErrorNotAnInteger = "Not a whole number.";
+    public const string ImportErrorNotANumber = "Not a number under the declared decimal separator.";
+    public const string ImportErrorNotADateTime = "Not a date/time under the declared field order.";
+    public const string ImportErrorNotABoolean = "Neither a true nor a false token.";
+    public const string ImportErrorValueTooLong = "Longer than the target column.";
+    public const string ImportErrorValueTooLongMeasuredFormat = "Too long: {0} characters, limit {1}.";
+    public const string ImportErrorValueOutOfRange = "Outside the target column's range.";
+    public const string ImportErrorPrecisionWouldBeLost = "Writing it would drop decimal places or a time part.";
+    public const string ImportErrorUnsupportedTargetType = "The target column's type cannot be imported.";
+    public const string ImportErrorNullNotAllowed = "The column is NOT NULL and has no default.";
+    public const string ImportErrorNotRepresentable =
+        "A character the connection charset cannot represent — it would be stored as '?'.";
+    public const string ImportErrorSourceErrorValue = "The source cell holds an error value.";
+    public const string ImportErrorServerNullViolation = "The server rejected a NULL.";
+    public const string ImportErrorServerUniqueViolation = "Unique-key violation.";
+    public const string ImportErrorServerCheckViolation = "CHECK constraint violated.";
+    public const string ImportErrorServerForeignKeyViolation = "Foreign key: the referenced row does not exist.";
+    public const string ImportErrorServerStringTruncation = "The server refused the value as too long.";
+    public const string ImportErrorServerNumericOverflow = "Numeric overflow on the server.";
+    public const string ImportErrorServerTransliteration = "The server could not transliterate the value.";
+    public const string ImportErrorServerError = "The server refused the row.";
+
     public const string ScriptRun = "Run";
     public const string ScriptRunTooltip = "Run the whole script in one transaction · F5";
     public const string ScriptStopTooltip = "Stop after the current statement";

@@ -98,10 +98,32 @@
     <Setter Property="FontSize" Value="16" />
   </Style>
 
-  <Style Selector="Border.panel">
-    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+  <!-- ── Settings group: a titled card around one coherent set of options ──────────────
+       A form with two or three loose captions floating between control rows reads as
+       captions, not as groups — the user has to infer where one subject ends and the next
+       begins. The card states it instead: a recessed BackgroundBrush surface inside the
+       PanelBrush chrome that hosts it, which is the same figure/ground pair the editor
+       already uses against its own panels. No new colour token, and nothing here touches a
+       control's own metrics — the app-wide density pass is its own sprint.
+
+       Header is deliberately stronger than `field-label`: a field caption names one value,
+       a group header names a subject, and at the same weight the two compete.
+
+       (This replaces a `Border.panel` style that had NO consumers anywhere in the app —
+       kept only as a near-identical sibling for someone to pick by mistake.) -->
+  <Style Selector="Border.settings-group">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="10,8" />
+  </Style>
+
+  <Style Selector="TextBlock.group-header">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,0,0,8" />
   </Style>
 
   <Style Selector="Button.icon">

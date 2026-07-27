@@ -47,6 +47,11 @@
   <!-- Download (Lucide download): arrow into a tray — the data-export affordance, distinct from
        Icon.Save (the disk / save-DDL glyph). -->
   <StreamGeometry x:Key="Icon.Download">M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3</StreamGeometry>
+  <!-- Data Import: an arrow descending INTO a table grid. Deliberately not Icon.Download, whose tray
+       means "fetch a file to disk" — this module puts rows into a TABLE, so the glyph rhymes with
+       Icon.Table / Icon.TablePlus the way the new-table button rhymes with the sidebar it feeds.
+       Canonical source: Assets/Icons/Actions/import.svg. -->
+  <StreamGeometry x:Key="Icon.Import">M12 3 V9 M8.5 5.5 L12 9 L15.5 5.5 M5 12 H19 A2 2 0 0 1 21 14 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V14 A2 2 0 0 1 5 12 Z M3 16.5 H21 M12 12 V21</StreamGeometry>
   <!-- X (Lucide x): generic close / dismiss — tab strip close + Close-tab toolbar.
        Window caption close keeps its own Icon.WindowClose (window-chrome domain). -->
   <StreamGeometry x:Key="Icon.X">M18 6 L6 18 M6 6 L18 18</StreamGeometry>

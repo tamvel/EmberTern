@@ -35,26 +35,46 @@ namespace EmberTern.Tests;
 // Style binding in MainWindow.axaml. NOT a behavioural assertion to keep green
 // forever — it's an instrument. It builds the REAL MainWindow (real compiled
 // bindings, real styles) so the binding under test is the production one.
-public sealed class ConnectionExpandBindingProbe
+/// <summary>
+/// Owns the ONE headless session for the whole test process, and — unlike the <c>static readonly</c> field it
+/// replaces — actually <b>disposes</b> it.
+/// <para>
+/// ⭐ Why the ownership matters, beyond tidiness. Avalonia's own contract for this type is: <i>"Disposing unit
+/// test session stops internal dispatcher loop."</i> A session that is never disposed therefore leaves a
+/// dispatcher loop spinning on its own thread for the rest of the process — after every test has finished.
+/// As an <c>IClassFixture</c>, xunit creates it before the class's first test and disposes it after the last,
+/// so the loop's lifetime is bounded by the tests that need it.
+/// </para>
+/// <para>
+/// It stays ONE session (gotcha #94/#226), which is the load-bearing part: a session owns a UI thread, and
+/// AvaloniaEdit builds its caret/editing <c>KeyBinding</c>s as STATIC lists created on whichever thread first
+/// constructs a <c>TextEditor</c>. With a session per test, every later test's <c>TextArea</c> shares those
+/// instances across threads, so any real KeyDown into an editor dies with "The calling thread cannot access
+/// this object because a different thread owns it" — regardless of how the key is injected.
+/// </para>
+/// </summary>
+public sealed class HeadlessSessionFixture : IDisposable
 {
-    // ONE headless session for the whole class (gotcha #94). This is not a tidy-up: a session owns a UI
-    // thread, and AvaloniaEdit builds its caret/editing KeyBindings as STATIC lists created on whichever
-    // thread first constructs a TextEditor. With a session per test, every later test's TextArea shares
-    // those KeyBinding instances across threads, so any real KeyDown into an editor dies with
-    // "The calling thread cannot access this object because a different thread owns it" — regardless of how
-    // the key is injected. One session keeps every test on one thread, which is also what the gotcha has
-    // always said to do.
-    private static readonly HeadlessUnitTestSession SharedSession =
-        HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
+    public HeadlessUnitTestSession Session { get; } = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
 
-    private readonly ITestOutputHelper _out;
-
-    public ConnectionExpandBindingProbe(ITestOutputHelper output) => _out = output;
+    public void Dispose() => Session.Dispose();
 
     private static class HeadlessAppEntry
     {
         public static AppBuilder BuildAvaloniaApp()
             => AppBuilder.Configure<global::EmberTern.App.App>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+    }
+}
+
+public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSessionFixture>
+{
+    private readonly HeadlessUnitTestSession SharedSession;
+    private readonly ITestOutputHelper _out;
+
+    public ConnectionExpandBindingProbe(HeadlessSessionFixture fixture, ITestOutputHelper output)
+    {
+        SharedSession = fixture.Session;
+        _out = output;
     }
 
     // Flat sidebar (migration): the real MainWindow hosts the single-VSP ListBox
@@ -140,11 +160,19 @@ public sealed class ConnectionExpandBindingProbe
             node.IsConnected = true;
             for (var i = 0; i < 5; i++) Dispatcher.UIThread.RunJobs();
 
+            // ⚠ Re-resolve the row rather than reusing the instance captured above. The connect-time
+            // category prefetch now runs under the sidebar's bulk guard (the Layer-1 fix for the
+            // quadratic re-projection), and EndUpdate re-projects the whole list — so the row OBJECT is
+            // replaced. That is the guard's documented trade-off, not a behaviour change: a manual
+            // Refresh already ended in a full re-projection via ApplyFilterAsync. What this probe is
+            // about is the MIRRORING, which is a property of the projection, not of a row's identity.
+            var expandedRow = vm.Metadata.SidebarRows.First(r => ReferenceEquals(r.Node, node));
+
             log.AppendLine($"VM IsExpanded = {node.IsExpanded}");
-            log.AppendLine($"row.IsExpanded = {row.IsExpanded}");
+            log.AppendLine($"row.IsExpanded = {expandedRow.IsExpanded}");
 
             Assert.True(node.IsExpanded, "VM should auto-expand on connect.\n" + log);
-            Assert.True(row.IsExpanded, "the SidebarRow must mirror the node's expansion.\n" + log);
+            Assert.True(expandedRow.IsExpanded, "the SidebarRow must mirror the node's expansion.\n" + log);
 
             window.Close();
             try { Directory.Delete(tempDir, recursive: true); } catch { }
@@ -1590,6 +1618,60 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
     }
 
+    /// <summary>
+    /// The settings-group card is a real, APPLIED style, not just a class name someone typed.
+    /// <para>
+    /// Pinned in a real window because "the style is in the file" and "the border paints" are different
+    /// claims (#251), and because a card that silently resolves to no background is exactly the failure the
+    /// brush-lookup gotcha (#250) produces — everything looks healthy and nothing is drawn. It also pins the
+    /// figure/ground pair the grouping depends on: the card is RECESSED against the panel chrome that hosts
+    /// it, so the two must not resolve to the same brush.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task SettingsGroupCard_IsAnAppliedStyle_AndReadsAgainstItsHost()
+    {
+        var session = SharedSession;
+
+        await session.Dispatch(() =>
+        {
+            var group = new Border();
+            group.Classes.Add("settings-group");
+
+            var header = new TextBlock { Text = "Parsing" };
+            header.Classes.Add("group-header");
+
+            var caption = new TextBlock { Text = "Column separator" };
+            caption.Classes.Add("field-label");
+
+            var host = new Border { Background = null };
+            var window = new Avalonia.Controls.Window
+            {
+                Content = new StackPanel { Children = { host, group, header, caption } },
+            };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // The card is enclosed and filled — the two things that make it read as a group.
+            Assert.Equal(new Avalonia.Thickness(1), group.BorderThickness);
+            Assert.NotNull(group.Background);
+            Assert.NotNull(group.BorderBrush);
+            Assert.Equal(new Avalonia.CornerRadius(3), group.CornerRadius);
+
+            // Recessed against the panel chrome it sits in: same brush would erase the grouping.
+            var panelBrush = window.FindResource("PanelBrush");
+            Assert.NotNull(panelBrush);
+            Assert.NotEqual(panelBrush, group.Background);
+
+            // A group header must outweigh a field caption, or the two compete and neither reads as a title.
+            Assert.Equal(Avalonia.Media.FontWeight.SemiBold, header.FontWeight);
+            Assert.NotEqual(caption.FontWeight, header.FontWeight);
+            Assert.NotEqual(caption.Foreground, header.Foreground);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // UX Polish Seam 4 (QA) — the SQL Editor's Messages panel stays a log, but a problem entry speaks the
     // one message language: its stripe + colour come from the SAME MessageBanner mapping (no icon — that
     // would widen only the marked rows and break the timestamp alignment). An Info line keeps the normal
@@ -2394,5 +2476,44 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());
+    }
+
+    // ── Data Import — etap I12, the UI audit made REPRODUCIBLE ──────────────────────────────────────────
+    //
+    // The audit's mechanical half (no hard-coded colours, no local brushes, no StaticResource on a brush,
+    // no local <Style> blocks) is a property of the XAML and was checked by reading it. THIS half cannot be
+    // read: a {DynamicResource} key is resolved at runtime, per theme, so a token that exists in Dark and
+    // was forgotten in Light compiles, renders in the palette the developer happens to use, and paints
+    // nothing in the other (gotcha #250 is the same failure one level down).
+    //
+    // So the list of tokens the module paints with is pinned here rather than re-grepped by hand at some
+    // future review. A token added to the surface without a Light counterpart fails this test.
+    [Fact]
+    public async System.Threading.Tasks.Task DataImportSurface_EveryThemeToken_ResolvesInBothPalettes()
+    {
+        var session = SharedSession;
+
+        // Every {DynamicResource} key used by DataImportTabView.axaml and TextPromptDialog.axaml.
+        var tokens = new[]
+        {
+            "AccentBrush", "AccentIconBrush", "BackgroundBrush", "BorderBrush", "DangerIconBrush",
+            "ElevatedPanelBrush", "ErrorBrush", "ForegroundBrush", "OnAccentBrush", "PanelBrush",
+            "SubtleForegroundBrush", "SuccessIconBrush", "WarningBrush",
+        };
+
+        await session.Dispatch(() =>
+        {
+            var app = Avalonia.Application.Current!;
+
+            foreach (var token in tokens)
+            {
+                foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
+                {
+                    Assert.True(
+                        app.Resources.TryGetResource(token, theme, out var brush) && brush is Avalonia.Media.IBrush,
+                        $"Data Import paints with '{token}', which does not resolve in {theme}");
+                }
+            }
+        }, CancellationToken.None);
     }
 }

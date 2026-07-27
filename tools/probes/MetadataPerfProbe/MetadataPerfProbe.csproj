@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER MEASUREMENT TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Metadata mechanism analysis (requested 2026-07-27, before etap I9). The user reported three symptoms:
+    a new table does not appear in the tree, manual refresh is slow and dropping a table briefly freezes the
+    app, and connect/startup feels heavy. This probe answers the "how much, exactly" half of that question so
+    the recommendation rests on numbers rather than on reading the code and guessing.
+
+    It measures TWO independent costs, because the code has two:
+
+      (A) THE CATALOG — the real FirebirdMetadataReader against a SCRATCH database populated to a realistic
+          size (the user's production DB has ~2 400 tables). Per category: COUNT(*) vs the full list, so the
+          connect-time prefetch and the manual refresh can be priced separately.
+
+      (B) THE PROJECTION — the real SidebarFlatController, driven with plain node objects (it is generic over
+          `object` + delegates, so no Avalonia and no ViewModels are needed). This prices what happens on the
+          UI THREAD when a category's leaves are replaced, which is where a freeze would come from.
+
+    Deliberately NOT in EmberTern.slnx: it needs a live server and a password, and it creates and drops a
+    scratch database. It never touches Lab/EmberTern_Lab.fdb.
+
+    How to run: see the header of Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.App\EmberTern.App.csproj" />
+  </ItemGroup>
+
+</Project>

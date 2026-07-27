@@ -60,7 +60,10 @@ public sealed class FirebirdConnectionService : IDisposable
     // Live debug sessions (Stage X / D2, spec §4.1). Each owns its OWN attachment + transaction — decision
     // 5: a session is not a lane. Tracked here only so disconnect/reconnect tears them down deterministically
     // (the attachments must not outlive the profile's connection). A session deregisters itself on dispose.
-    private readonly List<DebugSessionConnection> _debugSessions = new();
+    // ⭐ I7.5: every module-owned session, not just the debugger's. A session is NOT a lane (lanes are
+    // per-profile singletons and carry one transaction each); it is another attachment with another
+    // transaction, and the list exists so none of them can outlive the profile's connection.
+    private readonly List<IAsyncDisposable> _sessions = new();
 
     public bool IsConnected => _activeConnection is { State: System.Data.ConnectionState.Open };
 
@@ -235,37 +238,81 @@ public sealed class FirebirdConnectionService : IDisposable
             await session.DisposeAsync().ConfigureAwait(false); // closes the attachment, no half-open state
             throw;
         }
-        _debugSessions.Add(session);
+        _sessions.Add(session);
         return session;
     }
 
-    // A debug session deregisters itself here on dispose (called from DebugSessionConnection.DisposeAsync).
-    internal void RemoveDebugSession(DebugSessionConnection session) => _debugSessions.Remove(session);
-
-    // Tears down every live debug session — their attachments must not outlive the profile's connection.
-    // Snapshots first because each DisposeAsync deregisters itself (mutating _debugSessions).
-    private async Task TearDownDebugSessionsAsync()
+    /// <summary>
+    /// Opens Data Import's own working session — its own <see cref="FbConnection"/> and its own transaction
+    /// (etap I7.5, amending design §4.5), on the same fundament the debugger uses.
+    /// <para>
+    /// The import used to write into THE one user working transaction, which meant its <b>Commit</b> could
+    /// persist work the SQL Editor had left uncommitted. A button must do exactly what it says, so the module
+    /// got its own transaction and the possibility went away. The transaction is NOT begun here — the writer
+    /// auto-begins before its first row and never auto-commits (rule #3).
+    /// </para>
+    /// <para>
+    /// Registered like a debug session, so <see cref="DisconnectAsync"/>/<see cref="Dispose"/> tear it down;
+    /// it deregisters itself on dispose. A server connection-limit refusal surfaces as a
+    /// <see cref="ConnectionFailedException"/>, never a broken app.
+    /// </para>
+    /// </summary>
+    public async Task<ImportSessionConnection> CreateImportSessionAsync(
+        CancellationToken cancellationToken = default)
     {
-        if (_debugSessions.Count == 0)
+        if (_activeProfile is null || !IsConnected)
+        {
+            throw new InvalidOperationException("No active Firebird connection.");
+        }
+
+        var profile = _activeProfile;
+        var connection = new FbConnection(BuildConnectionString(profile));
+        try
+        {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+        }
+
+        var session = new ImportSessionConnection(connection, this);
+        _sessions.Add(session);
+        return session;
+    }
+
+    // A session deregisters itself here on dispose (called from its own DisposeAsync).
+    internal void RemoveSession(IAsyncDisposable session) => _sessions.Remove(session);
+
+    // Tears down every live session — their attachments must not outlive the profile's connection.
+    // Snapshots first because each DisposeAsync deregisters itself (mutating _sessions).
+    //
+    // ⚠ This is a LAST RESort, not a decision point: it rolls back whatever was unsettled. A module whose
+    // unsettled work would surprise the user to lose (Data Import) must have asked before control reaches
+    // here — that is the pending-work registry's job, not this method's.
+    private async Task TearDownSessionsAsync()
+    {
+        if (_sessions.Count == 0)
         {
             return;
         }
-        foreach (var session in _debugSessions.ToArray())
+        foreach (var session in _sessions.ToArray())
         {
             try { await session.DisposeAsync().ConfigureAwait(false); } catch { /* best-effort teardown */ }
         }
-        _debugSessions.Clear();
+        _sessions.Clear();
     }
 
     public async Task DisconnectAsync()
     {
         if (_activeConnection is null && _metadataConnection is null && _ddlConnection is null
-            && _debugSessions.Count == 0)
+            && _sessions.Count == 0)
         {
             return;
         }
 
-        await TearDownDebugSessionsAsync().ConfigureAwait(false);
+        await TearDownSessionsAsync().ConfigureAwait(false);
 
         await CloseAndDisposeAsync(_ddlConnection).ConfigureAwait(false);
         _ddlConnection = null;
@@ -558,11 +605,11 @@ public sealed class FirebirdConnectionService : IDisposable
         // Tear down live debug sessions first — their attachments must not outlive the service. Block
         // best-effort at shutdown; DebugSessionConnection.DisposeAsync uses ConfigureAwait(false) throughout,
         // so GetResult cannot deadlock on a captured context. Snapshot: each dispose deregisters itself.
-        foreach (var session in _debugSessions.ToArray())
+        foreach (var session in _sessions.ToArray())
         {
             try { session.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { /* best-effort */ }
         }
-        _debugSessions.Clear();
+        _sessions.Clear();
 
         try
         {
