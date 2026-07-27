@@ -287,16 +287,28 @@ a connection-dialog field which does not exist.
 
 ---
 
-## Left open, deliberately
+## Closed out — the two deferrals are DECISIONS, not open questions
 
-- **A-02 debugger safety modes** — a product policy decision, not a defect. Needs the user's answer to
-  "which side effects are acceptable beyond rollback".
-- **A-07 import pipeline `Complete`/`Abort` contract** — real: `ImportPipeline.RunAsync` catches only
-  `OperationCanceledException`, so another exception skips `CompleteAsync` and `TransactionLeftOpen` is
-  never reported. The App layer does catch everything, report it and drop a created table, so the user
-  gets a message and an open transaction they can roll back — not silent corruption. Fixing it changes
-  the public contract of a **frozen** module against a standing "do not return to Data Import"
-  directive. Reported for the user's decision.
+Both were reported at the end of the sprint for the user to decide, and both were **ratified on
+2026-07-27 as deliberately not implemented**. The distinction matters for whoever reads this next: an
+open question invites a future session to "just fix it", a ratified decision does not.
+
+- **A-02 — Debugger Safety: not implemented, and the current behaviour IS the intended one.** In the
+  user's framing: EmberTern *detects and clearly communicates* irreversible side effects but **does not
+  block debugging**, and that is the product's philosophy rather than a gap in it. `DebugPreflight`
+  already surfaces `IN AUTONOMOUS TRANSACTION`, `GEN_ID` and `NEXT VALUE FOR` (spec §4.6, "disclosed,
+  not hidden"). Modes such as **Safe Simulation / Risk Mode** remain a **separate product decision for
+  the future, explicitly NOT a fix** — which is the load-bearing half: they must never arrive as a
+  bug-fix, or as a side effect of some other milestone.
+- **A-07 — `ImportPipeline` `Complete`/`Abort` contract: not implemented.** The finding is real —
+  `RunAsync` catches only `OperationCanceledException`, so another exception skips `CompleteAsync` and
+  `TransactionLeftOpen` is never reported. But the App layer catches everything, reports it and drops a
+  created table, so the user gets a message and a transaction they can roll back, never silent
+  corruption. Data Import is closed and **its public contract stays closed**; this is recorded as a
+  possible improvement to a **future version** of `ImportPipeline`, and on its own it does not justify
+  re-opening a finished sprint.
+
+## Also left open (pre-existing, scheduled elsewhere)
 - **The charset audit, the app-wide UX sprint, the Metadata Explorer stage, the full-suite hang** — all
   pre-existing, all already scheduled elsewhere, none touched.
 - **Test-only advisories** are now clean, but no CI SCA gate was added — that is S4 in the audit's own

@@ -288,8 +288,31 @@ noted.
 
 ## Current state
 
-- **🛡 ARCHITECTURE HARDENING / PRODUCT SAFETY SPRINT — COMPLETE (2026-07-27).** Build 0/0, suite **5900
-  green** (from 5856), smoke clean, `tools/probes/ChangeSafetyProbe` 19/19 on FB5. Narrative +
+- **⌨ NEXT SPRINT — KEYBOARD MANAGER. Scoped by the user, NOT started (2026-07-27).** Start here; the
+  scope below is the user's own, recorded verbatim in substance so a fresh session needs no re-briefing:
+  - fill in shortcuts for the most frequently used functions;
+  - simplify existing shortcuts where that makes sense;
+  - surface shortcuts **in tooltips**;
+  - surface shortcuts **in context menus**;
+  - improve right-click menu UX — smaller typography, icons on the left, better consistency;
+  - lay the **foundations for a central Keyboard Manager**.
+  **⚠ Read before designing.** The audit's A-10 covers the same ground and its `CommandRegistry` sketch
+  (stable `CommandId`, default gesture, scope `global`/`workspace`/`editor`/`grid`/`dialog`, availability
+  predicate, priority resolver dialog→editor→tab→window, one list feeding menu + tooltip + palette +
+  configurator, a collision validator) is a **reasonable starting point that has NOT been verified against
+  the code** — treat it the way this sprint treated the rest of the audit: check it first. Known facts that
+  will matter: shortcuts are today spread across `MainWindow.axaml` `Window.KeyBindings`, per-view XAML, and
+  hand-rolled `KeyDown` handlers in the editor controllers; the editor's typing mechanics (Tab expansion,
+  pairing, completion) are **deliberately** local and tunnelled (gotchas #224/#228) and must stay that way
+  while merely *registering* their reserved gestures; `F5` deliberately means Execute in the SQL editor and
+  Continue in the debugger (the one ratified contradiction, spec §9.7); and the shared
+  `TextBlock.shortcut-chip` style already exists for rendering a gesture (UX Polish Seam 1).
+  ⚠ Also relevant: the **app-wide UX sprint** (density) is still backlogged and owns *control heights* —
+  "smaller typography + icons on the left in the context menu" is this sprint's, a global control-height
+  change is not. Keep the line the user drew.
+- **🛡 ARCHITECTURE HARDENING / PRODUCT SAFETY SPRINT — CLOSED AND USER-ACCEPTED (2026-07-27).** Build 0/0,
+  suite **5900 green** (from 5856), smoke clean, `tools/probes/ChangeSafetyProbe` 19/19 on FB5. Committed as
+  `340a634` and pushed to **both** remotes. Narrative +
   audit-by-audit verdicts: **[docs/history/22-architecture-hardening-sprint.md](docs/history/22-architecture-hardening-sprint.md)**.
   Driven by an external audit (`docs/audits/embertern-full-audit-2026-07-26.md`) that the user explicitly
   said **not to trust**; every finding was re-verified against the code first. Five things landed:
@@ -344,14 +367,20 @@ noted.
     `TransactionService` hard-enforces `ReadCommitted`; a v1-migrated file could make the UI claim "Table
     Stability" for Read Committed transactions. They now read the new `TransactionService.EnforcedProfile`;
     3 dead `UiStrings` constants removed.
-  **⚠ REJECTED / DEFERRED, each with a reason — do not re-litigate from the audit text.** **A-02** (debugger
-  side effects) is **not a defect**: `DebugPreflight` already detects `IN AUTONOMOUS TRANSACTION` / `GEN_ID` /
-  `NEXT VALUE FOR` and not blocking is ratified + documented (spec §4.6 "disclosed, not hidden") — making it
-  blocking is a **product policy decision**, the audit's own open question #2. **A-07** (import pipeline skips
-  `CompleteAsync` on a non-cancellation exception) is **real but P2**: the App catches everything, reports it
-  and drops a created table, so the user gets a message + a rollbackable transaction — and fixing it changes a
-  **frozen** module's public contract against the standing "do not return to Data Import" directive. **A-08**
-  (split the large ViewModels) declined — file size is not a defect. **A-06** historical.
+  **⛔ NOT DOING — RATIFIED BY THE USER ON CLOSING THE SPRINT (2026-07-27). These are DECISIONS, not open
+  questions; do not re-open them from the audit text, and do not offer them as "while we're here" fixes.**
+  - **A-02 (Debugger Safety) — NOT IMPLEMENTED, and the current behaviour is the intended one.** The user's
+    words: EmberTern *detects and clearly communicates* irreversible side effects but **does not block
+    debugging** — that is the product's philosophy, not a gap in it. `DebugPreflight` already surfaces
+    `IN AUTONOMOUS TRANSACTION` / `GEN_ID` / `NEXT VALUE FOR` (spec §4.6, "disclosed, not hidden"). Modes such
+    as **Safe Simulation / Risk Mode** are a **separate product decision for the future — explicitly NOT a
+    fix**, so they must never arrive as a bug-fix or a side effect of another milestone.
+  - **A-07 (`ImportPipeline` skips `CompleteAsync` on a non-cancellation exception) — NOT IMPLEMENTED.** Real
+    but P2: the App layer catches everything, reports it and drops a created table, so the user gets a message
+    and a rollbackable transaction, never silent corruption. Data Import is **closed and its public contract
+    stays closed** — recorded as a possible improvement to a FUTURE version of `ImportPipeline`, and on its own
+    it does not justify re-opening a finished sprint.
+  - **A-08** (split the large ViewModels) declined — file size is not a defect. **A-06** historical.
 - **🏁 DATA IMPORT — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-27).** Suite **5856 green**
   (5815 + the 41-test `ConnectionExpandBindingProbe`), build 0/0, smoke clean. **Full narrative:
   [docs/history/21-data-import.md](docs/history/21-data-import.md)** — the etap-by-etap record lives there,
