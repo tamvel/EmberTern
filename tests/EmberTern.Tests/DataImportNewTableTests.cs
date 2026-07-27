@@ -376,6 +376,55 @@ public class DataImportNewTableTests : IDisposable
         Assert.Empty(ledger.Ddl);
     }
 
+    /// <summary>
+    /// ⭐ A table this import CREATED is in the „Existing table" list immediately — the surface caches that list
+    /// (it is a fact about the database, read once per tab), and an import that creates a table changes that
+    /// fact from the inside.
+    /// <para>
+    /// Reported by the user as a picker that stayed empty until the tab was reopened. The picker was the visible
+    /// half; the test below pins the graver one.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ATableThisImportCreated_AppearsInTheExistingTableListAtOnce()
+    {
+        var (vm, _, ledger) = await NewTableVmAsync();
+
+        Assert.DoesNotContain("IMP_NEW", vm.Target.Tables);
+
+        await vm.ImportCommand.ExecuteAsync(null);
+
+        Assert.NotEmpty(ledger.Ddl);
+        Assert.Contains("IMP_NEW", vm.Target.Tables);
+
+        // At its sorted position, so a name that arrived this way is indistinguishable from one the catalog
+        // returned — appended at the end would be the tell that it came in by a different door.
+        Assert.Equal(vm.Target.Tables.OrderBy(t => t, StringComparer.OrdinalIgnoreCase), vm.Target.Tables);
+    }
+
+    /// <summary>
+    /// ⭐⭐ The graver half of the same staleness: with the list not knowing about the table it had just
+    /// created, <c>IMP0028</c> could no longer see that the name was taken — so re-running the very same import
+    /// showed a GREEN readiness strip and then failed with a raw server error, which is the exact state
+    /// IMP0028 exists to prevent.
+    /// </summary>
+    [Fact]
+    public async Task ReRunningTheSameNewTableImport_IsRefusedByIMP0028_NotByTheServer()
+    {
+        var (vm, _, _) = await NewTableVmAsync();
+
+        await vm.ImportCommand.ExecuteAsync(null);
+        await SettleAsync(vm);
+
+        // Re-run the chain the way any decision would, without a Refresh — a Refresh would re-read the fake
+        // catalog, which does not model the creation, and would prove nothing about the in-place update.
+        vm.ApplyConfiguration(vm.BuildConfiguration());
+        await SettleAsync(vm);
+
+        Assert.Contains(vm.Readiness.Items, i => i.Item.Code == ImportDiagnosticCode.NewTableAlreadyExists);
+        Assert.False(vm.Readiness.CanRun);
+    }
+
     /// <summary>⭐ The module's most important honest warning reaches the strip: the table will be committed,
     /// and a Rollback will not remove it (§0.5). A warning, never a block — it is a consequence to know, not a
     /// mistake to fix.</summary>

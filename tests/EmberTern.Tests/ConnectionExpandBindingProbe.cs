@@ -2477,4 +2477,43 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
 
         _out.WriteLine(log.ToString());
     }
+
+    // ── Data Import — etap I12, the UI audit made REPRODUCIBLE ──────────────────────────────────────────
+    //
+    // The audit's mechanical half (no hard-coded colours, no local brushes, no StaticResource on a brush,
+    // no local <Style> blocks) is a property of the XAML and was checked by reading it. THIS half cannot be
+    // read: a {DynamicResource} key is resolved at runtime, per theme, so a token that exists in Dark and
+    // was forgotten in Light compiles, renders in the palette the developer happens to use, and paints
+    // nothing in the other (gotcha #250 is the same failure one level down).
+    //
+    // So the list of tokens the module paints with is pinned here rather than re-grepped by hand at some
+    // future review. A token added to the surface without a Light counterpart fails this test.
+    [Fact]
+    public async System.Threading.Tasks.Task DataImportSurface_EveryThemeToken_ResolvesInBothPalettes()
+    {
+        var session = SharedSession;
+
+        // Every {DynamicResource} key used by DataImportTabView.axaml and TextPromptDialog.axaml.
+        var tokens = new[]
+        {
+            "AccentBrush", "AccentIconBrush", "BackgroundBrush", "BorderBrush", "DangerIconBrush",
+            "ElevatedPanelBrush", "ErrorBrush", "ForegroundBrush", "OnAccentBrush", "PanelBrush",
+            "SubtleForegroundBrush", "SuccessIconBrush", "WarningBrush",
+        };
+
+        await session.Dispatch(() =>
+        {
+            var app = Avalonia.Application.Current!;
+
+            foreach (var token in tokens)
+            {
+                foreach (var theme in new[] { Avalonia.Styling.ThemeVariant.Dark, Avalonia.Styling.ThemeVariant.Light })
+                {
+                    Assert.True(
+                        app.Resources.TryGetResource(token, theme, out var brush) && brush is Avalonia.Media.IBrush,
+                        $"Data Import paints with '{token}', which does not resolve in {theme}");
+                }
+            }
+        }, CancellationToken.None);
+    }
 }

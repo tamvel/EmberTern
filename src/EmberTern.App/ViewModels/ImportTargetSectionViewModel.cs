@@ -451,6 +451,67 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// ⭐ Records that a table now EXISTS, without re-reading the catalog — the import knows the name of the
+    /// table it just created.
+    /// <para>
+    /// The list is a fact about the database that this section caches (it is read once per tab, not on every
+    /// keystroke), and an import that creates a table changes that fact from inside. Until this existed the
+    /// cache went stale in two visible ways: the freshly created table was missing from the „Existing table"
+    /// picker until the tab was reopened, and — the graver half — <c>IMP0028</c> could no longer see that the
+    /// name was taken, so re-running the same new-table import showed a <b>green readiness strip followed by a
+    /// raw server error</b>, which is the exact state IMP0028 was added to prevent.
+    /// </para>
+    /// <para>
+    /// It reports a FACT („this table exists"), never a command („refresh") — the same shape
+    /// <c>MetadataExplorerViewModel.ApplyObjectAddedInPlace</c> uses for the tree, and for the same reason: one
+    /// name is already known, so spending a catalog round trip to re-learn it would be worse than free.
+    /// Idempotent, because an explicit Refresh may already have brought it in.
+    /// </para>
+    /// </summary>
+    public void NoteTableExists(string tableName)
+    {
+        var name = (tableName ?? string.Empty).Trim();
+        if (name.Length == 0) return;
+
+        foreach (var table in Tables)
+        {
+            if (string.Equals(table, name, StringComparison.OrdinalIgnoreCase)) return;
+        }
+
+        // At its sorted position, so the picker reads the same whether the name arrived from the catalog or
+        // from here — a name appended to the end would be the tell that it came in by a different door.
+        var index = 0;
+        while (index < Tables.Count && string.Compare(Tables[index], name, StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            index++;
+        }
+        Tables.Insert(index, name);
+    }
+
+    /// <summary>
+    /// The counterpart: a table this module dropped is gone from the list too. Symmetry is the point — a cache
+    /// that learns about creations but not deletions would offer a target that no longer exists, and the user
+    /// would meet <c>IMP0016</c> for a table the module itself removed a moment earlier.
+    /// </summary>
+    public void NoteTableGone(string tableName)
+    {
+        var name = (tableName ?? string.Empty).Trim();
+        if (name.Length == 0) return;
+
+        for (var i = 0; i < Tables.Count; i++)
+        {
+            if (!string.Equals(Tables[i], name, StringComparison.OrdinalIgnoreCase)) continue;
+
+            Tables.RemoveAt(i);
+            break;
+        }
+
+        // A selection pointing at a table that is gone must not survive: everything downstream would read it as
+        // a target the catalog simply failed to return.
+        if (string.Equals(SelectedTable, name, StringComparison.OrdinalIgnoreCase)) SelectedTable = null;
+    }
+
     /// <summary>Suppresses <see cref="Changed"/> while this VM writes to itself — without it, publishing a
     /// freshly read table list would restart the very chain that produced it.</summary>
     public IDisposable SuspendChangeNotifications() => new ChangeSuspension(this);

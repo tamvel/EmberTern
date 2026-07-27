@@ -1046,6 +1046,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             // survives a failed import (§0.5, gotcha #213), so its existence is not conditional on the rows.
             _environment.TableCreated?.Invoke(tableName);
 
+            // ⭐ And this surface's OWN cached list is one of the things that just went stale. It used to hear
+            // about the creation only through the tab being reopened, which left the „Existing table" picker
+            // without the table and — worse — left IMP0028 unable to see that the name was taken.
+            Target.NoteTableExists(tableName);
+
             SetStatus(
                 string.Format(CultureInfo.CurrentCulture, UiStrings.ImportCreatedTableFormat, tableName),
                 MessageSeverity.Success);
@@ -1134,8 +1139,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             await _environment.DropTableAsync(
                 ImportNewTable.BuildDropSql(createdTable), CancellationToken.None).ConfigureAwait(true);
 
-            // Undone — and the tree is told, so it does not keep a leaf for a table that is gone.
+            // Undone — and the tree is told, so it does not keep a leaf for a table that is gone. The same
+            // goes for this surface's own cached list: symmetry with NoteTableExists above, because a cache
+            // that learns about creations but not deletions would offer a target that no longer exists.
             _environment.TableDropped?.Invoke(createdTable);
+            Target.NoteTableGone(createdTable);
 
             SetStatus(
                 string.Format(CultureInfo.CurrentCulture, UiStrings.ImportDroppedTableFormat, createdTable),
