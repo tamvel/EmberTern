@@ -151,20 +151,16 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
     /// empty state and the type grid itself.</summary>
     public bool HasNewColumns => NewColumns.Count > 0;
 
-    /// <summary>Whether the generated DDL is on screen. View state, so it deliberately does NOT enter
-    /// <see cref="ImportConfiguration"/> — a disclosure is not a decision about an import (§4.8.2), and the
-    /// reflection round-trip guard would otherwise ship it inside a saved profile.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CreateTableSql))]
-    [NotifyPropertyChangedFor(nameof(DdlToggleText))]
-    private bool _isDdlVisible;
-
-    /// <summary>The disclosure's own label — it says what the click will DO, which is the only reading that
-    /// stays true in both states.</summary>
-    public string DdlToggleText => IsDdlVisible ? UiStrings.ImportNewTableHideDdl : UiStrings.ImportNewTableShowDdl;
-
-    [CommunityToolkit.Mvvm.Input.RelayCommand]
-    private void ToggleDdl() => IsDdlVisible = !IsDdlVisible;
+    // ⚠ The generated DDL is no longer DISCLOSED INSIDE this panel, and the toggle state that governed it
+    // (`IsDdlVisible` / `DdlToggleText` / `ToggleDdlCommand`) is gone with it. „Show DDL" now opens the
+    // statement as a new Saved Query in the SQL Editor.
+    //
+    // The reason is proportion, and it took seeing it running to be sure: the DDL is consulted rarely, but
+    // an embedded panel for it complicated the layout permanently — the types grid had to share its column
+    // with something that is empty almost all the time, and every question about the work area's height had
+    // to account for a disclosure nobody had opened. A rare answer belongs somewhere it costs nothing until
+    // it is asked for; the SQL Editor is where SQL is read in this application anyway, and getting it there
+    // means it can also be edited and run.
 
     /// <summary>
     /// The exact statement that will run. ⭐ From <see cref="ImportNewTable.BuildCreateSql"/>, which is the same

@@ -140,7 +140,8 @@ public class DataImportNewTableTests : IDisposable
         List<string>? transactionActions = null,
         ImportTarget? existing = null,
         List<string>? counted = null,
-        string? throwFrom = null)
+        string? throwFrom = null,
+        Action<string, string>? openSqlInEditor = null)
     {
         var ledger = new Ledger();
         var writer = new FakeWriter(ledger, failAt, throwFrom == "write" ? new ProbeFailure("write") : null);
@@ -154,6 +155,8 @@ public class DataImportNewTableTests : IDisposable
 
         var environment = new DataImportEnvironment(() => true, () => "LAB")
         {
+            OpenSqlInEditor = openSqlInEditor,
+
             ListTablesAsync = _ =>
             {
                 FailIf("tables");
@@ -374,6 +377,46 @@ public class DataImportNewTableTests : IDisposable
         Assert.False(vm.Readiness.CanRun);
         Assert.False(vm.ImportCommand.CanExecute(null));
         Assert.Empty(ledger.Ddl);
+    }
+
+    /// <summary>
+    /// ⭐ „Show DDL" leaves this surface: it hands the generated statement to the SQL Editor instead of
+    /// unfolding it in the panel.
+    /// <para>
+    /// The embedded disclosure was removed because of proportion — consulted rarely, yet its panel complicated
+    /// the work area permanently. Pinned because the command now reaches the world through a delegate, and a
+    /// delegate nobody wired is indistinguishable from a dead button (gotcha #233).
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ShowDdl_SendsTheCreateStatementToTheEditor_RatherThanUnfoldingItHere()
+    {
+        var opened = new List<(string Sql, string Name)>();
+        var (vm, _, _) = await NewTableVmAsync(openSqlInEditor: (sql, name) => opened.Add((sql, name)));
+
+        vm.ShowCreateTableDdlCommand.Execute(null);
+
+        var (openedSql, openedName) = Assert.Single(opened);
+        Assert.Contains("CREATE TABLE", openedSql, StringComparison.Ordinal);
+        Assert.Contains("IMP_NEW", openedSql, StringComparison.Ordinal);
+
+        // The statement is the one the RUN would issue, not a second rendering of it.
+        Assert.Equal(vm.Target.CreateTableSql, openedSql);
+        Assert.Contains("IMP_NEW", openedName, StringComparison.Ordinal);
+    }
+
+    /// <summary>An empty editor tab would be worse than no answer — the user would hunt for a statement the
+    /// module never generated, in a place that implies it did.</summary>
+    [Fact]
+    public async Task ShowDdl_WithNothingToShow_OpensNothing()
+    {
+        var opened = new List<(string Sql, string Name)>();
+        var (vm, _, _) = await NewTableVmAsync(openSqlInEditor: (sql, name) => opened.Add((sql, name)));
+
+        vm.Target.NewColumns.Clear();
+        vm.ShowCreateTableDdlCommand.Execute(null);
+
+        Assert.Empty(opened);
     }
 
     /// <summary>

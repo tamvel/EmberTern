@@ -4142,6 +4142,10 @@ public partial class MainWindowViewModel : ViewModelBase
             TableDropped = name =>
                 Metadata.ApplyObjectRemovedInPlace(new MetadataObject(name, MetadataObjectKind.Table)),
 
+            // „Show DDL" — through the SAME path the Trace monitor uses, so a generated CREATE TABLE lands in
+            // the editor exactly as a traced statement does: a new Saved Query, nothing overwritten.
+            OpenSqlInEditor = OpenSqlAsSavedQuery,
+
             // Batched is the only mode that finishes a transaction on its own, so it is the only one that gets
             // the decorator — Manual and AutoCommitOnSuccess run through byte-identical code (§4.5).
             CreateWriter = configuration =>
@@ -4245,13 +4249,25 @@ public partial class MainWindowViewModel : ViewModelBase
     // Non-destructive: a traced statement lands as a NEW Saved Query (never overwrites the
     // editor's current content). The previously-edited query is preserved as its own Saved
     // Query — selecting the new one just swaps the editor to it.
-    private void OnTraceOpenInEditor(string sql)
+    private void OnTraceOpenInEditor(string sql) => OpenSqlAsSavedQuery(sql, BuildTraceQueryName(sql));
+
+    /// <summary>
+    /// The ONE way a statement from anywhere else in the application lands in the SQL Editor: as a new Saved
+    /// Query, never over the editor's current content.
+    /// <para>
+    /// Generalized out of the Trace monitor's own handler when Data Import's „Show DDL" needed the same thing
+    /// (a generated <c>CREATE TABLE</c>). Two callers, one behaviour — so a statement arriving from the import
+    /// surface reads and behaves exactly like one arriving from a trace, and „open this in the editor" cannot
+    /// come to mean two different things depending on who asked.
+    /// </para>
+    /// </summary>
+    private void OpenSqlAsSavedQuery(string sql, string name)
     {
         if (string.IsNullOrWhiteSpace(sql)) return;
         var query = WorkspaceTabs.FirstOrDefault(t => t.Kind == WorkspaceTabKind.Query);
         if (query is not null) SelectTab(query);
         IsQueryPanelVisible = true; // reveal the panel so the new query is visible
-        var sq = new SavedQueryViewModel(Guid.NewGuid().ToString("N"), BuildTraceQueryName(sql), sql, this);
+        var sq = new SavedQueryViewModel(Guid.NewGuid().ToString("N"), name, sql, this);
         SavedQueries.Add(sq);
         SelectedSavedQuery = sq;
     }

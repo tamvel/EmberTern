@@ -305,7 +305,14 @@ internal static class UiStrings
     public const string ImportNewTableDropOnFailureTooltip =
         "On failure: roll back the imported rows, then DROP the table on the DDL connection. You are asked first.";
     public const string ImportNewTableShowDdl = "Show DDL";
-    public const string ImportNewTableHideDdl = "Hide DDL";
+
+    /// <summary>Says where the click takes the statement, because it leaves this surface — a button that only
+    /// said „Show DDL" would look like a disclosure that failed to open anything here.</summary>
+    public const string ImportNewTableShowDdlTooltip =
+        "Opens the generated CREATE TABLE in the SQL Editor as a new saved query — nothing here is replaced.";
+
+    /// <summary>Name of the saved query „Show DDL" creates. Same idiom as the Trace monitor's „Trace: …".</summary>
+    public const string ImportDdlQueryNameFormat = "Import: CREATE TABLE {0}";
 
     // The type grid.
     public const string ImportNewTableColumnName = "Column";

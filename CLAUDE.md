@@ -31,7 +31,7 @@ verbatim, in the archive below.
 | **`docs/history/21-data-import.md`** | The Data Import module’s **narrative** — etap by etap, why each decision went the way it did, the I12 close-out (1 M-row measurement, the UI audit, the last defect) and the closing table of what stays OPEN with a reason for each. Written in I12, when ~520 lines of it moved out of CLAUDE.md. | On demand — when you need the backstory on an import behaviour. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (263 entries, #1–#276), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (264 entries, #1–#277), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -314,8 +314,15 @@ noted.
   after conversion" is a *result* — what the pipeline produces — so it is a **bottom tab** beside Source
   preview / Errors / Report, needed as it is in both target variants. The work area now belongs entirely to
   configuration: **Existing table → Mapping at full width; New table → `Table types | Mapping`** with a
-  splitter, so the user sets the proportion. The type grid and the DDL preview moved out of the `Auto` Target
-  tile into that left half, which is what made the tile thin again.
+  splitter, so the user sets the proportion. The type grid moved out of the `Auto` Target tile into that left
+  half, which is what made the tile thin again.
+  **⭐ „Show DDL" opens the generated `CREATE TABLE` in the SQL EDITOR — it is not disclosed inside the surface
+  at all.** Same proportion argument one level down: the DDL is consulted rarely, yet an embedded panel for it
+  complicated that column permanently (the type grid shared its space with something almost always empty). It
+  goes through the **same** path the Trace monitor uses — `MainWindowViewModel.OpenSqlAsSavedQuery`, generalized
+  out of `OnTraceOpenInEditor`, reached by the module through the `OpenSqlInEditor` delegate — so a statement
+  from the import behaves exactly like a traced one: a new Saved Query, nothing overwritten. It also became
+  *more* useful than the old inline block: in the editor it can be read, edited and run.
   ⚠ **Two earlier attempts failed and are worth knowing before re-opening this.** A `MinHeight` floor on the
   work row plus a clamp on the bottom panel was built and **reverted** — honouring the floor made the bottom
   panel give way, so the middle grew and the panel stopped being useful. The lesson the user drew, and it is
@@ -3036,7 +3043,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (263 entries, #1–#276), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (264 entries, #1–#277), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

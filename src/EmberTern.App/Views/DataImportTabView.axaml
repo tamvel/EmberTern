@@ -639,9 +639,13 @@
                source, and a type is worth exactly as much as the evidence behind it. -->
           <TextBlock Grid.Column="1" Text="{Binding InferenceBasisText}" Classes="subtle" FontSize="12"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <!-- Leaves this surface: it opens the statement in the SQL Editor rather than unfolding it here.
+               The tooltip says so, because a button that only read „Show DDL" would look like a disclosure
+               that failed to reveal anything. -->
           <Button Grid.Column="2" Classes="flat" FontSize="12"
-                  Command="{Binding ToggleDdlCommand}"
-                  Content="{Binding DdlToggleText}" />
+                  Content="{x:Static app:UiStrings.ImportNewTableShowDdl}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportNewTableShowDdlTooltip}"
+                  Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).ShowCreateTableDdlCommand}" />
         </Grid>
 
         <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportNewTableEmpty}"
@@ -649,14 +653,14 @@
                    HorizontalAlignment="Center" VerticalAlignment="Top"
                    IsVisible="{Binding !HasNewColumns}" />
 
-        <Grid Grid.Row="1" RowDefinitions="*,Auto" IsVisible="{Binding HasNewColumns}">
-
-          <!-- ⭐ The grid is EDITABLE, not merely shown (§0.3). Once the CREATE has run the table is
-               committed and beyond a Rollback, so this is the last moment a wrong type costs nothing.
-               ⚠ No MaxHeight any more: it lives in a star row now, so it takes the height the user gave the
-               work area and scrolls inside it — a fixed cap here would re-create the very thing the move
-               was made to end. -->
-          <Border Grid.Row="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
+        <!-- ⭐ The grid is EDITABLE, not merely shown (§0.3). Once the CREATE has run the table is
+             committed and beyond a Rollback, so this is the last moment a wrong type costs nothing.
+             ⚠ It fills the panel: no wrapper row for the DDL (which is not here any more) and no MaxHeight
+             on the scroller. Both mattered — the cap SURVIVED the move to the work area for one round, and
+             a Stretch-aligned control that cannot use its space gets CENTRED in it, so the grid floated with
+             blank bands above and below while every property looked correct. -->
+        <Border Grid.Row="1" IsVisible="{Binding HasNewColumns}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
             <Grid RowDefinitions="Auto,*">
 
               <Grid Grid.Row="0" ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,5"
@@ -679,7 +683,7 @@
                            IsVisible="{Binding HasPerColumnBasis}" />
               </Grid>
 
-              <ScrollViewer Grid.Row="1" MaxHeight="170">
+              <ScrollViewer Grid.Row="1">
                 <ItemsControl x:Name="NewTableColumnRows" ItemsSource="{Binding NewColumns}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ImportNewTableColumnRowViewModel">
@@ -725,24 +729,17 @@
             </Grid>
           </Border>
 
-          <!-- ⚠ §0.5's sentence — "this CREATE is committed and a rollback will not remove it" — used to be
-               repeated HERE as a second banner. It is gone, not because the warning stopped mattering but
-               because it was being said twice on one screen: the readiness strip already carries it as
-               IMP0018, from Core, and additionally NAMES the table. Two statements of one fact train the
-               user to read neither. The remaining one is the strip's. -->
+          <!-- ⚠ Two things used to sit HERE and both are gone, for the same reason in two sizes: one screen
+               should say a thing once, and a panel should hold only what is being worked on.
 
-          <!-- The exact statement that will run — from the same call the run itself makes, so this is a
-               preview of the real thing rather than an illustration of it. It travels WITH the types: it is
-               what they compile to, so leaving it behind in the Target tile would put a statement in one
-               place and its subject in another. -->
-          <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                  Padding="8,6" Margin="0,6,0,0" IsVisible="{Binding IsDdlVisible}">
-            <ScrollViewer MaxHeight="140" HorizontalScrollBarVisibility="Auto">
-              <SelectableTextBlock Text="{Binding CreateTableSql}" FontFamily="Consolas,monospace"
-                                   FontSize="12" />
-            </ScrollViewer>
-          </Border>
-        </Grid>
+               §0.5's sentence ("this CREATE is committed and a rollback will not remove it") was a second
+               banner repeating what the readiness strip already carries as IMP0018 — from Core, and naming
+               the table besides.
+
+               The generated CREATE TABLE was disclosed inline. It is consulted rarely, yet its panel
+               complicated this column permanently: the types grid shared its space with something almost
+               always empty. „Show DDL" now opens the statement in the SQL Editor, where it can be read,
+               edited and run — and where it costs nothing until it is asked for. -->
       </Grid>
 
       <!-- Only there when there is a left half to divide. -->

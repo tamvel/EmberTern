@@ -1393,6 +1393,33 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// problem. A green chip navigates exactly like a red one.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// „Show DDL" — sends the generated <c>CREATE TABLE</c> to the SQL Editor as a new Saved Query.
+    /// <para>
+    /// ⭐ It used to unfold the statement inside the target panel, and that was the wrong shape for how often it
+    /// is consulted: a rarely-read panel that permanently complicated the layout around it. In the editor the
+    /// statement costs nothing until asked for, and gains everything that surface already offers — reading,
+    /// editing, running it by hand.
+    /// </para>
+    /// <para>
+    /// It refuses silently when there is nothing to show. An empty editor tab would be worse than no answer:
+    /// the user would be looking for a statement the module never generated, in a place that suggests it did.
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private void ShowCreateTableDdl()
+    {
+        var sql = Target.CreateTableSql;
+        if (string.IsNullOrWhiteSpace(sql) || _environment.OpenSqlInEditor is null) return;
+
+        _environment.OpenSqlInEditor(
+            sql,
+            string.Format(
+                CultureInfo.CurrentCulture,
+                UiStrings.ImportDdlQueryNameFormat,
+                Target.NewTableName.Trim()));
+    }
+
     [RelayCommand]
     private void FocusSection(ImportSection section)
     {

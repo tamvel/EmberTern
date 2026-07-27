@@ -103,6 +103,18 @@ public sealed class DataImportEnvironment
     /// it the tree would keep offering an object that no longer exists.</summary>
     public Action<string>? TableDropped { get; init; }
 
+    /// <summary>
+    /// Opens a statement in the SQL Editor as a new Saved Query — how „Show DDL" answers, since the generated
+    /// <c>CREATE TABLE</c> stopped being disclosed inside the surface.
+    /// <para>
+    /// A delegate rather than a reference to the shell, like every other way this module reaches the world: the
+    /// VM must not name a workspace type to hand somebody a string. It is deliberately the SAME path the Trace
+    /// monitor uses (a new Saved Query, never overwriting what the editor holds), so a statement arriving from
+    /// here behaves exactly like one arriving from there — and lands somewhere it can be read, edited and run.
+    /// </para>
+    /// </summary>
+    public Action<string, string>? OpenSqlInEditor { get; init; }
+
     // ── Data lane (THE user's working transaction) ──────────────────────────────────────────────────────
 
     /// <summary>Builds the writer for one run. The configuration decides which one — the real writer, wrapped in

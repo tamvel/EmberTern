@@ -686,10 +686,33 @@ oba należą do tej samej **kategorii odpowiedzialności**. Tutaj jeden był dec
 i dopóki stały obok siebie, każda odpowiedź w wymiarze „ile pikseli" musiała być kompromisem. Żadna zmiana
 wysokości nie naprawiłaby złego przydziału.
 
-⚠ Przy okazji: **„Show DDL" pojechał razem z podglądem DDL** do panelu typów. Przełącznik w jednym pasie i
-rzecz, którą odsłania, w innym to sposób na to, żeby kontrolka przestała wyglądać na powiązaną z czymkolwiek.
-Oraz `ReportTabIndex` przesunął się z 2 na 3 — zaszyty indeks, którego nie przesunie się razem z paskiem
+⚠ Oraz `ReportTabIndex` przesunął się z 2 na 3 — zaszyty indeks, którego nie przesunie się razem z paskiem
 zakładek, wysyła zakończony bieg na złą zakładkę.
+
+#### Dokończenie: DDL wychodzi z powierzchni, a siatka typów odzyskuje pełną wysokość
+
+Pierwszy przebieg podziału zabrał podgląd DDL **razem z typami** do lewej połowy — konsekwentnie (to jest to,
+w co typy się kompilują), ale wciąż wewnątrz powierzchni. Przy oglądzie wyszły dwie rzeczy:
+
+⚠ **Błąd układu, i to mój.** `MaxHeight="170"` na scrollerze siatki typów **przetrwał przeprowadzkę**, choć
+komentarz obok twierdził, że go nie ma. Objaw był mylący: kontrolka ze `Stretch`, która nie może zająć całej
+dostępnej wysokości, zostaje **wyśrodkowana** — więc siatka pływała z pustymi pasami nad i pod sobą, co czytało
+się jak „miejsce wciąż zarezerwowane dla DDL". Wszystkie właściwości wyglądały poprawnie. **Lekcja: komentarz
+twierdzący, że coś usunięto, nie jest dowodem, że usunięto — sprawdź kod, nie prozę przy nim.**
+
+⭐ **A potem właściwa decyzja, znowu o proporcji.** DDL jest czytane **sporadycznie**, ale jego panel
+komplikował tę kolumnę **na stałe**: siatka typów dzieliła miejsce z czymś, co niemal zawsze jest puste, a
+każde pytanie o wysokość powierzchni musiało uwzględniać ujawnienie, którego nikt nie otworzył. Osadzony
+podgląd zniknął w całości; **„Show DDL" otwiera instrukcję w SQL Editorze** jako nowe zapytanie zapisane.
+
+⭐ **Przez TĘ SAMĄ ścieżkę, którą chodzi monitor Trace.** `OnTraceOpenInEditor` został uogólniony do
+`OpenSqlAsSavedQuery(sql, name)` — dwóch wywołujących, jedno zachowanie, więc instrukcja przychodząca z importu
+zachowuje się dokładnie tak jak ta z trace'u i „otwórz to w edytorze" nie zaczyna znaczyć dwóch różnych rzeczy
+zależnie od tego, kto poprosił. Nic nie jest nadpisywane; zapytanie ląduje obok istniejących. Moduł sięga po to
+przez delegat `DataImportEnvironment.OpenSqlInEditor` — VM nie nazywa typu warsztatu, żeby podać komuś string.
+
+Zysk jest dwojaki: panel typów zawsze bierze całą wysokość, a DDL stało się **bardziej** użyteczne niż było —
+w edytorze można je przeczytać, poprawić i uruchomić, czego osadzony `SelectableTextBlock` nie oferował.
 
 ### Co zostaje otwarte po zamknięciu modułu
 
