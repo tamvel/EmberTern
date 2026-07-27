@@ -632,20 +632,15 @@
 
         <!-- Title + the basis, in the same shape Mapping and the preview use: a title says what the region
              IS, the subtle line beside it says how it currently stands. -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,6">
+        <!-- ⚠ No „Show DDL" button. The generated statement is a bottom TAB now, always current — so there is
+             no disclosure to toggle, nothing to navigate to, and no state saying whether it is on screen. -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,0,0,6">
           <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableTypesTitle}"
                      Classes="group-header" VerticalAlignment="Center" Margin="0" />
           <!-- ⭐ Always visible (§3.4): the number of rows the types rest on. REK-7 makes that the WHOLE
                source, and a type is worth exactly as much as the evidence behind it. -->
           <TextBlock Grid.Column="1" Text="{Binding InferenceBasisText}" Classes="subtle" FontSize="12"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-          <!-- Leaves this surface: it opens the statement in the SQL Editor rather than unfolding it here.
-               The tooltip says so, because a button that only read „Show DDL" would look like a disclosure
-               that failed to reveal anything. -->
-          <Button Grid.Column="2" Classes="flat" FontSize="12"
-                  Content="{x:Static app:UiStrings.ImportNewTableShowDdl}"
-                  ToolTip.Tip="{x:Static app:UiStrings.ImportNewTableShowDdlTooltip}"
-                  Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).ShowCreateTableDdlCommand}" />
         </Grid>
 
         <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportNewTableEmpty}"
@@ -1065,6 +1060,48 @@
                                     Binding="{Binding Reason}" IsReadOnly="True" Width="*" />
               </DataGrid.Columns>
             </DataGrid>
+          </Grid>
+          </Panel>
+          </TabItem>
+
+          <!-- ── DDL: the exact CREATE TABLE this import will run ────────────────────────────────────
+               ⭐ A TAB rather than a button, decided after two worse answers. It was first disclosed inline
+               in the types column — a panel almost always empty, complicating that column permanently — and
+               then briefly opened in the SQL Editor, which was worse in a different way: **the generated DDL
+               is part of configuring THIS import, so reaching it must not switch modules or move the active
+               tab.** Here it costs no space until selected, never navigates anywhere, and sits with the other
+               artefacts of the run.
+
+               Rendered LIVE from `CreateTableSql`, which is computed from the grid above through the same
+               `ImportNewTable.BuildCreateSql` the run itself calls — so it cannot go stale and there is no
+               refresh to forget. Selectable, so copying it needs no button of its own.
+
+               ⚠ Visible only in the „new table" variant: in the other one there is no statement to generate,
+               and a permanently empty tab is a promise nothing keeps. It is LAST on the strip on purpose —
+               a hidden tab still occupies its index, and the run reveals the Report by index. -->
+          <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportDdlTab}"
+                   IsVisible="{Binding Target.IsNewTable}">
+          <Panel IsVisible="{Binding !IsBottomPanelCollapsed}">
+          <Grid RowDefinitions="Auto,*" Margin="12,8"
+                DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel">
+
+            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.ImportDdlLive}"
+                       Classes="subtle" FontSize="11" Margin="0,0,0,6"
+                       IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+            <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportDdlEmpty}"
+                       Classes="subtle" FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                       HorizontalAlignment="Center" VerticalAlignment="Top"
+                       IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+
+            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                    Padding="8,6"
+                    IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                <SelectableTextBlock Text="{Binding CreateTableSql}" FontFamily="Consolas,monospace"
+                                     FontSize="12" />
+              </ScrollViewer>
+            </Border>
           </Grid>
           </Panel>
           </TabItem>

@@ -700,19 +700,42 @@ dostępnej wysokości, zostaje **wyśrodkowana** — więc siatka pływała z pu
 się jak „miejsce wciąż zarezerwowane dla DDL". Wszystkie właściwości wyglądały poprawnie. **Lekcja: komentarz
 twierdzący, że coś usunięto, nie jest dowodem, że usunięto — sprawdź kod, nie prozę przy nim.**
 
-⭐ **A potem właściwa decyzja, znowu o proporcji.** DDL jest czytane **sporadycznie**, ale jego panel
-komplikował tę kolumnę **na stałe**: siatka typów dzieliła miejsce z czymś, co niemal zawsze jest puste, a
-każde pytanie o wysokość powierzchni musiało uwzględniać ujawnienie, którego nikt nie otworzył. Osadzony
-podgląd zniknął w całości; **„Show DDL" otwiera instrukcję w SQL Editorze** jako nowe zapytanie zapisane.
+⭐ **A potem właściwe miejsce dla DDL — po dwóch gorszych odpowiedziach.** Wyjściowy problem był o proporcji:
+DDL czyta się **sporadycznie**, ale jego panel komplikował tę kolumnę **na stałe** — siatka typów dzieliła
+miejsce z czymś niemal zawsze pustym, a każde pytanie o wysokość musiało uwzględniać ujawnienie, którego nikt
+nie otworzył.
 
-⭐ **Przez TĘ SAMĄ ścieżkę, którą chodzi monitor Trace.** `OnTraceOpenInEditor` został uogólniony do
-`OpenSqlAsSavedQuery(sql, name)` — dwóch wywołujących, jedno zachowanie, więc instrukcja przychodząca z importu
-zachowuje się dokładnie tak jak ta z trace'u i „otwórz to w edytorze" nie zaczyna znaczyć dwóch różnych rzeczy
-zależnie od tego, kto poprosił. Nic nie jest nadpisywane; zapytanie ląduje obok istniejących. Moduł sięga po to
-przez delegat `DataImportEnvironment.OpenSqlInEditor` — VM nie nazywa typu warsztatu, żeby podać komuś string.
+**Odpowiedź pierwsza: „Show DDL" otwiera instrukcję w SQL Editorze** jako nowe zapytanie zapisane, przez tę
+samą ścieżkę co monitor Trace. Technicznie czysto — jedna ścieżka, dwóch wywołujących, nic nadpisywanego —
+i **odrzucone przez użytkownika jako regres UX**:
 
-Zysk jest dwojaki: panel typów zawsze bierze całą wysokość, a DDL stało się **bardziej** użyteczne niż było —
-w edytorze można je przeczytać, poprawić i uruchomić, czego osadzony `SelectableTextBlock` nie oferował.
+> „DDL jest elementem konfiguracji importu. Kliknięcie »Show DDL« nie powinno przełączać użytkownika do innego
+> modułu ani zmieniać aktywnej zakładki. W czasie konfiguracji importu chcę pozostać w module Data Import."
+
+⭐⭐ **Odpowiedź właściwa: DDL jest piątą zakładką dolnego panelu.** To jest ta sama zasada, która chwilę
+wcześniej rozstrzygnęła cały układ, tylko zastosowana konsekwentnie do końca: **góra = konfiguracja, dół =
+wyniki i artefakty.** Wygenerowany `CREATE TABLE` jest artefaktem tej konfiguracji, więc mieszka obok Source
+preview, Preview after conversion, Errors i Report — nie zajmuje miejsca, dopóki nie zostanie wybrany, i nigdzie
+nie nawiguje.
+
+Konsekwencje, które czynią to rozwiązanie prostszym od obu poprzednich:
+
+* **nie ma przycisku, komendy ani stanu** mówiącego, czy DDL jest na ekranie — jest zakładką jak każda inna;
+* **jest ŻYWE**: renderuje `CreateTableSql`, liczone z siatki typów przez to samo `ImportNewTable.BuildCreateSql`,
+  które wywoła sam bieg. Nie ma czego odświeżać i nie ma jak się rozjechać;
+* zakładka pokazuje się **tylko w wariancie „New table"** — w drugim nie ma czego generować, a trwale pusta
+  zakładka to obietnica, której nic nie dotrzymuje;
+* stoi **na końcu paska**, bo ukryta zakładka i tak zajmuje swój indeks, a zakończony bieg wysuwa Raport
+  po indeksie;
+* `SelectableTextBlock` wystarcza do skopiowania — własny przycisk „Kopiuj" byłby czwartym sposobem na to samo.
+
+⚠ Jedna pułapka po drodze: `CreateTableSql` liczy się z siatki, ale nazwa tabeli mieszka na **innej**
+właściwości, więc bez własnego `NotifyPropertyChangedFor` zakładka pokazywałaby starą nazwę, gdy pole wyżej ma
+już nową. Przypięte testem, który sprawdza obie strony — typ i nazwę.
+
+Usunięte jako martwe wraz z pierwszą odpowiedzią: `DataImportEnvironment.OpenSqlInEditor`,
+`ShowCreateTableDdlCommand` i uogólnienie `OpenSqlAsSavedQuery` (wróciło do `OnTraceOpenInEditor` — uogólnienie
+z jednym wywołującym jest resztką po niedoszłym drugim).
 
 ### Co zostaje otwarte po zamknięciu modułu
 

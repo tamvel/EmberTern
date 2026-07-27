@@ -82,8 +82,12 @@ public sealed partial class ImportTargetSectionViewModel : ViewModelBase
         set => IsNewTable = !value;
     }
 
+    /// <summary>⚠ <see cref="CreateTableSql"/> is notified here because the DDL tab renders it LIVE — the
+    /// table's name is half of a <c>CREATE TABLE</c>, so without this the tab would keep showing the previous
+    /// name while the box above already had the new one.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasTarget))]
+    [NotifyPropertyChangedFor(nameof(CreateTableSql))]
     private string _newTableName = string.Empty;
 
     private bool _settingNameUpper;

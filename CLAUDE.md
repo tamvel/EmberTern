@@ -316,13 +316,17 @@ noted.
   configuration: **Existing table → Mapping at full width; New table → `Table types | Mapping`** with a
   splitter, so the user sets the proportion. The type grid moved out of the `Auto` Target tile into that left
   half, which is what made the tile thin again.
-  **⭐ „Show DDL" opens the generated `CREATE TABLE` in the SQL EDITOR — it is not disclosed inside the surface
-  at all.** Same proportion argument one level down: the DDL is consulted rarely, yet an embedded panel for it
-  complicated that column permanently (the type grid shared its space with something almost always empty). It
-  goes through the **same** path the Trace monitor uses — `MainWindowViewModel.OpenSqlAsSavedQuery`, generalized
-  out of `OnTraceOpenInEditor`, reached by the module through the `OpenSqlInEditor` delegate — so a statement
-  from the import behaves exactly like a traced one: a new Saved Query, nothing overwritten. It also became
-  *more* useful than the old inline block: in the editor it can be read, edited and run.
+  **⭐ The generated `CREATE TABLE` is the FIFTH BOTTOM TAB (`DDL`), shown only in the „new table" variant** —
+  the same configuration/results principle carried to its end: the statement is an *artefact* of the
+  configuration, so it belongs with Source preview / Preview after conversion / Errors / Report. It is **live**
+  (rendered from `CreateTableSql`, computed through the same `ImportNewTable.BuildCreateSql` the run calls), so
+  there is no button, no command and no „is it showing" state to keep in sync; `SelectableTextBlock` covers
+  copying. Last on the strip on purpose — a hidden tab still holds its index and the run reveals Report by index.
+  ⚠ **Two worse answers came first and neither should be retried.** Disclosed *inline* in the types column, it
+  complicated that column permanently for something read rarely. Opened in the **SQL Editor**, it was technically
+  clean but a **UX regression the user rejected**: the DDL is part of configuring *this* import, so reaching it
+  must not switch modules or move the active tab. `OpenSqlInEditor`, `ShowCreateTableDdlCommand` and the
+  `OpenSqlAsSavedQuery` generalization were all removed with it.
   ⚠ **Two earlier attempts failed and are worth knowing before re-opening this.** A `MinHeight` floor on the
   work row plus a clamp on the bottom panel was built and **reverted** — honouring the floor made the bottom
   panel give way, so the middle grew and the panel stopped being useful. The lesson the user drew, and it is

@@ -140,8 +140,7 @@ public class DataImportNewTableTests : IDisposable
         List<string>? transactionActions = null,
         ImportTarget? existing = null,
         List<string>? counted = null,
-        string? throwFrom = null,
-        Action<string, string>? openSqlInEditor = null)
+        string? throwFrom = null)
     {
         var ledger = new Ledger();
         var writer = new FakeWriter(ledger, failAt, throwFrom == "write" ? new ProbeFailure("write") : null);
@@ -155,8 +154,6 @@ public class DataImportNewTableTests : IDisposable
 
         var environment = new DataImportEnvironment(() => true, () => "LAB")
         {
-            OpenSqlInEditor = openSqlInEditor,
-
             ListTablesAsync = _ =>
             {
                 FailIf("tables");
@@ -380,43 +377,48 @@ public class DataImportNewTableTests : IDisposable
     }
 
     /// <summary>
-    /// ⭐ „Show DDL" leaves this surface: it hands the generated statement to the SQL Editor instead of
-    /// unfolding it in the panel.
+    /// ⭐ The DDL tab is LIVE: it renders <see cref="ImportTargetSectionViewModel.CreateTableSql"/>, which is
+    /// recomputed from the type grid, so it cannot go stale and there is nothing to refresh.
     /// <para>
-    /// The embedded disclosure was removed because of proportion — consulted rarely, yet its panel complicated
-    /// the work area permanently. Pinned because the command now reaches the world through a delegate, and a
-    /// delegate nobody wired is indistinguishable from a dead button (gotcha #233).
+    /// Pinned on the two edits that change a <c>CREATE TABLE</c> from opposite directions — a type and the
+    /// table's NAME. The name is the one that would have been missed: it lives on a different property from the
+    /// grid, so without its own notification the tab would keep showing the previous name while the box above
+    /// already had the new one.
     /// </para>
     /// </summary>
     [Fact]
-    public async Task ShowDdl_SendsTheCreateStatementToTheEditor_RatherThanUnfoldingItHere()
+    public async Task TheDdl_FollowsTheTypesAndTheName_WithoutARefresh()
     {
-        var opened = new List<(string Sql, string Name)>();
-        var (vm, _, _) = await NewTableVmAsync(openSqlInEditor: (sql, name) => opened.Add((sql, name)));
+        var (vm, _, _) = await NewTableVmAsync();
 
-        vm.ShowCreateTableDdlCommand.Execute(null);
+        var changed = new List<string>();
+        vm.Target.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? string.Empty);
 
-        var (openedSql, openedName) = Assert.Single(opened);
-        Assert.Contains("CREATE TABLE", openedSql, StringComparison.Ordinal);
-        Assert.Contains("IMP_NEW", openedSql, StringComparison.Ordinal);
+        Assert.Contains("CREATE TABLE", vm.Target.CreateTableSql, StringComparison.Ordinal);
+        Assert.Contains("IMP_NEW", vm.Target.CreateTableSql, StringComparison.Ordinal);
 
-        // The statement is the one the RUN would issue, not a second rendering of it.
-        Assert.Equal(vm.Target.CreateTableSql, openedSql);
-        Assert.Contains("IMP_NEW", openedName, StringComparison.Ordinal);
+        vm.Target.NewColumns[1].Type = "BIGINT";
+        await SettleAsync(vm);
+        Assert.Contains("BIGINT", vm.Target.CreateTableSql, StringComparison.Ordinal);
+        Assert.Contains(nameof(ImportTargetSectionViewModel.CreateTableSql), changed);
+
+        changed.Clear();
+        vm.Target.NewTableName = "IMP_RENAMED";
+        await SettleAsync(vm);
+        Assert.Contains("IMP_RENAMED", vm.Target.CreateTableSql, StringComparison.Ordinal);
+        Assert.Contains(nameof(ImportTargetSectionViewModel.CreateTableSql), changed);
     }
 
-    /// <summary>An empty editor tab would be worse than no answer — the user would hunt for a statement the
-    /// module never generated, in a place that implies it did.</summary>
+    /// <summary>The tab has an empty state rather than a blank box: with no columns there is no statement, and
+    /// showing nothing at all would read as a failure to generate one.</summary>
     [Fact]
-    public async Task ShowDdl_WithNothingToShow_OpensNothing()
+    public async Task TheDdl_IsEmptyWhenThereIsNothingToCreate()
     {
-        var opened = new List<(string Sql, string Name)>();
-        var (vm, _, _) = await NewTableVmAsync(openSqlInEditor: (sql, name) => opened.Add((sql, name)));
+        var (vm, _, _) = await NewTableVmAsync();
 
         vm.Target.NewColumns.Clear();
-        vm.ShowCreateTableDdlCommand.Execute(null);
 
-        Assert.Empty(opened);
+        Assert.Equal(string.Empty, vm.Target.CreateTableSql);
     }
 
     /// <summary>
