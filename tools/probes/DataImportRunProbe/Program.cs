@@ -752,6 +752,291 @@ static void Finish(WorkbookPart workbookPart, SheetData sheetData)
     workbookPart.Workbook.Save();
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════
+Section("I — etap I10: the clipboard, and the legacy .xls");
+
+// ⭐ Note what is NOT here: a case proving the clipboard reaches the database. Every section from A onward has
+// been importing out of a TextImportSource, and that IS the clipboard's path — App reads the clipboard and
+// hands Core a string (§1.5). The one thing worth checking separately is the shape a paste from Excel actually
+// has, which is TAB-separated and relies on detection rather than on the CSV default.
+const string xlsNewTable = "IMP_NEW_XLS_PROBE";
+var legacyPath = Path.Combine(Path.GetTempPath(), $"embertern-i10-probe-{Guid.NewGuid():N}.xls");
+var xlsDate = new DateTime(2026, 5, 14);
+
+BuildLegacyProbeWorkbook(legacyPath, xlsDate);
+var xlsProvider = new XlsImportProvider();
+
+try
+{
+    // ── I1: a paste out of Excel — TAB-separated text, with the separator DETECTED ───────────────────────
+    await ResetAsync();
+    {
+        var pasted = "ID\tCODE\tNAME\tQTY\tPRICE\r\n1\tX1\tWidget 1\t5\t1.50\r\n2\tX2\tWidget 2\t12\t22.75\r\n";
+
+        // ⭐ Detection is deliberately a step ABOVE the pipeline, and this case has to mirror that or it proves
+        // nothing about the real surface. §0.4 lets auto-detection PROPOSE and never decide silently, so the
+        // App runs the detector, shows the evidence, and writes the RESOLVED separator into the configuration —
+        // which is why the provider reads a declared delimiter and has no opinion about detection at all. A
+        // first version of this case passed AutoDetectDelimiter to the pipeline and got one single column back;
+        // that was the case being wrong about the architecture, not the architecture being wrong.
+        var declared = new DelimitedOptions { HasHeader = true, FirstDataRow = 2, AutoDetectDelimiter = true };
+        var proposal = DelimiterDetector.Propose(pasted, declared);
+
+        if (proposal is { Delimiter: '\t', IsUnanimous: true })
+            Pass("I1a the detector proposes TAB for an Excel paste",
+                $"{proposal.ConsistentRecords}/{proposal.SampledRecords} records agree on {proposal.FieldCount} fields");
+        else
+            Fail("I1a the detector proposes TAB for an Excel paste", proposal is null ? "no proposal" : $"'{proposal.Delimiter}'");
+
+        var configuration = ConfigurationFor(ImportTransactionMode.Manual) with
+        {
+            Source = SourceDescriptor.Clipboard(),
+            Delimited = declared with { Delimiter = proposal?.Delimiter ?? ';' },
+        };
+
+        var source = new TextImportSource(pasted);
+        var schema = await provider.ReadSchemaAsync(source, configuration, CancellationToken.None);
+
+        var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
+        var outcome = await ImportPipeline.RunAsync(configuration, target, provider, source, writer, charset);
+
+        await importSession.CommitAsync();
+
+        var actual = await CountCommittedAsync();
+        if (schema.Fields.Count == 5 && outcome.RowsWritten == 2 && actual == 2 && outcome.RowsFailed == 0)
+            Pass("I1 an Excel paste imports with no file at all", $"TAB detected, 5 fields, {actual} rows in the table");
+        else
+            Fail("I1 an Excel paste imports with no file at all",
+                $"{schema.Fields.Count} fields, report {outcome.RowsWritten}/{outcome.RowsFailed} failed, table {actual}");
+    }
+
+    // ── I2: a legacy workbook into the EXISTING table ────────────────────────────────────────────────────
+    await ResetAsync();
+    {
+        var configuration = ConfigurationFor(ImportTransactionMode.Manual) with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Xls, legacyPath),
+            Delimited = null,
+            // Windowed to the three clean rows: the fixture's row 5 carries the #N/A cell, and that is I2b's
+            // question. One case, one thing.
+            Spreadsheet = new SpreadsheetOptions { HasHeader = true, FirstDataRow = 2, LastRow = 4 },
+        };
+
+        var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
+        var outcome = await ImportPipeline.RunAsync(
+            configuration, target, xlsProvider, new FileImportSource(legacyPath), writer, charset);
+
+        await importSession.CommitAsync();
+
+        var actual = await CountCommittedAsync();
+        if (outcome.RowsWritten == 3 && actual == 3 && outcome.RowsFailed == 0)
+            Pass("I2 legacy .xls -> existing table", $"{outcome.RowsWritten} written, {actual} in the table");
+        else
+            Fail("I2 legacy .xls -> existing table",
+                $"report {outcome.RowsWritten}/{outcome.RowsFailed} failed, table {actual}");
+    }
+
+    // ── I2b: R20 again, on the other container ───────────────────────────────────────────────────────────
+    await ResetAsync();
+    {
+        var configuration = ConfigurationFor(ImportTransactionMode.Manual) with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Xls, legacyPath),
+            Delimited = null,
+            // Row 5 of the fixture carries #N/A in NAME, a VARCHAR column. Widening the window to include it.
+            Spreadsheet = new SpreadsheetOptions { HasHeader = true, FirstDataRow = 2, LastRow = 5 },
+        };
+
+        var writer = new FirebirdImportWriter(importSession, configuration.ErrorPolicy);
+        var outcome = await ImportPipeline.RunAsync(
+            configuration, target, xlsProvider, new FileImportSource(legacyPath), writer, charset);
+
+        await importSession.CommitAsync();
+
+        // ⭐ The marker a .xls raises is the SAME source-neutral SourceErrorValue a .xlsx raises, which is why
+        // the converter needed no branch for this format — R20 closed once, for every source.
+        var actual = await CountCommittedAsync();
+        if (actual == 3 && outcome.RowsFailed == 1
+            && outcome.Errors.Any(e => e.Kind == ImportErrorKind.SourceErrorValue))
+            Pass("I2b #N/A refused by a VARCHAR column, from .xls", $"{actual} rows in, 1 refused");
+        else
+            Fail("I2b #N/A refused by a VARCHAR column, from .xls",
+                $"rows {actual}, failed {outcome.RowsFailed}, kinds {string.Join("/", outcome.Errors.Select(e => e.Kind))}");
+    }
+
+    // ── I3/I4: a legacy workbook into a table that does not exist yet ────────────────────────────────────
+    await DropIfExistsAsync(xlsNewTable);
+    {
+        var inferConfiguration = ImportConfiguration.Empty with
+        {
+            Source = SourceDescriptor.File(ImportSourceKind.Xls, legacyPath),
+            Delimited = null,
+            Spreadsheet = new SpreadsheetOptions { HasHeader = true, FirstDataRow = 2, LastRow = 4 },
+            Culture = newTableCulture,
+        };
+
+        var sheetSource = new FileImportSource(legacyPath);
+        var schema = await xlsProvider.ReadSchemaAsync(sheetSource, inferConfiguration, CancellationToken.None);
+
+        var inference = await ColumnTypeInferencer.InferAsync(
+            schema, xlsProvider, sheetSource, inferConfiguration,
+            ColumnTypeInferencer.DefaultScanLimit, CancellationToken.None);
+
+        var inferred = inference.Columns.Select(c => c.Definition).ToList();
+        var types = inferred.Select(ImportNewTable.TypeText).ToArray();
+
+        // ⭐⭐ The I10 claim, and it is the same sentence as I9's: type inference works on a THIRD source with
+        // no change, because the provider hands over native values and ColumnTypeInferencer asks
+        // ImportValueConverter. A BIFF date cell becomes a DATE column with nobody parsing a date string.
+        if (types.Length == 6 && types[5] == "DATE")
+            Pass("I3 a BIFF date CELL types as DATE", string.Join(", ", types));
+        else
+            Fail("I3 a BIFF date CELL types as DATE", string.Join(", ", types));
+
+        await ddlExecutor.ExecuteAsync(ImportNewTable.BuildCreateSql(xlsNewTable, inferred), CancellationToken.None);
+        var created = await targetReader.ReadTargetAsync(xlsNewTable, CancellationToken.None);
+
+        var runConfiguration = inferConfiguration with
+        {
+            Target = TargetDescriptor.New(xlsNewTable, inferred),
+            Mapping = inferred.Select((c, i) => new ColumnMapping
+            {
+                TargetColumnName = c.Name,
+                SourceFieldName = schema.Fields[i].Name,
+                SourceFieldIndex = i,
+            }).ToArray(),
+            ErrorPolicy = ImportErrorPolicy.SkipInvalidRows,
+        };
+
+        var writer = new FirebirdImportWriter(importSession, runConfiguration.ErrorPolicy);
+        var outcome = await ImportPipeline.RunAsync(
+            runConfiguration, created!, xlsProvider, sheetSource, writer, charset);
+
+        await importSession.CommitAsync();
+
+        var landed = await CountInAsync(xlsNewTable);
+        if (landed == 3 && outcome.RowsWritten == 3 && outcome.RowsFailed == 0)
+            Pass("I3b legacy .xls -> a table that did not exist", $"{outcome.RowsWritten} written, {landed} in {xlsNewTable}");
+        else
+            Fail("I3b legacy .xls -> a table that did not exist",
+                $"report {outcome.RowsWritten}/{outcome.RowsFailed} failed, table {landed}");
+
+        // ⭐ The date round trip through the OTHER container. Worth its own case because the two providers reach
+        // a date by opposite routes — .xlsx decodes the serial itself, .xls receives a DateTime the library has
+        // already decoded — and both have to land on the same calendar day (§0.1).
+        if (transactionService.IsActive) await transactionService.CommitAsync();
+        await transactionService.BeginTransactionAsync();
+        var connection = connectionService.RequireOpenConnection();
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT MIN(DATA) FROM {xlsNewTable}";
+            cmd.Transaction = transactionService.ActiveTransaction;
+            var scalar = await cmd.ExecuteScalarAsync();
+            var readBack = scalar is DateTime dt ? dt : default;
+
+            if (readBack == xlsDate)
+                Pass("I4 the date survives the round trip from .xls", $"sheet {xlsDate:yyyy-MM-dd} == database {readBack:yyyy-MM-dd}");
+            else
+                Fail("I4 the date survives the round trip from .xls", $"sheet {xlsDate:yyyy-MM-dd}, database {readBack:yyyy-MM-dd}");
+        }
+        await transactionService.CommitAsync();
+    }
+
+    // ── I5: the user's OWN .xls, if it is on this machine ────────────────────────────────────────────────
+    //
+    // ⚠ I9's lesson, applied: a probe proves what it happened to execute, and everything above ran on a file
+    // this probe wrote itself. NPOI's output is not Excel's. So when a real legacy workbook is present it is
+    // read through the production provider as well — no import, just "can we actually read what Excel wrote".
+    {
+        var real = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Nadgodziny2.xls");
+
+        if (!File.Exists(real))
+        {
+            Console.WriteLine("  I5 skipped — no real .xls on this machine to read.");
+        }
+        else
+        {
+            var realSource = new FileImportSource(real);
+            var sheets = await xlsProvider.ListSheetsAsync(realSource, CancellationToken.None);
+            var realConfiguration = ImportConfiguration.Empty with
+            {
+                Source = SourceDescriptor.File(ImportSourceKind.Xls, real),
+                Delimited = null,
+                Spreadsheet = new SpreadsheetOptions { HasHeader = true, FirstDataRow = 2, SheetIndex = 1 },
+            };
+
+            var realSchema = await xlsProvider.ReadSchemaAsync(realSource, realConfiguration, CancellationToken.None);
+
+            var rows = 0;
+            var lastRowNumber = 0;
+            await foreach (var record in xlsProvider.ReadRecordsAsync(
+                realSource, realConfiguration, CancellationToken.None))
+            {
+                rows++;
+                lastRowNumber = record.SourceRowNumber;
+            }
+
+            // Row numbers must stay ordered and reach at least as far as the row count — the §0.6 property, on
+            // a file nobody here wrote.
+            if (sheets.Count > 0 && realSchema.Fields.Count > 0 && rows > 0 && lastRowNumber >= rows)
+                Pass("I5 a REAL Excel-written .xls reads",
+                    $"{sheets.Count} sheet(s), {realSchema.Fields.Count} fields, {rows} rows, last row #{lastRowNumber}");
+            else
+                Fail("I5 a REAL Excel-written .xls reads",
+                    $"sheets {sheets.Count}, fields {realSchema.Fields.Count}, rows {rows}, last #{lastRowNumber}");
+        }
+    }
+}
+finally
+{
+    await DropIfExistsAsync(xlsNewTable);
+    try { File.Delete(legacyPath); } catch (IOException) { }
+}
+
+// The legacy counterpart of BuildProbeWorkbook: the same six columns, so sections H and I ask the engine
+// literally the same question through two different containers. Row 5 carries the #N/A case (I2b).
+static void BuildLegacyProbeWorkbook(string path, DateTime date)
+{
+    var workbook = new NPOI.HSSF.UserModel.HSSFWorkbook();
+    var sheet = workbook.CreateSheet("Arkusz1");
+
+    var dateStyle = workbook.CreateCellStyle();
+    dateStyle.DataFormat = workbook.CreateDataFormat().GetFormat("yyyy-mm-dd");
+
+    var header = sheet.CreateRow(0);
+    foreach (var (name, i) in new[] { "ID", "CODE", "NAME", "QTY", "PRICE", "DATA" }.Select((n, i) => (n, i)))
+    {
+        header.CreateCell(i).SetCellValue(name);
+    }
+
+    void Line(int index, double id, string code, string? name, double qty, double price)
+    {
+        var row = sheet.CreateRow(index);
+        row.CreateCell(0).SetCellValue(id);
+        row.CreateCell(1).SetCellValue(code);
+
+        var nameCell = row.CreateCell(2);
+        if (name is null) nameCell.SetCellErrorValue(42); // #N/A
+        else nameCell.SetCellValue(name);
+
+        row.CreateCell(3).SetCellValue(qty);
+        row.CreateCell(4).SetCellValue(price);
+
+        var dateCell = row.CreateCell(5);
+        dateCell.SetCellValue(date);
+        dateCell.CellStyle = dateStyle;
+    }
+
+    Line(1, 1, "X1", "Widget 1", 5, 1.50);
+    Line(2, 2, "X2", "Widget 2", 12, 22.75);
+    Line(3, 3, "X3", "Widget 3", 7, 3.05);
+    Line(4, 4, "X4", null, 9, 4.20);
+
+    using var output = File.Create(path);
+    workbook.Write(output, leaveOpen: true);
+}
+
 // ── The offered clean-up: roll back, THEN drop (§0.5) ────────────────────────────────────────────────────
 {
     await ddlExecutor.ExecuteAsync(ImportNewTable.BuildDropSql(newTable), CancellationToken.None);

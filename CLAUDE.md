@@ -28,10 +28,10 @@ verbatim, in the archive below.
 | **`docs/design/firebird-debugger-implementation-plan.md`** | **The debugger's execution plan** — per-milestone briefs (P1, P2, D1–D14: cel/zakres/components/new types/deps/risks/DoD/verification), how to split sessions so each ends green + committable, the editor/transaction **danger zones**, and the **Developer Contract** (20 binding rules). The spec says *what*; this says *in what order and under what rules*. **D14 = ANALYZED + DEFERRED** (its STATUS block records the ratified snapshot+savepoint+undo-only architecture if ever revisited). | **Every debugger implementation session — read this + your milestone's brief first.** |
 | **`docs/design/d15-debugger-experience-and-ide-polish.md`** | **DESIGN — D15 planning phase COMPLETE (2026-07-20); the next major stage, nothing implemented.** The self-contained implementation guide for **D15 — Debugger Experience & IDE Polish**: the **Presentation vs Feature** split, all seven milestones (D15.1 Editor Readability app-wide · D15.2 Toolbar + own SVG icon system + Error Bar · D15.3 Launch Experience · D15.4 Friendly Errors · D15.5 Inline Values · D15.6 Performance-integration · D15.7 Global UI Audit), per-milestone seams/DoD, ratified design decisions + rationale, priorities, dependencies, risks. A future session starts any milestone from here **without re-analysing**. | When working on any D15 milestone. |
 | **`docs/design/data-import.md`** | **🔒 FROZEN architecture + live implementation status for the Data Import module (the CURRENT work).** One working surface with collapsible sections (deliberately NOT a wizard), one pipeline for every source, `ImportConfiguration` as the single representation of every user decision (so profiles are a foundation, not a future extension), the transaction model, §0's seven consequences, risks R1–R20, and the etap plan I0–I12. **Its „📍 STAN IMPLEMENTACJI" block at the top is the handover** — branch, last commit, test count, what exists, what is next, and the remaining-scope table for I6–I12. **§3.8 holds the OPEN UX findings from the I5 review (U1–U10) — read it before touching the surface's layout.** | **Every Data Import session — read the status block + §3.8 + your etap's row in §6 first.** |
-| **`docs/design/data-import-i9-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I9** implementation session — the first etap that adds a new SOURCE (`.xlsx`), and therefore **the first real test of the "one pipeline for every source" pillar**: if adding a provider requires touching anything below `IImportProvider`, that is a stop-and-report. Carries the input state, the reuse inventory, REK-6's seven binding provider guidelines (all measured, incl. SAX-not-DOM at 77× memory and "place values by `CellReference`, never positionally"), the standing "no global UI work" rule, and the DoD incl. the live run and the owed **first real file with dates** (an explicit I0 measurement gap). Replace it with the I10 equivalent once I9 closes. | When starting etap I9. |
+| **`docs/design/data-import-i11-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I11** implementation session (named import profiles). Each etap's prompt replaces the previous one, so this file is the only live prompt; it carries the input state, the reuse inventory, the standing "no global UI work" rule and the DoD. **I11 is unlike every etap before it: it adds no capability, it CHECKS one.** §4.8 claimed named profiles are a consequence of the model rather than a feature to be built, and named the disproof — "if named profiles require changing even one model or rebuilding a UI section, §4.8 was violated along the way". So the session's unusual duty is that needing to touch the models or the pipeline is a **result to report**, not an obstacle to work around. | When starting etap I11. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (255 entries, #1–#268), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (257 entries, #1–#270), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -179,9 +179,10 @@ src/
     FirebirdMetadataReader.cs / FirebirdDdlReader.cs / FirebirdCatalogReader.cs /
     FirebirdTraceService.cs / FirebirdSessionReader.cs / FirebirdScriptExecutor.cs
   EmberTern.Office/          # the ONE place a NuGet dep on an Office format is allowed, in BOTH
-                             # directions: DocumentFormat.OpenXml, the streaming XLSX writer
-                             # (XlsxExporter) and, since etap I9, the streaming SAX reader
-                             # (XlsxImportProvider). Renamed from EmberTern.Export.Office in I9.
+                             # directions: DocumentFormat.OpenXml (the streaming XLSX writer XlsxExporter
+                             # and, since I9, the streaming SAX reader XlsxImportProvider) plus, since I10,
+                             # ExcelDataReader for legacy .xls (XlsImportProvider). Renamed from
+                             # EmberTern.Export.Office in I9.
   EmberTern.App/             # WinExe, Avalonia 12.0.3, CommunityToolkit.Mvvm 8.4.2
     Program.cs, App.axaml(.cs), UiStrings.cs, app.manifest
     ViewModels/ Views/ Themes/ (Colors.axaml + ControlStyles.axaml — the ONLY theme sources)
@@ -279,10 +280,56 @@ noted.
 
 ## Current state
 
+- **✅ DATA IMPORT I10 — CLIPBOARD + `.xls` DELIVERED (2026-07-27), awaits the user's visual confirmation in
+  both palettes. Next: I11 named profiles · I12 close-out.** Branch `feat/data-import`, suite **5785 green**
+  (+22), build 0/0, app launches clean, `DataImportRunProbe` **33/33 ALL PASS** on FB5 `WI-V5.0.3.1683`
+  (section **I** added).
+  **⭐⭐ The pillar held under a harder test than I9's, because this time a DEPENDENCY arrived.** I9 added a
+  source using a library the project already had; I10 adds **`ExcelDataReader` 3.7.0 (MIT)** — the one NuGet
+  decision left in the module — and it reaches **exactly one project** (`EmberTern.Office`). The pipeline,
+  converter, validator, mapping planner and writer were **again not touched**; `IImportProvider` now has a
+  third implementation and App learned exactly one thing: `ProviderFor` has one more branch.
+  **⭐ The clipboard was already built — the etap added only proof.** The Plik/Schowek toggle, `ClipboardText`,
+  `UseClipboardCommand`, the `ClipboardReadRequested` delegate and `MainWindow`'s `TopLevel` read all shipped
+  in I5. There was nothing to write; there was something to *verify*, and that turned out to be the
+  interesting part (below). ⚠ Worth carrying: **check whether a scope item is already standing before writing
+  it** — the opening prompt said "only the clipboard read is missing", and that existed too.
+  **⭐⭐ Delimiter detection is a step ABOVE the pipeline, and the first version of the probe case did not
+  mirror that.** It passed `AutoDetectDelimiter = true` straight to `ImportPipeline` and got back **one
+  column**. That is not a defect — it is §0.4 working as designed: auto-detection **proposes**, shows its
+  basis, and the **resolved** value goes into the configuration, so the provider reads a declared delimiter
+  and holds no opinion about detection. The probe has to walk the whole road the surface walks or it proves
+  nothing about the surface. ⚠ **General rule: when a probe and the UI disagree on the same input, first ask
+  whether the probe reproduced the entire path** — only then look for a defect in the product.
+  **⭐ Excel's calendar got ONE owner because the second provider needed it in reverse.** `WorkbookCellReader`
+  computed serial → date itself (I9). ExcelDataReader hands back an already-decoded `DateTime`, so honouring
+  "do not treat date cells as dates" means converting **back** to a serial — and an inverse written beside a
+  forward function it cannot see is exactly how two halves of one calendar drift apart. Hence
+  `ExcelSerialDate` (`FromSerial` + `ToSerial`), used by both providers. Pinned: serial 15 is 1900-01-15 in
+  both directions (`FromOADate(15)` would say 1900-01-14).
+  **⭐ The library decides "is this a date" for us, so its verdict is RE-ASKED.** The danger here is the
+  inverse of `.xlsx`'s: not a date missed but a date **invented**. `XlsCellReader` asks
+  `SpreadsheetNumberFormats` — the one owner of that question, which **parses** a format code rather than
+  searching it (gotcha #268) — so the real user's custom currency format `#,##0\ [$€-1];[Red]\-#,##0\ [$€-1]`
+  stays money here too, even though the library independently called it a date. It also closed a divergence
+  nobody would have gone looking for: a "time only" cell came out of `.xlsx` as a `TimeSpan` and out of `.xls`
+  as `1899-12-31 12:00`; both now yield a `TimeSpan`.
+  ⚠ **R8 measured BEFORE the provider was written** (throwaway `XlsFormatProbe`, deleted on close). A 60 000-row
+  × 5-column BIFF8 sheet: heap **flat at 26.7 MB at rows 15 000 / 30 000 / 45 000 / 60 000**. The *shape of the
+  curve* is the proof, not the final number — a reader that materialises the sheet grows with the row count.
+  The 19.6 MB retained is the shared-string table, proportional to **distinct** strings rather than rows — the
+  same property I9 documented for `SharedStringTable`.
+  ⚠ **Correction to I9:** `Wynagrodzenie.xlsx` was recorded as "the old format under the new name". Measured
+  in I10: it is an OLE2 container (signature `d0cf11e0`) but **not a workbook** — the BIFF reader answers
+  *"Neither stream 'Workbook' nor 'Book' was found"*. I10 therefore does **not** make that file readable, and
+  the refusal message promises no such thing. `XlsxImportProvider`'s refusal did change, though: it used to
+  advise "Save As", which was the only way out while BIFF was unreadable; it now leads with "rename it to
+  `.xls`". A refusal that keeps recommending the long way round after a short one exists has quietly stopped
+  being true.
 - **🏁 DATA IMPORT I9 — XLSX CLOSED AND USER-ACCEPTED (2026-07-27).** Confirmed visually in both palettes;
   the user checked the sheet picker, the hiding of CSV/TXT-only settings, "treat date cells as dates" and a
   full XLSX run — no visual or functional findings.
-  **Next: I10 clipboard + `.xls` · I11 named profiles · I12 close-out. ⛔ User directive on closing I9: no
+  **Next after I9 was I10 (delivered — see above) · then I11 named profiles · I12 close-out. ⛔ User directive on closing I9: no
   further refactors and no architectural changes — the module is carried to the end on the frozen design.**
   Branch `feat/data-import`, suite
   **5763 green** (+46), build 0/0, `DataImportRunProbe` **25/25 ALL PASS** on FB5 `WI-V5.0.3.1683`.
@@ -3276,7 +3323,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (255 entries, #1–#268), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (257 entries, #1–#270), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

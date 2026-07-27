@@ -63,9 +63,10 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **🔴 I8 — POPRAWKA PO PRZEGLĄDZIE (2026-07-27): „Importuj" na nowej tabeli ZAMYKAŁO APLIKACJĘ** | Zgłoszone przez użytkownika; **dwa niezależne defekty, oba w I8**, oba naprawione i zapinowane. Szczegóły w bloku niżej |
 | **✅ I8 — DOMKNIĘCIE PO PRZEGLĄDZIE (2026-07-27): nowa tabela pojawia się w drzewie od razu** | Drugie zgłoszenie z ręcznego QA: import przechodził, tabela powstawała, dane wchodziły — ale **Explorer metadanych jej nie pokazywał** do ręcznego odświeżenia. Naprawione **bez 21. wywołania `RefreshAsync()`**: moduł zgłasza fakt (`DataImportEnvironment.TableCreated` / `TableDropped`), a drzewo wstawia/usuwa **jeden liść w miejscu**. Przy okazji, w tej samej sesji, **Warstwa 1** z raportu — patrz blok niżej |
 | **✅ I9 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-27)** | XLSX: `EmberTern.Export.Office` → **`EmberTern.Office`** (D1), `XlsxImportProvider` (7 wytycznych REK-6), rozgałęzienie sekcji Format po **`Capabilities`**, `SourceErrorValue` domykający R20. ⭐ **Filar „jeden pipeline dla każdego źródła" utrzymał się: pipeline, konwerter, walidator, mapowanie i writer NIE zostały zmienione.** Potwierdzone wzrokowo przez użytkownika w obu paletach — sprawdzone osobno: wybór arkusza, ukrywanie ustawień właściwych dla CSV/TXT, opcja „traktuj komórki dat jako daty" i pełny przebieg importu XLSX; bez uwag wizualnych i funkcjonalnych |
-| **Następny etap** | **I10** — schowek (App czyta, Core parsuje) + `XlsImportProvider` (BIFF8, nowa zależność) |
-| **Testy** | **5763 zielone**, 0 niepowodzeń (I9 dodał **+46**). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
-| **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **G z I8** + **H z I9**) przeciwko FB5 `WI-V5.0.3.1683` — **25/25 ALL PASS**: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, Rollback cofa wiersze i NIE cofa tabeli — **oraz (I9): arkusz → tabela istniejąca, arkusz → tabela nowa, prawdziwa komórka daty typuje się na `DATE` i wraca z bazy tym samym dniem (2026-04-03), a `#N/A` zostaje odrzucone przez kolumnę VARCHAR** |
+| **✅ I10 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Schowek + `.xls` (BIFF8). ⭐ **Filar utrzymał się po raz drugi, tym razem pod większym obciążeniem — bo doszła NOWA ZALEŻNOŚĆ NuGet, a mimo to pipeline, konwerter, walidator, mapowanie i writer znów nie zostały tknięte.** Schowek okazał się już zbudowany (I5 dał przełącznik i pole, `MainWindow` czytanie ze schowka) — etap dołożył mu wyłącznie dowody. Szczegóły w bloku „⭐ I10 as-built" |
+| **Następny etap** | **I11** — nazwane profile (UI nad istniejącym magazynem; zero zmian w modelach i w pipeline) |
+| **Testy** | **5785 zielonych**, 0 niepowodzeń (I10 dodał **+22**). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
+| **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **G z I8** + **H z I9** + **I z I10**) przeciwko FB5 `WI-V5.0.3.1683` — **33/33 ALL PASS**; sekcja I dokłada: detektor proponuje TAB dla wklejenia z Excela (3/3 rekordy zgodne co do 5 pól), wklejenie importuje się **bez pliku na dysku**, `.xls` → tabela istniejąca i → tabela nowa, `#N/A` z BIFF odrzucone przez kolumnę VARCHAR, data z `.xls` wraca z bazy tym samym dniem (2026-05-14), oraz **prawdziwy skoroszyt napisany przez Excela** (`Nadgodziny2.xls`: 3 arkusze, 20 pól, 1073 wiersze, ostatni numer 1074). Wcześniejsze: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, Rollback cofa wiersze i NIE cofa tabeli — **oraz (I9): arkusz → tabela istniejąca, arkusz → tabela nowa, prawdziwa komórka daty typuje się na `DATE` i wraca z bazy tym samym dniem (2026-04-03), a `#N/A` zostaje odrzucone przez kolumnę VARCHAR** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
 | **⭐ Kamień milowy** | **MVP (I0–I7) DOSTARCZONE: CSV/TXT → istniejąca tabela działa end-to-end**, z walidacją, raportem, decyzją transakcyjną i pamięcią ostatniej konfiguracji. **I8 dokłada drugi wariant celu — tabelę, której jeszcze nie ma.** Wszystko dalej (I9–I12) jest przyrostowe. |
@@ -126,6 +127,59 @@ po nieudanym imporcie zgłasza usunięcie, żeby drzewo nie oferowało obiektu, 
 **Przy okazji tej samej sesji weszła Warstwa 1 z raportu** (blokada `BeginUpdate/EndUpdate` na ścieżce
 ładowania): projekcja pełnego odświeżenia **1 424 ms → 2 ms** przy jednej rozwiniętej kategorii. Szczegóły
 i pełne pomiary — [metadata-refresh-analysis.md §7](metadata-refresh-analysis.md).
+
+### ⭐ I10 as-built — pięć rzeczy wartych zapamiętania
+
+1. **⭐⭐ Filar wytrzymał ostrzejszy test, bo tym razem doszła ZALEŻNOŚĆ.** I9 dokładał źródło przy pomocy
+   biblioteki, którą projekt już miał; I10 dokłada `ExcelDataReader` — jedyną decyzję NuGetową, jaka w tym
+   module jeszcze zapadała. Zależność sięga **dokładnie jednego projektu** (`EmberTern.Office`), a pipeline,
+   konwerter, walidator, planer mapowania i writer **znów nie zostały tknięte**. `IImportProvider` ma trzecią
+   implementację; App nauczył się jednego: `ProviderFor` ma o jedną gałąź więcej.
+2. **⭐ Schowek był już zbudowany — etap dołożył mu wyłącznie dowody.** Przełącznik Plik/Schowek, pole
+   `ClipboardText`, komenda `UseClipboardCommand`, delegat `ClipboardReadRequested` i odczyt z `TopLevel`
+   w `MainWindow` powstały wcześniej (I5). Nie było czego pisać; było co **sprawdzić** — i to okazało się
+   niebanalne, patrz punkt 3. ⚠ Morał na przyszłe etapy: przed napisaniem kodu z listy zakresu warto sprawdzić,
+   czy nie stoi już gotowy. Prompt otwierający I10 zapowiadał „brakuje wyłącznie wczytania zawartości schowka" —
+   i to akurat też już istniało.
+3. **⭐⭐ Detekcja separatora jest krokiem NAD pipeline'em, i pierwsza wersja sondy tego nie odwzorowała.**
+   Przypadek I1 podał `AutoDetectDelimiter = true` prosto do `ImportPipeline` i dostał **jedną kolumnę**.
+   To nie jest usterka — to §0.4 działające zgodnie z projektem: auto-detekcja **proponuje**, pokazuje podstawę,
+   a do konfiguracji trafia wartość **rozstrzygnięta**; provider czyta separator zadeklarowany i nie ma zdania
+   o wykrywaniu. Sonda musi robić to, co robi powierzchnia, bo inaczej nie dowodzi niczego o powierzchni.
+   ⚠ Uogólnienie: gdy sonda i UI dają różne wyniki na tych samych danych, **najpierw sprawdź, czy sonda
+   odtworzyła całą drogę** — dopiero potem szukaj usterki w produkcie.
+4. **⭐ Kalendarz Excela dostał JEDNEGO właściciela, bo drugi provider potrzebował go w drugą stronę.**
+   `WorkbookCellReader` liczył serial → data u siebie (I9). ExcelDataReader oddaje `DateTime` **już zdekodowany**,
+   więc uszanowanie opcji „nie traktuj komórek dat jako daty" znaczy konwersję **z powrotem** na liczbę seryjną.
+   Odwrotność napisana obok funkcji prostej, której nie widzi, to dokładnie sposób, w jaki dwie połówki jednego
+   kalendarza się rozjeżdżają — stąd `ExcelSerialDate` z `FromSerial` i `ToSerial`, z którego korzystają obaj
+   providerzy. Zapinowane: serial 15 to 1900-01-15 w obie strony (`FromOADate(15)` dałoby 1900-01-14).
+5. **⭐ Biblioteka sama decyduje „czy to data", więc jej werdykt jest PONAWIANY u nas.** To odwrotne
+   niebezpieczeństwo niż w `.xlsx`: nie data przeoczona, tylko data **wymyślona**. `XlsCellReader` pyta
+   `SpreadsheetNumberFormats` — jedynego właściciela tej decyzji, który kod formatu **parsuje, a nie
+   przeszukuje** (gotcha #268) — więc własny format walutowy `#,##0\ [$€-1];[Red]\-#,##0\ [$€-1]` zostaje
+   pieniędzmi także tutaj, choć biblioteka niezależnie uznała go za datę. Przy okazji domknęła się rozbieżność,
+   której nikt by nie szukał: komórkę „sama godzina" `.xlsx` oddawał jako `TimeSpan`, a `.xls` jako
+   `1899-12-31 12:00` — teraz obaj oddają `TimeSpan`.
+
+⚠ **R8 zmierzone dla `.xls` przed napisaniem providera** (sonda `XlsFormatProbe`, usunięta po zamknięciu etapu,
+zgodnie z regułą dla sond jednorazowych). Skoroszyt BIFF8 o 60 000 wierszy × 5 kolumn: sterta **płaska —
+26,7 MB przy wierszu 15 000, 30 000, 45 000 i 60 000**. Kształt krzywej jest tu dowodem, a nie sama końcowa
+liczba: czytnik materializujący arkusz rośnie z liczbą wierszy. Zatrzymane 19,6 MB to tablica tekstów (SST),
+proporcjonalna do liczby **różnych** napisów, nie do liczby wierszy — ta sama własność, którą I9 opisał dla
+`SharedStringTable`.
+
+⚠ **Sprostowanie do I9.** I9 zapisał, że `Wynagrodzenie.xlsx` to „stary format pod nową nazwą". Pomiar I10
+uściśla: to plik-kontener OLE2 (sygnatura `d0cf11e0`), ale **nie skoroszyt** — czytnik BIFF odpowiada
+*„Neither stream 'Workbook' nor 'Book' was found"*. I10 **nie** daje więc możliwości odczytania tego pliku i
+komunikat odmowy niczego takiego nie obiecuje.
+
+⚠ **Zmieniony komunikat odmowy w `XlsxImportProvider`.** Do I10 radził „zapisz jako .xlsx", bo stary format był
+nieczytelny w ogóle. Teraz jest czytelny, więc pierwsza rada brzmi „zmień rozszerzenie na `.xls`". Odmowa, która
+po powstaniu krótszej drogi nadal poleca dłuższą, to komunikat, który po cichu przestał być prawdziwy.
+
+⚠ **Usunięty `UiStrings.ImportFormatNotYetSupportedFormat`.** Każdy rodzaj źródła, jaki powierzchnia potrafi
+rozpoznać, ma teraz providera — komunikat o stanie, który nie może już wystąpić, jest gorszy niż jego brak.
 
 ### ⭐ I9 as-built — cztery rzeczy warte zapamiętania
 
@@ -585,7 +639,7 @@ Z kreatora zachowujemy dokładnie dwie rzeczy, bo były jego realną wartością
 | TXT | `DelimitedTextImportProvider` | Core | Ten sam provider, inne domyślne opcje (separator TAB). |
 | CSV | `DelimitedTextImportProvider` | Core | Domyślnie `;` (locale PL) z auto-detekcją. |
 | XLSX | `XlsxImportProvider` | **`EmberTern.Office`** (D1 zatwierdzone) | Czytanie SAX-owe przez obecny `DocumentFormat.OpenXml`. |
-| XLS (BIFF8) | `XlsImportProvider` | `EmberTern.Office` | **Poza MVP** (D2 zatwierdzone) — etap I10. |
+| XLS (BIFF8) | `XlsImportProvider` | `EmberTern.Office` | Dostarczone w I10 (D2). Czytanie strumieniowe przez `ExcelDataReader` — jedyna zależność NuGet dołożona poza MVP. |
 
 ---
 
@@ -1539,7 +1593,7 @@ zielonymi testami, czystym smoke testem i commitem.
 | **I7** ✅ **DOSTARCZONY** | App: Podgląd + uruchomienie + raport — **pierwszy pełny przebieg** | Podgląd po konwersji (ciągły), `Waliduj`, tryby transakcji, `Importuj`/`F5`, postęp, anulowanie, raport, Commit/Rollback, eksport raportu, **zapis i przywracanie „ostatnio użytej" konfiguracji**. | **Import CSV → istniejąca tabela działa end-to-end na żywej bazie; druga sesja startuje z przywróconą konfiguracją.** Pierwszy etap z realną wartością dla użytkownika. **Spełnione** — +24 testy (5607 zielonych) oraz `tools/probes/DataImportRunProbe` **11/11 ALL PASS** na żywym FB5 (raport == `SELECT COUNT(*)`). |
 | **I8** ✅ **DOSTARCZONY** | Nowa tabela | `ColumnTypeInferencer` — **(I0/REK-7) domyślnie skanuje CAŁE źródło**, nie próbkę (limit bezpieczeństwa 1 M wierszy), bo w realnym pliku 2 z 5 kolumn były typowo mieszane (R19); siatka typów w sekcji Cel z **zawsze widoczną liczbą przeanalizowanych wierszy** w kolumnie „Podstawa"; podgląd DDL; wykonanie na linii Ddl; ostrzeżenie o nieodwracalności; opcja `DROP` przy niepowodzeniu. | Import do nieistniejącej tabeli działa; typy zachowawcze i edytowalne; DDL z tego samego generatora; **kolumna mieszana ląduje jako `VARCHAR`, nie jako `INTEGER` z bombą zegarową**. **Spełnione** — +86 testów (5693 zielone) oraz sekcja **G** w `DataImportRunProbe`: **20/20 ALL PASS** na żywym FB5, w tym dowód, że katalog oddaje dokładnie te typy, o które poprosiliśmy, i że Rollback cofa wiersze, a nie tabelę. |
 | **I9** | XLSX + zmiana nazwy projektu (D1) | `EmberTern.Export.Office` → **`EmberTern.Office`**; `XlsxImportProvider`; rozgałęzienie sekcji Format po `Capabilities`. **(I0/REK-6) Siedem wiążących wytycznych providera:** (1) **wyłącznie `OpenXmlReader` (SAX)** — DOM bierze 77× więcej pamięci (R8); (2) wartości umieszczane **po `CellReference`** — brakująca komórka środkowa jest NIEOBECNA, nie pusta, więc czytnik pozycyjny przesunąłby resztę wiersza o kolumnę (§0.1); (3) numer wiersza źródłowego **z `Row.RowIndex`** — puste wiersze są nieobecne, własny licznik skłamałby w raporcie (§0.6); (4) data = liczba + `numFmtId` daty (R3); (5) `SharedStringTable` czytana raz — Excel zapisuje teksty jako shared strings (rozmiar ∝ liczbie RÓŻNYCH tekstów); (6) `SheetDimension` **tylko jako wskazówka** postępu (bywa nieobecny); (7) formuła → wartość zbuforowana, a **komórka błędu → błąd wiersza** (+ opcja `ExcelErrorCellsAsNull`, R20). | Import plików z załączonych zrzutów daje identyczne dane. Eksport XLSX bez regresji. Pierwszy realny plik **z datami** obejrzany (luka pomiarowa R3). Po zamknięciu I9 `tools/probes/DataImportXlsxProbe` idzie do usunięcia. |
-| **I10** | Schowek + XLS | Schowek (App czyta, Core parsuje — zero nowego parsera). `XlsImportProvider` + zależność NuGet (D2). | Wklejenie z Excela importuje się bez zapisywania pliku. |
+| **I10** ✅ **DOSTARCZONY** | Schowek + XLS | Schowek (App czyta, Core parsuje — zero nowego parsera; **okazał się już zbudowany w I5**, etap dołożył dowody). `XlsImportProvider` (BIFF8) + zależność **`ExcelDataReader` 3.7.0, MIT** w `EmberTern.Office` (D2/R5) + `XlsCellReader` + wspólny `ExcelSerialDate`. Usunięta odmowa dla `.xls` i martwy już `ImportFormatNotYetSupportedFormat`. | Wklejenie z Excela importuje się bez zapisywania pliku. **Spełnione** — +22 testy (5785 zielonych) oraz sekcja **I** w `DataImportRunProbe`: **33/33 ALL PASS** na żywym FB5, w tym prawdziwy skoroszyt napisany przez Excela. R8 zmierzone przed implementacją: sterta **płaska 26,7 MB** przez 60 000 wierszy BIFF8. |
 | **I11** | Nazwane profile (UI) | Selektor profili w zarezerwowanym miejscu paska poleceń, `Zapisz jako…`, zmiana nazwy, usuwanie, opcjonalny eksport `.json`. **Zero zmian w modelach i w pipeline.** | Nazwany profil odtwarza cały import; niezgodności raportowane przez pasek gotowości (§4.8.5). |
 | **I12** | Domknięcie | Dokumentacja (`docs/history/`, `docs/gotchas.md`, CLAUDE.md w miejscu), audyt UI (obie palety, checklista), pomiar wydajności na 1 M wierszy. | Moduł zamknięty. |
 
@@ -1557,7 +1611,7 @@ choćby jednego modelu albo przebudowy sekcji UI, znaczy że §4.8 zostało naru
 | R2 | **Niejednoznaczność daty i liczby** (`03.04.2026`; `1,234`) | wysokie | ciche przekłamanie danych — najgorsza klasa błędu | §0.4: kultura jest jawna; auto-detekcja tylko proponuje; **ciągły podgląd po konwersji** pokazuje skutek natychmiast; konwerter odmawia zamiast zgadywać. |
 | R3 | **Daty w XLSX to liczby seryjne** (formatowanie w `numFmt`) — **potwierdzone (I0)**: `DataType` jest puste, wartość to numer seryjny, a „datowość" siedzi w `StyleIndex → CellFormat.NumberFormatId` (wbudowane 14–22 / 45–47 albo własny kod z `y`/`d`/`h`/`s`) | wysokie | „2026-07-24" wchodzi jako `46227` | Provider czyta `numFmtId`; przy niejednoznaczności zwraca liczbę **i mówi o tym** w podglądzie. ⚠ **Ograniczenie pomiaru: w pliku użytkownika nie było ANI JEDNEJ komórki daty**, więc obsługa dat jest zaprojektowana na arkuszu wygenerowanym, nie na wyjściu z Excela — pierwszy realny plik z datami trzeba obejrzeć w I9. |
 | R4 | **Długa transakcja** przy dużym pliku (własny detektor Session Managera to zgłosi) | średnie | blokady, ryzyko GC dla innych sesji | Tryb `Batched` z jawnym opisem skutku; **pozycja ostrzegawcza w pasku gotowości**, gdy szacowana liczba wierszy > progu (np. 100 k) w trybie jednotransakcyjnym. |
-| R5 | **`.xls` (BIFF8) wymaga nowej zależności** | pewne | brak zadeklarowanego źródła w MVP | **D2 zatwierdzone**: poza MVP; przy wyborze `.xls` w I9 komunikat „format nie jest jeszcze obsługiwany — zapisz jako .xlsx". Odmowa z powodem jest zgodna z §0; udawanie obsługi nie. |
+| R5 | ✅ **ZAMKNIĘTE (I10).** `.xls` (BIFF8) wymagało nowej zależności — i wymagało jej naprawdę: I0 zmierzył, że `DocumentFormat.OpenXml` nie otwiera takiego pliku w ogóle. | — | — | **D2 zrealizowane**: `ExcelDataReader` 3.7.0 (MIT, strumieniowy) w `EmberTern.Office` — jedynym projekcie, w którym zależność od formatu Office jest dozwolona. Do I10 obowiązywała odmowa z powodem, zgodna z §0; teraz format jest czytany naprawdę, a odmowa została zawężona do pliku, który **nie jest** tym, czym się przedstawia. |
 | R6 | **Triggery i generatory na tabeli docelowej** — `BEFORE INSERT` może nadpisać wartość, generator „przeskoczy" mimo Rollbacku | średnie | użytkownik nie rozumie wyniku | Sekcja Cel **wypisuje** aktywne triggery `BEFORE INSERT`; pasek gotowości daje pozycję ostrzegawczą; §0.5 mówi wprost, czego Rollback nie cofa. |
 | R7 | ✅ **ROZSTRZYGNIĘTE (I0) na korzyść paczek.** `FbBatchCommand` jest **16×** szybszy od pętli przygotowanej (~121 000 vs 7 313 rows/s) **i spełnił warunek blokujący**: podaje indeks błędnego wiersza wyrównany 1:1 z kolejnością dodania (`MultiError=true`), a `MultiError=false` zatrzymuje się **na** błędnym wierszu. Przyjmuje też BLOB-y ⇒ **żadnej ścieżki awaryjnej**. | — | 1 M wierszy: **~8 s** zamiast ~2,3 min | Paczki po 500 (REK-5); `MultiError` mapowany 1:1 na `ImportErrorPolicy`; `CommandLock` per paczka; postęp dławiony. Kontrakt `IImportWriter` skorygowany (REK-1, §4.3). Naiwna pętla (nowa komenda na wiersz) jest 2× gorsza od przygotowanej — nie używamy jej nigdzie. |
 | R8 | **Pamięć** — pokusa zmaterializowania pliku, by policzyć wiersze do procentu postępu. **Zmierzone (I0):** odczyt DOM-owy `.xlsx` bierze **300,5 MB** sterty na 100 000 wierszy, SAX-owy **3,9 MB** (**77×**) ⇒ DOM na 1 M wierszy to ~3 GB | średnie | OOM na dużym pliku | Pipeline strumieniowy bez wyjątków; **provider XLSX wyłącznie `OpenXmlReader`** (I9); postęp z **bajtów przeczytanych / rozmiaru** (pliki) albo licznik bez procentu (schowek); `SheetDimension` tylko jako wskazówka. Podgląd trzyma ≤200 wierszy. |

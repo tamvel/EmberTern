@@ -68,8 +68,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// memory (design R8); the preview is a diagnostic, not the data.</summary>
     public const int SourcePreviewRows = 200;
 
+    // The three readers this surface can hand a source to. They are ordinary objects with no state between
+    // reads, so one instance each is enough — and the ONE place a kind picks one is ProviderFor.
     private readonly IImportProvider _delimitedProvider = new DelimitedTextImportProvider();
-    private readonly IImportProvider _spreadsheetProvider = new XlsxImportProvider();
+    private readonly IImportProvider _xlsxProvider = new XlsxImportProvider();
+    private readonly IImportProvider _xlsProvider = new XlsImportProvider();
 
     /// <summary>Everything outside this surface, as delegates — so the VM stays testable without a database and
     /// no Firebird or Avalonia type reaches a ViewModel (rule #1).</summary>
@@ -1704,7 +1707,8 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// </summary>
     private IImportProvider ProviderFor(ImportConfiguration configuration) => configuration.Source.Kind switch
     {
-        ImportSourceKind.Xlsx => _spreadsheetProvider,
+        ImportSourceKind.Xlsx => _xlsxProvider,
+        ImportSourceKind.Xls => _xlsProvider,
         _ => _delimitedProvider,
     };
 
@@ -1717,18 +1721,6 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
         var path = configuration.Source.Path;
         if (string.IsNullOrWhiteSpace(path) || !_sourceExists) return null;
-
-        // .xls (BIFF8) has no provider until etap I10 — I0 measured that DocumentFormat.OpenXml simply cannot
-        // open it (FileFormatException), so reading it needs a different library. Refusing with a reason is
-        // §0-compliant; pretending to read it would not be. (.xlsx became readable in I9.)
-        if (configuration.Source.Kind is ImportSourceKind.Xls)
-        {
-            SetStatus(
-                string.Format(CultureInfo.CurrentCulture, UiStrings.ImportFormatNotYetSupportedFormat, Path.GetExtension(path)),
-                MessageSeverity.Warning);
-            _sourceReadable = false;
-            return null;
-        }
 
         return new FileImportSource(path);
     }

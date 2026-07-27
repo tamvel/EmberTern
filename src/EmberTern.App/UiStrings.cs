@@ -190,8 +190,10 @@ internal static class UiStrings
     public const string ImportSummaryNoHeader = "no header";
     public const string ImportFileFactsFormat = "{0:N1} KB · {1:g}";
     public const string ImportFileMissing = "file not found";
-    public const string ImportFormatNotYetSupportedFormat =
-        "{0} files are not supported yet — this build imports delimited text (CSV / TXT / clipboard). Spreadsheet support arrives in a later etap.";
+    // (There is deliberately no "format not supported yet" string any more. It refused .xls until etap I10 gave
+    // that format a provider, and every source kind the surface can resolve now has one — a message for a state
+    // that can no longer occur is worse than none, because the next reader of the code has to work out when it
+    // fires before discovering it never does.)
 
     // Readiness strip.
     public const string ImportReadinessHeader = "Ready:";

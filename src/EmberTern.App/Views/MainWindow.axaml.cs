@@ -644,8 +644,6 @@ public partial class MainWindow : Window
             FileTypeFilter = new[]
             {
                 new FilePickerFileType("CSV / TXT") { Patterns = new[] { "*.csv", "*.txt", "*.tsv" } },
-                // Offered so a user who picks one gets the module's honest "not yet supported" answer
-                // rather than a file-type filter that silently pretends the format does not exist.
                 new FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx", "*.xls" } },
                 FilePickerFileTypes.All,
             },

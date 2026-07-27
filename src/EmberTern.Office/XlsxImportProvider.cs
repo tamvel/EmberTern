@@ -209,9 +209,14 @@ public sealed class XlsxImportProvider : IImportProvider
     /// ⚠ Found by running this provider over the machine's real spreadsheets: a file NAMED <c>.xlsx</c> is not
     /// necessarily one. An old workbook saved under the new extension is still BIFF, and
     /// <c>SpreadsheetDocument.Open</c> answers with <c>FileFormatException: File contains corrupted data</c> —
-    /// which reads as "your file is damaged" when the true answer is "this is the old format, and I0 measured
-    /// that this library cannot read it at all" (findings §3.5). Saying so is the honest refusal §0 asks for;
-    /// passing the raw message on is not.
+    /// which reads as "your file is damaged" when the true answer is "this is the old format" (findings §3.5).
+    /// Saying so is the honest refusal §0 asks for; passing the raw message on is not.
+    /// </para>
+    /// <para>
+    /// The advice changed in etap I10 and the reason is worth keeping: until then the old format could not be
+    /// read at all, so the only way forward was Save As. <see cref="XlsImportProvider"/> reads it now, so the
+    /// cheaper answer — rename the file to <c>.xls</c> — comes first. A refusal that still recommends the long
+    /// way round after the short one exists is a message that has quietly stopped being true.
     /// </para>
     /// </summary>
     private static SpreadsheetDocument Open(Stream stream, IImportSource source)
@@ -224,8 +229,8 @@ public sealed class XlsxImportProvider : IImportProvider
         {
             throw new InvalidDataException(
                 $"'{source.DisplayName}' is not a readable .xlsx workbook. A file saved in the older Excel " +
-                "format keeps working under an .xlsx name, but it cannot be read as one — open it in Excel " +
-                "and use Save As to write a real .xlsx.",
+                "format keeps working under an .xlsx name, but it cannot be read as one — rename it to .xls, " +
+                "which EmberTern imports, or open it in Excel and use Save As.",
                 ex);
         }
     }

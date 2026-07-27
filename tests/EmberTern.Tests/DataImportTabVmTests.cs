@@ -313,6 +313,33 @@ public class DataImportTabVmTests : IDisposable
         return path;
     }
 
+    /// <summary>The same two rows as <see cref="WriteWorkbook"/>, in the legacy BIFF8 container — so the two
+    /// spreadsheet formats are asked literally the same question and any difference in the answer is the
+    /// provider's, not the fixture's. NPOI writes it; nothing in <c>src/</c> uses NPOI.</summary>
+    private string WriteLegacyWorkbook(string name)
+    {
+        var path = Path.Combine(_dir, name);
+
+        var workbook = new NPOI.HSSF.UserModel.HSSFWorkbook();
+        var sheet = workbook.CreateSheet("Arkusz1");
+
+        var header = sheet.CreateRow(0);
+        header.CreateCell(0).SetCellValue("Indeks");
+        header.CreateCell(1).SetCellValue("Nazwa");
+
+        var first = sheet.CreateRow(1);
+        first.CreateCell(0).SetCellValue(1d);
+        first.CreateCell(1).SetCellValue("abc");
+
+        var second = sheet.CreateRow(2);
+        second.CreateCell(0).SetCellValue(2d);
+        second.CreateCell(1).SetCellValue("def");
+
+        using var output = File.Create(path);
+        workbook.Write(output, leaveOpen: true);
+        return path;
+    }
+
     /// <summary>
     /// ⭐ A record that disagrees with the rest of the file about its field count is the instant tell for a
     /// wrong separator — marking it beats making the user count columns (§3.6).
@@ -384,25 +411,104 @@ public class DataImportTabVmTests : IDisposable
     }
 
     /// <summary>
-    /// A format with no provider yet is REFUSED WITH A REASON. Pretending to read it, or hiding it from the file
-    /// filter and leaving the user guessing, would both be worse (§0 / decision D2).
+    /// ⭐ Etap I10 — the legacy format joins on the same terms .xlsx did in I9: a third reader behind the ONE
+    /// factory, and nothing else on the surface knows. Values arrive NATIVE here too.
     /// <para>
-    /// ⚠ Narrowed from <c>.xlsx</c> to <c>.xls</c> in etap I9, when <c>.xlsx</c> gained a provider. Deliberately
-    /// NOT deleted: the refusal is still the correct behaviour for BIFF8 until I10, and I0 measured why —
-    /// <c>DocumentFormat.OpenXml</c> cannot open such a file at all (<c>FileFormatException</c>), so reading it
-    /// needs a different library rather than a different code path.
+    /// ⚠ This test REPLACED one asserting the opposite. Until I10 a <c>.xls</c> was refused with a reason,
+    /// which was the correct behaviour while the format had no provider — the refusal was narrowed in I9 rather
+    /// than deleted, and now that BIFF8 is genuinely readable the refusal itself is gone. What survives is the
+    /// case below: a file that is not what its extension claims still gets an honest answer.
     /// </para>
     /// </summary>
     [Fact]
-    public async Task AFormatWithNoProviderYet_IsRefusedWithAReason_NotSilentlyIgnored()
+    public async Task ChoosingALegacyWorkbook_ReadsItThroughTheSameSurface()
+    {
+        var vm = Vm();
+        vm.Source.FilePath = WriteLegacyWorkbook("in.xls");
+        await SettleAsync(vm);
+
+        Assert.False(vm.HasStatusMessage);
+        Assert.Equal(new[] { "Indeks", "Nazwa" }, vm.PreviewFields.Select(f => f.Name));
+        Assert.Equal(2, vm.PreviewRows.Count);
+        Assert.Equal(2, vm.PreviewRows[0].SourceRowNumber);
+        Assert.Equal(1d, vm.PreviewRows[0].ValueAt(0));
+        Assert.Equal("abc", vm.PreviewRows[0].ValueAt(1));
+    }
+
+    /// <summary>The legacy reader answers the same capability question the .xlsx one does — which is why the
+    /// Format section needed no change at all for a second spreadsheet format (§3.3).</summary>
+    [Fact]
+    public async Task ALegacyWorkbook_OffersSheets_AndNoSeparators()
+    {
+        var vm = Vm();
+        vm.Source.FilePath = WriteLegacyWorkbook("in.xls");
+        await SettleAsync(vm);
+
+        Assert.False(vm.Source.SupportsDelimiters);
+        Assert.False(vm.Source.SupportsEncoding);
+        Assert.True(vm.Source.SupportsSheets);
+        Assert.Equal("Arkusz1", Assert.Single(vm.Source.Sheets).Name);
+    }
+
+    /// <summary>
+    /// A file that is not what its extension claims is REFUSED WITH A REASON — never read as something else and
+    /// never passed through in silence (§0). The message has to name the file, because "invalid file signature"
+    /// on its own is not something a user can act on.
+    /// </summary>
+    [Fact]
+    public async Task AFileThatIsNotReallyAWorkbook_IsRefusedWithAReason_NotSilentlyIgnored()
     {
         var vm = Vm();
         vm.Source.FilePath = WriteFile("book.xls", "not really a workbook");
         await SettleAsync(vm);
 
         Assert.True(vm.HasStatusMessage);
-        Assert.Equal(MessageSeverity.Warning, vm.StatusSeverity);
-        Assert.Contains(".xls", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("book.xls", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// ⭐ §1.5 — the clipboard is not a second parser, it is a different ORIGIN for the one text reader. Pasting
+    /// from Excel produces TAB-separated text, which is the realistic case this etap is about: the surface reads
+    /// it with no file on disk, and the separator is DETECTED rather than assumed (§0.4 — detection proposes).
+    /// </summary>
+    [Fact]
+    public async Task PastingFromExcel_ImportsWithoutAFileOnDisk()
+    {
+        var vm = Vm();
+        vm.ClipboardReadRequested += () => Task.FromResult<string?>("Indeks\tNazwa\r\n1\tabc\r\n2\tdef\r\n");
+
+        await vm.UseClipboardCommand.ExecuteAsync(null);
+        await SettleAsync(vm);
+
+        Assert.False(vm.Source.UseFile);
+        Assert.Equal(new[] { "Indeks", "Nazwa" }, vm.PreviewFields.Select(f => f.Name));
+        Assert.Equal(2, vm.PreviewRows.Count);
+        Assert.Equal("abc", vm.PreviewRows[0].ValueAt(1));
+        Assert.Equal(ImportSourceKind.Clipboard, vm.BuildConfiguration().Source.Kind);
+    }
+
+    /// <summary>
+    /// ⚠ The clipboard's TEXT is never part of the configuration (§4.8.2): a profile stores DECISIONS, not the
+    /// data they were made about. Saving the pasted rows into a profile would quietly turn a reusable setup
+    /// into a snapshot of one afternoon's clipboard.
+    /// </summary>
+    [Fact]
+    public async Task TheClipboardsText_IsNotPartOfTheConfiguration()
+    {
+        var vm = Vm();
+        vm.ClipboardReadRequested += () => Task.FromResult<string?>("Indeks\tNazwa\r\n1\tabc\r\n");
+
+        await vm.UseClipboardCommand.ExecuteAsync(null);
+        await SettleAsync(vm);
+
+        var configuration = vm.BuildConfiguration();
+        Assert.Null(configuration.Source.Path);
+
+        // A second surface given the same configuration has no rows until the user pastes again — which is the
+        // honest state, not a bug.
+        var reloaded = Vm();
+        reloaded.ApplyConfiguration(configuration);
+        Assert.Equal(string.Empty, reloaded.Source.ClipboardText);
     }
 
     [Theory]

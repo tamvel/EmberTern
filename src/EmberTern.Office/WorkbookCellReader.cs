@@ -16,10 +16,6 @@ namespace EmberTern.Office;
 /// </summary>
 internal sealed class WorkbookCellReader
 {
-    /// <summary>Excel serial 61 is 1900-03-01, the first day on which Excel's calendar and
-    /// <see cref="DateTime.FromOADate"/> agree. See <see cref="FromSerial"/>.</summary>
-    private const double FirstUnambiguousSerial = 61d;
-
     private readonly IReadOnlyList<string> _sharedStrings;
     private readonly bool[] _styleIsDate;
     private readonly bool _datesAsDates;
@@ -139,43 +135,11 @@ internal sealed class WorkbookCellReader
         // the preview shows it as one, rather than a date being guessed into existence.
         if (_datesAsDates && IsDateStyle(cell.StyleIndex?.Value))
         {
-            return FromSerial(number);
+            return ExcelSerialDate.FromSerial(number);
         }
 
         return number;
     }
-
-    /// <summary>
-    /// Excel's serial number → a CLR value.
-    /// <para>
-    /// ⚠ Excel and <see cref="DateTime.FromOADate"/> do not share an epoch below 1900-03-01: Excel's serial 1 is
-    /// 1900-01-01 while OLE's is 1899-12-31, and Excel additionally carries the phantom 1900-02-29 (serial 60)
-    /// that never existed. Blindly calling <c>FromOADate</c> would shift every January/February 1900 date by a
-    /// day — silently. So the pre-1900-03-01 range is corrected explicitly, and the phantom day is refused: it
-    /// stays a number, which the converter will reject for a DATE column with an honest message rather than
-    /// inventing a date that has no calendar (§0.1).
-    /// </para>
-    /// </summary>
-    private static object FromSerial(double serial)
-    {
-        // A pure time of day (Excel formats 45–47): no date part at all, so a TimeSpan says exactly that. The
-        // converter maps it straight onto a TIME column.
-        if (serial >= 0d && serial < 1d) return TimeSpan.FromDays(serial);
-
-        if (serial >= FirstUnambiguousSerial)
-        {
-            return IsRepresentable(serial) ? DateTime.FromOADate(serial) : serial;
-        }
-
-        // 1 ≤ serial < 60 — before the phantom day, so Excel is exactly one ahead of OLE.
-        if (serial >= 1d && serial < 60d) return DateTime.FromOADate(serial + 1d);
-
-        // serial < 0, or the phantom 1900-02-29. Not a date we can name truthfully.
-        return serial;
-    }
-
-    private static bool IsRepresentable(double serial)
-        => serial <= 2958465.9999999d; // 9999-12-31, FromOADate's upper bound
 
     private bool IsDateStyle(uint? styleIndex)
     {

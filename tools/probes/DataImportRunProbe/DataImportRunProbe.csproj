@@ -43,4 +43,10 @@
     <ProjectReference Include="..\..\..\src\EmberTern.Office\EmberTern.Office.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Etap I10 (section I): a WRITER for the legacy BIFF8 container, so the section can build a .xls the way
+         section H builds a .xlsx. The product reads .xls with ExcelDataReader; nothing in src/ uses NPOI. -->
+    <PackageReference Include="NPOI" Version="2.7.2" />
+  </ItemGroup>
+
 </Project>
