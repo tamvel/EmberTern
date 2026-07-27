@@ -1,0 +1,277 @@
+# Mechanizm metadanych — analiza, pomiary i rekomendacja
+
+**Zlecone przez użytkownika 2026-07-27, przed etapem I9. Dokument ANALITYCZNY — zero zmian w implementacji.**
+Powstał, bo objawy zgłoszone przy okazji Data Import wyglądały na problem szerszy niż jeden moduł, a
+użytkownik wprost odrzucił „doklejanie kolejnego `Refresh()`" na rzecz poprawy u źródła.
+
+Wszystkie liczby pochodzą z pomiaru, nie z lektury kodu — narzędzie: `tools/probes/MetadataPerfProbe`.
+
+---
+
+## 0. Wniosek w trzech zdaniach
+
+**Baza nie jest wąskim gardłem.** Odczyt całego katalogu schematu o rozmiarze produkcyjnym (2 400 tabel)
+kosztuje **~172 ms** — i dzieje się poza wątkiem UI. Kosztem, który użytkownik odczuwa jako zawieszenie, jest
+**projekcja drzewa na płaską listę sidebara: ~1 142 ms na wątku UI przy jednej rozwiniętej kategorii**,
+ponieważ podmiana liści kategorii jest operacją **kwadratową** względem liczby obiektów. Ten sam kod zawiera
+już gotowe zabezpieczenie przed tym zjawiskiem (`BeginUpdate`/`EndUpdate`) — założone wyłącznie na ścieżce
+filtrowania, a nie na ścieżce ładowania.
+
+---
+
+## 1. Odpowiedzi na zadane pytania
+
+### 1.1. Jak wygląda przepływ budowania i odświeżania drzewa
+
+```
+POŁĄCZENIE
+  ConnectionNodeViewModel.OnIsConnectedChanged
+    └─ _ = LoadCategoriesAsync()                     ← fire-and-forget, nie blokuje połączenia
+         ├─ tworzy 13 węzłów kategorii (CategoryOrder)
+         └─ dla KAŻDEJ z 13 kategorii, SEKWENCYJNIE:
+              await MetadataExplorerViewModel.LoadGroupAsync(kategoria)
+                ├─ FirebirdMetadataReader.ListAsync(kind)      ← 1 zapytanie, PEŁNA lista
+                ├─ group.SetLeaves(...)                        ← ⚠ tworzy N VM-ów, N× Children.Add
+                ├─ group.MarkLoaded()                          ← od tej chwili IsLoaded = true
+                └─ RaiseObjectsChanged()                       ← sygnał do edytorów (koalescowany)
+         └─ NotifyMetadataReady()                              ← pełna przebudowa modelu semantycznego
+
+ODŚWIEŻENIE (ręczne albo po DDL)
+  MetadataExplorerViewModel.RefreshAsync()
+    └─ dla KAŻDEJ kategorii, SEKWENCYJNIE:
+         IsLoaded || IsExpanded ?  LoadGroupAsync(...)   ← pełna lista + pełna podmiana liści
+                                :  LoadCountAsync(...)   ← samo COUNT(*)
+    ├─ InvalidateNameCache()
+    └─ ApplyFilterAsync()                                ← pełna reprojekcja (Rows.Clear + wstaw wszystko)
+```
+
+⚠ **Kluczowa obserwacja o gałęzi `IsLoaded || IsExpanded`.** Komentarz przy `RefreshAsync` opisuje model
+leniwy („kategoria jest albo ZAŁADOWANA, albo pokazuje tylko licznik"), ale prefetch przy połączeniu ładuje
+**wszystkie** kategorie i każda dostaje `MarkLoaded()`. W praktyce więc **gałąź `LoadCountAsync` nigdy nie
+jest wykonywana**, a każde odświeżenie to **pełny odczyt całego katalogu**. Dwa miejsca opisują dwa różne
+modele; wygrywa prefetch.
+
+### 1.2. Czy za każdym razem wykonywany jest pełny odczyt całego katalogu
+
+**Tak.** Zarówno przy połączeniu, jak i przy każdym odświeżeniu: 13 zapytań, każde zwracające pełną listę
+nazw swojej kategorii. Nie ma pojęcia „co się zmieniło" — jest wyłącznie „przeczytaj wszystko jeszcze raz".
+
+**Wywołań `Metadata.RefreshAsync()` jest w aplikacji 20.** Każda operacja DDL (compile, drop, rename,
+recompile grupy, commit transakcji, która ruszyła schemat) uruchamia pełną przebudowę. To jest dokładnie ten
+wzorzec, o którym użytkownik napisał, że nie chce go dalej powielać — i miał rację, bo dodanie 21. wywołania
+dla Data Import rozwiązałoby objaw 1 kosztem pogłębienia przyczyny objawu 2.
+
+### 1.3. Co dzieje się na wątku UI
+
+| Operacja | Wątek | Uwaga |
+|---|---|---|
+| `ListAsync` / `CountAsync` — I/O do bazy | **pula wątków** | prawdziwie asynchroniczne, nie blokuje |
+| kontynuacje po `await` | **UI** | wszędzie `ConfigureAwait(true)` — świadome, VM-y muszą być na UI |
+| tworzenie N `MetadataNodeViewModel` | **UI** | ~2 400 obiektów na kategorię; koszt pomijalny |
+| ⚠ **`SetLeaves` → `Children.Clear()` + N× `Add`** | **UI** | ⭐ **to jest koszt — patrz §2** |
+| ⚠ **reprojekcja `SidebarFlatController`** | **UI** | wywoływana **raz na każdy `Add`** |
+| `ApplyFilterAsync` → `EndUpdate` → `Rebuild()` | **UI** | pełny `Rows.Clear()` + ponowne wstawienie |
+
+### 1.4. Czy istnieje cache i kiedy jest unieważniany
+
+Cache **obiektowego** katalogu **nie istnieje**. Są trzy rzeczy, które go przypominają, ale nim nie są:
+
+| Mechanizm | Co trzyma | Unieważnienie |
+|---|---|---|
+| `MetadataNodeViewModel.IsLoaded` + `_allLeaves` | listę liści kategorii | całkowita podmiana przy każdym `LoadGroupAsync` |
+| `MetadataExplorerViewModel._nameCache` | indeks nazw dla filtra / type-ahead | `InvalidateNameCache()` przy każdym `RefreshAsync` |
+| `_objectsGeneration` | licznik pokoleń dla edytorów | inkrementowany przy każdym załadowaniu kategorii |
+
+Czyli: dane są trzymane, ale **jedyną operacją unieważnienia jest „wyrzuć wszystko i przeczytaj od nowa"**.
+Nie ma protokołu „ten jeden obiekt jest nieaktualny".
+
+### 1.5. Czy da się odświeżać tylko zmieniony fragment
+
+**Tak — i w kodzie istnieje już działający precedens.**
+`MetadataExplorerViewModel.ApplyTriggerActiveStateInPlace` (linie 217–248) aktualizuje stan aktywności
+triggerów **w miejscu**, bez `RefreshAsync`. Jego komentarz nazywa dokładnie te korzyści, o które chodzi:
+
+> *„No collection change → no reproject, so the sidebar keeps its scroll position, selection, and expanded
+> groups (the whole point: single/batch trigger ops no longer make the tree jump)."*
+
+Ktoś już raz zdiagnozował ten problem i rozwiązał go dla jednego przypadku. Brakuje **uogólnienia**: pojęcia
+„dodano / usunięto / zmieniono obiekt X rodzaju Y" jako pierwszorzędnej rzeczy, którą operacja DDL zgłasza,
+a drzewo stosuje punktowo.
+
+### 1.6. Główny koszt startu i ręcznego odświeżania
+
+**Ręczne odświeżanie: zmierzone i rozstrzygnięte — to projekcja, nie baza.** Szczegóły w §2.
+
+**Start aplikacji: nie rozstrzygnięty, i mówię to wprost.** Zmierzyłem dwa podejrzane składniki i **żaden nie
+tłumaczy widocznej fazy budowania**: katalog to ~172 ms poza wątkiem UI, a projekcja przy **zwiniętych**
+kategoriach to **5 ms** (reprojekcja ma wczesne wyjście, gdy właściciel nie jest rozwinięty — patrz §2).
+Zostają kandydaci, których nie zmierzyłem: przebudowa modelu semantycznego + „warm" w otwartych edytorach po
+`NotifyMetadataReady`, oraz odtwarzanie zakładek przestrzeni roboczej. **Rekomendowany następny krok jest
+tani i już wbudowany** — patrz §5.
+
+---
+
+## 2. ⭐ Pomiar rozstrzygający: projekcja jest kwadratowa
+
+### Mechanizm
+
+`MetadataNodeViewModel.SetLeaves` podmienia liście przez `Children.Clear()`, a potem **`Children.Add(leaf)`
+po jednym**. `Children` to `ObservableCollection`, więc każdy `Add` emituje `CollectionChanged`, który łapie
+`SidebarFlatController.OnChildrenChanged` — a ten, **gdy kategoria jest rozwinięta**, robi:
+
+```csharp
+int i = IndexOfNode(owner);        // liniowe przeszukanie CAŁEJ listy Rows
+RemoveDescendants(i, row.Depth);   // usuwa WSZYSTKIE dotychczasowe liście, po jednym
+foreach (var child in ChildrenOf(owner))
+    at = InsertNode(at, child, ...);   // wstawia WSZYSTKIE z powrotem, po jednym
+```
+
+Czyli przy N obiektach: N zdarzeń × pełne przepięcie bloku N liści = **Θ(N²) operacji na liście i Θ(N²)
+powiadomień do kontrolki ListBox** — wszystko na wątku UI.
+
+### Liczby (pomiar prawdziwym `SidebarFlatController`, bez Avalonii)
+
+| liści | dziś (ms) | operacji na wierszach | powiadomień | pod istniejącą blokadą `BeginUpdate` (ms) |
+|---:|---:|---:|---:|---:|
+| 100 | 3,1 | 10 100 | 10 000 | 0,2 |
+| 250 | 11,0 | 62 750 | 62 500 | 0,1 |
+| 500 | 41,3 | 250 500 | 250 000 | 0,1 |
+| 1 000 | 213,1 | 1 001 000 | 1 000 000 | 0,4 |
+| **2 400** | **878,5** | **5 762 400** | **5 760 000** | **0,4** |
+
+Kwadratowość widać wprost: 4× więcej obiektów → ~16× dłużej.
+
+### Pełne odświeżenie, tak jak je odczuwa użytkownik
+
+| rozwiniętych kategorii | koszt projekcji jednego `RefreshAsync` |
+|---:|---:|
+| 0 | **5 ms** |
+| 1 | **1 142 ms** |
+| 2 | **1 433 ms** |
+
+**To jest zgłoszone „przywieszenie".** Występuje tylko przy rozwiniętej kategorii, co dokładnie zgadza się z
+objawem: użytkownik ma otwarte Tabele, usuwa tabelę → `RefreshAsync` → ponad sekunda na wątku UI.
+
+⭐ **Zabezpieczenie już istnieje w tym samym pliku.** `BeginUpdate`/`EndUpdate` wstrzymuje reprojekcję na czas
+masowej zmiany i przelicza raz. Jego komentarz nazywa problem po imieniu — *„an O(n²) storm"* — ale założono
+je **wyłącznie** wokół filtrowania (`MetadataExplorerViewModel:598`). Ścieżka ładowania go nie używa.
+
+---
+
+## 3. Pomiar drugi: katalog
+
+Schemat testowy: 2 400 tabel, 200 widoków, 400 procedur, 1 200 triggerów (FB5 `WI-V5.0.3.1683`).
+
+| kategoria | obiektów | `COUNT(*)` ms | pełna lista ms |
+|---|---:|---:|---:|
+| Table | 2 400 | 3,7 | 32,0 |
+| View | 200 | 3,0 | 6,0 |
+| Procedure | 400 | 2,3 | 4,8 |
+| Trigger | 1 200 | 2,2 | 13,8 |
+| Domain | 0 | 7,2 | **79,1** |
+| User | 5 | **48,3** | 21,3 |
+| Index | 0 | 3,0 | 18,9 |
+| pozostałe (6) | 0–56 | ~1,6–2,9 | ~1,4–4,5 |
+| **RAZEM (13)** | | **~80 ms** | **~172 ms** |
+
+Jedno okrążenie do katalogu kosztuje **~2,7 ms** — to podłoga dla dowolnego odświeżenia punktowego.
+
+**Wnioski.**
+- Pełny odczyt katalogu jest **tani** i rośnie liniowo. Stosunek „tylko liczniki" do „pełne listy" to zaledwie
+  **2,2×**, więc rezygnacja z prefetchu sama w sobie niewiele by dała.
+- Dwie kategorie odstają i są warte uwagi niezależnie: **Domain** (79 ms — `RDB$FIELDS` zawiera anonimową
+  domenę podkładową dla **każdej kolumny w bazie**, więc rośnie z liczbą kolumn, nie domen) i **User**
+  (48 ms — `SEC$USERS` to wywołanie do bazy bezpieczeństwa).
+
+⚠ **Granica tego pomiaru, powiedziana wprost:** schemat testowy ma mało indeksów, generatorów i domen. Realna
+baza ERP ma ich tysiące, więc **172 ms to podłoga, nie prawda o Państwa bazie**. Kształt wniosku (katalog
+liniowy i tani, projekcja kwadratowa i droga) się nie zmienia, bo dzieli je ponad rząd wielkości.
+
+---
+
+## 4. Dlaczego nowa tabela się nie pojawia (objaw 1)
+
+Nie ma tu żadnej zagadki i **nie jest to problem wydajnościowy**: Data Import wykonuje `CREATE TABLE` na linii
+Ddl i **nigdy nie zawiadamia drzewa**. Pozostałe ścieżki DDL robią to jawnie (20 wywołań `RefreshAsync`), a
+SQL Editor przez zaczep na zatwierdzeniu transakcji (`if (settled && schemaChanged)`).
+
+**Nie rekomenduję dopisania 21. wywołania.** Byłoby to poprawne w minutę i pogłębiłoby przyczynę objawu 2:
+utworzenie jednej tabeli kosztowałoby ponad sekundę zamrożonego UI i skok drzewa. Właściwe rozwiązanie jest w
+§5, Warstwa 2, i przy okazji jest **tańsze** niż pełne odświeżenie.
+
+---
+
+## 5. Rekomendacja
+
+Trzy warstwy, celowo rozdzielone: pierwsza to naprawa błędu, druga to brakujące pojęcie architektoniczne,
+trzecia to higiena. **Każda ma wartość osobno** — nie trzeba brać ich w komplecie.
+
+### Warstwa 1 — założyć istniejącą blokadę na ścieżkę ładowania *(mały zakres, największy zysk)*
+
+Podmiana liści to masowa mutacja i powinna być objęta tym samym `BeginUpdate`/`EndUpdate`, którym objęte jest
+filtrowanie. **Zmierzony efekt: 1 142 ms → ~5 ms.**
+
+- To **nie jest zmiana architektury** — to zastosowanie istniejącego zabezpieczenia w drugim miejscu.
+- Ryzyko niskie i znane: `EndUpdate` robi pełną reprojekcję, więc lista przewinie się na górę. Dlatego
+  Warstwa 1 **nie zastępuje** Warstwy 2 — usuwa zawieszenie, nie usuwa „skakania" drzewa.
+- Naturalne domknięcie: `SetLeaves` mógłby wymieniać zawartość jednym powiadomieniem zamiast N.
+
+### Warstwa 2 — ⭐ wprowadzić „co się zmieniło" jako pierwszorzędne pojęcie *(to jest naprawa u źródła)*
+
+Dziś aplikacja umie powiedzieć drzewu wyłącznie *„coś się stało, przeczytaj wszystko"*. Brakuje pojęcia
+zmiany: rodzaj + nazwa + `Added` / `Removed` / `Altered`. Operacja DDL zgłasza taką zmianę, a eksplorator
+**stosuje ją punktowo**: wstawia jeden liść w posortowane miejsce, usuwa jeden, poprawia licznik kategorii.
+
+- **Precedens już działa** — `ApplyTriggerActiveStateInPlace` robi dokładnie to dla stanu aktywności triggerów
+  i jego komentarz wymienia zyski: zachowane przewinięcie, zaznaczenie i rozwinięcie. Warstwa 2 to
+  uogólnienie tego, co ktoś już raz odkrył.
+- **Koszt:** jedno wstawienie do listy zamiast 5,76 mln operacji. Bez okrążenia do bazy, bo operacja DDL **wie**,
+  co zrobiła.
+- **To rozwiązuje objaw 1 właściwie:** Data Import zgłasza „dodano tabelę X" zamiast wywoływać `Refresh()`.
+- **Pełne odświeżenie zostaje** — jako jawne polecenie użytkownika i awaryjne wyjście, gdy zmiana nie jest
+  znana (skrypt, zewnętrzna modyfikacja bazy). Przestaje być domyślną reakcją na wszystko.
+- ⚠ **Uczciwa granica:** ten model zakłada, że aplikacja wie, co zrobiła. Dla Script Executora, `EXECUTE
+  STATEMENT` i zmian z zewnątrz nadal potrzebne jest pełne odświeżenie — i to jest w porządku, bo po Warstwie 1
+  będzie ono tanie.
+
+### Warstwa 3 — higiena, do rozważenia niezależnie
+
+1. **Uzgodnić prefetch z `RefreshAsync`.** Dziś jedno miejsce ładuje wszystko, a drugie opisuje model leniwy,
+   którego gałąź `LoadCountAsync` jest martwa. Niezależnie od wybranego modelu — powinien być jeden.
+2. **Kategoria Domain** kosztuje 79 ms, bo `RDB$FIELDS` zawiera anonimową domenę na każdą kolumnę bazy.
+   Warunek `NOT STARTING WITH 'RDB$'` jest już po stronie serwera; to koszt skanu, nie transferu. Wart
+   sprawdzenia na realnej bazie — może okazać się największą pojedynczą pozycją.
+3. **Kategoria User** (48 ms) odpytuje bazę bezpieczeństwa. Można ją ładować leniwie, bo prawie nikt jej nie
+   rozwija.
+
+### Kolejność, którą rekomenduję
+
+**Warstwa 1 → pomiar na realnej bazie (§6) → Warstwa 2.** Warstwa 1 jest tania i zdejmuje ból natychmiast;
+pomiar na realnej bazie ustali resztę kosztu startu, zanim zapadną decyzje projektowe; Warstwa 2 jest właściwą
+naprawą i zasługuje na własny etap z własnym projektem, a nie na doklejenie do I9.
+
+**Nie rekomenduję** dopisywania odświeżenia po imporcie jako osobnej poprawki. Objaw 1 poczeka na Warstwę 2 —
+jest kosmetyczny (ręczne odświeżenie działa), a naprawiony punktowo utrwaliłby wzorzec, który jest przyczyną.
+
+---
+
+## 6. Czego NIE zmierzyłem i jak to domknąć
+
+**Koszt startu na realnej bazie pozostaje nieustalony.** Nie zgaduję — aplikacja ma już wbudowany instrument,
+wystarczy go włączyć:
+
+```bash
+set EMBERTERN_PERF_DIAG=1
+```
+
+Po uruchomieniu i połączeniu w `%TEMP%\EmberTern-debug.log` pojawią się linie:
+
+- `PERF [category-load] … countFetchMs=… managedHeapKB=…` — całkowity czas prefetchu wszystkich kategorii,
+- `PERF [group-load] kind=… leaves=… loadMs=…` — czas na kategorię.
+
+Jeżeli suma `group-load` jest zbliżona do zmierzonych ~172 ms, koszt startu leży **poza** mechanizmem
+metadanych (najpewniej w przebudowie modelu semantycznego edytorów po `NotifyMetadataReady`) i tam należy
+szukać dalej. Jeżeli jest wielokrotnie większa — decyduje rozmiar katalogu i wtedy sensu nabiera Warstwa 3.
+
+**Narzędzie pomiarowe:** `tools/probes/MetadataPerfProbe` (poza rozwiązaniem, jak pozostałe sondy). Buduje
+własną bazę scratch na ścieżce ASCII (#149), nigdy nie dotyka bazy laboratoryjnej. Część B nie wymaga serwera.
