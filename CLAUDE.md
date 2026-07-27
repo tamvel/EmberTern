@@ -320,8 +320,14 @@ noted.
   the same configuration/results principle carried to its end: the statement is an *artefact* of the
   configuration, so it belongs with Source preview / Preview after conversion / Errors / Report. It is **live**
   (rendered from `CreateTableSql`, computed through the same `ImportNewTable.BuildCreateSql` the run calls), so
-  there is no button, no command and no „is it showing" state to keep in sync; `SelectableTextBlock` covers
-  copying. Last on the strip on purpose — a hidden tab still holds its index and the run reveals Report by index.
+  there is no button, no command and no „is it showing" state to keep in sync. Last on the strip on purpose —
+  a hidden tab still holds its index and the run reveals Report by index.
+  **⭐ It renders through the SAME read-only SQL surface as the other eleven DDL previews** — an
+  `AvaloniaEdit.TextEditor` + `SqlEditorBehavior.AttachReadOnlyHighlighting` (shared XSHD lexical layer + the
+  semantic accent layer from the one language front-end), **never a second renderer**. A plain text block had
+  made this the only place in the application showing colourless SQL. Read-only in the strict sense the seam
+  guarantees (no completion, no squiggles, no ergonomics); no line numbers; text **pushed** from the VM, since
+  a two-way `TextEditor.Text` binding is flaky — the same workaround every DDL preview uses.
   ⚠ **Two worse answers came first and neither should be retried.** Disclosed *inline* in the types column, it
   complicated that column permanently for something read rarely. Opened in the **SQL Editor**, it was technically
   clean but a **UX regression the user rejected**: the DDL is part of configuring *this* import, so reaching it

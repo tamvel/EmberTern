@@ -727,7 +727,23 @@ Konsekwencje, które czynią to rozwiązanie prostszym od obu poprzednich:
   zakładka to obietnica, której nic nie dotrzymuje;
 * stoi **na końcu paska**, bo ukryta zakładka i tak zajmuje swój indeks, a zakończony bieg wysuwa Raport
   po indeksie;
-* `SelectableTextBlock` wystarcza do skopiowania — własny przycisk „Kopiuj" byłby czwartym sposobem na to samo.
+* zaznaczanie wystarcza do skopiowania — własny przycisk „Kopiuj" byłby czwartym sposobem na to samo.
+
+⭐ **I ostatnia poprawka, bardziej o spójności aplikacji niż o module:** zakładka renderuje DDL **tą samą
+kontrolką, którą EmberTern pokazuje SQL wszędzie indziej** — `AvaloniaEdit.TextEditor` z
+`SqlEditorBehavior.AttachReadOnlyHighlighting`, dokładnie jak jedenaście pozostałych podglądów DDL w edytorach
+obiektów. Czyli: wspólna warstwa leksykalna (XSHD dla obu palet) **plus** warstwa semantyczna z tego samego
+frontendu Lexer → Parser → SemanticModel. Żadnego drugiego renderera SQL — użyty jest istniejący szew.
+
+To nie jest kosmetyka w rozumieniu „ładniej": `SelectableTextBlock` czynił z tej zakładki **jedyne miejsce w
+aplikacji, gdzie SQL jest bezbarwny**, a przy szerokiej tabeli `CREATE TABLE` to kilkadziesiąt wierszy, które
+bez kolorowania czyta się znacznie gorzej. ⚠ Read-only w mocnym sensie, jaki gwarantuje sam szew:
+`AttachReadOnlyHighlighting` **celowo nie podpina** uzupełniania, squiggli ani ergonomii pisania — podgląd nie
+może proponować edycji tego, co tylko pokazuje. Numery wierszy wyłączone (to jedna instrukcja, nie dokument).
+Tekst jest **wpychany** z VM, nie wiązany — dwukierunkowe wiązanie `TextEditor.Text` jest zawodne i obchodzi je
+tak samo każdy inny podgląd DDL; strażnik przed zapisem niezmienionej wartości ma tu dodatkowy sens, bo DDL
+przelicza się przy każdej edycji siatki, a ponowne przypisanie tego samego tekstu resetowałoby zaznaczenie
+czytającemu pod ręką.
 
 ⚠ Jedna pułapka po drodze: `CreateTableSql` liczy się z siatki, ale nazwa tabeli mieszka na **innej**
 właściwości, więc bez własnego `NotifyPropertyChangedFor` zakładka pokazywałaby starą nazwę, gdy pole wyżej ma

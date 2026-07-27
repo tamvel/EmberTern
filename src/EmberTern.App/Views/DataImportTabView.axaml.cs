@@ -10,7 +10,12 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.MarkupExtensions;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.VisualTree;
+using AvaloniaEdit;
+using AvaloniaEdit.Highlighting;
+using EmberTern.App.Completion;
 using EmberTern.App.Export;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
@@ -33,6 +38,7 @@ public partial class DataImportTabView : UserControl
     private RowDefinition? _workRow;
     private RowDefinition? _bottomRow;
     private Grid? _workArea;
+    private TextEditor? _ddlEditor;
 
     private const double MinBottomHeight = 80;
     private const double DefaultBottomHeight = 190;
@@ -50,6 +56,14 @@ public partial class DataImportTabView : UserControl
         }
 
         _workArea = this.FindControl<Grid>("WorkArea");
+
+        // The DDL tab is a read-only SQL surface, wired exactly as the other eleven DDL previews are: the
+        // shared semantic accent layer on top of the XSHD lexical one, and the theme applied here and on every
+        // theme change. Nothing interactive is attached — see AttachReadOnlyHighlighting.
+        _ddlEditor = this.FindControl<TextEditor>("DdlEditor");
+        if (_ddlEditor is not null) SqlEditorBehavior.AttachReadOnlyHighlighting(_ddlEditor);
+        ApplyDdlEditorTheme();
+        ActualThemeVariantChanged += (_, _) => ApplyDdlEditorTheme();
 
         if (this.FindControl<GridSplitter>("BottomSplitter") is { } splitter)
         {
@@ -93,6 +107,7 @@ public partial class DataImportTabView : UserControl
         RebuildConvertedColumns();
         ApplyBottomPanel();
         ApplyWorkAreaLayout();
+        PushDdl();
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -100,11 +115,46 @@ public partial class DataImportTabView : UserControl
         if (e.PropertyName == nameof(DataImportTabViewModel.IsBottomPanelCollapsed)) ApplyBottomPanel();
     }
 
-    /// <summary>The target VARIANT decides how the work area is divided, so the view listens to the one
-    /// property that says which variant is chosen.</summary>
+    /// <summary>The target VARIANT decides how the work area is divided, and the generated DDL is text this
+    /// view pushes rather than binds — so the view listens to exactly those two properties.</summary>
     private void OnTargetPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ImportTargetSectionViewModel.IsNewTable)) ApplyWorkAreaLayout();
+        if (e.PropertyName == nameof(ImportTargetSectionViewModel.CreateTableSql)) PushDdl();
+    }
+
+    /// <summary>
+    /// Pushes the generated statement into the read-only editor.
+    /// <para>
+    /// ⚠ Pushed rather than bound, like every other DDL preview in the application: a two-way
+    /// <c>TextEditor.Text</c> binding is flaky. The guard against writing an unchanged value matters more here
+    /// than elsewhere — the DDL is recomputed on every grid edit, and re-assigning identical text would reset
+    /// the caret and the user's selection while they were reading it.
+    /// </para>
+    /// </summary>
+    private void PushDdl()
+    {
+        if (_ddlEditor is null) return;
+
+        var text = _bound?.Target.CreateTableSql ?? string.Empty;
+        if (_ddlEditor.Text != text) _ddlEditor.Text = text;
+    }
+
+    /// <summary>The palette half of the shared read-only SQL surface: the XSHD definition for the current
+    /// theme plus the shared selection brush, re-applied whenever the theme changes.</summary>
+    private void ApplyDdlEditorTheme()
+    {
+        if (_ddlEditor is null) return;
+
+        var theme = ActualThemeVariant;
+        _ddlEditor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition(
+            theme == ThemeVariant.Light ? App.FirebirdSyntaxLightName : App.FirebirdSyntaxName);
+
+        if (Application.Current?.Resources.TryGetResource("SelectionBrush", theme, out var res) == true
+            && res is IBrush brush)
+        {
+            _ddlEditor.TextArea.SelectionBrush = brush;
+        }
     }
 
     /// <summary>
