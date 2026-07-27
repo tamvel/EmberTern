@@ -306,9 +306,17 @@ noted.
   defaults (batch 500 / commit 10 000) **hold**, and `Batched` costs 40% throughput, which is the price of the
   *mode*, not of the number.
   ⚠ **Open after the module, each with its reason, in the history file's closing table** — the app-wide UX
-  sprint (U4 density + the remaining I11 review wishes), profile `.json` exchange, a „modified" marker on the
-  selected profile, the platform-wide charset audit, and the full-suite hang (#94/#226/#261). None is a Data
-  Import defect; each is somebody else's task.
+  sprint (U4 density, **U5 responsiveness**, + the remaining I11 review wishes), profile `.json` exchange, a
+  „modified" marker on the selected profile, the platform-wide charset audit, and the full-suite hang
+  (#94/#226/#261). None is a Data Import defect; each is somebody else's task.
+  **⛔ U5 — DO NOT RE-FIX IT HERE, and this is worth reading before you think you have spotted a bug.** The
+  work row is the only `*` among `Auto` bands, so in the „New table" variant the Target tile can squeeze
+  Mapping and the converted preview to nothing. A floor (`MinHeight` + a clamp on the bottom panel) was added
+  for one review round and **reverted by the user after seeing it run**: honouring the floor made the bottom
+  panel give way, the middle of the window grew, and the panel stopped being useful. At today's control
+  heights you cannot have both — which makes this a **density** problem wearing a layout problem's clothes, and
+  it belongs to the UX sprint, where the surface regains ~100 px. **Do not re-add the floor; do not answer it
+  with another vertical section.** Gotcha #274 carries the full postscript.
   **⛔ STANDING DIRECTIVE: do NOT return to Data Import cosmetics.** Come back only for a real functional
   defect.
 - **✅ METADATA REFRESH — LAYER 1 SHIPPED + THE TREE NOW SHOWS AN IMPORTED TABLE IMMEDIATELY (2026-07-27).**

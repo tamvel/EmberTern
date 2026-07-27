@@ -7,7 +7,8 @@ Następny krok: **decyzja użytkownika o scaleniu `feat/data-import` do `master`
 (etap I12; ~520 wierszy zeszło z CLAUDE.md). Ten dokument zostaje **architekturą**; historia mieszka tam.
 Poza modułem świadomie zostają: **U4** (gęstość kontrolek → osobny sprint UX całego EmberTerna **po**
 zamknięciu modułu, decyzja użytkownika) oraz pozostałe pozycje z tabeli „Co zostaje otwarte" w pliku
-historii, każda z powodem. **U5 został ZAMKNIĘTY** w trzecim przeglądzie I11 (§3.8).
+historii, każda z powodem — w tym **U5**, którego poprawka weszła i została **cofnięta** decyzją użytkownika
+(§3.8): to problem gęstości przebrany za problem układu i należy do sprintu UX.
 Szczegóły — blok „📍 STAN IMPLEMENTACJI" niżej.
 
 > ### 🔒 DOKUMENT ZAMROŻONY — obowiązuje od 2026-07-26 (po akceptacji wyników I0)
@@ -70,7 +71,7 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **🔁 I11 — SZEW PO PRZEGLĄDZIE (2026-07-27)** | Dwie uwagi użytkownika z oglądu UI, obie zasadne, obie o **wyjściu** z profilu: (1) nie dało się wrócić do pracy **bez** profilu — doszła stała pozycja **„(no profile)"** na czele listy, która **odłącza i ZOSTAWIA decyzje**; (2) nie było jak wyczyścić powierzchni — doszedł przycisk **`Reset`**, który przywraca domyślne **i** odłącza profil. To są świadomie **dwie różne akcje**, nie jedna. Plus trzecia uwaga: **wyraźniejsze oddzielenie** grupy profili od grupy wykonania. Szczegóły w bloku „⭐ I11 as-built" |
 | **⛔ DYREKTYWA UŻYTKOWNIKA PRZY ZAMYKANIU I11 (2026-07-27)** | **Nie wracamy już do kosmetyki Data Import.** Użytkownik zamknął etap ze świadomym stwierdzeniem, że nie wszystko wygląda docelowo, ale pozostałe uwagi są **czysto UX** i naturalnie należą do planowanego **globalnego sprintu UX** całej aplikacji (wymiana kontrolek Avalonia, zagęszczenie, ujednolicenie zachowań). Do modułu wracamy **wyłącznie przy rzeczywistym błędzie funkcjonalnym** |
 | **🔁 I11 — DRUGI PRZEGLĄD (2026-07-27)** | Pięć uwag o ergonomii powierzchni, wszystkie w granicach modułu. ⭐ Dwie okazały się **defektem, nie kwestią gustu**: chipy `Target` i `Mapping` naprawdę nic nie robiły w zwyczajnych stanach, bo celowały w kontrolkę wyłączoną albo w wiersz, którego nie ma. Poza tym: usunięte zdublowane ostrzeżenie §0.5, `Existing/New table` w jednej siatce ze wspólnymi kolumnami, kolumna `Basis` przycięta z podpowiedzią, tytuł panelu Mapowanie. Szczegóły w bloku „⭐ Drugi przegląd I11" |
-| **🔁 I11 — TRZECI PRZEGLĄD (2026-07-27), przygotowanie do scalenia** | Cztery poprawki wybrane przez użytkownika z audytu; **żadna nie tknęła modeli ani pipeline'u.** ⭐ **U5 DOMKNIĘTY** — wiersz roboczy dostał podłogę (`MinHeight`) i, co ważniejsze, **zacisk, który tę podłogę czyni osiągalną**: `ApplyBottomPanel` przycina dolny panel, bo z dwóch pasów walczących o resztę miejsca to jego wysokość wybraliśmy my, a nie treść. Do tego: chip `Transaction` otwiera listę (jedyna sekcja, która nie jest pasem powierzchni, więc `BringIntoView` był tam zawsze pusty), wspólna „Podstawa" mówiona **raz dla sekcji** zamiast raz na wiersz, oraz `ImportReadinessReport.Prioritized` — sufit paska nie może już schować błędu blokującego za ostrzeżeniem. Szczegóły w bloku „⭐ Trzeci przegląd I11" |
+| **🔁 I11 — TRZECI PRZEGLĄD (2026-07-27), przygotowanie do scalenia** | Cztery poprawki wybrane przez użytkownika z audytu; **żadna nie tknęła modeli ani pipeline'u.** ⛔ **Poprawka U5 (podłoga wiersza roboczego + zacisk dolnego panelu) została COFNIĘTA tego samego dnia** po obejrzeniu w działaniu — środek okna urósł, a dolny panel przestał być użyteczny; **U5 wraca do otwartych i idzie do sprintu UX**. Zostają trzy: chip `Transaction` otwiera listę (jedyna sekcja, która nie jest pasem powierzchni, więc `BringIntoView` był tam zawsze pusty), wspólna „Podstawa" mówiona **raz dla sekcji** zamiast raz na wiersz, oraz `ImportReadinessReport.Prioritized` — sufit paska nie może już schować błędu blokującego za ostrzeżeniem. Szczegóły w bloku „⭐ Trzeci przegląd I11" |
 | **🏁 I12 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia użytkownika** | Domknięcie: narracja modułu do **[docs/history/21-data-import.md](../history/21-data-import.md)** (~520 wierszy zeszło z CLAUDE.md, który skurczył się o 490 wierszy) · **audyt UI w obu paletach** — zero twardych kolorów, zero lokalnych pędzli, zero `{StaticResource}` na pędzlu, zero lokalnych stylów, 13/13 tokenów w obu paletach, **przypięte testem** żeby audyt był powtarzalny · ⭐ **pomiar na 1 M wierszy**: Manual **14,0 s / 71 437 wierszy/s**, sterta **płaska** (~1 MB przez cały przebieg), Batched 19,6 s i **990 000 z 999 997 przeżywa Rollback** — domyślne I0 (500 / 10 000) **bronią się** · raport uczciwy przy tej skali (numery rekordów, sufit błędów, licznik postępu) · **ostatnia poprawka funkcjonalna**: nieświeża lista tabel po `CREATE` (zgłoszenie dotyczyło pickera; groźniejsza połowa to `IMP0028`, które przestawało widzieć zajętą nazwę) · jawna lista tego, co zostaje otwarte, z powodem przy każdej pozycji |
 | **Następny krok** | **decyzja użytkownika: scalenie `feat/data-import` do `master`.** Nie ma kolejnego etapu |
 | **Testy** | **5846 zielonych**, 0 niepowodzeń (I11 dodał **+45**: 16 do magazynu, 25 w nowym `DataImportProfileTests`, 4 na `ImportTargetFocus` z drugiego przeglądu; szew po I10 dodał +16; I10 +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
@@ -140,7 +141,15 @@ Pełny audyt powierzchni dał więcej uwag; użytkownik wybrał z niego **cztery
 prawej stronie uzasadniają obecny układ). Żadna poprawka nie tknęła `ImportConfiguration`, pipeline'u,
 konwertera, walidatora, planera ani writera.
 
-**1. ⭐ Wiersz roboczy dostał podłogę — to zamyka U5 i jest DEFEKTEM UKŁADU, nie zmianą UX.**
+**1. ⛔ COFNIĘTE po obejrzeniu w działaniu (decyzja użytkownika, 2026-07-27) — U5 wraca do otwartych.**
+Diagnoza niżej stoi i jest prawdziwa; cofnięte zostało **lekarstwo**, nie rozpoznanie. Uszanowanie podłogi
+wymagało oddania miejsca przez dolny panel, więc środek okna urósł, a dolny panel przestał być użyteczny —
+przy obecnych wysokościach kontrolek nie da się mieć obu naraz. Właściwym miejscem naprawy jest **sprint UX**
+(U4): gdy kontrolki zmaleją, powierzchnia odzyska ~100 px i problem zniknie bez dokładania czegokolwiek.
+⛔ Nie przywracać podłogi i nie rozwiązywać wysokości kolejną sekcją pionową. Zapis zostaje, żeby następna
+sesja nie „naprawiła" tego po raz drugi.
+
+**Rozpoznanie, które zostaje w mocy:**
 Wszystkie pasy poza roboczym są `Auto`, więc gwiazdka bierze to, co zostanie — a zostać może **nic**. W
 wariancie „New table" kafelek Cel jest najwyższym pasem powierzchni (siatka typów plus, na żądanie, podgląd
 DDL), a pod nim dolny panel trzyma wysokość bezwzględną: Mapowanie i Podgląd po konwersji **znikały
@@ -1276,14 +1285,16 @@ Błędy (2)                                    [Eksportuj raport…] [Kopiuj]
 > do §3.1 (z powodem odejścia od makiety v2), a tabela niżej zostaje jako zapis, **co** zgłoszono i **jak**
 > to rozstrzygnięto.
 >
-> **U5 — ZAMKNIĘTY 2026-07-27** (trzeci przegląd I11). Weryfikacja, na którą czekał, wypadła negatywnie i to
-> dobrze, że czekał: gdy sekcja Cel faktycznie zajęła miejsce — w wariancie „New table", z siatką typów i
-> podglądem DDL — **powierzchnia robocza schodziła do zera**, bo wiersz `*` nie miał podłogi. Domknięte
-> `MinHeight` na wierszu roboczym **plus** zacisk dolnego panelu w `ApplyBottomPanel`, bez którego podłoga
-> byłaby nieosiągalna (szczegóły w bloku „⭐ Trzeci przegląd I11").
+> **U5 — POZOSTAJE OTWARTY, decyzja użytkownika z 2026-07-27.** Weryfikacja, na którą czekał, wypadła
+> negatywnie: gdy sekcja Cel faktycznie zajęła miejsce — w wariancie „New table", z siatką typów — powierzchnia
+> robocza potrafi zejść do zera, bo wiersz `*` nie ma podłogi. **Podłoga została dodana i po obejrzeniu w
+> działaniu COFNIĘTA**: żeby ją uszanować, dolny panel musiał ustąpić, przez co środek okna urósł, a dolny
+> panel przestał być użyteczny — lekarstwo czytało się gorzej niż choroba. Użytkownik ratyfikował, gdzie leży
+> prawdziwa naprawa: **sprint UX całego EmberTerna**, gdzie wysokości kontrolek spadają i powierzchnia odzyskuje
+> ~100 px, po których problem znika sam. ⛔ **Nie dodawać podłogi z powrotem i nie odpowiadać na problem
+> wysokości kolejną sekcją pionową.**
 >
-> **Otwarty zostaje jeden punkt, świadomie poza modułem: U4** (gęstość globalna → sprint UX całego
-> EmberTerna po zamknięciu modułu).
+> **Otwarte świadomie poza modułem: U4** (gęstość globalna) **i U5** — oba do sprintu UX.
 
 #### Uwagi użytkownika
 

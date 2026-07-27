@@ -33,32 +33,18 @@
     enabled-looking control with nothing behind it would be a lie the readiness strip could not correct.
   -->
 
-  <Grid x:Name="SurfaceLayout">
-    <!--
-      ⭐ Written out rather than as the shorthand string for ONE reason: the work row needs a FLOOR.
+  <!--
+    ⚠ The work row deliberately has NO MinHeight, and that is a user decision (2026-07-27), not an oversight.
 
-      Every band except the work area is Auto, so each takes what its content wants and the star takes what is
-      left — and „what is left" can be nothing. In the „New table" variant the Target tile is the tallest band
-      on the surface (the type grid plus, on demand, the DDL preview), and with the bottom panel below it
-      holding an absolute height, Mapping and the converted preview were squeezed to zero: the panels the star
-      row exists to protect disappeared entirely, which is why the Mapping chip read as pointing at nothing.
-      That is §3.8's U5, left open at I5 „to be re-checked when Target and Mapping actually occupy space".
-
-      MinHeight is only half of it — a floor nothing can reach is not a floor. The other half is in
-      ApplyBottomPanel, which clamps the bottom panel so the floor stays reachable: of the two bands competing
-      for the space, the bottom panel is the one whose height WE chose, so it is the one that yields.
-    -->
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />   <!-- C — message banner -->
-      <RowDefinition Height="Auto" />   <!-- B — command bar -->
-      <RowDefinition Height="Auto" />   <!-- D — readiness strip -->
-      <RowDefinition Height="Auto" />   <!-- E1 — source -->
-      <RowDefinition Height="Auto" />   <!-- E2 — target -->
-      <RowDefinition Height="*" MinHeight="150" />  <!-- F — the work area. THE STAR, and now with a floor. -->
-      <RowDefinition Height="Auto" />   <!-- the bottom panel's splitter -->
-      <RowDefinition Height="Auto" />   <!-- G — bottom tabs -->
-      <RowDefinition Height="Auto" />   <!-- H — status -->
-    </Grid.RowDefinitions>
+    A floor was added here to close §3.8/U5 — in the „New table" variant the Target tile is the tallest band on
+    the surface, so the star row could be squeezed to nothing. Seen running, the cure read worse than the
+    disease: honouring the floor forced the bottom panel to give way, the middle of the window became too tall,
+    and the bottom panel stopped being useful. The user reverted it and ratified where the real fix belongs —
+    the app-wide UX sprint, where control heights come down and the surface regains the ~100 px that make this
+    a non-problem. **Do not re-add a floor here, and do not answer the height problem by adding another
+    vertical section.** U5 is OPEN again, on purpose, and belongs to that sprint.
+  -->
+  <Grid x:Name="SurfaceLayout" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
 
     <!-- ══ Band C — the ONE message surface. Never a locally-coloured TextBlock (§9.1 point 5). ══ -->
     <controls:MessageBanner Grid.Row="0"
@@ -722,7 +708,7 @@
          Two halves of one job, split by a draggable splitter: the mapping decides which field feeds
          which column, and the preview shows what that decision produces. The empty state names the
          next step rather than saying "no data" (§9.4). -->
-    <Grid Grid.Row="5" x:Name="WorkArea" ColumnDefinitions="*,4,*">
+    <Grid Grid.Row="5" ColumnDefinitions="*,4,*">
 
     <Grid Grid.Column="0" x:Name="MappingPanel" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
 

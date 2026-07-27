@@ -46,7 +46,12 @@ najnowsze najwyżej — bo tak rosła.
   `New table` layout, which they re-examined and kept, because the options appearing to the right of each
   variant justify it. **No model, no pipeline, no converter, no validator, no planner, no writer was touched** —
   the fourth etap in a row that has held.
-  **⭐⭐ U5 IS CLOSED, and it was a layout DEFECT rather than a matter of taste.** Every band except the work
+  **⛔ REVERTED THE SAME DAY — U5 STAYS OPEN. The diagnosis below holds; the cure did not.** Honouring the
+  floor made the bottom panel give way, the middle of the window grew, and the panel stopped being useful; at
+  today's control heights you cannot have both, so this is a density problem in a layout problem's clothes and
+  it goes to the UX sprint. Do not re-add the floor. The paragraph is kept because the diagnosis is worth
+  having — see the closing table and gotcha #274's postscript.
+  **⭐⭐ The diagnosis: it IS a layout defect rather than a matter of taste.** Every band except the work
   area is `Auto`, so the star takes what is left — and what is left can be **nothing**. In the „New table"
   variant the Target tile is the tallest band on the surface (type grid + optional DDL preview) and the bottom
   panel below it holds an absolute height, so **Mapping and the converted preview vanished entirely**. That is
@@ -652,6 +657,7 @@ poprawki** — padły oba.
 | Pozycja | Dlaczego zostaje |
 |---|---|
 | **U4 — gęstość kontrolek** | globalna, nie modułowa: `ControlStyles.axaml` nie ma ani jednego stylu domyślnego dla `TextBox`/`ComboBox`/`CheckBox`/`Button`. Ratyfikowany **sprint UX całego EmberTerna** po module, projektowany z oglądu wszystkich powierzchni naraz |
+| **U5 — powierzchnia robocza bez podłogi** | ⭐ **Rozpoznanie jest prawdziwe, lekarstwo zostało cofnięte.** Wiersz roboczy jest jedyną gwiazdką wśród pasów `Auto`, więc w wariancie „New table" kafelek Cel potrafi zdusić Mapowanie i podgląd do zera. Podłoga (`MinHeight` + zacisk dolnego panelu) weszła na jedną rundę przeglądu i **użytkownik ją cofnął po obejrzeniu w działaniu**: żeby ją uszanować, dolny panel musiał ustąpić, przez co środek okna urósł, a dolny panel przestał być użyteczny. Przy dzisiejszych wysokościach kontrolek nie da się mieć obu naraz — **to jest problem gęstości przebrany za problem układu**, więc idzie do sprintu UX, gdzie powierzchnia odzyska ~100 px. ⛔ Nie przywracać podłogi, nie dokładać kolejnej sekcji pionowej |
 | Pozostałe życzenia UX z przeglądów I11 | ta sama decyzja użytkownika — do sprintu UX, nie do modułu |
 | Kolumna „Podstawa" nie odzyskuje szerokości po ukryciu | proporcje `3*` są wspólne dla nagłówka i wierszy; zwinięcie wymaga konwertera `bool → GridLength`, czyli nowego typu na zamknięciu modułu |
 | **Eksport/import profilu do `.json`** | opcjonalny w §6, poza DoD I11: wymaga nowego serializatora w Core i dwóch szwów w widoku — **powiększyłby powierzchnię, którą I11 istniał po to, żeby poświadczyć jako nietkniętą** |

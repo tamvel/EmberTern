@@ -30,19 +30,11 @@ public partial class DataImportTabView : UserControl
 {
     private DataImportTabViewModel? _bound;
 
-    private Grid? _layout;
     private RowDefinition? _workRow;
     private RowDefinition? _bottomRow;
 
     private const double MinBottomHeight = 80;
     private const double DefaultBottomHeight = 190;
-
-    /// <summary>
-    /// ⭐ The floor under the work area, kept here because the clamp below is the thing that makes it reachable
-    /// (the <c>MinHeight</c> in the XAML only declares it). Roughly a panel title, its column captions and two
-    /// rows — enough for Mapping and the converted preview to still be <em>panels</em> rather than a hairline.
-    /// </summary>
-    private const double MinWorkHeight = 150;
 
     public DataImportTabView()
     {
@@ -52,18 +44,8 @@ public partial class DataImportTabView : UserControl
         if (this.FindControl<Grid>("SurfaceLayout") is { } layout && layout.RowDefinitions.Count > 7)
         {
             // Row 5 is the work area (the star), row 7 the bottom panel. ApplyBottomPanel sets BOTH.
-            _layout = layout;
             _workRow = layout.RowDefinitions[5];
             _bottomRow = layout.RowDefinitions[7];
-
-            // Re-clamp whenever the surface is resized OR an Auto band above grows — choosing "New table" with
-            // forty columns changes no window size, only how much room is left for the work area.
-            layout.SizeChanged += OnSurfaceResized;
-        }
-
-        if (this.FindControl<Grid>("WorkArea") is { } work)
-        {
-            work.SizeChanged += OnSurfaceResized;
         }
 
         if (this.FindControl<GridSplitter>("BottomSplitter") is { } splitter)
@@ -131,54 +113,17 @@ public partial class DataImportTabView : UserControl
         _workRow.Height = new GridLength(1, GridUnitType.Star);
         _bottomRow.Height = _bound.IsBottomPanelCollapsed
             ? GridLength.Auto
-            : new GridLength(ClampBottomHeight(ResolveBottomHeight(_bound.BottomPanelHeight)));
+            : new GridLength(ResolveBottomHeight(_bound.BottomPanelHeight));
     }
+
+    // ⚠ The bottom panel is NOT clamped against a floor under the work area, and that is a user decision
+    // (2026-07-27). A clamp existed for one review round: it made the floor in the XAML reachable by taking
+    // room back from this panel. Running it showed the cost — the middle of the window grew and this panel
+    // stopped being useful — so both halves were reverted together. The stored height wins outright; §3.8/U5
+    // is open again and belongs to the app-wide UX sprint.
 
     private static double ResolveBottomHeight(double stored)
         => stored >= MinBottomHeight ? stored : DefaultBottomHeight;
-
-    /// <summary>
-    /// ⭐ Keeps the work area's floor <b>reachable</b>: the bottom panel may take the space that is left after
-    /// every Auto band <em>and</em> <see cref="MinWorkHeight"/>, never more.
-    /// <para>
-    /// Of the two bands competing for what the Auto bands leave behind, this is the one to give way — its height
-    /// is a number the module chose (or the user dragged), while the work area's floor is the promise §3.1 makes
-    /// about where the session is actually spent. The stored height is never overwritten, only clamped for as
-    /// long as the surface is too short to honour it, so it comes straight back when the Target tile shrinks.
-    /// </para>
-    /// <para>
-    /// It reads the bands' measured heights rather than asking the grid, because a row's share is exactly what
-    /// is being decided here — asking the grid for it while changing it is how a layout loop starts.
-    /// </para>
-    /// </summary>
-    private double ClampBottomHeight(double desired)
-    {
-        if (_layout is null) return desired;
-
-        var available = _layout.Bounds.Height;
-
-        // Before the first layout pass there is nothing to measure against, and clamping to a guess would make
-        // the panel open at the wrong height once. Leave it; the size change that follows re-clamps.
-        if (available <= 0) return desired;
-
-        double bands = 0;
-        foreach (var child in _layout.Children)
-        {
-            var row = Grid.GetRow(child);
-            if (row == 5 || row == 7) continue;
-            bands += child.Bounds.Height;
-        }
-
-        var room = available - bands - MinWorkHeight;
-
-        // When even the floor no longer fits, the surface is simply shorter than its content (the app-wide
-        // density question, §3.8/U4). Hold the panel at its own minimum rather than collapsing it to nothing.
-        return room <= MinBottomHeight ? Math.Min(desired, MinBottomHeight) : Math.Min(desired, room);
-    }
-
-    /// <summary>Re-applies the clamp. Assigning an unchanged <see cref="GridLength"/> is a no-op, so this
-    /// settles after one pass instead of oscillating.</summary>
-    private void OnSurfaceResized(object? sender, SizeChangedEventArgs e) => ApplyBottomPanel();
 
     /// <summary>
     /// Captures the dragged height onto the VM, which is where it outlives this view — the import tab is
