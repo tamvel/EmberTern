@@ -76,9 +76,10 @@ git push private <branch>
 
 **Branch hygiene (2026-07-26):** the repo carries only branches that are still needed. `feat/completion-matching`,
 `feat/firebird-debugger`, `feat/save-and-close` and `feat/sql-data-export` were all provably merged into
-`master` and were deleted locally and from **both** remotes. **Live branch: `master` alone** — `feat/data-import`
-joined it on 2026-07-27 when the Data Import module closed (merged `--no-ff`, so the module's history stays one
-readable arc). ⚠ One residue: **`private`'s default branch (HEAD) still points at
+`master` and were deleted locally and from **both** remotes. **`feat/data-import` was merged into `master` on
+2026-07-27** (`--no-ff`, commit `0a3aed4`, so the module's history stays one readable arc) and **still exists**
+locally and on both remotes — deleting it is the user's call, per the same hygiene rule that retired the four
+above. ⚠ One residue: **`private`'s default branch (HEAD) still points at
 `feat/completion-matching`**, so GitHub refuses to delete it — it stays until the user switches the default
 to `master` in the GitHub repo settings (a repo-settings change, deliberately left to the user).
 
