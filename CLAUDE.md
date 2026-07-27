@@ -309,14 +309,19 @@ noted.
   sprint (U4 density, **U5 responsiveness**, + the remaining I11 review wishes), profile `.json` exchange, a
   „modified" marker on the selected profile, the platform-wide charset audit, and the full-suite hang
   (#94/#226/#261). None is a Data Import defect; each is somebody else's task.
-  **⛔ U5 — DO NOT RE-FIX IT HERE, and this is worth reading before you think you have spotted a bug.** The
-  work row is the only `*` among `Auto` bands, so in the „New table" variant the Target tile can squeeze
-  Mapping and the converted preview to nothing. A floor (`MinHeight` + a clamp on the bottom panel) was added
-  for one review round and **reverted by the user after seeing it run**: honouring the floor made the bottom
-  panel give way, the middle of the window grew, and the panel stopped being useful. At today's control
-  heights you cannot have both — which makes this a **density** problem wearing a layout problem's clothes, and
-  it belongs to the UX sprint, where the surface regains ~100 px. **Do not re-add the floor; do not answer it
-  with another vertical section.** Gotcha #274 carries the full postscript.
+  **⭐⭐ THE SURFACE IS SPLIT BY RESPONSIBILITY: the top half is where the import is DESIGNED, the bottom panel
+  is where RESULTS land** (user's call, 2026-07-27, and it is the decision that finally settled U5). „Preview
+  after conversion" is a *result* — what the pipeline produces — so it is a **bottom tab** beside Source
+  preview / Errors / Report, needed as it is in both target variants. The work area now belongs entirely to
+  configuration: **Existing table → Mapping at full width; New table → `Table types | Mapping`** with a
+  splitter, so the user sets the proportion. The type grid and the DDL preview moved out of the `Auto` Target
+  tile into that left half, which is what made the tile thin again.
+  ⚠ **Two earlier attempts failed and are worth knowing before re-opening this.** A `MinHeight` floor on the
+  work row plus a clamp on the bottom panel was built and **reverted** — honouring the floor made the bottom
+  panel give way, so the middle grew and the panel stopped being useful. The lesson the user drew, and it is
+  the load-bearing one: **it was never a height problem, it was configuration and results interleaved and
+  fighting over the same pixels.** Do not answer a space complaint here by adding a floor or another vertical
+  section; ask first what is a *decision* and what is an *outcome*. Gotcha #274 carries the postscript.
   **⛔ STANDING DIRECTIVE: do NOT return to Data Import cosmetics.** Come back only for a real functional
   defect.
 - **✅ METADATA REFRESH — LAYER 1 SHIPPED + THE TREE NOW SHOWS AN IMPORTED TABLE IMMEDIATELY (2026-07-27).**

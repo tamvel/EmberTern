@@ -442,6 +442,12 @@ internal static class UiStrings
 
     // The converted preview (§3.6).
     public const string ImportMappingTitle = "Mapping";
+
+    /// <summary>Title of the work area's left half in the „new table" variant — the columns about to be
+    /// created. It names a CONFIGURATION subject, which is why it lives beside Mapping rather than beside the
+    /// preview: the work area is where the import is designed, the bottom panel is where results land.</summary>
+    public const string ImportNewTableTypesTitle = "Table types";
+
     public const string ImportPreviewTitle = "Preview after conversion";
     public const string ImportPreviewHeadlineFormat = "{0:N0} row(s) after conversion — this is what reaches the database.";
     public const string ImportPreviewHeadlineProblemsFormat =

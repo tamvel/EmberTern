@@ -32,6 +32,7 @@ public partial class DataImportTabView : UserControl
 
     private RowDefinition? _workRow;
     private RowDefinition? _bottomRow;
+    private Grid? _workArea;
 
     private const double MinBottomHeight = 80;
     private const double DefaultBottomHeight = 190;
@@ -48,6 +49,8 @@ public partial class DataImportTabView : UserControl
             _bottomRow = layout.RowDefinitions[7];
         }
 
+        _workArea = this.FindControl<Grid>("WorkArea");
+
         if (this.FindControl<GridSplitter>("BottomSplitter") is { } splitter)
         {
             splitter.DragCompleted += OnBottomSplitterDragCompleted;
@@ -62,6 +65,7 @@ public partial class DataImportTabView : UserControl
         {
             _bound.PreviewSchemaChanged -= OnPreviewSchemaChanged;
             _bound.PropertyChanged -= OnViewModelPropertyChanged;
+            _bound.Target.PropertyChanged -= OnTargetPropertyChanged;
             _bound.ConvertedPreview.SchemaChanged -= OnConvertedSchemaChanged;
             _bound.ReportReady -= OnReportReady;
             _bound.ConfirmRequested -= ConfirmAsync;
@@ -76,6 +80,7 @@ public partial class DataImportTabView : UserControl
 
         _bound.PreviewSchemaChanged += OnPreviewSchemaChanged;
         _bound.PropertyChanged += OnViewModelPropertyChanged;
+        _bound.Target.PropertyChanged += OnTargetPropertyChanged;
         _bound.ConvertedPreview.SchemaChanged += OnConvertedSchemaChanged;
         _bound.ReportReady += OnReportReady;
         _bound.ConfirmRequested += ConfirmAsync;
@@ -87,11 +92,43 @@ public partial class DataImportTabView : UserControl
         RebuildPreviewColumns();
         RebuildConvertedColumns();
         ApplyBottomPanel();
+        ApplyWorkAreaLayout();
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DataImportTabViewModel.IsBottomPanelCollapsed)) ApplyBottomPanel();
+    }
+
+    /// <summary>The target VARIANT decides how the work area is divided, so the view listens to the one
+    /// property that says which variant is chosen.</summary>
+    private void OnTargetPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ImportTargetSectionViewModel.IsNewTable)) ApplyWorkAreaLayout();
+    }
+
+    /// <summary>
+    /// The ONE re-normalization point for the work area's columns, and it sets <b>both</b> every time.
+    /// <para>
+    /// ⚠ Same discipline as <see cref="ApplyBottomPanel"/>, and for the same reason (gotcha #240): a
+    /// <c>GridSplitter</c> turns a star column into an ABSOLUTE pixel width the moment it is dragged, so a
+    /// variant switch that only touched the left column would leave the grid with whatever the last drag left
+    /// behind — Mapping would keep a stale width after the types disappeared.
+    /// </para>
+    /// <para>
+    /// In the „existing table" variant there is no left half at all: its column goes to zero and the splitter
+    /// with it, so Mapping gets the whole row rather than sharing it with something invisible.
+    /// </para>
+    /// </summary>
+    private void ApplyWorkAreaLayout()
+    {
+        if (_workArea is null || _workArea.ColumnDefinitions.Count < 3) return;
+
+        var newTable = _bound?.Target.IsNewTable ?? false;
+
+        _workArea.ColumnDefinitions[0].Width = newTable ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        _workArea.ColumnDefinitions[1].Width = new GridLength(newTable ? 4 : 0);
+        _workArea.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star);
     }
 
     // ── Bottom panel sizing ─────────────────────────────────────────────────────────────────────────────
@@ -347,7 +384,10 @@ public partial class DataImportTabView : UserControl
 
     // ── The run's own surfaces ──────────────────────────────────────────────────────────────────────────
 
-    private const int ReportTabIndex = 2;
+    // Source preview · Preview after conversion · Errors · Report. The converted preview joined at index 1 in
+    // the configuration/results split, which pushed this along — a hard-coded index that is not moved with the
+    // strip sends a finished run to the wrong tab.
+    private const int ReportTabIndex = 3;
 
     /// <summary>A finished run brings its own tab forward (§3.7) — the answer arrives where the user is
     /// looking, instead of behind a tab they have to think to open.</summary>

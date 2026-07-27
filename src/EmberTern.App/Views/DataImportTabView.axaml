@@ -591,32 +591,72 @@
                     IsVisible="{Binding IsNewTable}"
                     IsChecked="{Binding DropTableOnFailure, Mode=TwoWay}" FontSize="12" />
 
-          <Button Grid.Row="1" Grid.Column="3" Classes="flat" FontSize="12"
-                  IsVisible="{Binding IsNewTable}"
-                  Command="{Binding ToggleDdlCommand}"
-                  Content="{Binding DdlToggleText}" />
+          <!-- „Show DDL" moved to the Table types panel with the preview it toggles — a toggle in one band
+               and the thing it reveals in another is how a control stops looking connected to anything. -->
         </Grid>
 
         <TextBlock Text="{Binding FactsText}" Classes="subtle" FontSize="11"
                    TextTrimming="CharacterEllipsis"
                    IsVisible="{Binding FactsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-        <StackPanel Spacing="4" IsVisible="{Binding IsNewTable}">
+        <!-- ⭐ The type grid, its basis line and the DDL preview used to hang HERE, under the choice, which
+             made this Auto band the tallest thing on the surface in the „new table" variant and left the work
+             area with whatever was over. They moved into the work area (band F) in the configuration/results
+             split of 2026-07-27: the columns about to be created are a CONFIGURATION decision, so they belong
+             beside Mapping, not above it. What stays here is the choice itself and the facts about it. -->
+      </StackPanel>
+    </Border>
 
+    <!-- ══ Band F — the work area: THE CONFIGURATION, at full height ════════════════════════════
+         ⭐ Ratified 2026-07-27 — the split that reorganised the whole surface: **the top half is where the
+         import is DESIGNED, the bottom panel is where RESULTS land.** Before it, „Preview after conversion"
+         (a result — what the pipeline produces) sat in the work area competing for space with Mapping (a
+         decision), while the type grid — also a decision — sat above in an Auto band. Configuration and
+         outcome were interleaved and fought over the same pixels.
+
+         Now:
+           • EXISTING table → the work area is Mapping, full width. Nothing to share it with.
+           • NEW table      → Table types | Mapping, split by a draggable splitter, so the user sets the
+                              proportion. Both halves are configuration; both are about the same import.
+           • either way     → the converted preview is a BOTTOM TAB beside Source preview / Errors / Report.
+
+         The column widths are re-normalized in ONE place (ApplyWorkAreaLayout), the way the bottom panel's
+         rows are — a splitter turns a star column into absolute pixels the moment it is dragged, so a
+         variant switch has to set BOTH columns or the layout keeps whatever the last drag left (#240). -->
+    <Grid Grid.Row="5" x:Name="WorkArea" ColumnDefinitions="*,4,*">
+
+      <!-- ── The new table's columns: the left half, and only in that variant ───────────────────── -->
+      <Grid Grid.Column="0" x:Name="TypesPanel" Margin="12,8" RowDefinitions="Auto,*"
+            DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel"
+            IsVisible="{Binding IsNewTable}">
+
+        <!-- Title + the basis, in the same shape Mapping and the preview use: a title says what the region
+             IS, the subtle line beside it says how it currently stands. -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,6">
+          <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableTypesTitle}"
+                     Classes="group-header" VerticalAlignment="Center" Margin="0" />
           <!-- ⭐ Always visible (§3.4): the number of rows the types rest on. REK-7 makes that the WHOLE
                source, and a type is worth exactly as much as the evidence behind it. -->
-          <TextBlock Text="{Binding InferenceBasisText}" Classes="subtle" FontSize="11"
-                     IsVisible="{Binding InferenceBasisText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Grid.Column="1" Text="{Binding InferenceBasisText}" Classes="subtle" FontSize="12"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="2" Classes="flat" FontSize="12"
+                  Command="{Binding ToggleDdlCommand}"
+                  Content="{Binding DdlToggleText}" />
+        </Grid>
 
-          <TextBlock Text="{x:Static app:UiStrings.ImportNewTableEmpty}"
-                     Classes="subtle" FontSize="12" TextWrapping="Wrap" MaxWidth="640"
-                     HorizontalAlignment="Left"
-                     IsVisible="{Binding !HasNewColumns}" />
+        <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportNewTableEmpty}"
+                   Classes="subtle" FontSize="12" TextWrapping="Wrap" MaxWidth="560"
+                   HorizontalAlignment="Center" VerticalAlignment="Top"
+                   IsVisible="{Binding !HasNewColumns}" />
+
+        <Grid Grid.Row="1" RowDefinitions="*,Auto" IsVisible="{Binding HasNewColumns}">
 
           <!-- ⭐ The grid is EDITABLE, not merely shown (§0.3). Once the CREATE has run the table is
-               committed and beyond a Rollback, so this is the last moment a wrong type costs nothing. -->
-          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                  IsVisible="{Binding HasNewColumns}">
+               committed and beyond a Rollback, so this is the last moment a wrong type costs nothing.
+               ⚠ No MaxHeight any more: it lives in a star row now, so it takes the height the user gave the
+               work area and scrolls inside it — a fixed cap here would re-create the very thing the move
+               was made to end. -->
+          <Border Grid.Row="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
             <Grid RowDefinitions="Auto,*">
 
               <Grid Grid.Row="0" ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,5"
@@ -692,25 +732,25 @@
                user to read neither. The remaining one is the strip's. -->
 
           <!-- The exact statement that will run — from the same call the run itself makes, so this is a
-               preview of the real thing rather than an illustration of it. -->
-          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                  Padding="8,6" IsVisible="{Binding IsDdlVisible}">
+               preview of the real thing rather than an illustration of it. It travels WITH the types: it is
+               what they compile to, so leaving it behind in the Target tile would put a statement in one
+               place and its subject in another. -->
+          <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                  Padding="8,6" Margin="0,6,0,0" IsVisible="{Binding IsDdlVisible}">
             <ScrollViewer MaxHeight="140" HorizontalScrollBarVisibility="Auto">
               <SelectableTextBlock Text="{Binding CreateTableSql}" FontFamily="Consolas,monospace"
                                    FontSize="12" />
             </ScrollViewer>
           </Border>
-        </StackPanel>
-      </StackPanel>
-    </Border>
+        </Grid>
+      </Grid>
 
-    <!-- ══ Band F — the work area: Mapping | Preview after conversion. THE STAR ROW. ════════════
-         Two halves of one job, split by a draggable splitter: the mapping decides which field feeds
-         which column, and the preview shows what that decision produces. The empty state names the
-         next step rather than saying "no data" (§9.4). -->
-    <Grid Grid.Row="5" ColumnDefinitions="*,4,*">
+      <!-- Only there when there is a left half to divide. -->
+      <GridSplitter Grid.Column="1" x:Name="WorkSplitter" ResizeDirection="Columns" Width="4"
+                    VerticalAlignment="Stretch" Background="{DynamicResource BorderBrush}"
+                    IsVisible="{Binding Target.IsNewTable}" />
 
-    <Grid Grid.Column="0" x:Name="MappingPanel" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
+    <Grid Grid.Column="2" x:Name="MappingPanel" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
 
       <TextBlock Text="{x:Static app:UiStrings.ImportMappingEmpty}"
                  Classes="subtle" FontSize="12" MaxWidth="560"
@@ -845,42 +885,6 @@
       </Grid>
     </Grid>
 
-    <GridSplitter Grid.Column="1" ResizeDirection="Columns" Width="4"
-                  VerticalAlignment="Stretch" Background="{DynamicResource BorderBrush}" />
-
-    <!-- ══ The converted preview (§3.6) — "exactly what reaches the database" ═════════════════
-         Filled by the REAL pipeline (bounded provider + a writer that keeps rows instead of sending
-         them), which is the only way that claim can be true.
-         ⛔ The shared filter panel and the aggregation bar are deliberately NOT wired: a filter here
-            would suggest it changes what gets imported. Filtering before import is its own planned
-            feature (§9.5) — a boundary, not an oversight. -->
-    <Grid Grid.Column="2" Margin="12,8" RowDefinitions="Auto,*"
-          DataContext="{Binding ConvertedPreview}" x:DataType="vm:ImportConvertedPreviewViewModel">
-
-      <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,0,0,6">
-        <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportPreviewTitle}"
-                   Classes="group-header" VerticalAlignment="Center" Margin="0" />
-        <TextBlock Grid.Column="1" Text="{Binding Headline}" Classes="subtle" FontSize="12"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-      </Grid>
-
-      <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportPreviewEmpty}"
-                 Classes="subtle" FontSize="12" MaxWidth="420" TextWrapping="Wrap"
-                 HorizontalAlignment="Center" VerticalAlignment="Top"
-                 IsVisible="{Binding !HasRows}" />
-
-      <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-              IsVisible="{Binding HasRows}">
-        <DataGrid x:Name="ConvertedPreviewGrid"
-                  ItemsSource="{Binding Rows}"
-                  IsReadOnly="True"
-                  AutoGenerateColumns="False"
-                  HeadersVisibility="Column"
-                  GridLinesVisibility="All"
-                  CanUserSortColumns="False"
-                  FontSize="12" />
-      </Border>
-    </Grid>
     </Grid>
 
     <!-- ══ The bottom panel's splitter (U2) ═════════════════════════════════════════════════════
@@ -933,6 +937,47 @@
                       CanUserSortColumns="False"
                       FontSize="12" />
           </Grid>
+          </TabItem>
+
+          <!-- ── Preview after conversion (§3.6) — "exactly what reaches the database" ──────────────
+               ⭐ It lives HERE, not in the work area, since the configuration/results split of 2026-07-27.
+               It is a RESULT — what the pipeline produces from the current settings — and it is needed in
+               both target variants, so putting it beside Mapping made a decision and its consequence fight
+               over the same pixels while the work area lost half its width to it. The bottom panel is where
+               outcomes belong, next to Source preview, Errors and Report.
+
+               Filled by the REAL pipeline (bounded provider + a writer that keeps rows instead of sending
+               them), which is the only way §3.6's claim can be true.
+               ⛔ The shared filter panel and the aggregation bar are deliberately NOT wired: a filter here
+                  would suggest it changes what gets imported. Filtering before import is its own planned
+                  feature (§9.5) — a boundary, not an oversight. -->
+          <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportPreviewTitle}">
+          <Panel IsVisible="{Binding !IsBottomPanelCollapsed}">
+          <Grid RowDefinitions="Auto,*" Margin="12,8"
+                DataContext="{Binding ConvertedPreview}" x:DataType="vm:ImportConvertedPreviewViewModel">
+
+            <TextBlock Grid.Row="0" Text="{Binding Headline}" Classes="subtle" FontSize="12"
+                       Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding HasRows}" />
+
+            <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportPreviewEmpty}"
+                       Classes="subtle" FontSize="12" MaxWidth="420" TextWrapping="Wrap"
+                       HorizontalAlignment="Center" VerticalAlignment="Top"
+                       IsVisible="{Binding !HasRows}" />
+
+            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                    IsVisible="{Binding HasRows}">
+              <DataGrid x:Name="ConvertedPreviewGrid"
+                        ItemsSource="{Binding Rows}"
+                        IsReadOnly="True"
+                        AutoGenerateColumns="False"
+                        HeadersVisibility="Column"
+                        GridLinesVisibility="All"
+                        CanUserSortColumns="False"
+                        FontSize="12" />
+            </Border>
+          </Grid>
+          </Panel>
           </TabItem>
 
           <!-- ── Errors: what the CURRENT settings would reject, found without running anything ──

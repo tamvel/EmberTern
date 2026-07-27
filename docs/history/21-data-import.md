@@ -652,12 +652,51 @@ posortowanej pozycji, bez ani jednego zapytania do katalogu. To fakt („ta tabe
 polecenie („odśwież"). Oba objawy przypięte testami, a testy sprawdzone przez **tymczasowe cofnięcie
 poprawki** — padły oba.
 
+### ⭐⭐ Podział konfiguracja / wynik — lekcja z trzech podejść do jednego objawu
+
+Objaw był przez cały czas ten sam: w wariancie „New table" środek okna jest za ciasny. Trzy podejścia:
+
+1. **Podłoga na wierszu roboczym** (`MinHeight` + zacisk dolnego panelu). Zamykała U5 dosłownie, ale żeby
+   podłoga była osiągalna, ustąpić musiał dolny panel — więc jeden panel odzyskał miejsce kosztem drugiego.
+   **Cofnięte przez użytkownika po obejrzeniu w działaniu.**
+2. **Odłożenie do sprintu UX** — „gdy kontrolki zmaleją, problem zniknie". Prawdziwe, ale to była zgoda na
+   życie z wadą, a nie jej rozpoznanie.
+3. **Podział odpowiedzialności** — i to była właściwa odpowiedź, postawiona przez użytkownika:
+
+> „Preview jest efektem importu, a nie konfiguracji. Typy i Mapping są elementami konfiguracji. Obecnie
+> mieszamy konfigurację z wynikiem i oba panele walczą o tę samą przestrzeń."
+
+To rozstrzyga wszystko, czego dwa poprzednie podejścia nie umiały ruszyć. „Preview after conversion" jest
+potrzebny w **obu** wariantach celu i jest **wynikiem** — schodzi do dolnych zakładek, obok Source preview,
+Errors i Report, czyli tam, gdzie już mieszkają wszystkie wyniki. Powierzchnia robocza zostaje **w całości
+konfiguracji**:
+
+```
+Existing table:   [ Mapping — pełna szerokość                    ]
+New table:        [ Typy tabeli   │   Mapping ]     (splitter)
+dół (obie):       Source preview · Preview after conversion · Errors · Report
+```
+
+Siatka typów i podgląd DDL wyszły przy okazji z pasa `Auto` do lewej połowy powierzchni roboczej — a to
+właśnie ten pas był najwyższą rzeczą na ekranie i przyczyną pierwotnego objawu. Pas Cel jest znów cienki:
+wybór wariantu, nazwa, opcje i linia faktów.
+
+⭐ **Lekcja, która wychodzi poza ten moduł:** gdy dwa panele biją się o miejsce, warto najpierw zapytać, czy
+oba należą do tej samej **kategorii odpowiedzialności**. Tutaj jeden był decyzją, drugi jej skutkiem —
+i dopóki stały obok siebie, każda odpowiedź w wymiarze „ile pikseli" musiała być kompromisem. Żadna zmiana
+wysokości nie naprawiłaby złego przydziału.
+
+⚠ Przy okazji: **„Show DDL" pojechał razem z podglądem DDL** do panelu typów. Przełącznik w jednym pasie i
+rzecz, którą odsłania, w innym to sposób na to, żeby kontrolka przestała wyglądać na powiązaną z czymkolwiek.
+Oraz `ReportTabIndex` przesunął się z 2 na 3 — zaszyty indeks, którego nie przesunie się razem z paskiem
+zakładek, wysyła zakończony bieg na złą zakładkę.
+
 ### Co zostaje otwarte po zamknięciu modułu
 
 | Pozycja | Dlaczego zostaje |
 |---|---|
 | **U4 — gęstość kontrolek** | globalna, nie modułowa: `ControlStyles.axaml` nie ma ani jednego stylu domyślnego dla `TextBox`/`ComboBox`/`CheckBox`/`Button`. Ratyfikowany **sprint UX całego EmberTerna** po module, projektowany z oglądu wszystkich powierzchni naraz |
-| **U5 — powierzchnia robocza bez podłogi** | ⭐ **Rozpoznanie jest prawdziwe, lekarstwo zostało cofnięte.** Wiersz roboczy jest jedyną gwiazdką wśród pasów `Auto`, więc w wariancie „New table" kafelek Cel potrafi zdusić Mapowanie i podgląd do zera. Podłoga (`MinHeight` + zacisk dolnego panelu) weszła na jedną rundę przeglądu i **użytkownik ją cofnął po obejrzeniu w działaniu**: żeby ją uszanować, dolny panel musiał ustąpić, przez co środek okna urósł, a dolny panel przestał być użyteczny. Przy dzisiejszych wysokościach kontrolek nie da się mieć obu naraz — **to jest problem gęstości przebrany za problem układu**, więc idzie do sprintu UX, gdzie powierzchnia odzyska ~100 px. ⛔ Nie przywracać podłogi, nie dokładać kolejnej sekcji pionowej |
+| ~~**U5 — powierzchnia robocza bez podłogi**~~ | ⭐⭐ **ROZWIĄZANY przez podział odpowiedzialności (2026-07-27), nie przez wysokości** — patrz sekcja niżej. Zapis poniżej zostaje jako przestroga: ⭐ **Rozpoznanie było prawdziwe, lekarstwo zostało cofnięte.** Wiersz roboczy jest jedyną gwiazdką wśród pasów `Auto`, więc w wariancie „New table" kafelek Cel potrafi zdusić Mapowanie i podgląd do zera. Podłoga (`MinHeight` + zacisk dolnego panelu) weszła na jedną rundę przeglądu i **użytkownik ją cofnął po obejrzeniu w działaniu**: żeby ją uszanować, dolny panel musiał ustąpić, przez co środek okna urósł, a dolny panel przestał być użyteczny. Przy dzisiejszych wysokościach kontrolek nie da się mieć obu naraz — **to jest problem gęstości przebrany za problem układu**, więc idzie do sprintu UX, gdzie powierzchnia odzyska ~100 px. ⛔ Nie przywracać podłogi, nie dokładać kolejnej sekcji pionowej |
 | Pozostałe życzenia UX z przeglądów I11 | ta sama decyzja użytkownika — do sprintu UX, nie do modułu |
 | Kolumna „Podstawa" nie odzyskuje szerokości po ukryciu | proporcje `3*` są wspólne dla nagłówka i wierszy; zwinięcie wymaga konwertera `bool → GridLength`, czyli nowego typu na zamknięciu modułu |
 | **Eksport/import profilu do `.json`** | opcjonalny w §6, poza DoD I11: wymaga nowego serializatora w Core i dwóch szwów w widoku — **powiększyłby powierzchnię, którą I11 istniał po to, żeby poświadczyć jako nietkniętą** |
