@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EmberTern.Core.Import;
 
@@ -130,6 +132,33 @@ public sealed partial class ImportSourceSectionViewModel : ViewModelBase
     /// one, because an automat that fights the user is worse than none (§2.2 point 2).</summary>
     [ObservableProperty] private bool _isExpanded = true;
 
+    // ── What the current provider can be asked about (§3.3) ─────────────────────────────────────────────
+    //
+    // ⭐ These are a PROJECTION of ImportProviderCapabilities, not a source-kind switch. The view binds its
+    // controls to them, so a provider added later brings its own answers and the XAML never learns a new format
+    // name. That is the whole reason the capabilities object exists — the alternative, `if (kind == Xlsx)` in a
+    // template, is the thing §3.3 forbids by name.
+
+    /// <summary>Column/text separators are meaningful — a workbook has none.</summary>
+    [ObservableProperty] private bool _supportsDelimiters = true;
+
+    /// <summary>The source's encoding is the user's choice. A workbook carries its own, so the control is not
+    /// shown at all rather than shown and quietly ignored.</summary>
+    [ObservableProperty] private bool _supportsEncoding = true;
+
+    /// <summary>The source has selectable sheets.</summary>
+    [ObservableProperty] private bool _supportsSheets;
+
+    /// <summary>The sheets the current source offers. A FACT about the file, so it is re-read with the source
+    /// and never stored in the configuration — only the chosen index is a decision (§4.8.2).</summary>
+    public ObservableCollection<SourceSheet> Sheets { get; } = new();
+
+    [ObservableProperty] private SourceSheet? _selectedSheet;
+
+    /// <summary>Read a numeric cell whose format says "date" as a date. Off ⇒ the raw Excel serial, which is
+    /// occasionally what the user actually wants to see.</summary>
+    [ObservableProperty] private bool _datesAsDates = true;
+
     /// <summary>The collapsed one-liner: <c>Fantomy.xlsx · WIN1250 · ";" · DMY</c>. The whole point of the
     /// surface — an expert reads the entire configuration without opening anything (§2.2 point 1).</summary>
     public string SummaryText
@@ -251,6 +280,54 @@ public sealed partial class ImportSourceSectionViewModel : ViewModelBase
         NullToken = NullToken,
     };
 
+    /// <summary>
+    /// The spreadsheet half of the same section.
+    /// <para>
+    /// Note that the header flag and the row window are read from the SAME fields the delimited options use.
+    /// They are not duplicated per source kind because they are not different questions — "does row 1 name the
+    /// columns" means one thing whatever the file is, and §3.3 shows them in both variants for that reason.
+    /// </para>
+    /// </summary>
+    public SpreadsheetOptions BuildSpreadsheet(SpreadsheetOptions? previous) => new()
+    {
+        // The index is the identity the workbook guarantees; the name rides along so a restored profile can
+        // later say "the sheet called X has moved" instead of silently reading whatever now sits here.
+        SheetIndex = SelectedSheet?.Index ?? previous?.SheetIndex ?? 0,
+        SheetName = SelectedSheet?.Name ?? previous?.SheetName,
+        HasHeader = HasHeader,
+        FirstDataRow = Math.Max(1, FirstDataRow),
+        LastRow = ParseLastRow(LastRowText),
+        DatesAsDates = DatesAsDates,
+    };
+
+    /// <summary>
+    /// Projects the active provider's capabilities onto the section, and offers whatever sheets the source has.
+    /// Called by the coordinator after a source is read — the section never picks a provider itself.
+    /// </summary>
+    public void ApplyCapabilities(ImportProviderCapabilities capabilities, IReadOnlyList<SourceSheet> sheets)
+    {
+        if (capabilities is null) throw new ArgumentNullException(nameof(capabilities));
+
+        SupportsDelimiters = capabilities.SupportsDelimiters;
+        SupportsEncoding = capabilities.SupportsEncoding;
+        SupportsSheets = capabilities.SupportsSheets;
+
+        // Rebuilding the list must not read as the user picking a sheet — that would restart the very
+        // recalculation chain that produced these sheets (the same trap SuspendChangeNotifications exists for).
+        var wanted = SelectedSheet?.Index ?? 0;
+        _suspendChangeNotification = true;
+        try
+        {
+            Sheets.Clear();
+            foreach (var sheet in sheets) Sheets.Add(sheet);
+            SelectedSheet = Sheets.FirstOrDefault(s => s.Index == wanted) ?? Sheets.FirstOrDefault();
+        }
+        finally
+        {
+            _suspendChangeNotification = false;
+        }
+    }
+
     public ImportCultureOptions BuildCulture() => new()
     {
         DecimalSeparator = DecimalSeparator.Value ?? ',',
@@ -291,6 +368,30 @@ public sealed partial class ImportSourceSectionViewModel : ViewModelBase
             LastRowText = delimited.LastRow?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
             TrimWhitespace = delimited.TrimWhitespace;
             NullToken = delimited.NullToken;
+
+            // A spreadsheet configuration overrides the three settings the two option blocks share, because for
+            // such a source IT is the one that was saved — exactly one block is ever non-null (the invariant
+            // ImportConfiguration.MatchesSourceKind enforces), so this cannot be applied twice.
+            if (configuration.Spreadsheet is { } spreadsheet)
+            {
+                HasHeader = spreadsheet.HasHeader;
+                FirstDataRow = spreadsheet.FirstDataRow;
+                LastRowText = spreadsheet.LastRow?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+                DatesAsDates = spreadsheet.DatesAsDates;
+
+                // The real sheet list arrives with the source; until then the stored choice is carried by a
+                // stand-in so that a profile applied before the file is read does not lose it.
+                if (Sheets.Count == 0)
+                {
+                    SelectedSheet = new SourceSheet(
+                        spreadsheet.SheetIndex, spreadsheet.SheetName ?? string.Empty, null);
+                }
+                else
+                {
+                    SelectedSheet = Sheets.FirstOrDefault(s => s.Index == spreadsheet.SheetIndex)
+                        ?? Sheets.FirstOrDefault();
+                }
+            }
 
             var culture = configuration.Culture;
             DecimalSeparator = Match(DecimalSeparatorOptions, culture.DecimalSeparator, DecimalSeparatorOptions[0]);
@@ -364,6 +465,8 @@ public sealed partial class ImportSourceSectionViewModel : ViewModelBase
     partial void OnFirstDataRowChanged(int value) => RaiseChanged();
     partial void OnLastRowTextChanged(string value) => RaiseChanged();
     partial void OnTrimWhitespaceChanged(bool value) => RaiseChanged();
+    partial void OnSelectedSheetChanged(SourceSheet? value) => RaiseChanged();
+    partial void OnDatesAsDatesChanged(bool value) => RaiseChanged();
     partial void OnNullTokenChanged(string value) => RaiseChanged();
     partial void OnDecimalSeparatorChanged(ImportCharOption value) => RaiseChanged();
     partial void OnThousandsSeparatorChanged(ImportCharOption value) => RaiseChanged();

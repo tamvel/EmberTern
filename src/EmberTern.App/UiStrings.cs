@@ -163,6 +163,10 @@ internal static class UiStrings
     // Never "2147483647" — an implementation detail in the UI is what §8 point 7 criticises.
     public const string ImportLastRowPlaceholder = "(to the end)";
     public const string ImportTrimWhitespaceLabel = "Trim whitespace around values";
+    // ── Spreadsheet sources (etap I9). Shown only when the provider declares sheets. ──
+    public const string ImportSheetLabel = "Sheet";
+    public const string ImportDatesAsDatesLabel = "Treat date cells as dates (otherwise: Excel serial number)";
+
     public const string ImportNullTokenLabel = "NULL value";
     public const string ImportNullTokenPlaceholder = "(empty field)";
     public const string ImportDecimalSeparatorLabel = "Decimal separator";

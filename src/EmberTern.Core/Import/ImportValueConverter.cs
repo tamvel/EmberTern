@@ -90,6 +90,12 @@ public static class ImportValueConverter
 
         if (raw is null || raw is DBNull) return ImportValueResult.Null;
 
+        // ⭐ Checked before every target-type branch, on purpose: a cell the source marked as an error must fail
+        // for EVERY column kind. Reaching the text branch below would return it as Ok("#N/A") — the one outcome
+        // R20 forbids, and the reason SourceErrorValue is a value rather than a convention.
+        if (raw is SourceErrorValue sourceError)
+            return ImportValueResult.Fail(ImportErrorKind.SourceErrorValue, sourceError.Code);
+
         if (raw is string text)
         {
             // An empty (or all-whitespace) field is the ABSENCE of a value, not a value to be converted — so

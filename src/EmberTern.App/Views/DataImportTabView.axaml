@@ -315,11 +315,25 @@
           <StackPanel Spacing="5">
             <TextBlock Text="{x:Static app:UiStrings.ImportParsingHeader}" Classes="group-header" />
 
+            <!-- ⭐ Sheet picker — shown when the PROVIDER says the source has sheets, never when a file
+                 extension says so (§3.3). The whole spreadsheet variant of this card is these two rows plus
+                 the row window below, which both variants share. -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" IsVisible="{Binding SupportsSheets}">
+              <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportSheetLabel}"
+                         Classes="field-label" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding Sheets}"
+                        SelectedItem="{Binding SelectedSheet, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Name}"
+                        HorizontalAlignment="Left" MinWidth="220" FontSize="12" />
+            </Grid>
+
             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
                   ColumnSpacing="8" RowSpacing="4">
               <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static app:UiStrings.ImportDelimiterLabel}"
-                         Classes="field-label" VerticalAlignment="Center" />
-              <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                         Classes="field-label" VerticalAlignment="Center"
+                         IsVisible="{Binding SupportsDelimiters}" />
+              <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                          IsVisible="{Binding SupportsDelimiters}">
                 <ComboBox ItemsSource="{Binding DelimiterOptions}" SelectedItem="{Binding Delimiter, Mode=TwoWay}"
                           DisplayMemberBinding="{Binding Display}" Width="110" FontSize="12" />
                 <CheckBox Content="{x:Static app:UiStrings.ImportAutoDetectLabel}"
@@ -333,8 +347,10 @@
                          IsVisible="{Binding DelimiterEvidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
               <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static app:UiStrings.ImportEncodingLabel}"
-                         Classes="field-label" VerticalAlignment="Center" />
-              <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                         Classes="field-label" VerticalAlignment="Center"
+                         IsVisible="{Binding SupportsEncoding}" />
+              <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                          IsVisible="{Binding SupportsEncoding}">
                 <ComboBox ItemsSource="{Binding EncodingOptions}" SelectedItem="{Binding Encoding, Mode=TwoWay}"
                           DisplayMemberBinding="{Binding Display}" Width="110" FontSize="12" />
                 <CheckBox Content="{x:Static app:UiStrings.ImportAutoDetectLabel}"
@@ -348,7 +364,7 @@
             </Grid>
 
             <!-- Qualifier + line ending: two narrow pickers that are always read together. -->
-            <StackPanel Orientation="Horizontal" Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding SupportsDelimiters}">
               <TextBlock Text="{x:Static app:UiStrings.ImportQuoteLabel}" Classes="field-label"
                          VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding QuoteOptions}" SelectedItem="{Binding Quote, Mode=TwoWay}"
@@ -374,7 +390,7 @@
                        PlaceholderText="{x:Static app:UiStrings.ImportLastRowPlaceholder}" />
             </StackPanel>
 
-            <StackPanel Orientation="Horizontal" Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding SupportsDelimiters}">
               <CheckBox Content="{x:Static app:UiStrings.ImportTrimWhitespaceLabel}"
                         IsChecked="{Binding TrimWhitespace, Mode=TwoWay}" FontSize="12"
                         VerticalAlignment="Center" />
@@ -383,6 +399,12 @@
               <TextBox Text="{Binding NullToken, Mode=TwoWay}" Width="110" FontSize="12"
                        PlaceholderText="{x:Static app:UiStrings.ImportNullTokenPlaceholder}" />
             </StackPanel>
+
+            <!-- The spreadsheet's own value question: a date cell is a NUMBER plus a date format, and nothing
+                 else distinguishes it (I0 / R3). Turning this off shows the raw Excel serial. -->
+            <CheckBox Content="{x:Static app:UiStrings.ImportDatesAsDatesLabel}"
+                      IsChecked="{Binding DatesAsDates, Mode=TwoWay}" FontSize="12"
+                      IsVisible="{Binding SupportsSheets}" />
           </StackPanel>
           </Border>
 
@@ -474,7 +496,7 @@
 
           <TextBox Grid.Column="1" Text="{Binding NewTableName, Mode=TwoWay}"
                    IsEnabled="{Binding IsNewTable}"
-                   Watermark="{x:Static app:UiStrings.ImportTargetNewTableWatermark}"
+                   PlaceholderText="{x:Static app:UiStrings.ImportTargetNewTableWatermark}"
                    HorizontalAlignment="Left" MinWidth="360" FontSize="12" />
 
           <!-- ⚠ §0.5: the CREATE is committed before the first row (gotcha #213), so this is the only

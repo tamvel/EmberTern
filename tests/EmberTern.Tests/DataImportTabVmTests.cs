@@ -4,6 +4,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
 using EmberTern.App;
 using EmberTern.App.Controls;
 using EmberTern.App.ViewModels;
@@ -195,6 +198,122 @@ public class DataImportTabVmTests : IDisposable
     }
 
     /// <summary>
+    /// ⭐ Etap I9 — the same surface, the same code, a workbook. This is the test that pins the ONE thing App
+    /// had to learn: choosing a reader from the source kind. Everything after that point — schema, preview, row
+    /// numbers — is the path CSV already used, which is the pillar §1.4 claims and I9 exists to check.
+    /// <para>
+    /// Note the values arrive NATIVE (a <see cref="double"/>, not "42"), which is what lets I8's type inference
+    /// work on a sheet without a single change.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ChoosingAWorkbook_ReadsItThroughTheSameSurfaceAsText()
+    {
+        var vm = Vm();
+        vm.Source.FilePath = WriteWorkbook("in.xlsx");
+        await SettleAsync(vm);
+
+        Assert.False(vm.HasStatusMessage); // no "format not supported" refusal any more
+        Assert.Equal(new[] { "Indeks", "Nazwa" }, vm.PreviewFields.Select(f => f.Name));
+        Assert.Equal(2, vm.PreviewRows.Count);
+        Assert.Equal(2, vm.PreviewRows[0].SourceRowNumber);
+        Assert.Equal("abc", vm.PreviewRows[0].ValueAt(1));
+        Assert.Equal(1d, vm.PreviewRows[0].ValueAt(0));
+    }
+
+    /// <summary>
+    /// ⭐ §3.3: the Format section follows the PROVIDER's capabilities, not the file extension. A workbook
+    /// carries its own encoding and has no separators, so those controls are not shown at all — rather than
+    /// shown and quietly ignored, which is the state that makes a user think they changed something.
+    /// </summary>
+    [Fact]
+    public async Task TheFormatSection_FollowsTheProvidersCapabilities_NotTheFileExtension()
+    {
+        var vm = Vm();
+
+        vm.Source.FilePath = WriteFile("in.csv", "Indeks;Nazwa\n1;abc\n");
+        await SettleAsync(vm);
+        Assert.True(vm.Source.SupportsDelimiters);
+        Assert.True(vm.Source.SupportsEncoding);
+        Assert.False(vm.Source.SupportsSheets);
+        Assert.Empty(vm.Source.Sheets);
+
+        vm.Source.FilePath = WriteWorkbook("in.xlsx");
+        await SettleAsync(vm);
+        Assert.False(vm.Source.SupportsDelimiters);
+        Assert.False(vm.Source.SupportsEncoding);
+        Assert.True(vm.Source.SupportsSheets);
+        Assert.Equal("Arkusz1", Assert.Single(vm.Source.Sheets).Name);
+    }
+
+    /// <summary>The sheet choice is a DECISION, so it must survive the round trip through the record — a
+    /// setting that lived only on the surface would be missing from a saved profile (§4.8.6).</summary>
+    [Fact]
+    public async Task TheSheetChoiceAndDateHandling_SurviveTheConfigurationRoundTrip()
+    {
+        var vm = Vm();
+        vm.Source.FilePath = WriteWorkbook("in.xlsx");
+        await SettleAsync(vm);
+
+        vm.Source.DatesAsDates = false;
+        var configuration = vm.BuildConfiguration();
+
+        Assert.Null(configuration.Delimited); // exactly one options block, matching the source kind
+        Assert.NotNull(configuration.Spreadsheet);
+        Assert.Equal(0, configuration.Spreadsheet!.SheetIndex);
+        Assert.Equal("Arkusz1", configuration.Spreadsheet.SheetName);
+        Assert.False(configuration.Spreadsheet.DatesAsDates);
+
+        var reloaded = Vm();
+        reloaded.ApplyConfiguration(configuration);
+        Assert.False(reloaded.Source.DatesAsDates);
+        Assert.Equal(0, reloaded.Source.SelectedSheet?.Index);
+    }
+
+    /// <summary>A two-column, two-row workbook with a header — the spreadsheet twin of the CSV above.</summary>
+    private string WriteWorkbook(string name)
+    {
+        var path = Path.Combine(_dir, name);
+        using var document = SpreadsheetDocument.Create(path, SpreadsheetDocumentType.Workbook);
+        var workbookPart = document.AddWorkbookPart();
+        workbookPart.Workbook = new Workbook();
+        var worksheetPart = workbookPart.AddNewPart<WorksheetPart>();
+
+        static Cell Text(string reference, string value) => new()
+        {
+            CellReference = reference,
+            DataType = CellValues.InlineString,
+            InlineString = new InlineString(new Text(value)),
+        };
+        static Cell Number(string reference, string value) => new()
+        {
+            CellReference = reference,
+            CellValue = new CellValue(value),
+        };
+        static Row Line(uint index, params Cell[] cells)
+        {
+            var row = new Row { RowIndex = index };
+            foreach (var cell in cells) row.Append(cell);
+            return row;
+        }
+
+        var sheetData = new SheetData();
+        sheetData.Append(Line(1, Text("A1", "Indeks"), Text("B1", "Nazwa")));
+        sheetData.Append(Line(2, Number("A2", "1"), Text("B2", "abc")));
+        sheetData.Append(Line(3, Number("A3", "2"), Text("B3", "def")));
+
+        worksheetPart.Worksheet = new Worksheet(sheetData);
+        workbookPart.Workbook.AppendChild(new Sheets(new Sheet
+        {
+            Id = workbookPart.GetIdOfPart(worksheetPart),
+            SheetId = 1U,
+            Name = "Arkusz1",
+        }));
+        workbookPart.Workbook.Save();
+        return path;
+    }
+
+    /// <summary>
     /// ⭐ A record that disagrees with the rest of the file about its field count is the instant tell for a
     /// wrong separator — marking it beats making the user count columns (§3.6).
     /// <para>
@@ -264,18 +383,26 @@ public class DataImportTabVmTests : IDisposable
         Assert.False(vm.Readiness.CanRun);
     }
 
-    /// <summary>A format with no provider yet is REFUSED WITH A REASON. Pretending to read it, or hiding it
-    /// from the file filter and leaving the user guessing, would both be worse (§0 / decision D2).</summary>
+    /// <summary>
+    /// A format with no provider yet is REFUSED WITH A REASON. Pretending to read it, or hiding it from the file
+    /// filter and leaving the user guessing, would both be worse (§0 / decision D2).
+    /// <para>
+    /// ⚠ Narrowed from <c>.xlsx</c> to <c>.xls</c> in etap I9, when <c>.xlsx</c> gained a provider. Deliberately
+    /// NOT deleted: the refusal is still the correct behaviour for BIFF8 until I10, and I0 measured why —
+    /// <c>DocumentFormat.OpenXml</c> cannot open such a file at all (<c>FileFormatException</c>), so reading it
+    /// needs a different library rather than a different code path.
+    /// </para>
+    /// </summary>
     [Fact]
-    public async Task ASpreadsheet_IsRefusedWithAReason_NotSilentlyIgnored()
+    public async Task AFormatWithNoProviderYet_IsRefusedWithAReason_NotSilentlyIgnored()
     {
         var vm = Vm();
-        vm.Source.FilePath = WriteFile("book.xlsx", "not really a workbook");
+        vm.Source.FilePath = WriteFile("book.xls", "not really a workbook");
         await SettleAsync(vm);
 
         Assert.True(vm.HasStatusMessage);
         Assert.Equal(MessageSeverity.Warning, vm.StatusSeverity);
-        Assert.Contains(".xlsx", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(".xls", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

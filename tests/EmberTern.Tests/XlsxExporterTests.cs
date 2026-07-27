@@ -12,7 +12,7 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Query;
-using EmberTern.Export.Office;
+using EmberTern.Office;
 using Xunit;
 
 namespace EmberTern.Tests;

@@ -38,6 +38,12 @@ public sealed class BoundedImportProvider : IImportProvider
         IImportSource source, ImportConfiguration configuration, CancellationToken cancellationToken)
         => _inner.ReadSchemaAsync(source, configuration, cancellationToken);
 
+    /// <summary>Passed straight through, for the same reason the schema is: a bound limits how much data is
+    /// read, not what the source is made of.</summary>
+    public Task<IReadOnlyList<SourceSheet>> ListSheetsAsync(
+        IImportSource source, CancellationToken cancellationToken)
+        => _inner.ListSheetsAsync(source, cancellationToken);
+
     public async IAsyncEnumerable<RawRecord> ReadRecordsAsync(
         IImportSource source,
         ImportConfiguration configuration,

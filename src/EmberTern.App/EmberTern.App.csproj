@@ -36,7 +36,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EmberTern.Core\EmberTern.Core.csproj" />
-    <ProjectReference Include="..\EmberTern.Export.Office\EmberTern.Export.Office.csproj" />
+    <ProjectReference Include="..\EmberTern.Office\EmberTern.Office.csproj" />
     <ProjectReference Include="..\EmberTern.Firebird\EmberTern.Firebird.csproj" />
   </ItemGroup>
 

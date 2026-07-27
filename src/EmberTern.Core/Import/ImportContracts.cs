@@ -112,6 +112,18 @@ public interface IImportProvider
     /// conversion belongs to one place, and that place is not here.</summary>
     IAsyncEnumerable<RawRecord> ReadRecordsAsync(
         IImportSource source, ImportConfiguration configuration, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The sheets this source offers, for the Format section's sheet picker (§3.3 variant b).
+    /// <para>
+    /// Meaningful only when <see cref="ImportProviderCapabilities.SupportsSheets"/> is set; a provider whose
+    /// source has no sheets returns an empty list. It lives on the port rather than on a spreadsheet-specific
+    /// service so that the surface asks <em>the provider</em> what it can offer — the same reason
+    /// <see cref="Capabilities"/> exists — and no caller has to know that a workbook type is involved.
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyList<SourceSheet>> ListSheetsAsync(
+        IImportSource source, CancellationToken cancellationToken);
 }
 
 /// <summary>

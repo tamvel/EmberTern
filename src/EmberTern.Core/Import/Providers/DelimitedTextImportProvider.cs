@@ -123,6 +123,12 @@ public sealed class DelimitedTextImportProvider : IImportProvider
         }
     }
 
+    /// <summary>Delimited text has no sheets. Empty, never an exception: the caller is the Format section, which
+    /// asks every provider the same question and shows a picker only when the capability says so.</summary>
+    public Task<IReadOnlyList<SourceSheet>> ListSheetsAsync(
+        IImportSource source, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<SourceSheet>>(Array.Empty<SourceSheet>());
+
     /// <summary>
     /// Turns the record's text fields into raw values, resolving the declared NULL token.
     /// <para>

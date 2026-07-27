@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Controls;
 using EmberTern.Core.Import;
 using EmberTern.Core.Import.Providers;
+using EmberTern.Office;
 
 namespace EmberTern.App.ViewModels;
 
@@ -68,6 +69,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     public const int SourcePreviewRows = 200;
 
     private readonly IImportProvider _delimitedProvider = new DelimitedTextImportProvider();
+    private readonly IImportProvider _spreadsheetProvider = new XlsxImportProvider();
 
     /// <summary>Everything outside this surface, as delegates — so the VM stays testable without a database and
     /// no Firebird or Avalonia type reaches a ViewModel (rule #1).</summary>
@@ -471,7 +473,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
             var outcome = await Task.Run(
                 () => ImportPipeline.RunAsync(
-                    configuration, target, _delimitedProvider, source, writer,
+                    configuration, target, ProviderFor(configuration), source, writer,
                     ImportCharsetGuard.Strict(_environment.ConnectionCharset?.Invoke()),
                     progress, token),
                 token).ConfigureAwait(true);
@@ -897,7 +899,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             // Exactly one options block is set, matching the source kind — the invariant
             // ImportConfiguration.MatchesSourceKind checks and readiness reports.
             Delimited = isSpreadsheet ? null : Source.BuildDelimited(),
-            Spreadsheet = isSpreadsheet ? _configuration.Spreadsheet ?? new SpreadsheetOptions() : null,
+            Spreadsheet = isSpreadsheet ? Source.BuildSpreadsheet(_configuration.Spreadsheet) : null,
             Culture = Source.BuildCulture(),
             Target = Target.BuildTarget(_configuration.Target),
             // The grid is authoritative once it has rows; before that the held mapping passes through, so a
@@ -1059,7 +1061,8 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             ConvertedPreview.IsBusy = true;
 
             var writer = new PreviewImportWriter(ImportConvertedPreviewViewModel.MaxRows);
-            var provider = new BoundedImportProvider(_delimitedProvider, ImportConvertedPreviewViewModel.MaxRows);
+            var provider = new BoundedImportProvider(
+                ProviderFor(configuration), ImportConvertedPreviewViewModel.MaxRows);
 
             var outcome = await Task.Run(
                 () => ImportPipeline.RunAsync(
@@ -1170,7 +1173,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             var configuration = _configuration;
             var inference = await Task.Run(
                     () => ColumnTypeInferencer.InferAsync(
-                        _schema, _delimitedProvider, source, configuration,
+                        _schema, ProviderFor(configuration), source, configuration,
                         ColumnTypeInferencer.DefaultScanLimit, cancellationToken),
                     cancellationToken)
                 .ConfigureAwait(true);
@@ -1391,11 +1394,29 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         IsBusy = true;
         try
         {
+            var provider = ProviderFor(configuration);
+
+            // ⭐ The section shows whatever THIS provider declares it can be asked about (§3.3) — the surface
+            // never switches on the source kind itself. Sheets are fetched only when there can be any.
+            var sheets = provider.Capabilities.SupportsSheets
+                ? await provider.ListSheetsAsync(source, cancellationToken).ConfigureAwait(true)
+                : (IReadOnlyList<SourceSheet>)Array.Empty<SourceSheet>();
+            if (cancellationToken.IsCancellationRequested) return;
+            Source.ApplyCapabilities(provider.Capabilities, sheets);
+
             // Detection runs FIRST and writes into the declared values, because those are what the reader
             // then uses (§0.4 — the detector proposes, it does not maintain a second hidden setting).
-            using (Source.SuspendChangeNotifications())
+            //
+            // It is skipped entirely for a source that has neither question. A workbook carries its own
+            // encoding and has no separators, so sniffing one would manufacture evidence for two controls that
+            // are not even on screen — and §0.4's "declared, never guessed" cuts against inventing a proposal
+            // nobody can see or correct.
+            if (provider.Capabilities.SupportsDelimiters || provider.Capabilities.SupportsEncoding)
             {
-                await RunDetectionAsync(source, cancellationToken).ConfigureAwait(true);
+                using (Source.SuspendChangeNotifications())
+                {
+                    await RunDetectionAsync(source, cancellationToken).ConfigureAwait(true);
+                }
             }
             if (cancellationToken.IsCancellationRequested) return;
 
@@ -1404,7 +1425,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             _configuration = BuildConfiguration();
             configuration = _configuration;
 
-            var schema = await _delimitedProvider
+            var schema = await ProviderFor(configuration)
                 .ReadSchemaAsync(source, configuration, cancellationToken)
                 .ConfigureAwait(true);
 
@@ -1445,7 +1466,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         PreviewSchemaChanged?.Invoke(this, EventArgs.Empty);
 
         var taken = 0;
-        await foreach (var record in _delimitedProvider
+        await foreach (var record in ProviderFor(configuration)
                            .ReadRecordsAsync(source, configuration, cancellationToken)
                            .ConfigureAwait(true))
         {
@@ -1671,6 +1692,22 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// ⭐ The ONE place a source kind chooses a reader — every other part of the surface, and everything below
+    /// <see cref="IImportProvider"/>, is written as if there were only one kind of source.
+    /// <para>
+    /// A factory has to branch somewhere; what matters is that it branches <b>once</b>. §3.3's rule that the
+    /// Format section must not switch on <c>ImportSourceKind</c> is about the VIEW, which asks
+    /// <c>Capabilities</c> instead — and it can only do that because this method has already handed it the right
+    /// provider to ask.
+    /// </para>
+    /// </summary>
+    private IImportProvider ProviderFor(ImportConfiguration configuration) => configuration.Source.Kind switch
+    {
+        ImportSourceKind.Xlsx => _spreadsheetProvider,
+        _ => _delimitedProvider,
+    };
+
     private IImportSource? TryCreateSource(ImportConfiguration configuration)
     {
         if (configuration.Source.Kind == ImportSourceKind.Clipboard)
@@ -1681,9 +1718,10 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         var path = configuration.Source.Path;
         if (string.IsNullOrWhiteSpace(path) || !_sourceExists) return null;
 
-        // A spreadsheet has no provider until etap I9. Refusing with a reason is §0-compliant; pretending to
-        // read it would not be.
-        if (configuration.Source.Kind is ImportSourceKind.Xlsx or ImportSourceKind.Xls)
+        // .xls (BIFF8) has no provider until etap I10 — I0 measured that DocumentFormat.OpenXml simply cannot
+        // open it (FileFormatException), so reading it needs a different library. Refusing with a reason is
+        // §0-compliant; pretending to read it would not be. (.xlsx became readable in I9.)
+        if (configuration.Source.Kind is ImportSourceKind.Xls)
         {
             SetStatus(
                 string.Format(CultureInfo.CurrentCulture, UiStrings.ImportFormatNotYetSupportedFormat, Path.GetExtension(path)),

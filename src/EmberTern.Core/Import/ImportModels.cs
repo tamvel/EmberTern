@@ -33,6 +33,18 @@ public sealed record SourceField(int Index, string Name, bool HasRealName)
     }
 }
 
+/// <summary>
+/// One selectable sheet in a source that has sheets. A FACT about the workbook, so — like
+/// <see cref="SourceField"/> — it never enters <see cref="ImportConfiguration"/>; the configuration stores only
+/// the user's CHOICE (<c>SpreadsheetOptions.SheetIndex</c>).
+/// </summary>
+/// <param name="Index">0-based position — the identity the workbook itself guarantees.</param>
+/// <param name="Name">The sheet's name as the workbook declares it.</param>
+/// <param name="EstimatedRows">Row count when the sheet declares a dimension, else <c>null</c>. A HINT: I0
+/// measured that Excel writes the dimension and programmatic writers omit it, so the picker must read well
+/// without it (design R8).</param>
+public sealed record SourceSheet(int Index, string Name, long? EstimatedRows);
+
 /// <summary>The shape of a source as the provider read it, plus an optional row-count hint.</summary>
 /// <param name="Fields">Fields in positional order.</param>
 /// <param name="HasHeader">Whether the first record was consumed as a header.</param>
@@ -73,6 +85,30 @@ public sealed record RawRecord(int SourceRowNumber, object?[] Values)
     /// <summary>The raw value at <paramref name="index"/>, or <c>null</c> when the record does not reach it.</summary>
     public object? ValueAt(int index)
         => index >= 0 && index < Values.Length ? Values[index] : null;
+}
+
+/// <summary>
+/// ⭐ A cell the SOURCE ITSELF marked as an error (a workbook's <c>#N/A</c>, <c>#REF!</c>, <c>#DIV/0!</c>, …).
+/// <para>
+/// It exists because such a cell is <b>not text</b>. Left as the string it renders as, it would land in a
+/// VARCHAR as the literal <c>"#N/A"</c> — data that was never data (design R20, and §0.1 directly). Every
+/// other raw value the converter meets can be converted for SOME target type; this one must fail for
+/// <em>all</em> of them, including text, which is why it needs a value of its own rather than a convention.
+/// </para>
+/// <para>
+/// <b>Deliberately source-neutral.</b> It says "the source declared this cell invalid", not "Excel said
+/// <c>#N/A</c>" — <see cref="RawRecord"/> is the one currency that makes the pipeline source-agnostic, so a
+/// value travelling in it must not name a file format. Only the provider knows what an error cell looks like;
+/// only <c>ImportValueConverter</c> decides what happens to one. When
+/// <c>ImportBehaviorOptions.ExcelErrorCellsAsNull</c> is on, the provider emits plain <c>null</c> instead and
+/// this type never appears — the option is about READING the cell, so it is settled where the cell is read.
+/// </para>
+/// </summary>
+/// <param name="Code">The source's own error text (<c>#N/A</c>), carried verbatim so the row error can quote
+/// what was actually there instead of a paraphrase (§0.6).</param>
+public sealed record SourceErrorValue(string Code)
+{
+    public override string ToString() => Code;
 }
 
 /// <summary>
