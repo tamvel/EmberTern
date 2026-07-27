@@ -4109,6 +4109,14 @@ public partial class MainWindowViewModel : ViewModelBase
             // stored as '?' with no error at all, even into a UTF8 column (design R1).
             ConnectionCharset = () => _service.ActiveProfile?.Charset ?? string.Empty,
 
+            // ⭐ The clipboard is a SOURCE the recalculation chain reads, so it has to be answerable before the
+            // tab's first chain run — which is why it belongs in the environment and not, like the file picker,
+            // in an event wired after construction. That is what lets a surface opened on a clipboard
+            // configuration read the clipboard by itself.
+            ReadClipboardAsync = ImportClipboardReadRequested is null
+                ? null
+                : () => ImportClipboardReadRequested.Invoke(),
+
             ListTablesAsync = async ct =>
             {
                 var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table, ct).ConfigureAwait(false);
@@ -4158,8 +4166,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (ImportFilePickRequested is not null)
             import.FilePickRequested += () => ImportFilePickRequested.Invoke();
-        if (ImportClipboardReadRequested is not null)
-            import.ClipboardReadRequested += () => ImportClipboardReadRequested.Invoke();
         import.CopyToClipboardRequested += text => ClipboardWriteRequested?.Invoke(text);
 
         // Hand the tab the remembered panel layout, and follow it back as the user drags. The tab is

@@ -86,6 +86,16 @@
             </StackPanel>
           </Button>
 
+          <!-- ⭐ Refresh sits with the other surface-level actions, not by the file picker, because it re-reads
+               every fact the surface holds — the source, the table list AND the target — and then re-runs the one
+               recalculation chain. Icon only: it is a secondary action beside Import and Validate, and the shared
+               refresh mark (used by the metadata tree, Session Manager and Table Data) already says what it does. -->
+          <Button Classes="icon" Command="{Binding RefreshCommand}"
+                  ToolTip.Tip="{x:Static app:UiStrings.ImportRefreshTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
+                              Foreground="{DynamicResource AccentIconBrush}" />
+          </Button>
+
           <!-- Only visible while there is something to cancel: a permanently disabled Stop teaches nothing. -->
           <Button Classes="icon" Command="{Binding CancelRunCommand}"
                   IsVisible="{Binding IsRunning}"
@@ -270,9 +280,13 @@
             <controls:SvgIcon Data="{StaticResource Icon.Folder}"
                               Foreground="{DynamicResource AccentIconBrush}" />
           </Button>
+          <!-- Choosing the clipboard READS it: the command points the surface at the clipboard and runs the one
+               recalculation chain with a Refresh trigger. The tooltip says so, because a control with a side
+               effect should announce it rather than let the user find out. -->
           <RadioButton Grid.Column="3" GroupName="ImportSourceKind"
                        Content="{x:Static app:UiStrings.ImportSourceClipboard}"
                        IsChecked="{Binding !UseFile}" VerticalAlignment="Center"
+                       ToolTip.Tip="{x:Static app:UiStrings.ImportSourceUseClipboardTooltip}"
                        Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).UseClipboardCommand}" />
 
           <!-- Format options disclosure — the debugger launch panel's idiom (chevron + title, no Expander). -->
@@ -290,13 +304,14 @@
           </Button>
         </Grid>
 
-        <!-- The thin facts line: what the file is, and how it is being read. Both are read-only statements,
-             so they share one subtle row instead of two full-height ones. -->
+        <!-- The thin facts line: what the source is, and how it is being read. Both are read-only statements,
+             so they share one subtle row instead of two full-height ones. For the clipboard the facts carry the
+             READ TIME, which is what tells the user whether a live source is current. -->
         <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsExpanded}">
-          <TextBlock Text="{Binding FileFacts}" Classes="subtle" FontSize="11"
-                     IsVisible="{Binding FileFacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Text="{Binding SourceFacts}" Classes="subtle" FontSize="11"
+                     IsVisible="{Binding SourceFacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <TextBlock Text="·" Classes="subtle" FontSize="11"
-                     IsVisible="{Binding FileFacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                     IsVisible="{Binding SourceFacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <TextBlock Text="{Binding SummaryText}" Classes="subtle" FontSize="11"
                      TextTrimming="CharacterEllipsis" />
         </StackPanel>

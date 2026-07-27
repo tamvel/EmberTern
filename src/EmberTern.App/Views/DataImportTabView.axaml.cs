@@ -145,11 +145,17 @@ public partial class DataImportTabView : UserControl
     // ── Keyboard (§9.2) ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// <c>F5</c> imports, <c>Ctrl+F5</c> validates, <c>Esc</c> cancels a run, <c>Ctrl+O</c> picks a file.
+    /// <c>F5</c> imports, <c>Ctrl+F5</c> validates, <c>Esc</c> cancels a run, <c>Ctrl+O</c> picks a file,
+    /// <c>Ctrl+R</c> and <c>Ctrl+V</c> refresh.
     /// <para>
     /// Every one of them goes through the very command the button does — the shortcut is a second trigger, never
     /// a second path — and each is guarded by that command's own <c>CanExecute</c>, so a shortcut can never do
     /// what the disabled button refuses to.
+    /// </para>
+    /// <para>
+    /// <c>Ctrl+V</c> is the same command as <c>Ctrl+R</c>: on this surface „paste" and „re-read the clipboard" are
+    /// the same request, and the clipboard read lives in the recalculation chain, so there is nothing else for it
+    /// to invoke. It steps aside for a text field, where <c>Ctrl+V</c> still has to mean paste.
     /// </para>
     /// </summary>
     protected override void OnKeyDown(KeyEventArgs e)
@@ -178,6 +184,16 @@ public partial class DataImportTabView : UserControl
             case Key.O when e.KeyModifiers.HasFlag(KeyModifiers.Control):
                 _bound.BrowseCommand.Execute(null);
                 e.Handled = true;
+                return;
+
+            // Inside a text field Ctrl+V stays paste. Checking the event's SOURCE rather than trusting the
+            // TextBox to have marked the key handled means the guard holds either way.
+            case Key.V when e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Source is TextBox:
+                break;
+
+            case Key.V when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+            case Key.R when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+                if (Invoke(_bound.RefreshCommand)) e.Handled = true;
                 return;
         }
 

@@ -69,8 +69,12 @@ public sealed partial class ImportSourceSectionViewModel : ViewModelBase
     public string FileDisplayName
         => string.IsNullOrWhiteSpace(FilePath) ? string.Empty : Path.GetFileName(FilePath);
 
-    /// <summary>Size + last-write line shown beside the picker; empty when the file is unreachable.</summary>
-    [ObservableProperty] private string _fileFacts = string.Empty;
+    /// <summary>
+    /// The facts line shown beside the picker — size + last-write for a file, size + read time for the clipboard,
+    /// empty when there is no source at all. Written by the coordinator, which is the one thing that knows when
+    /// the source was last read.
+    /// </summary>
+    [ObservableProperty] private string _sourceFacts = string.Empty;
 
     /// <summary>Clipboard text, held only while the surface is open — it is NEVER part of the configuration
     /// (§4.8.2: a profile stores decisions, not data).</summary>

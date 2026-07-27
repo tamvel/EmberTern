@@ -31,7 +31,7 @@ verbatim, in the archive below.
 | **`docs/design/data-import-i11-session-prompt.md`** | Session material, not architecture: the ready-to-paste opening prompt for the **I11** implementation session (named import profiles). Each etap's prompt replaces the previous one, so this file is the only live prompt; it carries the input state, the reuse inventory, the standing "no global UI work" rule and the DoD. **I11 is unlike every etap before it: it adds no capability, it CHECKS one.** §4.8 claimed named profiles are a consequence of the model rather than a feature to be built, and named the disproof — "if named profiles require changing even one model or rebuilding a UI section, §4.8 was violated along the way". So the session's unusual duty is that needing to touch the models or the pipeline is a **result to report**, not an obstacle to work around. | When starting etap I11. |
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (257 entries, #1–#270), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (259 entries, #1–#272), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~15 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -280,8 +280,56 @@ noted.
 
 ## Current state
 
+- **🏁 DATA IMPORT — POST-I10 ERGONOMICS SEAM CLOSED AND USER-ACCEPTED (2026-07-27).
+  Next: I11 named profiles · I12 close-out.** Three review findings from I10, scoped by the user as **closing
+  I10, not a new etap**: the clipboard as a **live source**, a **Refresh** button, and the requirement that a
+  re-read go through **the same chain** as the first read. Confirmed with no findings, and the architectural
+  direction endorsed explicitly — *"the important thing is that no second refresh path appeared; everything goes
+  through one chain with different reasons for running (Decision / Refresh)"*. `Ctrl+R` stays; **`F5` was
+  deliberately NOT added** (user's call — `F5` is Import). Suite **5801 green** (+16), build 0/0, smoke clean. **The models, the pipeline, the converter, the validator, the mapping planner and the writer were not
+  touched** — the third time that has held (I9, I10, this).
+  **⭐⭐ The user's architectural condition — "I don't want two update paths" — was already met, and the whole
+  seam was bringing three things onto the one path.** `Recalculate` → `RunChainAsync` is and was the single
+  entry point; what bypassed it was the clipboard (fetched by a command *beside* the chain) and what could not
+  reach it was a user asking for a re-read (there was no way to run it at all).
+  **⭐ THE REASON IS AN ARGUMENT TO THE ONE CHAIN, NEVER A SECOND CHAIN.** `ImportChainTrigger.Decision` (an
+  edit — recompute over the facts already established) vs `.Refresh` (the user asked — drop the cached facts and
+  re-read them first). Exactly the discipline that made "Validate" a different **writer** passed to the one
+  `ImportPipeline` rather than a second mode: there is nowhere for a refresh to drift from an edit.
+  **⭐ Why "even Ctrl+V didn't recompute the mapping" was NOT a mapping defect (gotcha #271).** The clipboard's
+  text arrived by **assigning a property**, and `SetProperty` compares — identical text meant no
+  `PropertyChanged`, no `Changed`, no chain, so re-reading unchanged content recomputed **nothing**. The read is
+  now the chain's **first link**, so what happens next follows from *having been asked*, not from the value
+  differing. **General rule: any state whose only refresh trigger is "someone assigns it" cannot be refreshed to
+  its current value.**
+  **⭐ Refresh re-reads the two FACTS the surface caches** — the clipboard text and the table list (which was
+  latched behind `_tablesLoaded` and read once per tab, so "the table blocking my `CREATE` has been dropped" was
+  invisible until the tab was reopened). Everything downstream then re-runs unchanged: source → analysis →
+  schema → mapping → readiness → preview.
+  ⚠ **Found by a test that COUNTED clipboard reads (gotcha #272): `SourceDescriptor` cannot say "a file, but
+  none chosen yet"** — `BuildSource` reports `Kind == Clipboard` for that state, so a gate on the source kind
+  would have made **every freshly opened tab** read the clipboard and, whenever the content looked tabular,
+  adopt it as the source **with the „File" radio still selected**. The gate asks the thing that actually carries
+  the user's choice (`Source.UseFile`, i.e. the radio).
+  **⭐ The automatic read adopts content only if it IS a table, and invents no heuristic for that:** the first
+  question goes to `DelimiterDetector`, the module's one owner of "is this delimited text", so "tabular" means
+  here what it means everywhere else; the second question exists only because that detector deliberately refuses
+  to invent a separator for a single column, and a single column pasted out of Excel is still a table. **An
+  explicit refresh does not consult it at all** — "re-read the clipboard" has one honest meaning, so it adopts
+  whatever is there, **including nothing** (readiness then says "no source", which is true; keeping the previous
+  text would show data the named source does not hold).
+  ⚠ **Deliberate boundary, pinned as a test:** a refresh does **not** re-propose a new table's types while the
+  source still describes the same fields — edited types are decisions, and overwriting a decision with a
+  proposal is what rule #11 forbids outright; the existing rule re-infers when the fields or the culture move,
+  i.e. when the ground under those decisions actually shifted.
+  Also: `ClipboardReadRequested` moved from an **event** (wired after construction) to
+  `DataImportEnvironment.ReadClipboardAsync`, because the **chain** reads the clipboard and must be able to ask
+  before anything could be wired to the finished tab (the file picker stays an event — only a user command drives
+  it); and `FileFacts` → **`SourceFacts`**, one facts line for both variants, carrying the clipboard's **read
+  time** — the form of "is what I see current?" that a live source can answer, and what makes a refresh visibly
+  acknowledge itself when the content is identical.
 - **✅ DATA IMPORT I10 — CLIPBOARD + `.xls` DELIVERED (2026-07-27), awaits the user's visual confirmation in
-  both palettes. Next: I11 named profiles · I12 close-out.** Branch `feat/data-import`, suite **5785 green**
+  both palettes.** Branch `feat/data-import`, suite **5785 green**
   (+22), build 0/0, app launches clean, `DataImportRunProbe` **33/33 ALL PASS** on FB5 `WI-V5.0.3.1683`
   (section **I** added).
   **⭐⭐ The pillar held under a harder test than I9's, because this time a DEPENDENCY arrived.** I9 added a
@@ -2307,9 +2355,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5763 as of 2026-07-27
-  (`feat/data-import`, after Data Import I9)** — green in two partitions (5723 + the 40-test
-  `ConnectionExpandBindingProbe`), ~11s.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5801 as of 2026-07-27
+  (`feat/data-import`, after the post-I10 ergonomics seam)** — green in two partitions (5761 + the 40-test
+  `ConnectionExpandBindingProbe`), ~12s.
   `ConnectionExpandBindingProbe` uses **one shared `HeadlessUnitTestSession`** — what gotcha #94 always
   prescribed, and **mandatory**, because AvaloniaEdit's static `KeyBinding` lists make any real key sent into
   a `TextEditor` throw cross-thread from every session after the first (#226).
@@ -3323,7 +3371,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (257 entries, #1–#270), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (259 entries, #1–#272), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~15 thematic files). Read a file when you need the "why" behind a

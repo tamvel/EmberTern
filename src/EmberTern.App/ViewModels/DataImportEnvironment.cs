@@ -49,6 +49,19 @@ public sealed class DataImportEnvironment
     /// </summary>
     public Func<string>? ConnectionCharset { get; init; }
 
+    /// <summary>
+    /// The clipboard's current text. App owns Avalonia's clipboard, Core receives a plain string — which is
+    /// exactly why the clipboard is not a second parser (§1.5).
+    /// <para>
+    /// ⭐ It lives <b>here</b>, in the environment, rather than as an event wired after construction like the file
+    /// picker, and the difference is not cosmetic: the clipboard is a source the <b>recalculation chain</b> reads,
+    /// so it has to be answerable from the constructor's first chain run — a surface opened on a clipboard
+    /// configuration reads the clipboard before the user touches anything. The file picker is only ever driven by
+    /// a user command, so an event is still the right shape for it.
+    /// </para>
+    /// </summary>
+    public Func<Task<string?>>? ReadClipboardAsync { get; init; }
+
     // ── Metadata lane (read-only, implicit per-command transactions) ────────────────────────────────────
 
     public Func<CancellationToken, Task<IReadOnlyList<string>>>? ListTablesAsync { get; init; }

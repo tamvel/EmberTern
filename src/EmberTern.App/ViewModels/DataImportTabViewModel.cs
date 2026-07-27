@@ -15,6 +15,26 @@ using EmberTern.Office;
 
 namespace EmberTern.App.ViewModels;
 
+/// <summary>
+/// Why the recalculation chain is running.
+/// <para>
+/// ⭐ It is an <b>argument to the one chain, not a second chain</b> — the same discipline that made "Validate"
+/// a different writer passed to the one <c>ImportPipeline</c> rather than a second mode. Everything the chain
+/// does is identical either way; the trigger decides only whether the chain may re-ask the world for the two
+/// FACTS this surface caches — the clipboard's text and the database's table list.
+/// </para>
+/// </summary>
+internal enum ImportChainTrigger
+{
+    /// <summary>A user decision changed. The chain re-runs over the facts already established, because nobody
+    /// asked for the clipboard or the catalog to be looked at again.</summary>
+    Decision,
+
+    /// <summary>The user asked for a refresh (the button, <c>Ctrl+R</c>, <c>Ctrl+V</c>, or choosing the clipboard
+    /// as the source). Every cached fact is dropped and re-read first, then the same chain runs.</summary>
+    Refresh,
+}
+
 /// <summary>One raw record in the source-preview grid — the provider's own values, before conversion.</summary>
 public sealed class ImportSourceRecordRowViewModel
 {
@@ -85,6 +105,16 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     private bool _sourceReadable = true;
     private bool _tablesLoaded;
     private CancellationTokenSource? _recalculation;
+
+    /// <summary>
+    /// True once the clipboard has been looked at for the current source selection.
+    /// <para>
+    /// It exists so that the <b>automatic</b> read happens once — when the surface starts using the clipboard —
+    /// rather than on every keystroke that re-runs the chain. Selecting a file resets it, so coming back to the
+    /// clipboard looks again. An explicit refresh ignores it entirely: that is the user asking.
+    /// </para>
+    /// </summary>
+    private bool _clipboardRead;
 
     /// <summary>
     /// True once the user has expanded the format options by hand, which suspends auto-collapse (U11) until
@@ -168,10 +198,6 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     /// <summary>The view supplies a file picker; the VM never touches a dialog type (rule #1).</summary>
     public event Func<Task<string?>>? FilePickRequested;
-
-    /// <summary>The view supplies the clipboard text. App owns Avalonia's clipboard, Core gets a string —
-    /// which is exactly why the clipboard is not a second parser (§1.5).</summary>
-    public event Func<Task<string?>>? ClipboardReadRequested;
 
     /// <summary>Asks the view to expand and focus a section (a readiness chip was clicked).</summary>
     public event EventHandler<ImportSection>? SectionFocusRequested;
@@ -291,9 +317,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// <summary>True while an import or a validation is on the wire.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConfigurationEnabled))]
+    [NotifyPropertyChangedFor(nameof(CanRefresh))]
     [NotifyCanExecuteChangedFor(nameof(ImportCommand))]
     [NotifyCanExecuteChangedFor(nameof(ValidateCommand))]
     [NotifyCanExecuteChangedFor(nameof(CancelRunCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
     private bool _isRunning;
 
     /// <summary>
@@ -817,22 +845,47 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Selects the clipboard as the source and reads it — the „Clipboard" radio button's own action.
+    /// <para>
+    /// ⭐ It reads nothing itself. Choosing the clipboard IS a request to re-read it, so the whole of this command
+    /// is "point the surface at the clipboard, then refresh" — and the refresh is the ONE chain, which owns the
+    /// clipboard read as a link (see <see cref="ReadClipboardIfNeededAsync"/>). Before this seam the read lived
+    /// here instead, which made the clipboard the one source with its own way in: a command fetched the text out
+    /// of band and the chain merely reacted to the property changing. That is the second update path the user
+    /// asked us to remove — and it also silently did nothing when the new text happened to equal the old one,
+    /// because an unchanged property raises nothing.
+    /// </para>
+    /// </summary>
     [RelayCommand]
-    private async Task UseClipboardAsync()
+    private void UseClipboard()
     {
-        if (ClipboardReadRequested is null) return;
-
-        try
+        // Suspended because this command runs the chain itself, on the next line: letting the property change
+        // ALSO start one would read the clipboard twice for one click — and the first read would be the implicit,
+        // gated kind, which is not what a user who just clicked „Clipboard" asked for.
+        using (Source.SuspendChangeNotifications())
         {
-            var text = await ClipboardReadRequested.Invoke().ConfigureAwait(true);
-            Source.ClipboardText = text ?? string.Empty;
             Source.UseFile = false;
         }
-        catch (Exception ex)
-        {
-            ReportUnexpected(ex);
-        }
+
+        Recalculate(ImportChainTrigger.Refresh);
     }
+
+    /// <summary>
+    /// ⭐ <b>Re-reads everything the surface knows about the world, then re-runs the whole chain.</b>
+    /// <para>
+    /// The one button for "the ground has moved": the file changed on disk, the clipboard now holds something
+    /// else, the table that was blocking a <c>CREATE</c> has been dropped, a column was added to the target. It is
+    /// deliberately <b>not</b> a second update path — it is <see cref="Recalculate"/> with
+    /// <see cref="ImportChainTrigger.Refresh"/>, so a refresh cannot drift from what the surface does after an
+    /// ordinary edit. Whatever the chain does for a decision, it does here, plus dropping the cached facts first.
+    /// </para>
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
+    private void Refresh() => Recalculate(ImportChainTrigger.Refresh);
+
+    /// <summary>A refresh rebuilds everything the run reads, so it must not happen underneath a run.</summary>
+    public bool CanRefresh => !IsRunning;
 
     /// <summary>A readiness chip was clicked — expand and focus the section that caused it. The advantage
     /// over a wizard: every gap is visible AND reachable in one click (§3.2).</summary>
@@ -953,7 +1006,13 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
     private void QueueRecalculate() => Recalculate();
 
-    private void Recalculate()
+    /// <summary>
+    /// ⭐ <b>The ONE entry point into everything this surface computes.</b> Reading the source, analysing it,
+    /// resolving the schema, planning the mapping, evaluating readiness and converting the preview all happen
+    /// here and only here — an edit, a restored profile, choosing the clipboard and the Refresh button are four
+    /// triggers of one path, not four paths.
+    /// </summary>
+    private void Recalculate(ImportChainTrigger trigger = ImportChainTrigger.Decision)
     {
         _configuration = BuildConfiguration();
 
@@ -964,8 +1023,8 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         var cts = new CancellationTokenSource();
         _recalculation = cts;
 
-        UpdateFileFacts();
-        PendingRecalculation = RunGuardedChainAsync(cts.Token);
+        UpdateSourceFacts();
+        PendingRecalculation = RunGuardedChainAsync(trigger, cts.Token);
     }
 
     /// <summary>
@@ -975,11 +1034,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// thread. Recalculating is background work the user did not ask for by name; it must never be able to
     /// close the window.
     /// </summary>
-    private async Task RunGuardedChainAsync(CancellationToken cancellationToken)
+    private async Task RunGuardedChainAsync(ImportChainTrigger trigger, CancellationToken cancellationToken)
     {
         try
         {
-            await RunChainAsync(cancellationToken).ConfigureAwait(true);
+            await RunChainAsync(trigger, cancellationToken).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -992,17 +1051,26 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The chain of §4.7, in the one order that is not a guess resting on a guess: <b>source → target →
-    /// mapping → readiness → converted preview</b>. Each link consumes what the previous one established, and
-    /// every link is cancellable, so a newer edit supersedes the whole tail rather than racing it.
+    /// The chain of §4.7, in the one order that is not a guess resting on a guess: <b>clipboard → tables →
+    /// source → target → mapping → readiness → converted preview</b>. Each link consumes what the previous one
+    /// established, and every link is cancellable, so a newer edit supersedes the whole tail rather than racing
+    /// it.
     /// <para>
     /// The preview comes last because it is the most expensive link and the only one that needs all the others
     /// to have settled: it is a real (bounded) import, so it needs a source, a target and a mapping.
     /// </para>
+    /// <para>
+    /// ⭐ The clipboard is read <b>first, as a link</b>, for the same reason the encoding is proposed before the
+    /// delimiter: everything after it reads the source, so a source that is still being fetched cannot come
+    /// second. That placement is what makes the clipboard a live source rather than a one-off paste.
+    /// </para>
     /// </summary>
-    private async Task RunChainAsync(CancellationToken cancellationToken)
+    private async Task RunChainAsync(ImportChainTrigger trigger, CancellationToken cancellationToken)
     {
-        await EnsureTablesLoadedAsync(cancellationToken).ConfigureAwait(true);
+        await ReadClipboardIfNeededAsync(trigger, cancellationToken).ConfigureAwait(true);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        await EnsureTablesLoadedAsync(trigger, cancellationToken).ConfigureAwait(true);
         if (cancellationToken.IsCancellationRequested) return;
 
         await ReadSourceAsync(cancellationToken).ConfigureAwait(true);
@@ -1230,11 +1298,116 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// </summary>
     private bool _adoptRestoredColumns;
 
-    /// <summary>Loads the table list once per tab. The list is a fact about the database, not a user decision,
-    /// so re-reading it on every keystroke would be work nobody asked for.</summary>
-    private async Task EnsureTablesLoadedAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// ⭐ Fetches the clipboard's current text, so that the clipboard behaves as a <b>live source</b> and not as
+    /// a one-off paste.
+    /// <para>
+    /// Two different questions, deliberately answered differently:
+    /// </para>
+    /// <para>
+    /// <b>The user asked</b> (<see cref="ImportChainTrigger.Refresh"/> — the Refresh button, <c>Ctrl+V</c>,
+    /// <c>Ctrl+R</c>, or clicking „Clipboard"): read it and adopt whatever is there, <b>including nothing</b>.
+    /// „Re-read the clipboard" has exactly one honest meaning, and keeping the previous text when the clipboard
+    /// no longer holds it would leave the surface showing data that is not in the source it names. If the
+    /// clipboard is empty the surface says „no source" through readiness, which is true.
+    /// </para>
+    /// <para>
+    /// <b>Nobody asked</b> (the surface merely started using the clipboard — a restored configuration on tab
+    /// open, or switching back to it): read it, but adopt it only if it actually <see cref="LooksTabular">looks
+    /// like a table</see>. Filling the surface with a copied sentence, URL or SQL snippet — and running a whole
+    /// read chain over it — is the kind of automatic behaviour that has to earn its place.
+    /// </para>
+    /// </summary>
+    private async Task ReadClipboardIfNeededAsync(ImportChainTrigger trigger, CancellationToken cancellationToken)
     {
-        if (_tablesLoaded || _environment.ListTablesAsync is null || !_environment.IsConnected()) return;
+        // ⚠ The gate is the RADIO the user selected, not the descriptor's kind — and the difference is
+        // load-bearing. `SourceDescriptor` has no way to say "a file, but none chosen yet", so
+        // `Source.BuildSource` reports Clipboard for that state too. Gating on the kind would therefore make every
+        // freshly opened tab read the clipboard and, if the content happened to look tabular, adopt it while the
+        // „File" radio was still selected — data appearing from nowhere under the wrong label.
+        if (Source.UseFile)
+        {
+            // Selecting a file re-arms the automatic read, so coming back to the clipboard looks at it again.
+            _clipboardRead = false;
+            return;
+        }
+
+        if (_environment.ReadClipboardAsync is null) return;
+
+        var requested = trigger == ImportChainTrigger.Refresh;
+        if (!requested && _clipboardRead) return;
+
+        string? text;
+        try
+        {
+            text = await _environment.ReadClipboardAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // The clipboard is outside this module (rule #1: it reaches it through a delegate), so the failures
+            // it can raise cannot be enumerated here — caught by POSITION, as every other seam is (#265).
+            SetStatus(ex.Message, MessageSeverity.Error);
+            return;
+        }
+
+        _clipboardRead = true;
+        if (cancellationToken.IsCancellationRequested) return;
+
+        text ??= string.Empty;
+        if (!requested && !LooksTabular(text, _configuration.Delimited)) return;
+
+        // Suspended because this assignment comes from the chain, not from the user — without it the chain would
+        // restart itself. The same guard, for the same reason, as a detector writing its proposal (§0.4).
+        using (Source.SuspendChangeNotifications())
+        {
+            Source.ClipboardText = text;
+        }
+
+        // The text is NOT part of the configuration (§4.8.2), so nothing needs re-assembling — but the facts line
+        // does, because it is the one place that says what was read and when.
+        UpdateSourceFacts();
+    }
+
+    /// <summary>
+    /// Whether a piece of text is worth adopting as a source <b>without being asked</b>.
+    /// <para>
+    /// ⭐ It invents no heuristic of its own: the first question goes to <see cref="DelimiterDetector"/>, the
+    /// module's one owner of „is this delimited text", so „tabular" means here exactly what it means everywhere
+    /// else. The detector deliberately refuses to propose a separator for a single-column text (that would be a
+    /// guess) — and a single column pasted out of Excel is still a table, so the second question is simply
+    /// whether there is more than one line of it.
+    /// </para>
+    /// <para>
+    /// This is a <b>presentation</b> decision — „may I fill this surface for you?" — and nothing below
+    /// <c>IImportProvider</c> ever asks it. An explicit refresh does not consult it at all.
+    /// </para>
+    /// </summary>
+    internal static bool LooksTabular(string text, DelimitedOptions? options)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        if (DelimiterDetector.Propose(text, options ?? new DelimitedOptions()) is not null) return true;
+
+        var lines = 0;
+        foreach (var line in text.Split('\n'))
+        {
+            if (line.Trim().Length == 0) continue;
+            if (++lines >= 2) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Loads the table list. The list is a fact about the database, not a user decision, so it is read once and
+    /// not re-read on every keystroke — but a <see cref="ImportChainTrigger.Refresh"/> reads it again, because
+    /// „the table that was blocking my CREATE has been dropped" is precisely what the user is telling us.
+    /// </summary>
+    private async Task EnsureTablesLoadedAsync(ImportChainTrigger trigger, CancellationToken cancellationToken)
+    {
+        var requested = trigger == ImportChainTrigger.Refresh;
+        if ((_tablesLoaded && !requested) || _environment.ListTablesAsync is null || !_environment.IsConnected())
+        {
+            return;
+        }
 
         try
         {
@@ -1243,6 +1416,12 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
             Target.ShowTables(tables);
             _tablesLoaded = true;
+
+            // ⚠ Only on an explicit refresh, and only after the list has been re-read: ShowTables drops a
+            // selection whose table is gone, and the record was assembled before that happened. Re-assembling
+            // makes the configuration agree with the picker the user is looking at — on the restore path nothing
+            // has been re-read, so nothing is re-assembled and a stored target still gets its say.
+            if (requested) _configuration = BuildConfiguration();
         }
         catch (OperationCanceledException)
         {
@@ -1667,12 +1846,35 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
                 DescribeTransactionMode(TransactionMode));
     }
 
-    private void UpdateFileFacts()
+    /// <summary>
+    /// The facts line beside the picker: what the current source IS, in numbers.
+    /// <para>
+    /// ⭐ One line for both variants, because it answers one question. A file states its size and the timestamp
+    /// that tells the user whether it has changed; the clipboard has neither, so it states its size and <b>when it
+    /// was read</b> — which is the same question in the form a live source can answer, and the thing that makes a
+    /// refresh visibly acknowledge itself when the content happens to be identical.
+    /// </para>
+    /// </summary>
+    private void UpdateSourceFacts()
     {
-        if (!Source.UseFile || Source.FilePath.Length == 0)
+        if (!Source.UseFile)
         {
             _sourceExists = true;
-            Source.FileFacts = string.Empty;
+            Source.SourceFacts = Source.ClipboardText.Length == 0
+                ? UiStrings.ImportClipboardEmpty
+                : string.Format(
+                    CultureInfo.CurrentCulture,
+                    UiStrings.ImportClipboardFactsFormat,
+                    CountLines(Source.ClipboardText),
+                    Source.ClipboardText.Length / 1024d,
+                    DateTime.Now);
+            return;
+        }
+
+        if (Source.FilePath.Length == 0)
+        {
+            _sourceExists = true;
+            Source.SourceFacts = string.Empty;
             return;
         }
 
@@ -1680,7 +1882,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             var info = new FileInfo(Source.FilePath);
             _sourceExists = info.Exists;
-            Source.FileFacts = info.Exists
+            Source.SourceFacts = info.Exists
                 ? string.Format(
                     CultureInfo.CurrentCulture,
                     UiStrings.ImportFileFactsFormat,
@@ -1691,8 +1893,20 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _sourceExists = false;
-            Source.FileFacts = UiStrings.ImportFileMissing;
+            Source.SourceFacts = UiStrings.ImportFileMissing;
         }
+    }
+
+    /// <summary>Non-empty lines in the clipboard's text — a count of what the user pasted, not of the records the
+    /// reader will find (a quoted field may span lines, and that is the provider's business, not a facts line's).</summary>
+    private static int CountLines(string text)
+    {
+        var lines = 0;
+        foreach (var line in text.Split('\n'))
+        {
+            if (line.Trim().Length > 0) lines++;
+        }
+        return lines;
     }
 
     /// <summary>

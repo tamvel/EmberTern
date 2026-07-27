@@ -85,6 +85,38 @@ public class DataImportTabVmTests : IDisposable
         };
     }
 
+    /// <summary>
+    /// A surface whose clipboard answers with whatever <paramref name="clipboard"/> returns — a function, not a
+    /// string, so a test can prove a <b>re-read</b> happened (by counting calls) rather than merely that the text
+    /// arrived once.
+    /// <para>
+    /// ⚠ The clipboard is supplied through the <b>environment</b>, not wired afterwards, and that is the point of
+    /// the seam: the recalculation chain reads the clipboard, so it must be answerable from the constructor's
+    /// first chain run. A test that attached it later could never exercise "the tab opened on a clipboard
+    /// configuration and read the clipboard by itself".
+    /// </para>
+    /// </summary>
+    private static DataImportTabViewModel ClipboardVm(
+        Func<string?> clipboard,
+        ImportTarget? target = null,
+        ImportConfiguration? lastUsed = null)
+    {
+        var environment = new DataImportEnvironment(() => true, () => "LAB")
+        {
+            ReadClipboardAsync = () => Task.FromResult(clipboard()),
+            ListTablesAsync = target is null
+                ? null
+                : _ => Task.FromResult<IReadOnlyList<string>>(new[] { target.TableName }),
+            ReadTargetAsync = target is null
+                ? null
+                : (name, _) => Task.FromResult(
+                    string.Equals(name, target.TableName, StringComparison.OrdinalIgnoreCase) ? target : null),
+            LoadLastUsed = lastUsed is null ? null : () => lastUsed,
+        };
+
+        return new DataImportTabViewModel(environment) { PreviewDebounce = TimeSpan.Zero };
+    }
+
     /// <summary>A small target table: a required column, an optional one, a COMPUTED one and an identity
     /// ALWAYS — one of each kind the mapping grid has to treat differently.</summary>
     private static ImportTarget LabTarget() => new(
@@ -474,10 +506,9 @@ public class DataImportTabVmTests : IDisposable
     [Fact]
     public async Task PastingFromExcel_ImportsWithoutAFileOnDisk()
     {
-        var vm = Vm();
-        vm.ClipboardReadRequested += () => Task.FromResult<string?>("Indeks\tNazwa\r\n1\tabc\r\n2\tdef\r\n");
+        var vm = ClipboardVm(() => "Indeks\tNazwa\r\n1\tabc\r\n2\tdef\r\n");
 
-        await vm.UseClipboardCommand.ExecuteAsync(null);
+        vm.UseClipboardCommand.Execute(null);
         await SettleAsync(vm);
 
         Assert.False(vm.Source.UseFile);
@@ -495,17 +526,16 @@ public class DataImportTabVmTests : IDisposable
     [Fact]
     public async Task TheClipboardsText_IsNotPartOfTheConfiguration()
     {
-        var vm = Vm();
-        vm.ClipboardReadRequested += () => Task.FromResult<string?>("Indeks\tNazwa\r\n1\tabc\r\n");
+        var vm = ClipboardVm(() => "Indeks\tNazwa\r\n1\tabc\r\n");
 
-        await vm.UseClipboardCommand.ExecuteAsync(null);
+        vm.UseClipboardCommand.Execute(null);
         await SettleAsync(vm);
 
         var configuration = vm.BuildConfiguration();
         Assert.Null(configuration.Source.Path);
 
-        // A second surface given the same configuration has no rows until the user pastes again — which is the
-        // honest state, not a bug.
+        // A second surface given the same configuration has no rows until it looks at the clipboard itself —
+        // which is what the read link now does, and which is why this one is given no clipboard at all.
         var reloaded = Vm();
         reloaded.ApplyConfiguration(configuration);
         Assert.Equal(string.Empty, reloaded.Source.ClipboardText);
@@ -1092,4 +1122,270 @@ public class DataImportTabVmTests : IDisposable
         Assert.Equal(before, vm.CurrentConfiguration.Mapping.Count);
     }
 
+    // ══ Refresh — one entry point for re-reading the world (post-I10 ergonomics seam) ════════════════════
+    //
+    // The user's report was three findings that turned out to be one question: is there ONE path that re-reads
+    // the source and recomputes everything downstream of it? There is — Recalculate → RunChainAsync — and these
+    // tests pin the two things that were true of it and the three that were not: it never re-read the clipboard
+    // or the table list, and there was no way to ask it to run at all.
+
+    /// <summary>
+    /// ⭐ Refresh re-reads the file <b>and everything downstream of it</b>. This is the user's third finding in
+    /// its most load-bearing form: a source whose FIELDS changed must re-plan the mapping, because a re-read that
+    /// leaves the mapping describing the previous file is worse than no re-read — the surface would then look
+    /// settled while pointing the wrong column at the wrong place.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_ReReadsTheFile_AndRebuildsTheMapping()
+    {
+        var target = LabTarget();
+        var vm = Vm(target: target);
+        var path = WriteFile("in.csv", "A;B\n1;x\n");
+
+        vm.Source.FilePath = path;
+        await SettleAsync(vm);
+        vm.Target.SelectedTable = target.TableName;
+        await SettleAsync(vm);
+
+        // Nothing matches by name yet, so nothing is paired automatically.
+        Assert.Equal(new[] { "A", "B" }, vm.PreviewFields.Select(f => f.Name));
+        Assert.False(vm.Mapping.Rows.Single(r => r.TargetColumnName == "KOD").IsMapped);
+
+        // The file changes on disk — the case the button exists for. Nothing in the surface has been touched.
+        File.WriteAllText(path, "KOD;NAZWA\nA1;Widget\nA2;Gadget\n");
+        vm.RefreshCommand.Execute(null);
+        await SettleAsync(vm);
+
+        Assert.Equal(new[] { "KOD", "NAZWA" }, vm.PreviewFields.Select(f => f.Name));
+        Assert.Equal(2, vm.PreviewRows.Count);
+
+        var kod = vm.Mapping.Rows.Single(r => r.TargetColumnName == "KOD");
+        Assert.True(kod.IsMapped);
+        Assert.Equal("KOD", kod.SelectedOption.Field!.Name);
+
+        // …and the whole tail ran, not just the read: the converted preview is a real bounded import.
+        Assert.Equal(2, vm.ConvertedPreview.Rows.Count);
+    }
+
+    /// <summary>
+    /// ⭐ Refresh re-reads the TABLE LIST too — the „the table that was blocking my CREATE has been dropped" case
+    /// the user named. Until this seam the list was latched behind <c>_tablesLoaded</c> and read exactly once per
+    /// tab, so a table added or dropped elsewhere could only be seen by closing and reopening the surface.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_ReReadsTheTableList()
+    {
+        var tables = new List<string> { "IMP_ONE" };
+        var environment = new DataImportEnvironment(() => true, () => "LAB")
+        {
+            ListTablesAsync = _ => Task.FromResult<IReadOnlyList<string>>(tables.ToList()),
+        };
+        var vm = new DataImportTabViewModel(environment) { PreviewDebounce = TimeSpan.Zero };
+        await SettleAsync(vm);
+
+        Assert.Equal(new[] { "IMP_ONE" }, vm.Target.Tables);
+
+        tables.Add("IMP_TWO");
+
+        // An ordinary decision must NOT re-read it: the catalog is not re-queried on every keystroke.
+        vm.Source.NullToken = "NULL";
+        await SettleAsync(vm);
+        Assert.Equal(new[] { "IMP_ONE" }, vm.Target.Tables);
+
+        vm.RefreshCommand.Execute(null);
+        await SettleAsync(vm);
+        Assert.Equal(new[] { "IMP_ONE", "IMP_TWO" }, vm.Target.Tables);
+    }
+
+    /// <summary>
+    /// ⭐ The defect behind the user's „even Ctrl+V did not recompute": the clipboard used to arrive by ASSIGNING a
+    /// property, and an assignment that does not change the value raises nothing — so re-reading identical text
+    /// recomputed nothing at all. Now the read is a link in the chain and the chain was started explicitly, so
+    /// what happens next does not depend on whether the text differs.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_ReReadsTheClipboard_EvenWhenTheTextIsIdentical()
+    {
+        var reads = 0;
+        var vm = ClipboardVm(() =>
+        {
+            reads++;
+            return "Indeks\tNazwa\r\n1\tabc\r\n";
+        });
+
+        vm.UseClipboardCommand.Execute(null);
+        await SettleAsync(vm);
+        Assert.Equal(1, reads);
+        Assert.Single(vm.PreviewRows);
+
+        vm.RefreshCommand.Execute(null);
+        await SettleAsync(vm);
+
+        Assert.Equal(2, reads);
+        Assert.Single(vm.PreviewRows);
+    }
+
+    /// <summary>An ordinary edit does not go back to the clipboard: the automatic read happens when the surface
+    /// starts using the clipboard, not on every keystroke that re-runs the chain.</summary>
+    [Fact]
+    public async Task ADecision_DoesNotReReadTheClipboard()
+    {
+        var reads = 0;
+        var vm = ClipboardVm(() =>
+        {
+            reads++;
+            return "Indeks\tNazwa\r\n1\tabc\r\n";
+        });
+
+        vm.UseClipboardCommand.Execute(null);
+        await SettleAsync(vm);
+        Assert.Equal(1, reads);
+
+        vm.Source.TrimWhitespace = true;
+        await SettleAsync(vm);
+
+        Assert.Equal(1, reads);
+    }
+
+    /// <summary>
+    /// ⭐ The user's first ask: a surface that opens on a clipboard configuration reads the clipboard by itself.
+    /// It is what makes the clipboard a live source rather than a one-off paste — and it is only possible because
+    /// the read is answered by the ENVIRONMENT, i.e. before anything could be wired to the finished tab.
+    /// </summary>
+    [Fact]
+    public async Task OpeningOnAClipboardConfiguration_ReadsTheClipboardByItself()
+    {
+        var configuration = ImportConfiguration.Empty with { Source = SourceDescriptor.Clipboard() };
+        var vm = ClipboardVm(() => "Indeks\tNazwa\r\n1\tabc\r\n2\tdef\r\n", lastUsed: configuration);
+
+        await SettleAsync(vm);
+
+        Assert.False(vm.Source.UseFile);
+        Assert.Equal(new[] { "Indeks", "Nazwa" }, vm.PreviewFields.Select(f => f.Name));
+        Assert.Equal(2, vm.PreviewRows.Count);
+    }
+
+    /// <summary>
+    /// ⚠ …but only for content that IS a table. Nobody asked for this read, so filling the surface with a copied
+    /// sentence — and running a whole read chain over it — has to be earned. An explicit refresh is a different
+    /// question and adopts whatever is there (below).
+    /// </summary>
+    [Fact]
+    public async Task OpeningOnAClipboardConfiguration_IgnoresContentThatIsNotATable()
+    {
+        var configuration = ImportConfiguration.Empty with { Source = SourceDescriptor.Clipboard() };
+        var vm = ClipboardVm(() => "select * from orders where id = 4", lastUsed: configuration);
+
+        await SettleAsync(vm);
+
+        Assert.Equal(string.Empty, vm.Source.ClipboardText);
+        Assert.Empty(vm.PreviewRows);
+    }
+
+    /// <summary>
+    /// The same non-tabular text, but now the user asked for it: „re-read the clipboard" has exactly one honest
+    /// meaning, so it is adopted and the surface shows what it found. Refusing an explicit request because the
+    /// content looks unpromising would be the module deciding it knows better.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_AdoptsWhateverTheClipboardHolds()
+    {
+        var reads = 0;
+        var vm = ClipboardVm(() => ++reads == 1 ? "A\tB\r\n1\t2\r\n" : "select * from orders where id = 4");
+
+        vm.UseClipboardCommand.Execute(null);
+        await SettleAsync(vm);
+        Assert.Equal(new[] { "A", "B" }, vm.PreviewFields.Select(f => f.Name));
+
+        // The clipboard now holds something the implicit read would have declined. The user asked, so it lands.
+        vm.RefreshCommand.Execute(null);
+        await SettleAsync(vm);
+
+        Assert.Equal("select * from orders where id = 4", vm.Source.ClipboardText);
+
+        // Re-read AND re-analysed: one line, one field. (No data rows — with a header expected, the only line
+        // there is IS the header. Which is the honest reading of a one-line source, not a failure to read it.)
+        Assert.Single(vm.PreviewFields);
+        Assert.Empty(vm.PreviewRows);
+    }
+
+    /// <summary>Switching away from the clipboard re-arms the automatic read, so coming back looks at it again
+    /// without the user having to ask.</summary>
+    [Fact]
+    public async Task SwitchingAwayFromTheClipboardAndBack_ReadsItAgain()
+    {
+        var reads = 0;
+        var vm = ClipboardVm(() =>
+        {
+            reads++;
+            return "Indeks\tNazwa\r\n1\tabc\r\n";
+        });
+
+        vm.UseClipboardCommand.Execute(null);
+        await SettleAsync(vm);
+        Assert.Equal(1, reads);
+
+        vm.Source.UseFile = true;
+        vm.Source.FilePath = WriteFile("in.csv", "A;B\n1;x\n");
+        await SettleAsync(vm);
+        Assert.Equal(1, reads);
+
+        // Back to the clipboard by the property alone — no command, no refresh.
+        vm.Source.UseFile = false;
+        await SettleAsync(vm);
+
+        Assert.Equal(2, reads);
+        Assert.Equal(new[] { "Indeks", "Nazwa" }, vm.PreviewFields.Select(f => f.Name));
+    }
+
+    /// <summary>
+    /// „Tabular" is not a new heuristic — the first question goes to <c>DelimiterDetector</c>, the module's one
+    /// owner of „is this delimited text". The second is only there because that detector deliberately refuses to
+    /// invent a separator for a single column, and a single column pasted out of Excel is still a table.
+    /// </summary>
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("   \r\n  ", false)]
+    [InlineData("just a sentence", false)]
+    [InlineData("A\tB\r\n1\t2\r\n", true)]
+    [InlineData("A;B\r\n1;2\r\n", true)]
+    [InlineData("1234\r\n5678\r\n", true)]
+    [InlineData("1234\r\n", false)]
+    public void LooksTabular_AnswersFromTheModulesOwnDetector(string text, bool expected)
+        => Assert.Equal(expected, DataImportTabViewModel.LooksTabular(text, new DelimitedOptions()));
+
+    /// <summary>
+    /// ⚠ A deliberate boundary, stated as a test so it cannot be „fixed" by accident: a refresh does NOT re-propose
+    /// the types of a new table while the source still describes the same fields. Types the user edited are
+    /// decisions, and overwriting a decision with a proposal is the one thing rule #11 forbids outright; the
+    /// existing rule already re-infers when the fields or the culture move, which is when the ground under those
+    /// decisions has actually shifted.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_DoesNotOverwriteTypesTheUserEdited()
+    {
+        var vm = Vm();
+        var path = WriteFile("in.csv", "KOD;ILOSC\nA1;1\n");
+
+        vm.Source.FilePath = path;
+        await SettleAsync(vm);
+
+        vm.Target.IsNewTable = true;
+        vm.Target.NewTableName = "IMP_NEW";
+        await SettleAsync(vm);
+
+        var column = vm.Target.NewColumns.Single(c => c.Name == "ILOSC");
+        column.Type = "VARCHAR";
+        column.Size = 30;
+        await SettleAsync(vm);
+        Assert.Equal("VARCHAR(30)", column.TypeText);
+
+        // The same columns, different values — the fields have not moved, so neither has the decision.
+        File.WriteAllText(path, "KOD;ILOSC\nA1;1\nA2;2\n");
+        vm.RefreshCommand.Execute(null);
+        await SettleAsync(vm);
+
+        Assert.Equal("VARCHAR(30)", vm.Target.NewColumns.Single(c => c.Name == "ILOSC").TypeText);
+        Assert.Equal(2, vm.PreviewRows.Count);
+    }
 }

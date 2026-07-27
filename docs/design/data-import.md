@@ -64,12 +64,68 @@ odbicie tego modułu) oraz `docs/design/firebird-debugger-implementation-plan.md
 | **✅ I8 — DOMKNIĘCIE PO PRZEGLĄDZIE (2026-07-27): nowa tabela pojawia się w drzewie od razu** | Drugie zgłoszenie z ręcznego QA: import przechodził, tabela powstawała, dane wchodziły — ale **Explorer metadanych jej nie pokazywał** do ręcznego odświeżenia. Naprawione **bez 21. wywołania `RefreshAsync()`**: moduł zgłasza fakt (`DataImportEnvironment.TableCreated` / `TableDropped`), a drzewo wstawia/usuwa **jeden liść w miejscu**. Przy okazji, w tej samej sesji, **Warstwa 1** z raportu — patrz blok niżej |
 | **✅ I9 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-27)** | XLSX: `EmberTern.Export.Office` → **`EmberTern.Office`** (D1), `XlsxImportProvider` (7 wytycznych REK-6), rozgałęzienie sekcji Format po **`Capabilities`**, `SourceErrorValue` domykający R20. ⭐ **Filar „jeden pipeline dla każdego źródła" utrzymał się: pipeline, konwerter, walidator, mapowanie i writer NIE zostały zmienione.** Potwierdzone wzrokowo przez użytkownika w obu paletach — sprawdzone osobno: wybór arkusza, ukrywanie ustawień właściwych dla CSV/TXT, opcja „traktuj komórki dat jako daty" i pełny przebieg importu XLSX; bez uwag wizualnych i funkcjonalnych |
 | **✅ I10 — DOSTARCZONY (2026-07-27), oczekuje potwierdzenia wzrokowego** | Schowek + `.xls` (BIFF8). ⭐ **Filar utrzymał się po raz drugi, tym razem pod większym obciążeniem — bo doszła NOWA ZALEŻNOŚĆ NuGet, a mimo to pipeline, konwerter, walidator, mapowanie i writer znów nie zostały tknięte.** Schowek okazał się już zbudowany (I5 dał przełącznik i pole, `MainWindow` czytanie ze schowka) — etap dołożył mu wyłącznie dowody. Szczegóły w bloku „⭐ I10 as-built" |
+| **🏁 SZEW ERGONOMICZNY PO I10 — ZAMKNIĘTY I ZAAKCEPTOWANY (2026-07-27)** | Trzy uwagi użytkownika z przeglądu I10, potraktowane jako domknięcie I10, **nie** jako nowy etap: schowek jako **źródło żywe**, przycisk **Odśwież**, i wymóg, żeby ponowny odczyt przechodził **tym samym łańcuchem** co pierwszy. **Potwierdzone przez użytkownika: bez uwag.** Wprost zaakceptowany kierunek architektoniczny — *„najważniejsze, że nie powstała druga ścieżka odświeżania, tylko wszystko przechodzi przez jeden łańcuch z różnymi powodami uruchomienia (Decision / Refresh)"*. `Ctrl+R` zostaje, **`F5` świadomie NIE dodane** (decyzja użytkownika — `F5` to Import). Szczegóły w bloku „⭐ Szew ergonomiczny po I10" |
 | **Następny etap** | **I11** — nazwane profile (UI nad istniejącym magazynem; zero zmian w modelach i w pipeline) |
-| **Testy** | **5785 zielonych**, 0 niepowodzeń (I10 dodał **+22**). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
+| **Testy** | **5801 zielonych**, 0 niepowodzeń (szew po I10 dodał **+16**; I10 dodał +22). ⚠ Uruchamiać **dwiema partycjami** (`ConnectionExpandBindingProbe` osobno) i **zawsze z `--blame-hang --blame-hang-timeout 120s`** — zawieszenie z #94/#226/#261 wystąpiło w tej sesji i instrument NAZWAŁ podejrzanego (`CompletionRow_HighlightsMatchedPrefix`); to zawieszenie **po** zakończeniu testów, nie awaria testu |
 | **Weryfikacja na żywo** | `tools/probes/DataImportProbe` (I4) — **20/20 ALL PASS** · `tools/probes/DataImportRunProbe` (I7 + **G z I8** + **H z I9** + **I z I10**) przeciwko FB5 `WI-V5.0.3.1683` — **33/33 ALL PASS**; sekcja I dokłada: detektor proponuje TAB dla wklejenia z Excela (3/3 rekordy zgodne co do 5 pól), wklejenie importuje się **bez pliku na dysku**, `.xls` → tabela istniejąca i → tabela nowa, `#N/A` z BIFF odrzucone przez kolumnę VARCHAR, data z `.xls` wraca z bazy tym samym dniem (2026-05-14), oraz **prawdziwy skoroszyt napisany przez Excela** (`Nadgodziny2.xls`: 3 arkusze, 20 pól, 1073 wiersze, ostatni numer 1074). Wcześniejsze: raport == `SELECT COUNT(*)`, Rollback cofa DELETE razem z wierszami, `Batched` zatwierdza co N i Rollback tego nie cofa, dry-run nie dotyka niczego, kolumna mieszana ląduje jako VARCHAR, `CREATE` widać z drugiego przyłączenia natychmiast (#213), katalog oddaje DOKŁADNIE te typy, o które poprosiliśmy, Rollback cofa wiersze i NIE cofa tabeli — **oraz (I9): arkusz → tabela istniejąca, arkusz → tabela nowa, prawdziwa komórka daty typuje się na `DATE` i wraca z bazy tym samym dniem (2026-04-03), a `#N/A` zostaje odrzucone przez kolumnę VARCHAR** |
 | **Build** | 0 ostrzeżeń / 0 błędów (`TreatWarningsAsErrors`) · smoke: aplikacja startuje |
 | **Kod w `src/`** | `EmberTern.Core/Import/**` + trzy pliki w `EmberTern.Firebird` + **pięć VM-ów i widok w `EmberTern.App`**. Rdzeń nadal ma zero Avalonia, zero `FirebirdSql`, zero UI. |
 | **⭐ Kamień milowy** | **MVP (I0–I7) DOSTARCZONE: CSV/TXT → istniejąca tabela działa end-to-end**, z walidacją, raportem, decyzją transakcyjną i pamięcią ostatniej konfiguracji. **I8 dokłada drugi wariant celu — tabelę, której jeszcze nie ma.** Wszystko dalej (I9–I12) jest przyrostowe. |
+
+### ⭐ Szew ergonomiczny po I10 — schowek jako źródło żywe, „Odśwież", jeden łańcuch (2026-07-27)
+
+Trzy uwagi z przeglądu I10, zgłoszone jako **domknięcie ergonomii gotowego modułu, nie nowa funkcjonalność**.
+Użytkownik postawił też warunek architektoniczny: *„nie chciałbym mieć dwóch ścieżek aktualizacji"* — i jeśli
+jednego punktu wejścia do łańcucha nie ma, zrobić go **teraz**, przed zamknięciem modułu.
+
+**Odpowiedź na to pytanie brzmi: jeden punkt wejścia BYŁ i jest — `Recalculate` → `RunChainAsync`.** Cały etap
+polegał na doprowadzeniu do niego trzech rzeczy, które go omijały albo nie miały jak go uruchomić. Modele,
+pipeline, konwerter, walidator, mapowanie i writer — **nie tknięte** (jak w I9 i I10).
+
+| Uwaga | Co było | Co jest |
+|---|---|---|
+| **1. Schowek ma być źródłem żywym** | Odczyt schowka był **komendą obok łańcucha**: pobierała tekst, przypisywała go do `Source.ClipboardText`, a łańcuch reagował dopiero na zmianę właściwości | Odczyt jest **pierwszym ogniwem łańcucha** (`ReadClipboardIfNeededAsync`). Zakładka otwarta na konfiguracji „Schowek" czyta schowek **sama**; przełączenie Plik → Schowek czyta ponownie; `Ctrl+V` i `Ctrl+R` to ręczne ponowienie |
+| **2. Brakuje przycisku „Odśwież"** | Nie było żadnego sposobu uruchomienia łańcucha na życzenie — pozostawało zamknięcie i otwarcie zakładki | Przycisk **Odśwież** w pasku poleceń (ikona `Icon.RefreshCw` — ta sama, której używa drzewo metadanych, Session Manager i Table Data) + `Ctrl+R`. **Nie jest drugą ścieżką**: to `Recalculate(ImportChainTrigger.Refresh)` |
+| **3. Odświeżenie musi przebudować cały stan** | Łańcuch przebudowywał wszystko poprawnie — ale **dwa FAKTY o świecie były zaryglowane**: lista tabel czytana raz na zakładkę (`_tablesLoaded`) i schowek czytany tylko przy przypisaniu | `Refresh` **zrzuca oba** i czyta je od nowa, po czym idzie ten sam łańcuch: źródło → analiza → schemat → mapowanie → gotowość → podgląd |
+
+⭐ **Kluczowa decyzja: „powód" jest ARGUMENTEM jednego łańcucha, nie drugim łańcuchem.** `ImportChainTrigger`
+ma dwie wartości — `Decision` (zmieniła się decyzja: przelicz na już ustalonych faktach) i `Refresh`
+(użytkownik poprosił: zrzuć fakty i przeczytaj je ponownie). To dokładnie ta sama dyscyplina, dzięki której
+„Waliduj" jest **innym writerem podanym do jednego `ImportPipeline`**, a nie drugim trybem: różnicy nie ma
+gdzie się rozjechać, bo nie ma drugiej ścieżki.
+
+⭐ **Dlaczego „nawet po Ctrl+V nie przeliczało się mapowanie" — i dlaczego to nie był błąd w mapowaniu.**
+Tekst schowka docierał przez **przypisanie właściwości**, a `SetProperty` porównuje: identyczna treść to brak
+`PropertyChanged`, brak `Changed`, brak łańcucha. Ponowny odczyt tej samej treści przeliczał **zero**. Odkąd
+odczyt jest ogniwem, to, co dzieje się dalej, wynika z **tego, że poproszono**, a nie z tego, że wartość się
+różni. Gotcha **#271**.
+
+⚠ **Odkryte przy okazji, przez test liczący odczyty: `SourceDescriptor` nie umie powiedzieć „plik, ale jeszcze
+nie wybrany".** `BuildSource` zwraca dla tego stanu `Kind == Clipboard`, więc brama oparta na rodzaju źródła
+kazałaby **każdej świeżo otwartej zakładce** sięgnąć do schowka i — gdy treść wygląda tabelarycznie — przyjąć
+ją jako źródło, **przy zaznaczonym „Plik"**. Brama pyta więc o to, co naprawdę niesie decyzję użytkownika
+(`Source.UseFile`, czyli radio). Gotcha **#272**.
+
+⭐ **Automatyczny odczyt przyjmuje treść tylko wtedy, gdy to TABELA — i nie wymyśla na to własnej heurystyki.**
+Pierwsze pytanie idzie do `DelimiterDetector`, jedynego właściciela pytania „czy to tekst rozdzielany", więc
+„tabelaryczne" znaczy tu to samo, co wszędzie indziej. Drugie pytanie istnieje tylko dlatego, że ten detektor
+**świadomie odmawia** wymyślenia separatora dla jednej kolumny — a jedna kolumna wklejona z Excela to nadal
+tabela. **Odświeżenie jawne nie pyta o to wcale**: „przeczytaj schowek ponownie" ma jedno uczciwe znaczenie,
+więc przyjmuje to, co tam jest, **także pustkę** (powierzchnia mówi wtedy „brak źródła" przez pasek gotowości,
+co jest prawdą — trzymanie poprzedniego tekstu pokazywałoby dane, których w nazwanym źródle nie ma).
+
+⚠ **Świadoma granica, zapisana jako test, żeby nie dało jej się „naprawić" przez przypadek:** odświeżenie
+**nie proponuje na nowo typów nowej tabeli**, dopóki źródło opisuje te same pola. Typy wyedytowane przez
+użytkownika są decyzjami, a nadpisanie decyzji propozycją to jedyna rzecz, której reguła #11 zabrania wprost;
+istniejąca reguła i tak wnioskuje ponownie, gdy zmienią się pola albo kultura — czyli wtedy, gdy grunt pod tymi
+decyzjami rzeczywiście się poruszył.
+
+**Drobne przy okazji:** `ClipboardReadRequested` przeniesione z **zdarzenia** (podłączanego po konstrukcji) do
+`DataImportEnvironment.ReadClipboardAsync` — bo schowek czyta teraz **łańcuch**, więc musi być odpowiadalny już
+w pierwszym przebiegu z konstruktora; wybór pliku zostaje zdarzeniem, bo jego jedynym wyzwalaczem jest komenda
+użytkownika. `FileFacts` → **`SourceFacts`**: jedna linia faktów dla obu wariantów, a dla schowka niesie
+**godzinę odczytu** — to jest ta postać pytania „czy to, co widzę, jest aktualne", na którą źródło żywe umie
+odpowiedzieć, i to ona sprawia, że odświeżenie widocznie się potwierdza także wtedy, gdy treść jest identyczna.
 
 ### 🔴 I8 — awaria znaleziona w przeglądzie i jej dwie przyczyny (2026-07-27)
 

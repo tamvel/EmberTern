@@ -149,7 +149,10 @@ internal static class UiStrings
     public const string ImportSourceClipboard = "Clipboard";
     public const string ImportSourceNoFile = "no file chosen";
     public const string ImportSourceBrowseTooltip = "Choose a file…";
-    public const string ImportSourceUseClipboardTooltip = "Use the clipboard contents as the source";
+    // Choosing the clipboard READS it — that is the whole point of it being a live source, and a control with a
+    // side effect should say so rather than let the user discover it.
+    public const string ImportSourceUseClipboardTooltip =
+        "Use the clipboard as the source, and read it now · Ctrl+V re-reads it";
     public const string ImportParsingHeader = "Parsing";
     public const string ImportCultureHeader = "Data culture";
     public const string ImportDelimiterLabel = "Column separator";
@@ -190,6 +193,11 @@ internal static class UiStrings
     public const string ImportSummaryNoHeader = "no header";
     public const string ImportFileFactsFormat = "{0:N1} KB · {1:g}";
     public const string ImportFileMissing = "file not found";
+    // The clipboard's facts carry the READ TIME, not a last-write time it does not have: for a live source that
+    // is the question ("is what I see still what I copied?"), and it is also what makes a refresh visibly
+    // acknowledge itself when the pasted content happens to be identical.
+    public const string ImportClipboardFactsFormat = "clipboard: {0} lines · {1:N1} KB · read {2:T}";
+    public const string ImportClipboardEmpty = "clipboard is empty";
     // (There is deliberately no "format not supported yet" string any more. It refused .xls until etap I10 gave
     // that format a provider, and every source kind the surface can resolve now has one — a message for a state
     // that can no longer occur is worse than none, because the next reader of the code has to work out when it
@@ -396,6 +404,15 @@ internal static class UiStrings
         "Run everything except the write — same pipeline, same conversion, same checks · Ctrl+F5";
     public const string ImportCancel = "Cancel";
     public const string ImportCancelTooltip = "Stop after the current batch · Esc";
+
+    // Refresh names what it does to the WORLD, not to the screen: it re-reads every fact the surface holds. The
+    // tooltip lists the cases because that is what makes the button discoverable — a bare "Refresh" leaves the
+    // user guessing what exactly gets re-read. (Icon only, so there is deliberately no label constant: the
+    // shared refresh mark already carries the meaning, and the command bar has no room to spare.)
+    public const string ImportRefreshTooltip =
+        "Read the source, the table list and the target again, then recompute everything: mapping, readiness and "
+        + "the preview. Use it when the file has changed on disk, the clipboard now holds something else, or a "
+        + "table has been added or dropped · Ctrl+R (Ctrl+V re-reads the clipboard)";
     public const string ImportRunCancelled = "Cancelled. Rows already written stay in the open transaction.";
 
     public const string ImportTransactionLabel = "Transaction";
