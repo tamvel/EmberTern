@@ -32,7 +32,7 @@ verbatim, in the archive below.
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
-| **`docs/design/keyboard-manager.md`** | **ACTIVE — the Keyboard Manager & Context Menu UX sprint's one document.** The full command/shortcut/menu **audit** (every gesture that exists, duplications, collisions, what is missing), the user's **ratified shortcut map and architecture decisions**, the `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design with the reasons the obvious alternatives do not work here, the **as-built for each etap** (§11 = etap 2), and the etap order. | When working on `EmberTern.App/Commands`, any shortcut, tooltip gesture, or context menu. |
+| **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (273 entries, #1–#286), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -76,7 +76,10 @@ git push origin <branch>
 git push private <branch>
 ```
 
-**Branch hygiene (2026-07-26):** the repo carries only branches that are still needed. `feat/completion-matching`,
+**Branch hygiene (2026-07-28):** **`feat/keyboard-manager` was merged into `master`** (`--no-ff`, so the
+sprint's six etaps stay one readable arc) and pushed to both remotes; like `feat/data-import` it **still
+exists** locally and on both remotes — deleting it is the user's call. Earlier: the repo carries only branches
+that are still needed. `feat/completion-matching`,
 `feat/firebird-debugger`, `feat/save-and-close` and `feat/sql-data-export` were all provably merged into
 `master` and were deleted locally and from **both** remotes. **`feat/data-import` was merged into `master` on
 2026-07-27** (`--no-ff`, commit `0a3aed4`, so the module's history stays one readable arc) and **still exists**
@@ -286,12 +289,28 @@ noted.
   rename, find references), semantic highlighting, and Quick Info all built as *clients* of that
   one model. See **`docs/design/editor-architecture.md`** for the current architecture and
   **"Editor Architecture — current direction"** below for status.
+- **Keyboard Manager / command system** — **ONE registry every UI surface reads from.**
+  `EmberTern.App/Commands`: `CommandCatalog` is a single declarative table of `CommandDescriptor`s built once
+  at type-init (id · scope · dispatch · gesture(s) · tab kinds), plus a collision validator; `CommandRouter`
+  (window, **Bubble** phase) resolves a keystroke **Editor > Tree > Grid > Tab > Global** and declines when
+  nothing is live; `CommandTip` is the one place a gesture becomes text. The registry holds **descriptions,
+  never `ICommand`s** — the instance is resolved at invoke time by `MainWindowViewModel.ResolveCommand`
+  (Global), `WorkspaceTabViewModel.ResolveCommand` (Tab — the fourth member of the per-kind family beside
+  `UnsavedWork`/`SavableEditor`/`RefreshAsync`) and `MetadataExplorerViewModel.ResolveCommand` (Tree).
+  **Shortcuts, tooltips, shortcut-chips and all 32 context menus take their gesture from it** — no gesture is
+  typed by hand anywhere, and two tests enforce that. Context menus are one shared style set (icons left via
+  `{app:MenuIcon}`, gestures right via `{app:CommandGesture}`). *(design + as-built:
+  [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
 
-- **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — SPRINT COMPLETE: ETAPS 1–5 + A UX CONSISTENCY PASS (2026-07-28).
-  Etaps 1–5 user-accepted; the consistency pass awaits visual QA. Branch `feat/keyboard-manager`, not yet
-  pushed.** Build 0/0; suite **5952 green** in the two documented partitions (5903 + 49); smoke clean.
+- **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-28).**
+  Etaps 1–5 + a UX Consistency Pass, every one visually QA'd and accepted. Build 0/0; suite **5952 green**
+  (full run in one pass, and in the two documented partitions 5903 + 49); smoke clean. Merged `--no-ff` so the
+  sprint's history stays one readable arc, and pushed to **both** remotes.
+  **The command system is now part of the app's architecture — see the "Keyboard Manager / command system"
+  entry in "What's built" for what it IS; the notes below are the WHY, kept because several are decisions
+  rather than history.**
   **⭐ UX CONSISTENCY PASS — one surface, one vocabulary.** The user's visual QA found Table Detail → Fields
   saying **"Add item"/"Remove item"** on the toolbar and **"New/Edit/Delete field"** in the menu, no **Edit**
   on the toolbar, and no **Move Up/Down** in the menu. One cause, not three bugs: the toolbar is the *shared*
@@ -3236,7 +3255,14 @@ for the full explanation, code, and the failure it prevents.
 - One headless UI test session per test **process** — share it, never `StartNew` per test. Not tidiness:
   AvaloniaEdit builds its caret/editing `KeyBinding`s as **static** lists owned by the thread of whichever
   session first constructs a `TextEditor`, so any real key sent into an editor from a later session throws
-  *"the calling thread cannot access this object"* — no injection style avoids it. *(#94, #226)*
+  *"the calling thread cannot access this object"* — no injection style avoids it. **It is shared through an
+  `ICollectionFixture` (`HeadlessCollection`), NOT `IClassFixture`** — the latter creates one per test *class*,
+  so a second consumer silently gets a second session; join the collection instead. *(#94, #226, #286)*
+- **A derived value that is typed by hand goes stale SILENTLY, and the guard against it must key on the
+  value's SOURCE, not on the value.** A shortcut written into a string (`"Format SQL · Alt+F"`) survived the
+  gesture being re-bound with a green build and green tests — a tooltip teaching a key that no longer existed.
+  A *correctly composed* string contains the same text at run time, so only the declaration (`const` = literal
+  by definition) distinguishes the two. Generalises to any copied derived fact. *(#284)*
 - **Reflect the real runtime contract of a UI member before guarding on it.** AvaloniaEdit's `TextEditor`
   is **not focusable** — `editor.Focus()` is a no-op returning `false` and `editor.IsFocused` is *always*
   false; keyboard focus lives on `editor.TextArea`. A guard written against the plausible-looking member
