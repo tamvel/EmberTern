@@ -1,8 +1,9 @@
 # Keyboard Manager & Context Menu UX — sprint design document
 
-**Status: SPRINT COMPLETE — ETAPS 1–5.** Audit accepted · registry (§11) · shortcuts (§12) ·
-tooltips (§14) · context menus (§15). Collision report: §13. Branch: `feat/keyboard-manager`.
-Build 0/0; suite **5948 green** in the two documented partitions (5900 + 48); smoke clean.
+**Status: SPRINT COMPLETE — ETAPS 1–5 + UX CONSISTENCY PASS.** Audit accepted · registry (§11) ·
+shortcuts (§12) · tooltips (§14) · context menus (§15) · consistency pass (§16). Collision report: §13.
+Branch: `feat/keyboard-manager`. Build 0/0; suite **5952 green** in the two documented partitions
+(5903 + 49); smoke clean.
 
 **A keyboard gesture is written down in exactly ONE place** (`CommandCatalog`) and reaches every shortcut,
 tooltip, shortcut-chip and context menu from there.
@@ -938,3 +939,96 @@ named `ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`, and 
 that test is the problem. It is not: **the name follows the POSITION — the last headless test in a long
 run — not the test itself.** So the suspect is session teardown / dispatcher-loop shutdown, not that
 assertion. Whoever picks up the infrastructure task should start there.
+
+---
+
+## 16. UX Consistency Pass — as built
+
+Build 0/0; suite **5952 green** in the two documented partitions (5903 + 49); smoke clean.
+No new command, no new gesture, no architectural change — this pass only made one surface describe itself
+one way.
+
+### 16.1 The finding, and why it was a naming problem rather than three separate bugs
+
+On Table Detail → Fields the toolbar said **"Add item" / "Remove item"** while the context menu beside it said
+**"New field" / "Edit field" / "Delete field"**, the toolbar had no **Edit** at all, and the menu had no
+**Move Up / Down**. Three symptoms, one cause: the toolbar is driven by the *shared* collection router, so its
+labels were written generically, and the menu is per-grid, so its labels were written specifically. Nothing
+made them agree.
+
+So the fix is at the router, not in the fields view: `ActiveCollection()` now returns a named
+**`CollectionCommands`** record carrying `Edit` **and the collection's own noun** — "field", "row", "column",
+"variable", "item". The toolbar tooltips are computed from that noun plus the gesture from the catalog, so the
+same button reads **"New field · F3"** on a table's fields and **"New parameter"**-class wording on a
+procedure's arguments, and can no longer disagree with the menu next to it.
+
+| | before | after |
+|---|---|---|
+| Toolbar New | "Add item" | "New *noun* · F3" |
+| Toolbar Edit | **absent** | present, shown only where the collection has an Edit |
+| Toolbar Delete | "Remove item" | "Delete *noun* · F8" |
+| Fields menu reorder | **absent** | Move up / Move down |
+| Fields menu gestures | `InputGesture="Insert"` etc., hand-typed | from the catalog |
+
+**⭐ The evidence that Edit was intended and dropped:** `UiStrings.FieldEditEditTooltip` — *"Edit selected
+field · F2"* — existed with **no consumer anywhere**. The string for the missing button had been sitting in
+the file. It is deleted; the button uses the noun-aware `CollectionEditTooltip`.
+
+### 16.2 The last hand-typed gestures in the application are gone
+
+The fields grid's `Insert` / `F2` / `Delete` were three local `DataGrid.KeyBindings` plus three literal
+`InputGesture` attributes — the only gestures no menu could read from the catalog, and the only entries left
+in either guard's allowlist. They are now catalog commands at `Grid` scope:
+
+* `CollectionAdd` — `F3`, with **`Insert` as an alternate**;
+* `CollectionEdit` — **`F2`** (new; routes to the router's `Edit`);
+* `CollectionRemove` — `F8`, with **`Delete` as an alternate`**.
+
+Long-standing muscle memory keeps working; what the menus *display* is the ratified `F3`/`F8`/`F2`. **Measured
+before removing the local bindings:** Avalonia's `DataGrid` claims none of `F2`/`Insert`/`Delete` itself, so
+nothing depended on a local binding winning a race. Both allowlists are now **empty**, which is the finished
+state rather than an oversight.
+
+⚠ `Delete` at `Grid` scope coexists with the editor's own `Delete` (it deletes a character — measured, #282).
+`Editor` outranks `Grid`, so the caret decides. That is the case scopes were built for.
+
+### 16.3 The global sweep
+
+**⭐ One drift found by machine, one by the user's eye, and now both are guarded.**
+`TheSameMenuOperationAlwaysCarriesTheSameIcon` groups all **63 distinct menu operations** by the `UiStrings`
+label they use and requires each group to agree on its icon. It found **"Debug procedure" / "Debug function"**
+carrying the debugger's composite identity mark in the Object Explorer and a plain `Icon.Crosshair` in the
+Package Members menu — the same command, two glyphs, depending on where the user right-clicked. Now the one
+mark in both. Nobody re-checks 133 menu items by hand, which is precisely why this is a test.
+
+Two more toolbar-only operations were surfaced in the menu of the same grid:
+
+* **Table Data:** *New row* / *Delete row* — the toolbar's `+` / `−` route to them, and every other
+  collection surface offered them in both places.
+* **Session Manager:** *Open in SQL Editor* / *Analyze in Performance* — row actions reachable only from the
+  detail pane's buttons, while Disconnect and Copy already sat in both.
+
+Deliberately **not** equalised, because the sets are different on purpose: Trace Monitor's start/pause/stop
+(a session control, not a row action), the Security Manager's bulk vs row/column grant scopes, the data grids'
+refresh + pagination strips, and the trigger-group `Visible`/`All` scope qualifiers whose parent carries the
+icon. The rule applied was the user's: *the same surface offers the same basic operations whichever way you
+reach them* — not *every menu holds the same items*.
+
+### 16.4 A tooltip constant used as a menu label
+
+Seven menu items across four views used `CollectionAddTooltip` / `CollectionRemoveTooltip` — **tooltip**
+constants — as their `Header`, which is how "Add item" became a menu entry (audit finding D6). They now use
+proper label constants (`CollectionMenuNew` / `CollectionMenuDelete`), and the two tooltip constants are
+deleted, since the toolbar's tooltips are computed.
+
+### 16.5 What is now enforced rather than promised
+
+| Guard | Rule |
+|---|---|
+| `TheSameMenuOperationAlwaysCarriesTheSameIcon` | one operation → one icon, across all 63 |
+| `EveryMenuIconKeyUsedInAViewResolvesToAGeometry` | no menu item silently loses its icon to a typo'd key |
+| `NoMenuItemTypesItsGestureByHand` | XAML gestures come from the catalog — allowlist now **empty** |
+| `NoConstantTypesAGestureByHand` | `UiStrings` gestures come from the catalog — allowlist now **empty** |
+| `CollectionTooltips_NameTheActiveCollectionAndCarryItsGesture` | the toolbar's words and key match the menu's |
+| `CollectionEdit_IsARoutedGridCommand_AndResolvesToTheRouter` | Edit really exists, and declines when there is nothing to edit |
+| `FieldsGridLegacyKeys_AreCatalogAlternates_NotLocalBindings` | Insert / Delete are aliases in the catalog, not local bindings |

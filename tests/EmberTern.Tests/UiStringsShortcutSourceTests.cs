@@ -45,9 +45,9 @@ public sealed class UiStringsShortcutSourceTests
         [nameof(UiStrings.ImportSourceUseClipboardTooltip)] =
             "Ctrl+V here means 're-read the clipboard SOURCE', i.e. paste semantics that must yield to a "
             + "focused text box, so it stayed a local handler and has no descriptor to read from.",
-        [nameof(UiStrings.FieldEditEditTooltip)] =
-            "F2 on the fields grid is a local DataGrid.KeyBinding. F2 was not part of the ratified gesture "
-            + "set for this sprint, so no CommandId was invented for it.",
+        // (FieldEditEditTooltip was here — "Edit selected field · F2" — until the UX Consistency Pass found it
+        //  had no consumer at all: the toolbar Edit button it described was never built. Removing the string
+        //  and building the button retired the exemption, and F2 is now CommandId.CollectionEdit.)
     };
 
     [Fact]

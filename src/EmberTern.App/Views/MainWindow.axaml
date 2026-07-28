@@ -1024,12 +1024,23 @@
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep2Visible}" />
 
-              <!-- ── SECTION 3 · Collection (unified router: + −  |  ↑ ↓) ────────────── -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionAddTooltip}"
+              <!-- ── SECTION 3 · Collection (unified router: New · Edit · Delete  |  ↑ ↓) ────────────
+                   Tooltips are BOUND, not static: they name the active collection's own noun and carry the
+                   gesture from CommandCatalog ("New field · F3" on a table's fields, "New parameter · F3" on
+                   a procedure's arguments). They used to be the constants "Add item" / "Remove item", so the
+                   toolbar and the context menu beside it described the same commands differently. -->
+              <Button Classes="icon" ToolTip.Tip="{Binding CollectionAddTooltip}"
                       Command="{Binding AddCollectionItemCommand}" IsVisible="{Binding ShowCollectionTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionRemoveTooltip}"
+              <!-- Edit was missing from the toolbar entirely while the fields context menu offered it. Shown
+                   only where the active collection HAS an edit action (ShowCollectionEdit) — a grid edited in
+                   place has none, and a permanently-greyed button teaches nothing. -->
+              <Button Classes="icon" ToolTip.Tip="{Binding CollectionEditTooltip}"
+                      Command="{Binding EditCollectionItemCommand}" IsVisible="{Binding ShowCollectionEdit}">
+                <controls:SvgIcon Data="{StaticResource Icon.Pencil}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{Binding CollectionRemoveTooltip}"
                       Command="{Binding RemoveCollectionItemCommand}" IsVisible="{Binding ShowCollectionTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
               </Button>

@@ -86,12 +86,23 @@
                        (OnMemberDebugClick → RequestDebugMember, kind-aware); one item per debuggable kind. -->
                   <Border.ContextMenu>
                     <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}" Icon="{app:MenuIcon Icon.Crosshair}"
+                      <!-- The debugger's own identity mark, the same composite the sidebar's Debug items and
+                           the editors' Debug buttons use. It briefly had Icon.Crosshair here, which made one
+                           operation carry two different icons depending on where the user found it. -->
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
                                 Click="OnMemberDebugClick"
-                                IsVisible="{Binding IsProcedure}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}" Icon="{app:MenuIcon Icon.Crosshair}"
+                                IsVisible="{Binding IsProcedure}">
+                        <MenuItem.Icon>
+                          <controls:DebuggerIcon Width="14" Height="14" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
                                 Click="OnMemberDebugClick"
-                                IsVisible="{Binding IsFunction}" />
+                                IsVisible="{Binding IsFunction}">
+                        <MenuItem.Icon>
+                          <controls:DebuggerIcon Width="14" Height="14" />
+                        </MenuItem.Icon>
+                      </MenuItem>
                     </ContextMenu>
                   </Border.ContextMenu>
                   <StackPanel Orientation="Horizontal" Spacing="5">

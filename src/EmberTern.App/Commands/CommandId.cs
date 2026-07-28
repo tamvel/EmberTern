@@ -101,10 +101,17 @@ public enum CommandId
     // whose ActiveCollection() already answers "which collection is the user editing". Nothing here
     // needs to know about a particular grid.
 
-    /// <summary>Add a row to the collection the focused grid belongs to — F3.</summary>
+    /// <summary>Add a row to the collection the focused grid belongs to — F3 (or Insert).</summary>
     CollectionAdd,
 
-    /// <summary>Remove the selected row from that collection — F8.</summary>
+    /// <summary>
+    /// Edit the selected row of that collection — F2. Exists only where the collection has an edit action
+    /// (the table fields grid, whose items open a dialog); elsewhere it resolves to null and the gesture
+    /// falls through, because a grid edited in place needs no separate Edit.
+    /// </summary>
+    CollectionEdit,
+
+    /// <summary>Remove the selected row from that collection — F8 (or Delete).</summary>
     CollectionRemove,
 
     // ── Global scope ────────────────────────────────────────────────────────────────────────────────

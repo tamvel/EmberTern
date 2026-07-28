@@ -289,9 +289,37 @@ noted.
 
 ## Current state
 
-- **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — SPRINT COMPLETE, ETAPS 1–5 (2026-07-28); etaps 1–4 user-accepted,
-  etap 5 awaits visual QA. Branch `feat/keyboard-manager`, not yet pushed.** Build 0/0; suite **5948 green**
-  in the two documented partitions (5900 + 48); smoke clean.
+- **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — SPRINT COMPLETE: ETAPS 1–5 + A UX CONSISTENCY PASS (2026-07-28).
+  Etaps 1–5 user-accepted; the consistency pass awaits visual QA. Branch `feat/keyboard-manager`, not yet
+  pushed.** Build 0/0; suite **5952 green** in the two documented partitions (5903 + 49); smoke clean.
+  **⭐ UX CONSISTENCY PASS — one surface, one vocabulary.** The user's visual QA found Table Detail → Fields
+  saying **"Add item"/"Remove item"** on the toolbar and **"New/Edit/Delete field"** in the menu, no **Edit**
+  on the toolbar, and no **Move Up/Down** in the menu. One cause, not three bugs: the toolbar is the *shared*
+  collection router (so generic labels) and the menu is per-grid (so specific ones). Fixed **at the router** —
+  `ActiveCollection()` now returns a named `CollectionCommands` record carrying `Edit` **and the collection's
+  own noun** (field/row/column/variable/item), so the toolbar tooltips are computed as
+  *"New field · F3"* / *"Edit field · F2"* / *"Delete field · F8"* and cannot disagree with the menu.
+  **⭐ The proof that Edit had been intended and dropped:** `UiStrings.FieldEditEditTooltip` — *"Edit selected
+  field · F2"* — existed with **no consumer anywhere**. The string for the missing button was in the file.
+  **⭐ THE LAST HAND-TYPED GESTURES IN THE APP ARE GONE.** The fields grid's `Insert`/`F2`/`Delete` were three
+  local `DataGrid.KeyBindings` + three literal `InputGesture` attributes — the only entries in either guard's
+  allowlist. Now catalog commands at Grid scope: `CollectionAdd` (F3, **Insert** alternate), **`CollectionEdit`
+  (F2, new)**, `CollectionRemove` (F8, **Delete** alternate). Muscle memory keeps working; menus display the
+  ratified keys. **Measured first:** Avalonia's `DataGrid` claims none of the three, so nothing relied on a
+  local binding winning a race. **Both allowlists are now empty** — the finished state, not an oversight.
+  ⚠ `Delete` at Grid scope coexists with the editor's own `Delete` (#282); Editor outranks Grid, so the caret
+  decides — the case scopes exist for.
+  **⭐ A machine found the icon drift the eye would have missed.**
+  `TheSameMenuOperationAlwaysCarriesTheSameIcon` groups all **63 distinct menu operations** by their
+  `UiStrings` label and requires one icon each — it caught **"Debug procedure"/"Debug function"** carrying the
+  debugger's composite mark in the tree and a plain `Icon.Crosshair` in the Package Members menu. Also
+  surfaced two toolbar-only operations in the menu of the same grid: Table Data **New/Delete row**, Session
+  Manager **Open in SQL Editor / Analyze in Performance**. Deliberately NOT equalised (different sets on
+  purpose): Trace start/pause/stop, Security bulk-vs-row scopes, grid refresh/pagination strips, trigger-group
+  scope qualifiers. The rule applied is the user's — *the same surface offers the same basic operations
+  whichever way you reach them*, not *every menu holds the same items*.
+  ⚠ Seven menu items used **tooltip** constants (`CollectionAddTooltip`) as their `Header` — audit finding D6,
+  which is how "Add item" became a menu entry. They now use label constants; the tooltip constants are gone.
   **⭐ Etap 5 — context menus. A CUSTOM CONTROL PROVED UNNECESSARY, and that was measured.** FluentTheme's
   **context-menu** `MenuItem` template already provides `PART_IconPresenter` (icons left),
   `PART_InputGestureText` (gestures right), the submenu chevron and the check mark — **and the icon column
@@ -2254,9 +2282,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5948 as of 2026-07-28
-  (`feat/keyboard-manager`, after etap 5; 5900 on `master`)** — green in the two documented partitions
-  (**5900 + 48**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5952 as of 2026-07-28
+  (`feat/keyboard-manager`, after the UX consistency pass; 5900 on `master`)** — green in the two documented partitions
+  (**5903 + 49**).
   **⭐⭐ 2026-07-28, Keyboard Manager etap 5 — THE FOUR "SAME TEST" OBSERVATIONS BELOW WERE AN ARTEFACT OF
   ORDERING. READ THIS BEFORE TRUSTING THEM.** Etap 5 briefly had a SECOND headless test class, and running the
   partition in which *it* ran last moved the reported hang to **that class's** last test

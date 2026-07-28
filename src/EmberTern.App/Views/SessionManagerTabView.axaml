@@ -224,6 +224,12 @@
           <ContextMenu>
             <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuDisconnect}" Icon="{app:MenuIcon Icon.Unplug, Brush=DangerIconBrush}" Command="{Binding DisconnectCommand}" />
             <Separator />
+            <!-- These two act on the SELECTED session's statement and were reachable only from the detail
+                 pane's buttons, while Disconnect and Copy sat in both places — the same surface offering a
+                 different set depending on where the user looked. Same commands, same icons as those buttons. -->
+            <MenuItem Header="{x:Static app:UiStrings.SessionManagerOpenInEditor}" Icon="{app:MenuIcon Icon.Query}" Command="{Binding OpenInEditorCommand}" />
+            <MenuItem Header="{x:Static app:UiStrings.SessionManagerAnalyze}" Icon="{app:MenuIcon Icon.Activity}" Command="{Binding AnalyzeInPerformanceCommand}" />
+            <Separator />
             <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuCopy}" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
           </ContextMenu>
         </DataGrid.ContextMenu>

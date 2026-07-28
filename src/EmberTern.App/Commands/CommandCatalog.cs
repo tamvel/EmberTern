@@ -143,8 +143,13 @@ public static class CommandCatalog
         new(CommandId.RefreshMetadata, CommandScope.Tree, CommandDispatch.Routed, G(Key.F4)),
 
         // ── Grid scope (the collection lists) ────────────────────────────────────────────────────────
-        new(CommandId.CollectionAdd, CommandScope.Grid, CommandDispatch.Routed, G(Key.F3)),
-        new(CommandId.CollectionRemove, CommandScope.Grid, CommandDispatch.Routed, G(Key.F8)),
+        // Insert / Delete are the keys the table's fields grid always had, kept as ALTERNATES so long-standing
+        // muscle memory still works while the ratified F3 / F8 are what the menus and tooltips display. They
+        // used to be three local DataGrid.KeyBindings, which is why that menu was the only place in the app
+        // showing a hand-typed gesture; routing them removed the last such literal.
+        new(CommandId.CollectionAdd, CommandScope.Grid, CommandDispatch.Routed, G(Key.F3), G(Key.Insert)),
+        new(CommandId.CollectionEdit, CommandScope.Grid, CommandDispatch.Routed, G(Key.F2)),
+        new(CommandId.CollectionRemove, CommandScope.Grid, CommandDispatch.Routed, G(Key.F8), G(Key.Delete)),
 
         // ── Global scope ─────────────────────────────────────────────────────────────────────────────
         new(CommandId.GlobalSearch, CommandScope.Global, CommandDispatch.Routed, G(Key.F, Ctrl | Shift)),

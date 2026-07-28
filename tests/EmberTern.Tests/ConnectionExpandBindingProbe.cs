@@ -2906,10 +2906,12 @@ public sealed class ConnectionExpandBindingProbe
     [Fact]
     public void NoMenuItemTypesItsGestureByHand()
     {
-        // The fields grid's Insert / F2 / Delete are local DataGrid.KeyBindings, not catalog commands: F2 was
-        // not part of the ratified gesture set, and Insert / Delete belong to that grid alone. They are the
-        // only literals allowed, and they are allowed by VALUE so a fourth one cannot slip in unnoticed.
-        var allowed = new HashSet<string>(StringComparer.Ordinal) { "Insert", "F2", "Delete" };
+        // ⭐ The allowlist is EMPTY, and that is the finished state. It used to hold the fields grid's
+        // Insert / F2 / Delete, which were three local DataGrid.KeyBindings — the last hand-typed gestures in
+        // the application. The UX Consistency Pass routed them (CollectionAdd keeps Insert as an alternate,
+        // CollectionRemove keeps Delete, and F2 became CollectionEdit), so every gesture a menu shows now
+        // comes from the catalog and there is nothing left to excuse.
+        var allowed = new HashSet<string>(StringComparer.Ordinal);
 
         var pattern = new Regex(@"InputGesture=""([^""{][^""]*)""", RegexOptions.Compiled);
         var offenders = new List<string>();
@@ -2931,6 +2933,58 @@ public sealed class ConnectionExpandBindingProbe
             "These menu items type a gesture by hand instead of reading it from the catalog via "
             + "{app:CommandGesture}, so they will go stale when the shortcut is re-bound: "
             + string.Join(", ", offenders));
+    }
+
+    // ⭐ UX Consistency Pass: ONE operation, ONE icon — wherever the user meets it.
+    //
+    // The user found this by eye: "Debug procedure" carried the debugger's composite identity mark in the
+    // Object Explorer and a plain crosshair in the Package Members menu. Same command, same label, two
+    // different glyphs depending on where you right-clicked. That is not a thing anyone re-checks by hand
+    // across 133 menu items, so it is checked here: group every menu item by the UiStrings constant it is
+    // labelled with, and require the group to agree on its icon.
+    [Fact]
+    public void TheSameMenuOperationAlwaysCarriesTheSameIcon()
+    {
+        // <MenuItem …> up to its own close — captures attributes AND an inline <MenuItem.Icon> child, so a
+        // composite icon counts as an icon rather than reading as "none".
+        var item = new Regex(@"<MenuItem\b(.*?)(?:/>|</MenuItem>)", RegexOptions.Compiled | RegexOptions.Singleline);
+        var header = new Regex(@"Header=""\{x:Static app:UiStrings\.(\w+)\}""", RegexOptions.Compiled);
+        var menuIcon = new Regex(@"\{app:MenuIcon ([\w.]+)", RegexOptions.Compiled);
+        var inlineIcon = new Regex(@"<MenuItem\.Icon>\s*<\w+:(\w+)", RegexOptions.Compiled);
+
+        var iconsByOperation = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(RepositoryRoot(), "src", "EmberTern.App"), "*.axaml", SearchOption.AllDirectories))
+        {
+            foreach (Match m in item.Matches(File.ReadAllText(file)))
+            {
+                var body = m.Groups[1].Value;
+                var name = header.Match(body);
+                if (!name.Success) continue; // bound or literal header — nothing stable to group by
+
+                string icon = menuIcon.Match(body) is { Success: true } k ? k.Groups[1].Value
+                    : inlineIcon.Match(body) is { Success: true } c ? c.Groups[1].Value
+                    : "(no icon)";
+
+                if (!iconsByOperation.TryGetValue(name.Groups[1].Value, out var set))
+                {
+                    iconsByOperation[name.Groups[1].Value] = set = new SortedSet<string>(StringComparer.Ordinal);
+                }
+                set.Add(icon);
+            }
+        }
+
+        var drift = iconsByOperation
+            .Where(kv => kv.Value.Count > 1)
+            .Select(kv => $"{kv.Key} → {string.Join(" / ", kv.Value)}")
+            .ToArray();
+
+        _out.WriteLine($"{iconsByOperation.Count} distinct menu operations checked");
+
+        Assert.True(drift.Length == 0,
+            "These operations show a different icon depending on which menu the user opened:"
+            + Environment.NewLine + string.Join(Environment.NewLine, drift));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
@@ -2966,4 +3020,6 @@ public sealed class ConnectionExpandBindingProbe
         Assert.NotNull(dir);
         return dir!.FullName;
     }
+
+
 }

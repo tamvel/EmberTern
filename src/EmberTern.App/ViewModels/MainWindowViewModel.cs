@@ -572,35 +572,60 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ToolbarSep3Visible => ShowCollectionTools && HasFrom4;
     public bool ToolbarSep4Visible => ShowHelperSection && IsClosableTabActive;
 
-    // Section 3 — collection-edit router. Resolves the active editor's Add/Remove/Move
-    // commands (+ whether it supports ↑↓). null when no editable collection is active
-    // (SQL editor, read-only system table, View/Procedure in Source mode, …).
-    private (System.Windows.Input.ICommand Add, System.Windows.Input.ICommand Remove,
-             System.Windows.Input.ICommand? Up, System.Windows.Input.ICommand? Down, bool Reorder)? ActiveCollection()
+    /// <summary>
+    /// One editable collection, as the toolbar and the router see it.
+    ///
+    /// <para><see cref="Noun"/> is what the surface calls its items — "field", "row", "parameter". It exists
+    /// so the toolbar can say <b>"New field"</b> where the context menu says "New field", instead of the
+    /// generic "Add item" the two used to disagree about. One noun per collection, named once here.</para>
+    ///
+    /// <para><see cref="Edit"/> and <see cref="Up"/>/<see cref="Down"/> are null for collections that have no
+    /// such action — a grid whose rows are edited in place needs no Edit dialog, and an unordered collection
+    /// no reorder. The toolbar hides what is null rather than greying it.</para>
+    /// </summary>
+    private sealed record CollectionCommands(
+        string Noun,
+        System.Windows.Input.ICommand Add,
+        System.Windows.Input.ICommand Remove,
+        System.Windows.Input.ICommand? Edit = null,
+        System.Windows.Input.ICommand? Up = null,
+        System.Windows.Input.ICommand? Down = null);
+
+    // Section 3 — collection-edit router. Resolves the active editor's New/Edit/Delete/Move commands and the
+    // noun its items go by. null when no editable collection is active (SQL editor, read-only system table,
+    // View/Procedure in Source mode, …).
+    private CollectionCommands? ActiveCollection()
     {
         switch (SelectedWorkspaceTab?.Kind)
         {
             case WorkspaceTabKind.TableDetail when SelectedWorkspaceTab.TableDetail is { } t:
                 if (ShowFieldEditTools)
-                    return (t.AddFieldCommand, t.DropFieldCommand, t.MoveFieldUpCommand, t.MoveFieldDownCommand, true);
+                    return new(UiStrings.CollectionNounField, t.AddFieldCommand, t.DropFieldCommand,
+                        t.EditFieldCommand, t.MoveFieldUpCommand, t.MoveFieldDownCommand);
                 if (ShowDataEditTools)
-                    return (t.AddRowCommand, t.DeleteRowCommand, null, null, false);  // rows: no reorder
+                    // Rows are edited in the grid itself and have no natural order, so no Edit and no ↑↓.
+                    return new(UiStrings.CollectionNounRow, t.AddRowCommand, t.DeleteRowCommand);
                 return null;
             case WorkspaceTabKind.NewTable when SelectedWorkspaceTab.NewTable is { } n:
-                return (n.AddFieldCommand, n.DeleteFieldCommand, n.MoveFieldUpCommand, n.MoveFieldDownCommand, true);
+                return new(UiStrings.CollectionNounField, n.AddFieldCommand, n.DeleteFieldCommand,
+                    Up: n.MoveFieldUpCommand, Down: n.MoveFieldDownCommand);
             case WorkspaceTabKind.ViewDetail when SelectedWorkspaceTab.ViewDetail is { EasyMode: true } v:
-                return (v.AddColumnCommand, v.DeleteColumnCommand, v.MoveColumnUpCommand, v.MoveColumnDownCommand, true);
+                return new(UiStrings.CollectionNounColumn, v.AddColumnCommand, v.DeleteColumnCommand,
+                    Up: v.MoveColumnUpCommand, Down: v.MoveColumnDownCommand);
             case WorkspaceTabKind.ProcedureDetail when SelectedWorkspaceTab.ProcedureDetail is { EasyMode: true } p:
-                return (p.AddCollectionItemCommand, p.RemoveCollectionItemCommand, p.MoveCollectionItemUpCommand, p.MoveCollectionItemDownCommand, true);
+                return new(UiStrings.CollectionNounItem, p.AddCollectionItemCommand, p.RemoveCollectionItemCommand,
+                    Up: p.MoveCollectionItemUpCommand, Down: p.MoveCollectionItemDownCommand);
             case WorkspaceTabKind.TriggerDetail when SelectedWorkspaceTab.TriggerDetail is { EasyMode: true } tr:
                 // Trigger Easy mode has a single editable collection — Variables.
-                return (tr.AddVariableCommand, tr.DeleteVariableCommand, tr.MoveVariableUpCommand, tr.MoveVariableDownCommand, true);
+                return new(UiStrings.CollectionNounVariable, tr.AddVariableCommand, tr.DeleteVariableCommand,
+                    Up: tr.MoveVariableUpCommand, Down: tr.MoveVariableDownCommand);
             case WorkspaceTabKind.FunctionDetail when SelectedWorkspaceTab.FunctionDetail is { EasyMode: true } fn:
                 // The Result sub-tab is a single record — no Add/Remove/Move there, so the
                 // whole collection section is hidden; other sub-tabs route to the unified
                 // commands (Arguments / Variables / Cursors / Subprograms).
                 return fn.IsEasyCollectionEditable
-                    ? (fn.AddCollectionItemCommand, fn.RemoveCollectionItemCommand, fn.MoveCollectionItemUpCommand, fn.MoveCollectionItemDownCommand, true)
+                    ? new(UiStrings.CollectionNounItem, fn.AddCollectionItemCommand, fn.RemoveCollectionItemCommand,
+                        Up: fn.MoveCollectionItemUpCommand, Down: fn.MoveCollectionItemDownCommand)
                     : null;
             default:
                 return null;
@@ -608,11 +633,32 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public bool ShowCollectionTools => ActiveCollection() is not null;
-    public bool ShowCollectionReorder => ActiveCollection() is { Reorder: true };
+    public bool ShowCollectionReorder => ActiveCollection() is { Up: not null };
+    /// <summary>The toolbar's Edit button exists only where the collection has an Edit action — the table
+    /// fields grid, whose items open a dialog. It was missing entirely while the context menu offered it.</summary>
+    public bool ShowCollectionEdit => ActiveCollection() is { Edit: not null };
+
+    // The toolbar's collection tooltips. Computed rather than constants because they name the collection's own
+    // noun AND carry the gesture from the catalog: "New field · F3" on the fields grid, "New parameter · F3"
+    // on a procedure's arguments. Before this the toolbar said "Add item" while the menu beside it said
+    // "New field" — the same command described two ways on one surface.
+    public string CollectionAddTooltip => CollectionTip(CommandId.CollectionAdd, UiStrings.CollectionNewFormat);
+    public string CollectionEditTooltip => CollectionTip(CommandId.CollectionEdit, UiStrings.CollectionEditFormat);
+    public string CollectionRemoveTooltip => CollectionTip(CommandId.CollectionRemove, UiStrings.CollectionDeleteFormat);
+
+    private string CollectionTip(CommandId id, string format)
+    {
+        var noun = ActiveCollection()?.Noun ?? UiStrings.CollectionNounItem;
+        return CommandTip.For(id, string.Format(CultureInfo.CurrentCulture, format, noun));
+    }
 
     private bool CanAddCollectionItem() => ActiveCollection()?.Add.CanExecute(null) ?? false;
     [RelayCommand(CanExecute = nameof(CanAddCollectionItem))]
     private void AddCollectionItem() => ActiveCollection()?.Add.Execute(null);
+
+    private bool CanEditCollectionItem() => ActiveCollection() is { Edit: { } e } && e.CanExecute(null);
+    [RelayCommand(CanExecute = nameof(CanEditCollectionItem))]
+    private void EditCollectionItem() => ActiveCollection()?.Edit?.Execute(null);
 
     private bool CanRemoveCollectionItem() => ActiveCollection()?.Remove.CanExecute(null) ?? false;
     [RelayCommand(CanExecute = nameof(CanRemoveCollectionItem))]
@@ -636,11 +682,19 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowHelperSection));
         OnPropertyChanged(nameof(ShowCollectionTools));
         OnPropertyChanged(nameof(ShowCollectionReorder));
+        OnPropertyChanged(nameof(ShowCollectionEdit));
+        // The tooltips name the ACTIVE collection's noun, so they change with the sub-tab exactly as the
+        // buttons' visibility does — they have to be re-raised here or the strip would say "New field" while
+        // pointing at a procedure's parameters.
+        OnPropertyChanged(nameof(CollectionAddTooltip));
+        OnPropertyChanged(nameof(CollectionEditTooltip));
+        OnPropertyChanged(nameof(CollectionRemoveTooltip));
         OnPropertyChanged(nameof(ToolbarSep1Visible));
         OnPropertyChanged(nameof(ToolbarSep2Visible));
         OnPropertyChanged(nameof(ToolbarSep3Visible));
         OnPropertyChanged(nameof(ToolbarSep4Visible));
         AddCollectionItemCommand.NotifyCanExecuteChanged();
+        EditCollectionItemCommand.NotifyCanExecuteChanged();
         RemoveCollectionItemCommand.NotifyCanExecuteChanged();
         MoveCollectionItemUpCommand.NotifyCanExecuteChanged();
         MoveCollectionItemDownCommand.NotifyCanExecuteChanged();
@@ -5972,6 +6026,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // ActiveCollection() already answers "which collection is the user editing" and returns null when
         // there is none — which is why these need no per-grid knowledge and no tab-kind list.
         CommandId.CollectionAdd => AddCollectionItemCommand,
+        CommandId.CollectionEdit => EditCollectionItemCommand,
         CommandId.CollectionRemove => RemoveCollectionItemCommand,
 
         // CommandScope.Tree belongs to the Object Explorer, which owns the tree's selection.

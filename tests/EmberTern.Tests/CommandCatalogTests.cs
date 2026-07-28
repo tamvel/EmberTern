@@ -228,6 +228,77 @@ public sealed class CommandCatalogTests
         Assert.Null(ddl.ResolveCommand(CommandId.FormatSql));
     }
 
+    // ── UX Consistency Pass: the toolbar and the context menu describe one surface the same way ─────
+
+    // The defect: the toolbar said "Add item" / "Remove item" while the fields context menu beside it said
+    // "New field" / "Edit field" / "Delete field" — the same commands, two vocabularies, one surface. The
+    // toolbar tooltip now names the ACTIVE collection's own noun and takes its gesture from the catalog, so
+    // the two cannot disagree.
+    [Fact]
+    public void CollectionTooltips_NameTheActiveCollectionAndCarryItsGesture()
+    {
+        using var h = new Harness();
+
+        // With no editable collection active the strip is hidden; the tooltip still has to be a sentence
+        // rather than "New " with a hole in it.
+        Assert.Equal("New item · F3", h.Main.CollectionAddTooltip);
+        Assert.Equal("Edit item · F2", h.Main.CollectionEditTooltip);
+        Assert.Equal("Delete item · F8", h.Main.CollectionRemoveTooltip);
+
+        // Every gesture shown comes from the catalog, so re-binding one moves the toolbar and the menu together.
+        Assert.EndsWith(CommandTip.Gesture(CommandId.CollectionAdd), h.Main.CollectionAddTooltip, StringComparison.Ordinal);
+        Assert.EndsWith(CommandTip.Gesture(CommandId.CollectionEdit), h.Main.CollectionEditTooltip, StringComparison.Ordinal);
+        Assert.EndsWith(CommandTip.Gesture(CommandId.CollectionRemove), h.Main.CollectionRemoveTooltip, StringComparison.Ordinal);
+    }
+
+    // Edit was reachable from the fields context menu and from nowhere on the toolbar — while a tooltip string
+    // for the missing button ("Edit selected field · F2") sat unused in UiStrings, which is what showed the
+    // button had been intended and dropped. It is a real routed command now.
+    [Fact]
+    public void CollectionEdit_IsARoutedGridCommand_AndResolvesToTheRouter()
+    {
+        var descriptor = CommandCatalog.For(CommandId.CollectionEdit);
+        Assert.NotNull(descriptor);
+        Assert.Equal(CommandScope.Grid, descriptor!.Scope);
+        Assert.Equal(CommandDispatch.Routed, descriptor.Dispatch);
+        Assert.Equal(new KeyGesture(Key.F2), descriptor.Gesture);
+
+        using var h = new Harness();
+        Assert.Same(h.Main.EditCollectionItemCommand, h.Main.ResolveCommand(CommandId.CollectionEdit));
+
+        // Nothing to edit with no collection active, so the gesture falls through rather than looking broken.
+        Assert.False(h.Main.EditCollectionItemCommand.CanExecute(null));
+        Assert.False(h.Main.ShowCollectionEdit);
+    }
+
+    // The fields grid's long-standing Insert / Delete keep working as ALTERNATES while the ratified F3 / F8 are
+    // what every surface displays — the point being that the aliases live in the catalog too, not in a local
+    // DataGrid.KeyBinding that no menu could read.
+    [Fact]
+    public void FieldsGridLegacyKeys_AreCatalogAlternates_NotLocalBindings()
+    {
+        Assert.Equal(new KeyGesture(Key.Insert), CommandCatalog.For(CommandId.CollectionAdd)!.AlternateGesture);
+        Assert.Equal(new KeyGesture(Key.Delete), CommandCatalog.For(CommandId.CollectionRemove)!.AlternateGesture);
+
+        // Both spellings resolve to the same command, at Grid scope only.
+        foreach (var (key, id) in new[]
+                 {
+                     (Key.F3, CommandId.CollectionAdd), (Key.Insert, CommandId.CollectionAdd),
+                     (Key.F8, CommandId.CollectionRemove), (Key.Delete, CommandId.CollectionRemove),
+                 })
+        {
+            var matches = CommandCatalog.Match(key, KeyModifiers.None)
+                .Where(m => m.Scope == CommandScope.Grid)
+                .ToArray();
+            Assert.Contains(id, matches.Select(m => m.Id));
+        }
+
+        // ⚠ Delete is claimed by the EDITOR too (it deletes a character). Editor outranks Grid, so the caret
+        // decides — which is the whole reason this had to be a scoped claim rather than a global gesture.
+        var deleteClaims = CommandCatalog.Match(Key.Delete, KeyModifiers.None);
+        Assert.Equal(CommandScope.Grid, deleteClaims.Single().Scope);
+    }
+
     private static WorkspaceTabViewModel ViewTab(Harness h, string name)
     {
         var detail = new ViewDetailTabViewModel(name);

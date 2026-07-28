@@ -1213,6 +1213,9 @@ internal static class UiStrings
     public const string DataEditAddRowTooltip = "Add new row";
     public const string DataEditDeleteRowIcon = "−";
     public const string DataEditDeleteRowTooltip = "Delete selected row";
+    // Context-menu labels for the same two commands, in the surface's New / Edit / Delete vocabulary.
+    public const string DataEditNewRow = "New row";
+    public const string DataEditDeleteRow = "Delete row";
     public const string DataEditDeleteConfirmTitle = "Delete row";
     public const string DataEditDeleteConfirmMessage = "Delete the selected row? This becomes part of the current transaction — use Rollback to revert.";
     public const string DataEditDeleteConfirmYes = "Delete";
@@ -1366,8 +1369,30 @@ internal static class UiStrings
     // Unified toolbar Collection section (routes to the active editor's collection —
     // fields / columns / params / variables / …). Generic labels: the router decides
     // which collection the action applies to.
-    public const string CollectionAddTooltip = "Add item";
-    public const string CollectionRemoveTooltip = "Remove item";
+    // The collection surface names its operations ONE way, whether the user reaches them from the toolbar or
+    // from the context menu. The verbs are New / Edit / Delete / Move — the nomenclature the fields menu
+    // already used and the toolbar did not ("Add item" / "Remove item", for the very same commands).
+    //
+    // ⚠ The {0} is the ACTIVE collection's own noun (below), supplied by MainWindowViewModel — which is why
+    // the toolbar tooltips are computed properties rather than constants: the same button is "New field" on a
+    // table's fields and "New parameter" on a procedure's arguments.
+    public const string CollectionNewFormat = "New {0}";
+    public const string CollectionEditFormat = "Edit {0}";
+    public const string CollectionDeleteFormat = "Delete {0}";
+
+    public const string CollectionNounField = "field";
+    public const string CollectionNounRow = "row";
+    public const string CollectionNounColumn = "column";
+    public const string CollectionNounVariable = "variable";
+    // The fallback, and the honest name for the routed collections whose sub-tab decides what the items are
+    // (a procedure's arguments / variables / cursors / subprograms all share one command pair).
+    public const string CollectionNounItem = "item";
+
+    // Menu labels for the collections whose grids are edited in place — a generic noun, but the same verbs.
+    // (These are LABELS. They used to be the tooltip constants above, reused as MenuItem headers, which is
+    // how "Add item" ended up as a menu entry.)
+    public const string CollectionMenuNew = "New item";
+    public const string CollectionMenuDelete = "Delete item";
     public const string CollectionMoveUpTooltip = "Move up";
     public const string CollectionMoveDownTooltip = "Move down";
 
@@ -1685,7 +1710,10 @@ internal static class UiStrings
     public const string FieldsContextMenuDrop = "Delete field";
     public const string FieldsContextMenuCreateForeignKey = "Create foreign key…";
     public const string FieldEditEditIcon = "✎";
-    public const string FieldEditEditTooltip = "Edit selected field · F2";
+    // (FieldEditEditTooltip — "Edit selected field · F2" — was removed in the UX Consistency Pass. It had no
+    // consumer: the toolbar's Edit button it was written for never existed, which is exactly the gap the pass
+    // closed. The button now uses MainWindowViewModel.CollectionEditTooltip, which names the active
+    // collection's noun and takes its gesture from the catalog.)
     public const string FieldEditForeignKeyIcon = "⛓";
     public const string FieldEditForeignKeyTooltip = "Create foreign key…";
 
