@@ -184,13 +184,38 @@ Measured across the titlebar:
 |---|---|
 | `Icon.Copy`, `Icon.FolderPlus` | 22×22, 22×19 |
 | `Icon.PanelLeft`, `Icon.Trash` | 20×20, 20×22 |
-| `Icon.Menu` (as shipped) | **20×18** |
+| `Icon.Menu` (as shipped) | **20×20** |
 | `Icon.Menu` (verbatim Lucide — rejected) | 18×14 ← the shortest glyph on the bar, and it showed |
 | `Icon.Plus` | 16×16 (a compact symbol; reads fine small) |
 
 **Aim for roughly 20×20 of ink** for a toolbar icon. Lucide's own set is not internally consistent on
 this, so a verbatim file is a starting point, not a guarantee. `ConnectionExpandBindingProbe`
 pins the hamburger against its neighbour so a revert to the upstream geometry fails the suite.
+
+### ⭐ Repeated parallel strokes: keep the spacing a multiple of 3
+
+The second half of the same fact, and it cost its own QA round. The 24→16 render is a **×2/3** scale,
+so a rule declared at `y` has its top edge at **2(y−1)/3** with a 1.333px thickness — and the
+*fractional part* of that edge decides the anti-aliasing. Two strokes on different fractions are
+**drawn differently no matter how symmetric the coordinates look**:
+
+| Declared y | Rendered band | Pixel coverage | Reads as |
+|---|---|---|---|
+| 4 | [2.000, 3.333] | row 2 → 100%, row 3 → 33% | crisp, faint edge below |
+| 12 | [7.333, 8.667] | rows 7 **and** 8 → 67% each | two grey rows: softer, **thicker** |
+| 20 | [12.667, 14.000] | row 12 → 33%, row 13 → 100% | crisp, faint edge above; the round cap lands on another phase, so the end looks clipped |
+
+Equal rendering requires equal phases, i.e. `2·Δy/3 ∈ ℤ` ⇒ **Δy must be a multiple of 3.** For the
+hamburger, Δy=6 is Lucide's (ink height only 14) and Δy=9 gives y3/12/21 — one phase (.333) for all
+three rules *and* a 20×20 ink box. It was the unique spacing satisfying both.
+
+**So: any icon with repeated parallel strokes** (a hamburger, a list, a stack, a set of rules) **spaces
+them by a multiple of 3 in the 24-unit grid.** Otherwise one stroke will look thicker than its
+siblings and no amount of nudging fixes it — the cause is the scale, not the coordinates.
+
+⚠ This holds at the rendered **16px**, the `SvgIcon` default. A host that overrides `Width`/`Height`
+(the debugger tab renders its mark at 14) re-scales the grid and changes the phase; that is inherent
+to scaling and cannot be fixed by choosing coordinates.
 
 ### Migration status — COMPLETE
 

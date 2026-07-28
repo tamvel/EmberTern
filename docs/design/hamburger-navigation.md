@@ -805,14 +805,43 @@ shortest glyph on the bar. Lucide's own set is simply not internally consistent 
 a closed rectangle.
 
 **Fixed by enlarging the geometry**, not by touching the control: rules widened to x3→21 and spread to
-y4/12/20 → ink **20×18**, the same width as `PanelLeft` and 90% of its height. Line spacing goes 6→8, which is
-~4px of white at the rendered size and still unmistakably a hamburger. **Measured after the change: 20×18
-against the sidebar toggle's 20×20.**
+y4/12/20 → ink **20×18**, the same width as `PanelLeft` and 90% of its height. *(Superseded one round later —
+see §12.2b, which raised it to a full 20×20 for a different reason.)*
 
-Two things came out of it worth more than the fix: the ink-box rule and its measured table are now in
-`Assets/Icons/ICONS.md` (aim for ~20×20; a verbatim Lucide file is a starting point, not a guarantee), and the
-probe **pins the hamburger's ink box against its neighbour's**, so a well-meant revert to the upstream file
-fails the suite instead of quietly shrinking the button again.
+### 12.2b QA round 2 — the three rules rendered differently, and it was ONE cause with two symptoms
+
+The user's second QA: the middle rule looked **thicker**, and the bottom one looked **clipped at the right
+end** — with the explicit instruction not to nudge lines again but to make the glyph mathematically symmetric
+and identically rendered. The coordinates *were* already symmetric (x3→21 and y4/12/20 are both centred on 12).
+Symmetry was never the problem.
+
+**The cause is the sub-pixel phase, and it explains both symptoms at once.** The 24→16 render is a **×2/3**
+scale, so a rule declared at `y` has its top edge at **2(y−1)/3** and a thickness of 1.333px. The *fractional
+part* of that edge decides the anti-aliasing:
+
+| Declared y | Rendered band | Pixel coverage | Reads as |
+|---|---|---|---|
+| 4 | [2.000, 3.333] | row 2 → 100%, row 3 → 33% | crisp, faint edge below |
+| 12 | [7.333, 8.667] | rows 7 **and** 8 → 67% each | two grey rows — softer and **optically thicker** |
+| 20 | [12.667, 14.000] | row 12 → 33%, row 13 → 100% | crisp, faint edge above; its round cap lands on yet another phase, which is the "clipped end" |
+
+So three geometrically identical rules were drawn three different ways. **No amount of nudging could have fixed
+it** — which is exactly what the user's instruction anticipated.
+
+**The fix is arithmetic, not taste.** Equal rendering requires equal phases: `2·Δy/3 ∈ ℤ`, so **the spacing must
+be a multiple of 3.** Δy=6 is Lucide's own y6/12/18 and caps the ink height at 14 (QA round 1's defect); **Δy=9
+gives y3/12/21 — one phase (.333) for all three rules *and* an ink box of exactly 20×20.** It is the unique
+spacing that satisfies both rounds of QA at once, which is a good sign the constraint was the real one.
+
+**Measured after the change: ink box 20×20 centred at (12,12) — identical to the sidebar toggle beside it.**
+
+Three things outlast the fix. `Assets/Icons/ICONS.md` now carries both rules — the ink-box target (~20×20) and
+**"any icon with repeated parallel strokes spaces them by a multiple of 3"**, with the coverage table as
+evidence. The probe's pin was tightened from a 3px tolerance to **exact equality with the neighbour plus a
+centre check**, which for a symmetric three-rule glyph *forces* an 18×18 path box and therefore spacing 9 — so
+the phase invariant is pinned by construction rather than by a comment. And the caveat is recorded: this is
+exact at the rendered 16px, the `SvgIcon` default; a host overriding the size re-scales the grid and changes the
+phase, which is inherent to scaling rather than fixable by coordinates.
 
 ### 12.3 Files touched
 

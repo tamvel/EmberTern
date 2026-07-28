@@ -1,10 +1,18 @@
-<!-- Hamburger, ENLARGED from Lucide's `menu` (which is x4→20 at y6/12/18) so its optical size matches the
-     other titlebar icons. The SvgIcon ControlTheme scales a fixed 24×24 Canvas, not the path's ink, so a
-     geometry that fills less of the box simply renders smaller: Lucide's menu has a 18×14 ink box against
-     PanelLeft's 20×20, Trash's 20×22 and Copy's 22×22 — the shortest glyph on the bar. These rules span
-     x3→21 at y4/12/20 → a 20×18 ink box, matching PanelLeft's width and 90% of its height. -->
+<!-- Hamburger, rebuilt from Lucide's `menu` (x4→20 at y6/12/18) for two measured reasons — see the long note
+     on Icon.Menu in Themes/IconGeometries.axaml for the arithmetic.
+
+     1. SIZE. SvgIcon scales a fixed 24×24 Canvas, not the path's ink, so a geometry that fills less of the box
+        renders smaller. Lucide's menu has an 18×14 ink box against PanelLeft's 20×20.
+
+     2. SUB-PIXEL PHASE. At the 24→16 render scale (×2/3) a rule at y has its top edge at 2(y-1)/3, and the
+        fraction of that decides the anti-aliasing. y4/12/20 gives three different fractions (.000/.333/.667),
+        so the middle rule spreads over two 67% pixel rows and reads thicker while the outer two stay crisp.
+        Equal phases require the spacing to be a MULTIPLE OF 3. Spacing 9 → y3/12/21: one phase (.333) for all
+        three rules, and an ink box of exactly 20×20 matching the neighbouring icons.
+
+     Symmetric about (12,12) in both axes. Do not "tidy" these coordinates — they are load-bearing. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <line x1="3" x2="21" y1="4" y2="4" />
+  <line x1="3" x2="21" y1="3" y2="3" />
   <line x1="3" x2="21" y1="12" y2="12" />
-  <line x1="3" x2="21" y1="20" y2="20" />
+  <line x1="3" x2="21" y1="21" y2="21" />
 </svg>

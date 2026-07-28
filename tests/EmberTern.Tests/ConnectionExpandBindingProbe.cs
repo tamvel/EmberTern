@@ -3001,28 +3001,37 @@ public sealed class ConnectionExpandBindingProbe
             log.AppendLine($"menu: rows={rows.Count} separators={menu.Items.OfType<Separator>().Count()} "
                            + $"placement={menu.Placement} fontSize={menu.FontSize} border={menu.BorderThickness}");
 
-            // [6] ⭐ Optical size. The SvgIcon ControlTheme scales a FIXED 24×24 Canvas, not the path's ink,
-            // so every icon renders at the same 24→16 scale and a geometry that fills less of the box simply
-            // looks smaller. Verbatim Lucide `menu` has an 18×14 ink box against PanelLeft's 20×20, which the
-            // user saw immediately as "the hamburger is smaller than the rest". This pins the enlarged
-            // geometry against a future well-meant revert to the upstream file.
-            static Avalonia.Size InkBox(Button host)
+            // [6] ⭐ Optical size AND sub-pixel phase — two QA rounds' worth of geometry, in one assertion.
+            //
+            // The SvgIcon ControlTheme scales a FIXED 24×24 Canvas, not the path's ink, so every icon renders
+            // at the same 24→16 scale (×2/3) and a geometry filling less of the box simply looks smaller:
+            // verbatim Lucide `menu` is 18×14 against PanelLeft's 20×20 (QA round 1).
+            //
+            // The same ×2/3 scale then decides the ANTI-ALIASING: a rule at y has its top edge at 2(y−1)/3,
+            // and rules whose fractional edges differ are drawn differently no matter how symmetric they look
+            // — at y4/12/20 the middle rule spreads over two 67% pixel rows and reads thicker while the outer
+            // two stay crisp (QA round 2). Equal phases require the spacing to be a multiple of 3.
+            //
+            // Both facts collapse into ONE invariant that is cheap to assert: the hamburger occupies exactly
+            // the same ink box as the icon beside it, centred. For a symmetric three-rule glyph an 18×18 path
+            // box forces spacing 9 — a multiple of 3 — so the phases cannot differ. A revert to the upstream
+            // file, or any "tidying" of the coordinates, fails here.
+            static (Avalonia.Size Ink, Avalonia.Point Centre) Box(Button host)
             {
                 var data = host.GetVisualDescendants().OfType<SvgIcon>().First().Data!;
-                // ±1 on every side: half of the theme's 2px stroke, with round caps.
-                return new Avalonia.Size(data.Bounds.Width + 2, data.Bounds.Height + 2);
+                var b = data.Bounds;
+                // ±1 on every side: half of the theme's 2px stroke.
+                return (new Avalonia.Size(b.Width + 2, b.Height + 2), b.Center);
             }
 
-            var hamburger = InkBox(button);
-            var neighbour = InkBox(sidebarToggle);
-            log.AppendLine($"ink box: hamburger {hamburger} vs sidebar toggle {neighbour}");
+            var hamburger = Box(button);
+            var neighbour = Box(sidebarToggle);
+            log.AppendLine($"ink box: hamburger {hamburger.Ink} @ {hamburger.Centre} "
+                           + $"vs sidebar toggle {neighbour.Ink} @ {neighbour.Centre}");
 
-            // Not "identical" — a three-rule glyph can never carry a closed rectangle's ink — but it must not
-            // be visibly shorter or narrower than the icon standing next to it.
-            Assert.True(hamburger.Width >= neighbour.Width - 3,
-                $"hamburger is narrower than its neighbour: {hamburger.Width} vs {neighbour.Width}");
-            Assert.True(hamburger.Height >= neighbour.Height - 3,
-                $"hamburger is shorter than its neighbour: {hamburger.Height} vs {neighbour.Height}");
+            Assert.Equal(neighbour.Ink, hamburger.Ink);
+            // Centred in the 24×24 grid, so the glyph is symmetric in both axes by construction.
+            Assert.Equal(new Avalonia.Point(12, 12), hamburger.Centre);
 
             menu.Close();
             window.Close();
