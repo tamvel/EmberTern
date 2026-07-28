@@ -184,13 +184,29 @@ Measured across the titlebar:
 |---|---|
 | `Icon.Copy`, `Icon.FolderPlus` | 22×22, 22×19 |
 | `Icon.PanelLeft`, `Icon.Trash` | 20×20, 20×22 |
-| `Icon.Menu` (as shipped) | **20×20** |
-| `Icon.Menu` (verbatim Lucide — rejected) | 18×14 ← the shortest glyph on the bar, and it showed |
+| `Icon.Menu` (as shipped) | **18×17** — smaller on purpose, see below |
+| `Icon.Menu` (verbatim Lucide) | 18×14 ← the shortest glyph on the bar, and it showed |
 | `Icon.Plus` | 16×16 (a compact symbol; reads fine small) |
 
-**Aim for roughly 20×20 of ink** for a toolbar icon. Lucide's own set is not internally consistent on
-this, so a verbatim file is a starting point, not a guarantee. `ConnectionExpandBindingProbe`
-pins the hamburger against its neighbour so a revert to the upstream geometry fails the suite.
+A toolbar icon lives in roughly a **20×20** ink box, so that is the right *starting* point — Lucide's own
+set is not internally consistent about it, and a verbatim file is not a guarantee.
+
+### ⚠⚠ But the target is OPTICAL, not geometric — do not equalise ink boxes
+
+This is the correction that cost a QA round, and it reverses the naive reading of the table above.
+`Icon.Menu` was once given PanelLeft's exact 20×20 box and **looked bigger than every icon around it**.
+Equal boxes are not equal weight: three full-width rules are far denser than a thin rectangle *outline*,
+so at the same extent the hamburger has to dominate. **A dense glyph needs a smaller box to look the same
+size** — hence 18×17 against its neighbours' 20×20.
+
+So: use the ink box to *diagnose* ("this glyph is 30% shorter than its neighbours, that is why it looks
+small"), never as the *goal*. The goal is what the icon looks like beside the icons it actually sits
+next to, at the size it actually renders. When in doubt, put the candidates side by side with the real
+neighbour geometries at 16px and look — that is what settled this one, after arithmetic had twice
+produced a confidently wrong answer.
+
+`ConnectionExpandBindingProbe` therefore pins a **range**, not an equality: big enough not to look lost,
+strictly smaller than a rectangle outline, centred, and phase-consistent (below).
 
 ### ⭐ Repeated parallel strokes: keep the spacing a multiple of 3
 
@@ -205,13 +221,14 @@ so a rule declared at `y` has its top edge at **2(y−1)/3** with a 1.333px thic
 | 12 | [7.333, 8.667] | rows 7 **and** 8 → 67% each | two grey rows: softer, **thicker** |
 | 20 | [12.667, 14.000] | row 12 → 33%, row 13 → 100% | crisp, faint edge above; the round cap lands on another phase, so the end looks clipped |
 
-Equal rendering requires equal phases, i.e. `2·Δy/3 ∈ ℤ` ⇒ **Δy must be a multiple of 3.** For the
-hamburger, Δy=6 is Lucide's (ink height only 14) and Δy=9 gives y3/12/21 — one phase (.333) for all
-three rules *and* a 20×20 ink box. It was the unique spacing satisfying both.
+Equal rendering requires equal phases, i.e. `2·Δy/3 ∈ ℤ` ⇒ **Δy must be a multiple of 1.5** (because
+1.5 × 2/3 = 1). The hamburger ships with Δy = **7.5** — all three rules on phase .333.
 
 **So: any icon with repeated parallel strokes** (a hamburger, a list, a stack, a set of rules) **spaces
-them by a multiple of 3 in the 24-unit grid.** Otherwise one stroke will look thicker than its
-siblings and no amount of nudging fixes it — the cause is the scale, not the coordinates.
+them by a multiple of 1.5 in the 24-unit grid.** Otherwise one stroke will look thicker than its
+siblings and no amount of nudging fixes it — the cause is the scale, not the coordinates. The multiples
+of 1.5 are what leave room to choose the *extent* freely (14 / 17 / 20 for a three-rule glyph), which is
+what the optical rule above needs.
 
 ⚠ This holds at the rendered **16px**, the `SvgIcon` default. A host that overrides `Width`/`Height`
 (the debugger tab renders its mark at 14) re-scales the grid and changes the phase; that is inherent

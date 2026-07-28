@@ -1,18 +1,23 @@
-<!-- Hamburger, rebuilt from Lucide's `menu` (x4→20 at y6/12/18) for two measured reasons — see the long note
-     on Icon.Menu in Themes/IconGeometries.axaml for the arithmetic.
+<!-- Hamburger, rebuilt from Lucide's `menu` (x4→20 at y6/12/18). Three QA rounds are baked into these six
+     numbers — see the long note on Icon.Menu in Themes/IconGeometries.axaml for the arithmetic.
 
-     1. SIZE. SvgIcon scales a fixed 24×24 Canvas, not the path's ink, so a geometry that fills less of the box
-        renders smaller. Lucide's menu has an 18×14 ink box against PanelLeft's 20×20.
+     1. SIZE IS A PROPERTY OF THE GEOMETRY. SvgIcon scales a fixed 24×24 Canvas, not the path's ink, so a
+        geometry filling less of the box renders smaller. Lucide's menu is 18×14 ink and read as small.
 
-     2. SUB-PIXEL PHASE. At the 24→16 render scale (×2/3) a rule at y has its top edge at 2(y-1)/3, and the
-        fraction of that decides the anti-aliasing. y4/12/20 gives three different fractions (.000/.333/.667),
-        so the middle rule spreads over two 67% pixel rows and reads thicker while the outer two stay crisp.
-        Equal phases require the spacing to be a MULTIPLE OF 3. Spacing 9 → y3/12/21: one phase (.333) for all
-        three rules, and an ink box of exactly 20×20 matching the neighbouring icons.
+     2. SUB-PIXEL PHASE. At the ×2/3 render scale a rule at y has its top edge at 2(y-1)/3, and the fraction
+        of that decides the anti-aliasing — rules on different fractions are drawn differently however
+        symmetric they look. Equal phases require the spacing to be a MULTIPLE OF 1.5. Here Δy = 7.5, so all
+        three rules sit on phase .333 and render identically.
 
-     Symmetric about (12,12) in both axes. Do not "tidy" these coordinates — they are load-bearing. -->
+     3. THE TARGET IS OPTICAL, NOT GEOMETRIC. Matching PanelLeft's 20×20 ink box exactly made this glyph look
+        BIGGER than its neighbours: three full-width rules are much denser than a thin rectangle outline, so at
+        equal extent the hamburger reads heavier. A dense glyph needs a smaller box to look the same size.
+
+     Shipped: ink 18×17 against PanelLeft's 20×20 — smaller on purpose, picked by eye from a side-by-side
+     sheet. Symmetric about (12,12) in both axes. Do not "tidy" these coordinates and do not equalise the ink
+     box with a neighbour — both have already been tried and reverted. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <line x1="3" x2="21" y1="3" y2="3" />
-  <line x1="3" x2="21" y1="12" y2="12" />
-  <line x1="3" x2="21" y1="21" y2="21" />
+  <line x1="4" x2="20" y1="4.5" y2="4.5" />
+  <line x1="4" x2="20" y1="12" y2="12" />
+  <line x1="4" x2="20" y1="19.5" y2="19.5" />
 </svg>

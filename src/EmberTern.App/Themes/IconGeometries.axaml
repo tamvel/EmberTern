@@ -173,15 +173,24 @@
                                                                      looks clipped next to the others
 
        That was one cause with two symptoms. Identical rendering requires equal phases, i.e. 2·Δy/3 ∈ ℤ, so
-       **Δy must be a multiple of 3.** Δy=6 gives Lucide's y6/12/18 and an ink height of only 14; Δy=9 gives
-       y3/12/21 → all three top edges at 1.333 / 7.333 / 13.333 (one phase, .333) AND an ink box of exactly
-       20×20, matching PanelLeft. Δy=9 is the unique spacing that satisfies both.
+       **Δy must be a multiple of 1.5** (1.5 · 2/3 = 1). Δy = 7.5 puts all three top edges on phase .333.
 
-       Symmetric by construction: x3→21 and y3/12/21 are both centred on 12, so the ink box is 20×20 about
-       (12,12). ⚠ Pixel-exactness holds at the rendered 16px — the ControlTheme default, and the only size this
-       glyph uses. A host that overrode Width/Height would re-scale the 24-unit grid and change the phase;
-       that is inherent to scaling, not fixable by coordinates. -->
-  <StreamGeometry x:Key="Icon.Menu">M3 3 H21 M3 12 H21 M3 21 H21</StreamGeometry>
+       (3) ⚠⚠ AND THE SIZE TARGET IS OPTICAL, NOT GEOMETRIC — the lesson that cost a third QA round.
+       Matching PanelLeft's ink box exactly (Δy=9 → 20×20) made the hamburger look BIGGER than its neighbours
+       and dominate the bar as its first item. Equal boxes are not equal weight: three full-width rules are far
+       denser than a thin rectangle OUTLINE, so at the same extent the hamburger must read heavier. A
+       high-density glyph therefore needs a SMALLER box to look the same size, and "ink box == neighbour" was a
+       measurable proxy standing in for the real goal.
+
+       Shipped: x4→20 at y4.5/12/19.5 → ink 18×17 against PanelLeft's 20×20 — deliberately smaller in both
+       axes, chosen by eye from a side-by-side sheet of candidates rather than by arithmetic. Symmetric by
+       construction (both spans centred on 12) and phase-consistent per (2). Tighter/looser one-line steps, all
+       phase-safe: y6/12/18 → 18×14 (verbatim Lucide, reads small) · x3→21 → 20×17 · x4.5→19.5 → 17×17.
+
+       ⚠ Pixel-exactness holds at the rendered 16px — the ControlTheme default, and the only size this glyph
+       uses. A host that overrode Width/Height would re-scale the 24-unit grid and change the phase; that is
+       inherent to scaling, not fixable by coordinates. -->
+  <StreamGeometry x:Key="Icon.Menu">M4 4.5 H20 M4 12 H20 M4 19.5 H20</StreamGeometry>
   <!-- Comment selection: message-square with text lines = "add comment". -->
   <StreamGeometry x:Key="Icon.Comment">M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M7 9 H17 M7 13 H13</StreamGeometry>
   <!-- Uncomment selection: message-square with a slash = "remove comment". -->

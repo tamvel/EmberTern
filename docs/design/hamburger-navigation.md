@@ -829,19 +829,50 @@ So three geometrically identical rules were drawn three different ways. **No amo
 it** — which is exactly what the user's instruction anticipated.
 
 **The fix is arithmetic, not taste.** Equal rendering requires equal phases: `2·Δy/3 ∈ ℤ`, so **the spacing must
-be a multiple of 3.** Δy=6 is Lucide's own y6/12/18 and caps the ink height at 14 (QA round 1's defect); **Δy=9
-gives y3/12/21 — one phase (.333) for all three rules *and* an ink box of exactly 20×20.** It is the unique
-spacing that satisfies both rounds of QA at once, which is a good sign the constraint was the real one.
+be a multiple of 1.5** (1.5 × 2/3 = 1). That constraint binds the *spacing* and leaves the *extent* free, which
+is what round 3 then needed.
 
-**Measured after the change: ink box 20×20 centred at (12,12) — identical to the sidebar toggle beside it.**
+`Assets/Icons/ICONS.md` carries the rule with its coverage table as evidence: **"any icon with repeated
+parallel strokes spaces them by a multiple of 1.5 in the 24-unit grid"**, and it is pinned directly by
+`HamburgerRulesAllRenderIdentically`, which reads the geometry out of `IconGeometries.axaml` and asserts one
+phase for all three rules — the same source-scanning idiom as the menu-icon consistency test.
 
-Three things outlast the fix. `Assets/Icons/ICONS.md` now carries both rules — the ink-box target (~20×20) and
-**"any icon with repeated parallel strokes spaces them by a multiple of 3"**, with the coverage table as
-evidence. The probe's pin was tightened from a 3px tolerance to **exact equality with the neighbour plus a
-centre check**, which for a symmetric three-rule glyph *forces* an 18×18 path box and therefore spacing 9 — so
-the phase invariant is pinned by construction rather than by a comment. And the caveat is recorded: this is
-exact at the rendered 16px, the `SvgIcon` default; a host overriding the size re-scales the grid and changes the
-phase, which is inherent to scaling rather than fixable by coordinates.
+### 12.2c QA round 3 — the ink box was the wrong target, and that is a lesson about method
+
+Round 2 shipped `y3/12/21` at ink **20×20**, matching `PanelLeft` exactly. The user's verdict: now the
+hamburger is **optically bigger** than its neighbours and dominates the bar as its first item — with the
+instruction not to chase equal ink boxes, because *different glyphs have different visual mass and should not
+be forced into an identical box*, and *"I trust what is on the screen more than perfect geometry"*.
+
+**They are right, and the error was mine rather than the icon's: I optimised a measurable proxy in place of the
+actual goal.** Equal extent is not equal weight. Three full-width rules are far denser than a thin rectangle
+*outline*, so at the same 20×20 box the hamburger must read heavier — **a dense glyph needs a smaller box to
+look the same size.** "Ink box == neighbour" was seductive precisely because it was checkable, which is exactly
+what made it dangerous: it produced a confidently wrong answer twice, in opposite directions.
+
+**Method changed, not just the numbers.** Rather than guess a third time at something only an eye can settle, the
+candidates were rendered **side by side with the real neighbour geometries** (`PanelLeft`, `Plus`, `FolderPlus`,
+`Trash`, unmodified) at the true 16px and at 6× zoom, all of them phase-consistent so only the extent varied:
+
+| | Geometry | Ink | Note |
+|---|---|---|---|
+| A | x4→20, y6/12/18 | 18×14 | verbatim Lucide — round 1's "too small" |
+| **B** | **x4→20, y4.5/12/19.5** | **18×17** | **shipped** |
+| C | x3→21, y4.5/12/19.5 | 20×17 | wider |
+| D | x3→21, y3/12/21 | 20×20 | round 2 — "too big" |
+| E | x4.5→19.5, y4.5/12/19.5 | 17×17 | tightest |
+
+**Shipped: B — ink 18×17 against the neighbours' 20×20, deliberately smaller in both axes.** Symmetric about
+(12,12), Δy = 7.5, one phase (.333) for all three rules. Measured: `18, 17 @ 12, 12`.
+
+**The pin was corrected too, because the old assertion *encoded the wrong goal*.** It demanded exact equality
+with the neighbour — i.e. it would have failed the version the user actually wants. It is now a **range**: big
+enough not to look lost (round 1), **strictly smaller** than a rectangle outline (round 3), centred; with the
+phase invariant moved to its own test. `ICONS.md` gained the standing rule: **use the ink box to diagnose, never
+as the goal — put candidates beside the real neighbours at the real size and look.**
+
+⚠ Recorded caveat, unchanged: exactness holds at the rendered 16px, the `SvgIcon` default. A host overriding the
+size re-scales the 24-unit grid and changes the phase — inherent to scaling, not fixable by coordinates.
 
 ### 12.3 Files touched
 

@@ -3012,10 +3012,14 @@ public sealed class ConnectionExpandBindingProbe
             // — at y4/12/20 the middle rule spreads over two 67% pixel rows and reads thicker while the outer
             // two stay crisp (QA round 2). Equal phases require the spacing to be a multiple of 3.
             //
-            // Both facts collapse into ONE invariant that is cheap to assert: the hamburger occupies exactly
-            // the same ink box as the icon beside it, centred. For a symmetric three-rule glyph an 18×18 path
-            // box forces spacing 9 — a multiple of 3 — so the phases cannot differ. A revert to the upstream
-            // file, or any "tidying" of the coordinates, fails here.
+            // ⚠⚠ QA round 3 then rejected the obvious-looking invariant: this assertion USED to demand that
+            // the hamburger's ink box EQUAL the neighbour's, and that is what made it look too big. Equal
+            // boxes are not equal weight — three full-width rules are far denser than a thin rectangle
+            // outline, so at the same extent the hamburger dominates. **The target is optical, not
+            // geometric**, and a dense glyph needs a SMALLER box to look the same size. So the bound is a
+            // RANGE, not an equality: big enough not to look lost (round 1), strictly smaller than a
+            // rectangle outline (round 3). The exact value inside that range is an eye's decision, and it was
+            // taken from a side-by-side sheet, not from arithmetic.
             static (Avalonia.Size Ink, Avalonia.Point Centre) Box(Button host)
             {
                 var data = host.GetVisualDescendants().OfType<SvgIcon>().First().Data!;
@@ -3029,7 +3033,14 @@ public sealed class ConnectionExpandBindingProbe
             log.AppendLine($"ink box: hamburger {hamburger.Ink} @ {hamburger.Centre} "
                            + $"vs sidebar toggle {neighbour.Ink} @ {neighbour.Centre}");
 
-            Assert.Equal(neighbour.Ink, hamburger.Ink);
+            Assert.True(hamburger.Ink.Height < neighbour.Ink.Height,
+                $"a full-width three-rule glyph at the neighbour's own extent reads bigger than it: "
+                + $"{hamburger.Ink} vs {neighbour.Ink}");
+            Assert.True(hamburger.Ink.Height >= neighbour.Ink.Height - 4,
+                $"too small to sit level with the bar: {hamburger.Ink} vs {neighbour.Ink}");
+            Assert.True(hamburger.Ink.Width <= neighbour.Ink.Width && hamburger.Ink.Width >= neighbour.Ink.Width - 3,
+                $"width out of range: {hamburger.Ink} vs {neighbour.Ink}");
+
             // Centred in the 24×24 grid, so the glyph is symmetric in both axes by construction.
             Assert.Equal(new Avalonia.Point(12, 12), hamburger.Centre);
 
@@ -3038,6 +3049,52 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());
+    }
+
+    // The hamburger's three rules must be DRAWN identically, which the ink-box assertion above no longer
+    // implies now that it is a range rather than an equality. This pins the arithmetic directly, from the
+    // geometry source — the same source-scanning idiom TheSameMenuOperationAlwaysCarriesTheSameIcon uses.
+    //
+    // ⭐ Why it is arithmetic and not taste. The 24→16 render is a ×2/3 scale, so a rule declared at y has its
+    // top edge at 2(y−1)/3 with a 1.333px thickness, and the FRACTION of that edge decides the anti-aliasing.
+    // At y4/12/20 the fractions were .000 / .333 / .667: the middle rule spread over two 67%-covered pixel
+    // rows and read visibly thicker than the outer two, whose coverage was 100% + 33%. Equal phases require
+    // 2·Δy/3 ∈ ℤ, i.e. **Δy a multiple of 1.5**. No nudging of individual lines can substitute for that.
+    [Fact]
+    public void HamburgerRulesAllRenderIdentically()
+    {
+        var xaml = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "Themes", "IconGeometries.axaml"));
+
+        var geometry = Regex.Match(xaml, @"<StreamGeometry x:Key=""Icon\.Menu"">([^<]*)</StreamGeometry>");
+        Assert.True(geometry.Success, "Icon.Menu geometry not found");
+
+        var rules = Regex.Matches(geometry.Groups[1].Value, @"M([\d.]+) ([\d.]+) H([\d.]+)")
+            .Select(m => (
+                X0: double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture),
+                Y: double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture),
+                X1: double.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture)))
+            .ToArray();
+
+        Assert.Equal(3, rules.Length);
+
+        // Every rule spans the same x range, so none can look shorter or end differently from the others.
+        Assert.Single(rules.Select(r => (r.X0, r.X1)).Distinct());
+
+        // Evenly spaced, and the spacing is a multiple of 1.5 — the phase condition.
+        double gap = rules[1].Y - rules[0].Y;
+        Assert.Equal(gap, rules[2].Y - rules[1].Y, precision: 6);
+        Assert.Equal(0d, (gap / 1.5) % 1, precision: 6);
+
+        // The condition restated as the thing the user actually sees: one sub-pixel phase for all three.
+        var phases = rules.Select(r => Math.Round(2 * (r.Y - 1) / 3 % 1, 6)).Distinct().ToArray();
+        _out.WriteLine($"rules at y={string.Join("/", rules.Select(r => r.Y))}, gap={gap}, "
+                       + $"phase(s)={string.Join(",", phases)}");
+        Assert.Single(phases);
+
+        // Symmetric about the centre of the 24×24 grid in both axes.
+        Assert.Equal(12d, (rules[0].X0 + rules[0].X1) / 2, precision: 6);
+        Assert.Equal(12d, (rules[0].Y + rules[2].Y) / 2, precision: 6);
     }
 
     // Etap 4 stopped gestures being typed by hand into UiStrings; this closes the same hole in XAML.
