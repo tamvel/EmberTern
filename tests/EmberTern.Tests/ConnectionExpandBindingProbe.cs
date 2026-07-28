@@ -16,6 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using EmberTern.App;
+using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
@@ -634,12 +635,15 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
         _out.WriteLine(log.ToString());
     }
 
-    // Etap 1 — Editor Find/Replace: the SearchPanel installer must attach cleanly and
-    // set a context menu, and the Ctrl+F router predicate (IsInsideEditor) must return
-    // true for an element inside a TextEditor and false otherwise. Guards the routing
-    // decision that leaves Ctrl+F for the editor vs. the sidebar filter.
+    // Editor Find/Replace + the Editor-scope predicate the CommandRouter resolves with.
+    //
+    // ⭐ [1] pins the fix for a MEASURED duplication: a TextEditor creates and installs its OWN SearchPanel,
+    // and EditorSearch used to call SearchPanel.Install on top of it — registering a second
+    // SearchInputHandler and returning a DIFFERENT panel, so Ctrl+F drove one instance while the context
+    // menu's Find/Replace drove another. Asserting the handler COUNT is what makes the regression
+    // impossible to reintroduce silently; asserting the panel is non-null would pass either way.
     [Fact]
-    public async System.Threading.Tasks.Task EditorSearch_InstallsAndRoutingPredicateHolds()
+    public async System.Threading.Tasks.Task EditorSearch_InstallsOnePanel_AndEditorScopePredicateHolds()
     {
         var session = SharedSession;
         var log = new StringBuilder();
@@ -653,24 +657,206 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var panel = EditorSearch.Install(editor);
-            log.AppendLine($"[1] panel installed = {panel is not null}, contextMenu = {editor.ContextMenu is not null}");
-            Assert.NotNull(panel);
+            int before = SearchHandlerCount(editor);
+            EditorSearch.Install(editor);
+            int after = SearchHandlerCount(editor);
+            log.AppendLine($"[1] SearchInputHandler count before={before} after={after}, "
+                           + $"panel={editor.SearchPanel is not null}, menu={editor.ContextMenu is not null}");
+
+            Assert.Equal(1, before);                  // the editor already brought one
+            Assert.Equal(1, after);                   // and Install must not add a second
+            Assert.NotNull(editor.SearchPanel);
             Assert.NotNull(editor.ContextMenu);
 
-            // Routing predicate: the editor (and its inner visual descendants) count as
-            // "inside an editor"; a sibling TextBox and null do not.
-            Assert.True(EditorSearch.IsInsideEditor(editor), "editor itself should be inside-editor");
+            // [2] Find opens the editor's OWN panel — the one Ctrl+F reaches.
+            Assert.True(EditorSearch.OpenFind(editor));
+            Assert.False(editor.SearchPanel!.IsReplaceMode);
+            Assert.True(EditorSearch.OpenReplace(editor));
+            Assert.True(editor.SearchPanel!.IsReplaceMode);
+
+            // [3] Replace is refused on a read-only surface (a DDL preview must not be offered a mutation).
+            var preview = new TextEditor { Width = 300, Height = 120, IsReadOnly = true };
+            root.Children.Add(preview);
+            Dispatcher.UIThread.RunJobs();
+            EditorSearch.Install(preview);
+            Assert.True(EditorSearch.OpenFind(preview));
+            Assert.False(EditorSearch.OpenReplace(preview));
+
+            // [4] CommandScope.Editor liveness: the editor and its inner visual descendants count as
+            // "in an editor"; a sibling TextBox and null do not. This is the whole of the router's Editor
+            // scope test, and it replaced the focus probe the window's Ctrl+F handler used to run.
+            Assert.Same(editor, EditorSearch.EditorFor(editor));
             var inner = editor.GetVisualDescendants().OfType<Avalonia.Visual>().FirstOrDefault(v => v != editor);
             if (inner is not null)
-                Assert.True(EditorSearch.IsInsideEditor(inner), "inner text view should be inside-editor");
-            Assert.False(EditorSearch.IsInsideEditor(outside), "sibling TextBox is not inside-editor");
-            Assert.False(EditorSearch.IsInsideEditor(null), "null is not inside-editor");
+                Assert.Same(editor, EditorSearch.EditorFor(inner));
+            Assert.Null(EditorSearch.EditorFor(outside));
+            Assert.Null(EditorSearch.EditorFor(null));
 
             window.Close();
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());
+    }
+
+    // ⭐ The CommandRouter's resolution, driven through the real thing — the catalog declaration plus the
+    // live focus probe. CommandCatalogTests pins the declaration; this pins that the router obeys it.
+    //
+    // [C1] is the audit's confirmed defect: F5 used to be a window binding whose command ended with
+    // "anything else → Execute Query", so on a tab with nothing to execute it ran the SQL editor's text in
+    // the user's working transaction. Here the router must simply decline.
+    [Fact]
+    public async System.Threading.Tasks.Task CommandRouter_ResolvesByScope_AndDeclinesWhereNothingIsLive()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+        var dir = Path.Combine(Path.GetTempPath(), "et-router-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        await session.Dispatch(() =>
+        {
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(new ConnectionProfileStore(dir), service);
+
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var outside = new TextBox { Width = 120, Height = 24 };
+            var root = new StackPanel { Children = { editor, outside } };
+            var window = new Window { Width = 400, Height = 300, Content = root };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            EditorSearch.Install(editor);
+
+            int sidebarFocusRequests = 0;
+            var router = CommandRouter.Attach(window, () => vm, () => { sidebarFocusRequests++; return true; });
+
+            // [1] F5 on a Query tab → the tab's main action is live, so the router handles it.
+            var query = WorkspaceTabViewModel.CreateQuery(vm);
+            vm.WorkspaceTabs.Add(query);
+            vm.SelectTab(query);
+            bool onQuery = router.Handle(Key.F5, KeyModifiers.None);
+            log.AppendLine($"[1] F5 on a Query tab handled = {onQuery}");
+            Assert.True(onQuery);
+
+            // [2] ⭐ C1 — F5 on a tab that has no main action must be DECLINED, not repurposed.
+            var ddl = WorkspaceTabViewModel.CreateDdl(
+                vm, new MetadataObject("V_X", MetadataObjectKind.View), "select 1 from rdb$database", null);
+            vm.WorkspaceTabs.Add(ddl);
+            vm.SelectTab(ddl);
+            bool onDdl = router.Handle(Key.F5, KeyModifiers.None);
+            log.AppendLine($"[2] F5 on a Ddl tab handled = {onDdl} (must be False)");
+            Assert.False(onDdl);
+
+            // [3] Ctrl+F with the caret OUTSIDE an editor → Global scope: focus the sidebar filter.
+            outside.Focus();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(router.Handle(Key.F, KeyModifiers.Control));
+            log.AppendLine($"[3] sidebar focus requests after Ctrl+F outside an editor = {sidebarFocusRequests}");
+            Assert.Equal(1, sidebarFocusRequests);
+
+            // [4] Ctrl+F with the caret INSIDE an editor → Editor scope wins: the Find bar opens and the
+            //     sidebar is left alone. This is the behaviour the deleted focus probe used to hand-code.
+            editor.TextArea.Focus();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(router.Handle(Key.F, KeyModifiers.Control));
+            log.AppendLine($"[4] sidebar focus requests after Ctrl+F inside an editor = {sidebarFocusRequests}"
+                           + $", replaceMode = {editor.SearchPanel!.IsReplaceMode}");
+            Assert.Equal(1, sidebarFocusRequests);          // unchanged → Global never ran
+            Assert.False(editor.SearchPanel!.IsReplaceMode); // Find, not Replace
+
+            // [5] A gesture nobody claims is left alone (F7 arrives in etap 3 as Compile).
+            Assert.False(router.Handle(Key.F7, KeyModifiers.None));
+
+            window.Close();
+        }, CancellationToken.None);
+
+        try { Directory.Delete(dir, recursive: true); } catch { /* best-effort */ }
+        _out.WriteLine(log.ToString());
+    }
+
+    // ⭐ The Keyboard Manager's foundation, measured rather than assumed: AvaloniaEdit must not claim any
+    // FUNCTION key inside a TextEditor, because the whole shortcut map is F-key-first.
+    //
+    // This started as a throwaway probe during the audit and it overturned inherited AvalonEdit lore —
+    // F3/Shift+F3 are NOT find-next/previous here: SearchInputHandler registers its commands with no
+    // KeyGesture at all. It is a permanent test because the risk is a silent one: an AvaloniaEdit upgrade
+    // that started binding a function key would steal a global shortcut with the build still green.
+    //
+    // It also records what the editor DOES claim (Delete / Back / Return / arrows / Shift+Alt box-select),
+    // which is why a global gesture may never be one of those and why "no Alt combos" is the right policy.
+    [Fact]
+    public async System.Threading.Tasks.Task Editor_ClaimsNoFunctionKey_AndClaimsTheEditingKeys()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            EditorSearch.Install(editor);
+            Dispatcher.UIThread.RunJobs();
+
+            var claimed = ClaimedGestures(editor).ToArray();
+            log.AppendLine($"[gestures] {claimed.Length} claimed inside a TextEditor");
+
+            var functionKeys = Enumerable.Range((int)Key.F1, 12).Cast<Key>().ToArray();
+            var stolen = claimed.Where(g => functionKeys.Contains(g.Key)).ToArray();
+            log.AppendLine("[function keys claimed] "
+                           + (stolen.Length == 0 ? "<none>" : string.Join(", ", stolen.Select(g => g.ToString()))));
+
+            Assert.True(stolen.Length == 0,
+                "AvaloniaEdit now claims a function key, which collides with the F-key-first shortcut map: "
+                + string.Join(", ", stolen.Select(g => g.ToString())));
+
+            // The keys it genuinely owns — a global command must never take one of these.
+            Assert.Contains(new KeyGesture(Key.Delete), claimed);
+            Assert.Contains(new KeyGesture(Key.Back), claimed);
+            Assert.Contains(new KeyGesture(Key.Return), claimed);
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Every KeyGesture reachable from a live editor: its own KeyBindings, the TextArea's, and every input
+    // handler in the TextArea's (recursive) default-handler chain — which is where AvaloniaEdit actually
+    // keeps them.
+    private static System.Collections.Generic.IEnumerable<KeyGesture> ClaimedGestures(TextEditor editor)
+    {
+        foreach (var kb in editor.KeyBindings) if (kb.Gesture is not null) yield return kb.Gesture;
+        foreach (var kb in editor.TextArea.KeyBindings) if (kb.Gesture is not null) yield return kb.Gesture;
+        foreach (var g in FromHandler(editor.TextArea.DefaultInputHandler)) yield return g;
+
+        static System.Collections.Generic.IEnumerable<KeyGesture> FromHandler(object? handler)
+        {
+            if (handler is null) yield break;
+            var type = handler.GetType();
+
+            if (type.GetProperty("KeyBindings")?.GetValue(handler) is System.Collections.IEnumerable bindings)
+            {
+                foreach (var b in bindings)
+                    if (b.GetType().GetProperty("Gesture")?.GetValue(b) is KeyGesture g) yield return g;
+            }
+
+            if (type.GetProperty("NestedInputHandlers")?.GetValue(handler) is System.Collections.IEnumerable nested)
+            {
+                foreach (var child in nested)
+                    foreach (var g in FromHandler(child)) yield return g;
+            }
+        }
+    }
+
+    // How many SearchInputHandlers the editor's input pipeline carries. Reflection because
+    // TextAreaDefaultInputHandler.NestedInputHandlers is the only place the count is observable.
+    private static int SearchHandlerCount(TextEditor editor)
+    {
+        var handler = editor.TextArea.DefaultInputHandler;
+        var nested = handler.GetType()
+            .GetProperty("NestedInputHandlers")?
+            .GetValue(handler) as System.Collections.IEnumerable;
+        return nested?.Cast<object>().Count(h => h.GetType().Name == "SearchInputHandler") ?? -1;
     }
 
     // Stage 8 / Language Completion (App layer) — the LIVE interaction contract, which the pure Core

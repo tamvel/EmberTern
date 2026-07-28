@@ -5,9 +5,11 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Controls;
 using EmberTern.App.Diagnostics;
@@ -5944,23 +5946,21 @@ public partial class MainWindowViewModel : ViewModelBase
         return hash.ToString("x16", CultureInfo.InvariantCulture);
     }
 
-    // F5 is an APPLICATION-level "Go" shortcut whose meaning depends on the active workspace tab — like modern
-    // IDEs — NOT a synonym for Execute Query. This is the ONE window-level interpreter of F5 (bound in
-    // MainWindow.axaml); the debugger participates HERE instead of fighting the global binding with a local,
-    // focus-dependent key handler (which only won while focus happened to sit inside the debugger tab). Kept out
-    // of ExecuteQueryCommand so that command's meaning stays unambiguous (execute the SQL editor). Routing:
-    //   • Debugger tab active → the debugger decides (launch panel = Start Debugging, paused session = Continue).
-    //   • anything else       → Execute Query (the SQL editor), exactly as F5 always behaved for other tabs.
-    // Scope is F5 only; Shift+F5 / Ctrl+Shift+F5 stay on the query commands (a deliberate later follow-up).
-    [RelayCommand]
-    private Task GoAsync()
+    /// <summary>
+    /// The command for a GLOBAL-scope <see cref="CommandId"/> — the ones that mean the same thing wherever
+    /// the user is. Tab-scoped ids are the selected tab's business and are resolved by
+    /// <see cref="WorkspaceTabViewModel.ResolveCommand"/>; ids backed by a view action (focusing the sidebar
+    /// filter, opening an editor's Find bar) have no view-model command and are dispatched by the router.
+    ///
+    /// <para>⚠ This is where the old <c>GoCommand</c> went. It interpreted F5 itself and ended every route
+    /// with "anything else → Execute Query", which is how F5 came to run the SQL editor's text from tabs
+    /// that have nothing to execute. "Which tab" is now a declared scope, so no command has to guess.</para>
+    /// </summary>
+    internal ICommand? ResolveCommand(CommandId id) => id switch
     {
-        if (ActiveDebugger is { } debugger)
-        {
-            return debugger.RequestGoAsync();
-        }
-        return ExecuteQueryAsync();
-    }
+        CommandId.GlobalSearch => OpenGlobalSearchCommand,
+        _ => null,
+    };
 
     [RelayCommand(CanExecute = nameof(CanExecute))]
     public Task ExecuteQueryAsync() => RunExecuteAsync(ExecutionIntent.Preview);

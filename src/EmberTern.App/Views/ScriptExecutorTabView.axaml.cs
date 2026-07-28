@@ -30,10 +30,13 @@ public partial class ScriptExecutorTabView : UserControl
     {
         InitializeComponent();
         _scriptEditor = this.FindControl<TextEditor>("ScriptEditor");
+        // F5 is not handled here: it is CommandId.Go, declared in Commands.CommandCatalog for this tab kind
+        // and dispatched by the router. The local handler this replaced fired only while the SCRIPT EDITOR
+        // held focus, so F5 with focus on the mode picker or the results grid fell through to the window and
+        // executed the SQL Editor's query instead of the script.
         if (_scriptEditor is not null)
         {
             _scriptEditor.TextChanged += OnScriptEditorTextChanged;
-            _scriptEditor.KeyDown += OnScriptEditorKeyDown;
         }
         ApplyEditorTheme();
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
@@ -126,16 +129,6 @@ public partial class ScriptExecutorTabView : UserControl
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _currentVm.ReportFileError(ex.Message);
-        }
-    }
-
-    // F5 runs the script (same key as the SQL Editor's execute).
-    private void OnScriptEditorKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.F5 && _currentVm is not null && _currentVm.RunCommand.CanExecute(null))
-        {
-            _currentVm.RunCommand.Execute(null);
-            e.Handled = true;
         }
     }
 

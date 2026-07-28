@@ -17,6 +17,7 @@ using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
 using EmberTern.App.Behaviors;
+using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Controls;
 using EmberTern.App.Sql;
@@ -47,6 +48,10 @@ public partial class MainWindow : Window
     // the LastFocusedSqlDocument rule collapses onto it — but it goes through the SAME host as the object
     // editors on purpose: one targeting mechanism, so the panel and F8 can never disagree anywhere.
     private readonly Completion.DiagnosticsPanelHost _diagnostics;
+
+    // The keyboard dispatcher for Commands.CommandCatalog. Held so its lifetime is the window's — it
+    // subscribes to this window's KeyDown and must not be collected while the window lives.
+    private readonly Commands.CommandRouter _commands;
 
     private SvgIcon? _maxRestoreGlyph;
 
@@ -224,9 +229,13 @@ public partial class MainWindow : Window
             _sidebarFilterBox.KeyDown += OnFilterBoxKeyDown;
         }
 
-        // Ctrl+F focuses the sidebar filter from anywhere (tunnel so it wins before any
-        // editor's own Ctrl+F). Per the user's explicit request the sidebar filter owns Ctrl+F.
-        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+        // The ONE keyboard dispatcher for every gesture in Commands.CommandCatalog. It replaced this
+        // window's KeyBindings block AND the tunnel handler that used to sit here: that handler had to
+        // probe the focus to decide whether Ctrl+F belonged to an editor's Find bar or to the sidebar
+        // filter, because on the tunnel phase it saw the key first. The router listens on BUBBLE and lets
+        // the declared scope decide — Editor outranks Global — so the probe is gone and the same rule now
+        // also covers every other gesture.
+        _commands = CommandRouter.Attach(this, () => _currentVm, FocusSidebarFilter);
 
         _lastNormalBounds = new WindowBounds
         {
@@ -741,35 +750,15 @@ public partial class MainWindow : Window
         FocusSidebarTree();
     }
 
-    // Ctrl+F is context-aware: inside a code editor it belongs to that editor's own
-    // Find bar (AvaloniaEdit SearchPanel), so we leave the event unhandled and let it
-    // tunnel down to the editor. Anywhere else (Explorer, grids, …) it focuses the
-    // sidebar filter — the historical behaviour. (Ctrl+H is handled per-editor.)
-    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    // Focuses the Object Explorer's filter box for CommandId.FocusSidebarFilter. A view action, not a
+    // command, so the router is handed it as a delegate. Returns false when there is no filter box, which is
+    // what lets the router leave Ctrl+F alone rather than swallow it.
+    private bool FocusSidebarFilter()
     {
-        // Ctrl+Shift+F → Global Search dialog (metadata names + source).
-        if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
-        {
-            if (_currentVm?.OpenGlobalSearchCommand.CanExecute(null) == true)
-            {
-                _currentVm.OpenGlobalSearchCommand.Execute(null);
-                e.Handled = true;
-            }
-            return;
-        }
-        if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
-        {
-            var focused = (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement()) as Visual;
-            if (Completion.EditorSearch.IsInsideEditor(focused))
-                return; // editor's SearchPanel opens Find
-
-            if (_sidebarFilterBox is not null)
-            {
-                _sidebarFilterBox.Focus();
-                _sidebarFilterBox.SelectAll();
-                e.Handled = true;
-            }
-        }
+        if (_sidebarFilterBox is null) return false;
+        _sidebarFilterBox.Focus();
+        _sidebarFilterBox.SelectAll();
+        return true;
     }
 
     private void FocusSidebarTree()

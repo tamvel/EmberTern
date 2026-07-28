@@ -1,6 +1,8 @@
 using System.Globalization;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Commands;
 using EmberTern.Core.Metadata;
 
 namespace EmberTern.App.ViewModels;
@@ -483,6 +485,43 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.RefreshAsync() ?? Task.CompletedTask,
         WorkspaceTabKind.IndexDetail => IndexDetail?.RefreshAsync() ?? Task.CompletedTask,
         _ => Task.CompletedTask,
+    };
+
+    /// <summary>
+    /// The command this tab offers for <paramref name="id"/>, or null when this tab kind has no such
+    /// command. The fourth member of the same per-kind family as <see cref="UnsavedWork"/> /
+    /// <see cref="SavableEditor"/> / <see cref="RefreshAsync"/> above — the mapping lives here, the command
+    /// logic stays in each tab's own view model.
+    ///
+    /// <para>⭐ <b>The <c>_ => null</c> arms are the feature, not filler.</b> <c>F5</c> used to be a window
+    /// binding that fell through to "execute the SQL editor's text" from every tab that did not claim it —
+    /// so pressing it on a Table editor or the Security Manager ran whatever was in the editor, inside the
+    /// user's working transaction. A tab that has no main action now returns null, the router finds nothing
+    /// live, and the key does nothing.</para>
+    ///
+    /// <para>⚠ Takes a <see cref="CommandId"/> and returns an <see cref="ICommand"/>: no
+    /// <c>KeyGesture</c> reaches a view model. Gestures belong to <see cref="Commands.CommandCatalog"/>
+    /// and the view layer.</para>
+    /// </summary>
+    internal ICommand? ResolveCommand(CommandId id) => id switch
+    {
+        // The main action of the tab. One command id, because to the user it is one idea — "do the thing
+        // this tab is for" — and because that keeps F5 a single, validatable claim in the catalog.
+        CommandId.Go => Kind switch
+        {
+            WorkspaceTabKind.Query => _owner.ExecuteQueryCommand,
+            WorkspaceTabKind.Debugger => Debugger?.GoCommand,
+            WorkspaceTabKind.ScriptExecutor => ScriptExecutor?.RunCommand,
+            WorkspaceTabKind.DataImport => DataImport?.ImportCommand,
+            _ => null,
+        },
+        CommandId.ExecuteQuery => Kind is WorkspaceTabKind.Query ? _owner.ExecuteQueryCommand : null,
+        CommandId.ExecuteQueryFull => Kind is WorkspaceTabKind.Query ? _owner.ExecuteQueryFullCommand : null,
+        CommandId.FormatSql => Kind is WorkspaceTabKind.Query ? _owner.FormatSqlCommand : null,
+        CommandId.ImportValidate => DataImport?.ValidateCommand,
+        CommandId.ImportRefresh => DataImport?.RefreshCommand,
+        CommandId.ImportBrowse => DataImport?.BrowseCommand,
+        _ => null,
     };
 
     [RelayCommand]

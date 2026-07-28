@@ -32,7 +32,8 @@ verbatim, in the archive below.
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (268 entries, #1–#281), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/design/keyboard-manager.md`** | **ACTIVE — the Keyboard Manager & Context Menu UX sprint's one document.** The full command/shortcut/menu **audit** (every gesture that exists, duplications, collisions, what is missing), the user's **ratified shortcut map and architecture decisions**, the `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design with the reasons the obvious alternatives do not work here, the **as-built for each etap** (§11 = etap 2), and the etap order. | When working on `EmberTern.App/Commands`, any shortcut, tooltip gesture, or context menu. |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (270 entries, #1–#283), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -288,28 +289,64 @@ noted.
 
 ## Current state
 
-- **⌨ NEXT SPRINT — KEYBOARD MANAGER. Scoped by the user, NOT started (2026-07-27).** Start here; the
-  scope below is the user's own, recorded verbatim in substance so a fresh session needs no re-briefing:
-  - fill in shortcuts for the most frequently used functions;
-  - simplify existing shortcuts where that makes sense;
-  - surface shortcuts **in tooltips**;
-  - surface shortcuts **in context menus**;
-  - improve right-click menu UX — smaller typography, icons on the left, better consistency;
-  - lay the **foundations for a central Keyboard Manager**.
-  **⚠ Read before designing.** The audit's A-10 covers the same ground and its `CommandRegistry` sketch
-  (stable `CommandId`, default gesture, scope `global`/`workspace`/`editor`/`grid`/`dialog`, availability
-  predicate, priority resolver dialog→editor→tab→window, one list feeding menu + tooltip + palette +
-  configurator, a collision validator) is a **reasonable starting point that has NOT been verified against
-  the code** — treat it the way this sprint treated the rest of the audit: check it first. Known facts that
-  will matter: shortcuts are today spread across `MainWindow.axaml` `Window.KeyBindings`, per-view XAML, and
-  hand-rolled `KeyDown` handlers in the editor controllers; the editor's typing mechanics (Tab expansion,
-  pairing, completion) are **deliberately** local and tunnelled (gotchas #224/#228) and must stay that way
-  while merely *registering* their reserved gestures; `F5` deliberately means Execute in the SQL editor and
-  Continue in the debugger (the one ratified contradiction, spec §9.7); and the shared
-  `TextBlock.shortcut-chip` style already exists for rendering a gesture (UX Polish Seam 1).
-  ⚠ Also relevant: the **app-wide UX sprint** (density) is still backlogged and owns *control heights* —
-  "smaller typography + icons on the left in the context menu" is this sprint's, a global control-height
-  change is not. Keep the line the user drew.
+- **⌨ CURRENT SPRINT — KEYBOARD MANAGER & CONTEXT MENU UX. Etap 1 (audit) ACCEPTED · Etap 2 (registry)
+  DONE (2026-07-28). Branch `feat/keyboard-manager`.** Build 0/0; suite **5911 green** in the two documented
+  partitions (5868 + 43); smoke clean. **The sprint's one document — audit, ratified decisions, architecture,
+  as-built, etap order: [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md).** Read it before
+  touching anything under `EmberTern.App/Commands`.
+  **Goal (the user's own framing): not "a few more shortcuts" but ONE source of truth for commands** — the
+  same registry feeding shortcuts, tooltips, context menus and, later, a Command Palette and a shortcut
+  editor, with nothing duplicated in XAML or `UiStrings`.
+  **⭐ RATIFIED SHORTCUT MAP — decided by the user, do not re-litigate:** `F3` New · `F4` Refresh ·
+  `F5` Execute (**Continue in the debugger stays the one accepted contradiction**) · `F6` Commit ·
+  `Shift+F6` Rollback · `F7` Compile · `F8` **Delete in trees/lists, Next Diagnostic in the editor** (a
+  scope split, both kept) · `Ctrl+K` Format SQL. **No `Alt+letter` gestures at all** — `Alt+F` is retired in
+  etap 3 with no exception — and F-keys are reserved for the most frequent operations. Windows/IDE standards
+  stay (`Ctrl+S`/`F`/`H`/`Z`/`Y`/`X`/`C`/`V`/`A`, `Ctrl+Enter`, `Ctrl+Space`, `Ctrl+.`, `Ctrl+Shift+F`,
+  `Escape`). `Alt+F12` (Peek) is Alt+**function key**, outside the rule, and stays.
+  **⭐ ARCHITECTURE (ratified):** `CommandCatalog` holds **`CommandDescriptor`s, never `ICommand`s** — a
+  gesture→command map is not expressible here, because "Go" belongs to the selected tab and the Explorer's
+  15 commands belong to a `MetadataNodeViewModel` built **per tree node**. One literal table, built once at
+  type-init (the `LanguageConstructCatalog` pattern); `CommandRouter` (view layer, **Bubble** phase) does the
+  focus probe and resolves **Editor > Tab > Global** — `CommandScope`'s numeric values *are* that order.
+  `WorkspaceTabViewModel.ResolveCommand(CommandId)` joined `UnsavedWork`/`SavableEditor`/`RefreshAsync` as
+  the **fourth member of the existing per-kind family**, not a new mechanism beside it.
+  **⚠ The line to hold: no `KeyGesture` ever reaches a view model.** VMs answer questions about a
+  `CommandId`; gestures live in the catalog and the view layer.
+  **⚠ `CommandDispatch.Reserved` is load-bearing, not bookkeeping.** The editor's typing mechanics
+  (#224/#228) and the debugger's stepping keys stay **locally dispatched** — several are view actions needing
+  the source editor's caret — but are **declared**, so the collision validator sees them and no global
+  gesture can quietly steal one. A live Reserved command stops resolution *without* handling the key.
+  **⭐ Etap 2 fixed the audit's confirmed defect C1 — and it was a real data-safety issue.**
+  `MainWindowViewModel.GoCommand` had no `CanExecute` and ended "anything else → Execute Query", while
+  `ResolveActiveSql()` falls back to the SQL editor's `QueryText` — so **F5 on a Table editor, Security
+  Manager, Trace, Sessions or any object editor ran the editor's text inside the user's working
+  transaction**. F5's reach is now a declaration (four tab kinds), so the other 16 cannot see it. Deleted
+  with it: the whole `Window.KeyBindings` block, the Tunnel-phase `OnWindowKeyDown` + its `IsInsideEditor`
+  focus probe, `GoCommand`/`GoAsync`, `RequestGoAsync`, and the duplicate F5 owners in the debugger, Script
+  Executor and Data Import views. **Side effects, both improvements:** Script Executor's F5 works anywhere in
+  its tab (it used to need focus in the script editor, and otherwise executed the SQL editor's query), and F5
+  in a non-actionable debugger phase now leaves the key alone instead of silently doing nothing.
+  **⚠ Two measured facts that overturned inherited assumptions — do not re-derive them.** (1) **AvaloniaEdit
+  12.0.0 claims NO function key**: `SearchInputHandler` registers Find/FindNext/FindPrevious as
+  `CommandBindings` with **no `KeyGesture`**, so the AvalonEdit lore that `F3`/`Shift+F3` are find-next/prev
+  does not hold here and `F1`–`F12` are free in the editor — now a permanent guard, because an upgrade that
+  began binding one would break a global shortcut with the build green. It *does* claim `Delete`, `Back`,
+  `Return`, the arrows and `Shift+Alt`+arrows (box select). (2) **Every `TextEditor` shipped TWO
+  `SearchPanel`s**: the editor creates its own, and `EditorSearch.Install` called `SearchPanel.Install` on
+  top, so `Ctrl+F` and the context menu's Find drove different instances. Fixed by using
+  `TextEditor.SearchPanel`; pinned by asserting the **handler count**, since a non-null check passed either
+  way. Gotchas **#282 / #283**.
+  **⚠ The audit's A-10 is ONE table row**, not a design — no scope list, no resolver, no `CommandId` shape.
+  The richer "sketch" was written during the previous sprint's triage. Its diagnosis is right; there was
+  nothing to copy.
+  **Etap 3 next** (the ratified new gestures + `Tree`/`Grid` scopes + retiring `Alt+F`'s 6 copies), then
+  etap 4 (tooltips from the catalog via `{app:CommandTip}`; `Label` joins the descriptor) and etap 5 (all 32
+  context menus: **there is currently no `MenuItem`/`ContextMenu` style in the app at all** — 138 of 142
+  items show no shortcut and none has an icon; style first, a custom control only if measured necessary, and
+  then app-wide per the user's instruction).
+  ⚠ Still relevant: the **app-wide UX sprint** (density) is backlogged and owns *control heights* — "smaller
+  typography + icons on the left in the context menu" is this sprint's, a global control-height change is not.
 - **🛡 ARCHITECTURE HARDENING / PRODUCT SAFETY SPRINT — CLOSED AND USER-ACCEPTED (2026-07-27).** Build 0/0,
   suite **5900 green** (from 5856), smoke clean, `tools/probes/ChangeSafetyProbe` 19/19 on FB5. Committed as
   `340a634` and pushed to **both** remotes. Narrative +
@@ -2138,9 +2175,19 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5900 as of 2026-07-27
-  (`master`, after the Architecture Hardening sprint; 5856 before it)** — green in ~11 s, and green in the
-  two documented partitions (**5859 + 41**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5911 as of 2026-07-28
+  (`feat/keyboard-manager`, after etap 2; 5900 on `master`)** — green in the two documented partitions
+  (**5868 + 43**).
+  **⚠ 2026-07-28, Keyboard Manager etap 2 — the hang REPRODUCED A THIRD TIME, and named the SAME test for
+  the third time.** A single full-suite run hung; `--blame-hang` reported **5868 of 5869 tests
+  `Completed="True"`** and the one that was not as
+  **`ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`** — again. **Three independent
+  observations across three sprints now agree on the name**, and the count says it hangs on the *last* test
+  of the run, which fits "after the work is done, not a failing assertion". Both partitions were green on the
+  same commit immediately before and after. Not caused by this sprint (nothing here touches the completion
+  probe or the headless session — the two tests it *did* add to that class both pass). Dump + sequence file
+  under `tests/EmberTern.Tests/TestResults/`. **Still its own infrastructure task; do not detour a sprint
+  etap into it.**
   **⚠ 2026-07-27, hardening sprint — the hang REPRODUCED A SECOND TIME, and named the SAME test.** Four
   consecutive full runs this session finished green in one pass; the fifth hung, and `--blame-hang` reported
   the only test not `Completed="True"` as **`ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`**
@@ -3162,7 +3209,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (264 entries, #1–#277), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (270 entries, #1–#283), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

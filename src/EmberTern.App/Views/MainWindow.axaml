@@ -25,16 +25,13 @@
     <vm:MainWindowViewModel />
   </Design.DataContext>
 
-  <Window.KeyBindings>
-    <!-- F5 is the application-level "Go" router (MainWindowViewModel.GoCommand): it means Execute Query in the
-         SQL editor, Start Debugging on a debugger launch panel, and Continue in a paused debug session — the
-         active workspace tab decides. Ctrl+Enter stays a SQL-editor-specific Execute. Shift+F5 stays Execute
-         (full) for now; making it debugger-aware (Stop) is a scoped follow-up. -->
-    <KeyBinding Gesture="F5" Command="{Binding GoCommand}" />
-    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding ExecuteQueryCommand}" />
-    <KeyBinding Gesture="Shift+F5" Command="{Binding ExecuteQueryFullCommand}" />
-    <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
-  </Window.KeyBindings>
+  <!-- ⛔ No Window.KeyBindings block, on purpose. Every application gesture is declared ONCE in
+       Commands.CommandCatalog and dispatched by Commands.CommandRouter (wired in the code-behind), so a
+       shortcut's meaning follows from its declared scope instead of from which handler happened to run
+       first. Adding a KeyBinding here would re-create the second mechanism this sprint removed: the block
+       that used to live at this spot bound F5 to a command that ended "anything else → Execute Query",
+       which ran the editor's text — in the user's working transaction — from tabs that have nothing to
+       execute. Register the gesture in the catalog instead. -->
 
   <!-- Rows: titlebar | settings-health banner (Auto ⇒ zero height when healthy) | body | status bar.
        The banner row exists because a settings.dat this build cannot read makes EVERY store silently stop

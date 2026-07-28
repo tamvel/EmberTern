@@ -497,6 +497,9 @@ public sealed partial class DebuggerTabViewModel
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     [NotifyCanExecuteChangedFor(nameof(RestartCommand))]
     [NotifyCanExecuteChangedFor(nameof(EvaluateImmediateCommand))]
+    // GoCommand is F5's meaning on a debugger tab, so it must re-evaluate exactly when Launch and
+    // Continue do — it is their disjunction.
+    [NotifyCanExecuteChangedFor(nameof(GoCommand))]
     private DebuggerPhase _phase = DebuggerPhase.Preparing;
 
     [ObservableProperty]
@@ -1056,12 +1059,22 @@ public sealed partial class DebuggerTabViewModel
 
     // ── Launch ────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The debugger's response to the application-level F5 ("Go", routed by
-    /// <c>MainWindowViewModel.GoCommand</c>): Start Debugging from the launch panel, Continue while paused, and
-    /// a no-op in any other phase (Preparing / Busy / Completed / Faulted). It reuses the existing command gates
-    /// (<see cref="LaunchCommand"/> / <see cref="ContinueCommand"/>) so there is no second definition of when
-    /// each action is valid — the debugger owns "what F5 means in my context", the window owns "which tab".</summary>
-    public Task RequestGoAsync()
+    /// <summary>
+    /// The debugger's answer to <c>CommandId.Go</c> (F5): Start Debugging from the launch panel, Continue
+    /// while paused. It reuses the existing command gates (<see cref="LaunchCommand"/> /
+    /// <see cref="ContinueCommand"/>) so there is no second definition of when either action is valid — the
+    /// debugger owns "what F5 means here", the catalog owns "F5 means the tab's main action".
+    ///
+    /// <para>⚠ <b>The <see cref="CanGo"/> gate matters beyond greying a button</b>: F5 in a phase where the
+    /// debugger can neither launch nor continue (Preparing / Busy / Completed / Faulted) must leave the key
+    /// unhandled rather than swallow it, so the router can fall through instead of silently doing nothing.
+    /// This also replaced the debugger view's own <c>case Key.F5</c>, which competed with the window binding
+    /// and won only while focus happened to sit inside the debugger tab.</para>
+    /// </summary>
+    private bool CanGo => LaunchCommand.CanExecute(null) || ContinueCommand.CanExecute(null);
+
+    [RelayCommand(CanExecute = nameof(CanGo))]
+    private Task GoAsync()
     {
         if (LaunchCommand.CanExecute(null)) return LaunchCommand.ExecuteAsync(null);
         if (ContinueCommand.CanExecute(null)) return ContinueCommand.ExecuteAsync(null);

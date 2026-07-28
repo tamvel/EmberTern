@@ -1,7 +1,15 @@
 # Keyboard Manager & Context Menu UX — sprint design document
 
-**Status: ETAP 1 (AUDIT) COMPLETE — awaiting the user's acceptance before any implementation.**
-Branch: `feat/keyboard-manager`. Build 0/0 at audit close; no production code touched.
+**Status: ETAP 1 (AUDIT) ACCEPTED · ETAP 2 (REGISTRY) COMPLETE — see §11 for the as-built.**
+Branch: `feat/keyboard-manager`. Build 0/0; suite **5911 green** in the two documented partitions
+(5868 + 43); smoke clean.
+
+**The shortcut map was ratified by the user on accepting etap 1** — `F3` New · `F4` Refresh ·
+`F5` Execute (Continue in the debugger stays the one accepted contradiction) · `F6` Commit ·
+`Shift+F6` Rollback · `F7` Compile · `F8` Delete in trees and lists, Next Diagnostic in the editor ·
+`Ctrl+K` Format SQL · **no `Alt+letter` exceptions at all**, and F-keys are reserved for the most
+frequent operations. The architecture (`CommandDescriptor` + `CommandResolver`, no `ICommand` in the
+registry) was ratified with it, and the double `SearchPanel` (§2.2) was pulled into the sprint.
 
 This document is the sprint's single home: the audit (§1–§6), the verified facts that constrain the
 design (§2), the architecture proposal (§7), the shortcut map proposal (§8) and the context-menu plan
@@ -451,13 +459,119 @@ so `139` items that show nothing today start showing the truth, and cannot drift
 
 ## 10. Etap order
 
-| Etap | Content | Ends with |
+| Etap | Content | State |
 |---|---|---|
-| **1** | **Audit — DONE** (this document §1–§6) | user acceptance |
-| **2** | `CommandDescriptor` / `CommandCatalog` / `CommandResolver` + scope resolution + the §7.6 pinned test + **fix C1** | build 0/0, suite green, committable |
-| **3** | Fill in §6's missing shortcuts through the catalog; retire `Alt+F`'s 6 copies (D1) | " |
-| **4** | `{app:CommandTip}` — every gesture-bearing tooltip reads the catalog; strip the ~24 hand-typed suffixes | " |
-| **5** | Context menus: styles (§9.2 (a)), then a control only if measured necessary; icons; gestures; all 32 menus | " |
+| **1** | Audit (§1–§6) | ✅ **DONE + accepted** |
+| **2** | `CommandDescriptor` / `CommandCatalog` / `CommandRouter` + scope resolution + the §7.6 pinned test + **fix C1** + the `SearchPanel` duplication | ✅ **DONE** — §11 |
+| **3** | The ratified new gestures (F3/F4/F6/F7/F8, `Ctrl+K`, `Ctrl+W`, …) through the catalog; retire `Alt+F`'s 6 copies (D1); add `Tree` + `Grid` scopes | next |
+| **4** | `{app:CommandTip}` — every gesture-bearing tooltip reads the catalog; strip the ~24 hand-typed suffixes; `Label` joins the descriptor | |
+| **5** | Context menus: styles (§9.2 (a)), then a control only if measured necessary; icons; gestures; all 32 menus | |
 
 One etap per session, each ending build 0/0 + tests green + smoke clean + committable, per the
 project's session protocol.
+
+---
+
+## 11. Etap 2 — as built
+
+`src/EmberTern.App/Commands/` — `CommandScope`, `CommandId`, `CommandDescriptor` (+ `CommandDispatch`),
+`CommandCatalog`, `CommandRouter`.
+
+### 11.1 The shape, and the two decisions that produced it
+
+**The registry describes; it never holds an `ICommand`.** Forced by the code, not chosen for elegance:
+"Go" must invoke whichever tab is selected *now*, and the Object Explorer's commands belong to whichever
+`MetadataNodeViewModel` is selected — 15 commands on an object built per tree node. None of those exist
+when a static table is built. So `CommandCatalog` is a literal array built once at type-init (the
+`LanguageConstructCatalog` pattern this codebase already uses — no reflection, no scanning, nothing
+recomputed when a menu opens), and the instance is resolved at invoke time.
+
+**Resolution lives where the knowledge already lives.** `WorkspaceTabViewModel.ResolveCommand(CommandId)`
+joined `UnsavedWork` / `SavableEditor` / `RefreshAsync` as the **fourth member of the existing per-kind
+family** rather than becoming a new mechanism beside them. `MainWindowViewModel.ResolveCommand` answers
+for `Global`. The router does only what needs Avalonia: the focus probe.
+
+**⭐ That split keeps `KeyGesture` out of the view models entirely.** A view model answers questions about
+a `CommandId`; gestures belong to the catalog and the view layer. This is the line to hold in etaps 3–5.
+
+### 11.2 Scope resolution
+
+`CommandScope`'s numeric values **are** the specificity order (`Editor` 2 > `Tab` 1 > `Global` 0) — the
+router walks candidates from the highest down. For each it asks whether the scope is *live* (caret in an
+editor / this tab kind declared), then:
+
+* **live + `Routed`** → resolve and invoke; handled.
+* **live + `Reserved`** → stop, *unhandled*. The owner has the claim, and no broader scope may answer for
+  it. This is how the editor's typing mechanics (#224/#228) and the debugger's stepping surface stay local
+  while still being *declared*, so nothing global can quietly steal one of their keys.
+* **live but unavailable** (no command on this tab kind, `CanExecute` false) → fall through to the next,
+  less specific candidate.
+* nothing resolves → the key is left alone.
+
+The router listens on **Bubble**, so a control that owns a keystroke still sees it first — exactly how the
+`Window.KeyBindings` block behaved. The deleted handler was on **Tunnel**, which is precisely why it had to
+probe the focus to hand `Ctrl+F` back to the editor.
+
+### 11.3 What was deleted
+
+| Gone | Replaced by |
+|---|---|
+| `MainWindow.axaml`'s whole `Window.KeyBindings` block (4 gestures) | catalog + router |
+| `MainWindow.OnWindowKeyDown` (the Tunnel handler + its `IsInsideEditor` probe) | `Editor` outranking `Global` |
+| `MainWindowViewModel.GoCommand` / `GoAsync` — whose last line was the C1 defect | `CommandId.Go` + per-kind resolution |
+| `DebuggerTabViewModel.RequestGoAsync` | its own `GoCommand`, with a real `CanGo` gate |
+| `DebuggerTabView`'s `case Key.F5` (the second owner of F5) | `CommandId.Go` |
+| `ScriptExecutorTabView.OnScriptEditorKeyDown` (F5 only while the script editor had focus) | `CommandId.Go` at tab scope |
+| Data Import's local `F5` / `Ctrl+F5` / `Ctrl+O` / `Ctrl+R` cases | `CommandId.Go` / `ImportValidate` / `ImportBrowse` / `ImportRefresh` |
+| `EditorSearch`'s `SearchPanel.Install` call + its `Ctrl+H` `AddHandler` | the editor's own panel + `CommandId.EditorFind`/`EditorReplace` |
+| `EditorSearch.IsInsideEditor` | `EditorSearch.EditorFor` (returns the editor the router needs) |
+
+### 11.4 ⭐ C1 fixed, and proven twice
+
+The defect was that `Go` *interpreted* F5 and ended "anything else → Execute Query". Now F5's reach is a
+**declaration**: `CommandId.Go` names four tab kinds, so the remaining 16 — every object editor, Security
+Manager, Trace, Sessions, Global Search, Table Detail — are structurally unable to see it.
+
+Pinned at both levels, deliberately:
+
+* `CommandCatalogTests.Go_IsDeclaredOnlyForTabsThatHaveAMainAction` — the declaration, exhaustively.
+* `CommandCatalogTests.ResolveCommand_MapsGoOnAQueryTab_AndNowhereOnADdlTab` — the per-kind switch agrees
+  with the declaration, so the two halves cannot drift.
+* `ConnectionExpandBindingProbe.CommandRouter_ResolvesByScope_AndDeclinesWhereNothingIsLive` — the **real
+  router** with a real focus probe: F5 handled on a Query tab, **declined** on a Ddl tab, and `Ctrl+F`
+  going to the sidebar outside an editor but to the Find bar inside one, with the sidebar untouched.
+
+Two side effects worth stating, both improvements: **Script Executor's F5 now works anywhere in the tab**
+(it used to require focus in the script editor, and otherwise executed the SQL editor's query instead), and
+`F5` on a debugger tab in a non-actionable phase now leaves the key alone instead of silently doing nothing.
+
+### 11.5 The `SearchPanel` duplication
+
+`EditorSearch.Install` no longer calls `SearchPanel.Install`; everything goes through
+`TextEditor.SearchPanel`, the panel the editor creates itself. `Ctrl+F` and the context menu's
+Find/Replace therefore drive one instance. `OpenReplace` now also **refuses a read-only editor** — a DDL
+preview must not be offered a mutation. Pinned by asserting the **handler count** (1 before Install, 1
+after): asserting the panel is non-null would have passed before the fix too.
+
+### 11.6 §7.6 — the measured fact is now a permanent guard
+
+`ConnectionExpandBindingProbe.Editor_ClaimsNoFunctionKey_AndClaimsTheEditingKeys` walks every
+`KeyGesture` reachable from a live editor (39 of them) and asserts **none is `F1`–`F12`**, while asserting
+that `Delete` / `Back` / `Return` *are* claimed. The risk it guards is silent: an AvaloniaEdit upgrade that
+began binding a function key would break a global shortcut with the build still green.
+
+### 11.7 Deliberately still local, with the reason
+
+* **`Escape`** — a universal dismiss owned by every popup, dialog and filter box. Declaring it would invent
+  collisions with all of them.
+* **Data Import's `Ctrl+V`** — it means "re-read the clipboard source", i.e. paste semantics, and must yield
+  to a focused text box via a source check. `Ctrl+R` (the same Refresh without the paste overlap) *is*
+  routed, so the command is in the catalog; only that one gesture stayed behind.
+* **The editor's typing mechanics** and **the debugger's stepping keys** — declared `Reserved`, dispatched
+  locally. Several debugger keys (Run To Cursor, Toggle Breakpoint) are *view* actions needing the source
+  editor's caret, with no view-model command to route to.
+
+### 11.8 Not yet in the descriptor, on purpose
+
+`Label` and `IconKey` are absent until etaps 4 and 5 consume them. A descriptor field that nothing reads
+looks like working infrastructure and is not (gotcha #233); adding them later is additive.
