@@ -33,7 +33,7 @@ verbatim, in the archive below.
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **ACTIVE — the Keyboard Manager & Context Menu UX sprint's one document.** The full command/shortcut/menu **audit** (every gesture that exists, duplications, collisions, what is missing), the user's **ratified shortcut map and architecture decisions**, the `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design with the reasons the obvious alternatives do not work here, the **as-built for each etap** (§11 = etap 2), and the etap order. | When working on `EmberTern.App/Commands`, any shortcut, tooltip gesture, or context menu. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (270 entries, #1–#283), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (271 entries, #1–#284), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -289,10 +289,32 @@ noted.
 
 ## Current state
 
-- **⌨ CURRENT SPRINT — KEYBOARD MANAGER & CONTEXT MENU UX. Etap 1 (audit) ACCEPTED · Etap 2 (registry) DONE ·
-  Etap 3 (shortcuts) DONE (2026-07-28). Branch `feat/keyboard-manager`.** Build 0/0; suite **5929 green** in
-  the two documented partitions (5886 + 43); smoke clean. **The command layer is CLOSED** — etaps 4
-  (tooltips) and 5 (context menus) consume it and add no new gestures.
+- **⌨ CURRENT SPRINT — KEYBOARD MANAGER & CONTEXT MENU UX. ETAPS 1–4 DONE (2026-07-28), etaps 1–3
+  user-accepted. Branch `feat/keyboard-manager`.** Build 0/0; suite **5943 green** in the two documented
+  partitions (5900 + 43); smoke clean. **Etap 5 (context menus) is the only one left, and it adds no
+  gestures.**
+  **⭐ Etap 4 — a keyboard gesture is now written down in exactly ONE place.** `Commands/CommandTip.cs` is the
+  ONE composer (`For` / `Gesture` / `Sentence` / `Format`); ~25 `UiStrings` members became `static readonly`
+  and compose their gesture from the catalog. **The etap justified itself before it started:** etap 3 re-bound
+  Format SQL to `Ctrl+K` and `ToolbarFormatSqlTooltip` went on reading *"Format SQL · Alt+F"* for a whole
+  etap with a green build — a hand-typed gesture does not duplicate the catalog, it **goes stale silently**.
+  ⚠ **The label text deliberately stayed in `UiStrings`** (rule #6) and is passed in: one `CommandId` serves
+  **eleven** differently-worded Compile tooltips, so a single text field on the descriptor could not have
+  served them. The catalog owns the gesture, `UiStrings` owns the words.
+  ⚠ **`CommandTip.Format` is deliberately NOT `KeyGesture.ToString()`** — that spells the raw enum name, so
+  `Ctrl+.` would reach the user as *"Ctrl+OemPeriod"*.
+  ⚠ **`const` → `static readonly` was the cheap migration**: `x:Static` resolves both identically, so ~25
+  strings centralised **without touching any of the 15 consuming XAML files**. Verified first that none is
+  used in a `const` expression (the one thing that would break it).
+  ⚠ **A gesture is shown ONLY where it works.** Tooltips carry gestures for `Global`/`Tab`-scoped commands
+  only; the focus-scoped ones (`F3`/`F4`/`F8`) are NOT shown on toolbar buttons, because a tooltip promising
+  `F3` on a button outside the tree/grid scope teaches something false — they belong in etap 5's context
+  menus. The collection `+`/`−` buttons are the concrete case: same commands, deliberately no gesture shown.
+  ⚠ **The rule is enforced, not remembered — and the guard keys on the DECLARATION, not the value**
+  (`UiStringsShortcutSourceTests`): a correctly composed string also contains `" · F7"` at run time, so only
+  `const`-ness distinguishes a literal from a computed one. **Verified by planting a violation** and watching
+  it fail by name. Three exemptions, each with a reason + a test that fails when an exemption goes stale
+  (`Esc`, Data Import's `Ctrl+V`, the fields grid's local `F2` — none is a catalog command). Gotcha **#284**.
   **⭐ Etap 3 shipped the whole ratified map** (`F3` New · `F4` Refresh · `F6` Commit · `Shift+F6` Rollback ·
   `F7` Compile · `F8` Delete · `Ctrl+K` Format · `Ctrl+W` Close tab) and **retired `Alt+F` with no
   exception**, pinned by `NoCommandUsesAltPlusALetter`. Two scopes joined: **`Tree`** (needed one small
@@ -371,12 +393,12 @@ noted.
   **⚠ The audit's A-10 is ONE table row**, not a design — no scope list, no resolver, no `CommandId` shape.
   The richer "sketch" was written during the previous sprint's triage. Its diagnosis is right; there was
   nothing to copy.
-  **Etap 4 next** — every gesture-bearing tooltip reads the catalog via a `{app:CommandTip}` markup
-  extension, the ~24 hand-typed `· F5`-style suffixes in `UiStrings` are stripped, and `Label` joins the
-  descriptor (it is deliberately absent until then, #233). Then etap 5 — all 32 context menus: **there is
-  currently no `MenuItem`/`ContextMenu` style in the app at all**, 138 of 142 items show no shortcut and none
-  has an icon; style first, a custom control only if measured necessary, and then app-wide per the user's
-  instruction. **Neither etap adds a gesture.**
+  **Etap 5 next — the last one** — all 32 context menus: **there is currently no `MenuItem`/`ContextMenu`
+  style in the app at all**, 138 of 142 items show no shortcut and none has an icon. Style first (the file
+  that has no menu selectors), a custom control **only if measured necessary** — and if one is built, the
+  whole app uses it and nothing else, per the user's instruction. Gestures come from the catalog via
+  `CommandTip`, and `Label` joins the descriptor here (deliberately absent until consumed, #233). **It adds
+  no gestures.** The focus-scoped `F3`/`F4`/`F8` finally get surfaced here, which is where they belong (§14.4).
   ⚠ Still relevant: the **app-wide UX sprint** (density) is backlogged and owns *control heights* — "smaller
   typography + icons on the left in the context menu" is this sprint's, a global control-height change is not.
 - **🛡 ARCHITECTURE HARDENING / PRODUCT SAFETY SPRINT — CLOSED AND USER-ACCEPTED (2026-07-27).** Build 0/0,
@@ -2207,9 +2229,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5929 as of 2026-07-28
-  (`feat/keyboard-manager`, after etap 3; 5900 on `master`)** — green in the two documented partitions
-  (**5886 + 43**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5943 as of 2026-07-28
+  (`feat/keyboard-manager`, after etap 4; 5900 on `master`)** — green in the two documented partitions
+  (**5900 + 43**).
   **⚠ 2026-07-28, Keyboard Manager etap 2 — the hang REPRODUCED A THIRD TIME, and named the SAME test for
   the third time.** A single full-suite run hung; `--blame-hang` reported **5868 of 5869 tests
   `Completed="True"`** and the one that was not as
@@ -3241,7 +3263,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (270 entries, #1–#283), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (271 entries, #1–#284), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

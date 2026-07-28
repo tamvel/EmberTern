@@ -1,9 +1,12 @@
 # Keyboard Manager & Context Menu UX — sprint design document
 
-**Status: ETAP 1 (AUDIT) ACCEPTED · ETAP 2 (REGISTRY) COMPLETE (§11) · ETAP 3 (SHORTCUTS) COMPLETE (§12).**
-Branch: `feat/keyboard-manager`. Build 0/0; suite **5929 green** in the two documented partitions
-(5886 + 43); smoke clean. **The command layer is closed** — etaps 4 (tooltips) and 5 (context menus) consume
-it and add no new gestures.
+**Status: ETAPS 1–4 COMPLETE.** Audit accepted · registry (§11) · shortcuts (§12) · tooltips (§14).
+Collision report: §13. Branch: `feat/keyboard-manager`. Build 0/0; suite **5943 green** in the two
+documented partitions (5900 + 43); smoke clean.
+
+**A keyboard gesture is now written down in exactly ONE place** (`CommandCatalog`) and reaches every
+shortcut, tooltip and shortcut-chip from there. **Etap 5 (context menus) is the only one left, and it adds
+no gestures.**
 
 **The shortcut map was ratified by the user on accepting etap 1** — `F3` New · `F4` Refresh ·
 `F5` Execute (Continue in the debugger stays the one accepted contradiction) · `F6` Commit ·
@@ -465,7 +468,7 @@ so `139` items that show nothing today start showing the truth, and cannot drift
 | **1** | Audit (§1–§6) | ✅ **DONE + accepted** |
 | **2** | `CommandDescriptor` / `CommandCatalog` / `CommandRouter` + scope resolution + the §7.6 pinned test + **fix C1** + the `SearchPanel` duplication | ✅ **DONE** — §11 |
 | **3** | The ratified new gestures through the catalog; retire `Alt+F`'s copies (D1); add `Tree` + `Grid` scopes | ✅ **DONE** — §12 |
-| **4** | `{app:CommandTip}` — every gesture-bearing tooltip reads the catalog; strip the ~24 hand-typed suffixes; `Label` joins the descriptor | |
+| **4** | Tooltips + chips read the catalog through `CommandTip`; every hand-typed gesture stripped; guarded by a test | ✅ **DONE** — §14 |
 | **5** | Context menus: styles (§9.2 (a)), then a control only if measured necessary; icons; gestures; all 32 menus | |
 
 One etap per session, each ending build 0/0 + tests green + smoke clean + committable, per the
@@ -715,3 +718,91 @@ exists unused by that toolbar. Either the comment is stale or the binding is not
 binds what the button binds** — that is the correct rule for a shortcut and it keeps the two in step
 whichever way the discrepancy is resolved. Flagged rather than changed: transaction settlement is
 rule-#11 territory and not this sprint's to reinterpret.
+
+---
+
+## 14. Etap 4 — as built
+
+Build 0/0; suite **5943 green** in the two partitions (5900 + 43); smoke clean.
+**A keyboard gesture is now written down in exactly one place.**
+
+### 14.1 ⭐ The etap justified itself before it started
+
+Etap 3 re-bound Format SQL from `Alt+F` to `Ctrl+K`. `UiStrings.ToolbarFormatSqlTooltip` went on reading
+**`"Format SQL · Alt+F"`** — a tooltip confidently teaching a shortcut that no longer existed — with a green
+build and a green suite. That is the whole argument for this etap in one artefact: **a hand-typed gesture does
+not merely duplicate the catalog, it goes stale silently**, which is worse than showing nothing.
+
+### 14.2 The composer, and why the text did NOT move into the catalog
+
+`Commands/CommandTip.cs` is the ONE place a gesture becomes text a user reads:
+
+* `For(id, text)` → `"Compile the procedure · F7"` (and just `text` when the command has no gesture, so no
+  caller has to ask).
+* `Gesture(id)` → `"F7"` alone, for a `TextBlock.shortcut-chip`.
+* `Sentence(id, format)` → the gesture substituted mid-sentence, for prose that names a shortcut.
+* `Format(gesture)` → `Ctrl` → `Shift` → `Alt` then the key, the way Windows writes it.
+
+**The label text stayed in `UiStrings`** and is passed in. Two reasons, both binding: architecture rule #6
+puts every user-visible string there, and **one `CommandId` serves eleven differently-worded Compile
+buttons** ("Compile view (CREATE OR ALTER VIEW)", "Compile package (header then body)", …) — so a single
+`Tooltip` field on the descriptor could not have served them. The catalog owns the *gesture*; `UiStrings`
+owns the *words*.
+
+**⚠ `Format` is deliberately not `KeyGesture.ToString()`**, which spells the raw enum name: `Ctrl+.` would
+have reached the user as **`"Ctrl+OemPeriod"`**. The named-key table covers what EmberTern actually shows and
+falls back to the enum name, which is already right for letters, digits and function keys.
+
+### 14.3 How the migration was made, and why `const` → `static readonly`
+
+~25 members now compose their gesture. Nothing in XAML changed: `x:Static` resolves a `static readonly`
+field exactly as it did a `const`, so the migration is 25 lines in one file instead of edits across 15 views —
+a much smaller blast radius for a change with no intended visual effect. Verified first that none of them is
+used in a `const` expression (attribute argument, `case` label, another `const` initialiser), which is the
+one thing that would have made this unsafe.
+
+Migrated: the 11 Compile tooltips (**new** — `F7` had no tooltip presence at all), Commit `F6`, Rollback
+`Shift+F6`, Close tab `Ctrl+W`, Format SQL `Ctrl+K`, Execute (both `F5` preview and `Shift+F5` all rows),
+Global Search, Quick Fix (tooltip + hover hint), Import Run / Validate / Refresh, Script Run, the nine
+debugger toolbar tooltips, Save, Evaluate, both shortcut **chips**, and three **prose** messages that name a
+key mid-sentence (the two debugger session-ended lines, the Session Manager analyze tip, the Harness Log
+empty state) — those went through `Sentence`, because a trailing `· key` does not read inside a sentence.
+
+### 14.4 A gesture shown on a button that cannot use it would be a lie
+
+Only **`Global`- and `Tab`-scoped** commands got their gesture into a tooltip. The **focus-scoped** ones
+(`F3`/`F4`/`F8` in the tree, `F3`/`F8` in a grid) did **not**: their buttons live in the toolbar, outside the
+scope where the key works, and a tooltip promising `F3` on a toolbar button that ignores `F3` teaches the
+user something false. Those gestures belong in the **context menu** of the surface that owns them — etap 5,
+where the user is already in that scope. The collection `+` / `−` toolbar buttons are the concrete case: same
+commands as `F3`/`F8`, deliberately no gesture shown.
+
+### 14.5 The guard — enforced, not remembered
+
+`UiStringsShortcutSourceTests` (14 tests) makes the rule structural.
+
+**⚠ It keys on `const` vs `static readonly`, not on the runtime text — and it has to.** A composed string
+legitimately *contains* `" · F7"` at run time, so its value proves nothing about where the gesture came from.
+What separates them is that **a `const` is a literal by definition**. So the rule is: no `const` in
+`UiStrings` may contain gesture-shaped text.
+
+**Verified by planting a violation** — a temporary `const` reading `"Do something · Ctrl+J"` made the test
+fail and name the offender, then was reverted. A guard nobody has seen fail is a guard nobody knows works.
+
+Three exemptions, each with its reason in the test (and a second test that fails if an exemption goes stale —
+names a member that no longer exists, or one that no longer contains a gesture):
+
+| Constant | Why the gesture is not a catalog command |
+|---|---|
+| `ImportCancelTooltip` (`Esc`) | `Escape` is a universal dismiss owned by every popup, dialog and filter box; declaring it would invent collisions with all of them. |
+| `ImportSourceUseClipboardTooltip` (`Ctrl+V`) | Means "re-read the clipboard SOURCE" — paste semantics that must yield to a focused text box, so it stayed a local handler. |
+| `FieldEditEditTooltip` (`F2`) | The fields grid's local `DataGrid.KeyBinding`. `F2` was not in the ratified set, so no `CommandId` was invented for it. |
+
+Also verified: **no gesture is hardcoded anywhere outside `UiStrings`** — no literal `ToolTip.Tip` in XAML
+carries one, and no code-behind composes one. The remaining hardcoded gestures in the app are the three
+`MenuItem.InputGesture="Insert|F2|Delete"` attributes on the fields grid, which are etap 5's business.
+
+### 14.6 Still not on the descriptor
+
+`Label` and `IconKey` remain absent. Etap 4 needed neither: the tooltip text comes from `UiStrings`, and a
+menu label is a different (shorter) string that etap 5 will introduce where it is consumed.
