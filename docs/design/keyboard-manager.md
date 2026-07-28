@@ -1,12 +1,11 @@
 # Keyboard Manager & Context Menu UX — sprint design document
 
-**Status: ETAPS 1–4 COMPLETE.** Audit accepted · registry (§11) · shortcuts (§12) · tooltips (§14).
-Collision report: §13. Branch: `feat/keyboard-manager`. Build 0/0; suite **5943 green** in the two
-documented partitions (5900 + 43); smoke clean.
+**Status: SPRINT COMPLETE — ETAPS 1–5.** Audit accepted · registry (§11) · shortcuts (§12) ·
+tooltips (§14) · context menus (§15). Collision report: §13. Branch: `feat/keyboard-manager`.
+Build 0/0; suite **5948 green** in the two documented partitions (5900 + 48); smoke clean.
 
-**A keyboard gesture is now written down in exactly ONE place** (`CommandCatalog`) and reaches every
-shortcut, tooltip and shortcut-chip from there. **Etap 5 (context menus) is the only one left, and it adds
-no gestures.**
+**A keyboard gesture is written down in exactly ONE place** (`CommandCatalog`) and reaches every shortcut,
+tooltip, shortcut-chip and context menu from there.
 
 **The shortcut map was ratified by the user on accepting etap 1** — `F3` New · `F4` Refresh ·
 `F5` Execute (Continue in the debugger stays the one accepted contradiction) · `F6` Commit ·
@@ -469,7 +468,7 @@ so `139` items that show nothing today start showing the truth, and cannot drift
 | **2** | `CommandDescriptor` / `CommandCatalog` / `CommandRouter` + scope resolution + the §7.6 pinned test + **fix C1** + the `SearchPanel` duplication | ✅ **DONE** — §11 |
 | **3** | The ratified new gestures through the catalog; retire `Alt+F`'s copies (D1); add `Tree` + `Grid` scopes | ✅ **DONE** — §12 |
 | **4** | Tooltips + chips read the catalog through `CommandTip`; every hand-typed gesture stripped; guarded by a test | ✅ **DONE** — §14 |
-| **5** | Context menus: styles (§9.2 (a)), then a control only if measured necessary; icons; gestures; all 32 menus | |
+| **5** | Context menus: one shared style set (a control proved unnecessary — measured), icons, catalog gestures | ✅ **DONE** — §15 |
 
 One etap per session, each ending build 0/0 + tests green + smoke clean + committable, per the
 project's session protocol.
@@ -806,3 +805,136 @@ carries one, and no code-behind composes one. The remaining hardcoded gestures i
 
 `Label` and `IconKey` remain absent. Etap 4 needed neither: the tooltip text comes from `UiStrings`, and a
 menu label is a different (shorter) string that etap 5 will introduce where it is consumed.
+
+---
+
+## 15. Etap 5 — as built
+
+Build 0/0; suite **5948 green** in the two documented partitions (5900 + 48); smoke clean.
+Scope was UX only: **no new gesture, no change to command logic.**
+
+### 15.1 ⭐ The measurement that decided the shape — no custom control needed
+
+§9.2 promised to check whether a style could do the job before building a control, and the answer was
+decisive. A headless probe of FluentTheme's **realized context-menu** `MenuItem` template found it already
+provides every part the design calls for:
+
+| Part | What it gives us |
+|---|---|
+| `ContentControl#PART_IconPresenter` | the **icon column, left** |
+| `ContentPresenter#PART_HeaderPresenter` | the label |
+| `TextBlock#PART_InputGestureText` | the **gesture column, right** |
+| `Path#PART_ChevronPath` | the submenu arrow |
+| `ContentControl#PART_ToggleIconPresenter` | the check mark |
+
+Three further measurements settled the rest:
+
+1. **Alignment is already correct.** The header presenter starts at **x = 28 for every item**, with or
+   without an icon — the icon column keeps its width when empty. Nothing had to be forced.
+2. **`MenuItem.InputGesture` is display-only.** Pressing the gesture with such an item realized invoked
+   nothing (0 clicks on `F8`). So it is safe to set on every item, and the item's `Command` stays the single
+   path to the action. (This also retroactively explains why the three pre-existing `InputGesture` items on
+   the fields grid never double-fired alongside their `DataGrid.KeyBindings`.)
+3. **The bad look was all styleable values**, not template structure: `Padding` was `11,4,11,7`
+   (**asymmetric** — 4 top against 7 bottom) at `FontSize` 14, giving 27px rows.
+
+**⚠ The first measurement was wrong and would have concluded the opposite.** The probe initially built a
+`MenuItem` inside a `Menu` — a menu-*bar* item — whose template has **no icon and no gesture part** at all.
+Avalonia gives context/submenu items a different `ControlTheme`. Had that reading stood, the etap would have
+started building a control the framework did not need.
+
+**So "one shared context menu for the whole application" ships as one shared style set** in
+`ControlStyles.axaml`. That is not a lesser version of the request — it is a **stronger** guarantee: a style
+applies to every `ContextMenu` with no opt-in, whereas a custom control would have to be adopted by 32 menus
+and a 33rd could quietly forget. It would also have had to re-implement submenus, check marks, keyboard
+navigation and disabled states to arrive where FluentTheme already is.
+
+### 15.2 What the style changes
+
+* **Rows: 27px → 22px.** `FontSize` 14 → **12**, symmetric `Padding` `10,3`, `MinHeight` 22 so an icon-less
+  row is exactly as tall as one with an icon.
+* **Hover / selection** painted from `HoverOverlayBrush` / `SelectionBrush` instead of FluentTheme's
+  `SystemAccentColor` (the brown/orange that styling rule #6 calls out). Applied on the measured
+  `PART_LayoutRoot` rather than by guessing FluentTheme's resource-key names — a part name is a fact, a key
+  name would have been a guess.
+* **The gesture column** subordinate: `SubtleForegroundBrush`, 11px, with a 24px minimum gap from the label.
+* **A disabled row stays readable** (`SubtleForegroundBrush` at 0.75 rather than Fluent's near-invisible
+  fade) — the grid menu's "Copy as UPDATE" carries a tooltip explaining *why* it is unavailable, and that
+  reason has to be legible for the affordance to work at all.
+* **Separators** a hairline spanning the menu with equal air above and below, scoped to menus so the
+  `Separator` used in toolbars is untouched.
+* Menu chrome (`ElevatedPanelBrush`, 1px border, 4px radius, 4px top/bottom band) from the shared style.
+
+**⚠ The rule this creates, and it is the same one Seam 4 learned the hard way with `MessageBanner`:** a host
+sets `Header`, `Command`, `Icon`, `InputGesture`, `IsVisible`/`IsEnabled` — **never** `Background`,
+`Padding`, `FontSize` or `Foreground`. A local value outranks a style setter, which is exactly how the banner
+grew six per-host variants.
+
+### 15.3 Icons and gestures, from the places that already own them
+
+Two markup extensions in `MenuMarkup.cs`, in the root `EmberTern.App` namespace beside
+`IconGeometryConverter` so every view reaches them through the `app:` prefix it already declares:
+
+* **`Icon="{app:MenuIcon Icon.Trash}"`** — resolves a key from the existing `IconGeometries.axaml` through
+  the one `IconGeometryConverter` and renders it with the one `SvgIcon`. No second icon mechanism.
+  Colour **inherits the menu item's foreground** by default, so a menu reads as one calm block and follows
+  selection/disabled states for free. `Brush=DangerIconBrush` is the deliberate exception for destructive
+  actions — keeping `DangerIconBrush` in the job Seam 4 gave it — bound as a **dynamic** resource so it still
+  re-colours on a theme toggle.
+* **`InputGesture="{app:CommandGesture Compile}"`** — the gesture from `CommandCatalog`, so a re-bind reaches
+  every menu offering that command and no menu can drift.
+
+**Coverage: 130 of 133 XAML menu items now carry an icon** (127 via `{app:MenuIcon}` + 3 inline), and
+**21 carry a catalog gesture**. The three without are the trigger-group `Visible` / `All` **scope
+qualifiers**, where the parent Activate/Deactivate item carries the mark and a duplicate on each child would
+be noise. The editor's C#-built menu got the same treatment through the same extensions — that menu being
+built in code is an implementation detail, not a licence to look different.
+
+**The Tree-scope gestures finally appear where they work**: `F3` on New, `F4` on Refresh, `F8` on Delete, in
+the Object Explorer's own menu — which is precisely what etap 4 §14.4 held them back for.
+
+### 15.4 Three new icons, in the existing idiom
+
+`Icon.Redo`, `Icon.Cut`, `Icon.Paste` — the marks the editor's menu needed and the app did not have. Redo is
+**Undo mirrored**, so the pair reads as a pair; Cut and Paste are the Lucide scissors and clipboard. Same
+24×24, 2px-stroke, round-cap authoring as every other geometry, canonical `.svg` under
+`Assets/Icons/Actions/` and mirrored into `IconGeometries.axaml` (the D15.2 rule). Everything else reused an
+existing mark. `Select All` deliberately has none — no Lucide mark fits, and an empty icon column still holds
+the alignment.
+
+### 15.5 ⭐ The guard caught a real defect on its first run
+
+`EveryMenuIconKeyUsedInAViewResolvesToAGeometry` **scans the source `.axaml` files** for every key passed to
+`{app:MenuIcon}` and asserts each resolves. It is written that way because the failure mode is invisible: the
+extension returns null for an unknown key (deliberately — a typo must not take down a menu), so a mistyped
+key yields one item with no icon and nothing else wrong. Nobody spots one missing glyph among 130.
+
+It immediately failed on **`Icon.KeyRound`** — a plausible-looking key that does not exist (the geometry is
+`Icon.Index`). That defect was already in the working tree and would have shipped as a silently icon-less
+"Create foreign key". Scanning the source, rather than checking a hand-maintained list, is what makes it
+exhaustive for menus added later too.
+
+A second guard, `NoMenuItemTypesItsGestureByHand`, closes in XAML the hole etap 4 closed in `UiStrings`: an
+`InputGesture` literal is rejected unless it is one of the three fields-grid values (`Insert` / `F2` /
+`Delete`), which are local `DataGrid.KeyBindings` rather than catalog commands. Allowed **by value**, so a
+fourth literal cannot slip in.
+
+### 15.6 ⚠ A test-infrastructure mistake I made and fixed, worth knowing
+
+The new tests first lived in their own class with `IClassFixture<HeadlessSessionFixture>`. **xunit creates a
+class fixture once per test class**, so the process then had **two** headless sessions — precisely the state
+gotcha #94/#226 forbids — and the suite began hanging inside the new class. `--blame-hang` named it.
+
+Fixed by making the fixture a **collection fixture** (`HeadlessCollection`), which is shared across classes
+and serialises them — the right mechanism for a single UI thread — and the rule is now written on the
+fixture: *any test needing a headless session joins that collection, never adds its own class fixture.* The
+tests were then consolidated into the existing `ConnectionExpandBindingProbe`, keeping the documented "one
+headless class" arrangement that the two-partition workflow depends on.
+
+**⚠ And it produced a genuinely new datum for the long-standing full-suite hang — which stays out of scope,
+but this reframes it.** Running the main partition while the new class was separate made the hang appear in
+**`ContextMenuPresentationTests.TheSharedStyle_…`**, at 5901 of 5902 tests. Four earlier observations had all
+named `ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`, and the natural reading was that
+that test is the problem. It is not: **the name follows the POSITION — the last headless test in a long
+run — not the test itself.** So the suspect is session teardown / dispatcher-loop shutdown, not that
+assertion. Whoever picks up the infrastructure task should start there.

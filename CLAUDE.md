@@ -33,7 +33,7 @@ verbatim, in the archive below.
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **ACTIVE — the Keyboard Manager & Context Menu UX sprint's one document.** The full command/shortcut/menu **audit** (every gesture that exists, duplications, collisions, what is missing), the user's **ratified shortcut map and architecture decisions**, the `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design with the reasons the obvious alternatives do not work here, the **as-built for each etap** (§11 = etap 2), and the etap order. | When working on `EmberTern.App/Commands`, any shortcut, tooltip gesture, or context menu. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (271 entries, #1–#284), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (273 entries, #1–#286), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -289,10 +289,39 @@ noted.
 
 ## Current state
 
-- **⌨ CURRENT SPRINT — KEYBOARD MANAGER & CONTEXT MENU UX. ETAPS 1–4 DONE (2026-07-28), etaps 1–3
-  user-accepted. Branch `feat/keyboard-manager`.** Build 0/0; suite **5943 green** in the two documented
-  partitions (5900 + 43); smoke clean. **Etap 5 (context menus) is the only one left, and it adds no
-  gestures.**
+- **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — SPRINT COMPLETE, ETAPS 1–5 (2026-07-28); etaps 1–4 user-accepted,
+  etap 5 awaits visual QA. Branch `feat/keyboard-manager`, not yet pushed.** Build 0/0; suite **5948 green**
+  in the two documented partitions (5900 + 48); smoke clean.
+  **⭐ Etap 5 — context menus. A CUSTOM CONTROL PROVED UNNECESSARY, and that was measured.** FluentTheme's
+  **context-menu** `MenuItem` template already provides `PART_IconPresenter` (icons left),
+  `PART_InputGestureText` (gestures right), the submenu chevron and the check mark — **and the icon column
+  keeps its width when empty** (header presenter at x=28 either way), so labels already align. So "one shared
+  menu control for the whole app" ships as **one shared style set** in `ControlStyles.axaml`, which is the
+  *stronger* guarantee: a style needs no opt-in, while a control would have to be adopted by 32 menus and a
+  33rd could forget. Rows **27px → 22px** (FontSize 14→12, symmetric padding — Fluent's was `11,4,11,7`),
+  hover/selection off `SystemAccentColor` onto the app palette, subordinate gesture column, readable disabled
+  rows, real separators. **130 of 133 menu items carry an icon, 21 carry a catalog gesture**; the 3 without
+  are trigger-scope qualifiers whose parent carries the mark. Two markup extensions in `MenuMarkup.cs`:
+  `Icon="{app:MenuIcon Icon.Trash}"` (existing geometries + the one `SvgIcon`; `Brush=DangerIconBrush` the
+  destructive exception, bound dynamically) and `InputGesture="{app:CommandGesture Compile}"` (from the
+  catalog). Three new icons only — `Icon.Redo` (Undo mirrored), `Icon.Cut`, `Icon.Paste`.
+  **⚠ The rule the style creates, and it is Seam 4's `MessageBanner` lesson again:** a menu host sets
+  `Header`/`Command`/`Icon`/`InputGesture`/`IsVisible` — **never** `Background`/`Padding`/`FontSize`/
+  `Foreground`. A local value outranks a style setter, which is how the banner grew six per-host variants.
+  **⚠ Two measurement traps recorded as gotchas #285/#286.** (1) Avalonia templates a **menu-BAR** `MenuItem`
+  differently from a **context-menu** one; the first probe measured the bar item, reported *no icon or gesture
+  part*, and would have justified building a control the framework did not need. A negative measurement is the
+  dangerous kind. `MenuItem.InputGesture` is also **display-only** (measured — safe on every item, no
+  double-fire). (2) `IClassFixture` creates one fixture **per class**, so a second headless test class
+  silently produced a **second** `HeadlessUnitTestSession` (banned by #94/#226) and hung the suite —
+  now an `ICollectionFixture` (`HeadlessCollection`), with the rule written on the fixture: join the
+  collection, never add your own class fixture.
+  **⚠ NEW, LOAD-BEARING DATUM FOR THE FULL-SUITE HANG (still out of scope, but it reframes four earlier
+  observations):** with a different headless class running last, the hang reported **that** class's last
+  test — at 5901 of 5902 completed, the identical shape. So the name tracks the **POSITION (the last headless
+  test in a long run), not the test**: the four consistent sightings of
+  `CompletionRow_HighlightsMatchedPrefix` were an artefact of ordering. The suspect is session teardown /
+  dispatcher-loop shutdown. Start there, not at that assertion.
   **⭐ Etap 4 — a keyboard gesture is now written down in exactly ONE place.** `Commands/CommandTip.cs` is the
   ONE composer (`For` / `Gesture` / `Sentence` / `Format`); ~25 `UiStrings` members became `static readonly`
   and compose their gesture from the catalog. **The etap justified itself before it started:** etap 3 re-bound
@@ -393,12 +422,8 @@ noted.
   **⚠ The audit's A-10 is ONE table row**, not a design — no scope list, no resolver, no `CommandId` shape.
   The richer "sketch" was written during the previous sprint's triage. Its diagnosis is right; there was
   nothing to copy.
-  **Etap 5 next — the last one** — all 32 context menus: **there is currently no `MenuItem`/`ContextMenu`
-  style in the app at all**, 138 of 142 items show no shortcut and none has an icon. Style first (the file
-  that has no menu selectors), a custom control **only if measured necessary** — and if one is built, the
-  whole app uses it and nothing else, per the user's instruction. Gestures come from the catalog via
-  `CommandTip`, and `Label` joins the descriptor here (deliberately absent until consumed, #233). **It adds
-  no gestures.** The focus-scoped `F3`/`F4`/`F8` finally get surfaced here, which is where they belong (§14.4).
+  ⚠ The **`MenuItem`/`ContextMenu` style gap is now closed** — that file had no menu selectors at all, which
+  is why menus looked untouched next to the rest of the app.
   ⚠ Still relevant: the **app-wide UX sprint** (density) is backlogged and owns *control heights* — "smaller
   typography + icons on the left in the context menu" is this sprint's, a global control-height change is not.
 - **🛡 ARCHITECTURE HARDENING / PRODUCT SAFETY SPRINT — CLOSED AND USER-ACCEPTED (2026-07-27).** Build 0/0,
@@ -2229,11 +2254,24 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5943 as of 2026-07-28
-  (`feat/keyboard-manager`, after etap 4; 5900 on `master`)** — green in the two documented partitions
-  (**5900 + 43**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5948 as of 2026-07-28
+  (`feat/keyboard-manager`, after etap 5; 5900 on `master`)** — green in the two documented partitions
+  (**5900 + 48**).
+  **⭐⭐ 2026-07-28, Keyboard Manager etap 5 — THE FOUR "SAME TEST" OBSERVATIONS BELOW WERE AN ARTEFACT OF
+  ORDERING. READ THIS BEFORE TRUSTING THEM.** Etap 5 briefly had a SECOND headless test class, and running the
+  partition in which *it* ran last moved the reported hang to **that class's** last test
+  (`ContextMenuPresentationTests.TheSharedStyle_…`, at 5901 of 5902 completed) — the identical shape.
+  So **the reported name tracks the POSITION — the last headless test in a long run — not the test.** Four
+  consistent sightings of `CompletionRow_HighlightsMatchedPrefix` corroborated each other only because that
+  test happened to be last in the only class that owned a session; they are not four independent witnesses.
+  **The suspect is session teardown / dispatcher-loop shutdown**, and the investigation should start there
+  rather than at that assertion. (Etap 5 also fixed a *different*, self-inflicted hang: the second class used
+  `IClassFixture`, which creates one fixture PER CLASS and so produced a second `HeadlessUnitTestSession` —
+  banned by #94/#226. The fixture is now an `ICollectionFixture`; gotcha #286.) Still its own infrastructure
+  task; do not detour a sprint etap into it.
   **⚠ 2026-07-28, Keyboard Manager etap 2 — the hang REPRODUCED A THIRD TIME, and named the SAME test for
-  the third time.** A single full-suite run hung; `--blame-hang` reported **5868 of 5869 tests
+  the third time** *(see the reframing above — the name was positional)*. A single full-suite run hung;
+  `--blame-hang` reported **5868 of 5869 tests
   `Completed="True"`** and the one that was not as
   **`ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`** — again. **Three independent
   observations across three sprints now agree on the name**, and the count says it hangs on the *last* test
@@ -3263,7 +3301,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (271 entries, #1–#284), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (273 entries, #1–#286), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

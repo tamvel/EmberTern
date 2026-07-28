@@ -222,9 +222,9 @@
                 ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="11">
         <DataGrid.ContextMenu>
           <ContextMenu>
-            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuDisconnect}" Command="{Binding DisconnectCommand}" />
+            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuDisconnect}" Icon="{app:MenuIcon Icon.Unplug, Brush=DangerIconBrush}" Command="{Binding DisconnectCommand}" />
             <Separator />
-            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuCopy}" Command="{Binding CopyCommand}" />
+            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuCopy}" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
           </ContextMenu>
         </DataGrid.ContextMenu>
         <DataGrid.Columns>

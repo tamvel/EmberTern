@@ -416,7 +416,7 @@
                            Foreground="{DynamicResource ForegroundBrush}">
               <ae:TextEditor.ContextMenu>
                 <ContextMenu>
-                  <MenuItem Header="{x:Static app:UiStrings.DebuggerRunToCursorMenu}"
+                  <MenuItem Header="{x:Static app:UiStrings.DebuggerRunToCursorMenu}" Icon="{app:MenuIcon Icon.RunToCursor}" InputGesture="{app:CommandGesture DebuggerRunToCursor}"
                             IsEnabled="{Binding IsPaused}"
                             Click="OnRunToCursorClick" />
                 </ContextMenu>
@@ -482,7 +482,7 @@
                                      ContextMenu's popup namescope) to the VM's AddDataBreakpointCommand. -->
                                 <Border.ContextMenu>
                                   <ContextMenu>
-                                    <MenuItem Header="{x:Static app:UiStrings.DebuggerDataBreakpointMenu}"
+                                    <MenuItem Header="{x:Static app:UiStrings.DebuggerDataBreakpointMenu}" Icon="{app:MenuIcon Icon.BreakException}"
                                               Click="OnBreakWhenChangesClick" />
                                   </ContextMenu>
                                 </Border.ContextMenu>

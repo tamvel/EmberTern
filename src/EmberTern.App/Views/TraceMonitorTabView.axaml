@@ -234,19 +234,19 @@
                   GridLinesVisibility="Horizontal" FontSize="11">
           <DataGrid.ContextMenu>
             <ContextMenu>
-              <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Click="OnCopyCellClick" />
-              <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Click="OnCopyRowClick" />
-              <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Click="OnCopyRowWithHeadersClick" />
-              <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Click="OnCopyAllWithHeadersClick" />
-              <MenuItem Header="{x:Static app:UiStrings.TraceDetailCopySql}" Click="OnCopySqlClick" />
-              <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Click="OnExportClick" />
+              <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnCopyCellClick" />
+              <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnCopyRowClick" />
+              <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnCopyRowWithHeadersClick" />
+              <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnCopyAllWithHeadersClick" />
+              <MenuItem Header="{x:Static app:UiStrings.TraceDetailCopySql}" Icon="{app:MenuIcon Icon.Query}" Click="OnCopySqlClick" />
+              <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnExportClick" />
               <Separator />
               <!-- Filter-from-cell verbs → add a condition to the shared grid filter (gotcha #99:
                    the clicked cell is resolved via CellPointerPressed). No-op on non-filterable
                    columns (# / gutter, which carry no filter-column Tag). -->
-              <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnFilterByValueClick" />
-              <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnExcludeValueClick" />
-              <MenuItem Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnFilterContainsClick" />
+              <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnFilterByValueClick" />
+              <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnExcludeValueClick" />
+              <MenuItem Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnFilterContainsClick" />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <DataGrid.Columns>

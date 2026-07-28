@@ -86,10 +86,10 @@
                        (OnMemberDebugClick → RequestDebugMember, kind-aware); one item per debuggable kind. -->
                   <Border.ContextMenu>
                     <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}" Icon="{app:MenuIcon Icon.Crosshair}"
                                 Click="OnMemberDebugClick"
                                 IsVisible="{Binding IsProcedure}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
+                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}" Icon="{app:MenuIcon Icon.Crosshair}"
                                 Click="OnMemberDebugClick"
                                 IsVisible="{Binding IsFunction}" />
                     </ContextMenu>

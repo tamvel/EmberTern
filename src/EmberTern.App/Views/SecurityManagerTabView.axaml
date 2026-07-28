@@ -283,11 +283,11 @@
                     AutoGenerateColumns="False">
             <DataGrid.ContextMenu>
               <ContextMenu>
-                <MenuItem Header="{x:Static app:UiStrings.SecurityRowGrantAll}"
+                <MenuItem Header="{x:Static app:UiStrings.SecurityRowGrantAll}" Icon="{app:MenuIcon Icon.Check}"
                           Command="{Binding Privileges.SelectedRow.GrantAllCommand}" />
-                <MenuItem Header="{x:Static app:UiStrings.SecurityRowGrantAllOption}"
+                <MenuItem Header="{x:Static app:UiStrings.SecurityRowGrantAllOption}" Icon="{app:MenuIcon Icon.Check}"
                           Command="{Binding Privileges.SelectedRow.GrantAllWithOptionCommand}" />
-                <MenuItem Header="{x:Static app:UiStrings.SecurityRowRevokeAll}"
+                <MenuItem Header="{x:Static app:UiStrings.SecurityRowRevokeAll}" Icon="{app:MenuIcon Icon.X, Brush=DangerIconBrush}"
                           Command="{Binding Privileges.SelectedRow.RevokeAllCommand}" />
               </ContextMenu>
             </DataGrid.ContextMenu>

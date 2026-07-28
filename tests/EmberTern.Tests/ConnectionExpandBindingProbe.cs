@@ -18,6 +18,7 @@ using AvaloniaEdit;
 using EmberTern.App;
 using EmberTern.App.Commands;
 using EmberTern.App.Completion;
+using EmberTern.App.Controls;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
@@ -26,6 +27,8 @@ using EmberTern.Core.Sql.Language.QuickInfo;
 using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql.Language.Signatures;
 using EmberTern.Firebird;
+using System.Text.RegularExpressions;
+using Avalonia.Controls.Presenters;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -53,6 +56,16 @@ namespace EmberTern.Tests;
 /// instances across threads, so any real KeyDown into an editor dies with "The calling thread cannot access
 /// this object because a different thread owns it" — regardless of how the key is injected.
 /// </para>
+/// <para>
+/// ⚠ <b>It is a COLLECTION fixture, not a class fixture, and that distinction is the whole guarantee.</b>
+/// xunit creates an <c>IClassFixture</c> once <i>per test class</i>, so the moment a second class wanted a
+/// headless session the process had TWO — which is precisely the state "ONE session" forbids. It was not
+/// theoretical: adding <c>ContextMenuPresentationTests</c> as an <c>IClassFixture</c> consumer made the
+/// full-suite run hang inside it, and <c>--blame-hang</c> named it. An <c>ICollectionFixture</c> is shared
+/// across every class in the collection and also serialises them, which is what a single UI thread needs.
+/// <b>Any new test that needs a headless session joins <see cref="HeadlessCollection"/> — never adds its own
+/// <c>IClassFixture&lt;HeadlessSessionFixture&gt;</c>.</b>
+/// </para>
 /// </summary>
 public sealed class HeadlessSessionFixture : IDisposable
 {
@@ -67,7 +80,18 @@ public sealed class HeadlessSessionFixture : IDisposable
     }
 }
 
-public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSessionFixture>
+/// <summary>
+/// The one collection every headless-UI test class belongs to, so they share a single
+/// <see cref="HeadlessSessionFixture"/> — one session, one UI thread, for the whole process.
+/// </summary>
+[CollectionDefinition(Name)]
+public sealed class HeadlessCollection : ICollectionFixture<HeadlessSessionFixture>
+{
+    public const string Name = "headless-avalonia";
+}
+
+[Collection(HeadlessCollection.Name)]
+public sealed class ConnectionExpandBindingProbe
 {
     private readonly HeadlessUnitTestSession SharedSession;
     private readonly ITestOutputHelper _out;
@@ -2751,5 +2775,195 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
                 }
             }
         }, CancellationToken.None);
+    }
+    // ══════ Context-menu presentation (Keyboard Manager etap 5) ══════════════════════════════════ 
+
+    // ⭐ The one that matters most, because its failure mode is INVISIBLE: {app:MenuIcon} returns null for an
+    // unknown geometry key (deliberately — a typo must not take down a menu), so a mistyped key yields a
+    // menu item with no icon and nothing else wrong. Nobody notices one missing glyph among a hundred.
+    // So: every key any view actually passes to {app:MenuIcon} must resolve to a real geometry.
+    [Fact]
+    public async System.Threading.Tasks.Task EveryMenuIconKeyUsedInAViewResolvesToAGeometry()
+    {
+        var keys = MenuIconKeysUsedInViews();
+        Assert.NotEmpty(keys); // the scan itself must not silently find nothing
+
+        var unresolved = new List<string>();
+        await SharedSession.Dispatch(() =>
+        {
+            foreach (var key in keys)
+            {
+                if (new MenuIconExtension(key).ProvideValue() is not SvgIcon { Data: not null })
+                {
+                    unresolved.Add(key);
+                }
+            }
+        }, CancellationToken.None);
+
+        _out.WriteLine($"{keys.Count} distinct MenuIcon keys used across the views:"
+                       + Environment.NewLine + string.Join(", ", keys));
+
+        Assert.True(unresolved.Count == 0,
+            "These geometry keys are passed to {app:MenuIcon} but resolve to nothing, so those menu items "
+            + "show no icon and nothing fails: " + string.Join(", ", unresolved));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task MenuIcon_InheritsForegroundByDefault_AndTakesAThemeBrushWhenAsked()
+    {
+        await SharedSession.Dispatch(() =>
+        {
+            // Default: no local Foreground, so the icon follows the menu item's own colour — which is what
+            // makes a menu read as one calm block and gives selected/disabled states for free.
+            var plain = (SvgIcon)new MenuIconExtension("Icon.Copy").ProvideValue()!;
+            Assert.False(plain.IsSet(TemplatedControl.ForegroundProperty));
+
+            // The destructive exception, bound as a DYNAMIC resource so it still re-colours on theme toggle.
+            var danger = (SvgIcon)new MenuIconExtension("Icon.Trash") { Brush = "DangerIconBrush" }
+                .ProvideValue()!;
+            var host = new ContentControl { Content = danger };
+            var window = new Window { Width = 100, Height = 100, Content = host };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(danger.Foreground);
+            Assert.IsAssignableFrom<IBrush>(danger.Foreground);
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // The gesture column reads the catalog, so a re-bind reaches every menu offering the command. If this
+    // ever returned null for a declared command, menus would quietly stop showing shortcuts.
+    [Fact]
+    public void CommandGesture_ComesFromTheCatalog()
+    {
+        Assert.Equal(new KeyGesture(Key.F8), new CommandGestureExtension(CommandId.DeleteObject).ProvideValue());
+        Assert.Equal(new KeyGesture(Key.F3), new CommandGestureExtension(CommandId.NewObject).ProvideValue());
+        Assert.Equal(new KeyGesture(Key.F4), new CommandGestureExtension(CommandId.RefreshMetadata).ProvideValue());
+
+        // A command with no declared gesture leaves the column empty rather than inventing one.
+        Assert.Null(new CommandGestureExtension((CommandId)(-1)).ProvideValue());
+    }
+
+    // The shared style IS the app's menu control. If it stopped applying, every menu would silently revert to
+    // FluentTheme's 27px rows, 14px type and SystemAccentColor hover — the exact look this etap removed.
+    [Fact]
+    public async System.Threading.Tasks.Task TheSharedStyle_AppliesToEveryContextMenuWithoutOptIn()
+    {
+        var log = new StringBuilder();
+
+        await SharedSession.Dispatch(() =>
+        {
+            var item = new MenuItem
+            {
+                Header = "Delete",
+                Icon = new MenuIconExtension("Icon.Trash").ProvideValue(),
+                InputGesture = new CommandGestureExtension(CommandId.DeleteObject).ProvideValue(),
+            };
+            var menu = new ContextMenu { Items = { item } };
+            var host = new Border { Width = 120, Height = 30, ContextMenu = menu };
+            var window = new Window { Width = 300, Height = 200, Content = new StackPanel { Children = { host } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            menu.Open(host);
+            Dispatcher.UIThread.RunJobs();
+
+            log.AppendLine($"menu: fontSize={menu.FontSize} padding={menu.Padding} border={menu.BorderThickness}");
+            log.AppendLine($"item: fontSize={item.FontSize} padding={item.Padding} "
+                           + $"minHeight={item.MinHeight} height={item.Bounds.Height}");
+
+            // Density — the whole point of the etap's typography brief.
+            Assert.Equal(12d, item.FontSize);
+            Assert.Equal(22d, item.MinHeight);
+            Assert.Equal(new Avalonia.Thickness(10, 3), item.Padding);
+            Assert.Equal(12d, menu.FontSize);
+
+            // The chrome comes from the shared style, so a host never has to (and must never) set it.
+            Assert.Equal(new Avalonia.Thickness(1), menu.BorderThickness);
+            Assert.NotNull(menu.Background);
+
+            // The gesture really reached the template's own column, not a hand-built TextBlock.
+            var gesture = item.GetVisualDescendants().OfType<TextBlock>()
+                .FirstOrDefault(t => t.Name == "PART_InputGestureText");
+            Assert.NotNull(gesture);
+            Assert.Equal("F8", gesture!.Text);
+            log.AppendLine($"gesture column text = \"{gesture.Text}\", "
+                           + $"fontSize={gesture.FontSize}, foreground set={gesture.Foreground is not null}");
+            Assert.Equal(11d, gesture.FontSize);
+
+            // …and the icon reached the icon column.
+            var icon = item.GetVisualDescendants().OfType<SvgIcon>().FirstOrDefault();
+            Assert.NotNull(icon);
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Etap 4 stopped gestures being typed by hand into UiStrings; this closes the same hole in XAML.
+    // A menu's gesture column must come from {app:CommandGesture}, never from a literal
+    // InputGesture="F7" — a literal is exactly what went stale when Format SQL moved from Alt+F to Ctrl+K.
+    [Fact]
+    public void NoMenuItemTypesItsGestureByHand()
+    {
+        // The fields grid's Insert / F2 / Delete are local DataGrid.KeyBindings, not catalog commands: F2 was
+        // not part of the ratified gesture set, and Insert / Delete belong to that grid alone. They are the
+        // only literals allowed, and they are allowed by VALUE so a fourth one cannot slip in unnoticed.
+        var allowed = new HashSet<string>(StringComparer.Ordinal) { "Insert", "F2", "Delete" };
+
+        var pattern = new Regex(@"InputGesture=""([^""{][^""]*)""", RegexOptions.Compiled);
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(RepositoryRoot(), "src", "EmberTern.App"), "*.axaml",
+                     SearchOption.AllDirectories))
+        {
+            foreach (Match m in pattern.Matches(File.ReadAllText(file)))
+            {
+                if (!allowed.Contains(m.Groups[1].Value))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}: InputGesture=\"{m.Groups[1].Value}\"");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These menu items type a gesture by hand instead of reading it from the catalog via "
+            + "{app:CommandGesture}, so they will go stale when the shortcut is re-bound: "
+            + string.Join(", ", offenders));
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
+
+    // Every distinct key passed to {app:MenuIcon ...} anywhere in the views, read from the source .axaml.
+    // Scanning the source is what makes the check exhaustive: a hand-maintained list would drift the first
+    // time somebody adds a menu item without updating it.
+    private static IReadOnlyList<string> MenuIconKeysUsedInViews()
+    {
+        var root = RepositoryRoot();
+        var pattern = new Regex(@"\{app:MenuIcon\s+([A-Za-z0-9.]+)", RegexOptions.Compiled);
+        var keys = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(root, "src", "EmberTern.App"), "*.axaml", SearchOption.AllDirectories))
+        {
+            foreach (Match m in pattern.Matches(File.ReadAllText(file)))
+            {
+                keys.Add(m.Groups[1].Value);
+            }
+        }
+
+        return keys.ToArray();
+    }
+
+    private static string RepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "EmberTern.slnx")))
+        {
+            dir = dir.Parent;
+        }
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 }

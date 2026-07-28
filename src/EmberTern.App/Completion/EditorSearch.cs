@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using EmberTern.App.Commands;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
@@ -88,17 +89,22 @@ internal static class EditorSearch
 
     private static ContextMenu BuildContextMenu(TextEditor editor)
     {
-        var undo = Item(UiStrings.EditorMenuUndo, () => editor.Undo());
-        var redo = Item(UiStrings.EditorMenuRedo, () => editor.Redo());
-        var cut = Item(UiStrings.EditorMenuCut, () => editor.Cut());
-        var copy = Item(UiStrings.EditorMenuCopy, () => editor.Copy());
-        var paste = Item(UiStrings.EditorMenuPaste, () => editor.Paste());
-        var selectAll = Item(UiStrings.EditorMenuSelectAll, () => editor.SelectAll());
-        var find = Item(UiStrings.EditorMenuFind, () => OpenFind(editor));
-        var replace = Item(UiStrings.EditorMenuReplace, () => OpenReplace(editor));
-        var comment = Item(UiStrings.EditorMenuComment, () => ApplyComment(editor, LineCommentMode.Comment));
-        var uncomment = Item(UiStrings.EditorMenuUncomment, () => ApplyComment(editor, LineCommentMode.Uncomment));
-        var format = Item(UiStrings.EditorMenuFormat, () => FormatEditor(editor));
+        // Icons and gestures come from the same two places every XAML menu uses — the geometry dictionary
+        // and CommandCatalog — because this menu being built in C# is an implementation detail, not a
+        // licence to look different. The platform edit gestures are the well-known ones and are declared
+        // nowhere in the catalog (they belong to the OS/editor, not to EmberTern), so they are named here;
+        // Find / Replace / Format are catalog commands and read their key from it.
+        var undo = Item(UiStrings.EditorMenuUndo, () => editor.Undo(), "Icon.Undo", new KeyGesture(Key.Z, KeyModifiers.Control));
+        var redo = Item(UiStrings.EditorMenuRedo, () => editor.Redo(), "Icon.Redo", new KeyGesture(Key.Y, KeyModifiers.Control));
+        var cut = Item(UiStrings.EditorMenuCut, () => editor.Cut(), "Icon.Cut", new KeyGesture(Key.X, KeyModifiers.Control));
+        var copy = Item(UiStrings.EditorMenuCopy, () => editor.Copy(), "Icon.Copy", new KeyGesture(Key.C, KeyModifiers.Control));
+        var paste = Item(UiStrings.EditorMenuPaste, () => editor.Paste(), "Icon.Paste", new KeyGesture(Key.V, KeyModifiers.Control));
+        var selectAll = Item(UiStrings.EditorMenuSelectAll, () => editor.SelectAll(), gesture: new KeyGesture(Key.A, KeyModifiers.Control));
+        var find = Item(UiStrings.EditorMenuFind, () => OpenFind(editor), "Icon.Search", Gesture(CommandId.EditorFind));
+        var replace = Item(UiStrings.EditorMenuReplace, () => OpenReplace(editor), gesture: Gesture(CommandId.EditorReplace));
+        var comment = Item(UiStrings.EditorMenuComment, () => ApplyComment(editor, LineCommentMode.Comment), "Icon.Comment");
+        var uncomment = Item(UiStrings.EditorMenuUncomment, () => ApplyComment(editor, LineCommentMode.Uncomment), "Icon.Uncomment");
+        var format = Item(UiStrings.EditorMenuFormat, () => FormatEditor(editor), "Icon.Braces", Gesture(CommandId.FormatSql));
 
         var menu = new ContextMenu();
         foreach (var i in new object[]
@@ -129,9 +135,19 @@ internal static class EditorSearch
         return menu;
     }
 
-    private static MenuItem Item(string header, Action action)
+    private static KeyGesture? Gesture(CommandId id) => new CommandGestureExtension(id).ProvideValue();
+
+    private static MenuItem Item(string header, Action action, string? iconKey = null, KeyGesture? gesture = null)
     {
-        var mi = new MenuItem { Header = header };
+        var mi = new MenuItem
+        {
+            Header = header,
+            // Reuses the ONE icon path — the same extension the XAML menus use, so this menu cannot end up
+            // with icons of a different size or colour policy. A null key simply leaves the icon column
+            // empty, which still reserves its width and keeps the labels aligned.
+            Icon = iconKey is null ? null : new MenuIconExtension(iconKey).ProvideValue(),
+            InputGesture = gesture,
+        };
         mi.Click += (_, _) => action();
         return mi;
     }
