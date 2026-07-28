@@ -118,7 +118,37 @@
           <!-- Leading divider between the brand/profile section and the toolbar.
                Same style as the toolbar's own group separators (1px, Margin 4,6). -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
-          <!-- Sidebar collapse / restore toggle — first action after the brand divider. -->
+          <!-- ☰ Application Menu — the FIRST button of the action zone, and deliberately NOT fenced off
+               with a separator of its own: ChatGPT and its peers do not, and it reads better (design §6).
+               The rows are application-level only; anything belonging to the active document stays on the
+               toolbars and context menus.
+
+               It hosts a plain ContextMenu, opened from code on left-click, because that inherits the app's
+               ONE menu appearance (the ContextMenu + MenuItem style set) with nothing added. A MenuFlyout
+               would have needed a second chrome variant for MenuFlyoutPresenter — the trap that grew the
+               MessageBanner six per-host variants. See docs/design/hamburger-navigation.md §2.2. -->
+          <Button Classes="icon"
+                  x:Name="AppMenuButton"
+                  ToolTip.Tip="{x:Static app:UiStrings.AppMenuTooltip}"
+                  Click="OnAppMenuClick">
+            <controls:SvgIcon Data="{StaticResource Icon.Menu}" />
+            <Button.ContextMenu>
+              <!-- Under the button, left edges aligned — a menu button's menu belongs below it, not at the
+                   pointer where a right-click menu belongs. -->
+              <ContextMenu x:Name="AppMenu" Placement="BottomEdgeAlignedLeft">
+                <MenuItem Header="{x:Static app:UiStrings.AppMenuSettings}"
+                          Icon="{app:MenuIcon Icon.Settings}"
+                          IsEnabled="False"
+                          ToolTip.Tip="{x:Static app:UiStrings.AppMenuSettingsUnavailableTooltip}" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.AppMenuExit}"
+                          Icon="{app:MenuIcon Icon.Exit}"
+                          ToolTip.Tip="{x:Static app:UiStrings.AppMenuExitTooltip}"
+                          Click="OnAppMenuExitClick" />
+              </ContextMenu>
+            </Button.ContextMenu>
+          </Button>
+          <!-- Sidebar collapse / restore toggle — immediately after the hamburger, no separator between. -->
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.SidebarToggleTooltip}"
                   Click="OnToggleSidebarClick">

@@ -838,6 +838,23 @@ internal static class UiStrings
 
     public const string ThemeToggleTooltip = "Toggle dark / light theme";
     public const string SidebarToggleTooltip = "Show / hide the connections panel";
+
+    // ── Application Menu (the hamburger) ────────────────────────────────────────────────────────────
+    // A rarely-used ADMINISTRATIVE menu for application-level functions — never commands of the active
+    // document, which stay on the toolbars, the shortcuts and the context menus. Design + the reasoning
+    // for what is deliberately absent: docs/design/hamburger-navigation.md §3–§5.
+    public const string AppMenuTooltip = "Application menu";
+    public const string AppMenuSettings = "Settings…";
+    // Settings is a placeholder for a feature the project has DECIDED on but not built (there is no
+    // settings surface anywhere in EmberTern yet). The row is disabled rather than absent, which works
+    // only because the shared menu style keeps a disabled row readable on purpose — that is how a menu
+    // says "this exists, not yet" instead of hiding it.
+    public const string AppMenuSettingsUnavailableTooltip = "Not available yet";
+    public const string AppMenuExit = "Exit";
+    // No gesture is shown beside Exit: EmberTern does not own Alt+F4, and a gesture typed by hand is the
+    // drift CommandTip exists to prevent (gotcha #284). It routes through the window's ordinary close, so
+    // unsaved work and an open transaction still get their prompts.
+    public const string AppMenuExitTooltip = "Close EmberTern";
     public const string SidebarExpandTooltip = "Show the connections panel";
     public const string ResultsPanelMaximizeTooltip = "Maximize / restore results (double-click the splitter)";
 

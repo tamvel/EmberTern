@@ -129,6 +129,15 @@
        so figure concatenation doesn't carry the previous endpoint. -->
   <StreamGeometry x:Key="Icon.Unplug">M19 5 l3-3 M2 22 l3-3 M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z M7.5 13.5 10 11 M10.5 16.5 13 14 M12 6 l6 6 l2.3-2.3 a2.4 2.4 0 0 0 0-3.4 l-2.6-2.6 a2.4 2.4 0 0 0-3.4 0 Z</StreamGeometry>
 
+  <!-- Application Menu rows (hamburger-navigation §4). Both COMPOSED in the Lucide style rather than taken
+       verbatim, and the .svg sources say so — same precedent as Icon.TablePlus / Icon.Import. -->
+  <!-- Settings: two setting tracks, each with a knob. A gear was rejected: its outline cannot be authored
+       cleanly at a 2px stroke rendered into a 14px menu icon column. -->
+  <StreamGeometry x:Key="Icon.Settings">M11 7 H20 M4 7 A3 3 0 1 1 10 7 A3 3 0 1 1 4 7 Z M4 17 H13 M14 17 A3 3 0 1 1 20 17 A3 3 0 1 1 14 17 Z</StreamGeometry>
+  <!-- Exit: a doorway with an arrow leaving through it. Deliberately not Icon.WindowClose (chrome-side
+       "close this window") and not a power symbol (a near-full arc is the shape that reads worst at 14px). -->
+  <StreamGeometry x:Key="Icon.Exit">M10 4 H6 A2 2 0 0 0 4 6 V18 A2 2 0 0 0 6 20 H10 M15 8 L19 12 L15 16 M19 12 H9</StreamGeometry>
+
   <!-- Transactions -->
   <StreamGeometry x:Key="Icon.RotateCw">M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8M21 3v5h-5</StreamGeometry>
   <StreamGeometry x:Key="Icon.RefreshCw">M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M3 21v-5h5</StreamGeometry>
@@ -141,6 +150,9 @@
   <!-- Panel-left / panel-right (Lucide): rounded-rect (x3 y3 18×18 rx2) + a vertical
        divider at x9 / x15. Drive the sidebar collapse + Saved-Queries-panel toggles. -->
   <StreamGeometry x:Key="Icon.PanelLeft">M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z M9 3 V21</StreamGeometry>
+  <!-- Hamburger (Lucide menu): three rules at y6/12/18. Opens the Application Menu, and it is the FIRST
+       button of the titlebar's action zone — see docs/design/hamburger-navigation.md §6. -->
+  <StreamGeometry x:Key="Icon.Menu">M4 6 H20 M4 12 H20 M4 18 H20</StreamGeometry>
   <!-- Comment selection: message-square with text lines = "add comment". -->
   <StreamGeometry x:Key="Icon.Comment">M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z M7 9 H17 M7 13 H13</StreamGeometry>
   <!-- Uncomment selection: message-square with a slash = "remove comment". -->

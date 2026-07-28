@@ -2900,6 +2900,114 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // ── Application Menu (hamburger-navigation etap 2) ──────────────────────────────────────────────
+    // The MEASUREMENT the design made a precondition (§2.2): whether a plain ContextMenu hosted on a
+    // toolbar Button really is the whole answer, so no MenuFlyoutPresenter chrome variant has to exist.
+    // It also pins the two things a later edit could silently undo: that the hamburger is the FIRST button
+    // of the action zone with NO separator between it and the sidebar toggle (§6, ratified), and that
+    // Settings ships disabled-but-present rather than absent.
+    //
+    // ⚠ What this canNOT measure, and is therefore owed to visual QA: where the menu actually lands on
+    // screen. Headless has no real popup surface, so Placement is asserted as the declared value only.
+    [Fact]
+    public async System.Threading.Tasks.Task ApplicationMenu_IsTheFirstToolbarButton_AndReusesTheSharedMenuChrome()
+    {
+        var log = new StringBuilder();
+
+        await SharedSession.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-appmenu-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(store, service);
+            vm.ReloadConnections();
+
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var button = window.GetVisualDescendants().OfType<Button>()
+                .Single(b => b.Name == "AppMenuButton");
+            var menu = Assert.IsType<ContextMenu>(button.ContextMenu);
+
+            // [1] Placement in the toolbar. The hamburger's parent panel holds the whole action zone, so
+            // "first button" and "nothing between it and the next one" are both readable from the children.
+            var zone = Assert.IsType<StackPanel>(button.Parent);
+            var buttons = zone.Children.OfType<Button>().ToList();
+            Assert.Same(button, buttons[0]);
+
+            int hamburgerAt = zone.Children.IndexOf(button);
+            var next = zone.Children[hamburgerAt + 1];
+            log.AppendLine($"action zone: hamburger at index {hamburgerAt} of {zone.Children.Count}, "
+                           + $"next sibling = {next.GetType().Name}");
+
+            // ⭐ The ratified rule: no separator of its own. The element right after the hamburger is the
+            // sidebar toggle Button — a Border here would be the fence the user rejected.
+            var sidebarToggle = Assert.IsType<Button>(next);
+            Assert.Same(buttons[1], sidebarToggle);
+            Assert.Equal(UiStrings.SidebarToggleTooltip, ToolTip.GetTip(sidebarToggle));
+
+            // [2] Left-click opens it — Avalonia only opens a ContextMenu on right-click by itself, so the
+            // button's own handler is what a menu button needs. A second click closes rather than re-opens.
+            Assert.False(menu.IsOpen);
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(menu.IsOpen, "left-clicking the hamburger opens the application menu");
+
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(menu.IsOpen, "clicking the hamburger again closes the menu");
+
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            // [3] ⭐ The measurement the host decision rested on: the shared ContextMenu + MenuItem style set
+            // applies with NOTHING added for this menu. Same values TheSharedStyle_… pins for every other
+            // menu — so a MenuFlyoutPresenter variant would have been chrome nobody needed.
+            Assert.Equal(new Avalonia.Thickness(1), menu.BorderThickness);
+            Assert.Equal(12d, menu.FontSize);
+            Assert.NotNull(menu.Background);
+            Assert.Equal(PlacementMode.BottomEdgeAlignedLeft, menu.Placement);
+
+            var rows = menu.Items.OfType<MenuItem>().ToList();
+            foreach (var row in rows)
+            {
+                Assert.Equal(22d, row.MinHeight);
+                Assert.Equal(12d, row.FontSize);
+                // Every row carries a mark from the existing icon system, via {app:MenuIcon}.
+                Assert.NotNull(row.Icon);
+            }
+
+            // [4] The rows themselves. Settings is present-but-disabled on purpose — the placeholder for a
+            // decided-and-unbuilt feature — and the shared style is what keeps a disabled row readable.
+            var settings = rows.Single(r => Equals(r.Header, UiStrings.AppMenuSettings));
+            Assert.False(settings.IsEnabled);
+            Assert.Equal(UiStrings.AppMenuSettingsUnavailableTooltip, ToolTip.GetTip(settings));
+
+            var exit = rows.Single(r => Equals(r.Header, UiStrings.AppMenuExit));
+            Assert.True(exit.IsEnabled);
+
+            // A real separator between the two groups, styled by the menu style set (not a stray Border).
+            Assert.Single(menu.Items.OfType<Separator>());
+
+            // [5] ⚠ No gesture column anywhere in this menu, and that is deliberate: Exit's key is Alt+F4,
+            // which EmberTern does not own, so showing it would be a hand-typed gesture (gotcha #284).
+            foreach (var row in rows)
+            {
+                Assert.Null(row.InputGesture);
+            }
+
+            log.AppendLine($"menu: rows={rows.Count} separators={menu.Items.OfType<Separator>().Count()} "
+                           + $"placement={menu.Placement} fontSize={menu.FontSize} border={menu.BorderThickness}");
+
+            menu.Close();
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
     // Etap 4 stopped gestures being typed by hand into UiStrings; this closes the same hole in XAML.
     // A menu's gesture column must come from {app:CommandGesture}, never from a literal
     // InputGesture="F7" — a literal is exactly what went stale when Format SQL moved from Alt+F to Ctrl+K.

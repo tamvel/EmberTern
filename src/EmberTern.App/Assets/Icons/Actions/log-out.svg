@@ -1,0 +1,9 @@
+<!-- COMPOSED in the Lucide style (24x24, 2px stroke, round caps), not a verbatim Lucide file:
+     an open doorway plus an arrow leaving through it = "leave the application".
+     Deliberately NOT Icon.WindowClose (that closes a window chrome-side) and NOT a power symbol
+     (whose near-full arc is the one shape that reads badly at a 14px menu-icon size). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M10 4 H6 A2 2 0 0 0 4 6 V18 A2 2 0 0 0 6 20 H10" />
+  <polyline points="15 8 19 12 15 16" />
+  <line x1="19" x2="9" y1="12" y2="12" />
+</svg>

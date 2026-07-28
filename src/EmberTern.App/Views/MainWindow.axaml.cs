@@ -468,6 +468,28 @@ public partial class MainWindow : Window
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
 
+    // ☰ The Application Menu. Avalonia opens a ContextMenu on RIGHT-click by itself, so the left-click a
+    // menu button needs is opened here — which is also what lets the menu keep the app's one menu
+    // appearance instead of becoming a MenuFlyout with its own chrome (design §2.2).
+    private void OnAppMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.ContextMenu is not { } menu) return;
+
+        // A second click on the button closes it again, rather than re-opening underneath itself.
+        if (menu.IsOpen)
+        {
+            menu.Close();
+            return;
+        }
+
+        menu.Open(button);
+    }
+
+    // Exit deliberately calls the very same Close() the titlebar's ✕ does, so it goes through
+    // OnWindowClosing → TryCloseApplicationAsync: the unsaved-work guard (Save / Discard / Cancel) and the
+    // open-transaction prompt. A second shutdown path is exactly what must not exist here.
+    private void OnAppMenuExitClick(object? sender, RoutedEventArgs e) => Close();
+
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (e.Property == WindowStateProperty && _maxRestoreGlyph is not null)
