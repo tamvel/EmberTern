@@ -1,5 +1,17 @@
+using EmberTern.App.Commands;
+
 namespace EmberTern.App;
 
+/// <summary>
+/// Every user-visible string in the application (architecture rule #6 — no resx).
+///
+/// <para>⚠ <b>A shortcut is never typed into a string here.</b> A handful of members are
+/// <c>static readonly</c> rather than <c>const</c> because they name a keyboard gesture, and the gesture
+/// comes from <see cref="CommandCatalog"/> through <see cref="CommandTip"/> — the text lives here, the key
+/// lives there, and re-binding a shortcut updates every surface that mentions it. Etap 3 proved why: it
+/// moved Format SQL to <c>Ctrl+K</c> and the hand-written tooltip went on teaching <c>Alt+F</c> forever,
+/// with a green build. <c>UiStringsShortcutSourceTests</c> fails if a literal gesture reappears.</para>
+/// </summary>
 internal static class UiStrings
 {
     public const string AppTitle = "EmberTern";
@@ -409,10 +421,12 @@ internal static class UiStrings
     // ---- Data Import, etap I7: the command bar (§3.1 band B), the run, and the report (§3.7) ----
 
     public const string ImportRun = "Import";
-    public const string ImportRunTooltip = "Read the source and write the rows into the target table · F5";
+    public static readonly string ImportRunTooltip = CommandTip.For(
+        CommandId.Go, "Read the source and write the rows into the target table");
     public const string ImportValidate = "Validate";
-    public const string ImportValidateTooltip =
-        "Run everything except the write — same pipeline, same conversion, same checks · Ctrl+F5";
+    public static readonly string ImportValidateTooltip = CommandTip.For(
+        CommandId.ImportValidate,
+        "Run everything except the write — same pipeline, same conversion, same checks");
     public const string ImportCancel = "Cancel";
     public const string ImportCancelTooltip = "Stop after the current batch · Esc";
 
@@ -420,10 +434,15 @@ internal static class UiStrings
     // tooltip lists the cases because that is what makes the button discoverable — a bare "Refresh" leaves the
     // user guessing what exactly gets re-read. (Icon only, so there is deliberately no label constant: the
     // shared refresh mark already carries the meaning, and the command bar has no room to spare.)
-    public const string ImportRefreshTooltip =
+    // ⚠ Ctrl+V stays literal here, and it is the one deliberate exception: it is not a catalog command (it
+    // means "re-read the clipboard SOURCE", i.e. paste semantics that must yield to a focused text box), so
+    // there is no descriptor to read it from. Ctrl+R comes from the catalog like every other gesture.
+    public static readonly string ImportRefreshTooltip = CommandTip.For(
+        CommandId.ImportRefresh,
         "Read the source, the table list and the target again, then recompute everything: mapping, readiness and "
         + "the preview. Use it when the file has changed on disk, the clipboard now holds something else, or a "
-        + "table has been added or dropped · Ctrl+R (Ctrl+V re-reads the clipboard)";
+        + "table has been added or dropped")
+        + " (Ctrl+V re-reads the clipboard)";
     public const string ImportRunCancelled = "Cancelled. Rows already written stay in the open transaction.";
 
     public const string ImportTransactionLabel = "Transaction";
@@ -594,7 +613,8 @@ internal static class UiStrings
     public const string ImportErrorServerError = "The server refused the row.";
 
     public const string ScriptRun = "Run";
-    public const string ScriptRunTooltip = "Run the whole script in one transaction · F5";
+    public static readonly string ScriptRunTooltip = CommandTip.For(
+        CommandId.Go, "Run the whole script in one transaction");
     public const string ScriptStopTooltip = "Stop after the current statement";
     public const string ScriptCommit = "Commit";
     public const string ScriptCommitTooltip = "Commit the open script transaction";
@@ -728,8 +748,8 @@ internal static class UiStrings
     public const string TransactionCommitDataTooltip = "Commit data transaction";
     public const string TransactionRollbackDataTooltip = "Roll back data transaction";
     // Unified single-pair tooltips — the app commits/rolls back whichever lane(s) are open.
-    public const string TransactionCommitTooltip = "Commit";
-    public const string TransactionRollbackTooltip = "Roll back";
+    public static readonly string TransactionCommitTooltip = CommandTip.For(CommandId.Commit, "Commit");
+    public static readonly string TransactionRollbackTooltip = CommandTip.For(CommandId.Rollback, "Roll back");
     // Execution-lane feedback: which profile the auto-router chose for a statement.
     // {0} = lane (Data/Metadata), {1} = profile label (e.g. "Read Committed").
     // Legacy binary disconnect-confirm strings — superseded by the DisconnectChoice*
@@ -884,22 +904,29 @@ internal static class UiStrings
 
     public const string ToolbarExecute = "Execute";
     public const string ToolbarCancel = "Cancel";
-    public const string ToolbarExecuteHint = "F5";
+    // The shortcut chip beside the Execute button — the gesture alone, no label.
+    public static readonly string ToolbarExecuteHint = CommandTip.Gesture(CommandId.Go);
     // Tooltip on the single Execute button — surfaces the Shift+F5 full-read power path (Variant A+D:
     // one button, no split-button, no second Execute button).
-    public const string ToolbarExecuteTooltip = "Execute  ·  F5 preview  ·  Shift+F5 all rows";
+    // Two gestures in one tooltip, so it interpolates CommandTip.Gesture twice rather than using Sentence —
+    // still the one formatter, still nothing typed by hand.
+    public static readonly string ToolbarExecuteTooltip =
+        $"Execute  ·  {CommandTip.Gesture(CommandId.Go)} preview  ·  "
+        + $"{CommandTip.Gesture(CommandId.ExecuteQueryFull)} all rows";
     public const string ToolbarClearEditor = "Clear";
     public const string ToolbarClearEditorIcon = "🗑";
     public const string ToolbarClearEditorTooltip = "Clear editor content";
     public const string ToolbarCloseTab = "Close tab";
     public const string ToolbarCloseTabIcon = "✕";
-    public const string ToolbarCloseTabTooltip = "Close active tab";
+    public static readonly string ToolbarCloseTabTooltip = CommandTip.For(CommandId.CloseTab, "Close active tab");
     public const string ToolbarNewQueryIcon = "+";
     public const string ToolbarNewQueryTooltip = "New saved query";
     public const string ToolbarToggleQueryPanelIcon = "▤";
     public const string ToolbarToggleQueryPanelTooltip = "Show / hide saved queries panel";
     public const string ToolbarFormatSqlIcon = "⎄";
-    public const string ToolbarFormatSqlTooltip = "Format SQL · Alt+F";
+    // ⚠ This constant is why CommandTip exists: it said "Alt+F" for a whole etap after the gesture became
+    // Ctrl+K, and nothing failed. It can no longer disagree with the catalog.
+    public static readonly string ToolbarFormatSqlTooltip = CommandTip.For(CommandId.FormatSql, "Format SQL");
     public const string ToolbarRefreshDataIcon = "↺";
     public const string ToolbarRefreshDataTooltip = "Refresh data preview";
 
@@ -1022,10 +1049,12 @@ internal static class UiStrings
         "file has been left untouched: it is most often readable on the Windows account or machine that wrote " +
         "it. File: {0} — {1}";
     // The code-action light bulb (Stage Q / Q3) — a discreet affordance for the same menu Ctrl+. opens.
-    public const string CodeActionsTooltip = "Show code actions · Ctrl+.";
+    public static readonly string CodeActionsTooltip = CommandTip.For(
+        CommandId.EditorQuickFix, "Show code actions");
     // Shown at the foot of the diagnostic hover when fixes exist there. Information only — the hover
     // never offers an action (§15.1.1); this just makes the shortcut discoverable.
-    public const string CodeActionsHoverHint = "Quick Fix available · Ctrl+.";
+    public static readonly string CodeActionsHoverHint = CommandTip.For(
+        CommandId.EditorQuickFix, "Quick Fix available");
     // Diagnostics-panel row → the same menu (Stage Q / Q5).
     public const string CodeActionsMenuItem = "Quick Fix…";
     public const string QueryCancelledMessage = "Query cancelled.";
@@ -1184,6 +1213,9 @@ internal static class UiStrings
     public const string DataEditAddRowTooltip = "Add new row";
     public const string DataEditDeleteRowIcon = "−";
     public const string DataEditDeleteRowTooltip = "Delete selected row";
+    // Context-menu labels for the same two commands, in the surface's New / Edit / Delete vocabulary.
+    public const string DataEditNewRow = "New row";
+    public const string DataEditDeleteRow = "Delete row";
     public const string DataEditDeleteConfirmTitle = "Delete row";
     public const string DataEditDeleteConfirmMessage = "Delete the selected row? This becomes part of the current transaction — use Rollback to revert.";
     public const string DataEditDeleteConfirmYes = "Delete";
@@ -1264,7 +1296,7 @@ internal static class UiStrings
     public const string NewTableTabDescription = "Description";
     public const string NewTableDescriptionLabel = "Table description (COMMENT ON TABLE)";
     public const string NewTableDdlLabel = "Live DDL preview";
-    public const string NewTableDialogCompile = "Compile";
+    public static readonly string NewTableDialogCompile = CommandTip.For(CommandId.Compile, "Compile");
     public const string NewTableNamePlaceholder = "MY_TABLE";
     public const string NewTableAddRowTooltip = "Add field";
     public const string NewTableDeleteRowTooltip = "Remove selected field";
@@ -1299,7 +1331,8 @@ internal static class UiStrings
     public const string ViewDetailLoadingHint = "Loading view…";
     public const string ToolbarNewViewTooltip = "New View";
     public const string ViewCompileIcon = "⚡";
-    public const string ViewCompileTooltip = "Compile view (CREATE OR ALTER VIEW)";
+    public static readonly string ViewCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile view (CREATE OR ALTER VIEW)");
     public const string ViewCompileFailedFormat = "Compile failed: {0}";
     public const string NewViewTabDefaultTitle = "New View";
     public const string NewViewExecutedFormat = "View \"{0}\" created.";
@@ -1322,7 +1355,8 @@ internal static class UiStrings
     public const string PackageDetailDependsOnHeader = "Depends on";
     public const string PackageDetailDependedOnByHeader = "Used by";
     public const string ToolbarNewPackageTooltip = "New Package";
-    public const string PackageCompileTooltip = "Compile package (header then body)";
+    public static readonly string PackageCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile package (header then body)");
     public const string PackageCompileHeaderFailedFormat = "Header compile failed: {0}";
     public const string PackageCompileBodyFailedFormat = "Body compile failed: {0}";
     public const string NewPackageTabDefaultTitle = "New Package";
@@ -1335,8 +1369,30 @@ internal static class UiStrings
     // Unified toolbar Collection section (routes to the active editor's collection —
     // fields / columns / params / variables / …). Generic labels: the router decides
     // which collection the action applies to.
-    public const string CollectionAddTooltip = "Add item";
-    public const string CollectionRemoveTooltip = "Remove item";
+    // The collection surface names its operations ONE way, whether the user reaches them from the toolbar or
+    // from the context menu. The verbs are New / Edit / Delete / Move — the nomenclature the fields menu
+    // already used and the toolbar did not ("Add item" / "Remove item", for the very same commands).
+    //
+    // ⚠ The {0} is the ACTIVE collection's own noun (below), supplied by MainWindowViewModel — which is why
+    // the toolbar tooltips are computed properties rather than constants: the same button is "New field" on a
+    // table's fields and "New parameter" on a procedure's arguments.
+    public const string CollectionNewFormat = "New {0}";
+    public const string CollectionEditFormat = "Edit {0}";
+    public const string CollectionDeleteFormat = "Delete {0}";
+
+    public const string CollectionNounField = "field";
+    public const string CollectionNounRow = "row";
+    public const string CollectionNounColumn = "column";
+    public const string CollectionNounVariable = "variable";
+    // The fallback, and the honest name for the routed collections whose sub-tab decides what the items are
+    // (a procedure's arguments / variables / cursors / subprograms all share one command pair).
+    public const string CollectionNounItem = "item";
+
+    // Menu labels for the collections whose grids are edited in place — a generic noun, but the same verbs.
+    // (These are LABELS. They used to be the tooltip constants above, reused as MenuItem headers, which is
+    // how "Add item" ended up as a menu entry.)
+    public const string CollectionMenuNew = "New item";
+    public const string CollectionMenuDelete = "Delete item";
     public const string CollectionMoveUpTooltip = "Move up";
     public const string CollectionMoveDownTooltip = "Move down";
 
@@ -1364,7 +1420,8 @@ internal static class UiStrings
     public const string GeneratorLoadingHint = "Loading generator…";
     public const string GeneratorRefreshCurrentValueTooltip = "Refresh current value (re-read from database)";
     public const string ToolbarNewGeneratorTooltip = "New Generator";
-    public const string GeneratorCompileTooltip = "Compile generator (CREATE / ALTER SEQUENCE)";
+    public static readonly string GeneratorCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile generator (CREATE / ALTER SEQUENCE)");
     public const string GeneratorCompileFailedFormat = "Compile failed: {0}";
     public const string GeneratorDeleteTooltip = "Delete generator";
     public const string GeneratorDeleteConfirmTitle = "Delete generator";
@@ -1383,7 +1440,8 @@ internal static class UiStrings
     public const string ExceptionDescriptionEditLabel = "Exception description";
     public const string ExceptionLoadingHint = "Loading exception…";
     public const string ToolbarNewExceptionTooltip = "New Exception";
-    public const string ExceptionCompileTooltip = "Compile exception (CREATE / ALTER EXCEPTION)";
+    public static readonly string ExceptionCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile exception (CREATE / ALTER EXCEPTION)");
     public const string ExceptionCompileFailedFormat = "Compile failed: {0}";
     public const string ExceptionDeleteTooltip = "Delete exception";
     public const string ExceptionDeleteConfirmTitle = "Delete exception";
@@ -1412,7 +1470,8 @@ internal static class UiStrings
     public const string IndexDescriptionHeader = "Description";
     public const string IndexLoadingHint = "Loading index…";
     public const string IndexNotFoundFormat = "Index \"{0}\" not found.";
-    public const string IndexCompileTooltip = "Compile index changes (ALTER INDEX / COMMENT ON INDEX)";
+    public static readonly string IndexCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile index changes (ALTER INDEX / COMMENT ON INDEX)");
     public const string IndexCompileFailedFormat = "Compile failed: {0}";
     public const string IndexRecomputeStatisticsTooltip = "Recompute statistics (SET STATISTICS INDEX)";
     public const string IndexDeleteTooltip = "Delete index";
@@ -1438,7 +1497,8 @@ internal static class UiStrings
     public const string DomainNotNullHeader = "Not null";
     public const string DomainLoadingHint = "Loading domain…";
     public const string ToolbarNewDomainTooltip = "New Domain";
-    public const string DomainCompileTooltip = "Compile domain (CREATE / ALTER DOMAIN)";
+    public static readonly string DomainCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile domain (CREATE / ALTER DOMAIN)");
     public const string DomainCompileFailedFormat = "Compile failed: {0}";
     public const string DomainRenamedFormat = "Domain renamed to \"{0}\".";
     public const string DomainDeleteTooltip = "Delete domain";
@@ -1457,7 +1517,8 @@ internal static class UiStrings
     public const string ProcedureDetailParamInputFormat = "Input ({0})";
     public const string ProcedureDetailParamOutputFormat = "Output ({0})";
     public const string ProcedureDetailLoadingHint = "Loading procedure…";
-    public const string ProcedureCompileTooltip = "Compile procedure (CREATE OR ALTER PROCEDURE)";
+    public static readonly string ProcedureCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile procedure (CREATE OR ALTER PROCEDURE)");
     public const string ProcedureCompileFailedFormat = "Compile failed: {0}";
     public const string ToolbarNewProcedureTooltip = "New Procedure";
     public const string NewProcedureTabDefaultTitle = "New Procedure";
@@ -1517,7 +1578,8 @@ internal static class UiStrings
     public const string FunctionDetailReturnTypeLabel = "Return type";
     public const string FunctionDetailDeterministicLabel = "Deterministic";
     public const string FunctionDetailLoadingHint = "Loading function…";
-    public const string FunctionCompileTooltip = "Compile function (CREATE OR ALTER FUNCTION)";
+    public static readonly string FunctionCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile function (CREATE OR ALTER FUNCTION)");
     public const string FunctionCompileFailedFormat = "Compile failed: {0}";
     public const string FunctionExecuteTooltip = "Execute function";
     public const string FunctionExecutedViaDataProfile = "Executed function via Data profile.";
@@ -1582,7 +1644,8 @@ internal static class UiStrings
     public const string TriggerPositionHeader = "Position";
     public const string TriggerActive = "Active";
     public const string TriggerDetailLoadingHint = "Loading trigger…";
-    public const string TriggerCompileTooltip = "Compile trigger (CREATE OR ALTER TRIGGER)";
+    public static readonly string TriggerCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile trigger (CREATE OR ALTER TRIGGER)");
     public const string TriggerCompileFailedFormat = "Compile failed: {0}";
     public const string TriggerModeToggleTooltip = "Toggle Source / Easy mode";
     public const string TriggerParseFailedNotice =
@@ -1594,7 +1657,8 @@ internal static class UiStrings
     public const string NewTriggerExecutedFormat = "Trigger \"{0}\" created.";
 
     public const string FieldEditCompileIcon = "⚡";
-    public const string FieldEditCompileTooltip = "Compile pending changes (apply DDL + auto-commit)";
+    public static readonly string FieldEditCompileTooltip = CommandTip.For(
+        CommandId.Compile, "Compile pending changes (apply DDL + auto-commit)");
     public const string FieldEditDiscardTooltip = "Discard pending changes";
     // Confirmation before discarding the table designer's buffered structural changes —
     // an accidental click must not silently throw away uncompiled work.
@@ -1646,7 +1710,10 @@ internal static class UiStrings
     public const string FieldsContextMenuDrop = "Delete field";
     public const string FieldsContextMenuCreateForeignKey = "Create foreign key…";
     public const string FieldEditEditIcon = "✎";
-    public const string FieldEditEditTooltip = "Edit selected field · F2";
+    // (FieldEditEditTooltip — "Edit selected field · F2" — was removed in the UX Consistency Pass. It had no
+    // consumer: the toolbar's Edit button it was written for never existed, which is exactly the gap the pass
+    // closed. The button now uses MainWindowViewModel.CollectionEditTooltip, which names the active
+    // collection's noun and takes its gesture from the catalog.)
     public const string FieldEditForeignKeyIcon = "⛓";
     public const string FieldEditForeignKeyTooltip = "Create foreign key…";
 
@@ -2141,8 +2208,10 @@ internal static class UiStrings
     public const string SessionManagerOpenInEditor = "Open in SQL Editor";
     public const string SessionManagerOpenInEditorTip = "Open this statement in the SQL Editor as a new saved query";
     public const string SessionManagerAnalyze = "Analyze in Performance";
-    public const string SessionManagerAnalyzeTip =
-        "Open in the SQL Editor and reveal the Performance tab — run it (F5) to analyze (it is not run automatically)";
+    public static readonly string SessionManagerAnalyzeTip = CommandTip.Sentence(
+        CommandId.Go,
+        "Open in the SQL Editor and reveal the Performance tab — run it ({0}) to analyze "
+        + "(it is not run automatically)");
     public const string SessionManagerCurrentStatementHeader = "Current statement";
 
     // transactions grid — always-on Health dot (mirrors the Sessions grid)
@@ -2174,7 +2243,8 @@ internal static class UiStrings
     public const string SessionManagerLastRefreshFormat = "Last refresh {0:HH:mm:ss}";
 
     // Global Search (Etap 3 — Search Results)
-    public const string ToolbarGlobalSearchTooltip = "Global Search · Ctrl+Shift+F";
+    public static readonly string ToolbarGlobalSearchTooltip = CommandTip.For(
+        CommandId.GlobalSearch, "Global Search");
 
     // Export DDL to .sql (portable object script — structure + comments, no grants).
     public const string ToolbarExportDdlTooltip = "Export DDL to .sql";
@@ -2290,7 +2360,9 @@ internal static class UiStrings
     // The shortcut surfaces Seam C's keyboard-first launch — the whole operation is reachable from the keyboard.
     // The label carries no parenthesised shortcut; the key is rendered in the shared shortcut-chip beside it.
     public const string DebuggerLaunchButton = "Start debugging";
-    public const string DebuggerLaunchShortcut = "F5";
+    // The shortcut chip on the launch button — F5 means Start Debugging here, which is CommandId.Go on a
+    // debugger tab (the one ratified contradiction with the SQL editor's Execute).
+    public static readonly string DebuggerLaunchShortcut = CommandTip.Gesture(CommandId.Go);
     public const string DebuggerLaunchPreparing = "Preparing…";
     // Pre-flight report (§9.2 / §4.6). D15.3 polish: the section is shown ONLY when it has something to say —
     // no header, and no "all clear" line when clean (a clean launch form stays maximally quiet). Each surfaced
@@ -2302,16 +2374,25 @@ internal static class UiStrings
         "Uses a generator/sequence (GEN_ID / NEXT VALUE FOR) — generator values are consumed permanently and are not restored on rollback.";
     public const string DebuggerPreflightUnsteppable =
         "The routine source could not be parsed into step points — debugging cannot start.";
-    // Toolbar / commands.
-    public const string DebuggerContinueTooltip = "Continue · F5";
-    public const string DebuggerStepIntoTooltip = "Step Into · F11";
-    public const string DebuggerStepOverTooltip = "Step Over · F10";
-    public const string DebuggerStepOutTooltip = "Step Out · Shift+F11";
-    public const string DebuggerRunToCursorTooltip = "Run To Cursor · Ctrl+F10";
+    // Toolbar / commands. Every gesture below comes from CommandCatalog — the debugger's stepping keys are
+    // declared there as CommandDispatch.Reserved (dispatched by DebuggerTabView, which owns the caret), and
+    // being declared is exactly what lets them be shown here without being re-typed.
+    public static readonly string DebuggerContinueTooltip = CommandTip.For(CommandId.Go, "Continue");
+    public static readonly string DebuggerStepIntoTooltip =
+        CommandTip.For(CommandId.DebuggerStepInto, "Step Into");
+    public static readonly string DebuggerStepOverTooltip =
+        CommandTip.For(CommandId.DebuggerStepOver, "Step Over");
+    public static readonly string DebuggerStepOutTooltip =
+        CommandTip.For(CommandId.DebuggerStepOut, "Step Out");
+    public static readonly string DebuggerRunToCursorTooltip =
+        CommandTip.For(CommandId.DebuggerRunToCursor, "Run To Cursor");
     public const string DebuggerRunToCursorMenu = "Run to Cursor";
-    public const string DebuggerStopTooltip = "Stop debugging · Shift+F5";
-    public const string DebuggerRestartTooltip = "Restart · Ctrl+Shift+F5";
-    public const string DebuggerToggleBreakpointTooltip = "Toggle breakpoint · F9";
+    public static readonly string DebuggerStopTooltip =
+        CommandTip.For(CommandId.DebuggerStop, "Stop debugging");
+    public static readonly string DebuggerRestartTooltip =
+        CommandTip.For(CommandId.DebuggerRestart, "Restart");
+    public static readonly string DebuggerToggleBreakpointTooltip =
+        CommandTip.For(CommandId.DebuggerToggleBreakpoint, "Toggle breakpoint");
     // Status line.
     public const string DebuggerStatusReady = "Ready to launch.";
     public const string DebuggerStatusPausedFormat = "Paused at line {0} — {1}";
@@ -2344,7 +2425,8 @@ internal static class UiStrings
     // Save + compile from the debugger tab (UX Polish Seam 5b). Saving is a deliberate new work cycle: it
     // ends a live session (which was compiled from the old code) before recompiling the routine.
     public const string DebuggerSave = "Save";
-    public const string DebuggerSaveTooltip = "Save and compile the routine · Ctrl+S";
+    public static readonly string DebuggerSaveTooltip = CommandTip.For(
+        CommandId.DebuggerSaveSource, "Save and compile the routine");
     public const string DebuggerSaveUnavailable = "This debugger tab cannot save (no connection).";
     // (the empty-buffer refusal is the shared EditorNothingToCompile — one wording for every editor)
     public const string DebuggerSaveEndsSessionTitle = "Save ends the debug session";
@@ -2365,12 +2447,14 @@ internal static class UiStrings
     // stepping on would run code the user can no longer see. Says what happened AND what to do next — the
     // toolbar going grey is the visual cue, this is the reason. (Until Restart can run the edited text without
     // saving, Save is the way back into a session — hence naming it here.)
-    public const string DebuggerStatusEndedByEdit =
-        "Session ended — the code changed. Restart (Ctrl+Shift+F5) runs the current code without saving.";
+    public static readonly string DebuggerStatusEndedByEdit = CommandTip.Sentence(
+        CommandId.DebuggerRestart,
+        "Session ended — the code changed. Restart ({0}) runs the current code without saving.");
     // The routine's HEADER changed, so the parameter list the engine reads from the catalog no longer describes
     // this text and a draft-sourced session cannot be started from it yet. Names the one way forward.
-    public const string DebuggerStatusEndedByHeaderEdit =
-        "Session ended — the routine header changed. Save (Ctrl+S) to compile and debug the new signature.";
+    public static readonly string DebuggerStatusEndedByHeaderEdit = CommandTip.Sentence(
+        CommandId.DebuggerSaveSource,
+        "Session ended — the routine header changed. Save ({0}) to compile and debug the new signature.");
     public const string DebuggerUnsavedSourceFormat = "{0} — modified source (not compiled)";
     // Variables panel.
     public const string DebuggerVariablesHeader = "Variables";
@@ -2463,9 +2547,10 @@ internal static class UiStrings
         "Diagnostic tool (debug builds only). Shows the EXECUTE BLOCK harnesses the debugger generates " +
         "internally to evaluate expressions and statements on the server — this is how the debugger works " +
         "under the hood, not a history of your SQL.";
-    public const string DebuggerHarnessLogEmpty =
-        "No harnesses generated yet. Evaluate an expression (Shift+F9) or run an Immediate statement while " +
-        "the session is paused, and the generated harness SQL will appear here.";
+    public static readonly string DebuggerHarnessLogEmpty = CommandTip.Sentence(
+        CommandId.DebuggerEvaluateSelection,
+        "No harnesses generated yet. Evaluate an expression ({0}) or run an Immediate statement while "
+        + "the session is paused, and the generated harness SQL will appear here.");
     public const string DebuggerBottomPanelCollapseTooltip = "Collapse / expand the panel";
     // Call Stack panel (D8, spec §5).
     public const string DebuggerCallStackEmpty = "No call stack — not paused.";
@@ -2486,7 +2571,8 @@ internal static class UiStrings
         "Run the text as a PSQL statement against the live frame (may assign variables). Off: evaluate it as an expression.";
     public const string DebuggerImmediateEvaluateButton = "Evaluate";
     public const string DebuggerImmediateClearTooltip = "Clear";
-    public const string DebuggerEvaluateSelectionTooltip = "Evaluate the selected expression · Shift+F9";
+    public static readonly string DebuggerEvaluateSelectionTooltip = CommandTip.For(
+        CommandId.DebuggerEvaluateSelection, "Evaluate the selected expression");
     public const string DebuggerImmediateEmpty = "No evaluations yet. Evaluate an expression, or select one in the source and press Shift+F9.";
     public const string DebuggerEvalKindExpression = "expression";
     public const string DebuggerEvalKindStatement = "statement";

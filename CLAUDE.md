@@ -32,7 +32,8 @@ verbatim, in the archive below.
 | **`docs/design/data-import-i0-findings.md`** | The Data Import **measurement archive** (etap I0): what the engine and the libraries actually do — batch throughput and row-error attribution, GDS error codes, the silent charset substitution, `.xlsx` reading traps. Evidence for the „(I0)" notes in the design doc. | On demand — when an I0-derived decision needs its proof. |
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (268 entries, #1–#281), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (273 entries, #1–#286), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -75,7 +76,10 @@ git push origin <branch>
 git push private <branch>
 ```
 
-**Branch hygiene (2026-07-26):** the repo carries only branches that are still needed. `feat/completion-matching`,
+**Branch hygiene (2026-07-28):** **`feat/keyboard-manager` was merged into `master`** (`--no-ff`, so the
+sprint's six etaps stay one readable arc) and pushed to both remotes; like `feat/data-import` it **still
+exists** locally and on both remotes — deleting it is the user's call. Earlier: the repo carries only branches
+that are still needed. `feat/completion-matching`,
 `feat/firebird-debugger`, `feat/save-and-close` and `feat/sql-data-export` were all provably merged into
 `master` and were deleted locally and from **both** remotes. **`feat/data-import` was merged into `master` on
 2026-07-27** (`--no-ff`, commit `0a3aed4`, so the module's history stays one readable arc) and **still exists**
@@ -285,31 +289,190 @@ noted.
   rename, find references), semantic highlighting, and Quick Info all built as *clients* of that
   one model. See **`docs/design/editor-architecture.md`** for the current architecture and
   **"Editor Architecture — current direction"** below for status.
+- **Keyboard Manager / command system** — **ONE registry every UI surface reads from.**
+  `EmberTern.App/Commands`: `CommandCatalog` is a single declarative table of `CommandDescriptor`s built once
+  at type-init (id · scope · dispatch · gesture(s) · tab kinds), plus a collision validator; `CommandRouter`
+  (window, **Bubble** phase) resolves a keystroke **Editor > Tree > Grid > Tab > Global** and declines when
+  nothing is live; `CommandTip` is the one place a gesture becomes text. The registry holds **descriptions,
+  never `ICommand`s** — the instance is resolved at invoke time by `MainWindowViewModel.ResolveCommand`
+  (Global), `WorkspaceTabViewModel.ResolveCommand` (Tab — the fourth member of the per-kind family beside
+  `UnsavedWork`/`SavableEditor`/`RefreshAsync`) and `MetadataExplorerViewModel.ResolveCommand` (Tree).
+  **Shortcuts, tooltips, shortcut-chips and all 32 context menus take their gesture from it** — no gesture is
+  typed by hand anywhere, and two tests enforce that. Context menus are one shared style set (icons left via
+  `{app:MenuIcon}`, gestures right via `{app:CommandGesture}`). *(design + as-built:
+  [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
 
-- **⌨ NEXT SPRINT — KEYBOARD MANAGER. Scoped by the user, NOT started (2026-07-27).** Start here; the
-  scope below is the user's own, recorded verbatim in substance so a fresh session needs no re-briefing:
-  - fill in shortcuts for the most frequently used functions;
-  - simplify existing shortcuts where that makes sense;
-  - surface shortcuts **in tooltips**;
-  - surface shortcuts **in context menus**;
-  - improve right-click menu UX — smaller typography, icons on the left, better consistency;
-  - lay the **foundations for a central Keyboard Manager**.
-  **⚠ Read before designing.** The audit's A-10 covers the same ground and its `CommandRegistry` sketch
-  (stable `CommandId`, default gesture, scope `global`/`workspace`/`editor`/`grid`/`dialog`, availability
-  predicate, priority resolver dialog→editor→tab→window, one list feeding menu + tooltip + palette +
-  configurator, a collision validator) is a **reasonable starting point that has NOT been verified against
-  the code** — treat it the way this sprint treated the rest of the audit: check it first. Known facts that
-  will matter: shortcuts are today spread across `MainWindow.axaml` `Window.KeyBindings`, per-view XAML, and
-  hand-rolled `KeyDown` handlers in the editor controllers; the editor's typing mechanics (Tab expansion,
-  pairing, completion) are **deliberately** local and tunnelled (gotchas #224/#228) and must stay that way
-  while merely *registering* their reserved gestures; `F5` deliberately means Execute in the SQL editor and
-  Continue in the debugger (the one ratified contradiction, spec §9.7); and the shared
-  `TextBlock.shortcut-chip` style already exists for rendering a gesture (UX Polish Seam 1).
-  ⚠ Also relevant: the **app-wide UX sprint** (density) is still backlogged and owns *control heights* —
-  "smaller typography + icons on the left in the context menu" is this sprint's, a global control-height
-  change is not. Keep the line the user drew.
+- **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-28).**
+  Etaps 1–5 + a UX Consistency Pass, every one visually QA'd and accepted. Build 0/0; suite **5952 green**
+  (full run in one pass, and in the two documented partitions 5903 + 49); smoke clean. Merged `--no-ff` so the
+  sprint's history stays one readable arc, and pushed to **both** remotes.
+  **The command system is now part of the app's architecture — see the "Keyboard Manager / command system"
+  entry in "What's built" for what it IS; the notes below are the WHY, kept because several are decisions
+  rather than history.**
+  **⭐ UX CONSISTENCY PASS — one surface, one vocabulary.** The user's visual QA found Table Detail → Fields
+  saying **"Add item"/"Remove item"** on the toolbar and **"New/Edit/Delete field"** in the menu, no **Edit**
+  on the toolbar, and no **Move Up/Down** in the menu. One cause, not three bugs: the toolbar is the *shared*
+  collection router (so generic labels) and the menu is per-grid (so specific ones). Fixed **at the router** —
+  `ActiveCollection()` now returns a named `CollectionCommands` record carrying `Edit` **and the collection's
+  own noun** (field/row/column/variable/item), so the toolbar tooltips are computed as
+  *"New field · F3"* / *"Edit field · F2"* / *"Delete field · F8"* and cannot disagree with the menu.
+  **⭐ The proof that Edit had been intended and dropped:** `UiStrings.FieldEditEditTooltip` — *"Edit selected
+  field · F2"* — existed with **no consumer anywhere**. The string for the missing button was in the file.
+  **⭐ THE LAST HAND-TYPED GESTURES IN THE APP ARE GONE.** The fields grid's `Insert`/`F2`/`Delete` were three
+  local `DataGrid.KeyBindings` + three literal `InputGesture` attributes — the only entries in either guard's
+  allowlist. Now catalog commands at Grid scope: `CollectionAdd` (F3, **Insert** alternate), **`CollectionEdit`
+  (F2, new)**, `CollectionRemove` (F8, **Delete** alternate). Muscle memory keeps working; menus display the
+  ratified keys. **Measured first:** Avalonia's `DataGrid` claims none of the three, so nothing relied on a
+  local binding winning a race. **Both allowlists are now empty** — the finished state, not an oversight.
+  ⚠ `Delete` at Grid scope coexists with the editor's own `Delete` (#282); Editor outranks Grid, so the caret
+  decides — the case scopes exist for.
+  **⭐ A machine found the icon drift the eye would have missed.**
+  `TheSameMenuOperationAlwaysCarriesTheSameIcon` groups all **63 distinct menu operations** by their
+  `UiStrings` label and requires one icon each — it caught **"Debug procedure"/"Debug function"** carrying the
+  debugger's composite mark in the tree and a plain `Icon.Crosshair` in the Package Members menu. Also
+  surfaced two toolbar-only operations in the menu of the same grid: Table Data **New/Delete row**, Session
+  Manager **Open in SQL Editor / Analyze in Performance**. Deliberately NOT equalised (different sets on
+  purpose): Trace start/pause/stop, Security bulk-vs-row scopes, grid refresh/pagination strips, trigger-group
+  scope qualifiers. The rule applied is the user's — *the same surface offers the same basic operations
+  whichever way you reach them*, not *every menu holds the same items*.
+  ⚠ Seven menu items used **tooltip** constants (`CollectionAddTooltip`) as their `Header` — audit finding D6,
+  which is how "Add item" became a menu entry. They now use label constants; the tooltip constants are gone.
+  **⭐ Etap 5 — context menus. A CUSTOM CONTROL PROVED UNNECESSARY, and that was measured.** FluentTheme's
+  **context-menu** `MenuItem` template already provides `PART_IconPresenter` (icons left),
+  `PART_InputGestureText` (gestures right), the submenu chevron and the check mark — **and the icon column
+  keeps its width when empty** (header presenter at x=28 either way), so labels already align. So "one shared
+  menu control for the whole app" ships as **one shared style set** in `ControlStyles.axaml`, which is the
+  *stronger* guarantee: a style needs no opt-in, while a control would have to be adopted by 32 menus and a
+  33rd could forget. Rows **27px → 22px** (FontSize 14→12, symmetric padding — Fluent's was `11,4,11,7`),
+  hover/selection off `SystemAccentColor` onto the app palette, subordinate gesture column, readable disabled
+  rows, real separators. **130 of 133 menu items carry an icon, 21 carry a catalog gesture**; the 3 without
+  are trigger-scope qualifiers whose parent carries the mark. Two markup extensions in `MenuMarkup.cs`:
+  `Icon="{app:MenuIcon Icon.Trash}"` (existing geometries + the one `SvgIcon`; `Brush=DangerIconBrush` the
+  destructive exception, bound dynamically) and `InputGesture="{app:CommandGesture Compile}"` (from the
+  catalog). Three new icons only — `Icon.Redo` (Undo mirrored), `Icon.Cut`, `Icon.Paste`.
+  **⚠ The rule the style creates, and it is Seam 4's `MessageBanner` lesson again:** a menu host sets
+  `Header`/`Command`/`Icon`/`InputGesture`/`IsVisible` — **never** `Background`/`Padding`/`FontSize`/
+  `Foreground`. A local value outranks a style setter, which is how the banner grew six per-host variants.
+  **⚠ Two measurement traps recorded as gotchas #285/#286.** (1) Avalonia templates a **menu-BAR** `MenuItem`
+  differently from a **context-menu** one; the first probe measured the bar item, reported *no icon or gesture
+  part*, and would have justified building a control the framework did not need. A negative measurement is the
+  dangerous kind. `MenuItem.InputGesture` is also **display-only** (measured — safe on every item, no
+  double-fire). (2) `IClassFixture` creates one fixture **per class**, so a second headless test class
+  silently produced a **second** `HeadlessUnitTestSession` (banned by #94/#226) and hung the suite —
+  now an `ICollectionFixture` (`HeadlessCollection`), with the rule written on the fixture: join the
+  collection, never add your own class fixture.
+  **⚠ NEW, LOAD-BEARING DATUM FOR THE FULL-SUITE HANG (still out of scope, but it reframes four earlier
+  observations):** with a different headless class running last, the hang reported **that** class's last
+  test — at 5901 of 5902 completed, the identical shape. So the name tracks the **POSITION (the last headless
+  test in a long run), not the test**: the four consistent sightings of
+  `CompletionRow_HighlightsMatchedPrefix` were an artefact of ordering. The suspect is session teardown /
+  dispatcher-loop shutdown. Start there, not at that assertion.
+  **⭐ Etap 4 — a keyboard gesture is now written down in exactly ONE place.** `Commands/CommandTip.cs` is the
+  ONE composer (`For` / `Gesture` / `Sentence` / `Format`); ~25 `UiStrings` members became `static readonly`
+  and compose their gesture from the catalog. **The etap justified itself before it started:** etap 3 re-bound
+  Format SQL to `Ctrl+K` and `ToolbarFormatSqlTooltip` went on reading *"Format SQL · Alt+F"* for a whole
+  etap with a green build — a hand-typed gesture does not duplicate the catalog, it **goes stale silently**.
+  ⚠ **The label text deliberately stayed in `UiStrings`** (rule #6) and is passed in: one `CommandId` serves
+  **eleven** differently-worded Compile tooltips, so a single text field on the descriptor could not have
+  served them. The catalog owns the gesture, `UiStrings` owns the words.
+  ⚠ **`CommandTip.Format` is deliberately NOT `KeyGesture.ToString()`** — that spells the raw enum name, so
+  `Ctrl+.` would reach the user as *"Ctrl+OemPeriod"*.
+  ⚠ **`const` → `static readonly` was the cheap migration**: `x:Static` resolves both identically, so ~25
+  strings centralised **without touching any of the 15 consuming XAML files**. Verified first that none is
+  used in a `const` expression (the one thing that would break it).
+  ⚠ **A gesture is shown ONLY where it works.** Tooltips carry gestures for `Global`/`Tab`-scoped commands
+  only; the focus-scoped ones (`F3`/`F4`/`F8`) are NOT shown on toolbar buttons, because a tooltip promising
+  `F3` on a button outside the tree/grid scope teaches something false — they belong in etap 5's context
+  menus. The collection `+`/`−` buttons are the concrete case: same commands, deliberately no gesture shown.
+  ⚠ **The rule is enforced, not remembered — and the guard keys on the DECLARATION, not the value**
+  (`UiStringsShortcutSourceTests`): a correctly composed string also contains `" · F7"` at run time, so only
+  `const`-ness distinguishes a literal from a computed one. **Verified by planting a violation** and watching
+  it fail by name. Three exemptions, each with a reason + a test that fails when an exemption goes stale
+  (`Esc`, Data Import's `Ctrl+V`, the fields grid's local `F2` — none is a catalog command). Gotcha **#284**.
+  **⭐ Etap 3 shipped the whole ratified map** (`F3` New · `F4` Refresh · `F6` Commit · `Shift+F6` Rollback ·
+  `F7` Compile · `F8` Delete · `Ctrl+K` Format · `Ctrl+W` Close tab) and **retired `Alt+F` with no
+  exception**, pinned by `NoCommandUsesAltPlusALetter`. Two scopes joined: **`Tree`** (needed one small
+  addition — `MetadataExplorerViewModel.SelectedNode`, fed by the sidebar's existing selection handler like
+  `SelectedConnection`, deliberately NOT observable) and **`Grid`**, which needed **no per-grid knowledge at
+  all** because `F3`/`F8` route through the app's *existing* unified collection router, whose
+  `ActiveCollection()` already answers "which collection" and self-gates.
+  **⚠ Nothing destructive became a one-keystroke action — verified, not assumed:** `F8` on a leaf routes to
+  the node's own `DeleteCommand`, which raises the **existing confirm dialog**; `F6`/`Shift+F6` bind the very
+  commands the toolbar buttons bind, with the same `CanCommitAll`/`CanRollbackAll`; `Ctrl+W` uses the
+  confirming close.
+  **⚠ A design trap worth not re-walking:** `CollectionAdd`/`Remove` were first placed at *Global* scope
+  (their commands live on `MainWindowViewModel` and self-gate). Subtly wrong — with a table leaf selected in
+  the tree and a Procedure editor open, `F3` fell through Tree→Global and would add a **parameter row to the
+  background tab**. `Grid` scope removes the fall-through because the scope is simply not live in the tree.
+  **⚠ The ONE gesture that could not be centralised, and why it is structural:** Procedure/Function Easy mode
+  formats the **cursor/subprogram** grid-row editors *in place*, an action identified by a specific
+  `TextEditor` **instance** — the router resolves commands, not controls. Those two handlers survive, rebound
+  to `Ctrl+K` and **narrowed to fire only for those two editors**, so everything else falls through to the
+  catalog. Deleting a working behaviour was not a refactor's call. Trigger/View/Package handlers were deleted
+  outright.
+  **⚠ Collisions with Windows/IDE standards are REPORTED in the design doc §13, not silently resolved** (the
+  user's standing instruction). The two worth knowing: **`Shift+F6` is Build in Visual Studio** and here rolls
+  back the working transaction — the one pairing whose two meanings are not equally recoverable; and **`F3` is
+  Find Next almost everywhere**, mitigated only because AvaloniaEdit binds no `F3` and the gesture is live
+  solely in the tree and grids. `F8` is a *match* with VS (Next Error) precisely because of the scope split.
+  **⚠ Flagged, NOT touched (§13.2):** `CommitAllAsync`'s comment claims *"the TOOLBAR's Commit stays
+  deliberately narrower"* while the toolbar binds `CommitAllCommand`, with a narrower unused `CommitCommand`
+  beside it. `F6` binds what the button binds — the correct rule either way — but the discrepancy is
+  transaction-settlement territory and belongs to whoever owns rule #11. **The sprint's one document — audit, ratified decisions, architecture,
+  as-built, etap order: [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md).** Read it before
+  touching anything under `EmberTern.App/Commands`.
+  **Goal (the user's own framing): not "a few more shortcuts" but ONE source of truth for commands** — the
+  same registry feeding shortcuts, tooltips, context menus and, later, a Command Palette and a shortcut
+  editor, with nothing duplicated in XAML or `UiStrings`.
+  **⭐ RATIFIED SHORTCUT MAP — decided by the user, do not re-litigate:** `F3` New · `F4` Refresh ·
+  `F5` Execute (**Continue in the debugger stays the one accepted contradiction**) · `F6` Commit ·
+  `Shift+F6` Rollback · `F7` Compile · `F8` **Delete in trees/lists, Next Diagnostic in the editor** (a
+  scope split, both kept) · `Ctrl+K` Format SQL. **No `Alt+letter` gestures at all** — `Alt+F` is retired in
+  etap 3 with no exception — and F-keys are reserved for the most frequent operations. Windows/IDE standards
+  stay (`Ctrl+S`/`F`/`H`/`Z`/`Y`/`X`/`C`/`V`/`A`, `Ctrl+Enter`, `Ctrl+Space`, `Ctrl+.`, `Ctrl+Shift+F`,
+  `Escape`). `Alt+F12` (Peek) is Alt+**function key**, outside the rule, and stays.
+  **⭐ ARCHITECTURE (ratified):** `CommandCatalog` holds **`CommandDescriptor`s, never `ICommand`s** — a
+  gesture→command map is not expressible here, because "Go" belongs to the selected tab and the Explorer's
+  15 commands belong to a `MetadataNodeViewModel` built **per tree node**. One literal table, built once at
+  type-init (the `LanguageConstructCatalog` pattern); `CommandRouter` (view layer, **Bubble** phase) does the
+  focus probe and resolves **Editor > Tab > Global** — `CommandScope`'s numeric values *are* that order.
+  `WorkspaceTabViewModel.ResolveCommand(CommandId)` joined `UnsavedWork`/`SavableEditor`/`RefreshAsync` as
+  the **fourth member of the existing per-kind family**, not a new mechanism beside it.
+  **⚠ The line to hold: no `KeyGesture` ever reaches a view model.** VMs answer questions about a
+  `CommandId`; gestures live in the catalog and the view layer.
+  **⚠ `CommandDispatch.Reserved` is load-bearing, not bookkeeping.** The editor's typing mechanics
+  (#224/#228) and the debugger's stepping keys stay **locally dispatched** — several are view actions needing
+  the source editor's caret — but are **declared**, so the collision validator sees them and no global
+  gesture can quietly steal one. A live Reserved command stops resolution *without* handling the key.
+  **⭐ Etap 2 fixed the audit's confirmed defect C1 — and it was a real data-safety issue.**
+  `MainWindowViewModel.GoCommand` had no `CanExecute` and ended "anything else → Execute Query", while
+  `ResolveActiveSql()` falls back to the SQL editor's `QueryText` — so **F5 on a Table editor, Security
+  Manager, Trace, Sessions or any object editor ran the editor's text inside the user's working
+  transaction**. F5's reach is now a declaration (four tab kinds), so the other 16 cannot see it. Deleted
+  with it: the whole `Window.KeyBindings` block, the Tunnel-phase `OnWindowKeyDown` + its `IsInsideEditor`
+  focus probe, `GoCommand`/`GoAsync`, `RequestGoAsync`, and the duplicate F5 owners in the debugger, Script
+  Executor and Data Import views. **Side effects, both improvements:** Script Executor's F5 works anywhere in
+  its tab (it used to need focus in the script editor, and otherwise executed the SQL editor's query), and F5
+  in a non-actionable debugger phase now leaves the key alone instead of silently doing nothing.
+  **⚠ Two measured facts that overturned inherited assumptions — do not re-derive them.** (1) **AvaloniaEdit
+  12.0.0 claims NO function key**: `SearchInputHandler` registers Find/FindNext/FindPrevious as
+  `CommandBindings` with **no `KeyGesture`**, so the AvalonEdit lore that `F3`/`Shift+F3` are find-next/prev
+  does not hold here and `F1`–`F12` are free in the editor — now a permanent guard, because an upgrade that
+  began binding one would break a global shortcut with the build green. It *does* claim `Delete`, `Back`,
+  `Return`, the arrows and `Shift+Alt`+arrows (box select). (2) **Every `TextEditor` shipped TWO
+  `SearchPanel`s**: the editor creates its own, and `EditorSearch.Install` called `SearchPanel.Install` on
+  top, so `Ctrl+F` and the context menu's Find drove different instances. Fixed by using
+  `TextEditor.SearchPanel`; pinned by asserting the **handler count**, since a non-null check passed either
+  way. Gotchas **#282 / #283**.
+  **⚠ The audit's A-10 is ONE table row**, not a design — no scope list, no resolver, no `CommandId` shape.
+  The richer "sketch" was written during the previous sprint's triage. Its diagnosis is right; there was
+  nothing to copy.
+  ⚠ The **`MenuItem`/`ContextMenu` style gap is now closed** — that file had no menu selectors at all, which
+  is why menus looked untouched next to the rest of the app.
+  ⚠ Still relevant: the **app-wide UX sprint** (density) is backlogged and owns *control heights* — "smaller
+  typography + icons on the left in the context menu" is this sprint's, a global control-height change is not.
 - **🛡 ARCHITECTURE HARDENING / PRODUCT SAFETY SPRINT — CLOSED AND USER-ACCEPTED (2026-07-27).** Build 0/0,
   suite **5900 green** (from 5856), smoke clean, `tools/probes/ChangeSafetyProbe` 19/19 on FB5. Committed as
   `340a634` and pushed to **both** remotes. Narrative +
@@ -2138,9 +2301,32 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5900 as of 2026-07-27
-  (`master`, after the Architecture Hardening sprint; 5856 before it)** — green in ~11 s, and green in the
-  two documented partitions (**5859 + 41**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5952 as of 2026-07-28
+  (`feat/keyboard-manager`, after the UX consistency pass; 5900 on `master`)** — green in the two documented partitions
+  (**5903 + 49**).
+  **⭐⭐ 2026-07-28, Keyboard Manager etap 5 — THE FOUR "SAME TEST" OBSERVATIONS BELOW WERE AN ARTEFACT OF
+  ORDERING. READ THIS BEFORE TRUSTING THEM.** Etap 5 briefly had a SECOND headless test class, and running the
+  partition in which *it* ran last moved the reported hang to **that class's** last test
+  (`ContextMenuPresentationTests.TheSharedStyle_…`, at 5901 of 5902 completed) — the identical shape.
+  So **the reported name tracks the POSITION — the last headless test in a long run — not the test.** Four
+  consistent sightings of `CompletionRow_HighlightsMatchedPrefix` corroborated each other only because that
+  test happened to be last in the only class that owned a session; they are not four independent witnesses.
+  **The suspect is session teardown / dispatcher-loop shutdown**, and the investigation should start there
+  rather than at that assertion. (Etap 5 also fixed a *different*, self-inflicted hang: the second class used
+  `IClassFixture`, which creates one fixture PER CLASS and so produced a second `HeadlessUnitTestSession` —
+  banned by #94/#226. The fixture is now an `ICollectionFixture`; gotcha #286.) Still its own infrastructure
+  task; do not detour a sprint etap into it.
+  **⚠ 2026-07-28, Keyboard Manager etap 2 — the hang REPRODUCED A THIRD TIME, and named the SAME test for
+  the third time** *(see the reframing above — the name was positional)*. A single full-suite run hung;
+  `--blame-hang` reported **5868 of 5869 tests
+  `Completed="True"`** and the one that was not as
+  **`ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`** — again. **Three independent
+  observations across three sprints now agree on the name**, and the count says it hangs on the *last* test
+  of the run, which fits "after the work is done, not a failing assertion". Both partitions were green on the
+  same commit immediately before and after. Not caused by this sprint (nothing here touches the completion
+  probe or the headless session — the two tests it *did* add to that class both pass). Dump + sequence file
+  under `tests/EmberTern.Tests/TestResults/`. **Still its own infrastructure task; do not detour a sprint
+  etap into it.**
   **⚠ 2026-07-27, hardening sprint — the hang REPRODUCED A SECOND TIME, and named the SAME test.** Four
   consecutive full runs this session finished green in one pass; the fifth hung, and `--blame-hang` reported
   the only test not `Completed="True"` as **`ConnectionExpandBindingProbe.CompletionRow_HighlightsMatchedPrefix`**
@@ -3069,7 +3255,14 @@ for the full explanation, code, and the failure it prevents.
 - One headless UI test session per test **process** — share it, never `StartNew` per test. Not tidiness:
   AvaloniaEdit builds its caret/editing `KeyBinding`s as **static** lists owned by the thread of whichever
   session first constructs a `TextEditor`, so any real key sent into an editor from a later session throws
-  *"the calling thread cannot access this object"* — no injection style avoids it. *(#94, #226)*
+  *"the calling thread cannot access this object"* — no injection style avoids it. **It is shared through an
+  `ICollectionFixture` (`HeadlessCollection`), NOT `IClassFixture`** — the latter creates one per test *class*,
+  so a second consumer silently gets a second session; join the collection instead. *(#94, #226, #286)*
+- **A derived value that is typed by hand goes stale SILENTLY, and the guard against it must key on the
+  value's SOURCE, not on the value.** A shortcut written into a string (`"Format SQL · Alt+F"`) survived the
+  gesture being re-bound with a green build and green tests — a tooltip teaching a key that no longer existed.
+  A *correctly composed* string contains the same text at run time, so only the declaration (`const` = literal
+  by definition) distinguishes the two. Generalises to any copied derived fact. *(#284)*
 - **Reflect the real runtime contract of a UI member before guarding on it.** AvaloniaEdit's `TextEditor`
   is **not focusable** — `editor.Focus()` is a no-op returning `false` and `editor.IsFocused` is *always*
   false; keyboard focus lives on `editor.TextArea`. A guard written against the plausible-looking member
@@ -3162,7 +3355,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (264 entries, #1–#277), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (273 entries, #1–#286), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

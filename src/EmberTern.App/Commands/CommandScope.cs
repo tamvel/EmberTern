@@ -1,0 +1,37 @@
+namespace EmberTern.App.Commands;
+
+/// <summary>
+/// Where a command lives, and therefore how specific its claim on a gesture is.
+///
+/// <para>⚠ <b>The numeric values are the resolution order and are load-bearing</b>: the router tries
+/// candidates from the HIGHEST value down, so a more specific scope wins. Renumbering these changes
+/// which command a gesture invokes.</para>
+///
+/// <para>A scope is only added when a command actually needs it (<c>Tree</c> and <c>Grid</c> arrive with
+/// the tree/grid commands in etap 3) — an unreachable scope reads like working behaviour and is not.</para>
+/// </summary>
+public enum CommandScope
+{
+    /// <summary>Available whenever the window is. The fallback, always tried last.</summary>
+    Global = 0,
+
+    /// <summary>Belongs to the selected workspace tab — resolved through
+    /// <c>WorkspaceTabViewModel.ResolveCommand</c>, which returns null for a tab kind that has no such
+    /// command. That null is what stops a gesture leaking into a tab it means nothing on.</summary>
+    Tab = 1,
+
+    // ── The three focus scopes ──────────────────────────────────────────────────────────────────────
+    // The caret is in at most one of these at a time, so their order relative to each other is very
+    // nearly never exercised. It is still ordered innermost-first rather than arbitrarily, because
+    // nesting is possible in principle (an editor hosted inside a grid cell) and the innermost control
+    // is the one the user is typing in.
+
+    /// <summary>Live while the focus is inside a <c>DataGrid</c> — the collection lists and data grids.</summary>
+    Grid = 2,
+
+    /// <summary>Live while the focus is inside the Object Explorer's list.</summary>
+    Tree = 3,
+
+    /// <summary>Live only while the keyboard focus is inside an AvaloniaEdit <c>TextEditor</c>.</summary>
+    Editor = 4,
+}

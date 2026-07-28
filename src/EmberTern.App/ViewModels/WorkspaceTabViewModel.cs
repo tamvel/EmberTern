@@ -1,6 +1,8 @@
 using System.Globalization;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Commands;
 using EmberTern.Core.Metadata;
 
 namespace EmberTern.App.ViewModels;
@@ -483,6 +485,74 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.RefreshAsync() ?? Task.CompletedTask,
         WorkspaceTabKind.IndexDetail => IndexDetail?.RefreshAsync() ?? Task.CompletedTask,
         _ => Task.CompletedTask,
+    };
+
+    /// <summary>
+    /// The command this tab offers for <paramref name="id"/>, or null when this tab kind has no such
+    /// command. The fourth member of the same per-kind family as <see cref="UnsavedWork"/> /
+    /// <see cref="SavableEditor"/> / <see cref="RefreshAsync"/> above — the mapping lives here, the command
+    /// logic stays in each tab's own view model.
+    ///
+    /// <para>⭐ <b>The <c>_ => null</c> arms are the feature, not filler.</b> <c>F5</c> used to be a window
+    /// binding that fell through to "execute the SQL editor's text" from every tab that did not claim it —
+    /// so pressing it on a Table editor or the Security Manager ran whatever was in the editor, inside the
+    /// user's working transaction. A tab that has no main action now returns null, the router finds nothing
+    /// live, and the key does nothing.</para>
+    ///
+    /// <para>⚠ Takes a <see cref="CommandId"/> and returns an <see cref="ICommand"/>: no
+    /// <c>KeyGesture</c> reaches a view model. Gestures belong to <see cref="Commands.CommandCatalog"/>
+    /// and the view layer.</para>
+    /// </summary>
+    internal ICommand? ResolveCommand(CommandId id) => id switch
+    {
+        // The main action of the tab. One command id, because to the user it is one idea — "do the thing
+        // this tab is for" — and because that keeps F5 a single, validatable claim in the catalog.
+        CommandId.Go => Kind switch
+        {
+            WorkspaceTabKind.Query => _owner.ExecuteQueryCommand,
+            WorkspaceTabKind.Debugger => Debugger?.GoCommand,
+            WorkspaceTabKind.ScriptExecutor => ScriptExecutor?.RunCommand,
+            WorkspaceTabKind.DataImport => DataImport?.ImportCommand,
+            _ => null,
+        },
+        CommandId.ExecuteQuery => Kind is WorkspaceTabKind.Query ? _owner.ExecuteQueryCommand : null,
+        CommandId.ExecuteQueryFull => Kind is WorkspaceTabKind.Query ? _owner.ExecuteQueryFullCommand : null,
+
+        // Ctrl+K — the console plus the five source-bearing object editors. Each returns the editor's own
+        // FormatSqlCommand, i.e. the very command that editor's toolbar button and context menu invoke.
+        CommandId.FormatSql => Kind switch
+        {
+            WorkspaceTabKind.Query => _owner.FormatSqlCommand,
+            WorkspaceTabKind.ViewDetail => ViewDetail?.FormatSqlCommand,
+            WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.FormatSqlCommand,
+            WorkspaceTabKind.TriggerDetail => TriggerDetail?.FormatSqlCommand,
+            WorkspaceTabKind.FunctionDetail => FunctionDetail?.FormatSqlCommand,
+            WorkspaceTabKind.PackageDetail => PackageDetail?.FormatSqlCommand,
+            _ => null,
+        },
+
+        // F7 — Compile. The application's most-used action after Execute, and it had no shortcut at all.
+        // Each editor's own CompileCommand, so its CanExecute, its buffered-edit semantics and the DDL
+        // change-safety gate all apply exactly as they do from the toolbar.
+        CommandId.Compile => Kind switch
+        {
+            WorkspaceTabKind.NewTable => NewTable?.CompileCommand,
+            WorkspaceTabKind.TableDetail => TableDetail?.CompileCommand,
+            WorkspaceTabKind.ViewDetail => ViewDetail?.CompileCommand,
+            WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.CompileCommand,
+            WorkspaceTabKind.TriggerDetail => TriggerDetail?.CompileCommand,
+            WorkspaceTabKind.FunctionDetail => FunctionDetail?.CompileCommand,
+            WorkspaceTabKind.GeneratorDetail => GeneratorDetail?.CompileCommand,
+            WorkspaceTabKind.DomainDetail => DomainDetail?.CompileCommand,
+            WorkspaceTabKind.PackageDetail => PackageDetail?.CompileCommand,
+            WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.CompileCommand,
+            WorkspaceTabKind.IndexDetail => IndexDetail?.CompileCommand,
+            _ => null,
+        },
+        CommandId.ImportValidate => DataImport?.ValidateCommand,
+        CommandId.ImportRefresh => DataImport?.RefreshCommand,
+        CommandId.ImportBrowse => DataImport?.BrowseCommand,
+        _ => null,
     };
 
     [RelayCommand]

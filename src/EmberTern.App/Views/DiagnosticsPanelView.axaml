@@ -41,7 +41,7 @@
                  opens the SAME menu Ctrl+. and the bulb open — no separate way to obtain or run a fix. -->
             <Grid.ContextMenu>
               <ContextMenu>
-                <MenuItem Header="{x:Static app:UiStrings.CodeActionsMenuItem}" Click="OnQuickFixClick" />
+                <MenuItem Header="{x:Static app:UiStrings.CodeActionsMenuItem}" Icon="{app:MenuIcon Icon.LightbulbFilled}" InputGesture="{app:CommandGesture EditorQuickFix}" Click="OnQuickFixClick" />
               </ContextMenu>
             </Grid.ContextMenu>
 

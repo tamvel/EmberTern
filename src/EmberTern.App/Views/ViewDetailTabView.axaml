@@ -361,12 +361,12 @@
                     IsVisible="{Binding HasDataResult}">
             <DataGrid.ContextMenu>
               <ContextMenu>
-                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnViewDataFilterByValueClick" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnViewDataExcludeValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnViewDataFilterByValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnViewDataExcludeValueClick" />
                 <MenuItem x:Name="ViewDataFilterContainsItem"
-                          Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnViewDataFilterContainsClick" />
+                          Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnViewDataFilterContainsClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Click="OnViewDataExportClick" />
+                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnViewDataExportClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

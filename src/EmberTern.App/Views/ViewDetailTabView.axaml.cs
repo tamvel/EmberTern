@@ -55,19 +55,12 @@ public partial class ViewDetailTabView : UserControl
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("ViewDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         _dataPreviewGrid = this.FindControl<DataGrid>("DataPreviewGrid");
-        if (_sqlEditor is not null)
-        {
-            _sqlEditor.TextChanged += OnSqlEditorTextChanged;
-            // Alt+F formats the active editor — same gesture as the SQL Editor. Handled
-            // in code-behind because the global window-level Alt+F binding targets
-            // the SQL Editor's VM; a focused-editor KeyDown is the reliable route.
-            _sqlEditor.KeyDown += OnSqlEditorKeyDown;
-        }
-        if (_bodyEditor is not null)
-        {
-            _bodyEditor.TextChanged += OnBodyEditorTextChanged;
-            _bodyEditor.KeyDown += OnSqlEditorKeyDown;
-        }
+        // Format is not wired here any more: it is CommandId.FormatSql (Ctrl+K), declared once in
+        // Commands.CommandCatalog for this tab kind and routed to this VM's own FormatSqlCommand. The two
+        // local Alt+F handlers this replaced existed only because the old window-level Alt+F binding
+        // targeted the SQL Editor's view model and could not reach this one.
+        if (_sqlEditor is not null) _sqlEditor.TextChanged += OnSqlEditorTextChanged;
+        if (_bodyEditor is not null) _bodyEditor.TextChanged += OnBodyEditorTextChanged;
         if (_dataPreviewGrid is not null)
         {
             _dataPreviewGrid.Sorting += OnDataPreviewSorting;
@@ -132,17 +125,6 @@ public partial class ViewDetailTabView : UserControl
         }
     }
 
-    private void OnSqlEditorKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Alt && _currentVm is not null)
-        {
-            if (_currentVm.FormatSqlCommand.CanExecute(null))
-            {
-                _currentVm.FormatSqlCommand.Execute(null);
-                e.Handled = true;
-            }
-        }
-    }
 
     // The editor the toolbar Format / selection callbacks act on: the AS-SELECT body
     // editor in Easy mode, the full-source editor in Source mode.

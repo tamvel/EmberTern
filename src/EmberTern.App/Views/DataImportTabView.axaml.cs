@@ -240,17 +240,19 @@ public partial class DataImportTabView : UserControl
     // ── Keyboard (§9.2) ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// <c>F5</c> imports, <c>Ctrl+F5</c> validates, <c>Esc</c> cancels a run, <c>Ctrl+O</c> picks a file,
-    /// <c>Ctrl+R</c> and <c>Ctrl+V</c> refresh.
+    /// The two gestures this view still owns: <c>Esc</c> cancels a run, and <c>Ctrl+V</c> re-reads the
+    /// clipboard source.
     /// <para>
-    /// Every one of them goes through the very command the button does — the shortcut is a second trigger, never
-    /// a second path — and each is guarded by that command's own <c>CanExecute</c>, so a shortcut can never do
-    /// what the disabled button refuses to.
+    /// <c>F5</c> (import), <c>Ctrl+F5</c> (validate), <c>Ctrl+O</c> (browse) and <c>Ctrl+R</c> (refresh) moved
+    /// to <c>Commands.CommandCatalog</c> and are dispatched by the router — same commands, same
+    /// <c>CanExecute</c> gates, one declaration instead of one per surface. The shortcut is still a second
+    /// trigger and never a second path.
     /// </para>
     /// <para>
     /// <c>Ctrl+V</c> is the same command as <c>Ctrl+R</c>: on this surface „paste" and „re-read the clipboard" are
     /// the same request, and the clipboard read lives in the recalculation chain, so there is nothing else for it
-    /// to invoke. It steps aside for a text field, where <c>Ctrl+V</c> still has to mean paste.
+    /// to invoke. It steps aside for a text field, where <c>Ctrl+V</c> still has to mean paste — and that is
+    /// exactly why it stayed here while <c>Ctrl+R</c> went to the catalog.
     /// </para>
     /// </summary>
     protected override void OnKeyDown(KeyEventArgs e)
@@ -263,31 +265,23 @@ public partial class DataImportTabView : UserControl
 
         switch (e.Key)
         {
-            case Key.F5 when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                if (Invoke(_bound.ValidateCommand)) e.Handled = true;
-                return;
-
-            case Key.F5:
-                if (Invoke(_bound.ImportCommand)) e.Handled = true;
-                return;
-
-            // Esc only when there is a run to stop; otherwise it stays the ordinary "dismiss" key.
+            // Esc only when there is a run to stop; otherwise it stays the ordinary "dismiss" key. Kept
+            // local and deliberately UNDECLARED in the catalog: Escape is a universal dismiss owned by
+            // every popup, dialog and filter box, and declaring it would invent collisions with all of them.
             case Key.Escape:
                 if (Invoke(_bound.CancelRunCommand)) e.Handled = true;
                 return;
 
-            case Key.O when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                _bound.BrowseCommand.Execute(null);
-                e.Handled = true;
-                return;
-
-            // Inside a text field Ctrl+V stays paste. Checking the event's SOURCE rather than trusting the
-            // TextBox to have marked the key handled means the guard holds either way.
+            // Ctrl+V re-reads the clipboard SOURCE, which is paste semantics — so inside a text field it
+            // must stay paste. That guard is why this one gesture is not routed: the router answers on the
+            // bubble phase and would have to re-implement a source check to know it should keep out.
+            // Checking the event's SOURCE rather than trusting the TextBox to have marked the key handled
+            // means the guard holds either way. (Ctrl+R, the same Refresh without the paste overlap, IS
+            // routed — see CommandId.ImportRefresh.)
             case Key.V when e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Source is TextBox:
                 break;
 
             case Key.V when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-            case Key.R when e.KeyModifiers.HasFlag(KeyModifiers.Control):
                 if (Invoke(_bound.RefreshCommand)) e.Handled = true;
                 return;
         }

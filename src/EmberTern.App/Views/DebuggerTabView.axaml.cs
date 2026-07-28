@@ -451,7 +451,15 @@ public partial class DebuggerTabView : UserControl
     }
 
     // Tab-scoped VS-standard debugger keys (spec §9.7). Tunnelled so the read-only editor never swallows
-    // them first. F5 = Continue here (Execute in the SQL editor — the one deliberate contradiction).
+    // them first. Every gesture here is declared in Commands.CommandCatalog as CommandDispatch.Reserved:
+    // the catalog knows about them (so no global gesture can quietly steal one, and menus/tooltips can show
+    // them) while dispatch stays here, because several are VIEW actions needing the source editor's caret —
+    // Run To Cursor and Toggle Breakpoint have no view-model command to route to.
+    //
+    // ⚠ F5 is deliberately ABSENT: it is CommandId.Go, resolved by the router to DebuggerTabViewModel's
+    // GoCommand. It used to be handled here AND by the window's F5 binding (which routed to the debugger
+    // too) — two owners for one key, where this one won only while focus sat inside the debugger tab. F5
+    // still means Continue in the debugger and Execute in the SQL editor: the one ratified contradiction.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
         if (_vm is null) return;
@@ -463,7 +471,6 @@ public partial class DebuggerTabView : UserControl
         {
             case Key.F5 when ctrl && shift: Invoke(_vm.RestartCommand); break;
             case Key.F5 when shift: Invoke(_vm.StopCommand); break;
-            case Key.F5: Invoke(_vm.ContinueCommand); break;
             case Key.F10 when ctrl: RunToCursor(); break;
             case Key.F10: Invoke(_vm.StepOverCommand); break;
             case Key.F11 when shift: Invoke(_vm.StepOutCommand); break;

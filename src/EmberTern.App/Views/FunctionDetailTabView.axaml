@@ -84,11 +84,11 @@
                           Background="{DynamicResource BackgroundBrush}">
                   <DataGrid.ContextMenu>
                     <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionAddTooltip}" Command="{Binding AddCollectionItemCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionRemoveTooltip}" Command="{Binding RemoveCollectionItemCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddCollectionItemCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding RemoveCollectionItemCommand}" />
                       <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Command="{Binding MoveCollectionItemUpCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Command="{Binding MoveCollectionItemDownCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveCollectionItemUpCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveCollectionItemDownCommand}" />
                     </ContextMenu>
                   </DataGrid.ContextMenu>
                 </DataGrid>
@@ -131,11 +131,11 @@
                           Background="{DynamicResource BackgroundBrush}">
                   <DataGrid.ContextMenu>
                     <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionAddTooltip}" Command="{Binding AddCollectionItemCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionRemoveTooltip}" Command="{Binding RemoveCollectionItemCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddCollectionItemCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding RemoveCollectionItemCommand}" />
                       <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Command="{Binding MoveCollectionItemUpCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Command="{Binding MoveCollectionItemDownCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveCollectionItemUpCommand}" />
+                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveCollectionItemDownCommand}" />
                     </ContextMenu>
                   </DataGrid.ContextMenu>
                 </DataGrid>
@@ -419,12 +419,12 @@
                     IsVisible="{Binding HasExecResult}">
             <DataGrid.ContextMenu>
               <ContextMenu>
-                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnFuncFilterByValueClick" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnFuncExcludeValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnFuncFilterByValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnFuncExcludeValueClick" />
                 <MenuItem x:Name="FuncFilterContainsItem"
-                          Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnFuncFilterContainsClick" />
+                          Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnFuncFilterContainsClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Click="OnFuncExportClick" />
+                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnFuncExportClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

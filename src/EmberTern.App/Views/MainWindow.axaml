@@ -25,16 +25,13 @@
     <vm:MainWindowViewModel />
   </Design.DataContext>
 
-  <Window.KeyBindings>
-    <!-- F5 is the application-level "Go" router (MainWindowViewModel.GoCommand): it means Execute Query in the
-         SQL editor, Start Debugging on a debugger launch panel, and Continue in a paused debug session — the
-         active workspace tab decides. Ctrl+Enter stays a SQL-editor-specific Execute. Shift+F5 stays Execute
-         (full) for now; making it debugger-aware (Stop) is a scoped follow-up. -->
-    <KeyBinding Gesture="F5" Command="{Binding GoCommand}" />
-    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding ExecuteQueryCommand}" />
-    <KeyBinding Gesture="Shift+F5" Command="{Binding ExecuteQueryFullCommand}" />
-    <KeyBinding Gesture="Alt+F" Command="{Binding FormatSqlCommand}" />
-  </Window.KeyBindings>
+  <!-- ⛔ No Window.KeyBindings block, on purpose. Every application gesture is declared ONCE in
+       Commands.CommandCatalog and dispatched by Commands.CommandRouter (wired in the code-behind), so a
+       shortcut's meaning follows from its declared scope instead of from which handler happened to run
+       first. Adding a KeyBinding here would re-create the second mechanism this sprint removed: the block
+       that used to live at this spot bound F5 to a command that ended "anything else → Execute Query",
+       which ran the editor's text — in the user's working transaction — from tabs that have nothing to
+       execute. Register the gesture in the catalog instead. -->
 
   <!-- Rows: titlebar | settings-health banner (Auto ⇒ zero height when healthy) | body | status bar.
        The banner row exists because a settings.dat this build cannot read makes EVERY store silently stop
@@ -453,11 +450,14 @@
                   <Border.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="{x:Static app:UiStrings.FolderContextAddConnection}"
+                                Icon="{app:MenuIcon Icon.Plus}"
                                 Command="{Binding AddConnectionCommand}" />
                       <Separator />
                       <MenuItem Header="{x:Static app:UiStrings.FolderContextRename}"
+                                Icon="{app:MenuIcon Icon.Pencil}"
                                 Command="{Binding BeginRenameCommand}" />
                       <MenuItem Header="{x:Static app:UiStrings.FolderContextDelete}"
+                                Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                                 Command="{Binding DeleteCommand}" />
                     </ContextMenu>
                   </Border.ContextMenu>
@@ -492,30 +492,40 @@
                   <Border.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="Connect"
+                                Icon="{app:MenuIcon Icon.PlugZap}"
                                 Command="{Binding ConnectCommand}"
                                 IsVisible="{Binding !IsConnected}" />
                       <MenuItem Header="Disconnect"
+                                Icon="{app:MenuIcon Icon.Unplug}"
                                 Command="{Binding DisconnectCommand}"
                                 IsVisible="{Binding IsConnected}" />
                       <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRefresh}"
+                                Icon="{app:MenuIcon Icon.RefreshCw}"
+                                InputGesture="{app:CommandGesture RefreshMetadata}"
                                 Command="{Binding RefreshMetadataCommand}"
                                 IsVisible="{Binding IsConnected}" />
                       <Separator />
-                      <MenuItem Header="Edit" Command="{Binding EditCommand}" />
-                      <MenuItem Header="Copy" Command="{Binding CopyCommand}" />
-                      <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+                      <MenuItem Header="Edit" Icon="{app:MenuIcon Icon.Pencil}" Command="{Binding EditCommand}" />
+                      <MenuItem Header="Copy" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
+                      <MenuItem Header="Delete" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                                Command="{Binding DeleteCommand}" />
                       <Separator IsVisible="{Binding IsConnected}" />
                       <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecomputeStats}"
+                                Icon="{app:MenuIcon Icon.Sigma}"
                                 Command="{Binding RecomputeAllStatisticsCommand}"
                                 IsVisible="{Binding IsConnected}" />
                       <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecompile}"
+                                Icon="{app:MenuIcon Icon.Hammer}"
                                 Command="{Binding RecompileAllObjectsCommand}"
                                 IsVisible="{Binding IsConnected}" />
                       <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}">
+                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}"
+                                Icon="{app:MenuIcon Icon.ListFilter}">
                         <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"
+                                  Icon="{app:MenuIcon Icon.ArrowUp}"
                                   Command="{Binding SortAscendingCommand}" />
                         <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortDescending}"
+                                  Icon="{app:MenuIcon Icon.ArrowDown}"
                                   Command="{Binding SortDescendingCommand}" />
                       </MenuItem>
                     </ContextMenu>
@@ -547,10 +557,18 @@
                         DoubleTapped="OnMetadataNodeDoubleTapped">
                   <Border.ContextMenu>
                     <ContextMenu>
+                      <!-- Icons come from the existing geometry dictionary through {app:MenuIcon}; gestures
+                           from CommandCatalog through {app:CommandGesture}, so a re-bind reaches this menu
+                           without anyone editing it. New / Delete / Refresh are the Tree-scope gestures —
+                           this is where they were always meant to be surfaced (etap 4 §14.4 deliberately
+                           kept them off the toolbar, where they do not fire). -->
                       <MenuItem Header="{Binding ContextNewLabel}"
+                                Icon="{app:MenuIcon Icon.Plus}"
+                                InputGesture="{app:CommandGesture NewObject}"
                                 Command="{Binding NewCommand}"
                                 IsVisible="{Binding SupportsNew}" />
                       <MenuItem Header="{Binding ContextRecompileAllLabel}"
+                                Icon="{app:MenuIcon Icon.Hammer}"
                                 Command="{Binding RecompileAllCommand}"
                                 IsVisible="{Binding IsRecompilableGroup}" />
                       <Separator IsVisible="{Binding IsTriggerGroup}" />
@@ -558,6 +576,7 @@
                            scope moved onto the selected trigger leaves (see below) so the user doesn't
                            scroll back to this header to act on a multi-selection. -->
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                                Icon="{app:MenuIcon Icon.Check}"
                                 IsVisible="{Binding IsTriggerGroup}">
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
                                   Command="{Binding ActivateVisibleCommand}" />
@@ -565,6 +584,7 @@
                                   Command="{Binding ActivateAllCommand}" />
                       </MenuItem>
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                                Icon="{app:MenuIcon Icon.Pause}"
                                 IsVisible="{Binding IsTriggerGroup}">
                         <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
                                   Command="{Binding DeactivateVisibleCommand}" />
@@ -576,38 +596,62 @@
                            (which owns the selection) via the node VM so they resolve inside the
                            ContextMenu's popup namescope (gotcha #180). -->
                       <MenuItem Header="{Binding ActivateSelectedTriggersLabel}"
+                                Icon="{app:MenuIcon Icon.Check}"
                                 Command="{Binding ActivateSelectedTriggersCommand}"
                                 IsVisible="{Binding ShowSelectedTriggerOps}" />
                       <MenuItem Header="{Binding DeactivateSelectedTriggersLabel}"
+                                Icon="{app:MenuIcon Icon.Pause}"
                                 Command="{Binding DeactivateSelectedTriggersCommand}"
                                 IsVisible="{Binding ShowSelectedTriggerOps}" />
                       <MenuItem Header="{Binding ContextEditLabel}"
+                                Icon="{app:MenuIcon Icon.Pencil}"
                                 Command="{Binding OpenDdlCommand}"
                                 IsVisible="{Binding CanEditLeaf}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
+                                Icon="{app:MenuIcon Icon.Play}"
                                 Command="{Binding ExecuteProcedureCommand}"
                                 IsVisible="{Binding IsProcedureLeaf}" />
+                      <!-- The debugger's identity mark is a two-colour composite control, not a single
+                           stroked geometry, so it cannot come through {app:MenuIcon}. Set inline — reusing
+                           the one existing mark rather than drawing a second, flatter debugger icon. -->
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
                                 Command="{Binding DebugProcedureCommand}"
-                                IsVisible="{Binding IsProcedureLeaf}" />
+                                IsVisible="{Binding IsProcedureLeaf}">
+                        <MenuItem.Icon>
+                          <controls:DebuggerIcon Width="14" Height="14" />
+                        </MenuItem.Icon>
+                      </MenuItem>
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
                                 Command="{Binding DebugTriggerCommand}"
-                                IsVisible="{Binding IsTriggerLeaf}" />
+                                IsVisible="{Binding IsTriggerLeaf}">
+                        <MenuItem.Icon>
+                          <controls:DebuggerIcon Width="14" Height="14" />
+                        </MenuItem.Icon>
+                      </MenuItem>
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
                                 Command="{Binding DebugFunctionCommand}"
-                                IsVisible="{Binding IsFunctionLeaf}" />
+                                IsVisible="{Binding IsFunctionLeaf}">
+                        <MenuItem.Icon>
+                          <controls:DebuggerIcon Width="14" Height="14" />
+                        </MenuItem.Icon>
+                      </MenuItem>
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                                Icon="{app:MenuIcon Icon.Check}"
                                 Command="{Binding ActivateCommand}"
                                 IsVisible="{Binding ShowActivate}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                                Icon="{app:MenuIcon Icon.Pause}"
                                 Command="{Binding DeactivateCommand}"
                                 IsVisible="{Binding ShowDeactivate}" />
                       <Separator IsVisible="{Binding CanDeleteLeaf}" />
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
+                                Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                                InputGesture="{app:CommandGesture DeleteObject}"
                                 Command="{Binding DeleteCommand}"
                                 IsVisible="{Binding CanDeleteLeaf}" />
                       <Separator IsVisible="{Binding ShowCopyNameLeaf}" />
                       <MenuItem Header="{Binding ContextCopyNameLabel}"
+                                Icon="{app:MenuIcon Icon.Copy}"
                                 Command="{Binding CopyNameCommand}"
                                 IsVisible="{Binding ShowCopyNameLeaf}" />
                     </ContextMenu>
@@ -980,12 +1024,23 @@
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep2Visible}" />
 
-              <!-- ── SECTION 3 · Collection (unified router: + −  |  ↑ ↓) ────────────── -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionAddTooltip}"
+              <!-- ── SECTION 3 · Collection (unified router: New · Edit · Delete  |  ↑ ↓) ────────────
+                   Tooltips are BOUND, not static: they name the active collection's own noun and carry the
+                   gesture from CommandCatalog ("New field · F3" on a table's fields, "New parameter · F3" on
+                   a procedure's arguments). They used to be the constants "Add item" / "Remove item", so the
+                   toolbar and the context menu beside it described the same commands differently. -->
+              <Button Classes="icon" ToolTip.Tip="{Binding CollectionAddTooltip}"
                       Command="{Binding AddCollectionItemCommand}" IsVisible="{Binding ShowCollectionTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionRemoveTooltip}"
+              <!-- Edit was missing from the toolbar entirely while the fields context menu offered it. Shown
+                   only where the active collection HAS an edit action (ShowCollectionEdit) — a grid edited in
+                   place has none, and a permanently-greyed button teaches nothing. -->
+              <Button Classes="icon" ToolTip.Tip="{Binding CollectionEditTooltip}"
+                      Command="{Binding EditCollectionItemCommand}" IsVisible="{Binding ShowCollectionEdit}">
+                <controls:SvgIcon Data="{StaticResource Icon.Pencil}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{Binding CollectionRemoveTooltip}"
                       Command="{Binding RemoveCollectionItemCommand}" IsVisible="{Binding ShowCollectionTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Minus}" />
               </Button>
@@ -1288,8 +1343,10 @@
                         <Border.ContextMenu>
                           <ContextMenu>
                             <MenuItem Header="{x:Static app:UiStrings.QueryContextRename}"
+                                      Icon="{app:MenuIcon Icon.Pencil}"
                                       Command="{Binding BeginRenameCommand}" />
                             <MenuItem Header="{x:Static app:UiStrings.QueryContextDelete}"
+                                      Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                                       Command="{Binding DeleteCommand}" />
                           </ContextMenu>
                         </Border.ContextMenu>
@@ -1511,34 +1568,46 @@
                   <DataGrid.ContextMenu>
                     <ContextMenu Opening="OnResultContextMenuOpening">
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}"
+                                Icon="{app:MenuIcon Icon.Copy}"
                                 Click="OnCopyCellClick" />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}"
+                                Icon="{app:MenuIcon Icon.Copy}"
                                 Click="OnCopyRowClick" />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}"
+                                Icon="{app:MenuIcon Icon.Copy}"
                                 Click="OnCopyRowWithHeadersClick" />
                       <Separator />
                       <!-- Disabled-with-a-reason: the tooltip is bound unconditionally and is empty when
-                           the action is available, so a greyed item always says WHY. -->
+                           the action is available, so a greyed item always says WHY. (The shared menu style
+                           keeps a disabled row READABLE rather than fading it out — that reason has to be
+                           legible for the affordance to work.) -->
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyAsInsert}"
+                                Icon="{app:MenuIcon Icon.Query}"
                                 Click="OnCopyAsInsertClick"
                                 IsEnabled="{Binding SqlCopy.CanCopyAsInsert}"
                                 ToolTip.Tip="{Binding SqlCopy.CopyAsInsertTooltip}" />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyAsUpdate}"
+                                Icon="{app:MenuIcon Icon.Query}"
                                 Click="OnCopyAsUpdateClick"
                                 IsEnabled="{Binding SqlCopy.CanCopyAsUpdate}"
                                 ToolTip.Tip="{Binding SqlCopy.CopyAsUpdateTooltip}" />
                       <Separator />
                       <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}"
+                                Icon="{app:MenuIcon Icon.Copy}"
                                 Click="OnCopyAllWithHeadersClick" />
                       <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}"
+                                Icon="{app:MenuIcon Icon.Download}"
                                 Command="{Binding ExportResultsCommand}" />
                       <Separator />
                       <MenuItem Header="{x:Static app:UiStrings.FilterByValue}"
+                                Icon="{app:MenuIcon Icon.Filter}"
                                 Click="OnResultFilterByValueClick" />
                       <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}"
+                                Icon="{app:MenuIcon Icon.ListX}"
                                 Click="OnResultExcludeValueClick" />
                       <MenuItem x:Name="ResultFilterContainsItem"
                                 Header="{x:Static app:UiStrings.FilterContainsValue}"
+                                Icon="{app:MenuIcon Icon.Search}"
                                 Click="OnResultFilterContainsClick" />
                     </ContextMenu>
                   </DataGrid.ContextMenu>
@@ -1550,8 +1619,10 @@
                 <Grid.ContextMenu>
                   <ContextMenu>
                     <MenuItem Header="{x:Static app:UiStrings.MessagesCopyAll}"
+                              Icon="{app:MenuIcon Icon.Copy}"
                               Command="{Binding CopyAllMessagesCommand}" />
                     <MenuItem Header="{x:Static app:UiStrings.MessagesClear}"
+                              Icon="{app:MenuIcon Icon.Eraser}"
                               Command="{Binding ClearMessagesCommand}" />
                   </ContextMenu>
                 </Grid.ContextMenu>

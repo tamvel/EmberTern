@@ -122,36 +122,43 @@
                  Item-level IsVisible guarantees the hide; the ContextMenu-level IsVisible
                  suppresses the (otherwise empty) popup where the framework honors it. -->
             <ContextMenu IsVisible="{Binding CanAddField}">
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuAdd}"
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuAdd}" Icon="{app:MenuIcon Icon.Plus}"
                         Command="{Binding AddFieldCommand}"
-                        InputGesture="Insert"
+                        InputGesture="{app:CommandGesture CollectionAdd}"
                         IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuEdit}"
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuEdit}" Icon="{app:MenuIcon Icon.Pencil}"
                         Command="{Binding EditFieldCommand}"
-                        InputGesture="F2"
+                        InputGesture="{app:CommandGesture CollectionEdit}"
                         IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDrop}"
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDrop}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                         Command="{Binding DropFieldCommand}"
-                        InputGesture="Delete"
+                        InputGesture="{app:CommandGesture CollectionRemove}"
                         IsVisible="{Binding CanAddField}" />
               <Separator IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuCreateForeignKey}"
+              <!-- Reorder was on the toolbar and missing here, so the same surface offered a different set of
+                   operations depending on how the user reached it. Firebird can reposition a column, so these
+                   belong in both places. -->
+              <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}"
+                        Command="{Binding MoveFieldUpCommand}"
+                        IsVisible="{Binding CanAddField}" />
+              <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}"
+                        Command="{Binding MoveFieldDownCommand}"
+                        IsVisible="{Binding CanAddField}" />
+              <Separator IsVisible="{Binding CanAddField}" />
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuCreateForeignKey}" Icon="{app:MenuIcon Icon.Index}"
                         Command="{Binding CreateForeignKeyCommand}"
                         IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDropForeignKey}"
+              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDropForeignKey}" Icon="{app:MenuIcon Icon.ListX}"
                         Command="{Binding DropFieldForeignKeyCommand}"
                         IsVisible="{Binding CanAddField}" />
             </ContextMenu>
           </DataGrid.ContextMenu>
-          <!-- Keyboard shortcuts scoped to the grid — fire only when the grid
-               (or one of its rows) has focus. Insert / F2 / Delete map to the
-               same commands as the context menu so behavior stays consistent
-               across input modes. -->
-          <DataGrid.KeyBindings>
-            <KeyBinding Gesture="Insert" Command="{Binding AddFieldCommand}" />
-            <KeyBinding Gesture="F2" Command="{Binding EditFieldCommand}" />
-            <KeyBinding Gesture="Delete" Command="{Binding DropFieldCommand}" />
-          </DataGrid.KeyBindings>
+          <!-- ⛔ No DataGrid.KeyBindings here any more. Insert / F2 / Delete were three local bindings — the
+               last hand-typed gestures in the application — and are now CommandId.CollectionAdd / .CollectionEdit
+               / .CollectionRemove at Grid scope, dispatched by the one CommandRouter and displayed from the one
+               catalog. Measured before removing them: Avalonia's DataGrid claims none of the three itself, so
+               nothing was relying on the local binding to win a race. -->
+
           <DataGrid.Styles>
             <!-- Subtle indigo/violet tint on rows with a pending (uncompiled) modify edit.
                  The "pending" class is toggled in code-behind off the row VM's IsModified
@@ -491,10 +498,10 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu IsVisible="{Binding CanManageConstraints}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddPrimaryKey}"
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddPrimaryKey}" Icon="{app:MenuIcon Icon.Plus}"
                             Command="{Binding AddPrimaryKeyCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropPrimaryKey}"
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropPrimaryKey}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                             Command="{Binding DropConstraintCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
@@ -538,10 +545,10 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu IsVisible="{Binding CanManageConstraints}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddForeignKey}"
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddForeignKey}" Icon="{app:MenuIcon Icon.Plus}"
                             Command="{Binding CreateForeignKeyCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropForeignKey}"
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropForeignKey}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                             Command="{Binding DropConstraintCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
@@ -594,10 +601,10 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu IsVisible="{Binding CanManageConstraints}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddCheck}"
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddCheck}" Icon="{app:MenuIcon Icon.Plus}"
                             Command="{Binding AddCheckCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropCheck}"
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropCheck}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                             Command="{Binding DropConstraintCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
@@ -636,10 +643,10 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu IsVisible="{Binding CanManageConstraints}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddUnique}"
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddUnique}" Icon="{app:MenuIcon Icon.Plus}"
                             Command="{Binding AddUniqueCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropUnique}"
+                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropUnique}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                             Command="{Binding DropConstraintCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
@@ -684,17 +691,17 @@
                   Background="{DynamicResource BackgroundBrush}">
           <DataGrid.ContextMenu>
             <ContextMenu IsVisible="{Binding CanManageIndexes}">
-              <MenuItem Header="{x:Static app:UiStrings.IndexMenuAdd}"
+              <MenuItem Header="{x:Static app:UiStrings.IndexMenuAdd}" Icon="{app:MenuIcon Icon.Plus}"
                         Command="{Binding AddIndexCommand}"
                         IsVisible="{Binding CanManageIndexes}" />
-              <MenuItem Header="{x:Static app:UiStrings.IndexMenuDrop}"
+              <MenuItem Header="{x:Static app:UiStrings.IndexMenuDrop}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                         Command="{Binding DropIndexCommand}"
                         IsVisible="{Binding CanManageIndexes}" />
               <Separator IsVisible="{Binding CanManageIndexes}" />
-              <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeStatistics}"
+              <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeStatistics}" Icon="{app:MenuIcon Icon.Sigma}"
                         Command="{Binding RecomputeIndexStatisticsCommand}"
                         IsVisible="{Binding CanManageIndexes}" />
-              <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeAllStatistics}"
+              <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeAllStatistics}" Icon="{app:MenuIcon Icon.Sigma}"
                         Command="{Binding RecomputeAllIndexStatisticsCommand}"
                         IsVisible="{Binding CanManageIndexes}" />
             </ContextMenu>
@@ -1008,29 +1015,44 @@
                    right-clicked row/column are resolved in OnDataCellPointerPressed;
                    Set NULL enables by nullability, Contains by text category. -->
               <ContextMenu Opening="OnDataContextMenuOpening">
+                <!-- New / Delete row were toolbar-only while every other collection surface offered them in
+                     both places. Same commands the toolbar's + / − route to, with the gestures the catalog
+                     declares for a grid. -->
+                <MenuItem Header="{x:Static app:UiStrings.DataEditNewRow}"
+                          Icon="{app:MenuIcon Icon.Plus}"
+                          InputGesture="{app:CommandGesture CollectionAdd}"
+                          Command="{Binding AddRowCommand}"
+                          IsVisible="{Binding CanEditData}" />
+                <MenuItem Header="{x:Static app:UiStrings.DataEditDeleteRow}"
+                          Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                          InputGesture="{app:CommandGesture CollectionRemove}"
+                          Command="{Binding DeleteRowCommand}"
+                          IsVisible="{Binding CanEditData}" />
+                <Separator IsVisible="{Binding CanEditData}" />
                 <MenuItem x:Name="SetNullMenuItem"
                           Header="{x:Static app:UiStrings.DataEditSetNull}"
+                          Icon="{app:MenuIcon Icon.Eraser}"
                           Click="OnSetCellNullClick"
                           IsVisible="{Binding CanEditData}" />
                 <Separator IsVisible="{Binding CanEditData}" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Click="OnDataFilterByValueClick" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Click="OnDataExcludeValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnDataFilterByValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnDataExcludeValueClick" />
                 <MenuItem x:Name="DataFilterContainsItem"
-                          Header="{x:Static app:UiStrings.FilterContainsValue}" Click="OnDataFilterContainsClick" />
+                          Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnDataFilterContainsClick" />
                 <Separator />
                 <!-- Copy the right-clicked row as runnable DML. Disabled-with-a-reason: the tooltip is
                      bound unconditionally and is empty when the action is available, so a greyed item
                      always says WHY (design §5/§6). SqlCopy is null on a read-only table → both stay off. -->
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyAsInsert}"
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyAsInsert}" Icon="{app:MenuIcon Icon.Query}"
                           Click="OnDataCopyAsInsertClick"
                           IsEnabled="{Binding SqlCopy.CanCopyAsInsert}"
                           ToolTip.Tip="{Binding SqlCopy.CopyAsInsertTooltip}" />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyAsUpdate}"
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyAsUpdate}" Icon="{app:MenuIcon Icon.Query}"
                           Click="OnDataCopyAsUpdateClick"
                           IsEnabled="{Binding SqlCopy.CanCopyAsUpdate}"
                           ToolTip.Tip="{Binding SqlCopy.CopyAsUpdateTooltip}" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Click="OnDataExportClick" />
+                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnDataExportClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

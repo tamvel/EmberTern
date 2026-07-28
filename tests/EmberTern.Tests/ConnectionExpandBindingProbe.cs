@@ -16,7 +16,9 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using EmberTern.App;
+using EmberTern.App.Commands;
 using EmberTern.App.Completion;
+using EmberTern.App.Controls;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
@@ -25,6 +27,8 @@ using EmberTern.Core.Sql.Language.QuickInfo;
 using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql.Language.Signatures;
 using EmberTern.Firebird;
+using System.Text.RegularExpressions;
+using Avalonia.Controls.Presenters;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -52,6 +56,16 @@ namespace EmberTern.Tests;
 /// instances across threads, so any real KeyDown into an editor dies with "The calling thread cannot access
 /// this object because a different thread owns it" — regardless of how the key is injected.
 /// </para>
+/// <para>
+/// ⚠ <b>It is a COLLECTION fixture, not a class fixture, and that distinction is the whole guarantee.</b>
+/// xunit creates an <c>IClassFixture</c> once <i>per test class</i>, so the moment a second class wanted a
+/// headless session the process had TWO — which is precisely the state "ONE session" forbids. It was not
+/// theoretical: adding <c>ContextMenuPresentationTests</c> as an <c>IClassFixture</c> consumer made the
+/// full-suite run hang inside it, and <c>--blame-hang</c> named it. An <c>ICollectionFixture</c> is shared
+/// across every class in the collection and also serialises them, which is what a single UI thread needs.
+/// <b>Any new test that needs a headless session joins <see cref="HeadlessCollection"/> — never adds its own
+/// <c>IClassFixture&lt;HeadlessSessionFixture&gt;</c>.</b>
+/// </para>
 /// </summary>
 public sealed class HeadlessSessionFixture : IDisposable
 {
@@ -66,7 +80,18 @@ public sealed class HeadlessSessionFixture : IDisposable
     }
 }
 
-public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSessionFixture>
+/// <summary>
+/// The one collection every headless-UI test class belongs to, so they share a single
+/// <see cref="HeadlessSessionFixture"/> — one session, one UI thread, for the whole process.
+/// </summary>
+[CollectionDefinition(Name)]
+public sealed class HeadlessCollection : ICollectionFixture<HeadlessSessionFixture>
+{
+    public const string Name = "headless-avalonia";
+}
+
+[Collection(HeadlessCollection.Name)]
+public sealed class ConnectionExpandBindingProbe
 {
     private readonly HeadlessUnitTestSession SharedSession;
     private readonly ITestOutputHelper _out;
@@ -634,12 +659,15 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
         _out.WriteLine(log.ToString());
     }
 
-    // Etap 1 — Editor Find/Replace: the SearchPanel installer must attach cleanly and
-    // set a context menu, and the Ctrl+F router predicate (IsInsideEditor) must return
-    // true for an element inside a TextEditor and false otherwise. Guards the routing
-    // decision that leaves Ctrl+F for the editor vs. the sidebar filter.
+    // Editor Find/Replace + the Editor-scope predicate the CommandRouter resolves with.
+    //
+    // ⭐ [1] pins the fix for a MEASURED duplication: a TextEditor creates and installs its OWN SearchPanel,
+    // and EditorSearch used to call SearchPanel.Install on top of it — registering a second
+    // SearchInputHandler and returning a DIFFERENT panel, so Ctrl+F drove one instance while the context
+    // menu's Find/Replace drove another. Asserting the handler COUNT is what makes the regression
+    // impossible to reintroduce silently; asserting the panel is non-null would pass either way.
     [Fact]
-    public async System.Threading.Tasks.Task EditorSearch_InstallsAndRoutingPredicateHolds()
+    public async System.Threading.Tasks.Task EditorSearch_InstallsOnePanel_AndEditorScopePredicateHolds()
     {
         var session = SharedSession;
         var log = new StringBuilder();
@@ -653,24 +681,256 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var panel = EditorSearch.Install(editor);
-            log.AppendLine($"[1] panel installed = {panel is not null}, contextMenu = {editor.ContextMenu is not null}");
-            Assert.NotNull(panel);
+            int before = SearchHandlerCount(editor);
+            EditorSearch.Install(editor);
+            int after = SearchHandlerCount(editor);
+            log.AppendLine($"[1] SearchInputHandler count before={before} after={after}, "
+                           + $"panel={editor.SearchPanel is not null}, menu={editor.ContextMenu is not null}");
+
+            Assert.Equal(1, before);                  // the editor already brought one
+            Assert.Equal(1, after);                   // and Install must not add a second
+            Assert.NotNull(editor.SearchPanel);
             Assert.NotNull(editor.ContextMenu);
 
-            // Routing predicate: the editor (and its inner visual descendants) count as
-            // "inside an editor"; a sibling TextBox and null do not.
-            Assert.True(EditorSearch.IsInsideEditor(editor), "editor itself should be inside-editor");
+            // [2] Find opens the editor's OWN panel — the one Ctrl+F reaches.
+            Assert.True(EditorSearch.OpenFind(editor));
+            Assert.False(editor.SearchPanel!.IsReplaceMode);
+            Assert.True(EditorSearch.OpenReplace(editor));
+            Assert.True(editor.SearchPanel!.IsReplaceMode);
+
+            // [3] Replace is refused on a read-only surface (a DDL preview must not be offered a mutation).
+            var preview = new TextEditor { Width = 300, Height = 120, IsReadOnly = true };
+            root.Children.Add(preview);
+            Dispatcher.UIThread.RunJobs();
+            EditorSearch.Install(preview);
+            Assert.True(EditorSearch.OpenFind(preview));
+            Assert.False(EditorSearch.OpenReplace(preview));
+
+            // [4] CommandScope.Editor liveness: the editor and its inner visual descendants count as
+            // "in an editor"; a sibling TextBox and null do not. This is the whole of the router's Editor
+            // scope test, and it replaced the focus probe the window's Ctrl+F handler used to run.
+            Assert.Same(editor, EditorSearch.EditorFor(editor));
             var inner = editor.GetVisualDescendants().OfType<Avalonia.Visual>().FirstOrDefault(v => v != editor);
             if (inner is not null)
-                Assert.True(EditorSearch.IsInsideEditor(inner), "inner text view should be inside-editor");
-            Assert.False(EditorSearch.IsInsideEditor(outside), "sibling TextBox is not inside-editor");
-            Assert.False(EditorSearch.IsInsideEditor(null), "null is not inside-editor");
+                Assert.Same(editor, EditorSearch.EditorFor(inner));
+            Assert.Null(EditorSearch.EditorFor(outside));
+            Assert.Null(EditorSearch.EditorFor(null));
 
             window.Close();
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());
+    }
+
+    // ⭐ The CommandRouter's resolution, driven through the real thing — the catalog declaration plus the
+    // live focus probe. CommandCatalogTests pins the declaration; this pins that the router obeys it.
+    //
+    // [C1] is the audit's confirmed defect: F5 used to be a window binding whose command ended with
+    // "anything else → Execute Query", so on a tab with nothing to execute it ran the SQL editor's text in
+    // the user's working transaction. Here the router must simply decline.
+    [Fact]
+    public async System.Threading.Tasks.Task CommandRouter_ResolvesByScope_AndDeclinesWhereNothingIsLive()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+        var dir = Path.Combine(Path.GetTempPath(), "et-router-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        await session.Dispatch(() =>
+        {
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(new ConnectionProfileStore(dir), service);
+
+            var editor = new TextEditor { Width = 300, Height = 120 };
+            var outside = new TextBox { Width = 120, Height = 24 };
+            var tree = new ListBox { Width = 120, Height = 60 };
+            var grid = new DataGrid { Width = 120, Height = 60 };
+            var root = new StackPanel { Children = { editor, outside, tree, grid } };
+            var window = new Window { Width = 400, Height = 400, Content = root };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            EditorSearch.Install(editor);
+
+            int sidebarFocusRequests = 0;
+            var router = CommandRouter.Attach(
+                window, () => vm, () => { sidebarFocusRequests++; return true; }, () => tree);
+
+            // [1] F5 on a Query tab → the tab's main action is live, so the router handles it.
+            var query = WorkspaceTabViewModel.CreateQuery(vm);
+            vm.WorkspaceTabs.Add(query);
+            vm.SelectTab(query);
+            bool onQuery = router.Handle(Key.F5, KeyModifiers.None);
+            log.AppendLine($"[1] F5 on a Query tab handled = {onQuery}");
+            Assert.True(onQuery);
+
+            // [2] ⭐ C1 — F5 on a tab that has no main action must be DECLINED, not repurposed.
+            var ddl = WorkspaceTabViewModel.CreateDdl(
+                vm, new MetadataObject("V_X", MetadataObjectKind.View), "select 1 from rdb$database", null);
+            vm.WorkspaceTabs.Add(ddl);
+            vm.SelectTab(ddl);
+            bool onDdl = router.Handle(Key.F5, KeyModifiers.None);
+            log.AppendLine($"[2] F5 on a Ddl tab handled = {onDdl} (must be False)");
+            Assert.False(onDdl);
+
+            // [3] Ctrl+F with the caret OUTSIDE an editor → Global scope: focus the sidebar filter.
+            outside.Focus();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(router.Handle(Key.F, KeyModifiers.Control));
+            log.AppendLine($"[3] sidebar focus requests after Ctrl+F outside an editor = {sidebarFocusRequests}");
+            Assert.Equal(1, sidebarFocusRequests);
+
+            // [4] Ctrl+F with the caret INSIDE an editor → Editor scope wins: the Find bar opens and the
+            //     sidebar is left alone. This is the behaviour the deleted focus probe used to hand-code.
+            editor.TextArea.Focus();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(router.Handle(Key.F, KeyModifiers.Control));
+            log.AppendLine($"[4] sidebar focus requests after Ctrl+F inside an editor = {sidebarFocusRequests}"
+                           + $", replaceMode = {editor.SearchPanel!.IsReplaceMode}");
+            Assert.Equal(1, sidebarFocusRequests);          // unchanged → Global never ran
+            Assert.False(editor.SearchPanel!.IsReplaceMode); // Find, not Replace
+
+            // [5] A gesture nobody claims is left alone.
+            Assert.False(router.Handle(Key.F1, KeyModifiers.None));
+
+            // ── etap 3: the focus scopes ─────────────────────────────────────────────────────────────
+            // Every assertion below is deliberately about DECLINING. A gesture that fires here would run a
+            // real New / Delete / Compile / Close flow, and a test must not need those to prove routing;
+            // the resolution mappings are asserted without a UI in CommandCatalogTests.
+
+            // [6] F3 / F8 are Tree- and Grid-scoped only: with the caret in a plain text box neither scope
+            //     is live, so nothing claims them. (Before the scopes existed there was nowhere to put this
+            //     distinction — the gesture would have had to be global and always-on.)
+            outside.Focus();
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[6] outside a tree/grid: F3={router.Handle(Key.F3, KeyModifiers.None)} "
+                           + $"F8={router.Handle(Key.F8, KeyModifiers.None)}");
+            Assert.False(router.Handle(Key.F3, KeyModifiers.None));
+            Assert.False(router.Handle(Key.F8, KeyModifiers.None));
+
+            // [7] Tree scope becomes live with the caret in the object tree — but nothing is selected, so
+            //     the command resolves to null and the key is still left alone rather than swallowed.
+            tree.Focus();
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[7] in the tree, nothing selected: F3={router.Handle(Key.F3, KeyModifiers.None)} "
+                           + $"F4={router.Handle(Key.F4, KeyModifiers.None)}");
+            Assert.False(router.Handle(Key.F3, KeyModifiers.None));
+            Assert.False(router.Handle(Key.F4, KeyModifiers.None));
+
+            // [8] Grid scope live, but the selected tab (Ddl) owns no collection, so the unified collection
+            //     router's own CanExecute declines — no per-grid knowledge needed anywhere.
+            grid.Focus();
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[8] in a grid on a Ddl tab: F3={router.Handle(Key.F3, KeyModifiers.None)} "
+                           + $"F8={router.Handle(Key.F8, KeyModifiers.None)}");
+            Assert.False(router.Handle(Key.F3, KeyModifiers.None));
+            Assert.False(router.Handle(Key.F8, KeyModifiers.None));
+
+            // [9] F7 is Compile, declared only for the compilable tab kinds — a Ddl snapshot is not one.
+            Assert.False(router.Handle(Key.F7, KeyModifiers.None));
+
+            // [10] Ctrl+W closes the active tab, and the console tab is not closable, so it declines.
+            vm.SelectTab(query);
+            Assert.False(vm.CanCloseActiveTab);
+            log.AppendLine($"[10] Ctrl+W on the non-closable console tab = {router.Handle(Key.W, KeyModifiers.Control)}");
+            Assert.False(router.Handle(Key.W, KeyModifiers.Control));
+
+            // [11] Ctrl+K is FormatSql for a query tab; F6 / Shift+F6 decline with no live transaction.
+            Assert.False(vm.CanCommitAll);
+            Assert.False(router.Handle(Key.F6, KeyModifiers.None));
+            Assert.False(router.Handle(Key.F6, KeyModifiers.Shift));
+
+            window.Close();
+        }, CancellationToken.None);
+
+        try { Directory.Delete(dir, recursive: true); } catch { /* best-effort */ }
+        _out.WriteLine(log.ToString());
+    }
+
+    // ⭐ The Keyboard Manager's foundation, measured rather than assumed: AvaloniaEdit must not claim any
+    // FUNCTION key inside a TextEditor, because the whole shortcut map is F-key-first.
+    //
+    // This started as a throwaway probe during the audit and it overturned inherited AvalonEdit lore —
+    // F3/Shift+F3 are NOT find-next/previous here: SearchInputHandler registers its commands with no
+    // KeyGesture at all. It is a permanent test because the risk is a silent one: an AvaloniaEdit upgrade
+    // that started binding a function key would steal a global shortcut with the build still green.
+    //
+    // It also records what the editor DOES claim (Delete / Back / Return / arrows / Shift+Alt box-select),
+    // which is why a global gesture may never be one of those and why "no Alt combos" is the right policy.
+    [Fact]
+    public async System.Threading.Tasks.Task Editor_ClaimsNoFunctionKey_AndClaimsTheEditingKeys()
+    {
+        var session = SharedSession;
+        var log = new StringBuilder();
+
+        await session.Dispatch(() =>
+        {
+            var editor = new TextEditor { Width = 400, Height = 200 };
+            var window = new Window { Width = 500, Height = 300, Content = editor };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            EditorSearch.Install(editor);
+            Dispatcher.UIThread.RunJobs();
+
+            var claimed = ClaimedGestures(editor).ToArray();
+            log.AppendLine($"[gestures] {claimed.Length} claimed inside a TextEditor");
+
+            var functionKeys = Enumerable.Range((int)Key.F1, 12).Cast<Key>().ToArray();
+            var stolen = claimed.Where(g => functionKeys.Contains(g.Key)).ToArray();
+            log.AppendLine("[function keys claimed] "
+                           + (stolen.Length == 0 ? "<none>" : string.Join(", ", stolen.Select(g => g.ToString()))));
+
+            Assert.True(stolen.Length == 0,
+                "AvaloniaEdit now claims a function key, which collides with the F-key-first shortcut map: "
+                + string.Join(", ", stolen.Select(g => g.ToString())));
+
+            // The keys it genuinely owns — a global command must never take one of these.
+            Assert.Contains(new KeyGesture(Key.Delete), claimed);
+            Assert.Contains(new KeyGesture(Key.Back), claimed);
+            Assert.Contains(new KeyGesture(Key.Return), claimed);
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Every KeyGesture reachable from a live editor: its own KeyBindings, the TextArea's, and every input
+    // handler in the TextArea's (recursive) default-handler chain — which is where AvaloniaEdit actually
+    // keeps them.
+    private static System.Collections.Generic.IEnumerable<KeyGesture> ClaimedGestures(TextEditor editor)
+    {
+        foreach (var kb in editor.KeyBindings) if (kb.Gesture is not null) yield return kb.Gesture;
+        foreach (var kb in editor.TextArea.KeyBindings) if (kb.Gesture is not null) yield return kb.Gesture;
+        foreach (var g in FromHandler(editor.TextArea.DefaultInputHandler)) yield return g;
+
+        static System.Collections.Generic.IEnumerable<KeyGesture> FromHandler(object? handler)
+        {
+            if (handler is null) yield break;
+            var type = handler.GetType();
+
+            if (type.GetProperty("KeyBindings")?.GetValue(handler) is System.Collections.IEnumerable bindings)
+            {
+                foreach (var b in bindings)
+                    if (b.GetType().GetProperty("Gesture")?.GetValue(b) is KeyGesture g) yield return g;
+            }
+
+            if (type.GetProperty("NestedInputHandlers")?.GetValue(handler) is System.Collections.IEnumerable nested)
+            {
+                foreach (var child in nested)
+                    foreach (var g in FromHandler(child)) yield return g;
+            }
+        }
+    }
+
+    // How many SearchInputHandlers the editor's input pipeline carries. Reflection because
+    // TextAreaDefaultInputHandler.NestedInputHandlers is the only place the count is observable.
+    private static int SearchHandlerCount(TextEditor editor)
+    {
+        var handler = editor.TextArea.DefaultInputHandler;
+        var nested = handler.GetType()
+            .GetProperty("NestedInputHandlers")?
+            .GetValue(handler) as System.Collections.IEnumerable;
+        return nested?.Cast<object>().Count(h => h.GetType().Name == "SearchInputHandler") ?? -1;
     }
 
     // Stage 8 / Language Completion (App layer) — the LIVE interaction contract, which the pure Core
@@ -2516,4 +2776,250 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
             }
         }, CancellationToken.None);
     }
+    // ══════ Context-menu presentation (Keyboard Manager etap 5) ══════════════════════════════════ 
+
+    // ⭐ The one that matters most, because its failure mode is INVISIBLE: {app:MenuIcon} returns null for an
+    // unknown geometry key (deliberately — a typo must not take down a menu), so a mistyped key yields a
+    // menu item with no icon and nothing else wrong. Nobody notices one missing glyph among a hundred.
+    // So: every key any view actually passes to {app:MenuIcon} must resolve to a real geometry.
+    [Fact]
+    public async System.Threading.Tasks.Task EveryMenuIconKeyUsedInAViewResolvesToAGeometry()
+    {
+        var keys = MenuIconKeysUsedInViews();
+        Assert.NotEmpty(keys); // the scan itself must not silently find nothing
+
+        var unresolved = new List<string>();
+        await SharedSession.Dispatch(() =>
+        {
+            foreach (var key in keys)
+            {
+                if (new MenuIconExtension(key).ProvideValue() is not SvgIcon { Data: not null })
+                {
+                    unresolved.Add(key);
+                }
+            }
+        }, CancellationToken.None);
+
+        _out.WriteLine($"{keys.Count} distinct MenuIcon keys used across the views:"
+                       + Environment.NewLine + string.Join(", ", keys));
+
+        Assert.True(unresolved.Count == 0,
+            "These geometry keys are passed to {app:MenuIcon} but resolve to nothing, so those menu items "
+            + "show no icon and nothing fails: " + string.Join(", ", unresolved));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task MenuIcon_InheritsForegroundByDefault_AndTakesAThemeBrushWhenAsked()
+    {
+        await SharedSession.Dispatch(() =>
+        {
+            // Default: no local Foreground, so the icon follows the menu item's own colour — which is what
+            // makes a menu read as one calm block and gives selected/disabled states for free.
+            var plain = (SvgIcon)new MenuIconExtension("Icon.Copy").ProvideValue()!;
+            Assert.False(plain.IsSet(TemplatedControl.ForegroundProperty));
+
+            // The destructive exception, bound as a DYNAMIC resource so it still re-colours on theme toggle.
+            var danger = (SvgIcon)new MenuIconExtension("Icon.Trash") { Brush = "DangerIconBrush" }
+                .ProvideValue()!;
+            var host = new ContentControl { Content = danger };
+            var window = new Window { Width = 100, Height = 100, Content = host };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(danger.Foreground);
+            Assert.IsAssignableFrom<IBrush>(danger.Foreground);
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // The gesture column reads the catalog, so a re-bind reaches every menu offering the command. If this
+    // ever returned null for a declared command, menus would quietly stop showing shortcuts.
+    [Fact]
+    public void CommandGesture_ComesFromTheCatalog()
+    {
+        Assert.Equal(new KeyGesture(Key.F8), new CommandGestureExtension(CommandId.DeleteObject).ProvideValue());
+        Assert.Equal(new KeyGesture(Key.F3), new CommandGestureExtension(CommandId.NewObject).ProvideValue());
+        Assert.Equal(new KeyGesture(Key.F4), new CommandGestureExtension(CommandId.RefreshMetadata).ProvideValue());
+
+        // A command with no declared gesture leaves the column empty rather than inventing one.
+        Assert.Null(new CommandGestureExtension((CommandId)(-1)).ProvideValue());
+    }
+
+    // The shared style IS the app's menu control. If it stopped applying, every menu would silently revert to
+    // FluentTheme's 27px rows, 14px type and SystemAccentColor hover — the exact look this etap removed.
+    [Fact]
+    public async System.Threading.Tasks.Task TheSharedStyle_AppliesToEveryContextMenuWithoutOptIn()
+    {
+        var log = new StringBuilder();
+
+        await SharedSession.Dispatch(() =>
+        {
+            var item = new MenuItem
+            {
+                Header = "Delete",
+                Icon = new MenuIconExtension("Icon.Trash").ProvideValue(),
+                InputGesture = new CommandGestureExtension(CommandId.DeleteObject).ProvideValue(),
+            };
+            var menu = new ContextMenu { Items = { item } };
+            var host = new Border { Width = 120, Height = 30, ContextMenu = menu };
+            var window = new Window { Width = 300, Height = 200, Content = new StackPanel { Children = { host } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            menu.Open(host);
+            Dispatcher.UIThread.RunJobs();
+
+            log.AppendLine($"menu: fontSize={menu.FontSize} padding={menu.Padding} border={menu.BorderThickness}");
+            log.AppendLine($"item: fontSize={item.FontSize} padding={item.Padding} "
+                           + $"minHeight={item.MinHeight} height={item.Bounds.Height}");
+
+            // Density — the whole point of the etap's typography brief.
+            Assert.Equal(12d, item.FontSize);
+            Assert.Equal(22d, item.MinHeight);
+            Assert.Equal(new Avalonia.Thickness(10, 3), item.Padding);
+            Assert.Equal(12d, menu.FontSize);
+
+            // The chrome comes from the shared style, so a host never has to (and must never) set it.
+            Assert.Equal(new Avalonia.Thickness(1), menu.BorderThickness);
+            Assert.NotNull(menu.Background);
+
+            // The gesture really reached the template's own column, not a hand-built TextBlock.
+            var gesture = item.GetVisualDescendants().OfType<TextBlock>()
+                .FirstOrDefault(t => t.Name == "PART_InputGestureText");
+            Assert.NotNull(gesture);
+            Assert.Equal("F8", gesture!.Text);
+            log.AppendLine($"gesture column text = \"{gesture.Text}\", "
+                           + $"fontSize={gesture.FontSize}, foreground set={gesture.Foreground is not null}");
+            Assert.Equal(11d, gesture.FontSize);
+
+            // …and the icon reached the icon column.
+            var icon = item.GetVisualDescendants().OfType<SvgIcon>().FirstOrDefault();
+            Assert.NotNull(icon);
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // Etap 4 stopped gestures being typed by hand into UiStrings; this closes the same hole in XAML.
+    // A menu's gesture column must come from {app:CommandGesture}, never from a literal
+    // InputGesture="F7" — a literal is exactly what went stale when Format SQL moved from Alt+F to Ctrl+K.
+    [Fact]
+    public void NoMenuItemTypesItsGestureByHand()
+    {
+        // ⭐ The allowlist is EMPTY, and that is the finished state. It used to hold the fields grid's
+        // Insert / F2 / Delete, which were three local DataGrid.KeyBindings — the last hand-typed gestures in
+        // the application. The UX Consistency Pass routed them (CollectionAdd keeps Insert as an alternate,
+        // CollectionRemove keeps Delete, and F2 became CollectionEdit), so every gesture a menu shows now
+        // comes from the catalog and there is nothing left to excuse.
+        var allowed = new HashSet<string>(StringComparer.Ordinal);
+
+        var pattern = new Regex(@"InputGesture=""([^""{][^""]*)""", RegexOptions.Compiled);
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(RepositoryRoot(), "src", "EmberTern.App"), "*.axaml",
+                     SearchOption.AllDirectories))
+        {
+            foreach (Match m in pattern.Matches(File.ReadAllText(file)))
+            {
+                if (!allowed.Contains(m.Groups[1].Value))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}: InputGesture=\"{m.Groups[1].Value}\"");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These menu items type a gesture by hand instead of reading it from the catalog via "
+            + "{app:CommandGesture}, so they will go stale when the shortcut is re-bound: "
+            + string.Join(", ", offenders));
+    }
+
+    // ⭐ UX Consistency Pass: ONE operation, ONE icon — wherever the user meets it.
+    //
+    // The user found this by eye: "Debug procedure" carried the debugger's composite identity mark in the
+    // Object Explorer and a plain crosshair in the Package Members menu. Same command, same label, two
+    // different glyphs depending on where you right-clicked. That is not a thing anyone re-checks by hand
+    // across 133 menu items, so it is checked here: group every menu item by the UiStrings constant it is
+    // labelled with, and require the group to agree on its icon.
+    [Fact]
+    public void TheSameMenuOperationAlwaysCarriesTheSameIcon()
+    {
+        // <MenuItem …> up to its own close — captures attributes AND an inline <MenuItem.Icon> child, so a
+        // composite icon counts as an icon rather than reading as "none".
+        var item = new Regex(@"<MenuItem\b(.*?)(?:/>|</MenuItem>)", RegexOptions.Compiled | RegexOptions.Singleline);
+        var header = new Regex(@"Header=""\{x:Static app:UiStrings\.(\w+)\}""", RegexOptions.Compiled);
+        var menuIcon = new Regex(@"\{app:MenuIcon ([\w.]+)", RegexOptions.Compiled);
+        var inlineIcon = new Regex(@"<MenuItem\.Icon>\s*<\w+:(\w+)", RegexOptions.Compiled);
+
+        var iconsByOperation = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(RepositoryRoot(), "src", "EmberTern.App"), "*.axaml", SearchOption.AllDirectories))
+        {
+            foreach (Match m in item.Matches(File.ReadAllText(file)))
+            {
+                var body = m.Groups[1].Value;
+                var name = header.Match(body);
+                if (!name.Success) continue; // bound or literal header — nothing stable to group by
+
+                string icon = menuIcon.Match(body) is { Success: true } k ? k.Groups[1].Value
+                    : inlineIcon.Match(body) is { Success: true } c ? c.Groups[1].Value
+                    : "(no icon)";
+
+                if (!iconsByOperation.TryGetValue(name.Groups[1].Value, out var set))
+                {
+                    iconsByOperation[name.Groups[1].Value] = set = new SortedSet<string>(StringComparer.Ordinal);
+                }
+                set.Add(icon);
+            }
+        }
+
+        var drift = iconsByOperation
+            .Where(kv => kv.Value.Count > 1)
+            .Select(kv => $"{kv.Key} → {string.Join(" / ", kv.Value)}")
+            .ToArray();
+
+        _out.WriteLine($"{iconsByOperation.Count} distinct menu operations checked");
+
+        Assert.True(drift.Length == 0,
+            "These operations show a different icon depending on which menu the user opened:"
+            + Environment.NewLine + string.Join(Environment.NewLine, drift));
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
+
+    // Every distinct key passed to {app:MenuIcon ...} anywhere in the views, read from the source .axaml.
+    // Scanning the source is what makes the check exhaustive: a hand-maintained list would drift the first
+    // time somebody adds a menu item without updating it.
+    private static IReadOnlyList<string> MenuIconKeysUsedInViews()
+    {
+        var root = RepositoryRoot();
+        var pattern = new Regex(@"\{app:MenuIcon\s+([A-Za-z0-9.]+)", RegexOptions.Compiled);
+        var keys = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(root, "src", "EmberTern.App"), "*.axaml", SearchOption.AllDirectories))
+        {
+            foreach (Match m in pattern.Matches(File.ReadAllText(file)))
+            {
+                keys.Add(m.Groups[1].Value);
+            }
+        }
+
+        return keys.ToArray();
+    }
+
+    private static string RepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "EmberTern.slnx")))
+        {
+            dir = dir.Parent;
+        }
+        Assert.NotNull(dir);
+        return dir!.FullName;
+    }
+
+
 }
