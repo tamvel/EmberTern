@@ -29,7 +29,7 @@ public partial class TriggerDetailTabView : UserControl
     private bool _suppressSourceSync;
     private bool _suppressBodySync;
     // The editable editor that last had focus — drives which editor Format / Comment
-    // and Alt+F act on (body in Easy mode, source in Source mode).
+    // act on (body in Easy mode, source in Source mode).
     private TextEditor? _focusedEditor;
     private bool _completionAttached;
     // Rebuilds the ambient-seeded body model when the Easy-mode Variables grid changes (S3 follow-up).
@@ -62,11 +62,12 @@ public partial class TriggerDetailTabView : UserControl
         DataContextChanged += OnDataContextChanged;
     }
 
+    // Format is not wired here any more: it is CommandId.FormatSql (Ctrl+K), declared once in
+    // Commands.CommandCatalog for this tab kind and routed to this VM's own FormatSqlCommand.
     private void WireEditor(TextEditor? editor, EventHandler handler)
     {
         if (editor is null) return;
         editor.TextChanged += handler;
-        editor.KeyDown += OnEditorKeyDown;
         editor.GotFocus += (_, _) => _focusedEditor = editor;
     }
 
@@ -155,18 +156,6 @@ public partial class TriggerDetailTabView : UserControl
         {
             if (_focusedEditor is not null && _focusedEditor.IsEffectivelyVisible) return _focusedEditor;
             return ModePrimaryEditor;
-        }
-    }
-
-    // Alt+F formats the focused editor via the shared (PSQL-aware) SqlFormatter, routed
-    // through the VM command so the formatted text syncs back.
-    private void OnEditorKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.F || e.KeyModifiers != KeyModifiers.Alt || _currentVm is null) return;
-        if (_currentVm.FormatSqlCommand.CanExecute(null))
-        {
-            _currentVm.FormatSqlCommand.Execute(null);
-            e.Handled = true;
         }
     }
 

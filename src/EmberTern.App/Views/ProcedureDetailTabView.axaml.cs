@@ -225,21 +225,23 @@ public partial class ProcedureDetailTabView : UserControl
         }
     }
 
-    // Alt+F formats the focused editor via the shared (PSQL-aware) SqlFormatter.
-    // The body/source editors go through the VM command (so the formatted text syncs
-    // back); the cursor/subprogram editors format in place (TextChanged syncs the row).
+    // Ctrl+K in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE.
+    //
+    // ⚠ This is the one gesture etap 3 could not move into Commands.CommandCatalog, and the reason is
+    // structural rather than incidental: "format the object's source" (the VM's FormatSqlCommand, which the
+    // catalog routes for every other case) and "format this little grid-row editor" are different actions,
+    // and the second one is identified by a specific TextEditor INSTANCE. The router resolves commands, not
+    // control instances, so it has nothing to route to here.
+    //
+    // It stays deliberately narrow: it handles the key ONLY for those two editors, so Ctrl+K anywhere else
+    // in the tab falls through to the router and reaches the catalog's FormatSql exactly like the other five
+    // formattable tabs. The body/source editors are no longer special-cased here at all.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.F || e.KeyModifiers != KeyModifiers.Alt || _currentVm is null) return;
+        if (e.Key != Key.K || e.KeyModifiers != KeyModifiers.Control) return;
         if (sender is TextEditor ed && (ReferenceEquals(ed, _cursorEditor) || ReferenceEquals(ed, _subprogramEditor)))
         {
             FormatEditorInPlace(ed);
-            e.Handled = true;
-            return;
-        }
-        if (_currentVm.FormatSqlCommand.CanExecute(null))
-        {
-            _currentVm.FormatSqlCommand.Execute(null);
             e.Handled = true;
         }
     }

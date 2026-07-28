@@ -235,7 +235,8 @@ public partial class MainWindow : Window
         // filter, because on the tunnel phase it saw the key first. The router listens on BUBBLE and lets
         // the declared scope decide — Editor outranks Global — so the probe is gone and the same rule now
         // also covers every other gesture.
-        _commands = CommandRouter.Attach(this, () => _currentVm, FocusSidebarFilter);
+        _commands = CommandRouter.Attach(
+            this, () => _currentVm, FocusSidebarFilter, () => this.FindControl<ListBox>("SidebarList"));
 
         _lastNormalBounds = new WindowBounds
         {
@@ -706,6 +707,9 @@ public partial class MainWindow : Window
         {
             _currentVm.Metadata.SelectedConnection = cn;
         }
+        // The primary selected node, for CommandScope.Tree resolution (F3 New / F8 Delete). Same shape as
+        // SelectedConnection above: the list owns the selection, the view model owns what it means.
+        _currentVm.Metadata.SelectedNode = (list.SelectedItem as SidebarRow)?.Node;
         // Feed the multi-selection to the VM so the "Selected" trigger bulk ops know their target.
         _currentVm.Metadata.SetSelectedTriggers(
             list.SelectedItems?.OfType<SidebarRow>() ?? Enumerable.Empty<SidebarRow>());

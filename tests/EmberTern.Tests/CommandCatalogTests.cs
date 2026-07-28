@@ -85,8 +85,154 @@ public sealed class CommandCatalogTests
     [Fact]
     public void AnUndeclaredGesture_MatchesNothing()
     {
-        Assert.Empty(CommandCatalog.Match(Key.F7, KeyModifiers.None));   // arrives in etap 3 as Compile
+        Assert.Empty(CommandCatalog.Match(Key.F1, KeyModifiers.None));
         Assert.Empty(CommandCatalog.Match(Key.Escape, KeyModifiers.None)); // deliberately never declared
+    }
+
+    // ── The ratified shortcut map ───────────────────────────────────────────────────────────────────
+
+    // Exactly the gestures the user ratified, on exactly the commands they ratified them for. Written as a
+    // table so the map is readable in one place and a silent re-binding fails here rather than in someone's
+    // muscle memory.
+    [Theory]
+    [InlineData(CommandId.NewObject, Key.F3, KeyModifiers.None)]
+    [InlineData(CommandId.CollectionAdd, Key.F3, KeyModifiers.None)]
+    [InlineData(CommandId.RefreshMetadata, Key.F4, KeyModifiers.None)]
+    [InlineData(CommandId.Go, Key.F5, KeyModifiers.None)]
+    [InlineData(CommandId.Commit, Key.F6, KeyModifiers.None)]
+    [InlineData(CommandId.Rollback, Key.F6, KeyModifiers.Shift)]
+    [InlineData(CommandId.Compile, Key.F7, KeyModifiers.None)]
+    [InlineData(CommandId.DeleteObject, Key.F8, KeyModifiers.None)]
+    [InlineData(CommandId.CollectionRemove, Key.F8, KeyModifiers.None)]
+    [InlineData(CommandId.FormatSql, Key.K, KeyModifiers.Control)]
+    [InlineData(CommandId.CloseTab, Key.W, KeyModifiers.Control)]
+    public void RatifiedGesture_IsTheDeclaredOne(CommandId id, Key key, KeyModifiers modifiers)
+        => Assert.Equal(new KeyGesture(key, modifiers), CommandCatalog.For(id)?.Gesture);
+
+    // Alt+letter is retired with no exceptions — Format SQL was the app's only one. Alt+F12 (Peek) is
+    // Alt + a FUNCTION key, outside the rule and deliberately kept.
+    [Fact]
+    public void NoCommandUsesAltPlusALetter()
+    {
+        var offenders = CommandCatalog.All
+            .SelectMany(d => new[] { d.Gesture, d.AlternateGesture })
+            .Where(g => g is not null)
+            .Where(g => g!.KeyModifiers.HasFlag(KeyModifiers.Alt) && g.Key is >= Key.A and <= Key.Z)
+            .Select(g => g!.ToString())
+            .ToArray();
+
+        Assert.True(offenders.Length == 0,
+            "Alt+letter is unusable on the Polish keyboard (AltGr) and is retired: "
+            + string.Join(", ", offenders));
+    }
+
+    // F3 and F8 are each claimed by two commands — a tree one and a grid one. Legal because the focus is in
+    // at most one of those surfaces, and the point of having separate scopes rather than one global gesture.
+    [Theory]
+    [InlineData(Key.F3)]
+    [InlineData(Key.F8)]
+    public void TreeAndGridShareTheGesture_ButNotTheScope(Key key)
+    {
+        // Other scopes may also claim the key (F8 is Next Diagnostic in the editor); this is about the two
+        // surface claims and their order.
+        var surfaces = CommandCatalog.Match(key, KeyModifiers.None)
+            .Where(m => m.Scope is CommandScope.Tree or CommandScope.Grid)
+            .ToArray();
+
+        Assert.Equal([CommandScope.Tree, CommandScope.Grid], surfaces.Select(m => m.Scope));
+    }
+
+    // F8 is the ratified Delete for trees and lists AND stays Next Diagnostic in the editor — the collision
+    // the user resolved by scope rather than by moving either one. All three must coexist, ordered so the
+    // editor wins while the caret is in code.
+    [Fact]
+    public void F8_MeansDeleteInTreesAndLists_ButNextDiagnosticInCode()
+    {
+        var matches = CommandCatalog.Match(Key.F8, KeyModifiers.None);
+
+        Assert.Equal(
+            [CommandId.EditorNextDiagnostic, CommandId.DeleteObject, CommandId.CollectionRemove],
+            matches.Select(m => m.Id));
+        Assert.Equal(CommandScope.Editor, matches[0].Scope);
+    }
+
+    // ── Resolution of the new commands ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TreeCommands_ResolveAgainstTheSelectedNode()
+    {
+        using var h = new Harness();
+        var tree = h.Main.Metadata;
+
+        // Nothing selected → nothing offered, so the gesture falls through instead of half-working.
+        tree.SelectedNode = null;
+        Assert.Null(h.Main.ResolveCommand(CommandId.NewObject));
+        Assert.Null(h.Main.ResolveCommand(CommandId.DeleteObject));
+
+        // A category group offers New but has nothing to delete.
+        var group = MetadataNodeViewModel.CreateGroup(tree, MetadataObjectKind.Procedure);
+        tree.SelectedNode = group;
+        Assert.Same(group.NewCommand, h.Main.ResolveCommand(CommandId.NewObject));
+        Assert.Null(h.Main.ResolveCommand(CommandId.DeleteObject));
+
+        // A leaf is the other way round — and Delete is the node's OWN command, which is what makes F8 open
+        // the existing confirmation dialog rather than drop anything by itself.
+        var leaf = MetadataNodeViewModel.CreateLeaf(tree, new MetadataObject("T_X", MetadataObjectKind.Table));
+        tree.SelectedNode = leaf;
+        Assert.Same(leaf.DeleteCommand, h.Main.ResolveCommand(CommandId.DeleteObject));
+        Assert.Null(h.Main.ResolveCommand(CommandId.NewObject));
+
+        // Refresh needs a connection; with none selected it declines rather than inventing a target.
+        Assert.Null(h.Main.ResolveCommand(CommandId.RefreshMetadata));
+    }
+
+    [Fact]
+    public void GridAndGlobalCommands_ResolveToTheCommandsTheirButtonsUse()
+    {
+        using var h = new Harness();
+
+        Assert.Same(h.Main.AddCollectionItemCommand, h.Main.ResolveCommand(CommandId.CollectionAdd));
+        Assert.Same(h.Main.RemoveCollectionItemCommand, h.Main.ResolveCommand(CommandId.CollectionRemove));
+        Assert.Same(h.Main.CommitAllCommand, h.Main.ResolveCommand(CommandId.Commit));
+        Assert.Same(h.Main.RollbackAllCommand, h.Main.ResolveCommand(CommandId.Rollback));
+        Assert.Same(h.Main.CloseActiveTabCommand, h.Main.ResolveCommand(CommandId.CloseTab));
+    }
+
+    // F7 Compile reaches every editor that compiles, and Ctrl+K reaches every tab with SQL to format —
+    // both through the tab's OWN command, so the shortcut is a second trigger and never a second path.
+    [Fact]
+    public void Compile_AndFormatSql_ResolveOnTheEditorTabs()
+    {
+        using var h = new Harness();
+
+        var view = ViewTab(h, "V_X");
+        Assert.NotNull(view.ResolveCommand(CommandId.Compile));
+        Assert.NotNull(view.ResolveCommand(CommandId.FormatSql));
+
+        // Declared reach and actual resolution must agree: every kind the descriptor names has to answer.
+        var compilable = CommandCatalog.For(CommandId.Compile)!.TabKinds!;
+        var formattable = CommandCatalog.For(CommandId.FormatSql)!.TabKinds!;
+        Assert.Contains(WorkspaceTabKind.ViewDetail, compilable);
+        Assert.Contains(WorkspaceTabKind.ViewDetail, formattable);
+        Assert.Equal(11, compilable.Count);
+        Assert.Equal(6, formattable.Count);
+
+        // A console tab formats but does not compile; a read-only Ddl snapshot does neither.
+        var query = WorkspaceTabViewModel.CreateQuery(h.Main);
+        Assert.Same(h.Main.FormatSqlCommand, query.ResolveCommand(CommandId.FormatSql));
+        Assert.Null(query.ResolveCommand(CommandId.Compile));
+
+        var ddl = WorkspaceTabViewModel.CreateDdl(
+            h.Main, new MetadataObject("V_Y", MetadataObjectKind.View), "select 1 from rdb$database", null);
+        Assert.Null(ddl.ResolveCommand(CommandId.Compile));
+        Assert.Null(ddl.ResolveCommand(CommandId.FormatSql));
+    }
+
+    private static WorkspaceTabViewModel ViewTab(Harness h, string name)
+    {
+        var detail = new ViewDetailTabViewModel(name);
+        return WorkspaceTabViewModel.CreateViewDetail(
+            h.Main, new MetadataObject(name, MetadataObjectKind.View), detail, null);
     }
 
     // ── ⭐ C1: F5 can no longer leak into a tab that has nothing to execute ─────────────────────────

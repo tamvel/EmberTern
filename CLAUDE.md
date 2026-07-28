@@ -289,9 +289,40 @@ noted.
 
 ## Current state
 
-- **⌨ CURRENT SPRINT — KEYBOARD MANAGER & CONTEXT MENU UX. Etap 1 (audit) ACCEPTED · Etap 2 (registry)
-  DONE (2026-07-28). Branch `feat/keyboard-manager`.** Build 0/0; suite **5911 green** in the two documented
-  partitions (5868 + 43); smoke clean. **The sprint's one document — audit, ratified decisions, architecture,
+- **⌨ CURRENT SPRINT — KEYBOARD MANAGER & CONTEXT MENU UX. Etap 1 (audit) ACCEPTED · Etap 2 (registry) DONE ·
+  Etap 3 (shortcuts) DONE (2026-07-28). Branch `feat/keyboard-manager`.** Build 0/0; suite **5929 green** in
+  the two documented partitions (5886 + 43); smoke clean. **The command layer is CLOSED** — etaps 4
+  (tooltips) and 5 (context menus) consume it and add no new gestures.
+  **⭐ Etap 3 shipped the whole ratified map** (`F3` New · `F4` Refresh · `F6` Commit · `Shift+F6` Rollback ·
+  `F7` Compile · `F8` Delete · `Ctrl+K` Format · `Ctrl+W` Close tab) and **retired `Alt+F` with no
+  exception**, pinned by `NoCommandUsesAltPlusALetter`. Two scopes joined: **`Tree`** (needed one small
+  addition — `MetadataExplorerViewModel.SelectedNode`, fed by the sidebar's existing selection handler like
+  `SelectedConnection`, deliberately NOT observable) and **`Grid`**, which needed **no per-grid knowledge at
+  all** because `F3`/`F8` route through the app's *existing* unified collection router, whose
+  `ActiveCollection()` already answers "which collection" and self-gates.
+  **⚠ Nothing destructive became a one-keystroke action — verified, not assumed:** `F8` on a leaf routes to
+  the node's own `DeleteCommand`, which raises the **existing confirm dialog**; `F6`/`Shift+F6` bind the very
+  commands the toolbar buttons bind, with the same `CanCommitAll`/`CanRollbackAll`; `Ctrl+W` uses the
+  confirming close.
+  **⚠ A design trap worth not re-walking:** `CollectionAdd`/`Remove` were first placed at *Global* scope
+  (their commands live on `MainWindowViewModel` and self-gate). Subtly wrong — with a table leaf selected in
+  the tree and a Procedure editor open, `F3` fell through Tree→Global and would add a **parameter row to the
+  background tab**. `Grid` scope removes the fall-through because the scope is simply not live in the tree.
+  **⚠ The ONE gesture that could not be centralised, and why it is structural:** Procedure/Function Easy mode
+  formats the **cursor/subprogram** grid-row editors *in place*, an action identified by a specific
+  `TextEditor` **instance** — the router resolves commands, not controls. Those two handlers survive, rebound
+  to `Ctrl+K` and **narrowed to fire only for those two editors**, so everything else falls through to the
+  catalog. Deleting a working behaviour was not a refactor's call. Trigger/View/Package handlers were deleted
+  outright.
+  **⚠ Collisions with Windows/IDE standards are REPORTED in the design doc §13, not silently resolved** (the
+  user's standing instruction). The two worth knowing: **`Shift+F6` is Build in Visual Studio** and here rolls
+  back the working transaction — the one pairing whose two meanings are not equally recoverable; and **`F3` is
+  Find Next almost everywhere**, mitigated only because AvaloniaEdit binds no `F3` and the gesture is live
+  solely in the tree and grids. `F8` is a *match* with VS (Next Error) precisely because of the scope split.
+  **⚠ Flagged, NOT touched (§13.2):** `CommitAllAsync`'s comment claims *"the TOOLBAR's Commit stays
+  deliberately narrower"* while the toolbar binds `CommitAllCommand`, with a narrower unused `CommitCommand`
+  beside it. `F6` binds what the button binds — the correct rule either way — but the discrepancy is
+  transaction-settlement territory and belongs to whoever owns rule #11. **The sprint's one document — audit, ratified decisions, architecture,
   as-built, etap order: [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md).** Read it before
   touching anything under `EmberTern.App/Commands`.
   **Goal (the user's own framing): not "a few more shortcuts" but ONE source of truth for commands** — the
@@ -340,11 +371,12 @@ noted.
   **⚠ The audit's A-10 is ONE table row**, not a design — no scope list, no resolver, no `CommandId` shape.
   The richer "sketch" was written during the previous sprint's triage. Its diagnosis is right; there was
   nothing to copy.
-  **Etap 3 next** (the ratified new gestures + `Tree`/`Grid` scopes + retiring `Alt+F`'s 6 copies), then
-  etap 4 (tooltips from the catalog via `{app:CommandTip}`; `Label` joins the descriptor) and etap 5 (all 32
-  context menus: **there is currently no `MenuItem`/`ContextMenu` style in the app at all** — 138 of 142
-  items show no shortcut and none has an icon; style first, a custom control only if measured necessary, and
-  then app-wide per the user's instruction).
+  **Etap 4 next** — every gesture-bearing tooltip reads the catalog via a `{app:CommandTip}` markup
+  extension, the ~24 hand-typed `· F5`-style suffixes in `UiStrings` are stripped, and `Label` joins the
+  descriptor (it is deliberately absent until then, #233). Then etap 5 — all 32 context menus: **there is
+  currently no `MenuItem`/`ContextMenu` style in the app at all**, 138 of 142 items show no shortcut and none
+  has an icon; style first, a custom control only if measured necessary, and then app-wide per the user's
+  instruction. **Neither etap adds a gesture.**
   ⚠ Still relevant: the **app-wide UX sprint** (density) is backlogged and owns *control heights* — "smaller
   typography + icons on the left in the context menu" is this sprint's, a global control-height change is not.
 - **🛡 ARCHITECTURE HARDENING / PRODUCT SAFETY SPRINT — CLOSED AND USER-ACCEPTED (2026-07-27).** Build 0/0,
@@ -2175,9 +2207,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5911 as of 2026-07-28
-  (`feat/keyboard-manager`, after etap 2; 5900 on `master`)** — green in the two documented partitions
-  (**5868 + 43**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5929 as of 2026-07-28
+  (`feat/keyboard-manager`, after etap 3; 5900 on `master`)** — green in the two documented partitions
+  (**5886 + 43**).
   **⚠ 2026-07-28, Keyboard Manager etap 2 — the hang REPRODUCED A THIRD TIME, and named the SAME test for
   the third time.** A single full-suite run hung; `--blame-hang` reported **5868 of 5869 tests
   `Completed="True"`** and the one that was not as

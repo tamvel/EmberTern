@@ -517,7 +517,38 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         },
         CommandId.ExecuteQuery => Kind is WorkspaceTabKind.Query ? _owner.ExecuteQueryCommand : null,
         CommandId.ExecuteQueryFull => Kind is WorkspaceTabKind.Query ? _owner.ExecuteQueryFullCommand : null,
-        CommandId.FormatSql => Kind is WorkspaceTabKind.Query ? _owner.FormatSqlCommand : null,
+
+        // Ctrl+K — the console plus the five source-bearing object editors. Each returns the editor's own
+        // FormatSqlCommand, i.e. the very command that editor's toolbar button and context menu invoke.
+        CommandId.FormatSql => Kind switch
+        {
+            WorkspaceTabKind.Query => _owner.FormatSqlCommand,
+            WorkspaceTabKind.ViewDetail => ViewDetail?.FormatSqlCommand,
+            WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.FormatSqlCommand,
+            WorkspaceTabKind.TriggerDetail => TriggerDetail?.FormatSqlCommand,
+            WorkspaceTabKind.FunctionDetail => FunctionDetail?.FormatSqlCommand,
+            WorkspaceTabKind.PackageDetail => PackageDetail?.FormatSqlCommand,
+            _ => null,
+        },
+
+        // F7 — Compile. The application's most-used action after Execute, and it had no shortcut at all.
+        // Each editor's own CompileCommand, so its CanExecute, its buffered-edit semantics and the DDL
+        // change-safety gate all apply exactly as they do from the toolbar.
+        CommandId.Compile => Kind switch
+        {
+            WorkspaceTabKind.NewTable => NewTable?.CompileCommand,
+            WorkspaceTabKind.TableDetail => TableDetail?.CompileCommand,
+            WorkspaceTabKind.ViewDetail => ViewDetail?.CompileCommand,
+            WorkspaceTabKind.ProcedureDetail => ProcedureDetail?.CompileCommand,
+            WorkspaceTabKind.TriggerDetail => TriggerDetail?.CompileCommand,
+            WorkspaceTabKind.FunctionDetail => FunctionDetail?.CompileCommand,
+            WorkspaceTabKind.GeneratorDetail => GeneratorDetail?.CompileCommand,
+            WorkspaceTabKind.DomainDetail => DomainDetail?.CompileCommand,
+            WorkspaceTabKind.PackageDetail => PackageDetail?.CompileCommand,
+            WorkspaceTabKind.ExceptionDetail => ExceptionDetail?.CompileCommand,
+            WorkspaceTabKind.IndexDetail => IndexDetail?.CompileCommand,
+            _ => null,
+        },
         CommandId.ImportValidate => DataImport?.ValidateCommand,
         CommandId.ImportRefresh => DataImport?.RefreshCommand,
         CommandId.ImportBrowse => DataImport?.BrowseCommand,

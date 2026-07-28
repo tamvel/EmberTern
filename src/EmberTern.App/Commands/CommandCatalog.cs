@@ -40,6 +40,35 @@ public static class CommandCatalog
     private static readonly WorkspaceTabKind[] DebuggerTab = [WorkspaceTabKind.Debugger];
     private static readonly WorkspaceTabKind[] ImportTab = [WorkspaceTabKind.DataImport];
 
+    // Every tab kind that compiles an object. Compile auto-commits through the Ddl lane, and the DDL
+    // change-safety gate stands between it and an overwrite, so F7 needs no confirmation of its own.
+    private static readonly WorkspaceTabKind[] CompilableTabs =
+    [
+        WorkspaceTabKind.NewTable,
+        WorkspaceTabKind.TableDetail,
+        WorkspaceTabKind.ViewDetail,
+        WorkspaceTabKind.ProcedureDetail,
+        WorkspaceTabKind.TriggerDetail,
+        WorkspaceTabKind.FunctionDetail,
+        WorkspaceTabKind.GeneratorDetail,
+        WorkspaceTabKind.DomainDetail,
+        WorkspaceTabKind.PackageDetail,
+        WorkspaceTabKind.ExceptionDetail,
+        WorkspaceTabKind.IndexDetail,
+    ];
+
+    // The tab kinds with SQL to format: the console plus the five source-bearing object editors — exactly
+    // the reach of the window binding and the five local Alt+F handlers this replaced, no wider.
+    private static readonly WorkspaceTabKind[] FormattableTabs =
+    [
+        WorkspaceTabKind.Query,
+        WorkspaceTabKind.ViewDetail,
+        WorkspaceTabKind.ProcedureDetail,
+        WorkspaceTabKind.TriggerDetail,
+        WorkspaceTabKind.FunctionDetail,
+        WorkspaceTabKind.PackageDetail,
+    ];
+
     private static readonly CommandDescriptor[] AllDescriptors =
     [
         // ── Tab scope ────────────────────────────────────────────────────────────────────────────────
@@ -55,11 +84,12 @@ public static class CommandCatalog
             G(Key.Enter, Ctrl), TabKinds: QueryTab),
         new(CommandId.ExecuteQueryFull, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.F5, Shift), TabKinds: QueryTab),
-        // Etap 2 keeps Alt+F and the SQL-editor-only reach of the window binding it replaces, byte for
-        // byte. Etap 3 moves the gesture to Ctrl+K (the user has retired Alt+letter) and extends the
-        // command to the five object editors, deleting their five local Alt+F handlers with it.
+        // Ctrl+K, not Alt+F: the user retired Alt+letter with no exceptions. This one descriptor replaced
+        // the window binding AND three of the five local Alt+F handlers outright.
         new(CommandId.FormatSql, CommandScope.Tab, CommandDispatch.Routed,
-            G(Key.F, Alt), TabKinds: QueryTab),
+            G(Key.K, Ctrl), TabKinds: FormattableTabs),
+        new(CommandId.Compile, CommandScope.Tab, CommandDispatch.Routed,
+            G(Key.F7), TabKinds: CompilableTabs),
         new(CommandId.ImportValidate, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.F5, Ctrl), TabKinds: ImportTab),
         new(CommandId.ImportRefresh, CommandScope.Tab, CommandDispatch.Routed,
@@ -105,8 +135,22 @@ public static class CommandCatalog
         new(CommandId.EditorPreviousDiagnostic, CommandScope.Editor, CommandDispatch.Reserved,
             G(Key.F8, Shift)),
 
+        // ── Tree scope (the Object Explorer) ─────────────────────────────────────────────────────────
+        // F3 / F8 are also claimed at Grid scope below. That is not a clash: the focus is in the tree or
+        // in a grid, never both, and each scope resolves through the owner of that surface's selection.
+        new(CommandId.NewObject, CommandScope.Tree, CommandDispatch.Routed, G(Key.F3)),
+        new(CommandId.DeleteObject, CommandScope.Tree, CommandDispatch.Routed, G(Key.F8)),
+        new(CommandId.RefreshMetadata, CommandScope.Tree, CommandDispatch.Routed, G(Key.F4)),
+
+        // ── Grid scope (the collection lists) ────────────────────────────────────────────────────────
+        new(CommandId.CollectionAdd, CommandScope.Grid, CommandDispatch.Routed, G(Key.F3)),
+        new(CommandId.CollectionRemove, CommandScope.Grid, CommandDispatch.Routed, G(Key.F8)),
+
         // ── Global scope ─────────────────────────────────────────────────────────────────────────────
         new(CommandId.GlobalSearch, CommandScope.Global, CommandDispatch.Routed, G(Key.F, Ctrl | Shift)),
+        new(CommandId.Commit, CommandScope.Global, CommandDispatch.Routed, G(Key.F6)),
+        new(CommandId.Rollback, CommandScope.Global, CommandDispatch.Routed, G(Key.F6, Shift)),
+        new(CommandId.CloseTab, CommandScope.Global, CommandDispatch.Routed, G(Key.W, Ctrl)),
         // Ctrl+F twice over is not a collision: Editor outranks Global, so the caret decides. That used to
         // be a hand-written focus probe in MainWindow's key handler; now it is the resolution order.
         new(CommandId.FocusSidebarFilter, CommandScope.Global, CommandDispatch.Routed, G(Key.F, Ctrl)),

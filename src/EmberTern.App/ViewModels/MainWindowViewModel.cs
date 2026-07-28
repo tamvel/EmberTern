@@ -5959,6 +5959,25 @@ public partial class MainWindowViewModel : ViewModelBase
     internal ICommand? ResolveCommand(CommandId id) => id switch
     {
         CommandId.GlobalSearch => OpenGlobalSearchCommand,
+
+        // F6 / Shift+F6 — the SAME commands the toolbar's Commit / Rollback buttons bind, and gated by the
+        // same CanCommitAll / CanRollbackAll, so the key can never settle a transaction the button refuses.
+        CommandId.Commit => CommitAllCommand,
+        CommandId.Rollback => RollbackAllCommand,
+
+        // Ctrl+W — the confirming close, so a tab with unsaved work still offers Save / Discard / Cancel.
+        CommandId.CloseTab => CloseActiveTabCommand,
+
+        // F3 / F8 inside a grid, through the application's EXISTING unified collection router. Its
+        // ActiveCollection() already answers "which collection is the user editing" and returns null when
+        // there is none — which is why these need no per-grid knowledge and no tab-kind list.
+        CommandId.CollectionAdd => AddCollectionItemCommand,
+        CommandId.CollectionRemove => RemoveCollectionItemCommand,
+
+        // CommandScope.Tree belongs to the Object Explorer, which owns the tree's selection.
+        CommandId.NewObject or CommandId.DeleteObject or CommandId.RefreshMetadata
+            => Metadata.ResolveCommand(id),
+
         _ => null,
     };
 

@@ -1,8 +1,9 @@
 # Keyboard Manager & Context Menu UX — sprint design document
 
-**Status: ETAP 1 (AUDIT) ACCEPTED · ETAP 2 (REGISTRY) COMPLETE — see §11 for the as-built.**
-Branch: `feat/keyboard-manager`. Build 0/0; suite **5911 green** in the two documented partitions
-(5868 + 43); smoke clean.
+**Status: ETAP 1 (AUDIT) ACCEPTED · ETAP 2 (REGISTRY) COMPLETE (§11) · ETAP 3 (SHORTCUTS) COMPLETE (§12).**
+Branch: `feat/keyboard-manager`. Build 0/0; suite **5929 green** in the two documented partitions
+(5886 + 43); smoke clean. **The command layer is closed** — etaps 4 (tooltips) and 5 (context menus) consume
+it and add no new gestures.
 
 **The shortcut map was ratified by the user on accepting etap 1** — `F3` New · `F4` Refresh ·
 `F5` Execute (Continue in the debugger stays the one accepted contradiction) · `F6` Commit ·
@@ -463,7 +464,7 @@ so `139` items that show nothing today start showing the truth, and cannot drift
 |---|---|---|
 | **1** | Audit (§1–§6) | ✅ **DONE + accepted** |
 | **2** | `CommandDescriptor` / `CommandCatalog` / `CommandRouter` + scope resolution + the §7.6 pinned test + **fix C1** + the `SearchPanel` duplication | ✅ **DONE** — §11 |
-| **3** | The ratified new gestures (F3/F4/F6/F7/F8, `Ctrl+K`, `Ctrl+W`, …) through the catalog; retire `Alt+F`'s 6 copies (D1); add `Tree` + `Grid` scopes | next |
+| **3** | The ratified new gestures through the catalog; retire `Alt+F`'s copies (D1); add `Tree` + `Grid` scopes | ✅ **DONE** — §12 |
 | **4** | `{app:CommandTip}` — every gesture-bearing tooltip reads the catalog; strip the ~24 hand-typed suffixes; `Label` joins the descriptor | |
 | **5** | Context menus: styles (§9.2 (a)), then a control only if measured necessary; icons; gestures; all 32 menus | |
 
@@ -575,3 +576,142 @@ began binding a function key would break a global shortcut with the build still 
 
 `Label` and `IconKey` are absent until etaps 4 and 5 consume them. A descriptor field that nothing reads
 looks like working infrastructure and is not (gotcha #233); adding them later is additive.
+
+---
+
+## 12. Etap 3 — as built
+
+Build 0/0; suite **5929 green** in the two partitions (5886 + 43); smoke clean.
+
+### 12.1 The map, as shipped
+
+| Gesture | Command | Scope | Resolves to |
+|---|---|---|---|
+| `F3` | `NewObject` | Tree | the selected category's own `NewCommand` |
+| `F3` | `CollectionAdd` | Grid | the unified collection router's `+` |
+| `F4` | `RefreshMetadata` | Tree | the selected connection's `RefreshMetadataCommand` |
+| `F5` | `Go` | Tab | *(etap 2)* the tab's main action |
+| `F6` | `Commit` | Global | `CommitAllCommand` — the toolbar button's own command |
+| `Shift+F6` | `Rollback` | Global | `RollbackAllCommand` |
+| `F7` | `Compile` | Tab (11 kinds) | each editor's own `CompileCommand` |
+| `F8` | `DeleteObject` | Tree | the leaf's own `DeleteCommand` (**confirmed**, see 12.3) |
+| `F8` | `CollectionRemove` | Grid | the unified collection router's `−` |
+| `F8` | `EditorNextDiagnostic` | Editor | *(unchanged)* — the ratified scope split |
+| `Ctrl+K` | `FormatSql` | Tab (6 kinds) | each tab's own `FormatSqlCommand` |
+| `Ctrl+W` | `CloseTab` | Global | `CloseActiveTabCommand` (the confirming close) |
+
+Nothing else was added. `Ctrl+N` (New Query) from the audit's §8.3 was **not** implemented — it was never
+ratified, and the rule was "only the ratified gestures".
+
+### 12.2 ⭐ Two scopes were enough, and one was avoidable
+
+`Tree` and `Grid` joined `Editor` as focus scopes. `CommandScope`'s numeric values remain the resolution
+order; the three focus scopes sit above `Tab` and are ordered innermost-first only as a safety net for
+nesting, since the caret is in at most one of them.
+
+**Grid scope needed no per-grid knowledge**, which is the part worth remembering: `F3`/`F8` route through
+the application's **existing** unified collection router (`AddCollectionItemCommand` /
+`RemoveCollectionItemCommand`), whose `ActiveCollection()` already answers "which collection is the user
+editing" and returns null when there is none. So its `CanExecute` does all the gating — no tab-kind list, no
+grid registry, and the Table Data grid or the SQL result grid simply decline.
+
+**Tree scope needed one small addition**: `MetadataExplorerViewModel.SelectedNode`, fed by the sidebar's
+existing selection handler exactly as `SelectedConnection` and `SetSelectedTriggers` already are. It is
+deliberately **not** observable — nothing binds to it, `ResolveCommand` reads it when a key is pressed, and
+notifying on every arrow-key move through a long tree would be pure noise.
+
+**⚠ A design trap avoided.** The first shape had `CollectionAdd`/`CollectionRemove` at *Global* scope, since
+their commands live on `MainWindowViewModel` and self-gate. It is subtly wrong: with a table leaf selected in
+the tree (no `New`) and a Procedure editor open, `F3` would fall through from Tree to Global and add a
+**parameter row to the background tab**. Grid scope removes the fall-through entirely, because the scope
+simply is not live while the caret is in the tree.
+
+### 12.3 Nothing destructive became a one-keystroke action
+
+* **`F8` on a tree leaf** routes to `MetadataNodeViewModel.DeleteCommand`, which raises the **existing
+  confirmation dialog** — verified in the code, not assumed. F8 opens a question; it never drops an object.
+* **`F6`/`Shift+F6`** bind the very commands the toolbar buttons bind, gated by the same
+  `CanCommitAll`/`CanRollbackAll`, so a key can never settle a transaction the button refuses.
+* **`Ctrl+W`** routes through the confirming close, so a tab with unsaved work still offers
+  Save / Discard / Cancel.
+* **`F7`** compiles without a prompt — which is intended, and the DDL change-safety gate from the previous
+  sprint stands between it and an overwrite.
+* **`F8` in a grid** removes a row from an *uncompiled buffer*; Revert undoes it, and it is the same command
+  the toolbar's `−` runs.
+
+### 12.4 `Alt+F` is gone — four of the six copies with it
+
+| Was | Now |
+|---|---|
+| window `KeyBindings` `Alt+F` | *(deleted in etap 2)* |
+| Trigger / View / Package local `Alt+F` handlers | **deleted** — `CommandId.FormatSql` covers them |
+| Procedure / Function local `Alt+F` handlers | **narrowed to `Ctrl+K` on two sub-editors only** — see below |
+
+**⚠ The one place etap 3 could not fully centralise, and the reason is structural.** In Easy mode the
+Procedure and Function editors format the **cursor** and **subprogram** grid-row editors *in place*, and that
+action is identified by a specific `TextEditor` **instance**. The router resolves *commands*, not controls, so
+it has nothing to route to. Those two handlers therefore survive, rebound to `Ctrl+K` and **narrowed to
+handle the key only for those two editors** — everything else in the tab falls through to the catalog. The
+alternative was to delete a working behaviour, which is not a refactor's call to make.
+
+### 12.5 Deliberately undeclared, added to etap 2's list
+
+* **The Global Search preview's `F3`/`Shift+F3`** (next/previous match). Verified: the preview is a
+  `TextEditor` holding the key on the **tunnel** phase, so it never reaches the router, and `F3` has no
+  Editor-scope claim — the audit's C3 resolution holds exactly as designed. Declaring it as Editor-scope
+  `Reserved` would have been *worse*: it would claim `F3` in every editor to describe one preview.
+
+### 12.6 What the tests pin
+
+`CommandCatalogTests` grew to 27 tests. The load-bearing ones:
+
+* **`RatifiedGesture_IsTheDeclaredOne`** — a table of all 11 ratified bindings, so a silent re-binding fails
+  here rather than in someone's muscle memory.
+* **`NoCommandUsesAltPlusALetter`** — the rule, enforced rather than remembered.
+* **`F8_MeansDeleteInTreesAndLists_ButNextDiagnosticInCode`** — the three-way scope split, in order.
+* **`TreeCommands_ResolveAgainstTheSelectedNode`** — group offers New and not Delete, leaf the reverse,
+  nothing selected offers neither, and Delete is the node's **own** (confirming) command.
+* **`Compile_AndFormatSql_ResolveOnTheEditorTabs`** — declared reach (11 / 6 kinds) and actual resolution
+  agree, so the descriptor and the per-kind switch cannot drift.
+* `CommandRouter_ResolvesByScope_AndDeclinesWhereNothingIsLive` gained cases [6]–[11], all asserting the
+  router **declines**: outside a tree/grid, in the tree with nothing selected, in a grid on a tab with no
+  collection, F7 on a non-compilable tab, Ctrl+W on the non-closable console tab, F6 with no transaction.
+  Deliberately about declining — a test must not need to run a real New / Delete / Compile / Close to prove
+  routing, and the mappings are asserted without a UI in the pure tests.
+
+---
+
+## 13. ⚠ Collisions with Windows / IDE standards — REPORTED, not silently resolved
+
+The user's standing instruction for etap 3 was to surface any clash with an established Windows or IDE
+convention rather than decide it quietly. None of these blocked the work; all are shipped as ratified, and
+each is here so the decision is an informed one.
+
+| # | Gesture | The standard it touches | Assessment |
+|---|---|---|---|
+| **K1** | **`F3` = New** | **`F3` = Find Next** is close to universal — Explorer, browsers, and most editors. The strongest clash in the set. | Already raised as audit C3 and ratified. Measured mitigation: AvaloniaEdit binds no `F3` (§2.1), so find-next was never `F3` in EmberTern's editors; the Find bar uses its own buttons and `Enter`. The only surviving `F3` is the Global Search preview's next-match, which keeps it locally (§12.5). **Cost is real but small: a user reflexively pressing `F3` to repeat a search now creates an object instead — mitigated by `F3` being live only in the tree and grids, never in a text editor.** |
+| **K2** | **`F6` = Commit, `Shift+F6` = Rollback** | In Visual Studio `F6` = **next pane** and `Shift+F6` = **Build current project**. In browsers `F6` = focus the address bar. | EmberTern has no split panes, and "build" is now `F7` (Compile), so nothing in the app competes. The residual risk is a VS user's reflex: `Shift+F6` meaning "build" would instead **roll back the working transaction**. That is the one pairing in this table worth a second thought, because the two actions are not equally recoverable. |
+| **K3** | **`F7` = Compile** | Visual Studio: `F7` = **View Code** (build is `Ctrl+Shift+B`). **Delphi / Borland: `F7` = Trace Into, `F8` = Step Over**, and compile is `Ctrl+F9`. | No in-app conflict: EmberTern's debugger uses the VS stepping convention (`F10`/`F11`), so `F7`/`F8` are free. But the audience is ERP developers, many of them Delphi-trained, for whom `F7`/`F8` are *stepping* keys. Worth knowing that both of this sprint's new F-keys land on Delphi's debugger pair. |
+| **K4** | **`F8` = Delete** | Visual Studio: `F8` = **Next Error / next result** — which is exactly what EmberTern's editor already uses it for. | **This one is a match, not a clash**, and it is why the scope split was the right call: the VS meaning survives precisely where a VS user expects it (in code), and `F8` means Delete only where VS has no meaning for it. |
+| **K5** | **`Ctrl+K` = Format SQL** | `Ctrl+K` is a **chord prefix** in both Visual Studio and VS Code (`Ctrl+K, Ctrl+D` = format document; `Ctrl+K, Ctrl+C` = comment). VS Code's format-document is `Shift+Alt+F` / `Ctrl+Shift+I`. | EmberTern has no chords, so a bare `Ctrl+K` is unambiguous *here*. The clash is with muscle memory: a VS user pressing `Ctrl+K` intending to follow it with `Ctrl+D` gets an immediate format. That happens to be the intended action anyway, so the failure mode is benign — it simply fires one keystroke earlier than expected. |
+| **K6** | **`F4` = Refresh** | Windows: `F4` opens the address-bar dropdown. Visual Studio: `F4` = **Properties window**. Some DB tools: `F4` = describe object. Refresh is normally `F5` — taken here by Execute. | No single dominant standard is violated, and `F5` was unavailable by ratified design. The weakest clash in the table. |
+| **K7** | **`Ctrl+W` = Close tab** | The browser/editor standard. Visual Studio uses `Ctrl+F4` and leaves `Ctrl+W` effectively free. | A match. Noted only for completeness. |
+
+### 13.1 One scope narrowing worth confirming
+
+**`F4` (Refresh) is Tree-scoped only.** It refreshes the object tree, and only while the caret is in the
+Object Explorer. Deliberate: a full refresh re-projects the whole tree and scrolls it to top (a documented,
+accepted trade-off), so firing it while the user is inside a debugger session or a data grid would be
+surprising. **The data grids' own Refresh was not given a gesture** — it is a different action with a
+pending-edit question of its own, and no gesture for it was ratified. Say the word and it becomes
+`Tab`- or `Grid`-scoped in a follow-up.
+
+### 13.2 An unrelated discrepancy noticed in passing — NOT touched
+
+`MainWindowViewModel.CommitAllAsync` carries a comment stating *"The TOOLBAR's Commit stays deliberately
+narrower — it is the console's button"*, yet `MainWindow.axaml`'s Commit and Rollback buttons bind
+`CommitAllCommand` / `RollbackAllCommand`, and a separate narrower `CommitCommand` / `RollbackCommand` pair
+exists unused by that toolbar. Either the comment is stale or the binding is not what was intended. **`F6`
+binds what the button binds** — that is the correct rule for a shortcut and it keeps the two in step
+whichever way the discrepancy is resolved. Flagged rather than changed: transaction settlement is
+rule-#11 territory and not this sprint's to reinterpret.

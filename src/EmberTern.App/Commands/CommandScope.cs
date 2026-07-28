@@ -20,6 +20,18 @@ public enum CommandScope
     /// command. That null is what stops a gesture leaking into a tab it means nothing on.</summary>
     Tab = 1,
 
+    // ── The three focus scopes ──────────────────────────────────────────────────────────────────────
+    // The caret is in at most one of these at a time, so their order relative to each other is very
+    // nearly never exercised. It is still ordered innermost-first rather than arbitrarily, because
+    // nesting is possible in principle (an editor hosted inside a grid cell) and the innermost control
+    // is the one the user is typing in.
+
+    /// <summary>Live while the focus is inside a <c>DataGrid</c> — the collection lists and data grids.</summary>
+    Grid = 2,
+
+    /// <summary>Live while the focus is inside the Object Explorer's list.</summary>
+    Tree = 3,
+
     /// <summary>Live only while the keyboard focus is inside an AvaloniaEdit <c>TextEditor</c>.</summary>
-    Editor = 2,
+    Editor = 4,
 }

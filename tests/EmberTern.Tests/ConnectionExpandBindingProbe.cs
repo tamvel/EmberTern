@@ -719,14 +719,17 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
 
             var editor = new TextEditor { Width = 300, Height = 120 };
             var outside = new TextBox { Width = 120, Height = 24 };
-            var root = new StackPanel { Children = { editor, outside } };
-            var window = new Window { Width = 400, Height = 300, Content = root };
+            var tree = new ListBox { Width = 120, Height = 60 };
+            var grid = new DataGrid { Width = 120, Height = 60 };
+            var root = new StackPanel { Children = { editor, outside, tree, grid } };
+            var window = new Window { Width = 400, Height = 400, Content = root };
             window.Show();
             Dispatcher.UIThread.RunJobs();
             EditorSearch.Install(editor);
 
             int sidebarFocusRequests = 0;
-            var router = CommandRouter.Attach(window, () => vm, () => { sidebarFocusRequests++; return true; });
+            var router = CommandRouter.Attach(
+                window, () => vm, () => { sidebarFocusRequests++; return true; }, () => tree);
 
             // [1] F5 on a Query tab → the tab's main action is live, so the router handles it.
             var query = WorkspaceTabViewModel.CreateQuery(vm);
@@ -762,8 +765,55 @@ public sealed class ConnectionExpandBindingProbe : IClassFixture<HeadlessSession
             Assert.Equal(1, sidebarFocusRequests);          // unchanged → Global never ran
             Assert.False(editor.SearchPanel!.IsReplaceMode); // Find, not Replace
 
-            // [5] A gesture nobody claims is left alone (F7 arrives in etap 3 as Compile).
+            // [5] A gesture nobody claims is left alone.
+            Assert.False(router.Handle(Key.F1, KeyModifiers.None));
+
+            // ── etap 3: the focus scopes ─────────────────────────────────────────────────────────────
+            // Every assertion below is deliberately about DECLINING. A gesture that fires here would run a
+            // real New / Delete / Compile / Close flow, and a test must not need those to prove routing;
+            // the resolution mappings are asserted without a UI in CommandCatalogTests.
+
+            // [6] F3 / F8 are Tree- and Grid-scoped only: with the caret in a plain text box neither scope
+            //     is live, so nothing claims them. (Before the scopes existed there was nowhere to put this
+            //     distinction — the gesture would have had to be global and always-on.)
+            outside.Focus();
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[6] outside a tree/grid: F3={router.Handle(Key.F3, KeyModifiers.None)} "
+                           + $"F8={router.Handle(Key.F8, KeyModifiers.None)}");
+            Assert.False(router.Handle(Key.F3, KeyModifiers.None));
+            Assert.False(router.Handle(Key.F8, KeyModifiers.None));
+
+            // [7] Tree scope becomes live with the caret in the object tree — but nothing is selected, so
+            //     the command resolves to null and the key is still left alone rather than swallowed.
+            tree.Focus();
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[7] in the tree, nothing selected: F3={router.Handle(Key.F3, KeyModifiers.None)} "
+                           + $"F4={router.Handle(Key.F4, KeyModifiers.None)}");
+            Assert.False(router.Handle(Key.F3, KeyModifiers.None));
+            Assert.False(router.Handle(Key.F4, KeyModifiers.None));
+
+            // [8] Grid scope live, but the selected tab (Ddl) owns no collection, so the unified collection
+            //     router's own CanExecute declines — no per-grid knowledge needed anywhere.
+            grid.Focus();
+            Dispatcher.UIThread.RunJobs();
+            log.AppendLine($"[8] in a grid on a Ddl tab: F3={router.Handle(Key.F3, KeyModifiers.None)} "
+                           + $"F8={router.Handle(Key.F8, KeyModifiers.None)}");
+            Assert.False(router.Handle(Key.F3, KeyModifiers.None));
+            Assert.False(router.Handle(Key.F8, KeyModifiers.None));
+
+            // [9] F7 is Compile, declared only for the compilable tab kinds — a Ddl snapshot is not one.
             Assert.False(router.Handle(Key.F7, KeyModifiers.None));
+
+            // [10] Ctrl+W closes the active tab, and the console tab is not closable, so it declines.
+            vm.SelectTab(query);
+            Assert.False(vm.CanCloseActiveTab);
+            log.AppendLine($"[10] Ctrl+W on the non-closable console tab = {router.Handle(Key.W, KeyModifiers.Control)}");
+            Assert.False(router.Handle(Key.W, KeyModifiers.Control));
+
+            // [11] Ctrl+K is FormatSql for a query tab; F6 / Shift+F6 decline with no live transaction.
+            Assert.False(vm.CanCommitAll);
+            Assert.False(router.Handle(Key.F6, KeyModifiers.None));
+            Assert.False(router.Handle(Key.F6, KeyModifiers.Shift));
 
             window.Close();
         }, CancellationToken.None);

@@ -216,18 +216,16 @@ public partial class FunctionDetailTabView : UserControl
         }
     }
 
+    // Ctrl+K in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE — the same
+    // deliberately narrow exception as ProcedureDetailTabView, for the same reason: the action is identified
+    // by a specific TextEditor instance, and the router resolves commands rather than controls. Everything
+    // else falls through to Commands.CommandCatalog's FormatSql.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.F || e.KeyModifiers != KeyModifiers.Alt || _currentVm is null) return;
+        if (e.Key != Key.K || e.KeyModifiers != KeyModifiers.Control) return;
         if (sender is TextEditor ed && (ReferenceEquals(ed, _cursorEditor) || ReferenceEquals(ed, _subprogramEditor)))
         {
             FormatEditorInPlace(ed);
-            e.Handled = true;
-            return;
-        }
-        if (_currentVm.FormatSqlCommand.CanExecute(null))
-        {
-            _currentVm.FormatSqlCommand.Execute(null);
             e.Handled = true;
         }
     }

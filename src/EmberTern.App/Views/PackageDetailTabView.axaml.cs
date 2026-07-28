@@ -47,16 +47,10 @@ public partial class PackageDetailTabView : UserControl
         // S5: the panel's activation gestures navigate the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("PackageDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
-        if (_headerEditor is not null)
-        {
-            _headerEditor.TextChanged += OnHeaderEditorTextChanged;
-            _headerEditor.KeyDown += OnEditorKeyDown;
-        }
-        if (_bodyEditor is not null)
-        {
-            _bodyEditor.TextChanged += OnBodyEditorTextChanged;
-            _bodyEditor.KeyDown += OnEditorKeyDown;
-        }
+        // Format is not wired here any more: it is CommandId.FormatSql (Ctrl+K), declared once in
+        // Commands.CommandCatalog for this tab kind and routed to this VM's own FormatSqlCommand.
+        if (_headerEditor is not null) _headerEditor.TextChanged += OnHeaderEditorTextChanged;
+        if (_bodyEditor is not null) _bodyEditor.TextChanged += OnBodyEditorTextChanged;
         ApplyEditorTheme();
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
         DataContextChanged += OnDataContextChanged;
@@ -136,17 +130,6 @@ public partial class PackageDetailTabView : UserControl
             : PackageDetailTabViewModel.PackageSubTabIndex;
     }
 
-    private void OnEditorKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Alt && _currentVm is not null)
-        {
-            if (_currentVm.FormatSqlCommand.CanExecute(null))
-            {
-                _currentVm.FormatSqlCommand.Execute(null);
-                e.Handled = true;
-            }
-        }
-    }
 
     private string? GetActiveEditorSelection()
     {

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Commands;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Search;
 using EmberTern.Firebird;
@@ -543,6 +544,43 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     internal void RequestCopyName(string name) => CopyNameRequested?.Invoke(name);
     internal void RequestNewObject(MetadataObjectKind kind) => NewObjectRequested?.Invoke(kind);
     internal void RequestDeleteObject(MetadataObject obj) => DeleteObjectRequested?.Invoke(obj);
+
+    /// <summary>
+    /// The node behind the sidebar's primary selected row — a <see cref="ConnectionNodeViewModel"/>,
+    /// <see cref="FolderNodeViewModel"/> or <see cref="MetadataNodeViewModel"/>. Fed by the view's
+    /// selection handler, exactly as <see cref="SelectedConnection"/> and <c>SetSelectedTriggers</c>
+    /// already are: the selection is a fact the list owns, and every consumer of it belongs here.
+    ///
+    /// <para>⚠ Not observable, on purpose. Nothing binds to it — <see cref="ResolveCommand"/> reads it at
+    /// the moment a key is pressed — so raising change notifications on every arrow-key move through a
+    /// long tree would be pure noise.</para>
+    /// </summary>
+    internal object? SelectedNode { get; set; }
+
+    /// <summary>
+    /// The command the Object Explorer offers for <paramref name="id"/> at <c>CommandScope.Tree</c>, or
+    /// null when the current selection has nothing to offer — which is what makes the gesture fall through
+    /// instead of appearing to work.
+    ///
+    /// <para>⭐ Every arm reuses the node's OWN command, the same one its context menu invokes. In
+    /// particular <c>DeleteObject</c> routes to <see cref="MetadataNodeViewModel.DeleteCommand"/>, which
+    /// raises the existing confirmation dialog — so F8 opens a question, never drops an object outright.
+    /// A shortcut is a second trigger for a command, never a second path to the action.</para>
+    /// </summary>
+    internal System.Windows.Input.ICommand? ResolveCommand(CommandId id) => id switch
+    {
+        CommandId.NewObject => SelectedNode is MetadataNodeViewModel { SupportsNew: true } group
+            ? group.NewCommand
+            : null,
+        CommandId.DeleteObject => SelectedNode is MetadataNodeViewModel { CanDeleteLeaf: true } leaf
+            ? leaf.DeleteCommand
+            : null,
+        // Refresh is one global re-read of the tree (every connection node's command calls the same
+        // RefreshAsync), so any connected connection answers for it — and routing through the node's
+        // command keeps the ban on a further direct RefreshAsync() call site intact.
+        CommandId.RefreshMetadata => SelectedConnection?.RefreshMetadataCommand,
+        _ => null,
+    };
     internal void RequestExecuteProcedure(MetadataObject obj) => ExecuteProcedureRequested?.Invoke(obj);
     internal void RequestDebugProcedure(MetadataObject obj) => DebugProcedureRequested?.Invoke(obj);
     internal void RequestDebugTrigger(MetadataObject obj) => DebugTriggerRequested?.Invoke(obj);

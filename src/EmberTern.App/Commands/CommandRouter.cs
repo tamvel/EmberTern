@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using AvaloniaEdit;
 using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
@@ -34,12 +35,18 @@ internal sealed class CommandRouter
     private readonly Visual _root;
     private readonly Func<MainWindowViewModel?> _viewModel;
     private readonly Func<bool> _focusSidebarFilter;
+    private readonly Func<Control?> _objectTree;
 
-    private CommandRouter(Visual root, Func<MainWindowViewModel?> viewModel, Func<bool> focusSidebarFilter)
+    private CommandRouter(
+        Visual root,
+        Func<MainWindowViewModel?> viewModel,
+        Func<bool> focusSidebarFilter,
+        Func<Control?> objectTree)
     {
         _root = root;
         _viewModel = viewModel;
         _focusSidebarFilter = focusSidebarFilter;
+        _objectTree = objectTree;
     }
 
     /// <summary>
@@ -49,12 +56,18 @@ internal sealed class CommandRouter
     /// Focuses the Object Explorer's filter box, returning false when it is not available. A view action,
     /// not a command, so the router is handed it rather than reaching into the window.
     /// </param>
+    /// <param name="objectTree">
+    /// The Object Explorer's list, used only to decide whether <see cref="CommandScope.Tree"/> is live.
+    /// Passed in rather than inferred from the focused element's DataContext: the window owns the sidebar,
+    /// and a router that guesses which list is "the tree" would answer wrongly the day a second one exists.
+    /// </param>
     public static CommandRouter Attach(
         InputElement root,
         Func<MainWindowViewModel?> viewModel,
-        Func<bool> focusSidebarFilter)
+        Func<bool> focusSidebarFilter,
+        Func<Control?> objectTree)
     {
-        var router = new CommandRouter(root, viewModel, focusSidebarFilter);
+        var router = new CommandRouter(root, viewModel, focusSidebarFilter, objectTree);
         root.AddHandler(InputElement.KeyDownEvent, router.OnKeyDown, RoutingStrategies.Bubble);
         return router;
     }
@@ -68,22 +81,30 @@ internal sealed class CommandRouter
         var candidates = CommandCatalog.Match(key, modifiers);
         if (candidates.Count == 0) return false;
 
-        var editor = EditorSearch.EditorFor(FocusedVisual());
+        var focused = FocusedVisual();
+        var editor = EditorSearch.EditorFor(focused);
         var vm = _viewModel();
+        var focus = new FocusState(
+            Editor: editor,
+            InGrid: focused?.FindAncestorOfType<DataGrid>(includeSelf: true) is not null,
+            InObjectTree: _objectTree() is { } tree && IsWithin(focused, tree));
 
         foreach (var descriptor in candidates)
         {
-            if (!IsLive(descriptor, editor, vm)) continue;
+            if (!IsLive(descriptor, focus, vm)) continue;
 
             // Live, but somebody else owns the keystroke: stop here rather than letting a broader scope
             // answer for it — the owner's claim is the most specific one there is.
             if (descriptor.Dispatch == CommandDispatch.Reserved) return false;
 
-            if (TryDispatch(descriptor, editor, vm)) return true;
+            if (TryDispatch(descriptor, focus.Editor, vm)) return true;
         }
 
         return false;
     }
+
+    /// <summary>Which focus scopes are live for one key stroke, computed once per stroke.</summary>
+    private readonly record struct FocusState(TextEditor? Editor, bool InGrid, bool InObjectTree);
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
@@ -92,14 +113,25 @@ internal sealed class CommandRouter
     }
 
     // Does this command's scope apply at this moment?
-    private static bool IsLive(CommandDescriptor descriptor, TextEditor? editor, MainWindowViewModel? vm)
+    private static bool IsLive(CommandDescriptor descriptor, FocusState focus, MainWindowViewModel? vm)
         => descriptor.Scope switch
         {
-            CommandScope.Editor => editor is not null,
+            CommandScope.Editor => focus.Editor is not null,
+            CommandScope.Tree => focus.InObjectTree,
+            CommandScope.Grid => focus.InGrid,
             CommandScope.Tab => descriptor.TabKinds is null
                                 || (vm?.SelectedWorkspaceTab is { } tab && descriptor.TabKinds.Contains(tab.Kind)),
             _ => true,
         };
+
+    private static bool IsWithin(Visual? candidate, Visual container)
+    {
+        for (var v = candidate; v is not null; v = v.GetVisualParent())
+        {
+            if (ReferenceEquals(v, container)) return true;
+        }
+        return false;
+    }
 
     private bool TryDispatch(CommandDescriptor descriptor, TextEditor? editor, MainWindowViewModel? vm)
         => descriptor.Id switch

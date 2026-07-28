@@ -34,8 +34,12 @@ public enum CommandId
     /// <summary>Execute the SQL editor's query without the preview row ceiling — Shift+F5.</summary>
     ExecuteQueryFull,
 
-    /// <summary>Format the SQL of the active tab's editor.</summary>
+    /// <summary>Format the SQL of the active tab's editor — Ctrl+K.</summary>
     FormatSql,
+
+    /// <summary>Compile the object the active editor tab is editing — F7. The application's most-used
+    /// action after Execute, and it had no shortcut at all before this sprint.</summary>
+    Compile,
 
     /// <summary>Data Import: run the whole pipeline except the write — Ctrl+F5.</summary>
     ImportValidate,
@@ -80,6 +84,29 @@ public enum CommandId
     EditorNextDiagnostic,
     EditorPreviousDiagnostic,
 
+    // ── Tree scope (the Object Explorer) ────────────────────────────────────────────────────────────
+
+    /// <summary>Create a new object of the selected category — F3.</summary>
+    NewObject,
+
+    /// <summary>Drop the selected object — F8. Routes to the existing confirmed delete, so a single
+    /// keystroke opens the confirmation dialog and never drops anything on its own.</summary>
+    DeleteObject,
+
+    /// <summary>Re-read the object tree — F4.</summary>
+    RefreshMetadata,
+
+    // ── Grid scope (the collection lists) ───────────────────────────────────────────────────────────
+    // Both route through the application's EXISTING unified collection router (the toolbar's + / −),
+    // whose ActiveCollection() already answers "which collection is the user editing". Nothing here
+    // needs to know about a particular grid.
+
+    /// <summary>Add a row to the collection the focused grid belongs to — F3.</summary>
+    CollectionAdd,
+
+    /// <summary>Remove the selected row from that collection — F8.</summary>
+    CollectionRemove,
+
     // ── Global scope ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Global Search over metadata names and source — Ctrl+Shift+F.</summary>
@@ -87,4 +114,14 @@ public enum CommandId
 
     /// <summary>Focus the Object Explorer's filter box — Ctrl+F, when the caret is not in an editor.</summary>
     FocusSidebarFilter,
+
+    /// <summary>Commit the working transaction — F6. Binds the very command the toolbar button does.</summary>
+    Commit,
+
+    /// <summary>Roll the working transaction back — Shift+F6.</summary>
+    Rollback,
+
+    /// <summary>Close the active workspace tab — Ctrl+W. Routes through the confirming close, so a tab
+    /// with unsaved work still offers Save / Discard / Cancel.</summary>
+    CloseTab,
 }
