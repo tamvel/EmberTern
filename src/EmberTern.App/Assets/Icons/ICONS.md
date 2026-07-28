@@ -155,6 +155,43 @@ breakpoint dot uses). Same idiom (24×24, 2px stroke, round caps/joins); canonic
 
 The fault message bar is Seam C.
 
+## Application Menu (hamburger-navigation, etap 2)
+
+| Geometry key | Source file | Purpose | Used in |
+|---|---|---|---|
+| `Icon.Menu` | Navigation/menu.svg | Open the Application Menu | Titlebar — the first button of the action zone |
+| `Icon.Settings` | Actions/settings-sliders.svg (composed) | Settings | Application Menu (disabled placeholder) |
+| `Icon.Exit` | Actions/log-out.svg (composed) | Leave the application | Application Menu |
+
+`Icon.Settings` and `Icon.Exit` are **composed** in the Lucide style rather than taken verbatim
+(precedent: `table-plus.svg`, `import.svg`), and each `.svg` says so in a comment. A gear was
+rejected for Settings — its outline cannot be authored cleanly at a 2px stroke rendered into the
+14px menu icon column; a power symbol was rejected for Exit for the same reason (a near-full arc
+is the shape that degrades worst at that size).
+
+### ⭐ Optical size is a property of the GEOMETRY, not of the control
+
+Worth knowing before adding any icon, because it cost a QA round. The `SvgIcon` ControlTheme is a
+`Viewbox Stretch="Uniform"` wrapping a **fixed `Canvas Width="24" Height="24"`** — so the Viewbox
+scales the *Canvas*, never the path's ink. Every icon therefore renders at exactly the same 24→16
+scale, and **an icon looks small purely because its geometry fills less of the 24×24 box.** No
+stretching compensates.
+
+The useful measure is the **ink box** = the path's extremes ±1 (half of the 2px stroke, round caps).
+Measured across the titlebar:
+
+| Icon | Ink box |
+|---|---|
+| `Icon.Copy`, `Icon.FolderPlus` | 22×22, 22×19 |
+| `Icon.PanelLeft`, `Icon.Trash` | 20×20, 20×22 |
+| `Icon.Menu` (as shipped) | **20×18** |
+| `Icon.Menu` (verbatim Lucide — rejected) | 18×14 ← the shortest glyph on the bar, and it showed |
+| `Icon.Plus` | 16×16 (a compact symbol; reads fine small) |
+
+**Aim for roughly 20×20 of ink** for a toolbar icon. Lucide's own set is not internally consistent on
+this, so a verbatim file is a starting point, not a guarantee. `ConnectionExpandBindingProbe`
+pins the hamburger against its neighbour so a revert to the upstream geometry fails the suite.
+
 ### Migration status — COMPLETE
 
 No Unicode/emoji object or action glyphs remain in any view — the debugger toolbar was the

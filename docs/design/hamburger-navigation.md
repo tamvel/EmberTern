@@ -784,6 +784,36 @@ a 14px icon column. Exit is a doorway with an arrow leaving through it — not `
 "close this window" chrome-side, and not a power symbol, whose near-full arc is the shape that degrades worst at
 menu-icon size.
 
+### 12.2a QA round 1 — the hamburger looked smaller than its neighbours, and it was
+
+The user's first visual QA: the ☰ glyph read as smaller than the icons beside it — *"not the button or the
+padding, the geometry itself"*. Correct, and the diagnosis was exact.
+
+**It is not a rendering difference.** `SvgIcon`'s ControlTheme is a `Viewbox Stretch="Uniform"` around a
+**fixed `Canvas Width="24" Height="24"`**, so the Viewbox scales the *Canvas*, never the path's ink. Every icon
+renders at the same 24→16 scale — which means an icon looks small for exactly one reason: **its geometry fills
+less of the 24×24 box.** Ink box = path extremes ±1 (half the 2px stroke, round caps):
+
+| Icon | Ink box |
+|---|---|
+| `Icon.Copy` / `Icon.FolderPlus` | 22×22 / 22×19 |
+| `Icon.PanelLeft` / `Icon.Trash` | 20×20 / 20×22 |
+| `Icon.Menu` — **verbatim Lucide** `menu` | **18×14** |
+
+At the rendered 16px that is 9.3px tall where `PanelLeft` is 13.3px — a **30% height deficit**, and the
+shortest glyph on the bar. Lucide's own set is simply not internally consistent between a three-rule glyph and
+a closed rectangle.
+
+**Fixed by enlarging the geometry**, not by touching the control: rules widened to x3→21 and spread to
+y4/12/20 → ink **20×18**, the same width as `PanelLeft` and 90% of its height. Line spacing goes 6→8, which is
+~4px of white at the rendered size and still unmistakably a hamburger. **Measured after the change: 20×18
+against the sidebar toggle's 20×20.**
+
+Two things came out of it worth more than the fix: the ink-box rule and its measured table are now in
+`Assets/Icons/ICONS.md` (aim for ~20×20; a verbatim Lucide file is a starting point, not a guarantee), and the
+probe **pins the hamburger's ink box against its neighbour's**, so a well-meant revert to the upstream file
+fails the suite instead of quietly shrinking the button again.
+
 ### 12.3 Files touched
 
 `Themes/IconGeometries.axaml` (+3 geometries) · `Assets/Icons/{Navigation/menu,Actions/settings-sliders,Actions/log-out}.svg`

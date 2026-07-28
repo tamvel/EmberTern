@@ -3001,6 +3001,29 @@ public sealed class ConnectionExpandBindingProbe
             log.AppendLine($"menu: rows={rows.Count} separators={menu.Items.OfType<Separator>().Count()} "
                            + $"placement={menu.Placement} fontSize={menu.FontSize} border={menu.BorderThickness}");
 
+            // [6] ⭐ Optical size. The SvgIcon ControlTheme scales a FIXED 24×24 Canvas, not the path's ink,
+            // so every icon renders at the same 24→16 scale and a geometry that fills less of the box simply
+            // looks smaller. Verbatim Lucide `menu` has an 18×14 ink box against PanelLeft's 20×20, which the
+            // user saw immediately as "the hamburger is smaller than the rest". This pins the enlarged
+            // geometry against a future well-meant revert to the upstream file.
+            static Avalonia.Size InkBox(Button host)
+            {
+                var data = host.GetVisualDescendants().OfType<SvgIcon>().First().Data!;
+                // ±1 on every side: half of the theme's 2px stroke, with round caps.
+                return new Avalonia.Size(data.Bounds.Width + 2, data.Bounds.Height + 2);
+            }
+
+            var hamburger = InkBox(button);
+            var neighbour = InkBox(sidebarToggle);
+            log.AppendLine($"ink box: hamburger {hamburger} vs sidebar toggle {neighbour}");
+
+            // Not "identical" — a three-rule glyph can never carry a closed rectangle's ink — but it must not
+            // be visibly shorter or narrower than the icon standing next to it.
+            Assert.True(hamburger.Width >= neighbour.Width - 3,
+                $"hamburger is narrower than its neighbour: {hamburger.Width} vs {neighbour.Width}");
+            Assert.True(hamburger.Height >= neighbour.Height - 3,
+                $"hamburger is shorter than its neighbour: {hamburger.Height} vs {neighbour.Height}");
+
             menu.Close();
             window.Close();
         }, CancellationToken.None);
