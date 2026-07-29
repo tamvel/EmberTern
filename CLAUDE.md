@@ -33,6 +33,7 @@ verbatim, in the archive below.
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
+| **`docs/design/settings-center.md`** | **ACTIVE SPRINT — DESIGN CLOSED + RATIFIED (2026-07-29), nothing implemented.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **11 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (273 entries, #1–#286), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -327,6 +328,62 @@ noted.
 
 ## Current state
 
+- **⚙ SETTINGS CENTER & SQL FORMATTER CASING — ACTIVE SPRINT. Etap 1 (audit + design) CLOSED AND RATIFIED
+  by the user 2026-07-29; NOTHING IMPLEMENTED, no production code touched. Branch `feat/settings-center`.**
+  **The sprint's one document: [docs/design/settings-center.md](docs/design/settings-center.md)** — read
+  §9 (the 11 ratified decisions) and §2 (the measured facts) before writing any code. Etap 2 is next and
+  is **pure Core**: `UserSettings.Preferences` + `PreferencesStore` (the 8th section facade) + the language
+  catalog + the defaults contract + tests, **no UI**.
+  **⭐ RATIFIED, do not re-litigate:** all scalar preferences live in a new **`UserSettings.Preferences`**
+  (additive — **`CurrentSchemaVersion` stays 2**, because a bump trips downgrade protection and older
+  builds then refuse the whole file), stored as **strings never Avalonia enums** (rule #1), with each
+  property's C# initializer *being* its default so "restore defaults" is `new Preferences()` · Settings
+  Center is a **window** (not a `WorkspaceTabKind` — a tab would need threading into five per-kind
+  families for no gain) · **apply-on-change, no OK/Cancel**, and it MUST surface `Save`'s refusal (§2.5)
+  because a dialog that accepts a change and persists nothing is the worst place for that silence ·
+  **no `CommandId` and NOT `Ctrl+,`** (an unratified gesture would have to pass the collision validator
+  and appear in Keyboard Shortcuts) · the formatter gets **exactly two** settings, Keywords + Identifiers
+  casing, both defaulting to `Lower` so shipped output is byte-identical.
+  **⛔ STANDING DIRECTIVE (user, on accepting the design): nothing is added because it might be wanted
+  later** — no update check, no telemetry, no experimental toggles, **no formatter options beyond those
+  two**. The test is *"is the next step scheduled?"*, not *"would this be useful someday?"* **Language is
+  the sole exception** because Polish is planned. Also ratified OUT, as decisions rather than gaps:
+  configurable editor **timing constants** (tuned values — a user setting debounce to 0 experiences the
+  editor as broken and reports it as our bug), **suppressible confirmations** (a "don't ask again"
+  checkbox exists only to disarm rule #11), and **import batch defaults** (measured I0 optima, already
+  per-profile, module closed).
+  **⚠ FOUR MEASURED FACTS THAT REVERSE THE OBVIOUS ASSUMPTION — do not re-derive them.** (1) **The theme
+  is never saved, not "reset on restart"**: `App.axaml:4` hard-codes `RequestedThemeVariant="Dark"` and
+  `MainWindow.axaml.cs:1564` flips it in memory only — a *missing feature*, so removing that hard-coded
+  `Dark` without first supplying a stored value yields `ThemeVariant.Default`, which follows the **OS**
+  theme and reads exactly like a regression. (2) **`SqlFormatter` has no casing decision point at all** —
+  casing is applied at ~9 sites and `FKind.Word` (`:360`) fuses keywords + identifiers + parameters, so
+  the two requested settings are *not separable* until that classification exists (via the existing
+  `FirebirdSyntax.IsKeyword`, never a second keyword list); the §0 lexeme net at `:2011` stays correct but
+  its comment *"Words are lowercased on output"* goes false and must be fixed in the same etap, or someone
+  "simplifies" it to a case-sensitive compare and disarms §0 for every keyword. (3) **Localization is NOT
+  built** — 1 815 `public const string` (a `const` is *inlined*, so there is no field to reassign), 42
+  XAML files on `x:Static`, zero `.resx`, and architecture rule #6 pointed *away* from it; the Language row
+  therefore ships as **live storage over a one-row catalog and no mechanism**, and Polish is its own
+  milestone whose scope includes finding a new discriminator for the `const`-keyed guard behind gotcha
+  #284. (4) **`UserSettings` holds four lists and not one scalar**, which is why every existing scalar
+  preference ended up in `WorkspaceState` beside window bounds.
+  **⭐ The export format is EmberTern's OWN versioned artifact, and the four version-ish fields each have
+  exactly ONE job** (the user's framing, and the reason the design holds): **`Magic`** (`EMBERTERN-SETTINGS`,
+  literal first bytes) = identity, **never versioned** — versioning it would make an old file report *"not
+  an EmberTern file"* instead of *"older export, migrating"*; **`ExportFormatVersion`** = the migration
+  contract; **`SchemaVersion`** = the `ApplicationSettings` shape (the existing ladder); **`AppVersion`** =
+  **diagnostics only, never branched on** (gotcha #289's shape), written from `AppInfo` never a literal.
+  **Every export is encrypted** (AES-256-**GCM**, so a wrong passphrase fails as *authentication* and is
+  distinguishable from a damaged file), cleartext header over encrypted payload — **which is what makes
+  versioning possible at all**, and the section list stays inside the payload so a cleartext
+  *"contains: Passwords"* never advertises what is worth attacking. ⚠ **The check order is itself the
+  design**: magic → format version → scheme → **only then the passphrase** → GCM auth, so we *never ask
+  for a credential that cannot possibly work*; the passphrase dialog must therefore not be import's entry
+  point. ⚠ Do **not** collapse `ExportFormatVersion` into `SchemaVersion` (it would force a schema bump
+  every time a section is added), and do **not** implement Q2's original *"refuse an unencrypted export
+  containing credentials"* — always-encrypted makes it **unreachable**, and an unreachable guard reads as
+  a real safety net to whoever comes next.
 - **☰ HAMBURGER NAVIGATION / APPLICATION MENU — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-29).**
   All five etaps accepted; build 0/0; suite **5971** green (partitions 5917 + 54); smoke clean. Merged `--no-ff`
   so the sprint stays one readable arc, pushed to **both** remotes.
