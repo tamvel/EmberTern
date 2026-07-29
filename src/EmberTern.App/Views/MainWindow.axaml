@@ -1770,8 +1770,10 @@
                    FontSize="11"
                    Margin="20,0,0,0"
                    VerticalAlignment="Center" />
+        <!-- Product + version from AppInfo — the same single source the About window reads. This used to be
+             the literal "EmberTern 0.1.0", which had gone stale and then disagreed with About on screen. -->
         <TextBlock Grid.Column="3"
-                   Text="EmberTern 0.1.0"
+                   Text="{Binding AppVersionChip}"
                    Classes="subtle"
                    FontSize="11"
                    VerticalAlignment="Center" />

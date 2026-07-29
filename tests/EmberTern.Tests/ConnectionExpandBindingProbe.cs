@@ -3076,12 +3076,21 @@ public sealed class ConnectionExpandBindingProbe
             log.AppendLine("about window text: " + string.Join(" | ", texts));
 
             Assert.Contains(AppInfo.Product, texts);
-            Assert.Contains(AppInfo.Author, texts);
             Assert.Contains(AppInfo.Copyright, texts);
 
             // The version reaches the surface, and carries its label rather than sitting there as a bare number.
             var version = Assert.Single(texts, t => t.Contains(AppInfo.Version, StringComparison.Ordinal));
             Assert.NotEqual(AppInfo.Version, version);
+
+            // ⚠ The author line is LABELLED — the bare name read as unsigned text, and it recurs in the
+            // copyright below, so the label is what makes that repetition read as authorship.
+            var author = Assert.Single(texts, t => t.StartsWith("Created by", StringComparison.Ordinal));
+            Assert.Contains(AppInfo.Author, author, StringComparison.Ordinal);
+            Assert.DoesNotContain(AppInfo.Author, texts);
+
+            // The release date, under the version — from <ReleaseDate>, never typed into the view.
+            Assert.NotNull(AppInfo.ReleaseDate);
+            Assert.Single(texts, t => t.StartsWith("Released", StringComparison.Ordinal));
 
             // The brand mark is the subject of the window, so it is present and it is the dominant element.
             var logo = Assert.Single(window.GetVisualDescendants().OfType<Image>());
@@ -3098,6 +3107,37 @@ public sealed class ConnectionExpandBindingProbe
         }, CancellationToken.None);
 
         _out.WriteLine(log.ToString());
+    }
+
+    // ⭐ ONE version for the whole application, proven where the user found the contradiction: on screen.
+    // The status bar used to carry the literal "EmberTern 0.1.0" while About read the assembly, so the two
+    // disagreed in front of them. Both now read AppInfo, and this asserts the status bar renders it.
+    [Fact]
+    public async System.Threading.Tasks.Task StatusBarShowsTheSameVersionAsAbout()
+    {
+        await SharedSession.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-version-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(store, service);
+
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var chip = window.GetVisualDescendants().OfType<TextBlock>()
+                .Select(t => t.Text ?? string.Empty)
+                .Where(t => t.Contains(AppInfo.Version, StringComparison.Ordinal))
+                .ToArray();
+
+            _out.WriteLine("status bar version chip: " + string.Join(" | ", chip));
+            Assert.Single(chip);
+            Assert.Contains(AppInfo.Product, chip[0], StringComparison.Ordinal);
+
+            window.Close();
+        }, CancellationToken.None);
     }
 
     // The hamburger's three rules must be DRAWN identically, which the ink-box assertion above no longer

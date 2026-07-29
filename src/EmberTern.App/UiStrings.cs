@@ -861,7 +861,18 @@ internal static class UiStrings
     // single source is <Version> in Directory.Build.props.
     public const string AboutTitle = "About EmberTern";
     public const string AboutVersionFormat = "Version {0}";
+    // Released on its own line under the version. The date is assembly metadata fed by <ReleaseDate> in
+    // Directory.Build.props — same single source as the version, so it is never a date typed into a view.
+    public const string AboutReleasedFormat = "Released {0}";
+    // ⚠ The author line is LABELLED on purpose. Unlabelled it read as an unsigned line of text, and the name
+    // already appears in the copyright below — the label is what turns a repetition into authorship.
+    public const string AboutAuthorFormat = "Created by {0}";
     public const string AboutClose = "Close";
+
+    // The status bar's version chip. It shows the SAME AppInfo value the About window does — it used to be the
+    // literal "EmberTern 0.1.0" in MainWindow.axaml, i.e. a second source of truth that had gone stale and
+    // then disagreed with About in front of the user.
+    public const string StatusBarVersionFormat = "{0} {1}";
     // No gesture is shown beside Exit: EmberTern does not own Alt+F4, and a gesture typed by hand is the
     // drift CommandTip exists to prevent (gotcha #284). It routes through the window's ordinary close, so
     // unsaved work and an open transaction still get their prompts.

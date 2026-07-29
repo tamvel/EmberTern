@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.Linq;
 using System.Reflection;
 
 namespace EmberTern.App;
@@ -56,6 +58,16 @@ public static class AppInfo
     public static string Copyright { get; } =
         Self.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? string.Empty;
 
+    /// <summary>
+    /// When this version was released, or null when the build did not declare it.
+    ///
+    /// <para>There is no standard assembly attribute for a release date, so it travels as
+    /// <see cref="AssemblyMetadataAttribute"/> — which keeps it in the same single source as the version
+    /// instead of becoming a date typed into a view. Stored ISO (unambiguous), formatted for display by the
+    /// caller.</para>
+    /// </summary>
+    public static DateOnly? ReleaseDate { get; } = ResolveReleaseDate();
+
     private static string ResolveVersion()
     {
         var informational = Self.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
@@ -68,5 +80,18 @@ public static class AppInfo
         return Self.GetName().Version is { } version
             ? $"{version.Major}.{version.Minor}.{version.Build}"
             : string.Empty;
+    }
+
+    private static DateOnly? ResolveReleaseDate()
+    {
+        var raw = Self.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => string.Equals(a.Key, "ReleaseDate", StringComparison.Ordinal))?.Value;
+
+        // Parsed strictly under the invariant culture: the value is ISO by construction, and a date we cannot
+        // read is reported as absent rather than guessed into another calendar (the §0 habit).
+        return DateOnly.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var date)
+            ? date
+            : null;
     }
 }

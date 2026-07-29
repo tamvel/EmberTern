@@ -47,6 +47,15 @@
                HorizontalAlignment="Center"
                Margin="0,5,0,0" />
 
+    <!-- Release date, under the version. Collapses entirely when the build declared none, so the window never
+         shows a label with nothing after it. Its value is assembly metadata from <ReleaseDate>. -->
+    <TextBlock Text="{Binding ReleasedText}"
+               IsVisible="{Binding HasReleaseDate}"
+               FontSize="11"
+               Foreground="{DynamicResource SubtleForegroundBrush}"
+               HorizontalAlignment="Center"
+               Margin="0,3,0,0" />
+
     <!-- A short hairline instead of a full-width rule: it separates authorship from identity without
          drawing a band across the window. This is also the slot a future licence line goes in — one row,
          not a redesign (design §8.3). -->
@@ -55,7 +64,9 @@
             HorizontalAlignment="Center"
             Margin="0,22,0,20" />
 
-    <TextBlock Text="{Binding Author}"
+    <!-- Labelled: "Created by …". Unlabelled it read as an unsigned line, and the name recurs in the
+         copyright below — the label is what makes that repetition read as authorship. -->
+    <TextBlock Text="{Binding AuthorText}"
                FontSize="12"
                HorizontalAlignment="Center" />
 

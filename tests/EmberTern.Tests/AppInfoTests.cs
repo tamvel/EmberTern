@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -40,22 +42,89 @@ public sealed class AppInfoTests
         var version = AppInfo.Version;
         Assert.NotEmpty(version);
 
-        var offenders = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot(), "src"), "*.*", SearchOption.AllDirectories)
-            .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                        || f.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase))
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
-                            StringComparison.OrdinalIgnoreCase)
-                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
-                            StringComparison.OrdinalIgnoreCase))
+        var offenders = AppSourceFiles()
             .Where(f => File.ReadAllText(f).Contains(version, StringComparison.Ordinal))
-            .Select(f => Path.GetRelativePath(RepositoryRoot(), f))
+            .Select(Relative)
             .ToArray();
 
         Assert.True(offenders.Length == 0,
             "the product version must live only in Directory.Build.props, but its text also appears in: "
             + string.Join(", ", offenders));
     }
+
+    // ⭐ The test above is not enough, and the gap is worth understanding rather than patching over: it
+    // searches for the CURRENT version, so a literal left over from an EARLIER one sails straight past. That
+    // is not hypothetical — the status bar carried Text="EmberTern 0.1.0" in MainWindow.axaml, stale for who
+    // knows how long, and the user found it by seeing the status bar and the About window disagree on screen.
+    // A guard keyed to today's value can only catch a copy someone makes today.
+    //
+    // So this one looks for the SHAPE of a version rather than a value, in the two places a version can
+    // actually reach a user:
+    //   · a XAML Text= / Content= attribute  — verified against the exact removed literal, which it matches
+    //     (a bare  "\d+\.\d+\.\d+"  pattern did NOT: the string was "EmberTern 0.1.0", so the quote is not
+    //      adjacent to the digits. That regex would have felt like a guard while catching nothing.)
+    //   · a C# string literal on a non-comment line
+    //
+    // Two deliberate exclusions, each with a reason. Spec references (§9.8.1, §4.8.3) are excluded by the
+    // lookbehind — they are pervasive in this codebase's prose and are not versions. Comment lines are
+    // excluded because prose legitimately names the literal that was REMOVED, which is a historical fact that
+    // cannot go stale; the *current* version is still banned from comments too, by the test above. Between the
+    // two: today's number appears nowhere at all, and a version shape appears nowhere it could be displayed.
+    // Scoped to EmberTern.App — Core legitimately quotes dotted numbers (SqlLiteralWriter's "15.03.2024" date
+    // example), and Core shows nothing to a user.
+    [Fact]
+    public void NoVersionShapedLiteralCanReachTheScreen()
+    {
+        var inXaml = new Regex(@"(?:Text|Content)=""[^""]*\d+\.\d+\.\d+[^""]*""");
+        var inCode = new Regex(@"""[^""\n]*(?<![§.\d])\d+\.\d+\.\d+(?![\d.])[^""\n]*""");
+
+        var offenders = new List<string>();
+
+        foreach (var file in AppSourceFiles())
+        {
+            bool xaml = file.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase);
+
+            foreach (var (line, number) in File.ReadAllLines(file).Select((l, i) => (l, i + 1)))
+            {
+                var trimmed = line.TrimStart();
+                if (!xaml && (trimmed.StartsWith("//", StringComparison.Ordinal)
+                              || trimmed.StartsWith("*", StringComparison.Ordinal)
+                              || trimmed.StartsWith("/*", StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+
+                var hit = (xaml ? inXaml : inCode).Match(line);
+                if (hit.Success) offenders.Add($"{Relative(file)}:{number} → {hit.Value}");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "a version-shaped literal on a surface that can be displayed is a second source of truth waiting "
+            + "to go stale; read it from AppInfo instead. Found: " + string.Join(", ", offenders));
+    }
+
+    [Fact]
+    public void ReleaseDateComesFromTheBuild()
+    {
+        var declared = BuildProperty("ReleaseDate");
+
+        Assert.NotNull(AppInfo.ReleaseDate);
+        Assert.Equal(declared, AppInfo.ReleaseDate!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+    }
+
+    private static IEnumerable<string> AppSourceFiles()
+        => Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot(), "src", "EmberTern.App"), "*.*",
+                SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                        || f.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                            StringComparison.OrdinalIgnoreCase)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                            StringComparison.OrdinalIgnoreCase));
+
+    private static string Relative(string file) => Path.GetRelativePath(RepositoryRoot(), file);
 
     [Fact]
     public void ProductAuthorAndCopyrightComeFromTheBuild()

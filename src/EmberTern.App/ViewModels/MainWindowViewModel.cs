@@ -1043,6 +1043,19 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string AppTitle => UiStrings.AppTitle;
     public string AppSubtitle => UiStrings.AppSubtitle;
+
+    /// <summary>
+    /// The status bar's product + version chip.
+    ///
+    /// <para>⭐ It reads <see cref="AppInfo"/>, i.e. the assembly, i.e. <c>&lt;Version&gt;</c> in
+    /// <c>Directory.Build.props</c> — the same single source the About window uses. It replaced the literal
+    /// <c>"EmberTern 0.1.0"</c> that had been typed into <c>MainWindow.axaml</c>: a second source of truth that
+    /// had gone stale and then contradicted About on screen, in front of the user, which is exactly how a
+    /// hand-typed copy fails (gotcha #284). <c>AppInfoTests</c> now fails on any version literal in this
+    /// project.</para>
+    /// </summary>
+    public string AppVersionChip => string.Format(
+        CultureInfo.CurrentCulture, UiStrings.StatusBarVersionFormat, AppInfo.Product, AppInfo.Version);
     public string CommitLabel => UiStrings.TransactionCommit;
     public string RollbackLabel => UiStrings.TransactionRollback;
     public string MessagesLabel => UiStrings.BottomTabMessages;

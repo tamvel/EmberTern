@@ -803,6 +803,46 @@ no composition needed, and its 22×22 ink box matches `Copy`/`FolderPlus`.
 **The `About EmberTern…` row shipped with the window**, per §10's rule that a row never ships ahead of what it
 opens; the menu's separator count moved 1 → 2 and the probe asserts it.
 
+### 13.3 QA round — four findings, and one of them exposed the guard as too weak
+
+**(1) ⭐ There WAS a second version source, and the guard had let it through.** The status bar showed `0.1.0`
+while About showed the assembly's version — the two contradicting each other on screen, which is how the user
+found it. The cause was `Text="EmberTern 0.1.0"` typed into `MainWindow.axaml`. Both surfaces now read
+`AppInfo` (`MainWindowViewModel.AppVersionChip`), and `StatusBarShowsTheSameVersionAsAbout` asserts the rendered
+chip carries it.
+
+⚠ **The instructive part is why `NoVersionNumberIsHardCodedInTheApp` did not catch it: it searches for the
+CURRENT version's text, so a literal left over from an EARLIER one sails straight past.** A guard keyed to
+today's value can only catch a copy made today. Worse, my first attempt at a shape-based guard used
+`"\d+\.\d+\.\d+"` — which does **not** match `"EmberTern 0.1.0"`, because the quote is not adjacent to the
+digits. It would have felt like protection while catching nothing, which is the more dangerous of the two
+failures. So `NoVersionShapedLiteralCanReachTheScreen` now scans **XAML `Text=`/`Content=` attributes and
+non-comment C# string literals**, was **checked against the exact removed literal**, and was **verified by
+planting it back** and watching the test fail by name. Two deliberate exclusions, each reasoned: spec
+references (`§9.8.1`) via a lookbehind, and comment lines — prose legitimately names the literal that was
+*removed*, a historical fact that cannot go stale, while the *current* number stays banned everywhere by the
+first guard. Between them: today's number appears nowhere at all, and a version shape appears nowhere it could
+be displayed.
+
+**(2) `1.2.0` was too high — now `0.5.0`.** Ratified: **1.0 arrives with the finished product and its licensing
+system**, possibly preceded by a Beta suffix once EmberTern is ready for wider testing, so the number stays
+under 1.0 however complete the feature set looks. `0.5.0` reads as substantial progress with beta still ahead;
+the previous on-screen claim was a never-maintained `0.1.0`. It is one line in one file if you want it lower or
+higher.
+
+**(3) The author line is labelled — `Created by Grzegorz Groński`.** Unlabelled it read as an unsigned line of
+text, and the name recurs in the copyright below; the label is what turns that repetition into authorship
+rather than an accident. Both alternatives the user offered were viable — the label was chosen over deleting
+the line because authorship is the product statement and the copyright below it is legal metadata.
+
+**(4) A release date, under the version — `Released 29 July 2026`.** ⭐ And it obeys the same single-source rule
+as the version rather than becoming a date typed into a view: there is no standard assembly attribute for it,
+so `<ReleaseDate>` travels as `AssemblyMetadata` and `AppInfo` parses it strictly (ISO in the file, formatted
+for display, unparseable ⇒ reported absent and the line hides rather than showing an empty label).
+
+**Verified as a side effect:** the exe's own properties read `ProductVersion=0.5.0`, so Explorer follows the
+same source. Suite **5961** green (5908 + 53).
+
 ---
 
 ## 12. Etap 2 — as built
