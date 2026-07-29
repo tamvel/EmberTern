@@ -1,7 +1,15 @@
 # Hamburger Navigation / Application Menu — sprint design document
 
-**Status: ETAP 1 — ANALYSIS + DESIGN PROPOSAL, REVISED after the user's reviews (rounds 2 and 3). Nothing
-implemented.** Branch: `feat/hamburger-navigation`.
+**Status: 🔒 SPRINT CLOSED — all five etaps DELIVERED and USER-ACCEPTED (2026-07-29), merged to `master`.**
+Branch: `feat/hamburger-navigation`. Build 0/0; suite **5971** green (partitions 5917 + 54); smoke clean.
+
+As-built, per etap: **§12** (menu + hamburger, incl. three icon QA rounds) · **§13** (About + the single version
+source) · **§14** (third-party notices) · **§15** (Keyboard Shortcuts + `CommandDescriptor.Title`). The decisions
+log is **§11**. Sections §1–§10 are the original analysis and design, kept as the record of *why* — including the
+options that were considered and rejected, which is the part that stops a future session re-opening them.
+
+⛔ **Closed and not to be re-litigated:** `Icon.Menu`'s geometry (§12.2d) · the 0.x versioning · About's content ·
+the absence of liability wording · the decision not to give the menu's rows `CommandId`s (§7).
 
 **Round 3:** the Keyboard Shortcuts window is **in this sprint** (etap 5), designed as the target browsing
 window rather than a static list — §8.5. It surfaced the sprint's one registry change (§8.5.1).
