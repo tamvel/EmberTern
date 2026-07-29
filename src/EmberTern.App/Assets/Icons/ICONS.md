@@ -157,6 +157,10 @@ The fault message bar is Seam C.
 
 ## Application Menu (hamburger-navigation, etap 2)
 
+⛔ **`Icon.Menu` is closed — user-accepted 2026-07-28 after three QA rounds. Do not adjust its geometry**
+(not the fractional coordinates, not the ink box, not a revert to upstream Lucide). The two rules below
+are the reusable part; the icon itself is settled.
+
 | Geometry key | Source file | Purpose | Used in |
 |---|---|---|---|
 | `Icon.Menu` | Navigation/menu.svg | Open the Application Menu | Titlebar — the first button of the action zone |

@@ -304,6 +304,51 @@ noted.
 
 ## Current state
 
+- **☰ HAMBURGER NAVIGATION / APPLICATION MENU — IN PROGRESS on `feat/hamburger-navigation`; etapy 1–2 DONE +
+  USER-ACCEPTED (2026-07-28).** Build 0/0; suite **5954** green (partitions 5903 + 51); smoke clean.
+  **The sprint's one document — design, licence findings, decisions log, etap plan, as-built:
+  [docs/design/hamburger-navigation.md](docs/design/hamburger-navigation.md).** Read it before touching the
+  menu, the About window or the notices.
+  **What it is:** an **Application Menu** for application-level functions — deliberately a *rarely used
+  administrative* menu, not a way to do daily work (that stays on the toolbar, the shortcuts and the context
+  menus). Five ratified rows: `Settings…` (disabled placeholder) · `Keyboard Shortcuts…` · `About EmberTern…` ·
+  `Exit`. Hamburger is the **first button of the titlebar action zone with no separator of its own**.
+  **Etap 2 as built:** a plain `ContextMenu` on the toolbar button, opened from code on left-click — **measured
+  first**, and the measurement is why no `MenuFlyoutPresenter` chrome variant exists: the etap-5 menu style set
+  applies with **nothing added**. `Exit` calls the window's own `Close()`, so the unsaved-work + open-transaction
+  guards are the existing ones, not a second shutdown path.
+  ⚠ **No `CommandId`s were added, and that is a decision** (§7 amended in flight): none of these rows shows a
+  shortcut, so by `CommandId`'s own admission rule — *"a command earns an id only when a shared surface must
+  speak about it"* — they do not qualify yet, and a dead enum member is gotcha #233 in the one file the sprint
+  keeps authoritative. They earn ids when a Command Palette needs them; that is four `Command="{Binding …}"`
+  substitutions, not a rebuild.
+  ⚠ **A row never ships ahead of what it opens** — `About…` arrives in etap 3 and `Keyboard Shortcuts…` in
+  etap 5, each *with* its window, because a row that opens nothing is indistinguishable from a defect in QA.
+  **⭐ RATIFIED, do not re-litigate:** version **`1.2.0`** — the first version the project declares and from now
+  on the single source of truth, read from the assembly, never typed · About is a **product** window (logo, name,
+  version, author, `© 2026 Grzegorz Groński. All rights reserved.`) — **no environment/diagnostic block** · **no
+  liability, warranty or privacy wording anywhere at this stage** (liability belongs to the future EmberTern
+  licence, not to About) · no library names on the About face · `CommandDescriptor.Title` (canonical name, text
+  from `UiStrings`, **no literals in `CommandCatalog`**) is accepted for etap 5, `Description` **declined** until
+  it has a consumer · Keyboard Shortcuts sorts `Global → Tab → Tree → Grid → Editor → alphabetically`, the user
+  may sort any column, and **clearing the sort or reopening restores that canonical order**.
+  **⭐ LICENCE FINDINGS (verified from artefacts, not memory — nuspec + licence files vs the DLLs in `bin`):**
+  everything shipped is **MIT except `FirebirdSql.Data.FirebirdClient` 10.3.4, which is IDPL 1.0** — an
+  MPL-1.1-derived file-level copyleft whose **§3.6 requires, when distributing an executable, a notice that the
+  Covered Code's source is available under that licence**; EmberTern's own code stays a "Larger Work". **MIT is
+  itself an obligation** (notice "in all copies"), so `THIRD-PARTY-NOTICES.txt` (etap 4) is **required, not a
+  courtesy**. **Icons are Lucide (ISC) and the obligation follows the geometries in `IconGeometries.axaml`, not
+  the excluded `.svg` files.** The **Inter font** is the one genuine ambiguity: the package declares MIT and
+  ships no OFL text while the typeface is upstream SIL OFL 1.1, and the font *is* rendered
+  (`Program.cs` → `.WithInterFont()`). Native Skia/HarfBuzz upstream notices are **flagged, not verified**.
+  ⛔ **`Icon.Menu` IS CLOSED — user-accepted after three QA rounds; do not touch its geometry.** The two
+  generalisations that DO apply to future icons are in
+  [`Assets/Icons/ICONS.md`](src/EmberTern.App/Assets/Icons/ICONS.md): **repeated parallel strokes are spaced by a
+  multiple of 1.5** in the 24-unit grid (the ×2/3 render scale puts strokes on different sub-pixel phases
+  otherwise, and one reads visibly thicker — no nudging fixes it), and **the ink box DIAGNOSES optical size, it
+  never dictates it** — forcing the hamburger to a neighbour's exact 20×20 made it look *bigger*, because three
+  full-width rules are far denser than a thin rectangle outline. Shipped at ink 18×17 against neighbours' 20×20,
+  chosen by eye from a side-by-side sheet. Gotcha-worthy and recorded there.
 - **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-28).**
   Etaps 1–5 + a UX Consistency Pass, every one visually QA'd and accepted. Build 0/0; suite **5952 green**
   (full run in one pass, and in the two documented partitions 5903 + 49); smoke clean. Merged `--no-ff` so the

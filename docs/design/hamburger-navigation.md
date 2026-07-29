@@ -706,7 +706,7 @@ standing rule that a UI change is not "done" until it has been seen in the runni
 | Etap | Scope | Notes |
 |---|---|---|
 | **1** | *This document.* Analysis, structure proposal, licence verification. **Revised in rounds 2–4; all questions closed.** | ACCEPTED. |
-| **2** | ✅ **DONE** — see §12. The button + the menu; the host measured first; placement per §6. Rows: `Settings…` (disabled, final) and `Exit` (live). **No `CommandId`s — §7 amended.** | Build 0/0; suite **5953** green (5903 + 50); smoke clean. Awaiting visual QA. |
+| **2** | ✅ **DONE + USER-ACCEPTED (2026-07-28)** — see §12. The button + the menu; the host measured first; placement per §6. Rows: `Settings…` (disabled, final) and `Exit` (live). **No `CommandId`s — §7 amended.** | Build 0/0; suite **5954** green (5903 + 51); smoke clean. Accepted after three icon QA rounds (§12.2a–d). |
 | **3** | The About window (§8) + `<Version>1.2.0</Version>` in `Directory.Build.props`, including the `+hash` defence (§8.2). **The `About EmberTern…` row arrives with it.** | This sprint's user-visible deliverable. |
 | **4** | `THIRD-PARTY-NOTICES.txt` (§9.6) + the notices window behind the About footer button. Optionally close §9.5. | Mostly content; the window is a scrollable read-only text surface, no new pattern. |
 | **5** | **Keyboard Shortcuts window** (§8.5) — `CommandDescriptor.Title` + its guard test first, then the window: search, `DataGrid`, scope-rank ordering, sort-reset (§8.5.4), live filter, count. **The `Keyboard Shortcuts…` row arrives with it.** | Firm as of round 3. Its own etap because it is a real window, and because §8.5.1 touches the command registry. |
@@ -747,8 +747,8 @@ classes must join `HeadlessCollection` — never their own `IClassFixture` (gotc
 
 ## 12. Etap 2 — as built
 
-**Build 0/0 · suite 5953 green** (partitions 5903 + 50, both with `--blame-hang`, no hang) **· smoke clean ·
-awaiting the user's visual QA.**
+**Build 0/0 · suite 5954 green** (partitions 5903 + 51, both with `--blame-hang`, no hang) **· smoke clean ·
+USER-ACCEPTED 2026-07-28**, after three QA rounds on the icon (§12.2a–d) and none on the menu itself.
 
 ### 12.1 The measurement came first, and it settled the host
 
@@ -873,6 +873,18 @@ as the goal — put candidates beside the real neighbours at the real size and l
 
 ⚠ Recorded caveat, unchanged: exactness holds at the rendered 16px, the `SvgIcon` default. A host overriding the
 size re-scales the 24-unit grid and changes the phase — inherent to scaling, not fixable by coordinates.
+
+### ⛔ 12.2d The icon is CLOSED — user-accepted 2026-07-28
+
+*"Optycznie jest spójna z resztą toolbaru i uznajmy temat za zamknięty."* **Do not revisit `Icon.Menu`'s
+geometry.** Not to "tidy" the fractional coordinates, not to align its ink box with a neighbour's, not to adopt
+the upstream Lucide file — all three have been tried, and two of them shipped and were rejected. The three
+tests (`ApplicationMenu_…`, `HamburgerRulesAllRenderIdentically`) plus the comments in
+`IconGeometries.axaml` and `Navigation/menu.svg` exist to make each of those attempts fail loudly rather than
+quietly regress the toolbar.
+
+The two generalisations from these rounds live in `Assets/Icons/ICONS.md` and **do** apply to future icons:
+spacing of repeated parallel strokes is a multiple of 1.5, and the ink box diagnoses rather than dictates.
 
 ### 12.3 Files touched
 
