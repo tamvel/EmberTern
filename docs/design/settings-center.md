@@ -425,9 +425,9 @@ Five properties of this shape are load-bearing:
    instance. `ApplicationSettingsStore.CurrentSchemaVersion` stays **2**, for the reason the C3
    milestone already established: a bump trips downgrade protection and makes older builds refuse the
    *whole file*. `ParameterValue.TypeText` and `ImportProfiles` both set this precedent explicitly.
-2. **Strings, not Avalonia enums.** `Theme` is `"Dark"`/`"Light"`, never `ThemeVariant` — architecture
-   rule #1 (Core has zero Avalonia dependencies). `WorkspaceState.WindowBounds.WindowState` is the
-   existing precedent: *"Stored as string … so Core stays free of any Avalonia enum dependency."*
+2. ⭐ **Strings, not enums — and the reason is FORWARD COMPATIBILITY, not architecture rule #1.**
+   See §5.2.3. The rule-#1 argument is **refutable and must not be relied on**; the real reason is that an
+   unknown enum value takes the entire settings file down.
 3. **The 8th facade, matching the 7 that exist.** `PreferencesStore` follows `WatchStore` /
    `GridProfileStore` exactly — `Load()`, mutate its slice, `Save()`. No new persistence mechanism, and
    `Save`'s refusal (§2.5) protects it for free.
@@ -468,10 +468,92 @@ Four consequences that are easy to violate while technically honouring the rule:
    other, and it fails the build the day someone adds a property whose initializer the validator would
    reject (e.g. a `Language = "pl"` default while the catalog still has one row). Without it, that drift
    is invisible: both halves look correct in isolation.
+   ⚠ **The comparison must be a REAL one** (etap-1 review, F5). On a plain `class`, `==` is reference
+   equality and the assertion passes vacuously — pinning nothing while looking authoritative, which is
+   worse than having no test. Make `Preferences` a `record class` (settable properties are fine; it
+   serializes exactly as a class does) **or** compare property-by-property. The effect is what is
+   ratified, not the mechanism.
 
 ⚠ **`Language` is validated from day one even though nothing consumes it** (§5.3, §6.2). It is the one
 property with no reader, which makes it the one most likely to be left unvalidated *"until it matters"* —
 and §8 is far enough away that a bad value would be well established by the time it does.
+
+#### 5.2.2 ⭐ ONE source of truth for an enumerated preference's legal values (etap-1 review, F2)
+
+**Every preference with a fixed set of legal values declares that set ONCE, in Core.** The validator
+consumes it, and **the UI generates its options from it** — a ComboBox's or radio group's items are never
+typed by hand in XAML.
+
+**The problem this prevents is silent and one-directional.** Without it the legal set exists twice — in
+`PreferencesStore`'s validator and again in the settings page — and §5.2.1/4's pinning test cannot see
+the second copy, because it only compares model against validator. The two drift directions are not
+equally visible:
+
+| Drift | Symptom |
+|---|---|
+UI gains an option the validator rejects | ⚠ **the user selects it, it appears to work, and it silently reverts on the next load.** Nothing fails. |
+Validator gains one the UI lacks | a legal value that can never be chosen — invisible, but harmless |
+
+The first is the dangerous one, and it is precisely the failure class this project keeps paying for: the
+hand-typed gesture that went stale with a green build (gotcha #284), the same operation carrying two
+different icons, `UiStrings.FieldEditEditTooltip` sitting unused. **The established answer here is always
+the same — one declarative table plus a test** (`CommandCatalog`, `LanguageConstructCatalog`), and this
+rule simply applies it to preference options.
+
+⚠ **The layer split, so this does not collide with rule #6:** Core owns the **option keys** (`"Dark"`,
+`"Light"`) because they are validated and persisted; App owns each option's **display label**, which is
+UI text and therefore belongs in `UiStrings`. Bind the two with a test asserting **every Core option has
+a label** — otherwise adding an option ships a blank row.
+
+⭐ **This is an internal correction, which is why it is worth stating explicitly:** the design already
+applied the catalog pattern to Language (§6.2/3) and to search metadata (§5.4), and omitted it exactly
+where drift is *silent* rather than visible. Consistency here is not tidiness — it is the difference
+between a bug that fails a build and one that fails a user.
+
+#### 5.2.3 ⭐ Why preferences are STRINGS — forward compatibility, not rule #1 (etap-1 review, F1)
+
+**The decision is strings. The reason recorded in an earlier draft was wrong**, and a wrong reason is
+more dangerous than no reason: it invites a competent reviewer to refute it and reverse a correct
+decision.
+
+**The refutable argument (do not use it):** *"Core has zero Avalonia dependencies (rule #1)."* This does
+not hold — a **Core-defined** enum breaks no rule, and this very file already persists three of them
+(`TransactionProfile`, `WorkspaceTabKind`, `MetadataObjectKind`) as readable stable names, because
+`ApplicationSettingsStore.JsonOptions` carries a `JsonStringEnumConverter`. Rule #1 forbids *Avalonia*
+types in Core, not enums. Anyone citing rule #1 here will be shown those three precedents and will win.
+
+**The durable argument:** ⭐ **`JsonStringEnumConverter` THROWS on an unrecognised name, and in this
+codebase that failure is total.** Trace it:
+
+```
+unknown enum name  →  JsonException
+                   →  LoadWithStatus  →  SettingsLoadResult.Corrupt
+                   →  ExistingFileBlocksSave  →  Save REFUSES
+```
+
+One unknown value does not degrade one preference — it makes the **whole `settings.dat` unreadable and
+unwritable**: connections, passwords, saved queries, workspace and watches, all inaccessible until the
+user deletes the file. A string in the same position normalizes to its default (§5.2.1/2) and everything
+else survives. **That asymmetry is the entire reason**, and it only grows as `Preferences` does.
+
+##### ⭐ The general rule this yields — worth more than the decision itself
+
+> **Adding a *value* to a persisted enum is NOT an additive change, even though adding a *property* is.**
+
+§5.2/1's "additive, no schema bump" rule is stated for properties and **does not extend to enum values**.
+A build that writes a new enum member produces a file every older build must reject in full. At forty
+preferences someone will reach for an enum "just for this one"; this is the sentence that should stop
+them.
+
+##### ⚠ Observation — the same exposure already exists in shipped code (NOT a task)
+
+`WorkspaceTabKind`, `MetadataObjectKind` and `TransactionProfile` are persisted today. If a future build
+adds a member and writes it, an older build loses its entire settings file by the trace above.
+
+**This is pre-existing technical debt, out of this sprint's scope, and deliberately NOT on the backlog**
+(user decision, 2026-07-29 — the backlog should not fill with items that will not be worked for a long
+time). It is recorded here so that whoever eventually rebuilds the settings or compatibility mechanism
+finds it already analysed and takes it up as its own task. **Do not fix it from a Settings Center etap.**
 
 ### 5.3 Consuming a preference: read once at startup, apply through the existing owner
 
@@ -526,6 +608,32 @@ settings dialog that appears to accept a change and persists nothing is the wors
 that silence.**
 
 "Restore defaults" is per-page, and is `new Preferences()`'s value for that page's fields (§5.2/4).
+
+#### 5.5.1 ⭐ "Apply on change" means on CHANGE, not on keystroke (etap-1 review, F3)
+
+**Ratified refinement.** Apply-on-change stands, but **what counts as a change depends on the control**:
+
+| Control | Commits |
+|---|---|
+Radio, checkbox, ComboBox — **discrete** | **immediately** on selection |
+TextBox, numeric — **free-text** | on **blur or Enter**, never per keystroke |
+
+**A `Save` is far more expensive than it looks, and I measured the path.** `Save` calls
+`ExistingFileBlocksSave` first, which does a **full read + decrypt + deserialize of the entire
+`settings.dat`**, before the serialize + encrypt + temp write + `File.Replace` + `.bak`. That is roughly
+seven file operations and two DPAPI round-trips **per call** — and Avalonia's `TextBox` updates its
+binding on every keystroke by default, so typing `5000` into the row-limit field (**Q9**, approved) would
+be four complete encrypted rewrites of every setting the user owns.
+
+⭐ **The consequence that is not performance, and is the reason this is architecture rather than tuning:**
+`AtomicWrite` keeps exactly **one** generation of `settings.dat.bak`. Four keystrokes roll it through
+four generations, **destroying the pre-edit state the hardening sprint added it to preserve** — the one
+hand-recovery net is gone at precisely the moment someone is editing settings. The backup's value depends
+on saves being *deliberate*, which per-keystroke saving silently ends.
+
+⚠ **Decide this in etap 2, not etap 3**, because it shapes `PreferencesStore`'s API (a page needs to
+commit a *settled* value, not stream one) and every future setting inherits whatever the first numeric
+field establishes.
 
 ### 5.6 Commands: no `CommandId` yet, for the reason the hamburger sprint ratified
 
@@ -981,6 +1089,27 @@ Consequences, so this is enforceable rather than aspirational:
 - A settings page must not ship a control whose backing behaviour does not exist. Language is the one
   approved instance, and it is approved *with* live storage and a real catalog, not as a stub.
 
+### 9.2 ⭐ Etap-1 architecture review — accepted findings (2026-07-29)
+
+Before etap 2 began, the design was given one adversarial review against a two-year horizon (dozens of
+preferences, several export versions, more languages, more formatter options), looking **only** for
+durable architectural weaknesses. Five findings were accepted and folded in; they are recorded here
+because each amends a decision that already looked settled.
+
+| # | Finding | Where it now lives |
+|---|---|---|
+**F1** | Strings-not-enums was recorded with a **refutable reason** (rule #1), which three Core enums persisted in the same file disprove. The durable reason is forward compatibility: an unknown enum name throws → `Corrupt` → `Save` refuses → **the whole settings file is lost**. Yields the rule that **adding a value to a persisted enum is not an additive change.** | §5.2/2 + **§5.2.3** |
+**F2** | An enumerated preference's legal values would live in the validator **and** in the UI; the §5.2.1 pinning test cannot see the second copy, and the dangerous drift is silent (the user picks an option that reverts on next load). | **§5.2.2** |
+**F3** | Apply-on-change was unqualified, so a numeric field would fully rewrite + re-encrypt `settings.dat` **per keystroke** — and roll the single-generation `.bak` through four states while editing, destroying the pre-edit backup. | **§5.5.1** |
+**F4** | Import needs `MigrateToCurrentVersion`, which is `private` — etap 5a would otherwise grow a second migration path. | §10, etap 5a note |
+**F5** | The §5.2.1 pinning test compares with `==`, which on a plain class is reference equality — it would pass vacuously and pin nothing. | §5.2.1/4 |
+
+⚠ **One observation deliberately NOT turned into a backlog item** (user decision): the same enum
+fragility already exists in shipped code for `WorkspaceTabKind` / `MetadataObjectKind` /
+`TransactionProfile`. It is pre-existing debt, out of scope, and recorded in §5.2.3 rather than the
+backlog — *"the backlog should not fill with things we will not do for a long time."* It waits for
+whoever rebuilds the settings or compatibility mechanism.
+
 ---
 
 ## 10. Proposed etap order
@@ -993,9 +1122,16 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 **2** | Core foundation: `Preferences` (incl. `Theme`, `Language`, the two formatter cases) + `PreferencesStore` (8th facade) + the language catalog + defaults contract + tests. **No UI.** | pure Core, additive, no schema bump; everything else depends on it |
 **3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | Theme is the user's clearest gap and proves the surface; Language ships **with it** so the General page is laid out once and never rebuilt (⭐ **Q4**'s whole rationale) |
 **4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | the largest single piece of work (§2.2); isolated so its §0 risk is not entangled with UI |
-**5a** | ⭐ **Core — the format itself.** Magic + versioned cleartext header, `aes256-passphrase` (AES-256-GCM) protector registered in `ResolveProtector`, KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** | needs etap 2's shape settled to know what it serialises; pure Core and fully testable without a window, which is what makes the split worth making |
+**5a** | ⭐ **Core — the format itself.** Magic + versioned cleartext header, `aes256-passphrase` (AES-256-GCM) protector registered in `ResolveProtector`, KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** ⚠ **Read the F4 note below before starting.** | needs etap 2's shape settled to know what it serialises; pure Core and fully testable without a window, which is what makes the split worth making |
 **5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | the format is settled and provable before any dialog exists |
 **6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | additive; naturally last, and trimmable without blocking anything |
+
+⚠ **Etap 5a — F4, decide this at the START, not halfway through.** §6.3.2 says the export's inner
+`SchemaVersion` is *"already handled by `MigrateToCurrentVersion`'s existing ladder"*. **That method is
+`private`** (`ApplicationSettingsStore.cs:432`, and so is `Migrate_1_2`), and import lives in a different
+class. So etap 5a must either widen its visibility or route import through the store — **it must not
+re-implement migration**, which would create a second migration path and defeat the whole point of the
+three-version split (§6.3.2). Cheap to settle in the first hour; expensive to discover in the fourth.
 
 ⭐ **Language moved into etap 3 (from "unplanned") as a direct consequence of Q4.** Putting it in etap 6
 would have laid out the General page twice — the exact churn the decision exists to avoid. Its Core

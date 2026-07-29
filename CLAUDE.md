@@ -336,7 +336,17 @@ noted.
   catalog + the defaults contract + tests, **no UI**.
   **⭐ RATIFIED, do not re-litigate:** all scalar preferences live in a new **`UserSettings.Preferences`**
   (additive — **`CurrentSchemaVersion` stays 2**, because a bump trips downgrade protection and older
-  builds then refuse the whole file), stored as **strings never Avalonia enums** (rule #1) · ⭐ **`Preferences`
+  builds then refuse the whole file), stored as **strings never enums** — ⚠ **and the reason is NOT rule #1**,
+  which is refutable (three Core enums are already persisted in that same file via `JsonStringEnumConverter`);
+  the durable reason is that an **unknown enum name THROWS** → `Corrupt` → `Save` refuses → **the whole
+  settings file is lost**, whereas a string normalizes. ⭐ **Yields the rule: adding a VALUE to a persisted
+  enum is NOT an additive change, even though adding a property is** (§5.2.3) · ⭐ **one source of truth for
+  an enumerated preference's legal values** — Core declares the option set, the validator consumes it and the
+  **UI generates its items from it**; two lists drift silently in the dangerous direction (the user picks an
+  option that reverts on next load, and nothing fails), §5.2.2 · ⭐ **apply-on-change means on CHANGE, not per
+  keystroke** — discrete controls commit immediately, **text/numeric commit on blur or Enter**, because every
+  `Save` does a full read+decrypt+deserialize before rewriting and rolls the single-generation
+  `settings.dat.bak`, so per-keystroke saving destroys the pre-edit backup while editing (§5.5.1) · ⭐ **`Preferences`
   is a SELF-SUFFICIENT CONTRACT and `PreferencesStore` only validates** (§5.2.1, binding): every property is
   valid from its own initializer so `new Preferences()` is always usable and *is* "restore defaults"; the
   store owns **validation + normalization of what it read from the file** (unknown value → the model's
