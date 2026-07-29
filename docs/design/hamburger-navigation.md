@@ -708,7 +708,7 @@ standing rule that a UI change is not "done" until it has been seen in the runni
 | **1** | *This document.* Analysis, structure proposal, licence verification. **Revised in rounds 2–4; all questions closed.** | ACCEPTED. |
 | **2** | ✅ **DONE + USER-ACCEPTED (2026-07-28)** — see §12. The button + the menu; the host measured first; placement per §6. Rows: `Settings…` (disabled, final) and `Exit` (live). **No `CommandId`s — §7 amended.** | Build 0/0; suite **5954** green (5903 + 51); smoke clean. Accepted after three icon QA rounds (§12.2a–d). |
 | **3** | ✅ **DONE** — see §13. The About window (§8) + `<Version>1.2.0</Version>` in `Directory.Build.props`, the `+hash` defence, the `About EmberTern…` row. | Build 0/0; suite **5958** green (5906 + 52); smoke clean. Awaiting visual QA. |
-| **4** | `THIRD-PARTY-NOTICES.txt` (§9.6) + the notices window behind the About footer button. Optionally close §9.5. | Mostly content; the window is a scrollable read-only text surface, no new pattern. |
+| **4** | ✅ **DONE** — see §14. `THIRD-PARTY-NOTICES.txt` (§9.6) + the notices window behind the About footer button. §9.5 recorded in the file's own Notes rather than closed. | Build 0/0; suite **5964** green (5911 + 53); smoke clean. Awaiting visual QA. |
 | **5** | **Keyboard Shortcuts window** (§8.5) — `CommandDescriptor.Title` + its guard test first, then the window: search, `DataGrid`, scope-rank ordering, sort-reset (§8.5.4), live filter, count. **The `Keyboard Shortcuts…` row arrives with it.** | Firm as of round 3. Its own etap because it is a real window, and because §8.5.1 touches the command registry. |
 
 ⭐ **A row never ships ahead of what it opens.** Etap 2 delivers only `Settings…` (disabled by design, its final
@@ -742,6 +742,67 @@ classes must join `HeadlessCollection` — never their own `IClassFixture` (gotc
 | Column sorting | 4 | User may sort any column; **clearing the sort and every first open restore the canonical order** (§8.5.4). |
 
 **Etap 2 is authorised (round 4)** — and delivered; see §12.
+
+---
+
+## 14. Etap 4 — as built
+
+**Build 0/0 · suite 5964 green** (partitions 5911 + 53) **· smoke clean · awaiting visual QA.**
+
+### 14.1 Every licence text is a copy of an artefact, not a recitation
+
+`THIRD-PARTY-NOTICES.txt` (390 lines) sits at the repository root. Sections: the components grouped by licence,
+the full licence texts, and Notes for what is deliberately *not* claimed.
+
+**MIT** was copied from a shipped artefact (`system.io.packaging/9.0.18/LICENSE.TXT`). **IDPL 1.0** (23 478
+characters) was spliced verbatim out of the Firebird provider's own `license.txt` **by script**, so no character
+of it passed through a transcription — including the §3.6 clause that made the file mandatory, which the tests
+assert is present.
+
+⭐ **Fetching Lucide's real LICENSE changed the content.** "Lucide is ISC" — which is what §9.3 recorded and what
+I would have written from memory — is **incomplete**: Lucide's licence file carries **two** notices, ISC for
+Lucide itself *and* MIT for the portions inherited from Feather (`Copyright (c) 2013-present Cole Bemis`). Both
+are now reproduced. A recitation would have shipped a licence file that under-credited a copyright holder.
+
+**Inter** is listed under the licence its package declares (MIT), with the upstream SIL OFL 1.1 credit recorded
+— and the OFL text is deliberately **not** reproduced, because no artefact in this build states that it applies
+(§9.4). Native Skia/HarfBuzz upstream notices are named in the Notes as an outstanding item rather than
+silently omitted (§9.5). `AvaloniaUI.DiagnosticsSupport` is excluded with two reasons: it is absent from Release
+output, and its package declares **no licence at all**, so stating one would be a guess.
+
+### 14.2 One file, two destinations, and a guard that would have caught a real omission
+
+The file is an `EmbeddedResource` **and** copied beside the executable. ⚠ **Not** an `AvaloniaResource`, and
+that changed during the etap: the first attempt used one, and all three tests failed because Avalonia's asset
+loader needs a live Avalonia application — so a plain text file could only be read, and only be tested, inside a
+headless UI session. `GetManifestResourceStream` with an explicit `LogicalName` needs nothing. The window reads
+the **embedded** copy on purpose: a document that can go missing or be edited after the build is not a notice.
+
+Three tests, and the third is the one worth having: **`EveryShippedDependencyIsNamedInTheNotices`** parses every
+`PackageReference` in `src/**/*.csproj` and fails if it is not named in the file. Adding a package is easy;
+remembering the notice is not.
+
+⭐ **Verified by planting — and the first attempt at planting was itself wrong**, which is worth recording. I
+renamed `ExcelDataReader` to `ExcelDataReaderXX` in the notices and the guard passed, which looked like a broken
+guard; the cause was that `ExcelDataReaderXX` still *contains* `ExcelDataReader`, so the substring check was
+right and my planting was not. Deleting the lines outright made it fail by name: *"ExcelDataReader (in
+EmberTern.Office.csproj)"*. Two guards this sprint have now looked correct while proving nothing, and both were
+only settled by planting the violation.
+
+### 14.3 The window
+
+A separate scrollable window, not a tab on About: a tab strip on a five-line window makes it look like a
+configuration dialog. Read-only, **selectable** (a reviewer can copy any clause), monospace — section 1 is an
+aligned column layout that a proportional font would break — resizable, since licence texts are long, unlike
+About's fixed composition. `Escape`/`Enter` close it.
+
+⚠ The monospace family is the string `Cascadia Code,Consolas,Menlo,monospace`, which is now the **third** copy
+of that list in the app (`HoverInfoView`, `LanguageExpansionController` have the others). Centralising it is
+typography, which the backlogged app-wide UX sprint owns; noted rather than half-done here.
+
+The About footer now holds `Third-party notices` beside `Close`. The About test's "no library names" assertion
+was scoped to the window's **text blocks**, because a button that *reaches* the component list is the opposite
+of putting the list on that face.
 
 ---
 

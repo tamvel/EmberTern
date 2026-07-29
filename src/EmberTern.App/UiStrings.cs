@@ -868,6 +868,14 @@ internal static class UiStrings
     // already appears in the copyright below — the label is what turns a repetition into authorship.
     public const string AboutAuthorFormat = "Created by {0}";
     public const string AboutClose = "Close";
+    // A discreet footer button rather than a tab: a tab strip on a five-line window makes it look like a
+    // configuration dialog. No licence requires these names on the About face itself — MIT is silent on
+    // placement and IDPL 1.0 §3.6 scopes its "conspicuously" to the notices document — so the face stays bare
+    // and the obligation is met by the document behind this button.
+    public const string AboutThirdPartyNotices = "Third-party notices";
+    public const string ThirdPartyNoticesTitle = "Third-party notices";
+    public const string ThirdPartyNoticesUnavailable =
+        "The third-party notices file could not be read from this build.";
 
     // The status bar's version chip. It shows the SAME AppInfo value the About window does — it used to be the
     // literal "EmberTern 0.1.0" in MainWindow.axaml, i.e. a second source of truth that had gone stale and

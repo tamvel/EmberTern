@@ -3098,10 +3098,18 @@ public sealed class ConnectionExpandBindingProbe
             Assert.True(logo.Width >= 96, $"the logo leads this window; it is {logo.Width}px");
 
             // A product window, not a diagnostic one: nothing about the runtime, the OS or the libraries.
+            // ⚠ Checked over the TEXT BLOCKS only, not the whole window — the footer's "Third-party notices"
+            // button is a way to REACH the component list, which is the opposite of putting it on this face.
             foreach (var banned in new[] { ".NET", "Avalonia", "Windows", "Firebird", "x64" })
             {
                 Assert.DoesNotContain(banned, string.Join(" ", texts), StringComparison.OrdinalIgnoreCase);
             }
+
+            // The notices are reachable from here, and that button is the whole of the licence surface: no
+            // library names on the face (§9.6 — nothing requires them there).
+            var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
+            Assert.Contains(buttons, b => Equals(b.Content, UiStrings.AboutThirdPartyNotices));
+            Assert.Contains(buttons, b => Equals(b.Content, UiStrings.AboutClose));
 
             window.Close();
         }, CancellationToken.None);

@@ -17,6 +17,26 @@
     <AvaloniaResource Remove="Assets\Icons\**\*.md" />
   </ItemGroup>
 
+  <!-- Third-party notices. Required, not a courtesy: MIT alone obliges us to include its copyright and
+       permission notice "in all copies", and FirebirdSql.Data.FirebirdClient is IDPL 1.0, whose §3.6 wants a
+       source-availability notice with any executable distribution.
+
+       It ships TWICE on purpose, and each copy has a job: embedded in the assembly so the application can
+       show it with no file-system dependency (About → Third-party notices), and beside the executable so a
+       reviewer, a packager or an auditor finds it without launching anything. One file at the repository root
+       is the single source for both.
+
+       ⚠ A plain EmbeddedResource with an explicit LogicalName, deliberately NOT an AvaloniaResource. Both
+       embed the file, but Avalonia's asset system needs a live Avalonia application to read from — so the
+       notices could only be loaded (and tested) inside a headless UI session, for a plain text file that has
+       nothing to do with the UI framework. GetManifestResourceStream needs nothing, and LogicalName makes the
+       name explicit instead of derived from a linked path outside the project directory. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.txt" LogicalName="EmberTern.THIRD-PARTY-NOTICES.txt" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.txt" Link="THIRD-PARTY-NOTICES.txt"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.3" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />

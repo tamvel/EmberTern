@@ -17,5 +17,8 @@ public partial class AboutWindow : Window
         DataContext = new AboutViewModel();
     }
 
+    private async void OnThirdPartyNoticesClick(object? sender, RoutedEventArgs e)
+        => await new ThirdPartyNoticesWindow().ShowDialog(this);
+
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
 }
