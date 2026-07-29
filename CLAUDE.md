@@ -33,7 +33,7 @@ verbatim, in the archive below.
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
-| **`docs/design/settings-center.md`** | **ACTIVE SPRINT — DESIGN CLOSED + RATIFIED (2026-07-29), nothing implemented.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **11 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2. |
+| **`docs/design/settings-center.md`** | **ACTIVE SPRINT — design closed + ratified, ⭐ etap 2 (Core foundation) DELIVERED + ACCEPTED 2026-07-29 (as-built: §12).** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (273 entries, #1–#286), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -329,11 +329,49 @@ noted.
 ## Current state
 
 - **⚙ SETTINGS CENTER & SQL FORMATTER CASING — ACTIVE SPRINT. Etap 1 (audit + design) CLOSED AND RATIFIED
-  by the user 2026-07-29; NOTHING IMPLEMENTED, no production code touched. Branch `feat/settings-center`.**
+  2026-07-29; ⭐ ETAP 2 (Core foundation) DELIVERED 2026-07-29. Branch `feat/settings-center`.**
   **The sprint's one document: [docs/design/settings-center.md](docs/design/settings-center.md)** — read
-  §9 (the 11 ratified decisions) and §2 (the measured facts) before writing any code. Etap 2 is next and
-  is **pure Core**: `UserSettings.Preferences` + `PreferencesStore` (the 8th section facade) + the language
-  catalog + the defaults contract + tests, **no UI**.
+  §9 (the 13 ratified decisions), §2 (the measured facts) and now **§12 (etap 2 as-built)** before writing
+  any code. **Etap 3 is next: the Settings Center window + the complete General page (Theme + Language).**
+  **⭐ Etap 2 shipped the Core foundation and NOTHING else** — `Preferences` (4 scalars) ·
+  `PreferenceOptions` (the ONE options table, holding the one-row **language catalog**) · `PreferencesStore`
+  (8th facade) · `UserSettings.Preferences` (+11 lines, the whole schema change) · 32 tests. Additive,
+  **`CurrentSchemaVersion` still 2**, zero App/Avalonia code touched.
+  **⚠ FOUR as-built decisions etap 3+ must not undo (§12.1):** (a) **ONE options table**, not one class per
+  preference — the `CommandCatalog` precedent; forty preferences must not become forty micro-classes ·
+  (b) an option set is **one object whose ctor rejects a default outside its own values**, because §5.2.1/4's
+  pin compares model against validator and both would read the same bad catalog — the symptom would be a
+  preference that silently resets itself · (c) `Preferences` initializers **read the catalog's `Default`
+  rather than repeating a literal**, so the default exists once · (d) ⭐ **`Validate` returns
+  `source with { … }`, never a fresh instance** — a fresh instance silently resets any property someone
+  forgets to list, turning *"I added a preference"* into *"that preference never persists"*, which is a
+  data-loss shape; with `with`, an unlisted property passes through. Its cost (a forgotten *enumerated*
+  property goes unvalidated quietly) is closed by `EveryPreference_IsAccountedForInValidation` — a declared
+  table + a test, so **adding a property to `Preferences` fails the build until the author records whether
+  it is normalized and against what**. Both guards were **verified by planting a violation**, including the
+  ratified pin failing on §5.2.1/4's own `Language = "pl"` example.
+  **⚠ Two contract details, so they are not re-derived:** normalization runs in **BOTH directions** across
+  the file boundary (writing is also a crossing; `Validate` is idempotent so they cannot fight) · a
+  *recognised* value is corrected to the catalog's spelling (`"dark"` → `"Dark"`), **not** reset — "silent
+  and total" means never refusing, not preferring the default. And **F3 is settled as API shape**:
+  `PreferencesStore` has **no per-property setters**, so etap 3 cannot stream keystrokes into a file whose
+  every save costs ~7 file ops + 2 DPAPI round-trips and rolls the single-generation `.bak`.
+  **⚠⚠ MEASURED CORRECTION THAT LANDED WITH ETAP 2 AND BELONGS TO ETAP 5a (§6.3.1b) — `settings.dat`
+  ALREADY carries the magic `EMBERTERN-SETTINGS`.** `SettingsFileContainer.Magic` has held that exact
+  literal, with a cleartext version + scheme header read before decryption, since the container shipped —
+  so §6.3.1a's *"settings.dat does not get a magic"* is **false** and §2.4's *"no new crypto plumbing"* is
+  **understated** (the envelope pattern is implemented and `public`). The consequence is a **collision, not
+  a convenience**: Q10's magic exists to answer *"is this even our file?"*, and if both formats begin with
+  the same bytes, step 1 of §6.3.3's ordered checks **cannot tell them apart** — a user who picks
+  `settings.dat` in the import dialog would be **asked for a passphrase** and told *"wrong passphrase"*
+  about a file that never had one, which is the exact outcome the check order exists to prevent.
+  ⭐ **RESOLVED THE SAME DAY — RATIFIED DECISION Q13 (user, on accepting etap 2), binding on etap 5a and not
+  to be re-litigated: the export gets its OWN unambiguous magic, `EMBERTERN-SETTINGS-EXPORT`, independent of
+  `settings.dat`'s**, so the first header read alone determines the file's type and *"never ask for a
+  credential that cannot possibly work"* holds. Every other Q10 property is unchanged (self-documenting
+  first line, **never versioned**, read from the stream, byte-compared) and **`settings.dat`'s shipped
+  format is untouched** — `SettingsFileContainer.Magic` stays exactly as it is. Identity is **per format**,
+  not per product.
   **⭐ RATIFIED, do not re-litigate:** all scalar preferences live in a new **`UserSettings.Preferences`**
   (additive — **`CurrentSchemaVersion` stays 2**, because a bump trips downgrade protection and older
   builds then refuse the whole file), stored as **strings never enums** — ⚠ **and the reason is NOT rule #1**,
@@ -2443,9 +2481,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5971 as of 2026-07-29
-  (after the Hamburger Navigation sprint, merged to `master`)** — green in the two documented partitions
-  (**5917 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **6003 as of 2026-07-29
+  (after Settings Center etap 2; was 5971 after the Hamburger Navigation sprint)** — green in the two
+  documented partitions (**5949 + 54**).
   **⭐⭐ 2026-07-28, Keyboard Manager etap 5 — THE FOUR "SAME TEST" OBSERVATIONS BELOW WERE AN ARTEFACT OF
   ORDERING. READ THIS BEFORE TRUSTING THEM.** Etap 5 briefly had a SECOND headless test class, and running the
   partition in which *it* ran last moved the reported hang to **that class's** last test

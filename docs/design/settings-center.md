@@ -1,8 +1,15 @@
 # Settings Center & SQL Formatter Profiles — sprint design document
 
-**🔒 STATUS: ETAP 1 CLOSED — design ACCEPTED AND CLOSED by the user 2026-07-29, all 11 decisions
-ratified (§9). Nothing implemented; no production code touched. Etap 2 is cleared to start.**
+**🔒 STATUS: ETAP 1 CLOSED (design accepted, 13 decisions ratified — §9). ⭐ ETAP 2 DELIVERED AND
+ACCEPTED 2026-07-29 — the Core foundation exists: `Preferences` · `PreferenceOptions` (incl. the
+language catalog) · `PreferencesStore` (8th facade) · 32 tests. No UI, no App code touched,
+`CurrentSchemaVersion` still 2. As built: §12. Etap 3 is cleared to start.**
 Branch: `feat/settings-center`.
+
+⚠ **One measured correction landed with etap 2 and it belongs to etap 5a, not etap 2: `settings.dat`
+already carries the magic `EMBERTERN-SETTINGS` — see §6.3.1b.** §6.3.1a claimed it does not. ⭐ **Resolved
+by the user the same day as ratified decision Q13: the export gets its OWN magic**
+(`EMBERTERN-SETTINGS-EXPORT`), so the first header read alone identifies the file's type.
 
 **Start here:** §9 for the decisions, §10 for the etap plan, §2 for the measured facts that constrain
 everything else. The four **⭐ measured findings in §2** are the ones that will cost a future session
@@ -764,10 +771,64 @@ Three rules make it do its job rather than become a second version field:
    point is a clean rejection message, so a crash here would be the one failure mode worse than the
    unclear message it replaced.
 
-⚠ **`settings.dat` does not get a magic, and that is not an inconsistency.** The export is a file *the
-user picks in a file dialog*, so mistaken identity is a real, frequent case. `settings.dat` lives at a
-path we control and is never chosen by hand, so a magic would buy nothing — and adding one would change
-that file's format, forcing a container-version bump and a legacy-read path for zero user-visible gain.
+⚠ ~~**`settings.dat` does not get a magic, and that is not an inconsistency.**~~ **FALSIFIED — see
+§6.3.1b.** The reasoning below is retained only because it explains what was believed when Q10 was
+ratified: *"The export is a file the user picks in a file dialog, so mistaken identity is a real, frequent
+case. `settings.dat` lives at a path we control and is never chosen by hand, so a magic would buy nothing —
+and adding one would change that file's format, forcing a container-version bump and a legacy-read path for
+zero user-visible gain."* Every clause of that is true except the premise: it already has one.
+
+##### 6.3.1b ⭐⭐ MEASURED CORRECTION (etap 2, 2026-07-29) — `settings.dat` ALREADY has this exact magic
+
+**Etap 2 read `SettingsFileContainer` to write a test fixture and found the container header is already
+precisely the shape §6.3.1 designs for the export — same idea, same position, and *the same literal
+string*:**
+
+```csharp
+// SettingsFileContainer.cs:22
+public const string Magic = "EMBERTERN-SETTINGS";
+// :34  Wrap → $"{Magic}\t{containerVersion}\t{encryptionScheme}\n{payload}"
+```
+
+So `settings.dat` has carried a cleartext magic + container version + scheme, read *before* decryption,
+since the container was introduced. §6.3.1a's "it does not get a magic" is simply wrong, and §2.4's
+"export/import needs no new crypto plumbing" is **understated** — the envelope pattern is not merely
+analogous, it is implemented and `public`.
+
+⚠ **This is not a licence to reuse the container for the export.** §2.4's own warning stands: the export
+needs an *independently versioned* envelope with KDF parameters, and `SchemaVersion`/`ExportFormatVersion`
+must move separately (§6.3.2). What changes is one thing, and it is a **collision, not a convenience**:
+
+> **Two different file formats would declare the same identity.** Q10's magic is what makes step 1 of
+> §6.3.3's ordered checks meaningful — *"is this even our file?"*. If `settings.dat` and an `.etsettings`
+> export both begin `EMBERTERN-SETTINGS`, step 1 **cannot tell them apart**, and the failure lands in the
+> exact place the ordering was designed to protect: a user who picks `settings.dat` in the import dialog
+> passes identity, passes version, passes scheme, is **asked for a passphrase**, and is told *"wrong
+> passphrase"* about a file that never had one. That is the precise outcome §6.3.3 calls out — *"never ask
+> for a credential that cannot possibly work"*.
+
+⚠ The reverse direction is already safe but for an accidental reason worth knowing: `TryParse`
+**deliberately tolerates extra trailing header fields** (`:58-59`, "reserved for forward-compatible header
+additions"), so an export dropped in place of `settings.dat` parses, then fails on its unknown
+`aes256-passphrase` scheme → `Future` → *"written by a newer EmberTern build"*. It refuses, which is
+correct, but for the wrong stated reason.
+
+#### ⭐ RATIFIED (user, 2026-07-29, on accepting etap 2) — the export gets its OWN magic
+
+**`EMBERTERN-SETTINGS-EXPORT`** (or an equally unambiguous variant), **independent of `settings.dat`'s.**
+Binding on etap 5a; this **amends Q10** and is recorded as **Q13** in §9.
+
+The user's stated rationale, and it is the operative one: *the very first header read must determine the
+file's type unambiguously, so that "never ask for a credential that cannot possibly work" holds.* Identity
+is therefore **per format**, which is what step 1 of §6.3.3 actually needs — not per product.
+
+Every property Q10 ratified survives unchanged: a self-documenting literal first line, **never versioned**
+(identity ≠ contract), read from the stream before loading the file, **byte-compared**. And
+`settings.dat`'s shipped format is left completely untouched — no container-version bump, no legacy-read
+path.
+
+⚠ **Scope: this is etap 5a's, and deliberately not etap 2's.** Nothing was changed in
+`SettingsFileContainer` — its magic stays exactly as shipped. Etap 5a writes the new one for the new format.
 
 **Mode: AES-256-GCM**, i.e. authenticated encryption — not CBC. The reason is a behaviour, not a
 preference: GCM's authentication tag makes a **wrong passphrase fail cleanly as an authentication
@@ -1054,6 +1115,11 @@ The design was reviewed and accepted. One recommendation was overridden (**Q4**)
 accepted as recommended. This table is the authority — where §§2–8 reasoned toward a different answer,
 the ratified answer wins and the section has been amended in place.
 
+⭐ **Q12 and Q13 were added later, and neither is a re-litigation.** Q12 arrived with the design's
+acceptance and is binding on etap 2 (delivered — §12). **Q13 arrived on accepting etap 2**, because etap 2
+measured a fact that made Q10's chosen literal unusable (§6.3.1b) — the decision it amends was sound, only
+its input was wrong.
+
 | # | Question | ⭐ Ratified |
 |---|---|---|
 **Q1** | Does `Identifiers: Upper/Lower` also govern `DdlGenerator` (Easy-mode generated DDL, always UPPER today)? | **No.** The formatter reformats the user's text; `DdlGenerator` composes new DDL for the catalog. They stay distinct, as CLAUDE.md already records. |
@@ -1065,9 +1131,10 @@ the ratified answer wins and the section has been amended in place.
 **Q7** | Settings Center as a **window** rather than a workspace tab? | **Window** — §5.1. |
 **Q8** | Apply-on-change, no OK/Cancel? | **Yes** — §5.5, with the refusal banner (§2.5). |
 **Q9** | Which §7 proposals are in scope? | **In: 7.2** (row limits, excl. `FullSafetyCeiling`), **7.3** (debugger isolation default), **7.5** (workspace restore), **7.6** (Source/Easy default), **7.7** (page size). **Prerequisite only: 7.1** (font consolidation — the *setting* stays with the UX sprint). **Trim first: 7.4.** **Out: 7.8, 7.9, 7.10.** |
-**Q10** | Format identity — how does the importer know it is our file? | ⭐ **ADDED BY THE USER.** A constant **magic**, `EMBERTERN-SETTINGS`, as the literal first bytes. Rejects a mistakenly-picked ZIP/PDF before parsing, versioning or any passphrase prompt. **Never versioned** (identity ≠ contract), checked from the stream before loading, byte-compared. §6.3.1a + the ordered checks in §6.3.3. |
+**Q10** | Format identity — how does the importer know it is our file? | ⭐ **ADDED BY THE USER.** A constant **magic** as the literal first bytes. Rejects a mistakenly-picked ZIP/PDF before parsing, versioning or any passphrase prompt. **Never versioned** (identity ≠ contract), checked from the stream before loading, byte-compared. §6.3.1a + the ordered checks in §6.3.3. ⚠ **The literal is amended by Q13** — `EMBERTERN-SETTINGS` is already `settings.dat`'s. |
 **Q11** | Is etap 5 one etap or two? | ⭐ **Two, as the user split it: 5a** = container, encryption, versioning, migrations, tests (Core, no UI); **5b** = export/import UI, section selection, passphrase. §10. |
 **Q12** | Where do defaults live, and who validates? | ⭐ **ADDED BY THE USER, binding on etap 2.** **`Preferences` is a self-sufficient contract** — every property valid from its own initializer, so `new Preferences()` is always usable with no initialization. **`PreferencesStore` only validates and normalizes what it read from the file** (unknown value → the model's default) and supplies no defaults of its own. Validation applies to `Language` from day one despite having no consumer. §5.2.1. |
+**Q13** | ⚠ Which magic does the export use, now that `settings.dat` is measured to already carry `EMBERTERN-SETTINGS` (§6.3.1b)? | ⭐ **ADDED BY THE USER 2026-07-29, on accepting etap 2 — amends Q10, binding on etap 5a.** The export gets its **OWN, unambiguous magic** (e.g. `EMBERTERN-SETTINGS-EXPORT`), **independent of `settings.dat`'s**, so the first header read alone determines the file's type and *"never ask for a credential that cannot possibly work"* holds. Every other Q10 property is unchanged; `settings.dat`'s format is untouched. §6.3.1b. |
 
 ### 9.1 ⭐ Standing directive — no features "for the future"
 
@@ -1119,10 +1186,10 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 | Etap | Scope | Why here |
 |---|---|---|
 **1** | *(this document)* audit + design | ✅ **done — accepted 2026-07-29** |
-**2** | Core foundation: `Preferences` (incl. `Theme`, `Language`, the two formatter cases) + `PreferencesStore` (8th facade) + the language catalog + defaults contract + tests. **No UI.** | pure Core, additive, no schema bump; everything else depends on it |
+**2** | Core foundation: `Preferences` (incl. `Theme`, `Language`, the two formatter cases) + `PreferencesStore` (8th facade) + the language catalog + defaults contract + tests. **No UI.** | ✅ **done 2026-07-29 — §12** |
 **3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | Theme is the user's clearest gap and proves the surface; Language ships **with it** so the General page is laid out once and never rebuilt (⭐ **Q4**'s whole rationale) |
 **4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | the largest single piece of work (§2.2); isolated so its §0 risk is not entangled with UI |
-**5a** | ⭐ **Core — the format itself.** Magic + versioned cleartext header, `aes256-passphrase` (AES-256-GCM) protector registered in `ResolveProtector`, KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** ⚠ **Read the F4 note below before starting.** | needs etap 2's shape settled to know what it serialises; pure Core and fully testable without a window, which is what makes the split worth making |
+**5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM) protector registered in `ResolveProtector`, KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** ⚠ **Read the F4 note below before starting.** | needs etap 2's shape settled to know what it serialises; pure Core and fully testable without a window, which is what makes the split worth making |
 **5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | the format is settled and provable before any dialog exists |
 **6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | additive; naturally last, and trimmable without blocking anything |
 
@@ -1158,3 +1225,87 @@ run it standalone. Note it is a *consolidation*, not a setting (**Q9**).
   them re-creates the lie the hardening sprint removed (§3.1).
 - **Any Data Import change** — standing directive (§7.10).
 - **The full-suite hang** (#94/#226/#261) — its own infrastructure task.
+
+---
+
+## 12. ⭐ Etap 2 — as built (2026-07-29)
+
+Pure Core, additive, `CurrentSchemaVersion` **still 2**, no App/Avalonia code touched. Build 0/0; suite
+**6003** green in the two documented partitions (5949 + 54), up 32; smoke clean.
+
+| File | Job |
+|---|---|
+[`PreferenceOptions.cs`](../../src/EmberTern.Core/Settings/PreferenceOptions.cs) | The ONE declaration of every enumerated preference's legal values **and** its default (§5.2.2), plus the `PreferenceOptionSet` type that pairs them. Holds the **language catalog**. |
+[`Preferences.cs`](../../src/EmberTern.Core/Settings/Preferences.cs) | The four scalars, each valid from its own initializer (§5.2.1). |
+[`PreferencesStore.cs`](../../src/EmberTern.Core/Settings/PreferencesStore.cs) | The 8th facade: `Load` · `Save` → `bool` · `static Validate`. |
+`UserSettings.Preferences` | +11 lines. The whole schema change. |
+`PreferencesTests` · `PreferencesStoreTests` | 19 + 13 tests. |
+
+### 12.1 Four implementation decisions the design left open
+
+**(a) ONE options table, not one class per preference.** `CommandCatalog` and `LanguageConstructCatalog`
+are single declarative tables covering many items; forty preferences must not become forty micro-classes.
+`PreferenceOptions.Language` **is** the "one-row declarative catalog" §6.2/3 asked for — a future reader
+grepping *Language* finds it, and adding Polish is still one row with no window, view-model or binding
+change.
+
+**(b) An option set is ONE object (`PreferenceOptionSet`), and its constructor rejects a default that is
+not one of its own values.** A legal-values list and a default declared separately are two facts that can
+disagree, and §5.2.1/4's pinning test cannot see that disagreement — it compares the *model* against the
+*validator*, both of which would be reading the same bad catalog. The symptom would be invisible in the
+worst way: a preference normalized away on every load, appearing to reset itself for no reason. Pairing
+them makes it unrepresentable rather than merely tested (and a test names it too).
+
+⚠ **The default is passed explicitly, never taken as the first value.** These lists are what the UI
+renders, so a positional convention would move the default silently the day languages are sorted
+alphabetically or Light is listed first.
+
+**(c) `Preferences` initializers read `PreferenceOptions.<set>.Default` rather than repeating a literal.**
+Otherwise the default exists twice — once in the model, once as the validator's fallback — which is the
+second copy §5.2.2 exists to forbid. This does narrow what §5.2.1/4's pinning test can catch, so **the
+invariant it used to carry is now carried structurally by (b) plus a test that every option set contains
+its own default**. The ratified pin is kept unchanged and still bites: planting `Language = "pl"` — §5.2.1/4's
+own example — was verified to fail it by name.
+
+**(d) ⭐ `Validate` returns `source with { … }`, never a fresh instance.** A fresh instance silently resets
+any property somebody forgets to list in the validator, turning *"I added a preference"* into *"that
+preference never persists"* — a data-loss shape, not a cosmetic one. With `with`, an unlisted property
+**passes through**, which is also the right answer for a future free-text preference (a font family) that
+has nothing to normalize against. It is a real benefit of the `record` decision that F5 ratified for
+equality alone.
+
+⚠ The cost of (d) is that forgetting an *enumerated* property leaves it unvalidated **quietly**.
+`PreferencesTests.EveryPreference_IsAccountedForInValidation` closes it the way this project always does —
+a declared table plus a test that fails when it goes stale: adding a property to `Preferences` fails the
+build until the author records, in that table, whether it is normalized and against what. Verified by
+planting a fifth property and watching it fail by name, with nothing else failing.
+
+### 12.2 Two contract details worth not re-deriving
+
+⭐ **Normalization runs in BOTH directions across the file boundary**, not only on read as §5.2.1's table
+literally says. Writing is also a boundary crossing, and a value we would only have to correct on the next
+read has no business reaching the file. `Validate` is idempotent, so the two directions cannot fight. This
+is the same one responsibility stated precisely, not a second one.
+
+⭐ **A recognised value is corrected to the catalog's spelling, not reset.** `"dark"` from a hand-edited
+file becomes `"Dark"`; only genuinely unrecognised values (including a code from a build that knew more
+options) fall back to the default. Resetting a value the user clearly meant would be data loss with extra
+steps — and §5.2.1/2's "silent and total" is about *never refusing*, not about preferring the default.
+
+### 12.3 F3 (apply-on-change granularity) — settled as API shape, as §5.5.1 required
+
+`PreferencesStore` has **no per-property setters** — no `SetTheme(string)`, no `Save(key, value)`. `Save`
+takes a whole `Preferences`, i.e. a *settled* value, so the cheap mistake is not available to etap 3. The
+reasoning is on the class: seven file operations and two DPAPI round-trips per call, and — the part that is
+architecture rather than tuning — `AtomicWrite` keeps exactly **one** generation of `settings.dat.bak`, so
+per-keystroke saving destroys the pre-edit state while someone is editing settings.
+
+### 12.4 What etap 3 inherits
+
+- `PreferencesStore.Load()` never returns null and every field is valid — no null check, no bootstrap.
+- `Save` returns **`false`** when the store refused, with the reason in `LastSaveDiagnostic`. §5.5 makes
+  surfacing that mandatory; the value is there to be surfaced.
+- ComboBox/radio items come from `PreferenceOptions.<set>.Values` — **never typed in XAML** (§5.2.2). App
+  owes each key a `UiStrings` label **and the test binding the two**, or adding an option ships a blank row.
+- `PreferenceOptions.ThemeDark` is the default because `App.axaml` hard-codes `Dark` today. §2.1's startup
+  order still has to be honoured: read the stored value, then assign, `Dark` as the fallback.
