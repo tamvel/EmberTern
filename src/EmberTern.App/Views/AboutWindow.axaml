@@ -1,0 +1,99 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:app="using:EmberTern.App"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.AboutWindow"
+        x:DataType="vm:AboutViewModel"
+        Title="{x:Static app:UiStrings.AboutTitle}"
+        Width="400"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ⭐ ONE flat surface, centred, logo-dominant — deliberately NOT the app's usual dialog skeleton.
+       ConfirmDialog and friends open with a PanelBrush header band and close with a footer band, which is
+       right for a dialog that asks something. Here it would produce exactly the classic Win32 "About" look
+       (banded chrome around a two-column Author: / Copyright: form) that this window is meant not to be.
+       So: no bands, no label column, no environment block — the mark, the name, and a quiet line of
+       authorship. Every value comes from AboutViewModel → AppInfo → the assembly. -->
+  <StackPanel HorizontalAlignment="Center" Margin="32,36,32,26" Spacing="0">
+
+    <!-- The brand mark is the subject of the window, so it gets the size and the air.
+         EmberTern_logo.png is the 256×256 transparent mark the titlebar already uses (logo.png is the same
+         artwork on an opaque white ground, which would show as a white square on the dark theme). At 128 it
+         is still downscaling at 200% DPI, so it stays crisp. -->
+    <Image Source="avares://EmberTern/Assets/Branding/EmberTern_logo.png"
+           Width="128" Height="128"
+           Stretch="Uniform"
+           RenderOptions.BitmapInterpolationMode="HighQuality"
+           HorizontalAlignment="Center" />
+
+    <TextBlock Text="{Binding Product}"
+               FontSize="23"
+               FontWeight="SemiBold"
+               HorizontalAlignment="Center"
+               Margin="0,18,0,0" />
+
+    <!-- Composed in the view model from UiStrings + the assembly's version. No literal here. -->
+    <TextBlock Text="{Binding VersionText}"
+               FontSize="12"
+               Foreground="{DynamicResource SubtleForegroundBrush}"
+               HorizontalAlignment="Center"
+               Margin="0,5,0,0" />
+
+    <!-- Release date, under the version. Collapses entirely when the build declared none, so the window never
+         shows a label with nothing after it. Its value is assembly metadata from <ReleaseDate>. -->
+    <TextBlock Text="{Binding ReleasedText}"
+               IsVisible="{Binding HasReleaseDate}"
+               FontSize="11"
+               Foreground="{DynamicResource SubtleForegroundBrush}"
+               HorizontalAlignment="Center"
+               Margin="0,3,0,0" />
+
+    <!-- A short hairline instead of a full-width rule: it separates authorship from identity without
+         drawing a band across the window. This is also the slot a future licence line goes in — one row,
+         not a redesign (design §8.3). -->
+    <Border Width="40" Height="1"
+            Background="{DynamicResource BorderBrush}"
+            HorizontalAlignment="Center"
+            Margin="0,22,0,20" />
+
+    <!-- Labelled: "Created by …". Unlabelled it read as an unsigned line, and the name recurs in the
+         copyright below — the label is what makes that repetition read as authorship. -->
+    <TextBlock Text="{Binding AuthorText}"
+               FontSize="12"
+               HorizontalAlignment="Center" />
+
+    <TextBlock Text="{Binding Copyright}"
+               FontSize="11"
+               Foreground="{DynamicResource SubtleForegroundBrush}"
+               HorizontalAlignment="Center"
+               TextAlignment="Center"
+               TextWrapping="Wrap"
+               Margin="0,6,0,0" />
+
+    <!-- Centred to match the composition. IsDefault + IsCancel so both Enter and Escape close it.
+         The notices sit behind a discreet button rather than a tab: a tab strip on a five-line window makes it
+         look like a configuration dialog, and no licence requires the component names on this face (§9.6). -->
+    <StackPanel Orientation="Horizontal"
+                Spacing="8"
+                HorizontalAlignment="Center"
+                Margin="0,28,0,0">
+      <Button Classes="flat"
+              Content="{x:Static app:UiStrings.AboutThirdPartyNotices}"
+              Click="OnThirdPartyNoticesClick" />
+      <Button Classes="flat"
+              Content="{x:Static app:UiStrings.AboutClose}"
+              Click="OnCloseClick"
+              IsDefault="True"
+              IsCancel="True" />
+    </StackPanel>
+
+  </StackPanel>
+</Window>

@@ -2900,6 +2900,376 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
+    // ── Application Menu (hamburger-navigation etap 2) ──────────────────────────────────────────────
+    // The MEASUREMENT the design made a precondition (§2.2): whether a plain ContextMenu hosted on a
+    // toolbar Button really is the whole answer, so no MenuFlyoutPresenter chrome variant has to exist.
+    // It also pins the two things a later edit could silently undo: that the hamburger is the FIRST button
+    // of the action zone with NO separator between it and the sidebar toggle (§6, ratified), and that
+    // Settings ships disabled-but-present rather than absent.
+    //
+    // ⚠ What this canNOT measure, and is therefore owed to visual QA: where the menu actually lands on
+    // screen. Headless has no real popup surface, so Placement is asserted as the declared value only.
+    [Fact]
+    public async System.Threading.Tasks.Task ApplicationMenu_IsTheFirstToolbarButton_AndReusesTheSharedMenuChrome()
+    {
+        var log = new StringBuilder();
+
+        await SharedSession.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-appmenu-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(store, service);
+            vm.ReloadConnections();
+
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var button = window.GetVisualDescendants().OfType<Button>()
+                .Single(b => b.Name == "AppMenuButton");
+            var menu = Assert.IsType<ContextMenu>(button.ContextMenu);
+
+            // [1] Placement in the toolbar. The hamburger's parent panel holds the whole action zone, so
+            // "first button" and "nothing between it and the next one" are both readable from the children.
+            var zone = Assert.IsType<StackPanel>(button.Parent);
+            var buttons = zone.Children.OfType<Button>().ToList();
+            Assert.Same(button, buttons[0]);
+
+            int hamburgerAt = zone.Children.IndexOf(button);
+            var next = zone.Children[hamburgerAt + 1];
+            log.AppendLine($"action zone: hamburger at index {hamburgerAt} of {zone.Children.Count}, "
+                           + $"next sibling = {next.GetType().Name}");
+
+            // ⭐ The ratified rule: no separator of its own. The element right after the hamburger is the
+            // sidebar toggle Button — a Border here would be the fence the user rejected.
+            var sidebarToggle = Assert.IsType<Button>(next);
+            Assert.Same(buttons[1], sidebarToggle);
+            Assert.Equal(UiStrings.SidebarToggleTooltip, ToolTip.GetTip(sidebarToggle));
+
+            // [2] Left-click opens it — Avalonia only opens a ContextMenu on right-click by itself, so the
+            // button's own handler is what a menu button needs. A second click closes rather than re-opens.
+            Assert.False(menu.IsOpen);
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(menu.IsOpen, "left-clicking the hamburger opens the application menu");
+
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(menu.IsOpen, "clicking the hamburger again closes the menu");
+
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            // [3] ⭐ The measurement the host decision rested on: the shared ContextMenu + MenuItem style set
+            // applies with NOTHING added for this menu. Same values TheSharedStyle_… pins for every other
+            // menu — so a MenuFlyoutPresenter variant would have been chrome nobody needed.
+            Assert.Equal(new Avalonia.Thickness(1), menu.BorderThickness);
+            Assert.Equal(12d, menu.FontSize);
+            Assert.NotNull(menu.Background);
+            Assert.Equal(PlacementMode.BottomEdgeAlignedLeft, menu.Placement);
+
+            var rows = menu.Items.OfType<MenuItem>().ToList();
+            foreach (var row in rows)
+            {
+                Assert.Equal(22d, row.MinHeight);
+                Assert.Equal(12d, row.FontSize);
+                // Every row carries a mark from the existing icon system, via {app:MenuIcon}.
+                Assert.NotNull(row.Icon);
+            }
+
+            // [4] The rows themselves. Settings is present-but-disabled on purpose — the placeholder for a
+            // decided-and-unbuilt feature — and the shared style is what keeps a disabled row readable.
+            var settings = rows.Single(r => Equals(r.Header, UiStrings.AppMenuSettings));
+            Assert.False(settings.IsEnabled);
+            Assert.Equal(UiStrings.AppMenuSettingsUnavailableTooltip, ToolTip.GetTip(settings));
+
+            var shortcuts = rows.Single(r => Equals(r.Header, UiStrings.AppMenuKeyboardShortcuts));
+            Assert.True(shortcuts.IsEnabled);
+
+            var about = rows.Single(r => Equals(r.Header, UiStrings.AppMenuAbout));
+            Assert.True(about.IsEnabled);
+
+            var exit = rows.Single(r => Equals(r.Header, UiStrings.AppMenuExit));
+            Assert.True(exit.IsEnabled);
+
+            // Real separators between the three groups, styled by the menu style set (not stray Borders).
+            // ⭐ A row never ships ahead of what it opens, so the count grows one etap at a time: etap 2 had
+            // Settings + Exit, etap 3 adds About WITH its window, and Keyboard Shortcuts follows in etap 5.
+            Assert.Equal(2, menu.Items.OfType<Separator>().Count());
+
+            // [5] ⚠ No gesture column anywhere in this menu, and that is deliberate: Exit's key is Alt+F4,
+            // which EmberTern does not own, so showing it would be a hand-typed gesture (gotcha #284).
+            foreach (var row in rows)
+            {
+                Assert.Null(row.InputGesture);
+            }
+
+            log.AppendLine($"menu: rows={rows.Count} separators={menu.Items.OfType<Separator>().Count()} "
+                           + $"placement={menu.Placement} fontSize={menu.FontSize} border={menu.BorderThickness}");
+
+            // [6] ⭐ Optical size AND sub-pixel phase — two QA rounds' worth of geometry, in one assertion.
+            //
+            // The SvgIcon ControlTheme scales a FIXED 24×24 Canvas, not the path's ink, so every icon renders
+            // at the same 24→16 scale (×2/3) and a geometry filling less of the box simply looks smaller:
+            // verbatim Lucide `menu` is 18×14 against PanelLeft's 20×20 (QA round 1).
+            //
+            // The same ×2/3 scale then decides the ANTI-ALIASING: a rule at y has its top edge at 2(y−1)/3,
+            // and rules whose fractional edges differ are drawn differently no matter how symmetric they look
+            // — at y4/12/20 the middle rule spreads over two 67% pixel rows and reads thicker while the outer
+            // two stay crisp (QA round 2). Equal phases require the spacing to be a multiple of 3.
+            //
+            // ⚠⚠ QA round 3 then rejected the obvious-looking invariant: this assertion USED to demand that
+            // the hamburger's ink box EQUAL the neighbour's, and that is what made it look too big. Equal
+            // boxes are not equal weight — three full-width rules are far denser than a thin rectangle
+            // outline, so at the same extent the hamburger dominates. **The target is optical, not
+            // geometric**, and a dense glyph needs a SMALLER box to look the same size. So the bound is a
+            // RANGE, not an equality: big enough not to look lost (round 1), strictly smaller than a
+            // rectangle outline (round 3). The exact value inside that range is an eye's decision, and it was
+            // taken from a side-by-side sheet, not from arithmetic.
+            static (Avalonia.Size Ink, Avalonia.Point Centre) Box(Button host)
+            {
+                var data = host.GetVisualDescendants().OfType<SvgIcon>().First().Data!;
+                var b = data.Bounds;
+                // ±1 on every side: half of the theme's 2px stroke.
+                return (new Avalonia.Size(b.Width + 2, b.Height + 2), b.Center);
+            }
+
+            var hamburger = Box(button);
+            var neighbour = Box(sidebarToggle);
+            log.AppendLine($"ink box: hamburger {hamburger.Ink} @ {hamburger.Centre} "
+                           + $"vs sidebar toggle {neighbour.Ink} @ {neighbour.Centre}");
+
+            Assert.True(hamburger.Ink.Height < neighbour.Ink.Height,
+                $"a full-width three-rule glyph at the neighbour's own extent reads bigger than it: "
+                + $"{hamburger.Ink} vs {neighbour.Ink}");
+            Assert.True(hamburger.Ink.Height >= neighbour.Ink.Height - 4,
+                $"too small to sit level with the bar: {hamburger.Ink} vs {neighbour.Ink}");
+            Assert.True(hamburger.Ink.Width <= neighbour.Ink.Width && hamburger.Ink.Width >= neighbour.Ink.Width - 3,
+                $"width out of range: {hamburger.Ink} vs {neighbour.Ink}");
+
+            // Centred in the 24×24 grid, so the glyph is symmetric in both axes by construction.
+            Assert.Equal(new Avalonia.Point(12, 12), hamburger.Centre);
+
+            menu.Close();
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // The About window shows the version the BUILD declares, and it gets there through the real bindings.
+    // AppInfoTests already proves AppInfo agrees with Directory.Build.props and that no literal exists in
+    // src/; this closes the last link — that the window actually renders it — because a correct AppInfo behind
+    // an unbound TextBlock would satisfy every other test in the sprint.
+    [Fact]
+    public async System.Threading.Tasks.Task AboutWindow_ShowsTheAssemblyVersionAndIdentity()
+    {
+        var log = new StringBuilder();
+
+        await SharedSession.Dispatch(() =>
+        {
+            var window = new AboutWindow();
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var texts = window.GetVisualDescendants().OfType<TextBlock>()
+                .Select(t => t.Text ?? string.Empty).ToArray();
+            log.AppendLine("about window text: " + string.Join(" | ", texts));
+
+            Assert.Contains(AppInfo.Product, texts);
+            Assert.Contains(AppInfo.Copyright, texts);
+
+            // The version reaches the surface, and carries its label rather than sitting there as a bare number.
+            var version = Assert.Single(texts, t => t.Contains(AppInfo.Version, StringComparison.Ordinal));
+            Assert.NotEqual(AppInfo.Version, version);
+
+            // ⚠ The author line is LABELLED — the bare name read as unsigned text, and it recurs in the
+            // copyright below, so the label is what makes that repetition read as authorship.
+            var author = Assert.Single(texts, t => t.StartsWith("Created by", StringComparison.Ordinal));
+            Assert.Contains(AppInfo.Author, author, StringComparison.Ordinal);
+            Assert.DoesNotContain(AppInfo.Author, texts);
+
+            // The release date, under the version — from <ReleaseDate>, never typed into the view.
+            Assert.NotNull(AppInfo.ReleaseDate);
+            Assert.Single(texts, t => t.StartsWith("Released", StringComparison.Ordinal));
+
+            // The brand mark is the subject of the window, so it is present and it is the dominant element.
+            var logo = Assert.Single(window.GetVisualDescendants().OfType<Image>());
+            Assert.NotNull(logo.Source);
+            Assert.True(logo.Width >= 96, $"the logo leads this window; it is {logo.Width}px");
+
+            // A product window, not a diagnostic one: nothing about the runtime, the OS or the libraries.
+            // ⚠ Checked over the TEXT BLOCKS only, not the whole window — the footer's "Third-party notices"
+            // button is a way to REACH the component list, which is the opposite of putting it on this face.
+            foreach (var banned in new[] { ".NET", "Avalonia", "Windows", "Firebird", "x64" })
+            {
+                Assert.DoesNotContain(banned, string.Join(" ", texts), StringComparison.OrdinalIgnoreCase);
+            }
+
+            // The notices are reachable from here, and that button is the whole of the licence surface: no
+            // library names on the face (§9.6 — nothing requires them there).
+            var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
+            Assert.Contains(buttons, b => Equals(b.Content, UiStrings.AboutThirdPartyNotices));
+            Assert.Contains(buttons, b => Equals(b.Content, UiStrings.AboutClose));
+
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // ⭐ The Keyboard Shortcuts window, and the MEASUREMENT the design made a precondition (§8.5.4): the
+    // canonical order must come back after a user sort is cleared, and whether this grid even offers a
+    // "cleared" third state was an open question rather than something to assume.
+    [Fact]
+    public async System.Threading.Tasks.Task KeyboardShortcutsWindow_SortsByColumn_AndReturnsToTheCanonicalOrder()
+    {
+        var log = new StringBuilder();
+
+        await SharedSession.Dispatch(() =>
+        {
+            var window = new KeyboardShortcutsWindow();
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var grid = window.GetVisualDescendants().OfType<DataGrid>().Single();
+            var reset = window.GetVisualDescendants().OfType<Button>()
+                .Single(b => Equals(b.Content, UiStrings.KeyboardShortcutsResetOrder));
+
+            // ⚠ Read through the grid's own selection, not the visual rows: DataGridRow.Index is the index in
+            // the underlying items, so with recycled rows it says nothing about DISPLAY order. Selecting
+            // display position 0 and reading SelectedItem asks the grid what it is actually showing first.
+            string FirstCommand()
+            {
+                grid.SelectedIndex = 0;
+                Dispatcher.UIThread.RunJobs();
+                return ((KeyboardShortcutRowViewModel)grid.SelectedItem!).Command;
+            }
+
+            // [1] First open is canonical: Global scope leads, alphabetically inside it.
+            var canonicalFirst = FirstCommand();
+            log.AppendLine($"first open → {canonicalFirst}");
+            Assert.Equal(UiStrings.CommandTitleCloseTab, canonicalFirst);
+
+            // [2] ⭐ A user sort — and this is the assertion that caught a real defect. Column sorting did
+            // NOTHING until every column got an explicit SortMemberPath: the grid derives one from the column's
+            // Binding, and this project compiles bindings by default, which leaves the grid without a usable
+            // path. Clickable headers that sort nothing would have reached QA.
+            var commandColumn = grid.Columns[0];
+            commandColumn.Sort(System.ComponentModel.ListSortDirection.Descending);
+            Dispatcher.UIThread.RunJobs();
+
+            var sortedFirst = FirstCommand();
+            log.AppendLine($"sorted desc → {sortedFirst}");
+            Assert.NotEqual(canonicalFirst, sortedFirst);
+
+            // [3] Clearing returns to the canonical order — the ratified requirement.
+            reset.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            var afterReset = FirstCommand();
+            log.AppendLine($"after reset → {afterReset}");
+            Assert.Equal(canonicalFirst, afterReset);
+
+            // The affordance is stateless and always available — see the window's code-behind for why driving
+            // its visibility from the grid's own Sorting event did not work.
+            Assert.True(reset.IsVisible);
+
+            // [5] Sorting still works after a reset, so the reset restores the canonical order without
+            // leaving the grid in a state where its own sorting has stopped responding.
+            commandColumn.Sort(System.ComponentModel.ListSortDirection.Descending);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(sortedFirst, FirstCommand());
+
+            // ⚠ MEASURED AND NOT ASSERTED: Avalonia 12's DataGridColumn exposes no public sort-direction
+            // property, so the header's direction glyph cannot be inspected from a test. The reset calls
+            // DataGridColumn.ClearSort() (which does exist) and re-assigns ItemsSource; that the ROW ORDER
+            // returns is proven above, but whether the header glyph clears with it is owed to visual QA.
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // ⭐ ONE version for the whole application, proven where the user found the contradiction: on screen.
+    // The status bar used to carry the literal "EmberTern 0.1.0" while About read the assembly, so the two
+    // disagreed in front of them. Both now read AppInfo, and this asserts the status bar renders it.
+    [Fact]
+    public async System.Threading.Tasks.Task StatusBarShowsTheSameVersionAsAbout()
+    {
+        await SharedSession.Dispatch(() =>
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-version-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var store = new ConnectionProfileStore(tempDir);
+            using var service = new FirebirdConnectionService();
+            var vm = new MainWindowViewModel(store, service);
+
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var chip = window.GetVisualDescendants().OfType<TextBlock>()
+                .Select(t => t.Text ?? string.Empty)
+                .Where(t => t.Contains(AppInfo.Version, StringComparison.Ordinal))
+                .ToArray();
+
+            _out.WriteLine("status bar version chip: " + string.Join(" | ", chip));
+            Assert.Single(chip);
+            Assert.Contains(AppInfo.Product, chip[0], StringComparison.Ordinal);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    // The hamburger's three rules must be DRAWN identically, which the ink-box assertion above no longer
+    // implies now that it is a range rather than an equality. This pins the arithmetic directly, from the
+    // geometry source — the same source-scanning idiom TheSameMenuOperationAlwaysCarriesTheSameIcon uses.
+    //
+    // ⭐ Why it is arithmetic and not taste. The 24→16 render is a ×2/3 scale, so a rule declared at y has its
+    // top edge at 2(y−1)/3 with a 1.333px thickness, and the FRACTION of that edge decides the anti-aliasing.
+    // At y4/12/20 the fractions were .000 / .333 / .667: the middle rule spread over two 67%-covered pixel
+    // rows and read visibly thicker than the outer two, whose coverage was 100% + 33%. Equal phases require
+    // 2·Δy/3 ∈ ℤ, i.e. **Δy a multiple of 1.5**. No nudging of individual lines can substitute for that.
+    [Fact]
+    public void HamburgerRulesAllRenderIdentically()
+    {
+        var xaml = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "Themes", "IconGeometries.axaml"));
+
+        var geometry = Regex.Match(xaml, @"<StreamGeometry x:Key=""Icon\.Menu"">([^<]*)</StreamGeometry>");
+        Assert.True(geometry.Success, "Icon.Menu geometry not found");
+
+        var rules = Regex.Matches(geometry.Groups[1].Value, @"M([\d.]+) ([\d.]+) H([\d.]+)")
+            .Select(m => (
+                X0: double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture),
+                Y: double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture),
+                X1: double.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture)))
+            .ToArray();
+
+        Assert.Equal(3, rules.Length);
+
+        // Every rule spans the same x range, so none can look shorter or end differently from the others.
+        Assert.Single(rules.Select(r => (r.X0, r.X1)).Distinct());
+
+        // Evenly spaced, and the spacing is a multiple of 1.5 — the phase condition.
+        double gap = rules[1].Y - rules[0].Y;
+        Assert.Equal(gap, rules[2].Y - rules[1].Y, precision: 6);
+        Assert.Equal(0d, (gap / 1.5) % 1, precision: 6);
+
+        // The condition restated as the thing the user actually sees: one sub-pixel phase for all three.
+        var phases = rules.Select(r => Math.Round(2 * (r.Y - 1) / 3 % 1, 6)).Distinct().ToArray();
+        _out.WriteLine($"rules at y={string.Join("/", rules.Select(r => r.Y))}, gap={gap}, "
+                       + $"phase(s)={string.Join(",", phases)}");
+        Assert.Single(phases);
+
+        // Symmetric about the centre of the 24×24 grid in both axes.
+        Assert.Equal(12d, (rules[0].X0 + rules[0].X1) / 2, precision: 6);
+        Assert.Equal(12d, (rules[0].Y + rules[2].Y) / 2, precision: 6);
+    }
+
     // Etap 4 stopped gestures being typed by hand into UiStrings; this closes the same hole in XAML.
     // A menu's gesture column must come from {app:CommandGesture}, never from a literal
     // InputGesture="F7" — a literal is exactly what went stale when Format SQL moved from Alt+F to Ctrl+K.

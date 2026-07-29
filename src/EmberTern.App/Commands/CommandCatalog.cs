@@ -72,7 +72,7 @@ public static class CommandCatalog
     private static readonly CommandDescriptor[] AllDescriptors =
     [
         // ── Tab scope ────────────────────────────────────────────────────────────────────────────────
-        new(CommandId.Go, CommandScope.Tab, CommandDispatch.Routed,
+        new(CommandId.Go, UiStrings.CommandTitleGo, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.F5), TabKinds:
             [
                 WorkspaceTabKind.Query,
@@ -80,85 +80,105 @@ public static class CommandCatalog
                 WorkspaceTabKind.ScriptExecutor,
                 WorkspaceTabKind.DataImport,
             ]),
-        new(CommandId.ExecuteQuery, CommandScope.Tab, CommandDispatch.Routed,
+        new(CommandId.ExecuteQuery, UiStrings.CommandTitleExecuteQuery, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.Enter, Ctrl), TabKinds: QueryTab),
-        new(CommandId.ExecuteQueryFull, CommandScope.Tab, CommandDispatch.Routed,
+        new(CommandId.ExecuteQueryFull, UiStrings.CommandTitleExecuteQueryFull, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.F5, Shift), TabKinds: QueryTab),
         // Ctrl+K, not Alt+F: the user retired Alt+letter with no exceptions. This one descriptor replaced
         // the window binding AND three of the five local Alt+F handlers outright.
-        new(CommandId.FormatSql, CommandScope.Tab, CommandDispatch.Routed,
+        new(CommandId.FormatSql, UiStrings.CommandTitleFormatSql, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.K, Ctrl), TabKinds: FormattableTabs),
-        new(CommandId.Compile, CommandScope.Tab, CommandDispatch.Routed,
+        new(CommandId.Compile, UiStrings.CommandTitleCompile, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.F7), TabKinds: CompilableTabs),
-        new(CommandId.ImportValidate, CommandScope.Tab, CommandDispatch.Routed,
+        new(CommandId.ImportValidate, UiStrings.CommandTitleImportValidate, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.F5, Ctrl), TabKinds: ImportTab),
-        new(CommandId.ImportRefresh, CommandScope.Tab, CommandDispatch.Routed,
+        new(CommandId.ImportRefresh, UiStrings.CommandTitleImportRefresh, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.R, Ctrl), TabKinds: ImportTab),
-        new(CommandId.ImportBrowse, CommandScope.Tab, CommandDispatch.Routed,
+        new(CommandId.ImportBrowse, UiStrings.CommandTitleImportBrowse, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.O, Ctrl), TabKinds: ImportTab),
 
         // The debugger's stepping surface keeps its own dispatch: several of these are VIEW actions that
         // need the source editor's caret (Run To Cursor, Toggle Breakpoint), not view-model commands.
         // Only F5 moved to the router — it was the one gesture with two competing owners.
-        new(CommandId.DebuggerStepOver, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.F10), TabKinds: DebuggerTab),
-        new(CommandId.DebuggerRunToCursor, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.F10, Ctrl), TabKinds: DebuggerTab),
-        new(CommandId.DebuggerStepInto, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.F11), TabKinds: DebuggerTab),
-        new(CommandId.DebuggerStepOut, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.F11, Shift), TabKinds: DebuggerTab),
-        new(CommandId.DebuggerStop, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.F5, Shift), TabKinds: DebuggerTab),
-        new(CommandId.DebuggerRestart, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.F5, Ctrl | Shift), TabKinds: DebuggerTab),
-        new(CommandId.DebuggerToggleBreakpoint, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.F9), TabKinds: DebuggerTab),
-        new(CommandId.DebuggerEvaluateSelection, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.F9, Shift), TabKinds: DebuggerTab),
-        new(CommandId.DebuggerSaveSource, CommandScope.Tab, CommandDispatch.Reserved,
-            G(Key.S, Ctrl), TabKinds: DebuggerTab),
+        // ⚠ Reserved means "dispatched by the control that owns it", NOT "internal": these are exactly the
+        // keys a user wants the Keyboard Shortcuts window to tell them about, so they carry titles too.
+        new(CommandId.DebuggerStepOver, UiStrings.CommandTitleDebuggerStepOver, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.F10), TabKinds: DebuggerTab),
+        new(CommandId.DebuggerRunToCursor, UiStrings.CommandTitleDebuggerRunToCursor, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.F10, Ctrl), TabKinds: DebuggerTab),
+        new(CommandId.DebuggerStepInto, UiStrings.CommandTitleDebuggerStepInto, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.F11), TabKinds: DebuggerTab),
+        new(CommandId.DebuggerStepOut, UiStrings.CommandTitleDebuggerStepOut, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.F11, Shift), TabKinds: DebuggerTab),
+        new(CommandId.DebuggerStop, UiStrings.CommandTitleDebuggerStop, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.F5, Shift), TabKinds: DebuggerTab),
+        new(CommandId.DebuggerRestart, UiStrings.CommandTitleDebuggerRestart, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.F5, Ctrl | Shift), TabKinds: DebuggerTab),
+        new(CommandId.DebuggerToggleBreakpoint, UiStrings.CommandTitleDebuggerToggleBreakpoint, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.F9), TabKinds: DebuggerTab),
+        new(CommandId.DebuggerEvaluateSelection, UiStrings.CommandTitleDebuggerEvaluateSelection, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.F9, Shift), TabKinds: DebuggerTab),
+        new(CommandId.DebuggerSaveSource, UiStrings.CommandTitleDebuggerSaveSource, CommandScope.Tab,
+            CommandDispatch.Reserved, G(Key.S, Ctrl), TabKinds: DebuggerTab),
 
         // ── Editor scope ─────────────────────────────────────────────────────────────────────────────
-        new(CommandId.EditorFind, CommandScope.Editor, CommandDispatch.Routed, G(Key.F, Ctrl)),
-        new(CommandId.EditorReplace, CommandScope.Editor, CommandDispatch.Routed, G(Key.H, Ctrl)),
+        new(CommandId.EditorFind, UiStrings.CommandTitleEditorFind, CommandScope.Editor, CommandDispatch.Routed,
+            G(Key.F, Ctrl)),
+        new(CommandId.EditorReplace, UiStrings.CommandTitleEditorReplace, CommandScope.Editor, CommandDispatch.Routed,
+            G(Key.H, Ctrl)),
 
         // Typing mechanics + navigation the editor controllers own on the tunnel (#224 / #228).
-        new(CommandId.EditorCompletion, CommandScope.Editor, CommandDispatch.Reserved, G(Key.Space, Ctrl)),
-        new(CommandId.EditorParameterHelper, CommandScope.Editor, CommandDispatch.Reserved,
-            G(Key.Space, Ctrl | Shift)),
-        new(CommandId.EditorRename, CommandScope.Editor, CommandDispatch.Reserved, G(Key.F2)),
-        new(CommandId.EditorPeekDefinition, CommandScope.Editor, CommandDispatch.Reserved, G(Key.F12, Alt)),
-        new(CommandId.EditorQuickFix, CommandScope.Editor, CommandDispatch.Reserved, G(Key.OemPeriod, Ctrl)),
-        new(CommandId.EditorExpandConstruct, CommandScope.Editor, CommandDispatch.Reserved, G(Key.Tab)),
-        new(CommandId.EditorNextDiagnostic, CommandScope.Editor, CommandDispatch.Reserved, G(Key.F8)),
-        new(CommandId.EditorPreviousDiagnostic, CommandScope.Editor, CommandDispatch.Reserved,
-            G(Key.F8, Shift)),
+        new(CommandId.EditorCompletion, UiStrings.CommandTitleEditorCompletion, CommandScope.Editor,
+            CommandDispatch.Reserved, G(Key.Space, Ctrl)),
+        new(CommandId.EditorParameterHelper, UiStrings.CommandTitleEditorParameterHelper, CommandScope.Editor,
+            CommandDispatch.Reserved, G(Key.Space, Ctrl | Shift)),
+        new(CommandId.EditorRename, UiStrings.CommandTitleEditorRename, CommandScope.Editor,
+            CommandDispatch.Reserved, G(Key.F2)),
+        new(CommandId.EditorPeekDefinition, UiStrings.CommandTitleEditorPeekDefinition, CommandScope.Editor,
+            CommandDispatch.Reserved, G(Key.F12, Alt)),
+        new(CommandId.EditorQuickFix, UiStrings.CommandTitleEditorQuickFix, CommandScope.Editor,
+            CommandDispatch.Reserved, G(Key.OemPeriod, Ctrl)),
+        new(CommandId.EditorExpandConstruct, UiStrings.CommandTitleEditorExpandConstruct, CommandScope.Editor,
+            CommandDispatch.Reserved, G(Key.Tab)),
+        new(CommandId.EditorNextDiagnostic, UiStrings.CommandTitleEditorNextDiagnostic, CommandScope.Editor,
+            CommandDispatch.Reserved, G(Key.F8)),
+        new(CommandId.EditorPreviousDiagnostic, UiStrings.CommandTitleEditorPreviousDiagnostic, CommandScope.Editor,
+            CommandDispatch.Reserved, G(Key.F8, Shift)),
 
         // ── Tree scope (the Object Explorer) ─────────────────────────────────────────────────────────
         // F3 / F8 are also claimed at Grid scope below. That is not a clash: the focus is in the tree or
         // in a grid, never both, and each scope resolves through the owner of that surface's selection.
-        new(CommandId.NewObject, CommandScope.Tree, CommandDispatch.Routed, G(Key.F3)),
-        new(CommandId.DeleteObject, CommandScope.Tree, CommandDispatch.Routed, G(Key.F8)),
-        new(CommandId.RefreshMetadata, CommandScope.Tree, CommandDispatch.Routed, G(Key.F4)),
+        new(CommandId.NewObject, UiStrings.CommandTitleNewObject, CommandScope.Tree, CommandDispatch.Routed,
+            G(Key.F3)),
+        new(CommandId.DeleteObject, UiStrings.CommandTitleDeleteObject, CommandScope.Tree, CommandDispatch.Routed,
+            G(Key.F8)),
+        new(CommandId.RefreshMetadata, UiStrings.CommandTitleRefreshMetadata, CommandScope.Tree,
+            CommandDispatch.Routed, G(Key.F4)),
 
         // ── Grid scope (the collection lists) ────────────────────────────────────────────────────────
         // Insert / Delete are the keys the table's fields grid always had, kept as ALTERNATES so long-standing
         // muscle memory still works while the ratified F3 / F8 are what the menus and tooltips display. They
         // used to be three local DataGrid.KeyBindings, which is why that menu was the only place in the app
         // showing a hand-typed gesture; routing them removed the last such literal.
-        new(CommandId.CollectionAdd, CommandScope.Grid, CommandDispatch.Routed, G(Key.F3), G(Key.Insert)),
-        new(CommandId.CollectionEdit, CommandScope.Grid, CommandDispatch.Routed, G(Key.F2)),
-        new(CommandId.CollectionRemove, CommandScope.Grid, CommandDispatch.Routed, G(Key.F8), G(Key.Delete)),
+        new(CommandId.CollectionAdd, UiStrings.CommandTitleCollectionAdd, CommandScope.Grid, CommandDispatch.Routed,
+            G(Key.F3), G(Key.Insert)),
+        new(CommandId.CollectionEdit, UiStrings.CommandTitleCollectionEdit, CommandScope.Grid, CommandDispatch.Routed,
+            G(Key.F2)),
+        new(CommandId.CollectionRemove, UiStrings.CommandTitleCollectionRemove, CommandScope.Grid,
+            CommandDispatch.Routed, G(Key.F8), G(Key.Delete)),
 
         // ── Global scope ─────────────────────────────────────────────────────────────────────────────
-        new(CommandId.GlobalSearch, CommandScope.Global, CommandDispatch.Routed, G(Key.F, Ctrl | Shift)),
-        new(CommandId.Commit, CommandScope.Global, CommandDispatch.Routed, G(Key.F6)),
-        new(CommandId.Rollback, CommandScope.Global, CommandDispatch.Routed, G(Key.F6, Shift)),
-        new(CommandId.CloseTab, CommandScope.Global, CommandDispatch.Routed, G(Key.W, Ctrl)),
+        new(CommandId.GlobalSearch, UiStrings.CommandTitleGlobalSearch, CommandScope.Global, CommandDispatch.Routed,
+            G(Key.F, Ctrl | Shift)),
+        new(CommandId.Commit, UiStrings.CommandTitleCommit, CommandScope.Global, CommandDispatch.Routed, G(Key.F6)),
+        new(CommandId.Rollback, UiStrings.CommandTitleRollback, CommandScope.Global, CommandDispatch.Routed,
+            G(Key.F6, Shift)),
+        new(CommandId.CloseTab, UiStrings.CommandTitleCloseTab, CommandScope.Global, CommandDispatch.Routed,
+            G(Key.W, Ctrl)),
         // Ctrl+F twice over is not a collision: Editor outranks Global, so the caret decides. That used to
         // be a hand-written focus probe in MainWindow's key handler; now it is the resolution order.
-        new(CommandId.FocusSidebarFilter, CommandScope.Global, CommandDispatch.Routed, G(Key.F, Ctrl)),
+        new(CommandId.FocusSidebarFilter, UiStrings.CommandTitleFocusSidebarFilter, CommandScope.Global,
+            CommandDispatch.Routed, G(Key.F, Ctrl)),
     ];
 
     private static readonly Dictionary<CommandId, CommandDescriptor> ById =

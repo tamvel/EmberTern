@@ -155,6 +155,89 @@ breakpoint dot uses). Same idiom (24×24, 2px stroke, round caps/joins); canonic
 
 The fault message bar is Seam C.
 
+## Application Menu (hamburger-navigation, etap 2)
+
+⛔ **`Icon.Menu` is closed — user-accepted 2026-07-28 after three QA rounds. Do not adjust its geometry**
+(not the fractional coordinates, not the ink box, not a revert to upstream Lucide). The two rules below
+are the reusable part; the icon itself is settled.
+
+| Geometry key | Source file | Purpose | Used in |
+|---|---|---|---|
+| `Icon.Menu` | Navigation/menu.svg | Open the Application Menu | Titlebar — the first button of the action zone |
+| `Icon.Settings` | Actions/settings-sliders.svg (composed) | Settings | Application Menu (disabled placeholder) |
+| `Icon.Exit` | Actions/log-out.svg (composed) | Leave the application | Application Menu |
+
+`Icon.Settings` and `Icon.Exit` are **composed** in the Lucide style rather than taken verbatim
+(precedent: `table-plus.svg`, `import.svg`), and each `.svg` says so in a comment. A gear was
+rejected for Settings — its outline cannot be authored cleanly at a 2px stroke rendered into the
+14px menu icon column; a power symbol was rejected for Exit for the same reason (a near-full arc
+is the shape that degrades worst at that size).
+
+### ⭐ Optical size is a property of the GEOMETRY, not of the control
+
+Worth knowing before adding any icon, because it cost a QA round. The `SvgIcon` ControlTheme is a
+`Viewbox Stretch="Uniform"` wrapping a **fixed `Canvas Width="24" Height="24"`** — so the Viewbox
+scales the *Canvas*, never the path's ink. Every icon therefore renders at exactly the same 24→16
+scale, and **an icon looks small purely because its geometry fills less of the 24×24 box.** No
+stretching compensates.
+
+The useful measure is the **ink box** = the path's extremes ±1 (half of the 2px stroke, round caps).
+Measured across the titlebar:
+
+| Icon | Ink box |
+|---|---|
+| `Icon.Copy`, `Icon.FolderPlus` | 22×22, 22×19 |
+| `Icon.PanelLeft`, `Icon.Trash` | 20×20, 20×22 |
+| `Icon.Menu` (as shipped) | **18×17** — smaller on purpose, see below |
+| `Icon.Menu` (verbatim Lucide) | 18×14 ← the shortest glyph on the bar, and it showed |
+| `Icon.Plus` | 16×16 (a compact symbol; reads fine small) |
+
+A toolbar icon lives in roughly a **20×20** ink box, so that is the right *starting* point — Lucide's own
+set is not internally consistent about it, and a verbatim file is not a guarantee.
+
+### ⚠⚠ But the target is OPTICAL, not geometric — do not equalise ink boxes
+
+This is the correction that cost a QA round, and it reverses the naive reading of the table above.
+`Icon.Menu` was once given PanelLeft's exact 20×20 box and **looked bigger than every icon around it**.
+Equal boxes are not equal weight: three full-width rules are far denser than a thin rectangle *outline*,
+so at the same extent the hamburger has to dominate. **A dense glyph needs a smaller box to look the same
+size** — hence 18×17 against its neighbours' 20×20.
+
+So: use the ink box to *diagnose* ("this glyph is 30% shorter than its neighbours, that is why it looks
+small"), never as the *goal*. The goal is what the icon looks like beside the icons it actually sits
+next to, at the size it actually renders. When in doubt, put the candidates side by side with the real
+neighbour geometries at 16px and look — that is what settled this one, after arithmetic had twice
+produced a confidently wrong answer.
+
+`ConnectionExpandBindingProbe` therefore pins a **range**, not an equality: big enough not to look lost,
+strictly smaller than a rectangle outline, centred, and phase-consistent (below).
+
+### ⭐ Repeated parallel strokes: keep the spacing a multiple of 3
+
+The second half of the same fact, and it cost its own QA round. The 24→16 render is a **×2/3** scale,
+so a rule declared at `y` has its top edge at **2(y−1)/3** with a 1.333px thickness — and the
+*fractional part* of that edge decides the anti-aliasing. Two strokes on different fractions are
+**drawn differently no matter how symmetric the coordinates look**:
+
+| Declared y | Rendered band | Pixel coverage | Reads as |
+|---|---|---|---|
+| 4 | [2.000, 3.333] | row 2 → 100%, row 3 → 33% | crisp, faint edge below |
+| 12 | [7.333, 8.667] | rows 7 **and** 8 → 67% each | two grey rows: softer, **thicker** |
+| 20 | [12.667, 14.000] | row 12 → 33%, row 13 → 100% | crisp, faint edge above; the round cap lands on another phase, so the end looks clipped |
+
+Equal rendering requires equal phases, i.e. `2·Δy/3 ∈ ℤ` ⇒ **Δy must be a multiple of 1.5** (because
+1.5 × 2/3 = 1). The hamburger ships with Δy = **7.5** — all three rules on phase .333.
+
+**So: any icon with repeated parallel strokes** (a hamburger, a list, a stack, a set of rules) **spaces
+them by a multiple of 1.5 in the 24-unit grid.** Otherwise one stroke will look thicker than its
+siblings and no amount of nudging fixes it — the cause is the scale, not the coordinates. The multiples
+of 1.5 are what leave room to choose the *extent* freely (14 / 17 / 20 for a three-rule glyph), which is
+what the optical rule above needs.
+
+⚠ This holds at the rendered **16px**, the `SvgIcon` default. A host that overrides `Width`/`Height`
+(the debugger tab renders its mark at 14) re-scales the grid and changes the phase; that is inherent
+to scaling and cannot be fixed by choosing coordinates.
+
 ### Migration status — COMPLETE
 
 No Unicode/emoji object or action glyphs remain in any view — the debugger toolbar was the

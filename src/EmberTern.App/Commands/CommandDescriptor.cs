@@ -29,6 +29,18 @@ public enum CommandDispatch
 /// — see <see cref="CommandCatalog"/> for why that would not work here.
 /// </summary>
 /// <param name="Id">Stable identity; the only thing other layers refer to.</param>
+/// <param name="Title">
+/// The command's ONE canonical, host-independent name — <c>"Compile"</c>, <c>"Format SQL"</c> — for surfaces
+/// that list commands rather than offer one: the Keyboard Shortcuts window today, a Command Palette and a
+/// command search later.
+/// <para>⭐ This does <b>not</b> reverse etap 4's ratified decision that a command's text lives in
+/// <see cref="UiStrings"/> and is passed to <see cref="CommandTip"/>. That decision rejected a single text field
+/// for <i>tooltips</i>, because eleven Compile tooltips are host-specific prose ("Compile the procedure",
+/// "Compile and save the trigger"). A catalogue needs the opposite thing — one name, the same everywhere — which
+/// is a different job. Tooltips are untouched and still compose their own wording.</para>
+/// <para>⛔ The text still comes from <see cref="UiStrings"/>; <c>CommandCatalog</c> contains no string
+/// literals, and <c>CommandCatalogTests</c> fails if one appears in the table.</para>
+/// </param>
 /// <param name="Scope">Which context the command belongs to, and so how specific its gesture claim is.</param>
 /// <param name="Dispatch">Whether the router invokes it or merely knows about it.</param>
 /// <param name="Gesture">The primary gesture, or null for a command reachable only from a menu/toolbar.</param>
@@ -43,6 +55,7 @@ public enum CommandDispatch
 /// </param>
 public sealed record CommandDescriptor(
     CommandId Id,
+    string Title,
     CommandScope Scope,
     CommandDispatch Dispatch,
     KeyGesture? Gesture,
@@ -52,6 +65,12 @@ public sealed record CommandDescriptor(
     /// <summary>True when either declared gesture matches the pressed key and modifiers.</summary>
     public bool Matches(Key key, KeyModifiers modifiers)
         => Is(Gesture, key, modifiers) || Is(AlternateGesture, key, modifiers);
+
+    /// <summary>
+    /// True when the command has any gesture at all. A command reachable only from a menu — the Application
+    /// Menu's rows, for instance — has none, and a *shortcuts* list has nothing to say about it.
+    /// </summary>
+    public bool HasGesture => Gesture is not null || AlternateGesture is not null;
 
     private static bool Is(KeyGesture? gesture, Key key, KeyModifiers modifiers)
         => gesture is not null && gesture.Key == key && gesture.KeyModifiers == modifiers;

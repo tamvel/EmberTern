@@ -289,6 +289,29 @@ noted.
   rename, find references), semantic highlighting, and Quick Info all built as *clients* of that
   one model. See **`docs/design/editor-architecture.md`** for the current architecture and
   **"Editor Architecture — current direction"** below for status.
+- **Application Menu (☰) + About + Keyboard Shortcuts + third-party notices** — the hamburger is the **first
+  button of the titlebar action zone** and opens EmberTern's one home for *application-level* functions:
+  `Settings…` (disabled placeholder — no settings surface exists yet), `Keyboard Shortcuts…`, `About EmberTern…`,
+  `Exit`. Deliberately a **rarely used administrative menu** — daily work stays on the toolbar, the shortcuts and
+  the context menus, and no existing tool was moved or mirrored into it. It is a plain `ContextMenu` opened from
+  code, so it inherits the app's one menu appearance with **no new style**.
+  **About** is a *product* window (logo, name, version, `Created by`, copyright) — no runtime/OS/library block by
+  decision; a footer button opens the **third-party notices**. **Keyboard Shortcuts** is a read-only projection of
+  `CommandCatalog` (search · Command/Shortcut/Scope · canonical order `Global → Tab → Tree → Grid → Editor →
+  alphabetical`, restorable after any column sort · live count), which is why there is no second list of
+  shortcuts to maintain.
+  **⭐ Version and identity have ONE source: the `PropertyGroup` in `Directory.Build.props`.** `AppInfo` reads
+  `<Version>`, `<ReleaseDate>`, `<Product>`, `<Company>`, `<Copyright>` back off the assembly, so a release is one
+  line in one file — and both the About window *and* the status-bar chip read it. **⛔ Never write a version
+  number in code**; two `AppInfoTests` guards enforce it (the current value nowhere under `src/`; no
+  version-shaped literal where one could be displayed). Current version **0.5.0**, and 0.x is deliberate: 1.0
+  arrives with the finished product and its licensing system.
+  **⭐ `THIRD-PARTY-NOTICES.txt` is required, not a courtesy** — MIT obliges its notice "in all copies", and
+  `FirebirdSql.Data.FirebirdClient` is **IDPL 1.0**, whose §3.6 wants a source-availability notice with an
+  executable distribution. One file at the repo root, embedded *and* copied beside the exe; every licence text is
+  a **copy of an artefact**, never a recitation. `ThirdPartyNoticesTests` fails when a shipping `PackageReference`
+  is not named in it. Design + licence findings + as-built:
+  [docs/design/hamburger-navigation.md](docs/design/hamburger-navigation.md).
 - **Keyboard Manager / command system** — **ONE registry every UI surface reads from.**
   `EmberTern.App/Commands`: `CommandCatalog` is a single declarative table of `CommandDescriptor`s built once
   at type-init (id · scope · dispatch · gesture(s) · tab kinds), plus a collision validator; `CommandRouter`
@@ -304,6 +327,49 @@ noted.
 
 ## Current state
 
+- **☰ HAMBURGER NAVIGATION / APPLICATION MENU — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-29).**
+  All five etaps accepted; build 0/0; suite **5971** green (partitions 5917 + 54); smoke clean. Merged `--no-ff`
+  so the sprint stays one readable arc, pushed to **both** remotes.
+  **What it IS is in "What's built" above** (Application Menu · About · Keyboard Shortcuts · notices). The notes
+  below are the WHY — decisions and traps, not history. **The sprint's one document:
+  [docs/design/hamburger-navigation.md](docs/design/hamburger-navigation.md)** — read it before touching the
+  menu, the About window, the notices or `CommandDescriptor.Title`.
+  **⭐ RATIFIED, do not re-litigate:** version **`0.5.0`** and **0.x is deliberate** — 1.0 arrives with the
+  finished product and its licensing system, possibly preceded by a Beta suffix · About is a **product** window,
+  **no environment/diagnostic block**, no library names on its face · **no liability, warranty or privacy wording
+  anywhere at this stage** (liability is a term of the future EmberTern licence and belongs there, in one
+  document) · `CommandDescriptor.Title` is the ONE canonical command name for surfaces that *list* commands, text
+  from `UiStrings`, **no literals in `CommandCatalog`**; a `Description` field was **declined** until it has a
+  consumer (#233) · Keyboard Shortcuts' canonical order is restorable after any column sort.
+  ⚠ **No `CommandId` was added for the menu's rows, and that is a decision:** none shows a shortcut, so by
+  `CommandId`'s own admission rule — *"a command earns an id only when a shared surface must speak about it"* —
+  they do not qualify yet. They earn ids when a Command Palette needs them; four `Command="{Binding …}"`
+  substitutions, not a rebuild. ⚠ **A row never ships ahead of what it opens** — each arrived *with* its window,
+  because a row that opens nothing is indistinguishable from a defect in QA.
+  **⭐ LICENCE FINDINGS (verified from artefacts — nuspec + licence files vs the DLLs in `bin`; re-verify the same
+  way, do not trust this summary alone):** everything shipped is **MIT except `FirebirdSql.Data.FirebirdClient`
+  10.3.4, which is IDPL 1.0** (MPL-1.1-derived file-level copyleft; §3.6 wants a source-availability notice with
+  an executable distribution — EmberTern's own code stays a "Larger Work"). **Icons are Lucide, and its LICENSE
+  carries TWO notices — ISC *and* MIT for the portions inherited from Feather**; the obligation follows the
+  geometries in `IconGeometries.axaml`, not the excluded `.svg` files. **Inter** is the one genuine ambiguity (the
+  package declares MIT and ships no OFL text while the typeface is upstream SIL OFL 1.1, and it *is* rendered) —
+  listed under the package's declared licence with the credit recorded. Native Skia/HarfBuzz upstream notices are
+  **flagged in the file's own Notes, not resolved**; `AvaloniaUI.DiagnosticsSupport` is excluded (Debug-only, and
+  its package declares no licence at all).
+  ⛔ **`Icon.Menu` IS CLOSED — user-accepted after three QA rounds; do not touch its geometry**, not to tidy the
+  fractional coordinates, not to match a neighbour's ink box, not to adopt the upstream Lucide file. The two
+  generalisations that DO apply to future icons are in
+  [`Assets/Icons/ICONS.md`](src/EmberTern.App/Assets/Icons/ICONS.md) and as gotchas **#287/#288**: **repeated
+  parallel strokes are spaced by a multiple of 1.5** in the 24-unit grid, and **the ink box DIAGNOSES optical
+  size, it never dictates it**.
+  **⚠ Four traps this sprint paid for, all now gotchas — read them before writing a similar guard or grid:**
+  **#287/#288** the icon lessons above · **#289** a guard keyed to a value's *current* contents cannot catch a
+  copy of an *earlier* one (the status bar showed a stale `0.1.0` while About read the assembly), and a
+  plausible-looking regex can pass while matching nothing · **#290** a `DataGridTextColumn` gets no sort path from
+  a **compiled** binding, so headers sort **nothing** without an explicit `SortMemberPath`.
+  ⚠ **Still open, deliberately:** the monospace font-family string now has **three** copies in the app
+  (`HoverInfoView`, `LanguageExpansionController`, `ThirdPartyNoticesWindow`) — centralising it is typography,
+  which the backlogged app-wide UX sprint owns.
 - **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-28).**
   Etaps 1–5 + a UX Consistency Pass, every one visually QA'd and accepted. Build 0/0; suite **5952 green**
   (full run in one pass, and in the two documented partitions 5903 + 49); smoke clean. Merged `--no-ff` so the
@@ -2301,9 +2367,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5952 as of 2026-07-28
-  (`feat/keyboard-manager`, after the UX consistency pass; 5900 on `master`)** — green in the two documented partitions
-  (**5903 + 49**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **5971 as of 2026-07-29
+  (after the Hamburger Navigation sprint, merged to `master`)** — green in the two documented partitions
+  (**5917 + 54**).
   **⭐⭐ 2026-07-28, Keyboard Manager etap 5 — THE FOUR "SAME TEST" OBSERVATIONS BELOW WERE AN ARTEFACT OF
   ORDERING. READ THIS BEFORE TRUSTING THEM.** Etap 5 briefly had a SECOND headless test class, and running the
   partition in which *it* ran last moved the reported hang to **that class's** last test
