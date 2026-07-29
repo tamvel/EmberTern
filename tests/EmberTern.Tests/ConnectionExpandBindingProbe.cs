@@ -2985,6 +2985,9 @@ public sealed class ConnectionExpandBindingProbe
             Assert.False(settings.IsEnabled);
             Assert.Equal(UiStrings.AppMenuSettingsUnavailableTooltip, ToolTip.GetTip(settings));
 
+            var shortcuts = rows.Single(r => Equals(r.Header, UiStrings.AppMenuKeyboardShortcuts));
+            Assert.True(shortcuts.IsEnabled);
+
             var about = rows.Single(r => Equals(r.Header, UiStrings.AppMenuAbout));
             Assert.True(about.IsEnabled);
 
@@ -3111,6 +3114,79 @@ public sealed class ConnectionExpandBindingProbe
             Assert.Contains(buttons, b => Equals(b.Content, UiStrings.AboutThirdPartyNotices));
             Assert.Contains(buttons, b => Equals(b.Content, UiStrings.AboutClose));
 
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // ⭐ The Keyboard Shortcuts window, and the MEASUREMENT the design made a precondition (§8.5.4): the
+    // canonical order must come back after a user sort is cleared, and whether this grid even offers a
+    // "cleared" third state was an open question rather than something to assume.
+    [Fact]
+    public async System.Threading.Tasks.Task KeyboardShortcutsWindow_SortsByColumn_AndReturnsToTheCanonicalOrder()
+    {
+        var log = new StringBuilder();
+
+        await SharedSession.Dispatch(() =>
+        {
+            var window = new KeyboardShortcutsWindow();
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var grid = window.GetVisualDescendants().OfType<DataGrid>().Single();
+            var reset = window.GetVisualDescendants().OfType<Button>()
+                .Single(b => Equals(b.Content, UiStrings.KeyboardShortcutsResetOrder));
+
+            // ⚠ Read through the grid's own selection, not the visual rows: DataGridRow.Index is the index in
+            // the underlying items, so with recycled rows it says nothing about DISPLAY order. Selecting
+            // display position 0 and reading SelectedItem asks the grid what it is actually showing first.
+            string FirstCommand()
+            {
+                grid.SelectedIndex = 0;
+                Dispatcher.UIThread.RunJobs();
+                return ((KeyboardShortcutRowViewModel)grid.SelectedItem!).Command;
+            }
+
+            // [1] First open is canonical: Global scope leads, alphabetically inside it.
+            var canonicalFirst = FirstCommand();
+            log.AppendLine($"first open → {canonicalFirst}");
+            Assert.Equal(UiStrings.CommandTitleCloseTab, canonicalFirst);
+
+            // [2] ⭐ A user sort — and this is the assertion that caught a real defect. Column sorting did
+            // NOTHING until every column got an explicit SortMemberPath: the grid derives one from the column's
+            // Binding, and this project compiles bindings by default, which leaves the grid without a usable
+            // path. Clickable headers that sort nothing would have reached QA.
+            var commandColumn = grid.Columns[0];
+            commandColumn.Sort(System.ComponentModel.ListSortDirection.Descending);
+            Dispatcher.UIThread.RunJobs();
+
+            var sortedFirst = FirstCommand();
+            log.AppendLine($"sorted desc → {sortedFirst}");
+            Assert.NotEqual(canonicalFirst, sortedFirst);
+
+            // [3] Clearing returns to the canonical order — the ratified requirement.
+            reset.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            var afterReset = FirstCommand();
+            log.AppendLine($"after reset → {afterReset}");
+            Assert.Equal(canonicalFirst, afterReset);
+
+            // The affordance is stateless and always available — see the window's code-behind for why driving
+            // its visibility from the grid's own Sorting event did not work.
+            Assert.True(reset.IsVisible);
+
+            // [5] Sorting still works after a reset, so the reset restores the canonical order without
+            // leaving the grid in a state where its own sorting has stopped responding.
+            commandColumn.Sort(System.ComponentModel.ListSortDirection.Descending);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(sortedFirst, FirstCommand());
+
+            // ⚠ MEASURED AND NOT ASSERTED: Avalonia 12's DataGridColumn exposes no public sort-direction
+            // property, so the header's direction glyph cannot be inspected from a test. The reset calls
+            // DataGridColumn.ClearSort() (which does exist) and re-assigns ItemsSource; that the ROW ORDER
+            // returns is proven above, but whether the header glyph clears with it is owed to visual QA.
             window.Close();
         }, CancellationToken.None);
 

@@ -709,7 +709,7 @@ standing rule that a UI change is not "done" until it has been seen in the runni
 | **2** | ✅ **DONE + USER-ACCEPTED (2026-07-28)** — see §12. The button + the menu; the host measured first; placement per §6. Rows: `Settings…` (disabled, final) and `Exit` (live). **No `CommandId`s — §7 amended.** | Build 0/0; suite **5954** green (5903 + 51); smoke clean. Accepted after three icon QA rounds (§12.2a–d). |
 | **3** | ✅ **DONE** — see §13. The About window (§8) + `<Version>1.2.0</Version>` in `Directory.Build.props`, the `+hash` defence, the `About EmberTern…` row. | Build 0/0; suite **5958** green (5906 + 52); smoke clean. Awaiting visual QA. |
 | **4** | ✅ **DONE** — see §14. `THIRD-PARTY-NOTICES.txt` (§9.6) + the notices window behind the About footer button. §9.5 recorded in the file's own Notes rather than closed. | Build 0/0; suite **5964** green (5911 + 53); smoke clean. Awaiting visual QA. |
-| **5** | **Keyboard Shortcuts window** (§8.5) — `CommandDescriptor.Title` + its guard test first, then the window: search, `DataGrid`, scope-rank ordering, sort-reset (§8.5.4), live filter, count. **The `Keyboard Shortcuts…` row arrives with it.** | Firm as of round 3. Its own etap because it is a real window, and because §8.5.1 touches the command registry. |
+| **5** | ✅ **DONE** — see §15. `CommandDescriptor.Title` + its guards, then the window: search, `DataGrid`, scope-rank ordering, sort-reset, live filter, count. The `Keyboard Shortcuts…` row arrived with it. | Build 0/0; suite **5971** green (5917 + 54); smoke clean. Awaiting visual QA. |
 
 ⭐ **A row never ships ahead of what it opens.** Etap 2 delivers only `Settings…` (disabled by design, its final
 state) and `Exit` (live); `About EmberTern…` and `Keyboard Shortcuts…` appear in etaps 3 and 5 *with* their
@@ -742,6 +742,72 @@ classes must join `HeadlessCollection` — never their own `IClassFixture` (gotc
 | Column sorting | 4 | User may sort any column; **clearing the sort and every first open restore the canonical order** (§8.5.4). |
 
 **Etap 2 is authorised (round 4)** — and delivered; see §12.
+
+---
+
+## 15. Etap 5 — as built
+
+**Build 0/0 · suite 5971 green** (partitions 5917 + 54) **· smoke clean · awaiting visual QA.** The window lists
+**38 commands** — every catalog entry that has a gesture.
+
+### 15.1 `CommandDescriptor.Title` — the registry's one canonical name
+
+Added as a **required** positional parameter (position 2), so the compiler enumerated all 38 rows rather than
+letting one slip through with a default. Text comes from `UiStrings.CommandTitle*`; **`CommandCatalog` holds no
+string literal**, and `TheDescriptorTableContainsNoStringLiterals` scans the `AllDescriptors` table (comment
+lines excluded — the table is heavily annotated) and fails if one appears.
+
+⚠ **An alias class was written and deleted.** A private `T` shortening `UiStrings.CommandTitleX` to
+`T.CommandTitleX` made the rows shorter at the cost of 38 lines duplicating the names — a second list to keep in
+step for cosmetics. The table now references `UiStrings` directly.
+
+Two more guards: every descriptor has a **non-empty** Title, and **titles are unique** (two commands sharing one
+would be indistinguishable in a list). The Grid-scope titles are deliberately generic — *"New item in list"* —
+because those three commands route through the app's one collection router, which serves fields, rows, columns,
+parameters and variables; the per-collection nouns belong to the toolbar and the grid's own menu, which know
+which collection they are looking at.
+
+### 15.2 The window is a projection, and the canonical order is its resting state
+
+`KeyboardShortcutsViewModel` holds the ordered, filtered rows; the grid's own sorting is an **overlay** on top,
+which is what makes "clear the sort ⇒ canonical order" fall out rather than needing reconstruction. The scope
+rank is declared once (`Global → Tab → Tree → Grid → Editor`) with a test asserting **every `CommandScope` member
+has a rank** — and note the doc's earlier claim that this is "the reverse of the numeric order" was imprecise:
+ascending numeric order is `Global, Tab, Grid, Tree, Editor`, which swaps Tree and Grid. An explicit rank was
+required, not merely tidier.
+
+Search matches the three displayed fields including the **rendered** shortcut text, so `ctrl` finds every Ctrl
+binding and what you see is what you searched. ⚠ Substring matching means one gesture can be a prefix of
+another: `Ctrl+Shift+F` finds Global Search **and** Restart debugging (`Ctrl+Shift+F5`). That is correct for a
+search box — the test originally asserted a single hit and **the test was wrong, not the code**.
+
+### 15.3 ⭐ Two real defects the measurement caught before QA
+
+**(1) Column sorting did nothing at all.** `DataGridTextColumn` derives its sort path from the column's
+`Binding`, but this project sets `AvaloniaUseCompiledBindingsByDefault`, and a compiled binding leaves the grid
+without a usable path. The headers were clickable and sorted **nothing**. Fixed with an explicit
+`SortMemberPath` on all three columns. The design doc had marked this area "measure, do not assume"; the
+measurement is the only reason this is not a QA report.
+
+**(2) The reset affordance re-armed itself.** It first appeared only while a sort was active, driven by the
+grid's `Sorting` event — but that event also fires while the reset clears the columns, and it arrives late
+enough that a "we are resetting" guard flag does not cover it, so the button reappeared the instant it had done
+its job. Rather than chase the event's timing, **the affordance became stateless and is always visible**: a small
+flat button in the footer costs nothing when unused and cannot lie about the grid's state. Same lesson as gotcha
+#240 — never tie a control's visibility to the state its own action changes.
+
+⚠ **Measured and deliberately not asserted:** Avalonia 12's `DataGridColumn` exposes no public sort-direction
+property, so the header's direction glyph cannot be inspected from a test. That the **row order** returns to
+canonical is proven; whether the glyph clears with it is owed to visual QA. `DataGridRow.GetIndex()` is also
+obsolete, and `Index` is the index in the *underlying* items — so display order is read through the grid's own
+selection instead.
+
+### 15.4 What is deliberately absent
+
+No details pane (§8.5.5) while it would be empty — the rows are typed view models, so adding it later is a
+column bound to the grid's selection. No editing. `Icon.Keyboard` is verbatim Lucide; its two rows of key dots
+are 4 apart, not a multiple of 1.5, and the `.svg` says why that rule does not bite here: it was written for long
+parallel **rules**, where the eye compares thickness along a length.
 
 ---
 

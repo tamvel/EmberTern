@@ -1,0 +1,96 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:app="using:EmberTern.App"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.KeyboardShortcutsWindow"
+        x:DataType="vm:KeyboardShortcutsViewModel"
+        Title="{x:Static app:UiStrings.KeyboardShortcutsTitle}"
+        Width="720" Height="560"
+        MinWidth="480" MinHeight="320"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- Search on top, list below, count bottom-left. Every value is a projection of CommandCatalog — no name,
+       gesture or scope is written in this file. The right-hand details pane the design anticipates is
+       deliberately absent while it would be empty (gotcha #233); the rows are typed view models, so adding it
+       later is a second column bound to the grid's selection. -->
+  <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+
+    <TextBox Grid.Row="0"
+             x:Name="SearchBox"
+             Text="{Binding SearchText}"
+             Watermark="{x:Static app:UiStrings.KeyboardShortcutsSearchPlaceholder}"
+             Margin="0,0,0,12" />
+
+    <Panel Grid.Row="1">
+      <DataGrid x:Name="ShortcutsGrid"
+                ItemsSource="{Binding Rows}"
+                IsReadOnly="True"
+                SelectionMode="Single"
+                GridLinesVisibility="Horizontal"
+                HeadersVisibility="Column"
+                CanUserResizeColumns="True"
+                CanUserSortColumns="True"
+                IsVisible="{Binding HasRows}">
+        <!-- ⚠ SortMemberPath is EXPLICIT on every column, and it is load-bearing rather than decorative.
+             The DataGrid derives a sort path from the column's Binding, but this project compiles bindings by
+             default (AvaloniaUseCompiledBindingsByDefault), and a compiled binding does not hand the grid a
+             path it can use — so without these the headers are clickable and sort NOTHING. Measured: the
+             headless test asserted a descending sort changed the first row, and it did not until these were
+             added. -->
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="{x:Static app:UiStrings.KeyboardShortcutsColumnCommand}"
+                              Binding="{Binding Command}"
+                              SortMemberPath="Command"
+                              Width="*" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.KeyboardShortcutsColumnShortcut}"
+                              Binding="{Binding Shortcut}"
+                              SortMemberPath="Shortcut"
+                              Width="Auto" />
+          <DataGridTextColumn Header="{x:Static app:UiStrings.KeyboardShortcutsColumnScope}"
+                              Binding="{Binding Scope}"
+                              SortMemberPath="Scope"
+                              Width="Auto" />
+        </DataGrid.Columns>
+      </DataGrid>
+
+      <TextBlock Text="{x:Static app:UiStrings.KeyboardShortcutsEmpty}"
+                 IsVisible="{Binding !HasRows}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center" />
+    </Panel>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding CountText}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 FontSize="11"
+                 VerticalAlignment="Center" />
+
+      <!-- Restores Global → Tab → Tree → Grid → Editor → alphabetical. Always visible: it first appeared only
+           while a sort was active, but the grid's Sorting event also fires while the reset clears the columns
+           and arrives too late for a guard flag, so the button re-armed itself the moment it had worked. A
+           stateless affordance cannot lie about the grid's state — see the code-behind. -->
+      <Button Grid.Column="1"
+              x:Name="ResetOrderButton"
+              Classes="flat"
+              Content="{x:Static app:UiStrings.KeyboardShortcutsResetOrder}"
+              ToolTip.Tip="{x:Static app:UiStrings.KeyboardShortcutsResetOrderTooltip}"
+              Click="OnResetOrderClick"
+              Margin="0,0,8,0" />
+
+      <Button Grid.Column="2"
+              Classes="flat"
+              Content="{x:Static app:UiStrings.AboutClose}"
+              Click="OnCloseClick"
+              IsCancel="True" />
+    </Grid>
+
+  </Grid>
+</Window>

@@ -850,6 +850,7 @@ internal static class UiStrings
     // only because the shared menu style keeps a disabled row readable on purpose — that is how a menu
     // says "this exists, not yet" instead of hiding it.
     public const string AppMenuSettingsUnavailableTooltip = "Not available yet";
+    public const string AppMenuKeyboardShortcuts = "Keyboard Shortcuts…";
     public const string AppMenuAbout = "About EmberTern…";
     public const string AppMenuExit = "Exit";
 
@@ -876,6 +877,74 @@ internal static class UiStrings
     public const string ThirdPartyNoticesTitle = "Third-party notices";
     public const string ThirdPartyNoticesUnavailable =
         "The third-party notices file could not be read from this build.";
+
+    // ── Keyboard Shortcuts window ───────────────────────────────────────────────────────────────────
+    // A read-only VIEW of CommandCatalog: no name, gesture or scope is written here or in the window.
+    public const string KeyboardShortcutsTitle = "Keyboard Shortcuts";
+    public const string KeyboardShortcutsSearchPlaceholder = "Search commands and shortcuts…";
+    public const string KeyboardShortcutsColumnCommand = "Command";
+    public const string KeyboardShortcutsColumnShortcut = "Shortcut";
+    public const string KeyboardShortcutsColumnScope = "Scope";
+    public const string KeyboardShortcutsCountFormat = "{0} commands";
+    public const string KeyboardShortcutsCountOne = "1 command";
+    public const string KeyboardShortcutsEmpty = "No command matches this search.";
+    // Restores Global → Tab → Tree → Grid → Editor → alphabetically. Shown only while a column sort is
+    // overriding it, because an always-visible reset for a state you are not in is noise.
+    public const string KeyboardShortcutsResetOrder = "Reset order";
+    public const string KeyboardShortcutsResetOrderTooltip =
+        "Return to the default order: Global, Tab, Tree, Grid, Editor, then alphabetical";
+
+    // ── Canonical command names (CommandDescriptor.Title) ───────────────────────────────────────────
+    // ONE host-independent name per command, for surfaces that LIST commands: the Keyboard Shortcuts window
+    // today, a Command Palette later. Deliberately separate from the tooltip strings above and below, which
+    // stay host-specific prose — that distinction is why adding Title did not reopen etap 4's decision.
+    // ⛔ These belong here and not in CommandCatalog: the catalog owns the gesture, UiStrings owns the words.
+    public const string CommandTitleGo = "Execute (active tab)";
+    public const string CommandTitleExecuteQuery = "Execute query";
+    public const string CommandTitleExecuteQueryFull = "Execute query, all rows";
+    public const string CommandTitleFormatSql = "Format SQL";
+    public const string CommandTitleCompile = "Compile";
+    public const string CommandTitleImportValidate = "Validate import";
+    public const string CommandTitleImportRefresh = "Re-read import source";
+    public const string CommandTitleImportBrowse = "Choose import file";
+
+    public const string CommandTitleDebuggerStepOver = "Step over";
+    public const string CommandTitleDebuggerStepInto = "Step into";
+    public const string CommandTitleDebuggerStepOut = "Step out";
+    public const string CommandTitleDebuggerRunToCursor = "Run to cursor";
+    public const string CommandTitleDebuggerStop = "Stop debugging";
+    public const string CommandTitleDebuggerRestart = "Restart debugging";
+    public const string CommandTitleDebuggerToggleBreakpoint = "Toggle breakpoint";
+    public const string CommandTitleDebuggerEvaluateSelection = "Evaluate selection";
+    public const string CommandTitleDebuggerSaveSource = "Save debugged source";
+
+    public const string CommandTitleEditorFind = "Find";
+    public const string CommandTitleEditorReplace = "Replace";
+    public const string CommandTitleEditorCompletion = "Show completion list";
+    public const string CommandTitleEditorParameterHelper = "Show parameter help";
+    public const string CommandTitleEditorRename = "Rename";
+    public const string CommandTitleEditorPeekDefinition = "Peek definition";
+    public const string CommandTitleEditorQuickFix = "Quick fix";
+    public const string CommandTitleEditorExpandConstruct = "Expand construct";
+    public const string CommandTitleEditorNextDiagnostic = "Next diagnostic";
+    public const string CommandTitleEditorPreviousDiagnostic = "Previous diagnostic";
+
+    public const string CommandTitleNewObject = "New object";
+    public const string CommandTitleDeleteObject = "Delete object";
+    public const string CommandTitleRefreshMetadata = "Refresh metadata";
+
+    // Generic on purpose: these route through the app's ONE collection router, which serves fields, rows,
+    // columns, parameters and variables. The per-collection nouns ("New field") belong to the toolbar and the
+    // grid's own menu, which know which collection they are looking at; a catalogue does not.
+    public const string CommandTitleCollectionAdd = "New item in list";
+    public const string CommandTitleCollectionEdit = "Edit selected item";
+    public const string CommandTitleCollectionRemove = "Delete selected item";
+
+    public const string CommandTitleGlobalSearch = "Global search";
+    public const string CommandTitleFocusSidebarFilter = "Focus object filter";
+    public const string CommandTitleCommit = "Commit transaction";
+    public const string CommandTitleRollback = "Roll back transaction";
+    public const string CommandTitleCloseTab = "Close tab";
 
     // The status bar's version chip. It shows the SAME AppInfo value the About window does — it used to be the
     // literal "EmberTern 0.1.0" in MainWindow.axaml, i.e. a second source of truth that had gone stale and

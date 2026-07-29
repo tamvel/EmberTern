@@ -485,6 +485,9 @@ public partial class MainWindow : Window
         menu.Open(button);
     }
 
+    private async void OnAppMenuKeyboardShortcutsClick(object? sender, RoutedEventArgs e)
+        => await new KeyboardShortcutsWindow().ShowDialog(this);
+
     private async void OnAppMenuAboutClick(object? sender, RoutedEventArgs e)
         => await new AboutWindow().ShowDialog(this);
 

@@ -141,6 +141,9 @@
                           IsEnabled="False"
                           ToolTip.Tip="{x:Static app:UiStrings.AppMenuSettingsUnavailableTooltip}" />
                 <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.AppMenuKeyboardShortcuts}"
+                          Icon="{app:MenuIcon Icon.Keyboard}"
+                          Click="OnAppMenuKeyboardShortcutsClick" />
                 <MenuItem Header="{x:Static app:UiStrings.AppMenuAbout}"
                           Icon="{app:MenuIcon Icon.Info}"
                           Click="OnAppMenuAboutClick" />
