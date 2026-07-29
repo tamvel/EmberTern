@@ -7,6 +7,7 @@ using Avalonia.Platform;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
 using EmberTern.App.Security;
+using EmberTern.App.Settings;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
@@ -44,9 +45,30 @@ public class App : Application
             // enforces the ReadCommitted/NOWAIT TPB itself, so there is nothing to configure here.)
             _transactionService = new TransactionService(_service);
 
+            var viewModel = new MainWindowViewModel(store, _service, _transactionService);
+
+            // ⭐ Settings Center etap 3 — the theme is read HERE, before the window exists, and applied through
+            // the one mapping in ThemePreference. Until this landed the theme was never saved at all (design
+            // §2.1: App.axaml hard-codes Dark and the titlebar toggle flipped it in memory only), so "the theme
+            // resets on exit" was a missing feature rather than a failing write.
+            //
+            // ⚠ App.axaml's RequestedThemeVariant="Dark" STAYS, and removing it is the trap. It is the value
+            // the framework holds between XAML load and this line; without it that window is
+            // ThemeVariant.Default, which follows the OS theme — a silent behaviour change for every existing
+            // user that reads exactly like a regression. Dark is also PreferenceOptions.Theme.Default, so a
+            // fresh install and the XAML fallback agree.
+            ThemePreference.Apply(viewModel.Preferences.Current.Theme);
+
+            // ⭐ ONE application point for the theme, for the whole app. The titlebar toggle and the Settings
+            // Center radio both only WRITE the preference; this is what paints it. Two apply sites would be two
+            // answers to "what does Light mean", and the divergence would show up as a theme that applies from
+            // one surface and not the other.
+            viewModel.Preferences.Changed += (_, _) =>
+                ThemePreference.Apply(viewModel.Preferences.Current.Theme);
+
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(store, _service, _transactionService),
+                DataContext = viewModel,
             };
 
             desktop.ShutdownRequested += (_, _) =>

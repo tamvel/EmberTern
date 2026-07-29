@@ -15,6 +15,7 @@ using EmberTern.App.Controls;
 using EmberTern.App.Diagnostics;
 using EmberTern.App.Export;
 using EmberTern.App.Security;
+using EmberTern.App.Settings;
 using EmberTern.App.Sql;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Export;
@@ -41,6 +42,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ParameterHistoryStore _parameterHistory;
     private readonly WatchStore _watchStore;
     private readonly EmberTern.Core.Import.ImportProfileStore _importProfiles;
+    private readonly PreferencesService _preferences;
 
     // ⭐ The ONE owner of "does the application hold anything uncommitted". Before I7.5 that question had a
     // single answer (the console transaction) and the guards asked it directly; Data Import's own
@@ -172,6 +174,12 @@ public partial class MainWindowViewModel : ViewModelBase
         // is the same store its named profiles will use in I11.
         _importProfiles = new EmberTern.Core.Import.ImportProfileStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector);
+        // Same shared settings.dat — the scalar user preferences (Settings Center, etap 2/3). Wrapped in the
+        // App's ONE PreferencesService because the store's Save takes a whole Preferences by design: two
+        // holders of a snapshot would overwrite each other's fields (the titlebar theme toggle vs an open
+        // Settings Center). The service loads here and is handed to both.
+        _preferences = new PreferencesService(new PreferencesStore(
+            System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector));
         _folderState = _folderStore.Load();
         // Settings health (audit A-03). Read ONCE, here, because the answer is a property of the file on disk
         // at startup and does not change while we run — and because it must be read BEFORE anything in this
@@ -279,6 +287,16 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<WorkspaceTabViewModel> WorkspaceTabs { get; }
     public ObservableCollection<SavedQueryViewModel> SavedQueries { get; }
     public MetadataExplorerViewModel Metadata { get; }
+
+    /// <summary>
+    /// The app's ONE owner of the scalar user preferences, over the shared <c>settings.dat</c>.
+    /// <para>Exposed because three surfaces outside this view model need the same instance: the startup theme
+    /// read in <c>App</c>, the titlebar theme toggle in <c>MainWindow</c>'s code-behind (which stays
+    /// code-behind per architecture rule #1 — it moves a <c>string</c>, not a UI type), and Settings Center.
+    /// A second instance anywhere would clobber fields, because the store persists a whole
+    /// <see cref="Preferences"/> at a time.</para>
+    /// </summary>
+    public PreferencesService Preferences => _preferences;
 
     /// <summary>The SQL Editor's own Performance context (its captured run + panel). Procedure/
     /// Function detail tabs each own a separate <see cref="HostPerformanceContext"/> — nothing is

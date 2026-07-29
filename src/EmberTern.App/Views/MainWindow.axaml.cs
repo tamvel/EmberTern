@@ -20,6 +20,7 @@ using EmberTern.App.Behaviors;
 using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Controls;
+using EmberTern.App.Settings;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
@@ -483,6 +484,15 @@ public partial class MainWindow : Window
         }
 
         menu.Open(button);
+    }
+
+    // ⚠ It takes the view model's PreferencesService rather than opening a store of its own: the store saves a
+    // whole Preferences at a time (etap 2, §12.3), so a second snapshot holder would write its stale copy of
+    // Theme back over whatever the titlebar toggle had just set.
+    private async void OnAppMenuSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null) return;
+        await new SettingsWindow(_currentVm.Preferences).ShowDialog(this);
     }
 
     private async void OnAppMenuKeyboardShortcutsClick(object? sender, RoutedEventArgs e)
@@ -1561,18 +1571,33 @@ public partial class MainWindow : Window
     private void OnToggleResultsMaximizeClick(object? sender, RoutedEventArgs e)
         => ToggleResultsMaximized();
 
+    /// <summary>
+    /// Flips the theme — and, since Settings Center etap 3, <b>persists it</b>. It writes the very preference
+    /// the Settings Center radio writes, through the same service, so the two cannot disagree.
+    ///
+    /// <para>⚠ It no longer assigns <c>RequestedThemeVariant</c> itself. The write raises
+    /// <c>PreferencesService.Changed</c>, and <c>App</c> is the ONE place that paints the variant. A second
+    /// apply site here would be a second answer to "what does Light mean".</para>
+    ///
+    /// <para>⚠ It stays in code-behind, which architecture rule #1 asks for and decision Q5 ratified: what
+    /// crosses into the view model is a <c>string</c> preference, not an Avalonia type.</para>
+    ///
+    /// <para>A refused save is deliberately silent here — MainWindow already carries the settings-health
+    /// banner for exactly that file state, and a toolbar button is not a surface that can explain it. The
+    /// place a refusal must be spoken is Settings Center (design §5.5).</para>
+    /// </summary>
     private void OnThemeToggleClick(object? sender, RoutedEventArgs e)
     {
-        var app = Application.Current;
-        if (app is null)
+        if (_currentVm is null)
         {
             return;
         }
 
-        var current = app.ActualThemeVariant;
-        app.RequestedThemeVariant = current == ThemeVariant.Dark
-            ? ThemeVariant.Light
-            : ThemeVariant.Dark;
+        var preferences = _currentVm.Preferences;
+        preferences.Apply(preferences.Current with
+        {
+            Theme = ThemePreference.Toggle(preferences.Current.Theme),
+        });
     }
 
     private void OnActualThemeVariantChanged(object? sender, EventArgs e)

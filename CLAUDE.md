@@ -33,7 +33,7 @@ verbatim, in the archive below.
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
-| **`docs/design/settings-center.md`** | **ACTIVE SPRINT — design closed + ratified, ⭐ etap 2 (Core foundation) DELIVERED + ACCEPTED 2026-07-29 (as-built: §12).** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2. |
+| **`docs/design/settings-center.md`** | **ACTIVE SPRINT — design closed + ratified, ⭐ etap 2 (Core foundation, §12) and ⭐ etap 3 (the Settings Center window + the complete General page, §13) both DELIVERED 2026-07-29.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (273 entries, #1–#286), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -292,7 +292,7 @@ noted.
   **"Editor Architecture — current direction"** below for status.
 - **Application Menu (☰) + About + Keyboard Shortcuts + third-party notices** — the hamburger is the **first
   button of the titlebar action zone** and opens EmberTern's one home for *application-level* functions:
-  `Settings…` (disabled placeholder — no settings surface exists yet), `Keyboard Shortcuts…`, `About EmberTern…`,
+  `Settings…` (live since Settings Center etap 3), `Keyboard Shortcuts…`, `About EmberTern…`,
   `Exit`. Deliberately a **rarely used administrative menu** — daily work stays on the toolbar, the shortcuts and
   the context menus, and no existing tool was moved or mirrored into it. It is a plain `ContextMenu` opened from
   code, so it inherits the app's one menu appearance with **no new style**.
@@ -313,6 +313,18 @@ noted.
   a **copy of an artefact**, never a recitation. `ThirdPartyNoticesTests` fails when a shipping `PackageReference`
   is not named in it. Design + licence findings + as-built:
   [docs/design/hamburger-navigation.md](docs/design/hamburger-navigation.md).
+- **Settings Center** — the app's one home for user preferences, opened from the hamburger's `Settings…`: a
+  **window** (never a workspace tab — a tab would need threading into five per-kind families), two panes
+  (search + category list · the selected category's page), **apply-on-change with no OK/Cancel**, and a docked
+  shared `MessageBanner` when the store refuses to write. The General page carries **Theme** (persisted and
+  read at startup — the titlebar toggle writes the same preference) and **Language** (real storage over Core's
+  one-row catalog; the localization *mechanism* is its own milestone). ⭐ **Every option a control offers is
+  generated from Core's `PreferenceOptions`** — a second list in XAML drifts silently, in the direction where
+  the user picks an option that reverts on next load and nothing fails. ⭐ **One `PreferencesService` owns the
+  live `Preferences` for the whole app**, because the store persists the whole object: two snapshot holders
+  would overwrite each other's fields. ⭐ **`App` is the ONE place a theme is applied** — every writer only
+  writes the preference. Design + as-built:
+  [docs/design/settings-center.md](docs/design/settings-center.md) §13.
 - **Keyboard Manager / command system** — **ONE registry every UI surface reads from.**
   `EmberTern.App/Commands`: `CommandCatalog` is a single declarative table of `CommandDescriptor`s built once
   at type-init (id · scope · dispatch · gesture(s) · tab kinds), plus a collision validator; `CommandRouter`
@@ -329,10 +341,44 @@ noted.
 ## Current state
 
 - **⚙ SETTINGS CENTER & SQL FORMATTER CASING — ACTIVE SPRINT. Etap 1 (audit + design) CLOSED AND RATIFIED
-  2026-07-29; ⭐ ETAP 2 (Core foundation) DELIVERED 2026-07-29. Branch `feat/settings-center`.**
+  2026-07-29; ⭐ ETAP 2 (Core foundation) and ⭐ ETAP 3 (the window + the complete General page) both
+  DELIVERED AND USER-ACCEPTED 2026-07-29. Branch `feat/settings-center`, pushed to both remotes.
+  ⛔ **From here the sprint goes to the SQL Formatter settings and nothing else** (user, on accepting
+  etap 3).**
   **The sprint's one document: [docs/design/settings-center.md](docs/design/settings-center.md)** — read
-  §9 (the 13 ratified decisions), §2 (the measured facts) and now **§12 (etap 2 as-built)** before writing
-  any code. **Etap 3 is next: the Settings Center window + the complete General page (Theme + Language).**
+  §9 (the 13 ratified decisions), §2 (the measured facts) and now **§12 (etap 2 as-built) + §13 (etap 3
+  as-built)** before writing any code. **Etap 4 is next: `FormatterStyle`, the ONE casing decision point,
+  the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction.**
+  **⭐ ETAP 3 shipped Settings Center and closed the theme gap end to end** — see "What's built" for what it
+  *is*; the notes here are the WHY. Build 0/0; suite **6022** green (partitions 5964 + 58); smoke clean.
+  ⭐ **The user's own framing on accepting it, worth keeping because it is the general rule:** with etap 2's
+  whole-object `Save`, **two independent snapshots would sooner or later silently overwrite settings** — and
+  it was better solved now than discovered after a few more Settings Center pages; likewise one apply point
+  beats several places setting `RequestedThemeVariant`; and `App.axaml`'s `Dark` is a **startup technical
+  detail, not a user default**.
+  **⚠ FOUR as-built decisions etap 4+ must not undo (§13):** (a) ⭐ **ONE `PreferencesService` owns the live
+  `Preferences` for the whole app** — a direct consequence of etap 2's ratified API (`Save` takes the WHOLE
+  object, so a page commits a *settled* value): two snapshot holders **overwrite each other's fields**, and
+  the concrete case is the titlebar toggle writing `Theme` while an open Settings Center still holds the
+  pre-toggle copy. Silent, unlogged, green build · (b) ⭐ **`App` is the ONE place a theme is applied** — the
+  startup read, the toggle and the Settings radio all only *write* the preference, and `App` subscribes to
+  `PreferencesService.Changed`; two apply sites are two answers to *"what does Light mean"* · (c)
+  ⚠ **`App.axaml`'s `RequestedThemeVariant="Dark"` STAYS** and is now commented: it is the bootstrap value
+  between XAML load and the startup read, and deleting it leaves `ThemeVariant.Default`, which follows the
+  **OS** theme (§2.1's trap) · (d) **the UI generates every option from `PreferenceOptions`** and each
+  `SettingDescriptor` carries the option set *plus* its `UiStrings` labels, so §5.2.2's binding test is one
+  local assertion (`EveryEnumeratedOptionHasALabel`) that also catches a label left behind by a removed
+  option.
+  **⚠ `PreferencesService.Apply` adopts the value EVEN WHEN THE SAVE IS REFUSED** — a refusal means *this
+  file cannot be written* (audit A-03), not *this choice is invalid*; the surface that asked for the change
+  is what must say it did not persist, which is what its `bool` return is for. Settings Center is the ONE
+  place that silence is wrong; the titlebar toggle stays silent because MainWindow already carries the
+  startup settings-health banner.
+  **⚠ Deliberately NOT built in etap 3, each with a reason (§13.4):** *"Restore defaults"* per page (both
+  General settings are one click from their default — it belongs with the first page that has enough rows),
+  the blur-or-Enter commit path (§5.5.1 has no subject yet — both settings are discrete; the first numeric
+  setting in etap 6 brings its own trigger), a second category (a category ships **with** its page), and
+  any `CommandId` / `Ctrl+,` (§5.6, unchanged).
   **⭐ Etap 2 shipped the Core foundation and NOTHING else** — `Preferences` (4 scalars) ·
   `PreferenceOptions` (the ONE options table, holding the one-row **language catalog**) · `PreferencesStore`
   (8th facade) · `UserSettings.Preferences` (+11 lines, the whole schema change) · 32 tests. Additive,
@@ -2481,9 +2527,11 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **6003 as of 2026-07-29
-  (after Settings Center etap 2; was 5971 after the Hamburger Navigation sprint)** — green in the two
-  documented partitions (**5949 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **6022 as of 2026-07-29
+  (after Settings Center etap 3; 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in
+  the two documented partitions (**5964 + 58**). ⚠ The headless partition now holds **two** classes
+  (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests`), both in `HeadlessCollection` — a new headless
+  test **joins that collection**, never adds its own `IClassFixture` (#94/#226/#286).
   **⭐⭐ 2026-07-28, Keyboard Manager etap 5 — THE FOUR "SAME TEST" OBSERVATIONS BELOW WERE AN ARTEFACT OF
   ORDERING. READ THIS BEFORE TRUSTING THEM.** Etap 5 briefly had a SECOND headless test class, and running the
   partition in which *it* ran last moved the reported hang to **that class's** last test

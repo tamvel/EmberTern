@@ -1,0 +1,145 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:app="using:EmberTern.App"
+        xmlns:controls="using:EmberTern.App.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.SettingsWindow"
+        x:DataType="vm:SettingsCenterViewModel"
+        Title="{x:Static app:UiStrings.SettingsCenterTitle}"
+        Width="760" Height="560"
+        MinWidth="560" MinHeight="360"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- The standard two-pane settings shape: search + categories on the left, the selected category's page on
+       the right. Apply-on-change (ratified Q8), so there is no OK/Cancel — the footer carries a hint saying so
+       and a Close button, nothing that could be mistaken for a commit.
+
+       ⚠ Every option a control offers is generated from Core's PreferenceOptions through the view model
+       (design §5.2.2). No theme name and no language is typed in this file: a second copy of a legal-values
+       list drifts silently — the user picks an option the validator rejects, it appears to work, and it
+       reverts on the next load with nothing failing. -->
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Settings Center is THE place the store's silent refusal must be spoken (design §2.5 / §5.5): every
+         other writer in the app is incidental, but a dialog whose purpose is "change this setting" cannot
+         accept a change and persist nothing without saying so. Shared MessageBanner, docked — the host sets
+         only Severity / Message / IsVisible / Classes, never its own chrome. -->
+    <controls:MessageBanner Grid.Row="0"
+                            Classes="docked"
+                            Severity="Warning"
+                            Message="{Binding SaveRefusalMessage}"
+                            IsVisible="{Binding ShowSaveRefusal}" />
+
+    <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*" Margin="16,16,16,0">
+
+      <Grid Grid.Column="0" RowDefinitions="Auto,*">
+        <TextBox Grid.Row="0"
+                 x:Name="SearchBox"
+                 Text="{Binding SearchText}"
+                 PlaceholderText="{x:Static app:UiStrings.SettingsSearchPlaceholder}"
+                 Margin="0,0,0,8" />
+
+        <ListBox Grid.Row="1"
+                 x:Name="CategoryList"
+                 ItemsSource="{Binding Categories}"
+                 SelectedItem="{Binding SelectedCategory}"
+                 Background="Transparent"
+                 BorderThickness="0">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:SettingsCategoryViewModel">
+              <TextBlock Text="{Binding Title}" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+
+      <Border Grid.Column="1" Width="1" Margin="12,0" Background="{DynamicResource BorderBrush}" />
+
+      <Panel Grid.Column="2">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasMatches}">
+
+          <!-- ⚠ One page per category, each with its own IsVisible, deliberately. A generic page host would be
+               an abstraction for pages that do not exist yet; with a handful of categories this is one block
+               each and every binding stays compiled and typed. -->
+          <StackPanel Spacing="12" IsVisible="{Binding IsGeneralPageVisible}">
+
+            <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryGeneral}" />
+
+            <!-- Theme. The titlebar toggle writes the SAME preference through the same service, so the two
+                 cannot disagree, and neither of them applies the variant itself — PreferencesService.Changed
+                 does, in one place (App). -->
+            <Border Classes="settings-group" IsVisible="{Binding Theme.IsVisible}">
+              <StackPanel>
+                <TextBlock Classes="group-header" Text="{Binding Theme.Label}" />
+                <TextBlock Classes="field-label"
+                           Text="{Binding Theme.Description}"
+                           TextWrapping="Wrap" />
+                <ItemsControl ItemsSource="{Binding Theme.Options}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                      <RadioButton GroupName="SettingsTheme"
+                                   Content="{Binding Label}"
+                                   IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+
+            <!-- Language. A real, enabled control over a real catalog whose legal set has one entry today —
+                 not a stub and not a disabled row. Its value is stored, validated and round-tripped from day
+                 one; what waits for its own milestone is the localization mechanism (design §8), which is why
+                 nothing here reads a culture. -->
+            <Border Classes="settings-group" IsVisible="{Binding Language.IsVisible}">
+              <StackPanel>
+                <TextBlock Classes="group-header" Text="{Binding Language.Label}" />
+                <TextBlock Classes="field-label"
+                           Text="{Binding Language.Description}"
+                           TextWrapping="Wrap" />
+                <ComboBox x:Name="LanguageBox"
+                          ItemsSource="{Binding Language.Options}"
+                          SelectedItem="{Binding Language.SelectedOption, Mode=TwoWay}"
+                          MinWidth="200"
+                          HorizontalAlignment="Left">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+            </Border>
+
+          </StackPanel>
+        </ScrollViewer>
+
+        <TextBlock Text="{x:Static app:UiStrings.SettingsNoMatch}"
+                   IsVisible="{Binding !HasMatches}"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center" />
+      </Panel>
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="16,12,16,16">
+      <TextBlock Grid.Column="0"
+                 Text="{x:Static app:UiStrings.SettingsAppliedImmediately}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 FontSize="11"
+                 VerticalAlignment="Center" />
+
+      <Button Grid.Column="1"
+              Classes="flat"
+              Content="{x:Static app:UiStrings.SettingsClose}"
+              Click="OnCloseClick"
+              IsCancel="True" />
+    </Grid>
+
+  </Grid>
+</Window>

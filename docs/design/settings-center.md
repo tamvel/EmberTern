@@ -1,9 +1,12 @@
 # Settings Center & SQL Formatter Profiles — sprint design document
 
 **🔒 STATUS: ETAP 1 CLOSED (design accepted, 13 decisions ratified — §9). ⭐ ETAP 2 DELIVERED AND
-ACCEPTED 2026-07-29 — the Core foundation exists: `Preferences` · `PreferenceOptions` (incl. the
-language catalog) · `PreferencesStore` (8th facade) · 32 tests. No UI, no App code touched,
-`CurrentSchemaVersion` still 2. As built: §12. Etap 3 is cleared to start.**
+ACCEPTED 2026-07-29 — the Core foundation: `Preferences` · `PreferenceOptions` (incl. the
+language catalog) · `PreferencesStore` (8th facade) · 32 tests; `CurrentSchemaVersion` still 2. As
+built: §12. ⭐ ETAP 3 DELIVERED AND ACCEPTED 2026-07-29 — the Settings Center window, the category
+list, search, apply-on-change, the refusal banner, and the complete General page (Theme + Language);
+the theme is now persisted and read at startup, which closes §2.1 end to end. As built: §13. Etap 4
+(formatter casing) is cleared to start, and the sprint goes to it exclusively.**
 Branch: `feat/settings-center`.
 
 ⚠ **One measured correction landed with etap 2 and it belongs to etap 5a, not etap 2: `settings.dat`
@@ -1187,7 +1190,7 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 |---|---|---|
 **1** | *(this document)* audit + design | ✅ **done — accepted 2026-07-29** |
 **2** | Core foundation: `Preferences` (incl. `Theme`, `Language`, the two formatter cases) + `PreferencesStore` (8th facade) + the language catalog + defaults contract + tests. **No UI.** | ✅ **done 2026-07-29 — §12** |
-**3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | Theme is the user's clearest gap and proves the surface; Language ships **with it** so the General page is laid out once and never rebuilt (⭐ **Q4**'s whole rationale) |
+**3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | ✅ **done 2026-07-29 — §13** |
 **4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | the largest single piece of work (§2.2); isolated so its §0 risk is not entangled with UI |
 **5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM) protector registered in `ResolveProtector`, KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** ⚠ **Read the F4 note below before starting.** | needs etap 2's shape settled to know what it serialises; pure Core and fully testable without a window, which is what makes the split worth making |
 **5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | the format is settled and provable before any dialog exists |
@@ -1309,3 +1312,120 @@ per-keystroke saving destroys the pre-edit state while someone is editing settin
   owes each key a `UiStrings` label **and the test binding the two**, or adding an option ships a blank row.
 - `PreferenceOptions.ThemeDark` is the default because `App.axaml` hard-codes `Dark` today. §2.1's startup
   order still has to be honoured: read the stored value, then assign, `Dark` as the fallback.
+
+---
+
+## 13. ⭐ Etap 3 — as built (2026-07-29, USER-ACCEPTED)
+
+The window exists, the General page is complete, and **the theme is persisted and read at startup** — §2.1
+closed end to end. Build 0/0; suite **6022** green in the two documented partitions (5964 + 58), up 19;
+smoke clean.
+
+⭐ **What the user singled out on accepting it, so it is not re-opened later:** the single
+`PreferencesService` (§13.1) — *"with etap 2's whole-object save, two independent snapshots would sooner or
+later silently overwrite settings; better solved now than discovered after a few more Settings Center
+pages"* — the ONE theme apply point (§13.2), keeping `RequestedThemeVariant="Dark"` as a **startup technical
+detail rather than a user default**, and the deferral of *Restore defaults* (§13.4) until there are enough
+options for it to carry weight.
+
+| File | Job |
+|---|---|
+[`Settings/PreferencesService.cs`](../../src/EmberTern.App/Settings/PreferencesService.cs) | ⭐ The app's ONE in-memory owner of the current `Preferences`, over the Core store. See §13.1 — it is a *consequence* of etap 2's API, not an extra layer. |
+[`Settings/ThemePreference.cs`](../../src/EmberTern.App/Settings/ThemePreference.cs) | The ONE mapping between a stored theme key and Avalonia's `ThemeVariant`, and the one place the variant is assigned. |
+[`Settings/SettingsCatalog.cs`](../../src/EmberTern.App/Settings/SettingsCatalog.cs) | The declarative table: categories, settings, keywords, and each enumerated setting's Core option set + its labels. Plus the one `Matches` used by search. |
+[`ViewModels/SettingsCenterViewModel.cs`](../../src/EmberTern.App/ViewModels/SettingsCenterViewModel.cs) | The window's content — a projection of the catalog over the service. Also `PreferenceSettingViewModel` / `PreferenceOptionViewModel` / `SettingsCategoryViewModel`. |
+[`Views/SettingsWindow.axaml`](../../src/EmberTern.App/Views/SettingsWindow.axaml) (+ `.axaml.cs`) | The two-pane window: search + categories, the General page, the docked refusal banner, footer. |
+`App.axaml.cs` | Reads the stored theme before the window exists; subscribes `PreferencesService.Changed` as the ONE apply point. |
+`MainWindow.axaml(.cs)` | The `Settings…` row is enabled and opens the window; the titlebar toggle now **writes the preference** instead of assigning the variant. |
+`MainWindowViewModel` | Owns the one `PreferencesService` (beside the other section facades it already constructs) and exposes it. |
+`SettingsCenterVmTests` · `SettingsCenterViewTests` | 15 + 4 tests. The second class is headless and joins `HeadlessCollection`. |
+
+### 13.1 ⭐ The one thing the design did not name: a single in-memory owner
+
+Etap 2 ratified that `PreferencesStore` has **no per-property setters** — `Save` takes a whole
+`Preferences`, so a page commits a settled value (§12.3). That is right, and it has a consequence in the App
+layer that §5 does not state:
+
+> **Two holders of a `Preferences` snapshot overwrite each other's fields.**
+
+Concretely: the titlebar toggle writes `Theme`; a Settings Center opened before that toggle still holds the
+pre-toggle snapshot, and the next row the user changes writes its stale `Theme` back over it. Nothing fails,
+nothing is logged, and the theme silently reverts — the same silent shape §5.2.2 exists to prevent one level
+down.
+
+`PreferencesService` removes it by construction: **one instance, created with `MainWindowViewModel`,
+handed to everything that reads or writes a preference.** It holds the current value, saves through the
+store, reports the refusal, and raises `Changed`. It has **zero Avalonia** — it moves strings — which is what
+lets the theme toggle stay in code-behind (rule #1 / **Q5**) while the value itself lives in a view model.
+
+⚠ **Its `Apply` adopts the value even when the save is refused.** A refusal means *this file cannot be
+written* (audit A-03: it holds data this build could not read), not *this choice is invalid* — refusing to
+honour it for the session as well would punish the user twice for a file problem they have already been told
+about. The surface that asked for the change is what must say it did not persist.
+
+### 13.2 ⭐ ONE apply point for the theme, and neither writer is it
+
+The startup read, the titlebar toggle and the Settings radio all only **write the preference**.
+`App.OnFrameworkInitializationCompleted` subscribes to `PreferencesService.Changed` and is the single place
+that calls `ThemePreference.Apply`. Two apply sites would be two answers to *"what does Light mean"*, and the
+failure mode is the familiar one: a theme that applies from one surface and not the other, with a green
+build.
+
+⚠ **`App.axaml`'s `RequestedThemeVariant="Dark"` STAYS**, now with a comment saying why. It is the bootstrap
+value the framework holds between XAML load and the startup read; deleting it leaves `ThemeVariant.Default`
+in that window, which follows the **OS** theme (§2.1's trap). It agrees with `PreferenceOptions.Theme.Default`,
+so the XAML fallback and a fresh install cannot disagree.
+
+### 13.3 Implementation decisions the design left open
+
+**(a) The catalog is App's, and it carries the option LABELS.** Core owns an option's *key* (persisted,
+validated); the words are `UiStrings`'. Rather than a separate label lookup, each `SettingDescriptor` carries
+the option set **and** its labels, so the §5.2.2 binding test is local and trivial —
+`EveryEnumeratedOptionHasALabel` fails the build when an option gains a key with no word, and also when a
+label survives an option that was removed. Keywords live in `UiStrings` too (they are text the user types at
+the product), and `TheCatalogTableContainsNoStringLiterals` holds the table to the same condition
+`CommandCatalog`'s is held to.
+
+**(b) One `IsVisible` page block per category, not a generic page host.** With a handful of categories this is
+one XAML block and one `bool` each, and every binding stays compiled and typed. A page host would be an
+abstraction built for pages that do not exist (§9.1).
+
+**(c) Search adds the CATEGORY TITLE to each setting's haystack.** So "general" keeps the whole page instead
+of emptying it, and a category is visible exactly when one of its settings is — one rule, no second
+category-level match to keep in step. The matcher is a plain `Contains` with the "why this is not
+`CompletionMatcher`" note on it, as §5.4 asked.
+
+**(d) A free-text/numeric commit path is NOT built, deliberately.** §5.5.1's blur-or-Enter rule has no
+subject yet: both General settings are discrete and commit on selection. The API already makes the wrong
+answer unavailable (no per-property setter), so the first numeric setting — etap 6 — brings its own commit
+trigger. Building it now would be a mechanism with no consumer (gotcha #233).
+
+**(e) The refusal is reported by `PreferencesStore.LastSaveDiagnostic`, not by `CheckSettingsHealth`.** §5.5
+says "reuse the banner and that status, add no second health mechanism", and this satisfies it: the
+diagnostic is the *same* store's own report, forwarded. The difference is scope, and it is the right one —
+`CaptureSettingsHealth` answers "what was the file like at startup" (and MainWindow already shows that,
+dismissibly), while Settings Center has to answer "did **this change** persist", which is a per-write fact.
+
+### 13.4 Deliberately not built in etap 3
+
+- **"Restore defaults" per page** (§5.5). Both General settings are one click from their default, so the
+  button would add a control with nothing to do; it belongs with the first page that has enough rows to make
+  it meaningful. Recorded here rather than dropped silently — the design does call for it.
+- **A `CommandId` or a shortcut** — §5.6, unchanged. Not `Ctrl+,`.
+- **A second category.** There is one because etap 3 built one complete page; a category ships *with* its
+  page (gotcha #233).
+- **Anything touching the formatter, the export, `Preferences`, `PreferencesStore`, `PreferenceOptions` or
+  `CurrentSchemaVersion`** — all untouched by this etap.
+
+### 13.5 What etap 4 inherits
+
+- Add a category: one row in `SettingsCatalog.Categories`, one `IsXxxPageVisible` property, one XAML block.
+- Add a setting: one row in `SettingsCatalog.Settings` (label + description + keywords + option set +
+  labels), one arm in `SettingsCenterViewModel.ValueOf`, one line in `Compose`, one XAML block bound to its
+  `IsVisible`. The two `ValueOf`/`Compose` halves are deliberately explicit — a reflective mapping would bind
+  a UI row to a property *name*, which breaks silently on a rename.
+- ⚠ `Compose` builds with `source with { … }` for the same reason `Validate` does: a preference the window
+  does not render — the formatter's two casing settings, today — must pass through rather than be reset.
+  `ChangingOneSetting_LeavesEveryOtherPreferenceAlone` pins exactly that, with the formatter's own fields.
+- The formatter's casing keys already exist in `PreferenceOptions.Casing`; etap 4 maps them onto its own
+  style type **at the boundary** and does not introduce a second list of casing names.

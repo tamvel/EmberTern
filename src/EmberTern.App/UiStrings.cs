@@ -844,12 +844,10 @@ internal static class UiStrings
     // document, which stay on the toolbars, the shortcuts and the context menus. Design + the reasoning
     // for what is deliberately absent: docs/design/hamburger-navigation.md §3–§5.
     public const string AppMenuTooltip = "Application menu";
+    // ⭐ Live since Settings Center etap 3. It shipped as a DISABLED row with a "Not available yet" tooltip
+    // while the window did not exist — the rule being that a row never ships ahead of what it opens — and the
+    // etap that built the window is the etap that enabled the row and removed that tooltip string.
     public const string AppMenuSettings = "Settings…";
-    // Settings is a placeholder for a feature the project has DECIDED on but not built (there is no
-    // settings surface anywhere in EmberTern yet). The row is disabled rather than absent, which works
-    // only because the shared menu style keeps a disabled row readable on purpose — that is how a menu
-    // says "this exists, not yet" instead of hiding it.
-    public const string AppMenuSettingsUnavailableTooltip = "Not available yet";
     public const string AppMenuKeyboardShortcuts = "Keyboard Shortcuts…";
     public const string AppMenuAbout = "About EmberTern…";
     public const string AppMenuExit = "Exit";
@@ -893,6 +891,46 @@ internal static class UiStrings
     public const string KeyboardShortcutsResetOrder = "Reset order";
     public const string KeyboardShortcutsResetOrderTooltip =
         "Return to the default order: Global, Tab, Tree, Grid, Editor, then alphabetical";
+
+    // ── Settings Center ─────────────────────────────────────────────────────────────────────────────
+    // The app's one home for user preferences: a category list, a search box, and pages that apply on change
+    // with no OK/Cancel. Design: docs/design/settings-center.md §5–§6.
+    // ⚠ Every OPTION KEY ("Dark", "en") lives in Core's PreferenceOptions, because it is persisted and
+    // validated; only the words are here. The two are bound by a test — a key without a label ships a blank
+    // row.
+    public const string SettingsCenterTitle = "Settings";
+    public const string SettingsSearchPlaceholder = "Search settings…";
+    public const string SettingsNoMatch = "No setting matches this search.";
+    public const string SettingsClose = "Close";
+    // Apply-on-change is the ratified model (Q8), so the window has no OK/Cancel and nothing to confirm. The
+    // hint says so once, quietly, rather than leaving the user hunting for a missing OK button.
+    public const string SettingsAppliedImmediately = "Changes apply immediately.";
+
+    public const string SettingsCategoryGeneral = "General";
+
+    public const string SettingsThemeLabel = "Theme";
+    public const string SettingsThemeDescription =
+        "Colour scheme for the whole application. The titlebar button switches the same setting.";
+    // Extra search terms: the words a user types when they do not know our label.
+    public const string SettingsThemeKeywords = "colour color appearance dark light contrast";
+    public const string SettingsThemeDark = "Dark";
+    public const string SettingsThemeLight = "Light";
+
+    public const string SettingsLanguageLabel = "Language";
+    // ⚠ It says "interface language" and nothing about availability, because the row is REAL: the value is
+    // stored, validated and round-tripped from day one, and its list happens to have one entry. Presenting it
+    // as unavailable would misrepresent what it does. Adding Polish is a row in Core's language catalog plus
+    // the localization milestone (design §8) — no change to this window.
+    public const string SettingsLanguageDescription = "Language of the EmberTern interface.";
+    public const string SettingsLanguageKeywords = "locale translation localization interface";
+    public const string SettingsLanguageEnglish = "English";
+
+    // Shown in the docked MessageBanner when a change could not be written. Settings Center is the ONE place
+    // where the store's silent refusal (audit A-03) must be spoken: every other writer in the app is
+    // incidental, but a dialog whose entire purpose is "change this setting" cannot accept a change and
+    // persist nothing without saying so. {0} = the store's diagnostic.
+    public const string SettingsSaveRefusedFormat =
+        "This change applies for the current session only — it could not be saved. {0}";
 
     // ── Canonical command names (CommandDescriptor.Title) ───────────────────────────────────────────
     // ONE host-independent name per command, for surfaces that LIST commands: the Keyboard Shortcuts window
