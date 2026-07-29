@@ -485,6 +485,9 @@ public partial class MainWindow : Window
         menu.Open(button);
     }
 
+    private async void OnAppMenuAboutClick(object? sender, RoutedEventArgs e)
+        => await new AboutWindow().ShowDialog(this);
+
     // Exit deliberately calls the very same Close() the titlebar's ✕ does, so it goes through
     // OnWindowClosing → TryCloseApplicationAsync: the unsaved-work guard (Save / Discard / Cancel) and the
     // open-transaction prompt. A second shutdown path is exactly what must not exist here.

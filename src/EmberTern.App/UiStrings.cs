@@ -850,7 +850,18 @@ internal static class UiStrings
     // only because the shared menu style keeps a disabled row readable on purpose — that is how a menu
     // says "this exists, not yet" instead of hiding it.
     public const string AppMenuSettingsUnavailableTooltip = "Not available yet";
+    public const string AppMenuAbout = "About EmberTern…";
     public const string AppMenuExit = "Exit";
+
+    // The About window. Deliberately a PRODUCT window, not a diagnostic one: the logo, the name, the version,
+    // the author and the copyright — no runtime/OS block, no library names, and no liability or privacy
+    // wording (a limitation of liability is a term of the future EmberTern licence and belongs there, in one
+    // document). Design: docs/design/hamburger-navigation.md §8.
+    // ⛔ There is deliberately NO version string here. The number is read from the assembly by AppInfo, whose
+    // single source is <Version> in Directory.Build.props.
+    public const string AboutTitle = "About EmberTern";
+    public const string AboutVersionFormat = "Version {0}";
+    public const string AboutClose = "Close";
     // No gesture is shown beside Exit: EmberTern does not own Alt+F4, and a gesture typed by hand is the
     // drift CommandTip exists to prevent (gotcha #284). It routes through the window's ordinary close, so
     // unsaved work and an open transaction still get their prompts.

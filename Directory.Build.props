@@ -7,4 +7,26 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsNotAsErrors>NU1701</WarningsNotAsErrors>
   </PropertyGroup>
+
+  <!-- ⭐ PRODUCT IDENTITY — THE SINGLE SOURCE OF TRUTH. 1.2.0 is the first version EmberTern declares
+       (before it, every assembly reported the SDK's default 1.0.0.0, which was a default and not a
+       statement). Everything the About window shows is read back from the built assembly at run time by
+       AppInfo, so releasing a new version means editing the line below and nothing else.
+
+       ⛔ Never write a version number in code — not in a view, not in UiStrings, not as a fallback.
+       AppInfoTests enforces it: one test asserts AppInfo agrees with the <Version> parsed out of THIS file,
+       and another fails if that version's text appears anywhere under src/.
+
+       ⚠ IncludeSourceRevisionInInformationalVersion=false is load-bearing, not tidiness. Since .NET 8 the SDK
+       appends the source-revision hash to InformationalVersion, so "1.2.0" is emitted as "1.2.0+9a3f2c1…" and
+       an About box reading that attribute would display the hash to the user. AppInfo also truncates at '+',
+       so the display stays correct even if this property is ever removed by someone who does not know why it
+       is here — two independent defences, because only one of them lives next to the explanation. -->
+  <PropertyGroup>
+    <Version>1.2.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Product>EmberTern</Product>
+    <Company>Grzegorz Groński</Company>
+    <Copyright>© 2026 Grzegorz Groński. All rights reserved.</Copyright>
+  </PropertyGroup>
 </Project>

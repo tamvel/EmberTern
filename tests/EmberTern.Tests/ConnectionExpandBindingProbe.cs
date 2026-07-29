@@ -2985,11 +2985,16 @@ public sealed class ConnectionExpandBindingProbe
             Assert.False(settings.IsEnabled);
             Assert.Equal(UiStrings.AppMenuSettingsUnavailableTooltip, ToolTip.GetTip(settings));
 
+            var about = rows.Single(r => Equals(r.Header, UiStrings.AppMenuAbout));
+            Assert.True(about.IsEnabled);
+
             var exit = rows.Single(r => Equals(r.Header, UiStrings.AppMenuExit));
             Assert.True(exit.IsEnabled);
 
-            // A real separator between the two groups, styled by the menu style set (not a stray Border).
-            Assert.Single(menu.Items.OfType<Separator>());
+            // Real separators between the three groups, styled by the menu style set (not stray Borders).
+            // ⭐ A row never ships ahead of what it opens, so the count grows one etap at a time: etap 2 had
+            // Settings + Exit, etap 3 adds About WITH its window, and Keyboard Shortcuts follows in etap 5.
+            Assert.Equal(2, menu.Items.OfType<Separator>().Count());
 
             // [5] ⚠ No gesture column anywhere in this menu, and that is deliberate: Exit's key is Alt+F4,
             // which EmberTern does not own, so showing it would be a hand-typed gesture (gotcha #284).
@@ -3045,6 +3050,50 @@ public sealed class ConnectionExpandBindingProbe
             Assert.Equal(new Avalonia.Point(12, 12), hamburger.Centre);
 
             menu.Close();
+            window.Close();
+        }, CancellationToken.None);
+
+        _out.WriteLine(log.ToString());
+    }
+
+    // The About window shows the version the BUILD declares, and it gets there through the real bindings.
+    // AppInfoTests already proves AppInfo agrees with Directory.Build.props and that no literal exists in
+    // src/; this closes the last link — that the window actually renders it — because a correct AppInfo behind
+    // an unbound TextBlock would satisfy every other test in the sprint.
+    [Fact]
+    public async System.Threading.Tasks.Task AboutWindow_ShowsTheAssemblyVersionAndIdentity()
+    {
+        var log = new StringBuilder();
+
+        await SharedSession.Dispatch(() =>
+        {
+            var window = new AboutWindow();
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var texts = window.GetVisualDescendants().OfType<TextBlock>()
+                .Select(t => t.Text ?? string.Empty).ToArray();
+            log.AppendLine("about window text: " + string.Join(" | ", texts));
+
+            Assert.Contains(AppInfo.Product, texts);
+            Assert.Contains(AppInfo.Author, texts);
+            Assert.Contains(AppInfo.Copyright, texts);
+
+            // The version reaches the surface, and carries its label rather than sitting there as a bare number.
+            var version = Assert.Single(texts, t => t.Contains(AppInfo.Version, StringComparison.Ordinal));
+            Assert.NotEqual(AppInfo.Version, version);
+
+            // The brand mark is the subject of the window, so it is present and it is the dominant element.
+            var logo = Assert.Single(window.GetVisualDescendants().OfType<Image>());
+            Assert.NotNull(logo.Source);
+            Assert.True(logo.Width >= 96, $"the logo leads this window; it is {logo.Width}px");
+
+            // A product window, not a diagnostic one: nothing about the runtime, the OS or the libraries.
+            foreach (var banned in new[] { ".NET", "Avalonia", "Windows", "Firebird", "x64" })
+            {
+                Assert.DoesNotContain(banned, string.Join(" ", texts), StringComparison.OrdinalIgnoreCase);
+            }
+
             window.Close();
         }, CancellationToken.None);
 

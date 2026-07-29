@@ -141,6 +141,10 @@
                           IsEnabled="False"
                           ToolTip.Tip="{x:Static app:UiStrings.AppMenuSettingsUnavailableTooltip}" />
                 <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.AppMenuAbout}"
+                          Icon="{app:MenuIcon Icon.Info}"
+                          Click="OnAppMenuAboutClick" />
+                <Separator />
                 <MenuItem Header="{x:Static app:UiStrings.AppMenuExit}"
                           Icon="{app:MenuIcon Icon.Exit}"
                           ToolTip.Tip="{x:Static app:UiStrings.AppMenuExitTooltip}"

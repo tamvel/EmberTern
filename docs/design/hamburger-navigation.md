@@ -707,7 +707,7 @@ standing rule that a UI change is not "done" until it has been seen in the runni
 |---|---|---|
 | **1** | *This document.* Analysis, structure proposal, licence verification. **Revised in rounds 2–4; all questions closed.** | ACCEPTED. |
 | **2** | ✅ **DONE + USER-ACCEPTED (2026-07-28)** — see §12. The button + the menu; the host measured first; placement per §6. Rows: `Settings…` (disabled, final) and `Exit` (live). **No `CommandId`s — §7 amended.** | Build 0/0; suite **5954** green (5903 + 51); smoke clean. Accepted after three icon QA rounds (§12.2a–d). |
-| **3** | The About window (§8) + `<Version>1.2.0</Version>` in `Directory.Build.props`, including the `+hash` defence (§8.2). **The `About EmberTern…` row arrives with it.** | This sprint's user-visible deliverable. |
+| **3** | ✅ **DONE** — see §13. The About window (§8) + `<Version>1.2.0</Version>` in `Directory.Build.props`, the `+hash` defence, the `About EmberTern…` row. | Build 0/0; suite **5958** green (5906 + 52); smoke clean. Awaiting visual QA. |
 | **4** | `THIRD-PARTY-NOTICES.txt` (§9.6) + the notices window behind the About footer button. Optionally close §9.5. | Mostly content; the window is a scrollable read-only text surface, no new pattern. |
 | **5** | **Keyboard Shortcuts window** (§8.5) — `CommandDescriptor.Title` + its guard test first, then the window: search, `DataGrid`, scope-rank ordering, sort-reset (§8.5.4), live filter, count. **The `Keyboard Shortcuts…` row arrives with it.** | Firm as of round 3. Its own etap because it is a real window, and because §8.5.1 touches the command registry. |
 
@@ -742,6 +742,66 @@ classes must join `HeadlessCollection` — never their own `IClassFixture` (gotc
 | Column sorting | 4 | User may sort any column; **clearing the sort and every first open restore the canonical order** (§8.5.4). |
 
 **Etap 2 is authorised (round 4)** — and delivered; see §12.
+
+---
+
+## 13. Etap 3 — as built
+
+**Build 0/0 · suite 5958 green** (partitions 5906 + 52) **· smoke clean · awaiting visual QA.**
+
+### 13.1 The version has exactly one home, and two tests keep it that way
+
+`Directory.Build.props` gained one `PropertyGroup`: `<Version>1.2.0</Version>`,
+`<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>`,
+`<Product>`, `<Company>` (the author — it is the slot Windows shows in a file's properties) and `<Copyright>`.
+`AppInfo` (App root, pure, no Avalonia) reads them back off the assembly; `AboutViewModel` composes the version
+with its `UiStrings` label. **A release is one line in one file.**
+
+Verified as a side effect, and worth having: the exe's own properties now read
+`ProductVersion=1.2.0 · CompanyName=Grzegorz Groński · LegalCopyright=© 2026 Grzegorz Groński. All rights
+reserved.` — Explorer gets the same single source for free.
+
+**Two guards, and neither contains a version number** (`AppInfoTests` reads the expected value out of the props
+file, so bumping the version needs no test change):
+
+1. `VersionComesFromTheBuild` — `AppInfo.Version` equals the declared `<Version>`, and carries no `+`.
+2. `NoVersionNumberIsHardCodedInTheApp` — the version's text appears **nowhere** under `src/`.
+
+⭐ **The second guard failed on its first run, and it was right.** It caught the version in **my own doc
+comments** in `AppInfo.cs` and `AboutViewModel.cs`, which quoted `1.2.0` as an example — including, on the next
+iteration, the comment explaining the guard. Those comments would have been false after the next release. The
+fix was to remove the numbers, not to narrow the guard: a stale comment teaches the next reader something
+untrue, which is the same failure mode as a stale shortcut (gotcha #284), and this is a fair measure of how
+easily such a copy appears even while writing the code that forbids it.
+
+⚠ `AppInfo` reads **its own assembly**, deliberately not `Assembly.GetEntryAssembly()` — under a test host the
+entry assembly is the test runner, so every one of these tests would have measured vstest's version while
+passing.
+
+### 13.2 The window
+
+One flat surface, centred, logo-dominant — **deliberately not the app's usual dialog skeleton.** `ConfirmDialog`
+and its peers open with a `PanelBrush` header band and close with a footer band, which is right for a dialog
+that asks something; here it would have produced exactly the banded Win32 "About" look with a two-column
+`Author:` / `Copyright:` form. So: no bands, no label column, no environment block. 400px wide, height to
+content, `Escape`/`Enter` both close.
+
+The mark is the subject: `EmberTern_logo.png` at 128px (the same 256×256 transparent asset the titlebar uses —
+`logo.png` is the same artwork on an opaque white ground, which would show as a white square on the dark
+theme), then the name at 23px SemiBold, the version subtle beneath it, a **40px hairline** rather than a
+full-width rule, then author and copyright. The hairline is also the slot a future licence line occupies — one
+row, not a redesign (§8.3).
+
+`AboutWindow_ShowsTheAssemblyVersionAndIdentity` closes the last link the other tests cannot: that the values
+actually reach the surface through the real bindings — a correct `AppInfo` behind an unbound `TextBlock` would
+satisfy everything else. It also asserts the window stays a **product** window, failing if the text ever
+mentions .NET, Avalonia, Windows, Firebird or an architecture.
+
+**`Icon.Info` is verbatim Lucide** (circle r10, stem, and a zero-length stroke whose round cap is the dot) —
+no composition needed, and its 22×22 ink box matches `Copy`/`FolderPlus`.
+
+**The `About EmberTern…` row shipped with the window**, per §10's rule that a row never ships ahead of what it
+opens; the menu's separator count moved 1 → 2 and the probe asserts it.
 
 ---
 

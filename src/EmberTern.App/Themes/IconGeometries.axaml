@@ -137,6 +137,9 @@
   <!-- Exit: a doorway with an arrow leaving through it. Deliberately not Icon.WindowClose (chrome-side
        "close this window") and not a power symbol (a near-full arc is the shape that reads worst at 14px). -->
   <StreamGeometry x:Key="Icon.Exit">M10 4 H6 A2 2 0 0 0 4 6 V18 A2 2 0 0 0 6 20 H10 M15 8 L19 12 L15 16 M19 12 H9</StreamGeometry>
+  <!-- Info (Lucide, verbatim): circle r10 + stem + a zero-length stroke whose round cap IS the dot.
+       Opens the About window. Ink box 22×22, in line with Copy and FolderPlus. -->
+  <StreamGeometry x:Key="Icon.Info">M2 12 A10 10 0 1 1 22 12 A10 10 0 1 1 2 12 Z M12 16 V12 M12 8 h0.01</StreamGeometry>
 
   <!-- Transactions -->
   <StreamGeometry x:Key="Icon.RotateCw">M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8M21 3v5h-5</StreamGeometry>
