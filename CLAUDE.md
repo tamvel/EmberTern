@@ -336,8 +336,17 @@ noted.
   catalog + the defaults contract + tests, **no UI**.
   **⭐ RATIFIED, do not re-litigate:** all scalar preferences live in a new **`UserSettings.Preferences`**
   (additive — **`CurrentSchemaVersion` stays 2**, because a bump trips downgrade protection and older
-  builds then refuse the whole file), stored as **strings never Avalonia enums** (rule #1), with each
-  property's C# initializer *being* its default so "restore defaults" is `new Preferences()` · Settings
+  builds then refuse the whole file), stored as **strings never Avalonia enums** (rule #1) · ⭐ **`Preferences`
+  is a SELF-SUFFICIENT CONTRACT and `PreferencesStore` only validates** (§5.2.1, binding): every property is
+  valid from its own initializer so `new Preferences()` is always usable and *is* "restore defaults"; the
+  store owns **validation + normalization of what it read from the file** (unknown value → the model's
+  default) and supplies **no defaults of its own**; no property may be "nullable meaning unset" (that hands
+  the default decision to every reader), normalization is **silent and total** (never refuse to load), and
+  it must **not** rewrite the file on load (a writing `Load` is audit A-03's shape). The pinning test is
+  `Validate(new Preferences())` == `new Preferences()` — it fails the day a property's initializer would be
+  rejected by the validator, drift that is invisible in either half alone. **`Language` is validated from
+  day one despite having no consumer** — it is the property most likely to be left until "it matters", and
+  §8 is far enough off that a bad value would be entrenched by then · Settings
   Center is a **window** (not a `WorkspaceTabKind` — a tab would need threading into five per-kind
   families for no gain) · **apply-on-change, no OK/Cancel**, and it MUST surface `Save`'s refusal (§2.5)
   because a dialog that accepts a change and persists nothing is the worst place for that silence ·

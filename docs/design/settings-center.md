@@ -432,12 +432,46 @@ Five properties of this shape are load-bearing:
    `GridProfileStore` exactly — `Load()`, mutate its slice, `Save()`. No new persistence mechanism, and
    `Save`'s refusal (§2.5) protects it for free.
 4. **A defaults contract.** Every scalar's C# initializer **is** its default, so "restore defaults"
-   is `new Preferences()` and cannot drift from a separately-maintained table.
+   is `new Preferences()` and cannot drift from a separately-maintained table. Formalised as a binding
+   rule in §5.2.1.
 5. **Layout stays in `WorkspaceState`.** Panel heights and window bounds are not preferences the user
    goes looking for; moving them would be a migration with no user-visible gain. The dividing line —
    *if the user would look for it in a settings dialog, it is a `Preference`; if they set it by
    dragging or clicking the thing itself, it is `WorkspaceState`* — is what keeps the new class from
    becoming the next dumping ground.
+
+#### 5.2.1 ⭐ RATIFIED — `Preferences` is a self-sufficient contract; the store only validates
+
+**User, 2026-07-29, binding on etap 2.** Two responsibilities, one owner each:
+
+| | Owns | Never does |
+|---|---|---|
+**`Preferences`** (the model) | **Safe defaults.** Every property carries a valid value from its own initializer, so a freshly constructed instance is **always** correct and needs no initialization step. | validate; normalize; know about files |
+**`PreferencesStore`** (the facade) | **Validation and normalization of what was read from the file** — an unrecognised value is replaced with the model's default (unknown language → `"en"`, unknown theme → `"Dark"`). | supply defaults of its own |
+
+**The invariant this buys: `new Preferences()` is valid, unconditionally.** Every consumer, test and
+"restore defaults" path can rely on it without a null check or a bootstrap call.
+
+Four consequences that are easy to violate while technically honouring the rule:
+
+1. ⭐ **No property may be "nullable meaning unset".** A `string?` whose null means *not chosen yet* pushes
+   the default decision to whoever reads it — and there will eventually be more than one reader, which is
+   how one default becomes three. Each property has a real value or it does not belong here.
+2. ⭐ **Normalization is silent and TOTAL, not rejection.** The store never refuses to load because a value
+   was bad; it corrects it and continues. Every field is valid when `Load` returns, always. A settings file
+   is not a document to be validated at the user — it is state to be brought into a usable shape.
+3. **Normalizing on read does not rewrite the file.** The correction lives in memory and reaches disk only
+   if something later saves for its own reasons. Do **not** add a "repair the file on load" write — `Load`
+   writing is precisely the shape audit A-03 was about, and §2.5's `Save` refusal exists to stop it.
+4. ⭐ **The rule is directly testable, and the test is the point** — `Validate(new Preferences())` must
+   return a value **equal to** `new Preferences()`. That single assertion pins model and store against each
+   other, and it fails the build the day someone adds a property whose initializer the validator would
+   reject (e.g. a `Language = "pl"` default while the catalog still has one row). Without it, that drift
+   is invisible: both halves look correct in isolation.
+
+⚠ **`Language` is validated from day one even though nothing consumes it** (§5.3, §6.2). It is the one
+property with no reader, which makes it the one most likely to be left unvalidated *"until it matters"* —
+and §8 is far enough away that a bad value would be well established by the time it does.
 
 ### 5.3 Consuming a preference: read once at startup, apply through the existing owner
 
@@ -925,6 +959,7 @@ the ratified answer wins and the section has been amended in place.
 **Q9** | Which §7 proposals are in scope? | **In: 7.2** (row limits, excl. `FullSafetyCeiling`), **7.3** (debugger isolation default), **7.5** (workspace restore), **7.6** (Source/Easy default), **7.7** (page size). **Prerequisite only: 7.1** (font consolidation — the *setting* stays with the UX sprint). **Trim first: 7.4.** **Out: 7.8, 7.9, 7.10.** |
 **Q10** | Format identity — how does the importer know it is our file? | ⭐ **ADDED BY THE USER.** A constant **magic**, `EMBERTERN-SETTINGS`, as the literal first bytes. Rejects a mistakenly-picked ZIP/PDF before parsing, versioning or any passphrase prompt. **Never versioned** (identity ≠ contract), checked from the stream before loading, byte-compared. §6.3.1a + the ordered checks in §6.3.3. |
 **Q11** | Is etap 5 one etap or two? | ⭐ **Two, as the user split it: 5a** = container, encryption, versioning, migrations, tests (Core, no UI); **5b** = export/import UI, section selection, passphrase. §10. |
+**Q12** | Where do defaults live, and who validates? | ⭐ **ADDED BY THE USER, binding on etap 2.** **`Preferences` is a self-sufficient contract** — every property valid from its own initializer, so `new Preferences()` is always usable with no initialization. **`PreferencesStore` only validates and normalizes what it read from the file** (unknown value → the model's default) and supplies no defaults of its own. Validation applies to `Language` from day one despite having no consumer. §5.2.1. |
 
 ### 9.1 ⭐ Standing directive — no features "for the future"
 
