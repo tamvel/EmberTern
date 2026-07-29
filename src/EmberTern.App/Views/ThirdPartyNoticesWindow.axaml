@@ -15,18 +15,25 @@
 
   <!-- The notices document, verbatim. Read-only, scrollable, selectable so a reviewer can copy any part of
        it, and resizable because licence texts are long — unlike About, which is a fixed composition.
-       Monospace: section 1 is an aligned column layout and a proportional font would break it. -->
+       Monospace: section 1 is an aligned column layout and a proportional font would break it.
+
+       Wrapped, not horizontally scrolled: a licence paragraph is one very long line, and a notice the reader
+       has to scroll sideways to finish is a notice they do not read. ⚠ The two settings are ONE decision —
+       `TextWrapping="Wrap"` alone does nothing here, because a ScrollViewer offering a horizontal scrollbar
+       measures its child with infinite width, so there is no width to wrap against; the horizontal bar must be
+       Disabled for the wrap to take effect. Section 1's column alignment survives at the default window width
+       and degrades gracefully (it re-flows) when the window is narrowed, which is the right trade. -->
   <Grid RowDefinitions="*,Auto">
 
     <ScrollViewer Grid.Row="0"
-                  HorizontalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto"
                   Padding="20,16,16,16">
       <SelectableTextBlock x:Name="NoticesText"
                            FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                            FontSize="12"
                            LineHeight="17"
-                           TextWrapping="NoWrap" />
+                           TextWrapping="Wrap" />
     </ScrollViewer>
 
     <Border Grid.Row="1"
