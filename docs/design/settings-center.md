@@ -9,9 +9,10 @@ the theme is now persisted and read at startup, which closes §2.1 end to end. A
 ⭐ ETAP 4 DELIVERED AND USER-ACCEPTED 2026-07-30 — `FormatterStyle`, the ONE casing decision point, the
 keyword/identifier split, and the SQL Formatter page with its two rows; the default output is byte-identical
 (459 existing formatter assertions pass unedited). As built: §14.
-⭐ ETAP 5a DELIVERED 2026-07-30 — the export FORMAT: its own magic (Q13), the versioned cleartext header, the
-`aes256-passphrase` AES-256-GCM protector, the two-phase ordered check sequence, both migration axes, and 176
-tests. Core only, no UI. As built: **§15** — read §15.1 first, it records the one deviation from the brief.
+⭐ ETAP 5a DELIVERED AND USER-ACCEPTED 2026-07-30 — the export FORMAT: its own magic (Q13), the versioned
+cleartext header, the `aes256-passphrase` AES-256-GCM protector, the two-phase ordered check sequence, both
+migration axes, and 176 tests. Core only, no UI. As built: **§15** — read §15.1 (the one deviation from the
+brief, ratified) and **§15.9 (what the user ratified on accepting it)** before touching the export.
 Etap 5b (the export/import UI) is next.**
 Branch: `feat/settings-center`.
 
@@ -1232,7 +1233,7 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 **2** | Core foundation: `Preferences` (incl. `Theme`, `Language`, the two formatter cases) + `PreferencesStore` (8th facade) + the language catalog + defaults contract + tests. **No UI.** | ✅ **done 2026-07-29 — §12** |
 **3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | ✅ **done 2026-07-29 — §13** |
 **4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | ✅ **done 2026-07-30 — §14** |
-**5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM), KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** | ✅ **done 2026-07-30 — §15.** ⚠ The protector is deliberately **NOT** registered in `ResolveProtector`; §15.1 explains why that instruction did not survive the design. F4 resolved in §15.2. |
+**5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM), KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** | ✅ **done + user-accepted 2026-07-30 — §15.** ⚠ The protector is deliberately **NOT** registered in `ResolveProtector` (ratified — §15.1 + §15.9/2). F4 resolved in §15.2, and its shape is now a ratified constraint (§15.9/1). |
 **5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | the format is settled and provable before any dialog exists |
 **6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | additive; naturally last, and trimmable without blocking anything |
 
@@ -1683,7 +1684,7 @@ Recorded because three of the four are general rules, not compliments on this et
 
 ---
 
-## 15. ⭐ Etap 5a — as built (2026-07-30)
+## 15. ⭐ Etap 5a — as built (2026-07-30, USER-ACCEPTED)
 
 The export format exists, is versioned, is encrypted, and is proved by tests before any dialog exists — which
 is the whole reason **Q11** split etap 5 in two. Pure Core; no App or Avalonia file was touched. Build 0/0;
@@ -1705,6 +1706,10 @@ suite **6960** green in the two documented partitions (6901 + 59), up 176; smoke
 `SettingsExportFormatTests` · `SettingsExportContentTests` | 176 tests. |
 
 ### 15.1 ⚠⚠ THE ONE DEVIATION FROM THE BRIEF — the protector is NOT registered in `ResolveProtector`
+
+⭐ **RATIFIED BY THE USER on accepting etap 5a — this is a decision now, not an implementation judgement.
+Do not re-open it from the old reserved note. See §15.9/2 for the user's own, cleaner statement of the
+rule.**
 
 Both the etap brief and `EncryptionSchemes`' own reserved comment said to *"add the protector and register it in
 `ApplicationSettingsStore.ResolveProtector`, then start writing it as the scheme"*. **That instruction was
@@ -1893,3 +1898,28 @@ assertion over a small alphabet is a probabilistic test wearing a deterministic 
 - ⚠ **The refusal `Save` can return has not gone away.** An import ends in a write to `settings.dat`, which
   refuses over a file this build could not read (§2.5) — so 5b's import must surface that outcome for the same
   reason etap 3's Settings Center had to.
+
+### 15.9 ⭐ What the user ratified on accepting it (2026-07-30)
+
+Recorded because two of these were implementation decisions until now and are ratified ones from here — and
+because each names the general rule rather than praising the etap.
+
+1. ⭐ **F4's shape is the etap's most important decision, and the reason is the one to carry: *"import uses
+   exactly the same migration path (`MigrateToCurrentVersion`) as `settings.dat`, which eliminates the risk of
+   two independent migration mechanisms that would eventually drift apart."*** ⛔ So the payload being shaped as
+   an `ApplicationSettings` is now a ratified constraint, not a convenience: **do not give the export its own
+   migration ladder**, and do not reshape the payload into loose sections in a way that would require one.
+2. ⭐ **§15.1's deviation is RATIFIED — do not re-open it from `EncryptionSchemes`' old reserved note.** The
+   user's own framing, and it is a cleaner statement of the rule than §15.1's: *`ResolveProtector` is
+   responsible for protecting `settings.dat`* **at rest**, *whereas the export is a separate format requiring a
+   credential from the user; registering `aes256-passphrase` there merely to return a misleading DPAPI message
+   would be worse than leaving an explicit, documented `null`.* ⭐ The generalisation: **an at-rest scheme and a
+   credential-bearing scheme are different kinds of thing, and a seam built for the first does not extend to
+   the second.**
+3. ⭐ **The two-phase `Inspect → Open` API is ratified as the realisation of an already-ratified principle** —
+   *we do not ask the user for a passphrase until we know there is a scenario in which that passphrase could
+   change anything.* Etap 5b inherits this as a constraint on its wiring, not as a suggestion (§15.3b).
+4. **The deep copy on export is ratified**: an export must under no circumstances modify the application's live
+   settings.
+5. **Gotcha #291 was worth recording because it is not specific to this module** — it is a general lesson about
+   testing encrypted data.

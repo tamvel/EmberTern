@@ -370,14 +370,27 @@ noted.
 - **⚙ SETTINGS CENTER & SQL FORMATTER CASING — ACTIVE SPRINT. Etap 1 (audit + design) CLOSED AND RATIFIED
   2026-07-29; ⭐ ETAP 2 (Core foundation) and ⭐ ETAP 3 (the window + the complete General page) both
   DELIVERED AND USER-ACCEPTED 2026-07-29; ⭐ ETAP 4 (the formatter's two casing settings) DELIVERED AND
-  USER-ACCEPTED 2026-07-30; ⭐ ETAP 5a (the export FORMAT — Core only, no UI) DELIVERED 2026-07-30. Branch
-  `feat/settings-center`. Next: etap 5b (the export/import UI).**
+  USER-ACCEPTED 2026-07-30; ⭐ ETAP 5a (the export FORMAT — Core only, no UI) DELIVERED AND USER-ACCEPTED
+  2026-07-30. Branch `feat/settings-center`, pushed to both remotes. Next: etap 5b (the export/import UI —
+  the etap that connects the whole feature to the user).**
   **The sprint's one document: [docs/design/settings-center.md](docs/design/settings-center.md)** — read
   §9 (the 13 ratified decisions), §2 (the measured facts) and the as-built sections **§12 (etap 2) + §13
   (etap 3) + §14 (etap 4) + §15 (etap 5a)** before writing any code.
   **⭐ ETAP 5a — the format is settled and provable before any dialog exists, which is exactly what Q11's split
   was for. See "What's built" for what it IS; the notes here are the WHY.** Build 0/0; suite **6960** green
   (partitions 6901 + 59, up 176); smoke clean.
+  ⭐ **RATIFIED BY THE USER ON ACCEPTING IT (§15.9) — two of these stop being implementation judgements:**
+  (1) **F4's shape is the etap's most important decision**, because *"import uses exactly the same migration
+  path as `settings.dat`, which eliminates the risk of two independent migration mechanisms that would
+  eventually drift apart"* — so ⛔ **the payload being an `ApplicationSettings` is a ratified constraint: the
+  export must never grow a migration ladder of its own**; (2) **the §15.1 deviation is ratified**, in the
+  user's cleaner words — *`ResolveProtector` protects `settings.dat` **at rest**, whereas the export is a
+  separate format requiring a credential from the user; registering `aes256-passphrase` there merely to return
+  a misleading DPAPI message would be worse than an explicit, documented `null`* ⭐ (the general rule: **an
+  at-rest scheme and a credential-bearing scheme are different kinds of thing, and a seam built for the first
+  does not extend to the second**); (3) the two-phase API is ratified as the realisation of the
+  already-ratified *"never ask for a credential that cannot possibly work"*, and binds 5b's wiring; (4) the
+  deep copy is ratified — an export must under no circumstances modify the live settings.
   **⚠⚠ ONE DEVIATION FROM THE BRIEF, and it is a correction to a stale instruction rather than a shortcut
   (§15.1): `aes256-passphrase` is deliberately NOT registered in `ApplicationSettingsStore.ResolveProtector`.**
   Both the brief and `EncryptionSchemes`' reserved comment said to register it there — written before the export
