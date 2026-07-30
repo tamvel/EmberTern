@@ -13,6 +13,8 @@ using EmberTern.App.Controls;
 using EmberTern.App.Settings;
 using EmberTern.App.Views;
 using EmberTern.Core.Settings;
+using EmberTern.Core.Settings.Export;
+using EmberTern.App.ViewModels;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -49,6 +51,10 @@ public sealed class SettingsCenterViewTests
         return dir;
     }
 
+    private static SettingsPortability PortabilityOver(
+        string dir, PreferencesService service, EmberTern.Core.Security.SecretProtector? protector = null)
+        => new(new ApplicationSettingsStore(dir, protector), service, "9.9.9-test");
+
     /// <summary>
     /// The window renders the theme radios and the language list from Core's option sets, with UiStrings'
     /// words — and selecting a radio commits through the one service to the shared settings file.
@@ -62,7 +68,7 @@ public sealed class SettingsCenterViewTests
             try
             {
                 var service = new PreferencesService(new PreferencesStore(dir));
-                var window = new SettingsWindow(service);
+                var window = new SettingsWindow(service, PortabilityOver(dir, service));
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
@@ -119,7 +125,8 @@ public sealed class SettingsCenterViewTests
             var dir = NewTempDir();
             try
             {
-                var window = new SettingsWindow(new PreferencesService(new PreferencesStore(dir)));
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var window = new SettingsWindow(service, PortabilityOver(dir, service));
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
@@ -130,8 +137,9 @@ public sealed class SettingsCenterViewTests
                 // ⚠ IsEffectivelyVisible, not IsVisible: a row on a hidden page still has its own
                 // IsVisible == true (its search filter matched), so IsVisible alone would count all four
                 // and this test would stop measuring what it is named for.
-                Assert.Equal(4, groups.Count);
-                Assert.Equal(2, groups.Count(g => g.IsEffectivelyVisible));
+                // General: Theme, Language, Import/export. SQL Formatter: keyword case, identifier case.
+                Assert.Equal(5, groups.Count);
+                Assert.Equal(3, groups.Count(g => g.IsEffectivelyVisible));
 
                 var search = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");
                 var categories = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "CategoryList");
@@ -151,7 +159,7 @@ public sealed class SettingsCenterViewTests
 
                 search.Text = string.Empty;
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(2, groups.Count(g => g.IsEffectivelyVisible));
+                Assert.Equal(3, groups.Count(g => g.IsEffectivelyVisible));
                 Assert.False(empty.IsVisible);
 
                 window.Close();
@@ -182,7 +190,8 @@ public sealed class SettingsCenterViewTests
                     s => "ENC:" + s,
                     _ => throw new InvalidOperationException("Key not valid for use in specified state."));
 
-                var window = new SettingsWindow(new PreferencesService(new PreferencesStore(dir, undecryptable)));
+                var refusing = new PreferencesService(new PreferencesStore(dir, undecryptable));
+                var window = new SettingsWindow(refusing, PortabilityOver(dir, refusing, undecryptable));
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
@@ -227,7 +236,7 @@ public sealed class SettingsCenterViewTests
             try
             {
                 var service = new PreferencesService(new PreferencesStore(dir));
-                var window = new SettingsWindow(service);
+                var window = new SettingsWindow(service, PortabilityOver(dir, service));
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
@@ -301,6 +310,213 @@ public sealed class SettingsCenterViewTests
             finally
             {
                 app!.RequestedThemeVariant = original;
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    // ─── Etap 5b — export / import ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The General page offers the three portability commands, and the Import / export row is searchable like any
+    /// other — which is the whole reason an ACTION row is in the catalog rather than hand-placed in XAML
+    /// (design §5.4).
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task TheGeneralPageOffersExportImportAndTheFolder_AndSearchFindsThem()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var window = new SettingsWindow(service, PortabilityOver(dir, service));
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
+                Assert.Contains(buttons, b => b.Name == "ExportSettingsButton" && b.IsEffectivelyVisible);
+                Assert.Contains(buttons, b => b.Name == "ImportSettingsButton" && b.IsEffectivelyVisible);
+                Assert.Contains(buttons, b => b.Name == "OpenSettingsFolderButton" && b.IsEffectivelyVisible);
+
+                // Searching a word the user would actually type: it is in the row's keywords, not its label.
+                var search = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");
+                search.Text = "backup";
+                Dispatcher.UIThread.RunJobs();
+
+                var groups = window.GetVisualDescendants().OfType<Border>()
+                    .Where(b => b.Classes.Contains("settings-group")).ToList();
+                Assert.Equal(1, groups.Count(g => g.IsEffectivelyVisible));
+                Assert.Contains(buttons, b => b.Name == "ExportSettingsButton" && b.IsEffectivelyVisible);
+
+                window.Close();
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    /// <summary>
+    /// ⭐⭐ §6.3.3's corollary, seen from the UI: <b>a file rejected in phase one never produces a passphrase
+    /// field.</b>
+    ///
+    /// <para>Three rejections, each a different cause with its own message: a PDF (not our file at all), a real
+    /// <c>settings.dat</c> (ratified Q13's whole point — with a shared magic this would have been the file the
+    /// user was asked for a passphrase about), and an export from a newer build. In all three the passphrase group
+    /// must be invisible and the contents group must be invisible, because a passphrase prompt is an implicit
+    /// claim that the file is readable given the right one.</para>
+    ///
+    /// <para>⚠ It asserts on the real window's real bindings rather than on the view model's booleans, because the
+    /// defect this guards against is a passphrase box left visible by a binding nobody wired.</para>
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task APhaseOneRejection_NeverShowsThePassphraseField()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var portability = PortabilityOver(dir, service);
+
+                // (a) not our file at all.
+                var pdf = Path.Combine(dir, "brochure.pdf");
+                File.WriteAllBytes(pdf, new byte[] { 0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x37, 0x0A, 0x00 });
+
+                // (b) a genuine settings.dat — same product, different format.
+                new ApplicationSettingsStore(dir).Save(new ApplicationSettings());
+                var settingsDat = Path.Combine(dir, "settings.dat");
+
+                // (c) ours, but from a build that knows more than we do.
+                var future = Path.Combine(dir, "future" + SettingsExportFormat.FileExtension);
+                File.WriteAllText(future,
+                    SettingsExportFormat.Magic + "\t999\t9.9.9\taes256-passphrase\tPBKDF2-SHA256\t1000\tc2FsdA==\npayload");
+
+                foreach (var (path, expected) in new[]
+                         {
+                             (pdf, SettingsImportStatus.NotAnExportFile),
+                             (settingsDat, SettingsImportStatus.NotAnExportFile),
+                             (future, SettingsImportStatus.FutureFormatVersion),
+                         })
+                {
+                    Assert.Equal(expected, portability.Inspect(path).Status);
+
+                    var dialog = new SettingsImportDialog(portability);
+                    dialog.Show();
+                    Dispatcher.UIThread.RunJobs();
+
+                    var vm = (SettingsImportDialogViewModel)dialog.DataContext!;
+                    vm.PickFile(path);
+                    Dispatcher.UIThread.RunJobs();
+
+                    var passphrase = dialog.GetVisualDescendants().OfType<Border>()
+                        .Single(b => b.Name == "PassphraseGroup");
+                    var contents = dialog.GetVisualDescendants().OfType<Border>()
+                        .Single(b => b.Name == "ContentsGroup");
+                    var banner = dialog.GetVisualDescendants().OfType<MessageBanner>().Single();
+                    _out.WriteLine($"{Path.GetFileName(path)} → {banner.Message}");
+
+                    Assert.False(passphrase.IsVisible);
+                    Assert.False(contents.IsVisible);
+                    Assert.True(banner.IsVisible);
+                    Assert.Equal(MessageSeverity.Error, banner.Severity);
+                    Assert.False(string.IsNullOrWhiteSpace(banner.Message));
+
+                    dialog.Close();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    /// <summary>
+    /// The whole user journey through the real windows: export a file, then import it back and see the passphrase
+    /// step arrive only after the file has been accepted, the contents listed, and the settings written.
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task TheExportDialogWritesAFile_AndTheImportDialogTakesItBack()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            var target = NewTempDir();
+            try
+            {
+                // A source installation with a theme worth carrying.
+                var source = new PreferencesService(new PreferencesStore(dir));
+                source.Apply(source.Current with { Theme = PreferenceOptions.ThemeLight });
+
+                var file = Path.Combine(target, "carried" + SettingsExportFormat.FileExtension);
+                var export = new SettingsExportDialog(PortabilityOver(dir, source));
+                export.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var exportVm = (SettingsExportDialogViewModel)export.DataContext!;
+                exportVm.Passphrase = "correct horse battery";
+                // ⚠ The primary button stays disabled until the confirmation matches — a typo would produce a
+                // permanently unreadable file, and this is the only moment it can be caught.
+                var runButton = export.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportButton");
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(runButton.IsEnabled);
+
+                exportVm.PassphraseConfirmation = "correct horse battery";
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(runButton.IsEnabled);
+
+                exportVm.ExportTo(file);
+                Assert.True(exportVm.Completed);
+                Assert.True(File.Exists(file));
+                export.Close();
+
+                // A different installation, on Dark, imports it.
+                var destination = new PreferencesService(new PreferencesStore(target));
+                Assert.Equal(PreferenceOptions.ThemeDark, destination.Current.Theme);
+
+                var import = new SettingsImportDialog(PortabilityOver(target, destination));
+                import.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var importVm = (SettingsImportDialogViewModel)import.DataContext!;
+                var passphraseGroup = import.GetVisualDescendants().OfType<Border>()
+                    .Single(b => b.Name == "PassphraseGroup");
+                var contentsGroup = import.GetVisualDescendants().OfType<Border>()
+                    .Single(b => b.Name == "ContentsGroup");
+
+                // Nothing is offered before a file is chosen.
+                Assert.False(passphraseGroup.IsVisible);
+
+                importVm.PickFile(file);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(passphraseGroup.IsVisible);
+                Assert.False(contentsGroup.IsVisible);
+
+                importVm.Passphrase = "correct horse battery";
+                importVm.Open();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(contentsGroup.IsVisible);
+                Assert.True(importVm.OffersPreferences);
+
+                importVm.ApplySelected();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(importVm.Completed);
+
+                // ⭐ Both halves: the file holds it, and the live service does too — the second is the trap, since
+                // the import wrote settings.dat behind the service's back.
+                Assert.Equal(PreferenceOptions.ThemeLight, new PreferencesStore(target).Load().Theme);
+                Assert.Equal(PreferenceOptions.ThemeLight, destination.Current.Theme);
+
+                import.Close();
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+                if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
             }
         }, System.Threading.CancellationToken.None);
     }

@@ -44,7 +44,19 @@ public class SettingsCenterVmTests
     }
 
     private static SettingsCenterViewModel VmOver(string dir, SecretProtector? protector = null)
-        => new(new PreferencesService(new PreferencesStore(dir, protector)));
+    {
+        var service = new PreferencesService(new PreferencesStore(dir, protector));
+        return new SettingsCenterViewModel(service, PortabilityOver(dir, service, protector));
+    }
+
+    /// <summary>
+    /// The export/import seam over the same directory and protector, as the app wires it (gotcha #88).
+    /// <para>The app version is a synthetic one on purpose: Core takes it as an input it cannot derive, which is
+    /// what makes "diagnostics only, never branched on" structural (§15.3a).</para>
+    /// </summary>
+    private static SettingsPortability PortabilityOver(
+        string dir, PreferencesService service, SecretProtector? protector = null)
+        => new(new ApplicationSettingsStore(dir, protector), service, "9.9.9-test");
 
     // ─── THE CATALOG ────────────────────────────────────────────────────────────────────────
 
@@ -377,7 +389,7 @@ public class SettingsCenterVmTests
         InTempDir(dir =>
         {
             var service = new PreferencesService(new PreferencesStore(dir));
-            var vm = new SettingsCenterViewModel(service);
+            var vm = new SettingsCenterViewModel(service, PortabilityOver(dir, service));
 
             // The titlebar toggle's write, through the same service.
             service.Apply(service.Current with { Theme = ThemePreference.Toggle(service.Current.Theme) });

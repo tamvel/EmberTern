@@ -390,6 +390,18 @@ public partial class MainWindow : Window
         // Flush every still-attached grid's layout while ActualWidth is still valid
         // (before the visual tree is torn down on close).
         GridLayoutBehavior.FlushAll();
+
+        // ⚠ The ONE case where this session must not record its workspace: an import in this session replaced the
+        // stored one, and capturing now would write these tabs straight over it — the import would silently undo
+        // itself on exit, which is precisely the failure rule #11 forbids. Deliberately a session-scoped
+        // suppression following an explicit user instruction, NOT a setting: design §7.5's "gate restore, never
+        // capture" is about a persistent preference, and its reasoning (turning the setting back on would restore
+        // a workspace from whenever it was last disabled) does not apply to a one-shot.
+        if (_currentVm.SuppressWorkspaceCaptureOnClose)
+        {
+            return;
+        }
+
         var state = _currentVm.CaptureWorkspace();
         state.WindowBounds = new WindowBounds
         {
@@ -492,7 +504,9 @@ public partial class MainWindow : Window
     private async void OnAppMenuSettingsClick(object? sender, RoutedEventArgs e)
     {
         if (_currentVm is null) return;
-        await new SettingsWindow(_currentVm.Preferences).ShowDialog(this);
+        // Portability comes from the same view model for the same reason: it owns the store, the app version, and
+        // the refresh an import makes necessary (SettingsPortability.AfterImport).
+        await new SettingsWindow(_currentVm.Preferences, _currentVm.Portability).ShowDialog(this);
     }
 
     private async void OnAppMenuKeyboardShortcutsClick(object? sender, RoutedEventArgs e)

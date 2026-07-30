@@ -1,3 +1,7 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -41,10 +45,37 @@ public partial class SettingsWindow : Window
         Opened += (_, _) => Dispatcher.UIThread.Post(() => SearchBox.Focus());
     }
 
-    public SettingsWindow(PreferencesService preferences)
+    public SettingsWindow(PreferencesService preferences, SettingsPortability portability)
         : this()
     {
-        DataContext = new SettingsCenterViewModel(preferences);
+        var vm = new SettingsCenterViewModel(preferences, portability);
+
+        // The view supplies the modal owner, the shell and the pickers — the view model supplies everything that
+        // can be decided without them. Same request/callback shape the data ExportDialog already uses.
+        vm.RequestExport = () => new SettingsExportDialog(portability).ShowDialog(this);
+        vm.RequestImport = () => new SettingsImportDialog(portability).ShowDialog(this);
+        vm.RequestRevealFolder = RevealFolderAsync;
+
+        DataContext = vm;
+    }
+
+    /// <summary>Opens the settings folder in the shell. Best-effort: a failure to open a file manager must never
+    /// take the settings window with it.</summary>
+    private static Task RevealFolderAsync(string folder)
+    {
+        try
+        {
+            if (Directory.Exists(folder))
+            {
+                Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException
+                                      or IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return Task.CompletedTask;
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();

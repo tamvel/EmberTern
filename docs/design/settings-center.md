@@ -749,10 +749,14 @@ resolution rules twice.
 
 ### 6.3 General → Import / Export Settings
 
-⭐ **The FORMAT half of this section is now AS BUILT — etap 5a, §15.** §6.3.1–§6.3.4 are the design and were
-followed; where the implementation settled something they left open, or diverged, §15 says so and wins. The
-UI half (section selection, the passphrase flow, `.pre-import-<stamp>`, *Open settings folder*) is still
-etap 5b's.
+⭐ **THIS WHOLE SECTION IS NOW AS BUILT — the format in etap 5a (§15), the user surface in etap 5b (§16).**
+§6.3.1–§6.3.4 are the design and were followed; where the implementation settled something they left open, or
+diverged, **§15 and §16 say so and win**. In particular: the section list, the passphrase flow,
+`.pre-import-<stamp>` and *Open settings folder* all exist — ⚠ but **the pre-import file is a COPY, not a rename**
+(§16.2c, which corrects §6.3.4's "reusing `SaveOverUnreadableFile`'s pattern" on the operation while keeping it on
+the naming), and ⚠ **§6.3.4's "let the user choose which sections to take" is implemented per-section over a
+`SettingsImportSelection` whose merge rules are §16.2(b)/(e)** — including the one the design does not mention: an
+import that declines passwords must not blank the ones already stored.
 
 ⭐ **RATIFIED (user, 2026-07-29 — supersedes my Q3 recommendation): this is EmberTern's own versioned
 export format, not JSON as a public contract. EVERY export is encrypted, whether or not it contains
@@ -1234,7 +1238,7 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 **3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | ✅ **done 2026-07-29 — §13** |
 **4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | ✅ **done 2026-07-30 — §14** |
 **5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM), KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** | ✅ **done + user-accepted 2026-07-30 — §15.** ⚠ The protector is deliberately **NOT** registered in `ResolveProtector` (ratified — §15.1 + §15.9/2). F4 resolved in §15.2, and its shape is now a ratified constraint (§15.9/1). |
-**5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | the format is settled and provable before any dialog exists |
+**5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | ✅ **done 2026-07-30 — §16.** Also settled the three traps the brief named (§16.1 stale snapshots · §16.2f the action-row shape · §16.2c copy-not-move) and the live-session question (§16.3). |
 **6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | additive; naturally last, and trimmable without blocking anything |
 
 ⚠ **Etap 5a — F4. ✅ RESOLVED (§15.2): `MigrateToCurrentVersion` is now `internal static`, and the export
@@ -1884,7 +1888,7 @@ assertion over a small alphabet is a probabilistic test wearing a deterministic 
 - **Anything touching** `Preferences`, `PreferenceOptions`, `PreferencesStore`, `CurrentSchemaVersion`,
   `PreferencesService`, the one theme apply point, `SqlFormatter` or `FormatterStyle` — all verified untouched.
 
-### 15.8 What etap 5b inherits
+### 15.8 What etap 5b inherits — ✅ all honoured; see §16
 
 - `SettingsImportReader.Inspect` → *validate*; `SettingsImportReader.Open` → *decrypt*. **In that order, because
   the API allows no other** (§15.3b). The passphrase dialog goes between them.
@@ -1923,3 +1927,196 @@ because each names the general rule rather than praising the etap.
    settings.
 5. **Gotcha #291 was worth recording because it is not specific to this module** — it is a general lesson about
    testing encrypted data.
+
+---
+
+## 16. ⭐ Etap 5b — as built (2026-07-30)
+
+The feature reaches the user: settings can be exported to a file and imported back, and an import **writes
+`settings.dat`**. Build 0/0; suite **6976** green in the two documented partitions (6914 + 62), up 16; smoke
+clean.
+
+| File | Job |
+|---|---|
+[`Core/Settings/Export/SettingsImportSelection.cs`](../../src/EmberTern.Core/Settings/Export/SettingsImportSelection.cs) | Which sections the user *accepts*. Deliberately a separate type from `SettingsExportOptions` — see §16.2(a). |
+[`Core/Settings/Export/SettingsImportApplier.cs`](../../src/EmberTern.Core/Settings/Export/SettingsImportApplier.cs) | ⭐ The non-destructive merge (pure `Merge`) + the write (`Apply`), with the ordered refusals. |
+`Core/Settings/ApplicationSettingsStore.cs` | Two additions: `CanSave(out diagnostic)` and `CopyAsideForImport()`. No behaviour changed for any existing caller. |
+[`App/Settings/SettingsPortability.cs`](../../src/EmberTern.App/Settings/SettingsPortability.cs) | ⭐ The App's ONE owner of export/import **and of what the running app must be told afterwards** (§16.1). |
+`App/Settings/PreferencesService.cs` | Gained `Reload()` — the answer to the stale-snapshot trap, and deliberately not a second apply point. |
+`App/Settings/SettingsCatalog.cs` | `SettingKind` (`Preference` \| `Action`) + the `general.importExport` row. |
+`App/ViewModels/SettingsCenterViewModel.cs` | A `SettingRowViewModel` base, `SettingActionViewModel`, three commands, three view-supplied request hooks. |
+`App/ViewModels/SettingsExportDialogViewModel.cs` · `SettingsImportDialogViewModel.cs` | The two flows. |
+`App/Views/SettingsExportDialog.axaml(.cs)` · `SettingsImportDialog.axaml(.cs)` | Two modals over the app's shared skeleton + the shared `MessageBanner`. |
+`App/Views/SettingsWindow.axaml(.cs)` | The Import / export group on the General page + *Open settings folder*. |
+`MainWindowViewModel` · `MainWindow.axaml.cs` | Owns the one `SettingsPortability`, supplies `ApplyImportedSettings`, and honours the workspace-capture suppression on close. |
+`SettingsImportApplyTests` · `SettingsCenterViewTests` (+3) | 13 + 3 tests. |
+
+### 16.1 ⭐⭐ The stale-snapshot trap, and why the fix reuses the existing apply point
+
+The brief named this as the trap to settle in the first hour, and it is the etap's most important decision. An
+import writes `settings.dat` **directly**, so every in-memory holder loaded from that file is stale the moment it
+returns — and, exactly as §13.1 found one level down, **the damage is not the stale read but the next write**:
+`PreferencesStore.Save` persists a *whole* `Preferences`, so the next preference the user touched would carry the
+pre-import copy of every other field back to disk. Silent, unlogged, green build.
+
+⭐ **The measured list of holders — read in the code, not assumed** (and it is the reason `SettingsPortability`
+owns this rather than the dialog):
+
+| Holder | Verdict |
+|---|---|
+`PreferencesService._current` | **A live snapshot.** `Reload()` added; called by `SettingsPortability.Apply`. |
+`MainWindowViewModel._folderState` | **A live snapshot** — loaded once in the constructor and mutated in place all session. Reloaded by `ApplyImportedSettings`. |
+Connections | No snapshot (`ReloadConnections` re-reads `LoadAll()`), but the tree must be rebuilt to show imported profiles — and it reads `_folderState`, which is why the order in `ApplyImportedSettings` is not arbitrary. |
+`GridProfileStore` | No snapshot — `Get` reads the file per call. An already-built grid keeps the layout it applied; an imported one takes effect when that grid is next built. **Stated, not hidden.** |
+`ParameterHistoryStore` / `WatchStore` | Nothing to do — neither section can be exported, so neither can be imported. |
+`WorkspaceStore` | No snapshot, but the app-close capture is a *write* that would undo the import — §16.3. |
+
+⭐ **`PreferencesService.Reload()` deliberately applies nothing.** It re-reads and raises `Changed`, and `App` is
+still the ONE place a theme variant is assigned (§13.2) — so an imported theme repaints through the existing apply
+point and the import adds no second one. That is why the fix is four lines rather than a wiring exercise.
+
+⚠ **The test is written to fail before the fix, and it does — verified by planting the violation.**
+`AfterAnImport_NoFacadeKeepsItsPreImportSnapshot` does not stop at *"the service sees the imported theme"*: it
+then changes a **different** preference and requires the imported one to survive that write. Only the second half
+catches a missing reload. It also asserts `Changed` fired, because without that the value is right and the window
+is still the old colour.
+
+### 16.2 Implementation decisions the design left open
+
+**(a) ⭐ `SettingsImportSelection` is its own type, not `SettingsExportOptions` reused.** The flags line up, but
+the two answer different questions and their **defaults are opposites**: the export options' defaults *are* the
+ratified content classification (§6.3.4 — "what should normally travel"), whereas a selection has no defensible
+default at all, since it depends on what a particular file happens to carry. Everything in a selection is
+therefore off until something switches it on, and `EverythingIn(content)` is the single place *"take what this
+file has"* is expressed. A flag set for a section the file lacks is **not** an error — it means "I would have
+taken it" — which is what keeps a selection assertable without a file in hand (`IntersectWith` narrows it).
+
+**(b) ⚠⚠ The subtlest data-loss path in the whole sprint, and it is not in the design: an import that does not
+take passwords must not blank the ones already stored.** An export without passwords carries every connection
+with an **empty** password — that is *how* the exporter omits them (§15, `BuildContent`) — so a merge that copied
+the incoming profile wholesale would erase a working credential as a side effect of importing a host name. The
+merge therefore restores two fields from the **local** profile: `Password` (unless passwords were both exported
+*and* selected, and the incoming one is non-empty) and `ClientLibraryPath` (which never travels at all). ⭐ The
+division of labour worth keeping: **`SettingsExporter.BuildContent` decides whether a field travels** (guarded by
+reflection), **`MergeConnections` decides what happens to the local value** — and a new field needs an answer in
+both. Pinned in both directions, and verified by planting the violation.
+
+**(c) ⭐ `.pre-import-<stamp>` is a COPY, and `CanSave` exists because of the ordering that follows.** §6.3.4 says
+to reuse `SaveOverUnreadableFile`'s *"rename aside, never delete"* pattern — and the naming and the principle do
+come from there, but **not the operation**: that method moves the old file away and writes over empty ground,
+whereas an import **merges**, so the file it is preserving is also the file it reads the current values out of.
+Moving it would take the merge base with it and every unselected section would come back as a default. And since
+the copy happens *before* the merge, a `Save` refused afterwards would leave a file created for an operation that
+never happened — whose only remedies are a delete branch on a rule #11 surface or unexplained clutter. So
+`ApplicationSettingsStore.CanSave` asks the question *first*, through the **same** private
+`ExistingFileBlocksSave` that `Save` uses, so the two cannot disagree. ⚠ `Save` still re-checks, and that arm is
+reachable and tested.
+
+**(d) Refusing to import because the recovery copy could not be made.** If `CopyAsideForImport` throws, the import
+stops. The copy is what makes this operation undoable by hand; importing without one would be the single
+irreversible write in the feature.
+
+**(e) The merge rules per section, so they are not re-derived.** Grid profiles by `GridId`, import profiles by
+`Id`, connections by `Id` (imported wins, local-only untouched), folders **merged** — folders by `Id`, the
+per-connection map and sort orders per key, `ExpandedNodeIds` as a **union** (a local node absent from the file was
+not collapsed by anybody), and ⚠ **`ExpandStateInitialized` stays local**, because it records that *this*
+installation already ran the one-time seed. Workspaces replace wholesale **except `WindowBounds`**, which is the
+local machine's geometry and would otherwise be replaced with the null the export always carries.
+
+**(f) ⭐ `SettingKind` — the shape of a row that is an action rather than a value.** The brief asked for this to be
+settled before the page was built, and both obvious answers were worse. *Leaving the row out of the catalog* costs
+search: §5.4's promise is that typing "export" finds this place, and the search reads
+`SettingsCatalog.Settings`. *Reusing `Options == null` as the marker* conflates "not a preference at all" with "a
+preference that is not enumerated" — which is exactly what etap 6's first numeric setting will be. So the catalog
+gained a two-value `Kind`, `ValueOf` / `Compose` see only `Preference` rows, and etap 4's
+`EveryPreference_IsRenderedOrRecordedAsHidden` was taught the distinction rather than exempted from it: it now
+filters to preference rows **and** holds every action row to its own condition (no options, no labels), so "it is
+an action" cannot become a way to opt a row out of the mapping. ⚠ That guard caught the new row on the first run —
+working exactly as etap 4 intended.
+
+**(g) The dialogs are modals with a primary button, and that does not contradict Q8.** Apply-on-change governs the
+preference *pages*; an export is a command that produces a file once and has an outcome to report. Precedent: the
+data `ExportDialog` is the same shape. ⭐ **The passphrase lives inside the import dialog rather than in a modal of
+its own**, which is what keeps §6.3.3's corollary readable: the dialog's own flow is *pick file → phase one runs
+immediately → the passphrase group appears only if `CanBeOpened`*.
+
+**(h) The export's passphrase is confirmed, and the confirmation is part of the gate.** A typo produces a file
+that is **permanently** unreadable and the mistake cannot be detected by anyone afterwards, so the only moment it
+can be caught is before the file exists. The primary button stays disabled until the two match; the
+irreversibility is stated **where the passphrase is typed**, per §6.3.1.
+
+**(i) Failure text is Core's, shown as-is.** Both dialogs switch on `SettingsImportStatus` /
+`SettingsImportApplyStatus` and render `Message` unchanged (§15.8). No import failure wording was added to
+`UiStrings` — two answers to one question is what that rule exists to prevent.
+
+### 16.3 ⚠⚠ The live-session decision (mine, and the one with no safe default)
+
+The brief flagged this as the etap's open judgement. **Decision: apply immediately, disclose honestly, and refuse
+nothing — except that the one section which cannot survive the session gets its overwrite suppressed.**
+
+Rejected: *"import requires no active connection"* (a cost with no safety benefit — every section but one already
+has a live apply path, and `ReloadConnections` runs mid-session on every folder edit today) and *"import applies
+after restart"* (it would make the theme, the formatter and the folders arrive late for no reason).
+
+- **Preferences / formatter** — immediately, through the existing single apply point (§16.1).
+- **Folders / connections** — immediately, through `ReloadConnections`. ⚠ A profile the user is **connected to**
+  keeps the parameters it connected with; the change takes effect on the next connect. That is not new behaviour —
+  editing a profile mid-session has always worked this way — and the dialog says so rather than blocking.
+- **Grid layouts** — on the next build of each grid. Stated.
+- ⭐ **`Workspaces` is different in kind, and applying it "immediately" would not have saved it.** `MainWindow`
+  captures the live workspace on close and saves it, so a session that imported workspaces and then exited would
+  write its own tabs straight over them: **the import would silently undo itself**, which is the precise failure
+  rule #11 forbids. So importing that section arms a one-shot `SuppressWorkspaceCaptureOnClose`, and the dialog
+  says the section applies on the next start.
+  ⚠ **This is not §7.5's rule being broken.** *"Gate restore, never capture"* is about a persistent preference, and
+  its reasoning — turning the setting back on would restore a workspace from whenever it was last disabled — has no
+  purchase on a session-scoped suppression that follows an explicit instruction to replace the stored workspace.
+  ⛔ **Do not turn it into a setting.**
+  Also rejected: restoring the imported workspace into the live session (`RestoreWorkspace`), which would rebuild
+  tabs under an open connection and an open transaction and discard unsaved editor work — and which runs exactly
+  once today, at first VM attach.
+  ⚠ Accepted cost, stated: that session also does not record its window geometry. The merge keeps the **local**
+  bounds, so the previous geometry survives.
+
+### 16.4 Verification — what was actually proved
+
+- **Export → import → write → reload**, with every **unselected** section compared as serialized JSON before and
+  after — not spot-checked, because the failure guarded against is a section rebuilt when nobody asked.
+- **Merging by `Id`**: the same file imported **twice** updates two profiles and adds none, and a local-only
+  profile is untouched.
+- **The password rules in both directions**, and `ClientLibraryPath` kept locally. ⭐ Verified by planting the
+  violation: three tests failed by name.
+- **The `.pre-import-<stamp>` copy exists, and is loaded back as a real `settings.dat`** carrying the *pre*-import
+  values — which is what proves it was a copy rather than a move, and that a hand recovery is one file copy away.
+- **A refusing store is reported and nothing is written or copied** — asserted on the file's bytes and on the
+  absence of any `.pre-import-*`.
+- **An empty selection changes nothing**, reached both ways (nothing ticked; ticked but absent from the file).
+- **Execution history never arrives**, asserted from the applier's side under *every* section selected.
+- **Workspace-capture suppression is armed only by importing workspaces**, never by importing anything else.
+- Headless, on the real windows: **the three portability buttons are on the General page and search finds the row
+  by "backup"**; ⭐ **a phase-one rejection never shows the passphrase field** — a PDF, a real `settings.dat`
+  (ratified Q13 as a UI test) and a newer-format export, each with its own distinct message; and the **whole
+  journey** export → import → apply, asserting the disabled primary button before the passphrases match, the
+  passphrase group appearing only after the file is accepted, and — the trap again — the **live service** holding
+  the imported theme, not just the file.
+
+### 16.5 Deliberately not built in etap 5b
+
+- **Export profiles, schedules, `.json` interchange, a "modified" marker** — standing directive §9.1.
+- **A `CommandId` or `Ctrl+,`** — §5.6, unchanged.
+- **"Restore defaults"** — still §13.4's reasoning; the General page's rows are each one click from default.
+- **A separate passphrase dialog** — §16.2(g): it would have been the natural place to invert the check order.
+- **Any change to the etap-5a format**, to `Preferences` / `PreferenceOptions` / `PreferencesStore` /
+  `CurrentSchemaVersion`, to the one theme apply point, or to `SqlFormatter` / `FormatterStyle` — all verified
+  untouched. `aes256-passphrase` remains unregistered in `ResolveProtector` (§15.1, ratified).
+
+### 16.6 What etap 6 inherits
+
+- **Add a preference:** unchanged from §13.5 — one `SettingsCatalog.Settings` row (now with the default
+  `SettingKind.Preference`), one arm in `ValueOf`, one line in `Compose`, one XAML block, one entry in
+  `PreferencePropertyFor`. **Add a command instead:** the same row with `kind: SettingKind.Action` and no mapping.
+- **Add an export section:** §15.8's recipe, plus one arm in `SettingsImportApplier.Merge`, one flag on
+  `SettingsImportSelection` (and its `Sections` / `EverythingIn` / `IntersectWith`), one checkbox in each dialog.
+  The format version does not move for an additive section.
+- ⚠ **The first free-text or numeric preference still owes §5.5.1's blur-or-Enter commit path** — etap 5b added no
+  preference at all, so §13.4(d)'s note stands unchanged.

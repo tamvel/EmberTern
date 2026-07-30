@@ -961,6 +961,86 @@ internal static class UiStrings
     public const string SettingsSaveRefusedFormat =
         "This change applies for the current session only — it could not be saved. {0}";
 
+    // ── Settings export / import (etap 5b) ──────────────────────────────────────────────────────────
+    // The user-facing half of EmberTern's own .etsettings format. Design §6.3; the format itself is §15.
+    // ⚠ Failure messages are NOT duplicated here. SettingsImportReader / SettingsImportApplier produce them in
+    // Core, on purpose (the same reason Firebird connection-failure text lives in the Firebird layer): a status
+    // whose meaning is decided in Core should not have its explanation decided somewhere else. Surfaces switch
+    // on the STATUS and show the message as-is (§15.8).
+    public const string SettingsImportExportLabel = "Import / export settings";
+    public const string SettingsImportExportDescription =
+        "Copy your settings to another machine, or keep a backup. The file is always encrypted with a "
+        + "passphrase you choose.";
+    public const string SettingsImportExportKeywords =
+        "export import backup restore transfer move copy migrate passphrase encrypt file etsettings folder";
+
+    public const string SettingsExportButton = "Export…";
+    public const string SettingsImportButton = "Import…";
+    public const string SettingsOpenFolderButton = "Open settings folder";
+    public const string SettingsOpenFolderTooltip =
+        "Opens the folder holding settings.dat and its backup copies.";
+
+    // ── Export dialog ───────────────────────────────────────────────────────────────────────────────
+    public const string SettingsExportTitle = "Export settings";
+    public const string SettingsExportIntro = "Choose what to include, then set a passphrase for the file.";
+    public const string SettingsExportSectionsHeader = "Include";
+    public const string SettingsExportPassphraseHeader = "Passphrase";
+    public const string SettingsExportRun = "Export…";
+    public const string SettingsExportCancel = "Cancel";
+    public const string SettingsExportFileFilter = "EmberTern settings export";
+    public const string SettingsExportSuggestedName = "embertern-settings";
+
+    public const string SettingsSectionPreferences = "Preferences (theme, language, formatter)";
+    public const string SettingsSectionGridProfiles = "Grid column layouts";
+    public const string SettingsSectionFolders = "Connection folders";
+    public const string SettingsSectionConnections = "Connection profiles";
+    // ⚠ Ratified Q2: the label must state that the file will contain database credentials. It says it plainly —
+    // the whole reason the checkbox exists is that the user should be making this decision knowingly.
+    public const string SettingsSectionPasswords = "Connection passwords — the file will contain database credentials";
+    public const string SettingsSectionWorkspaces = "Open tabs, SQL text and saved queries";
+    public const string SettingsSectionImportProfiles = "Data Import configurations";
+
+    public const string SettingsExportPassphraseLabel = "Passphrase";
+    public const string SettingsExportPassphraseConfirmLabel = "Repeat passphrase";
+    // ⚠ Stated where the passphrase is TYPED, not in a help page: a passphrase-derived key means a forgotten
+    // passphrase makes the file permanently unreadable, with no reset and no back door (design §6.3.1). That is
+    // a consequence of the ratified always-encrypted decision, and the only honest place to say it is here.
+    public const string SettingsExportPassphraseWarning =
+        "There is no way to recover this passphrase. Without it the file cannot be read again — by anyone, "
+        + "including us.";
+    public const string SettingsExportPassphraseMismatch = "The two passphrases are not the same.";
+    public const string SettingsExportPassphraseMissing = "Enter a passphrase — every export is encrypted.";
+    public const string SettingsExportNothingSelected = "Select at least one thing to include.";
+    // {0} = file name.
+    public const string SettingsExportDoneFormat = "Exported to {0}.";
+    // {0} = the failure message.
+    public const string SettingsExportFailedFormat = "The export could not be written: {0}";
+
+    // ── Import dialog ───────────────────────────────────────────────────────────────────────────────
+    public const string SettingsImportTitle = "Import settings";
+    public const string SettingsImportPickFile = "Choose file…";
+    public const string SettingsImportIntro =
+        "Choose an exported settings file. Its contents are shown once it has been opened.";
+    public const string SettingsImportPassphraseLabel = "Passphrase";
+    public const string SettingsImportOpen = "Open";
+    public const string SettingsImportRun = "Import selected";
+    public const string SettingsImportCancel = "Close";
+    public const string SettingsImportContentsHeader = "Take from this file";
+    // ⚠ Shown only when the file carries passwords AND the row is offered — an import overwrites the password
+    // stored for the same connection, which is a thing to say before it happens rather than after.
+    public const string SettingsImportPasswordsNote =
+        "Taking passwords replaces the password stored for each matching connection.";
+    // ⭐ The honest disclosure of what an import can and cannot do to a RUNNING session, in the place the user
+    // decides. Nothing is blocked (EmberTern discloses rather than forbids); it just has to be true.
+    public const string SettingsImportLiveSessionNote =
+        "Theme, formatter, folders and connections apply immediately. A profile you are connected to keeps its "
+        + "current settings until you reconnect. Open tabs and saved queries apply the next time EmberTern "
+        + "starts.";
+    // {0} = the comma-separated sections taken. {1} = the preserved copy's file name.
+    public const string SettingsImportDoneFormat = "Imported: {0}. Your previous settings were kept as {1}.";
+    // Used when there was no settings.dat to preserve — a first run.
+    public const string SettingsImportDoneNoBackupFormat = "Imported: {0}.";
+
     // ── Canonical command names (CommandDescriptor.Title) ───────────────────────────────────────────
     // ONE host-independent name per command, for surfaces that LIST commands: the Keyboard Shortcuts window
     // today, a Command Palette later. Deliberately separate from the tooltip strings above and below, which

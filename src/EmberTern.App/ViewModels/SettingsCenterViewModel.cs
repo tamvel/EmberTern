@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Settings;
 using EmberTern.Core.Settings;
 
@@ -44,40 +46,25 @@ public sealed partial class PreferenceOptionViewModel : ObservableObject
 }
 
 /// <summary>
-/// One row on a settings page: its caption, its sentence, its legal values and its current value.
-///
-/// <para>⭐ <b>The values come from the Core option set, never from XAML</b> (design §5.2.2). A hand-typed
-/// list in the view would be a second copy of the legal set, and the drift is silent in the dangerous
-/// direction: the user picks an option the validator rejects, it appears to work, and it reverts on the next
-/// load with nothing failing anywhere.</para>
+/// What every row on a settings page has in common: a caption, a sentence, a search haystack, and whether the
+/// current search matched it.
+/// <para>⭐ It exists because etap 5b added a row that is a <b>command</b> rather than a value (Import / export),
+/// and search reads the whole catalog — so both kinds must be filterable by exactly the same rule. The
+/// alternative was giving the action row a fake value.</para>
 /// </summary>
-public sealed partial class PreferenceSettingViewModel : ObservableObject
+public abstract partial class SettingRowViewModel : ObservableObject
 {
-    private readonly List<PreferenceOptionViewModel> _options = new();
-    private bool _syncing;
-    private string _value = string.Empty;
-
-    internal PreferenceSettingViewModel(SettingDescriptor descriptor, string categoryTitle, string value)
+    protected SettingRowViewModel(SettingDescriptor descriptor, string categoryTitle)
     {
         Id = descriptor.Id;
         CategoryId = descriptor.CategoryId;
         Label = descriptor.Label;
         Description = descriptor.Description;
 
-        if (descriptor.Options is { } options && descriptor.OptionLabels is { } labels)
-        {
-            foreach (var key in options.Values)
-            {
-                _options.Add(new PreferenceOptionViewModel(this, key, labels[key]));
-            }
-        }
-
         // Searching matches what is DISPLAYED plus the keywords that lead to it — and the category's own
         // title, so typing "general" keeps the whole page rather than emptying it.
         Haystack = string.Join('\n',
             Label, Description, categoryTitle, string.Join(' ', descriptor.Keywords));
-
-        SetValue(value, notify: false);
     }
 
     public string Id { get; }
@@ -88,14 +75,57 @@ public sealed partial class PreferenceSettingViewModel : ObservableObject
 
     public string Description { get; }
 
-    public IReadOnlyList<PreferenceOptionViewModel> Options => _options;
-
     /// <summary>Hidden by a search that does not match it. The row stays in place; only its visibility
     /// changes, so nothing is rebuilt while the user types.</summary>
     [ObservableProperty]
     private bool _isVisible = true;
 
     internal string Haystack { get; }
+}
+
+/// <summary>
+/// A row that offers commands instead of a value — today only Import / export settings.
+/// <para>It holds no value, is never persisted, and deliberately has no arm in
+/// <c>SettingsCenterViewModel.ValueOf</c> or <c>Compose</c>: apply-on-change is a property of preferences, and
+/// an export is a deliberate action with its own dialog.</para>
+/// </summary>
+public sealed class SettingActionViewModel : SettingRowViewModel
+{
+    internal SettingActionViewModel(SettingDescriptor descriptor, string categoryTitle)
+        : base(descriptor, categoryTitle)
+    {
+    }
+}
+
+/// <summary>
+/// One preference row on a settings page: its caption, its sentence, its legal values and its current value.
+///
+/// <para>⭐ <b>The values come from the Core option set, never from XAML</b> (design §5.2.2). A hand-typed
+/// list in the view would be a second copy of the legal set, and the drift is silent in the dangerous
+/// direction: the user picks an option the validator rejects, it appears to work, and it reverts on the next
+/// load with nothing failing anywhere.</para>
+/// </summary>
+public sealed partial class PreferenceSettingViewModel : SettingRowViewModel
+{
+    private readonly List<PreferenceOptionViewModel> _options = new();
+    private bool _syncing;
+    private string _value = string.Empty;
+
+    internal PreferenceSettingViewModel(SettingDescriptor descriptor, string categoryTitle, string value)
+        : base(descriptor, categoryTitle)
+    {
+        if (descriptor.Options is { } options && descriptor.OptionLabels is { } labels)
+        {
+            foreach (var key in options.Values)
+            {
+                _options.Add(new PreferenceOptionViewModel(this, key, labels[key]));
+            }
+        }
+
+        SetValue(value, notify: false);
+    }
+
+    public IReadOnlyList<PreferenceOptionViewModel> Options => _options;
 
     /// <summary>The stored key of the current value. Setting it is what "apply on change" means for a
     /// discrete control: the user selected, so the value is settled.</summary>
@@ -189,12 +219,14 @@ public sealed class SettingsCategoryViewModel
 public sealed partial class SettingsCenterViewModel : ObservableObject
 {
     private readonly PreferencesService _preferences;
+    private readonly SettingsPortability _portability;
     private readonly IReadOnlyList<SettingsCategoryViewModel> _allCategories;
-    private readonly Dictionary<string, PreferenceSettingViewModel> _settings = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SettingRowViewModel> _settings = new(StringComparer.Ordinal);
 
-    public SettingsCenterViewModel(PreferencesService preferences)
+    public SettingsCenterViewModel(PreferencesService preferences, SettingsPortability portability)
     {
         _preferences = preferences;
+        _portability = portability;
         var current = preferences.Current;
 
         _allCategories = SettingsCatalog.Categories
@@ -205,6 +237,15 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         {
             foreach (var descriptor in SettingsCatalog.SettingsIn(category.Id))
             {
+                // ⚠ The two kinds diverge HERE and nowhere else. An action row is never handed to ValueOf, which
+                // is what keeps that mapping a statement about preferences only — it still throws for an id it
+                // does not know, and that is the guard, not an inconvenience.
+                if (descriptor.Kind == SettingKind.Action)
+                {
+                    _settings.Add(descriptor.Id, new SettingActionViewModel(descriptor, category.Title));
+                    continue;
+                }
+
                 var setting = new PreferenceSettingViewModel(descriptor, category.Title, ValueOf(descriptor.Id, current));
                 setting.ValueChanged += (_, _) => Commit();
                 _settings.Add(descriptor.Id, setting);
@@ -214,6 +255,18 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         Categories = new ObservableCollection<SettingsCategoryViewModel>(_allCategories);
         SelectedCategory = Categories.FirstOrDefault();
     }
+
+    /// <summary>
+    /// Opens the export dialog. Supplied by the view, because a file picker and a modal owner are view things —
+    /// the same request/callback shape <c>ExportDialogViewModel</c> already uses for the data export.
+    /// </summary>
+    public Func<Task>? RequestExport { get; set; }
+
+    /// <summary>Opens the import dialog.</summary>
+    public Func<Task>? RequestImport { get; set; }
+
+    /// <summary>Reveals <see cref="SettingsPortability.SettingsFolder"/> in the shell.</summary>
+    public Func<string, Task>? RequestRevealFolder { get; set; }
 
     public ObservableCollection<SettingsCategoryViewModel> Categories { get; }
 
@@ -234,15 +287,42 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     [ObservableProperty]
     private bool _showSaveRefusal;
 
-    public PreferenceSettingViewModel Theme => _settings[SettingsCatalog.SettingTheme];
+    public PreferenceSettingViewModel Theme => Preference(SettingsCatalog.SettingTheme);
 
-    public PreferenceSettingViewModel Language => _settings[SettingsCatalog.SettingLanguage];
+    public PreferenceSettingViewModel Language => Preference(SettingsCatalog.SettingLanguage);
 
     public PreferenceSettingViewModel FormatterKeywordCase
-        => _settings[SettingsCatalog.SettingFormatterKeywordCase];
+        => Preference(SettingsCatalog.SettingFormatterKeywordCase);
 
     public PreferenceSettingViewModel FormatterIdentifierCase
-        => _settings[SettingsCatalog.SettingFormatterIdentifierCase];
+        => Preference(SettingsCatalog.SettingFormatterIdentifierCase);
+
+    /// <summary>The Import / export row — an action row, so it exposes visibility and words but no value.</summary>
+    public SettingActionViewModel ImportExport
+        => (SettingActionViewModel)_settings[SettingsCatalog.SettingImportExport];
+
+    private PreferenceSettingViewModel Preference(string id) => (PreferenceSettingViewModel)_settings[id];
+
+    /// <summary>The folder the <i>Open settings folder</i> button reveals.</summary>
+    public string SettingsFolder => _portability.SettingsFolder;
+
+    [RelayCommand]
+    private async Task ExportSettingsAsync()
+    {
+        if (RequestExport is { } request) await request();
+    }
+
+    [RelayCommand]
+    private async Task ImportSettingsAsync()
+    {
+        if (RequestImport is { } request) await request();
+    }
+
+    [RelayCommand]
+    private async Task OpenSettingsFolderAsync()
+    {
+        if (RequestRevealFolder is { } reveal) await reveal(_portability.SettingsFolder);
+    }
 
     /// <summary>
     /// Which page the right pane shows. One property per category, deliberately: with a handful of pages this
@@ -316,6 +396,8 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     /// </summary>
     private Preferences Compose() => _preferences.Current with
     {
+        // ⚠ Action rows (Import / export) are absent here by design, not omission — they carry no value. The
+        // SettingKind split is what makes that a typed fact rather than a convention.
         Theme = Theme.Value,
         Language = Language.Value,
         FormatterKeywordCase = FormatterKeywordCase.Value,

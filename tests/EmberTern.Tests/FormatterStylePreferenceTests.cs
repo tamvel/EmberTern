@@ -181,9 +181,22 @@ public class FormatterStylePreferenceTests
         // the four is rendered. An entry here is a decision, not a TODO.
         var deliberatelyHidden = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        // ⚠ Only PREFERENCE rows map to a property. An ACTION row (etap 5b's Import / export) is a command with
+        // nothing stored, and filtering it out here is what keeps PreferencePropertyFor a total function over the
+        // rows that DO have a property — so a new preference row still fails below until it is mapped, while a new
+        // button does not have to invent a property to satisfy a guard.
         var rendered = SettingsCatalog.Settings
+            .Where(s => s.Kind == SettingKind.Preference)
             .Select(s => PreferencePropertyFor(s.Id))
             .ToHashSet(StringComparer.Ordinal);
+
+        // And the action rows are held to their own condition, so "it is an action" cannot become a way to opt a
+        // row out of the mapping: an action must have no options and no value to render.
+        foreach (var action in SettingsCatalog.Settings.Where(s => s.Kind == SettingKind.Action))
+        {
+            Assert.Null(action.Options);
+            Assert.Null(action.OptionLabels);
+        }
 
         var all = typeof(Preferences)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)

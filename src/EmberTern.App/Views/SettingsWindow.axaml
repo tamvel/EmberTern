@@ -121,6 +121,37 @@
                 </StackPanel>
               </Border>
 
+              <!-- Import / export. ⚠ An ACTION row — it is in the catalog (so search finds it by "export",
+                   "backup", "migrate") but has no stored value and no arm in ValueOf / Compose; see
+                   SettingKind. Both operations open their own dialog, because they are commands with an outcome
+                   rather than settings that apply on change. -->
+              <Border Classes="settings-group" IsVisible="{Binding ImportExport.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding ImportExport.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding ImportExport.Description}"
+                             TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                    <Button x:Name="ExportSettingsButton"
+                            Classes="flat"
+                            Content="{x:Static app:UiStrings.SettingsExportButton}"
+                            Command="{Binding ExportSettingsCommand}" />
+                    <Button x:Name="ImportSettingsButton"
+                            Classes="flat"
+                            Content="{x:Static app:UiStrings.SettingsImportButton}"
+                            Command="{Binding ImportSettingsCommand}" />
+                    <!-- Cheap, and genuinely useful since the hardening sprint made settings.dat.bak and
+                         settings.dat.unreadable-<stamp> real artifacts a user may need to reach — with no path
+                         shown anywhere else in the UI. The pre-import copies land here too. -->
+                    <Button x:Name="OpenSettingsFolderButton"
+                            Classes="flat"
+                            Content="{x:Static app:UiStrings.SettingsOpenFolderButton}"
+                            ToolTip.Tip="{x:Static app:UiStrings.SettingsOpenFolderTooltip}"
+                            Command="{Binding OpenSettingsFolderCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
             </StackPanel>
 
             <!-- SQL Formatter. Exactly two rows, ratified (§6.4 / §9.1): no line width, no indent size, no

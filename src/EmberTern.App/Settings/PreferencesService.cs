@@ -62,6 +62,24 @@ public sealed class PreferencesService
     /// twice for a file problem they have already been told about. The surface that asked for the change is
     /// what must say it did not persist (design §5.5); that is what the return value is for.
     /// </remarks>
+    /// <summary>
+    /// Re-reads the preferences from the file and raises <see cref="Changed"/>.
+    ///
+    /// <para>⭐ <b>Added for the settings IMPORT, and it closes the same failure this class exists to prevent —
+    /// one level up.</b> An import writes <c>settings.dat</c> directly, so without this the service keeps its
+    /// pre-import snapshot: the theme would not repaint, and the next preference the user changed would write the
+    /// stale copy back over everything that was just imported. Silent, unlogged, green build.</para>
+    ///
+    /// <para>⭐ It deliberately does <b>not</b> apply anything itself. Raising <see cref="Changed"/> is what makes
+    /// the imported theme take effect, because <c>App</c> is the ONE place a theme variant is assigned (design
+    /// §13.2) — so an import reuses the existing apply point instead of becoming a second one.</para>
+    /// </summary>
+    public void Reload()
+    {
+        _current = _store.Load();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     public bool Apply(Preferences updated)
     {
         ArgumentNullException.ThrowIfNull(updated);

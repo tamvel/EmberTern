@@ -322,6 +322,47 @@ public sealed class ApplicationSettingsStore
     }
 
     /// <summary>
+    /// Whether <see cref="Save"/> would write, asked <b>before</b> anything is prepared for it.
+    /// <para>⭐ Added for the settings IMPORT (etap 5b), and the reason is ordering rather than convenience. An
+    /// import copies the current <c>settings.dat</c> aside before it merges; if the save were then refused, that
+    /// copy would be a file created for an operation that never happened — and the only ways out of that are a
+    /// delete branch on a rule #11 surface or leaving unexplained clutter in the settings folder. Asking first
+    /// removes the choice.</para>
+    /// <para>⚠ It is the <i>same</i> judgement <see cref="Save"/> makes, from the same file, through the same
+    /// private method — not a second opinion that could disagree with it. <see cref="Save"/> still re-checks, so a
+    /// file that changes in between is caught there.</para>
+    /// </summary>
+    /// <returns>True when the file on disk is one this build may replace; otherwise false, with
+    /// <paramref name="diagnostic"/> saying why in the words <see cref="LastSaveDiagnostic"/> would use.</returns>
+    public bool CanSave(out string diagnostic) => !ExistingFileBlocksSave(out diagnostic);
+
+    /// <summary>
+    /// Copies the current <c>settings.dat</c> aside as <c>settings.dat.pre-import-&lt;stamp&gt;</c>, returning the
+    /// path, or null when there was no file to copy.
+    ///
+    /// <para>⚠ <b>A COPY, not a move, and the difference is load-bearing.</b> The naming and the "never delete"
+    /// principle come from <see cref="SaveOverUnreadableFile"/>, but its <i>operation</i> does not: that method
+    /// renames the old file aside and writes a fresh one over empty ground, whereas an import <b>merges</b> — the
+    /// file it is preserving is also the file it is about to read the current values out of. Moving it away would
+    /// take the merge base with it, and every unselected section would come back as a default.</para>
+    ///
+    /// <para>Timestamped for the same reason the unreadable copy is: a second import must not overwrite the first
+    /// rescue copy.</para>
+    /// </summary>
+    public string? CopyAsideForImport()
+    {
+        if (!File.Exists(_filePath))
+        {
+            return null;
+        }
+
+        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var preservedAt = _filePath + ".pre-import-" + stamp;
+        File.Copy(_filePath, preservedAt, overwrite: true);
+        return preservedAt;
+    }
+
+    /// <summary>
     /// Writes fresh settings over a file this build cannot interpret, <b>after preserving the old bytes</b>
     /// beside it. The deliberate escape hatch from <see cref="Save"/>'s refusal — and the only way past it.
     /// <para>Nothing calls this automatically, and nothing should: the whole point of the refusal is that a

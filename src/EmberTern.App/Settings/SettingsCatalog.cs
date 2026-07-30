@@ -22,8 +22,31 @@ public sealed class SettingsCategoryDescriptor
 }
 
 /// <summary>
-/// One setting: what it is called, what it is about, and (for an enumerated one) which Core option set it
-/// draws its legal values from.
+/// What a catalog row IS — a value the user picks, or something the user does.
+///
+/// <para>⭐ <b>Added in etap 5b, and the alternative was worse in a specific way.</b> Import / Export are
+/// buttons, not preferences: they have no <c>PreferenceOptions</c>, no arm in <c>ValueOf</c> / <c>Compose</c>,
+/// and nothing to apply on change. The tempting shape was to leave them out of the catalog entirely — but
+/// <b>search reads the catalog</b> (design §5.4), so a row outside it is a row the user cannot find by typing
+/// "export", which is exactly the promise search makes. The other tempting shape was to reuse
+/// <c>Options == null</c> as the marker; that conflates "not a preference at all" with "a preference that is not
+/// enumerated", which is what a future free-text or numeric setting will be (etap 6). Two meanings on one null
+/// is how a button and a number end up in the same code path.</para>
+/// </summary>
+public enum SettingKind
+{
+    /// <summary>Backed by a property on <c>Preferences</c>. Appears in <c>ValueOf</c> and <c>Compose</c>, and
+    /// applies on change.</summary>
+    Preference,
+
+    /// <summary>A command the row offers. Carries no value, is never persisted, and must NOT appear in
+    /// <c>ValueOf</c> / <c>Compose</c> — but is searchable exactly like any other row.</summary>
+    Action,
+}
+
+/// <summary>
+/// One row on a settings page: what it is called, what it is about, whether it is a value or an action, and
+/// (for an enumerated preference) which Core option set it draws its legal values from.
 /// </summary>
 public sealed class SettingDescriptor
 {
@@ -34,7 +57,8 @@ public sealed class SettingDescriptor
         string description,
         string keywords,
         PreferenceOptionSet? options = null,
-        IReadOnlyDictionary<string, string>? optionLabels = null)
+        IReadOnlyDictionary<string, string>? optionLabels = null,
+        SettingKind kind = SettingKind.Preference)
     {
         Id = id;
         CategoryId = categoryId;
@@ -44,9 +68,13 @@ public sealed class SettingDescriptor
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         Options = options;
         OptionLabels = optionLabels;
+        Kind = kind;
     }
 
     public string Id { get; }
+
+    /// <summary>Whether this row is a stored value or a command. See <see cref="SettingKind"/>.</summary>
+    public SettingKind Kind { get; }
 
     public string CategoryId { get; }
 
@@ -104,6 +132,7 @@ public static class SettingsCatalog
 
     public const string SettingTheme = "general.theme";
     public const string SettingLanguage = "general.language";
+    public const string SettingImportExport = "general.importExport";
     public const string SettingFormatterKeywordCase = "formatter.keywordCase";
     public const string SettingFormatterIdentifierCase = "formatter.identifierCase";
 
@@ -141,6 +170,17 @@ public static class SettingsCatalog
                 {
                     [PreferenceOptions.LanguageEnglish] = UiStrings.SettingsLanguageEnglish,
                 }),
+
+            // ⚠ An ACTION row, not a preference: two buttons and a folder shortcut, with nothing stored. It is
+            // in this table anyway because SEARCH reads this table — typing "export" or "backup" has to land
+            // here, and a row outside the catalog is invisible to it (design §5.4). Hence SettingKind.
+            new SettingDescriptor(
+                SettingImportExport,
+                CategoryGeneral,
+                UiStrings.SettingsImportExportLabel,
+                UiStrings.SettingsImportExportDescription,
+                UiStrings.SettingsImportExportKeywords,
+                kind: SettingKind.Action),
 
             // ⚠ Both formatter rows draw on the SAME Core option set (PreferenceOptions.Casing) — two
             // preferences over one declared vocabulary, which is why "Upper" cannot come to mean one thing for

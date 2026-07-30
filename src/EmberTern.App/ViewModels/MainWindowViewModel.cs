@@ -43,6 +43,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly WatchStore _watchStore;
     private readonly EmberTern.Core.Import.ImportProfileStore _importProfiles;
     private readonly PreferencesService _preferences;
+    private readonly SettingsPortability _portability;
 
     // ⭐ The ONE owner of "does the application hold anything uncommitted". Before I7.5 that question had a
     // single answer (the console transaction) and the guards asked it directly; Data Import's own
@@ -180,6 +181,15 @@ public partial class MainWindowViewModel : ViewModelBase
         // Settings Center). The service loads here and is handed to both.
         _preferences = new PreferencesService(new PreferencesStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector));
+        // Settings export / import (etap 5b). Same settings.dat + protector again, and the app version comes from
+        // AppInfo because Core cannot see it and must not be able to branch on it (§15.3a). AfterImport is this
+        // view model's own refresh: the import rewrites the file several in-memory holders were loaded from.
+        _portability = new SettingsPortability(
+            new ApplicationSettingsStore(
+                System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector),
+            _preferences,
+            AppInfo.Version,
+            ApplyImportedSettings);
         _folderState = _folderStore.Load();
         // Settings health (audit A-03). Read ONCE, here, because the answer is a property of the file on disk
         // at startup and does not change while we run — and because it must be read BEFORE anything in this
@@ -297,6 +307,39 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <see cref="Preferences"/> at a time.</para>
     /// </summary>
     public PreferencesService Preferences => _preferences;
+
+    /// <summary>
+    /// Settings export / import (etap 5b), over the same <c>settings.dat</c> and protector as every other
+    /// facade. Its <c>AfterImport</c> is wired here because the in-memory holders an import invalidates are this
+    /// view model's — see <see cref="ApplyImportedSettings"/>.
+    /// </summary>
+    public SettingsPortability Portability => _portability;
+
+    /// <summary>
+    /// Brings this view model back into step with a <c>settings.dat</c> that an import has just rewritten.
+    ///
+    /// <para>⚠ <b>The two holders here were found by reading the code, not by guessing.</b>
+    /// <c>_folderState</c> is loaded once in the constructor and mutated in place all session, so without the
+    /// reload the next folder edit would write the pre-import layout back. Connections have no snapshot —
+    /// <see cref="ReloadConnections"/> re-reads them — but the tree still has to be rebuilt to show the imported
+    /// profiles, and it reads <c>_folderState</c>, which is why the order below is not arbitrary.</para>
+    ///
+    /// <para>An active connection keeps the parameters it connected with; a changed profile takes effect on its
+    /// next connect. That is not new behaviour — editing a profile mid-session has always worked this way — and
+    /// the import surface says so rather than blocking on it.</para>
+    /// </summary>
+    public void ApplyImportedSettings()
+    {
+        _folderState = _folderStore.Load();
+        ReloadConnections();
+    }
+
+    /// <summary>
+    /// ⚠ True when this session must NOT capture its workspace on exit, because an import replaced the stored
+    /// one. Read by <c>MainWindow.OnClosing</c>; see <see cref="SettingsPortability.ImportedWorkspaces"/> for why
+    /// suppressing that one write is what makes the import honest.
+    /// </summary>
+    public bool SuppressWorkspaceCaptureOnClose => _portability.ImportedWorkspaces;
 
     /// <summary>
     /// The casing style the <b>Format SQL</b> action must use right now, read from the live preferences
