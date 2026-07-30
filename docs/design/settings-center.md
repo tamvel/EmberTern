@@ -8,8 +8,11 @@ list, search, apply-on-change, the refusal banner, and the complete General page
 the theme is now persisted and read at startup, which closes §2.1 end to end. As built: §13.
 ⭐ ETAP 4 DELIVERED AND USER-ACCEPTED 2026-07-30 — `FormatterStyle`, the ONE casing decision point, the
 keyword/identifier split, and the SQL Formatter page with its two rows; the default output is byte-identical
-(459 existing formatter assertions pass unedited). As built: §14. Etap 5a (the export format, Core only) is
-next.**
+(459 existing formatter assertions pass unedited). As built: §14.
+⭐ ETAP 5a DELIVERED 2026-07-30 — the export FORMAT: its own magic (Q13), the versioned cleartext header, the
+`aes256-passphrase` AES-256-GCM protector, the two-phase ordered check sequence, both migration axes, and 176
+tests. Core only, no UI. As built: **§15** — read §15.1 first, it records the one deviation from the brief.
+Etap 5b (the export/import UI) is next.**
 Branch: `feat/settings-center`.
 
 ⚠ **Etap 4 corrected §2.2 on two measured points — read §14.1 before touching the formatter.** §2.2(a)
@@ -745,6 +748,11 @@ resolution rules twice.
 
 ### 6.3 General → Import / Export Settings
 
+⭐ **The FORMAT half of this section is now AS BUILT — etap 5a, §15.** §6.3.1–§6.3.4 are the design and were
+followed; where the implementation settled something they left open, or diverged, §15 says so and wins. The
+UI half (section selection, the passphrase flow, `.pre-import-<stamp>`, *Open settings folder*) is still
+etap 5b's.
+
 ⭐ **RATIFIED (user, 2026-07-29 — supersedes my Q3 recommendation): this is EmberTern's own versioned
 export format, not JSON as a public contract. EVERY export is encrypted, whether or not it contains
 passwords.** The rationale is the design one and it is the stronger argument: **one uniform format means
@@ -937,6 +945,10 @@ claim that the file is readable given the right one.
 ⚠ Corollary for whoever implements 5b: the passphrase dialog must not be the *entry point* to import. The
 file is validated first, then the passphrase is requested. Wiring it the other way round is the natural
 shape if the dialog is built first, and it silently discards every distinct message above.
+
+⭐ **AS BUILT (etap 5a): that corollary is enforced by the API's shape rather than left as advice.**
+`SettingsImportReader.Inspect` runs checks 1–4 and takes **no passphrase**; `Open` takes an *inspection*,
+never a path. So etap 5b cannot express the wrong order — §15.3.
 
 #### 6.3.4 What travels
 
@@ -1220,11 +1232,13 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 **2** | Core foundation: `Preferences` (incl. `Theme`, `Language`, the two formatter cases) + `PreferencesStore` (8th facade) + the language catalog + defaults contract + tests. **No UI.** | ✅ **done 2026-07-29 — §12** |
 **3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | ✅ **done 2026-07-29 — §13** |
 **4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | ✅ **done 2026-07-30 — §14** |
-**5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM) protector registered in `ResolveProtector`, KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** ⚠ **Read the F4 note below before starting.** | needs etap 2's shape settled to know what it serialises; pure Core and fully testable without a window, which is what makes the split worth making |
+**5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM), KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** | ✅ **done 2026-07-30 — §15.** ⚠ The protector is deliberately **NOT** registered in `ResolveProtector`; §15.1 explains why that instruction did not survive the design. F4 resolved in §15.2. |
 **5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | the format is settled and provable before any dialog exists |
 **6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | additive; naturally last, and trimmable without blocking anything |
 
-⚠ **Etap 5a — F4, decide this at the START, not halfway through.** §6.3.2 says the export's inner
+⚠ **Etap 5a — F4. ✅ RESOLVED (§15.2): `MigrateToCurrentVersion` is now `internal static`, and the export
+payload is shaped as an `ApplicationSettings` so the import calls that exact ladder. Kept below because its
+reasoning is why the payload has the shape it does.** §6.3.2 says the export's inner
 `SchemaVersion` is *"already handled by `MigrateToCurrentVersion`'s existing ladder"*. **That method is
 `private`** (`ApplicationSettingsStore.cs:432`, and so is `Migrate_1_2`), and import lives in a different
 class. So etap 5a must either widen its visibility or route import through the store — **it must not
@@ -1666,3 +1680,216 @@ Recorded because three of the four are general rules, not compliments on this et
 - Adding a preference is unchanged from §13.5's recipe, plus **one arm in
   `FormatterStylePreferenceTests.PreferencePropertyFor`** — deliberately explicit for the same reason
   `ValueOf`/`Compose` are.
+
+---
+
+## 15. ⭐ Etap 5a — as built (2026-07-30)
+
+The export format exists, is versioned, is encrypted, and is proved by tests before any dialog exists — which
+is the whole reason **Q11** split etap 5 in two. Pure Core; no App or Avalonia file was touched. Build 0/0;
+suite **6960** green in the two documented partitions (6901 + 59), up 176; smoke clean.
+
+| File | Job |
+|---|---|
+[`Core/Security/PassphraseProtector.cs`](../../src/EmberTern.Core/Security/PassphraseProtector.cs) | Builds the `aes256-passphrase` protector: AES-256-**GCM** under a PBKDF2-SHA256 key. The only new crypto in the sprint. |
+[`Core/Security/EncryptionSchemes.cs`](../../src/EmberTern.Core/Security/EncryptionSchemes.cs) | `PassphraseAes256` promoted from a reserved comment to a real constant — ⚠ with the reserved comment's *instruction* corrected (§15.1). |
+[`Core/Settings/Export/SettingsExportFormat.cs`](../../src/EmberTern.Core/Settings/Export/SettingsExportFormat.cs) | Identity and the version contract: the magic (**Q13**), `CurrentFormatVersion`, `OldestSupportedFormatVersion`, `.etsettings`, the header size cap. Also the one place the **three** version axes are named together. |
+`Core/Settings/Export/SettingsExportEnvelope.cs` | `SettingsExportHeader` + `Wrap` / `TryReadHeader` / `ReadPayload`. Deliberately the same shape as `SettingsFileContainer`. |
+`Core/Settings/Export/SettingsExportSections.cs` | The seven section names, **as strings** (§5.2.3's rule applies — they are persisted). |
+`Core/Settings/Export/SettingsExportOptions.cs` | What to include; **its defaults are §6.3.4's classification**. |
+`Core/Settings/Export/SettingsExportContent.cs` | The payload: the section list + the settings, the latter as an `ApplicationSettings` (§15.2). |
+`Core/Settings/Export/SettingsExporter.cs` | ⭐ The content classification in ONE method, plus serialize → encrypt → wrap. |
+`Core/Settings/Export/SettingsExportMigration.cs` | The `ExportFormatVersion` ladder. ⚠ Refuses on a missing step where the settings.dat ladder stamps (§15.4). |
+`Core/Settings/Export/SettingsImportReader.cs` | ⭐ The ordered checks, in **two phases** — the shape that makes "validate first, prompt second" inexpressible to get wrong. |
+`Core/Settings/ApplicationSettingsStore.cs` | Three small openings: `JsonOptions` and `MigrateToCurrentVersion` are now `internal`, and a settings.dat that is actually an export now says so (§15.5). |
+`SettingsExportFormatTests` · `SettingsExportContentTests` | 176 tests. |
+
+### 15.1 ⚠⚠ THE ONE DEVIATION FROM THE BRIEF — the protector is NOT registered in `ResolveProtector`
+
+Both the etap brief and `EncryptionSchemes`' own reserved comment said to *"add the protector and register it in
+`ApplicationSettingsStore.ResolveProtector`, then start writing it as the scheme"*. **That instruction was
+written before the export had an envelope of its own, and it does not survive the design.** It was not followed;
+the reasoning is recorded here and on both types, because the next reader will otherwise "fix" it.
+
+`ResolveProtector` answers one question: *which protector decrypts **this `settings.dat`** payload?* It is
+called from `LoadWithStatus` and `ExistingFileBlocksSave`, neither of which has — or could have — a passphrase.
+So registering `aes256-passphrase` there could only return a protector that **cannot decrypt**, and the
+consequences all point the wrong way:
+
+- The refusal gets *worse*, not better. An export dropped in place of `settings.dat` is refused today; with a
+  registration it would be refused as *"could not be decrypted — written by a different Windows account"*,
+  which is untrue.
+- The protector an import needs is **per file**, built from that file's own salt and iteration count by
+  `SettingsImportReader`. There is nothing for a store-level registry to hold.
+
+⭐ **The general shape, which is why this is worth a section rather than a code comment: the reserved note
+generalised from an AT-REST scheme (one whose key the store can obtain by itself) to a scheme that needs a
+credential from the user, and those are not the same kind of thing.** `ResolveProtector` now carries an explicit
+arm returning null for this scheme with that reason on it — a visible decision where someone would go to make
+it, rather than a fall-through — and `EncryptionSchemes`' reserved block says the instruction holds for
+`aes256-machinekey` and not for this. Pinned by `ThePassphraseSchemeIsNotAsettingsDatScheme`.
+
+### 15.2 ⭐ F4 resolved — and the answer changed the payload's shape, which is the interesting part
+
+F4 warned that the import needs `MigrateToCurrentVersion`, that it is `private`, and that etap 5a must not grow
+a second migration path. Settling it first, as §10 insisted, produced a better format:
+
+> **⭐ The payload's settings travel as an `ApplicationSettings`** — not as a bag of loose sections. So the import
+> calls `ApplicationSettingsStore.MigrateToCurrentVersion(content.Settings)`, *the very method `LoadWithStatus`
+> calls*, and a future `Migrate_2_3` applies to imported files for free.
+
+`MigrateToCurrentVersion` became `internal static` — a pure visibility-and-staticness change (it never used
+instance state), with `LoadWithStatus`'s call unchanged. Two consequences worth stating:
+
+1. **Only the ladder is shared, and only the ladder needs to be.** The importer keeps its own *"newer than we
+   support"* check, because it must say *"this settings export"* rather than *"settings.dat"* — matching the two
+   such checks `LoadWithStatus` and `ExistingFileBlocksSave` already keep separately for the same reason.
+2. ⭐ **`JsonOptions` also had to become `internal`, and that is a one-owner point rather than a convenience.**
+   `ApplicationSettings` contains three enums (`TransactionProfile`, `WorkspaceTabKind`, `MetadataObjectKind`)
+   whose stable-name representation comes from that options object's `JsonStringEnumConverter`. An export that
+   built its own options would write them as **numbers** — two representations of one aggregate, free to drift,
+   with the divergence invisible until a file crossed between them.
+
+Pinned by `AnOlderSettingsSchema_IsMigratedByTheExistingLadder` (v1 in → v2 out) and
+`ANewerSettingsSchema_IsRefusedOnItsOwnTerms`.
+
+### 15.3 ⭐ The `AppVersion` seam, and the two-phase reader — the two API decisions 5b inherits
+
+**(a) `appVersion` is a required input parameter on `SettingsExporter.Export`.** Core cannot see `AppInfo`
+(App references Core, not the reverse), so App passes `AppInfo.Version` and tests pass a synthetic one.
+⭐ **That is not a workaround for a layering problem — it is the correct shape for a field nothing may branch
+on.** Core does not derive the version and therefore *cannot* condition on it, which enforces §6.3.2's
+⛔ *"diagnostics only"* structurally rather than by discipline. ⛔ **Never add a literal fallback in Core**;
+`TheAppVersionComesFromTheCaller_NeverFromCore` and
+`TheAppVersion_IsCarriedForDiagnostics_AndNothingBranchesOnIt` pin both halves — the second by proving a nonsense
+version changes nothing about whether the file reads.
+
+**(b) The reader is two phases, and that is what makes §6.3.3's corollary structural.**
+`Inspect(path|stream)` runs checks 1–4 and **takes no passphrase**; `Open(inspection, passphrase)` runs 5–6.
+A passphrase dialog therefore *cannot* be import's entry point, because `Open` will not accept a path.
+
+⭐ **The assertion that proves the ordering is real, and it is worth reusing:** for every phase-one failure, the
+test hands the failed inspection to `Open` with three different passphrases and requires the status to be
+**unchanged**. If no passphrase can alter the outcome, then asking for one would have been asking for nothing —
+which is exactly what *"never ask for a credential that cannot possibly work"* means, expressed as something a
+machine can check.
+
+⚠ The inspection **carries the payload it already read**, so phase two needs no second file access. Beyond
+saving a read, it means the bytes that were validated are the bytes that get decrypted, rather than whatever the
+file holds by the time the user has finished typing.
+
+### 15.4 Implementation decisions the design left open
+
+**(a) ⭐ The format-version ladder REFUSES on a missing step, where `MigrateToCurrentVersion` stamps and
+continues.** Copying the pattern meant copying its `default:` arm, and that arm would have been wrong here. For
+`settings.dat`, "no registered step" means a file this build wrote in its own shape and merely mislabelled, so
+stamping is harmless and stops an infinite loop. For an **import** it means a file whose shape we genuinely
+cannot read, and claiming it is current would import whatever happened to deserialize and silently drop the
+rest — **a partial import is worse than none** (rule #11). Same pattern, opposite correct answer.
+
+**(b) `OldestSupportedFormatVersion` exists so that "too old" is decided from the HEADER.** Whether a migration
+step exists is a fact about the *version*, not about the payload, so it belongs on the early side of the
+passphrase prompt (check 3) rather than being discovered after decrypting. The constant states the invariant —
+*there is a step for every version from here to current* — and the ladder's `default:` arm stays as a
+consistency backstop for a contributor who bumps `CurrentFormatVersion` without adding one.
+
+⚠ **There are no steps today, and the docs say so plainly rather than implying depth.** Version 1 is the first,
+so nothing older exists. What *is* proved today is both edges: a version above the ceiling is refused naming it,
+and a version below the oldest is refused rather than accepted — the latter being the ladder's load-bearing
+property.
+
+**(c) The migration operates on a `JsonObject`, not on a deserialized `SettingsExportContent`.** A format
+migration is precisely the case where a field may have been renamed, moved or split, so the old shape may not
+deserialize into the current type at all. Migrate the JSON, then deserialize; the reverse order silently loses
+whatever the current type has no property for.
+
+**(d) The exporter deep-copies via the store's own serializer, and never mutates the live settings.** A
+hand-written clone would be a second list of properties that goes stale the day someone adds a field.
+⚠ **`BuildContent_NeverMutatesTheLiveSettings` guards the worst failure available here**: stripping a password
+out of the export must not strip it out of the running app, where the user would meet it at the next connect.
+
+**(e) The passwords "section" is a statement ABOUT the connections, not a data section.** Recording
+`Passwords` in the section list is what lets an import say *"this file contains database credentials"* without
+decrypting a password to find out — and it is only recorded when there are connections to attach it to.
+
+**(f) An empty selection and an empty passphrase both throw.** An encrypted envelope around nothing imports
+"successfully" and changes nothing, which is the least diagnosable outcome available; and refusing an empty
+passphrase is what makes ratified **Q3** (*every export is encrypted*) unrepresentable to violate rather than
+merely documented.
+
+**(g) An absurd iteration count is refused.** The count sits in a cleartext header anyone can edit, so
+honouring a claimed two billion would hang inside the KDF with no way out — a denial-of-service guard, not
+fussiness. Bounds are `[1, 10 000 000]`; production writes 600 000.
+
+⭐ **And the reason the count is in the header at all pays off immediately in the tests**: it is a *per-file*
+parameter rather than a build-wide assumption, so the suite runs at 1 000 iterations in milliseconds while one
+test exercises the shipped default once. That is the design working, not a shortcut around it.
+
+### 15.5 The `settings.dat` ↔ export cross-check, in both directions (Q13's whole point)
+
+| Direction | Before | Now |
+|---|---|---|
+`settings.dat` offered to **import** | — | **`NotAnExportFile`**, at the magic, before any version, scheme or passphrase. ⭐ This is Q13 as a test: with a shared magic the user would have been asked for a passphrase and told it was wrong, about a file that never had one. |
+An **export** put where `settings.dat` belongs | Refused, but as *"could not be decrypted — written by a different Windows account"* | Refused, and told **which file it actually is**. Still `Unreadable` (intact data this build cannot interpret in this position, and emphatically not safe to overwrite), and `Save` still refuses over it. |
+
+The second row is a small improvement made where identity is decided rather than left to the DPAPI story: the
+prior message was true of the mechanism and false about the file. ⚠ Note §6.3.1b's observation that the reverse
+direction was already safe *"for an accidental reason"* — with distinct magics the accident is gone, and the
+refusal now rests on the file being identified.
+
+### 15.6 Verification — what was actually proved
+
+- **Round trip through real encryption for all 126 combinations of sections** (six independent sections × the
+  password opt-in), each asserting both the section list *and* the data, so a section list that lied would fail
+  rather than be believed.
+- **The four ❌ rows proved absent under every combination**: `ClientLibraryPath`, `WindowBounds`,
+  `ParameterHistory`, `DebugWatches` — plus the v1→v2 shim.
+- **A wrong passphrase is a different status from a damaged file**, which is the reason the format uses GCM
+  stated as an assertion. **A modified payload is detected** (one bit flipped inside the ciphertext).
+- **Every step of §6.3.3 separately**, each with its own status and message — and, for checks 1–4, the proof that
+  **no passphrase can change the outcome** (§15.3b).
+- **A binary file, an empty file, a short file and a plain text file are all rejected cleanly**, never with an
+  exception.
+- ⭐ **The magic is measured to be decided from the stream**: a `CountingStream` over a 4 MB file asserts that no
+  more bytes were read than the magic is long. Without that instrument the *"read from the stream, not after a
+  `ReadAllText`"* rule is untestable and would quietly stop holding the first time someone wrote the obvious
+  code.
+- ⭐ **Both reflection guards verified by planting a violation.** A new `ConnectionProfile` property failed
+  `EveryConnectionProfileField_IsAccountedForInTheExport` **by name, with the fix in the message**, and nothing
+  else failed. Deleting the `WindowBounds` strip failed 65 cases.
+- **`ApplicationSettingsStoreTests`, `PreferencesStoreTests`, `ConnectionProfileStoreTests` and `AppInfoTests`
+  all still green** — the three openings in the store changed no behaviour.
+
+⚠ **One test of mine was flaky and the lesson generalises — gotcha #291.** Asserting that the connection *name*
+`"Lab"` is absent from the encrypted file passed in isolation and failed in the batch: `L`, `a` and `b` are all
+Base64 characters. The assertion now uses a needle the encoding **cannot** produce (the password fixture
+contains a `-`) and proves the structural half with `{`, likewise outside the Base64 alphabet. **An absence
+assertion over a small alphabet is a probabilistic test wearing a deterministic test's clothes.**
+
+### 15.7 Deliberately not built in etap 5a
+
+- **Every part of the UI**, which is etap 5b: section selection, the passphrase dialog, the content preview, the
+  non-destructive merge, `.pre-import-<stamp>`, *Open settings folder*. `SettingsImportReader` returns content;
+  **nothing applies it to `settings.dat` yet**, deliberately — applying it is a rule #11 decision that belongs
+  with the surface that asks the user which sections to take.
+- **Q2's original *"refuse an unencrypted export containing credentials"* clause** — unreachable under Q3, and
+  an unreachable guard reads as a real safety net to whoever comes next (§6.3.4).
+- **Any change to `settings.dat`'s format.** `SettingsFileContainer.Magic` and `CurrentContainerVersion` are
+  untouched; there is no legacy-read path and no container bump.
+- **Anything touching** `Preferences`, `PreferenceOptions`, `PreferencesStore`, `CurrentSchemaVersion`,
+  `PreferencesService`, the one theme apply point, `SqlFormatter` or `FormatterStyle` — all verified untouched.
+
+### 15.8 What etap 5b inherits
+
+- `SettingsImportReader.Inspect` → *validate*; `SettingsImportReader.Open` → *decrypt*. **In that order, because
+  the API allows no other** (§15.3b). The passphrase dialog goes between them.
+- `SettingsImportStatus` is the stable half of every failure; the `Message` beside it is Core's English text.
+  A surface should switch on the **status** and may show the message as-is.
+- `SettingsExportContent.Sections` is what a content preview renders, and `CarriesPasswords` is the one question
+  a merge must be able to answer before it touches anything.
+- Adding a section is: one name in `SettingsExportSections`, one flag on `SettingsExportOptions`, one arm in
+  `SettingsExporter.BuildContent`, one row in the relevant reflection-guard table. The **format version does not
+  move** for an additive section — that is what having a section list buys.
+- ⚠ **The refusal `Save` can return has not gone away.** An import ends in a write to `settings.dat`, which
+  refuses over a file this build could not read (§2.5) — so 5b's import must surface that outcome for the same
+  reason etap 3's Settings Center had to.

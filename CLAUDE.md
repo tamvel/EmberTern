@@ -33,8 +33,8 @@ verbatim, in the archive below.
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
-| **`docs/design/settings-center.md`** | **ACTIVE SPRINT — design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13) and ⭐ etap 4 (the formatter's two casing settings, §14) all DELIVERED.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (273 entries, #1–#286), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/design/settings-center.md`** | **ACTIVE SPRINT — design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14) and ⭐ etap 5a (the export FORMAT — Core only, §15) all DELIVERED.** ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (278 entries, #1–#291), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -332,6 +332,26 @@ noted.
   governs the **Format SQL action**: generated DML (Copy as INSERT, `.sql` export) and generated DDL keep the
   shipped style, per ratified Q1. Design + as-built:
   [docs/design/settings-center.md](docs/design/settings-center.md) §13 + §14.
+- **Settings export format (`.etsettings`)** — EmberTern's own **versioned, always-encrypted** artifact, so a
+  configuration is portable where DPAPI deliberately is not. **Core only so far; no UI yet** (etap 5b). A
+  cleartext header (`EMBERTERN-SETTINGS-EXPORT` · format version · app version · scheme · KDF + iterations +
+  salt) over an **AES-256-GCM** payload under a PBKDF2-SHA256 passphrase key. ⭐ **The header is cleartext
+  because that is what makes versioning possible at all** — an opaque file could not tell *"older export,
+  migrating"* from *"wrong passphrase"* from *"corrupt"*; the **section list stays inside the payload**, since
+  a cleartext *"contains: Passwords"* advertises what is worth attacking. ⭐ **GCM, not CBC**: a wrong
+  passphrase fails as *authentication*, so it is distinguishable from a damaged file — the same distinction
+  `SettingsLoadStatus` draws between `Corrupt` and `Unreadable`, for the same reason. ⭐ **The magic is the
+  export's OWN, not `settings.dat`'s** (ratified Q13), so the first header read alone determines the file's
+  type and *"never ask for a credential that cannot possibly work"* holds — a `settings.dat` offered to import
+  is rejected **at the magic**, never with a passphrase prompt. ⭐ **`SettingsImportReader` is TWO PHASES** —
+  `Inspect` (identity → format version → scheme, **no passphrase**) then `Open(inspection, passphrase)` — so
+  the passphrase dialog *cannot* become import's entry point. ⚠ **Three version numbers, one job each**:
+  `ExportFormatVersion` is the migration contract, `SchemaVersion` is the settings shape (the **existing**
+  `MigrateToCurrentVersion` ladder, called not copied), and **`AppVersion` is diagnostics and is never branched
+  on** — Core takes it as an input precisely so it cannot be. ⚠ Passwords are **opt-in**; `ClientLibraryPath`,
+  `WindowBounds`, `ParameterHistory` and `DebugWatches` **never travel**, and a reflection guard per persisted
+  type fails the build when a new field has no recorded decision. Design + as-built:
+  [docs/design/settings-center.md](docs/design/settings-center.md) §6.3 + §15.
 - **Keyboard Manager / command system** — **ONE registry every UI surface reads from.**
   `EmberTern.App/Commands`: `CommandCatalog` is a single declarative table of `CommandDescriptor`s built once
   at type-init (id · scope · dispatch · gesture(s) · tab kinds), plus a collision validator; `CommandRouter`
@@ -350,11 +370,64 @@ noted.
 - **⚙ SETTINGS CENTER & SQL FORMATTER CASING — ACTIVE SPRINT. Etap 1 (audit + design) CLOSED AND RATIFIED
   2026-07-29; ⭐ ETAP 2 (Core foundation) and ⭐ ETAP 3 (the window + the complete General page) both
   DELIVERED AND USER-ACCEPTED 2026-07-29; ⭐ ETAP 4 (the formatter's two casing settings) DELIVERED AND
-  USER-ACCEPTED 2026-07-30. Branch `feat/settings-center`, pushed to both remotes. Next: etap 5a (the export
-  format, Core only).**
+  USER-ACCEPTED 2026-07-30; ⭐ ETAP 5a (the export FORMAT — Core only, no UI) DELIVERED 2026-07-30. Branch
+  `feat/settings-center`. Next: etap 5b (the export/import UI).**
   **The sprint's one document: [docs/design/settings-center.md](docs/design/settings-center.md)** — read
   §9 (the 13 ratified decisions), §2 (the measured facts) and the as-built sections **§12 (etap 2) + §13
-  (etap 3) + §14 (etap 4)** before writing any code.
+  (etap 3) + §14 (etap 4) + §15 (etap 5a)** before writing any code.
+  **⭐ ETAP 5a — the format is settled and provable before any dialog exists, which is exactly what Q11's split
+  was for. See "What's built" for what it IS; the notes here are the WHY.** Build 0/0; suite **6960** green
+  (partitions 6901 + 59, up 176); smoke clean.
+  **⚠⚠ ONE DEVIATION FROM THE BRIEF, and it is a correction to a stale instruction rather than a shortcut
+  (§15.1): `aes256-passphrase` is deliberately NOT registered in `ApplicationSettingsStore.ResolveProtector`.**
+  Both the brief and `EncryptionSchemes`' reserved comment said to register it there — written before the export
+  had an envelope of its own. `ResolveProtector` answers *"which protector decrypts **this settings.dat**
+  payload"* and **has no passphrase**, so it could only return a protector that cannot decrypt: an export
+  dropped in place of `settings.dat` would then be refused as *"could not be decrypted — written by a different
+  Windows account"*, which is untrue, and §6.3.1b explicitly praises the current honest refusal. The protector
+  an import needs is built **per file** from that file's own header. ⭐ **The general shape: the reserved note
+  generalised from an AT-REST scheme (whose key the store can obtain itself) to one that needs a credential
+  from the user, and those are not the same kind of thing** — so the instruction now says it holds for
+  `aes256-machinekey` and not for this, and `ResolveProtector` carries an explicit commented arm instead of a
+  fall-through. Pinned by a test.
+  **⭐ F4 IS RESOLVED, AND THE ANSWER IMPROVED THE FORMAT (§15.2).** `MigrateToCurrentVersion` became
+  `internal static` (it never used instance state), and — the load-bearing part — **the payload's settings
+  travel as an `ApplicationSettings`**, so the import calls *the very method `LoadWithStatus` calls* and a
+  future `Migrate_2_3` applies to imported files for free. ⛔ Never re-implement that ladder. ⭐ **`JsonOptions`
+  had to become `internal` too, and that is a one-owner point, not a convenience**: `ApplicationSettings` holds
+  three enums whose stable-name form comes from that options object, so an export with its own options would
+  write them as **numbers** — two representations of one aggregate, free to drift, invisible until a file
+  crossed between them.
+  **⭐ THE `AppVersion` SEAM (§15.3a): Core takes it as a REQUIRED INPUT PARAMETER**, because Core cannot see
+  `AppInfo`. ⭐ That is not a workaround for layering — it is the right shape for a field nothing may branch on:
+  Core does not derive the version and therefore *cannot* condition on it, which makes §6.3.2's ⛔ *"diagnostics
+  only"* structural rather than a matter of discipline. ⛔ **No literal version fallback in Core.**
+  **⭐ THE READER IS TWO PHASES, and that is what makes §6.3.3's corollary structural (§15.3b).** `Inspect`
+  runs checks 1–4 and takes **no passphrase**; `Open` takes an *inspection*, never a path — so etap 5b cannot
+  wire the passphrase dialog as import's entry point. ⭐ **The assertion that proves the ordering is real and is
+  worth reusing:** every phase-one failure is handed to `Open` with three different passphrases and the status
+  must be **unchanged**. If no passphrase can alter the outcome, asking for one would have been asking for
+  nothing.
+  **⚠ FOUR as-built decisions later work must not undo (§15.4):** (a) ⭐ **the format-version ladder REFUSES on
+  a missing step where `MigrateToCurrentVersion` stamps and continues** — same pattern, opposite correct answer:
+  for `settings.dat` a missing step means a mislabelled current file, for an *import* it means a shape we cannot
+  read, and claiming it is current would import whatever deserialized and drop the rest (**a partial import is
+  worse than none**) · (b) **`OldestSupportedFormatVersion` exists so "too old" is decided from the HEADER** —
+  whether a step exists is a fact about the version, not the payload, so it belongs *before* the passphrase
+  prompt · (c) **the ladder operates on a `JsonObject`**, because a format migration is exactly the case where a
+  field may have been renamed and the old shape may not deserialize into the current type at all · (d) **the
+  exporter deep-copies through the store's own serializer and never mutates the live settings** — the guarded
+  failure is stripping a password out of the export *and* out of the running app.
+  ⚠ **The section names are STRINGS, not an enum** — they are persisted, so §5.2.3's ratified rule applies:
+  an unknown enum name throws → the whole file is lost, whereas an unknown *string* is simply a section this
+  build does not act on.
+  ⚠ **Deliberately NOT built in etap 5a (§15.7):** every part of the UI · **nothing applies an import to
+  `settings.dat` yet** (that is a rule #11 decision belonging with the surface that asks which sections to take)
+  · Q2's *"refuse an unencrypted export with credentials"* clause (unreachable under Q3 — an unreachable guard
+  reads as a real safety net) · any change to `settings.dat`'s own format.
+  ⚠ **One test of mine was flaky and the lesson generalises — gotcha #291.** Asserting a **short** string is
+  absent from an encrypted blob is flaky by construction: `"Lab"` is three Base64 characters and turns up in
+  ciphertext by chance. Choose a needle the encoding **cannot** produce (the password fixture contains a `-`).
   **⭐ ETAP 4 gave `SqlFormatter` its first two user-owned decisions — see "What's built"; the notes here
   are the WHY.** Build 0/0; suite **6784** green (partitions 6725 + 59, up 762); smoke clean.
   ⭐ **The load-bearing result: the default output did not move.** All **459** existing formatter assertions
@@ -2583,9 +2656,11 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **6784 as of 2026-07-30
-  (after Settings Center etap 4; 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation
-  sprint)** — green in the two documented partitions (**6725 + 59**). ⚠ Etap 4's +762 is mostly theory rows:
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **6960 as of 2026-07-30
+  (after Settings Center etap 5a; 6784 after etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the
+  Hamburger Navigation sprint)** — green in the two documented partitions (**6901 + 59**). ⚠ Etap 5a's +176 is
+  mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
+  the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
   four times its own count. ⚠ The headless partition now holds **two** classes
   (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests`), both in `HeadlessCollection` — a new headless
@@ -3435,7 +3510,7 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (255 entries, organized thematically) lives in
+The **complete** catalog (278 entries, organized thematically) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -3641,7 +3716,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (273 entries, #1–#286), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (278 entries, #1–#291), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a
