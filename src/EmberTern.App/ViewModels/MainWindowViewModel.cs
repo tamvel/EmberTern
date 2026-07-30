@@ -298,6 +298,22 @@ public partial class MainWindowViewModel : ViewModelBase
     /// </summary>
     public PreferencesService Preferences => _preferences;
 
+    /// <summary>
+    /// The casing style the <b>Format SQL</b> action must use right now, read from the live preferences
+    /// through the one boundary mapping (<see cref="FormatterStylePreference"/>).
+    ///
+    /// <para>⚠ <b>Computed per call, never cached.</b> Apply-on-change means the preference can change while
+    /// tabs are open; a captured <see cref="FormatterStyle"/> would go stale silently and the next Format SQL
+    /// would use the previous setting — the same clobbering shape §13.1 removed by having ONE
+    /// <see cref="PreferencesService"/>. Reading it at the moment of the action costs two enum comparisons.</para>
+    ///
+    /// <para>⚠ <b>Scope: the Format SQL action only</b> (design §14). SQL that EmberTern <i>composes</i>
+    /// (Copy as INSERT / UPDATE, the <c>.sql</c> exporters) or renders <i>read-only</i> (the Trace event
+    /// detail) keeps <see cref="FormatterStyle.Default"/>, on ratified Q1's reasoning: the formatter reformats
+    /// the user's own text, whereas generated statements are EmberTern's output.</para>
+    /// </summary>
+    public FormatterStyle FormatterStyle => FormatterStylePreference.From(_preferences.Current);
+
     /// <summary>The SQL Editor's own Performance context (its captured run + panel). Procedure/
     /// Function detail tabs each own a separate <see cref="HostPerformanceContext"/> — nothing is
     /// shared, so a run in one place never shows up in another.</summary>
@@ -6352,7 +6368,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var source = hasSelection ? selected! : QueryText;
         if (string.IsNullOrEmpty(source)) return;
 
-        var formatted = SqlFormatter.Format(source);
+        var formatted = SqlFormatter.Format(source, FormatterStyle);
         if (string.Equals(formatted, source, StringComparison.Ordinal)) return;
 
         if (ReplaceSelectedOrAllText is { } replace)

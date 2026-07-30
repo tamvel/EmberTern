@@ -5,9 +5,17 @@ ACCEPTED 2026-07-29 — the Core foundation: `Preferences` · `PreferenceOptions
 language catalog) · `PreferencesStore` (8th facade) · 32 tests; `CurrentSchemaVersion` still 2. As
 built: §12. ⭐ ETAP 3 DELIVERED AND ACCEPTED 2026-07-29 — the Settings Center window, the category
 list, search, apply-on-change, the refusal banner, and the complete General page (Theme + Language);
-the theme is now persisted and read at startup, which closes §2.1 end to end. As built: §13. Etap 4
-(formatter casing) is cleared to start, and the sprint goes to it exclusively.**
+the theme is now persisted and read at startup, which closes §2.1 end to end. As built: §13.
+⭐ ETAP 4 DELIVERED AND USER-ACCEPTED 2026-07-30 — `FormatterStyle`, the ONE casing decision point, the
+keyword/identifier split, and the SQL Formatter page with its two rows; the default output is byte-identical
+(459 existing formatter assertions pass unedited). As built: §14. Etap 5a (the export format, Core only) is
+next.**
 Branch: `feat/settings-center`.
+
+⚠ **Etap 4 corrected §2.2 on two measured points — read §14.1 before touching the formatter.** §2.2(a)
+undercounted the casing sites (~30, not ~9: it missed the ~22 keyword literals the emitters *synthesize*),
+and the keyword/identifier split turned out to need no `IsKeyword` call at all because the lexer already
+records that verdict. §2.2's own text is annotated in place.
 
 ⚠ **One measured correction landed with etap 2 and it belongs to etap 5a, not etap 2: `settings.dat`
 already carries the magic `EMBERTERN-SETTINGS` — see §6.3.1b.** §6.3.1a claimed it does not. ⭐ **Resolved
@@ -97,6 +105,13 @@ neither two booleans nor one place.
 
 **(a) Casing is applied at ~9 independent sites**, most of them inline literals:
 
+> ⚠ **AMENDED BY ETAP 4 (§14.1a): the real count was ~30.** The table below lists the sites that *copy* a
+> token's text. It misses the **~22 lowercase keyword literals the emitters SYNTHESIZE** (`"select"`,
+> `"in"`, `"begin"`, `"end"`, `"union"`, `"from "`, …), which are keyword-casing decisions just as much.
+> Left alone they would have produced `SELECT … in (1, 2, 3)`. The architecture below is unchanged; only
+> the inventory was wrong.
+
+
 | Site | Code |
 |---|---|
 [`SqlFormatter.cs:1493-1497`](../../src/EmberTern.Core/Sql/SqlFormatter.cs:1493) | `MaybeLowercaseWord(SqlToken)` — `Identifier or Keyword => ToLowerInvariant()`
@@ -110,6 +125,10 @@ neither two booleans nor one place.
 ```csharp
 private enum FKind { Word, Number, String, QuotedIdent, LineComment, BlockComment, Punctuation }
 ```
+
+> ⚠ **ETAP 4 (§14.2a): this diagnosis is right, but do NOT split `FKind` to fix it.** ~40 sites key on
+> `FKind.Word` for *spacing and phrase matching*, where "is this a word" is the correct question. The
+> classification shipped as a **second, orthogonal field** (`FWord`), read in exactly one place.
 
 `FKind.Word` **is keywords + identifiers + named parameters together**, and the AST-level path at
 `:1495` fuses `Identifier or Keyword` just as firmly. Neither emitter can answer *"is this token a
@@ -133,6 +152,11 @@ inside the lexeme net that guarantees no token is ever lost:
 TokenKind.Keyword or TokenKind.Identifier or TokenKind.Parameter
     => new Lexeme(LexClass.Word, t.Text.ToLowerInvariant()),
 ```
+
+> ⚠ **ETAP 4 (§14.3): corrected, and it needed more than a one-line edit.** The comment's *premise* is
+> false under the settings while its *conclusion* stays true — the shape that licenses a wrong
+> "simplification". It now states the consequence (an exact compare makes the safety net revert **every**
+> re-cased statement to verbatim, silently), and a test asserts the output actually changed.
 
 The comparison **stays correct** under any casing setting — it lowercases both sides, so uppercase
 output still compares equal. But the *justification written on it* becomes false the moment output can
@@ -973,6 +997,10 @@ byte-identical to today.
 4. **The keyword/identifier split** comes from `FirebirdSyntax.IsKeyword` — the catalog the lexer and
    the XSHD drift-guard already share — applied where `FKind` is assigned in `Flatten`. No second
    keyword list (the mistake the language-expansion sprint's §9.1 one-owner rule exists to prevent).
+   ⭐ **As built (§14.1b), stronger than this asks: the formatter makes no keyword decision at all.**
+   `SqlLexer` already *is* `IsKeyword(word) ? Keyword : Identifier`, and `MapToken` was discarding that
+   verdict; the split now reads the token's own kind. ⛔ Do not "improve" it by calling `IsKeyword` here
+   — that re-introduces a second decision that can drift from the lexer's.
 5. **Quoted identifiers stay verbatim** — apply the setting inside the existing `QuotedIdent` guard,
    never around it (§2.2e).
 6. **Correct the §0 net's comment** at `SqlFormatter.cs:2011` in the same etap (§2.2d). The code is
@@ -1191,7 +1219,7 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 **1** | *(this document)* audit + design | ✅ **done — accepted 2026-07-29** |
 **2** | Core foundation: `Preferences` (incl. `Theme`, `Language`, the two formatter cases) + `PreferencesStore` (8th facade) + the language catalog + defaults contract + tests. **No UI.** | ✅ **done 2026-07-29 — §12** |
 **3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | ✅ **done 2026-07-29 — §13** |
-**4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | the largest single piece of work (§2.2); isolated so its §0 risk is not entangled with UI |
+**4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | ✅ **done 2026-07-30 — §14** |
 **5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM) protector registered in `ResolveProtector`, KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** ⚠ **Read the F4 note below before starting.** | needs etap 2's shape settled to know what it serialises; pure Core and fully testable without a window, which is what makes the split worth making |
 **5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | the format is settled and provable before any dialog exists |
 **6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | additive; naturally last, and trimmable without blocking anything |
@@ -1427,5 +1455,214 @@ dismissibly), while Settings Center has to answer "did **this change** persist",
 - ⚠ `Compose` builds with `source with { … }` for the same reason `Validate` does: a preference the window
   does not render — the formatter's two casing settings, today — must pass through rather than be reset.
   `ChangingOneSetting_LeavesEveryOtherPreferenceAlone` pins exactly that, with the formatter's own fields.
+  ⚠ **AMENDED BY ETAP 4: those two ARE rendered now, so this invariant has no unrendered subject — which
+  is exactly when someone deletes the `with` as redundant. Keep it; the replacement guard is
+  `EveryPreference_IsRenderedOrRecordedAsHidden` (§14.6).**
 - The formatter's casing keys already exist in `PreferenceOptions.Casing`; etap 4 maps them onto its own
   style type **at the boundary** and does not introduce a second list of casing names.
+
+---
+
+## 14. ⭐ Etap 4 — as built (2026-07-30, USER-ACCEPTED)
+
+The formatter has its first two user-owned style decisions. Build 0/0; suite **6784** green in the two
+documented partitions (6725 + 59), up 762; smoke clean.
+
+⭐ **The result that matters most, stated first: the default output did not move.** All **459** existing
+formatter assertions — `SqlFormatterTests`, `PsqlFormatterTests`, `SqlFormatterInvariantsTests`,
+`SqlFormatterCteTests`, the wrapping / insert / list-builder / nested-query / PSQL-AST / safety suites — pass
+**with no expected string edited**. They were deliberately *not* parameterised: their whole value is being the
+unchanged byte-for-byte record of the shipped layout, and editing them to take a style would have destroyed
+the evidence.
+
+| File | Job |
+|---|---|
+[`Core/Sql/FormatterStyle.cs`](../../src/EmberTern.Core/Sql/FormatterStyle.cs) | `FormatterCase` (Lower/Upper) + `FormatterStyle` (`KeywordCase`, `IdentifierCase`, `Default`). Pure Core, **not persisted** — the stored vocabulary stays `PreferenceOptions.Casing`'s strings. |
+`Core/Sql/SqlFormatter.cs` | `Format(sql, FormatterStyle? style = null)`; the `FWord` classification; **the ONE `Cased` decision point**; the style threaded through the emitter closure; the §0 comment corrections. |
+[`App/Settings/FormatterStylePreference.cs`](../../src/EmberTern.App/Settings/FormatterStylePreference.cs) | The ONE boundary: a stored casing key → `FormatterCase`, and a `Preferences` → a `FormatterStyle`. `ThemePreference`'s sibling. |
+`App/ViewModels/MainWindowViewModel.cs` | `FormatterStyle` — computed per call from the live preferences, never cached. |
+`App/ViewModels/WorkspaceTabViewModel.cs` | `Styled(owner, detail)` at the tab-factory chokepoint — the one place a Format-SQL surface is handed the live style. |
+`SettingsCatalog` · `SettingsCenterViewModel` · `SettingsWindow.axaml` · `UiStrings` | The **SQL Formatter** category and its two rows, by §13.5's recipe exactly. |
+`SqlFormatterCasingTests` · `FormatterStylePreferenceTests` · `SettingsCenterViewTests` | The §0 gate (+1 headless case). |
+
+### 14.1 ⚠⚠ TWO MEASURED CORRECTIONS TO §2.2 — do not re-derive them
+
+**(a) §2.2(a)'s inventory was short by a factor of three: there were ~30 casing sites, not ~9.** §2.2(a)
+counted `ToLowerInvariant()` calls on token text (6) plus the two `MaybeLowercase*` helpers. It did **not**
+count the **25 hard-coded lowercase keyword literal sites the emitters synthesize** rather than copy from the
+input — `"execute block"`, `"returns "`, `"as"`, `"as ("`, `"in"`, `"view "`, `"values "`, `"exists"`,
+`"case"`, `"end"`, `"end;"`, `"union"`/`"intersect"`/`"except"`, `" all"`, `"select"`, `"from "`, `"with"`,
+`" recursive"`, `"begin"`, `"else"`, `"do"`, `"for "` — 22 distinct words over 25 call sites.
+
+⚠ **This changes nothing about the architecture and everything about the definition of done.** The literals
+are keyword-casing decisions like any other: left alone, `Keywords: Upper` would emit
+`SELECT … in (1, 2, 3)` and `DELETE FROM t` followed by a lower-case `begin`. They now go through the same
+decision point via a thin `Kw("in", style)` shorthand. **`SynthesizedKeywords_FollowTheKeywordSetting` exists
+precisely because a reviewer counting §2.2(a)'s nine sites would believe the etap complete while two thirds of
+the keyword output ignored the setting** — and no §0 test would notice, because mixed-case output preserves
+every lexeme perfectly.
+
+**(b) The keyword/identifier split needed no `FirebirdSyntax.IsKeyword` call at all — the lexer already made
+that exact decision.** `SqlLexer.cs` is literally
+`FirebirdSyntax.IsKeyword(word) ? TokenKind.Keyword : TokenKind.Identifier`, and `MapToken` **threw that
+verdict away** by collapsing both into `FKind.Word`. So the split reads `t.Kind` (via `ClassifyWord`) instead
+of re-deriving it.
+
+⭐ **This is strictly stronger than §6.4/4 asked for.** "No second keyword *list*" was the requirement; what
+shipped has no second keyword *decision* either, so the formatter cannot disagree with the lexer, the
+completion engine or the XSHD drift-guard even if the catalog later gains a nuance. **Do not "improve" this by
+calling `IsKeyword` in the formatter** — that would re-introduce the second decision this avoided.
+
+### 14.2 Implementation decisions the design left open
+
+**(a) ⭐ `FKind.Word` STAYS keywords + identifiers + parameters fused; the classification is a SECOND,
+orthogonal field.** §2.2(b) diagnoses `FKind.Word` as the problem, which invites splitting it into
+`FKind.Keyword` / `FKind.Identifier`. That would have been wrong: **~40 sites key on `FKind.Word`** for
+spacing, call-gluing and structural-phrase matching, and every one of them means "is this a word" — not "is
+this vocabulary". Splitting the layout kind to express a casing question would have touched all forty and made
+each a place to get the new distinction wrong. `FWord` answers exactly one question and is read in exactly one
+place.
+
+**(b) The style travels as a parameter through ~40 emitter signatures, and the churn is the point.** Two
+cheaper shapes were considered and rejected. *Casing the words inside `Flatten`* would leave `FToken.Text`
+holding **styled** text while `Start`/`End` point at the source — a permanent trap for anyone who later uses
+`Text` to reconstruct source, and it moves the decision into data rather than a decision point. *An
+instance-based engine* (all 90 members on a nested class holding the style) removes the threading but
+re-indents 2 000 lines of a §0-critical file, which is the worst possible diff to review. Threading is
+**compiler-enforced**: nothing can silently keep formatting in the default.
+
+**(c) ⚠ SCOPE: the settings govern the Format SQL ACTION, not every `SqlFormatter.Format` call.** Ten calls
+at seven code locations follow the preference — the SQL Editor, the five object editors (via the factory
+chokepoint), the two Easy-mode grid-row editors, and the editor context menu. **Four calls deliberately do
+not:** `SqlCopyController`
+(Copy as INSERT / UPDATE) and Core's `InsertScriptExporter` / `UpdateScriptExporter` **compose new DML** and
+run it through the formatter only to canonicalise it, and `TraceEventDetailViewModel` prettifies traced SQL for
+**read-only display**.
+
+⚠ **This is ratified Q1's own reasoning applied consistently** — *the formatter reformats the user's text,
+`DdlGenerator` composes new DDL* — and it is the reading that keeps one feature from disagreeing with itself:
+the two `.sql` exporters live in the frozen Core export framework where no preference is reachable, so making
+their App-side sibling follow the setting would have made **Copy as INSERT upper-case while Export to .sql
+stayed lower**.
+
+⭐ **RATIFIED BY THE USER ON ACCEPTING ETAP 4 (2026-07-30) — this is no longer a judgement call, do not
+re-litigate it.** The user's own framing: *the formatter's preferences are to affect the Format SQL operation,
+i.e. the deliberate formatting of the user's code; SQL generators, exporters and data-presenting views may keep
+their own deterministic format.* ⭐ And the part worth keeping because it generalises: **if the behaviour is ever
+wanted more widely, that is a single argument passed to those places — not an architecture change.** That is
+precisely what the parameter-with-a-default shape buys, and it is the reason the shape was chosen over an
+ambient read.
+
+**(d) The context menu's Format needed the style too, and that says something.** `EditorSearch.FormatEditor`
+is a **second path** to "format this editor", beside the tab view models' `FormatSqlCommand` that `Ctrl+K` and
+the toolbar reach — pre-existing, because that menu is built from static actions and the router resolves
+commands rather than control instances. Left on the default, **the same menu row that displays "Ctrl+K" would
+format in a different case than Ctrl+K does.** It resolves the style from the window's view model **at click
+time**, the idiom `SqlEditorBehavior.AttachReadOnlyHighlighting` already uses.
+
+**(e) A provider (`Func<FormatterStyle>`), never a captured value — and non-nullable with a real default.**
+Apply-on-change means the preference moves while tabs are open, so a captured style would silently format with
+the previous setting; that is §13.1's clobbering shape one level down. The default
+(`() => FormatterStyle.Default`) makes it `Preferences`' self-sufficiency rule applied upward: a view model
+built without the factory formats deterministically instead of handing each reader a default decision.
+
+**(f) ⚠ A DISTINCT `GroupName` per formatter row is mandatory, not cosmetic.** Both rows render the same two
+option labels, and a `RadioButton` group is keyed by name — one shared group would make selecting *UPPER CASE*
+for keywords **silently uncheck the identifier row**, so the two settings could never hold different values.
+No view-model test can see this; `TheFormatterPage_RendersBothRows_AndTheyAreIndependent` (headless) is what
+catches it.
+
+**(g) The option labels are `lower case` / `UPPER CASE`** — the label demonstrates the option instead of
+naming it, which is the shortest possible explanation of the setting.
+
+**(h) The two pages needed a container.** A `ScrollViewer` takes ONE child, so the second `IsVisible`-gated
+page block required wrapping both in a `Panel` (they overlay; exactly one is ever visible). §13.3(b)'s
+"one `IsVisible` block per category, not a generic page host" is unchanged — this is the container that
+decision always implied.
+
+### 14.3 ⚠ The §0 comment correction, and why it needed more than a one-line edit
+
+§2.2(d) asked for the comment at the lexeme net to be corrected. What was there —
+*"Words are lowercased on output → compare case-insensitively"* — had a **premise the settings falsify and a
+conclusion that stays correct**, which is the exact shape that licenses a wrong simplification: a future reader
+sees a case-insensitive fold over text they believe is already lower-case, calls it redundant, and makes it
+exact.
+
+⛔ **An exact word comparison would be a silent, total defect.** With `KeywordCase = Upper`, output
+legitimately reads `SELECT` where input read `select`; an exact compare reports that as a **lost lexeme**, the
+safety net fires, and **every re-cased statement reverts to verbatim** — so the setting would appear to do
+nothing while every §0 assertion still passed (verbatim output preserves every lexeme perfectly). The comment
+now states the consequence, not just the rule, and `UpperKeywords_ActuallyReCase_AndDoNotTripTheSafetyNet`
+asserts the output **changed**, which is the only assertion that can catch it.
+
+Three neighbouring stale comments were corrected with it (the class-level *"lowercase-all"* framing, the
+EXECUTE BLOCK note, the `EmitStrayToken` note), and the constants block is now headed *"Fixed style
+constants"* with §9.1's directive written on it — so the next reader knows `MaxLineWidth` is a decision, not an
+omission.
+
+### 14.4 Verification — what was actually proved
+
+- **459 existing formatter assertions unchanged and green** — the default did not move (the strongest evidence
+  in the etap, because it is evidence nobody wrote for the occasion).
+- `DefaultStyle_IsIdenticalToTheImplicitDefault` over the whole corpus ties the **explicit**
+  `FormatterStyle.Default` to the parameterless overload, so the two cannot drift.
+- **§0 + idempotency re-run over the full shared corpus × the three non-default styles**, well-formed **and**
+  adversarial (`SqlFormatterSafetyTests.MalformedCorpus` is reused, not copied).
+- **Quoted identifiers proved verbatim under all four styles**, including a quoted name that spells a keyword
+  (`"From"`) — the §2.2(e) / rule-#11 half. String literals, numbers and comments likewise.
+- ⭐ **Both new guards verified by planting a violation.** A fifth `Preferences` property failed
+  `EveryPreference_IsRenderedOrRecordedAsHidden` **by name**, with the fix in the message (and etap 2's
+  `EveryPreference_IsAccountedForInValidation` caught it too — the two layers are independent). Removing one
+  `Styled(owner, detail)` failed `EveryFormatSqlTab_TakesItsStyleFromTheOnePreferencesService` at *1 of 6*.
+
+⚠ **One existing headless assertion was corrected, not weakened.** `SearchFiltersTheRenderedRows` counted rows
+by `IsVisible`, but a row on a **hidden page** still has `IsVisible == true` (its own search filter matched) —
+with two pages that counts four. It now uses `IsEffectivelyVisible`, which is what "rendered" always meant.
+The theme-radio assertions were scoped by `GroupName` for a related reason: they passed only because an
+`ItemsControl` on a hidden page does not realise its items, which is incidental behaviour to depend on.
+
+### 14.4a ⭐ What the user singled out on accepting it (2026-07-30)
+
+Recorded because three of the four are general rules, not compliments on this etap:
+
+1. ⭐ **"If the lexer already decides `Keyword` vs `Identifier`, that verdict should be the only source of
+   truth"** — and the user states plainly that this is **better than what the design originally described**
+   (§6.4/4 asked only for no second keyword *list*). ⛔ So §14.1(b) is now the ratified shape: the formatter
+   makes no keyword decision of its own, and re-introducing an `IsKeyword` call here would be a regression
+   against an accepted decision, not a refactor.
+2. ⭐ **`FormatterStyle` stays a pure Core model with no persistence mixed in** — preferences store only the
+   keys (`Lower` / `Upper`) and the mapping happens at the **App ↔ Core boundary**. This is the durable reason
+   `FormatterCase` is deliberately not persisted (see its own remarks) and why `FormatterStylePreference`
+   exists as a separate one-job class rather than a method on the style.
+3. ⭐ **The scope decision is ratified** — see §14.2(c), amended in place.
+4. **459 unchanged formatter tests are the evidence that matters**: the user reads it as proof that the default
+   configuration genuinely preserves the previous behaviour and the new options are purely additive. ⚠ Keep
+   that property: a future formatter change must not "update" those expectations to make itself pass.
+
+### 14.5 Deliberately not built in etap 4
+
+- **Any third formatter option** — §9.1, unchanged. `MaxLineWidth`, indent size, indent style, comma
+  placement and keyword alignment stay constants, now with that directive written on the constants block.
+- **"Restore defaults"** — still deferred (§13.4). The formatter page has two rows, both one click from their
+  default; the button earns its place on the first page with enough rows to make it meaningful.
+- **A context-aware keyword/identifier split.** The classification is **lexical**, so a non-reserved keyword
+  used as a column name (`t.value`, `t.type`) takes the *keyword* case: `Keywords: Upper` renders it `t.TYPE`.
+  ⚠ **Semantically inert** — Firebird folds unquoted identifiers to upper, so it names the same object — and a
+  purely local dot-adjacency rule would fix the common case. It was **not** added: §6.4/4 ratifies the split as
+  `IsKeyword`'s, and adding an unratified heuristic to a §0 surface in the same etap that introduces the split
+  is the wrong place to be clever. Recorded so it can be asked for.
+- **Anything touching** `Preferences`, `PreferencesStore`, `PreferenceOptions`, `CurrentSchemaVersion`,
+  `PreferencesService`, the one theme apply point, `App.axaml`'s bootstrap `Dark`, or the export/import seam —
+  all verified untouched.
+
+### 14.6 What etap 5a inherits
+
+- Nothing about the export changed, and **Q13 stands unamended**: the export gets its own magic,
+  `EMBERTERN-SETTINGS-EXPORT`. Read the ⚠ F4 note in §10 before starting.
+- ⭐ **`Preferences` now has four rendered properties and no unrendered one**, so §13.5's `with`-composition
+  invariant momentarily has no subject — which is exactly when someone deletes the `with` as redundant.
+  `EveryPreference_IsRenderedOrRecordedAsHidden` is the replacement guard, and it carries a
+  `deliberatelyHidden` table (empty today) so an exemption is a recorded decision rather than a gap.
+- Adding a preference is unchanged from §13.5's recipe, plus **one arm in
+  `FormatterStylePreferenceTests.PreferencePropertyFor`** — deliberately explicit for the same reason
+  `ValueOf`/`Compose` are.

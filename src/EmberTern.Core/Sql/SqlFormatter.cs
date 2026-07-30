@@ -40,15 +40,22 @@ namespace EmberTern.Core.Sql;
 /// whitespace — so re-formatting reproduces the output exactly.
 /// </para>
 /// <para>
-/// <b>Default style</b> (design §6): one opinionated IBExpert-inspired layout, lowercase-all
-/// (matching the "lowercase all" preset ERP users prefer). A configurable style profile is deferred
-/// to the future application configurator; the single default lives in the constants below.
+/// <b>Style</b> (design §6): one opinionated IBExpert-inspired layout. Two decisions are the USER's —
+/// keyword casing and identifier casing, carried by <see cref="FormatterStyle"/> and applied at the single
+/// decision point (<c>Cased</c>); both default to lower case, so <c>Format(sql)</c> reproduces the
+/// lowercase-all preset this formatter has always emitted. Every other style value (line width, indent size,
+/// comma placement) remains a constant below, deliberately — the settings sprint ratified exactly two.
 /// </para>
 /// <para>Pure — no Avalonia, no Firebird driver — and offline unit-testable.</para>
 /// </summary>
 public static class SqlFormatter
 {
-    // ── Default style (§6 — single opinionated default; config panel deferred) ────────────────
+    // ── Fixed style constants (§6) ───────────────────────────────────────────────────────────────
+    //
+    // Everything here is a deliberate constant, not a setting-in-waiting. The settings sprint ratified
+    // exactly two user decisions — keyword and identifier casing, carried by FormatterStyle — and standing
+    // directive §9.1 forbids adding an option because it might be wanted later. MaxLineWidth is the only one
+    // with a real argument (ultrawide monitors) and it arrives alone, if it is ever asked for.
     private const string ConjunctionIndent = "  ";   // AND/OR sub-conjunction indent
     private const string ViewColumnIndent = "    ";   // CREATE VIEW column list indent
     private const string CteBodyIndent = "    ";      // WITH-CTE body indent (IBExpert style)
@@ -64,22 +71,34 @@ public static class SqlFormatter
     /// </summary>
     public static string PsqlIndentUnit { get; } = new string(' ', PsqlIndentSize);
 
-    /// <summary>Formats a SQL/PSQL script with the default style.</summary>
-    public static string Format(string? sql)
+    /// <summary>
+    /// Formats a SQL/PSQL script.
+    /// </summary>
+    /// <param name="style">
+    /// The casing style, or null for <see cref="FormatterStyle.Default"/> — the shipped lowercase-all output,
+    /// byte-identical to every build before the setting existed.
+    /// <para>⚠ <b>A parameter with a default, deliberately, never an ambient read.</b> The formatter stays a
+    /// pure function of (text, style): that is what lets the §0 differential and idempotency suites run one
+    /// corpus under every style, and what stops a formatting result from depending on when a preference
+    /// happened to change relative to a background parse. Callers that have the user's preference pass it;
+    /// callers that render EmberTern's own generated SQL simply do not.</para>
+    /// </param>
+    public static string Format(string? sql, FormatterStyle? style = null)
     {
         if (string.IsNullOrEmpty(sql)) return sql ?? string.Empty;
-        return Format(SqlParser.Parse(sql!).Root);
+        return Format(SqlParser.Parse(sql!).Root, style);
     }
 
     /// <summary>Formats an already-parsed script. Never throws; never loses information (§0).</summary>
-    public static string Format(SqlScript root)
+    public static string Format(SqlScript root, FormatterStyle? style = null)
     {
         if (root is null) throw new ArgumentNullException(nameof(root));
+        style ??= FormatterStyle.Default;
 
         var parts = new List<string>();
         foreach (var stmt in root.Statements)
         {
-            var text = FormatStatement(root.Text, stmt);
+            var text = FormatStatement(style, root.Text, stmt);
             // §0 Formatter Safety (per statement): if formatting altered or lost ANY lexeme, keep
             // the statement verbatim instead — "leave the fragment unchanged" — so one malformed
             // statement never corrupts, and never blocks formatting of the rest of the script.
@@ -101,7 +120,7 @@ public static class SqlFormatter
 
     // ── Statement dispatch (100% AST-driven) ──────────────────────────────────────────────────
 
-    private static string FormatStatement(string source, SqlStatement stmt) => stmt switch
+    private static string FormatStatement(FormatterStyle style, string source, SqlStatement stmt) => stmt switch
     {
         // §0 safety valve: unrecognised or empty statements are reproduced verbatim.
         RawStatement or EmptyStatement => VerbatimStatement(source, stmt),
@@ -109,53 +128,53 @@ public static class SqlFormatter
         // PSQL definitions (CREATE/ALTER/RECREATE PROCEDURE/TRIGGER/FUNCTION/PACKAGE): the header up
         // to the body's AS is kept verbatim (it is persistent DDL — the user's object definition — so
         // we do not reshape it), the body is block-structured.
-        DdlStatement { IsPsqlDefinition: true } => FormatWithHeaderAndBody(source, stmt),
+        DdlStatement { IsPsqlDefinition: true } => FormatWithHeaderAndBody(style, source, stmt),
 
         // CREATE / ALTER / RECREATE VIEW … AS <query> — the header (through AS) keeps its shipped layout,
         // the body query is laid out by the AST-walking core (so a WITH / nested subquery in the body
         // indents naturally). Mutually exclusive with the PSQL-definition branch above.
-        DdlStatement { Query: { } vq } => FormatViewStatement(source, stmt, vq),
+        DdlStatement { Query: { } vq } => FormatViewStatement(style, source, stmt, vq),
 
         // EXECUTE BLOCK — a runnable anonymous block, formatted like every other executable statement:
         // its header (input-parameter list + RETURNS list) is laid out via the shared adaptive builder
-        // and lowercased, then the body is block-structured. Unlike a CREATE definition it is not
-        // persistent DDL, so the lowercase-all layout applies. Unexpected header shapes fall back to the
+        // and cased per the style, then the body is block-structured. Unlike a CREATE definition it is
+        // not persistent DDL, so the formatter's own layout applies. Unexpected header shapes fall back to the
         // verbatim-header path (safe; §0).
-        ExecuteBlockStatement => FormatExecuteBlock(source, stmt),
+        ExecuteBlockStatement => FormatExecuteBlock(style, source, stmt),
 
         // A bare/DECLARE-led anonymous block (the body editor's text) — no header, whole body.
-        AnonymousBlockStatement ab => FormatPsqlBody(Flatten(ab.Tokens), header: null, ab.Body),
+        AnonymousBlockStatement ab => FormatPsqlBody(style, Flatten(ab.Tokens), header: null, ab.Body),
 
         // INSERT and UPDATE OR INSERT — "<verb> into <target> (cols)" then "values (…)" / "select …"
         // and (for UPDATE OR INSERT) "matching (…)" each on its own line, the lists laid out by the
         // shared adaptive builder (§F). One formatter for both (they differ only by the leading verb +
         // MATCHING); unrecognised shapes fall back to the generic emitter (safe; §0 net covers it).
-        InsertStatement ins => FormatInsertFamily(Flatten(stmt.Tokens), 2, ins.SourceQuery, ins.Subqueries),
-        UpdateOrInsertStatement uoi => FormatInsertFamily(Flatten(stmt.Tokens), 4, null, uoi.Subqueries),
+        InsertStatement ins => FormatInsertFamily(style, Flatten(stmt.Tokens), 2, ins.SourceQuery, ins.Subqueries),
+        UpdateOrInsertStatement uoi => FormatInsertFamily(style, Flatten(stmt.Tokens), 4, null, uoi.Subqueries),
 
         // UPDATE / DELETE / MERGE have no clause-node model (an intentional structural-depth boundary), so
         // they keep the token clause emitter — but their embedded subqueries (EXISTS / scalar in
         // SET/WHERE/ON/WHEN, and a MERGE USING (…) source query) are spliced from the AST as blocks.
-        UpdateStatement u => Emit(Flatten(stmt.Tokens), u.Subqueries),
-        DeleteStatement d => Emit(Flatten(stmt.Tokens), d.Subqueries),
-        MergeStatement m => Emit(Flatten(stmt.Tokens), m.Children),
+        UpdateStatement u => Emit(style, Flatten(stmt.Tokens), u.Subqueries),
+        DeleteStatement d => Emit(style, Flatten(stmt.Tokens), d.Subqueries),
+        MergeStatement m => Emit(style, Flatten(stmt.Tokens), m.Children),
 
         // SELECT — a plain query goes through the clause-break emitter; a CTE-led "WITH … SELECT …"
         // query (the parser modelled it as a WithQuery on SelectStatement.Query) is laid out as a
         // first-class construct by FormatWithClause. A WITH whose shape the parser could not model has
         // Query == null (or a non-WithQuery) and formats as a plain query (§0-safe; the lexeme net covers
         // it regardless).
-        SelectStatement { Query: WithQuery wq } => FormatWithClause(wq),
+        SelectStatement { Query: WithQuery wq } => FormatWithClause(style, wq),
         // A plain (non-WITH) query is laid out by the AST-walking core: clauses per line, nested queries
         // as expanded-paren blocks, CASE laid out. The query node excludes the statement terminator ';',
         // so re-attach it (glued) when the statement carried one.
-        SelectStatement { Query: { } q } => WithSemicolon(EmitQuery(q), stmt),
-        SelectStatement => Emit(Flatten(stmt.Tokens)),
+        SelectStatement { Query: { } q } => WithSemicolon(EmitQuery(style, q), stmt),
+        SelectStatement => Emit(style, Flatten(stmt.Tokens)),
 
         // Everything else — all DML plus non-PSQL DDL, COMMENT, SET, GRANT/REVOKE, DECLARE,
         // EXECUTE PROCEDURE/STATEMENT — through the clause-break SQL emitter (which also handles the
         // CREATE VIEW header case internally, exactly as before).
-        _ => Emit(Flatten(stmt.Tokens)),
+        _ => Emit(style, Flatten(stmt.Tokens)),
     };
 
     // Re-attaches the statement terminator ';' (glued) to a query rendered from its QueryNode, which
@@ -212,13 +231,13 @@ public static class SqlFormatter
     // PSQL definition / EXECUTE BLOCK: keep the header (through the body-opening AS) verbatim, then
     // block-structure the body. The AS is found over tokens at paren depth 0 (so CAST(x AS y) and a
     // param-list AS are skipped). No top-level AS ⇒ format the whole thing as a body.
-    private static string FormatWithHeaderAndBody(string source, SqlStatement stmt)
+    private static string FormatWithHeaderAndBody(FormatterStyle style, string source, SqlStatement stmt)
     {
         var bodyNode = (stmt as DdlStatement)?.Body;
         int asIndex = FindTopLevelAs(stmt.Tokens);
         if (asIndex < 0)
         {
-            return FormatPsqlBody(Flatten(stmt.Tokens), header: null, bodyNode);
+            return FormatPsqlBody(style, Flatten(stmt.Tokens), header: null, bodyNode);
         }
 
         var asTok = stmt.Tokens[asIndex];
@@ -232,7 +251,7 @@ public static class SqlFormatter
         var bodyTokens = new List<SqlToken>(stmt.Tokens.Count - asIndex - 1);
         for (int k = asIndex + 1; k < stmt.Tokens.Count; k++) bodyTokens.Add(stmt.Tokens[k]);
 
-        return FormatPsqlBody(Flatten(bodyTokens), header, bodyNode);
+        return FormatPsqlBody(style, Flatten(bodyTokens), header, bodyNode);
     }
 
     // CREATE/ALTER/RECREATE VIEW … AS <query>: keep the shipped header layout (name + column list +
@@ -240,12 +259,12 @@ public static class SqlFormatter
     // query core, so a WITH-led / nested-subquery / set-operation view body indents naturally. The header
     // is everything before the body query's first token (which includes the "as"); the body is the query
     // node. §0: the trailing ';' (if any) is re-attached; the header still round-trips its own tokens.
-    private static string FormatViewStatement(string source, SqlStatement stmt, QueryNode query)
+    private static string FormatViewStatement(FormatterStyle style, string source, SqlStatement stmt, QueryNode query)
     {
         var headerToks = new List<SqlToken>();
         foreach (var t in stmt.Tokens) if (t.Start < query.Start) headerToks.Add(t);
-        if (headerToks.Count == 0) return Emit(Flatten(stmt.Tokens)); // defensive — no header
-        return WithSemicolon(Emit(Flatten(headerToks)) + "\n" + EmitQuery(query), stmt);
+        if (headerToks.Count == 0) return Emit(style, Flatten(stmt.Tokens)); // defensive — no header
+        return WithSemicolon(Emit(style, Flatten(headerToks)) + "\n" + EmitQuery(style, query), stmt);
     }
 
     // EXECUTE BLOCK: lay out the header — "execute block ( params )" (adaptive list) then
@@ -253,15 +272,15 @@ public static class SqlFormatter
     // body. Reuses the shared adaptive list builder + Emit (item content) + FormatPsqlBody (body), so
     // there is no parallel layout logic. Any header shape TryFormatExecuteBlockHeader does not fully
     // recognise falls back to the verbatim-header path — never guess, never lose (§0).
-    private static string FormatExecuteBlock(string source, SqlStatement stmt)
+    private static string FormatExecuteBlock(FormatterStyle style, string source, SqlStatement stmt)
     {
         var bodyNode = (stmt as ExecuteBlockStatement)?.Body;
         int asIndex = FindTopLevelAs(stmt.Tokens);
-        if (asIndex < 0) return FormatPsqlBody(Flatten(stmt.Tokens), header: null, bodyNode);
+        if (asIndex < 0) return FormatPsqlBody(style, Flatten(stmt.Tokens), header: null, bodyNode);
 
         var headerToks = new List<SqlToken>(asIndex);
         for (int k = 0; k < asIndex; k++) headerToks.Add(stmt.Tokens[k]);
-        string? formattedHeader = TryFormatExecuteBlockHeader(Flatten(headerToks));
+        string? formattedHeader = TryFormatExecuteBlockHeader(style, Flatten(headerToks));
 
         string header;
         if (formattedHeader is null)
@@ -279,13 +298,13 @@ public static class SqlFormatter
 
         var bodyTokens = new List<SqlToken>(stmt.Tokens.Count - asIndex - 1);
         for (int k = asIndex + 1; k < stmt.Tokens.Count; k++) bodyTokens.Add(stmt.Tokens[k]);
-        return FormatPsqlBody(Flatten(bodyTokens), header, bodyNode);
+        return FormatPsqlBody(style, Flatten(bodyTokens), header, bodyNode);
     }
 
     // Formats the flattened EXECUTE BLOCK header tokens (everything before the body-opening AS) into
     // "execute block [(params)]\n[returns (cols)]\nas", or null when the shape is not the plain expected
     // one (so the caller keeps the header verbatim). Leading comments are preserved on their own lines.
-    private static string? TryFormatExecuteBlockHeader(List<FToken> h)
+    private static string? TryFormatExecuteBlockHeader(FormatterStyle style, List<FToken> h)
     {
         int p = 0;
         StringBuilder? commentPrefix = null;
@@ -300,7 +319,7 @@ public static class SqlFormatter
         if (p + 1 >= h.Count || !IsWordTok(h[p], "EXECUTE") || !IsWordTok(h[p + 1], "BLOCK"))
             return null;
 
-        var sb = new StringBuilder("execute block");
+        var sb = new StringBuilder(Kw("execute block", style));
         int j = p + 2;
 
         // Optional input-parameter list, on the "execute block" line.
@@ -310,7 +329,7 @@ public static class SqlFormatter
             if (close >= h.Count) return null; // unterminated — let the verbatim path keep it
             var ps = SplitTopLevelCommas(h, j + 1, close);
             int openColumn = sb.Length + 1; // where '(' lands after the joining space
-            sb.Append(' ').Append(FormatAdaptiveList(ps, openColumn));
+            sb.Append(' ').Append(FormatAdaptiveList(style, ps, openColumn));
             j = close + 1;
         }
 
@@ -322,15 +341,15 @@ public static class SqlFormatter
             int close = MatchParen(h, open);
             if (close >= h.Count) return null;
             var rs = SplitTopLevelCommas(h, open + 1, close);
-            const string head = "returns ";
-            sb.Append('\n').Append(head).Append(FormatAdaptiveList(rs, head.Length));
+            var head = Kw("returns", style) + " ";
+            sb.Append('\n').Append(head).Append(FormatAdaptiveList(style, rs, head.Length));
             j = close + 1;
         }
 
         // Any leftover header token (an unexpected clause or a mid-header comment) → don't guess.
         if (j != h.Count) return null;
 
-        sb.Append('\n').Append("as");
+        sb.Append('\n').Append(Kw("as", style));
         return commentPrefix is null ? sb.ToString() : commentPrefix + "\n" + sb;
     }
 
@@ -359,11 +378,90 @@ public static class SqlFormatter
 
     private enum FKind { Word, Number, String, QuotedIdent, LineComment, BlockComment, Punctuation }
 
+    // ── The keyword / identifier split (the casing setting's classification) ─────────────────────
+    //
+    // FKind answers "how does this token LAY OUT" and ~40 sites key on FKind.Word, which is why the split
+    // is a SECOND, orthogonal fact rather than more FKind members: FKind.Word is deliberately still
+    // keywords + identifiers + named parameters as far as spacing, gluing and phrase matching are concerned.
+    // FWord answers only "which casing setting governs this word".
+    //
+    // ⭐ The classification is NOT re-derived here. SqlLexer already records exactly this verdict —
+    // `FirebirdSyntax.IsKeyword(word) ? TokenKind.Keyword : TokenKind.Identifier` (SqlLexer.cs) — against
+    // the ONE catalog the lexer, the completion engine and the XSHD drift-guard share; MapToken used to throw
+    // it away when it collapsed both into FKind.Word. Reading the token's own kind is therefore stronger than
+    // calling IsKeyword again: there is not merely no second keyword LIST, there is no second keyword
+    // DECISION that could disagree with the lexer's if the catalog ever gains a nuance.
+
+    private enum FWord
+    {
+        /// <summary>Not an unquoted word — a literal, a quoted identifier, punctuation or a comment. Casing
+        /// never applies (§0: those pass through verbatim).</summary>
+        NotAWord,
+
+        /// <summary>An unquoted word IN the <c>FirebirdSyntax</c> catalog — governed by
+        /// <see cref="FormatterStyle.KeywordCase"/>. Includes data types and built-in functions, which are
+        /// catalog entries: <c>cast(x as integer)</c> reads as one language, not three.</summary>
+        Keyword,
+
+        /// <summary>An unquoted word NOT in the catalog, plus a named parameter (<c>:name</c> / <c>@name</c>,
+        /// whose text is a variable name rather than vocabulary) — governed by
+        /// <see cref="FormatterStyle.IdentifierCase"/>.</summary>
+        Identifier,
+    }
+
+    private static FWord ClassifyWord(TokenKind kind) => kind switch
+    {
+        TokenKind.Keyword => FWord.Keyword,
+        TokenKind.Identifier or TokenKind.Parameter => FWord.Identifier,
+        _ => FWord.NotAWord,
+    };
+
+    // ── ⭐ THE ONE CASING DECISION POINT ─────────────────────────────────────────────────────────
+    //
+    // Before this existed, casing was applied at ~30 independent places: 6 `ToLowerInvariant()` calls on
+    // token text, 2 near-duplicate "MaybeLowercase" helpers (one per token model), and ~22 hard-coded
+    // lowercase keyword literals the emitters synthesize ("select", "in", "end", "union", …). Two settings
+    // cannot be honoured from thirty places — every new emitter would have to remember the policy, and a
+    // forgotten one produces plausible-looking mixed-case output that no test would think to assert.
+    //
+    // Everything the formatter emits as a WORD now goes through here. The three members below are one
+    // decision with three input shapes (a flattened token, a raw AST token, a synthesized keyword); none of
+    // them decides anything itself.
+
+    /// <summary>The one place a word's case is chosen. Anything not a word is returned untouched.</summary>
+    private static string Cased(string text, FWord word, FormatterStyle style) => word switch
+    {
+        FWord.Keyword => style.KeywordCase == FormatterCase.Upper ? text.ToUpperInvariant() : text.ToLowerInvariant(),
+        FWord.Identifier => style.IdentifierCase == FormatterCase.Upper ? text.ToUpperInvariant() : text.ToLowerInvariant(),
+        _ => text,
+    };
+
+    /// <summary>A flattened token's display text. ⚠ Strings, quoted identifiers, comments, numbers and
+    /// punctuation pass through verbatim — a quoted identifier is case-sensitive in Firebird, so the setting
+    /// is applied strictly INSIDE this guard, never around it (§0 / architecture rule #11).</summary>
+    private static string Cased(FToken t, FormatterStyle style)
+        => t.Kind == FKind.Word ? Cased(t.Text, t.Word, style) : t.Text;
+
+    /// <summary>A raw AST name token's display text (the CTE-name path, which never went through
+    /// <see cref="Flatten"/>). Same guard, same decision — the quoted case falls to <c>NotAWord</c>.</summary>
+    private static string Cased(SqlToken t, FormatterStyle style)
+        => Cased(t.Text, ClassifyWord(t.Kind), style);
+
+    /// <summary>A keyword the emitter SYNTHESIZES rather than copies from the input ("select", "as", "end" …).
+    /// It is vocabulary the formatter is choosing to write, so it obeys the keyword setting like any other —
+    /// otherwise an Upper setting would emit <c>SELECT … in (…)</c>.</summary>
+    private static string Kw(string keyword, FormatterStyle style)
+        => Cased(keyword, FWord.Keyword, style);
+
     // A flattened token carries its absolute source span (<see cref="Start"/>/<see cref="End"/>) so the
     // AST-walking layout core (EmitQuery + the structural splice in Emit) can locate, by position, where an
     // embedded structural child node (a subquery / CASE) begins and ends within a token fragment. Synthesized
     // FTokens (none today) would carry 0/0; every real one comes from a lexer token or a comment trivia.
-    private readonly record struct FToken(FKind Kind, string Text, bool BlankBefore, int Start = 0, int End = 0)
+    // <see cref="Word"/> is the casing classification (see FWord) and is set only by <see cref="MapToken"/>,
+    // from the lexer's own TokenKind. A synthesized FToken leaves it NotAWord: the ones built below exist
+    // purely as the `prev` token a spacing decision looks at, and are never emitted.
+    private readonly record struct FToken(
+        FKind Kind, string Text, bool BlankBefore, int Start = 0, int End = 0, FWord Word = FWord.NotAWord)
     {
         public bool IsComment => Kind is FKind.LineComment or FKind.BlockComment;
     }
@@ -396,17 +494,21 @@ public static class SqlFormatter
         return list;
     }
 
+    // ⭐ This is where the keyword / identifier split is made — by carrying the classification the lexer
+    // already decided (ClassifyWord over t.Kind) instead of collapsing Keyword and Identifier into one
+    // indistinguishable FKind.Word, which is what made the two casing settings inexpressible (design §2.2b).
     private static FToken MapToken(SqlToken t, bool blankBefore) => t.Kind switch
     {
-        TokenKind.Keyword or TokenKind.Identifier => new FToken(FKind.Word, t.Text, blankBefore, t.Start, t.End),
+        TokenKind.Keyword or TokenKind.Identifier
+            => new FToken(FKind.Word, t.Text, blankBefore, t.Start, t.End, ClassifyWord(t.Kind)),
         TokenKind.QuotedIdentifier => new FToken(FKind.QuotedIdent, t.Text, blankBefore, t.Start, t.End),
         TokenKind.StringLiteral => new FToken(FKind.String, t.Text, blankBefore, t.Start, t.End),
         TokenKind.Number => new FToken(FKind.Number, t.Text, blankBefore, t.Start, t.End),
-        // Named parameters (:name / @name) behave like an identifier for spacing + lowercasing;
-        // a positional '?' is punctuation.
+        // Named parameters (:name / @name) behave like an identifier for spacing AND for casing (their text
+        // is a variable name, not vocabulary); a positional '?' is punctuation.
         TokenKind.Parameter => t.Text == "?"
             ? new FToken(FKind.Punctuation, "?", blankBefore, t.Start, t.End)
-            : new FToken(FKind.Word, t.Text, blankBefore, t.Start, t.End),
+            : new FToken(FKind.Word, t.Text, blankBefore, t.Start, t.End, FWord.Identifier),
         _ => new FToken(FKind.Punctuation, t.Text, blankBefore, t.Start, t.End), // Comma/Dot/Semicolon/(/)/Operator/Unknown
     };
 
@@ -470,7 +572,7 @@ public static class SqlFormatter
     // tokens, so nested structure follows the AST rather than being re-flattened. When null (list items,
     // UPDATE/DELETE/MERGE/generic statements that have no clause node), NO splice runs and the output is the
     // pure token layout — byte-identical to before the convergence.
-    private static string Emit(List<FToken> meaningful, IReadOnlyList<SqlNode>? structuralChildren = null)
+    private static string Emit(FormatterStyle style, List<FToken> meaningful, IReadOnlyList<SqlNode>? structuralChildren = null)
     {
         var sb = new StringBuilder();
         FToken? prev = null;
@@ -486,7 +588,7 @@ public static class SqlFormatter
             if (nextSplice < splices.Count && !t.IsComment && t.Start == splices[nextSplice].Start)
             {
                 var node = splices[nextSplice].Node;
-                EmitStructuralChild(node, sb, ref prev);
+                EmitStructuralChild(style, node, sb, ref prev);
                 int k = i;
                 while (k + 1 < meaningful.Count && meaningful[k + 1].Start < node.End) k++;
                 i = k;
@@ -494,7 +596,7 @@ public static class SqlFormatter
                 continue;
             }
 
-            var viewConsumed = TryEmitViewHeader(meaningful, i, sb, ref prev);
+            var viewConsumed = TryEmitViewHeader(style, meaningful, i, sb, ref prev);
             if (viewConsumed > 0) { i += viewConsumed - 1; continue; }
 
             var phrase = MatchStructuralPhrase(meaningful, i);
@@ -509,7 +611,7 @@ public static class SqlFormatter
                 for (int k = 0; k < phrase.Length; k++)
                 {
                     if (k > 0) sb.Append(' ');
-                    sb.Append(meaningful[i + k].Text.ToLowerInvariant());
+                    sb.Append(Cased(meaningful[i + k], style));
                 }
                 prev = meaningful[i + phrase.Length - 1];
                 i += phrase.Length - 1;
@@ -519,7 +621,7 @@ public static class SqlFormatter
                 // separate string post-pass.
                 if (phrase.Kind == PhraseKind.TopLevel && IsWordTok(meaningful[i], "SELECT"))
                 {
-                    i += EmitSelectColumnList(meaningful, i + 1, sb, ref prev);
+                    i += EmitSelectColumnList(style, meaningful, i + 1, sb, ref prev);
                 }
                 continue;
             }
@@ -528,7 +630,7 @@ public static class SqlFormatter
             if (IsWordTok(t, "IN") && i + 1 < meaningful.Count && IsPunctTok(meaningful[i + 1], "(")
                 && !StartsSubquery(meaningful, i + 2))
             {
-                i += EmitInList(meaningful, i, sb, ref prev, structuralChildren) - 1;
+                i += EmitInList(style, meaningful, i, sb, ref prev, structuralChildren) - 1;
                 nextSplice = SkipConsumedSplices(splices, nextSplice, meaningful[i]);
                 continue;
             }
@@ -543,13 +645,13 @@ public static class SqlFormatter
                 && i + 1 < meaningful.Count && IsPunctTok(meaningful[i + 1], "(")
                 && !StartsSubquery(meaningful, i + 2))
             {
-                i += EmitCallArgList(meaningful, i, sb, ref prev, structuralChildren) - 1;
+                i += EmitCallArgList(style, meaningful, i, sb, ref prev, structuralChildren) - 1;
                 nextSplice = SkipConsumedSplices(splices, nextSplice, meaningful[i]);
                 continue;
             }
 
             if (NeedsSpaceBefore(prev, t, sb)) sb.Append(' ');
-            sb.Append(MaybeLowercase(t));
+            sb.Append(Cased(t, style));
             prev = t;
 
             // A line comment runs to end-of-line — force a newline so following tokens are not
@@ -568,7 +670,7 @@ public static class SqlFormatter
     // SELECT). Leading DISTINCT/ALL are emitted inline as part of the header; the columns then run to
     // the first depth-0 clause break and are laid out by the shared bare-list builder, measured from
     // the current column (so the continuation aligns under the first column). Returns tokens consumed.
-    private static int EmitSelectColumnList(List<FToken> tokens, int start, StringBuilder sb, ref FToken? prev)
+    private static int EmitSelectColumnList(FormatterStyle style, List<FToken> tokens, int start, StringBuilder sb, ref FToken? prev)
     {
         int i = start;
         while (i < tokens.Count && tokens[i].Kind == FKind.Word
@@ -576,7 +678,7 @@ public static class SqlFormatter
                    || tokens[i].Text.Equals("ALL", StringComparison.OrdinalIgnoreCase)))
         {
             if (NeedsSpaceBefore(prev, tokens[i], sb)) sb.Append(' ');
-            sb.Append(tokens[i].Text.ToLowerInvariant());
+            sb.Append(Cased(tokens[i], style));
             prev = tokens[i];
             i++;
         }
@@ -587,7 +689,7 @@ public static class SqlFormatter
         if (NeedsSpaceBefore(prev, tokens[i], sb)) sb.Append(' ');
         int openColumn = CurrentColumn(sb);
         var items = SplitTopLevelCommas(tokens, i, listEnd);
-        sb.Append(FormatAdaptiveBareList(items, openColumn));
+        sb.Append(FormatAdaptiveBareList(style, items, openColumn));
         prev = tokens[listEnd - 1];
         return listEnd - start;
     }
@@ -603,10 +705,10 @@ public static class SqlFormatter
     // Emits "in ( … )" with the value list laid out by the shared adaptive builder, measured from the
     // '(' column. A scalar subquery in a value expression is spliced from <paramref name="children"/>.
     // Returns tokens consumed (IN through the matching ')').
-    private static int EmitInList(List<FToken> tokens, int inIdx, StringBuilder sb, ref FToken? prev, IReadOnlyList<SqlNode>? children)
+    private static int EmitInList(FormatterStyle style, List<FToken> tokens, int inIdx, StringBuilder sb, ref FToken? prev, IReadOnlyList<SqlNode>? children)
     {
         if (NeedsSpaceBefore(prev, tokens[inIdx], sb)) sb.Append(' ');
-        sb.Append("in");
+        sb.Append(Kw("in", style));
         prev = tokens[inIdx];
 
         int open = inIdx + 1; // '('
@@ -615,7 +717,7 @@ public static class SqlFormatter
 
         if (NeedsSpaceBefore(prev, tokens[open], sb)) sb.Append(' ');
         int openColumn = CurrentColumn(sb);
-        sb.Append(FormatAdaptiveList(items, openColumn, children));
+        sb.Append(FormatAdaptiveList(style, items, openColumn, children));
         prev = close < tokens.Count ? tokens[close] : tokens[open];
 
         int last = close < tokens.Count ? close : tokens.Count - 1;
@@ -627,10 +729,10 @@ public static class SqlFormatter
     // mechanism for every call's arguments: EXECUTE PROCEDURE, function/procedure calls, and any other
     // "identifier ( comma-list )" — no per-construct arg formatter. Returns tokens consumed (name through
     // the matching ')').
-    private static int EmitCallArgList(List<FToken> tokens, int nameIdx, StringBuilder sb, ref FToken? prev, IReadOnlyList<SqlNode>? children)
+    private static int EmitCallArgList(FormatterStyle style, List<FToken> tokens, int nameIdx, StringBuilder sb, ref FToken? prev, IReadOnlyList<SqlNode>? children)
     {
         if (NeedsSpaceBefore(prev, tokens[nameIdx], sb)) sb.Append(' ');
-        sb.Append(MaybeLowercase(tokens[nameIdx]));
+        sb.Append(Cased(tokens[nameIdx], style));
         prev = tokens[nameIdx];
 
         int open = nameIdx + 1; // '(' (glued to the name — no space)
@@ -640,7 +742,7 @@ public static class SqlFormatter
         int openColumn = CurrentColumn(sb); // column of '(', since it glues to the name
         // A subquery / CASE embedded in an argument is spliced from the structural children (so it nests
         // instead of flattening to the argument column).
-        sb.Append(FormatAdaptiveList(items, openColumn, children));
+        sb.Append(FormatAdaptiveList(style, items, openColumn, children));
         prev = close < tokens.Count ? tokens[close] : tokens[open];
 
         int last = close < tokens.Count ? close : tokens.Count - 1;
@@ -712,7 +814,7 @@ public static class SqlFormatter
 
     // Emits a CREATE [OR ALTER] VIEW header (name + column list one-per-line + AS on its own line).
     // Returns the number of tokens consumed, or 0 when token i is not a view header.
-    private static int TryEmitViewHeader(List<FToken> tokens, int i, StringBuilder sb, ref FToken? prev)
+    private static int TryEmitViewHeader(FormatterStyle style, List<FToken> tokens, int i, StringBuilder sb, ref FToken? prev)
     {
         var t = tokens[i];
         if (t.Kind != FKind.Word || !string.Equals(t.Text, "VIEW", StringComparison.OrdinalIgnoreCase))
@@ -722,8 +824,8 @@ public static class SqlFormatter
         if (nameTok.Kind != FKind.Word && nameTok.Kind != FKind.QuotedIdent) return 0;
 
         if (NeedsSpaceBefore(prev, t, sb)) sb.Append(' ');
-        sb.Append("view ");
-        sb.Append(MaybeLowercase(nameTok));
+        sb.Append(Kw("view", style)).Append(' ');
+        sb.Append(Cased(nameTok, style));
         int j = i + 2;
         prev = nameTok;
 
@@ -734,7 +836,7 @@ public static class SqlFormatter
         {
             int close = MatchParen(tokens, j);
             var items = SplitTopLevelCommas(tokens, j + 1, close);
-            sb.Append(' ').Append(FormatBrokenList(items, ViewColumnIndent));
+            sb.Append(' ').Append(FormatBrokenList(style, items, ViewColumnIndent));
             prev = close < tokens.Count ? tokens[close] : nameTok;
             j = close < tokens.Count ? close + 1 : tokens.Count;
         }
@@ -744,7 +846,7 @@ public static class SqlFormatter
             && string.Equals(tokens[j].Text, "AS", StringComparison.OrdinalIgnoreCase))
         {
             TrimTrailingSpaces(sb);
-            sb.Append('\n').Append("as");
+            sb.Append('\n').Append(Kw("as", style));
             prev = tokens[j];
             j++;
         }
@@ -807,18 +909,18 @@ public static class SqlFormatter
     // both list layouts (so spacing/lowercasing/nesting is identical to plain SQL, no parallel path).
     // <paramref name="children"/>, when supplied, are the list's embedded structural nodes (a scalar
     // subquery in a VALUES expression); each item splices the ones inside its own span.
-    private static List<string> RenderListItems(List<List<FToken>> items, IReadOnlyList<SqlNode>? children = null)
+    private static List<string> RenderListItems(FormatterStyle style, List<List<FToken>> items, IReadOnlyList<SqlNode>? children = null)
     {
         var rendered = new List<string>(items.Count);
         foreach (var it in items)
-            rendered.Add(Emit(it, children is null ? null : ItemChildren(children, it)).Trim());
+            rendered.Add(Emit(style, it, children is null ? null : ItemChildren(children, it)).Trim());
         return rendered;
     }
 
     // One item per line, indented by <paramref name="itemIndent"/>, ')' glued to the last item — the
     // shipped CREATE VIEW column-list style (always vertical, regardless of width).
-    private static string FormatBrokenList(List<List<FToken>> items, string itemIndent)
-        => FormatBrokenListRendered(RenderListItems(items), itemIndent);
+    private static string FormatBrokenList(FormatterStyle style, List<List<FToken>> items, string itemIndent)
+        => FormatBrokenListRendered(RenderListItems(style, items), itemIndent);
 
     // One pre-rendered item per line (each block item shifted to the item indent), ')' glued to the last.
     private static string FormatBrokenListRendered(List<string> rendered, string itemIndent)
@@ -837,9 +939,9 @@ public static class SqlFormatter
     // packed across lines up to the width limit with the continuation aligned under the first item —
     // multiple items per line while they fit (length/readability-driven wrap, NOT one item per line).
     // The shared reflow for parenthesized lists: INSERT / VALUES / UPDATE OR INSERT / MATCHING / IN.
-    private static string FormatAdaptiveList(List<List<FToken>> items, int openColumn, IReadOnlyList<SqlNode>? children = null)
+    private static string FormatAdaptiveList(FormatterStyle style, List<List<FToken>> items, int openColumn, IReadOnlyList<SqlNode>? children = null)
     {
-        var rendered = RenderListItems(items, children);
+        var rendered = RenderListItems(style, items, children);
         // A block (multi-line) item — e.g. a scalar subquery in a VALUES list — forces the vertical
         // one-per-line layout so the block reads cleanly, rather than an inline join.
         foreach (var r in rendered) if (r.Contains('\n')) return FormatBrokenListRendered(rendered, new string(' ', openColumn + 1));
@@ -852,9 +954,9 @@ public static class SqlFormatter
     // Adaptive layout for a BARE (unparenthesised) comma list — the SELECT column list. Inline when it
     // fits at <paramref name="openColumn"/>, else packed with the continuation aligned under the first
     // item (openColumn spaces). Same packer/threshold as the parenthesised form; no surrounding parens.
-    private static string FormatAdaptiveBareList(List<List<FToken>> items, int openColumn)
+    private static string FormatAdaptiveBareList(FormatterStyle style, List<List<FToken>> items, int openColumn)
     {
-        var rendered = RenderListItems(items);
+        var rendered = RenderListItems(style, items);
         var inline = string.Join(", ", rendered);
         if (rendered.Count <= 1 || openColumn + inline.Length <= MaxLineWidth) return inline;
         var indent = new string(' ', openColumn);
@@ -903,25 +1005,26 @@ public static class SqlFormatter
     // token list (not the AST node) so the PSQL body emitter can delegate to it too. Any shape it
     // doesn't recognise falls back to the generic emitter — the §0 safety net guarantees no loss.
     private static string FormatInsertFamily(
+        FormatterStyle style,
         List<FToken> tokens, int headerLen, QueryNode? sourceQuery = null, IReadOnlyList<SqlNode>? subqueries = null)
     {
         int n = tokens.Count;
         if (n <= headerLen || !IsWordTok(tokens[headerLen - 1], "INTO"))
-            return Emit(tokens, subqueries);
+            return Emit(style, tokens, subqueries);
 
         bool semi = IsPunctTok(tokens[n - 1], ";");
         int end = semi ? n - 1 : n;
 
         int boundary = FindInsertListOrSource(tokens, headerLen, end);
-        if (boundary < 0) return Emit(tokens, subqueries); // no column list and no known source → generic
+        if (boundary < 0) return Emit(style, tokens, subqueries); // no column list and no known source → generic
 
         var sb = new StringBuilder();
         for (int h = 0; h < headerLen; h++)
         {
             if (h > 0) sb.Append(' ');
-            sb.Append(tokens[h].Text.ToLowerInvariant());
+            sb.Append(Cased(tokens[h], style));
         }
-        sb.Append(' ').Append(Emit(tokens.GetRange(headerLen, boundary - headerLen)).Trim());
+        sb.Append(' ').Append(Emit(style, tokens.GetRange(headerLen, boundary - headerLen)).Trim());
         int j = boundary;
 
         // Optional column list, on the same line as the target.
@@ -930,7 +1033,7 @@ public static class SqlFormatter
             int close = MatchParen(tokens, j);
             var cols = SplitTopLevelCommas(tokens, j + 1, Math.Min(close, end));
             int openColumn = sb.Length + 1; // where '(' lands after the joining space
-            sb.Append(' ').Append(FormatAdaptiveList(cols, openColumn));
+            sb.Append(' ').Append(FormatAdaptiveList(style, cols, openColumn));
             j = close < end ? close + 1 : end;
         }
 
@@ -940,16 +1043,16 @@ public static class SqlFormatter
             int vOpen = j + 1;
             int close = MatchParen(tokens, vOpen);
             var vals = SplitTopLevelCommas(tokens, vOpen + 1, Math.Min(close, end));
-            const string head = "values ";
+            var head = Kw("values", style) + " ";
             // Value expressions may hold a scalar subquery — splice it via the list's structural children.
-            sb.Append('\n').Append(head).Append(FormatAdaptiveList(vals, head.Length, subqueries));
+            sb.Append('\n').Append(head).Append(FormatAdaptiveList(style, vals, head.Length, subqueries));
             j = close < end ? close + 1 : end;
         }
         else if (j < end && sourceQuery is not null)
         {
             // INSERT … SELECT / WITH — the source query is laid out by the AST-walking core (so its own
             // nested queries indent). RETURNING (if any) is handled by the trailing loop below.
-            sb.Append('\n').Append(EmitQuery(sourceQuery));
+            sb.Append('\n').Append(EmitQuery(style, sourceQuery));
             int nj = j;
             while (nj < end && tokens[nj].Start < sourceQuery.End) nj++;
             j = nj;
@@ -957,7 +1060,7 @@ public static class SqlFormatter
         else if (j < end)
         {
             // DEFAULT VALUES / a source shape the parser did not model as a query — token layout (§0).
-            sb.Append('\n').Append(Emit(tokens.GetRange(j, end - j), subqueries));
+            sb.Append('\n').Append(Emit(style, tokens.GetRange(j, end - j), subqueries));
             j = end;
         }
 
@@ -970,12 +1073,12 @@ public static class SqlFormatter
                 int close = MatchParen(tokens, j + 1);
                 var m = SplitTopLevelCommas(tokens, j + 2, Math.Min(close, end));
                 const string head = "matching ";
-                sb.Append('\n').Append(head).Append(FormatAdaptiveList(m, head.Length));
+                sb.Append('\n').Append(head).Append(FormatAdaptiveList(style, m, head.Length));
                 j = close < end ? close + 1 : end;
             }
             else
             {
-                sb.Append('\n').Append(Emit(tokens.GetRange(j, end - j), subqueries));
+                sb.Append('\n').Append(Emit(style, tokens.GetRange(j, end - j), subqueries));
                 j = end;
             }
         }
@@ -1032,22 +1135,22 @@ public static class SqlFormatter
     }
 
     // Emits one embedded structural child (a subquery block or a CASE) in place of its tokens.
-    private static void EmitStructuralChild(SqlNode node, StringBuilder sb, ref FToken? prev)
+    private static void EmitStructuralChild(FormatterStyle style, SqlNode node, StringBuilder sb, ref FToken? prev)
     {
         int lineIndent = Math.Min(CurrentLineIndent(sb), MaxNestColumn);
         switch (node)
         {
             case ExistsExpression ex:
-                EmitSubqueryBlock(sb, "exists", ex.Query, ex.Tokens, lineIndent, ref prev);
+                EmitSubqueryBlock(style, sb, Kw("exists", style), ex.Query, ex.Tokens, lineIndent, ref prev);
                 break;
             case SubqueryExpression sub: // ScalarSubquery / IN / quantified
-                EmitSubqueryBlock(sb, null, sub.Query, sub.Tokens, lineIndent, ref prev);
+                EmitSubqueryBlock(style, sb, null, sub.Query, sub.Tokens, lineIndent, ref prev);
                 break;
             case CaseExpression ce:
-                EmitCaseChild(sb, ce, lineIndent, ref prev);
+                EmitCaseChild(style, sb, ce, lineIndent, ref prev);
                 break;
             case QueryNode q: // a bare query whose parens live in the surrounding tokens (MERGE USING (…))
-                EmitBareQueryBlock(sb, q, lineIndent, ref prev);
+                EmitBareQueryBlock(style, sb, q, lineIndent, ref prev);
                 break;
         }
     }
@@ -1055,9 +1158,9 @@ public static class SqlFormatter
     // A bare query node whose enclosing "(" was already emitted by the token path and whose ")" follows in
     // the token stream (MERGE's USING (query) source): lay the query on indented lines so "(" ends its line
     // and ")" returns to the current indent — the expanded-paren block, sharing the tokens' own parens.
-    private static void EmitBareQueryBlock(StringBuilder sb, QueryNode q, int lineIndent, ref FToken? prev)
+    private static void EmitBareQueryBlock(FormatterStyle style, StringBuilder sb, QueryNode q, int lineIndent, ref FToken? prev)
     {
-        string inner = EmitQuery(q);
+        string inner = EmitQuery(style, q);
         if (inner.Contains('\n'))
         {
             sb.Append('\n').Append(IndentBlock(inner, new string(' ', lineIndent + QueryIndentUnit.Length)));
@@ -1074,13 +1177,14 @@ public static class SqlFormatter
     // expanded-paren block ("(" ends the current line, the inner query indented one level, ")" back at the
     // current line's indent). Falls back to a verbatim inline emit when the parser did not model the query.
     private static void EmitSubqueryBlock(
+        FormatterStyle style,
         StringBuilder sb, string? keyword, QueryNode? query, IReadOnlyList<SqlToken> tokens,
         int lineIndent, ref FToken? prev)
     {
         if (query is null)
         {
             if (NeedsSpaceBeforeStructural(sb)) sb.Append(' ');
-            sb.Append(Emit(Flatten(tokens)).Trim());
+            sb.Append(Emit(style, Flatten(tokens)).Trim());
             prev = new FToken(FKind.Punctuation, ")", false);
             return;
         }
@@ -1092,7 +1196,7 @@ public static class SqlFormatter
         }
         if (NeedsSpaceBeforeStructural(sb)) sb.Append(' ');
 
-        string inner = EmitQuery(query);
+        string inner = EmitQuery(style, query);
         string block = inner.Contains('\n')
             ? "(\n" + IndentBlock(inner, QueryIndentUnit) + "\n)"
             : "(" + inner + ")";
@@ -1101,9 +1205,9 @@ public static class SqlFormatter
     }
 
     // A CASE rendered inline (simple: ≤1 WHEN, single line, fits) or as a WHEN/THEN/ELSE block.
-    private static void EmitCaseChild(StringBuilder sb, CaseExpression ce, int lineIndent, ref FToken? prev)
+    private static void EmitCaseChild(FormatterStyle style, StringBuilder sb, CaseExpression ce, int lineIndent, ref FToken? prev)
     {
-        string inline = EmitCaseInline(ce);
+        string inline = EmitCaseInline(style, ce);
         int startCol = CurrentColumn(sb) + (NeedsSpaceBeforeStructural(sb) ? 1 : 0);
         bool block = ce.Whens.Count > 1 || inline.Contains('\n') || startCol + inline.Length > MaxLineWidth;
 
@@ -1122,23 +1226,23 @@ public static class SqlFormatter
             TrimTrailingSpaces(sb);
             sb.Append('\n').Append(new string(' ', lineIndent));
         }
-        AppendBlock(sb, EmitCaseBlock(ce), lineIndent);
+        AppendBlock(sb, EmitCaseBlock(style, ce), lineIndent);
         prev = new FToken(FKind.Word, "end", false);
     }
 
     // The inline single-line CASE rendering (pure token layout — identical to the pre-convergence inline
     // form). A nested SELECT inside an arm breaks to a newline here, so the caller then chooses the block.
-    private static string EmitCaseInline(CaseExpression ce) => Emit(Flatten(ce.Tokens)).Trim();
+    private static string EmitCaseInline(FormatterStyle style, CaseExpression ce) => Emit(style, Flatten(ce.Tokens)).Trim();
 
     // The block CASE rendering (column-0 relative): "case [operand]" / one "when … then …" per line / an
     // "else …" line / "end". Each arm/operand/ELSE interior is the shared token emitter with that region's
     // embedded structural children spliced (so a subquery / nested CASE in a branch lays out as a block).
-    private static string EmitCaseBlock(CaseExpression ce)
+    private static string EmitCaseBlock(FormatterStyle style, CaseExpression ce)
     {
         var toks = ce.Tokens;
         int endStart = toks.Count > 0 ? toks[toks.Count - 1].Start : ce.End; // the END token
         var whens = ce.Whens;
-        var sb = new StringBuilder("case");
+        var sb = new StringBuilder(Kw("case", style));
 
         int afterCase = toks.Count > 0 ? toks[0].End : ce.Start;
         // Operand of a simple CASE (between CASE and the first WHEN / ELSE / END).
@@ -1147,7 +1251,7 @@ public static class SqlFormatter
         if (operand.Count > 0)
         {
             sb.Append(' ');
-            AppendBlock(sb, Emit(Flatten(operand), SpliceChildrenIn(ce.Children, afterCase, firstBoundary)).Trim(), 0);
+            AppendBlock(sb, Emit(style, Flatten(operand), SpliceChildrenIn(ce.Children, afterCase, firstBoundary)).Trim(), 0);
         }
 
         // Each arm / the ELSE result on its own line at the arm indent. AppendBlock shifts a multi-line
@@ -1156,7 +1260,7 @@ public static class SqlFormatter
         foreach (var w in whens)
         {
             sb.Append('\n').Append(CaseArmIndent);
-            AppendBlock(sb, Emit(Flatten(w.Tokens), w.Children).Trim(), CaseArmIndent.Length);
+            AppendBlock(sb, Emit(style, Flatten(w.Tokens), w.Children).Trim(), CaseArmIndent.Length);
         }
 
         int elseFrom = whens.Count > 0 ? whens[whens.Count - 1].End : afterCase;
@@ -1164,10 +1268,10 @@ public static class SqlFormatter
         if (elseRegion.Count > 0)
         {
             sb.Append('\n').Append(CaseArmIndent);
-            AppendBlock(sb, Emit(Flatten(elseRegion), SpliceChildrenIn(ce.Children, elseFrom, endStart)).Trim(), CaseArmIndent.Length);
+            AppendBlock(sb, Emit(style, Flatten(elseRegion), SpliceChildrenIn(ce.Children, elseFrom, endStart)).Trim(), CaseArmIndent.Length);
         }
 
-        sb.Append('\n').Append("end");
+        sb.Append('\n').Append(Kw("end", style));
         return sb.ToString();
     }
 
@@ -1192,53 +1296,53 @@ public static class SqlFormatter
 
     // Lays out a query node column-0-relative. The single structural entry the formatter recurses through
     // for every nested query.
-    private static string EmitQuery(QueryNode q) => q switch
+    private static string EmitQuery(FormatterStyle style, QueryNode q) => q switch
     {
-        SelectQuery sq => EmitSelectQuery(sq),
-        SetOperationQuery so => EmitSetOperation(so),
-        WithQuery wq => FormatWithClause(wq),
-        _ => Emit(Flatten(q.Tokens)), // RawQuery / unmodeled — verbatim token layout (§0)
+        SelectQuery sq => EmitSelectQuery(style, sq),
+        SetOperationQuery so => EmitSetOperation(style, so),
+        WithQuery wq => FormatWithClause(style, wq),
+        _ => Emit(style, Flatten(q.Tokens)), // RawQuery / unmodeled — verbatim token layout (§0)
     };
 
-    private static string EmitSelectQuery(SelectQuery sq)
+    private static string EmitSelectQuery(FormatterStyle style, SelectQuery sq)
     {
-        var lines = new List<string> { EmitProjection(sq.Select) };
-        if (sq.From is not null) lines.Add(EmitFromClause(sq.From));
-        if (sq.Where is not null) lines.Add(Emit(Flatten(sq.Where.Tokens), sq.Where.Children));
-        if (sq.GroupBy is not null) lines.Add(Emit(Flatten(sq.GroupBy.Tokens), sq.GroupBy.Children));
-        if (sq.Having is not null) lines.Add(Emit(Flatten(sq.Having.Tokens), sq.Having.Children));
-        if (sq.OrderBy is not null) lines.Add(Emit(Flatten(sq.OrderBy.Tokens), sq.OrderBy.Children));
+        var lines = new List<string> { EmitProjection(style, sq.Select) };
+        if (sq.From is not null) lines.Add(EmitFromClause(style, sq.From));
+        if (sq.Where is not null) lines.Add(Emit(style, Flatten(sq.Where.Tokens), sq.Where.Children));
+        if (sq.GroupBy is not null) lines.Add(Emit(style, Flatten(sq.GroupBy.Tokens), sq.GroupBy.Children));
+        if (sq.Having is not null) lines.Add(Emit(style, Flatten(sq.Having.Tokens), sq.Having.Children));
+        if (sq.OrderBy is not null) lines.Add(Emit(style, Flatten(sq.OrderBy.Tokens), sq.OrderBy.Children));
         return string.Join("\n", lines);
     }
 
     // A set operation — each operand query on its own lines, the operator (union [all] / intersect /
     // except) on its own line between them (matching the shipped set-op layout), a trailing ORDER BY last.
-    private static string EmitSetOperation(SetOperationQuery so)
+    private static string EmitSetOperation(FormatterStyle style, SetOperationQuery so)
     {
         var sb = new StringBuilder();
-        sb.Append(EmitQuery(so.Left));
-        sb.Append('\n').Append(SetOperatorText(so.Operator));
-        if (so.All) sb.Append(" all");
-        sb.Append('\n').Append(EmitQuery(so.Right));
-        if (so.OrderBy is not null) sb.Append('\n').Append(Emit(Flatten(so.OrderBy.Tokens), so.OrderBy.Children));
+        sb.Append(EmitQuery(style, so.Left));
+        sb.Append('\n').Append(SetOperatorText(style, so.Operator));
+        if (so.All) sb.Append(' ').Append(Kw("all", style));
+        sb.Append('\n').Append(EmitQuery(style, so.Right));
+        if (so.OrderBy is not null) sb.Append('\n').Append(Emit(style, Flatten(so.OrderBy.Tokens), so.OrderBy.Children));
         return sb.ToString();
     }
 
-    private static string SetOperatorText(SetOperator op) => op switch
+    private static string SetOperatorText(FormatterStyle style, SetOperator op) => op switch
     {
-        SetOperator.Union => "union",
-        SetOperator.Intersect => "intersect",
-        SetOperator.Except => "except",
-        _ => "union",
+        SetOperator.Union => Kw("union", style),
+        SetOperator.Intersect => Kw("intersect", style),
+        SetOperator.Except => Kw("except", style),
+        _ => Kw("union", style),
     };
 
     // The SELECT clause. With no embedded structural children the projection is the shared token layout
     // (byte-identical to before). Otherwise each projection item owns its layout — a CASE / scalar-subquery
     // item expands as a block while ordinary items pack adaptively — without forcing its neighbours
     // one-per-line (user directive: a complex item formats itself, it does not change its neighbours' policy).
-    private static string EmitProjection(SelectClause sc)
+    private static string EmitProjection(FormatterStyle style, SelectClause sc)
     {
-        if (sc.Children.Count == 0) return Emit(Flatten(sc.Tokens));
+        if (sc.Children.Count == 0) return Emit(style, Flatten(sc.Tokens));
 
         var f = Flatten(sc.Tokens);
         // Header = "select" + a leading DISTINCT/ALL run (FIRST n / SKIP n stay with the first item — the
@@ -1248,8 +1352,8 @@ public static class SqlFormatter
                && (f[h].Text.Equals("DISTINCT", StringComparison.OrdinalIgnoreCase)
                    || f[h].Text.Equals("ALL", StringComparison.OrdinalIgnoreCase)))
             h++;
-        var header = new StringBuilder("select");
-        for (int k = 1; k < h; k++) header.Append(' ').Append(f[k].Text.ToLowerInvariant());
+        var header = new StringBuilder(Kw("select", style));
+        for (int k = 1; k < h; k++) header.Append(' ').Append(Cased(f[k], style));
 
         var items = SplitTopLevelCommas(f, h, f.Count);
         var rendered = new List<string>(items.Count);
@@ -1257,7 +1361,7 @@ public static class SqlFormatter
         foreach (var it in items)
         {
             var itemChildren = ItemChildren(sc.Children, it);
-            var r = Emit(it, itemChildren).Trim();
+            var r = Emit(style, it, itemChildren).Trim();
             rendered.Add(r);
             if (r.Contains('\n')) anyBlock = true;
         }
@@ -1341,7 +1445,7 @@ public static class SqlFormatter
     // embedded subquery/CASE (in a join's ON), in which case it is laid out structurally: comma entries on
     // the FROM line, JOINs each on their own line (source join keywords preserved verbatim), a derived
     // table expanded as a paren block.
-    private static string EmitFromClause(FromClause fc)
+    private static string EmitFromClause(FormatterStyle style, FromClause fc)
     {
         // Lay out structurally when the FROM holds any derived table or embedded subquery/CASE — so a
         // nested query is a real block (EmitDerivedTable itself decides inline vs. expanded by its content).
@@ -1349,34 +1453,34 @@ public static class SqlFormatter
         bool structural = false;
         foreach (var n in fc.DescendantNodes())
             if (n is DerivedTable or SubqueryExpression or CaseExpression) { structural = true; break; }
-        if (!structural) return Emit(Flatten(fc.Tokens));
+        if (!structural) return Emit(style, Flatten(fc.Tokens));
 
-        var sb = new StringBuilder("from ");
+        var sb = new StringBuilder(Kw("from", style) + " ");
         for (int i = 0; i < fc.Items.Count; i++)
         {
             if (i > 0) sb.Append(", ");
-            sb.Append(EmitFromItem(fc.Items[i]));
+            sb.Append(EmitFromItem(style, fc.Items[i]));
         }
         return sb.ToString();
     }
 
-    private static string EmitFromItem(FromItem item) => item switch
+    private static string EmitFromItem(FormatterStyle style, FromItem item) => item switch
     {
-        DerivedTable dt => EmitDerivedTable(dt),
-        JoinedTable jt => EmitJoinedTable(jt),
-        _ => Emit(Flatten(item.Tokens)).Trim(), // TableReference
+        DerivedTable dt => EmitDerivedTable(style, dt),
+        JoinedTable jt => EmitJoinedTable(style, jt),
+        _ => Emit(style, Flatten(item.Tokens)).Trim(), // TableReference
     };
 
-    private static string EmitDerivedTable(DerivedTable dt)
+    private static string EmitDerivedTable(FormatterStyle style, DerivedTable dt)
     {
         var f = Flatten(dt.Tokens);
         int open = f.Count > 0 && f[0] is { Kind: FKind.Punctuation, Text: "(" } ? 0 : -1;
         int close = open >= 0 ? MatchParen(f, open) : -1;
         if (dt.Query is null || close < 0)
-            return Emit(Flatten(dt.Tokens)).Trim();
+            return Emit(style, Flatten(dt.Tokens)).Trim();
 
-        string inner = EmitQuery(dt.Query);
-        string alias = close + 1 < f.Count ? Emit(f.GetRange(close + 1, f.Count - close - 1)).Trim() : string.Empty;
+        string inner = EmitQuery(style, dt.Query);
+        string alias = close + 1 < f.Count ? Emit(style, f.GetRange(close + 1, f.Count - close - 1)).Trim() : string.Empty;
         if (!inner.Contains('\n'))
             return alias.Length > 0 ? "(" + inner + ") " + alias : "(" + inner + ")";
 
@@ -1385,20 +1489,20 @@ public static class SqlFormatter
         return block.ToString();
     }
 
-    private static string EmitJoinedTable(JoinedTable jt)
+    private static string EmitJoinedTable(FormatterStyle style, JoinedTable jt)
     {
-        var sb = new StringBuilder(EmitFromItem(jt.Left));
-        // Join keywords sit between the left item and the right item — emit them verbatim (lowercased) so
+        var sb = new StringBuilder(EmitFromItem(style, jt.Left));
+        // Join keywords sit between the left item and the right item — emit them verbatim (re-cased) so
         // "left outer join" / "natural join" etc. are preserved exactly (JoinKind would drop OUTER/INNER).
-        var kw = Emit(Flatten(SliceSpan(jt.Tokens, jt.Left.End, jt.Right.Start))).Trim();
+        var kw = Emit(style, Flatten(SliceSpan(jt.Tokens, jt.Left.End, jt.Right.Start))).Trim();
         sb.Append('\n').Append(kw);
         if (kw.Length > 0) sb.Append(' ');
-        sb.Append(EmitFromItem(jt.Right));
+        sb.Append(EmitFromItem(style, jt.Right));
         if (jt.OnTokens is { Count: > 0 })
         {
             var onChildren = new List<SqlNode>();
             foreach (var c in jt.Children) if (c is SubqueryExpression or CaseExpression) onChildren.Add(c);
-            sb.Append(' ').Append(Emit(Flatten(jt.OnTokens), onChildren));
+            sb.Append(' ').Append(Emit(style, Flatten(jt.OnTokens), onChildren));
         }
         return sb.ToString();
     }
@@ -1455,46 +1559,38 @@ public static class SqlFormatter
     // CTE body stays byte-identical to the pre-convergence layout). A statement whose CTE clause the parser
     // could not cleanly model has Query == null / non-WithQuery and is emitted as a plain query (§0-safe;
     // the lexeme net is the backstop regardless).
-    private static string FormatWithClause(WithQuery wq)
+    private static string FormatWithClause(FormatterStyle style, WithQuery wq)
     {
-        var sb = new StringBuilder("with");
-        if (wq.With.IsRecursive) sb.Append(" recursive");
+        var sb = new StringBuilder(Kw("with", style));
+        if (wq.With.IsRecursive) sb.Append(' ').Append(Kw("recursive", style));
 
         var ctes = wq.With.Ctes;
         for (int c = 0; c < ctes.Count; c++)
         {
             var cte = ctes[c];
-            var nameLine = new StringBuilder(MaybeLowercaseWord(cte.NameToken));
+            var nameLine = new StringBuilder(Cased(cte.NameToken, style));
 
             if (cte.ColumnTokens is { Count: > 0 } colTokens)
             {
                 var flat = Flatten(colTokens);
                 var cols = SplitTopLevelCommas(flat, 0, flat.Count);
                 nameLine.Append(' ');
-                nameLine.Append(FormatAdaptiveList(cols, nameLine.Length + (c == 0 ? 5 : 0)));
+                nameLine.Append(FormatAdaptiveList(style, cols, nameLine.Length + (c == 0 ? 5 : 0)));
             }
 
-            string body = IndentBlock(EmitQuery(cte.Body), CteBodyIndent);
+            string body = IndentBlock(EmitQuery(style, cte.Body), CteBodyIndent);
 
             sb.Append(c == 0 ? ' ' : '\n').Append(nameLine);
-            sb.Append('\n').Append("as (");
+            sb.Append('\n').Append(Kw("as", style)).Append(" (");
             sb.Append('\n').Append(body);
             sb.Append('\n').Append(')');
             if (c < ctes.Count - 1) sb.Append(',');
         }
 
         // Main query directly on the next line — a CTE query is ONE statement, not two.
-        sb.Append('\n').Append(EmitQuery(wq.Query));
+        sb.Append('\n').Append(EmitQuery(style, wq.Query));
         return sb.ToString();
     }
-
-    // The display text of a name token for the formatter: an unquoted identifier/keyword lowercased
-    // (the default style), a quoted identifier preserved verbatim.
-    private static string MaybeLowercaseWord(SqlToken t) => t.Kind switch
-    {
-        TokenKind.Identifier or TokenKind.Keyword => t.Text.ToLowerInvariant(),
-        _ => t.Text,
-    };
 
     // Prefixes every non-empty line of <paramref name="text"/> with <paramref name="indent"/>. Used to
     // indent a CTE body under its "as (". Trailing newlines are trimmed so no dangling blank line.
@@ -1509,11 +1605,6 @@ public static class SqlFormatter
         }
         return sb.ToString();
     }
-
-    private static string MaybeLowercase(FToken t)
-        // Lowercase words (keywords + identifiers + named parameters). Strings, quoted identifiers,
-        // comments and numbers pass through verbatim.
-        => t.Kind == FKind.Word ? t.Text.ToLowerInvariant() : t.Text;
 
     private static bool NeedsSpaceBefore(FToken? prev, FToken t, StringBuilder sb)
     {
@@ -1551,7 +1642,7 @@ public static class SqlFormatter
     // A statement is collected up to its top-level ';', so a CASE…END (which has no ';') is consumed
     // WHOLE inside a statement and never mistaken for a block END.
 
-    private static string FormatPsqlBody(List<FToken> body, string? header, BlockStatement? bodyNode = null)
+    private static string FormatPsqlBody(FormatterStyle style, List<FToken> body, string? header, BlockStatement? bodyNode = null)
     {
         var leaves = BuildLeafIndex(bodyNode);
         var lines = new List<string>();
@@ -1559,8 +1650,8 @@ public static class SqlFormatter
         while (i < body.Count)
         {
             int before = i;
-            EmitPsqlUnit(body, ref i, 0, lines, leaves);
-            if (i == before) EmitStrayToken(body, ref i, 0, lines); // §0: never skip — emit verbatim
+            EmitPsqlUnit(style, body, ref i, 0, lines, leaves);
+            if (i == before) EmitStrayToken(style, body, ref i, 0, lines); // §0: never skip — emit verbatim
         }
 
         var bodyStr = string.Join("\n", lines);
@@ -1586,7 +1677,7 @@ public static class SqlFormatter
 
     // Emits one PSQL "unit" (a leaf statement, or a compound: BEGIN block / IF / WHILE / FOR / local
     // subprogram) at <paramref name="indent"/>; advances i.
-    private static void EmitPsqlUnit(List<FToken> sig, ref int i, int indent, List<string> lines, IReadOnlyDictionary<int, SqlNode> leaves)
+    private static void EmitPsqlUnit(FormatterStyle style, List<FToken> sig, ref int i, int indent, List<string> lines, IReadOnlyDictionary<int, SqlNode> leaves)
     {
         while (i < sig.Count && sig[i].IsComment)
         {
@@ -1604,46 +1695,46 @@ public static class SqlFormatter
             var up = t.Text.ToUpperInvariant();
             if (up == "BEGIN")
             {
-                AddPsqlLine(lines, indent, "begin");
+                AddPsqlLine(lines, indent, Kw("begin", style));
                 i++;
                 while (i < sig.Count && !IsWordTok(sig[i], "END"))
                 {
                     int before = i;
-                    EmitPsqlUnit(sig, ref i, indent + 1, lines, leaves);
-                    if (i == before) EmitStrayToken(sig, ref i, indent + 1, lines);
+                    EmitPsqlUnit(style, sig, ref i, indent + 1, lines, leaves);
+                    if (i == before) EmitStrayToken(style, sig, ref i, indent + 1, lines);
                 }
                 if (i < sig.Count && IsWordTok(sig[i], "END"))
                 {
                     MaybeBlankLine(lines, sig[i].BlankBefore);
                     i++;
-                    var end = "end";
-                    if (i < sig.Count && IsPunctTok(sig[i], ";")) { end = "end;"; i++; }
+                    var end = Kw("end", style);
+                    if (i < sig.Count && IsPunctTok(sig[i], ";")) { end += ";"; i++; }
                     AddPsqlLine(lines, indent, end);
                 }
                 return;
             }
             if (up == "IF")
             {
-                AddPsqlEmit(lines, indent, CollectUntilWord(sig, ref i, "THEN"), leaves);
-                EmitPsqlBranch(sig, ref i, indent, lines, leaves);
+                AddPsqlEmit(style, lines, indent, CollectUntilWord(sig, ref i, "THEN"), leaves);
+                EmitPsqlBranch(style, sig, ref i, indent, lines, leaves);
                 while (i < sig.Count && sig[i].IsComment) { MaybeBlankLine(lines, sig[i].BlankBefore); AddPsqlLine(lines, indent, sig[i].Text); i++; }
                 if (i < sig.Count && IsWordTok(sig[i], "ELSE"))
                 {
                     i++;
-                    AddPsqlLine(lines, indent, "else");
-                    EmitPsqlBranch(sig, ref i, indent, lines, leaves);
+                    AddPsqlLine(lines, indent, Kw("else", style));
+                    EmitPsqlBranch(style, sig, ref i, indent, lines, leaves);
                 }
                 return;
             }
             if (up == "WHILE")
             {
-                AddPsqlEmit(lines, indent, CollectUntilWord(sig, ref i, "DO"), leaves);
-                EmitPsqlBranch(sig, ref i, indent, lines, leaves);
+                AddPsqlEmit(style, lines, indent, CollectUntilWord(sig, ref i, "DO"), leaves);
+                EmitPsqlBranch(style, sig, ref i, indent, lines, leaves);
                 return;
             }
             if (up == "FOR")
             {
-                EmitForSelect(sig, ref i, indent, lines, leaves);
+                EmitForSelect(style, sig, ref i, indent, lines, leaves);
                 return;
             }
             if (up == "DECLARE"
@@ -1651,10 +1742,10 @@ public static class SqlFormatter
                 && (sig[i + 1].Text.Equals("PROCEDURE", StringComparison.OrdinalIgnoreCase)
                     || sig[i + 1].Text.Equals("FUNCTION", StringComparison.OrdinalIgnoreCase)))
             {
-                AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"), leaves);
+                AddPsqlEmit(style, lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"), leaves);
                 int before = i;
-                EmitPsqlUnit(sig, ref i, indent, lines, leaves); // the subprogram's BEGIN…END
-                if (i == before) EmitStrayToken(sig, ref i, indent, lines);
+                EmitPsqlUnit(style, sig, ref i, indent, lines, leaves); // the subprogram's BEGIN…END
+                if (i == before) EmitStrayToken(style, sig, ref i, indent, lines);
                 return;
             }
             // A packaged subprogram DEFINITION — a bare FUNCTION/PROCEDURE WITH a body, as found in a
@@ -1662,29 +1753,29 @@ public static class SqlFormatter
             // BEGIN…END block so the enclosing package-body loop stops only at the package's OWN END.
             if ((up == "FUNCTION" || up == "PROCEDURE") && IsSubprogramDefinition(sig, i))
             {
-                AddPsqlEmit(lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"), leaves);
+                AddPsqlEmit(style, lines, indent, CollectUntilWordExclusive(sig, ref i, "BEGIN"), leaves);
                 int before = i;
-                EmitPsqlUnit(sig, ref i, indent, lines, leaves); // the subprogram's BEGIN…END
-                if (i == before) EmitStrayToken(sig, ref i, indent, lines);
+                EmitPsqlUnit(style, sig, ref i, indent, lines, leaves); // the subprogram's BEGIN…END
+                if (i == before) EmitStrayToken(style, sig, ref i, indent, lines);
                 return;
             }
         }
 
-        AddPsqlEmit(lines, indent, CollectPsqlStatement(sig, ref i), leaves);
+        AddPsqlEmit(style, lines, indent, CollectPsqlStatement(sig, ref i), leaves);
     }
 
-    private static void EmitPsqlBranch(List<FToken> sig, ref int i, int indent, List<string> lines, IReadOnlyDictionary<int, SqlNode> leaves)
+    private static void EmitPsqlBranch(FormatterStyle style, List<FToken> sig, ref int i, int indent, List<string> lines, IReadOnlyDictionary<int, SqlNode> leaves)
     {
         while (i < sig.Count && sig[i].IsComment) { AddPsqlLine(lines, indent + 1, sig[i].Text); i++; }
         if (i < sig.Count && IsWordTok(sig[i], "BEGIN"))
         {
-            EmitPsqlUnit(sig, ref i, indent, lines, leaves); // block aligned under the header
+            EmitPsqlUnit(style, sig, ref i, indent, lines, leaves); // block aligned under the header
         }
         else
         {
             int before = i;
-            EmitPsqlUnit(sig, ref i, indent + 1, lines, leaves); // single statement indented
-            if (i == before) EmitStrayToken(sig, ref i, indent + 1, lines);
+            EmitPsqlUnit(style, sig, ref i, indent + 1, lines, leaves); // single statement indented
+            if (i == before) EmitStrayToken(style, sig, ref i, indent + 1, lines);
         }
     }
 
@@ -1698,7 +1789,7 @@ public static class SqlFormatter
     // clauses never leak out). Malformed input (no top-level DO) falls back to the generic statement path
     // — nothing is lost (§0). This is the ONE place FOR is laid out; the WHILE path (single-line
     // condition) stays separate because its "(cond) do" fits on the header line.
-    private static void EmitForSelect(List<FToken> sig, ref int i, int indent, List<string> lines, IReadOnlyDictionary<int, SqlNode> leaves)
+    private static void EmitForSelect(FormatterStyle style, List<FToken> sig, ref int i, int indent, List<string> lines, IReadOnlyDictionary<int, SqlNode> leaves)
     {
         int depth = 0, intoIdx = -1, doIdx = -1;
         for (int k = i + 1; k < sig.Count; k++)
@@ -1716,7 +1807,7 @@ public static class SqlFormatter
         if (doIdx < 0)
         {
             // Not a well-formed FOR … DO (mid-edit / malformed) — emit generically, lossless.
-            AddPsqlEmit(lines, indent, CollectPsqlStatement(sig, ref i), leaves);
+            AddPsqlEmit(style, lines, indent, CollectPsqlStatement(sig, ref i), leaves);
             return;
         }
 
@@ -1729,21 +1820,21 @@ public static class SqlFormatter
         string cursor;
         if (query.Count == 0) cursor = string.Empty;
         else if (leaves.TryGetValue(sig[i].Start, out var node) && node is ForSelectStatement { Query: { } fq })
-            cursor = EmitQuery(fq);
-        else cursor = Emit(query).TrimEnd('\n');
-        string forQuery = query.Count > 0 ? "for " + cursor : "for";
+            cursor = EmitQuery(style, fq);
+        else cursor = Emit(style, query).TrimEnd('\n');
+        string forQuery = query.Count > 0 ? Kw("for", style) + " " + cursor : Kw("for", style);
         EmitPsqlLines(lines, indent, forQuery);
 
         if (intoIdx >= 0)
         {
             var into = sig.GetRange(intoIdx, doIdx - intoIdx); // "into <vars>", loop indent
-            EmitPsqlLines(lines, indent, Emit(into));
+            EmitPsqlLines(lines, indent, Emit(style, into));
         }
 
-        AddPsqlLine(lines, indent, "do");
+        AddPsqlLine(lines, indent, Kw("do", style));
 
         i = doIdx + 1;
-        EmitPsqlBranch(sig, ref i, indent, lines, leaves);
+        EmitPsqlBranch(style, sig, ref i, indent, lines, leaves);
     }
 
     private static void MaybeBlankLine(List<string> lines, bool hadBlank)
@@ -1819,10 +1910,10 @@ public static class SqlFormatter
         return list;
     }
 
-    private static void AddPsqlEmit(List<string> lines, int indent, List<FToken> stmt, IReadOnlyDictionary<int, SqlNode> leaves)
+    private static void AddPsqlEmit(FormatterStyle style, List<string> lines, int indent, List<FToken> stmt, IReadOnlyDictionary<int, SqlNode> leaves)
     {
         if (stmt.Count == 0) return;
-        EmitPsqlLines(lines, indent, FormatLeafStatement(stmt, leaves));
+        EmitPsqlLines(lines, indent, FormatLeafStatement(style, stmt, leaves));
     }
 
     // Formats ONE leaf statement of a PSQL body. When the parser modelled the leaf (its span is in the
@@ -1832,33 +1923,33 @@ public static class SqlFormatter
     // malformed input where the leaf index is empty) it falls back to the token layout, unchanged. There is
     // no parallel PSQL formatting: the PSQL emitter owns only the block STRUCTURE (BEGIN/END, IF/WHILE/FOR
     // indentation); each leaf's CONTENT is formatted by the same code paths as at the top level.
-    private static string FormatLeafStatement(List<FToken> stmt, IReadOnlyDictionary<int, SqlNode> leaves)
+    private static string FormatLeafStatement(FormatterStyle style, List<FToken> stmt, IReadOnlyDictionary<int, SqlNode> leaves)
         => leaves.TryGetValue(stmt[0].Start, out var node)
-            ? FormatAstLeaf(node, stmt)
-            : FormatLeafStatementTokens(stmt);
+            ? FormatAstLeaf(style, node, stmt)
+            : FormatLeafStatementTokens(style, stmt);
 
     // The AST-aware leaf renderer: the collected tokens (which the block structurer guarantees are the
     // leaf's complete range, incl. its ';') are formatted by the same per-kind formatters as a top-level
     // statement, driven by the leaf node's structural facts (source query / embedded subqueries / CASE).
-    private static string FormatAstLeaf(SqlNode node, List<FToken> stmt) => node switch
+    private static string FormatAstLeaf(FormatterStyle style, SqlNode node, List<FToken> stmt) => node switch
     {
-        InsertStatement ins => FormatInsertFamily(stmt, 2, ins.SourceQuery, ins.Subqueries),
-        UpdateOrInsertStatement uoi => FormatInsertFamily(stmt, 4, null, uoi.Subqueries),
-        UpdateStatement u => Emit(stmt, u.Subqueries),
-        DeleteStatement d => Emit(stmt, d.Subqueries),
-        MergeStatement m => Emit(stmt, m.Children),
-        SelectStatement s => FormatSelectLeaf(stmt, s.Query),
-        IfStatement f => Emit(stmt, f.ConditionExpressions),      // "if (cond) then" — splice CASE/subquery
-        WhileStatement w => Emit(stmt, w.ConditionExpressions),   // "while (cond) do"
-        PsqlLeafStatement leaf => Emit(stmt, leaf.Children),      // assignment / RETURN — splice CASE/subquery
-        _ => FormatLeafStatementTokens(stmt),
+        InsertStatement ins => FormatInsertFamily(style, stmt, 2, ins.SourceQuery, ins.Subqueries),
+        UpdateOrInsertStatement uoi => FormatInsertFamily(style, stmt, 4, null, uoi.Subqueries),
+        UpdateStatement u => Emit(style, stmt, u.Subqueries),
+        DeleteStatement d => Emit(style, stmt, d.Subqueries),
+        MergeStatement m => Emit(style, stmt, m.Children),
+        SelectStatement s => FormatSelectLeaf(style, stmt, s.Query),
+        IfStatement f => Emit(style, stmt, f.ConditionExpressions),      // "if (cond) then" — splice CASE/subquery
+        WhileStatement w => Emit(style, stmt, w.ConditionExpressions),   // "while (cond) do"
+        PsqlLeafStatement leaf => Emit(style, stmt, leaf.Children),      // assignment / RETURN — splice CASE/subquery
+        _ => FormatLeafStatementTokens(style, stmt),
     };
 
     // A PSQL SELECT … [INTO :vars] leaf: the query part is laid out by the AST-walking core (so a nested
     // subquery in it indents), the INTO clause stays on its own line, a trailing ';' is glued.
-    private static string FormatSelectLeaf(List<FToken> stmt, QueryNode? query)
+    private static string FormatSelectLeaf(FormatterStyle style, List<FToken> stmt, QueryNode? query)
     {
-        if (query is null) return FormatLeafStatementTokens(stmt);
+        if (query is null) return FormatLeafStatementTokens(style, stmt);
         int into = FindTopLevelWord(stmt, "INTO");
         // The PSQL block structurer already emitted this leaf's LEADING comment (it precedes the leaf's
         // first token in the flattened body). EmitQuery would re-materialise it from the query's
@@ -1867,12 +1958,12 @@ public static class SqlFormatter
         // nothing is lost or duplicated). Only this SELECT-leaf path is affected: the DML leaves render
         // from the comment-free token list, and an INTERNAL subquery comment is emitted once (its enclosing
         // Emit skips the spliced node's tokens).
-        string head = StripLeadingLeafComments(EmitQuery(query), query.Tokens);
-        if (into > 0) return head + "\n" + Emit(stmt.GetRange(into, stmt.Count - into));
+        string head = StripLeadingLeafComments(EmitQuery(style, query), query.Tokens);
+        if (into > 0) return head + "\n" + Emit(style, stmt.GetRange(into, stmt.Count - into));
         // No INTO — glue any trailing tokens after the query (the terminating ';').
         int qEnd = stmt.Count;
         for (int k = 0; k < stmt.Count; k++) { if (stmt[k].Start >= query.End) { qEnd = k; break; } }
-        return qEnd >= stmt.Count ? head : head + Emit(stmt.GetRange(qEnd, stmt.Count - qEnd));
+        return qEnd >= stmt.Count ? head : head + Emit(style, stmt.GetRange(qEnd, stmt.Count - qEnd));
     }
 
     // Removes, from the start of a rendered leaf, exactly the leading comments that live on the leaf's
@@ -1894,21 +1985,21 @@ public static class SqlFormatter
 
     // The token-only leaf layout — the pre-convergence behaviour, kept for a leaf the parser did not model
     // (PACKAGE body / malformed input). SELECT … INTO :vars splits the INTO onto its own line.
-    private static string FormatLeafStatementTokens(List<FToken> stmt)
+    private static string FormatLeafStatementTokens(FormatterStyle style, List<FToken> stmt)
     {
-        if (IsWordTok(stmt[0], "INSERT")) return FormatInsertFamily(stmt, 2);
+        if (IsWordTok(stmt[0], "INSERT")) return FormatInsertFamily(style, stmt, 2);
         if (IsWordTok(stmt[0], "UPDATE") && stmt.Count > 1 && IsWordTok(stmt[1], "OR"))
-            return FormatInsertFamily(stmt, 4);
+            return FormatInsertFamily(style, stmt, 4);
 
         // SELECT … INTO :vars (PSQL singleton select) — the INTO clause on its own line.
         if (IsWordTok(stmt[0], "SELECT"))
         {
             int into = FindTopLevelWord(stmt, "INTO");
             if (into > 0)
-                return Emit(stmt.GetRange(0, into)) + "\n" + Emit(stmt.GetRange(into, stmt.Count - into));
+                return Emit(style, stmt.GetRange(0, into)) + "\n" + Emit(style, stmt.GetRange(into, stmt.Count - into));
         }
 
-        return Emit(stmt);
+        return Emit(style, stmt);
     }
 
     private static void EmitPsqlLines(List<string> lines, int indent, string emitted)
@@ -1941,13 +2032,13 @@ public static class SqlFormatter
     // — e.g. a stray/unmatched END mid-edit) is emitted VERBATIM on its own line and consumed, never
     // silently skipped. This makes the emitter lexeme-lossless by construction so the per-statement
     // safety check (LexemesPreserved) does not have to fall back to a fully-verbatim statement for the
-    // common near-valid case. Words are lowercased like every other word; comments print as-is.
-    private static void EmitStrayToken(List<FToken> sig, ref int i, int indent, List<string> lines)
+    // common near-valid case. Words are cased like every other word; comments print as-is.
+    private static void EmitStrayToken(FormatterStyle style, List<FToken> sig, ref int i, int indent, List<string> lines)
     {
         if (i >= sig.Count) return;
         var t = sig[i];
         MaybeBlankLine(lines, t.BlankBefore);
-        AddPsqlLine(lines, indent, t.IsComment ? t.Text : MaybeLowercase(t));
+        AddPsqlLine(lines, indent, t.IsComment ? t.Text : Cased(t, style));
         i++;
     }
 
@@ -1966,12 +2057,21 @@ public static class SqlFormatter
     // holds even for malformed / incomplete SQL the parser could not fully model.
     //
     // A "lexeme" is a significant token — words (keyword/identifier/parameter) compared
-    // case-insensitively because the formatter lowercases unquoted words; strings, numbers, quoted
+    // CASE-INSENSITIVELY because the formatter may RE-CASE an unquoted word; strings, numbers, quoted
     // identifiers, and punctuation compared exactly — PLUS every comment (compared with the trailing
     // whitespace trimmed, since the formatter trims line-comment tails). Whitespace is deliberately
     // NOT compared: re-spacing is the formatter's entire job. For any well-formed input the two
     // sequences are identical (the formatter changes only whitespace and word case), so this guard
     // never rejects valid code — it fires only on a genuine loss, which is exactly when it must.
+    //
+    // ⛔ DO NOT "SIMPLIFY" THE WORD COMPARISON TO A CASE-SENSITIVE ONE. Until the casing settings landed
+    // the formatter only ever lowercased, so folding both sides looked like a redundant flourish over a
+    // known-lowercase value. It is not: with FormatterStyle.KeywordCase = Upper the output legitimately
+    // reads SELECT where the input read select, and an exact compare would report that as a LOST LEXEME —
+    // which fires the safety net and silently reverts every re-cased statement to verbatim. The fold is
+    // what makes the net orthogonal to style. (This paragraph replaces the old one-line note "Words are
+    // lowercased on output → compare case-insensitively", whose premise the settings falsified while
+    // leaving its conclusion correct — exactly the shape that licenses a wrong simplification.)
 
     private enum LexClass { Word, Verbatim, Comment }
     private readonly record struct Lexeme(LexClass Class, string Text);
@@ -2009,7 +2109,8 @@ public static class SqlFormatter
             if (t.Kind == TokenKind.EndOfFile) continue; // sentinel; its trailing comments counted above
             list.Add(t.Kind switch
             {
-                // Words are lowercased on output → compare case-insensitively.
+                // Words may be RE-CASED on output (either case, per FormatterStyle) → fold both sides.
+                // ⛔ Not a redundant fold over known-lowercase text — see the ⛔ note above.
                 TokenKind.Keyword or TokenKind.Identifier or TokenKind.Parameter
                     => new Lexeme(LexClass.Word, t.Text.ToLowerInvariant()),
                 // Strings / numbers / quoted identifiers / commas / dots / semicolons / parens /

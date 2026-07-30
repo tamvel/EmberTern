@@ -925,6 +925,35 @@ internal static class UiStrings
     public const string SettingsLanguageKeywords = "locale translation localization interface";
     public const string SettingsLanguageEnglish = "English";
 
+    // ── SQL Formatter ───────────────────────────────────────────────────────────────────────────────
+    // Exactly two rows, and that is ratified (§6.4 / §9.1): no line width, no indent size, no comma
+    // placement. Both default to lower case, so a user who never opens this page sees the output EmberTern
+    // has always produced.
+    public const string SettingsCategoryFormatter = "SQL Formatter";
+
+    // ⚠ Says "Format SQL" rather than "the formatter", because that is the scope: the action on the
+    // Ctrl+K / toolbar / context menu. SQL that EmberTern composes (Copy as INSERT, .sql export) and
+    // generated DDL keep their own casing, by ratified Q1 — a description promising "everywhere" would be
+    // a promise the code deliberately does not keep.
+    public const string SettingsFormatterKeywordCaseLabel = "Keyword case";
+    public const string SettingsFormatterKeywordCaseDescription =
+        "How Format SQL cases keywords, data types and built-in functions — select or SELECT.";
+    public const string SettingsFormatterKeywordCaseKeywords =
+        "formatter format sql case casing uppercase lowercase keyword reserved word";
+
+    public const string SettingsFormatterIdentifierCaseLabel = "Identifier case";
+    // ⚠ Says quoted names are untouched because that is a correctness guarantee the user can rely on, not a
+    // limitation: "MyTable" is a different object from MYTABLE in Firebird, so re-casing it would change
+    // which object the statement names (§0 / architecture rule #11).
+    public const string SettingsFormatterIdentifierCaseDescription =
+        "How Format SQL cases table, column and variable names. Quoted names like \"MixedCase\" are never "
+        + "changed — their case is part of the object's identity.";
+    public const string SettingsFormatterIdentifierCaseKeywords =
+        "formatter format sql case casing uppercase lowercase identifier name table column variable";
+
+    public const string SettingsCaseLower = "lower case";
+    public const string SettingsCaseUpper = "UPPER CASE";
+
     // Shown in the docked MessageBanner when a change could not be written. Settings Center is the ONE place
     // where the store's silent refusal (audit A-03) must be spoken: every other writer in the app is
     // incidental, but a dialog whose entire purpose is "change this setting" cannot accept a change and

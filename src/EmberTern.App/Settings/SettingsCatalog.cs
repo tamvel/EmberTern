@@ -100,15 +100,19 @@ public sealed class SettingDescriptor
 public static class SettingsCatalog
 {
     public const string CategoryGeneral = "general";
+    public const string CategoryFormatter = "formatter";
 
     public const string SettingTheme = "general.theme";
     public const string SettingLanguage = "general.language";
+    public const string SettingFormatterKeywordCase = "formatter.keywordCase";
+    public const string SettingFormatterIdentifierCase = "formatter.identifierCase";
 
     static SettingsCatalog()
     {
         Categories =
         [
             new SettingsCategoryDescriptor(CategoryGeneral, UiStrings.SettingsCategoryGeneral),
+            new SettingsCategoryDescriptor(CategoryFormatter, UiStrings.SettingsCategoryFormatter),
         ];
 
         Settings =
@@ -137,8 +141,39 @@ public static class SettingsCatalog
                 {
                     [PreferenceOptions.LanguageEnglish] = UiStrings.SettingsLanguageEnglish,
                 }),
+
+            // ⚠ Both formatter rows draw on the SAME Core option set (PreferenceOptions.Casing) — two
+            // preferences over one declared vocabulary, which is why "Upper" cannot come to mean one thing for
+            // keywords and another for identifiers. The labels are shared for the same reason.
+            new SettingDescriptor(
+                SettingFormatterKeywordCase,
+                CategoryFormatter,
+                UiStrings.SettingsFormatterKeywordCaseLabel,
+                UiStrings.SettingsFormatterKeywordCaseDescription,
+                UiStrings.SettingsFormatterKeywordCaseKeywords,
+                PreferenceOptions.Casing,
+                CasingLabels),
+
+            new SettingDescriptor(
+                SettingFormatterIdentifierCase,
+                CategoryFormatter,
+                UiStrings.SettingsFormatterIdentifierCaseLabel,
+                UiStrings.SettingsFormatterIdentifierCaseDescription,
+                UiStrings.SettingsFormatterIdentifierCaseKeywords,
+                PreferenceOptions.Casing,
+                CasingLabels),
         ];
     }
+
+    /// <summary>The labels for <c>PreferenceOptions.Casing</c>, shared by both formatter rows. ⚠ Rendered as
+    /// <c>lower case</c> / <c>UPPER CASE</c> deliberately: the label demonstrates the option instead of merely
+    /// naming it, which is the shortest possible explanation of what the setting does.</summary>
+    private static readonly IReadOnlyDictionary<string, string> CasingLabels =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [PreferenceOptions.CaseLower] = UiStrings.SettingsCaseLower,
+            [PreferenceOptions.CaseUpper] = UiStrings.SettingsCaseUpper,
+        };
 
     public static IReadOnlyList<SettingsCategoryDescriptor> Categories { get; }
 

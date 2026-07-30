@@ -66,7 +66,11 @@ public sealed class SettingsCenterViewTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var radios = window.GetVisualDescendants().OfType<RadioButton>().ToList();
+                // ⚠ Scoped by GroupName, not "every radio in the window": since etap 4 there is a second
+                // page with radios of its own. Filtering by group makes this assertion independent of
+                // whether a hidden page realises its ItemsControl items (it does not today — incidental).
+                var radios = window.GetVisualDescendants().OfType<RadioButton>()
+                    .Where(r => r.GroupName == "SettingsTheme").ToList();
                 _out.WriteLine("theme radios: " + string.Join(" | ", radios.Select(r => $"{r.Content}={r.IsChecked}")));
 
                 // One radio per Core option — never a hand-typed pair in XAML (design §5.2.2).
@@ -121,15 +125,20 @@ public sealed class SettingsCenterViewTests
 
                 var groups = window.GetVisualDescendants().OfType<Border>()
                     .Where(b => b.Classes.Contains("settings-group")).ToList();
-                Assert.Equal(2, groups.Count);
-                Assert.All(groups, g => Assert.True(g.IsVisible));
+
+                // Every category's rows live in the visual tree; only the selected page's are RENDERED.
+                // ⚠ IsEffectivelyVisible, not IsVisible: a row on a hidden page still has its own
+                // IsVisible == true (its search filter matched), so IsVisible alone would count all four
+                // and this test would stop measuring what it is named for.
+                Assert.Equal(4, groups.Count);
+                Assert.Equal(2, groups.Count(g => g.IsEffectivelyVisible));
 
                 var search = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");
                 var categories = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "CategoryList");
 
                 search.Text = "colour";
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(1, groups.Count(g => g.IsVisible));
+                Assert.Equal(1, groups.Count(g => g.IsEffectivelyVisible));
                 Assert.Equal(1, categories.ItemCount);
 
                 search.Text = "zzzz-no-such-setting";
@@ -142,7 +151,7 @@ public sealed class SettingsCenterViewTests
 
                 search.Text = string.Empty;
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(2, groups.Count(g => g.IsVisible));
+                Assert.Equal(2, groups.Count(g => g.IsEffectivelyVisible));
                 Assert.False(empty.IsVisible);
 
                 window.Close();
@@ -189,6 +198,71 @@ public sealed class SettingsCenterViewTests
                 Assert.Equal(MessageSeverity.Warning, banner.Severity);
                 Assert.False(string.IsNullOrWhiteSpace(banner.Message));
                 _out.WriteLine("banner: " + banner.Message);
+
+                window.Close();
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Etap 4 — the SQL Formatter page renders both casing rows from Core's ONE option set, and selecting an
+    /// option reaches the file.
+    ///
+    /// <para>⭐ The load-bearing assertion is the LAST one: the two rows must be able to hold DIFFERENT values.
+    /// Both draw on the same option set, so both render radios labelled the same way — and a RadioButton group
+    /// is keyed by <c>GroupName</c>. Had the two rows shared one group name, checking "UPPER CASE" for keywords
+    /// would silently uncheck the identifier row, and the two settings could never differ. That is a defect no
+    /// view-model test can see.</para>
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task TheFormatterPage_RendersBothRows_AndTheyAreIndependent()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var window = new SettingsWindow(service);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                // Select the SQL Formatter category the way the user does.
+                var categories = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "CategoryList");
+                Assert.Equal(2, categories.ItemCount);
+                categories.SelectedIndex = 1;
+                Dispatcher.UIThread.RunJobs();
+
+                var keyword = window.GetVisualDescendants().OfType<RadioButton>()
+                    .Where(r => r.GroupName == "SettingsFormatterKeywordCase").ToList();
+                var identifier = window.GetVisualDescendants().OfType<RadioButton>()
+                    .Where(r => r.GroupName == "SettingsFormatterIdentifierCase").ToList();
+                _out.WriteLine("keyword: " + string.Join(" | ", keyword.Select(r => $"{r.Content}={r.IsChecked}")));
+
+                // One radio per Core option, per row — never a hand-typed pair in XAML (design §5.2.2).
+                Assert.Equal(PreferenceOptions.Casing.Values.Count, keyword.Count);
+                Assert.Equal(PreferenceOptions.Casing.Values.Count, identifier.Count);
+                Assert.Contains(keyword, r => Equals(r.Content, UiStrings.SettingsCaseLower));
+                Assert.Contains(keyword, r => Equals(r.Content, UiStrings.SettingsCaseUpper));
+
+                // A fresh install is lower/lower — the byte-identical-output default.
+                Assert.True(keyword.Single(r => Equals(r.Content, UiStrings.SettingsCaseLower)).IsChecked);
+                Assert.True(identifier.Single(r => Equals(r.Content, UiStrings.SettingsCaseLower)).IsChecked);
+
+                // Apply on change: one click and the file already holds it.
+                keyword.Single(r => Equals(r.Content, UiStrings.SettingsCaseUpper)).IsChecked = true;
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal(PreferenceOptions.CaseUpper, service.Current.FormatterKeywordCase);
+                Assert.Equal(PreferenceOptions.CaseUpper, new PreferencesStore(dir).Load().FormatterKeywordCase);
+
+                // ⭐ The two rows are independent groups — the identifier row did NOT follow.
+                Assert.Equal(PreferenceOptions.CaseLower, service.Current.FormatterIdentifierCase);
+                Assert.True(identifier.Single(r => Equals(r.Content, UiStrings.SettingsCaseLower)).IsChecked);
 
                 window.Close();
             }

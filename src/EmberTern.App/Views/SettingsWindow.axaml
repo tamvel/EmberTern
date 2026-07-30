@@ -64,59 +64,114 @@
       <Panel Grid.Column="2">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasMatches}">
 
-          <!-- ⚠ One page per category, each with its own IsVisible, deliberately. A generic page host would be
-               an abstraction for pages that do not exist yet; with a handful of categories this is one block
-               each and every binding stays compiled and typed. -->
-          <StackPanel Spacing="12" IsVisible="{Binding IsGeneralPageVisible}">
+          <!-- One page per category, each an IsVisible-gated block inside this Panel. A Panel (not a
+               StackPanel) because exactly one page is ever visible, so they overlay rather than stack — and
+               ⚠ the ScrollViewer takes ONE child, which is why the pages need this container at all. -->
+          <Panel>
 
-            <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryGeneral}" />
+            <!-- ⚠ One page per category, each with its own IsVisible, deliberately. A generic page host would be
+                 an abstraction for pages that do not exist yet; with a handful of categories this is one block
+                 each and every binding stays compiled and typed. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsGeneralPageVisible}">
 
-            <!-- Theme. The titlebar toggle writes the SAME preference through the same service, so the two
-                 cannot disagree, and neither of them applies the variant itself — PreferencesService.Changed
-                 does, in one place (App). -->
-            <Border Classes="settings-group" IsVisible="{Binding Theme.IsVisible}">
-              <StackPanel>
-                <TextBlock Classes="group-header" Text="{Binding Theme.Label}" />
-                <TextBlock Classes="field-label"
-                           Text="{Binding Theme.Description}"
-                           TextWrapping="Wrap" />
-                <ItemsControl ItemsSource="{Binding Theme.Options}">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
-                      <RadioButton GroupName="SettingsTheme"
-                                   Content="{Binding Label}"
-                                   IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-              </StackPanel>
-            </Border>
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryGeneral}" />
 
-            <!-- Language. A real, enabled control over a real catalog whose legal set has one entry today —
-                 not a stub and not a disabled row. Its value is stored, validated and round-tripped from day
-                 one; what waits for its own milestone is the localization mechanism (design §8), which is why
-                 nothing here reads a culture. -->
-            <Border Classes="settings-group" IsVisible="{Binding Language.IsVisible}">
-              <StackPanel>
-                <TextBlock Classes="group-header" Text="{Binding Language.Label}" />
-                <TextBlock Classes="field-label"
-                           Text="{Binding Language.Description}"
-                           TextWrapping="Wrap" />
-                <ComboBox x:Name="LanguageBox"
-                          ItemsSource="{Binding Language.Options}"
-                          SelectedItem="{Binding Language.SelectedOption, Mode=TwoWay}"
-                          MinWidth="200"
-                          HorizontalAlignment="Left">
-                  <ComboBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
-                      <TextBlock Text="{Binding Label}" />
-                    </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </StackPanel>
-            </Border>
+              <!-- Theme. The titlebar toggle writes the SAME preference through the same service, so the two
+                   cannot disagree, and neither of them applies the variant itself — PreferencesService.Changed
+                   does, in one place (App). -->
+              <Border Classes="settings-group" IsVisible="{Binding Theme.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding Theme.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Theme.Description}"
+                             TextWrapping="Wrap" />
+                  <ItemsControl ItemsSource="{Binding Theme.Options}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <RadioButton GroupName="SettingsTheme"
+                                     Content="{Binding Label}"
+                                     IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
 
-          </StackPanel>
+              <!-- Language. A real, enabled control over a real catalog whose legal set has one entry today —
+                   not a stub and not a disabled row. Its value is stored, validated and round-tripped from day
+                   one; what waits for its own milestone is the localization mechanism (design §8), which is why
+                   nothing here reads a culture. -->
+              <Border Classes="settings-group" IsVisible="{Binding Language.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding Language.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Language.Description}"
+                             TextWrapping="Wrap" />
+                  <ComboBox x:Name="LanguageBox"
+                            ItemsSource="{Binding Language.Options}"
+                            SelectedItem="{Binding Language.SelectedOption, Mode=TwoWay}"
+                            MinWidth="200"
+                            HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+
+            <!-- SQL Formatter. Exactly two rows, ratified (§6.4 / §9.1): no line width, no indent size, no
+                 comma placement. Both draw their items from the SAME Core option set (PreferenceOptions.Casing),
+                 so "Upper" cannot come to mean one thing for keywords and another for identifiers. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsFormatterPageVisible}">
+
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryFormatter}" />
+
+              <Border Classes="settings-group" IsVisible="{Binding FormatterKeywordCase.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding FormatterKeywordCase.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding FormatterKeywordCase.Description}"
+                             TextWrapping="Wrap" />
+                  <ItemsControl ItemsSource="{Binding FormatterKeywordCase.Options}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <RadioButton GroupName="SettingsFormatterKeywordCase"
+                                     Content="{Binding Label}"
+                                     IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+              <!-- ⚠ A DISTINCT GroupName is mandatory. Both rows offer the same two option keys, and a
+                   RadioButton group is keyed by name — sharing one would make selecting "UPPER CASE" for
+                   keywords silently uncheck the identifier row's selection, and the two settings would be
+                   unable to hold different values at all. -->
+              <Border Classes="settings-group" IsVisible="{Binding FormatterIdentifierCase.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding FormatterIdentifierCase.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding FormatterIdentifierCase.Description}"
+                             TextWrapping="Wrap" />
+                  <ItemsControl ItemsSource="{Binding FormatterIdentifierCase.Options}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <RadioButton GroupName="SettingsFormatterIdentifierCase"
+                                     Content="{Binding Label}"
+                                     IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+          </Panel>
         </ScrollViewer>
 
         <TextBlock Text="{x:Static app:UiStrings.SettingsNoMatch}"

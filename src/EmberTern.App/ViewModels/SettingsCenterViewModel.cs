@@ -219,6 +219,7 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGeneralPageVisible))]
+    [NotifyPropertyChangedFor(nameof(IsFormatterPageVisible))]
     private SettingsCategoryViewModel? _selectedCategory;
 
     /// <summary>Live filter over every setting's label, sentence, keywords and category title.</summary>
@@ -237,6 +238,12 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
 
     public PreferenceSettingViewModel Language => _settings[SettingsCatalog.SettingLanguage];
 
+    public PreferenceSettingViewModel FormatterKeywordCase
+        => _settings[SettingsCatalog.SettingFormatterKeywordCase];
+
+    public PreferenceSettingViewModel FormatterIdentifierCase
+        => _settings[SettingsCatalog.SettingFormatterIdentifierCase];
+
     /// <summary>
     /// Which page the right pane shows. One property per category, deliberately: with a handful of pages this
     /// is one line each and every binding is compiled and typed, whereas a generic page host would be an
@@ -244,6 +251,10 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     /// </summary>
     public bool IsGeneralPageVisible
         => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryGeneral, StringComparison.Ordinal);
+
+    /// <inheritdoc cref="IsGeneralPageVisible"/>
+    public bool IsFormatterPageVisible
+        => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryFormatter, StringComparison.Ordinal);
 
     /// <summary>False when the search matches nothing — the cue for an explained empty state rather than an
     /// empty window.</summary>
@@ -286,20 +297,29 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     {
         SettingsCatalog.SettingTheme => preferences.Theme,
         SettingsCatalog.SettingLanguage => preferences.Language,
+        SettingsCatalog.SettingFormatterKeywordCase => preferences.FormatterKeywordCase,
+        SettingsCatalog.SettingFormatterIdentifierCase => preferences.FormatterIdentifierCase,
         _ => throw new ArgumentOutOfRangeException(nameof(settingId), settingId, "No such setting in the catalog."),
     };
 
     /// <summary>
     /// The current page state as a whole <see cref="Preferences"/>.
-    /// <para>⭐ Built with <c>with</c> on the live value, so a preference this window does not render — the
-    /// formatter's two casing settings today — passes through untouched instead of being reset to its default.
-    /// Same reasoning as <c>PreferencesStore.Validate</c>: a fresh instance silently loses whatever nobody
-    /// remembered to list.</para>
+    /// <para>⭐ Built with <c>with</c> on the live value, never a fresh instance, so a preference this window
+    /// does not render passes through untouched instead of being reset to its default. Same reasoning as
+    /// <c>PreferencesStore.Validate</c>: a fresh instance silently loses whatever nobody remembered to list,
+    /// which turns "I added a preference" into "that preference never persists".</para>
+    /// <para>⚠ <b>As of etap 4 every preference IS rendered here</b>, so <c>with</c> currently has no unrendered
+    /// subject to protect — which is exactly when someone deletes it as redundant. Keep it: the next preference
+    /// added to <see cref="Preferences"/> is unrendered until its row exists, and
+    /// <c>EveryPreference_IsRenderedOrRecordedAsHidden</c> is what makes that gap a failing test instead of a
+    /// silent reset.</para>
     /// </summary>
     private Preferences Compose() => _preferences.Current with
     {
         Theme = Theme.Value,
         Language = Language.Value,
+        FormatterKeywordCase = FormatterKeywordCase.Value,
+        FormatterIdentifierCase = FormatterIdentifierCase.Value,
     };
 
     private void Commit()

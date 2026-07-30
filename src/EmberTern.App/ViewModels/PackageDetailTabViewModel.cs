@@ -387,6 +387,17 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
         set { if (ActiveSubTabIndex == BodySubTabIndex) BodySource = value; else HeaderSource = value; }
     }
 
+    /// <summary>
+    /// The casing style the Format SQL action uses — supplied by the tab factory, which has the app's one
+    /// <c>PreferencesService</c> in hand (<c>WorkspaceTabViewModel.Create*Detail</c>).
+    /// <para>⚠ A <b>provider</b>, not a captured value: apply-on-change means the preference can change
+    /// while this tab is open, and a captured style would silently format with the previous setting.</para>
+    /// <para>⚠ Non-nullable with a real default, so a view model constructed without a factory (every unit
+    /// test) formats deterministically in the shipped style — "nullable meaning unset" would hand the
+    /// default decision to each reader, the shape <c>Preferences</c>' own contract forbids.</para>
+    /// </summary>
+    public Func<FormatterStyle> CurrentFormatterStyle { get; set; } = () => FormatterStyle.Default;
+
     [RelayCommand]
     private void FormatSql()
     {
@@ -395,7 +406,7 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
         var source = hasSelection ? selected! : ActiveEditorText;
         if (string.IsNullOrEmpty(source)) return;
 
-        var formatted = SqlFormatter.Format(source);
+        var formatted = SqlFormatter.Format(source, CurrentFormatterStyle());
         if (string.Equals(formatted, source, StringComparison.Ordinal)) return;
 
         if (ReplaceSelectedOrAllText is { } replace) replace(formatted);
