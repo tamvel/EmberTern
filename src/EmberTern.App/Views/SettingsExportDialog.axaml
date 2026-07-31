@@ -7,6 +7,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.SettingsExportDialog"
+        x:Name="ExportDialogRoot"
         x:DataType="vm:SettingsExportDialogViewModel"
         Title="{x:Static app:UiStrings.SettingsExportTitle}"
         Width="520"
@@ -43,7 +44,11 @@
                             Message="{Binding Message}"
                             IsVisible="{Binding ShowMessage}" />
 
-    <StackPanel Grid.Row="2" Margin="20,18" Spacing="16">
+    <!-- ⚠ Row 2 SCROLLS. This dialog does not grow after it opens, but it is already tall enough to reach the
+         bottom of a 768-high screen, and it shares GrowingDialogBehavior's ceiling with the import dialog — a cap
+         without a ScrollViewer clips instead of scrolling. -->
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="20,18" Spacing="16">
 
       <Border Classes="settings-group">
         <StackPanel Spacing="4">
@@ -95,15 +100,37 @@
       </Border>
 
     </StackPanel>
+    </ScrollViewer>
 
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="20,0,20,18">
-      <TextBlock Grid.Column="0"
-                 Text="{Binding BlockedReason}"
-                 Foreground="{DynamicResource SubtleForegroundBrush}"
-                 FontSize="11"
-                 TextWrapping="Wrap"
-                 VerticalAlignment="Center"
-                 Margin="0,0,12,0" />
+      <!-- ⭐ Why Export is disabled. It used to be a plain SubtleForegroundBrush line, which is exactly what
+           MessageSeverity.Info looks like — so "the two passphrases are not the same" read as a hint and was
+           routinely missed (QA, etap 5b). The icon and both foregrounds now come from MessageBanner's shared
+           severity map via the view model, so this row cannot disagree with a banner about what an error looks
+           like. ⛔ Do not paint it with a local ErrorBrush — that is the drift the shared map exists to stop. -->
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                  VerticalAlignment="Center" Margin="0,0,12,0"
+                  IsVisible="{Binding Blocked.IsVisible}">
+        <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                          Data="{Binding Blocked.GeometryKey,
+                                         Converter={x:Static app:IconGeometryConverter.Instance}}">
+          <controls:SvgIcon.Foreground>
+            <!-- With the theme variant, never without (gotcha #250). -->
+            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+              <Binding Path="Blocked.BrushKey" />
+              <Binding ElementName="ExportDialogRoot" Path="ActualThemeVariant" />
+            </MultiBinding>
+          </controls:SvgIcon.Foreground>
+        </controls:SvgIcon>
+        <TextBlock Text="{Binding Blocked.Text}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center">
+          <TextBlock.Foreground>
+            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+              <Binding Path="Blocked.BrushKey" />
+              <Binding ElementName="ExportDialogRoot" Path="ActualThemeVariant" />
+            </MultiBinding>
+          </TextBlock.Foreground>
+        </TextBlock>
+      </StackPanel>
       <Button Grid.Column="1"
               Classes="flat"
               Content="{x:Static app:UiStrings.SettingsExportCancel}"

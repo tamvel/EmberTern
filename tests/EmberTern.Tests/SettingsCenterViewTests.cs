@@ -520,4 +520,127 @@ public sealed class SettingsCenterViewTests
             }
         }, System.Threading.CancellationToken.None);
     }
+
+    /// <summary>
+    /// ⭐⭐ <b>Etap 5b's first QA finding, asserted where it actually failed — on the painted control.</b>
+    ///
+    /// <para>Mistyping the confirmation disables Export and the dialog says why, but the reason was rendered in
+    /// <c>SubtleForegroundBrush</c> — which is what <see cref="MessageSeverity.Info"/> looks like — so a genuine
+    /// input error read as a hint and was routinely missed. A view-model test cannot see this: the string was
+    /// always right. So this resolves the brush the <b>TextBlock</b> ended up with and requires it to be the very
+    /// object <c>ErrorBrush</c> resolves to in the live theme.</para>
+    ///
+    /// <para>⚠ It also asserts the <i>other</i> direction — a passphrase that has merely not been typed yet is a
+    /// Warning, not an Error. Painting every blocked state red would make the dialog red from the moment it opens,
+    /// and a colour that is always on carries no information.</para>
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task AMistypedConfirmation_ReadsAsAnErrorAndNotAsAHint()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var dialog = new SettingsExportDialog(PortabilityOver(dir, service));
+                dialog.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var vm = (SettingsExportDialogViewModel)dialog.DataContext!;
+                var hint = dialog.GetVisualDescendants().OfType<TextBlock>()
+                    .Single(t => ReferenceEquals(t.DataContext, vm)
+                                 && t.Text == vm.Blocked.Text
+                                 && !string.IsNullOrEmpty(t.Text));
+
+                // Nothing typed yet: outstanding, not wrong.
+                Assert.Equal(MessageSeverity.Warning, vm.Blocked.Severity);
+                Assert.Equal(BrushIn(dialog, "WarningBrush"), hint.Foreground);
+
+                vm.Passphrase = "correct horse battery";
+                vm.PassphraseConfirmation = "correct horse batteru";
+                Dispatcher.UIThread.RunJobs();
+
+                var button = dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportButton");
+                Assert.False(button.IsEnabled);
+
+                _out.WriteLine($"blocked: {vm.Blocked.Severity} — {vm.Blocked.Text}");
+                Assert.Equal(UiStrings.SettingsExportPassphraseMismatch, vm.Blocked.Text);
+                Assert.Equal(MessageSeverity.Error, vm.Blocked.Severity);
+
+                // ⭐ The assertion the defect could not survive: the painted foreground IS the error brush, and is
+                // no longer the subtle one every other secondary line uses.
+                Assert.Equal(BrushIn(dialog, "ErrorBrush"), hint.Foreground);
+                Assert.NotEqual(BrushIn(dialog, "SubtleForegroundBrush"), hint.Foreground);
+
+                // Matching resolves the gate and the row disappears rather than lingering as stale advice.
+                vm.PassphraseConfirmation = "correct horse battery";
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(button.IsEnabled);
+                Assert.False(vm.Blocked.IsVisible);
+
+                dialog.Close();
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    /// <summary>
+    /// ⚠ Etap 5b's second QA finding, pinned structurally: <b>both settings dialogs scroll their body.</b>
+    ///
+    /// <para>The window ceiling (<c>GrowingDialogBehavior</c>) needs a real desktop, so what a headless test can
+    /// prove is the half that makes the ceiling survivable — that the body is inside a <see cref="ScrollViewer"/>
+    /// and the footer buttons are OUTSIDE it, so capping the window scrolls the sections rather than clipping the
+    /// primary button out of reach. A body without this pairing is the defect all over again on a shorter
+    /// screen.</para>
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task BothSettingsDialogs_ScrollTheirBodyAndKeepTheirButtonsOutsideIt()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var portability = PortabilityOver(dir, service);
+
+                foreach (var (window, buttonName) in new (Window, string)[]
+                         {
+                             (new SettingsExportDialog(portability), "ExportButton"),
+                             (new SettingsImportDialog(portability), "ImportButton"),
+                         })
+                {
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+
+                    var scroller = window.GetVisualDescendants().OfType<ScrollViewer>()
+                        .FirstOrDefault(s => s.FindAncestorOfType<Window>() is not null
+                                             && s.Content is StackPanel);
+                    Assert.NotNull(scroller);
+
+                    var primary = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == buttonName);
+                    // The button must not live inside the scroller, or scrolling could carry it away.
+                    Assert.Null(primary.FindAncestorOfType<ScrollViewer>());
+
+                    _out.WriteLine($"{window.GetType().Name}: body scrolls, {buttonName} is outside it");
+                    window.Close();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    /// <summary>Resolves a theme brush the same way <c>IconBrushConverter</c> does — by key AND theme variant,
+    /// never by key alone (gotcha #250).</summary>
+    private static object? BrushIn(Window window, string key)
+        => Application.Current!.Resources.TryGetResource(key, window.ActualThemeVariant, out var brush)
+            ? brush
+            : null;
 }

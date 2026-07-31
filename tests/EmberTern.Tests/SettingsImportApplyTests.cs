@@ -486,6 +486,114 @@ public sealed class SettingsImportApplyTests
         });
     }
 
+    /// <summary>
+    /// ⭐⭐ <b>THE ETAP-5b QA DEFECT.</b> Every exportable section but one is written to <c>settings.dat</c> the
+    /// moment the user changes it. <c>Workspace</c> is the exception — the app captures it once, at close — so a
+    /// mid-session export that read the section off the store carried the <b>previous</b> session's tabs and SQL.
+    /// The import, the merge and the close-capture suppression were all correct; the file simply described the
+    /// wrong session, and it then imported and restored faithfully.
+    ///
+    /// <para>The fix is the <c>CaptureLiveWorkspace</c> hook, supplied by <c>MainWindow</c> from the same builder
+    /// the close path uses. This test fails against the pre-fix code (verified by unsetting the hook — see the
+    /// companion below), because the assertion is not "a workspace was exported" but "the exported workspace is
+    /// the LIVE one and not the stored one".</para>
+    ///
+    /// <para>⚠ It also asserts the export stayed <b>read-only</b> (ratified §15.9/4): a live capture must reach
+    /// the file without being persisted on the way — the user has not closed the app, so <c>settings.dat</c>'s
+    /// workspace is still the last one they did close on.</para>
+    /// </summary>
+    [Fact]
+    public void ExportingWorkspaces_TakesTheLiveSession_NotTheOneStoredAtTheLastClose()
+    {
+        InTempDir(dir =>
+        {
+            var store = new ApplicationSettingsStore(dir);
+            var stored = new ApplicationSettings
+            {
+                Workspace = new WorkspaceState
+                {
+                    Workspaces =
+                    {
+                        ["conn-1"] = new ConnectionWorkspace
+                        {
+                            Tabs = { new WorkspaceTab { Kind = WorkspaceTabKind.Query, SqlText = "select 'LAST CLOSE' from rdb$database" } },
+                        },
+                    },
+                },
+            };
+            store.Save(stored);
+
+            var portability = new SettingsPortability(
+                store, new PreferencesService(new PreferencesStore(dir)), "9.9.9-test")
+            {
+                // What MainWindow.CaptureLiveWorkspaceState() supplies: the tabs the user has open right now.
+                CaptureLiveWorkspace = () => new WorkspaceState
+                {
+                    SidebarWidth = 321,
+                    Workspaces =
+                    {
+                        ["conn-1"] = new ConnectionWorkspace
+                        {
+                            Tabs = { new WorkspaceTab { Kind = WorkspaceTabKind.Query, SqlText = "select 'LIVE' from rdb$database" } },
+                        },
+                    },
+                },
+            };
+
+            var path = Path.Combine(dir, "live.etsettings");
+            portability.ExportTo(path, new SettingsExportOptions { Workspaces = true }, Passphrase);
+
+            var opened = portability.Open(portability.Inspect(path), Passphrase);
+            Assert.True(opened.IsUsable, opened.Message);
+            var exported = opened.Content!.Settings.Workspace;
+
+            Assert.Equal("select 'LIVE' from rdb$database", exported.Workspaces["conn-1"].Tabs[0].SqlText);
+            Assert.Equal(321, exported.SidebarWidth);
+
+            // ⚠ Read-only: capturing for an export must not persist the workspace. settings.dat still holds the
+            // state the user last closed the app on.
+            var onDisk = store.Load()!.Workspace;
+            Assert.Equal("select 'LAST CLOSE' from rdb$database", onDisk.Workspaces["conn-1"].Tabs[0].SqlText);
+        });
+    }
+
+    /// <summary>
+    /// The hook's absence is a real state (a test, or an export attempted before the window has restored), so it
+    /// must degrade to the stored section rather than to an empty workspace — an empty one would export "no tabs"
+    /// as though that were the truth. It is also only consulted when the section is actually being exported.
+    /// </summary>
+    [Fact]
+    public void WithoutALiveCapture_TheExportFallsBackToTheStoredWorkspace()
+    {
+        InTempDir(dir =>
+        {
+            var store = new ApplicationSettingsStore(dir);
+            store.Save(Populated("local"));
+
+            var captures = 0;
+            var portability = new SettingsPortability(
+                store, new PreferencesService(new PreferencesStore(dir)), "9.9.9-test")
+            {
+                CaptureLiveWorkspace = () => { captures++; return new WorkspaceState(); },
+            };
+
+            // Not exporting workspaces ⇒ the live capture is never asked for.
+            var other = Path.Combine(dir, "no-workspace.etsettings");
+            portability.ExportTo(other, new SettingsExportOptions { Preferences = true }, Passphrase);
+            Assert.Equal(0, captures);
+
+            portability.CaptureLiveWorkspace = null;
+            var path = Path.Combine(dir, "fallback.etsettings");
+            portability.ExportTo(path, new SettingsExportOptions { Workspaces = true }, Passphrase);
+
+            var opened = portability.Open(portability.Inspect(path), Passphrase);
+            Assert.True(opened.IsUsable, opened.Message);
+            // The stored section's own value, not a default-constructed WorkspaceState.
+            Assert.Equal(store.Load()!.Workspace.SidebarWidth, opened.Content!.Settings.Workspace.SidebarWidth);
+            Assert.NotEqual(new WorkspaceState().SidebarWidth, opened.Content!.Settings.Workspace.SidebarWidth);
+        });
+    }
+
     /// <summary>The seam exposes the settings folder — the <i>Open settings folder</i> button's target, and the
     /// only place in the UI this path is visible.</summary>
     [Fact]

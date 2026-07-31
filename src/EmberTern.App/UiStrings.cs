@@ -1026,6 +1026,9 @@ internal static class UiStrings
     public const string SettingsImportRun = "Import selected";
     public const string SettingsImportCancel = "Close";
     public const string SettingsImportContentsHeader = "Take from this file";
+    // Shown only once the file is open and every box has been unticked — the one state in which Import is dead
+    // with nothing on screen saying why.
+    public const string SettingsImportNothingSelected = "Select at least one thing to import.";
     // ⚠ Shown only when the file carries passwords AND the row is offered — an import overwrites the password
     // stored for the same connection, which is a thing to say before it happens rather than after.
     public const string SettingsImportPasswordsNote =

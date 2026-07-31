@@ -13,8 +13,15 @@ keyword/identifier split, and the SQL Formatter page with its two rows; the defa
 cleartext header, the `aes256-passphrase` AES-256-GCM protector, the two-phase ordered check sequence, both
 migration axes, and 176 tests. Core only, no UI. As built: **§15** — read §15.1 (the one deviation from the
 brief, ratified) and **§15.9 (what the user ratified on accepting it)** before touching the export.
-Etap 5b (the export/import UI) is next.**
-Branch: `feat/settings-center`.
+⭐ **ETAP 5b DELIVERED AND USER-ACCEPTED 2026-07-31** — the export/import surface and the non-destructive write
+into `settings.dat`; accepted after a QA round that produced three findings, all fixed before acceptance: the
+export read the workspace off `settings.dat`, which does not hold it until app close (**§16.6**), a blocked-gate
+reason that was painted like a hint, and a `SizeToContent` dialog that grew off the bottom of the screen
+(**§16.7**). As built: **§16** — read **§16.1** (the stale-snapshot trap) and **§16.3** (the ratified live-session
+behaviour) before touching an import path.
+**⛔ THE SPRINT IS CLOSED THROUGH ETAP 5b. Etap 6 (§7 + ratified Q9) has not been started and is a new session.**
+Branch: `feat/settings-center` — pushed to both remotes, deliberately **not** merged to `master`, because the
+sprint continues at etap 6.
 
 ⚠ **Etap 4 corrected §2.2 on two measured points — read §14.1 before touching the formatter.** §2.2(a)
 undercounted the casing sites (~30, not ~9: it missed the ~22 keyword literals the emitters *synthesize*),
@@ -1238,7 +1245,7 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 **3** | Settings Center window: shell, category list, search, apply-on-change, refusal banner — hosting the **complete General page: Theme + Language**. Fixes §2.1 end to end (persist + read at startup + the `App.axaml` trap). | ✅ **done 2026-07-29 — §13** |
 **4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | ✅ **done 2026-07-30 — §14** |
 **5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM), KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** | ✅ **done + user-accepted 2026-07-30 — §15.** ⚠ The protector is deliberately **NOT** registered in `ResolveProtector` (ratified — §15.1 + §15.9/2). F4 resolved in §15.2, and its shape is now a ratified constraint (§15.9/1). |
-**5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | ✅ **done 2026-07-30 — §16.** Also settled the three traps the brief named (§16.1 stale snapshots · §16.2f the action-row shape · §16.2c copy-not-move) and the live-session question (§16.3). |
+**5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | ✅ **done + user-accepted 2026-07-31 — §16.** Settled the three traps the brief named (§16.1 stale snapshots · §16.2f the action-row shape · §16.2c copy-not-move) and the live-session question (§16.3); QA then found and returned three more, all fixed before acceptance — §16.6 (the export read the workspace off `settings.dat`) and §16.7 (the gate hint's severity · the growing dialog). |
 **6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | additive; naturally last, and trimmable without blocking anything |
 
 ⚠ **Etap 5a — F4. ✅ RESOLVED (§15.2): `MigrateToCurrentVersion` is now `internal static`, and the export
@@ -1941,15 +1948,17 @@ clean.
 [`Core/Settings/Export/SettingsImportSelection.cs`](../../src/EmberTern.Core/Settings/Export/SettingsImportSelection.cs) | Which sections the user *accepts*. Deliberately a separate type from `SettingsExportOptions` — see §16.2(a). |
 [`Core/Settings/Export/SettingsImportApplier.cs`](../../src/EmberTern.Core/Settings/Export/SettingsImportApplier.cs) | ⭐ The non-destructive merge (pure `Merge`) + the write (`Apply`), with the ordered refusals. |
 `Core/Settings/ApplicationSettingsStore.cs` | Two additions: `CanSave(out diagnostic)` and `CopyAsideForImport()`. No behaviour changed for any existing caller. |
-[`App/Settings/SettingsPortability.cs`](../../src/EmberTern.App/Settings/SettingsPortability.cs) | ⭐ The App's ONE owner of export/import **and of what the running app must be told afterwards** (§16.1). |
+[`App/Settings/SettingsPortability.cs`](../../src/EmberTern.App/Settings/SettingsPortability.cs) | ⭐ The App's ONE owner of export/import, **of what the running app must be told afterwards** (§16.1) **and of where the export reads the workspace from** (`CaptureLiveWorkspace`, §16.6). |
 `App/Settings/PreferencesService.cs` | Gained `Reload()` — the answer to the stale-snapshot trap, and deliberately not a second apply point. |
 `App/Settings/SettingsCatalog.cs` | `SettingKind` (`Preference` \| `Action`) + the `general.importExport` row. |
 `App/ViewModels/SettingsCenterViewModel.cs` | A `SettingRowViewModel` base, `SettingActionViewModel`, three commands, three view-supplied request hooks. |
 `App/ViewModels/SettingsExportDialogViewModel.cs` · `SettingsImportDialogViewModel.cs` | The two flows. |
-`App/Views/SettingsExportDialog.axaml(.cs)` · `SettingsImportDialog.axaml(.cs)` | Two modals over the app's shared skeleton + the shared `MessageBanner`. |
+`App/Views/SettingsExportDialog.axaml(.cs)` · `SettingsImportDialog.axaml(.cs)` | Two modals over the app's shared skeleton + the shared `MessageBanner`. Bodies scroll, footers do not, and both attach `GrowingDialogBehavior` (§16.7b). |
+[`App/ViewModels/DialogGateHint.cs`](../../src/EmberTern.App/ViewModels/DialogGateHint.cs) | ⭐ Why a dialog's primary button is disabled, in the app's shared severity language (§16.7a). |
+[`App/Behaviors/GrowingDialogBehavior.cs`](../../src/EmberTern.App/Behaviors/GrowingDialogBehavior.cs) | ⭐ Keeps a `SizeToContent` dialog that grows after opening fully on screen (§16.7b). |
 `App/Views/SettingsWindow.axaml(.cs)` | The Import / export group on the General page + *Open settings folder*. |
-`MainWindowViewModel` · `MainWindow.axaml.cs` | Owns the one `SettingsPortability`, supplies `ApplyImportedSettings`, and honours the workspace-capture suppression on close. |
-`SettingsImportApplyTests` · `SettingsCenterViewTests` (+3) | 13 + 3 tests. |
+`MainWindowViewModel` · `MainWindow.axaml.cs` | Owns the one `SettingsPortability`, supplies `ApplyImportedSettings`, honours the workspace-capture suppression on close, and supplies `CaptureLiveWorkspaceState()` — ⭐ the ONE builder of the live workspace, shared by the close save and the export (§16.6). |
+`SettingsImportApplyTests` · `SettingsCenterViewTests` · `SettingsCenterVmTests` · `GrowingDialogBehaviorTests` | 15 + 5 + 3 + 5 tests. |
 
 ### 16.1 ⭐⭐ The stale-snapshot trap, and why the fix reuses the existing apply point
 
@@ -2077,6 +2086,8 @@ after restart"* (it would make the theme, the formatter and the folders arrive l
   once today, at first VM attach.
   ⚠ Accepted cost, stated: that session also does not record its window geometry. The merge keeps the **local**
   bounds, so the previous geometry survives.
+  ⚠ **That same "captured only at close" fact is what broke the EXPORT side — see §16.6.** The suppression was
+  correct; the file it was protecting had been written from the wrong session.
 
 ### 16.4 Verification — what was actually proved
 
@@ -2093,6 +2104,8 @@ after restart"* (it would make the theme, the formatter and the folders arrive l
 - **An empty selection changes nothing**, reached both ways (nothing ticked; ticked but absent from the file).
 - **Execution history never arrives**, asserted from the applier's side under *every* section selected.
 - **Workspace-capture suppression is armed only by importing workspaces**, never by importing anything else.
+- ⭐ **An export of the Workspaces section carries the LIVE session, not the one stored at the last close** — and
+  taking it does not write `settings.dat`. Verified by planting the violation (§16.6).
 - Headless, on the real windows: **the three portability buttons are on the General page and search finds the row
   by "backup"**; ⭐ **a phase-one rejection never shows the passphrase field** — a PDF, a real `settings.dat`
   (ratified Q13 as a UI test) and a newer-format export, each with its own distinct message; and the **whole
@@ -2110,7 +2123,111 @@ after restart"* (it would make the theme, the formatter and the folders arrive l
   `CurrentSchemaVersion`, to the one theme apply point, or to `SqlFormatter` / `FormatterStyle` — all verified
   untouched. `aes256-passphrase` remains unregistered in `ResolveProtector` (§15.1, ratified).
 
-### 16.6 What etap 6 inherits
+### 16.6 ⚠⚠ The QA defect — the export read the workspace off `settings.dat`, which does not have it yet
+
+The user's QA of etap 5b found the one thing the whole design had not asked: **where does an export read the
+workspace FROM?** Scenario: open several tabs including a SQL Editor with text → export with *Open tabs, SQL text
+and saved queries* ticked → import → close → restart. The restored workspace was **not** the one exported.
+
+⭐ **Root cause, and it is a single sentence: every exportable section but one is written to `settings.dat` the
+moment the user changes it — `Workspace` is captured once, at app close.** Preferences apply-on-change,
+connections and folders save on edit, import profiles save on use; the `Workspace` section has exactly **one**
+writer in the entire application, `MainWindow.OnWindowClosing`. So `SettingsPortability.ExportTo`'s
+`_store.Load()` — correct for every other section, and deliberately chosen so *"the file describes what is
+persisted"* — returned the **previous session's** tabs and SQL. The file then imported and restored perfectly
+faithfully; it simply described the wrong session.
+
+⚠ **What was NOT wrong, verified before anything was changed** — the whole chain was traced rather than assumed,
+and four plausible suspects were cleared: the import reader, `SettingsImportApplier.Merge` (workspace replaced
+wholesale, local `WindowBounds` kept), the write into `settings.dat`, and `SuppressWorkspaceCaptureOnClose` (armed
+only by importing workspaces, and it does suppress the close capture). ⭐ The generalisable shape:
+**"read the persisted state" is only equivalent to "read the current state" for state that is persisted eagerly** —
+and one deferred section is enough to break it silently, because the operation still succeeds end to end.
+
+**The fix — `SettingsPortability.CaptureLiveWorkspace`, a `Func<WorkspaceState>?` supplied by `MainWindow`,**
+mirroring `AfterImport` exactly. When the Workspaces section is being exported, the loaded copy's `Workspace` is
+replaced by the live capture before the exporter sees it.
+
+- ⭐ **`MainWindow.CaptureLiveWorkspaceState()` is the ONE builder**, extracted from the close path and shared with
+  it. The complete state is the **View's** to build — sidebar width, the results-panel height and the import panel
+  live on controls, not on the view model — so composing it a second time inside the export would be a second
+  answer to *"what is the workspace"*, free to drift. `CaptureWorkspace()` on the view model alone would have
+  quietly exported default layout values.
+- ⚠ **Still read-only** (ratified §15.9/4): the capture lands in the **in-memory copy** handed to the exporter,
+  never in `settings.dat`. Exporting must not persist a workspace the user has not closed the app on — and
+  persisting it would also have been the easy wrong fix.
+- ⚠ **The hook is wired outside `MainWindow`'s run-once restore guard**, because it belongs to *that* view model's
+  `SettingsPortability`; a view-model swap would otherwise leave the incoming one unhooked, and an unset hook fails
+  **silently** by falling back to exactly the stale read. Unset is nevertheless a legitimate state (a test, or
+  before the window has restored) and falls back to the stored section — never to an empty workspace, which would
+  export *"no tabs"* as though it were the truth.
+- ⚠ **Known and stated, deliberately not fixed here: grid column WIDTHS have the same shape.**
+  `GridLayoutBehavior` saves on reorder and on detach, but widths of still-attached grids flush only at close
+  (`FlushAll`), so an export of `GridProfiles` carries the widths as of the last close. It is the same class of
+  staleness, far less visible, not what QA reported, and the only read-only fix reaches into a module this sprint
+  does not touch. Recorded rather than silently absorbed.
+
+**Verified by planting the violation**: `ExportingWorkspaces_TakesTheLiveSession_NotTheOneStoredAtTheLastClose`
+fails against the pre-fix code with the exact QA symptom (the export carried `LAST CLOSE` where the live session
+held `LIVE`), and it also asserts `settings.dat` was not written on the way.
+`WithoutALiveCapture_TheExportFallsBackToTheStoredWorkspace` pins the fallback and that the hook is consulted
+**only** when the section is actually being exported.
+
+### 16.7 The two UX findings from the same QA round — and the two reusable pieces they produced
+
+**(a) ⭐ "The two passphrases are not the same" was rendered as a hint.** Functionally the gate was right: Export
+stayed disabled and the dialog said why. But the reason was a plain `TextBlock` on `SubtleForegroundBrush` — which
+is exactly what `MessageSeverity.Info` looks like — so a genuine input error read like guidance and was routinely
+missed. ⛔ The failure is not "the message was too small"; it is that **the app has one severity vocabulary and
+this line was not speaking it**.
+
+New `App/ViewModels/DialogGateHint.cs`: an immutable `Text` + `Severity`, with `BrushKey` / `GeometryKey` read
+from **`MessageBanner`'s shared map**, exactly as `ImportReadinessItemViewModel` and `QueryMessageViewModel` do.
+Both settings dialogs render it as a severity-coloured icon + line in the footer. ⛔ **Never paint it with a local
+`ErrorBrush`** — the whole point is that a gate hint and a banner cannot disagree about what an error looks like.
+
+- ⚠ **Two severities, and the split is deliberate.** `Error` = *what is there is wrong* (mismatched passphrases,
+  nothing selected); `Warning` = *a required step has not happened yet* (no passphrase typed). Painting every
+  blocked state red would make a freshly-opened dialog red before the user has done anything, and a colour that is
+  always on carries no information. Both are unmistakable, which is what the finding asked for.
+- ⚠ **Not a `MessageBanner`, and that is a decision.** Each dialog already has one, for the *outcome*; a second bar
+  would compete with it, sit far from the button it explains, and — because these dialogs are `SizeToContent` —
+  change the window's height every time the gate opened or closed, which is finding (b) all over again.
+- ⚠ **The import dialog gets the hint only for the state a user reaches by mistake** (file open, every box
+  unticked). It stays silent before that: a line saying *"choose a file"* under a dialog whose first control is
+  *Choose file…* is noise, and premature validation is its own UX defect.
+- ⚠⚠ **A latent defect surfaced while wiring it: the "select at least one thing to include" reason could never
+  appear.** Five of the seven section flags notified `CanExport` but not the reason property, so unticking every
+  box disabled Export while the hint went on describing the previous state — silent, with a green build. Now every
+  input notifies **both**. See gotcha #296.
+
+**(b) ⚠ The import dialog grew off the bottom of the screen.** It is `SizeToContent="Height"` and gets taller once
+a file has been opened and the section list appears. **Avalonia grows such a window downwards from its existing
+position** — the top-left stays put — so a dialog centred on its owner pushed its footer, and with it the *Import*
+button, under the bottom edge; the only recovery was dragging the window. Gotcha #295.
+
+New `App/Behaviors/GrowingDialogBehavior.cs`, one `Attach(Window)` call per dialog, with **two rules that only
+work together**:
+
+1. **A ceiling** — the window may never exceed the screen's working area, so the body scrolls instead of the
+   desktop overflowing. That half requires the host to put its body in a `ScrollViewer` (both dialogs now do, with
+   the footer deliberately *outside* it), because a cap without one clips rather than scrolls.
+2. **A nudge, not a jump** — after a size change the window is pushed back inside the working area only if it has
+   fallen outside. ⚠ Deliberately **not** re-centred: re-centring moves a dialog the user is reading every time it
+   changes size, which is more disorienting than the defect. Rejected for the same reason: "open it higher"
+   (guesses at a height it does not know yet) and "make the dialog resizable" (hands the user a problem to solve).
+
+⚠ **The units are the trap and are why the arithmetic is a pure static:** `Position` and `WorkingArea` are physical
+pixels, `MaxHeight` / `ClientSize` / `FrameSize` are DIPs, so on a 150% display a mixed calculation is a third
+wrong in both. `ClampOnScreen` is unit-tested without a desktop, including a working area that does not start at
+the origin — a top-docked taskbar or a monitor left of the primary, where clamping against `0,0` passes every
+single-monitor test and puts the dialog under the taskbar in real use.
+
+⚠ **Both are reusable and neither was rolled out further.** Sixteen dialogs use `SizeToContent`; only the two this
+QA round covered were touched. Adopting the behaviour more widely is an app-wide UX question and belongs to the
+backlogged UX sprint, not to a settings etap.
+
+### 16.8 What etap 6 inherits
 
 - **Add a preference:** unchanged from §13.5 — one `SettingsCatalog.Settings` row (now with the default
   `SettingKind.Preference`), one arm in `ValueOf`, one line in `Compose`, one XAML block, one entry in

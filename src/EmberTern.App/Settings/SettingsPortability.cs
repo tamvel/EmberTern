@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Settings.Export;
+using EmberTern.Core.Workspace;
 
 namespace EmberTern.App.Settings;
 
@@ -64,6 +65,33 @@ public sealed class SettingsPortability
     /// by <c>MainWindowViewModel</c>, because the holders it refreshes are its.</summary>
     public Action? AfterImport { get; set; }
 
+    /// <summary>
+    /// ⚠⚠ <b>The live workspace, supplied by <c>MainWindow</c> — because <c>settings.dat</c> does not have it.</b>
+    ///
+    /// <para>Every other exportable section is written to the file the moment the user changes it: preferences
+    /// apply-on-change, connections and folders save on edit, import profiles save on use. <b><c>Workspace</c> is
+    /// the one exception — it is captured once, at app close.</b> So a mid-session <c>_store.Load()</c> returns the
+    /// workspace of the <i>previous</i> session, and an export taken while the user has tabs open would carry work
+    /// they did not do — which then imports "successfully" and restores the wrong tabs. That is the etap-5b QA
+    /// defect, and it was a defect of <b>where the export read from</b>, not of the import, the merge or the
+    /// close-capture suppression (all three were correct).</para>
+    ///
+    /// <para>⭐ The hook is a <see cref="Func{TResult}"/> for the same reason <see cref="AfterImport"/> is an
+    /// <see cref="Action"/>: the complete state is the <i>View's</i> to build — sidebar width, the results-panel
+    /// height and the import panel live on controls, not on the view model — so Core and this seam ask for it
+    /// rather than reassembling it from parts they can reach. <c>MainWindow.CaptureLiveWorkspaceState()</c> is the
+    /// ONE builder, shared with the app-close save, so an export and a close can never disagree about what "the
+    /// workspace" means.</para>
+    ///
+    /// <para>⚠ Reading it is still <b>read-only</b> (ratified §15.9/4): the captured state is written into the
+    /// in-memory copy the exporter is handed, never into <c>settings.dat</c>. Exporting must not persist a
+    /// workspace the user has not closed the app on.</para>
+    ///
+    /// <para>Unset (a test, or before the window has restored) simply falls back to the persisted section — the
+    /// previous behaviour, which is correct whenever there is no live session to be newer than the file.</para>
+    /// </summary>
+    public Func<WorkspaceState>? CaptureLiveWorkspace { get; set; }
+
     /// <summary>The folder holding <c>settings.dat</c>, its <c>.bak</c>, and any preserved copies — what the
     /// <i>Open settings folder</i> button opens. Cheap, and the only place in the UI this path is visible.</summary>
     public string SettingsFolder => Path.GetDirectoryName(_store.FilePath)!;
@@ -89,12 +117,28 @@ public sealed class SettingsPortability
     // ---- Export ------------------------------------------------------------------
 
     /// <summary>Writes an export of the CURRENT settings to <paramref name="path"/>.</summary>
-    /// <remarks>Reads the settings straight off the store rather than from anything in memory, so the file
-    /// describes what is persisted — and <c>SettingsExporter</c> deep-copies before it strips, so nothing in the
-    /// running app is touched (ratified §15.9/4).</remarks>
+    /// <remarks>
+    /// <para>Reads the settings straight off the store, because for every section but one the file <i>is</i> the
+    /// current state — and <c>SettingsExporter</c> deep-copies before it strips, so nothing in the running app is
+    /// touched (ratified §15.9/4).</para>
+    /// <para>⚠ The one exception is <c>Workspace</c>, which the app persists only at close. When it is being
+    /// exported and a live capture is available, the loaded copy's workspace is replaced by the live one — see
+    /// <see cref="CaptureLiveWorkspace"/>. The replacement happens on the <b>loaded copy</b>, so this method still
+    /// reads and never writes.</para>
+    /// </remarks>
     public void ExportTo(string path, SettingsExportOptions options, string passphrase)
     {
         var settings = _store.Load() ?? new ApplicationSettings();
+
+        if (options.Workspaces && CaptureLiveWorkspace is { } capture)
+        {
+            var live = capture();
+            if (live is not null)
+            {
+                settings.Workspace = live;
+            }
+        }
+
         SettingsExporter.ExportTo(path, settings, options, passphrase, _appVersion);
     }
 

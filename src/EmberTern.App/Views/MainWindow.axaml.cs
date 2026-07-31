@@ -402,6 +402,38 @@ public partial class MainWindow : Window
             return;
         }
 
+        var state = CaptureLiveWorkspaceState();
+        try
+        {
+            _workspaceStore?.Save(state);
+        }
+        catch (IOException)
+        {
+            // Closing path — don't block shutdown on a transient I/O hiccup.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// ⭐ The ONE builder of "the workspace as it is right now" — the live tab/SQL state from the view model plus
+    /// the layout the <i>view</i> owns (window bounds, sidebar, results panel, the import panel).
+    ///
+    /// <para>Two callers, and they must not be able to disagree: the app-close save above, and a settings
+    /// <b>export</b> that includes the Workspaces section (<c>SettingsPortability.CaptureLiveWorkspace</c>). The
+    /// export needs this because <c>settings.dat</c>'s Workspace section is written only here, at close — so
+    /// loading it mid-session yields the <i>previous</i> session's tabs, which is exactly what etap 5b's QA caught.
+    /// Building it in a second place would answer "what is the workspace" twice.</para>
+    ///
+    /// <para>Read-only with respect to persistence: it composes a state and returns it. Whether that state is
+    /// saved is the caller's decision — the close path saves it, the export path only serializes it into the
+    /// export file.</para>
+    /// </summary>
+    private WorkspaceState CaptureLiveWorkspaceState()
+    {
+        if (_currentVm is null) return new WorkspaceState();
+
         var state = _currentVm.CaptureWorkspace();
         state.WindowBounds = new WindowBounds
         {
@@ -434,17 +466,7 @@ public partial class MainWindow : Window
         // reach into a control.
         state.ImportPreviewPanelHeight = _currentVm.ImportPanelHeight;
         state.ImportPreviewPanelCollapsed = _currentVm.ImportPanelCollapsed;
-        try
-        {
-            _workspaceStore?.Save(state);
-        }
-        catch (IOException)
-        {
-            // Closing path — don't block shutdown on a transient I/O hiccup.
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
+        return state;
     }
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -640,6 +662,13 @@ public partial class MainWindow : Window
                 }
                 _vmRestored = true;
             }
+
+            // ⚠ Deliberately OUTSIDE the run-once guard above: the hook belongs to THIS view model's
+            // SettingsPortability, so a view-model swap would otherwise leave the incoming one without it — and an
+            // unset hook fails silently, by exporting the previous session's workspace. See
+            // CaptureLiveWorkspaceState and SettingsPortability.CaptureLiveWorkspace for why the export cannot
+            // read that section off settings.dat.
+            _currentVm.Portability.CaptureLiveWorkspace = CaptureLiveWorkspaceState;
 
             if (_editor is not null && _editor.Text != _currentVm.QueryText)
             {

@@ -7,6 +7,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.SettingsImportDialog"
+        x:Name="ImportDialogRoot"
         x:DataType="vm:SettingsImportDialogViewModel"
         Title="{x:Static app:UiStrings.SettingsImportTitle}"
         Width="560"
@@ -26,6 +27,11 @@
        ⛔ Do not restructure this into "ask for the passphrase, then read the file". A passphrase prompt is an
        implicit claim that the file is readable given the right one, and Core's Open() takes an inspection rather
        than a path precisely so that claim cannot be made falsely (§15.3b, ratified). -->
+  <!-- ⚠ Row 2 SCROLLS, and that is half of the fix for a QA finding: this dialog is SizeToContent and grows once
+       the section list appears, which Avalonia does by extending it downwards from where it already is — so the
+       footer, and with it the Import button, slid off the bottom of the screen. GrowingDialogBehavior caps the
+       window at the working area and nudges it back on screen; the ScrollViewer is what makes that cap survivable
+       instead of clipping. Neither half works alone. -->
   <Grid RowDefinitions="Auto,Auto,*,Auto">
 
     <Border Grid.Row="0"
@@ -50,7 +56,8 @@
                             Message="{Binding Message}"
                             IsVisible="{Binding ShowMessage}" />
 
-    <StackPanel Grid.Row="2" Margin="20,18" Spacing="16">
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="20,18" Spacing="16">
 
       <!-- Step 1 — the file. -->
       <Grid ColumnDefinitions="Auto,*">
@@ -131,8 +138,37 @@
       </Border>
 
     </StackPanel>
+    </ScrollViewer>
 
     <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="20,0,20,18">
+      <!-- Why Import is disabled, in the app's shared severity language — icon and colour from
+           MessageBanner's map via the view model, never a literal here (the ImportReadiness strip's precedent:
+           "a greyed-out button with no reason is a UX defect"). Silent until the file is open; see
+           SettingsImportDialogViewModel.Blocked. -->
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                  VerticalAlignment="Center" Margin="0,0,12,0"
+                  IsVisible="{Binding Blocked.IsVisible}">
+        <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                          Data="{Binding Blocked.GeometryKey,
+                                         Converter={x:Static app:IconGeometryConverter.Instance}}">
+          <controls:SvgIcon.Foreground>
+            <!-- A brush is looked up WITH the theme variant, never without — a variant-less lookup returns
+                 UNSET and the icon paints nothing while every observable state looks healthy (gotcha #250). -->
+            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+              <Binding Path="Blocked.BrushKey" />
+              <Binding ElementName="ImportDialogRoot" Path="ActualThemeVariant" />
+            </MultiBinding>
+          </controls:SvgIcon.Foreground>
+        </controls:SvgIcon>
+        <TextBlock Text="{Binding Blocked.Text}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center">
+          <TextBlock.Foreground>
+            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+              <Binding Path="Blocked.BrushKey" />
+              <Binding ElementName="ImportDialogRoot" Path="ActualThemeVariant" />
+            </MultiBinding>
+          </TextBlock.Foreground>
+        </TextBlock>
+      </StackPanel>
       <Button Grid.Column="1"
               Classes="flat"
               Content="{x:Static app:UiStrings.SettingsImportCancel}"

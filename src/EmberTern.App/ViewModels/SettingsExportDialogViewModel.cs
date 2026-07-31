@@ -37,20 +37,29 @@ public sealed partial class SettingsExportDialogViewModel : ObservableObject
         _importProfiles = defaults.ImportProfiles;
     }
 
+    // ⚠ Every field that can close the gate notifies BOTH CanExport and Blocked. They are two halves of one
+    // answer — the button's state and the reason for it — and a field that refreshed only the first would
+    // disable the button while the hint went on describing the previous state. That was a real defect until
+    // etap 5b's QA round: five of these notified CanExport only, so unticking every section disabled Export
+    // and the "select at least one thing" line never appeared at all.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     private bool _preferences;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     private bool _gridProfiles;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     private bool _folders;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     [NotifyPropertyChangedFor(nameof(CanIncludePasswords))]
     private bool _connections;
 
@@ -59,18 +68,22 @@ public sealed partial class SettingsExportDialogViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     private bool _workspaces;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     private bool _importProfiles;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     private string _passphrase = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     private string _passphraseConfirmation = string.Empty;
 
     [ObservableProperty]
@@ -110,32 +123,39 @@ public sealed partial class SettingsExportDialogViewModel : ObservableObject
                              && !string.IsNullOrEmpty(Passphrase)
                              && string.Equals(Passphrase, PassphraseConfirmation, StringComparison.Ordinal);
 
-    /// <summary>Why <see cref="CanExport"/> is false, for the hint under the buttons — or empty when it is
-    /// true.</summary>
-    public string BlockedReason
+    /// <summary>
+    /// ⭐ Why <see cref="CanExport"/> is false, in the app's shared severity language — or <see cref="DialogGateHint.None"/>
+    /// when nothing blocks the export.
+    ///
+    /// <para>⚠ <b>The severity split is the point (QA, etap 5b).</b> This used to be one plain string painted
+    /// <c>SubtleForegroundBrush</c>, so "the two passphrases are not the same" — a genuine input error that makes
+    /// the button dead — read exactly like a hint and was routinely missed. A wrong state is now an
+    /// <b>Error</b>; a step that has merely not happened yet is a <b>Warning</b>, because a dialog that opens red
+    /// before the user has done anything teaches nothing. See <see cref="DialogGateHint"/>.</para>
+    /// </summary>
+    public DialogGateHint Blocked
     {
         get
         {
-            if (Options.IsEmpty) return UiStrings.SettingsExportNothingSelected;
-            if (string.IsNullOrEmpty(Passphrase)) return UiStrings.SettingsExportPassphraseMissing;
+            // Actively emptied by the user: they unticked everything, so this is a wrong state, not a missing step.
+            if (Options.IsEmpty) return DialogGateHint.Error(UiStrings.SettingsExportNothingSelected);
+            if (string.IsNullOrEmpty(Passphrase)) return DialogGateHint.Pending(UiStrings.SettingsExportPassphraseMissing);
             if (!string.Equals(Passphrase, PassphraseConfirmation, StringComparison.Ordinal))
             {
-                return UiStrings.SettingsExportPassphraseMismatch;
+                // ⚠ The one the QA finding was about. A typo here produces a permanently unreadable file and the
+                // mistake is undetectable afterwards, so this is the single moment it can be caught — it has to
+                // look like what it is.
+                return DialogGateHint.Error(UiStrings.SettingsExportPassphraseMismatch);
             }
-            return string.Empty;
+            return DialogGateHint.None;
         }
     }
-
-    partial void OnPassphraseChanged(string value) => OnPropertyChanged(nameof(BlockedReason));
-
-    partial void OnPassphraseConfirmationChanged(string value) => OnPropertyChanged(nameof(BlockedReason));
 
     partial void OnConnectionsChanged(bool value)
     {
         // Unchecking the connections leaves nothing for a password to belong to, so the opt-in follows it down
         // rather than staying checked over an empty section.
         if (!value) Passwords = false;
-        OnPropertyChanged(nameof(BlockedReason));
     }
 
     /// <summary>

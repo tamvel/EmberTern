@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Settings;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Settings.Export;
@@ -19,11 +20,16 @@ public partial class SettingsImportDialog : Window
     public SettingsImportDialog()
     {
         InitializeComponent();
+        GrowingDialogBehavior.Attach(this);
     }
 
     public SettingsImportDialog(SettingsPortability portability)
     {
         InitializeComponent();
+        // ⚠ This dialog GROWS: opening a file reveals the section list, and Avalonia extends a SizeToContent
+        // window downwards from where it already is — which is how the Import button ended up under the bottom
+        // edge of the screen (QA, etap 5b). See GrowingDialogBehavior.
+        GrowingDialogBehavior.Attach(this);
         _vm = new SettingsImportDialogViewModel(portability);
         DataContext = _vm;
     }

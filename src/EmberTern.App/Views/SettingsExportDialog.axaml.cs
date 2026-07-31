@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Settings;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Settings.Export;
@@ -21,11 +22,15 @@ public partial class SettingsExportDialog : Window
     public SettingsExportDialog()
     {
         InitializeComponent();
+        GrowingDialogBehavior.Attach(this);
     }
 
     public SettingsExportDialog(SettingsPortability portability)
     {
         InitializeComponent();
+        // The section list plus the passphrase group already reaches the bottom of a 768-high screen; the ceiling
+        // keeps the dialog on the desktop and the body's ScrollViewer takes the overflow.
+        GrowingDialogBehavior.Attach(this);
         _vm = new SettingsExportDialogViewModel(portability);
         DataContext = _vm;
     }

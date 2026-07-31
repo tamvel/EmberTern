@@ -65,6 +65,7 @@ public sealed partial class SettingsImportDialogViewModel : ObservableObject
     /// <summary>True once the payload has been decrypted — the cue to show the section list.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanImport))]
+    [NotifyPropertyChangedFor(nameof(Blocked))]
     private bool _isOpened;
 
     /// <summary>⚠ Each section is offered only when the file actually carries it. A checkbox for a section that
@@ -78,13 +79,13 @@ public sealed partial class SettingsImportDialogViewModel : ObservableObject
     [ObservableProperty] private bool _offersWorkspaces;
     [ObservableProperty] private bool _offersImportProfiles;
 
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))] private bool _takePreferences;
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))] private bool _takeGridProfiles;
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))] private bool _takeFolders;
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))] private bool _takeConnections;
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))] private bool _takePasswords;
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))] private bool _takeWorkspaces;
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))] private bool _takeImportProfiles;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))][NotifyPropertyChangedFor(nameof(Blocked))] private bool _takePreferences;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))][NotifyPropertyChangedFor(nameof(Blocked))] private bool _takeGridProfiles;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))][NotifyPropertyChangedFor(nameof(Blocked))] private bool _takeFolders;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))][NotifyPropertyChangedFor(nameof(Blocked))] private bool _takeConnections;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))][NotifyPropertyChangedFor(nameof(Blocked))] private bool _takePasswords;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))][NotifyPropertyChangedFor(nameof(Blocked))] private bool _takeWorkspaces;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(CanImport))][NotifyPropertyChangedFor(nameof(Blocked))] private bool _takeImportProfiles;
 
     /// <summary>Shown only when this file carries passwords — an import overwrites the stored one for a matching
     /// connection, which is worth saying before it happens.</summary>
@@ -104,6 +105,20 @@ public sealed partial class SettingsImportDialogViewModel : ObservableObject
     };
 
     public bool CanImport => IsOpened && !Selection.IsEmpty;
+
+    /// <summary>
+    /// Why <see cref="CanImport"/> is false — but <b>only for the one state a user can reach by mistake</b>: the
+    /// file is open and every section has been unticked, so Import is dead with nothing on screen saying why.
+    ///
+    /// <para>⚠ Deliberately silent before the file is open. The steps ahead of that are visible in the dialog
+    /// itself (choose a file → the passphrase group appears → the contents appear), and a line saying "choose a
+    /// file" under a dialog whose first control is <i>Choose file…</i> is noise. Premature validation is its own
+    /// UX defect; this exists for the state that genuinely looks broken. Same severity vocabulary as the export's
+    /// — see <see cref="DialogGateHint"/>.</para>
+    /// </summary>
+    public DialogGateHint Blocked => IsOpened && Selection.IsEmpty
+        ? DialogGateHint.Error(UiStrings.SettingsImportNothingSelected)
+        : DialogGateHint.None;
 
     // ---- Outcome ----------------------------------------------------------------
 

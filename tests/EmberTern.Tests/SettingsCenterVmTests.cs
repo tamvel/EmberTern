@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Avalonia.Styling;
 using EmberTern.App;
+using EmberTern.App.Controls;
 using EmberTern.App.Settings;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Security;
@@ -421,6 +422,108 @@ public class SettingsCenterVmTests
             Assert.Equal(PreferenceOptions.ThemeLight, service.Current.Theme);
         });
     }
+
+    /// <summary>
+    /// ⚠ <b>A latent defect the QA round exposed: the "select at least one thing" reason could never appear.</b>
+    /// Five of the seven section flags notified <c>CanExport</c> but not the reason property, so unticking every
+    /// box disabled Export while the hint went on describing the previous state — the exact failure the hint
+    /// exists to prevent, with a green build. The test drives it through <c>PropertyChanged</c> rather than
+    /// reading the property directly, because reading it always computed the right answer; only a listener sees
+    /// whether the UI was ever told.
+    /// </summary>
+    [Fact]
+    public void UntickingEverySection_AnnouncesWhyExportIsBlocked()
+    {
+        InTempDir(dir =>
+        {
+            var vm = ExportVmOver(dir);
+            var announced = 0;
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(SettingsExportDialogViewModel.Blocked)) announced++;
+            };
+
+            // The defaults ARE §6.3.4's classification, so the dialog opens with sections ticked and the
+            // outstanding step is the passphrase.
+            Assert.Equal(MessageSeverity.Warning, vm.Blocked.Severity);
+            Assert.Equal(UiStrings.SettingsExportPassphraseMissing, vm.Blocked.Text);
+
+            // ⚠ Connections is unticked FIRST and Preferences LAST on purpose: Connections was the one flag that
+            // already announced (it had a handler for the password rule), so a test that ended on it would have
+            // passed against the defect. The last step here is one of the five that were silent.
+            vm.Connections = false;
+            vm.GridProfiles = false;
+            vm.Folders = false;
+
+            var beforeTheLastOne = announced;
+            vm.Preferences = false;
+
+            Assert.False(vm.CanExport);
+            Assert.True(announced > beforeTheLastOne, "the reason changed and nothing was told about it");
+            Assert.Equal(UiStrings.SettingsExportNothingSelected, vm.Blocked.Text);
+            // Emptied on purpose ⇒ a wrong state, not an outstanding step.
+            Assert.Equal(MessageSeverity.Error, vm.Blocked.Severity);
+            Assert.Equal("ErrorBrush", vm.Blocked.BrushKey);
+        });
+    }
+
+    /// <summary>
+    /// The import dialog's twin, and its deliberate limit: the reason appears for the one state a user reaches by
+    /// mistake — the file is open and every box has been unticked — and stays <b>silent</b> before that. A dialog
+    /// whose first control is <i>Choose file…</i> does not need a line telling the user to choose a file, and
+    /// premature validation is its own UX defect.
+    /// </summary>
+    [Fact]
+    public void TheImportHint_AppearsOnlyWhenAnOpenedFileHasNothingTicked()
+    {
+        InTempDir(dir =>
+        {
+            var vm = ImportVmOver(dir);
+
+            Assert.False(vm.Blocked.IsVisible);
+
+            // Simulate what Open() produces: the file carried preferences, and the user unticks them.
+            vm.IsOpened = true;
+            vm.TakePreferences = true;
+            Assert.True(vm.CanImport);
+            Assert.False(vm.Blocked.IsVisible);
+
+            vm.TakePreferences = false;
+            Assert.False(vm.CanImport);
+            Assert.True(vm.Blocked.IsVisible);
+            Assert.Equal(UiStrings.SettingsImportNothingSelected, vm.Blocked.Text);
+            Assert.Equal(MessageSeverity.Error, vm.Blocked.Severity);
+        });
+    }
+
+    /// <summary>⭐ The colour and the icon are taken from <c>MessageBanner</c>'s shared map, never restated — so a
+    /// gate hint and a banner cannot disagree about what an error looks like. Pinned because a literal here would
+    /// compile, render plausibly, and drift the day the map changes.</summary>
+    [Fact]
+    public void AGateHint_ReadsItsColourAndIconFromTheSharedSeverityMap()
+    {
+        foreach (var hint in new[]
+                 {
+                     DialogGateHint.Error("wrong"),
+                     DialogGateHint.Pending("outstanding"),
+                 })
+        {
+            Assert.Equal(MessageBanner.BrushKeyFor(hint.Severity), hint.BrushKey);
+            Assert.Equal(MessageBanner.GeometryKeyFor(hint.Severity), hint.GeometryKey);
+            Assert.True(hint.IsVisible);
+        }
+
+        Assert.False(DialogGateHint.None.IsVisible);
+    }
+
+    private static SettingsExportDialogViewModel ExportVmOver(string dir)
+        => new(PortabilityOver(dir));
+
+    private static SettingsImportDialogViewModel ImportVmOver(string dir)
+        => new(PortabilityOver(dir));
+
+    private static SettingsPortability PortabilityOver(string dir)
+        => new(new ApplicationSettingsStore(dir), new PreferencesService(new PreferencesStore(dir)), "9.9.9-test");
 
     private static string RepositoryRoot()
     {
