@@ -34,7 +34,7 @@ verbatim, in the archive below.
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
 | **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (285 entries, #1–#298), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (287 entries, #1–#300), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -297,7 +297,13 @@ noted.
   the context menus, and no existing tool was moved or mirrored into it. It is a plain `ContextMenu` opened from
   code, so it inherits the app's one menu appearance with **no new style**.
   **About** is a *product* window (logo, name, version, `Created by`, copyright) — no runtime/OS/library block by
-  decision; a footer button opens the **third-party notices**. **Keyboard Shortcuts** is a read-only projection of
+  decision; a footer button opens the **third-party notices**. ⭐ **Since 2026-08-01 it is the ONLY place a logo
+  appears in the running application** — the titlebar mark was removed on purpose (chrome belongs to the
+  document; the identity belongs here), and the **OS icon every window carries comes from ONE
+  `<Style Selector="Window">` setter** in `ControlStyles.axaml`, never from a per-window assignment. ⛔ Do not
+  set `Icon` on an individual window (a local value outranks the setter) and do not re-add a mark to the
+  titlebar. Asset map + how to replace the artwork:
+  [src/EmberTern.App/Assets/Branding/BRANDING.md](src/EmberTern.App/Assets/Branding/BRANDING.md). **Keyboard Shortcuts** is a read-only projection of
   `CommandCatalog` (search · Command/Shortcut/Scope · canonical order `Global → Tab → Tree → Grid → Editor →
   alphabetical`, restorable after any column sort · live count), which is why there is no second list of
   shortcuts to maintain.
@@ -404,6 +410,88 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **🎨 BRANDING UX SPRINT — DELIVERED 2026-08-01, awaits the user's visual QA. NOT committed.** A small,
+  closed sprint on the visual identity only: **no logic, no fonts, no spacing, no colours, no layout rebuild**
+  — and explicitly **not** the start of the backlogged app-wide UX sprint. Build 0/0; suite **7027** green
+  (6959 + 54 probe + 14, run in the three groups described under "Tests"); smoke clean.
+  Narrative: [docs/history/01-...](docs/history/01-v1-foundation-and-workspace.md) (§"Branding UX sprint");
+  asset map + swap procedure: **[src/EmberTern.App/Assets/Branding/BRANDING.md](src/EmberTern.App/Assets/Branding/BRANDING.md)**.
+  **⭐ THE LOGO IS OUT OF THE TITLEBAR AND NOW APPEARS IN EXACTLY ONE PLACE: About.** The user's reasoning,
+  and it is the modern desktop idiom (ChatGPT, Claude, VS Code) — a working surface's chrome is for the
+  document, not the product's identity, and the 26px mark plus its divider spent ~40px of the window's most
+  contested horizontal space telling the user which application they had launched.
+  **⚠ The removal's hard half was the LEFTOVERS, not the `<Image>`.** Three, each of which reads as a
+  rendering bug rather than as stale markup: (a) ⭐ **a container whose children are all collapsed is STILL
+  MEASURED**, so `IsVisible` on the children alone would have left the brand `StackPanel`'s own
+  `Margin="8,0,2,0"` as an empty inset at the window's left edge — the block is therefore gated as a whole on
+  `HasActiveConnection` (safe: its only other content is the DEV MODE badge, and `IsDeveloperModeActive` reads
+  `ActiveProfile?.DeveloperMode == true`, which cannot be true without a profile); (b) the divider that
+  separated the mark from the connection name — deleted, since with nothing to its left it is a rule against
+  the window edge; (c) the action zone's **leading** divider, the same problem one level out — gated on the
+  same condition as the block it separates. ⛔ The titlebar comment says all of this in place, because
+  "add the logo back" is a plausible-sounding regression.
+  **⭐⭐ THE ICON AUDIT'S REAL FINDING WAS THE PATH THAT DID NOT EXIST: 25 of 26 windows had NO icon at all** —
+  Settings Center, Keyboard Shortcuts, Third-party notices, the BLOB editor and every dialog rendered a blank
+  slot in their title bar and in Alt+Tab. Only `MainWindow` set one, in its constructor. ⭐ **Fixed with ONE
+  `<Style Selector="Window">` setter in `ControlStyles.axaml`, and that is structural rather than tidy:
+  Avalonia has no application-level window icon, but `Window.Icon` IS a styled property**, so one setter
+  reaches all 26 windows *and every window added later* — which a per-window assignment cannot, being a rule
+  someone must remember 26 times where the 27th window is the one that forgets. ⚠ **The `MainWindow` ctor
+  assignment was DELETED in the same change, not kept as belt-and-braces**: a local value outranks a style
+  setter, so it would have made the main window the one window whose icon came from a second source.
+  ⚠ **A compiling style setter proves nothing** — it compiles whether or not `Icon` is styled and whether or
+  not the converter reads an avares URI — so it is pinned by a test against a **bare `new Window()`**, which
+  is also the stronger assertion (an icon reaching a window with no XAML and no code-behind can only have come
+  from the app-level style). ⚠ **Nothing about the exe icon changed**: `<ApplicationIcon>` is a build-time
+  embed for Explorer and the pre-launch taskbar, a different job from the runtime one.
+  ⚠ **`logo.png` stopped shipping** — 833 KB of source artwork with no avares reference anywhere, the largest
+  embedded resource in the assembly, now excluded from `AvaloniaResource` exactly as the icon `.svg` sources
+  already are. It stays in the repo as the master.
+  ⚠ **About needed no work** — it has shown the 128px mark since the Hamburger sprint (2026-07-29); only a
+  comment that had just gone stale ("the same asset the titlebar uses") was corrected.
+  **⭐⭐ THE ARTWORK ITSELF WAS REPLACED (the sprint's actual point), IN TWO ROUNDS — AND IT ENDED WITH TWO
+  SEPARATE MASTERS, WHICH IS A DECISION, NOT DRIFT.** Round 1 replaced all three files from one master (a
+  forged-steel database cylinder with an ember wing). ⚠ **Then the user saw it in the Windows taskbar and
+  rejected it there** — so round 2 replaced the **OS icon only**, from a *different* source, and left the
+  About mark on the round-1 artwork.
+  ⭐ **The lesson generalises past branding: an icon and a presentation mark are judged at different sizes
+  (16–32px in dense chrome vs 128px on a quiet window), so "one source feeds both" is a convenience, not a
+  requirement — and when it stops holding, the honest answer is two masters, not a compromise rendition that
+  serves neither.** ⚠ Round 1's note here claimed the two "change together because both read one source";
+  that is now false **on purpose**, and `BRANDING.md` opens with the correction because *"update the logo"*
+  is otherwise ambiguous and would silently change a surface nobody asked about.
+  ⭐ The masters live in `Assets/Branding/Masters/`, excluded from `AvaloniaResource` **as a folder** —
+  a per-file rule is one more thing to remember, and its failure is silent (the 1.5 MB icon source would
+  simply have shipped).
+  **⚠⚠ CUTTING AN OPAQUE BACKGROUND — THE STEP THAT MUST NOT BE SIMPLIFIED, AND THE REASON IS ARITHMETIC.**
+  The icon source arrives 24bpp on `rgb(14,15,19)`, and **the artwork itself contains pure black** — Chebyshev
+  distance **19**. So a global "remove pixels near the background colour" punches holes through the cylinder,
+  and a **flood fill from the border with tolerance ≥ 19 walks through those black pixels into the interior
+  and eats a wedge out of the middle of the logo** (observed at 28, visible only once composited over
+  magenta). **The tolerance must sit above the background's own noise (±4) and strictly below the distance to
+  the artwork's darkest pixel; 12 shipped.** ⚠ The feather is likewise restricted to the **1px rim** touching
+  the cut — feathering globally re-opens the same trap one level subtler. ⚠ **Verify a cut-out over white and
+  magenta, never over the dark ground it came from**: a leak, a hole or a dark halo is invisible against
+  near-black.
+  ⚠ **The icon is cropped tight with NO padding** (the About mark keeps its 5% pad): an icon is drawn small in
+  dense chrome, and the empty margin that flatters a 128px slot just makes a 16px icon look shrunken.
+  Verified rather than assumed: both shipped assets found by payload search inside `EmberTern.dll` (and both
+  masters correctly *absent*), the new mark embedded in the built `.exe`, and the **live** window returning a
+  non-zero `ICON_BIG` from `WM_GETICON` — the proof the headless test cannot give.
+  **⚠⚠ TWO GDI+ TRAPS MAKE A CORRECT `.ico` LOOK CATASTROPHICALLY BROKEN — gotcha #299, and the lesson is
+  general.** `Icon.ToBitmap()` returns **colour noise** for a PNG-compressed entry (it decodes the frame as a
+  DIB), and `new Icon(path, Size(256,256))` **returns the 64px frame** (GDI+ never selects PNG-compressed 256
+  entries). ⭐ **What settled it in one step was running the same inspection against the PREVIOUSLY SHIPPED
+  icon, which reproduced both symptoms identically** — the known-good artefact is what distinguishes *"my file
+  is broken"* from *"my tool is lying"*, the same shape as #214, where a NOWAIT failure was mistaken for a
+  Firebird prohibition. Real verification walks the `ICONDIRENTRY` table and decodes each payload with
+  `Image.FromStream` (declared size == decoded size · PNG signature · `Format32bppArgb`); neither API above
+  can express that. Neither trap affects the app — Avalonia decodes with Skia, the shell decodes itself.
+  **⛔ NOT done, by scope:** no per-window icon overrides.
+  ⚠ **Stated, not tested: the titlebar's "nothing left over" property is visual QA.** The test that would have
+  covered it constructed a `MainWindow` and **hung** — see the new datum under "Tests"; it was cut rather than
+  fought, on the standing instruction that the suite hang is its own infrastructure task.
 
 - **⚙ SETTINGS CENTER & SQL FORMATTER CASING — ACTIVE SPRINT. Etap 1 (audit + design) CLOSED AND RATIFIED
   2026-07-29; ⭐ ETAP 2 (Core foundation) and ⭐ ETAP 3 (the window + the complete General page) both
@@ -2935,23 +3023,35 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7026 as of 2026-08-01
-  (after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7027 as of 2026-08-01
+  (after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the two
-  documented partitions (**6959 + 67**).
+  documented partitions (**6959 + 68**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition now holds **three** classes
-  (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `ContextMenuPresentationTests`), all in
+  four times its own count. ⚠ The headless partition now holds **four** classes
+  (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `ContextMenuPresentationTests` +
+  `BrandingPresentationTests`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
-  (#94/#226/#286). The partition filter is the three class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~ContextMenuPresentationTests"`
+  (#94/#226/#286). The partition filter is the four class names excluded / included:
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~ContextMenuPresentationTests&FullyQualifiedName!~BrandingPresentationTests"`
   and its inverse with `|`.
+  **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
+  with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,
+  ~9 s) and the other three together (14 green, ~2 s). Both were clean that way on the same commit where a
+  combined run had to be interrupted twice.
+  **⭐ A NEW DATUM ON THE CAUSE, and it is a better suspect than any assertion: a headless test that constructs
+  a `MainWindow` is the hang-prone shape.** The first draft of `BrandingPresentationTests` built one to check
+  the titlebar and hung; rewritten around a bare `new Window()` the same class runs in **476 ms**. Constructing
+  `MainWindow` is exactly what the probe does. ⚠ The consequence for test design: **assert app-wide
+  presentation against the cheapest control that can carry it** — the bare window is also the *stronger*
+  assertion, since an icon reaching a window with no XAML and no code-behind can only have come from the
+  application-level style. Still its own infrastructure task; **do not detour a sprint into it.**
   **⭐⭐ 2026-07-28, Keyboard Manager etap 5 — THE FOUR "SAME TEST" OBSERVATIONS BELOW WERE AN ARTEFACT OF
   ORDERING. READ THIS BEFORE TRUSTING THEM.** Etap 5 briefly had a SECOND headless test class, and running the
   partition in which *it* ran last moved the reported hang to **that class's** last test
@@ -4003,7 +4103,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (285 entries, #1–#298), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (287 entries, #1–#300), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

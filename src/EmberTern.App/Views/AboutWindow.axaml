@@ -25,9 +25,15 @@
   <StackPanel HorizontalAlignment="Center" Margin="32,36,32,26" Spacing="0">
 
     <!-- The brand mark is the subject of the window, so it gets the size and the air.
-         EmberTern_logo.png is the 256×256 transparent mark the titlebar already uses (logo.png is the same
-         artwork on an opaque white ground, which would show as a white square on the dark theme). At 128 it
-         is still downscaling at 200% DPI, so it stays crisp. -->
+         ⭐ Since 2026-08-01 this is the ONLY logo in the running application — the titlebar's mark was
+         removed on purpose, so About is where the product's identity is shown rather than one of two
+         places that show it. EmberTern_logo.png is the 256×256 transparent mark rendered from
+         Masters/logo.png (repo-only, never shipped). At 128 it is still downscaling at 200% DPI, so it
+         stays crisp.
+         ⚠ This mark and the OS icon are DIFFERENT artwork, from different masters, on purpose — an icon is
+         judged at 16-32px in dense chrome and this at 128px on a quiet window. Replacing one does not
+         replace the other; see Assets/Branding/BRANDING.md before changing either.
+         Asset map + how to replace the artwork: Assets/Branding/BRANDING.md. -->
     <Image Source="avares://EmberTern/Assets/Branding/EmberTern_logo.png"
            Width="128" Height="128"
            Stretch="Uniform"

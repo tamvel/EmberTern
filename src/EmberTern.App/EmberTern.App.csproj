@@ -15,6 +15,20 @@
          build output — zero app-size impact. The ICONS.md catalog is also docs-only. -->
     <AvaloniaResource Remove="Assets\Icons\**\*.svg" />
     <AvaloniaResource Remove="Assets\Icons\**\*.md" />
+    <!-- Same rule for branding. Assets\Branding\Masters\ holds the SOURCE artwork the shipped files are
+         rendered from (see Assets/Branding/BRANDING.md) — multi-megabyte originals with no avares
+         reference anywhere. Only EmberTern.ico (the OS icon) and EmberTern_logo.png (the mark About
+         shows) ship.
+         ⭐ The exclusion is the whole FOLDER, not a list of filenames, and that is deliberate: the two
+         masters are different artwork with different jobs, and a third one will arrive the same way.
+         A per-file rule is something the next person has to remember; a folder rule cannot be forgotten,
+         and the failure it prevents is silent — a forgotten master simply ships, costing 1.5 MB with
+         nothing to show for it.
+         ⚠ Do NOT "fix" this by adding an <AvaloniaResource Include="Assets\Branding\**" /> — the
+         Assets\** include above already covers the folder, and a second more-specific include fails
+         the build as a duplicate item (NETSDK1022) under TreatWarningsAsErrors. -->
+    <AvaloniaResource Remove="Assets\Branding\Masters\**" />
+    <AvaloniaResource Remove="Assets\Branding\**\*.md" />
   </ItemGroup>
 
   <!-- Third-party notices. Required, not a courtesy: MIT alone obliges us to include its copyright and
