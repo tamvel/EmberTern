@@ -183,9 +183,19 @@
       <ControlTemplate>
         <Grid ColumnDefinitions="Auto,*">
 
+          <!-- ⚠⚠ `UseLayoutRounding=False` DOTYCZY WYŁĄCZNIE TEGO ZNAKU I JEST CELOWE.
+               Zaokrąglanie układu przyciąga każdy element OSOBNO do piksela urządzenia. Dla dwóch
+               współśrodkowych okręgów o różnych średnicach to jedyne miejsce, w którym mogą przestać
+               być współśrodkowe: przy skalowaniu 150% pierścień wypada na 21 px w pozycji 4,5,
+               a kropka na 9 px w pozycji 10,5 — zaokrąglone niezależnie potrafią rozjechać środki
+               o 1 px. Zmierzone przy 100%: `dx = dy = 0,000`, więc tutaj wyłączenie nie zmienia nic.
+               ⭐ Przyciąganie do pikseli pomaga KRAWĘDZI PROSTEJ (dlatego `CheckBox` je zachowuje)
+               i nie ma czego pomóc OKRĘGOWI, który i tak jest wygładzany na całym obwodzie.
+               Zamiana kosztu, którego tu nie ma, na ryzyko, które tu jest. -->
           <Panel Name="PART_MarkArea"
                  Background="Transparent"
                  MinWidth="20"
+                 UseLayoutRounding="False"
                  VerticalAlignment="Center">
 
             <Ellipse Name="NormalEllipse"

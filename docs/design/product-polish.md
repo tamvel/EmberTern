@@ -1729,3 +1729,56 @@ Rola powstanie, gdy zażąda jej druga kontrolka (reguła użytkownika z QA krok
 ⭐ Pierwszy konsument **`Stroke.Hairline`** (grubość pierścienia to `double`, nie `Thickness`) i drugi
 konsument **`Margin.MarkGap`** — roli dodanej w kroku 1 właśnie z myślą o tej kontrolce, więc katalog
 nie urósł „na zapas".
+
+##### §15.6.1a Zgłoszenie użytkownika — kropka `RadioButtona` nie wygląda na wyśrodkowaną
+
+Odpowiedzią miał być **pomiar, nie opinia** — i tak został potraktowany.
+
+**Zmierzone trzema niezależnymi metodami** (lokalne `Bounds`, punkty przeliczone do przestrzeni
+kontrolki, `RenderedGeometry`): pierścień `3,0,14,14` środek `(10,000; 7,000)`, kropka `7,4,6,6`
+środek `(10,000; 7,000)` → **`dx = dy = 0,000`. Geometria jest dokładnie koncentryczna.**
+
+⚠ **Czego NIE udało się zweryfikować i nie wolno tego zaraportować jako sprawdzone:** poziomu
+pikseli przy skalowaniu ≠ 100%. Dwie próby zawiodły i obie warto znać:
+- **`LayoutTransformControl` NIE symuluje DPI** — skaluje po ułożeniu dziecka, więc `Bounds` wyszły
+  identyczne na 1,0 / 1,25 / 1,5 / 1,75 / 2,0. Test, który „przechodzi" na każdej skali, bo nie
+  dotyka mechanizmu, którego dotyczy;
+- **zrzut pikseli jest niedostępny** — sesja headless używa `UseHeadlessDrawing`, więc
+  `CaptureRenderedFrame()` zwraca `null`. Test „powiększeniem" wymagałby renderera Skia.
+
+⭐ **Mechanizm, który mógłby to tłumaczyć, JEST realny — więc został usunięty, zamiast czekać na
+dowód.** Zaokrąglanie układu przyciąga **każdy element osobno** do piksela urządzenia: przy 150%
+pierścień wypada na 21 px w pozycji 4,5, kropka na 9 px w pozycji 10,5, a niezależne zaokrąglenie
+potrafi rozjechać środki o 1 px. `PART_MarkArea` `RadioButtona` ma więc `UseLayoutRounding="False"`.
+⭐ **`CheckBox` go NIE dostaje i to jest istota decyzji:** przyciąganie do pikseli pomaga **krawędzi
+prostej**, a okręgowi — który i tak jest wygładzany na całym obwodzie — nie ma czego pomóc. Wymiana
+kosztu, którego tam nie ma, na ryzyko, które tam jest.
+
+Koncentryczność jest teraz **zapięta testem** — dwie niezależnie wyrównywane figury są współśrodkowe
+tylko dopóki nikt nie doda jednej z nich marginesu, innego wyrównania albo nieparzystego rozmiaru.
+
+##### §15.6.2 ⛔ Iteracja 2 (`TextBox`) — WSTRZYMANA: pomiar zmienia podejście do całej reszty kroku 5
+
+Sonda szablonu `TextBoxa` pokazała, że tło i krawędź maluje `PART_BorderElement`, a nie sama
+kontrolka — czyli settery `Background`/`BorderBrush` na `TextBox` nie mają dokąd trafić. **Ale
+kolejna sonda pokazała coś ważniejszego: Fluent wystawia dokładnie te pokrętła, których potrzebujemy,
+jako ZASOBY** (zmierzone wartości w motywie ciemnym):
+
+| Klucz Fluenta | Wartość | Odpowiednik w katalogu |
+|---|---|---|
+| `TextControlThemeMinHeight` | **32** | `Size.Control` (24) |
+| `TextControlThemePadding` | **10,6,6,5** | `Pad.Control` (8,0) |
+| `TextControlBorderThemeThickness` | `1,1,1,1` | `Border.All` |
+| **`ControlCornerRadius`** | `3,3,3,3` | `Radius.Surface` — ⭐ **wspólny dla wielu kontrolek** |
+| `TextControlBackground` / `…PointerOver` / `…Focused` | `#66000000` … | `BackgroundBrush` itd. |
+| `TextControlBorderBrush` / `…PointerOver` / `…Focused` | `#99ffffff` … | `BorderBrush`, `AccentMutedBrush`, `FocusBorderBrush` |
+| `TextControlPlaceholderForeground` | `#99ffffff` | `SubtleForegroundBrush` |
+| `ComboBoxBackground`, `ComboBoxBorderBrush` | | |
+| `ButtonBackground`, `ButtonBorderBrush`, `ButtonForeground`, `ButtonPadding` | `8,5,8,6` | `Pad.Button` |
+
+**⭐⭐ To otwiera podejście, którego plan nie zakładał: nie przestylowujemy Fluenta — PRZEPINAMY GO
+NA NASZ KATALOG.** Zamiast pisać własne szablony dla `TextBox`/`ComboBox`/`Button`, nadpisujemy
+klucze, z których Fluent i tak czyta. **Projekt ma na to własny precedens** — tak właśnie rozwiązano
+kolory zaznaczenia `TreeViewItem*` i `DataGridCell*` (reguła UI #6 w `CLAUDE.md`).
+
+Propozycja przedstawiona użytkownikowi przed implementacją — rozstrzygnięcie w §15.6.3.

@@ -172,6 +172,16 @@ public sealed class DesignTokenApplicationTests
             Assert.True(markArea.Bounds.Width >= ring.Bounds.Width + 4,
                 $"The click target ({markArea.Bounds.Width} px wide) is no wider than the mark.");
 
+            // ⭐ The dot is CONCENTRIC with the ring — asserted because the user reported it as looking
+            // off-centre and the answer had to be a measurement, not an opinion. Two independently aligned
+            // shapes are concentric by construction only as long as nobody gives one of them a margin, a
+            // different alignment, or an odd size; this is what makes that a decision rather than a slip.
+            // (Layout level only. Device-pixel behaviour at fractional DPI is handled in the template by
+            // switching layout rounding off for this mark — see its comment.)
+            var dot = bare.GetVisualDescendants().OfType<Ellipse>().Single(e => e.Name == "CheckGlyph");
+            Assert.Equal(ring.Bounds.Center.X, dot.Bounds.Center.X, 3);
+            Assert.Equal(ring.Bounds.Center.Y, dot.Bounds.Center.Y, 3);
+
             window.Close();
         }, default);
     }
