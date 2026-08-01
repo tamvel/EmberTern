@@ -59,6 +59,35 @@
 
       <!-- Zaznaczenie tekstu — ten sam pędzel, którym zaznacza się wiersz siatki i pozycja listy. -->
       <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{StaticResource SelectionColor}" />
+
+      <!-- ── ComboBox ────────────────────────────────────────────────────────────────────────────
+           ⭐ `ComboBoxDropDownBackground` to lista rozwijana, czyli powierzchnia UNIESIONA (RB‑4) —
+           kolejny naturalny konsument `SurfaceRaised`, a nie chromy. W motywie jasnym to właśnie
+           ta różnica sprawia, że rozwinięta lista czyta się jako pływająca nad formularzem.
+           ⚠ Tło pola NIE zmienia się przy najechaniu ani wciśnięciu — sygnał niesie krawędź.
+           Zmiana tła czytałaby się jak zmiana stanu DANYCH, a nie wskazania kursorem. -->
+      <SolidColorBrush x:Key="ComboBoxBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxPlaceHolderForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <!-- Chevron jest afordancją drugorzędną — niesie „to się rozwija", nie treść. -->
+      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="{StaticResource SubtleForegroundColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{StaticResource SurfaceRaisedColor}" />
+      <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{StaticResource HoverOverlayColor}" />
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{StaticResource SelectionColor}" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -82,6 +111,35 @@
       <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="{StaticResource SubtleForegroundColor}" />
 
       <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{StaticResource SelectionColor}" />
+
+      <!-- ── ComboBox ────────────────────────────────────────────────────────────────────────────
+           ⭐ `ComboBoxDropDownBackground` to lista rozwijana, czyli powierzchnia UNIESIONA (RB‑4) —
+           kolejny naturalny konsument `SurfaceRaised`, a nie chromy. W motywie jasnym to właśnie
+           ta różnica sprawia, że rozwinięta lista czyta się jako pływająca nad formularzem.
+           ⚠ Tło pola NIE zmienia się przy najechaniu ani wciśnięciu — sygnał niesie krawędź.
+           Zmiana tła czytałaby się jak zmiana stanu DANYCH, a nie wskazania kursorem. -->
+      <SolidColorBrush x:Key="ComboBoxBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxPlaceHolderForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <!-- Chevron jest afordancją drugorzędną — niesie „to się rozwija", nie treść. -->
+      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="{StaticResource SubtleForegroundColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{StaticResource SurfaceRaisedColor}" />
+      <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{StaticResource HoverOverlayColor}" />
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{StaticResource SelectionColor}" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>

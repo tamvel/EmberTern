@@ -269,6 +269,33 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// The Bridge scaling to a SECOND control, which is the question step 5.3 exists to answer. <c>ComboBox</c>
+    /// has far more template parts than <c>TextBox</c> (Background, HighlightBackground, DropDownOverlay,
+    /// DropDownGlyph, PART_Popup) and still needed no template of its own.
+    /// </summary>
+    [Fact]
+    public async Task ComboBox_TakesTheSameRoute_AsTextBox()
+    {
+        await _session.Dispatch(() =>
+        {
+            var combo = new ComboBox { Items = { "alpha", "beta" }, SelectedIndex = 0, Width = 200 };
+            var window = new Window { Content = new StackPanel { Children = { combo } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(Token<double>("Size.Control"), combo.MinHeight);
+            Assert.Equal(Token<Thickness>("Pad.Control"), combo.Padding);
+            Assert.Equal(Token<double>("Text.Application.Size"), combo.FontSize);
+
+            var painter = combo.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Background");
+            var background = Assert.IsType<SolidColorBrush>(painter.Background);
+            Assert.Equal(ThemeToken<SolidColorBrush>("BackgroundBrush", ThemeVariant.Dark).Color, background.Color);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// Reads a token straight from the application's merged resources — the same lookup a style performs. If
     /// the key is missing this fails loudly here, instead of leaving a control on a silent default.
     /// </summary>

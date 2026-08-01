@@ -1859,3 +1859,51 @@ Fluenta, więc jadą Bridge'em. Asercja czyta pędzel **z elementu, który fakty
 `<ResourceDictionary x:Key="Dark">` nazywa **zakres motywu**, a nie zasób — a oba strażniki liczyły
 go jako klucz („Dark zadeklarowany w dwóch plikach", „Dark nie ma wartości"). Prawda o wyrażeniu
 regularnym, bzdura o kodzie. **Ciąg w kształcie klucza nie jest automatycznie kluczem.**
+
+##### §15.6.4a QA iteracji 5.2 — zaliczone; ⭐ pierwsze wystąpienie zjawiska, które będzie wracać
+
+**Werdykt użytkownika:** *„Obawiałem się, że wysokość 24 px okaże się zbyt mała do codziennej pracy,
+ale na tym etapie wygląda naturalnie i nie sprawia wrażenia ciasnej. Pasek filtra oraz pola tekstowe
+wyglądają nowocześniej i bardziej przypominają komercyjne IDE niż standardowe kontrolki Avalonia."*
+⭐ D1 (24 px) potwierdzone w praktyce, nie tylko w katalogu.
+
+**📌 Do ponownej oceny w M3.2 (Toolbar), NIE teraz: badge DEV MODE.** Użytkownik: *„po uspokojeniu
+wyglądu kontrolek jeszcze bardziej rzuca się w oczy"*.
+
+⭐⭐ **To jest pierwszy przypadek zjawiska, które w tym etapie będzie się powtarzać i warto je nazwać:
+uspokojenie otoczenia PODNOSI głośność wszystkiego, czego jeszcze nie dotknęliśmy.** Badge nie zmienił
+się ani o piksel — zmieniło się tło, na którym stoi. Konsekwencje praktyczne:
+
+- **element zgłoszony jako „za głośny" po kolejnym kroku nie musi być defektem tego kroku** — bywa
+  długiem, który dopiero stał się widoczny;
+- ⛔ **nie wolno reagować na to od razu**, bo poprawka wykonana na wpół uspokojonym otoczeniu jest
+  strojeniem do stanu przejściowego. Stąd konsekwentne odkładanie takich zgłoszeń (kolor komentarzy
+  §7.3, nasycenie zaznaczonego wiersza §15.2.1, teraz DEV MODE) — to nie jest odsuwanie pracy, tylko
+  jedyny moment, w którym da się ją ocenić uczciwie;
+- ⭐ **to jest też argument ZA bramą §13.3**: ocena Application Chrome jako całości ma sens dopiero
+  wtedy, gdy nic w kadrze nie jest już w stanie przejściowym.
+
+##### §15.6.5 Iteracja 3 — `ComboBox` (most zdał próbę skalowania)
+
+Metryki przez styl (`Size.Control` · `Pad.Control` · `Text.Application` · `Border.All`), kolory przez
+Bridge (16 kluczy w obu motywach).
+
+⭐ **Ta iteracja była właściwym testem architektury z §15.6.3 — i most zdał.** `ComboBox` ma
+znacznie więcej części szablonu niż `TextBox` (`Background`, `HighlightBackground`, `DropDownOverlay`,
+`DropDownGlyph`, `PART_Popup`, `PART_EditableTextBox`) i **nie wymagał ani jednego własnego szablonu**.
+Przy pierwotnym planie („własne szablony dla kontrolek bazowych") byłby to najdroższy element kroku 5.
+
+⭐ **`ComboBoxDropDownBackground` → `SurfaceRaisedColor`** — lista rozwijana jest powierzchnią
+uniesioną, więc trafia na token z RB‑4 samoistnie. W motywie jasnym to właśnie ta różnica sprawia,
+że rozwinięta lista czyta się jako pływająca nad formularzem, a nie jako jego wgłębiona część.
+To trzeci naturalny konsument tej roli (po zakładkach panelu i `ToolTipie`) — podział z kroku 2
+zaczyna się sam obsługiwać.
+
+⚠ **Tło pola nie zmienia się przy najechaniu ani wciśnięciu — sygnał niesie krawędź.** Fluent zmieniał
+tło (`#66000000` → `#99000000`); zmiana tła czyta się jak zmiana stanu **danych**, a nie wskazania
+kursorem, i w siatce ustawień dawała efekt „to pole jest jakieś inne".
+
+⚠ **`ComboBoxItem` dostaje `Size.Row.Menu` (22) i `Pad.MenuItem`, a nie wysokość kontrolki.**
+Pozycja listy rozwijanej jest wierszem MENU, nie polem formularza: czyta się ją w pionowej serii,
+wybiera jednym kliknięciem i nigdy nie edytuje. Rola dzielona z menu kontekstowym jest tu poprawna
+(§3.3), a nie oszczędnością na tokenie.

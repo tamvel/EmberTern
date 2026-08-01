@@ -147,6 +147,32 @@
     <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
   </Style>
 
+  <!-- ================================================================================================
+       ComboBox — Compact Controls, Product Polish M2b krok 5.3. Metryki tutaj, kolory w Bridge'u.
+
+       ⭐ Ta kontrolka jest sprawdzianem, czy most SKALUJE SIĘ na kolejne kontrolki — i skaluje:
+       nie trzeba było ani jednego własnego szablonu, mimo że `ComboBox` ma ich znacznie więcej niż
+       `TextBox` (Background, HighlightBackground, DropDownOverlay, DropDownGlyph, PART_Popup).
+
+       ⚠ `ComboBoxItem` dostaje `Size.Row.Menu` (22) i `Pad.MenuItem`, a nie wysokość kontrolki.
+       Pozycja listy rozwijanej jest wierszem MENU, nie polem formularza: czyta się ją w pionowej
+       serii, wybiera jednym kliknięciem i nigdy nie edytuje. Rola dzielona z menu kontekstowym jest
+       tu poprawna (§3.3), a nie oszczędnością na tokenie.
+       ================================================================================================ -->
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ComboBoxItem">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Menu}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.MenuItem}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+
   <Style Selector="ToolTip">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
