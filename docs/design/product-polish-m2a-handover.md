@@ -1,5 +1,11 @@
 # Product Polish — M2a — dokument startowy sesji
 
+> ## ⛔ DOKUMENT ZAMKNIĘTY — M2a został wykonany 2026-08-01.
+>
+> Zachowany jako zapis wejścia w etap. **Stan faktyczny i decyzje: `product-polish.md` §14 (as-built)**;
+> uzupełnienia katalogu, które powstały w trakcie: §4.2 · §6.4 · §11.1.
+> Następny krok to **M2b** — start z `product-polish.md`, nie stąd.
+
 > **To jest prompt dla Claude'a, nie dla użytkownika.** Punkt wejścia w nową sesję —
 > pozwala wejść w implementację bez ponownego czytania całej dokumentacji.
 >

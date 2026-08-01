@@ -1,10 +1,14 @@
 # Product Polish — audyt, ratyfikowane decyzje i katalog Design Tokens
 
-> **STATUS: M0 (audyt) ✅ ZAKOŃCZONY. M1 (ten katalog) ✅ ZAAKCEPTOWANY przez użytkownika 2026-08-01.**
-> **Następny krok: M2a — infrastruktura tokenów.** Zaczynaj od
-> [`product-polish-m2a-handover.md`](product-polish-m2a-handover.md).
+> **STATUS: M0 (audyt) ✅ · M1 (ten katalog) ✅ zaakceptowany 2026-08-01 ·
+> M2a (infrastruktura tokenów) ⏳ ZAIMPLEMENTOWANY 2026-08-01, oczekuje na QA wizualne.**
+> **Następny krok: M2b — Compact Controls, własny `CheckBox`, powierzchnie i kolory.**
 >
-> ⛔ **Kod nie został jeszcze napisany** — do tej pory powstała wyłącznie dokumentacja projektowa.
+> **As-built M2a: §14** (co powstało, decyzje, pomiary dla M2b). Uzupełnienia katalogu wykonane
+> w M2a: **§4.2** (ikony, promienie, krawędzie), **§6.4** (jak konsumuje się rolę typograficzną),
+> **§11.1** (zapadka licznikowa).
+>
+> ⚠ `product-polish-m2a-handover.md` jest **zamknięty** — opisuje etap już wykonany.
 >
 > Specyfikacja etapu: `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown` — **jest źródłem prawdy**.
 > Ten dokument jej nie zastępuje; dopowiada to, czego w niej nie ma, i zapisuje decyzje użytkownika.
@@ -334,6 +338,82 @@ zapobiec ponownemu dryfowi.
 ⚠ Lista jest **zamknięta na starcie M2a**. Każda kolejna pozycja wymaga uzasadnienia rolą,
 której nie da się złożyć z istniejących.
 
+⭐ **Uzupełnienie M2a (2026-08-01, zaakceptowane przez użytkownika).** Lista powyżej opisuje
+wnętrza i odstępy, ale **nie opisuje krawędzi** — a `BorderThickness` też jest `Thickness`
+i też stoi dziś w całości na wartościach lokalnych (133 wystąpienia). Trzy role krawędzi
+dołączają do warstwy złożonej w §4.2. Reguła zamknięcia listy **nie zmienia się**: rozszerza
+ją wyłącznie zmierzona potrzeba, nigdy przewidywana.
+
+---
+
+## §4.2 Katalog — ikony, promienie, krawędzie
+
+> ⭐ **Sekcja dopisana w M2a.** Audyt notował te trzy obszary jako defekty (H‑9 „7 rozmiarów ikon
+> bez reguły", M‑6 „5 wartości `CornerRadius` bez reguły"), a §8.4 użyła raz nazwy `Radius.Sm`,
+> ale **żadna tabela ról nie istniała**. M2a musiał je nazwać, żeby `Tokens.axaml` był kompletny.
+> Wartości wyprowadzone z pomiaru kodu 2026-08-01, nie z uśrednienia.
+
+### §4.2.1 Rozmiary ikon
+
+| Token | Wartość | Rola |
+|---|---|---|
+| `Size.Icon` | **14** | ikona chromy — toolbar, zakładka, drzewo, wiersz menu |
+| `Size.Icon.Lg` | **16** | ikona o własnej wadze wizualnej — nagłówek, pusty stan, akcja główna |
+| `Size.Icon.Sm` | **12** | ikona inline w tekście 11 px — chip, wiersz siatki |
+
+**Dlaczego trzy, nie siedem.** Zmierzone: 14×64, 16×15, 11×5, 13×4, 12×3, 15×2, 10×1.
+Rozkład ma **dwa realne skupienia** (14 i 16) i długi ogon czterech wartości użytych łącznie
+15 razy — ogon jest dryfem, nie decyzją. Trzecia rola istnieje, bo ikona stojąca obok tekstu
+11 px przy 14 px optycznie go przerasta; to jedyny przypadek z ogona, który ma uzasadnienie
+własne, a nie „ktoś wpisał inną liczbę".
+
+### §4.2.2 Promienie
+
+| Token | Wartość | Rola |
+|---|---|---|
+| `Radius.Surface` | **3** | karta, grupa, panel, lista rozwijana, `Border.settings-group` |
+| `Radius.Chip` | **4** | odznaka i chip — element o kształcie pigułki |
+
+⭐ **To nie jest pięć wartości do uśrednienia — to dwie role.** Pomiar rozkładu wskazał
+jednoznacznie: wszystkie wystąpienia `4`, `4.5`, `5` i `6` siedzą w Trace Monitor, Session
+Managerze i pasku agregacji i **wszystkie są chipami**; `3` to wyłącznie powierzchnie. Różnica
+nie była przypadkowa — brakowało jej tylko nazwy.
+
+⚠ **Poprawka do §8.4.6:** pasek postępu Status Bara czyta `Radius.Surface`. Nazwa `Radius.Sm`
+z pierwszej redakcji tej sekcji nie została nigdy zdefiniowana i **nie wchodzi do katalogu** —
+byłaby nazwą wartości, nie roli (§3.1).
+
+### §4.2.3 Krawędzie
+
+| Token | Wartość | Warstwa | Rola |
+|---|---|---|---|
+| `Stroke.Hairline` | **1** | skalarna | grubość każdej krawędzi i separatora |
+| `Border.All` | `1` | złożona | pełna ramka — karta, pole, przycisk konturowy |
+| `Border.Top` | `0,1,0,0` | złożona | linia oddzielająca od treści **powyżej** |
+| `Border.Bottom` | `0,0,0,1` | złożona | linia oddzielająca od treści **poniżej** |
+
+Trzy role złożone pokrywają **96 ze 133** zmierzonych wystąpień (`0,0,0,1`×44, `0,1,0,0`×30,
+`1`×22). Reszta to `0` (×31 — brak krawędzi nie potrzebuje tokenu) i cztery wystąpienia
+jednostronnych krawędzi bocznych, które zostają lokalne do czasu, aż M2b lub M3 pokaże dla nich
+rolę.
+
+⛔ **`Stroke.Rail` = 2 **świadomie NIE wchodzi do M2a**, mimo że §8.4.2 ratyfikuje rail o stałej
+grubości 2 px. Rail jeszcze nie istnieje — token bez konsumenta wygląda identycznie jak regresja
+(reguła #233) i nikt nie potrafi zweryfikować, czy jego wartość jest dobra. Wchodzi w **M3.1**,
+razem z railem, który go użyje.
+
+### §4.2.4 ⭐ Rola przed wartością — reguła operacyjna
+
+> **Użytkownik, 2026-08-01, przy akceptacji tej sekcji:** *„Traktujmy przede wszystkim role,
+> a nie konkretne wartości. Jeżeli podczas M2b okaże się, że np. `Radius.Chip` lub któryś
+> z rozmiarów ikon powinien mieć inną wartość — najpierw aktualizujemy dokumentację, a dopiero
+> potem implementację."*
+
+Wartości w §4.2 są **zmierzone, nie ratyfikowane**. Zmiana wartości przy zachowanej roli jest
+zwykłą decyzją projektową kolejnego etapu i przechodzi normalną ścieżką: propozycja →
+dokument → kod. Zmiana **zestawu ról** to co innego — wymaga uzasadnienia rolą, której nie da
+się złożyć z istniejących (§4.1).
+
 ---
 
 ## §5 Katalog — wysokości kontrolek (decyzja D1)
@@ -426,6 +506,34 @@ System typografii dotyka edytora kodu **wyłącznie** przez `Font.Code` i `Text.
 kolorów, nie dotyka `SemanticHighlighter`, nie dotyka `EditorDataTypeBrush` ani żadnego tokenu
 `Editor*`. Ta praca została zaprojektowana osobno, przeszła dwie rundy QA użytkownika i jej
 cofnięcie byłoby regresją, nie polerowaniem.
+
+### §6.4 ⭐ Jak rola jest konsumowana — rozstrzygnięte pomiarem w M2a
+
+Handover §7 zostawił otwarte pytanie, czy w Avalonii 12 rola typograficzna może być **jednym**
+zasobem. **Zmierzone na kodzie projektu, nie na dokumentacji frameworka:** mechanizm już istnieje
+i działa — `ControlStyles.axaml` ma pięć stylów klasowych, które są rolami w rozumieniu §6:
+
+| Styl klasowy | Odpowiada roli |
+|---|---|
+| `TextBlock.field-label` (12) | `Text.Application` |
+| `TextBlock.shortcut-chip` (10) | `Text.Caption` |
+| `TextBlock.title` (14 SemiBold) | `Text.Title` |
+| `TextBlock.h1` (16 SemiBold) | `Text.DialogHeader` |
+| `TextBlock.group-header` (11 SemiBold) | `Text.SectionHeader` |
+
+**Wniosek — rola ma dwie warstwy, dokładnie jak §3.2:**
+
+1. **warstwa skalarna** (`Text.<Rola>.Size` / `.LineHeight` / `.Weight`, `Font.Ui`, `Font.Code`) —
+   jedyna, którą da się skonsumować **wszędzie**: w implicit style kontrolki, w `ControlTemplate`,
+   w code-behind, w AvaloniaEdit. To ona powstaje w **M2a**;
+2. **warstwa klasowa** (`Classes="text-compact"`) — wygodne złożenie trzech skalarów w jeden
+   atrybut, ale **działa tylko dla `TextBlock`**: wnętrze `TextBox`, komórki `DataGrid`
+   czy nagłówka kolumny i tak musi czytać skalar w swoim własnym stylu.
+
+⛔ **Warstwa klasowa NIE powstaje w M2a**, i to nie jest niedoróbka. Styl klasowy **jest już
+konsumpcją** — a M2a ma zbudować system, nie włączyć go (handover §8). Wchodzi w **M2b**,
+do `ControlStyles.axaml`, obok kontrolek, które go użyją — zgodnie z regułą UI #5 z `CLAUDE.md`
+(wspólne style mają jeden dom; drugi plik `Styles` wyłącznie dla typografii ten dom rozbija).
 
 ---
 
@@ -849,7 +957,7 @@ Wymagania z §8.5 specyfikacji: postęp procentowy, tryb nieokreślony, możliwo
 
 | Element | Projekt |
 |---|---|
-| Pasek | wysokość **4 px**, `Radius.Sm`, `AccentBrush` na `ChromeStrongBrush`, szerokość stała **120 px** |
+| Pasek | wysokość **4 px**, `Radius.Surface` (§4.2.2), `AccentBrush` na `ChromeStrongBrush`, szerokość stała **120 px** |
 | Tryb nieokreślony | ten sam pasek, animacja przesuwana — **wyłącznie `Opacity`/pozycja, nigdy `Width`** (§9) |
 | Anulowanie | `Button.icon` z `Icon.X`, widoczny **tylko** gdy operacja jest anulowalna |
 | Etykieta | `Text.Caption`, po lewej stronie paska |
@@ -931,6 +1039,36 @@ i zielonych testach** (gotcha #284). Wartość skopiowana ręcznie starzeje się
 
 **Test powstaje w M2a — przed migracją, nie po.** Wtedy M2c ma mierzalny warunek zakończenia:
 lista wyjątków skurczona do uzasadnionego minimum, test zielony.
+
+### §11.1 ⭐ Kształt listy — zapadka licznikowa, nie lista plików (M2a, zaakceptowane)
+
+Punkty 1–4 opisują listę **plików**. Pomiar stanu wyjściowego pokazał, dlaczego to za mało:
+**609 wystąpień `FontSize` rozkłada się na 49 plików**, a rekordzista ma ich 86. Lista plików
+zwolniłaby `DataImportTabView.axaml` w całości — mógłby dorzucić osiemdziesiąte siódme
+wystąpienie bez żadnego sygnału, przy zielonym teście. Dokładnie ta cisza, przed którą test ma
+chronić (gotcha #284).
+
+**Dlatego wyjątek to para `plik → liczba wystąpień`, a test pilnuje jej w obie strony:**
+
+| Kierunek | Znaczenie | Reakcja |
+|---|---|---|
+| liczba **wzrosła** | pojawiła się nowa wartość lokalna | użyj tokenu **albo** świadomie podnieś wartość referencyjną |
+| liczba **spadła** | migracja się udała, ale nie została odnotowana | obniż wartość referencyjną — to jest postęp M2c |
+| liczba **= 0** | plik jest czysty | usuń wpis; ponowne dopisanie wymaga decyzji |
+
+⭐ **Zapadka wykrywa dryf, nie blokuje decyzji** *(uzupełnienie użytkownika przy akceptacji,
+2026-08-01)*. Czerwony test nie znaczy „zrobiłeś źle" — znaczy „nazwij, którą z dwóch rzeczy
+robisz". Jeżeli liczba zmienia się **celowo** i zmiana jest opisana w dokumentacji etapu,
+aktualizacja wartości referencyjnej jest **prawidłową częścią procesu**, a nie obejściem
+strażnika. Ta zasada jest wpisana wprost w komunikat błędu testu — czyta ją ten, kto go zobaczy,
+a nie ten, kto akurat czyta ten dokument.
+
+**Konsekwencja dla M2c:** warunek zakończenia przestaje być oceną („lista skurczona do
+uzasadnionego minimum") i staje się liczbą — **suma liczników**, którą widać w jednym miejscu.
+
+⚠ **Stan wyjściowy zmierzony w M2a** (`Views/` + `Controls/`, `.axaml` oraz `.axaml.cs`):
+`FontSize` **609 / 49 plików** · `FontFamily` **83 / 28** · `CornerRadius` **37 / 13**.
+To jest liczba, którą M2c ma sprowadzić do uzasadnionej reszty.
 
 ⚠ Nie obejmuję testem `Margin`/`Padding` — są zbyt kontekstowe (rozmieszczenie w układzie to
 odpowiedzialność hosta, nie chromy) i test byłby albo dziurawy, albo uciążliwy. Tam narzędziem
@@ -1106,3 +1244,76 @@ Poza ryzykiem testowym (§13.1) i zależnościami (§13.0.1):
 | **R‑8** | **Terminologia (M‑4) i empty states (M‑3) wymagają INWENTARZA przed poprawką** | M5 zaczyna się od dwóch inwentarzy: słownik pojęć → `docs/design/terminology.md` + test strażniczy; lista 48 widoków z oceną empty state |
 | **R‑9** | **Zakres pełzający** — audyt wygenerował propozycje spoza specyfikacji | Decyzja D12: dodatki **nie mogą** ograniczyć żadnego pierwotnego założenia. Przy konflikcie czasu wygrywa specyfikacja, dodatek idzie do UX Debt |
 | **R‑10** | **Paleta składni edytora** może zostać przypadkowo dotknięta przy pracy nad typografią | §6.3 — zamrożona. Dotykamy wyłącznie `Font.Code` i `Text.Code` |
+
+---
+
+## §14 As-built — M2a (infrastruktura tokenów)
+
+> **Status: zaimplementowane 2026-08-01, oczekuje na QA wizualne użytkownika.**
+> Build 0/0 · suite **7066** zielony w trzech partycjach (6998 + 54 + 14, +9) · smoke czysty.
+> ⚠ Warunek 8 z DoD handovera — *„aplikacja wygląda IDENTYCZNIE"* — potwierdza użytkownik, nie test.
+
+### §14.1 Co powstało
+
+| Artefakt | Zawartość |
+|---|---|
+| `Themes/Tokens.axaml` | warstwa niekolorowa: 7 odstępów · 13 ról `Thickness` (§4.1) · 10 wysokości (§5) · 3 rozmiary ikon · 2 promienie · 1 grubość skalarna + 3 role krawędzi (§4.2) |
+| `Themes/Typography.axaml` | 2 rodziny bazowe + 12 ról × (rozmiar · waga · interlinia) = 35 zasobów (§6) |
+| `App.axaml` | oba słowniki w `MergedDictionaries`, **przed** `Colors.axaml` |
+| `tests/EmberTern.Tests/DesignTokenComplianceTests.cs` | 9 przypadków — zapadka licznikowa (§11.1) + trzy strażniki samego katalogu |
+
+**Zero zmian w widokach.** Jedyna modyfikacja poza nowymi plikami to dwie linie `ResourceInclude`
+w `App.axaml`. Żaden token nie ma dziś konsumenta, więc renderowanie nie może się różnić —
+to jest argument strukturalny, nie zapewnienie.
+
+### §14.2 Decyzje podjęte w trakcie (zatwierdzone przed implementacją)
+
+1. ⭐ **Katalog uzupełniony o §4.2** — ikony, promienie i krawędzie nie miały tabeli ról, a handover
+   wymagał ich w `Tokens.axaml`. Wartości **zmierzone**, nie uśrednione; reguła operacyjna „rola przed
+   wartością" w §4.2.4.
+2. ⭐ **`Stroke.Rail` = 2 świadomie POMINIĘTY** mimo ratyfikacji w §8.4.2. Rail nie istnieje, a tokenu
+   bez konsumenta nikt nie potrafi zweryfikować (reguła #233). Wchodzi w **M3.1**.
+   *To jest odstępstwo od pierwotnej propozycji na rzecz węższego zakresu — na wyraźne życzenie
+   użytkownika: „katalog rozszerzamy dopiero wtedy, gdy pojawi się realna potrzeba".*
+3. ⭐ **Sposób złożenia roli typograficznej rozstrzygnięty POMIAREM** (§6.4): mechanizm już istniał
+   w projekcie — pięć stylów klasowych w `ControlStyles.axaml` jest rolami z liczbami wpisanymi na
+   sztywno. Wniosek: rola ma dwie warstwy, M2a dostarcza skalarną, klasowa wchodzi w M2b.
+4. ⭐ **`Text.<Rola>.Weight` istnieje także dla ról Regular.** Dzięki temu konsumpcja roli jest zawsze
+   mechaniczna (te same trzy klucze). Gdyby waga była tylko tam, gdzie odbiega od domyślnej, każde
+   użycie roli zaczynałoby się od pytania „czy ta rola ma wagę?" — a pytanie zadawane przy każdym
+   użyciu jest źródłem dryfu.
+5. ⭐ **`Font.Ui` = `$Default`, nie `"Inter"`.** Rodzina interfejsu ma jedno źródło —
+   `Program.cs` → `.WithInterFont()`. Token jest jego **nazwą**, nie drugą kopią.
+6. ⭐ **Zapadka licznikowa zamiast listy plików** (§11.1) — z zasadą „wykrywa dryf, nie blokuje
+   decyzji" wpisaną **wprost w komunikat błędu testu**, bo czyta go ten, kto zobaczy czerwony test,
+   a nie ten, kto akurat czyta ten dokument.
+7. ⭐ **Kontrola kolizji kluczy obejmuje CAŁY folder `Themes/`**, nie tylko dwa nowe pliki (decyzja
+   użytkownika: to zabezpieczenie fundamentu, nie funkcjonalność M2b). ⚠⚠ **Test musiał rozróżnić
+   dwa przypadki, inaczej byłby wręcz błędny:** plik z `ThemeDictionaries` deklaruje każdy klucz
+   **dwa razy celowo** — raz dla Dark, raz dla Light (reguła UI #3; `Colors.axaml` to 283 deklaracje
+   na 146 kluczy). Reguła „bez duplikatów" obowiązuje więc wyłącznie słowniki bez wariantów, a reguła
+   „klucz w jednym pliku" — wszystkie. Napisany bez tego rozróżnienia test zgłosiłby 137 „kolizji"
+   w pliku, który jest poprawny, a naturalny odruch — rozluźnić go aż zzielenieje — usunąłby kontrolę,
+   o którą chodzi. Zmierzony stan wyjściowy: **0 kolizji** (76 nowych kluczy wobec 247 istniejących).
+
+### §14.3 ⚠ Pomiary, które warto znać w M2b
+
+| Fakt | Konsekwencja |
+|---|---|
+| Licznik zlicza **deklaracje**, nie wystąpienia słowa | `FontFamily = new FontFamily("…")` to jedna deklaracja, nie dwie. Regex: `\bX\s*=(?!=)` lub `Property="X"` |
+| Stan wyjściowy: **609 / 81 / 37** | `FontSize` 49 plików · `FontFamily` 28 · `CornerRadius` 13 |
+| `FontFamily` **nie ma uprawnionej reszty** | widok nie ma powodu nazywać rodziny — ta lista ma w M2c zejść do zera, w odróżnieniu od dwóch pozostałych |
+| Rekordziści | `DataImportTabView` 86 · `DebuggerTabView` 85 · `PerformancePanelView` 42 — cztery pliki to 41% całości |
+| ⚠ Test **nie potrzebuje sesji headless** | czyta `.axaml` jako tekst; biegnie w partycji głównej w 124 ms |
+| ⚠ Zasoby `FontWeight` i `FontFamily="$Default"` **kompilują się i ładują** | zweryfikowane buildem *i* startem aplikacji — sama kompilacja XamlIl nie dowodzi, że wartość rozwinie się w runtime |
+
+### §14.4 Czego M2a NIE zrobiło (zgodnie z zakresem)
+
+⛔ Żadnego implicit style kontrolki · żadnej zmiany w `Colors.axaml` · żadnego usuwania wartości
+lokalnych · żadnego `ControlTemplate` · **żadnej warstwy klasowej typografii** (§6.4) · żadnego
+tokenu bez zmierzonego użycia.
+
+**Pierwszy ruch M2b** wynika wprost z §6.4: pięć istniejących stylów klasowych
+(`field-label`, `shortcut-chip`, `title`, `h1`, `group-header`) zaczyna czytać tokeny zamiast
+liczb wpisanych na sztywno. To zmiana bajtowo neutralna — i dlatego jest dobrym pierwszym
+sprawdzianem, że warstwa skalarna faktycznie działa.

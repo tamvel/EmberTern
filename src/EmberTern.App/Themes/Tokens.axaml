@@ -1,0 +1,191 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ================================================================================================
+       EmberTern Design Tokens — warstwa NIEKOLOROWA.
+
+       Kolory mają swój dom w Colors.axaml i ten plik ich nie dotyka. Tutaj są odstępy, wysokości,
+       rozmiary ikon, promienie i krawędzie — czyli wszystko to, czego przed etapem Product Polish
+       w aplikacji NIE BYŁO: audyt M0 zmierzył ZERO tokenów niekolorowych, 114 unikalnych marginesów,
+       40 paddingów, 7 rozmiarów ikon i 5 promieni, wszystkie wpisane lokalnie w widokach.
+
+       ⭐ TOKEN NAZYWA ROLĘ, NIGDY WARTOŚĆ (product-polish.md §3.1).
+       `Pad.Control`, nie `Pad.8x3`. Token nazwany wartością to zwykła zmienna globalna na liczbę:
+       kiedy standardowy padding zmieni się z 8,0 na 8,1, nazwa albo skłamie, albo trzeba ją
+       przemianować w trzystu miejscach — czyli odtworzy się dokładnie ten problem, przed którym
+       katalog ma chronić. Rola przeżywa zmianę wartości.
+
+       ⭐ DWIE WARSTWY, BO XAML NIE LICZY (§3.2).
+       `Margin`/`Padding`/`BorderThickness` przyjmują `Thickness`, a XAML nie potrafi złożyć
+       `Thickness` z dwóch `x:Double`. Katalog ma więc warstwę SKALARNĄ (dla `Spacing=`, `Width=`,
+       `Height=`, `FontSize=`) i warstwę ZŁOŻONĄ — wartości pre-komponowane, nazwane rolą.
+       ⚠ Warstwa złożona jest ZAMKNIĘTA. Nowy `Thickness` wymaga nowej roli, a nowa rola wymaga
+       uzasadnienia rolą, której nie da się złożyć z istniejących. To jest miejsce, w którym dług
+       odrasta najłatwiej.
+
+       ⚠ ROLA MOŻE DZIELIĆ WARTOŚĆ Z INNĄ ROLĄ I TO JEST POPRAWNE (§3.3). Dwie role o tej samej
+       liczbie to nie duplikat do zwinięcia — to dwie niezależne decyzje, które chwilowo się
+       pokrywają i mogą się rozejść.
+
+       Typografia ma osobny plik (Themes/Typography.axaml) — jest osobnym systemem, nie sekcją tego.
+       ================================================================================================ -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       SKALA ODSTĘPÓW (§4) — baza 4 px, z półstopniami 2 i 6 dla ciasnej chromy.
+
+       Siedem stopni, nie pięć i nie dziesięć: zmierzone 114 unikalnych marginesów redukuje się do
+       tych siedmiu bez zauważalnej zmiany układu (weryfikacja w M2c). Pięć wymuszałoby widoczne
+       przeskoki w paskach narzędzi i wierszach siatek; dziesięć nie ogranicza swobody na tyle,
+       żeby zapobiec ponownemu dryfowi.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Ikona ↔ ikona w toolbarze; wnętrze chipa. Najciaśniejszy odstęp, jaki jeszcze coś rozdziela. -->
+  <x:Double x:Key="Space.Hair">2</x:Double>
+  <!-- Ikona ↔ tekst; elementy wewnątrz jednego wiersza. -->
+  <x:Double x:Key="Space.Xs">4</x:Double>
+  <!-- Kontrolka ↔ kontrolka w poziomie. -->
+  <x:Double x:Key="Space.Sm">6</x:Double>
+  <!-- Standardowy odstęp w formularzu. -->
+  <x:Double x:Key="Space.Md">8</x:Double>
+  <!-- Między grupami pól. -->
+  <x:Double x:Key="Space.Lg">12</x:Double>
+  <!-- Między sekcjami. -->
+  <x:Double x:Key="Space.Xl">16</x:Double>
+  <!-- Wewnętrzny margines okna dialogowego. -->
+  <x:Double x:Key="Space.Xxl">20</x:Double>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       WARSTWA ZŁOŻONA — role `Thickness` dla wnętrz i odstępów (§4.1). LISTA ZAMKNIĘTA.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Wnętrze `TextBox`/`ComboBox`. Wysokości nie daje padding, tylko `Size.Control` — dlatego
+       pion jest zerowy. Padding pionowy w polu tekstowym walczy z wysokością kontrolki i wygrywa
+       ten, który jest większy; jedna z tych dwóch rzeczy musi być jedynym źródłem wysokości. -->
+  <Thickness x:Key="Pad.Control">8,0</Thickness>
+  <!-- Wnętrze przycisku tekstowego. -->
+  <Thickness x:Key="Pad.Button">12,0</Thickness>
+  <!-- Wnętrze przycisku ikonowego — węższe, bo ikona ma własny margines optyczny. -->
+  <Thickness x:Key="Pad.ButtonIcon">6,0</Thickness>
+  <!-- Komórka siatki. Pion 3+3 to liczba, na której stoi wiersz 22 px (§5.1) — nie zmieniać
+       w oderwaniu od `Size.Row.Grid` i interlinii `Text.Grid`; te trzy były dobierane razem. -->
+  <Thickness x:Key="Pad.Cell">8,3</Thickness>
+  <!-- Komórka siatki gęstej — Trace Monitor, Session Manager: wiersze czytane jako strumień. -->
+  <Thickness x:Key="Pad.CellCompact">6,2</Thickness>
+  <!-- Wiersz menu kontekstowego. -->
+  <Thickness x:Key="Pad.MenuItem">10,3</Thickness>
+  <!-- Zakładka dokumentu i zakładka pomocnicza. -->
+  <Thickness x:Key="Pad.Tab">10,4</Thickness>
+  <!-- Wnętrze panelu. -->
+  <Thickness x:Key="Pad.Panel">8</Thickness>
+  <!-- Wnętrze okna dialogowego. -->
+  <Thickness x:Key="Pad.Dialog">20,16</Thickness>
+  <!-- Wnętrze karty grupy ustawień (`Border.settings-group`). -->
+  <Thickness x:Key="Pad.Group">10,8</Thickness>
+
+  <!-- Odstęp POD polem formularza. Kierunkowy (tylko dół) świadomie: odstęp między dwoma polami
+       ma jednego właściciela — pole górne. Marginesy z dwóch stron sumują się albo zlewają
+       zależnie od kontenera, co jest najczęstszym źródłem „dlaczego tu jest 12, a tam 8". -->
+  <Thickness x:Key="Margin.FieldGap">0,0,0,8</Thickness>
+  <!-- Odstęp pod sekcją. -->
+  <Thickness x:Key="Margin.SectionGap">0,0,0,16</Thickness>
+  <!-- Odstęp między kontrolkami w poziomie — ta sama reguła jednego właściciela, oś pozioma. -->
+  <Thickness x:Key="Margin.InlineGap">0,0,8,0</Thickness>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       WYSOKOŚCI KONTROLEK (§5, decyzja D1 — ratyfikowana, nie podlega zmianie w tym etapie).
+
+       ⚠ Dziś NIC z tego nie obowiązuje: `ControlStyles.axaml` nie ma implicit style dla żadnej
+       kontrolki bazowej, więc `TextBox`, `ComboBox`, `CheckBox` i `Button` stoją na `MinHeight=32`
+       z FluentTheme. Podłączenie tych tokenów to M2b.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Kontrolka standardowa: `TextBox`, `ComboBox`, `Button.flat`, `NumericUpDown`,
+       `SearchableComboBox`. -->
+  <x:Double x:Key="Size.Control">24</x:Double>
+  <!-- Akcja główna: `Button.primary` — Execute, Start debugging, Import. Wyższa nie dla ozdoby:
+       to jedyny sygnał hierarchii, który działa też wtedy, gdy kolor niesie już inne znaczenie. -->
+  <x:Double x:Key="Size.ControlPrimary">28</x:Double>
+
+  <!-- Wiersz siatki danych i edytor w komórce. -->
+  <x:Double x:Key="Size.Row.Grid">22</x:Double>
+  <!-- Nagłówek kolumny — o stopień wyższy niż wiersz, żeby czytał się jako nagłówek bez ramki. -->
+  <x:Double x:Key="Size.Row.Header">24</x:Double>
+  <!-- Wiersz Metadata Explorera i wiersz drzewa zależności. Najniższy w aplikacji, bo to widok
+       o największej liczbie wierszy na ekran. -->
+  <x:Double x:Key="Size.Row.Tree">20</x:Double>
+  <!-- Wiersz menu kontekstowego (stan faktyczny po etapie Keyboard Manager — token go formalizuje,
+       niczego nie zmienia). -->
+  <x:Double x:Key="Size.Row.Menu">22</x:Double>
+  <!-- Zakładka dokumentu i zakładka pomocnicza. -->
+  <x:Double x:Key="Size.Row.Tab">26</x:Double>
+
+  <!-- Box `CheckBox`/`RadioButton`. ⚠ 14 px NIE da się ustawić setterem — Fluent koduje rozmiar
+       boxa w `ControlTemplate`, nie we właściwości. Ten token czeka na własny szablon w M2b
+       (ryzyko R‑2). Dopiero przy 14 px checkbox mieści się w wierszu 22 px (§5.1); dziś ten sam
+       wiersz ma 43 px. -->
+  <x:Double x:Key="Size.Checkbox">14</x:Double>
+
+  <!-- Pasek tytułu (stan faktyczny) i pasek statusu. ⭐ Te dwie liczby razem z `Size.Row.Tab`
+       tworzą rytm pionowy Application Chrome (§0.1.2) — nie zmieniać żadnej w oderwaniu od
+       pozostałych dwóch. §8.5 specyfikacji zabrania wprost zwiększania paska statusu. -->
+  <x:Double x:Key="Size.TitleBar">36</x:Double>
+  <x:Double x:Key="Size.StatusBar">24</x:Double>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       ROZMIARY IKON (§4.2.1)
+
+       Zmierzone: 14×64, 16×15, 11×5, 13×4, 12×3, 15×2, 10×1 — dwa realne skupienia i ogon
+       czterech wartości użytych łącznie 15 razy. Ogon jest dryfem, nie decyzją.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Ikona chromy: toolbar, zakładka, drzewo, wiersz menu. Wartość domyślna dla nowej ikony. -->
+  <x:Double x:Key="Size.Icon">14</x:Double>
+  <!-- Ikona o własnej wadze wizualnej: nagłówek, pusty stan, akcja główna. -->
+  <x:Double x:Key="Size.Icon.Lg">16</x:Double>
+  <!-- Ikona inline w tekście 11 px (chip, wiersz siatki). Jedyna pozycja z ogona z własnym
+       uzasadnieniem: ikona 14 px obok tekstu 11 px optycznie go przerasta. -->
+  <x:Double x:Key="Size.Icon.Sm">12</x:Double>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       PROMIENIE (§4.2.2)
+
+       ⭐ To nie było pięć wartości do uśrednienia, tylko dwie role bez nazwy: wszystkie
+       wystąpienia 4 / 4.5 / 5 / 6 siedzą w Trace Monitor, Session Managerze i pasku agregacji
+       i wszystkie są CHIPAMI; 3 to wyłącznie powierzchnie. Różnica była celowa — brakowało jej nazwy.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Karta, grupa, panel, lista rozwijana, `Border.settings-group`, pasek postępu (§8.4.6). -->
+  <CornerRadius x:Key="Radius.Surface">3</CornerRadius>
+  <!-- Odznaka i chip — element o kształcie pigułki. -->
+  <CornerRadius x:Key="Radius.Chip">4</CornerRadius>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       KRAWĘDZIE (§4.2.3)
+
+       Trzy role złożone pokrywają 96 ze 133 zmierzonych wystąpień. Reszta to `0` (brak krawędzi
+       nie potrzebuje tokenu) i cztery krawędzie boczne, które zostają lokalne, dopóki nie pokażą
+       roli.
+
+       ⭐ Kierunek jest częścią roli, nie ozdobą: `Border.Top` i `Border.Bottom` mają tę samą
+       grubość i różne znaczenie — „oddzielam się od tego, co nade mną" vs „…pode mną". To jest
+       ta sama reguła jednego właściciela odstępu, co przy `Margin.FieldGap`: gdyby dwa sąsiadujące
+       panele rysowały każdy swoją krawędź, powstałaby linia o grubości 2 px w połowie miejsc
+       i 1 px w reszcie.
+
+       ⛔ `Stroke.Rail` = 2 (rail Status Bara, §8.4.2) świadomie NIE MA tu tokenu. Rail jeszcze nie
+       istnieje, a token bez konsumenta wygląda identycznie jak regresja (reguła #233) i nikt nie
+       potrafi zweryfikować, czy jego wartość jest dobra. Wchodzi w M3.1, razem z railem.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Grubość każdej krawędzi i separatora w aplikacji. Warstwa skalarna — dla miejsc, które liczą
+       wysokość albo rysują linię same. -->
+  <x:Double x:Key="Stroke.Hairline">1</x:Double>
+
+  <!-- Pełna ramka: karta, pole, przycisk konturowy. -->
+  <Thickness x:Key="Border.All">1</Thickness>
+  <!-- Linia oddzielająca od treści POWYŻEJ (panel dokowany u dołu, pasek statusu). -->
+  <Thickness x:Key="Border.Top">0,1,0,0</Thickness>
+  <!-- Linia oddzielająca od treści PONIŻEJ (toolbar, nagłówek, pasek zakładek). -->
+  <Thickness x:Key="Border.Bottom">0,0,0,1</Thickness>
+
+</ResourceDictionary>

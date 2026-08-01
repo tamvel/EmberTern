@@ -10,6 +10,12 @@
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
+        <!-- ⭐ Tokens/Typography PRZED Colors: warstwa niekolorowa (odstępy, wysokości, ikony,
+             promienie, krawędzie) i typograficzna nie zależą od motywu — nie mają `ThemeDictionaries`
+             i są identyczne w Light i Dark. Kolejność nie zmienia rozstrzygania kluczy (żaden się nie
+             powtarza), ale utrwala czytelność: najpierw metryka, potem barwa. -->
+        <ResourceInclude Source="avares://EmberTern/Themes/Tokens.axaml" />
+        <ResourceInclude Source="avares://EmberTern/Themes/Typography.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/Colors.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/IconGeometries.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/SearchableComboBox.axaml" />

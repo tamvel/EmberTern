@@ -423,12 +423,46 @@ noted.
 
 ## Current state
 
-- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 (audit) + M1 (Design Token
-  catalog) COMPLETE and user-accepted 2026-08-01. ⛔ NO CODE WRITTEN YET — next step is M2a.**
-  **Start the next session from
-  [docs/design/product-polish-m2a-handover.md](docs/design/product-polish-m2a-handover.md)**, then
-  [docs/design/product-polish.md](docs/design/product-polish.md) §3–§6 + §11. Spec (source of truth):
-  `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`.
+- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 user-accepted 2026-08-01;
+  ⭐ M2a (token infrastructure) IMPLEMENTED 2026-08-01 — awaits the user's visual QA. Next step: M2b.**
+  **Start the next session from [docs/design/product-polish.md](docs/design/product-polish.md) — §14 is
+  the M2a as-built**, plus the three sections M2a added to the catalog: **§4.2** (icons, radii, borders),
+  **§6.4** (how a typography role is consumed), **§11.1** (the counter ratchet). The M2a handover file is
+  **closed**. Spec (source of truth): `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`.
+  **⭐ M2a is STRICTLY ADDITIVE and that is its whole point: `Themes/Tokens.axaml` (7 spacings · 13
+  `Thickness` roles · 10 heights · 3 icon sizes · 2 radii · 3 border roles) + `Themes/Typography.axaml`
+  (2 base families + 12 roles × size/weight/line-height) + registration + `DesignTokenComplianceTests`.
+  ZERO view files touched** — the only edit outside the new files is two `ResourceInclude` lines, so
+  rendering cannot differ; nothing consumes a token yet. Build 0/0; suite **7066** (6998 + 54 + 14);
+  smoke clean.
+  **⭐ THE GUARD IS A COUNTER RATCHET, NOT A FILE LIST (§11.1), and the measurement is why:** 609
+  `FontSize` declarations over 49 files with one file holding 86 — a file-level exemption would clear
+  `DataImportTabView.axaml` wholesale and let it add an 87th in silence, which is the exact failure
+  (gotcha #284) the test exists to break. An exemption is `file → count`, checked in BOTH directions:
+  a rise is new drift, **a fall is progress nobody wrote down**. ⭐ **It detects drift, it does not veto
+  decisions** — deliberately raising a baseline and recording why is a correct part of the process, and
+  that sentence lives in the test's own failure message, where the person who sees red will read it.
+  Baseline: `FontSize` **609/49** · `FontFamily` **81/28** · `CornerRadius` **37/13** — M2c's exit
+  condition is now a number. ⚠ It counts **declarations**, not occurrences of the word (`FontFamily =
+  new FontFamily("…")` is one), and it needs **no headless session** — it reads `.axaml` as text, 124 ms.
+  **⭐ TWO OPEN QUESTIONS THE DOC LEFT WERE ANSWERED BY MEASUREMENT, NOT ASSUMPTION.** (1) *Can a
+  typography role be one resource in Avalonia 12?* — the mechanism **already exists in this codebase**:
+  `TextBlock.field-label`/`.shortcut-chip`/`.title`/`.h1`/`.group-header` are exactly those roles, with
+  the numbers hard-coded. So a role has **two layers** (§6.4): the scalar one is the only one consumable
+  everywhere (control styles, `ControlTemplate`, code-behind, AvaloniaEdit) and ships in M2a; the class
+  layer is **consumption**, so it waits for M2b and lands in `ControlStyles.axaml` beside the controls
+  that use it. (2) *Radii* — the five values were never a drift: **every 4/4.5/5/6 is a chip, every 3 is
+  a surface**. Two roles, `Radius.Surface`/`Radius.Chip`; the distinction was deliberate and only lacked
+  a name. ⚠ `Radius.Sm` from §8.4 was never defined and does **not** enter the catalog (it names a value,
+  not a role).
+  ⛔ **`Stroke.Rail` = 2 was deliberately LEFT OUT** although §8.4.2 ratifies it: the rail does not exist
+  yet, and a token with no consumer is indistinguishable from a regression (#233) — nobody can tell
+  whether its value is right. It arrives in **M3.1, with the rail.** ⭐ `Text.<Role>.Weight` exists even
+  for Regular roles so consuming a role is always the same three keys — a question asked at every use is
+  where drift comes from. ⭐ `Font.Ui` = `$Default`, not `"Inter"`: the UI family has ONE source
+  (`Program.cs` → `.WithInterFont()`) and the token is its name, not a second copy.
+  **⚠ First move of M2b follows from §6.4:** point those five existing class styles at the tokens. It is
+  byte-neutral, which is exactly what makes it the honest first proof that the scalar layer works.
   **⭐ The stage's one finding, and it reframes everything: EmberTern does not have a Design System —
   it has a colour system and a set of variant styles.** `Colors.axaml` is mature; the component layer
   (`Button.icon/.primary/.flat`, `TabItem.bottom-tab/.sub-tab`, `MessageBanner`, `ContextMenu`,
@@ -3152,12 +3186,13 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7057 as of 2026-08-01
-  (after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7066 as of 2026-08-01
+  (after Product Polish M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
+  partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
   segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**6989 + 14 + 54**).
+  three documented partitions (**6998 + 54 + 14**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
