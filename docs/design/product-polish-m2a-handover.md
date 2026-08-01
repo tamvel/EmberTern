@@ -179,7 +179,37 @@ M2a ──► M2b ──► M2c ──► M3.1 ──► M3.2 ──► M3.3 ─
 
 ---
 
-## 7. Jedno zdanie na start
+## 7. ⭐⭐ Reguła prowadząca — przeczytaj przed każdą decyzją implementacyjną
+
+> **Użytkownik, 2026-08-01:** *„Dokument ma prowadzić produkt. Nie produkt dokument."*
+
+`product-polish.md` jest źródłem prawdy dla **zakresu i założeń**, ale **nie jest celem**.
+
+Jeżeli w trakcie M2a znajdziesz rozwiązanie wyraźnie lepsze od zapisanego:
+
+```
+1. NIE implementuj gorszego, bo było opisane wcześniej.
+2. NIE implementuj lepszego po cichu.
+3. Propozycja + uzasadnienie → akceptacja → aktualizacja dokumentu → implementacja.
+```
+
+**Ciche odstępstwo** odbiera dokumentowi znaczenie. **Ślepa zgodność** odbiera produktowi jakość.
+Oba są błędami.
+
+⛔ **Wyjątek: decyzje D1–D12 i wymagania specyfikacji** zmienia wyłącznie użytkownik.
+
+**Gdzie to najpewniej wypłynie w M2a** (na podstawie §3.2 dokumentu — to są miejsca, gdzie katalog
+zapisał *intencję*, a nie zmierzoną implementację):
+- **sposób złożenia roli typograficznej** — dokument nie przesądza, czy w Avalonii 12 rola może być
+  jednym zasobem (`ControlTheme`/klasa), czy musi być rozbita na `x:Double` + `FontWeight` + interlinię.
+  **Zmierz i zaproponuj** — ta decyzja determinuje konsumpcję w M2b–M4;
+- **granica warstwy złożonej `Thickness`** — 13 ról z §4.1 to propozycja z pomiaru, nie dogmat;
+- **forma `DesignTokenComplianceTests`** — czy czyta `.axaml` jako tekst, czy potrzebuje sesji
+  headless (preferowana wersja tekstowa, §4.2).
+
+---
+
+## 8. Jedno zdanie na start
 
 **M2a buduje fundament, którego nikt jeszcze nie używa — i to jest cały jego sens.**
 Jeżeli w trakcie pojawi się pokusa „przy okazji podłączmy to do `TextBox`" — to jest M2b,

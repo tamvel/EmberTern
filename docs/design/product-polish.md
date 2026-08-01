@@ -10,6 +10,41 @@
 
 ---
 
+## ⭐⭐ REGUŁA PROWADZĄCA CAŁY ETAP
+
+> **Użytkownik, 2026-08-01:**
+>
+> ## *„Dokument ma prowadzić produkt. Nie produkt dokument."*
+
+Dokumentacja jest **źródłem prawdy dla zakresu i założeń** — nie jest celem samym w sobie.
+
+**Jeżeli podczas implementacji znajdziesz rozwiązanie wyraźnie lepsze od zapisanego:**
+
+```
+1. NIE implementuj gorszego tylko dlatego, że zostało opisane wcześniej.
+2. NIE implementuj lepszego po cichu.
+3. Przedstaw propozycję WRAZ Z UZASADNIENIEM.
+4. Po akceptacji — zaktualizuj dokumentację.
+5. Dopiero wtedy implementuj.
+```
+
+**⚠ Dwa błędy są symetryczne i oba są błędami:**
+
+| Błąd | Skutek |
+|---|---|
+| **Ciche odstępstwo** | dokument traci znaczenie — za pół roku nikt nie odróżni świadomej decyzji od tego, że ktoś nie doczytał |
+| **Ślepa zgodność** | produkt traci jakość — powstaje gorsze rozwiązanie, o którym wiadomo było, że jest gorsze |
+
+⭐ **Ten dokument jest zapisem decyzji, a nie kontraktem do wykonania literalnie.** Każda sekcja
+oznaczona ⭐ SWOBODA PROJEKTOWA (np. §8.4.1 — rail) mówi to wprost, ale reguła obowiązuje wszędzie,
+także tam, gdzie nie ma takiej adnotacji.
+
+⛔ **Jeden wyjątek: decyzje ratyfikowane D1–D12 (§2) oraz wymagania specyfikacji.** Te podlegają
+zmianie wyłącznie przez wyraźną decyzję użytkownika — propozycja jest dopuszczalna, samodzielna
+zmiana nie.
+
+---
+
 ## §0 Jedno zdanie, które tłumaczy cały etap
 
 **EmberTern nie ma Design Systemu — ma system kolorów i zbiór stylów wariantowych.**
