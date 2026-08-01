@@ -812,6 +812,52 @@ public class SemanticModelTests
         Assert.Equal(SymbolKind.Sequence, Assert.IsType<SchemaObjectSymbol>(g2!.Symbol).Kind);
     }
 
+    // The generator-name POSITION must be read the same way inside a PSQL body as in a query. It was not:
+    // the PSQL expression walker knew only "the identifier after keyword FOR is a sequence" (NEXT VALUE FOR)
+    // and so claimed GEN_ID's argument as a bare local — an unresolved VARIABLE reference, which then won the
+    // offset and kept the catalog scan from binding the generator (ET0003 on a generator that exists).
+    [Theory]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = gen_id(gen_x, 1);\nend")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = next value for gen_x;\nend")]
+    [InlineData("execute block as declare variable v integer;\nbegin\n  v = gen_id(gen_x, 1);\nend")]
+    [InlineData("create trigger tr for t before insert as\nbegin\n  new.id = gen_id(gen_x, 1);\nend")]
+    public void GeneratorName_InPsqlBody_ResolvesSequence(string sql)
+    {
+        var meta = new FakeMetadata().Object("GEN_X", SymbolKind.Sequence).Col("T", "ID", "INTEGER");
+        var m = Build(sql, meta);
+        var seq = m.ReferenceAt(sql.IndexOf("gen_x", StringComparison.Ordinal) + 2);
+        Assert.NotNull(seq);
+        Assert.Equal(ReferenceRole.SchemaObject, seq!.Role);
+        Assert.Equal(SymbolKind.Sequence, Assert.IsType<SchemaObjectSymbol>(seq.Symbol).Kind);
+    }
+
+    // The position is the whole rule, so an unknown name there is an unknown OBJECT, not an unknown variable:
+    // the reference is recorded unresolved rather than dropped (which is what makes ET0001 reachable).
+    [Fact]
+    public void GeneratorName_Unknown_IsAnUnresolvedSchemaObject_NotAVariable()
+    {
+        var meta = new FakeMetadata().Object("GEN_X", SymbolKind.Sequence);
+        const string sql = "create procedure p as declare variable v integer;\nbegin\n  v = gen_id(gen_typo, 1);\nend";
+        var m = Build(sql, meta);
+        var r = m.ReferenceAt(sql.IndexOf("gen_typo", StringComparison.Ordinal) + 2);
+        Assert.NotNull(r);
+        Assert.Equal(ReferenceRole.SchemaObject, r!.Role);
+        Assert.False(r.IsResolved);
+    }
+
+    // Precision: ONLY the first argument names a generator. The second is an ordinary expression, so an
+    // undeclared bare name there is still a local — the fix must not blanket-exempt GEN_ID's argument list.
+    [Fact]
+    public void GenId_SecondArgument_IsAnOrdinaryExpression()
+    {
+        var meta = new FakeMetadata().Object("GEN_X", SymbolKind.Sequence);
+        const string sql = "create procedure p as declare variable v integer;\nbegin\n  v = gen_id(gen_x, v_step);\nend";
+        var m = Build(sql, meta);
+        var step = m.ReferenceAt(sql.IndexOf("v_step", StringComparison.Ordinal) + 2);
+        Assert.NotNull(step);
+        Assert.Equal(ReferenceRole.Variable, step!.Role);
+    }
+
     [Fact]
     public void GenId_BuiltInName_StaysUnresolved()
     {

@@ -146,6 +146,49 @@ public class SqlParserTests
         Assert.Equal("P", ddl.ObjectName);
     }
 
+    // An EXECUTE BLOCK has a PSQL body, so its DECLARE-section semicolons must not split it — the same
+    // rule that keeps a procedure whole. It used to fall to the plain ';' scan (it is not a *definition*),
+    // which cut it in two at the end of its first DECLARE: the BEGIN…END became a separate anonymous
+    // block whose scope could not see the declared variables (ET0003 on every :v in the body).
+    [Theory]
+    [InlineData("EXECUTE BLOCK\nAS\nDECLARE VARIABLE V INTEGER;\nBEGIN\n  V = 1;\nEND")]
+    [InlineData("EXECUTE BLOCK (A INTEGER = ?) RETURNS (R INTEGER) AS\n"
+        + "DECLARE VARIABLE V INTEGER;\nDECLARE VARIABLE W INTEGER;\n"
+        + "BEGIN\n  R = :A;\n  SUSPEND;\nEND")]
+    [InlineData("EXECUTE BLOCK AS\nDECLARE C CURSOR FOR (SELECT 1 FROM RDB$DATABASE);\nBEGIN\n  OPEN C;\n  CLOSE C;\nEND")]
+    public void ExecuteBlock_WithDeclareSection_StaysOneStatement(string sql)
+    {
+        var stmt = Assert.Single(SqlParser.Parse(sql).Root.Statements);
+        Assert.IsType<ExecuteBlockStatement>(stmt);
+        Assert.Equal(sql, sql.Substring(stmt.Start, stmt.Length));
+    }
+
+    // …and the whole-statement scan must still yield at the END, not swallow what follows.
+    [Fact]
+    public void ExecuteBlock_WithDeclareSection_DoesNotSwallowTheNextStatement()
+    {
+        const string sql =
+            "EXECUTE BLOCK AS DECLARE VARIABLE V INTEGER; BEGIN V = 1; END;\n" +
+            "SELECT 1 FROM RDB$DATABASE;";
+        var statements = SqlParser.Parse(sql).Root.Statements;
+        Assert.Equal(
+            new[] { StatementKind.ExecuteBlock, StatementKind.Select },
+            statements.Select(s => s.Kind));
+    }
+
+    // The shape predicate is about a PSQL BODY, not about the EXECUTE verb: the other two EXECUTE forms
+    // have no body and stay on the plain ';' scan.
+    [Fact]
+    public void ExecuteProcedureAndStatement_StillSegmentOnSemicolons()
+    {
+        var statements = SqlParser
+            .Parse("EXECUTE PROCEDURE P(1); EXECUTE STATEMENT 'select 1 from rdb$database'; SELECT 1 FROM T;")
+            .Root.Statements;
+        Assert.Equal(
+            new[] { StatementKind.ExecuteProcedure, StatementKind.ExecuteStatement, StatementKind.Select },
+            statements.Select(s => s.Kind));
+    }
+
     [Theory]
     [InlineData("CREATE TABLE MYTAB (ID INTEGER)", DdlVerb.Create, DdlObjectKind.Table, "MYTAB")]
     [InlineData("CREATE OR ALTER VIEW V AS SELECT 1 FROM T", DdlVerb.CreateOrAlter, DdlObjectKind.View, "V")]

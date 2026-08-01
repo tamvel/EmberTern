@@ -94,15 +94,23 @@ internal sealed partial class SemanticBinder
     }
 
     // Records the catalog references the structural (scope-based) binders don't cover: a FUNCTION or
-    // stored-procedure CALL (<c>NAME(…)</c>) in any expression, and <c>NEXT VALUE FOR &lt;sequence&gt;</c>.
-    // These appear in every statement kind — SELECT lists, DML expressions, PSQL bodies, and bare
-    // expression statements (<c>SELECT F(:x) FROM RDB$DATABASE</c>, a standalone <c>NEXT VALUE FOR G</c>)
-    // — so ONE flat token scan across all statements covers them uniformly, resolving each name against
-    // the metadata snapshot: only a KNOWN catalog object gets a reference, so a built-in
+    // stored-procedure CALL (<c>NAME(…)</c>) in any expression, and a GENERATOR NAME
+    // (<c>NEXT VALUE FOR &lt;sequence&gt;</c> / <c>GEN_ID(&lt;sequence&gt;, …)</c>). These appear in every
+    // statement kind — SELECT lists, DML expressions, PSQL bodies, and bare expression statements
+    // (<c>SELECT F(:x) FROM RDB$DATABASE</c>, a standalone <c>NEXT VALUE FOR G</c>) — so ONE flat token scan
+    // across all statements covers them uniformly, resolving each name against the metadata snapshot.
+    //
+    // A CALL is recorded only when the name is a KNOWN catalog object, so a built-in
     // (<c>MAX</c>/<c>COALESCE</c>/<c>SUBSTRING</c>/…) the catalog doesn't carry stays uncoloured — the
-    // same high-precision "never guess" rule the rest of the binder follows. A token a structural binder
-    // already referenced (e.g. a selectable procedure in <c>FROM</c>) is skipped, so no occurrence is
-    // double-recorded. Read-only; every reference is a plain occurrence, never a definition.
+    // same high-precision "never guess" rule the rest of the binder follows. A GENERATOR NAME is the one
+    // deliberate exception, and it does not weaken that rule: there the grammar — not a guess — fixes what
+    // the identifier means, so an unknown one is recorded UNRESOLVED (it is provably a missing object, and
+    // dropping the reference would lose the finding rather than be conservative about it).
+    //
+    // A token a structural binder already referenced (e.g. a selectable procedure in <c>FROM</c>) is
+    // skipped, so no occurrence is double-recorded — which also means a binder that claims an occurrence
+    // this scan owns SILENTLY WINS it (see IsGeneratorNamePosition). Read-only; every reference is a plain
+    // occurrence, never a definition.
     private void BindGlobalCatalogReferences()
     {
         var referenced = new HashSet<int>();
@@ -115,34 +123,19 @@ internal sealed partial class SemanticBinder
             {
                 var tok = t[i];
 
-                // NEXT VALUE FOR <sequence>. NEXT/VALUE may lex as identifiers or keywords, so match by
-                // text; the sequence name resolves only when the catalog knows it as a generator.
-                if (IsWordText(tok, "NEXT") && IsWordText(At(t, i + 1), "VALUE") && IsWordText(At(t, i + 2), "FOR")
-                    && IsNameToken(At(t, i + 3)))
+                // A GENERATOR NAME — the operand of NEXT VALUE FOR, or GEN_ID's first argument. The
+                // grammar admits nothing else there (IsGeneratorNamePosition), so the occurrence is
+                // recorded as a SCHEMA OBJECT reference either way: bound to the sequence when the catalog
+                // knows it, and deliberately UNRESOLVED when it does not — a mistyped generator then reads
+                // as an unknown OBJECT (ET0001, itself metadata-gated) instead of disappearing. GEN_ID and
+                // NEXT VALUE FOR are built-in syntax the catalog doesn't carry, so they stay uncoloured.
+                if (IsNameToken(tok) && IsGeneratorNamePosition(t, i))
                 {
-                    var seqTok = t[i + 3];
-                    if (referenced.Add(seqTok.Start)
-                        && ResolveObject(FoldedName(seqTok)) is { Kind: SymbolKind.Sequence } seq)
+                    if (referenced.Add(tok.Start))
                     {
-                        AddReference(seqTok, seq, ReferenceRole.SchemaObject);
+                        var seq = ResolveObject(FoldedName(tok)) is { Kind: SymbolKind.Sequence } s ? s : null;
+                        AddReference(tok, seq, ReferenceRole.SchemaObject);
                     }
-                    i += 3;
-                    continue;
-                }
-
-                // GEN_ID(<sequence>, <increment>) — the FIRST argument is a generator name, exactly like
-                // NEXT VALUE FOR. Resolved through the SAME path (ObjectMetadata → QuickInfoEngine); there
-                // is no GEN_ID special case beyond spotting the argument position. GEN_ID itself is a
-                // built-in the catalog doesn't carry, so it stays uncoloured.
-                if (IsWordText(tok, "GEN_ID") && At(t, i + 1).Kind == TokenKind.LParen && IsNameToken(At(t, i + 2)))
-                {
-                    var genTok = t[i + 2];
-                    if (referenced.Add(genTok.Start)
-                        && ResolveObject(FoldedName(genTok)) is { Kind: SymbolKind.Sequence } seq)
-                    {
-                        AddReference(genTok, seq, ReferenceRole.SchemaObject);
-                    }
-                    i += 2;
                     continue;
                 }
 
@@ -166,6 +159,33 @@ internal sealed partial class SemanticBinder
     private static bool IsWordText(SqlToken t, string text)
         => t.Kind is TokenKind.Identifier or TokenKind.Keyword
            && string.Equals(t.Text, text, StringComparison.OrdinalIgnoreCase);
+
+    // Does Firebird's grammar say the name token at <paramref name="k"/> is a GENERATOR (sequence) NAME
+    // rather than an ordinary expression? True in exactly two positions: the operand of
+    // <c>NEXT VALUE FOR</c>, and the FIRST argument of <c>GEN_ID(…)</c>.
+    //
+    // Those two are the whole list, measured on FB5 (2026-08-01) rather than assumed: GEN_ID takes a bare
+    // identifier (`GEN_ID(GEN_ORDER_ID, 0)` → 999), while MAKE_DBKEY's first argument is an ordinary
+    // expression — a bare name there is rejected by the engine with "-206 Column unknown" — and
+    // RDB$GET_CONTEXT / RDB$SET_CONTEXT take string literals, which never lex as identifiers. So no other
+    // built-in can put an object name where a column or variable would otherwise be read.
+    //
+    // ONE owner for that question. It is asked by two binders with OPPOSITE jobs — the global catalog scan
+    // RESOLVES the name, while the PSQL expression walker must leave the occurrence unclaimed instead of
+    // treating it as a local variable — and a partial second copy of it (a bare "is the previous token FOR"
+    // test, which covered NEXT VALUE FOR but not GEN_ID) is exactly how GEN_ID's argument came to be
+    // reported as an unresolved variable.
+    private static bool IsGeneratorNamePosition(IReadOnlyList<SqlToken> t, int k)
+    {
+        // NEXT VALUE FOR <name> — each word may lex as a keyword or an identifier, so match by text.
+        if (k >= 3 && IsWordText(t[k - 3], "NEXT") && IsWordText(t[k - 2], "VALUE") && IsWordText(t[k - 1], "FOR"))
+        {
+            return true;
+        }
+
+        // GEN_ID( <name> , … ) — the first argument only; every later one is an ordinary expression.
+        return k >= 2 && t[k - 1].Kind == TokenKind.LParen && IsWordText(t[k - 2], "GEN_ID");
+    }
 
     private void BindStatement(SqlStatement stmt)
     {

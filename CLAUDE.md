@@ -34,7 +34,7 @@ verbatim, in the archive below.
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
 | **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (287 entries, #1–#300), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (289 entries, #1–#302), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -410,6 +410,60 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **🐞 ET0003 NA NAZWIE GENERATORA W `GEN_ID(…)` — FIXED 2026-08-01 (minimal bugfix, awaits the user's
+  confirmation in the running app).** `v = GEN_ID(gen_bomitem, 1);` w ciele PSQL zgłaszało **ET0003
+  UnresolvedVariable** na istniejącym generatorze. Build 0/0; suite **7057** green (6989 + 14 + 54, up 17).
+  ⭐ **Znowu nie diagnostyka — binder, i znowu CZĘŚCIOWA KOPIA jednej wiedzy** (gotcha **#302**).
+  Firebird dopuszcza gołą nazwę obiektu w wyrażeniu w **dokładnie dwóch** miejscach: operand
+  `NEXT VALUE FOR` i **pierwszy** argument `GEN_ID(…)`. `BindGlobalCatalogReferences` znał **oba**;
+  `BindPsqlExpression` miał ręcznie dopisany jednolinijkowiec pokrywający tylko *„poprzedni token to `FOR`"*.
+  Więc w ciele PSQL argument `GEN_ID` trafiał do `BindBareLocal` jako kandydat na zmienną lokalną.
+  ⭐⭐ **Kolejność dobiła sprawę: globalny skan katalogu biegnie OSTATNI i pomija offset, który inny binder
+  już zreferencjonował** — więc błędna referencja `Variable` **wygrywała pozycję**, a poprawny binder był
+  pomijany. Objaw jest odwrotnością „nikt tego nie zbindował". ⚠ W `SELECT` działało od zawsze (nie ma tam
+  walkera PSQL), co maskowało defekt — istniejące testy `GenId_ResolvesSequence` pokrywały wyłącznie zapytania.
+  ⭐ **Poprawka: jeden wspólny `IsGeneratorNamePosition(t, k)`**, czytany przez skan, który nazwę
+  **rozwiązuje**, i przez walker PSQL, który ma ją **zostawić nieprzypisaną**. ⛔ Zero `if (Function ==
+  "GEN_ID")` w `DiagnosticsEngine` — silnik diagnostyk **nietknięty**.
+  ⭐ **Druga połowa: nieznany generator to teraz ET0001, nie cisza.** Skan zapisywał referencję tylko gdy
+  nazwa **rozwiązała się** do `Sequence`; literówka znikała bez śladu. Teraz referencja `SchemaObject`
+  powstaje zawsze — związana z sekwencją albo **świadomie nierozwiązana**. ⚠ **To nie łamie reguły „prefer
+  silence"**: cisza jest słuszna tam, gdzie goła nazwa jest naprawdę wieloznaczna (kolumna / zmienna /
+  etykieta), ale w pozycji, którą gramatyka przypina do jednego rodzaju obiektu, nieznana nazwa jest
+  *dowodliwie* nieznanym obiektem. ET0001 pozostaje bramkowane metadanymi — bez połączenia cisza.
+  ⚠ **Zakres zmierzony, nie wydedukowany (FB5, 2026-08-01):** `GEN_ID(GEN_ORDER_ID, 0)` → `999`, natomiast
+  `MAKE_DBKEY(ORDERS, 0)` **odrzucane przez sam silnik** (`-206 Column unknown`) — jego pierwszy argument to
+  zwykłe wyrażenie, a `RDB$GET_CONTEXT`/`RDB$SET_CONTEXT` biorą literały tekstowe. Żadna inna funkcja
+  wbudowana nie stawia nazwy obiektu tam, gdzie czytana byłaby kolumna lub zmienna. ⚠ **Precyzja:** tylko
+  **pierwszy** argument `GEN_ID`; drugi to zwykłe wyrażenie i niezadeklarowana nazwa tam nadal daje ET0003.
+
+- **🐞 ET0003 ON `EXECUTE BLOCK` — FIXED 2026-08-01 (minimal bugfix, awaits the user's confirmation in the
+  running app).** A variable DECLAREd in an `EXECUTE BLOCK` was reported **ET0003 UnresolvedVariable**
+  wherever the body used it; the identical code in a procedure was silent. Build 0/0; suite **7040** green
+  (6972 + 14 + 54, up 13). ⭐ **It was NOT a diagnostics bug and not a binder bug — it was STATEMENT
+  SEGMENTATION**, one predicate answering the wrong question (gotcha **#301**). `SqlParser.Parse` chose the
+  PSQL whole-body scan via `IsPsqlDefinitionStart` — *"is this a `CREATE/ALTER/RECREATE` of a
+  `PROCEDURE/TRIGGER/FUNCTION/PACKAGE`?"* — but what segmentation needs to know is *"does this statement have
+  a PSQL body, so its inner semicolons do not end it?"*, and the two questions agree on everything **except
+  `EXECUTE BLOCK`**, which defines nothing yet has exactly that shape. So the block fell to the plain `;` scan
+  and was **cut in two at the end of its first `DECLARE`**: its `BEGIN … END` became a separate
+  `AnonymousBlockStatement` with its own `RoutineBody` scope, which could not see the declarations.
+  ⚠ **Invisible without a DECLARE section** — the body's `BEGIN` raises the depth before any top-level `;`
+  appears, so the plain scan was right by accident, which is why the defect survived this long.
+  ⚠ **It only *looked* colon-specific**: a `:v` always records a Variable reference, while a bare name in a
+  DML position is a column candidate and stays silent (the bare assignment target *was* flagged too).
+  ⭐ **Fix: a second predicate for the second question** — `HasPsqlBodyShape` = `IsPsqlDefinitionStart` ||
+  `IsExecuteBlockStart`, used **only** at the segmentation dispatch; `IsPsqlDefinitionStart` keeps its exact
+  meaning for `ClassifyDdl` (`DdlStatement.IsPsqlDefinition`). ⛔ No `if (ExecuteBlock)` anywhere downstream,
+  no ET0003 exemption, no `:`-token special case — the diagnostics engine, the binder and `ScanPsql` are all
+  **untouched**, and the block now takes the very path a procedure takes.
+  ⚠ **The strict scan was fixed too, deliberately, and that is a small behaviour improvement beyond the
+  editor**: the same split reached the executor boundary (gotcha #192), so an `EXECUTE BLOCK` with a `DECLARE`
+  section was being sent as two broken statements. Pinned that it still yields at its `END` and does not
+  swallow the next statement. ⚠ `UnknownCursor_DeclaredButMisSplit_IsNotFlagged` — a conservatism guard
+  written *around* this split — still passes, and is worth reading as the shape of a workaround for a bug in
+  a lower layer.
 
 - **🎨 BRANDING UX SPRINT — DELIVERED 2026-08-01, awaits the user's visual QA. NOT committed.** A small,
   closed sprint on the visual identity only: **no logic, no fonts, no spacing, no colours, no layout rebuild**
@@ -3023,11 +3077,12 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7027 as of 2026-08-01
-  (after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7057 as of 2026-08-01
+  (after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
+  segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
-  etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the two
-  documented partitions (**6959 + 68**).
+  etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
+  three documented partitions (**6989 + 14 + 54**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
@@ -4103,7 +4158,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (287 entries, #1–#300), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (289 entries, #1–#302), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

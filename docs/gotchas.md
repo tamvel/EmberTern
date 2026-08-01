@@ -7,7 +7,7 @@
 
 > **CLAUDE.md keeps a short curated subset of the ~20 most load-bearing, cross-cutting
 > entries inline** (the ones almost every session touches). This file is the *complete*
-> catalog (285 entries, #1–#298) — search it by keyword whenever a bug "feels
+> catalog (287 entries, #1–#302) — search it by keyword whenever a bug "feels
 > familiar"; it usually is.
 
 > A handful of numbers are intentionally absent (renumbered or merged away in the
@@ -334,6 +334,44 @@ fresh nav). Because `SqlCompletionController.Detach()` is never called, subscrib
 `AttachedToVisualTree` / unsubscribe on `DetachedFromVisualTree` (use `Control.IsLoaded` for the
 "already attached at ctor" case — gotcha #95; the `GetVisualRoot()` extension didn't resolve on `TextEditor`)
 so the subscription to `Metadata` can't leak the editor.
+
+301. **A predicate answering one question must not be reused for a *different* question that merely
+overlaps it — the mismatch shows up only on the cases the two questions disagree about.** Statement
+segmentation asked `IsPsqlDefinitionStart` ("is this a `CREATE/ALTER/RECREATE` of a
+`PROCEDURE/TRIGGER/FUNCTION/PACKAGE`?") to decide whether to use the PSQL whole-body scan. What segmentation
+actually needs to know is *"does this statement have a PSQL body — header, top-level `AS`, `DECLARE` section,
+`BEGIN … END` — so its inner semicolons do not end it?"*, and those two questions agree on every statement
+**except `EXECUTE BLOCK`**, which defines nothing yet has exactly that shape. So an `EXECUTE BLOCK` was cut in
+two at the end of its first `DECLARE`: the `BEGIN … END` became a separate `AnonymousBlockStatement` with its
+own `RoutineBody` scope, and every use of a declared variable in the body reported **ET0003 UnresolvedVariable**
+(a `:v` always records a Variable reference; a bare name in a DML position is a column candidate and stays
+silent, which is why the symptom looked colon-specific). **Invisible without a `DECLARE` section** — the body's
+`BEGIN` raises the depth before any top-level `;` appears, so the plain scan gets the right answer by accident.
+The fix is a second predicate for the second question (`HasPsqlBodyShape` = `IsPsqlDefinitionStart` ||
+`IsExecuteBlockStart`), not a special case downstream: the diagnostics engine had already grown a conservatism
+guard *around* the split (`UnknownCursor_DeclaredButMisSplit_IsNotFlagged`), which is what a workaround for a
+segmentation bug looks like from inside the wrong layer. **Rule: when a boolean is about to be reused at a new
+call site, restate the question that call site is asking in words; if it is not the sentence the predicate's
+name and comment already state, it needs its own predicate.**
+
+302. **When two binders ask the same grammatical question for opposite purposes, a PARTIAL second copy of
+the answer is worse than no copy — it works on the cases it lists and silently mis-binds the rest.** Firebird
+admits a bare object identifier in exactly two expression positions: the operand of `NEXT VALUE FOR` and the
+FIRST argument of `GEN_ID(…)` (**measured on FB5, do not re-derive**: `GEN_ID(GEN_ORDER_ID, 0)` returns a
+value, while `MAKE_DBKEY(ORDERS, 0)` is rejected by the engine with *-206 Column unknown* — its first argument
+is an ordinary expression — and `RDB$GET_CONTEXT`/`RDB$SET_CONTEXT` take string literals, which never lex as
+identifiers). `BindGlobalCatalogReferences` knew **both** positions; `BindPsqlExpression` carried a hand-rolled
+one-liner covering only *"the previous token is `FOR`"*. So inside a PSQL body `GEN_ID`'s argument fell through
+to `BindBareLocal`, which recorded it as an **unresolved Variable** — and because the global catalog scan runs
+last and skips any offset another binder already referenced, that wrong reference **won the position** and the
+generator was reported **ET0003 UnresolvedVariable**. ⭐ **Two compounding failure modes worth recognising
+separately:** the partial copy (silent for one of the two syntaxes) and the *last-writer-loses* ordering (the
+correct binder is the one that gets skipped, so the symptom is the opposite of "nobody bound it"). The fix is
+one shared `IsGeneratorNamePosition`, read by the scan that RESOLVES the name and by the walker that must
+LEAVE IT UNCLAIMED. ⚠ **Corollary about the "prefer silence" rule:** silence is right where a bare identifier
+is genuinely ambiguous (column vs variable vs label), but in a position the grammar pins to one object kind an
+unknown name is *provably* an unknown object — so it is recorded **unresolved** rather than dropped, which is
+what makes ET0001 reachable there. Dropping the reference is not conservatism, it is losing the finding.
 
 
 ## Avalonia UI: controls, XAML binding & templates
