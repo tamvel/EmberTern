@@ -1684,3 +1684,48 @@ istnieje. Wariant jest przywracany w `finally`, bo sesja headless jest wspólna 
 `ThemeDictionaries`** — zgłasza klucz jako nieistniejący. To jest dokładnie granica między dwoma
 słownikami dodanymi w M2a (`Tokens`/`Typography` — jedna wartość, bez wariantu) a `Colors.axaml`
 (jedna wartość na motyw). Dwa rodzaje zasobu, dwie ścieżki wyszukiwania; testy mają teraz obie.
+
+### §15.6 Krok 5 — kontrolki bazowe, iteracja po iteracji
+
+Na życzenie użytkownika krok 5 nie jest jedną zmianą, tylko **serią zamkniętych iteracji**: po każdej
+większej kontrolce aplikacja jest uruchamiana i oceniana, zanim ruszy następna.
+
+**Pomiar wyjściowy wszystkich kontrolek bazowych** (sonda headless, Avalonia 12.0.3):
+
+| Kontrolka | `MinHeight` | żądana wys. | `Padding` | `FontSize` |
+|---|---|---|---|---|
+| `RadioButton` | **0** | **32** | `8,0,0,0` | 14 |
+| `TextBox` | 32 | 32 | `10,6,6,5` | 14 |
+| `ComboBox` | 32 | 32 | `12,5,0,7` | 14 |
+| `NumericUpDown` | 32 | 32 | `10,6,6,5` | 14 |
+| `Button` | 0 | 29 | `8,5,8,6` | 14 |
+
+⚠ **Dwie rzeczy warte uwagi przed dalszymi iteracjami:** `FontSize` **14** w każdej kontrolce (przy
+roli `Text.Application` = 12, więc tekst w polach się zmniejszy — i to jest część efektu „to nie
+wygląda już na aplikację Avalonia"), oraz **niesymetryczne paddingi** (`10,6,6,5`, `12,5,0,7`), które
+są jednym z powodów, dla których pola nie stoją dziś w jednej linii.
+
+#### §15.6.1 Iteracja 1 — `RadioButton`
+
+⚠ **Ten sam defekt co RB‑2, o jedną kontrolkę dalej — i lepiej zamaskowany.** `MinHeight` wynosi tu
+**0**, więc kontrolka wygląda na niewinną; żądana wysokość i tak jest **32 px**, bo wymusza ją
+nienazwany element szablonu. Gdyby oceniać po samej właściwości, defektu by tu nie znaleziono.
+
+⭐ **Odejście od Fluenta w jednym miejscu, świadome:** stan zaznaczony to **wypełnienie akcentem
+z jasną kropką**, dokładnie jak w `CheckBoxie`, a nie pierścień z kropką w kolorze akcentu.
+**Spójność wewnątrz własnego systemu jest ważniejsza niż zgodność z konwencją frameworka** —
+zaznaczony przełącznik ma czytać się tak samo niezależnie od tego, czy jest kwadratem czy kółkiem.
+To jest ta sama zasada, którą użytkownik sformułował przy QA kroku 1 (komplet stanów, jedna
+spójność), zastosowana o poziom wyżej: do rodziny kontrolek.
+
+⚠ **Bez `Radius`:** `Ellipse` jest okręgiem z natury. `Border` + `CornerRadius` wymagałby połowy
+rozmiaru znaku — czyli tokenu udającego działanie arytmetyczne.
+
+⭐ **Proporcja kropki przejęta z pomiaru, nie wymyślona:** Fluent ma znak 20 i kropkę 8, czyli **0,4**;
+przy znaku 14 daje to 6. Liczba stoi w szablonie, a nie w katalogu, bo jest wewnętrzną proporcją
+**rysunku** jednej kontrolki — tym samym rodzajem szczegółu co grubość kreski w geometrii ikony.
+Rola powstanie, gdy zażąda jej druga kontrolka (reguła użytkownika z QA kroku 1).
+
+⭐ Pierwszy konsument **`Stroke.Hairline`** (grubość pierścienia to `double`, nie `Thickness`) i drugi
+konsument **`Margin.MarkGap`** — roli dodanej w kroku 1 właśnie z myślą o tej kontrolce, więc katalog
+nie urósł „na zapas".

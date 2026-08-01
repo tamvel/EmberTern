@@ -2,6 +2,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -136,6 +137,40 @@ public sealed class DesignTokenApplicationTests
             var markArea = bare.GetVisualDescendants().OfType<Panel>().Single(p => p.Name == "PART_MarkArea");
             Assert.True(markArea.Bounds.Width >= box.Bounds.Width + 4,
                 $"The click target ({markArea.Bounds.Width} px wide) is no wider than the mark ({box.Bounds.Width} px).");
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// <c>RadioButton</c> is a sibling of <c>CheckBox</c>, not a separate design — so it is measured against the
+    /// same constraint. Fluent reports <c>MinHeight = 0</c> for it and still asks for 32 px, because the height
+    /// is imposed by an unnamed element of its template: the same shape as RB‑2, one control further.
+    /// </summary>
+    [Fact]
+    public async Task RadioButton_FitsInsideAGridRow_LikeItsCheckBoxSibling()
+    {
+        await _session.Dispatch(() =>
+        {
+            var bare = new RadioButton();
+            var window = new Window { Content = bare };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var cell = Token<Thickness>("Pad.Cell");
+            var room = Token<double>("Size.Row.Grid") - cell.Top - cell.Bottom;
+            Assert.True(bare.DesiredSize.Height <= room,
+                $"A RadioButton asks for {bare.DesiredSize.Height} px and a grid cell leaves {room} px.");
+
+            // ⭐ The mark reads the SAME token as the CheckBox's box (§5: "box CheckBox/RadioButton"). The two
+            // controls belonging to one family is the property being pinned — not the number 14.
+            var ring = bare.GetVisualDescendants().OfType<Ellipse>().Single(e => e.Name == "NormalEllipse");
+            Assert.Equal(Token<double>("Size.Checkbox"), ring.Bounds.Width);
+            Assert.Equal(Token<double>("Size.Checkbox"), ring.Bounds.Height);
+
+            var markArea = bare.GetVisualDescendants().OfType<Panel>().Single(p => p.Name == "PART_MarkArea");
+            Assert.True(markArea.Bounds.Width >= ring.Bounds.Width + 4,
+                $"The click target ({markArea.Bounds.Width} px wide) is no wider than the mark.");
 
             window.Close();
         }, default);

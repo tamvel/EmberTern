@@ -151,4 +151,100 @@
     </Style>
   </ControlTheme>
 
+  <!-- ================================================================================================
+       RadioButton — rodzeństwo CheckBoxa, nie kopia Fluenta.
+
+       ⚠ Ten sam defekt co RB‑2, zmierzony: `MinHeight` wynosi tu 0, ale **żądana wysokość i tak jest
+       32 px**, bo wymusza ją nienazwany element szablonu. Sam znak ma u Fluenta 20 px przy kropce
+       8 px — proporcja **0,4**, którą zachowujemy: znak `Size.Checkbox` (14) → kropka 6.
+
+       ⭐ ŚWIADOMIE ODCHODZIMY OD FLUENTA W JEDNYM MIEJSCU: stan zaznaczony to **wypełnienie akcentem
+       z jasną kropką**, dokładnie jak w CheckBoxie, a nie pierścień z kropką w kolorze akcentu.
+       Spójność WEWNĄTRZ własnego systemu jest ważniejsza niż zgodność z konwencją frameworka —
+       zaznaczony przełącznik ma czytać się tak samo niezależnie od tego, czy jest kwadratem
+       czy kółkiem.
+
+       ⚠ Brak `Radius`: `Ellipse` jest okręgiem z natury. `Border` + `CornerRadius` wymagałby połowy
+       rozmiaru znaku, czyli liczby, której XAML nie potrafi wyliczyć — a token „promień = połowa
+       czegoś innego" byłby rolą udającą działanie arytmetyczne.
+
+       ⭐ Pierwszy konsument `Stroke.Hairline` (grubość pierścienia jest `double`, nie `Thickness`)
+       i drugi konsument `Margin.MarkGap` — roli dodanej w kroku 1 właśnie z myślą o tej kontrolce.
+       ================================================================================================ -->
+  <ControlTheme x:Key="{x:Type RadioButton}" TargetType="RadioButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="Auto,*">
+
+          <Panel Name="PART_MarkArea"
+                 Background="Transparent"
+                 MinWidth="20"
+                 VerticalAlignment="Center">
+
+            <Ellipse Name="NormalEllipse"
+                     Width="{DynamicResource Size.Checkbox}"
+                     Height="{DynamicResource Size.Checkbox}"
+                     Fill="{TemplateBinding Background}"
+                     Stroke="{TemplateBinding BorderBrush}"
+                     StrokeThickness="{DynamicResource Stroke.Hairline}"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+
+            <!-- Kropka 6 px = 0,4 znaku, proporcja przejęta z pomiaru Fluenta (8 z 20). Liczba stoi
+                 tutaj, a nie w katalogu, bo jest wewnętrzną proporcją RYSUNKU jednej kontrolki —
+                 tym samym rodzajem szczegółu co grubość kreski w geometrii ikony. Rola powstanie
+                 wtedy, gdy zażąda jej druga kontrolka, nie wcześniej. -->
+            <Ellipse Name="CheckGlyph"
+                     Width="6"
+                     Height="6"
+                     Fill="{DynamicResource OnAccentBrush}"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     Opacity="0" />
+          </Panel>
+
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Grid.Column="1"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Margin="{DynamicResource Margin.MarkGap}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            RecognizesAccessKey="True" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:pointerover /template/ Ellipse#NormalEllipse">
+      <Setter Property="Stroke" Value="{DynamicResource AccentMutedBrush}" />
+    </Style>
+
+    <Style Selector="^:checked /template/ Ellipse#NormalEllipse">
+      <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ Ellipse#CheckGlyph">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="^:pressed /template/ Ellipse#NormalEllipse">
+      <Setter Property="Opacity" Value="0.75" />
+    </Style>
+
+    <Style Selector="^:focus-visible /template/ Ellipse#NormalEllipse">
+      <Setter Property="Stroke" Value="{DynamicResource FocusBorderBrush}" />
+    </Style>
+
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+  </ControlTheme>
+
 </ResourceDictionary>
