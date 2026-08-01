@@ -77,17 +77,27 @@ git push origin <branch>
 git push private <branch>
 ```
 
-**Branch hygiene (2026-07-28):** **`feat/keyboard-manager` was merged into `master`** (`--no-ff`, so the
-sprint's six etaps stay one readable arc) and pushed to both remotes; like `feat/data-import` it **still
-exists** locally and on both remotes — deleting it is the user's call. Earlier: the repo carries only branches
-that are still needed. `feat/completion-matching`,
-`feat/firebird-debugger`, `feat/save-and-close` and `feat/sql-data-export` were all provably merged into
-`master` and were deleted locally and from **both** remotes. **`feat/data-import` was merged into `master` on
-2026-07-27** (`--no-ff`, commit `0a3aed4`, so the module's history stays one readable arc) and **still exists**
-locally and on both remotes — deleting it is the user's call, per the same hygiene rule that retired the four
-above. ⚠ One residue: **`private`'s default branch (HEAD) still points at
-`feat/completion-matching`**, so GitHub refuses to delete it — it stays until the user switches the default
-to `master` in the GitHub repo settings (a repo-settings change, deliberately left to the user).
+**Branch hygiene — ⭐ the repo is now at `master` ONLY (swept 2026-08-01, on the user's instruction).**
+Every feature branch has been merged and retired; there is **one local branch (`master`)** and, apart from the
+one residue below, **one branch on each remote**. So the working assumption for a new session is: *start from
+`master`, branch for the work, merge back `--no-ff`, delete the branch.*
+
+The final sweep merged the last outstanding branch — **`feat/branding-ux`** (the branding UX sprint plus the
+two ET0003 diagnostics bugfixes) — into `master` as `93d640f`, `--no-ff` so the arc stays readable, then
+deleted **locally and from BOTH remotes**: `feat/branding-ux`, `feat/data-import`, `feat/hamburger-navigation`,
+`feat/keyboard-manager`, `feat/settings-center`. Each was verified merged first (`git branch -d`, the safe
+variant, which refuses unmerged work). Earlier retirements, same rule: `feat/completion-matching`,
+`feat/firebird-debugger`, `feat/save-and-close`, `feat/sql-data-export`.
+
+⚠ **One residue, unchanged and still the user's to clear: `private`'s default branch (HEAD) points at
+`feat/completion-matching`**, so GitHub refuses to delete it (`refusing to delete the current branch`) even
+though it is provably merged. It stays until the default is switched to `master` in the **GitHub repo
+settings** — a repo-settings change deliberately left to the user, not something to work around. Once switched,
+one command finishes it:
+
+```bash
+git push private --delete feat/completion-matching
+```
 
 **⛔ Never change the remote configuration without the user's explicit decision** — not the URLs, not a
 `pushurl`, not a rename. A dual-`pushurl` "one push reaches both" variant was considered and **rejected on
@@ -465,7 +475,8 @@ noted.
   written *around* this split — still passes, and is worth reading as the shape of a workaround for a bug in
   a lower layer.
 
-- **🎨 BRANDING UX SPRINT — DELIVERED 2026-08-01, awaits the user's visual QA. NOT committed.** A small,
+- **🎨 BRANDING UX SPRINT — DELIVERED 2026-08-01, awaits the user's visual QA. Committed `3e1df1a`, merged
+  to `master` in `93d640f`.** A small,
   closed sprint on the visual identity only: **no logic, no fonts, no spacing, no colours, no layout rebuild**
   — and explicitly **not** the start of the backlogged app-wide UX sprint. Build 0/0; suite **7027** green
   (6959 + 54 probe + 14, run in the three groups described under "Tests"); smoke clean.
