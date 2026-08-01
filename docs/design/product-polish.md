@@ -1,7 +1,10 @@
 # Product Polish — audyt, ratyfikowane decyzje i katalog Design Tokens
 
-> **STATUS: M0 zakończony (audyt). M1 (ten katalog) — PROPOZYCJA, czeka na akceptację.**
-> **Do czasu akceptacji M1 nie powstaje żaden kod.**
+> **STATUS: M0 (audyt) ✅ ZAKOŃCZONY. M1 (ten katalog) ✅ ZAAKCEPTOWANY przez użytkownika 2026-08-01.**
+> **Następny krok: M2a — infrastruktura tokenów.** Zaczynaj od
+> [`product-polish-m2a-handover.md`](product-polish-m2a-handover.md).
+>
+> ⛔ **Kod nie został jeszcze napisany** — do tej pory powstała wyłącznie dokumentacja projektowa.
 >
 > Specyfikacja etapu: `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown` — **jest źródłem prawdy**.
 > Ten dokument jej nie zastępuje; dopowiada to, czego w niej nie ma, i zapisuje decyzje użytkownika.
@@ -963,8 +966,8 @@ domyślna, pasek **pozostaje kolorowy**.
 | Etap | Zakres | Zmiana widoczna? |
 |---|---|---|
 | **M0** ✅ | Audyt — §1 tego dokumentu | nie |
-| **M1** ⏳ | Ten katalog — czeka na akceptację | nie |
-| **M2a** | `Tokens.axaml` + `Typography.axaml` + `DesignTokenComplianceTests`. **Wyłącznie addytywne** | **nie** |
+| **M1** ✅ | Ten katalog — **zaakceptowany 2026-08-01** | nie |
+| **M2a** ⏳ | `Tokens.axaml` + `Typography.axaml` + `DesignTokenComplianceTests`. **Wyłącznie addytywne** — **NASTĘPNY KROK** | **nie** |
 | **M2b** | Compact Controls (RB‑3, D1), własny `CheckBox` (RB‑2), DataGrid Standard, scrollbary (H‑10), `ToolTip` (M‑2), powierzchnie i kolory (RB‑4, §7) | **tak, duża** |
 | **M2c** | Sweep de‑lokalizacyjny (H‑1) — lista wyjątków do minimum | tak |
 | **M3.1** | **Status Bar 2.0** (§8.4) — rail, cztery sekcje, hierarchia, chip transakcji, sekcja postępu + **jedna** operacja referencyjna | tak |
