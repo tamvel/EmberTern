@@ -423,8 +423,26 @@ noted.
 
 ## Current state
 
-- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 user-accepted 2026-08-01;
-  ⭐ M2a (token infrastructure) IMPLEMENTED 2026-08-01 — awaits the user's visual QA. Next step: M2b.**
+- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + ⭐ M2a all user-accepted
+  2026-08-01 (M2a visually QA'd: identical in both themes, committed `109c7dc`). ⏳ M2b IN PROGRESS —
+  step 0 done.**
+  **⭐ M2b's governing rule, above the catalog's numbers (user, 2026-08-01):** *"We are not designing the
+  smallest possible controls. We are designing controls a developer works on comfortably for 8 hours a
+  day."* A catalog value that is technically right but worse in practice gets **stopped and proposed**
+  (§4.2.4), never quietly shipped — ⛔ the catalog must not win against product quality. Plan: step 0
+  proof → `CheckBox` alone (RB‑2 isolated, risk R‑2 first) → RB‑4 structural split → §7.2/§7.4 values +
+  V‑1 → `ToolTip` → base controls **one at a time, app run and judged after each** → DataGrid →
+  `ScrollBar` last. ⚠ M2b works **only in `Themes/`**, which makes `DesignTokenComplianceTests` a
+  **scope sensor**: it measures `Views/`+`Controls/`, so any counter moving means M2c's territory.
+  **⚠⚠ Step 0's finding, and it generalises past this stage: `{DynamicResource}` does NOT throw on a
+  missing key — the property silently keeps its default.** Verified by planting a typo: build stayed
+  **0 errors** while `FontSize` quietly fell 11 → 12 (Avalonia's default). Hence
+  `DesignTokenApplicationTests` (headless, joins `HeadlessCollection`, bare controls — never a
+  `MainWindow`), which asserts a token **reaches** a control, through **both** §3.2 layers (scalar
+  *and* `Thickness`/`CornerRadius` — different resolution paths). ⭐ It compares against the **catalog,
+  not a literal**: it pins *that the token arrives*, not *what number it carries* (§4.2.4).
+  ⭐ **`DynamicResource` for tokens is architectural, not stylistic** — §3.4 wants a future font/scale
+  preference to swap the base tokens at runtime, and a statically resolved value could not follow.
   **Start the next session from [docs/design/product-polish.md](docs/design/product-polish.md) — §14 is
   the M2a as-built**, plus the three sections M2a added to the catalog: **§4.2** (icons, radii, borders),
   **§6.4** (how a typography role is consumed), **§11.1** (the counter ratchet). The M2a handover file is
@@ -3186,29 +3204,29 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7066 as of 2026-08-01
-  (after Product Polish M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7068 as of 2026-08-01
+  (after Product Polish M2b krok 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
   partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
   segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**6998 + 54 + 14**).
+  three documented partitions (**6998 + 54 + 16**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition now holds **four** classes
+  four times its own count. ⚠ The headless partition now holds **five** classes
   (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `ContextMenuPresentationTests` +
-  `BrandingPresentationTests`), all in
+  `BrandingPresentationTests` + `DesignTokenApplicationTests`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
-  (#94/#226/#286). The partition filter is the four class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~ContextMenuPresentationTests&FullyQualifiedName!~BrandingPresentationTests"`
+  (#94/#226/#286). The partition filter is the five class names excluded / included:
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~ContextMenuPresentationTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests"`
   and its inverse with `|`.
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
   with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,
-  ~9 s) and the other three together (14 green, ~2 s). Both were clean that way on the same commit where a
+  ~9 s) and the other four together (16 green, ~2 s). Both were clean that way on the same commit where a
   combined run had to be interrupted twice.
   **⭐ A NEW DATUM ON THE CAUSE, and it is a better suspect than any assertion: a headless test that constructs
   a `MainWindow` is the hang-prone shape.** The first draft of `BrandingPresentationTests` built one to check

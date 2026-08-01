@@ -582,6 +582,31 @@ Jeden styl, dwa przeciwne komunikaty.
 `SurfaceRaisedBrush` idzie **ku światłu w obu motywach**: Dark `#2D2D2D` (zbiega się z chromą,
 jak dziś), Light **`#FFFFFF` + obramowanie 1 px**.
 
+#### §7.1.1 ⚠ Zmierzony zakres RB‑4 — węższy, niż sugeruje słowo „zakładka" (M2b)
+
+**Zakładki DOKUMENTU nie są objęte tym defektem i nie wymagają zmiany.** Pomiar
+(`MainWindow.axaml:790`): aktywna zakładka dokumentu maluje się `BackgroundBrush` na `PanelBrush`
+nieaktywnych — czyli *„zlewa się z dokumentem pod sobą"*, idiom VS Code, plus 2 px akcentu u góry.
+Po przeprojektowaniu skali szarości (§7.2) aktywna stanie się **jaśniejsza** od nieaktywnych
+w Light — zadziała poprawnie sama z siebie, bez ingerencji.
+
+Defekt dotyczy **`TabItem.bottom-tab:selected` i `TabItem.sub-tab:selected`** (zakładki panelu
+wyników i zakładki pomocnicze edytorów) oraz powierzchni pływających.
+
+**Zmierzone 33 użycia `ElevatedPanelBrush` w 17 plikach; 12 to praca (b):**
+
+| Praca (b) — `SurfaceRaisedBrush` | Praca (a) — `ChromeStrongBrush` |
+|---|---|
+| `aecc\|CompletionListBox` · `ListBox.code-action-menu` · `ContextMenu` | `DataGridColumnHeader` · pasek tytułu |
+| `TabItem.bottom-tab:selected` · `TabItem.sub-tab:selected` | `Border.sidebar-rail:pointerover` |
+| `PickerTemplates` · `SearchableComboBox` (popupy) | nagłówki paneli: Performance, Procedure, Function |
+| `QuickInfoView` · `ParameterHelper` · `LanguageExpansionController` · `NavigationController` ×3 | Trace · Sessions · Data Import ×3 · AggregationBar · Debugger |
+
+⭐ **Wniosek, który warto zapamiętać poza tym defektem:** podział na dwie prace okazał się
+sprawdzalny mechanicznie — „czy ten element pływa nad swoim kontenerem?" ma jednoznaczną
+odpowiedź dla każdego z 33 miejsc. To dlatego rozwiązaniem jest **nowy token**, a nie nowa
+wartość: gdyby granica była nieostra, żadna wartość by jej nie przecięła.
+
 ⚠ **Przemianowanie dotyczy tylko tego jednego tokenu i tylko dlatego, że jego nazwa kłamie po
 podziale.** `BackgroundBrush`/`PanelBrush` zostają — przemianowanie ich to czysta churn bez
 korzyści dla użytkownika (UX Debt D‑5).
@@ -626,13 +651,17 @@ okazała się też poprawna architektonicznie.
 
 ### §7.3 ⚠ Konsekwencja, którą trzeba zweryfikować, a nie założyć
 
-Zmiana `BackgroundBrush` w Light z `#F3F3F3` na `#FFFFFF` **zmienia tło, na którym stoi cała
-paleta składni edytora w motywie jasnym.** Paleta jest zamrożona (§6.3), ale jej *kontrast
-względem tła* się przesuwa.
+Zmiana `BackgroundBrush` w Light z `#F3F3F3` na **`#FCFCFD`** (§7.2.1) **zmienia tło, na którym
+stoi cała paleta składni edytora w motywie jasnym.** Paleta jest zamrożona (§6.3), ale jej
+*kontrast względem tła* się przesuwa.
+
+> ⚠ **Poprawka redakcyjna (M2b):** ta sekcja mówiła `#FFFFFF`, bo powstała **przed** decyzją Q7.
+> Wartością obowiązującą jest `#FCFCFD`. Nie jest to zmiana ustalenia — jest to usunięcie zdania,
+> które unieważniła późniejsza decyzja, a które wysłałoby weryfikację V‑1 na złe tło.
 
 **Wymóg:** przed zamknięciem M2b trzeba przeliczyć kontrast wszystkich czterech barw składni
 (`#0F766E` typy, `#795E26` funkcje, `#5D30A6` PSQL, SQL blue) oraz komentarzy (`#2E8B57`)
-względem `#FFFFFF` i potwierdzić ≥4,5:1. **Jeśli któraś nie przejdzie — zmieniamy tło, nie
+względem **`#FCFCFD`** i potwierdzić ≥4,5:1. **Jeśli któraś nie przejdzie — zmieniamy tło, nie
 paletę**, bo paleta ma za sobą akceptację użytkownika, a tło jej nie ma.
 
 ### §7.4 Kontrast tekstu drugorzędnego — H‑7
@@ -649,6 +678,11 @@ potwierdza — Dark jest równie słaby**, po prostu mniej rzuca się w oczy.
 | Dark | `#858585` | **`#9AA0A6`** | **6,32:1** (na `BackgroundBrush #1E1E1E`) |
 
 ### §7.5 §8.6 — semantyka kolorów (⭐ skorygowana po decyzji użytkownika Q6)
+
+> ⚠ **Etap: M3.2, nie M2b.** Wiersz M2b w §13 wymienia ogólnie „powierzchnie i kolory (§7)", ale
+> ten sam §13 przypisuje semantykę kolorów do **M3.2 (Toolbar)** — i tam jest jej miejsce, bo cała
+> ta sekcja opisuje pracę na pasku narzędzi. M2b realizuje z §7 wyłącznie **§7.1 (RB‑4)**,
+> **§7.2 (skala szarości Light)** i **§7.4 (kontrast tekstu drugorzędnego)**.
 
 > **Decyzja użytkownika:** *„Porządkujemy semantykę kolorów, ale nie zabijamy charakteru
 > interfejsu. Jeżeli kolor występuje, powinien mieć jednoznaczne znaczenie."*
@@ -1317,3 +1351,54 @@ tokenu bez zmierzonego użycia.
 (`field-label`, `shortcut-chip`, `title`, `h1`, `group-header`) zaczyna czytać tokeny zamiast
 liczb wpisanych na sztywno. To zmiana bajtowo neutralna — i dlatego jest dobrym pierwszym
 sprawdzianem, że warstwa skalarna faktycznie działa.
+
+---
+
+## §15 As-built — M2b (Compact Controls, powierzchnie, kolory)
+
+> **Status: W TOKU.** Etap prowadzony małymi, zamkniętymi krokami — po każdym build 0/0,
+> trzy partycje, smoke, commit. Kolejność i uzasadnienie: patrz plan przyjęty 2026-08-01.
+
+### §15.0 ⭐ Zasada nadrzędna M2b (użytkownik, 2026-08-01)
+
+> *„Nie projektujemy możliwie najmniejszych kontrolek. Projektujemy kontrolki, na których
+> programista będzie komfortowo pracował przez 8 godzin dziennie."*
+
+**To jest kryterium nadrzędne wobec liczb z §5.** Jeżeli wartość z katalogu jest technicznie
+poprawna, ale w praktyce wygląda lub pracuje się na niej gorzej — zatrzymujemy się i zgłaszamy
+propozycję (§4.2.4), zamiast dowozić zgodność. ⛔ **Katalog nie ma wygrać z jakością produktu.**
+
+### §15.1 Krok 0 — dowód, że warstwa tokenów działa (bez zmiany wizualnej)
+
+Pięć istniejących stylów klasowych (`field-label`, `shortcut-chip`, `title`, `h1`, `group-header`)
+plus `Border.settings-group` czytają teraz katalog zamiast liczb wpisanych na sztywno.
+**Bajtowo neutralne** — te same wartości; celem jest dowód, nie zmiana.
+
+⭐ **`Border.settings-group` jest w tym kroku świadomie.** Pięć stylów tekstowych dowodzi wyłącznie,
+że rozwijają się `x:Double` i `FontWeight`; warstwa złożona (`Thickness`, `CornerRadius`) to inny
+mechanizm — a to ją §3.2 wskazuje jako miejsce, w którym dług odrasta najłatwiej. Dowód z jedną
+połową byłby dowodem połowicznym.
+
+**⚠⚠ Rozstrzygnięcie: `DynamicResource`, nie `StaticResource` — i powód NIE jest estetyczny.**
+Tokeny nie zależą od motywu, więc rozwiązanie statyczne byłoby technicznie wystarczające.
+Decyduje §3.4: przyszłe ustawienie czcionki i skali ma podmieniać tokeny bazowe, a wartość
+rozwiązana statycznie nie zareagowałaby na podmianę w czasie działania aplikacji. Zostawiamy
+warstwę, która to udźwignie — **nie budując mechanizmu, który by z niej korzystał** (reguła #233).
+
+**⭐⭐ Nowy test `DesignTokenApplicationTests` (headless, 2 przypadki) i powód, dla którego musiał
+powstać właśnie tu.** `{DynamicResource}` **nie rzuca wyjątku, gdy klucz nie istnieje** — właściwość
+po cichu zostaje na wartości domyślnej. Zweryfikowane zasadzeniem: po podmianie klucza na
+nieistniejący **build nadal miał 0 błędów**, a `FontSize` cicho spadło z 11 na 12 (domyślna
+Avalonii). Objaw byłby widoczny miesiące później jako „na jednym ekranie tekst ma zły rozmiar".
+⚠ Test porównuje wartość z **katalogiem**, nie z literałem — pinuje *że token dociera*, nie *jaką
+niesie liczbę* (§4.2.4); literał byłby drugą kopią, czyli tym, co ten etap likwiduje.
+⚠ Asercja `NotEqual(12)` jest częścią dowodu: 12 to zarówno domyślna Avalonii, jak i realna wartość
+innego tokenu — bez tego „wygląda sensownie" udawałoby sukces.
+
+⚠ Klasa dołącza do `HeadlessCollection` (#94/#226/#286) i **nie konstruuje `MainWindow`** — używa
+gołych kontrolek w gołym oknie. Partycja headless ma odtąd **pięć** klas; filtr w `CLAUDE.md`
+zaktualizowany.
+
+⭐ **Efekt uboczny, który warto znać:** `DesignTokenComplianceTests` z M2a zaczyna w M2b pełnić
+drugą rolę — **czujnika zakresu**. M2b pracuje wyłącznie w `Themes/`, a test mierzy
+`Views/`+`Controls/`; drgnięcie któregokolwiek licznika oznacza wejście w zakres M2c.

@@ -97,32 +97,56 @@
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
+  <!-- ================================================================================================
+       ⭐ TYPOGRAFIA CZYTANA Z KATALOGU (Product Polish M2b, krok 0)
+
+       Pięć poniższych stylów klasowych BYŁO rolami typograficznymi z §6 — tyle że z liczbami
+       wpisanymi na sztywno. Teraz czytają je z Themes/Typography.axaml. Zmiana jest bajtowo
+       neutralna (te same wartości) i to jest jej cel: pierwszy dowód, że warstwa skalarna
+       rzeczywiście rozwija się w runtime — na pięciu setterach, a nie na czterdziestu.
+
+       ⚠ `DynamicResource`, nie `StaticResource`, mimo że tokeny nie zależą od motywu. Powód jest
+       architektoniczny, nie estetyczny: §3.4 wymaga, aby przyszłe ustawienie czcionki i skali
+       podmieniało tokeny bazowe — a wartość rozwiązana statycznie nie zareagowałaby na podmianę
+       w czasie działania aplikacji. Tego ustawienia ten etap NIE buduje (reguła #233); zostawia
+       jedynie warstwę, która je udźwignie.
+
+       ⚠ Marginesy zostają lokalne. Odstęp pod podpisem pola (4 px) nie ma dziś roli w §4.1, a
+       `Margin.FieldGap` to inna rola („odstęp pod polem", 8 px). Dopisanie roli tylko po to, żeby
+       nie było tu liczby, byłoby dokładnie tym, przed czym ostrzega §4.1 — katalog rośnie od
+       potrzeby, nie od symetrii.
+       ================================================================================================ -->
+
   <!-- Form field caption above an input. Centralized here (was duplicated verbatim
        in every dialog's local Window.Styles). Application-level styles apply inside
-       dialog windows too, so each dialog just uses Classes="field-label". -->
+       dialog windows too, so each dialog just uses Classes="field-label".
+       Rola: Text.Application (§6). -->
   <Style Selector="TextBlock.field-label">
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="Margin" Value="0,0,0,4" />
   </Style>
 
   <!-- The keyboard-shortcut hint shown beside a command's label on an accent (primary) button — e.g.
        Execute F5, Start debugging F5. ONE presentation for every such chip across the app; the shortcut
        is carried in this chip, never baked into the label string with parentheses. -->
+  <!-- Rola: Text.Caption (§6) — najmniejszy stopień pisma w aplikacji. -->
   <Style Selector="TextBlock.shortcut-chip">
     <Setter Property="Foreground" Value="{DynamicResource OnAccentSubtleBrush}" />
-    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <!-- Rola: Text.Title (§6) — nazwa połączenia, tytuł panelu. -->
   <Style Selector="TextBlock.title">
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Title.Weight}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Title.Size}" />
   </Style>
 
+  <!-- Rola: Text.DialogHeader (§6). -->
   <Style Selector="TextBlock.h1">
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.DialogHeader.Weight}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.DialogHeader.Size}" />
   </Style>
 
   <!-- ── Settings group: a titled card around one coherent set of options ──────────────
@@ -138,18 +162,23 @@
 
        (This replaces a `Border.panel` style that had NO consumers anywhere in the app —
        kept only as a near-identical sibling for someone to pick by mistake.) -->
+  <!-- ⭐ Ten styl jest w kroku 0 świadomie: pięć stylów tekstowych powyżej dowodzi wyłącznie, że
+       rozwijają się `x:Double` i `FontWeight`. Warstwa ZŁOŻONA (`Thickness`, `CornerRadius`) to
+       osobny mechanizm i bez niego dowód byłby połowiczny — a to ona jest w §3.2 wskazana jako
+       miejsce, w którym dług odrasta najłatwiej. Role: Border.All · Radius.Surface · Pad.Group. -->
   <Style Selector="Border.settings-group">
     <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="3" />
-    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Group}" />
   </Style>
 
+  <!-- Rola: Text.SectionHeader (§6) — mocniejsza od podpisu pola, bo nazywa temat, nie wartość. -->
   <Style Selector="TextBlock.group-header">
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />
     <Setter Property="Margin" Value="0,0,0,8" />
   </Style>
 
