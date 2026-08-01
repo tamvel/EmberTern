@@ -1,9 +1,11 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -83,6 +85,56 @@ public sealed class DesignTokenApplicationTests
             Assert.Equal(Token<Thickness>("Border.All"), group.BorderThickness);
             Assert.Equal(Token<Thickness>("Pad.Group"), group.Padding);
             Assert.Equal(Token<CornerRadius>("Radius.Surface"), group.CornerRadius);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Release Blocker RB‑2, as a measurement rather than an intention: a <c>CheckBox</c> must fit inside a data
+    /// grid row. Fluent's own template makes it ~43 px against a 22 px row — the specification calls that
+    /// "unacceptable" (§6.4) — because it hard-codes <c>MinHeight=32</c> plus a 20×20 box and a 32 px column,
+    /// and only the box is a named element.
+    ///
+    /// <para>⚠ This is the assertion that would have to fail before RB‑2 could come back. It is written against
+    /// the catalog (<c>Size.Checkbox</c>, <c>Size.Row.Grid</c>) rather than against 14 and 22, so a deliberate
+    /// change of either value keeps it meaningful instead of turning it into a number to "fix".</para>
+    /// </summary>
+    [Fact]
+    public async Task CheckBox_FitsInsideAGridRow()
+    {
+        await _session.Dispatch(() =>
+        {
+            var bare = new CheckBox();
+            var window = new Window { Content = bare };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // ⚠ DesiredSize, not Bounds — and the distinction is the defect itself. Bounds depends on the host
+            // (as a Window's content the control stretches to the whole window), while DesiredSize is what the
+            // control ASKS FOR, which is exactly what forces a data grid row to grow. Fluent asks for 32.
+            //
+            // ⚠⚠ Compared against the room a CELL leaves, not against the row height — §5.1's own arithmetic:
+            // 22 px row − Pad.Cell top and bottom = 16 px of content. An earlier draft of the CheckBox template
+            // compared against 22, passed at 20 px, and would still have pushed every row to 26 — the assertion
+            // was measuring the wrong quantity, so it agreed with a template that reopened RB‑2.
+            var cell = Token<Thickness>("Pad.Cell");
+            var room = Token<double>("Size.Row.Grid") - cell.Top - cell.Bottom;
+            Assert.True(bare.DesiredSize.Height <= room,
+                $"A CheckBox asks for {bare.DesiredSize.Height} px and a grid cell leaves {room} px — this is RB‑2.");
+
+            // The mark itself carries the catalog value; the control around it carries no height of its own.
+            var box = bare.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NormalRectangle");
+            Assert.Equal(Token<double>("Size.Checkbox"), box.Bounds.Height);
+            Assert.Equal(Token<double>("Size.Checkbox"), box.Bounds.Width);
+
+            // ⭐ The click target is deliberately WIDER than the mark (see the ControlTheme's comment): 14 px is
+            // a small thing to hit for eight hours. Horizontally only — vertically there is no room to spare,
+            // as the assertion above spells out. Pinned so a later "tidy-up" of the transparent panel is a
+            // visible decision rather than an accident.
+            var markArea = bare.GetVisualDescendants().OfType<Panel>().Single(p => p.Name == "PART_MarkArea");
+            Assert.True(markArea.Bounds.Width >= box.Bounds.Width + 4,
+                $"The click target ({markArea.Bounds.Width} px wide) is no wider than the mark ({box.Bounds.Width} px).");
 
             window.Close();
         }, default);

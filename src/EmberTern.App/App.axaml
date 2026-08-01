@@ -18,6 +18,9 @@
         <ResourceInclude Source="avares://EmberTern/Themes/Typography.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/Colors.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/IconGeometries.axaml" />
+        <!-- ⚠ ControlThemes PO IconGeometries: szablon CheckBoxa sięga po `{StaticResource Icon.Check}`,
+             a `StaticResource` rozwiązuje się przy wczytywaniu — geometria musi już tu być. -->
+        <ResourceInclude Source="avares://EmberTern/Themes/ControlThemes.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/SearchableComboBox.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/PickerTemplates.axaml" />
       </ResourceDictionary.MergedDictionaries>

@@ -1402,3 +1402,70 @@ zaktualizowany.
 ⭐ **Efekt uboczny, który warto znać:** `DesignTokenComplianceTests` z M2a zaczyna w M2b pełnić
 drugą rolę — **czujnika zakresu**. M2b pracuje wyłącznie w `Themes/`, a test mierzy
 `Views/`+`Controls/`; drgnięcie któregokolwiek licznika oznacza wejście w zakres M2c.
+
+### §15.2 Krok 1 — `CheckBox` (Release Blocker RB‑2)
+
+Pierwsza zmiana wizualna M2b. Zakres celowo wąski: **wyłącznie `CheckBox`** (decyzja użytkownika —
+izolacja ryzyka R‑2); `RadioButton` wchodzi jako pierwsza iteracja kroku kontrolek.
+
+**⭐ Własny `ControlTemplate` był konieczny i to zostało ZMIERZONE, nie założone.** Sonda headless na
+Avalonii 12.0.3 wypisała drzewo szablonu Fluenta:
+
+```
+Grid #RootGrid
+  Border #PART_Border
+  Grid (BEZ NAZWY)  Height=32          ← wysokość kolumny boxa
+    Border #NormalRectangle  W=20 H=20 ← sam box
+    Viewbox → Panel 16×16 → Path #CheckGlyph
+  ContentPresenter #PART_ContentPresenter
+```
+
+Rozmiary to **wartości lokalne wewnątrz szablonu**, a z trzech elementów wymagających zmiany
+**nazwany jest tylko jeden**. Selektor po nienazwanym elemencie (`Grid:not(#RootGrid)`) działałby
+dziś, ale aktualizacja Avalonii dodająca jeden `Grid` po cichu zmieniłaby cel — a objawem byłaby zła
+wysokość wiersza, nie błąd kompilacji. §5 przewidziało to wprost i miało rację.
+
+**⭐ Znak zaznaczenia pochodzi z własnego systemu ikon** (`Icon.Check`, `Icon.Minus`) renderowanego
+przez `SvgIcon` — a nie z kopii geometrii Fluenta. Checkbox przestaje być jedynym miejscem
+w aplikacji z obcym rysunkiem, a stan nieokreślony niesie tę samą kreskę co menu.
+
+**⚠⚠ NAJWAŻNIEJSZE USTALENIE KROKU — cel kliknięcia rośnie POZIOMO, nie pionowo, i wykrył to
+błąd, który przeszedł przez pierwszy test.** Pierwsza wersja szablonu dawała przezroczysty cel
+20×20, żeby 14‑pikselowy znak nie był mikroskopijnym celem przy ośmiogodzinnej pracy. Test to
+przepuścił, bo porównywał żądaną wysokość z **wysokością wiersza** (22). Prawdziwym ograniczeniem
+jest arytmetyka §5.1: wiersz 22 − `Pad.Cell` (3+3) = **16 px na zawartość**. Cel 20 px podniósłby
+wiersz do 26 — czyli **ta „ergonomiczna" poprawka przewróciłaby dokładnie ten Release Blocker,
+który krok naprawia.**
+
+⭐ Rozwiązanie zachowuje obie rzeczy: **cel rośnie tam, gdzie to nic nie kosztuje** (poziomo do 20 px,
+kolumna jest szersza niż znak) i **nie rośnie tam, gdzie kosztowałoby RB‑2**. Asercja porównuje teraz
+z **przestrzenią, jaką zostawia komórka**, a nie z wysokością wiersza — bo poprzednia zgadzała się
+z szablonem, który defekt przywracał.
+
+⚠ **Lekcja ogólniejsza:** test napisany na tę samą wielkość, na którą patrzy implementacja, potrafi
+potwierdzić błąd zamiast go złapać. Asercja musi mierzyć **ograniczenie**, nie **zamiar**.
+
+**⚠ Kontrolka nie ma `MinHeight` i to jest cała treść RB‑2.** Fluent narzucał 32; kontrolka
+zaznaczenia nie ma własnej wysokości do narzucenia — ma zmieścić się w wierszu, w którym stoi.
+
+**⭐ Nowa rola w katalogu: `Margin.MarkGap` = `8,0,0,0`** — odstęp między znakiem kontrolki
+a jej etykietą. Pierwsze rozszerzenie „zamkniętej" listy §4.1, wykonane procedurą, którą ta sekcja
+sama przewiduje. Nie da się jej złożyć z istniejącej `Margin.InlineGap` (`0,0,8,0`), bo tamta jest
+prawostronna: właścicielem odstępu jest tam element po lewej. Tutaj musi nim być **etykieta** —
+gdyby odstęp należał do znaku, `CheckBox` bez etykiety (kolumna siatki) niósłby 8 px pustego
+marginesu i przestałby być wyśrodkowany w komórce. Ten sam odstęp, inny właściciel, inna rola.
+⚠ `RadioButton` skonsumuje ją natychmiast — rola nie powstała „na zapas".
+
+**⚠ Nowy plik `Themes/ControlThemes.axaml`** — `ControlTheme` to **struktura** (szablon + stany),
+`ControlStyles.axaml` to **style** (warianty klasowe na gotowych szablonach). Podział nie jest nowym
+pomysłem: `SearchableComboBox.axaml` i `PickerTemplates.axaml` są dokładnie takimi słownikami
+szablonów. ⚠ Wpięty **po** `IconGeometries.axaml`, bo szablon sięga po `{StaticResource Icon.Check}`,
+a `StaticResource` rozwiązuje się przy wczytywaniu.
+
+⭐ **Fakt potwierdzający D1 znaleziony po drodze:** `SearchableComboBox` — jedyna kontrolka, którą
+ktoś w tym projekcie świadomie zaprojektował — **ma `MinHeight=24`**. Wysokość standardowa z D1 nie
+jest liczbą wymyśloną; jest liczbą, do której projekt już raz doszedł sam.
+
+**Do oceny wizualnej użytkownika:** promień boxa czyta `Radius.Surface` (3). Na kwadracie 14 px to
+proporcjonalnie więcej niż 3 na 20 px u Fluenta — jeżeli okaże się zbyt okrągły, właściwą odpowiedzią
+jest **nowa rola `Radius.Control`**, a nie zmiana `Radius.Surface`, którą dzielą karty i panele.

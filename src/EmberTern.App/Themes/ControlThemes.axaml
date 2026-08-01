@@ -1,0 +1,154 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:EmberTern.App.Controls">
+
+  <!-- ================================================================================================
+       EmberTern Control Themes — własne szablony kontrolek bazowych (Product Polish M2b).
+
+       Ten plik trzyma `ControlTheme`, czyli STRUKTURĘ kontrolki (szablon + jej stany).
+       `Themes/ControlStyles.axaml` trzyma STYLE — warianty klasowe i settery na gotowych szablonach.
+       Podział jest zgodny z precedensem, który już istniał: `SearchableComboBox.axaml`
+       i `PickerTemplates.axaml` to dokładnie takie słowniki szablonów, scalane w `App.axaml`.
+
+       ⛔ Szablon piszemy WYŁĄCZNIE wtedy, gdy Fluent nie pozwala inaczej. Nie jest to preferencja
+       stylistyczna — każdy własny szablon to kod, który trzeba utrzymać przy aktualizacji Avalonii.
+       ================================================================================================ -->
+
+  <!-- ================================================================================================
+       CheckBox — Release Blocker RB‑2.
+
+       ⚠ PROBLEM: `CheckBox` w siatce wymusza wiersz ~43 px zamiast 22 (§1.2). Specyfikacja §6.4
+       nazywa to „niedopuszczalne". Dotyczy Table Editor → Fields, Data Import → Table types
+       i Security Managera — czyli powierzchni, na których użytkownik pracuje godzinami.
+
+       ⭐ DLACZEGO WŁASNY SZABLON, A NIE SETTER — ZMIERZONE, NIE ZAŁOŻONE (M2b, sonda headless
+       na Avalonii 12.0.3). Drzewo szablonu Fluenta wygląda tak:
+
+           Grid #RootGrid
+             Border #PART_Border
+             Grid (BEZ NAZWY)   Height=32      ← wysokość kolumny boxa, wartość lokalna
+               Border #NormalRectangle  W=20 H=20   ← sam box, wartość lokalna
+               Viewbox → Panel 16×16 → Path #CheckGlyph
+             ContentPresenter #PART_ContentPresenter
+
+       Rozmiar jest wpisany jako wartości lokalne WEWNĄTRZ szablonu, a z trzech elementów, które
+       trzeba zmniejszyć, **nazwany jest tylko jeden**. Do reszty dałoby się dojść selektorem po
+       nienazwanym elemencie (`Grid:not(#RootGrid)`), ale wtedy aktualizacja Avalonii, która doda
+       do szablonu jeden `Grid`, po cichu zmienia cel selektora — a objawem jest zła wysokość
+       wiersza, nie błąd kompilacji. §5 przewidziało to wprost.
+
+       ⭐ ZNAK ZAZNACZENIA POCHODZI Z WŁASNEGO SYSTEMU IKON (`Icon.Check` / `Icon.Minus`), a nie
+       z kopii geometrii Fluenta. To ta sama rodzina znaków, którą użytkownik widzi w menu i na
+       pasku narzędzi — checkbox przestaje być jedynym miejscem z obcym rysunkiem.
+
+       ⭐⭐ POLE KLIKNIĘCIA JEST SZERSZE NIŻ BOX — i to jest decyzja, nie przypadek.
+       Katalog mówi, jak duży ma być ZNAK (`Size.Checkbox` = 14). Nie mówi, jak duży ma być CEL.
+       Box 14 px bez etykiety (a tak wygląda kolumna w siatce) to bardzo mały cel dla kogoś, kto
+       klika w niego przez osiem godzin. Przezroczysty `Panel` poszerza cel do 20 px.
+
+       ⚠⚠ POZIOMO, NIE PIONOWO — i ta asymetria jest wymuszona arytmetyką §5.1, nie estetyką.
+       Wiersz siatki ma 22 px, `Pad.Cell` zabiera 3+3, więc na zawartość zostaje **16 px**.
+       Pierwsza wersja tego szablonu miała cel 20×20 i **przewróciłaby RB‑2**: żądana wysokość
+       20 px podniosłaby wiersz z 22 do 26, czyli zepsułaby dokładnie to, co ten szablon naprawia.
+       W poziomie takiego ograniczenia nie ma — kolumna jest szersza niż znak — więc cel rośnie
+       tam, gdzie to nic nie kosztuje, i nie rośnie tam, gdzie kosztowałoby Release Blocker.
+       ⚠ `Size.Checkbox` zostaje 14 — żadna wartość z katalogu się nie zmienia.
+       ================================================================================================ -->
+  <ControlTheme x:Key="{x:Type CheckBox}" TargetType="CheckBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- ⚠ Świadomie BEZ `MinHeight`. Kontrolka zaznaczenia nie ma własnej wysokości do narzucenia —
+         ma zmieścić się w wierszu, w którym stoi. To jest cała treść RB‑2: Fluent narzucał 32. -->
+
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="Auto,*">
+
+          <!-- Pole kliknięcia (przezroczyste, ale hit-testowalne) — patrz komentarz wyżej. -->
+          <Panel Name="PART_MarkArea"
+                 Background="Transparent"
+                 MinWidth="20"
+                 VerticalAlignment="Center">
+
+            <Border Name="NormalRectangle"
+                    Width="{DynamicResource Size.Checkbox}"
+                    Height="{DynamicResource Size.Checkbox}"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Radius.Surface}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+
+              <!-- Rozmiar `Size.Icon.Sm` (12) wypełnia wnętrze boxa dokładnie: 14 − 2×1 px
+                   obramowania. Sam znak jest mniejszy, bo geometrie Lucide mają własny margines
+                   w siatce 24 — dlatego nie potrzeba tu dodatkowego odstępu. -->
+              <controls:SvgIcon Name="CheckGlyph"
+                                Data="{StaticResource Icon.Check}"
+                                Width="{DynamicResource Size.Icon.Sm}"
+                                Height="{DynamicResource Size.Icon.Sm}"
+                                Foreground="{DynamicResource OnAccentBrush}"
+                                Opacity="0" />
+            </Border>
+          </Panel>
+
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Grid.Column="1"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Margin="{DynamicResource Margin.MarkGap}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            RecognizesAccessKey="True" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+
+    <!-- ── Stany. Kolejność ma znaczenie: późniejszy selektor o tej samej specyficzności wygrywa. ── -->
+
+    <!-- Wskazanie kursorem na polu NIEZAZNACZONYM: samo obramowanie, bez wypełnienia. Wypełnienie
+         w stanie hover czytałoby się jak „już zaznaczone" — a to jest dokładnie ta informacja,
+         którą kontrolka niesie. -->
+    <Style Selector="^:pointerover /template/ Border#NormalRectangle">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
+    </Style>
+
+    <Style Selector="^:checked /template/ Border#NormalRectangle">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ controls|SvgIcon#CheckGlyph">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- Stan nieokreślony — kreska, nie „ptaszek". Ten sam znak co w menu (`Icon.Minus`). -->
+    <Style Selector="^:indeterminate /template/ Border#NormalRectangle">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="^:indeterminate /template/ controls|SvgIcon#CheckGlyph">
+      <Setter Property="Data" Value="{StaticResource Icon.Minus}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="^:pressed /template/ Border#NormalRectangle">
+      <Setter Property="Opacity" Value="0.75" />
+    </Style>
+
+    <!-- Pierścień skupienia na samym boxie, nie na całej kontrolce — etykieta bywa długa
+         i obramowanie wokół całości gubi informację, co właściwie ma skupienie (L‑1). -->
+    <Style Selector="^:focus-visible /template/ Border#NormalRectangle">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+    </Style>
+
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

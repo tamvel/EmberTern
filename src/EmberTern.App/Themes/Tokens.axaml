@@ -91,6 +91,19 @@
   <!-- Odstęp między kontrolkami w poziomie — ta sama reguła jednego właściciela, oś pozioma. -->
   <Thickness x:Key="Margin.InlineGap">0,0,8,0</Thickness>
 
+  <!-- ⭐ DOPISANE W M2b, kroku 1 (CheckBox) — pierwsze rozszerzenie „zamkniętej" listy §4.1,
+       wykonane procedurą, którą ta sekcja sama przewiduje: nową rolę wolno dodać wtedy, gdy nie da
+       się jej złożyć z istniejących.
+
+       Rola: odstęp między ZNAKIEM kontrolki (box `CheckBox`, kropka `RadioButton`, przełącznik)
+       a jego etykietą.
+
+       Dlaczego nie `Margin.InlineGap`: tamta rola jest prawostronna (`0,0,8,0`), bo jej właścicielem
+       jest element PO LEWEJ. Tutaj odstęp musi należeć do etykiety — gdyby należał do znaku, to
+       `CheckBox` bez etykiety (czyli kolumna w siatce danych) niósłby 8 px pustego marginesu po
+       prawej i przestałby być wyśrodkowany w komórce. Ten sam odstęp, inny właściciel, inna rola. -->
+  <Thickness x:Key="Margin.MarkGap">8,0,0,0</Thickness>
+
   <!-- ══════════════════════════════════════════════════════════════════════════════════════════
        WYSOKOŚCI KONTROLEK (§5, decyzja D1 — ratyfikowana, nie podlega zmianie w tym etapie).
 
