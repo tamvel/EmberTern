@@ -90,6 +90,40 @@
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
   </Style>
 
+  <!-- ================================================================================================
+       ToolTip — M‑2 („bez stylu i bez standardu opóźnienia"), Product Polish M2b krok 4.
+
+       ⭐ Pierwszy NOWY konsument `SurfaceRaisedBrush` (RB‑4) — i najczystszy przypadek tej roli, jaki
+       jest w aplikacji: podpowiedź nie należy do żadnego kontenera, tylko unosi się nad wszystkim.
+       Dzięki temu ten styl jest zarazem sprawdzianem, czy podział z kroku 2 jest użyteczny, a nie
+       tylko poprawny.
+
+       ⚠ OPÓŹNIENIA ZOSTAJĄ NA WARTOŚCIACH AVALONII I TO JEST DECYZJA, NIE POMINIĘCIE.
+       Zmierzone: `ShowDelay` = 400 ms, `BetweenShowDelay` = 100 ms, `Placement` = Pointer.
+       Audyt zarzucał „brak standardu", a nie złą wartość — i 400 ms jest dobrą wartością: krócej
+       oznacza podpowiedzi wyskakujące, gdy kursor tylko PRZEJEŻDŻA przez pasek narzędzi, co przy
+       ośmiogodzinnej pracy jest hałasem, nie pomocą. Drugie 100 ms sprawia, że przejście na sąsiedni
+       przycisk pokazuje podpowiedź natychmiast — czyli seria przycisków czyta się płynnie.
+       ⛔ Nie da się ich zresztą ustawić tutaj: to właściwości DOŁĄCZONE, ustawiane na WŁAŚCICIELU
+       podpowiedzi, więc styl `ToolTip` ich nie widzi. Zmiana wymagałaby settera na selektorze
+       uniwersalnym — kosztu nieproporcjonalnego do wartości, która i tak jest właściwa.
+
+       ⚠ Rozmiar celowo nietknięty (`MaxWidth`, zawijanie). Zawartość podpowiedzi to zwykły tekst
+       renderowany jako `TextBlock` bez zawijania — samo `MaxWidth` przycięłoby go, zamiast zawinąć.
+       Długie podpowiedzi to osobny, mierzalny temat, nie efekt uboczny zmiany wyglądu.
+       ================================================================================================ -->
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Panel}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <!-- Rola: Text.Application — podpowiedź jest treścią, którą użytkownik czyta świadomie,
+         a nie chromą, którą omiata wzrokiem. -->
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+
   <!-- :is(TextBlock) so it also matches SelectableTextBlock (a TextBlock subclass) —
        error messages use Classes="subtle error" on a SelectableTextBlock so they can be
        selected/copied. -->

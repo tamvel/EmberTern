@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
@@ -141,6 +142,52 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// A <c>ToolTip</c> is the cleanest case of the RB‑4 "raised" role in the whole application — it belongs to
+    /// no container, it floats above everything — so it is also the check that the split from step 2 is
+    /// <i>useful</i> and not merely correct.
+    ///
+    /// <para>⚠⚠ Asserted under the <b>Light</b> variant, and that is the whole point. In Dark the two roles
+    /// deliberately carry the same value (§7.1: "chrome one step further" and "raised above its container"
+    /// coincide there), so a Dark assertion could not tell a correct wiring from one pointed at the chrome
+    /// token — it would pass either way. The only theme in which this test can fail is the one in which the
+    /// distinction exists.</para>
+    /// </summary>
+    [Fact]
+    public async Task ToolTip_TakesTheRaisedSurface_NotTheChromeOne()
+    {
+        await _session.Dispatch(() =>
+        {
+            var app = Application.Current!;
+            var original = app.RequestedThemeVariant;
+            try
+            {
+                app.RequestedThemeVariant = ThemeVariant.Light;
+
+                var tip = new ToolTip();
+                var window = new Window { Content = tip };
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var actual = Assert.IsType<SolidColorBrush>(tip.Background);
+                Assert.Equal(ThemeToken<SolidColorBrush>("SurfaceRaisedBrush", ThemeVariant.Light).Color, actual.Color);
+                Assert.NotEqual(ThemeToken<SolidColorBrush>("ChromeStrongBrush", ThemeVariant.Light).Color, actual.Color);
+
+                Assert.Equal(Token<Thickness>("Pad.Panel"), tip.Padding);
+                Assert.Equal(Token<CornerRadius>("Radius.Surface"), tip.CornerRadius);
+                Assert.Equal(Token<double>("Text.Application.Size"), tip.FontSize);
+
+                window.Close();
+            }
+            finally
+            {
+                // The headless session is shared by every test in HeadlessCollection (#94/#226/#286), so a
+                // leaked theme variant would silently change what a later test measures.
+                app.RequestedThemeVariant = original;
+            }
+        }, default);
+    }
+
+    /// <summary>
     /// Reads a token straight from the application's merged resources — the same lookup a style performs. If
     /// the key is missing this fails loudly here, instead of leaving a control on a silent default.
     /// </summary>
@@ -149,6 +196,22 @@ public sealed class DesignTokenApplicationTests
         var app = Application.Current;
         Assert.NotNull(app);
         Assert.True(app!.TryFindResource(key, out var value), $"Token `{key}` is not in the application's resources.");
+        return Assert.IsType<T>(value);
+    }
+
+    /// <summary>
+    /// The same lookup for a THEME-SCOPED resource. ⚠ Measured, and worth knowing: the variant-less
+    /// <see cref="Token{T}"/> above cannot see anything declared inside <c>ThemeDictionaries</c> — it reports the
+    /// key as missing. That is precisely the line between the two colour-free dictionaries added in M2a
+    /// (<c>Tokens</c>/<c>Typography</c>: one value, no variant) and <c>Colors.axaml</c> (one value per theme).
+    /// Two kinds of resource, two lookups.
+    /// </summary>
+    private static T ThemeToken<T>(string key, ThemeVariant variant)
+    {
+        var app = Application.Current;
+        Assert.NotNull(app);
+        Assert.True(app!.TryFindResource(key, variant, out var value),
+            $"Theme token `{key}` is not in the application's {variant} resources.");
         return Assert.IsType<T>(value);
     }
 }

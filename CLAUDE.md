@@ -3204,13 +3204,13 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7070 as of 2026-08-01
-  (after Product Polish M2b step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7071 as of 2026-08-01
+  (after Product Polish M2b step 4 — ToolTip, +1; 7070 after step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
   partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
   segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**6999 + 54 + 17**).
+  three documented partitions (**6999 + 54 + 18**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
@@ -3226,7 +3226,7 @@ noted.
   and its inverse with `|`.
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
   with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,
-  ~9 s) and the other four together (17 green, ~2 s). Both were clean that way on the same commit where a
+  ~9 s) and the other four together (18 green, ~2 s). Both were clean that way on the same commit where a
   combined run had to be interrupted twice.
   **⭐ A NEW DATUM ON THE CAUSE, and it is a better suspect than any assertion: a headless test that constructs
   a `MainWindow` is the hang-prone shape.** The first draft of `BrandingPresentationTests` built one to check

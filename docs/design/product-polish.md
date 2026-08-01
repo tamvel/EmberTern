@@ -664,6 +664,32 @@ stoi cała paleta składni edytora w motywie jasnym.** Paleta jest zamrożona (�
 względem **`#FCFCFD`** i potwierdzić ≥4,5:1. **Jeśli któraś nie przejdzie — zmieniamy tło, nie
 paletę**, bo paleta ma za sobą akceptację użytkownika, a tło jej nie ma.
 
+> ### ⛔ WYKONANE W M2b, KROKU 3 — i reguła powyżej okazała się NIEWYKONALNA dla jednego koloru
+>
+> Przechodzą wszystkie barwy poza **komentarzem `#2E8B57`: 4,14:1**. Ucieczka *„zmień tło"* tu nie
+> działa — ten kolor na **czystej bieli** daje **4,25:1**, więc żaden zapas w tle nie sięga progu.
+> Reguła milcząco zakładała, że tło ma zawsze margines; jeden kolor pokazał, że nie ma.
+> ⚠ Nie jest to regresja: dziś było **3,83:1**, więc zmiana tła sytuację *poprawiła*.
+> Pełne wyniki: §15.4.1.
+>
+> **⭐ ROZSTRZYGNIĘCIE UŻYTKOWNIKA (2026-08-01) — zasada szersza niż ten jeden kolor:**
+>
+> > *„Nie chciałbym zmieniać koloru komentarzy wyłącznie po to, aby osiągnąć formalny próg
+> > kontrastu. Paleta została wcześniej świadomie zaprojektowana i zaakceptowana. Wolałbym
+> > najpierw zobaczyć edytor po zakończeniu całego etapu, a dopiero później ocenić praktyczną
+> > czytelność podczas normalnej pracy."*
+>
+> **Kolor komentarzy ZOSTAJE bez zmian.** Temat wraca **po zakończeniu etapu**, oceniany
+> w normalnej pracy, a nie liczbą.
+>
+> ⭐ **Dlaczego to jest spójne z §10, a nie wyjątkiem od niego:** §10 to **próg projektowy**, czyli
+> narzędzie do wykrywania rzeczy przeoczonych — a nie nadrzędne kryterium odbioru. Nadrzędne jest
+> §0.1.1: *tokeny (i progi) są środkiem, nie celem*. Element **celowo cichy**, który przy pomiarze
+> wypada 0,36 poniżej progu, jest dokładnie tym przypadkiem, w którym liczba wymaga potwierdzenia
+> okiem, zanim uruchomi zmianę ratyfikowanej palety. ⛔ To **nie** jest licencja na ignorowanie §10
+> gdzie indziej: tam, gdzie pomiar wykrył realny problem (H‑7, tekst drugorzędny 3,86:1), zmiana
+> weszła bez dyskusji.
+
 ### §7.4 Kontrast tekstu drugorzędnego — H‑7
 
 Zmierzone dziś: **Light 4,60:1, Dark 4,52:1** — obie na granicy WCAG AA (4,5:1), przy `FontSize=11`,
@@ -1607,3 +1633,54 @@ Rozstrzygnięcie zapisane w §15.4.2.
    zmiana tła dokumentu, bo ta jest ratyfikowana (Q7).
 3. **`SearchableComboBox`** — użytkownik odnotował przy QA kroku 2 brak widocznej różnicy i słusznie
    złożył to na karb nieprzebudowanej jeszcze kolorystyki. Teraz jest przebudowana.
+
+#### §15.4.3 QA kroku 3 — zaliczone; dwa rozstrzygnięcia
+
+**Werdykt użytkownika:** *„Nowe tło było dobrą decyzją. Interfejs wygląda lżej i bardziej
+nowocześnie, a nieaktywne zakładki są wyraźnie czytelniejsze. To jest poprawa, którą rzeczywiście
+widać."* ⭐ Zwrotnie potwierdza pomiar H‑7: zgłoszona przy QA kroku 2 słaba czytelność nieaktywnych
+zakładek była w liczbach kontrastem **3,86:1**, a nie kwestią gustu.
+
+**① Ocena Application Chrome odłożona do końca M3** *(decyzja użytkownika)* — toolbar, status bar
+i pasek zakładek będą jeszcze przebudowywane, więc końcowa ocena ramy ma sens dopiero jako całość.
+⭐ To jest dokładnie brama §13.3, potwierdzona teraz niezależnie, z praktyki: użytkownik sam odmówił
+zamykania oceny na fragmencie.
+
+**② Kolor komentarzy SQL zostaje** — pełne uzasadnienie i wynikająca z niego zasada w §7.3.
+Temat wraca po zakończeniu etapu, oceniany w normalnej pracy.
+
+### §15.5 Krok 4 — `ToolTip` (M‑2)
+
+Kontrolka wybrana wcześnie **na życzenie użytkownika**: zużywa najwięcej nowych tokenów przy
+najmniejszym promieniu rażenia. Styl (settery), nie własny szablon — Fluent nie blokuje tu niczego.
+
+Tło `SurfaceRaisedBrush` · krawędź `BorderBrush` + `Border.All` · `Radius.Surface` · `Pad.Panel` ·
+`Text.Application`.
+
+⭐ **Pierwszy NOWY konsument `SurfaceRaisedBrush` — i najczystszy przypadek tej roli w aplikacji.**
+Podpowiedź nie należy do żadnego kontenera; unosi się nad wszystkim. Ten krok jest więc zarazem
+sprawdzianem, czy podział z kroku 2 jest **użyteczny**, a nie tylko poprawny.
+
+**⚠ Opóźnienia zostają na wartościach Avalonii i to jest decyzja, nie pominięcie.** Zmierzone:
+`ShowDelay` **400 ms**, `BetweenShowDelay` **100 ms**, `Placement` = Pointer. Audyt (M‑2) zarzucał
+*brak standardu*, a nie złą wartość — a 400 ms jest wartością właściwą: krócej oznacza podpowiedzi
+wyskakujące, gdy kursor tylko **przejeżdża** przez pasek narzędzi, co przy ośmiogodzinnej pracy jest
+hałasem. Drugie 100 ms sprawia, że przejście na sąsiedni przycisk pokazuje podpowiedź natychmiast.
+⛔ Nie da się ich zresztą ustawić w tym stylu: to właściwości **dołączone, ustawiane na WŁAŚCICIELU**
+podpowiedzi, więc `Selector="ToolTip"` ich nie widzi. Zmiana wymagałaby settera na selektorze
+uniwersalnym — koszt nieproporcjonalny do wartości, która i tak jest dobra.
+
+⚠ **Rozmiar celowo nietknięty.** Zawartość podpowiedzi to `TextBlock` bez zawijania, więc samo
+`MaxWidth` **przycięłoby** długi tekst zamiast go zawinąć. Długie podpowiedzi to osobny, mierzalny
+temat — nie efekt uboczny zmiany wyglądu.
+
+**⚠⚠ TEST MUSIAŁ ZOSTAĆ NAPISANY W MOTYWIE JASNYM — i to jest ogólniejsza lekcja o RB‑4.**
+W motywie ciemnym `SurfaceRaised` i `ChromeStrong` mają **celowo tę samą wartość** (§7.1), więc
+asercja „bierze uniesienie, nie chromę" w Dark przechodzi **niezależnie od tego, czy styl jest
+podpięty poprawnie**. Jedynym motywem, w którym ten test może zawieść, jest ten, w którym różnica
+istnieje. Wariant jest przywracany w `finally`, bo sesja headless jest wspólna dla całej kolekcji.
+
+⚠ **Drugi pomiar warty zapamiętania: `TryFindResource(key, out …)` NIE WIDZI zasobów z
+`ThemeDictionaries`** — zgłasza klucz jako nieistniejący. To jest dokładnie granica między dwoma
+słownikami dodanymi w M2a (`Tokens`/`Typography` — jedna wartość, bez wariantu) a `Colors.axaml`
+(jedna wartość na motyw). Dwa rodzaje zasobu, dwie ścieżki wyszukiwania; testy mają teraz obie.
