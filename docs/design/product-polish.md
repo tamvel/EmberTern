@@ -1782,3 +1782,80 @@ klucze, z których Fluent i tak czyta. **Projekt ma na to własny precedens** �
 kolory zaznaczenia `TreeViewItem*` i `DataGridCell*` (reguła UI #6 w `CLAUDE.md`).
 
 Propozycja przedstawiona użytkownikowi przed implementacją — rozstrzygnięcie w §15.6.3.
+
+##### §15.6.3 ⭐ RATYFIKOWANE — `FluentBridge.axaml`: przepinamy Fluenta na katalog, zamiast go kopiować
+
+> **Decyzja użytkownika, 2026-08-02:** *„Wykorzystujemy mechanizmy Avalonia zamiast je kopiować,
+> zachowujemy wszystkie sprawdzone zachowania Fluent, a jednocześnie cała aplikacja pozostaje
+> sterowana naszym systemem tokenów."*
+
+**⛔ REGUŁA WIĄŻĄCA — Bridge NIE MOŻE stać się drugim katalogiem tokenów** *(użytkownik)*:
+
+> *„Ma być wyłącznie warstwą mapującą zasoby Fluent na `Tokens.axaml`, `Typography.axaml`
+> i `Colors.axaml`. Nie powinny pojawiać się tam lokalne wartości ani nowe decyzje projektowe.
+> Wszystkie liczby i role pozostają właścicielami odpowiednich katalogów, a Bridge jedynie
+> je tłumaczy."*
+
+###### Ograniczenie XAML‑a, które wyznacza kształt Bridge'a — zmierzone
+
+⚠⚠ **XAML nie potrafi ZAALIASOWAĆ zasobu skalarnego.** `<x:Double x:Key="TextControlThemeMinHeight">`
+musi zawierać liczbę; nie da się w tym miejscu napisać „to samo, co `Size.Control`". To samo dotyczy
+`Thickness` i `CornerRadius`. Gdyby więc Bridge przejął metryki, **musiałby wpisać liczby — czyli
+złamać regułę użytkownika w pierwszej linijce.**
+
+⭐ **Pędzle są wyjątkiem i to one wyznaczają podział:** `<SolidColorBrush Color="{StaticResource
+BackgroundColor}" />` jest **odwołaniem**, nie wartością. Stąd kształt warstwy:
+
+| Co | Gdzie | Dlaczego |
+|---|---|---|
+| **Metryki** — `MinHeight`, `Padding`, `FontSize`, `BorderThickness` | **styl** w `ControlStyles.axaml`, setter czytający token przez `{DynamicResource}` | styl aplikacji ma wyższy priorytet niż `ControlTheme`, a setter **potrafi** odwołać się do tokenu |
+| **Kolory malowane przez wnętrze szablonu** (`PART_BorderElement`) | **`FluentBridge.axaml`**, jako `SolidColorBrush Color="{StaticResource …Color}"` | setter na kontrolce tam nie dociera; odwołanie do koloru nie jest wartością lokalną |
+| **Wartości, w których Fluent już się z nami zgadza** (`ControlCornerRadius` = 3 = `Radius.Surface`) | **nigdzie** — pinowane testem | wpis powielałby liczbę; test zamienia zbieżność w sprawdzany niezmiennik |
+
+⭐ **To jest lepszy podział niż „Bridge przejmuje wszystko":** Bridge zostaje **wyłącznie warstwą
+kolorów**, czyli dokładnie tym, czego nie da się zrobić inaczej — a reguła „bez lokalnych wartości"
+staje się **strukturalna, nie pamięciowa**, bo w tym pliku nie ma gdzie wpisać liczby.
+
+###### Egzekwowanie
+
+Reguła użytkownika jest zapięta testem (`FluentBridge_ContainsNoLocalValues`): **każdy wpis
+w `FluentBridge.axaml` musi odwoływać się do zasobu** (`{StaticResource …}` / `{DynamicResource …}`).
+Wartość wpisana wprost wywala test. ⛔ Bez tego reguła przetrwałaby dokładnie do pierwszego
+„tu jest szybciej wpisać kolor".
+
+###### Czego to NIE cofa
+
+⚠ `CheckBox` i `RadioButton` **zostają na własnych szablonach** i nie jest to niekonsekwencja:
+u nich rozmiar znaku jest zakodowany **wewnątrz szablonu**, a nie wystawiony jako zasób — czego
+dowiódł pomiar w krokach 1 i 5.1. Te dwie kontrolki były **wyjątkiem, nie regułą**, i dopiero sonda
+`TextBoxa` to pokazała.
+
+##### §15.6.4 Iteracja 2 — `TextBox` (pierwsza kontrolka na moście)
+
+Metryki przez styl (`Size.Control` 24 · `Pad.Control` · `Text.Application` · `Border.All` ·
+`VerticalContentAlignment=Center`), kolory przez `FluentBridge` (tło, krawędź w trzech stanach,
+tekst, watermark, zaznaczenie). Wysokość spada **32 → 24**, tekst **14 → 12**.
+
+⚠ **`VerticalContentAlignment=Center` jest konieczne, nie kosmetyczne.** `Pad.Control` ma pion
+**zerowy**, bo wysokość ma dawać `Size.Control` — jedna wielkość, jeden właściciel (inaczej padding
+i wysokość walczą, a wygrywa większy). Bez wyśrodkowania tekst osiadłby przy górnej krawędzi.
+
+**⚠⚠ EDYTOR W KOMÓRCE SIATKI DOSTAŁ WŁASNĄ REGUŁĘ — i bez niej krok 5.2 zepsułby krok 1.**
+`Size.Row.Grid` (22) minus `Pad.Cell` (3+3) zostawia **16 px**. `TextBox` o `MinHeight` 24
+podnosiłby **każdy edytowany wiersz o 8 px**, czyli wprowadzałby skok układu przy samym wejściu
+w edycję (§13.3 specyfikacji — Zero Layout Shift). §5 przypisuje edytorom w komórce wysokość
+**wiersza siatki**, nie kontrolki, więc `DataGridCell TextBox` ma `MinHeight=0`, `Pad.CellCompact`
+i rolę `Text.Grid`. ⭐ To jest ten sam kształt błędu, który złapałem w kroku 1 przy celu kliknięcia:
+**wartość poprawna dla formularza bywa destrukcyjna dla siatki, a obie kontrolki są tą samą klasą.**
+
+**⭐ Most zweryfikowany pomiarem w obie strony** (`TextBox_TakesItsMetricsFromTheCatalog_AndItsColours
+ThroughTheBridge`) — bo obie połowy jadą **innymi trasami i żadna nie dowodzi drugiej**:
+metryki docierają setterem stylu, który bije `ControlTheme` Fluenta (stąd `MinHeight` 24 mimo
+`TextControlThemeMinHeight` = 32), a kolory **nie mogą** — maluje je `PART_BorderElement` z zasobów
+Fluenta, więc jadą Bridge'em. Asercja czyta pędzel **z elementu, który faktycznie maluje**; setter na
+`TextBoxie` malowałby po cichu nic.
+
+⚠ **Dwa moje testy najpierw zgłosiły fałszywy alarm i warto wiedzieć dlaczego:**
+`<ResourceDictionary x:Key="Dark">` nazywa **zakres motywu**, a nie zasób — a oba strażniki liczyły
+go jako klucz („Dark zadeklarowany w dwóch plikach", „Dark nie ma wartości"). Prawda o wyrażeniu
+regularnym, bzdura o kodzie. **Ciąg w kształcie klucza nie jest automatycznie kluczem.**

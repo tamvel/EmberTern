@@ -1,0 +1,88 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ================================================================================================
+       FluentBridge — warstwa TŁUMACZĄCA słownik FluentTheme na katalog EmberTerna.
+
+       ⭐ ZASADA POWSTANIA: nie przestylowujemy Fluenta i nie kopiujemy jego szablonów — PRZEPINAMY GO
+       na nasze tokeny. Fluent maluje wnętrza kontrolek (`PART_BorderElement` i podobne) z własnych
+       zasobów; ten plik podmienia te zasoby na nasze. Dzięki temu zachowujemy wszystkie sprawdzone
+       zachowania frameworka (zaznaczanie tekstu, watermark, walidacja, przewijanie, animacje stanów),
+       a wygląd i tak jest sterowany katalogiem.
+
+       ⛔⛔ REGUŁA WIĄŻĄCA (użytkownik, 2026-08-02) — TEN PLIK NIE JEST DRUGIM KATALOGIEM TOKENÓW.
+       Wyłącznie mapowanie. ŻADNYCH wartości lokalnych, ŻADNYCH nowych decyzji projektowych.
+       Każda liczba i każda rola ma właściciela w `Tokens.axaml` / `Typography.axaml` / `Colors.axaml`;
+       tutaj są wyłącznie odwołania. Egzekwuje to test `FluentBridge_ContainsNoLocalValues`.
+
+       ⚠⚠ DLATEGO SĄ TU WYŁĄCZNIE KOLORY — i to jest wynik pomiaru, nie upodobanie.
+       XAML nie potrafi ZAALIASOWAĆ zasobu skalarnego: `<x:Double x:Key="TextControlThemeMinHeight">`
+       musi zawierać liczbę, bo nie da się w tym miejscu napisać „to samo, co `Size.Control`".
+       Gdyby więc Bridge przejął metryki, musiałby wpisać liczby — czyli złamać powyższą regułę
+       w pierwszej linijce. Pędzel jest wyjątkiem, bo `Color="{StaticResource …}"` JEST odwołaniem.
+       ⭐ Konsekwencja jest korzystna: metryki (`MinHeight`, `Padding`, `FontSize`, `BorderThickness`)
+       idą przez SETTERY STYLU w `ControlStyles.axaml`, które potrafią czytać token — a reguła
+       „bez wartości lokalnych" staje się w tym pliku strukturalna, bo nie ma tu gdzie wpisać liczby.
+
+       ⚠ Czego tu NIE MA i nie powinno być: `ControlCornerRadius`. Fluent ma tam 3, `Radius.Surface`
+       ma 3 — wpis powielałby liczbę, więc zamiast niego zbieżność pinuje test.
+       ================================================================================================ -->
+
+  <ResourceDictionary.ThemeDictionaries>
+
+    <!-- ⚠ Oba słowniki mają IDENTYCZNĄ treść, bo mapowanie jest takie samo w obu motywach — różnią
+         się wyłącznie tokeny, na które wskazuje, a te są już rozdzielone w `Colors.axaml`. To jedyny
+         powód, dla którego ten plik w ogóle ma `ThemeDictionaries`: zasoby Fluenta, które nadpisuje,
+         są zależne od motywu, więc nadpisanie też musi być. -->
+
+    <ResourceDictionary x:Key="Dark">
+      <!-- ── TextBox (i wszystko, co go osadza: NumericUpDown, edytor komórki siatki) ────────────── -->
+      <SolidColorBrush x:Key="TextControlBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="TextControlForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- Podpowiedź w pustym polu — rola tekstu drugorzędnego, ta sama co podpisy pól. -->
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- Zaznaczenie tekstu — ten sam pędzel, którym zaznacza się wiersz siatki i pozycja listy. -->
+      <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{StaticResource SelectionColor}" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="TextControlBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="TextControlForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="{StaticResource SubtleForegroundColor}" />
+
+      <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{StaticResource SelectionColor}" />
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

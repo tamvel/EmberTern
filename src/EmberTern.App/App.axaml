@@ -17,6 +17,9 @@
         <ResourceInclude Source="avares://EmberTern/Themes/Tokens.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/Typography.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/Colors.axaml" />
+        <!-- ⚠ FluentBridge PO Colors: mapuje zasoby FluentTheme na nasze KOLORY przez
+             `Color="{StaticResource …Color}"`, więc tokeny barw muszą być już wczytane. -->
+        <ResourceInclude Source="avares://EmberTern/Themes/FluentBridge.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/IconGeometries.axaml" />
         <!-- ⚠ ControlThemes PO IconGeometries: szablon CheckBoxa sięga po `{StaticResource Icon.Check}`,
              a `StaticResource` rozwiązuje się przy wczytywaniu — geometria musi już tu być. -->

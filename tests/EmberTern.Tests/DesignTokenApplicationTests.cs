@@ -233,6 +233,42 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// The architectural bet of step 5.2, as a measurement: <b>re-pointing Fluent at our catalog actually
+    /// works</b> — both halves of it.
+    ///
+    /// <para>⭐ The two halves travel by different routes and neither implies the other. <b>Metrics</b> reach the
+    /// control through an application-level <c>Style</c> setter, which outranks Fluent's <c>ControlTheme</c>
+    /// (<c>TextControlThemeMinHeight</c> is 32; ours must win). <b>Colours</b> cannot: they are painted by
+    /// <c>PART_BorderElement</c> inside the template, which reads Fluent's own resource keys — so they travel
+    /// through <c>FluentBridge.axaml</c> instead. Asserting the border element's brush is the only way to know
+    /// the Bridge is wired at all; a setter on the TextBox would silently paint nothing.</para>
+    /// </summary>
+    [Fact]
+    public async Task TextBox_TakesItsMetricsFromTheCatalog_AndItsColoursThroughTheBridge()
+    {
+        await _session.Dispatch(() =>
+        {
+            var box = new TextBox { Text = "abc", Width = 200 };
+            var window = new Window { Content = new StackPanel { Children = { box } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // Half one — metrics, via the Style. Fluent asks for 32; the catalog says otherwise.
+            Assert.Equal(Token<double>("Size.Control"), box.MinHeight);
+            Assert.Equal(Token<Thickness>("Pad.Control"), box.Padding);
+            Assert.Equal(Token<double>("Text.Application.Size"), box.FontSize);
+            Assert.NotEqual(32d, box.MinHeight);
+
+            // Half two — colour, via the Bridge. Read off the element that actually paints it.
+            var painter = box.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_BorderElement");
+            var background = Assert.IsType<SolidColorBrush>(painter.Background);
+            Assert.Equal(ThemeToken<SolidColorBrush>("BackgroundBrush", ThemeVariant.Dark).Color, background.Color);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// Reads a token straight from the application's merged resources — the same lookup a style performs. If
     /// the key is missing this fails loudly here, instead of leaving a control on a silent default.
     /// </summary>

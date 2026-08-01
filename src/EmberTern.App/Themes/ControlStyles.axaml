@@ -112,6 +112,41 @@
        renderowany jako `TextBlock` bez zawijania — samo `MaxWidth` przycięłoby go, zamiast zawinąć.
        Długie podpowiedzi to osobny, mierzalny temat, nie efekt uboczny zmiany wyglądu.
        ================================================================================================ -->
+  <!-- ================================================================================================
+       TextBox — Compact Controls (RB‑3, decyzja D1), Product Polish M2b krok 5.2.
+
+       ⭐ TU SĄ WYŁĄCZNIE METRYKI. Kolory tej kontrolki maluje wnętrze szablonu Fluenta
+       (`PART_BorderElement`), więc setter `Background`/`BorderBrush` na `TextBox` nie ma dokąd
+       trafić — one idą przez `Themes/FluentBridge.axaml`. Podział jest wymuszony pomiarem, nie
+       upodobaniem: XAML nie potrafi zaaliasować zasobu skalarnego, więc gdyby metryki trafiły do
+       Bridge'a, musiałby on wpisać liczby i przestałby być warstwą mapującą (§15.6.3).
+
+       ⚠ Setter stylu aplikacji ma wyższy priorytet niż `ControlTheme` Fluenta — stąd `MinHeight`
+       zadziała mimo `TextControlThemeMinHeight` = 32.
+
+       ⚠ `VerticalContentAlignment=Center` jest konieczne, a nie kosmetyczne: `Pad.Control` ma pion
+       ZEROWY, bo wysokość ma dawać `Size.Control`, a nie padding (jedna wielkość, jeden właściciel).
+       Bez wyśrodkowania tekst przy `Stretch` osiadłby przy górnej krawędzi.
+       ================================================================================================ -->
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⚠ Edytor w komórce siatki NIE jest kontrolką formularza i nie może narzucać wiersza.
+       `Size.Row.Grid` (22) minus `Pad.Cell` (3+3) zostawia 16 px — pole o `MinHeight` 24 podniosłoby
+       każdy edytowany wiersz o 8 px, czyli wprowadziłoby skok układu przy wejściu w edycję
+       (§13.3 specyfikacji, Zero Layout Shift). §5 wprost przypisuje edytorom w komórce wysokość
+       wiersza siatki, nie kontrolki. -->
+  <Style Selector="DataGridCell TextBox">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellCompact}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+  </Style>
+
   <Style Selector="ToolTip">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />

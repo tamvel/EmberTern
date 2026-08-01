@@ -365,6 +365,40 @@ public class DesignTokenComplianceTests
                 string.Join('\n', text.Split('\n').Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))),
                 @"/\*.*?\*/", " ", RegexOptions.Singleline);
 
+    /// <summary>
+    /// ⛔ <c>FluentBridge.axaml</c> is a MAPPING layer, never a second token catalog — the user's binding rule
+    /// on ratifying it (2026-08-02): *"no local values and no new design decisions there; every number and role
+    /// keeps its owner in the catalogs, and the Bridge only translates."*
+    /// <para>Every value in that file must therefore be a <i>reference</i> (<c>{StaticResource …}</c> or
+    /// <c>{DynamicResource …}</c>). A literal colour or number is what turns a translation layer into a second
+    /// source of truth — and it would do so quietly, because a hard-coded brush works perfectly until the day
+    /// someone changes the catalog and one control does not follow.</para>
+    /// <para>⚠ This is also what keeps the rule structural rather than remembered: the file physically cannot
+    /// accumulate design decisions if every entry has to point at one.</para>
+    /// </summary>
+    [Fact]
+    public void FluentBridge_ContainsNoLocalValues()
+    {
+        var bridge = Path.Combine(AppRoot(), "Themes", "FluentBridge.axaml");
+        Assert.True(File.Exists(bridge), $"FluentBridge.axaml is missing at {bridge}");
+
+        var text = Regex.Replace(File.ReadAllText(bridge), "<!--.*?-->", " ", RegexOptions.Singleline);
+
+        // Every element carrying an x:Key is a mapping entry; each must resolve its value from a resource.
+        var offenders = KeyedElements(text)
+            .Where(m => !m.Value.Contains("StaticResource", StringComparison.Ordinal) &&
+                        !m.Value.Contains("DynamicResource", StringComparison.Ordinal))
+            .Select(m => $"{m.Groups["key"].Value} ({m.Groups["tag"].Value}) — value written in place")
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "FluentBridge declared a value of its own instead of translating one:\n  " +
+            string.Join("\n  ", offenders) +
+            "\n\nThe Bridge maps Fluent's resource keys onto Tokens/Typography/Colors and owns nothing. If the " +
+            "value you need does not exist in a catalog, it belongs in the catalog — with a role and a reason " +
+            "(§4.2.4) — not here.");
+    }
+
     private static IEnumerable<string> ThemeFiles() =>
         Directory.EnumerateFiles(Path.Combine(AppRoot(), "Themes"), "*.axaml").OrderBy(f => f, StringComparer.Ordinal);
 
@@ -377,10 +411,19 @@ public class DesignTokenComplianceTests
             // Method group would infer string? (GetFileName is NotNullIfNotNull-annotated), which a dictionary
             // key may not be — the input is always a real path here.
             f => Path.GetFileName(f)!,
-            f => Regex.Matches(File.ReadAllText(f), @"x:Key=""([^""]+)""")
-                      .Select(m => m.Groups[1].Value)
-                      .ToHashSet(StringComparer.Ordinal),
+            f => KeyedElements(File.ReadAllText(f)).Select(m => m.Groups["key"].Value).ToHashSet(StringComparer.Ordinal),
             StringComparer.Ordinal);
+
+    /// <summary>
+    /// Every element that DECLARES a resource, with its tag and key.
+    /// <para>⚠ <c>ResourceDictionary</c> is excluded, and that is not a detail: <c>&lt;ResourceDictionary
+    /// x:Key="Dark"&gt;</c> names a THEME SCOPE, not a resource. Both guards below first reported "Dark is
+    /// declared in two files" and "Dark has no value" — true of the regex, meaningless about the code. A
+    /// key-shaped string is not automatically a key.</para>
+    /// </summary>
+    private static IEnumerable<Match> KeyedElements(string text) =>
+        Regex.Matches(text, @"<(?<tag>[\w:]+)(?=[\s>])[^>]*?x:Key=""(?<key>[^""]+)""[^>]*>")
+             .Where(m => m.Groups["tag"].Value != "ResourceDictionary");
 
     /// <summary>
     /// Counts declarations per file, keyed by a repository-relative path with forward slashes. Keyed by path
