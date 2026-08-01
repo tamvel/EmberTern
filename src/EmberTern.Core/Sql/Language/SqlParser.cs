@@ -25,10 +25,10 @@ namespace EmberTern.Core.Sql.Language;
 /// <see cref="SqlStatementSplitter"/>) rather than carrying its own scanner. The boundary rules
 /// mirror the long-standing PSQL-aware splitter exactly (gotchas #55/#117/#128/#140/#152): a
 /// plain statement ends at the next top-level <c>;</c> (BEGIN/CASE/END-depth and string/comment
-/// aware — strings and comments are already opaque as tokens/trivia); a <c>CREATE/ALTER/RECREATE</c>
-/// of a <c>PROCEDURE/TRIGGER/FUNCTION/PACKAGE</c> is kept whole from its header <c>AS</c> through
-/// the <c>END</c> that closes the outermost <c>BEGIN</c>, so its DECLARE-section semicolons never
-/// split it.
+/// aware — strings and comments are already opaque as tokens/trivia); a statement with a PSQL body —
+/// a <c>CREATE/ALTER/RECREATE</c> of a <c>PROCEDURE/TRIGGER/FUNCTION/PACKAGE</c>, or an
+/// <c>EXECUTE BLOCK</c> — is kept whole from its header <c>AS</c> through the <c>END</c> that closes
+/// the outermost <c>BEGIN</c>, so its DECLARE-section semicolons never split it.
 /// </para>
 /// <para>Pure — no Avalonia, no Firebird driver — and offline unit-testable.</para>
 /// <para>
@@ -78,7 +78,7 @@ public static partial class SqlParser
             int startIdx = idx;
             int startChar = sig[startIdx].Start;
 
-            (int endIdxExcl, int endChar) = IsPsqlDefinitionStart(sig, startIdx)
+            (int endIdxExcl, int endChar) = HasPsqlBodyShape(sig, startIdx)
                 ? ScanPsql(sig, startIdx, n)
                 : lenient ? ScanPlainLenient(sig, startIdx, n) : ScanPlain(sig, startIdx, n);
 
@@ -266,6 +266,22 @@ public static partial class SqlParser
         }
         return i;
     }
+
+    // The question SEGMENTATION asks: does this statement have a PSQL body — a header, a top-level AS,
+    // then an optional DECLARE section and BEGIN … END — so that the semicolons inside it do NOT end it?
+    // That is deliberately NOT the same question as "is this a PSQL DEFINITION" (IsPsqlDefinitionStart,
+    // which classification asks to set DdlStatement.IsPsqlDefinition): EXECUTE BLOCK defines nothing, yet
+    // it has exactly that shape. Scanning it with the plain ';' rule cut it in two at the end of its first
+    // DECLARE — its BEGIN … END became a separate AnonymousBlockStatement with its own scope, so no
+    // declared variable could resolve in the body (ET0003 on every :v). One question, one predicate, one
+    // scan for every PSQL-bodied statement.
+    private static bool HasPsqlBodyShape(IReadOnlyList<SqlToken> sig, int start)
+        => IsPsqlDefinitionStart(sig, start) || IsExecuteBlockStart(sig, start);
+
+    // EXECUTE BLOCK — the anonymous PSQL statement. (EXECUTE PROCEDURE / EXECUTE STATEMENT have no body
+    // and stay on the plain ';' scan.)
+    private static bool IsExecuteBlockStart(IReadOnlyList<SqlToken> sig, int start)
+        => Kw(At(sig, start), "EXECUTE") && Kw(At(sig, start + 1), "BLOCK");
 
     // CREATE [OR ALTER] | ALTER | RECREATE  +  PROCEDURE | TRIGGER | FUNCTION | PACKAGE.
     // (ALTER TABLE / CREATE VIEW … AS SELECT / CREATE GENERATOR etc. are NOT PSQL definitions.)

@@ -177,6 +177,134 @@ public class DiagnosticsEngineTests
             x.Category is DiagnosticCategory.UnresolvedVariable or DiagnosticCategory.UnresolvedParameter);
     }
 
+    // ══ Generator names are objects, not variables (GEN_ID / NEXT VALUE FOR) ══════════════════
+    //
+    // `GEN_ID(gen_bomitem, 1)` in a PSQL body reported ET0003 on an existing generator. The PSQL expression
+    // walker treated the bare name as a local-variable candidate — it knew only the NEXT VALUE FOR position —
+    // and the unresolved Variable reference it recorded then blocked the catalog scan that would have bound
+    // the sequence. Both positions now read one shared predicate, so the two constructs cannot diverge.
+
+    private static FakeMetadata WithGenerator() =>
+        new FakeMetadata().Object("GEN_TEST", SymbolKind.Sequence).Object("T", SymbolKind.Table);
+
+    [Theory]
+    [InlineData("select gen_id(gen_test, 1) from rdb$database")]
+    [InlineData("select next value for gen_test from rdb$database")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = gen_id(gen_test, 1);\nend")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = next value for gen_test;\nend")]
+    [InlineData("execute block as declare variable v integer;\nbegin\n  v = gen_id(gen_test, 1);\nend")]
+    public void GeneratorName_Known_IsNotFlagged(string sql)
+        => Assert.Empty(Analyze(sql, WithGenerator()));
+
+    // An unknown name in a generator position is an unknown OBJECT (ET0001) — never an unresolved variable.
+    [Theory]
+    [InlineData("select gen_id(brak_generatora, 1) from rdb$database")]
+    [InlineData("select next value for brak_generatora from rdb$database")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = gen_id(brak_generatora, 1);\nend")]
+    public void GeneratorName_Unknown_IsFlaggedAsUnknownObject(string sql)
+    {
+        var d = Assert.Single(Analyze(sql, WithGenerator()));
+        Assert.Equal(DiagnosticCategory.UnknownObject, d.Category);
+        Assert.Equal("ET0001", d.Code);
+        Assert.Equal(sql.IndexOf("brak_generatora", StringComparison.Ordinal), d.Start);
+        Assert.Equal("brak_generatora".Length, d.Length);
+    }
+
+    // ET0001 stays metadata-gated: with no connection every object is unresolved by construction, so a
+    // generator position must be silent rather than accuse a generator that does exist.
+    [Fact]
+    public void GeneratorName_WithoutMetadata_IsSilent()
+    {
+        const string sql = "create procedure p as declare variable v integer;\nbegin\n  v = gen_id(gen_test, 1);\nend";
+        Assert.Empty(Analyze(sql)); // EmptyMetadataProvider
+    }
+
+    // The rule is the POSITION, not the function: only GEN_ID's first argument names a generator, so an
+    // undeclared bare name in the second argument is still an unresolved variable.
+    [Fact]
+    public void GenId_SecondArgument_UndeclaredVariable_IsStillFlagged()
+    {
+        const string sql = "create procedure p as declare variable v integer;\nbegin\n  v = gen_id(gen_test, v_step);\nend";
+        var d = Assert.Single(Analyze(sql, WithGenerator()));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal("ET0003", d.Code);
+        Assert.Equal(sql.IndexOf("v_step", StringComparison.Ordinal), d.Start);
+    }
+
+    // …and an ordinary undeclared variable in the same body still reports ET0003 as it always has.
+    [Fact]
+    public void OrdinaryVariable_NextToAGeneratorUse_IsStillFlagged()
+    {
+        const string sql =
+            "create procedure p as declare variable v integer;\n" +
+            "begin\n" +
+            "  v = gen_id(gen_test, 1);\n" +
+            "  v = v_typo;\n" +
+            "end";
+        var d = Assert.Single(Analyze(sql, WithGenerator()));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal("ET0003", d.Code);
+        Assert.Equal(sql.IndexOf("v_typo", StringComparison.Ordinal), d.Start);
+    }
+
+    // ══ EXECUTE BLOCK — declarations reach the body (segmentation regression) ═════════════════
+    //
+    // A variable DECLAREd in an EXECUTE BLOCK must resolve in its body exactly as in a procedure. It did
+    // not: statement segmentation asked "is this a PSQL *definition*" (it is not — it defines nothing) and
+    // so scanned the block with the plain ';' rule, which ended the statement at the first DECLARE's
+    // semicolon. The BEGIN…END then became a separate anonymous block with its own scope, and every use of
+    // a declared variable in it was reported ET0003. Only EXECUTE BLOCK was affected, and only once it had
+    // a DECLARE section — without one the body's BEGIN raises the depth before any top-level ';' appears.
+    // Each case is paired with its procedure twin, which must stay silent as it always has.
+
+    [Theory]
+    [InlineData("execute block\nas\ndeclare variable v integer;\nbegin\n  v = 1;\nend")]
+    [InlineData("create procedure p\nas\ndeclare variable v integer;\nbegin\n  v = 1;\nend")]
+    public void DeclaredVariable_AssignedInBody_IsNotFlagged(string sql)
+        => Assert.Empty(Analyze(sql));
+
+    [Theory]
+    [InlineData("execute block\nas\ndeclare variable v integer;\nbegin\n  insert into test(id)\n  values (:v);\nend")]
+    [InlineData("create procedure p\nas\ndeclare variable v integer;\nbegin\n  insert into test(id)\n  values (:v);\nend")]
+    public void DeclaredVariable_UsedWithColonInEmbeddedDml_IsNotFlagged(string sql)
+        => Assert.Empty(Analyze(sql));
+
+    [Theory]
+    [InlineData("execute block\nreturns (id integer)\nas\ndeclare variable v integer;\nbegin\n  id = :v;\n  suspend;\nend")]
+    [InlineData("create procedure p\nreturns (id integer)\nas\ndeclare variable v integer;\nbegin\n  id = :v;\n  suspend;\nend")]
+    public void DeclaredVariable_AssignedToOutputWithColon_IsNotFlagged(string sql)
+        => Assert.Empty(Analyze(sql));
+
+    // The block still has a routine-body scope of its own, so a genuinely undeclared name is still caught —
+    // the fix restores resolution, it does not silence the category for EXECUTE BLOCK.
+    [Fact]
+    public void ExecuteBlock_UndeclaredVariable_IsStillFlagged()
+    {
+        const string sql =
+            "execute block\nas\ndeclare variable v integer;\nbegin\n  v = :undeclared;\nend";
+        var d = Assert.Single(Analyze(sql));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal("ET0003", d.Code);
+        Assert.Equal(sql.IndexOf(":undeclared", StringComparison.Ordinal), d.Start);
+    }
+
+    // An EXECUTE BLOCK's input parameters must reach the body too (the same scope, declared from the header).
+    [Fact]
+    public void ExecuteBlock_HeaderParameterUsedInBody_IsNotFlagged()
+    {
+        const string sql =
+            "execute block (a integer = ?)\n" +
+            "returns (r integer)\n" +
+            "as\n" +
+            "declare variable v integer;\n" +
+            "begin\n" +
+            "  v = :a;\n" +
+            "  r = v;\n" +
+            "  suspend;\n" +
+            "end";
+        Assert.Empty(Analyze(sql));
+    }
+
     // ══ Unresolved BARE variable (Seam 0-fix) ═════════════════════════════════════════════════
     //
     // A bare (colon-less) reference to an undeclared variable is flagged ET0003 — but ONLY in an

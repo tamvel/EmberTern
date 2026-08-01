@@ -9,7 +9,6 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -126,8 +125,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Icon = new WindowIcon(
-            AssetLoader.Open(new Uri("avares://EmberTern/Assets/Branding/EmberTern.ico")));
+        // ⛔ No Icon assignment here. The application icon is declared ONCE, for every window, by the
+        // `Window` style in Themes/ControlStyles.axaml. A local value set here would outrank that
+        // setter and make this the one window whose icon comes from a second place.
         _diagnostics = new Completion.DiagnosticsPanelHost(
             () => _currentVm?.DiagnosticsPanel,
             () => _editor,

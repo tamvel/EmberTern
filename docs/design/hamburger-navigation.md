@@ -265,6 +265,15 @@ user has to know to look for.
 
 ## 6. Placement
 
+> ⚠ **AMENDED 2026-08-01 (Branding UX sprint): the `[logo]` in this section's diagrams is GONE.** The brand
+> mark was removed from the titlebar on purpose — chrome belongs to the document, not to the product's
+> identity, and the mark plus its divider were spending ~40px of the most contested horizontal space in the
+> window. The row now reads `[active connection] │ ☰ ⊟ ＋ …`, and with **no** connection it reads
+> `☰ ⊟ ＋ …` — the whole connection block, its margin and the divider after it collapse together, so nothing
+> is left standing where the mark used to be. **The hamburger's placement decision below is unchanged**: it
+> is still the first button of the action zone, still unfenced. The logo now lives only in About (§9.6), which
+> is what that section was already arguing it deserved.
+
 **Decided (round 2):** `[logo] │ ☰ ⊟ ＋ …` — the hamburger is **simply the first button of the action zone**,
 immediately followed by Show/Hide Connections, with **no separator between them**. Nothing else in the layout
 moves.
@@ -359,9 +368,8 @@ footer) — no new dialog pattern. Modal, fixed size (~420 × 300), not resizabl
 - **No tagline.** Round 1 proposed one; cutting it is more consistent with the brief than keeping it — the
   logo and the name already say what this is, and a marketing line on an otherwise bare window reads louder
   than it should. Trivially added later if you want it.
-- **Logo** from `Assets/Branding/` (both `logo.png` and `EmberTern_logo.png` ship), `Stretch="Uniform"` in a
-  square slot — same discipline as the 26px titlebar mark. Etap 3 picks the file by pixel size so a ~96px slot
-  is not upscaling a 26px-grade asset.
+- **Logo** from `Assets/Branding/`, `Stretch="Uniform"` in a square slot. Etap 3 picks the file by pixel size
+  so a ~96px slot is not upscaling a 26px-grade asset.
 - **No mention of Claude Code or ChatGPT.** This is the author's window.
 - **`All rights reserved`** is a *reservation*, not a licence grant, so it does not pre-empt the licence being
   deferred.
@@ -927,9 +935,9 @@ that asks something; here it would have produced exactly the banded Win32 "About
 `Author:` / `Copyright:` form. So: no bands, no label column, no environment block. 400px wide, height to
 content, `Escape`/`Enter` both close.
 
-The mark is the subject: `EmberTern_logo.png` at 128px (the same 256×256 transparent asset the titlebar uses —
-`logo.png` is the same artwork on an opaque white ground, which would show as a white square on the dark
-theme), then the name at 23px SemiBold, the version subtle beneath it, a **40px hairline** rather than a
+The mark is the subject: `EmberTern_logo.png` at 128px (the 256×256 transparent asset rendered from the
+source master `logo.png`, which is repo-only and does not ship), then the name at
+23px SemiBold, the version subtle beneath it, a **40px hairline** rather than a
 full-width rule, then author and copyright. The hairline is also the slot a future licence line occupies — one
 row, not a redesign (§8.3).
 

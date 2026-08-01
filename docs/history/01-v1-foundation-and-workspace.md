@@ -112,6 +112,155 @@ Surfaced when the user opened DDL against the production FK ERP schema (2356 tab
 
 **csproj gotcha** — `<AvaloniaResource Include="Assets\**" />` already covers the new `Branding` subfolder. **Do not add a second more-specific include** (`Assets/Branding/**`) — with `TreatWarningsAsErrors=true` the duplicate item fails the build (NETSDK1022).
 
+#### ⚠ Superseded in part — Branding UX sprint, 2026-08-01
+
+Three statements above are no longer true, and the current state is documented in
+[`src/EmberTern.App/Assets/Branding/BRANDING.md`](../../src/EmberTern.App/Assets/Branding/BRANDING.md),
+which is the authority from here on:
+
+- **`EmberTern_logo.png` is no longer rendered in the top bar.** The titlebar mark was removed; the asset's
+  one remaining consumer is the About window, at 128px.
+- **The window icon is no longer assigned in `MainWindow`'s constructor.** It comes from a single
+  `<Style Selector="Window">` setter in `Themes/ControlStyles.axaml`, which reaches every window — the other
+  25 had no icon at all until then.
+- **`logo.png` no longer ships.** It is excluded from `AvaloniaResource` (the same treatment the icon `.svg`
+  sources get) and stays in the repository purely as the master artwork.
+- **All three files are different artwork now** — the logo was replaced on 2026-08-01 (below). The
+  1536×1024 recorded above was already wrong for the old master (it was 976×973).
+- **`logo.png` moved to `Assets/Branding/Masters/`, and it is no longer the only master.** The OS icon is
+  rendered from a *second* source, `Masters/icon-source.png` — the two shipped assets are deliberately
+  different artwork (below).
+
+---
+
+### Branding UX sprint (2026-08-01)
+
+A small, closed sprint on the application's visual identity — no logic touched, no fonts, spacing, colours or
+layout changed beyond the removal itself.
+
+**1. The titlebar logo is gone.** The user's reasoning, and it is the modern desktop idiom (ChatGPT, Claude,
+VS Code): a working surface's chrome is for the document, not for the product's identity, and the 26px mark
+plus its divider were spending ~40px of the window's most contested horizontal space telling the user which
+application they had launched.
+
+⭐ **The interesting half was making sure nothing was left behind.** Deleting the `<Image>` is trivial; the
+mistakes that read as rendering bugs are the leftovers. Three of them existed here:
+
+- The brand `StackPanel`'s own `Margin="8,0,2,0"` — a container whose children are all collapsed **is still
+  measured**, so `IsVisible` on the children alone would have left a 10px inset at the window's left edge
+  with nothing in it. Fixed by gating the container itself on `HasActiveConnection` (safe: the block's only
+  other content is the DEV MODE badge, and `IsDeveloperModeActive` reads
+  `ActiveProfile?.DeveloperMode == true` — it cannot be true without an active profile).
+- The divider that separated the mark from the connection name, which with nothing to its left becomes a rule
+  against the window edge. Deleted.
+- The action zone's **leading** divider, which had the same problem one level out: with no connection there is
+  now nothing to its left either. Gated on the same condition as the block it separates.
+
+**2. The icon mechanism, audited end to end.** The audit found the real defect was not in the paths that
+existed but in the ones that did not:
+
+| Surface | Before | After |
+|---|---|---|
+| `EmberTern.exe` (Explorer, pre-launch taskbar) | `<ApplicationIcon>` ✓ | unchanged |
+| Main window / taskbar / Alt+Tab | assigned in `MainWindow`'s ctor | from the shared style |
+| **The other 25 windows** | **no icon at all** — blank slot in the title bar and in Alt+Tab | from the shared style |
+
+⭐ **The fix is one `<Style Selector="Window">` setter in `ControlStyles.axaml`, and the choice is
+structural rather than tidy.** Avalonia has no application-level window icon, but `Window.Icon` *is* a styled
+property — so one setter reaches all 26 windows **and every window added later**, which is precisely what a
+per-window assignment cannot do: that is a rule someone has to remember 26 times, and the 27th window is the
+one that forgets. The `MainWindow` ctor assignment was **deleted with the same change**, not left as a
+belt-and-braces duplicate — a local value outranks a style setter, so keeping it would have made the main
+window the one window whose icon came from somewhere else.
+
+⚠ **A compiling style setter proves nothing here**, which is why it is pinned by a test: the setter compiles
+whether or not `Icon` is a styled property and whether or not the converter can read an avares URI. The
+assertion is deliberately made against a **bare `new Window()`** — an icon reaching a window with no XAML and
+no code-behind can only have come from the application-level style, which is exactly the property that must
+hold when a future window is added.
+
+⚠ **The test was written twice.** The first version also constructed a `MainWindow` to assert the titlebar
+carried no mark, and it **hung** — the same shape as `ConnectionExpandBindingProbe`, the notoriously
+hang-prone class, which does the same thing. Rewritten as the cheapest possible headless test (one bare
+window, 476 ms) on the standing instruction that the suite hang is its own infrastructure task and no sprint
+detours into it. The titlebar's "nothing left over" property is therefore **visual QA, not a test** — stated
+rather than quietly dropped.
+
+**3. `logo.png` stopped shipping.** 833 KB of source artwork with no avares reference anywhere — the single
+largest embedded resource in the assembly, carried for nothing. Excluded from `AvaloniaResource` exactly the
+way the icon `.svg` sources already are, so it stays the repository's master and leaves the binary.
+
+**4. About was already correct.** The window has shown the 128px mark since the Hamburger Navigation sprint
+(2026-07-29), so the sprint's third task needed no work — only the removal of a comment that had just gone
+stale ("the same asset the titlebar uses"). ⭐ The outcome is the one the user asked for and is worth stating
+positively: the logo now appears in **exactly one** place in the running application, and it is the place
+where it is the subject rather than decoration.
+
+**5. The artwork itself was replaced** — the sprint's actual point, delivered after the user pointed out that
+the first pass had built the infrastructure but not performed the swap. The new mark (a forged-steel database
+cylinder with an ember wing) replaced all three files, every shipped size regenerated **from the new master**
+by the pipeline documented in `BRANDING.md`: `EmberTern.ico` at 16/24/32/48/64/256 and `EmberTern_logo.png`
+at 256.
+
+⚠ The new master is **673×673 and already tightly cropped** — the content bounding box came back as the whole
+canvas, so the mark bled to all four edges. The pipeline's 5% pad is what stops it touching the slot border.
+
+**6. Then the taskbar rejected it, and the sprint ended with TWO masters.** The user saw round 5's icon in the
+Windows taskbar, did not like it there, and asked for a different graphic **for the `.ico` only** — the About
+mark to stay exactly as it was.
+
+⭐ **That turns a convenience into a decision worth recording.** Round 5's note above said the two shipped
+assets "change together, because both are rendered from one source". That is now false *on purpose*: an OS
+icon is judged at 16–32px inside dense chrome, an About mark at 128px on a quiet window, and a rendition that
+carries one does not automatically carry the other. **When "one source feeds both" stops holding, two masters
+is the honest answer** — a single compromise rendition would have served neither. `BRANDING.md` now opens
+with that, because *"update the logo"* is otherwise an ambiguous instruction that would silently change a
+surface nobody asked about. The masters moved to `Assets/Branding/Masters/`, excluded from `AvaloniaResource`
+**as a folder** rather than by filename: the folder rule cannot be forgotten, and the forgotten-file failure
+is silent (the 1.5 MB icon source would simply have shipped).
+
+**⚠⚠ Cutting the opaque background was the one genuinely delicate step, and the constraint is arithmetic.**
+The new icon source is 24bpp — no alpha at all — on a uniform `rgb(14,15,19)` ground, and **the artwork itself
+contains pure black**, i.e. Chebyshev distance **19** from the background. Two consequences, both observed
+rather than reasoned about:
+
+- A **global colour threshold** ("remove pixels near the background colour") punches holes straight through
+  the cylinder, because parts of the cylinder are *darker* than the background.
+- A **flood fill from the border is correct, but only below that distance.** At tolerance 28 the fill walked
+  through the artwork's own black pixels into the interior and ate a wedge out of the middle of the logo.
+
+⭐ So the rule is: **tolerance strictly above the background's own noise (±4 here) and strictly below the
+distance to the artwork's darkest pixel.** 12 shipped. The feather is restricted to the **1px rim** touching
+the cut for the same reason — feathering by colour distance globally would make the artwork's near-black
+interior semi-transparent, the same trap one level subtler.
+
+⚠ **The wedge was invisible in every check made against the source's own dark background** and obvious the
+moment the cut-out was composited over magenta. Verify a cut over white and magenta, never over the ground it
+came from.
+
+⚠ The icon is cropped **tight, with no padding** (the About mark keeps its 5% pad, since round 5) — the user
+asked for it explicitly and the reasoning holds: an icon is drawn small in dense chrome, and the empty margin
+that flatters a 128px presentation slot just makes a 16px icon look shrunken.
+
+**⚠⚠ Two GDI+ traps made a correct `.ico` look catastrophically broken, and both cost verification time.**
+`System.Drawing.Icon.ToBitmap()` returns **colour noise** for a PNG-compressed entry (it decodes the frame as
+a DIB, so PNG bytes are read as pixels), and `new Icon(path, new Size(256,256))` **hands back the 64px
+frame** (GDI+ does not select PNG-compressed 256px entries at all). A magnified strip built the obvious way
+looks like static at every size.
+
+⭐ **What settled it in one step: running the same inspection against the previously shipped icon, which
+reproduced both symptoms identically.** The check that distinguishes "my file is broken" from "my tool is
+lying" is the known-good file, not reasoning about the format — the same shape as gotcha #214, where a
+NOWAIT failure was mistaken for a Firebird prohibition. The real verification walks the `ICONDIRENTRY` table
+and decodes each payload with `Image.FromStream`: all six frames report declared size == decoded size, a PNG
+signature, and `Format32bppArgb`. Neither of the two APIs can express that assertion. Recorded in
+`BRANDING.md` so the next person to regenerate the icon does not re-derive it.
+
+Verified end to end rather than assumed: the new bytes are embedded in `EmberTern.dll` (both shipped assets
+found by payload search; `logo.png` correctly absent), the freshly built `EmberTern.exe` carries the new
+mark, and the live process's main window returns a non-zero `ICON_BIG` handle from `WM_GETICON` — which is
+what proves the style-driven icon reaches a real OS window, something the headless test cannot show.
+
 **Theme palette refresh** — `Themes/Colors.axaml`:
 
 Moved from a violet-tinted palette to VS Code-style neutrals. Dark dropped the blue-purple cast (`#1A1B26` / `#22232F` → `#1E1E1E` / `#252526`) and brightened the accent (`#8B7AB8` violet → `#C084FC`, with `#7C3AED` muted). Light gave up pure-white panels (`#FFFFFF` → `#E8E8E8`) and switched to a deeper purple accent (`#6F3DC7`) for stronger contrast on light. Selection in dark is now VS Code's `#094771` blue (was muted purple `#3D3F58`).

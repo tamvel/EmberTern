@@ -675,10 +675,14 @@ internal sealed partial class SemanticBinder
 
             if (IsNameToken(tok) && At(t, k + 1).Kind != TokenKind.LParen)
             {
-                // NEXT VALUE FOR <seq>: the identifier after the keyword FOR is a sequence, not a variable —
-                // never flag it. (In an assignment / RETURN / IF / WHILE, keyword FOR appears only there.)
-                bool flag = flagUnresolvedLocals && !(k > lo && IsWordText(t[k - 1], "FOR"));
-                BindBareLocal(tok, scope, flag);
+                // A generator name (NEXT VALUE FOR <seq>, GEN_ID(<seq>, …)) is not a local at all — the
+                // grammar fixes its meaning, and BindGlobalCatalogReferences is the one binder that resolves
+                // it. Leaving the occurrence UNCLAIMED here is what lets it: that scan skips an offset some
+                // other binder already referenced, so a reference recorded now would win the position and
+                // the generator would read as an unresolved VARIABLE (ET0003).
+                if (IsGeneratorNamePosition(t, k)) { k++; continue; }
+
+                BindBareLocal(tok, scope, flagUnresolvedLocals);
                 k++;
                 continue;
             }

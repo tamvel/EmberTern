@@ -4,6 +4,33 @@
         xmlns:aecc="using:AvaloniaEdit.CodeCompletion">
 
   <!-- ============================================================================================
+       ⭐ THE APPLICATION ICON — declared ONCE, for EVERY window.
+
+       Avalonia has no application-level window icon: Window.Icon is per window and defaults to null,
+       which the OS renders as a blank slot in the title bar and in Alt+Tab. Before this style only
+       MainWindow set one (in its code-behind), so all 25 other windows — Settings Center, Keyboard
+       Shortcuts, Third-party notices, the BLOB editor and every dialog — showed no icon at all.
+
+       Window.Icon is a StyledProperty, so ONE setter here reaches every window, including windows
+       that do not exist yet. That is the point: a per-window assignment is a rule someone has to
+       remember 26 times, and the 27th window is the one that forgets. The code-behind assignment in
+       MainWindow was removed with this change — a local value outranks a style setter, so leaving it
+       would make MainWindow the one window whose icon comes from somewhere else.
+
+       ⚠ THIS IS THE ONLY PLACE THE OS ICON PATH IS WRITTEN. The other two references to the branding
+       folder have different jobs and are not substitutes: EmberTern.App.csproj's <ApplicationIcon>
+       embeds the .ico in the executable (Explorer, and the taskbar before the app has a window), and
+       AboutWindow.axaml shows the PNG mark inside the UI. Swapping the artwork is documented in
+       Assets/Branding/BRANDING.md.
+
+       ⚠ The .ico, not the PNG: it carries 16/24/32/48/64/256 renditions, so Windows picks the size it
+       is about to draw instead of downscaling a 256px bitmap into a 16px title-bar slot.
+       ============================================================================================ -->
+  <Style Selector="Window">
+    <Setter Property="Icon" Value="avares://EmberTern/Assets/Branding/EmberTern.ico" />
+  </Style>
+
+  <!-- ============================================================================================
        MessageBanner — the IDE's ONE message surface. Its chrome lives here, in exactly TWO variants,
        so no host can invent a third:
          · (default) STANDALONE — the banner sits inside content: a full border on all four sides.
