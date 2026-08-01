@@ -34,6 +34,8 @@ verbatim, in the archive below.
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
 | **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
+| **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0 (audit) + M1 (Design Token catalog) COMPLETE and user-accepted 2026-08-01; nothing implemented.** The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
+| **`docs/design/product-polish-m2a-handover.md`** | **⭐ START HERE for the next Product Polish session.** Entry point into M2a — branch, ratified decisions, exact scope (+ the five things M2a must NOT do), work order, test-partitioning rules, 10-point DoD. Written so implementation starts without re-reading the design doc. | At the start of the M2a session. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (289 entries, #1–#302), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
@@ -420,6 +422,68 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 (audit) + M1 (Design Token
+  catalog) COMPLETE and user-accepted 2026-08-01. ⛔ NO CODE WRITTEN YET — next step is M2a.**
+  **Start the next session from
+  [docs/design/product-polish-m2a-handover.md](docs/design/product-polish-m2a-handover.md)**, then
+  [docs/design/product-polish.md](docs/design/product-polish.md) §3–§6 + §11. Spec (source of truth):
+  `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`.
+  **⭐ The stage's one finding, and it reframes everything: EmberTern does not have a Design System —
+  it has a colour system and a set of variant styles.** `Colors.axaml` is mature; the component layer
+  (`Button.icon/.primary/.flat`, `TabItem.bottom-tab/.sub-tab`, `MessageBanner`, `ContextMenu`,
+  `SvgIcon`) exists wherever someone deliberately designed a component. **Everything between those
+  components stands on local values.** Measured: **zero implicit styles for the 11 base controls**
+  (all on Fluent `MinHeight=32`), **zero non-colour tokens**, 589 local `FontSize`, 114 `Margin`,
+  40 `Padding`, 7 icon sizes, 5 corner radii, 7 monospace `FontFamily` strings across 33 files.
+  **⚠⚠ THE PLAN'S LOAD-BEARING CORRECTION — the spec's M2 says "most screens will gain the new look
+  automatically". THAT IS FALSE IN THIS CODEBASE and the project has proved it four times** (the
+  `MessageBanner`'s six per-host variants, `MainWindow.Icon`, Batch Results' `Foreground`,
+  `DangerIconBrush`): **a local value outranks a style setter.** So a de-localization sweep is its own
+  mandatory milestone (**M2c**), and `DesignTokenComplianceTests` ships in **M2a — before the
+  migration, not after** — so M2c has a measurable exit condition instead of "looks alright now".
+  **⭐ RB‑4, the subtlest finding, and the obvious diagnosis is wrong.** The chrome ladder legitimately
+  reverses per theme (Dark `#1E1E1E→#252526→#2D2D2D` lighter; Light `#F3F3F3→#E0E0E0→#D6D6D6` darker) —
+  that is the VS Code convention and it stays. The defect is that **`ElevatedPanelBrush` does TWO
+  jobs**: *"chrome one step further from the document"* (column headers, titlebar) and *"this element
+  floats above its container"* (selected tab, popups, menus). **In Dark they coincide; in Light they
+  oppose** — because *raised* reads as movement toward the light in every theme. Hence the selected tab
+  reads recessed in Light only. Fix: rename to `ChromeStrongBrush` (20 consumers) + a **new
+  `SurfaceRaisedBrush`** (~8) that goes light-ward in both.
+  **⭐ COLOUR SEMANTICS — my first proposal was wrong and the correction matters.** I proposed
+  neutralising the toolbar's icons; a precise re-measurement showed **the toolbar already has a working
+  semantic system** — ten "New X" buttons carry `IconColor_*`, *the same colours the user reads in the
+  metadata tree and on document tabs all day*. That is its character and it stays. The real defect is
+  narrow: **six generic tools painted `AccentBrush` compete with it**, plus three tokens with
+  overlapping jobs (`Icon.Trash` on `WarningIconBrush` for a destructive action, `AccentIconBrush`
+  beside `AccentBrush`, `InfoIconBrush` on Refresh). Contract: **two independent systems — object KIND
+  and action EFFECT — with neutral as the correct default**, `AccentIconBrush`/`InfoIconBrush` deleted.
+  **The toolbar stays colourful; only the blue wallpaper goes.**
+  **⭐ RATIFIED (D1–D12), do not re-litigate:** control heights **24 / 22 / 28** · **Cascadia Mono** ·
+  app name + version **removed** from the status bar · progress infrastructure (M3.1) split from wiring
+  operations (M3b) · **two tab-strip modes**, multi-row default, row limit 1–10 default 3, only the
+  strip scrolls · ⛔ **no `MaxWidth`/ellipsis on tabs** — measured refutation: `XXX_GG_WYSTCECHKART_AU99`
+  and `…_BU99` differ at **character 20**, so truncation renders them identically; DB object names share
+  prefixes by nature and the distinguishing part is at the END · Metadata Explorer unchanged (a
+  decision, not debt) · Dependencies trees (18 `TreeView` in 9 editors) migrate for **consistency, not
+  performance**, onto a new shared `TreeListView` — **never onto `SidebarFlatController`**, which exists
+  for scale it does not need.
+  **⭐ THREE PRINCIPLES THAT OUTRANK THE CATALOG:** **§0.1 Persistent UI** — Status Bar, Toolbar, tab
+  strip, Metadata Explorer, DataGrid, base controls, context menus beat screens opened once a day;
+  governs *order and effort, not scope*. **§0.1.1 tokens are a means, not the end** — ⛔ never report a
+  stage done on green tests alone; compliance is necessary, not sufficient. **§0.1.2 Application Chrome
+  is ONE surface, not four components** — designed separately they yield four correct components and one
+  incoherent frame.
+  **⛔ §13.3 IS A QUALITY GATE THAT BLOCKS M4** — after M3 the four persistent surfaces are reviewed
+  *together, on a real database, in both themes*, for **visual reception, not document compliance**.
+  Anything that still looks ordinary despite green tests gets an M3.5 before migration starts.
+  ⚠ **Ten risks recorded (§13.4)** — the two most expensive: the **`CheckBox` `ControlTemplate`** (Fluent
+  encodes box size in the template, so `Size.Checkbox=14` cannot be a setter — do it FIRST in M2b), and
+  **DPI verified at 150% after every milestone**, not only in M5, or a bad fixed-pixel token means
+  reworking everything. ⚠ Tab-strip preferences are **additive — `CurrentSchemaVersion` STAYS 2**, and
+  `TabStripMaxRows` is a numeric preference, so the whole settings-center §17.4/§17.4a pattern applies
+  (`PreferenceRange`, blur-or-Enter commit, digits-only on the tunnel, and ⚠⚠ **the control carries its
+  ROW as `DataContext`** — on the page's it types correctly and persists nothing).
 
 - **🐞 ET0003 NA NAZWIE GENERATORA W `GEN_ID(…)` — FIXED 2026-08-01 (minimal bugfix, awaits the user's
   confirmation in the running app).** `v = GEN_ID(gen_bomitem, 1);` w ciele PSQL zgłaszało **ET0003
