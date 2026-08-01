@@ -724,32 +724,36 @@ public class ProcedureDetailTests
         Assert.True(vm.ShowExecError);
     }
 
-    // ─── V1.2: Easy Mode persistence ──────────────────────────────────────
+    // ─── Easy Mode: the STATED default (Settings Center etap 6 / §7.6) ────────
+    //
+    // ⚠ These two used to assert the opposite of what they assert now, and the change is the etap's point. The
+    // default was a WorkspaceState flag that the editor's own toggle wrote back, so opening a procedure in Easy
+    // mode because of something done to a DIFFERENT procedure looked like a bug. The default now lives in
+    // Preferences with one way to change it, and toggling a mode inside an editor is a per-tab action.
 
     [Fact]
-    public void EasyModePreference_AppliedAndTracked()
+    public void TheStatedEasyModeDefault_IsAppliedToANewlyOpenedProcedure()
     {
         using var harness = new Harness();
-        harness.Main.ProcedureEasyModePreference = true;
+        harness.Main.Preferences.Apply(
+            harness.Main.Preferences.Current with { ProcedureEasyModeDefault = true });
 
         var detail = harness.Main.CreateProcedureDetail(new MetadataObject("P", MetadataObjectKind.Procedure));
-        Assert.True(detail.EasyMode);                 // applied from the stored preference
-
-        detail.EasyMode = false;                      // user toggles → preference follows
-        Assert.False(harness.Main.ProcedureEasyModePreference);
+        Assert.True(detail.EasyMode);
     }
 
     [Fact]
-    public void EasyModePreference_RoundTripsThroughWorkspace()
+    public void TogglingEasyModeInTheEditor_LeavesTheStatedDefaultAlone()
     {
-        using var h1 = new Harness();
-        h1.Main.ProcedureEasyModePreference = true;
-        var state = h1.Main.CaptureWorkspace();
-        Assert.True(state.ProcedureEasyMode);
+        using var harness = new Harness();
+        harness.Main.Preferences.Apply(
+            harness.Main.Preferences.Current with { ProcedureEasyModeDefault = true });
 
-        using var h2 = new Harness();
-        h2.Main.RestoreWorkspace(new WorkspaceState { ProcedureEasyMode = true });
-        Assert.True(h2.Main.ProcedureEasyModePreference);
+        var detail = harness.Main.CreateProcedureDetail(new MetadataObject("P", MetadataObjectKind.Procedure));
+        detail.EasyMode = false;
+
+        Assert.True(harness.Main.ProcedureEasyModeDefault);
+        Assert.True(harness.Main.Preferences.Current.ProcedureEasyModeDefault);
     }
 
     // ─── V1.3: typed Execute-dialog classification + resolve ──────────────

@@ -39,7 +39,11 @@ public sealed class ApplicationSettingsStore
     // v2 = ConnectionProfile.TransactionProfile split into Data/Metadata profiles.
     public const int CurrentSchemaVersion = 2;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    // ⭐ internal, not private, because the SETTINGS EXPORT serializes the same ApplicationSettings and must do
+    // it identically. If the export built its own options, the enums below would be written as numbers there and
+    // as names here — two representations of one aggregate, free to drift, with the divergence invisible until a
+    // file crosses between them. One aggregate, one serialization contract.
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         // Enums (TransactionProfile, WorkspaceTabKind, MetadataObjectKind, …) as their
@@ -128,6 +132,17 @@ public sealed class ApplicationSettingsStore
                 // An empty file holds no user data, so replacing it destroys nothing — Missing, not Corrupt.
                 // (A zero-length settings.dat is what a disk-full or killed-mid-write leaves behind.)
                 return SettingsLoadResult.Missing();
+            }
+
+            // A settings EXPORT put where settings.dat belongs. It was always refused — its magic is not ours, so
+            // it falls through to the legacy-headerless path and fails to decrypt — but it was refused with the
+            // DPAPI story ("written by a different Windows account"), which is untrue and unhelpful. Identity is
+            // decided here, so the truthful answer belongs here too. Still Unreadable: intact data this build
+            // cannot interpret in this position, and emphatically not safe to overwrite.
+            if (LooksLikeASettingsExport(raw))
+            {
+                LastLoadDiagnostic = ExportInPlaceOfSettingsDiagnostic;
+                return SettingsLoadResult.Unreadable(LastLoadDiagnostic);
             }
 
             string payload;
@@ -228,12 +243,19 @@ public sealed class ApplicationSettingsStore
         }
     }
 
-    // Picks the protector for a stored payload's declared scheme. Today the store holds a
-    // single injected protector; this is the seam where future schemes (AES, passphrase
-    // export/import) get registered. Returns null for a scheme we can't handle — the
-    // caller degrades safely (downgrade protection). A plaintext ("none") payload is
-    // always readable regardless of the injected protector (e.g. a dev/exported file
-    // opened by a DPAPI build); writing still uses the injected protector.
+    // Picks the protector for a stored settings.dat payload's declared scheme. Today the store
+    // holds a single injected protector; this is the seam where a future AT-REST scheme (an AES
+    // machine key, say) gets registered. Returns null for a scheme we can't handle — the caller
+    // degrades safely (downgrade protection). A plaintext ("none") payload is always readable
+    // regardless of the injected protector (e.g. a dev file opened by a DPAPI build); writing still
+    // uses the injected protector.
+    //
+    // ⚠ This comment used to name "passphrase export/import" among the schemes to register here,
+    // and EncryptionSchemes carried the matching instruction. Both were written before the export
+    // had its own envelope, and neither survives the design — see the note on
+    // EncryptionSchemes.PassphraseAes256. The short version: this method has no passphrase, so
+    // registering that scheme could only return a protector that cannot decrypt, which would turn
+    // an honest refusal into a misleading "could not be decrypted".
     private SecretProtector? ResolveProtector(string scheme)
     {
         if (string.Equals(scheme, _protector.Scheme, StringComparison.OrdinalIgnoreCase))
@@ -244,8 +266,26 @@ public sealed class ApplicationSettingsStore
         {
             return SecretProtector.Identity;
         }
+        // Explicit, so the decision is visible where someone would go to make it rather than being
+        // a fall-through. A passphrase-encrypted payload belongs to a settings EXPORT, is opened by
+        // SettingsImportReader with a protector built from that file's own header, and is never a
+        // settings.dat payload.
+        if (string.Equals(scheme, EncryptionSchemes.PassphraseAes256, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
         return null;
     }
+
+    // The export's magic, byte-compared against the front of the file. Deliberately a plain prefix test on text
+    // we have already read: this is a diagnosis of a file we are refusing either way, not a parse.
+    private static bool LooksLikeASettingsExport(string raw)
+        => raw.StartsWith(Export.SettingsExportFormat.Magic, StringComparison.Ordinal);
+
+    private const string ExportInPlaceOfSettingsDiagnostic =
+        "this looks like an exported EmberTern settings file (" + Export.SettingsExportFormat.FileExtension
+        + "), not settings.dat. An export is a separate, passphrase-encrypted format — import it from Settings "
+        + "instead of copying it over settings.dat.";
 
     /// <summary>
     /// Persists the whole aggregate — or refuses, leaving the file untouched and the reason in
@@ -279,6 +319,47 @@ public sealed class ApplicationSettingsStore
         var container = SettingsFileContainer.Wrap(
             SettingsFileContainer.CurrentContainerVersion, _protector.Scheme, payload);
         AtomicWrite(_filePath, container);
+    }
+
+    /// <summary>
+    /// Whether <see cref="Save"/> would write, asked <b>before</b> anything is prepared for it.
+    /// <para>⭐ Added for the settings IMPORT (etap 5b), and the reason is ordering rather than convenience. An
+    /// import copies the current <c>settings.dat</c> aside before it merges; if the save were then refused, that
+    /// copy would be a file created for an operation that never happened — and the only ways out of that are a
+    /// delete branch on a rule #11 surface or leaving unexplained clutter in the settings folder. Asking first
+    /// removes the choice.</para>
+    /// <para>⚠ It is the <i>same</i> judgement <see cref="Save"/> makes, from the same file, through the same
+    /// private method — not a second opinion that could disagree with it. <see cref="Save"/> still re-checks, so a
+    /// file that changes in between is caught there.</para>
+    /// </summary>
+    /// <returns>True when the file on disk is one this build may replace; otherwise false, with
+    /// <paramref name="diagnostic"/> saying why in the words <see cref="LastSaveDiagnostic"/> would use.</returns>
+    public bool CanSave(out string diagnostic) => !ExistingFileBlocksSave(out diagnostic);
+
+    /// <summary>
+    /// Copies the current <c>settings.dat</c> aside as <c>settings.dat.pre-import-&lt;stamp&gt;</c>, returning the
+    /// path, or null when there was no file to copy.
+    ///
+    /// <para>⚠ <b>A COPY, not a move, and the difference is load-bearing.</b> The naming and the "never delete"
+    /// principle come from <see cref="SaveOverUnreadableFile"/>, but its <i>operation</i> does not: that method
+    /// renames the old file aside and writes a fresh one over empty ground, whereas an import <b>merges</b> — the
+    /// file it is preserving is also the file it is about to read the current values out of. Moving it away would
+    /// take the merge base with it, and every unselected section would come back as a default.</para>
+    ///
+    /// <para>Timestamped for the same reason the unreadable copy is: a second import must not overwrite the first
+    /// rescue copy.</para>
+    /// </summary>
+    public string? CopyAsideForImport()
+    {
+        if (!File.Exists(_filePath))
+        {
+            return null;
+        }
+
+        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var preservedAt = _filePath + ".pre-import-" + stamp;
+        File.Copy(_filePath, preservedAt, overwrite: true);
+        return preservedAt;
     }
 
     /// <summary>
@@ -351,6 +432,14 @@ public sealed class ApplicationSettingsStore
         if (string.IsNullOrWhiteSpace(raw))
         {
             return false;
+        }
+
+        // A settings export sitting in settings.dat's place: refuse, and say which file it actually is. This is
+        // the file most worth not destroying — it is the user's portable copy of everything.
+        if (LooksLikeASettingsExport(raw))
+        {
+            diagnostic = "Refusing to overwrite settings.dat: " + ExportInPlaceOfSettingsDiagnostic;
+            return true;
         }
 
         string payload;
@@ -429,7 +518,19 @@ public sealed class ApplicationSettingsStore
     //     without needing to understand any earlier step. Files from the future are
     //     already rejected in Load (downgrade protection), so here we always have
     //     SchemaVersion <= CurrentSchemaVersion.
-    private void MigrateToCurrentVersion(ApplicationSettings settings)
+    //
+    // ⭐ internal static (was private), so the SETTINGS IMPORT can call THIS ladder rather than
+    // growing one of its own — the export payload is shaped as an ApplicationSettings precisely so
+    // that it can. A second migration path would defeat the point of keeping the export's format
+    // version separate from this schema version: a future Migrate_2_3 must apply to an imported
+    // file for free, and it does. Static because it never used instance state; nothing else about
+    // it changed.
+    //
+    // ⚠ The importer keeps its own "newer than we support" check with its own wording (it must say
+    // "this settings export", not "settings.dat"), matching the existing pair of such checks in
+    // LoadWithStatus and ExistingFileBlocksSave. Only the LADDER is shared, and only the ladder
+    // needs to be.
+    internal static void MigrateToCurrentVersion(ApplicationSettings settings)
     {
         Migrate_1_2(settings);
 

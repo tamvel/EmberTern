@@ -20,6 +20,7 @@ using EmberTern.App.Behaviors;
 using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Controls;
+using EmberTern.App.Settings;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
@@ -389,6 +390,50 @@ public partial class MainWindow : Window
         // Flush every still-attached grid's layout while ActualWidth is still valid
         // (before the visual tree is torn down on close).
         GridLayoutBehavior.FlushAll();
+
+        // ⚠ The ONE case where this session must not record its workspace: an import in this session replaced the
+        // stored one, and capturing now would write these tabs straight over it — the import would silently undo
+        // itself on exit, which is precisely the failure rule #11 forbids. Deliberately a session-scoped
+        // suppression following an explicit user instruction, NOT a setting: design §7.5's "gate restore, never
+        // capture" is about a persistent preference, and its reasoning (turning the setting back on would restore
+        // a workspace from whenever it was last disabled) does not apply to a one-shot.
+        if (_currentVm.SuppressWorkspaceCaptureOnClose)
+        {
+            return;
+        }
+
+        var state = CaptureLiveWorkspaceState();
+        try
+        {
+            _workspaceStore?.Save(state);
+        }
+        catch (IOException)
+        {
+            // Closing path — don't block shutdown on a transient I/O hiccup.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// ⭐ The ONE builder of "the workspace as it is right now" — the live tab/SQL state from the view model plus
+    /// the layout the <i>view</i> owns (window bounds, sidebar, results panel, the import panel).
+    ///
+    /// <para>Two callers, and they must not be able to disagree: the app-close save above, and a settings
+    /// <b>export</b> that includes the Workspaces section (<c>SettingsPortability.CaptureLiveWorkspace</c>). The
+    /// export needs this because <c>settings.dat</c>'s Workspace section is written only here, at close — so
+    /// loading it mid-session yields the <i>previous</i> session's tabs, which is exactly what etap 5b's QA caught.
+    /// Building it in a second place would answer "what is the workspace" twice.</para>
+    ///
+    /// <para>Read-only with respect to persistence: it composes a state and returns it. Whether that state is
+    /// saved is the caller's decision — the close path saves it, the export path only serializes it into the
+    /// export file.</para>
+    /// </summary>
+    private WorkspaceState CaptureLiveWorkspaceState()
+    {
+        if (_currentVm is null) return new WorkspaceState();
+
         var state = _currentVm.CaptureWorkspace();
         state.WindowBounds = new WindowBounds
         {
@@ -421,17 +466,7 @@ public partial class MainWindow : Window
         // reach into a control.
         state.ImportPreviewPanelHeight = _currentVm.ImportPanelHeight;
         state.ImportPreviewPanelCollapsed = _currentVm.ImportPanelCollapsed;
-        try
-        {
-            _workspaceStore?.Save(state);
-        }
-        catch (IOException)
-        {
-            // Closing path — don't block shutdown on a transient I/O hiccup.
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
+        return state;
     }
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -483,6 +518,17 @@ public partial class MainWindow : Window
         }
 
         menu.Open(button);
+    }
+
+    // ⚠ It takes the view model's PreferencesService rather than opening a store of its own: the store saves a
+    // whole Preferences at a time (etap 2, §12.3), so a second snapshot holder would write its stale copy of
+    // Theme back over whatever the titlebar toggle had just set.
+    private async void OnAppMenuSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_currentVm is null) return;
+        // Portability comes from the same view model for the same reason: it owns the store, the app version, and
+        // the refresh an import makes necessary (SettingsPortability.AfterImport).
+        await new SettingsWindow(_currentVm.Preferences, _currentVm.Portability).ShowDialog(this);
     }
 
     private async void OnAppMenuKeyboardShortcutsClick(object? sender, RoutedEventArgs e)
@@ -609,6 +655,11 @@ public partial class MainWindow : Window
                 // settings.dat — wire the shared store from the VM's location so tests
                 // never touch the real %AppData% (see gotcha #88).
                 GridLayoutBehavior.Store = new GridProfileStore(settingsDir, _currentVm.Store.Protector);
+                // What a grid with NO stored profile does about auto-fit (§7.4). A provider, not a value: the
+                // preference applies on change, so a grid built later must read the current setting rather than
+                // whatever it was when this window opened. Set here, beside Store, because the two share a
+                // lifetime — with Store unset nothing is loaded or saved anyway.
+                GridLayoutBehavior.DefaultAutoFitColumns = () => _currentVm?.Preferences.Current.GridAutoFitColumns ?? true;
                 _pendingRestore = _workspaceStore.Load();
                 if (_pendingRestore is not null)
                 {
@@ -616,6 +667,13 @@ public partial class MainWindow : Window
                 }
                 _vmRestored = true;
             }
+
+            // ⚠ Deliberately OUTSIDE the run-once guard above: the hook belongs to THIS view model's
+            // SettingsPortability, so a view-model swap would otherwise leave the incoming one without it — and an
+            // unset hook fails silently, by exporting the previous session's workspace. See
+            // CaptureLiveWorkspaceState and SettingsPortability.CaptureLiveWorkspace for why the export cannot
+            // read that section off settings.dat.
+            _currentVm.Portability.CaptureLiveWorkspace = CaptureLiveWorkspaceState;
 
             if (_editor is not null && _editor.Text != _currentVm.QueryText)
             {
@@ -1561,18 +1619,33 @@ public partial class MainWindow : Window
     private void OnToggleResultsMaximizeClick(object? sender, RoutedEventArgs e)
         => ToggleResultsMaximized();
 
+    /// <summary>
+    /// Flips the theme — and, since Settings Center etap 3, <b>persists it</b>. It writes the very preference
+    /// the Settings Center radio writes, through the same service, so the two cannot disagree.
+    ///
+    /// <para>⚠ It no longer assigns <c>RequestedThemeVariant</c> itself. The write raises
+    /// <c>PreferencesService.Changed</c>, and <c>App</c> is the ONE place that paints the variant. A second
+    /// apply site here would be a second answer to "what does Light mean".</para>
+    ///
+    /// <para>⚠ It stays in code-behind, which architecture rule #1 asks for and decision Q5 ratified: what
+    /// crosses into the view model is a <c>string</c> preference, not an Avalonia type.</para>
+    ///
+    /// <para>A refused save is deliberately silent here — MainWindow already carries the settings-health
+    /// banner for exactly that file state, and a toolbar button is not a surface that can explain it. The
+    /// place a refusal must be spoken is Settings Center (design §5.5).</para>
+    /// </summary>
     private void OnThemeToggleClick(object? sender, RoutedEventArgs e)
     {
-        var app = Application.Current;
-        if (app is null)
+        if (_currentVm is null)
         {
             return;
         }
 
-        var current = app.ActualThemeVariant;
-        app.RequestedThemeVariant = current == ThemeVariant.Dark
-            ? ThemeVariant.Light
-            : ThemeVariant.Dark;
+        var preferences = _currentVm.Preferences;
+        preferences.Apply(preferences.Current with
+        {
+            Theme = ThemePreference.Toggle(preferences.Current.Theme),
+        });
     }
 
     private void OnActualThemeVariantChanged(object? sender, EventArgs e)

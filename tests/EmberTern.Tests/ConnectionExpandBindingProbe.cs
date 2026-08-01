@@ -2979,11 +2979,13 @@ public sealed class ConnectionExpandBindingProbe
                 Assert.NotNull(row.Icon);
             }
 
-            // [4] The rows themselves. Settings is present-but-disabled on purpose — the placeholder for a
-            // decided-and-unbuilt feature — and the shared style is what keeps a disabled row readable.
+            // [4] The rows themselves. ⭐ Settings shipped present-but-DISABLED while the window did not exist
+            // (a row never ships ahead of what it opens); Settings Center etap 3 built the window, so the same
+            // etap enabled the row and removed the "Not available yet" tooltip. A row that is enabled and still
+            // says it is unavailable would be the worse of the two states.
             var settings = rows.Single(r => Equals(r.Header, UiStrings.AppMenuSettings));
-            Assert.False(settings.IsEnabled);
-            Assert.Equal(UiStrings.AppMenuSettingsUnavailableTooltip, ToolTip.GetTip(settings));
+            Assert.True(settings.IsEnabled);
+            Assert.Null(ToolTip.GetTip(settings));
 
             var shortcuts = rows.Single(r => Equals(r.Header, UiStrings.AppMenuKeyboardShortcuts));
             Assert.True(shortcuts.IsEnabled);

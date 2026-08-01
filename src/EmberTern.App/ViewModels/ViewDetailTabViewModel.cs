@@ -10,6 +10,7 @@ using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
+using EmberTern.Core.Settings;
 using EmberTern.Core.Sql;
 using EmberTern.Firebird;
 
@@ -29,8 +30,12 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
 {
     // Mirrors TableDetail's data-preview knobs — a view's Data tab uses the
     // exact same paged SELECT * infrastructure.
-    public const int DataPreviewRowLimit = 200;
-    public const int MaxPageSize = 1000;
+    //
+    // ⚠ The page size and its ceiling now come from Core's PreferenceOptions.DataPageSize (etap 6 / §7.7), which
+    // is the same declaration TableDetailTabViewModel reads. They were two independent literals, and two copies
+    // of one number are what drift.
+    public static readonly int DataPreviewRowLimit = PreferenceOptions.DataPageSize.Default;
+    public static readonly int MaxPageSize = PreferenceOptions.DataPageSize.Maximum;
     public const int RowCountCap = 50000;
 
     // Sub-tab indices — must match the TabItem order in ViewDetailTabView.axaml
@@ -482,6 +487,17 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
         set { if (EasyMode) EditableBody = value; else SourceText = value; }
     }
 
+    /// <summary>
+    /// The casing style the Format SQL action uses — supplied by the tab factory, which has the app's one
+    /// <c>PreferencesService</c> in hand (<c>WorkspaceTabViewModel.Create*Detail</c>).
+    /// <para>⚠ A <b>provider</b>, not a captured value: apply-on-change means the preference can change
+    /// while this tab is open, and a captured style would silently format with the previous setting.</para>
+    /// <para>⚠ Non-nullable with a real default, so a view model constructed without a factory (every unit
+    /// test) formats deterministically in the shipped style — "nullable meaning unset" would hand the
+    /// default decision to each reader, the shape <c>Preferences</c>' own contract forbids.</para>
+    /// </summary>
+    public Func<FormatterStyle> CurrentFormatterStyle { get; set; } = () => FormatterStyle.Default;
+
     [RelayCommand]
     private void FormatSql()
     {
@@ -490,7 +506,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
         var source = hasSelection ? selected! : ActiveEditorText;
         if (string.IsNullOrEmpty(source)) return;
 
-        var formatted = SqlFormatter.Format(source);
+        var formatted = SqlFormatter.Format(source, CurrentFormatterStyle());
         if (string.Equals(formatted, source, StringComparison.Ordinal)) return;
 
         if (ReplaceSelectedOrAllText is { } replace)

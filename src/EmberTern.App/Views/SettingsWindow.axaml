@@ -1,0 +1,414 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:app="using:EmberTern.App"
+        xmlns:controls="using:EmberTern.App.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.SettingsWindow"
+        x:DataType="vm:SettingsCenterViewModel"
+        Title="{x:Static app:UiStrings.SettingsCenterTitle}"
+        Width="760" Height="560"
+        MinWidth="560" MinHeight="360"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- The standard two-pane settings shape: search + categories on the left, the selected category's page on
+       the right. Apply-on-change (ratified Q8), so there is no OK/Cancel — the footer carries a hint saying so
+       and a Close button, nothing that could be mistaken for a commit.
+
+       ⚠ Every option a control offers is generated from Core's PreferenceOptions through the view model
+       (design §5.2.2). No theme name and no language is typed in this file: a second copy of a legal-values
+       list drifts silently — the user picks an option the validator rejects, it appears to work, and it
+       reverts on the next load with nothing failing. -->
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Settings Center is THE place the store's silent refusal must be spoken (design §2.5 / §5.5): every
+         other writer in the app is incidental, but a dialog whose purpose is "change this setting" cannot
+         accept a change and persist nothing without saying so. Shared MessageBanner, docked — the host sets
+         only Severity / Message / IsVisible / Classes, never its own chrome. -->
+    <controls:MessageBanner Grid.Row="0"
+                            Classes="docked"
+                            Severity="Warning"
+                            Message="{Binding SaveRefusalMessage}"
+                            IsVisible="{Binding ShowSaveRefusal}" />
+
+    <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*" Margin="16,16,16,0">
+
+      <Grid Grid.Column="0" RowDefinitions="Auto,*">
+        <TextBox Grid.Row="0"
+                 x:Name="SearchBox"
+                 Text="{Binding SearchText}"
+                 PlaceholderText="{x:Static app:UiStrings.SettingsSearchPlaceholder}"
+                 Margin="0,0,0,8" />
+
+        <ListBox Grid.Row="1"
+                 x:Name="CategoryList"
+                 ItemsSource="{Binding Categories}"
+                 SelectedItem="{Binding SelectedCategory}"
+                 Background="Transparent"
+                 BorderThickness="0">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:SettingsCategoryViewModel">
+              <TextBlock Text="{Binding Title}" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+
+      <Border Grid.Column="1" Width="1" Margin="12,0" Background="{DynamicResource BorderBrush}" />
+
+      <Panel Grid.Column="2">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasMatches}">
+
+          <!-- One page per category, each an IsVisible-gated block inside this Panel. A Panel (not a
+               StackPanel) because exactly one page is ever visible, so they overlay rather than stack — and
+               ⚠ the ScrollViewer takes ONE child, which is why the pages need this container at all. -->
+          <Panel>
+
+            <!-- ⚠ One page per category, each with its own IsVisible, deliberately. A generic page host would be
+                 an abstraction for pages that do not exist yet; with a handful of categories this is one block
+                 each and every binding stays compiled and typed. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsGeneralPageVisible}">
+
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryGeneral}" />
+
+              <!-- Theme. The titlebar toggle writes the SAME preference through the same service, so the two
+                   cannot disagree, and neither of them applies the variant itself — PreferencesService.Changed
+                   does, in one place (App). -->
+              <Border Classes="settings-group" IsVisible="{Binding Theme.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding Theme.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Theme.Description}"
+                             TextWrapping="Wrap" />
+                  <ItemsControl ItemsSource="{Binding Theme.Options}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <RadioButton GroupName="SettingsTheme"
+                                     Content="{Binding Label}"
+                                     IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+              <!-- Language. A real, enabled control over a real catalog whose legal set has one entry today —
+                   not a stub and not a disabled row. Its value is stored, validated and round-tripped from day
+                   one; what waits for its own milestone is the localization mechanism (design §8), which is why
+                   nothing here reads a culture. -->
+              <Border Classes="settings-group" IsVisible="{Binding Language.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding Language.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Language.Description}"
+                             TextWrapping="Wrap" />
+                  <ComboBox x:Name="LanguageBox"
+                            ItemsSource="{Binding Language.Options}"
+                            SelectedItem="{Binding Language.SelectedOption, Mode=TwoWay}"
+                            MinWidth="200"
+                            HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Border>
+
+              <!-- Restore open tabs (§7.5). ⚠ It gates RESTORE, never CAPTURE: the workspace keeps being saved
+                   at app close either way, so turning this back on restores the LAST session — not whichever
+                   session last had it on. And it gates the tabs only; saved queries are the user's own content
+                   and live in the same stored workspace. -->
+              <Border Classes="settings-group" IsVisible="{Binding RestoreWorkspace.IsVisible}">
+                <StackPanel>
+                  <CheckBox x:Name="RestoreWorkspaceCheck"
+                            Content="{Binding RestoreWorkspace.Label}"
+                            IsChecked="{Binding RestoreWorkspace.Value, Mode=TwoWay}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding RestoreWorkspace.Description}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+              <!-- Import / export. ⚠ An ACTION row — it is in the catalog (so search finds it by "export",
+                   "backup", "migrate") but has no stored value and no arm in ValueOf / Compose; see
+                   SettingKind. Both operations open their own dialog, because they are commands with an outcome
+                   rather than settings that apply on change. -->
+              <Border Classes="settings-group" IsVisible="{Binding ImportExport.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding ImportExport.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding ImportExport.Description}"
+                             TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                    <Button x:Name="ExportSettingsButton"
+                            Classes="flat"
+                            Content="{x:Static app:UiStrings.SettingsExportButton}"
+                            Command="{Binding ExportSettingsCommand}" />
+                    <Button x:Name="ImportSettingsButton"
+                            Classes="flat"
+                            Content="{x:Static app:UiStrings.SettingsImportButton}"
+                            Command="{Binding ImportSettingsCommand}" />
+                    <!-- Cheap, and genuinely useful since the hardening sprint made settings.dat.bak and
+                         settings.dat.unreadable-<stamp> real artifacts a user may need to reach — with no path
+                         shown anywhere else in the UI. The pre-import copies land here too. -->
+                    <Button x:Name="OpenSettingsFolderButton"
+                            Classes="flat"
+                            Content="{x:Static app:UiStrings.SettingsOpenFolderButton}"
+                            ToolTip.Tip="{x:Static app:UiStrings.SettingsOpenFolderTooltip}"
+                            Command="{Binding OpenSettingsFolderCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+
+            <!-- Editor (etap 6). The default Source/Easy mode for newly opened object editors (§7.6) and the
+                 execution row limits (§7.2) — §7.2's own "Editor / Execution" page.
+
+                 ⚠ The four mode checkboxes share ONE description string, and every one of them says the same two
+                 things: this is a DEFAULT for newly opened editors, and switching mode inside an editor no longer
+                 changes it. That second half is the etap's actual fix — those four flags used to be rewritten
+                 silently by whatever editor the user last toggled. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsEditorPageVisible}">
+
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryEditor}" />
+
+              <Border Classes="settings-group" IsVisible="{Binding ProcedureEasyMode.IsVisible}">
+                <StackPanel>
+                  <CheckBox x:Name="ProcedureEasyModeCheck"
+                            Content="{Binding ProcedureEasyMode.Label}"
+                            IsChecked="{Binding ProcedureEasyMode.Value, Mode=TwoWay}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding ProcedureEasyMode.Description}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+              <Border Classes="settings-group" IsVisible="{Binding ViewEasyMode.IsVisible}">
+                <StackPanel>
+                  <CheckBox x:Name="ViewEasyModeCheck"
+                            Content="{Binding ViewEasyMode.Label}"
+                            IsChecked="{Binding ViewEasyMode.Value, Mode=TwoWay}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding ViewEasyMode.Description}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+              <Border Classes="settings-group" IsVisible="{Binding TriggerEasyMode.IsVisible}">
+                <StackPanel>
+                  <CheckBox x:Name="TriggerEasyModeCheck"
+                            Content="{Binding TriggerEasyMode.Label}"
+                            IsChecked="{Binding TriggerEasyMode.Value, Mode=TwoWay}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding TriggerEasyMode.Description}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+              <Border Classes="settings-group" IsVisible="{Binding FunctionEasyMode.IsVisible}">
+                <StackPanel>
+                  <CheckBox x:Name="FunctionEasyModeCheck"
+                            Content="{Binding FunctionEasyMode.Label}"
+                            IsChecked="{Binding FunctionEasyMode.Value, Mode=TwoWay}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding FunctionEasyMode.Description}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+              <!-- ⚠ Numeric fields commit on BLUR or ENTER, never per keystroke (design §5.5.1). The handlers in
+                   the code-behind are what settle the value; `EditText` following each keystroke persists
+                   nothing. Every save reads + decrypts + rewrites the whole settings.dat and rolls the single
+                   generation of settings.dat.bak, so per-keystroke saving would destroy the one hand-recovery
+                   backup at exactly the moment someone is editing settings. -->
+              <!-- ⚠ A numeric group takes its ROW as its DataContext (the shipped DataImportTabView idiom), and
+                   that is load-bearing rather than tidiness: the commit handlers identify the row they must
+                   settle from the control's DataContext, so a field left on the page's DataContext would call
+                   nothing and persist nothing while still looking and typing correctly. -->
+              <Border Classes="settings-group"
+                      DataContext="{Binding PreviewRowLimit}" x:DataType="vm:NumericSettingViewModel"
+                      IsVisible="{Binding IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Description}"
+                             TextWrapping="Wrap" />
+                  <TextBox x:Name="PreviewRowLimitBox"
+                           Text="{Binding EditText, Mode=TwoWay}"
+                           LostFocus="OnNumericSettingLostFocus"
+                           KeyDown="OnNumericSettingKeyDown"
+                           MinWidth="140"
+                           HorizontalAlignment="Left"
+                           Margin="0,6,0,0" />
+                </StackPanel>
+              </Border>
+
+              <Border Classes="settings-group"
+                      DataContext="{Binding FullLoadPromptThreshold}" x:DataType="vm:NumericSettingViewModel"
+                      IsVisible="{Binding IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Description}"
+                             TextWrapping="Wrap" />
+                  <TextBox x:Name="FullLoadPromptBox"
+                           Text="{Binding EditText, Mode=TwoWay}"
+                           LostFocus="OnNumericSettingLostFocus"
+                           KeyDown="OnNumericSettingKeyDown"
+                           MinWidth="140"
+                           HorizontalAlignment="Left"
+                           Margin="0,6,0,0" />
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+
+            <!-- Grid (etap 6). The Table / View data page size (§7.7) and the default auto-fit (§7.4) — the last
+                 hard-coded layout default in GridLayoutBehavior. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsGridPageVisible}">
+
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryGrid}" />
+
+              <Border Classes="settings-group"
+                      DataContext="{Binding DataPageSize}" x:DataType="vm:NumericSettingViewModel"
+                      IsVisible="{Binding IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Description}"
+                             TextWrapping="Wrap" />
+                  <TextBox x:Name="DataPageSizeBox"
+                           Text="{Binding EditText, Mode=TwoWay}"
+                           LostFocus="OnNumericSettingLostFocus"
+                           KeyDown="OnNumericSettingKeyDown"
+                           MinWidth="140"
+                           HorizontalAlignment="Left"
+                           Margin="0,6,0,0" />
+                </StackPanel>
+              </Border>
+
+              <Border Classes="settings-group" IsVisible="{Binding GridAutoFitColumns.IsVisible}">
+                <StackPanel>
+                  <CheckBox x:Name="GridAutoFitCheck"
+                            Content="{Binding GridAutoFitColumns.Label}"
+                            IsChecked="{Binding GridAutoFitColumns.Value, Mode=TwoWay}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding GridAutoFitColumns.Description}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+
+            <!-- Debugger (etap 6 / §7.3) — closes a recorded D4 UX wish. ⚠ The launch panel's own Advanced
+                 selector stays: this decides what a debug session OPENS with, not what it is limited to. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsDebuggerPageVisible}">
+
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryDebugger}" />
+
+              <Border Classes="settings-group" IsVisible="{Binding DebuggerIsolation.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding DebuggerIsolation.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding DebuggerIsolation.Description}"
+                             TextWrapping="Wrap" />
+                  <ComboBox x:Name="DebuggerIsolationBox"
+                            ItemsSource="{Binding DebuggerIsolation.Options}"
+                            SelectedItem="{Binding DebuggerIsolation.SelectedOption, Mode=TwoWay}"
+                            MinWidth="200"
+                            HorizontalAlignment="Left"
+                            Margin="0,6,0,0">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+
+            <!-- SQL Formatter. Exactly two rows, ratified (§6.4 / §9.1): no line width, no indent size, no
+                 comma placement. Both draw their items from the SAME Core option set (PreferenceOptions.Casing),
+                 so "Upper" cannot come to mean one thing for keywords and another for identifiers. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsFormatterPageVisible}">
+
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryFormatter}" />
+
+              <Border Classes="settings-group" IsVisible="{Binding FormatterKeywordCase.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding FormatterKeywordCase.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding FormatterKeywordCase.Description}"
+                             TextWrapping="Wrap" />
+                  <ItemsControl ItemsSource="{Binding FormatterKeywordCase.Options}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <RadioButton GroupName="SettingsFormatterKeywordCase"
+                                     Content="{Binding Label}"
+                                     IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+              <!-- ⚠ A DISTINCT GroupName is mandatory. Both rows offer the same two option keys, and a
+                   RadioButton group is keyed by name — sharing one would make selecting "UPPER CASE" for
+                   keywords silently uncheck the identifier row's selection, and the two settings would be
+                   unable to hold different values at all. -->
+              <Border Classes="settings-group" IsVisible="{Binding FormatterIdentifierCase.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding FormatterIdentifierCase.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding FormatterIdentifierCase.Description}"
+                             TextWrapping="Wrap" />
+                  <ItemsControl ItemsSource="{Binding FormatterIdentifierCase.Options}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <RadioButton GroupName="SettingsFormatterIdentifierCase"
+                                     Content="{Binding Label}"
+                                     IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+          </Panel>
+        </ScrollViewer>
+
+        <TextBlock Text="{x:Static app:UiStrings.SettingsNoMatch}"
+                   IsVisible="{Binding !HasMatches}"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center" />
+      </Panel>
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="16,12,16,16">
+      <TextBlock Grid.Column="0"
+                 Text="{x:Static app:UiStrings.SettingsAppliedImmediately}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}"
+                 FontSize="11"
+                 VerticalAlignment="Center" />
+
+      <Button Grid.Column="1"
+              Classes="flat"
+              Content="{x:Static app:UiStrings.SettingsClose}"
+              Click="OnCloseClick"
+              IsCancel="True" />
+    </Grid>
+
+  </Grid>
+</Window>

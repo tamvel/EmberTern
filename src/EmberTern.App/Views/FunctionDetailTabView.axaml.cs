@@ -225,23 +225,29 @@ public partial class FunctionDetailTabView : UserControl
         if (e.Key != Key.K || e.KeyModifiers != KeyModifiers.Control) return;
         if (sender is TextEditor ed && (ReferenceEquals(ed, _cursorEditor) || ReferenceEquals(ed, _subprogramEditor)))
         {
-            FormatEditorInPlace(ed);
+            FormatEditorInPlace(ed, StyleForFormatting());
             e.Handled = true;
         }
     }
 
-    private static void FormatEditorInPlace(TextEditor ed)
+    // The style comes from this tab's own view model, so the grid-row editors obey the SAME casing
+    // preference as the tab's Format SQL command. Falls back to the shipped style only when there is no
+    // view model yet (design-time), which is also the one case where nothing can be formatted anyway.
+    private FormatterStyle StyleForFormatting()
+        => DataContext is SourceObjectDetailTabViewModel vm ? vm.CurrentFormatterStyle() : FormatterStyle.Default;
+
+    private static void FormatEditorInPlace(TextEditor ed, FormatterStyle style)
     {
         if (ed.SelectionLength > 0)
         {
             var start = ed.SelectionStart;
-            var formatted = SqlFormatter.Format(ed.SelectedText);
+            var formatted = SqlFormatter.Format(ed.SelectedText, style);
             ed.Document.Replace(start, ed.SelectionLength, formatted);
             ed.Select(start, formatted.Length);
         }
         else
         {
-            var formatted = SqlFormatter.Format(ed.Text);
+            var formatted = SqlFormatter.Format(ed.Text, style);
             if (!string.Equals(formatted, ed.Text, StringComparison.Ordinal)) ed.Text = formatted;
         }
     }

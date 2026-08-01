@@ -111,24 +111,18 @@ public sealed class WorkspaceState
     public bool SidebarCollapsed { get; set; }
     public double ResultsPanelHeight { get; set; } = 280;
 
-    // Last-used Procedure Detail editor mode (false = Source, true = Easy). Global
-    // (not per-connection) — a UI preference like QueryPanelVisible. Hybrid model:
-    // seeds the mode for newly opened procedures; a tab restored from the workspace
-    // uses its own WorkspaceTab.EasyMode instead. New procedures stay Source.
-    public bool ProcedureEasyMode { get; set; }
-
-    // Last-used View Detail editor mode (false = Source, true = Easy). Same hybrid
-    // role as ProcedureEasyMode — seeds newly opened views; restored tabs use their
-    // own per-tab value.
-    public bool ViewEasyMode { get; set; }
-
-    // Last-used Trigger Detail editor mode (false = Source, true = Easy). Same hybrid
-    // role as ProcedureEasyMode/ViewEasyMode.
-    public bool TriggerEasyMode { get; set; }
-
-    // Last-used Function Detail editor mode (false = Source, true = Easy). Same hybrid
-    // role as ProcedureEasyMode/ViewEasyMode/TriggerEasyMode.
-    public bool FunctionEasyMode { get; set; }
+    // ⚠ ProcedureEasyMode / ViewEasyMode / TriggerEasyMode / FunctionEasyMode USED TO LIVE HERE, and were
+    // removed by Settings Center etap 6 (§7.6). They were "last-used editor mode" flags rewritten by whatever
+    // editor the user last toggled — so opening a procedure in Easy mode because of something done to a
+    // DIFFERENT procedure yesterday looked like a bug rather than a preference.
+    //
+    // They are now Preferences.ProcedureEasyModeDefault & co: a stated default with one home and one way to
+    // change it (Settings Center), and toggling a mode inside an editor is a per-tab action that persists
+    // nothing globally. This class keeps what the user sets by dragging or clicking the thing itself; a
+    // default they would go looking for in a settings dialog belongs in Preferences (design §5.2/5).
+    //
+    // ⚠ A restored tab's own WorkspaceTab.EasyMode is UNCHANGED and still wins over the default — that half of
+    // the hybrid model was never the problem. Do not re-add a global flag here.
 
     // Whether the SQL editor's results panel is maximized (editor row collapsed).
     // Global layout preference, restored like ResultsPanelHeight.

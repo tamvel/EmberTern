@@ -11,6 +11,12 @@ options that were considered and rejected, which is the part that stops a future
 ⛔ **Closed and not to be re-litigated:** `Icon.Menu`'s geometry (§12.2d) · the 0.x versioning · About's content ·
 the absence of liability wording · the decision not to give the menu's rows `CommandId`s (§7).
 
+⚠ **ONE statement in this document is now historical: `Settings…` is no longer disabled.** Settings Center
+etap 3 (2026-07-29) built the window, so the same etap enabled the row and deleted its *"Not available yet"*
+tooltip — which is this document's own rule (*"a row never ships ahead of what it opens"*) reaching its other
+half. §4 A / §5 / §12's disabled-row reasoning is kept verbatim as the record of why the row shipped that way;
+for what the row does today see [`settings-center.md`](settings-center.md) §13. Nothing else here changed.
+
 **Round 3:** the Keyboard Shortcuts window is **in this sprint** (etap 5), designed as the target browsing
 window rather than a static list — §8.5. It surfaced the sprint's one registry change (§8.5.1).
 

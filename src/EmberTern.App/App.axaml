@@ -2,6 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="EmberTern.App.App"
              RequestedThemeVariant="Dark">
+  <!-- ⚠ Dark here is the BOOTSTRAP value, not the user's preference, and it must stay. The stored theme is
+       read and applied in App.OnFrameworkInitializationCompleted; this is what the framework holds until that
+       line runs. Delete it and the value in between is ThemeVariant.Default, which follows the OS theme — a
+       silent behaviour change that reads like a regression. It agrees with PreferenceOptions.Theme.Default. -->
 
   <Application.Resources>
     <ResourceDictionary>

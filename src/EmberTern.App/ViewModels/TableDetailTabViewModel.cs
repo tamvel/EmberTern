@@ -12,6 +12,7 @@ using EmberTern.Core.Export;
 using EmberTern.Core.Export.Sql;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
+using EmberTern.Core.Settings;
 using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Firebird;
 
@@ -20,13 +21,17 @@ namespace EmberTern.App.ViewModels;
 public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
 {
     // Data preview is capped — we never want to pull a whole table into the
-    // grid from a metadata-browsing tab. 200 is the default page size for
-    // pagination (used by both the initial load and the Refresh button).
-    public const int DataPreviewRowLimit = 200;
+    // grid from a metadata-browsing tab.
+    //
+    // ⚠ The number itself lives in Core now (Settings Center etap 6 / §7.7): it is a user setting, and it was
+    // hard-coded HERE and again in ViewDetailTabViewModel, which is exactly the pair that drifts. Both read
+    // PreferenceOptions.DataPageSize so the shipped default and its ceiling exist once — and a tab built with a
+    // page size supplied by MainWindowViewModel gets the user's value instead.
+    public static readonly int DataPreviewRowLimit = PreferenceOptions.DataPageSize.Default;
 
     // Hard upper bound on PageSize. The user can bump PageSize up to this; the
-    // grid stays usable but each fetch grows linearly. 1000 is the spec.
-    public const int MaxPageSize = 1000;
+    // grid stays usable but each fetch grows linearly.
+    public static readonly int MaxPageSize = PreferenceOptions.DataPageSize.Maximum;
 
     // Hard upper bound on how far GoToLastPageCommand will probe. The COUNT(*)
     // query is wrapped in SELECT FIRST {cap} so it never sequential-scans

@@ -35,6 +35,29 @@ public static class GridLayoutBehavior
     // the app is single-window; null in design/headless contexts → the behavior no-ops.
     public static GridProfileStore? Store { get; set; }
 
+    /// <summary>
+    /// What a grid with no stored profile does about auto-fit (Settings Center etap 6 / §7.4). Set by
+    /// <c>MainWindow</c> beside <see cref="Store"/>, from the app's one <c>PreferencesService</c>.
+    ///
+    /// <para>⭐ <b>A provider, never a captured value</b> — the §14.2e rule the formatter's style follows:
+    /// apply-on-change means the preference moves while grids exist, and a captured <c>bool</c> would leave a
+    /// grid built afterwards on whatever the setting was when the window opened.</para>
+    ///
+    /// <para>⚠ Unset falls back to <c>true</c>, which is the value that was hard-coded here before this setting
+    /// existed — so a headless or design-time grid behaves exactly as it always has. Unset is only reachable
+    /// where <see cref="Store"/> is also unset, i.e. where nothing is loaded or saved at all.</para>
+    /// </summary>
+    public static Func<bool>? DefaultAutoFitColumns { get; set; }
+
+    /// <summary>
+    /// The profile a grid with NO stored layout starts from — the ONE place the auto-fit default is decided.
+    /// <para><c>internal</c> so that decision is assertable without a desktop: whether <c>MainWindow</c> sets the
+    /// two statics is a one-line wiring fact, but <i>"a grid nobody has adjusted follows the setting"</i> is the
+    /// behaviour worth pinning, and reproducing it in a test would have been a second copy of it.</para>
+    /// </summary>
+    internal static GridProfile FallbackProfile(string gridId)
+        => new() { GridId = gridId, AutoFitColumns = DefaultAutoFitColumns?.Invoke() ?? true };
+
     public static readonly AttachedProperty<string?> GridIdProperty =
         AvaloniaProperty.RegisterAttached<DataGrid, string?>("GridId", typeof(GridLayoutBehavior));
 
@@ -153,8 +176,10 @@ public static class GridLayoutBehavior
             }, DispatcherPriority.Background);
         }
 
-        private GridProfile LoadProfile()
-            => Store?.Get(_id) ?? new GridProfile { GridId = _id, AutoFitColumns = true };
+        // ⚠ The fallback is for a grid the user has NEVER adjusted (no stored profile). A grid with one keeps its
+        // own AutoFitColumns — which is what makes §7.4 a default rather than an override, and why changing the
+        // setting does not undo a layout somebody deliberately arranged.
+        private GridProfile LoadProfile() => Store?.Get(_id) ?? FallbackProfile(_id);
 
         private static string HeaderText(DataGridColumn column) => column.Header?.ToString() ?? string.Empty;
 

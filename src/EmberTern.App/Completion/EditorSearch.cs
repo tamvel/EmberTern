@@ -8,6 +8,7 @@ using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Search;
 using EmberTern.Core.Sql;
+using EmberTern.App.ViewModels;
 
 namespace EmberTern.App.Completion;
 
@@ -152,21 +153,37 @@ internal static class EditorSearch
         return mi;
     }
 
+    // ⚠ This is a SECOND path to "format this editor" — the context-menu item — beside the tab view models'
+    // FormatSqlCommand that Ctrl+K and the toolbar reach. The duplication is pre-existing (this menu is built
+    // from static actions, and the router resolves commands rather than control instances), and it is exactly
+    // why the style must be resolved here too: left on the default, the same menu entry that shows "Ctrl+K"
+    // would format in a different case than Ctrl+K does.
+    //
+    // The style is resolved from the window's view model AT CLICK TIME — the same idiom
+    // SqlEditorBehavior.AttachReadOnlyHighlighting uses to reach the VM from a static editor helper — so it is
+    // the live preference and the same PreferencesService instance the tab reads, never a captured copy.
     private static void FormatEditor(TextEditor editor)
     {
         if (editor.IsReadOnly) return;
+        var style = StyleFor(editor);
         if (editor.SelectionLength > 0)
         {
             var start = editor.SelectionStart;
-            var formatted = SqlFormatter.Format(editor.SelectedText);
+            var formatted = SqlFormatter.Format(editor.SelectedText, style);
             editor.Document.Replace(start, editor.SelectionLength, formatted);
         }
         else
         {
-            var formatted = SqlFormatter.Format(editor.Text);
+            var formatted = SqlFormatter.Format(editor.Text, style);
             editor.Document.Replace(0, editor.Document.TextLength, formatted);
         }
     }
+
+    /// <summary>The live formatter style, or the shipped default when this editor is not inside a window with
+    /// the app's view model (design-time / a headless host) — where there is no preference to honour.</summary>
+    private static FormatterStyle StyleFor(TextEditor editor)
+        => (editor.FindAncestorOfType<Window>()?.DataContext as MainWindowViewModel)?.FormatterStyle
+           ?? FormatterStyle.Default;
 
     private static void ApplyComment(TextEditor editor, LineCommentMode mode)
     {

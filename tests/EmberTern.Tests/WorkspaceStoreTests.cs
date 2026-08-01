@@ -185,8 +185,6 @@ public class WorkspaceStoreTests
                 ResultsPanelHeight = 410,
                 ResultsMaximized = true,
                 BottomPanelTabIndex = 1,
-                ViewEasyMode = true,
-                ProcedureEasyMode = true,
             });
 
             var reloaded = store.Load();
@@ -197,8 +195,6 @@ public class WorkspaceStoreTests
             Assert.Equal(410, reloaded.ResultsPanelHeight);
             Assert.True(reloaded.ResultsMaximized);
             Assert.Equal(1, reloaded.BottomPanelTabIndex);
-            Assert.True(reloaded.ViewEasyMode);
-            Assert.True(reloaded.ProcedureEasyMode);
         }
         finally
         {
@@ -216,8 +212,6 @@ public class WorkspaceStoreTests
         Assert.Equal(280, s.ResultsPanelHeight);
         Assert.False(s.ResultsMaximized);
         Assert.Equal(0, s.BottomPanelTabIndex);
-        Assert.False(s.ViewEasyMode);
-        Assert.False(s.ProcedureEasyMode);
     }
 
     [Fact]

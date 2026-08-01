@@ -844,12 +844,10 @@ internal static class UiStrings
     // document, which stay on the toolbars, the shortcuts and the context menus. Design + the reasoning
     // for what is deliberately absent: docs/design/hamburger-navigation.md §3–§5.
     public const string AppMenuTooltip = "Application menu";
+    // ⭐ Live since Settings Center etap 3. It shipped as a DISABLED row with a "Not available yet" tooltip
+    // while the window did not exist — the rule being that a row never ships ahead of what it opens — and the
+    // etap that built the window is the etap that enabled the row and removed that tooltip string.
     public const string AppMenuSettings = "Settings…";
-    // Settings is a placeholder for a feature the project has DECIDED on but not built (there is no
-    // settings surface anywhere in EmberTern yet). The row is disabled rather than absent, which works
-    // only because the shared menu style keeps a disabled row readable on purpose — that is how a menu
-    // says "this exists, not yet" instead of hiding it.
-    public const string AppMenuSettingsUnavailableTooltip = "Not available yet";
     public const string AppMenuKeyboardShortcuts = "Keyboard Shortcuts…";
     public const string AppMenuAbout = "About EmberTern…";
     public const string AppMenuExit = "Exit";
@@ -893,6 +891,243 @@ internal static class UiStrings
     public const string KeyboardShortcutsResetOrder = "Reset order";
     public const string KeyboardShortcutsResetOrderTooltip =
         "Return to the default order: Global, Tab, Tree, Grid, Editor, then alphabetical";
+
+    // ── Settings Center ─────────────────────────────────────────────────────────────────────────────
+    // The app's one home for user preferences: a category list, a search box, and pages that apply on change
+    // with no OK/Cancel. Design: docs/design/settings-center.md §5–§6.
+    // ⚠ Every OPTION KEY ("Dark", "en") lives in Core's PreferenceOptions, because it is persisted and
+    // validated; only the words are here. The two are bound by a test — a key without a label ships a blank
+    // row.
+    public const string SettingsCenterTitle = "Settings";
+    public const string SettingsSearchPlaceholder = "Search settings…";
+    public const string SettingsNoMatch = "No setting matches this search.";
+    public const string SettingsClose = "Close";
+    // Apply-on-change is the ratified model (Q8), so the window has no OK/Cancel and nothing to confirm. The
+    // hint says so once, quietly, rather than leaving the user hunting for a missing OK button.
+    public const string SettingsAppliedImmediately = "Changes apply immediately.";
+
+    public const string SettingsCategoryGeneral = "General";
+
+    public const string SettingsThemeLabel = "Theme";
+    public const string SettingsThemeDescription =
+        "Colour scheme for the whole application. The titlebar button switches the same setting.";
+    // Extra search terms: the words a user types when they do not know our label.
+    public const string SettingsThemeKeywords = "colour color appearance dark light contrast";
+    public const string SettingsThemeDark = "Dark";
+    public const string SettingsThemeLight = "Light";
+
+    public const string SettingsLanguageLabel = "Language";
+    // ⚠ It says "interface language" and nothing about availability, because the row is REAL: the value is
+    // stored, validated and round-tripped from day one, and its list happens to have one entry. Presenting it
+    // as unavailable would misrepresent what it does. Adding Polish is a row in Core's language catalog plus
+    // the localization milestone (design §8) — no change to this window.
+    public const string SettingsLanguageDescription = "Language of the EmberTern interface.";
+    public const string SettingsLanguageKeywords = "locale translation localization interface";
+    public const string SettingsLanguageEnglish = "English";
+
+    // ⚠ The description says "open tabs" and "saved queries stay" because the setting is narrower than its name
+    // suggests, and the narrower half is the important one: a connection's saved queries live in the same stored
+    // workspace and are the user's own content, so they come back either way.
+    public const string SettingsRestoreWorkspaceLabel = "Restore open tabs on startup";
+    public const string SettingsRestoreWorkspaceDescription =
+        "Reopen the tabs from your last session when you connect. Saved queries are always restored.";
+    public const string SettingsRestoreWorkspaceKeywords =
+        "workspace session tabs restore startup launch reopen clean start";
+
+    // ── Editor (etap 6) ─────────────────────────────────────────────────────────────────────────────
+    // The default Source/Easy mode for newly opened object editors (§7.6) and the execution row limits
+    // (§7.2). §7.2 calls this an "Editor / Execution" page; it is one page.
+    public const string SettingsCategoryEditor = "Editor";
+
+    // ⚠ One description for all four rows, and it states the two things a user needs to know: this is a
+    // DEFAULT for newly opened editors, and switching a mode inside an editor no longer changes it. That second
+    // sentence is the etap's actual fix — the four flags used to be rewritten silently by the last toggle.
+    public const string SettingsEditorModeDescription =
+        "Mode a newly opened editor starts in. Switching mode inside an editor affects that tab only; a "
+        + "restored tab keeps the mode it was saved in.";
+    public const string SettingsEditorModeKeywords =
+        "editor mode easy source default open procedure view trigger function structured";
+
+    public const string SettingsProcedureEasyModeLabel = "Open procedures in Easy mode";
+    public const string SettingsViewEasyModeLabel = "Open views in Easy mode";
+    public const string SettingsTriggerEasyModeLabel = "Open triggers in Easy mode";
+    public const string SettingsFunctionEasyModeLabel = "Open functions in Easy mode";
+
+    // ⚠ Both numeric descriptions name their range, because the field CLAMPS silently: a user who types 50000000
+    // and gets 1000000 back has to be able to see why, and the alternative — a validation error on a settings
+    // page that applies on change — would be a worse answer to the same problem.
+    public const string SettingsPreviewRowLimitLabel = "Preview row limit";
+
+    // ⚠ The key comes from the catalog, not from this string — CommandId.Go is what F5 actually runs, and a
+    // hand-typed "(F5)" here would teach a stale shortcut the day it is re-bound, silently (gotcha #284). That
+    // is also why this one member is `static readonly` while its neighbours are `const`: the guard keys on
+    // const-ness, because a correctly composed string contains the same text at run time.
+    public static readonly string SettingsPreviewRowLimitDescription = CommandTip.Sentence(
+        CommandId.Go,
+        "Rows a Preview execution ({0}) stops at. Full load is unaffected. Between 1 and 1 000 000.");
+    public const string SettingsPreviewRowLimitKeywords =
+        "execution execute preview rows limit f5 query results fetch cap";
+
+    // ⚠ It says the safety ceiling is separate and fixed, so the absence of a control for it reads as a decision
+    // rather than an omission — ratified Q9: a configurable memory backstop is not a backstop.
+    public const string SettingsFullLoadPromptLabel = "Ask before loading more than";
+    public const string SettingsFullLoadPromptDescription =
+        "Rows at which a Full load stops to ask whether to keep going. The hard 1 000 000-row memory limit is "
+        + "separate and not configurable.";
+    public const string SettingsFullLoadPromptKeywords =
+        "execution execute full load threshold prompt rows ask keep loading memory";
+
+    // ── Grid (etap 6) ───────────────────────────────────────────────────────────────────────────────
+    public const string SettingsCategoryGrid = "Grid";
+
+    // ⚠ Names the two grids explicitly. This is the page size of the SERVER-PAGED data grids, which is what
+    // ratified Q9 admits; the SQL editor's results and the Procedure / Function exec grids page an
+    // already-materialized result in memory and are not this setting's subject. A description saying just
+    // "grids" would be a promise the code deliberately does not keep.
+    public const string SettingsDataPageSizeLabel = "Data page size";
+    public const string SettingsDataPageSizeDescription =
+        "Rows per page in the Table Data and View Data grids. Each grid's own page-size box still overrides it. "
+        + "Between 1 and 1 000.";
+    public const string SettingsDataPageSizeKeywords =
+        "grid data page size rows pagination table view records per page";
+
+    public const string SettingsGridAutoFitLabel = "Auto-fit columns by default";
+    public const string SettingsGridAutoFitDescription =
+        "Size columns to their content in a grid whose layout you have not adjusted yet. A grid you have "
+        + "resized keeps its own layout.";
+    public const string SettingsGridAutoFitKeywords =
+        "grid columns auto fit width size layout default resize";
+
+    // ── Debugger (etap 6) ───────────────────────────────────────────────────────────────────────────
+    public const string SettingsCategoryDebugger = "Debugger";
+
+    // ⚠ Says the launch panel still offers it, because that is what makes this a DEFAULT rather than a
+    // replacement — the recorded D4 wish was "show only params at launch", not "take the choice away".
+    public const string SettingsDebuggerIsolationLabel = "Default transaction isolation";
+    public const string SettingsDebuggerIsolationDescription =
+        "Isolation a debug session starts with. The launch panel's Advanced section can still change it for a "
+        + "single run.";
+    public const string SettingsDebuggerIsolationKeywords =
+        "debugger debug transaction isolation snapshot read committed default launch";
+
+    // ── SQL Formatter ───────────────────────────────────────────────────────────────────────────────
+    // Exactly two rows, and that is ratified (§6.4 / §9.1): no line width, no indent size, no comma
+    // placement. Both default to lower case, so a user who never opens this page sees the output EmberTern
+    // has always produced.
+    public const string SettingsCategoryFormatter = "SQL Formatter";
+
+    // ⚠ Says "Format SQL" rather than "the formatter", because that is the scope: the action on the
+    // Ctrl+K / toolbar / context menu. SQL that EmberTern composes (Copy as INSERT, .sql export) and
+    // generated DDL keep their own casing, by ratified Q1 — a description promising "everywhere" would be
+    // a promise the code deliberately does not keep.
+    public const string SettingsFormatterKeywordCaseLabel = "Keyword case";
+    public const string SettingsFormatterKeywordCaseDescription =
+        "How Format SQL cases keywords, data types and built-in functions — select or SELECT.";
+    public const string SettingsFormatterKeywordCaseKeywords =
+        "formatter format sql case casing uppercase lowercase keyword reserved word";
+
+    public const string SettingsFormatterIdentifierCaseLabel = "Identifier case";
+    // ⚠ Says quoted names are untouched because that is a correctness guarantee the user can rely on, not a
+    // limitation: "MyTable" is a different object from MYTABLE in Firebird, so re-casing it would change
+    // which object the statement names (§0 / architecture rule #11).
+    public const string SettingsFormatterIdentifierCaseDescription =
+        "How Format SQL cases table, column and variable names. Quoted names like \"MixedCase\" are never "
+        + "changed — their case is part of the object's identity.";
+    public const string SettingsFormatterIdentifierCaseKeywords =
+        "formatter format sql case casing uppercase lowercase identifier name table column variable";
+
+    public const string SettingsCaseLower = "lower case";
+    public const string SettingsCaseUpper = "UPPER CASE";
+
+    // Shown in the docked MessageBanner when a change could not be written. Settings Center is the ONE place
+    // where the store's silent refusal (audit A-03) must be spoken: every other writer in the app is
+    // incidental, but a dialog whose entire purpose is "change this setting" cannot accept a change and
+    // persist nothing without saying so. {0} = the store's diagnostic.
+    public const string SettingsSaveRefusedFormat =
+        "This change applies for the current session only — it could not be saved. {0}";
+
+    // ── Settings export / import (etap 5b) ──────────────────────────────────────────────────────────
+    // The user-facing half of EmberTern's own .etsettings format. Design §6.3; the format itself is §15.
+    // ⚠ Failure messages are NOT duplicated here. SettingsImportReader / SettingsImportApplier produce them in
+    // Core, on purpose (the same reason Firebird connection-failure text lives in the Firebird layer): a status
+    // whose meaning is decided in Core should not have its explanation decided somewhere else. Surfaces switch
+    // on the STATUS and show the message as-is (§15.8).
+    public const string SettingsImportExportLabel = "Import / export settings";
+    public const string SettingsImportExportDescription =
+        "Copy your settings to another machine, or keep a backup. The file is always encrypted with a "
+        + "passphrase you choose.";
+    public const string SettingsImportExportKeywords =
+        "export import backup restore transfer move copy migrate passphrase encrypt file etsettings folder";
+
+    public const string SettingsExportButton = "Export…";
+    public const string SettingsImportButton = "Import…";
+    public const string SettingsOpenFolderButton = "Open settings folder";
+    public const string SettingsOpenFolderTooltip =
+        "Opens the folder holding settings.dat and its backup copies.";
+
+    // ── Export dialog ───────────────────────────────────────────────────────────────────────────────
+    public const string SettingsExportTitle = "Export settings";
+    public const string SettingsExportIntro = "Choose what to include, then set a passphrase for the file.";
+    public const string SettingsExportSectionsHeader = "Include";
+    public const string SettingsExportPassphraseHeader = "Passphrase";
+    public const string SettingsExportRun = "Export…";
+    public const string SettingsExportCancel = "Cancel";
+    public const string SettingsExportFileFilter = "EmberTern settings export";
+    public const string SettingsExportSuggestedName = "embertern-settings";
+
+    public const string SettingsSectionPreferences = "Preferences (theme, language, formatter)";
+    public const string SettingsSectionGridProfiles = "Grid column layouts";
+    public const string SettingsSectionFolders = "Connection folders";
+    public const string SettingsSectionConnections = "Connection profiles";
+    // ⚠ Ratified Q2: the label must state that the file will contain database credentials. It says it plainly —
+    // the whole reason the checkbox exists is that the user should be making this decision knowingly.
+    public const string SettingsSectionPasswords = "Connection passwords — the file will contain database credentials";
+    public const string SettingsSectionWorkspaces = "Open tabs, SQL text and saved queries";
+    public const string SettingsSectionImportProfiles = "Data Import configurations";
+
+    public const string SettingsExportPassphraseLabel = "Passphrase";
+    public const string SettingsExportPassphraseConfirmLabel = "Repeat passphrase";
+    // ⚠ Stated where the passphrase is TYPED, not in a help page: a passphrase-derived key means a forgotten
+    // passphrase makes the file permanently unreadable, with no reset and no back door (design §6.3.1). That is
+    // a consequence of the ratified always-encrypted decision, and the only honest place to say it is here.
+    public const string SettingsExportPassphraseWarning =
+        "There is no way to recover this passphrase. Without it the file cannot be read again — by anyone, "
+        + "including us.";
+    public const string SettingsExportPassphraseMismatch = "The two passphrases are not the same.";
+    public const string SettingsExportPassphraseMissing = "Enter a passphrase — every export is encrypted.";
+    public const string SettingsExportNothingSelected = "Select at least one thing to include.";
+    // {0} = file name.
+    public const string SettingsExportDoneFormat = "Exported to {0}.";
+    // {0} = the failure message.
+    public const string SettingsExportFailedFormat = "The export could not be written: {0}";
+
+    // ── Import dialog ───────────────────────────────────────────────────────────────────────────────
+    public const string SettingsImportTitle = "Import settings";
+    public const string SettingsImportPickFile = "Choose file…";
+    public const string SettingsImportIntro =
+        "Choose an exported settings file. Its contents are shown once it has been opened.";
+    public const string SettingsImportPassphraseLabel = "Passphrase";
+    public const string SettingsImportOpen = "Open";
+    public const string SettingsImportRun = "Import selected";
+    public const string SettingsImportCancel = "Close";
+    public const string SettingsImportContentsHeader = "Take from this file";
+    // Shown only once the file is open and every box has been unticked — the one state in which Import is dead
+    // with nothing on screen saying why.
+    public const string SettingsImportNothingSelected = "Select at least one thing to import.";
+    // ⚠ Shown only when the file carries passwords AND the row is offered — an import overwrites the password
+    // stored for the same connection, which is a thing to say before it happens rather than after.
+    public const string SettingsImportPasswordsNote =
+        "Taking passwords replaces the password stored for each matching connection.";
+    // ⭐ The honest disclosure of what an import can and cannot do to a RUNNING session, in the place the user
+    // decides. Nothing is blocked (EmberTern discloses rather than forbids); it just has to be true.
+    public const string SettingsImportLiveSessionNote =
+        "Theme, formatter, folders and connections apply immediately. A profile you are connected to keeps its "
+        + "current settings until you reconnect. Open tabs and saved queries apply the next time EmberTern "
+        + "starts.";
+    // {0} = the comma-separated sections taken. {1} = the preserved copy's file name.
+    public const string SettingsImportDoneFormat = "Imported: {0}. Your previous settings were kept as {1}.";
+    // Used when there was no settings.dat to preserve — a first run.
+    public const string SettingsImportDoneNoBackupFormat = "Imported: {0}.";
 
     // ── Canonical command names (CommandDescriptor.Title) ───────────────────────────────────────────
     // ONE host-independent name per command, for surfaces that LIST commands: the Keyboard Shortcuts window

@@ -1,0 +1,150 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:controls="using:EmberTern.App.Controls"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.SettingsExportDialog"
+        x:Name="ExportDialogRoot"
+        x:DataType="vm:SettingsExportDialogViewModel"
+        Title="{x:Static app:UiStrings.SettingsExportTitle}"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ⚠ An export is a COMMAND, so this dialog has a real primary button — apply-on-change (ratified Q8) governs
+       the preference pages, not an action that produces a file once.
+
+       ⚠ Every checkbox's initial state comes from SettingsExportOptions' own defaults, which ARE the ratified
+       content classification (§6.3.4). Nothing here re-states which sections "should" travel. -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="{x:Static app:UiStrings.SettingsExportTitle}" Classes="h1" />
+        <TextBlock Text="{x:Static app:UiStrings.SettingsExportIntro}"
+                   Classes="field-label"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <controls:MessageBanner Grid.Row="1"
+                            Classes="docked"
+                            Severity="{Binding MessageSeverity}"
+                            Message="{Binding Message}"
+                            IsVisible="{Binding ShowMessage}" />
+
+    <!-- ⚠ Row 2 SCROLLS. This dialog does not grow after it opens, but it is already tall enough to reach the
+         bottom of a 768-high screen, and it shares GrowingDialogBehavior's ceiling with the import dialog — a cap
+         without a ScrollViewer clips instead of scrolling. -->
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="20,18" Spacing="16">
+
+      <Border Classes="settings-group">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{x:Static app:UiStrings.SettingsExportSectionsHeader}" Classes="group-header" />
+          <CheckBox x:Name="ExportPreferences"
+                    Content="{x:Static app:UiStrings.SettingsSectionPreferences}"
+                    IsChecked="{Binding Preferences, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionGridProfiles}"
+                    IsChecked="{Binding GridProfiles, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionFolders}"
+                    IsChecked="{Binding Folders, Mode=TwoWay}" />
+          <CheckBox x:Name="ExportConnections"
+                    Content="{x:Static app:UiStrings.SettingsSectionConnections}"
+                    IsChecked="{Binding Connections, Mode=TwoWay}" />
+          <!-- ⚠ Ratified Q2: off by default, and the label states that the file will hold database credentials.
+               Disabled without the connections it would belong to. -->
+          <CheckBox x:Name="ExportPasswords"
+                    Margin="20,0,0,0"
+                    Content="{x:Static app:UiStrings.SettingsSectionPasswords}"
+                    IsEnabled="{Binding CanIncludePasswords}"
+                    IsChecked="{Binding Passwords, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionWorkspaces}"
+                    IsChecked="{Binding Workspaces, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionImportProfiles}"
+                    IsChecked="{Binding ImportProfiles, Mode=TwoWay}" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="settings-group">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.SettingsExportPassphraseHeader}" Classes="group-header" />
+          <!-- ⚠ The irreversibility is stated HERE, where the passphrase is typed — not in a help page and not
+               after the file exists. A passphrase-derived key means a forgotten passphrase makes the file
+               permanently unreadable, with no reset (§6.3.1). -->
+          <TextBlock Text="{x:Static app:UiStrings.SettingsExportPassphraseWarning}"
+                     Classes="field-label"
+                     TextWrapping="Wrap" />
+          <TextBlock Text="{x:Static app:UiStrings.SettingsExportPassphraseLabel}" Classes="field-label" />
+          <TextBox x:Name="PassphraseBox"
+                   PasswordChar="•"
+                   Text="{Binding Passphrase, Mode=TwoWay}" />
+          <!-- ⭐ The confirmation is part of the gate, not a courtesy: a typo produces a file nobody can ever
+               open, and the error is undetectable afterwards. This is the only moment it can be caught. -->
+          <TextBlock Text="{x:Static app:UiStrings.SettingsExportPassphraseConfirmLabel}" Classes="field-label" />
+          <TextBox x:Name="PassphraseConfirmBox"
+                   PasswordChar="•"
+                   Text="{Binding PassphraseConfirmation, Mode=TwoWay}" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="20,0,20,18">
+      <!-- ⭐ Why Export is disabled. It used to be a plain SubtleForegroundBrush line, which is exactly what
+           MessageSeverity.Info looks like — so "the two passphrases are not the same" read as a hint and was
+           routinely missed (QA, etap 5b). The icon and both foregrounds now come from MessageBanner's shared
+           severity map via the view model, so this row cannot disagree with a banner about what an error looks
+           like. ⛔ Do not paint it with a local ErrorBrush — that is the drift the shared map exists to stop. -->
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                  VerticalAlignment="Center" Margin="0,0,12,0"
+                  IsVisible="{Binding Blocked.IsVisible}">
+        <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                          Data="{Binding Blocked.GeometryKey,
+                                         Converter={x:Static app:IconGeometryConverter.Instance}}">
+          <controls:SvgIcon.Foreground>
+            <!-- With the theme variant, never without (gotcha #250). -->
+            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+              <Binding Path="Blocked.BrushKey" />
+              <Binding ElementName="ExportDialogRoot" Path="ActualThemeVariant" />
+            </MultiBinding>
+          </controls:SvgIcon.Foreground>
+        </controls:SvgIcon>
+        <TextBlock Text="{Binding Blocked.Text}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center">
+          <TextBlock.Foreground>
+            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+              <Binding Path="Blocked.BrushKey" />
+              <Binding ElementName="ExportDialogRoot" Path="ActualThemeVariant" />
+            </MultiBinding>
+          </TextBlock.Foreground>
+        </TextBlock>
+      </StackPanel>
+      <Button Grid.Column="1"
+              Classes="flat"
+              Content="{x:Static app:UiStrings.SettingsExportCancel}"
+              Click="OnCloseClick"
+              IsCancel="True"
+              Margin="0,0,8,0" />
+      <Button Grid.Column="2"
+              x:Name="ExportButton"
+              Classes="primary"
+              Content="{x:Static app:UiStrings.SettingsExportRun}"
+              IsEnabled="{Binding CanExport}"
+              Click="OnExportClick"
+              IsDefault="True" />
+    </Grid>
+
+  </Grid>
+</Window>

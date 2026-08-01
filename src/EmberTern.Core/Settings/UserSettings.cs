@@ -24,4 +24,15 @@ public sealed class UserSettings
     // Additive — an old settings.dat simply has an empty list, and the container schema version is
     // deliberately NOT bumped for it (see ImportProfileStore).
     public List<Import.ImportProfile> ImportProfiles { get; set; } = new();
+
+    // ⭐ The scalar user preferences (theme, language, formatter casing, …). See PreferencesStore.
+    //
+    // Until this landed, this class held four LISTS and not one scalar — which is why every scalar
+    // preference the app already had ended up in WorkspaceState beside window bounds: it was the only class
+    // that ever accepted one. Preferences is where they belong; layout stays in WorkspaceState.
+    //
+    // Additive, and the container schema version is deliberately NOT bumped for it (the same reasoning as
+    // ImportProfiles above): an older settings.dat has no Preferences key and deserializes to a default
+    // instance, whereas a version bump would make an older build refuse the WHOLE file.
+    public Preferences Preferences { get; set; } = new();
 }

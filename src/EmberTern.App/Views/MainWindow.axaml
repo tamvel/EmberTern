@@ -138,8 +138,7 @@
               <ContextMenu x:Name="AppMenu" Placement="BottomEdgeAlignedLeft">
                 <MenuItem Header="{x:Static app:UiStrings.AppMenuSettings}"
                           Icon="{app:MenuIcon Icon.Settings}"
-                          IsEnabled="False"
-                          ToolTip.Tip="{x:Static app:UiStrings.AppMenuSettingsUnavailableTooltip}" />
+                          Click="OnAppMenuSettingsClick" />
                 <Separator />
                 <MenuItem Header="{x:Static app:UiStrings.AppMenuKeyboardShortcuts}"
                           Icon="{app:MenuIcon Icon.Keyboard}"

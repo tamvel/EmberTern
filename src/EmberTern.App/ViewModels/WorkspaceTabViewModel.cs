@@ -40,6 +40,37 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         _owner = owner;
     }
 
+    // ── The Format SQL style seam ────────────────────────────────────────────────────────────────
+    //
+    // Every editor tab that offers Format SQL is built by one of the Create*Detail factories below, and
+    // each of them already has `owner` — the app's ONE PreferencesService holder. So this is the single
+    // chokepoint where a Format-SQL surface is handed the live casing style, rather than ten construction
+    // sites each remembering to wire it (design §14).
+    //
+    // ⚠ A provider, not a value: apply-on-change means the setting can change while the tab is open.
+    // ⚠ Three overloads rather than a shared interface: the property is identical on all three types, but an
+    //   interface would not make a FOURTH such view model a compile error either, so it would buy nothing
+    //   over what FormatterStylePreferenceTests already pins (architecture rule #2 — no interface without a
+    //   reason the type system can enforce).
+
+    private static T Styled<T>(MainWindowViewModel owner, T detail) where T : SourceObjectDetailTabViewModel
+    {
+        detail.CurrentFormatterStyle = () => owner.FormatterStyle;
+        return detail;
+    }
+
+    private static ViewDetailTabViewModel Styled(MainWindowViewModel owner, ViewDetailTabViewModel detail)
+    {
+        detail.CurrentFormatterStyle = () => owner.FormatterStyle;
+        return detail;
+    }
+
+    private static PackageDetailTabViewModel Styled(MainWindowViewModel owner, PackageDetailTabViewModel detail)
+    {
+        detail.CurrentFormatterStyle = () => owner.FormatterStyle;
+        return detail;
+    }
+
     public static WorkspaceTabViewModel CreateQuery(MainWindowViewModel owner)
         => new(owner)
         {
@@ -108,7 +139,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             Icon = MetadataNodeViewModel.IconFor(obj.Kind),
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
             IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
-            ViewDetail = detail,
+            ViewDetail = Styled(owner, detail),
         };
 
     public static WorkspaceTabViewModel CreateProcedureDetail(MainWindowViewModel owner, MetadataObject obj, ProcedureDetailTabViewModel detail, string? connectionProfileId)
@@ -124,7 +155,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             Icon = MetadataNodeViewModel.IconFor(obj.Kind),
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
             IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
-            ProcedureDetail = detail,
+            ProcedureDetail = Styled(owner, detail),
         };
 
     public static WorkspaceTabViewModel CreateTriggerDetail(MainWindowViewModel owner, MetadataObject obj, TriggerDetailTabViewModel detail, string? connectionProfileId)
@@ -140,7 +171,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             Icon = MetadataNodeViewModel.IconFor(obj.Kind),
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
             IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
-            TriggerDetail = detail,
+            TriggerDetail = Styled(owner, detail),
         };
 
     public static WorkspaceTabViewModel CreateFunctionDetail(MainWindowViewModel owner, MetadataObject obj, FunctionDetailTabViewModel detail, string? connectionProfileId)
@@ -156,7 +187,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             Icon = MetadataNodeViewModel.IconFor(obj.Kind),
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
             IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
-            FunctionDetail = detail,
+            FunctionDetail = Styled(owner, detail),
         };
 
     public static WorkspaceTabViewModel CreateGeneratorDetail(MainWindowViewModel owner, MetadataObject obj, GeneratorDetailTabViewModel detail, string? connectionProfileId)
@@ -202,7 +233,7 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             Icon = MetadataNodeViewModel.IconFor(obj.Kind),
             IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(obj.Kind),
             IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(obj.Kind),
-            PackageDetail = detail,
+            PackageDetail = Styled(owner, detail),
         };
 
     public static WorkspaceTabViewModel CreateExceptionDetail(MainWindowViewModel owner, MetadataObject obj, ExceptionDetailTabViewModel detail, string? connectionProfileId)

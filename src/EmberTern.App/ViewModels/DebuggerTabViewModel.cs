@@ -168,7 +168,8 @@ public sealed partial class DebuggerTabViewModel
         string? connectionId = null,
         WatchStore? watchStore = null,
         Func<string, CancellationToken, Task<IReadOnlyList<ColumnSpec>>>? columnsProvider = null,
-        string? packageName = null)
+        string? packageName = null,
+        DebugIsolation defaultIsolation = DebugIsolation.ReadCommitted)
     {
         RoutineName = routineName ?? throw new ArgumentNullException(nameof(routineName));
         _sourceProvider = sourceProvider ?? throw new ArgumentNullException(nameof(sourceProvider));
@@ -178,6 +179,17 @@ public sealed partial class DebuggerTabViewModel
         _watchStore = watchStore;
         _columnsProvider = columnsProvider;
         _packageName = packageName;
+        // The stated default isolation (Settings Center etap 6 / §7.3), closing a recorded D4 UX wish.
+        //
+        // ⚠ A SEED at construction, deliberately NOT a live provider like the formatter's style (§14.2e). The
+        // launch panel's selector is the user's per-launch choice: re-reading the preference later would move a
+        // selector they may already have touched, and §7.3's own wording is "the launch panel keeps the
+        // per-session override; this sets what it opens with".
+        //
+        // ⚠ The index convention (0 = Read Committed, 1 = Snapshot) stays here, in the only class that has ever
+        // expressed it — DebuggerIsolationPreference maps a stored key to DebugIsolation and knows nothing about
+        // indices.
+        _selectedIsolationIndex = defaultIsolation == DebugIsolation.Snapshot ? 1 : 0;
         Preflight = new ObservableCollection<DebugPreflightItem>();
         Variables = new ObservableCollection<DebugVariableRowViewModel>();
         VariableGroups = new ObservableCollection<DebugVariableGroupViewModel>();

@@ -1,0 +1,187 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:controls="using:EmberTern.App.Controls"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.SettingsImportDialog"
+        x:Name="ImportDialogRoot"
+        x:DataType="vm:SettingsImportDialogViewModel"
+        Title="{x:Static app:UiStrings.SettingsImportTitle}"
+        Width="560"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ⭐⭐ THE ORDER OF THIS DIALOG IS THE DESIGN (§6.3.3): file → verdict → passphrase → contents → choose →
+       import. The passphrase group binds its visibility to CanEnterPassphrase, which is false until phase one
+       has confirmed the file is ours, of a supported version, in an encryption scheme we can handle. So a PDF, a
+       settings.dat or a file from a newer build is rejected with its own message and the passphrase field is
+       never shown.
+
+       ⛔ Do not restructure this into "ask for the passphrase, then read the file". A passphrase prompt is an
+       implicit claim that the file is readable given the right one, and Core's Open() takes an inspection rather
+       than a path precisely so that claim cannot be made falsely (§15.3b, ratified). -->
+  <!-- ⚠ Row 2 SCROLLS, and that is half of the fix for a QA finding: this dialog is SizeToContent and grows once
+       the section list appears, which Avalonia does by extending it downwards from where it already is — so the
+       footer, and with it the Import button, slid off the bottom of the screen. GrowingDialogBehavior caps the
+       window at the working area and nudges it back on screen; the ScrollViewer is what makes that cap survivable
+       instead of clipping. Neither half works alone. -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="20,16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="{x:Static app:UiStrings.SettingsImportTitle}" Classes="h1" />
+        <TextBlock Text="{x:Static app:UiStrings.SettingsImportIntro}"
+                   Classes="field-label"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <!-- Every failure of §6.3.3 lands here, in Core's own words: "not an EmberTern settings file", "written by a
+         newer build (format vN)", "unsupported encryption scheme", "wrong passphrase". The status is what this
+         view switches on; the text is not restated in UiStrings. -->
+    <controls:MessageBanner Grid.Row="1"
+                            Classes="docked"
+                            Severity="{Binding MessageSeverity}"
+                            Message="{Binding Message}"
+                            IsVisible="{Binding ShowMessage}" />
+
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="20,18" Spacing="16">
+
+      <!-- Step 1 — the file. -->
+      <Grid ColumnDefinitions="Auto,*">
+        <Button Grid.Column="0"
+                x:Name="PickFileButton"
+                Classes="flat"
+                Content="{x:Static app:UiStrings.SettingsImportPickFile}"
+                Click="OnPickFileClick" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding FileName}"
+                   VerticalAlignment="Center"
+                   Margin="12,0,0,0"
+                   TextTrimming="CharacterEllipsis" />
+      </Grid>
+
+      <!-- Step 2 — the passphrase, shown ONLY once the file has passed phase one. -->
+      <Border Classes="settings-group" x:Name="PassphraseGroup" IsVisible="{Binding CanEnterPassphrase}">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{x:Static app:UiStrings.SettingsImportPassphraseLabel}" Classes="group-header" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0"
+                     x:Name="PassphraseBox"
+                     PasswordChar="•"
+                     Text="{Binding Passphrase, Mode=TwoWay}" />
+            <Button Grid.Column="1"
+                    Classes="primary"
+                    Content="{x:Static app:UiStrings.SettingsImportOpen}"
+                    IsEnabled="{Binding CanOpen}"
+                    Click="OnOpenClick"
+                    Margin="8,0,0,0" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Step 3 — what the file holds, and what to take. Each row appears only when the file carries it. -->
+      <Border Classes="settings-group" x:Name="ContentsGroup" IsVisible="{Binding IsOpened}">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{x:Static app:UiStrings.SettingsImportContentsHeader}" Classes="group-header" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionPreferences}"
+                    IsVisible="{Binding OffersPreferences}"
+                    IsChecked="{Binding TakePreferences, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionGridProfiles}"
+                    IsVisible="{Binding OffersGridProfiles}"
+                    IsChecked="{Binding TakeGridProfiles, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionFolders}"
+                    IsVisible="{Binding OffersFolders}"
+                    IsChecked="{Binding TakeFolders, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionConnections}"
+                    IsVisible="{Binding OffersConnections}"
+                    IsChecked="{Binding TakeConnections, Mode=TwoWay}" />
+          <CheckBox x:Name="TakePasswordsBox"
+                    Margin="20,0,0,0"
+                    Content="{x:Static app:UiStrings.SettingsSectionPasswords}"
+                    IsVisible="{Binding OffersPasswords}"
+                    IsEnabled="{Binding TakeConnections}"
+                    IsChecked="{Binding TakePasswords, Mode=TwoWay}" />
+          <TextBlock Text="{x:Static app:UiStrings.SettingsImportPasswordsNote}"
+                     Classes="field-label"
+                     TextWrapping="Wrap"
+                     Margin="20,0,0,0"
+                     IsVisible="{Binding ShowPasswordNote}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionWorkspaces}"
+                    IsVisible="{Binding OffersWorkspaces}"
+                    IsChecked="{Binding TakeWorkspaces, Mode=TwoWay}" />
+          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionImportProfiles}"
+                    IsVisible="{Binding OffersImportProfiles}"
+                    IsChecked="{Binding TakeImportProfiles, Mode=TwoWay}" />
+
+          <!-- ⭐ The honest statement of what an import does to a RUNNING session, where the user decides.
+               Nothing is blocked — EmberTern discloses rather than forbids — so this has to be true, and it is:
+               theme/formatter through the one apply point, folders + connections through ReloadConnections, a
+               connected profile on its next connect, and workspaces on the next start. -->
+          <TextBlock Text="{x:Static app:UiStrings.SettingsImportLiveSessionNote}"
+                     Classes="field-label"
+                     TextWrapping="Wrap"
+                     Margin="0,8,0,0" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="20,0,20,18">
+      <!-- Why Import is disabled, in the app's shared severity language — icon and colour from
+           MessageBanner's map via the view model, never a literal here (the ImportReadiness strip's precedent:
+           "a greyed-out button with no reason is a UX defect"). Silent until the file is open; see
+           SettingsImportDialogViewModel.Blocked. -->
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
+                  VerticalAlignment="Center" Margin="0,0,12,0"
+                  IsVisible="{Binding Blocked.IsVisible}">
+        <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                          Data="{Binding Blocked.GeometryKey,
+                                         Converter={x:Static app:IconGeometryConverter.Instance}}">
+          <controls:SvgIcon.Foreground>
+            <!-- A brush is looked up WITH the theme variant, never without — a variant-less lookup returns
+                 UNSET and the icon paints nothing while every observable state looks healthy (gotcha #250). -->
+            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+              <Binding Path="Blocked.BrushKey" />
+              <Binding ElementName="ImportDialogRoot" Path="ActualThemeVariant" />
+            </MultiBinding>
+          </controls:SvgIcon.Foreground>
+        </controls:SvgIcon>
+        <TextBlock Text="{Binding Blocked.Text}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center">
+          <TextBlock.Foreground>
+            <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+              <Binding Path="Blocked.BrushKey" />
+              <Binding ElementName="ImportDialogRoot" Path="ActualThemeVariant" />
+            </MultiBinding>
+          </TextBlock.Foreground>
+        </TextBlock>
+      </StackPanel>
+      <Button Grid.Column="1"
+              Classes="flat"
+              Content="{x:Static app:UiStrings.SettingsImportCancel}"
+              Click="OnCloseClick"
+              IsCancel="True"
+              Margin="0,0,8,0" />
+      <Button Grid.Column="2"
+              x:Name="ImportButton"
+              Classes="primary"
+              Content="{x:Static app:UiStrings.SettingsImportRun}"
+              IsEnabled="{Binding CanImport}"
+              Click="OnImportClick" />
+    </Grid>
+
+  </Grid>
+</Window>
