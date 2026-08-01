@@ -67,7 +67,6 @@ internal static class ExportFixtures
             WindowBounds = new WindowBounds { X = 11, Y = 22, Width = 333, Height = 444, WindowState = "Maximized" },
             SidebarWidth = 321,
             LastActiveConnectionId = "conn-1",
-            ProcedureEasyMode = true,
             Workspaces =
             {
                 ["conn-1"] = new ConnectionWorkspace
@@ -208,7 +207,6 @@ public class SettingsExportContentTests
 
         // Layout preference rides along with the opt-in; monitor geometry does not.
         Assert.Equal(321, imported.Settings.Workspace.SidebarWidth);
-        Assert.True(imported.Settings.Workspace.ProcedureEasyMode);
         Assert.Null(imported.Settings.Workspace.WindowBounds);
     }
 
@@ -381,10 +379,10 @@ public class SettingsExportContentTests
             [nameof(WorkspaceState.ResultsPanelHeight)] = "⚠ with the Workspaces opt-in — layout preference",
             [nameof(WorkspaceState.ResultsMaximized)] = "⚠ with the Workspaces opt-in — layout preference",
             [nameof(WorkspaceState.BottomPanelTabIndex)] = "⚠ with the Workspaces opt-in — layout preference",
-            [nameof(WorkspaceState.ProcedureEasyMode)] = "⚠ with the Workspaces opt-in — a Source/Easy seed",
-            [nameof(WorkspaceState.ViewEasyMode)] = "⚠ with the Workspaces opt-in — a Source/Easy seed",
-            [nameof(WorkspaceState.TriggerEasyMode)] = "⚠ with the Workspaces opt-in — a Source/Easy seed",
-            [nameof(WorkspaceState.FunctionEasyMode)] = "⚠ with the Workspaces opt-in — a Source/Easy seed",
+            // ⚠ The four *EasyMode seeds used to be rows here. Settings Center etap 6 (§7.6) moved them to
+            // Preferences.*EasyModeDefault, so they now travel with the PREFERENCES section instead of the
+            // Workspaces opt-in — which is also the more useful answer, since a Source/Easy default is a
+            // preference and not part of a session's tab strip.
             [nameof(WorkspaceState.ImportPreviewPanelHeight)] = "⚠ with the Workspaces opt-in — layout preference",
             [nameof(WorkspaceState.ImportPreviewPanelCollapsed)] = "⚠ with the Workspaces opt-in — layout preference",
         });

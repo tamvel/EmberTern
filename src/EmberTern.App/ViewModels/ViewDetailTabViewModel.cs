@@ -10,6 +10,7 @@ using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
+using EmberTern.Core.Settings;
 using EmberTern.Core.Sql;
 using EmberTern.Firebird;
 
@@ -29,8 +30,12 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
 {
     // Mirrors TableDetail's data-preview knobs — a view's Data tab uses the
     // exact same paged SELECT * infrastructure.
-    public const int DataPreviewRowLimit = 200;
-    public const int MaxPageSize = 1000;
+    //
+    // ⚠ The page size and its ceiling now come from Core's PreferenceOptions.DataPageSize (etap 6 / §7.7), which
+    // is the same declaration TableDetailTabViewModel reads. They were two independent literals, and two copies
+    // of one number are what drift.
+    public static readonly int DataPreviewRowLimit = PreferenceOptions.DataPageSize.Default;
+    public static readonly int MaxPageSize = PreferenceOptions.DataPageSize.Maximum;
     public const int RowCountCap = 50000;
 
     // Sub-tab indices — must match the TabItem order in ViewDetailTabView.axaml

@@ -129,6 +129,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // into WorkspaceTabs). Survives the lifetime of the VM and is persisted via
     // CaptureWorkspace/RestoreWorkspace.
     private readonly Dictionary<string, ConnectionWorkspace> _workspacesByConnection = new();
+    // Profiles whose STORED tabs must not be materialised in this session (§7.5, "restore open tabs" off).
+    // Populated at restore time and emptied one id at a time, so a reconnect later in the SAME session still
+    // restores the tabs this session built. The dictionary above is untouched either way — it is what capture
+    // writes back at close.
+    private readonly HashSet<string> _workspaceRestoreSuppressed = new(StringComparer.Ordinal);
     // Set during connection switches / saved-query selection to suppress the
     // QueryText <-> SelectedSavedQuery.SqlText feedback loop. Without this, loading
     // a saved query into the editor would echo the same text back into the same
@@ -817,7 +822,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // no re-query. Sorting reuses the shared RowIndexComparer (object?[] by
     // column index). 3-state cycle: asc → desc → none (original order).
 
-    // Same default page size as the Table Data View (DataPreviewRowLimit).
+    // ⚠ This used to read "same default page size as the Table Data View (DataPreviewRowLimit)". That stopped
+    // being true in Settings Center etap 6: DataPreviewRowLimit now follows the user's Data page size (§7.7)
+    // while this stays 200 — deliberately, because ratified Q9 scopes that setting to the two SERVER-PAGED
+    // grids. This one pages an already-materialized, already-capped result in memory, which is a different
+    // question, so the two numbers are no longer the same number and must not be re-coupled by a comment.
     public const int ResultPageSize = 200;
 
     private List<object?[]> _sortedRows = new();
@@ -1773,10 +1782,10 @@ public partial class MainWindowViewModel : ViewModelBase
             Workspaces = new Dictionary<string, ConnectionWorkspace>(_workspacesByConnection),
             LastActiveConnectionId = _service.ActiveProfile?.Id,
             QueryPanelVisible = IsQueryPanelVisible,
-            ProcedureEasyMode = ProcedureEasyModePreference,
-            ViewEasyMode = ViewEasyModePreference,
-            TriggerEasyMode = TriggerEasyModePreference,
-            FunctionEasyMode = FunctionEasyModePreference,
+            // ⚠ The four *EasyMode flags are gone from WorkspaceState (etap 6 / §7.6) — they are
+            // Preferences.*EasyModeDefault now. And note what is NOT conditional here: capture always runs,
+            // whatever RestoreWorkspaceOnStartup says. Gating capture would mean that turning restore back on
+            // resurrected a workspace from whenever it was last enabled (§7.5).
             BottomPanelTabIndex = SelectedBottomTabIndex,
             // ResultsMaximized is a layout flag owned by the View code-behind; it sets
             // it on the captured state in OnWindowClosing, like WindowBounds.
@@ -1791,11 +1800,21 @@ public partial class MainWindowViewModel : ViewModelBase
             _workspacesByConnection[kvp.Key] = kvp.Value;
         }
 
+        // ⭐ §7.5 — "restore open tabs on startup", off. The dictionary above is loaded ANYWAY, and that is the
+        // load-bearing part: it is what CaptureWorkspace writes back at close, so skipping the load would silently
+        // erase every OTHER connection's stored tabs AND saved queries — rule-#11 data loss disguised as a
+        // preference. What the setting suppresses is materialising those tabs into the UI, once per profile, the
+        // first time this session opens it. Later in the same session a reconnect restores what this session
+        // built, which is why the suppression is a set of ids that empties rather than a standing flag.
+        if (!_preferences.Current.RestoreWorkspaceOnStartup)
+        {
+            foreach (var id in _workspacesByConnection.Keys)
+            {
+                _workspaceRestoreSuppressed.Add(id);
+            }
+        }
+
         IsQueryPanelVisible = state.QueryPanelVisible;
-        ProcedureEasyModePreference = state.ProcedureEasyMode;
-        ViewEasyModePreference = state.ViewEasyMode;
-        TriggerEasyModePreference = state.TriggerEasyMode;
-        FunctionEasyModePreference = state.FunctionEasyMode;
         SelectedBottomTabIndex = state.BottomPanelTabIndex;
 
         // Workspace tabs stay empty at startup — there's no active connection yet.
@@ -2049,6 +2068,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void LoadWorkspaceFor(string profileId)
     {
+        // ⭐ §7.5 — the ONE place "restore open tabs" is honoured, and it removes the id as it reads it: the
+        // setting is about STARTUP, so a connection switch later in the same session must restore the tabs this
+        // session built rather than starting clean again.
+        var suppressed = _workspaceRestoreSuppressed.Remove(profileId);
+
         if (!_workspacesByConnection.TryGetValue(profileId, out var ws))
         {
             // First time we see this connection — start with a single empty Query tab.
@@ -2058,9 +2082,15 @@ public partial class MainWindowViewModel : ViewModelBase
             };
         }
 
+        // ⚠ Only the TABS are skipped. LoadSavedQueriesFor below still runs on the very same stored workspace,
+        // because a connection's saved queries are the user's own content — "start me clean" is about a stale tab
+        // strip, not about discarding SQL they named and kept. The Query tab still appears (the defensive insert
+        // below), and QueryText comes back from the active saved query.
+        var storedTabs = suppressed ? Array.Empty<WorkspaceTab>() : (IReadOnlyList<WorkspaceTab>)ws.Tabs;
+
         var queryTabAdded = false;
         QueryText = string.Empty;
-        foreach (var tab in ws.Tabs)
+        foreach (var tab in storedTabs)
         {
             if (tab.Kind == CoreTabKind.Query && !queryTabAdded)
             {
@@ -2227,7 +2257,7 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkspaceTabs.Insert(0, WorkspaceTabViewModel.CreateQuery(this));
         }
 
-        var activeIndex = ws.ActiveTabIndex;
+        var activeIndex = suppressed ? 0 : ws.ActiveTabIndex;
         if (activeIndex < 0 || activeIndex >= WorkspaceTabs.Count)
         {
             activeIndex = 0;
@@ -3386,7 +3416,38 @@ public partial class MainWindowViewModel : ViewModelBase
     // are best-effort — any MON$ failure degrades to a null delta (RecordsAffected fallback).
     private Task<(QueryResult Result, IReadOnlyList<PerTableReadRow>? Reads)> ExecuteWithMetricsAsync(
         string sql, IReadOnlyList<QueryParameter>? parameters, CancellationToken cancellationToken)
-        => ExecuteWithMetricsAsync(new ExecutionRequest { Sql = sql, Parameters = parameters }, null, null, cancellationToken);
+        => ExecuteWithMetricsAsync(Request(sql, ExecutionIntent.Preview, parameters), null, null, cancellationToken);
+
+    /// <summary>
+    /// ⭐ The ONE place an <see cref="ExecutionRequest"/> is given the user's row limits (§7.2).
+    ///
+    /// <para><c>ExecutionDefaults</c> was written for this moment — <i>"they live here (never as scattered
+    /// literals) so that moving them into user settings later […] is a one-line change at the call site that
+    /// fills an ExecutionRequest"</i> — and it was right: the limits already travel as VALUES on the request,
+    /// so nothing below this method reads a global and <see cref="EmberTern.Core.Sql.SqlFormatter"/>-style
+    /// ambient reads never arise. Building the request in one place rather than editing four call sites is what
+    /// makes a fifth execution surface inherit the limits instead of quietly shipping on the defaults.</para>
+    ///
+    /// <para>⚠ <b><see cref="ExecutionRequest.FullSafetyCeiling"/> is deliberately left at its default</b>
+    /// (ratified Q9). It is a memory backstop, not a preference: a user who raised it to 50 M would get an
+    /// out-of-memory crash instead of a truncated grid.</para>
+    ///
+    /// <para>⚠ Read from the live preferences per call, never captured — apply-on-change means the value moves
+    /// while the window is open (the §14.2e rule the formatter's style provider follows).</para>
+    /// </summary>
+    internal ExecutionRequest Request(
+        string sql, ExecutionIntent intent, IReadOnlyList<QueryParameter>? parameters)
+    {
+        var preferences = _preferences.Current;
+        return new ExecutionRequest
+        {
+            Sql = sql,
+            Intent = intent,
+            Parameters = parameters,
+            PreviewLimit = preferences.PreviewRowLimit,
+            SoftThreshold = preferences.FullLoadPromptThreshold,
+        };
+    }
 
     // Streaming-aware overload: runs the request (Preview or Full) through the executor with the
     // before/after MON$ read delta, reporting streamed progress for a Full load's live counter and
@@ -3869,10 +3930,15 @@ public partial class MainWindowViewModel : ViewModelBase
     // Single construction point for ViewDetail VMs — mirrors CreateTableDetail.
     // A view is read-only data (no inline editing) but its SQL source IS editable,
     // so the DDL executor is wired for Compile while no data editor is.
-    // Last-used View Detail editor mode (false = Source, true = Easy), mirrored to
-    // WorkspaceState.ViewEasyMode. Hybrid model: applied to each newly opened existing
-    // view; a workspace-restored tab overrides it with its own per-tab value.
-    internal bool ViewEasyModePreference { get; set; }
+    // The stated default mode for a newly opened View editor (§7.6). Read from the app's ONE
+    // PreferencesService at the moment a tab is built — never captured — so the setting takes effect on the next
+    // editor opened, exactly as apply-on-change promises.
+    //
+    // ⚠ It is deliberately READ-ONLY now. Until etap 6 this was a settable flag that the editor's own Easy
+    // toggle wrote back, which is why opening a view in Easy mode because of something done to a DIFFERENT view
+    // looked like a bug. Switching mode inside an editor is a per-tab action; the default changes only in
+    // Settings Center.
+    internal bool ViewEasyModeDefault => _preferences.Current.ViewEasyModeDefault;
 
     internal ViewDetailTabViewModel CreateViewDetail(MetadataObject obj)
     {
@@ -3884,19 +3950,11 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
         detail.CompiledExistingObject += () => _ = OfferRecompileDependentsAsync(obj);
-        // Restore the remembered mode (existing views only — New View sets Easy after).
-        if (detail.CanUseEasyMode) detail.EasyMode = ViewEasyModePreference;
-        detail.PropertyChanged += OnViewDetailPropertyChanged;
+        // The stated data page size (§7.7) — the same seed CreateTableDetail applies, for the same Data grid.
+        detail.PageSize = _preferences.Current.DataPageSize;
+        // Apply the stated default (existing views only — New View sets Easy after).
+        if (detail.CanUseEasyMode) detail.EasyMode = ViewEasyModeDefault;
         return detail;
-    }
-
-    private void OnViewDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(ViewDetailTabViewModel.EasyMode)
-            && sender is ViewDetailTabViewModel { CanUseEasyMode: true } d)
-        {
-            ViewEasyModePreference = d.EasyMode;
-        }
     }
 
     // Single construction point for GeneratorDetail VMs — mirrors CreateViewDetail.
@@ -4551,11 +4609,8 @@ public partial class MainWindowViewModel : ViewModelBase
     // Single construction point for ProcedureDetail VMs — mirrors CreateViewDetail.
     // The procedure source IS editable (Compile), so the DDL executor is wired;
     // there is no data editor (procedures have no Data tab).
-    // Last-used Procedure Detail editor mode (false = Source, true = Easy),
-    // mirrored to WorkspaceState.ProcedureEasyMode. Applied to each newly opened
-    // existing procedure; updated when the user toggles a procedure's mode so the
-    // preference follows them across procedures and app restarts.
-    internal bool ProcedureEasyModePreference { get; set; }
+    /// <inheritdoc cref="ViewEasyModeDefault"/>
+    internal bool ProcedureEasyModeDefault => _preferences.Current.ProcedureEasyModeDefault;
 
     internal ProcedureDetailTabViewModel CreateProcedureDetail(MetadataObject obj)
     {
@@ -4576,9 +4631,8 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         // Best-effort domain + table lists for the Variables grid (Easy mode).
         _ = LoadProcedureListsAsync(detail);
-        // Restore the remembered mode (existing procedures only — New stays Source).
-        if (detail.CanUseEasyMode) detail.EasyMode = ProcedureEasyModePreference;
-        detail.PropertyChanged += OnProcedureDetailPropertyChanged;
+        // Apply the stated default (existing procedures only — New stays Source).
+        if (detail.CanUseEasyMode) detail.EasyMode = ProcedureEasyModeDefault;
         return detail;
     }
 
@@ -4598,20 +4652,12 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (MetadataReadException) { /* best effort — Table column tab stays empty */ }
     }
 
-    private void OnProcedureDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(ProcedureDetailTabViewModel.EasyMode)
-            && sender is ProcedureDetailTabViewModel { CanUseEasyMode: true } d)
-        {
-            ProcedureEasyModePreference = d.EasyMode;
-        }
-    }
-
     // Single construction point for TriggerDetail VMs — mirrors CreateProcedureDetail.
     // The trigger source IS editable (Compile), so the DDL executor is wired. The Easy
     // mode Variables grid needs the domain list and the Table picker needs the table
     // list — both loaded best-effort.
-    internal bool TriggerEasyModePreference { get; set; }
+    /// <inheritdoc cref="ViewEasyModeDefault"/>
+    internal bool TriggerEasyModeDefault => _preferences.Current.TriggerEasyModeDefault;
 
     internal TriggerDetailTabViewModel CreateTriggerDetail(MetadataObject obj)
     {
@@ -4628,8 +4674,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // Lazy column loader for the Variables grid's merged Domain/Column picker.
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadTriggerListsAsync(detail);
-        if (detail.CanUseEasyMode) detail.EasyMode = TriggerEasyModePreference;
-        detail.PropertyChanged += OnTriggerDetailPropertyChanged;
+        if (detail.CanUseEasyMode) detail.EasyMode = TriggerEasyModeDefault;
         return detail;
     }
 
@@ -4649,19 +4694,11 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (MetadataReadException) { /* best effort — empty picker */ }
     }
 
-    private void OnTriggerDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(TriggerDetailTabViewModel.EasyMode)
-            && sender is TriggerDetailTabViewModel { CanUseEasyMode: true } d)
-        {
-            TriggerEasyModePreference = d.EasyMode;
-        }
-    }
-
     // Single construction point for FunctionDetail VMs — mirrors CreateProcedureDetail.
     // The function source IS editable (Compile) and the function IS executable (Data
     // lane), so both the DDL executor and the Execute callback are wired.
-    internal bool FunctionEasyModePreference { get; set; }
+    /// <inheritdoc cref="ViewEasyModeDefault"/>
+    internal bool FunctionEasyModeDefault => _preferences.Current.FunctionEasyModeDefault;
 
     internal FunctionDetailTabViewModel CreateFunctionDetail(MetadataObject obj)
     {
@@ -4681,8 +4718,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.PerformanceContext = CreatePerformanceContext();
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadFunctionListsAsync(detail);
-        if (detail.CanUseEasyMode) detail.EasyMode = FunctionEasyModePreference;
-        detail.PropertyChanged += OnFunctionDetailPropertyChanged;
+        if (detail.CanUseEasyMode) detail.EasyMode = FunctionEasyModeDefault;
         return detail;
     }
 
@@ -4700,15 +4736,6 @@ public partial class MainWindowViewModel : ViewModelBase
             detail.SetAvailableTables(tables.Select(t => t.Name));
         }
         catch (MetadataReadException) { /* best effort — Table column tab stays empty */ }
-    }
-
-    private void OnFunctionDetailPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(FunctionDetailTabViewModel.EasyMode)
-            && sender is FunctionDetailTabViewModel { CanUseEasyMode: true } d)
-        {
-            FunctionEasyModePreference = d.EasyMode;
-        }
     }
 
     // Runs an Execute Procedure statement on the Data lane with bound parameters
@@ -4773,6 +4800,10 @@ public partial class MainWindowViewModel : ViewModelBase
             _metadataReader);
         detail.OpenObjectRequested += OnOpenDdlRequested;
         detail.ConfirmationRequested += RequestConfirmAsync;
+        // The stated data page size (§7.7). Seeded here, at the one construction point, exactly like the
+        // Source/Easy default — the grid's own page-size box still overrides it for that grid, which is what
+        // makes this a default rather than a limit.
+        detail.PageSize = _preferences.Current.DataPageSize;
         // Merged Domena/Kolumna picker (Pola): lazy column loader + best-effort table list
         // for the Table-column (TYPE OF COLUMN) tab. Domains load via the VM's own LoadAsync.
         if (writable)
@@ -5252,7 +5283,10 @@ public partial class MainWindowViewModel : ViewModelBase
             _parameterHistory,
             _service.ActiveProfile?.Id,
             _watchStore,
-            columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct));
+            columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct),
+            // The stated default isolation (§7.3). Read at construction, through the ONE boundary that turns a
+            // stored key into a DebugIsolation — the launch panel's Advanced selector still overrides it per run.
+            defaultIsolation: DebuggerIsolationPreference.From(_preferences.Current));
 
         // Seam 5b — the debugger tab saves + compiles the routine it is debugging through the SAME Ddl-lane
         // executor and the SAME confirmation dialog every object editor uses; no second save mechanism.
@@ -5290,7 +5324,10 @@ public partial class MainWindowViewModel : ViewModelBase
             _service.ActiveProfile?.Id,
             _watchStore,
             columnsProvider: (t, ct) => EnsureColumnsAsync(t, ct),
-            packageName: packageName);
+            packageName: packageName,
+            // Same stated default as the other entry point (§7.3) — a package member's launch panel opens with
+            // the user's isolation for the same reason a standalone routine's does.
+            defaultIsolation: DebuggerIsolationPreference.From(_preferences.Current));
 
         // No DdlExecutor here on purpose (Seam 5b): a package member's source is RECONSTRUCTED as a
         // standalone CREATE PROCEDURE/FUNCTION so the engine can frame it — compiling that text would create
@@ -6008,7 +6045,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var parameters = _lastResultParameters;
             streamAll = ct => _executor.StreamAsync(
-                new ExecutionRequest { Sql = sql, Intent = ExecutionIntent.Full, Parameters = parameters }, ct);
+                Request(sql, ExecutionIntent.Full, parameters), ct);
         }
 
         return new QueryResultExportSource(
@@ -6192,7 +6229,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 var progress = intent == ExecutionIntent.Full ? MakeLoadProgress() : null;
                 var onSoft = intent == ExecutionIntent.Full ? MakeSoftThresholdCallback() : null;
                 (result, reads) = await ExecuteWithMetricsAsync(
-                    new ExecutionRequest { Sql = executeSql, Intent = intent, Parameters = parameters },
+                    Request(executeSql, intent, parameters),
                     progress, onSoft, _executionCts.Token).ConfigureAwait(true);
                 // A DDL/DCL statement in this transaction means the schema changes on Commit — so
                 // the metadata tree must be reloaded then (uncommitted DDL is deliberately NOT
@@ -6360,7 +6397,7 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             var (result, reads) = await ExecuteWithMetricsAsync(
-                new ExecutionRequest { Sql = _lastResultSql, Intent = ExecutionIntent.Full, Parameters = _lastResultParameters },
+                Request(_lastResultSql, ExecutionIntent.Full, _lastResultParameters),
                 MakeLoadProgress(), MakeSoftThresholdCallback(), _executionCts.Token).ConfigureAwait(true);
             SqlEditorPerformance.Record(_lastResultSql, result, reads);
 

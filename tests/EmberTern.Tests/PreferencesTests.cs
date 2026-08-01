@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using EmberTern.Core.Query;
 using EmberTern.Core.Settings;
 using Xunit;
 
@@ -224,21 +225,41 @@ public class PreferencesTests
     // ─── THE GUARD THAT KEEPS THIS TRUE AT FORTY PREFERENCES ────────────────────────────────
 
     /// <summary>
-    /// Every property of <see cref="Preferences"/> is declared below with the decision taken about it:
-    /// the option set it is normalized against, or <c>null</c> for a value with no fixed legal set.
+    /// Every property of <see cref="Preferences"/> is declared below with the decision taken about it: the
+    /// option set or numeric range it is normalized against, or <c>null</c> for a value with no illegal state.
     /// <para>
     /// ⚠ <b>Adding a property to <c>Preferences</c> fails this test until it is added here.</b> That is the
     /// whole point — <c>Validate</c> uses <c>source with { … }</c>, so an unlisted property passes through
-    /// <i>unvalidated</i> rather than loudly breaking. For a free-text preference that is correct; for an
-    /// enumerated one it is a bug that no other test can see. This forces the author to decide which it is.
+    /// <i>unvalidated</i> rather than loudly breaking. For a boolean that is correct (there is no illegal
+    /// <c>bool</c>); for an enumerated or numeric one it is a bug no other test can see. This forces the author
+    /// to decide which it is.
+    /// </para>
+    /// <para>
+    /// ⚠ Etap 6 made the decision three-way rather than two-way, and that matters: a NUMBER has no option set
+    /// but is not therefore unconstrained — its bounds are its legal set, and "carry it over untouched" would
+    /// let a hand-edited <c>0</c> row limit make the SQL editor return nothing.
     /// </para>
     /// </summary>
-    private static readonly Dictionary<string, PreferenceOptionSet?> ValidatedProperties = new()
+    private static readonly Dictionary<string, object?> ValidatedProperties = new()
     {
         [nameof(Preferences.Theme)] = PreferenceOptions.Theme,
         [nameof(Preferences.Language)] = PreferenceOptions.Language,
         [nameof(Preferences.FormatterKeywordCase)] = PreferenceOptions.Casing,
         [nameof(Preferences.FormatterIdentifierCase)] = PreferenceOptions.Casing,
+        [nameof(Preferences.DebuggerIsolation)] = PreferenceOptions.DebuggerIsolation,
+
+        [nameof(Preferences.PreviewRowLimit)] = PreferenceOptions.PreviewRowLimit,
+        [nameof(Preferences.FullLoadPromptThreshold)] = PreferenceOptions.FullLoadPromptThreshold,
+        [nameof(Preferences.DataPageSize)] = PreferenceOptions.DataPageSize,
+
+        // Booleans: no illegal value exists, so there is nothing for Validate to correct. Recorded as a
+        // decision rather than omitted — that is what this table is for.
+        [nameof(Preferences.RestoreWorkspaceOnStartup)] = null,
+        [nameof(Preferences.ProcedureEasyModeDefault)] = null,
+        [nameof(Preferences.ViewEasyModeDefault)] = null,
+        [nameof(Preferences.TriggerEasyModeDefault)] = null,
+        [nameof(Preferences.FunctionEasyModeDefault)] = null,
+        [nameof(Preferences.GridAutoFitColumns)] = null,
     };
 
     [Fact]
@@ -256,24 +277,132 @@ public class PreferencesTests
     }
 
     /// <summary>
-    /// The other direction: a property this table claims is normalized really is. Writes garbage into one
-    /// property at a time and requires <c>Validate</c> to have replaced it with that set's default — so a
-    /// property listed above but forgotten inside <c>Validate</c> is caught too.
+    /// The other direction: a property this table claims is normalized really is. Writes an ILLEGAL value into
+    /// one property at a time and requires <c>Validate</c> to have corrected it — so a property listed above but
+    /// forgotten inside <c>Validate</c> is caught too.
+    /// <para>⚠ What counts as illegal, and as corrected, depends on the shape: an unknown key becomes the option
+    /// set's default, whereas an out-of-range number is CLAMPED rather than reset (a stored 50 000 000 means "as
+    /// many as possible", and answering it with the shipped 5 000 would be data loss with extra steps).</para>
     /// </summary>
     [Fact]
-    public void EveryEnumeratedPreference_IsActuallyNormalizedByValidate()
+    public void EveryConstrainedPreference_IsActuallyNormalizedByValidate()
     {
-        foreach (var (name, set) in ValidatedProperties)
+        foreach (var (name, constraint) in ValidatedProperties)
         {
-            if (set is null) continue;   // no fixed legal set — nothing to normalize against, by decision
-
             var property = typeof(Preferences).GetProperty(name, BindingFlags.Public | BindingFlags.Instance)!;
             var subject = new Preferences();
-            property.SetValue(subject, "value-no-build-ever-wrote");
 
-            var actual = (string?)property.GetValue(PreferencesStore.Validate(subject));
+            switch (constraint)
+            {
+                case PreferenceOptionSet set:
+                    property.SetValue(subject, "value-no-build-ever-wrote");
+                    Assert.Equal(set.Default, (string?)property.GetValue(PreferencesStore.Validate(subject)));
+                    break;
 
-            Assert.Equal(set.Default, actual);
+                case PreferenceRange range:
+                    // Both edges, because a one-sided clamp is a real and easy mistake.
+                    property.SetValue(subject, range.Maximum + 1_000);
+                    Assert.Equal(range.Maximum, (int)property.GetValue(PreferencesStore.Validate(subject))!);
+
+                    property.SetValue(subject, range.Minimum - 1_000);
+                    Assert.Equal(range.Minimum, (int)property.GetValue(PreferencesStore.Validate(subject))!);
+                    break;
+
+                default:
+                    // null — nothing to normalize against, by decision (a bool has no illegal value).
+                    break;
+            }
         }
+    }
+
+    // ─── NUMERIC PREFERENCES (etap 6) ───────────────────────────────────────────────────────
+
+    /// <summary>The numeric mirror of <see cref="EveryOptionSet_ContainsItsOwnDefault"/>, for the same
+    /// reason: a default outside its own range would be clamped on every load, so the preference would appear
+    /// to reset itself.</summary>
+    [Fact]
+    public void EveryRange_ContainsItsOwnDefault()
+    {
+        foreach (var range in PreferenceOptions.AllRanges)
+        {
+            Assert.True(range.Contains(range.Default));
+            Assert.True(range.Minimum <= range.Maximum);
+        }
+    }
+
+    /// <summary>And structural, not merely tested — the constructor refuses the bad combination.</summary>
+    [Fact]
+    public void Range_RefusesADefaultOutsideItself_AndAnInvertedRange()
+    {
+        Assert.Throws<ArgumentException>(() => new PreferenceRange(1, 10, @default: 11));
+        Assert.Throws<ArgumentException>(() => new PreferenceRange(1, 10, @default: 0));
+        Assert.Throws<ArgumentException>(() => new PreferenceRange(10, 1, @default: 5));
+    }
+
+    /// <summary>Clamped at both edges, never reset, and never throwing — total and silent, exactly as an
+    /// enumerated preference is.</summary>
+    [Fact]
+    public void Range_Normalize_Clamps()
+    {
+        var range = new PreferenceRange(10, 100, @default: 50);
+
+        Assert.Equal(10, range.Normalize(0));
+        Assert.Equal(10, range.Normalize(int.MinValue));
+        Assert.Equal(100, range.Normalize(1_000));
+        Assert.Equal(100, range.Normalize(int.MaxValue));
+        Assert.Equal(42, range.Normalize(42));
+    }
+
+    /// <summary>
+    /// ⭐ The shipped numeric defaults ARE the constants they replace, not copies of them —
+    /// <c>ExecutionDefaults</c> was written for exactly this moment, and the two page-size literals that used to
+    /// live in the App's Table and View view models now come from here.
+    /// </summary>
+    [Fact]
+    public void ShippedNumericDefaults_AreTheConstantsTheyReplace()
+    {
+        Assert.Equal(ExecutionDefaults.PreviewLimit, PreferenceOptions.PreviewRowLimit.Default);
+        Assert.Equal((int)ExecutionDefaults.FullSoftThreshold, PreferenceOptions.FullLoadPromptThreshold.Default);
+        Assert.Equal(200, PreferenceOptions.DataPageSize.Default);
+        Assert.Equal(1000, PreferenceOptions.DataPageSize.Maximum);
+    }
+
+    /// <summary>
+    /// ⭐ The soft threshold cannot be configured up to or past the hard memory ceiling — which is what keeps
+    /// <c>ExecutionModesTests</c>' <c>soft &lt; ceiling</c> invariant true for a USER-CHOSEN value and not only
+    /// for the shipped one. <c>FullSafetyCeiling</c> itself is deliberately not configurable (ratified Q9): a
+    /// configurable memory backstop is not a backstop.
+    /// </summary>
+    [Fact]
+    public void TheFullLoadPromptCannotReachTheHardSafetyCeiling()
+    {
+        Assert.True(PreferenceOptions.FullLoadPromptThreshold.Maximum < ExecutionDefaults.FullSafetyCeiling);
+        Assert.Equal(
+            (int)ExecutionDefaults.FullSafetyCeiling,
+            PreferenceOptions.PreviewRowLimit.Maximum);
+
+        // And no range admits a nonsensical zero or negative row count.
+        foreach (var range in PreferenceOptions.AllRanges)
+        {
+            Assert.True(range.Minimum >= 1);
+        }
+    }
+
+    /// <summary>
+    /// The shipped defaults for the etap-6 booleans reproduce today's behaviour: tabs are restored, editors open
+    /// in Source, and an unadjusted grid auto-fits — the three values that were hard-coded before this etap.
+    /// </summary>
+    [Fact]
+    public void ShippedBooleanDefaults_ReproduceTodaysBehaviour()
+    {
+        var fresh = new Preferences();
+
+        Assert.True(fresh.RestoreWorkspaceOnStartup);
+        Assert.False(fresh.ProcedureEasyModeDefault);
+        Assert.False(fresh.ViewEasyModeDefault);
+        Assert.False(fresh.TriggerEasyModeDefault);
+        Assert.False(fresh.FunctionEasyModeDefault);
+        Assert.True(fresh.GridAutoFitColumns);
+        Assert.Equal(PreferenceOptions.DebuggerIsolationReadCommitted, fresh.DebuggerIsolation);
     }
 }

@@ -92,4 +92,69 @@ public sealed record Preferences
     /// </para>
     /// </summary>
     public string FormatterIdentifierCase { get; set; } = PreferenceOptions.Casing.Default;
+
+    // ── Etap 6 — the approved §7 settings (ratified Q9) ──────────────────────────────────────────────────
+    //
+    // ⚠ These are the first NON-STRING preferences, and the reason that is safe is worth stating once here so
+    // nobody "fixes" them into strings for consistency with the four above. §5.2.3's strings-not-enums rule is
+    // about ENUMS specifically: JsonStringEnumConverter throws on a name it has never seen, so a newer build
+    // writing a new member makes an older build refuse the WHOLE settings file. A bool and an int have no such
+    // hazard — the set of legal JSON booleans never grows, and WorkspaceState has persisted dozens of both
+    // since it shipped. What a number DOES need is bounds, which is PreferenceRange's job.
+
+    /// <summary>
+    /// Whether the previous session's open tabs are restored (§7.5).
+    /// <para>
+    /// ⚠ It gates <b>restore</b>, never <b>capture</b>: the workspace keeps being written at app close either
+    /// way, so turning this back on restores the LAST session rather than whichever session last had it on.
+    /// </para>
+    /// <para>
+    /// ⚠ And it gates the <i>tabs</i> only. A connection's <b>saved queries</b> live in the same stored
+    /// workspace and are the user's own content, not clutter to be started clean from — dropping them would be
+    /// rule-#11 data loss dressed up as a preference.
+    /// </para>
+    /// </summary>
+    public bool RestoreWorkspaceOnStartup { get; set; } = true;
+
+    /// <summary>
+    /// Whether a newly opened <b>procedure</b> starts in Easy mode rather than Source (§7.6).
+    ///
+    /// <para>⭐ <b>These four replace four <c>WorkspaceState</c> flags that no user ever knowingly set.</b> They
+    /// were written by whatever editor mode the user last toggled, so opening a procedure in Easy mode because
+    /// of something done to a <i>different</i> procedure yesterday looked like a bug. The default now has one
+    /// home and one way to change it; toggling Source/Easy in an editor affects that tab only.</para>
+    ///
+    /// <para>⚠ A workspace-restored tab still carries its own per-tab mode, which continues to win over this
+    /// default — that half of the hybrid model was never the problem.</para>
+    /// </summary>
+    public bool ProcedureEasyModeDefault { get; set; }
+
+    /// <inheritdoc cref="ProcedureEasyModeDefault"/>
+    public bool ViewEasyModeDefault { get; set; }
+
+    /// <inheritdoc cref="ProcedureEasyModeDefault"/>
+    public bool TriggerEasyModeDefault { get; set; }
+
+    /// <inheritdoc cref="ProcedureEasyModeDefault"/>
+    public bool FunctionEasyModeDefault { get; set; }
+
+    /// <summary>Rows a Preview (F5) execution stops at (§7.2). Travels as a value on
+    /// <c>ExecutionRequest</c> — nothing reads a global.</summary>
+    public int PreviewRowLimit { get; set; } = PreferenceOptions.PreviewRowLimit.Default;
+
+    /// <summary>Rows at which a Full load pauses to ask whether to keep loading (§7.2). Bounded below
+    /// <c>ExecutionDefaults.FullSafetyCeiling</c>, which stays a non-configurable memory backstop.</summary>
+    public int FullLoadPromptThreshold { get; set; } = PreferenceOptions.FullLoadPromptThreshold.Default;
+
+    /// <summary>Page size the Table Data and View Data grids open with (§7.7). Each grid's own page-size box
+    /// still overrides it for that grid.</summary>
+    public int DataPageSize { get; set; } = PreferenceOptions.DataPageSize.Default;
+
+    /// <summary>Whether a grid whose column layout has never been saved auto-fits its columns (§7.4). A grid
+    /// the user has adjusted keeps its own stored <c>GridProfile</c>.</summary>
+    public bool GridAutoFitColumns { get; set; } = true;
+
+    /// <summary>The transaction isolation the debugger's launch panel opens with (§7.3). The per-launch
+    /// selector is unchanged; this only decides its initial value.</summary>
+    public string DebuggerIsolation { get; set; } = PreferenceOptions.DebuggerIsolation.Default;
 }

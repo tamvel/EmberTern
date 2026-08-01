@@ -165,6 +165,19 @@ public sealed class PreferencesStore
             Language = PreferenceOptions.Language.Normalize(source.Language),
             FormatterKeywordCase = PreferenceOptions.Casing.Normalize(source.FormatterKeywordCase),
             FormatterIdentifierCase = PreferenceOptions.Casing.Normalize(source.FormatterIdentifierCase),
+            DebuggerIsolation = PreferenceOptions.DebuggerIsolation.Normalize(source.DebuggerIsolation),
+
+            // Numeric preferences are clamped, not reset (see PreferenceRange): a stored 50 000 000 means "as
+            // many as possible", and answering it with the shipped 5 000 would be data loss with extra steps.
+            PreviewRowLimit = PreferenceOptions.PreviewRowLimit.Normalize(source.PreviewRowLimit),
+            FullLoadPromptThreshold =
+                PreferenceOptions.FullLoadPromptThreshold.Normalize(source.FullLoadPromptThreshold),
+            DataPageSize = PreferenceOptions.DataPageSize.Normalize(source.DataPageSize),
+
+            // ⚠ The booleans are absent on purpose, and it is a decision rather than an omission: a bool has no
+            // illegal value to correct, so listing it here could only be a no-op — and `source with { … }` is
+            // what carries an unlisted property through untouched (§12.1d). PreferencesTests' declared table
+            // records that decision per property and fails the build when a new one has no entry.
         };
     }
 }

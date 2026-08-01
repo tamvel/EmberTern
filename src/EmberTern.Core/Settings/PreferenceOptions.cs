@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EmberTern.Core.Query;
 
 namespace EmberTern.Core.Settings;
 
@@ -90,6 +91,66 @@ public sealed class PreferenceOptionSet
 }
 
 /// <summary>
+/// A numeric preference's legal bounds together with its default, as ONE object — the sibling of
+/// <see cref="PreferenceOptionSet"/> for a value that is a number rather than a choice.
+///
+/// <para><b>Why a number needs this at all.</b> §5.2.1/2 makes normalization <i>silent and total</i>: every
+/// field is valid when <c>Load</c> returns, whatever was on disk. An enumerated preference normalizes against
+/// its option set; a numeric one has no option set, and "carry it over untouched" is not an answer here — a
+/// hand-edited or imported <c>0</c> row limit would make the SQL editor return nothing, and a page size of
+/// <c>-1</c> would break pagination arithmetic. The bounds ARE that preference's legal set, stated once.</para>
+///
+/// <para>⚠ <b>Out of range clamps; it never resets to the default.</b> A stored <c>50 000 000</c> means the
+/// user wanted "as many as possible", and answering that with <c>5 000</c> would be data loss with extra
+/// steps — the same reasoning that makes <see cref="PreferenceOptionSet.Normalize"/> correct <c>"dark"</c> to
+/// <c>"Dark"</c> rather than throwing it away (§12.2).</para>
+///
+/// <para>⭐ <b>The UI reads <see cref="Minimum"/> / <see cref="Maximum"/> from here too</b> (§5.2.2), so the
+/// bounds a field advertises and the bounds the store enforces cannot drift — which is the numeric form of the
+/// drift that rule exists to prevent: a field that accepts a value the store silently corrects on the next
+/// load, with nothing failing.</para>
+/// </summary>
+public sealed class PreferenceRange
+{
+    public PreferenceRange(int minimum, int maximum, int @default)
+    {
+        if (minimum > maximum)
+        {
+            throw new ArgumentException($"Minimum {minimum} is above maximum {maximum}.", nameof(minimum));
+        }
+
+        if (@default < minimum || @default > maximum)
+        {
+            // Loud and immediate (type-init of PreferenceOptions), for the same reason PreferenceOptionSet
+            // rejects a default outside its own values: the alternative is a preference that quietly refuses
+            // to hold its own default, which reads to the user as a setting that resets itself.
+            throw new ArgumentException(
+                $"The default {@default} is outside the range [{minimum}, {maximum}].", nameof(@default));
+        }
+
+        Minimum = minimum;
+        Maximum = maximum;
+        Default = @default;
+    }
+
+    public int Minimum { get; }
+
+    public int Maximum { get; }
+
+    /// <summary>The value a fresh <see cref="Preferences"/> carries.</summary>
+    public int Default { get; }
+
+    /// <summary>
+    /// Brings a stored number into range — <b>always</b>, and silently. Never throws, never refuses.
+    /// </summary>
+    public int Normalize(int stored) => stored < Minimum ? Minimum : stored > Maximum ? Maximum : stored;
+
+    /// <summary>Whether <paramref name="candidate"/> would survive <see cref="Normalize"/> unchanged. The UI
+    /// uses it to tell "the user typed something out of range" from "the user typed the stored value".</summary>
+    public bool Contains(int candidate) => candidate >= Minimum && candidate <= Maximum;
+}
+
+/// <summary>
 /// ⭐ The ONE place an enumerated preference's legal values and default are declared (design §5.2.2).
 /// <para>
 /// <b>Three readers, one table.</b> <see cref="Preferences"/> takes each property's initializer from here,
@@ -174,9 +235,72 @@ public static class PreferenceOptions
     public static PreferenceOptionSet Casing { get; } =
         new(new[] { CaseLower, CaseUpper }, @default: CaseLower);
 
+    // ---- Debugger transaction isolation (etap 6 / §7.3) ------------------------------------------------
+    //
+    // ⚠ The KEYS are this catalog's, deliberately spelled the way the launch panel already speaks rather
+    // than as the Firebird layer's enum member names — mapping a stored key to DebugIsolation is an App-side
+    // boundary job (DebuggerIsolationPreference), exactly as a casing key becomes a FormatterCase at the
+    // boundary and never inside Core's formatter (§14.4a/2). Core has no opinion about FbTransactionOptions.
+    //
+    // ⚠ The debugger's own per-launch selector STAYS. This is the value the launch panel OPENS with, which is
+    // what the recorded D4 wish asked for; it is read once when a debugger tab is built, never afterwards, so
+    // changing the setting cannot move a selector a user has already touched.
+
+    public const string DebuggerIsolationReadCommitted = "ReadCommitted";
+    public const string DebuggerIsolationSnapshot = "Snapshot";
+
+    public static PreferenceOptionSet DebuggerIsolation { get; } =
+        new(new[] { DebuggerIsolationReadCommitted, DebuggerIsolationSnapshot },
+            @default: DebuggerIsolationReadCommitted);
+
+    // ---- Execution row limits (etap 6 / §7.2) ----------------------------------------------------------
+    //
+    // ⭐ The defaults are ExecutionDefaults' own constants, not copies of them. That class was written for
+    // this sprint — "they live here (never as scattered literals) so that moving them into user settings
+    // later […] is a one-line change at the call site" — so the shipped value stays declared exactly once and
+    // a user who never opens the settings page gets byte-identical behaviour.
+    //
+    // ⚠ FullSafetyCeiling is deliberately NOT configurable (ratified Q9). It is a memory backstop, not a
+    // preference: a user who raises it to 50 M gets an out-of-memory crash instead of a truncated grid, so
+    // configuring the safety limit defeats it. It appears below only as the ceiling of the two that ARE
+    // configurable, which is what keeps "the soft threshold sits below the hard ceiling" true by construction
+    // rather than by a comment.
+
+    public static PreferenceRange PreviewRowLimit { get; } =
+        new(minimum: 1,
+            maximum: (int)ExecutionDefaults.FullSafetyCeiling,
+            @default: ExecutionDefaults.PreviewLimit);
+
+    /// <summary>Row count at which a Full load stops to ask "keep loading?". Its maximum is one below
+    /// <c>ExecutionDefaults.FullSafetyCeiling</c>, so the invariant <c>soft &lt; ceiling</c> — which
+    /// <c>ExecutionModesTests</c> pins for the shipped values — cannot be broken by a setting.</summary>
+    public static PreferenceRange FullLoadPromptThreshold { get; } =
+        new(minimum: 1,
+            maximum: (int)ExecutionDefaults.FullSafetyCeiling - 1,
+            @default: (int)ExecutionDefaults.FullSoftThreshold);
+
+    // ---- Table / View data page size (etap 6 / §7.7) ---------------------------------------------------
+    //
+    // ⚠ SCOPE, stated because it is narrower than "page size" sounds: this is the page size of the two
+    // SERVER-PAGED data grids — Table Data and View Data — which is exactly what ratified Q9 admits. The
+    // three client-side RESULT grids (the SQL editor's results, Procedure and Function exec results) page an
+    // already-materialized, already-capped result set in memory and keep their own constant; they answer a
+    // different question and are not this setting's subject. The setting's label says so.
+    //
+    // ⭐ The numbers move HERE from TableDetailTabViewModel / ViewDetailTabViewModel, which declared them
+    // twice; those two now read this range so the value and its ceiling exist once.
+
+    public static PreferenceRange DataPageSize { get; } =
+        new(minimum: 1, maximum: 1000, @default: 200);
+
     /// <summary>
     /// Every option set declared here, so a test can hold all of them to the same invariants without a
     /// hand-maintained list going stale beside them.
     /// </summary>
-    public static IReadOnlyList<PreferenceOptionSet> All { get; } = new[] { Theme, Language, Casing };
+    public static IReadOnlyList<PreferenceOptionSet> All { get; } =
+        new[] { Theme, Language, Casing, DebuggerIsolation };
+
+    /// <summary>Every numeric range declared here, for the same reason as <see cref="All"/>.</summary>
+    public static IReadOnlyList<PreferenceRange> AllRanges { get; } =
+        new[] { PreviewRowLimit, FullLoadPromptThreshold, DataPageSize };
 }

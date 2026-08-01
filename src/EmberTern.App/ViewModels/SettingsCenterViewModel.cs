@@ -98,6 +98,204 @@ public sealed class SettingActionViewModel : SettingRowViewModel
 }
 
 /// <summary>
+/// An on/off preference row, rendered as a checkbox.
+/// <para>A checkbox is a <b>discrete</b> control, so it commits the moment it is clicked — the same rule
+/// <see cref="PreferenceSettingViewModel"/> follows, and the reason neither needs the blur-or-Enter path that
+/// <see cref="NumericSettingViewModel"/> does (design §5.5.1).</para>
+/// <para>⚠ It is deliberately not a two-value <c>PreferenceOptionSet</c> rendered as radios. "On"/"Off" as
+/// persisted option keys would put a second vocabulary for <c>true</c>/<c>false</c> into the settings file, and
+/// a pair of radio buttons for a yes/no question is worse UX than the checkbox everyone already reads.</para>
+/// </summary>
+public sealed partial class BooleanSettingViewModel : SettingRowViewModel
+{
+    private bool _value;
+
+    internal BooleanSettingViewModel(SettingDescriptor descriptor, string categoryTitle, bool value)
+        : base(descriptor, categoryTitle)
+    {
+        _value = value;
+    }
+
+    /// <summary>Two-way for a <c>CheckBox</c>. Setting it is the user's decision, so it is settled.</summary>
+    public bool Value
+    {
+        get => _value;
+        set
+        {
+            if (_value == value) return;
+            _value = value;
+            OnPropertyChanged();
+            ValueChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised when the user settled on a new value — the page's cue to persist.</summary>
+    public event EventHandler? ValueChanged;
+}
+
+/// <summary>
+/// A numeric preference row, rendered as a plain text field bounded by its Core
+/// <see cref="PreferenceRange"/>.
+///
+/// <para>⭐ <b>This is the class §16.8 recorded as etap 6's debt: the blur-or-Enter commit path (design
+/// §5.5.1).</b> <see cref="EditText"/> follows every keystroke and commits <b>nothing</b>; the view calls
+/// <see cref="Commit"/> on lost focus and on Enter. The reason is not performance: every save does a full
+/// read + decrypt + deserialize of <c>settings.dat</c> before rewriting it, and <c>AtomicWrite</c> keeps exactly
+/// <b>one</b> generation of <c>settings.dat.bak</c> — so typing <c>5000</c> per-keystroke would roll the single
+/// hand-recovery backup through four generations at precisely the moment someone is editing settings.</para>
+///
+/// <para>⚠ <b>Out of range clamps and the field shows the clamped value.</b> The store would clamp it anyway
+/// (<see cref="PreferenceRange.Normalize"/>), so echoing the stored number back is the only honest option — a
+/// field that kept displaying <c>50000000</c> over a stored <c>1000000</c> would be lying, and a validation
+/// error on a page that applies on change has nowhere to live. Unparseable text reverts to the current
+/// value.</para>
+/// </summary>
+public sealed partial class NumericSettingViewModel : SettingRowViewModel
+{
+    private readonly PreferenceRange _range;
+    private int _value;
+    private string _editText;
+
+    internal NumericSettingViewModel(
+        SettingDescriptor descriptor, string categoryTitle, PreferenceRange range, int value)
+        : base(descriptor, categoryTitle)
+    {
+        _range = range;
+        _value = range.Normalize(value);
+        _editText = _value.ToString(CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>The settled value — what <c>Compose</c> reads. Never out of range.</summary>
+    public int Value => _value;
+
+    public int Minimum => _range.Minimum;
+
+    public int Maximum => _range.Maximum;
+
+    /// <summary>
+    /// What the field currently shows — and the ONE gate on what may reach it.
+    ///
+    /// <para>⚠ Bound two-way per keystroke and deliberately NOT a commit: <see cref="Commit"/> is. Typing moves
+    /// this; only blur or Enter settles it.</para>
+    ///
+    /// <para>⭐ <b>Text that could never be a number is refused here rather than tolerated and undone later.</b>
+    /// Letting a letter land and silently reverting the whole entry on commit is the weaker behaviour: the user
+    /// loses the digits they had already typed and is told nothing about why. Refusing the keystroke is the
+    /// answer a numeric field is expected to give.</para>
+    ///
+    /// <para>⚠⚠ <b>It is deliberately TOLERANT — the refusal lives in the view, at the input boundary.</b>
+    /// Vetoing here was tried and measured to fail on both halves: Avalonia's two-way binding ignores a
+    /// <c>PropertyChanged</c> raised while it is pushing target → source, so the rejected text stayed on screen
+    /// with the model disagreeing; and a veto would have made <b>paste</b> strictly worse, because
+    /// <see cref="Commit"/> then finds the model already correct, changes nothing, notifies nothing, and the
+    /// pasted junk never leaves the field. The property that the control writes to cannot also be the property
+    /// that refuses the write.</para>
+    /// </summary>
+    public string EditText
+    {
+        get => _editText;
+        set
+        {
+            var candidate = value ?? string.Empty;
+            if (string.Equals(_editText, candidate, StringComparison.Ordinal)) return;
+
+            _editText = candidate;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="candidate"/> may stand in the field — i.e. whether it already is, or could still
+    /// become, a number this row can hold.
+    ///
+    /// <para>⭐ <b>The ONE definition of "acceptable text", and it lives on the row because the row owns the
+    /// range.</b> The view enforces it at the input boundary (see <c>SettingsWindow</c>); nothing else decides
+    /// what a numeric field may contain.</para>
+    ///
+    /// <para>⚠ It judges a <b>partial</b> entry, not a final one, which is why it is not simply
+    /// <c>int.TryParse</c>: an empty field is legitimate (the user is retyping), and so is a lone
+    /// <c>-</c> where the range admits negatives. <b>Range is NOT checked here</b> — typing <c>1</c> on the way
+    /// to <c>1000</c> would fail a minimum of <c>10</c>, and blocking it would make the field impossible to
+    /// use. Bounds are <see cref="Commit"/>'s job, where they clamp (§17.1).</para>
+    ///
+    /// <para>⚠⚠ <b>The length cap is <c>int</c>'s width, NOT the range's</b>, and the difference matters. Capping
+    /// at <see cref="Maximum"/>'s digit count was the first attempt and it quietly broke the promise §17.1
+    /// makes: typing <c>50000000</c> into a field whose maximum is <c>1 000 000</c> is the user saying "as many
+    /// as possible", and clamping it is the documented answer — but an 8-digit cap would have refused the 8th
+    /// keystroke, which reads as a broken field. So over-range entry stays possible and still clamps; only
+    /// lengths no <c>int</c> could hold are refused.</para>
+    ///
+    /// <para>⚠ The sign branch reads <see cref="PreferenceRange.Minimum"/> rather than assuming the positive
+    /// ranges this build happens to ship — a predicate that silently refuses half of a future range's legal
+    /// values would be found the hard way, by a field nobody could type into.</para>
+    /// </summary>
+    public bool AcceptsText(string candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        if (candidate.Length == 0) return true;
+
+        var digitsFrom = 0;
+        if (candidate[0] == '-')
+        {
+            if (_range.Minimum >= 0) return false;
+            if (candidate.Length == 1) return true;
+            digitsFrom = 1;
+        }
+
+        if (candidate.Length - digitsFrom > MaxDigits) return false;
+
+        for (var i = digitsFrom; i < candidate.Length; i++)
+        {
+            // ⚠ ASCII digits only, never char.IsDigit — that accepts every Unicode decimal digit, and a field
+            // holding Arabic-Indic digits would pass this gate and then fail to parse at commit.
+            if (candidate[i] is < '0' or > '9') return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>The widest run of digits worth accepting — <c>int</c>'s own, so a long-enough entry can still
+    /// be over the range (and clamp) but never so long that it means nothing.</summary>
+    private static readonly int MaxDigits =
+        int.MaxValue.ToString(CultureInfo.InvariantCulture).Length;
+
+    /// <summary>Raised when the user settled on a new value — the page's cue to persist.</summary>
+    public event EventHandler? ValueChanged;
+
+    /// <summary>
+    /// Settles whatever is in the field: parse, clamp, echo the result back, and report a change if there was
+    /// one. Called by the view on blur and on Enter — the two moments a free-text value is settled.
+    /// </summary>
+    public void Commit()
+    {
+        // ⚠ Parsed as a LONG, then squeezed into int before the range clamps it. AcceptsText admits up to
+        // int.MaxValue's DIGIT COUNT, which lets through a handful of 10-digit values above int.MaxValue
+        // ("9999999999") — parsing those as int would fail and revert the entry, when what the user typed
+        // plainly means "the maximum". One widening keeps "type a big number, get the maximum" true for every
+        // length the field accepts.
+        //
+        // ⚠ The unparseable branch is therefore unreachable from the keyboard, and is kept for the routes that
+        // do not pass through AcceptsText: an empty field (legitimate while retyping, and "" is not a number)
+        // and a value set programmatically.
+        var settled = long.TryParse(EditText, NumberStyles.Integer, CultureInfo.CurrentCulture, out var parsed)
+            ? _range.Normalize((int)Math.Clamp(parsed, int.MinValue, int.MaxValue))
+            : _value;   // unparseable → keep what we had; the echo below puts it back in the field
+
+        var text = settled.ToString(CultureInfo.CurrentCulture);
+        if (!string.Equals(EditText, text, StringComparison.Ordinal))
+        {
+            EditText = text;
+        }
+
+        if (settled == _value) return;
+
+        _value = settled;
+        OnPropertyChanged(nameof(Value));
+        ValueChanged?.Invoke(this, EventArgs.Empty);
+    }
+}
+
+/// <summary>
 /// One preference row on a settings page: its caption, its sentence, its legal values and its current value.
 ///
 /// <para>⭐ <b>The values come from the Core option set, never from XAML</b> (design §5.2.2). A hand-typed
@@ -237,23 +435,56 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         {
             foreach (var descriptor in SettingsCatalog.SettingsIn(category.Id))
             {
-                // ⚠ The two kinds diverge HERE and nowhere else. An action row is never handed to ValueOf, which
-                // is what keeps that mapping a statement about preferences only — it still throws for an id it
-                // does not know, and that is the guard, not an inconvenience.
+                // ⚠ The kinds diverge HERE and nowhere else. An action row is never handed to a value mapping,
+                // which is what keeps those mappings statements about preferences only — each still throws for an
+                // id it does not know, and that is the guard, not an inconvenience.
                 if (descriptor.Kind == SettingKind.Action)
                 {
                     _settings.Add(descriptor.Id, new SettingActionViewModel(descriptor, category.Title));
                     continue;
                 }
 
-                var setting = new PreferenceSettingViewModel(descriptor, category.Title, ValueOf(descriptor.Id, current));
-                setting.ValueChanged += (_, _) => Commit();
-                _settings.Add(descriptor.Id, setting);
+                SettingRowViewModel row = descriptor.ValueKind switch
+                {
+                    SettingValueKind.Toggle => Wire(
+                        new BooleanSettingViewModel(descriptor, category.Title, FlagOf(descriptor.Id, current))),
+
+                    // ⚠ A Number row must carry a range, and the `!` rests on the catalog pairing the two at the
+                    // one place both are declared — SettingsCatalog passes `valueKind: Number` and `range:`
+                    // together, so a row with one and not the other would have to be written deliberately.
+                    // ⚠ There is deliberately NO test named here: an earlier draft of this comment cited a
+                    // guard that was never written, which is worse than no claim at all — it tells the next
+                    // reader a net exists. If a Number row ever ships without a range this throws at
+                    // construction, loudly and immediately, which is the behaviour a missing range deserves.
+                    SettingValueKind.Number => Wire(
+                        new NumericSettingViewModel(
+                            descriptor, category.Title, descriptor.Range!, NumberOf(descriptor.Id, current))),
+
+                    _ => Wire(
+                        new PreferenceSettingViewModel(
+                            descriptor, category.Title, ValueOf(descriptor.Id, current))),
+                };
+
+                _settings.Add(descriptor.Id, row);
             }
         }
 
         Categories = new ObservableCollection<SettingsCategoryViewModel>(_allCategories);
         SelectedCategory = Categories.FirstOrDefault();
+    }
+
+    // One subscription point for all three value-carrying row kinds, so "a settled value persists" is stated
+    // once rather than once per kind — the place a future fourth kind would otherwise be forgotten.
+    private T Wire<T>(T row) where T : SettingRowViewModel
+    {
+        switch (row)
+        {
+            case PreferenceSettingViewModel option: option.ValueChanged += (_, _) => Commit(); break;
+            case BooleanSettingViewModel toggle: toggle.ValueChanged += (_, _) => Commit(); break;
+            case NumericSettingViewModel number: number.ValueChanged += (_, _) => Commit(); break;
+        }
+
+        return row;
     }
 
     /// <summary>
@@ -272,6 +503,9 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGeneralPageVisible))]
+    [NotifyPropertyChangedFor(nameof(IsEditorPageVisible))]
+    [NotifyPropertyChangedFor(nameof(IsGridPageVisible))]
+    [NotifyPropertyChangedFor(nameof(IsDebuggerPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsFormatterPageVisible))]
     private SettingsCategoryViewModel? _selectedCategory;
 
@@ -291,6 +525,28 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
 
     public PreferenceSettingViewModel Language => Preference(SettingsCatalog.SettingLanguage);
 
+    public BooleanSettingViewModel RestoreWorkspace => Toggle(SettingsCatalog.SettingRestoreWorkspace);
+
+    public BooleanSettingViewModel ProcedureEasyMode => Toggle(SettingsCatalog.SettingProcedureEasyMode);
+
+    public BooleanSettingViewModel ViewEasyMode => Toggle(SettingsCatalog.SettingViewEasyMode);
+
+    public BooleanSettingViewModel TriggerEasyMode => Toggle(SettingsCatalog.SettingTriggerEasyMode);
+
+    public BooleanSettingViewModel FunctionEasyMode => Toggle(SettingsCatalog.SettingFunctionEasyMode);
+
+    public NumericSettingViewModel PreviewRowLimit => Number(SettingsCatalog.SettingPreviewRowLimit);
+
+    public NumericSettingViewModel FullLoadPromptThreshold
+        => Number(SettingsCatalog.SettingFullLoadPromptThreshold);
+
+    public NumericSettingViewModel DataPageSize => Number(SettingsCatalog.SettingDataPageSize);
+
+    public BooleanSettingViewModel GridAutoFitColumns => Toggle(SettingsCatalog.SettingGridAutoFit);
+
+    public PreferenceSettingViewModel DebuggerIsolation
+        => Preference(SettingsCatalog.SettingDebuggerIsolation);
+
     public PreferenceSettingViewModel FormatterKeywordCase
         => Preference(SettingsCatalog.SettingFormatterKeywordCase);
 
@@ -302,6 +558,10 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         => (SettingActionViewModel)_settings[SettingsCatalog.SettingImportExport];
 
     private PreferenceSettingViewModel Preference(string id) => (PreferenceSettingViewModel)_settings[id];
+
+    private BooleanSettingViewModel Toggle(string id) => (BooleanSettingViewModel)_settings[id];
+
+    private NumericSettingViewModel Number(string id) => (NumericSettingViewModel)_settings[id];
 
     /// <summary>The folder the <i>Open settings folder</i> button reveals.</summary>
     public string SettingsFolder => _portability.SettingsFolder;
@@ -331,6 +591,18 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     /// </summary>
     public bool IsGeneralPageVisible
         => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryGeneral, StringComparison.Ordinal);
+
+    /// <inheritdoc cref="IsGeneralPageVisible"/>
+    public bool IsEditorPageVisible
+        => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryEditor, StringComparison.Ordinal);
+
+    /// <inheritdoc cref="IsGeneralPageVisible"/>
+    public bool IsGridPageVisible
+        => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryGrid, StringComparison.Ordinal);
+
+    /// <inheritdoc cref="IsGeneralPageVisible"/>
+    public bool IsDebuggerPageVisible
+        => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryDebugger, StringComparison.Ordinal);
 
     /// <inheritdoc cref="IsGeneralPageVisible"/>
     public bool IsFormatterPageVisible
@@ -377,8 +649,35 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     {
         SettingsCatalog.SettingTheme => preferences.Theme,
         SettingsCatalog.SettingLanguage => preferences.Language,
+        SettingsCatalog.SettingDebuggerIsolation => preferences.DebuggerIsolation,
         SettingsCatalog.SettingFormatterKeywordCase => preferences.FormatterKeywordCase,
         SettingsCatalog.SettingFormatterIdentifierCase => preferences.FormatterIdentifierCase,
+        _ => throw new ArgumentOutOfRangeException(nameof(settingId), settingId, "No such setting in the catalog."),
+    };
+
+    /// <summary>
+    /// <see cref="ValueOf"/> for a <see cref="SettingValueKind.Toggle"/> row.
+    /// <para>⚠ One mapping method per value SHAPE rather than one returning <c>object</c>: three small total
+    /// functions each throw for an id they do not know, which is what makes a new row fail loudly instead of
+    /// silently reading the wrong kind of value.</para>
+    /// </summary>
+    private static bool FlagOf(string settingId, Preferences preferences) => settingId switch
+    {
+        SettingsCatalog.SettingRestoreWorkspace => preferences.RestoreWorkspaceOnStartup,
+        SettingsCatalog.SettingProcedureEasyMode => preferences.ProcedureEasyModeDefault,
+        SettingsCatalog.SettingViewEasyMode => preferences.ViewEasyModeDefault,
+        SettingsCatalog.SettingTriggerEasyMode => preferences.TriggerEasyModeDefault,
+        SettingsCatalog.SettingFunctionEasyMode => preferences.FunctionEasyModeDefault,
+        SettingsCatalog.SettingGridAutoFit => preferences.GridAutoFitColumns,
+        _ => throw new ArgumentOutOfRangeException(nameof(settingId), settingId, "No such setting in the catalog."),
+    };
+
+    /// <inheritdoc cref="FlagOf"/>
+    private static int NumberOf(string settingId, Preferences preferences) => settingId switch
+    {
+        SettingsCatalog.SettingPreviewRowLimit => preferences.PreviewRowLimit,
+        SettingsCatalog.SettingFullLoadPromptThreshold => preferences.FullLoadPromptThreshold,
+        SettingsCatalog.SettingDataPageSize => preferences.DataPageSize,
         _ => throw new ArgumentOutOfRangeException(nameof(settingId), settingId, "No such setting in the catalog."),
     };
 
@@ -400,6 +699,16 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         // SettingKind split is what makes that a typed fact rather than a convention.
         Theme = Theme.Value,
         Language = Language.Value,
+        RestoreWorkspaceOnStartup = RestoreWorkspace.Value,
+        ProcedureEasyModeDefault = ProcedureEasyMode.Value,
+        ViewEasyModeDefault = ViewEasyMode.Value,
+        TriggerEasyModeDefault = TriggerEasyMode.Value,
+        FunctionEasyModeDefault = FunctionEasyMode.Value,
+        PreviewRowLimit = PreviewRowLimit.Value,
+        FullLoadPromptThreshold = FullLoadPromptThreshold.Value,
+        DataPageSize = DataPageSize.Value,
+        GridAutoFitColumns = GridAutoFitColumns.Value,
+        DebuggerIsolation = DebuggerIsolation.Value,
         FormatterKeywordCase = FormatterKeywordCase.Value,
         FormatterIdentifierCase = FormatterIdentifierCase.Value,
     };

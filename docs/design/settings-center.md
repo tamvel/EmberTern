@@ -19,9 +19,20 @@ export read the workspace off `settings.dat`, which does not hold it until app c
 reason that was painted like a hint, and a `SizeToContent` dialog that grew off the bottom of the screen
 (**§16.7**). As built: **§16** — read **§16.1** (the stale-snapshot trap) and **§16.3** (the ratified live-session
 behaviour) before touching an import path.
-**⛔ THE SPRINT IS CLOSED THROUGH ETAP 5b. Etap 6 (§7 + ratified Q9) has not been started and is a new session.**
-Branch: `feat/settings-center` — pushed to both remotes, deliberately **not** merged to `master`, because the
-sprint continues at etap 6.
+⭐ **ETAP 6 DELIVERED AND USER-ACCEPTED 2026-08-01** — the six approved §7 settings (ratified Q9): three new
+categories (Editor · Grid · Debugger), ten new rows, `Preferences` 4 → 14 properties, `CurrentSchemaVersion`
+still 2. It brought the first **non-string** preferences and `PreferenceRange`, paid §5.5.1's blur-or-Enter debt,
+and migrated the four Source/Easy flags out of `WorkspaceState` (deleting the editor write-back). As built:
+**§17** — read **§17.1** (why `bool`/`int` do not breach §5.2.3), **§17.3** (the two ways §7.5 could have
+destroyed data) and **§17.4a** (the digits-only QA follow-up, and the two designs measured and rejected).
+⚠ **Two amendments to ratified Q9 are recorded there, both the user's:** **7.4 was built** although Q9 listed it
+as "trim first", and **7.1 (monospace font) left the sprint entirely** on a re-measurement — 7 strings / 95
+occurrences / 33 files, not 4 / 10 — moving to the app-wide UX sprint; §2.7, §7.1, §10 and Q9 are all amended in
+place.
+
+**🔒 THE SPRINT IS COMPLETE — ALL SIX ETAPS DELIVERED AND ACCEPTED.** Every point of §6, §7, §9 and §11 is
+rendered as built, deliberately deferred (with its measurement), or ratified out with a reason; §17.8 is the
+record of what was deliberately not built. Branch `feat/settings-center`, merged to `master`.
 
 ⚠ **Etap 4 corrected §2.2 on two measured points — read §14.1 before touching the formatter.** §2.2(a)
 undercounted the casing sites (~30, not ~9: it missed the ~22 keyword literals the emitters *synthesize*),
@@ -291,9 +302,33 @@ class that ever accepted one.
 
 This is the single largest architectural item in the sprint, and §5.2 addresses it.
 
-### 2.7 The monospace font has **four** divergent strings across ten files, not three
+### 2.7 The monospace font has **seven** divergent strings across **33** files, not three
 
-CLAUDE.md records this as *"three copies"*. Measured, it is worse:
+⚠⚠ **CORRECTED IN ETAP 6 (2026-08-01) — this section's own heading used to say "four across ten", and that
+was an undercount of the same shape as §14.1's casing count.** The etap-1 survey enumerated the sites it had
+reason to look at (the popups and dialogs) and generalised; a full sweep of `src/EmberTern.App` measures:
+
+| Measure | Etap 1 claimed | ⭐ Measured (etap 6) |
+|---|---|---|
+| Distinct strings | 4 | **7** |
+| Occurrences | *(not counted)* | **95** |
+| Files | 10 | **33** |
+
+The distribution is what matters, because it explains why the survey missed it — one string dominates and
+the divergence is a long tail:
+
+| String | Occurrences |
+|---|---|
+`"Cascadia Code,Consolas,Menlo,monospace"` | 65 (XAML) + 5 (code) |
+`"Cascadia Mono, Consolas, Menlo, monospace"` (spaced) | 3 (`LanguageExpansionController`, `NavigationController`, `ParameterHelper`) |
+`"Cascadia Code,Consolas,monospace"` | 5 |
+`"Consolas,Cascadia Code,monospace"` | 4 |
+`"Consolas,Menlo,monospace"` | 3 |
+`"Cascadia Mono,Consolas,monospace"` | 1 |
+`"Cascadia Code,Consolas,Courier New,monospace"` | 1 + `SqlSnippetDropTarget` |
+
+⭐ **This measurement is what moved §7.1 out of this sprint** — see §7.1, amended. The original list is kept
+below because its *point* survives unchanged and is the reason the item exists at all:
 
 | String | Sites |
 |---|---|
@@ -302,10 +337,10 @@ CLAUDE.md records this as *"three copies"*. Measured, it is worse:
 `"Cascadia Code,Consolas,Courier New,monospace"` | `SqlSnippetDropTarget` |
 (+ `ThirdPartyNoticesWindow`, per the hamburger sprint) | |
 
-These are not four spellings of one font — **`Cascadia Code` and `Cascadia Mono` are different
+These are not seven spellings of one font — **`Cascadia Code` and `Cascadia Mono` are different
 typefaces** (Code has programming ligatures, Mono does not), and the fallback chains differ too. So the
 app already renders monospace text inconsistently. This is the prerequisite for any font setting, and
-it is why §7.1 recommends splitting consolidation from configuration.
+it is why §7.1 splits consolidation from configuration.
 
 ---
 
@@ -1053,13 +1088,36 @@ it everywhere, so this is the user's call.
 
 Each answers: *why worth it · global? · in Settings Center? · defer or Premium?*
 
-### 7.1 Editor / monospace font family + size — **prerequisite now, setting later**
-*Why:* the app already renders monospace text in two different typefaces (§2.7), and font size is the
-single most-requested accessibility setting in any code editor. *Global:* yes. *Settings Center:* yes.
-*Defer:* **the setting, yes — the consolidation, no.** Typography is explicitly the backlogged app-wide
-UX sprint's territory, and a font-family setting with four divergent hard-coded strings behind it would
-configure some surfaces and not others. **Recommendation: this sprint collapses the four strings into
-one theme token (a bug fix, and small); the UX sprint adds the setting on top.**
+### 7.1 Editor / monospace font family + size — ⭐ **BOTH HALVES DEFERRED to the app-wide UX sprint** (user, 2026-08-01)
+
+*Why the item exists:* the app already renders monospace text in two different typefaces (§2.7), and font
+size is the single most-requested accessibility setting in any code editor. *Global:* yes.
+*Settings Center:* yes — **later**.
+
+⚠⚠ **AMENDED IN ETAP 6, and this supersedes both the original recommendation below and ratified Q9's
+"prerequisite only" wording.** The original text said *"this sprint collapses the four strings into one
+theme token (a bug fix, and small); the UX sprint adds the setting on top"*, and §10 said to *"fold it into
+whichever etap has room"*. **Both rested on §2.7's undercount.** Re-measured before etap 6 committed to it:
+**7 distinct strings, 95 occurrences, 33 files** — not four across ten.
+
+⭐ **The decision (user's, on that measurement): etap 6 does neither half, and the whole item moves to the
+backlogged app-wide UX sprint.** The reasoning is the one this project already applies to typography:
+
+- At 33 files it is **not** "small and independent", which is the only property that made folding it into a
+  settings etap defensible. It is a change to how every monospace surface in the application renders.
+- Collapsing seven chains into one **decides which typeface wins** — `Cascadia Code` (ligatures) or
+  `Cascadia Mono` (none) — for the editor, the debugger, the hover cards and eleven DDL previews at once.
+  That is a typography decision with a visible result on every code surface, and it belongs to the sprint
+  that looks at every surface together, not to the last etap of a settings sprint.
+- It is squarely inside the **standing instruction from the Data Import close-out**: *"a module etap
+  delivers the module — do NOT initiate global UI changes or style refactors"*, where the working line is
+  that a control's appearance app-wide is the sprint's and a single screen is the module's. A shared font
+  token is as app-wide as it gets.
+
+⚠ **So there is no unexecuted point left here.** §7.1 is not "owed" by this sprint in either half; it is
+recorded in the UX sprint's backlog **with its measurement**, which is the part that makes it actionable
+later — see CLAUDE.md's backlog entry. Nothing in etap 6 depends on it, and no setting was shipped that
+would only work on some surfaces.
 
 ### 7.2 Execution row limits — **yes, ship it (highest-value optional setting)**
 *Why:* `PreviewLimit = 5000` is a taste-and-hardware trade-off asserted for everyone, and
@@ -1100,6 +1158,23 @@ invisible side effect into a stated preference. *Global:* yes, already are. *Set
 *Why:* 200 rows, hard-coded **twice** (`TableDetailTabViewModel:25`, `ViewDetailTabViewModel:32`).
 *Global:* yes. *Settings Center:* yes, Grid page. *Defer:* no. Small, and it removes a duplicate pair
 that can drift.
+
+⚠ **Recorded in etap 6 (measurement, not a scope change): there are FIVE grid page-size `200`s, not two.**
+The other three are `MainWindowViewModel.ResultPageSize`, `ProcedureDetailTabViewModel.ExecResultPageSize`
+and `FunctionDetailTabViewModel.ExecResultPageSize` — the three **client-side** result grids, which page an
+already-materialized, already-capped result set in memory. (Two further `200`s,
+`DataImportTabViewModel.SourcePreviewRows` and `DebuggerTabViewModel.ExecutedSqlCap`, are unrelated
+constants that merely share the number.)
+
+⭐ **Only the two server-paged grids are this setting's subject, and that is ratified Q9's scope, not an
+omission** — the three client-side grids answer a different question ("how much of what I already have do I
+show at once", where the real ceiling is `PreviewRowLimit`, which §7.2 *does* expose). The setting's label
+and description name the two grids explicitly so the absence of the others reads as a decision.
+
+⚠ **One consequence had to be fixed in place**: `MainWindowViewModel.ResultPageSize`'s comment said *"Same
+default page size as the Table Data View (DataPreviewRowLimit)"*. True when both were literal `200`s, and
+false the moment one of them started following a preference — so it was corrected to say why they are now
+deliberately different numbers. A comment asserting two values are the same is how they get re-coupled later.
 
 ### 7.8 Editor timing constants (debounce / hover dwell / auto-popup / trigger length) — **NO, and deliberately so**
 *Why not:* these four are **tuned values, not preferences.** `HoverDwell = 350 ms` was chosen as part
@@ -1185,7 +1260,7 @@ its input was wrong.
 **Q6** | Does Export offer **Workspaces** (tabs, SQL text, saved queries)? | **Yes — separate opt-in, off by default.** It is work rather than settings, and it can be large. |
 **Q7** | Settings Center as a **window** rather than a workspace tab? | **Window** — §5.1. |
 **Q8** | Apply-on-change, no OK/Cancel? | **Yes** — §5.5, with the refusal banner (§2.5). |
-**Q9** | Which §7 proposals are in scope? | **In: 7.2** (row limits, excl. `FullSafetyCeiling`), **7.3** (debugger isolation default), **7.5** (workspace restore), **7.6** (Source/Easy default), **7.7** (page size). **Prerequisite only: 7.1** (font consolidation — the *setting* stays with the UX sprint). **Trim first: 7.4.** **Out: 7.8, 7.9, 7.10.** |
+**Q9** | Which §7 proposals are in scope? | **In: 7.2** (row limits, excl. `FullSafetyCeiling`), **7.3** (debugger isolation default), **7.5** (workspace restore), **7.6** (Source/Easy default), **7.7** (page size). ~~**Prerequisite only: 7.1**~~ → ⭐ **AMENDED 2026-08-01 (user): 7.1 is OUT of this sprint entirely**, both the setting and the consolidation, on a re-measurement that found 7 strings / 95 occurrences / 33 files rather than 4 / 10 — §7.1 + §2.7. **Trim first: 7.4** → ⭐ **built (user, etap 6): not trimmed.** **Out: 7.8, 7.9, 7.10.** |
 **Q10** | Format identity — how does the importer know it is our file? | ⭐ **ADDED BY THE USER.** A constant **magic** as the literal first bytes. Rejects a mistakenly-picked ZIP/PDF before parsing, versioning or any passphrase prompt. **Never versioned** (identity ≠ contract), checked from the stream before loading, byte-compared. §6.3.1a + the ordered checks in §6.3.3. ⚠ **The literal is amended by Q13** — `EMBERTERN-SETTINGS` is already `settings.dat`'s. |
 **Q11** | Is etap 5 one etap or two? | ⭐ **Two, as the user split it: 5a** = container, encryption, versioning, migrations, tests (Core, no UI); **5b** = export/import UI, section selection, passphrase. §10. |
 **Q12** | Where do defaults live, and who validates? | ⭐ **ADDED BY THE USER, binding on etap 2.** **`Preferences` is a self-sufficient contract** — every property valid from its own initializer, so `new Preferences()` is always usable with no initialization. **`PreferencesStore` only validates and normalizes what it read from the file** (unknown value → the model's default) and supplies no defaults of its own. Validation applies to `Language` from day one despite having no consumer. §5.2.1. |
@@ -1246,7 +1321,7 @@ Each etap ends build 0/0, tests green, smoke clean, and committable — and each
 **4** | SQL Formatter: `FormatterStyle`, the **one** casing decision point, the keyword/identifier split via `FirebirdSyntax.IsKeyword`, the §0 comment correction, differential + idempotency suites green **under both settings**. | ✅ **done 2026-07-30 — §14** |
 **5a** | ⭐ **Core — the format itself.** The **export's own** magic (**Q13** — not `settings.dat`'s, §6.3.1b) + versioned cleartext header, `aes256-passphrase` (AES-256-GCM), KDF params, the migration ladder, the ordered check sequence (§6.3.3), and tests. **No UI.** | ✅ **done + user-accepted 2026-07-30 — §15.** ⚠ The protector is deliberately **NOT** registered in `ResolveProtector` (ratified — §15.1 + §15.9/2). F4 resolved in §15.2, and its shape is now a ratified constraint (§15.9/1). |
 **5b** | ⭐ **UI — export/import experience.** The content filter (§6.3.4), section selection, the passphrase flow (§6.3.3's corollary — validate first, prompt second), the non-destructive import with `.pre-import-<stamp>`, "Open settings folder". | ✅ **done + user-accepted 2026-07-31 — §16.** Settled the three traps the brief named (§16.1 stale snapshots · §16.2f the action-row shape · §16.2c copy-not-move) and the live-session question (§16.3); QA then found and returned three more, all fixed before acceptance — §16.6 (the export read the workspace off `settings.dat`) and §16.7 (the gate hint's severity · the growing dialog). |
-**6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | additive; naturally last, and trimmable without blocking anything |
+**6** | The approved §7 settings (**Q9**) — each a scalar on `Preferences` plus one page row. | ✅ **done 2026-08-01 — §17.** All six shipped (7.2 · 7.3 · 7.4 · 7.5 · 7.6 · 7.7); **7.4 was NOT trimmed** and **7.1 left the sprint** (Q9 amended). Brought the first non-string preferences, the first numeric commit path (§5.5.1's debt, §16.8), and one migration out of `WorkspaceState` (§17.2). |
 
 ⚠ **Etap 5a — F4. ✅ RESOLVED (§15.2): `MigrateToCurrentVersion` is now `internal static`, and the export
 payload is shaped as an `ApplicationSettings` so the import calls that exact ladder. Kept below because its
@@ -1261,8 +1336,11 @@ three-version split (§6.3.2). Cheap to settle in the first hour; expensive to d
 would have laid out the General page twice — the exact churn the decision exists to avoid. Its Core
 storage and catalog therefore land in **etap 2**, alongside `Theme`.
 
-**Font-family consolidation (§7.1)** is small and independent — fold it into whichever etap has room, or
-run it standalone. Note it is a *consolidation*, not a setting (**Q9**).
+⚠⚠ **Font-family consolidation (§7.1) — this note is SUPERSEDED and is kept only so the change is visible.**
+It used to read *"small and independent — fold it into whichever etap has room, or run it standalone"*. That
+rested on §2.7's undercount; re-measured at **7 strings / 95 occurrences / 33 files**, it is neither small
+nor independent, and the user moved the whole item to the app-wide UX sprint on 2026-08-01. **No etap of this
+sprint owes it.** See §7.1 (amended) and §2.7 (corrected).
 
 **Polish (§8)** is explicitly **not** in this plan. Etap 3 ships the row; §8 is its own milestone.
 
@@ -2235,5 +2313,294 @@ backlogged UX sprint, not to a settings etap.
 - **Add an export section:** §15.8's recipe, plus one arm in `SettingsImportApplier.Merge`, one flag on
   `SettingsImportSelection` (and its `Sections` / `EverythingIn` / `IntersectWith`), one checkbox in each dialog.
   The format version does not move for an additive section.
-- ⚠ **The first free-text or numeric preference still owes §5.5.1's blur-or-Enter commit path** — etap 5b added no
-  preference at all, so §13.4(d)'s note stands unchanged.
+- ~~⚠ **The first free-text or numeric preference still owes §5.5.1's blur-or-Enter commit path** — etap 5b added
+  no preference at all, so §13.4(d)'s note stands unchanged.~~ ✅ **DISCHARGED by etap 6 — see §17.4**, which
+  built it on `NumericSettingViewModel` (`EditText` follows the keystrokes and commits nothing; the view calls
+  `Commit()` on blur and Enter), and **§17.4a** for the digits-only input gate QA asked for on top of it.
+
+---
+
+## 17. ⭐ Etap 6 — as built (2026-08-01)
+
+**The last etap of the sprint: the six approved §7 settings (ratified Q9).** Build 0/0; suite **7026** green
+(partitions 6959 + 67, up 38); smoke clean. — including the QA follow-up of 2026-08-01 (§17.4a).
+
+| §7 | Setting | Page | Shape |
+|---|---|---|---|
+7.5 | Restore open tabs on startup | General | `Toggle` |
+7.6 | Open procedures / views / triggers / functions in Easy mode | Editor | `Toggle` ×4 |
+7.2 | Preview row limit · Ask before loading more than | Editor | `Number` ×2 |
+7.7 | Data page size | Grid | `Number` |
+7.4 | Auto-fit columns by default | Grid | `Toggle` |
+7.3 | Debugger transaction isolation | Debugger | `Option` |
+
+Three new categories (Editor, Grid, Debugger), ten new rows, ten new `Preferences` properties. `Preferences`
+went from 4 properties to 14, `CurrentSchemaVersion` **did not move** (additive — §5.2.3), and no etap 2–5b
+contract changed.
+
+⭐ **Two §7 items did not end where the plan left them, both on the user's call:** **7.4 was built** although
+Q9 listed it as "trim first", and **7.1 left the sprint entirely** on a re-measurement (§7.1, §2.7, Q9 amended).
+
+### 17.1 ⭐ The first non-string preferences — and why that is not a breach of §5.2.3
+
+Ten of the fourteen properties on `Preferences` are now `bool` or `int`. §5.2.3's rule is *strings, never
+enums*, and it would be an easy and wrong generalisation to read that as *strings, never anything else* and
+"fix" these into `"true"` / `"200"` for consistency.
+
+⭐ **The rule is about enums specifically, and its reason does not transfer.** `JsonStringEnumConverter`
+throws on a name it has never seen → `Corrupt` → `Save` refuses → **the whole settings file is lost**; that
+is why adding a *value* to a persisted enum is not an additive change. A `bool` has no such hazard (the set
+of legal JSON booleans never grows) and neither does an `int`. `WorkspaceState` has persisted dozens of both
+since it shipped. Stringly-typing them would buy nothing and cost every consumer a parse.
+
+⚠ **What a number does need is bounds**, which is `PreferenceRange`'s job — the numeric sibling of
+`PreferenceOptionSet`, and added for the same reason: §5.2.1/2 makes normalization *silent and total*, so
+every field must be valid when `Load` returns. A hand-edited or imported `0` row limit would make the SQL
+editor return nothing; a `-1` page size would break pagination arithmetic. The bounds **are** a numeric
+preference's legal set, stated once and read by both the store and the field (§5.2.2's rule, numeric form).
+
+⭐ **Out of range CLAMPS; it never resets to the default.** A stored `50 000 000` means *"as many as
+possible"*, and answering that with the shipped `5 000` would be data loss with extra steps — the same
+reasoning that makes `PreferenceOptionSet.Normalize` correct `"dark"` → `"Dark"` rather than discard it
+(§12.2). ⚠ Consequently the field **echoes the clamped value back**: a box still showing `50000000` over a
+stored `1 000 000` would be lying, and a validation error has nowhere to live on a page that applies on
+change (Q8). Both numeric descriptions therefore state their range.
+
+⚠ **`PreferenceRange`'s ctor rejects a default outside its own bounds**, exactly as `PreferenceOptionSet`
+does and for the identical reason: the alternative is a preference that quietly refuses to hold its own
+default, which the user experiences as a setting that resets itself.
+
+⭐ **`FullSafetyCeiling` is the ceiling of the two ranges that ARE configurable**, so *"the soft threshold
+sits below the hard ceiling"* — which `ExecutionModesTests` pins for the shipped values — stays true **by
+construction** rather than by a comment. It is itself deliberately not configurable (Q9): a user who raised
+it to 50 M would get an out-of-memory crash instead of a truncated grid, so configuring the safety limit
+defeats it.
+
+### 17.2 ⭐ §7.6 — the migration OUT of `WorkspaceState`, and the write-back that had to go (ratified)
+
+The four `*EasyMode` flags did not need a new home for tidiness. They were **written by whatever editor the
+user last toggled** — `MainWindowViewModel` subscribed each detail VM's `PropertyChanged` and mirrored
+`EasyMode` back into a global — so opening a procedure in Easy mode because of something done to a
+*different* procedure yesterday looked like a bug rather than a preference.
+
+⭐ **RATIFIED (user, etap 6): the flags move to `Preferences` and the write-back is DELETED.** Four handlers
+(`OnProcedureDetailPropertyChanged` and its three siblings) and four settable `*ModePreference` properties
+are gone; the four properties are now **read-only** and read the live `PreferencesService` at the moment a
+tab is built. So:
+
+- the default has **one home and one way to change it** (Settings Center), and
+- toggling Source/Easy inside an editor is a **per-tab action that persists nothing globally**.
+
+⚠ **The per-tab half of the hybrid model is unchanged**: a workspace-restored tab still carries its own
+`WorkspaceTab.EasyMode` and it still wins over the default. That half was never the problem.
+
+⚠ **Read at construction, not captured** — a tab built after the setting changes gets the new value, which is
+what apply-on-change promises. ⛔ **Do not re-add a global flag to `WorkspaceState`**; the removed block is
+replaced by a comment saying so, because "restore the last-used mode" is a plausible-sounding regression.
+
+### 17.3 ⭐ §7.5 — "gate restore, never capture", and the two ways it could have destroyed data
+
+§7.5's own rule is that the setting must gate **restore** and never **capture**, so that turning it back on
+restores the *last* session rather than whichever session last had it enabled. Honouring that literally is
+what makes the implementation non-obvious, and two natural shortcuts are both rule-#11 data loss:
+
+⚠⚠ **(a) Not LOADING the stored workspaces would erase every other connection's work.** The per-connection
+dictionary that `RestoreWorkspace` fills is the very thing `CaptureWorkspace` writes back at close. Skip the
+load and one session with the setting off silently deletes the stored tabs **and saved queries** of every
+profile the user did not open — reported as success, discovered days later. So the dictionary is loaded
+either way; what is suppressed is **materialising the tabs into the UI**.
+
+⚠⚠ **(b) "Do not restore the workspace" would discard saved queries.** A connection's saved queries live
+*inside* the same stored `ConnectionWorkspace` as its tab list. They are named SQL the user deliberately
+kept — *"start me clean"* is about a stale tab strip, not about throwing away content. Only `Tabs` is
+skipped; `SavedQueries` and the active query still load.
+
+⭐ **The suppression is a set of profile ids that EMPTIES as it is read, not a standing flag.** The setting
+says *on startup*: a reconnect later in the same session must restore the tabs **this session built**,
+otherwise switching connections would keep discarding the user's work all day. `LoadWorkspaceFor` removes
+the id as it consults it.
+
+Both hazards are pinned by name (`WithRestoreOff_SavedQueriesStillComeBack`,
+`WithRestoreOff_OtherProfilesWorkspacesAreNotErasedAtCapture`,
+`WithRestoreOff_AReconnectLaterInTheSameSessionKeepsThisSessionsTabs`).
+
+### 17.4 ⭐ §5.5.1's numeric commit path — the debt §16.8 recorded, and where it lives
+
+`NumericSettingViewModel.EditText` follows every keystroke and commits **nothing**; the view calls `Commit()`
+on **blur** and on **Enter**, which parses, clamps against the Core range, echoes the settled number back and
+only then reports a change.
+
+⭐ **The reason is not performance.** Every `Save` does a full read + decrypt + deserialize of `settings.dat`
+before rewriting it, and `AtomicWrite` keeps exactly **one** generation of `settings.dat.bak` — so typing
+`5000` per keystroke would roll the single hand-recovery backup through four generations at precisely the
+moment someone is editing settings.
+
+⚠ **The commit lives in the VIEW, and that is the right layer**: the view is what knows when a control's
+value is settled. Core already makes the wrong answer unavailable — `PreferencesStore` has no per-property
+setter to stream into (§12.3).
+
+⚠⚠ **A control must carry its ROW as its `DataContext`, and this is load-bearing.** All three hooks identify
+what to act on from `sender`/`e.Source`'s `DataContext`. Left on the *page's* DataContext, a numeric field
+looks correct, types correctly, shows the number — and calls nothing. Each numeric group therefore sets
+`DataContext="{Binding …}" x:DataType="vm:NumericSettingViewModel"` (the shipped `DataImportTabView` idiom).
+
+#### 17.4a ⭐ Digits only — the QA follow-up (2026-08-01), and the two designs that were measured and rejected
+
+QA accepted the etap with one change: *"the fields accept any text; a mistyped letter just cancels the whole
+entry, which is poor UX — they should take numbers only, keeping the blur/Enter commit."* Correct, and the
+losing behaviour is worse than it sounds: the digits already typed went with it, and nothing said why.
+
+⭐ **As built: one predicate, `NumericSettingViewModel.AcceptsText`, enforced by the view at the input
+boundary.** It judges a **partial** entry — an empty field and a lone `-` (where the range admits one) are
+legal steps toward a number — and it deliberately does **not** check the range, because typing `1` on the way
+to `1000` would fail a minimum of `10` and make the field unusable. Bounds stay `Commit`'s job, where they
+clamp. The predicate lives on the row because **the row owns the range**; the view never re-decides.
+
+⚠⚠ **Rejected design 1 — veto inside the `EditText` setter.** The obvious "one owner" answer, and it fails
+twice, both measured: (a) **Avalonia's two-way binding ignores a `PropertyChanged` raised while it is pushing
+target → source**, so re-announcing the kept value does not snap the control back — the headless test showed
+the box still reading `12a3x.5-` while the model held the old number; (b) it makes **paste strictly worse** —
+`Commit` then finds the model already correct, changes nothing, notifies nothing, and the pasted junk stays
+in the field permanently, where today it is cleaned at blur. ⭐ **The general shape: the property a control
+writes to cannot also be the property that refuses the write.**
+
+⚠⚠ **Rejected design 2 — a length cap at the range's own width.** The first cut capped input at `Maximum`'s
+digit count, which quietly broke §17.1's promise: typing `50000000` into a field whose maximum is a million
+is the user saying *"as many as possible"*, and clamping is the documented answer — but an 8-digit cap
+refuses the 8th keystroke, which reads as a broken field. **The cap is `int`'s width instead**, so over-range
+entry stays possible and still clamps; only lengths no `int` could hold are refused. `Commit` consequently
+parses as **`long`** and clamps into `int` before the range normalizes, so the handful of accepted 10-digit
+values above `int.MaxValue` also mean "the maximum" rather than reverting.
+
+⚠ **The enforcement is a TUNNEL handler, and here that is justified where §17.5's was not.** A `TextBox`
+consumes `TextInput` in its own class handler, and **Avalonia runs class handlers before instance handlers on
+the same element** — so a bubbling `TextInput="…"` fires only after the character is already in, and marking
+it handled is too late. That is exactly the case gotcha #224 exists for. It is scoped by `e.Source`, so a
+window-level handler cannot become a window-wide input grab.
+
+⚠ **Paste is deliberately still not blocked** and keeps the shipped behaviour: it raises no `TextInput`, so
+junk lands and is undone at blur or Enter. Covering it needs a second, differently-shaped hook for a much
+rarer path, and the tolerant `EditText` + clamping `Commit` already make the *outcome* correct. Pinned by
+`ANumericField_PastedJunkIsUndoneAtCommit` so the behaviour is a decision on record, not an oversight.
+
+⚠ **One existing test was rewritten rather than left passing.** `ANumericField_RevertsUnparseableText`
+asserted that `"not a number"` reaches `EditText` and is undone by `Commit` — **its assertions still pass
+unchanged** under the gate, which is precisely why it could not stay: a test that passes for a reason it no
+longer describes has stopped being evidence. It is now three tests that say what is actually true (the
+predicate refuses, partial entries pass, paste is undone), plus a headless one driving **real keystrokes**,
+because whether a refusal reaches the screen is a fact about Avalonia's routing and not about the model.
+
+### 17.5 ⚠⚠ A measured correction to an in-flight assumption: a `TextBox` does **not** claim Enter
+
+Mid-etap, the Enter path was diagnosed as *"the `TextBox` handles Enter in its own class handler, so a
+bubbling `KeyDown="…"` never fires"*, and a **tunnelled window-level handler** (gotcha #224) was added on
+that basis, scoped back down by inspecting `e.Source`.
+
+⭐ **Probed on the headless session before the etap closed, and it is false.** With `AcceptsReturn=false` the
+bubbling handler on the box runs with `Handled=false`, and the key reaches the window **still unhandled**.
+The real cause of the field not committing was §17.4's `DataContext` — a different bug with the same symptom.
+
+⭐ **So the tunnel was removed and Enter is an ordinary bubbling handler on the field, symmetric with the blur
+one beside it.** This is §14.3's shape again — *a false premise with a working conclusion* — and the reason
+it matters is §15.7's: **an inert guard reads to the next author as a real hazard**, and a window-wide key
+handler that exists to defend against nothing is exactly that. Gotcha #224's tunnel is for a key an editing
+control genuinely claims; this was not one.
+
+⚠ The behaviour is pinned end to end by `ANumericSetting_CommitsOnBlurAndOnEnter_AndNotWhileTyping`, so if a
+future Avalonia *does* start claiming Enter, that test fails rather than the field silently degrading to
+blur-only.
+
+### 17.6 Implementation decisions the design left open
+
+**(a) `SettingValueKind` (`Option` | `Toggle` | `Number`), separate from `SettingKind`.** ⭐ Exactly the
+distinction §16.2(f) predicted would be needed: `SettingKind` answers *is this a value or a command*, this
+answers *what shape is the value*. §16.2(f) rejected reusing `Options == null` as the marker because it
+conflates "not a preference" with "a preference that is not enumerated" — and etap 6 brought both of the
+latter. ⚠ There is deliberately **no `Text` member**: a free-text preference has no consumer, and a
+mechanism without one is gotcha #233.
+
+**(b) Three mapping methods (`ValueOf` / `FlagOf` / `NumberOf`), not one returning `object`.** Each is a
+small total function that throws for an id it does not know — which is what makes a new row fail loudly
+instead of silently reading the wrong kind of value.
+
+**(c) One `Wire` subscription point for all three value-carrying row kinds**, so *"a settled value persists"*
+is stated once rather than once per kind — the place a fourth kind would otherwise be forgotten.
+
+**(d) `DebuggerIsolationPreference` — the third member of the `ThemePreference` / `FormatterStylePreference`
+family.** Core owns the persisted *key*; the consumer owns its own type; the translation happens once, at the
+App ↔ Core boundary. That is ratified §14.4a/2, and Core has no opinion about `FbTransactionOptions`.
+⚠ The launch panel's index convention (0 = Read Committed, 1 = Snapshot) stays inside `DebuggerTabViewModel`,
+the only class that has ever expressed it.
+
+**(e) The debugger isolation is a SEED at construction, not a live provider** — the opposite of the
+formatter's style (§14.2e), deliberately. The launch panel's selector is the user's per-launch choice, and
+re-reading the preference later would move a selector they may already have touched. §7.3's own wording:
+*"the launch panel keeps the per-session override; this sets what it opens with."*
+
+**(f) Grid auto-fit IS a live provider** (`Func<bool>`), for the §14.2e reason: grids are built while the
+preference moves. ⚠ It applies only to a grid with **no stored profile**; one the user has adjusted keeps its
+own `GridProfile`, which is what makes §7.4 a default rather than an override. `FallbackProfile` is
+`internal` so *"an unadjusted grid follows the setting"* is assertable without a desktop.
+
+**(g) `MainWindowViewModel.Request(...)` is the ONE place an `ExecutionRequest` gets the user's limits.**
+`ExecutionDefaults`' own comment predicted this — *"moving them into user settings later […] is a one-line
+change at the call site that fills an ExecutionRequest"* — and it was right: the limits already travel as
+values on the request, so nothing below reads a global. Building the request in one place rather than
+editing four call sites is what makes a **fifth** execution surface inherit the limits instead of quietly
+shipping on the defaults.
+
+**(h) The one hand-typed gesture was caught by the guard, not by review.** `SettingsPreviewRowLimitDescription`
+said *"a Preview execution (F5)"*; `UiStringsShortcutSourceTests` failed it, and it is now composed via
+`CommandTip.Sentence(CommandId.Go, …)` and became `static readonly` (gotcha #284 — the guard keys on
+const-ness because a correct string contains the same text at run time).
+
+### 17.7 Verification — what was actually proved
+
+- **Build 0/0**; suite **7026** green — partitions **6959** (non-headless) + **67** (headless), up 38.
+- **`SettingsConsumerWiringTests` (new)** — the etap's centre of gravity, on the lesson
+  `FormatterStylePreferenceTests` recorded one etap earlier: *a stored value and a mapping are two lines each;
+  what actually fails is a consumer left on the shipped constant.* Every test moves a preference through the
+  app's one `PreferencesService` and asserts the consumer followed — execution limits (incl. that
+  `FullSafetyCeiling` does **not** move), both data grids' page size, the auto-fit fallback, the isolation
+  mapping, and the four §7.5 hazards.
+- **Headless, on the real window** — `ANumericSetting_CommitsOnBlurAndOnEnter_AndNotWhileTyping` proves the
+  handlers are *wired* (a VM test proves `Commit` works; only this proves the XAML calls it — §14.2f's
+  shared-`GroupName` lesson), and `TheEtap6Pages_RenderTheirRows_AndACheckboxCommitsOnClick` proves each page
+  renders exactly its catalog rows.
+- ⭐ **The headless counts are now DERIVED from the catalog, not written down** — a row added to
+  `SettingsCatalog` without its XAML block fails these tests, which a hard-coded number would have hidden
+  behind a passing update. Category selection is by **id**, never by index, for the same reason.
+- **Existing suites rewritten in place, not duplicated** — `ProcedureDetailTests`,
+  `WorkspaceUiStatePersistenceTests` and `FunctionRoutingTests` owned the Source/Easy assertions and were
+  updated where they live, which keeps the *"what used to be true"* contrast visible.
+- **Smoke:** the app launches and stays up.
+
+⚠ **Not verified against a live engine, and it does not need to be:** every etap-6 setting is client-side.
+The debugger isolation is the only one that reaches Firebird, and it changes which of **two already-shipped,
+already-live-verified** TPBs the launch panel pre-selects — no new transaction path.
+
+### 17.8 Deliberately not built in etap 6
+
+- **§7.1 font consolidation or setting** — out of the sprint entirely (§7.1, amended; Q9 amended).
+- **§7.8 timing constants · §7.9 suppressible confirmations · §7.10 import defaults** — ratified out, and
+  7.9 is a decision rather than a gap: a "don't ask again" checkbox exists only to disarm rule #11.
+- **Page size for the three client-side result grids** — Q9's scope, stated in §7.7 and in the row's own label.
+- **`FullSafetyCeiling`** — a memory backstop, not a preference.
+- ***Restore defaults*** — still §13.4's reasoning; the pages have grown but no page yet has enough rows that
+  clicking through them is worse than one button, and `new Preferences()` already *is* the answer if it lands.
+- **A `CommandId` or `Ctrl+,`** — §5.6, unchanged through six etaps.
+- **Any change to etap 2–5b contracts** — `CurrentSchemaVersion` still 2, the export format untouched, the one
+  theme apply point untouched, `SqlFormatter`/`FormatterStyle` untouched, `aes256-passphrase` still
+  unregistered in `ResolveProtector` (§15.1).
+
+### 17.9 What comes after the sprint
+
+- ⚠ **The new preferences travel in the export automatically** — they are properties of `Preferences`, which
+  the `Preferences` section already carries whole. No format version moves, and the reflection guard per
+  persisted type had nothing new to record. **An import brings them in and `PreferencesService.Reload()`
+  republishes them** through the one apply point (§16.1).
+- ⚠ **Grid column WIDTHS are still flushed only at close** (§16.6's stated-not-fixed note). Etap 6 did not
+  touch `GridProfiles`; auto-fit's *default* is a preference now, but a live layout is still captured late.
+- **Adding a preference** is unchanged from §16.8, plus: pick a `SettingValueKind`, add the arm to the
+  matching mapping method (`ValueOf` / `FlagOf` / `NumberOf`), and — for a number — declare its
+  `PreferenceRange` in `PreferenceOptions` and pass it on the descriptor.

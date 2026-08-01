@@ -925,6 +925,91 @@ internal static class UiStrings
     public const string SettingsLanguageKeywords = "locale translation localization interface";
     public const string SettingsLanguageEnglish = "English";
 
+    // ⚠ The description says "open tabs" and "saved queries stay" because the setting is narrower than its name
+    // suggests, and the narrower half is the important one: a connection's saved queries live in the same stored
+    // workspace and are the user's own content, so they come back either way.
+    public const string SettingsRestoreWorkspaceLabel = "Restore open tabs on startup";
+    public const string SettingsRestoreWorkspaceDescription =
+        "Reopen the tabs from your last session when you connect. Saved queries are always restored.";
+    public const string SettingsRestoreWorkspaceKeywords =
+        "workspace session tabs restore startup launch reopen clean start";
+
+    // ── Editor (etap 6) ─────────────────────────────────────────────────────────────────────────────
+    // The default Source/Easy mode for newly opened object editors (§7.6) and the execution row limits
+    // (§7.2). §7.2 calls this an "Editor / Execution" page; it is one page.
+    public const string SettingsCategoryEditor = "Editor";
+
+    // ⚠ One description for all four rows, and it states the two things a user needs to know: this is a
+    // DEFAULT for newly opened editors, and switching a mode inside an editor no longer changes it. That second
+    // sentence is the etap's actual fix — the four flags used to be rewritten silently by the last toggle.
+    public const string SettingsEditorModeDescription =
+        "Mode a newly opened editor starts in. Switching mode inside an editor affects that tab only; a "
+        + "restored tab keeps the mode it was saved in.";
+    public const string SettingsEditorModeKeywords =
+        "editor mode easy source default open procedure view trigger function structured";
+
+    public const string SettingsProcedureEasyModeLabel = "Open procedures in Easy mode";
+    public const string SettingsViewEasyModeLabel = "Open views in Easy mode";
+    public const string SettingsTriggerEasyModeLabel = "Open triggers in Easy mode";
+    public const string SettingsFunctionEasyModeLabel = "Open functions in Easy mode";
+
+    // ⚠ Both numeric descriptions name their range, because the field CLAMPS silently: a user who types 50000000
+    // and gets 1000000 back has to be able to see why, and the alternative — a validation error on a settings
+    // page that applies on change — would be a worse answer to the same problem.
+    public const string SettingsPreviewRowLimitLabel = "Preview row limit";
+
+    // ⚠ The key comes from the catalog, not from this string — CommandId.Go is what F5 actually runs, and a
+    // hand-typed "(F5)" here would teach a stale shortcut the day it is re-bound, silently (gotcha #284). That
+    // is also why this one member is `static readonly` while its neighbours are `const`: the guard keys on
+    // const-ness, because a correctly composed string contains the same text at run time.
+    public static readonly string SettingsPreviewRowLimitDescription = CommandTip.Sentence(
+        CommandId.Go,
+        "Rows a Preview execution ({0}) stops at. Full load is unaffected. Between 1 and 1 000 000.");
+    public const string SettingsPreviewRowLimitKeywords =
+        "execution execute preview rows limit f5 query results fetch cap";
+
+    // ⚠ It says the safety ceiling is separate and fixed, so the absence of a control for it reads as a decision
+    // rather than an omission — ratified Q9: a configurable memory backstop is not a backstop.
+    public const string SettingsFullLoadPromptLabel = "Ask before loading more than";
+    public const string SettingsFullLoadPromptDescription =
+        "Rows at which a Full load stops to ask whether to keep going. The hard 1 000 000-row memory limit is "
+        + "separate and not configurable.";
+    public const string SettingsFullLoadPromptKeywords =
+        "execution execute full load threshold prompt rows ask keep loading memory";
+
+    // ── Grid (etap 6) ───────────────────────────────────────────────────────────────────────────────
+    public const string SettingsCategoryGrid = "Grid";
+
+    // ⚠ Names the two grids explicitly. This is the page size of the SERVER-PAGED data grids, which is what
+    // ratified Q9 admits; the SQL editor's results and the Procedure / Function exec grids page an
+    // already-materialized result in memory and are not this setting's subject. A description saying just
+    // "grids" would be a promise the code deliberately does not keep.
+    public const string SettingsDataPageSizeLabel = "Data page size";
+    public const string SettingsDataPageSizeDescription =
+        "Rows per page in the Table Data and View Data grids. Each grid's own page-size box still overrides it. "
+        + "Between 1 and 1 000.";
+    public const string SettingsDataPageSizeKeywords =
+        "grid data page size rows pagination table view records per page";
+
+    public const string SettingsGridAutoFitLabel = "Auto-fit columns by default";
+    public const string SettingsGridAutoFitDescription =
+        "Size columns to their content in a grid whose layout you have not adjusted yet. A grid you have "
+        + "resized keeps its own layout.";
+    public const string SettingsGridAutoFitKeywords =
+        "grid columns auto fit width size layout default resize";
+
+    // ── Debugger (etap 6) ───────────────────────────────────────────────────────────────────────────
+    public const string SettingsCategoryDebugger = "Debugger";
+
+    // ⚠ Says the launch panel still offers it, because that is what makes this a DEFAULT rather than a
+    // replacement — the recorded D4 wish was "show only params at launch", not "take the choice away".
+    public const string SettingsDebuggerIsolationLabel = "Default transaction isolation";
+    public const string SettingsDebuggerIsolationDescription =
+        "Isolation a debug session starts with. The launch panel's Advanced section can still change it for a "
+        + "single run.";
+    public const string SettingsDebuggerIsolationKeywords =
+        "debugger debug transaction isolation snapshot read committed default launch";
+
     // ── SQL Formatter ───────────────────────────────────────────────────────────────────────────────
     // Exactly two rows, and that is ratified (§6.4 / §9.1): no line width, no indent size, no comma
     // placement. Both default to lower case, so a user who never opens this page sees the output EmberTern

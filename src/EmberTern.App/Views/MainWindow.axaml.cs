@@ -655,6 +655,11 @@ public partial class MainWindow : Window
                 // settings.dat — wire the shared store from the VM's location so tests
                 // never touch the real %AppData% (see gotcha #88).
                 GridLayoutBehavior.Store = new GridProfileStore(settingsDir, _currentVm.Store.Protector);
+                // What a grid with NO stored profile does about auto-fit (§7.4). A provider, not a value: the
+                // preference applies on change, so a grid built later must read the current setting rather than
+                // whatever it was when this window opened. Set here, beside Store, because the two share a
+                // lifetime — with Store unset nothing is loaded or saved anyway.
+                GridLayoutBehavior.DefaultAutoFitColumns = () => _currentVm?.Preferences.Current.GridAutoFitColumns ?? true;
                 _pendingRestore = _workspaceStore.Load();
                 if (_pendingRestore is not null)
                 {

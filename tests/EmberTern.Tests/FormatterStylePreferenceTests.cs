@@ -228,6 +228,16 @@ public class FormatterStylePreferenceTests
     {
         SettingsCatalog.SettingTheme => nameof(Preferences.Theme),
         SettingsCatalog.SettingLanguage => nameof(Preferences.Language),
+        SettingsCatalog.SettingRestoreWorkspace => nameof(Preferences.RestoreWorkspaceOnStartup),
+        SettingsCatalog.SettingProcedureEasyMode => nameof(Preferences.ProcedureEasyModeDefault),
+        SettingsCatalog.SettingViewEasyMode => nameof(Preferences.ViewEasyModeDefault),
+        SettingsCatalog.SettingTriggerEasyMode => nameof(Preferences.TriggerEasyModeDefault),
+        SettingsCatalog.SettingFunctionEasyMode => nameof(Preferences.FunctionEasyModeDefault),
+        SettingsCatalog.SettingPreviewRowLimit => nameof(Preferences.PreviewRowLimit),
+        SettingsCatalog.SettingFullLoadPromptThreshold => nameof(Preferences.FullLoadPromptThreshold),
+        SettingsCatalog.SettingDataPageSize => nameof(Preferences.DataPageSize),
+        SettingsCatalog.SettingGridAutoFit => nameof(Preferences.GridAutoFitColumns),
+        SettingsCatalog.SettingDebuggerIsolation => nameof(Preferences.DebuggerIsolation),
         SettingsCatalog.SettingFormatterKeywordCase => nameof(Preferences.FormatterKeywordCase),
         SettingsCatalog.SettingFormatterIdentifierCase => nameof(Preferences.FormatterIdentifierCase),
         _ => throw new ArgumentOutOfRangeException(

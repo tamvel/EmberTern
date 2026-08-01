@@ -33,8 +33,8 @@ verbatim, in the archive below.
 | **`docs/design/metadata-refresh-analysis.md`** | **The Metadata Explorer's measurement archive + the plan for its own stage.** Why the tree feels slow (the catalog is ~164 ms off the UI thread; the *projection* was quadratic), the flow of build/refresh, the 20 `RefreshAsync()` call sites, and the three-layer recommendation. **§7 is the as-built**: Layer 1 shipped 2026-07-27 (1 424 ms → 2 ms) together with the targeted in-place tree update; **Layers 2 and 3 + the unmeasured startup cost stay open** for the Metadata Explorer stage after Data Import. | Before touching the metadata tree, and at the start of the Metadata Explorer stage. |
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
-| **`docs/design/settings-center.md`** | **ACTIVE SPRINT — design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15) and ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) all DELIVERED.** ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (283 entries, #1–#296), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (285 entries, #1–#298), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -330,8 +330,25 @@ noted.
   no second keyword list *and* no second keyword decision. ⚠ **Quoted identifiers, literals and comments are
   never re-cased** (a quoted name's case is part of the object's identity — §0 / rule #11), and the setting
   governs the **Format SQL action**: generated DML (Copy as INSERT, `.sql` export) and generated DDL keep the
-  shipped style, per ratified Q1. Design + as-built:
-  [docs/design/settings-center.md](docs/design/settings-center.md) §13 + §14.
+  shipped style, per ratified Q1.
+  **Three more pages since etap 6** — **Editor** (default Source/Easy mode for procedures / views / triggers /
+  functions · **Preview row limit** · **Ask before loading more than**), **Grid** (**Data page size** for the two
+  server-paged data grids · **Auto-fit columns by default**), **Debugger** (**default transaction isolation** —
+  the launch panel's per-launch selector still overrides it). ⭐ **A row declares its `SettingValueKind`**
+  (`Option` | `Toggle` | `Number`), which is what picks its control — separate from `SettingKind`
+  (`Preference` | `Action`), because *value or command* and *what shape of value* are two questions.
+  ⭐ **A numeric preference is bounded by a Core `PreferenceRange`** that the store and the field both read, and
+  out-of-range **clamps rather than resets** (a stored `50 000 000` means "as many as possible"), with the field
+  echoing the settled number back. ⚠ **Numeric fields commit on BLUR or ENTER, never per keystroke** — every save
+  fully rewrites `settings.dat` and rolls its single `.bak`. ⚠⚠ **A numeric control carries its ROW as its
+  `DataContext`**; on the page's DataContext it types correctly and persists nothing. ⭐ **The four Source/Easy
+  flags moved out of `WorkspaceState` and the editor write-back is deleted** — they were rewritten by whatever
+  editor was last toggled, so a procedure opening in Easy mode because of a *different* procedure looked like a
+  bug; toggling mode in an editor is now per-tab only, and a restored tab's own mode still wins.
+  ⚠ **"Restore open tabs" gates RESTORE, never CAPTURE, and only the TABS** — the stored workspaces are still
+  loaded (they are what capture writes back, so skipping the load would erase other connections' work) and
+  **saved queries always come back**. Design + as-built:
+  [docs/design/settings-center.md](docs/design/settings-center.md) §13 + §14 + §17.
 - **Settings export / import (`.etsettings`)** — EmberTern's own **versioned, always-encrypted** artifact, so a
   configuration is portable where DPAPI deliberately is not. **Live end to end since etap 5b**: the General page's
   *Import / export settings* row opens two modals (section checkboxes · passphrase with confirmation · a content
@@ -394,13 +411,116 @@ noted.
   USER-ACCEPTED 2026-07-30; ⭐ ETAP 5a (the export FORMAT — Core only) DELIVERED AND USER-ACCEPTED 2026-07-30;
   ⭐ ETAP 5b (the export/import UI + the write into `settings.dat`) DELIVERED 2026-07-30 and, after a QA round
   that produced **three findings — one functional (§16.6) and two UX (§16.7) — DELIVERED AND USER-ACCEPTED
-  2026-07-31.**
-  **⭐ THE SPRINT IS CLOSED THROUGH ETAP 5b.** Branch `feat/settings-center`, pushed to both remotes and **not
-  merged to `master`** — the sprint continues at etap 6. **⛔ Etap 6 is a NEW SESSION** (the standing
-  one-etap-one-session rule); its scope is §7 + ratified Q9, and nothing of it exists yet.**
+  2026-07-31**; ⭐ **ETAP 6 (the approved §7 settings — ratified Q9) DELIVERED AND USER-ACCEPTED 2026-08-01.**
+  **🔒 THE SPRINT IS CLOSED — all six etaps delivered and accepted, merged to `master` (`--no-ff`, so the
+  sprint's arc stays readable) and pushed to both remotes.** A closing compliance audit checked every point of
+  §6, §7, §9 and §11 against the code: each is built, deliberately deferred with its measurement, or ratified
+  out with a reason, and **no global user preference is left outside `Preferences`** (verified in code —
+  `WorkspaceState` now holds only gesture-set layout, per-tab state and content). Build 0/0; suite **7026**
+  green (partitions 6959 + 67, up 38); smoke clean.
   **The sprint's one document: [docs/design/settings-center.md](docs/design/settings-center.md)** — read
   §9 (the 13 ratified decisions), §2 (the measured facts) and the as-built sections **§12 (etap 2) + §13
-  (etap 3) + §14 (etap 4) + §15 (etap 5a) + §16 (etap 5b)** before writing any code.
+  (etap 3) + §14 (etap 4) + §15 (etap 5a) + §16 (etap 5b) + §17 (etap 6)** before writing any code.
+  **⭐ ETAP 6 — the six approved §7 settings. See "What's built" for what it IS; the notes here are the WHY.**
+  Three new categories (Editor · Grid · Debugger), ten new rows, `Preferences` 4 → 14 properties, and
+  **`CurrentSchemaVersion` still 2** (additive).
+  **⚠ TWO §7 ITEMS DID NOT END WHERE THE PLAN LEFT THEM, both on the user's call, and both are AMENDMENTS to
+  ratified Q9 rather than drift.** **(a) 7.4 (grid auto-fit) was BUILT** although Q9 listed it as *"trim
+  first"*. **(b) ⭐ 7.1 (monospace font) LEFT THE SPRINT ENTIRELY** — Q9 had it as *"prerequisite only"* and §10
+  said to *"fold it into whichever etap has room"*, both resting on §2.7's count of *"four divergent strings
+  across ten files"*. **Re-measured before committing to it: 7 distinct strings, 95 occurrences, 33 files** —
+  so it is neither small nor independent, it would decide `Cascadia Code` vs `Cascadia Mono` for every code
+  surface at once, and it sits squarely inside the standing *"a module etap delivers the module — do NOT
+  initiate global UI changes or style refactors"* instruction. It moved to the backlogged app-wide UX sprint
+  **with its measurement**. ⚠ **§2.7, §7.1, §10 and Q9 were all amended in place** — the point is not left
+  unexecuted anywhere.
+  **⭐ THE FIRST NON-STRING PREFERENCES, and why that is not a breach of §5.2.3 (§17.1).** Ten of the fourteen
+  properties are now `bool`/`int`. ⛔ **Do not "fix" them into strings for consistency**: §5.2.3 is about
+  **enums specifically** — an unknown enum name throws → `Corrupt` → `Save` refuses → *the whole settings file
+  is lost* — and that reason does not transfer to a `bool` (the set of legal JSON booleans never grows) or an
+  `int`. ⚠ What a number **does** need is bounds: new **`PreferenceRange`**, the numeric sibling of
+  `PreferenceOptionSet`, because §5.2.1/2 makes normalization *silent and total*, and a hand-edited or
+  imported `0` row limit would make the SQL editor return nothing. ⭐ **Out of range CLAMPS, never resets** — a
+  stored `50 000 000` means *"as many as possible"*, and answering it with the shipped `5 000` would be data
+  loss with extra steps (the `"dark"` → `"Dark"` reasoning, §12.2) — **and the field echoes the clamped value
+  back**, because a box still showing `50000000` over a stored `1 000 000` would be lying and a validation
+  error has nowhere to live under apply-on-change. ⭐ `FullSafetyCeiling` is the **ceiling of the two ranges
+  that are configurable**, so *soft < ceiling* holds by construction, not by comment; it stays
+  non-configurable itself (Q9 — a configurable memory backstop is not a backstop).
+  **⭐ §7.6 — THE MIGRATION OUT OF `WorkspaceState`, AND THE WRITE-BACK IS DELETED (ratified, §17.2).** The four
+  `*EasyMode` flags were written by whatever editor the user last toggled, so opening a procedure in Easy mode
+  because of something done to a *different* procedure looked like a bug. Four `PropertyChanged` handlers and
+  four settable properties are **gone**; the four are now read-only and read the live `PreferencesService` when
+  a tab is built. ⚠ A restored tab's own `WorkspaceTab.EasyMode` still wins — that half was never the problem.
+  ⛔ **Do not re-add a global flag to `WorkspaceState`**; the removed block carries a comment saying so, because
+  *"remember the last-used mode"* is a plausible-sounding regression.
+  **⚠⚠ §7.5 — "GATE RESTORE, NEVER CAPTURE" HAD TWO WAYS TO DESTROY DATA, and both are the obvious
+  implementation (§17.3).** (a) **Not LOADING the stored workspaces** would have silently erased every *other*
+  connection's tabs **and saved queries** at the next close — the dictionary `RestoreWorkspace` fills is the
+  very thing `CaptureWorkspace` writes back. (b) **"Do not restore the workspace"** would have discarded
+  **saved queries**, which live inside the same stored `ConnectionWorkspace`; *"start me clean"* is about a
+  stale tab strip, not about throwing away named SQL. So the dictionary loads either way and only the *tabs'
+  materialisation* is suppressed. ⭐ **The suppression is a set of profile ids that EMPTIES as it is read**, not
+  a standing flag: the setting says *on startup*, so a reconnect later in the same session must restore the
+  tabs **this** session built. All three pinned by name.
+  **⭐ §5.5.1's NUMERIC COMMIT PATH — the debt §16.8 recorded, now paid (§17.4).** `EditText` follows every
+  keystroke and commits **nothing**; the view calls `Commit()` on **blur** and **Enter**, which parses, clamps
+  and echoes back. ⚠ The reason is not performance: every `Save` fully reads + decrypts + rewrites
+  `settings.dat` and rolls the **single** generation of `settings.dat.bak`, so per-keystroke saving destroys
+  the one hand-recovery net exactly while someone edits settings. ⚠⚠ **A numeric control must carry its ROW as
+  its `DataContext`** (the shipped `DataImportTabView` idiom) — all three hooks identify what to act on from it,
+  and on the page's DataContext the field types correctly, shows the number and **calls nothing**.
+  **⭐ QA FOLLOW-UP (2026-08-01) — the fields take DIGITS ONLY, and two designs were measured and rejected on
+  the way (§17.4a).** One predicate, `NumericSettingViewModel.AcceptsText`, enforced by the view at the input
+  boundary; it judges a **partial** entry (empty and a lone `-` are legal steps) and deliberately does **not**
+  check the range, since typing `1` toward `1000` would fail a minimum of `10`. ⚠⚠ **Rejected: vetoing inside
+  the `EditText` setter** — measured to fail twice: Avalonia's two-way binding **ignores a `PropertyChanged`
+  raised while it pushes target → source** (the box kept showing the refused text), and it makes **paste
+  strictly worse** (`Commit` finds the model already correct, notifies nothing, junk stays forever). ⭐ **The
+  general shape: the property a control writes to cannot also be the property that refuses the write.**
+  ⚠⚠ **Rejected: capping length at the RANGE's width** — it silently broke §17.1's promise, since typing
+  `50000000` into a million-max field means "as many as possible" and must clamp, not be refused at the 8th
+  keystroke; the cap is **`int`'s** width and `Commit` parses as **`long`** before clamping. ⚠ **The gate is a
+  TUNNEL handler and here that IS justified** — a `TextBox` genuinely consumes `TextInput`, and class handlers
+  run **before** instance handlers, so a bubbling attribute fires after the character is already in. Hence the
+  same field has **Enter on the bubble and TextInput on the tunnel** (gotcha #298). ⚠ **Paste stays unblocked
+  by decision** (no `TextInput`; undone at blur/Enter), pinned by a test so it is on record.
+  **⚠⚠ A MEASURED CORRECTION TO AN IN-FLIGHT ASSUMPTION — a `TextBox` does NOT claim Enter (§17.5).** Mid-etap
+  the Enter path was diagnosed as *"TextBox handles Enter in its own class handler, so a bubbling `KeyDown=`
+  never fires"* and a **tunnelled window-level handler** was added on that basis. **Probed on the headless
+  session before closing: false** — with `AcceptsReturn=false` the bubbling handler runs with `Handled=false`
+  and the key reaches the window still unhandled. The real cause was the `DataContext` above. ⭐ **The tunnel
+  was removed**; Enter is an ordinary bubbling handler, symmetric with the blur one. This is §14.3's shape
+  again — *a false premise with a working conclusion* — and it matters for §15.7's reason: **an inert guard
+  reads to the next author as a real hazard.** Gotcha #224's tunnel is for a key an editing control genuinely
+  claims; this was not one.
+  **⚠ FOUR as-built decisions later work must not undo (§17.6):** (a) ⭐ **`SettingValueKind`
+  (`Option`|`Toggle`|`Number`) is separate from `SettingKind`** — exactly the distinction §16.2(f) predicted;
+  one answers *value or command*, the other *what shape*, and reusing `Options == null` would conflate them.
+  ⚠ No `Text` member — a free-text preference has no consumer (#233) · (b) **three mapping methods
+  (`ValueOf`/`FlagOf`/`NumberOf`), not one returning `object`** — each throws for an id it does not know, so a
+  new row fails loudly instead of silently reading the wrong kind · (c) ⭐ **the debugger isolation is a SEED at
+  construction, deliberately NOT a live provider** (the opposite of the formatter's style, §14.2e): the launch
+  panel's selector is the user's per-launch choice, and re-reading later would move one they may already have
+  touched — whereas **grid auto-fit IS a provider**, because grids get built while the preference moves ·
+  (d) ⭐ **`MainWindowViewModel.Request(...)` is the ONE place an `ExecutionRequest` gets the limits** —
+  `ExecutionDefaults`' own comment predicted this and was right; one builder is what makes a *fifth* execution
+  surface inherit the limits instead of quietly shipping on the defaults.
+  **⚠ TWO MEASURED CORRECTIONS TO THE SPEC, both recorded rather than acted on:** **§7.7 has FIVE grid page-size
+  `200`s, not two** — the other three are the **client-side** result grids (SQL editor, Procedure exec, Function
+  exec), which page an already-materialized result and are **out of scope by ratified Q9**, stated in the row's
+  own label; ⚠ one consequence had to be fixed in place — `MainWindowViewModel.ResultPageSize`'s comment claimed
+  *"same page size as the Table Data View (DataPreviewRowLimit)"*, true while both were literal `200`s and false
+  the moment one started following a preference. **§2.7's font count was off by 3× in files** (above).
+  ⚠ **Deliberately NOT built in etap 6 (§17.8):** §7.1 · §7.8 timing constants · §7.9 suppressible confirmations
+  · §7.10 import defaults · page size for the three client-side grids · `FullSafetyCeiling` · *Restore defaults*
+  (still §13.4's reasoning) · a `CommandId` or `Ctrl+,` (§5.6, unchanged through six etaps) · **any change to
+  etap 2–5b contracts** — `CurrentSchemaVersion` still 2, the export format, the one theme apply point and
+  `SqlFormatter`/`FormatterStyle` all verified untouched, and `aes256-passphrase` still unregistered in
+  `ResolveProtector` (§15.1).
+  ⚠ **The new preferences travel in the export for free** — they are properties of `Preferences`, which the
+  export's `Preferences` section already carries whole; no format version moves and the reflection guard had
+  nothing new to record.
   **⭐ ETAP 5b — the etap that connected the feature to the user. See "What's built" for what it IS; the notes
   here are the WHY.** Build 0/0; suite **6988** green (partitions 6924 + 64, up 28); smoke clean.
   ⚠ **The headless partition now holds THREE classes** (`ConnectionExpandBindingProbe` ·
@@ -802,9 +922,12 @@ noted.
   copy of an *earlier* one (the status bar showed a stale `0.1.0` while About read the assembly), and a
   plausible-looking regex can pass while matching nothing · **#290** a `DataGridTextColumn` gets no sort path from
   a **compiled** binding, so headers sort **nothing** without an explicit `SortMemberPath`.
-  ⚠ **Still open, deliberately:** the monospace font-family string now has **three** copies in the app
-  (`HoverInfoView`, `LanguageExpansionController`, `ThirdPartyNoticesWindow`) — centralising it is typography,
-  which the backlogged app-wide UX sprint owns.
+  ⚠ **Still open, deliberately:** the monospace font-family string is duplicated across the app — centralising
+  it is typography, which the backlogged app-wide UX sprint owns. ⚠⚠ **This line used to say "three copies
+  (`HoverInfoView`, `LanguageExpansionController`, `ThirdPartyNoticesWindow`)" and was badly wrong: measured
+  2026-08-01, it is 7 distinct strings / 95 occurrences / 33 files** — see the UX-sprint backlog entry above
+  and settings-center.md §2.7. The estimate was low because one string dominates and the divergence is a long
+  tail, which is exactly how a survey that samples the sites it has reason to look at goes wrong.
 - **⌨ KEYBOARD MANAGER & CONTEXT MENU UX — CLOSED, USER-ACCEPTED AND MERGED TO `master` (2026-07-28).**
   Etaps 1–5 + a UX Consistency Pass, every one visually QA'd and accepted. Build 0/0; suite **5952 green**
   (full run in one pass, and in the two documented partitions 5903 + 49); smoke clean. Merged `--no-ff` so the
@@ -1164,6 +1287,16 @@ noted.
   the sprint. A **small remark about one specific screen** (the kind that produced `Border.settings-group`)
   may still be fixed in passing; anything that would touch the app as a whole may not. The working line:
   *a control's height* is the sprint, *two controls stacked instead of side by side* is the module.
+  **⭐ THE SPRINT INHERITED THE MONOSPACE-FONT ITEM FROM SETTINGS CENTER (user, 2026-08-01) — with its
+  measurement, which is the part that makes it actionable.** Settings Center §7.1 had planned the
+  *consolidation* as a small prerequisite inside that sprint (ratified Q9: *"prerequisite only"*). Re-measured
+  before etap 6 committed to it: **7 distinct monospace `FontFamily` strings, 95 occurrences, 33 files** — not
+  the *"four across ten"* the audit had recorded. So it is neither small nor independent, **collapsing them
+  decides `Cascadia Code` (ligatures) vs `Cascadia Mono` (none) for the editor, the debugger, the hover cards
+  and eleven DDL previews at once**, and that is a typography decision for the sprint that sees every surface
+  together. ⚠ Both halves — the consolidation *and* the font family/size setting — are this sprint's now;
+  Settings Center ships **no** font setting, so nothing exists that would configure some surfaces and not
+  others. Detail: [docs/design/settings-center.md](docs/design/settings-center.md) §2.7 + §7.1.
 - **⚠ Spun off from Data Import I0, NOT part of it — a platform-wide defect to audit.** Measured on live FB5:
   binding a string containing a character the **connection** charset cannot represent stores `?` with **no
   error at all**, even when the target column is UTF8 (the connection charset decides, not the column's), and
@@ -2802,10 +2935,13 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **6988 as of 2026-07-31
-  (after Settings Center etap 5b + its three QA fixes; 6976 at etap 5b as delivered, 6960 after etap 5a, 6784 after
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7026 as of 2026-08-01
+  (after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
+  etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the two
-  documented partitions (**6924 + 64**).
+  documented partitions (**6959 + 67**).
+  ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
+  and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
@@ -3867,7 +4003,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (283 entries, #1–#296), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (285 entries, #1–#298), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

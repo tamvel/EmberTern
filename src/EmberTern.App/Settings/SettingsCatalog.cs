@@ -45,8 +45,35 @@ public enum SettingKind
 }
 
 /// <summary>
-/// One row on a settings page: what it is called, what it is about, whether it is a value or an action, and
-/// (for an enumerated preference) which Core option set it draws its legal values from.
+/// What KIND of value a preference row holds, and therefore which control renders it.
+///
+/// <para>⭐ <b>Added in etap 6, and it is the distinction §16.2(f) predicted would be needed.</b> That note
+/// rejected reusing <c>Options == null</c> as a marker because it conflates "not a preference at all" with "a
+/// preference that is not enumerated" — and etap 6 brings both of the latter: five booleans and three numbers.
+/// So the two questions stay separate: <see cref="SettingKind"/> answers <i>is this a value or a command</i>,
+/// this answers <i>what shape is the value</i>.</para>
+///
+/// <para>⚠ There is deliberately no <c>Text</c> member. A free-text preference (a font family) has no consumer
+/// yet, and a mechanism without one is exactly what gotcha #233 is about.</para>
+/// </summary>
+public enum SettingValueKind
+{
+    /// <summary>One of a fixed set of keys, from a <see cref="PreferenceOptionSet"/>. Radio buttons or a
+    /// ComboBox; commits on selection.</summary>
+    Option,
+
+    /// <summary>On or off. A checkbox; commits on click.</summary>
+    Toggle,
+
+    /// <summary>A number bounded by a <see cref="PreferenceRange"/>. A text field; ⚠ commits on <b>blur or
+    /// Enter</b>, never per keystroke (design §5.5.1) — see <c>NumericSettingViewModel</c>.</summary>
+    Number,
+}
+
+/// <summary>
+/// One row on a settings page: what it is called, what it is about, whether it is a value or an action, what
+/// shape the value has, and (for an enumerated or numeric preference) the Core declaration it draws its legal
+/// values from.
 /// </summary>
 public sealed class SettingDescriptor
 {
@@ -58,7 +85,9 @@ public sealed class SettingDescriptor
         string keywords,
         PreferenceOptionSet? options = null,
         IReadOnlyDictionary<string, string>? optionLabels = null,
-        SettingKind kind = SettingKind.Preference)
+        SettingKind kind = SettingKind.Preference,
+        SettingValueKind valueKind = SettingValueKind.Option,
+        PreferenceRange? range = null)
     {
         Id = id;
         CategoryId = categoryId;
@@ -69,6 +98,8 @@ public sealed class SettingDescriptor
         Options = options;
         OptionLabels = optionLabels;
         Kind = kind;
+        ValueKind = valueKind;
+        Range = range;
     }
 
     public string Id { get; }
@@ -106,6 +137,18 @@ public sealed class SettingDescriptor
     /// blank row.
     /// </summary>
     public IReadOnlyDictionary<string, string>? OptionLabels { get; }
+
+    /// <summary>What shape this row's value has, and therefore which control renders it. See
+    /// <see cref="SettingValueKind"/>.</summary>
+    public SettingValueKind ValueKind { get; }
+
+    /// <summary>
+    /// The Core range a numeric setting is validated against, or null for any other kind.
+    /// <para>⭐ <b>The field's own bounds come from here too</b> (design §5.2.2, the numeric case): a field that
+    /// accepted a value the store silently clamps on the next load is precisely the drift that rule exists to
+    /// prevent — the user types it, it appears to work, and it changes by itself later.</para>
+    /// </summary>
+    public PreferenceRange? Range { get; }
 }
 
 /// <summary>
@@ -128,11 +171,24 @@ public sealed class SettingDescriptor
 public static class SettingsCatalog
 {
     public const string CategoryGeneral = "general";
+    public const string CategoryEditor = "editor";
+    public const string CategoryGrid = "grid";
+    public const string CategoryDebugger = "debugger";
     public const string CategoryFormatter = "formatter";
 
     public const string SettingTheme = "general.theme";
     public const string SettingLanguage = "general.language";
+    public const string SettingRestoreWorkspace = "general.restoreWorkspace";
     public const string SettingImportExport = "general.importExport";
+    public const string SettingProcedureEasyMode = "editor.procedureEasyMode";
+    public const string SettingViewEasyMode = "editor.viewEasyMode";
+    public const string SettingTriggerEasyMode = "editor.triggerEasyMode";
+    public const string SettingFunctionEasyMode = "editor.functionEasyMode";
+    public const string SettingPreviewRowLimit = "editor.previewRowLimit";
+    public const string SettingFullLoadPromptThreshold = "editor.fullLoadPromptThreshold";
+    public const string SettingDataPageSize = "grid.dataPageSize";
+    public const string SettingGridAutoFit = "grid.autoFitColumns";
+    public const string SettingDebuggerIsolation = "debugger.isolation";
     public const string SettingFormatterKeywordCase = "formatter.keywordCase";
     public const string SettingFormatterIdentifierCase = "formatter.identifierCase";
 
@@ -141,6 +197,9 @@ public static class SettingsCatalog
         Categories =
         [
             new SettingsCategoryDescriptor(CategoryGeneral, UiStrings.SettingsCategoryGeneral),
+            new SettingsCategoryDescriptor(CategoryEditor, UiStrings.SettingsCategoryEditor),
+            new SettingsCategoryDescriptor(CategoryGrid, UiStrings.SettingsCategoryGrid),
+            new SettingsCategoryDescriptor(CategoryDebugger, UiStrings.SettingsCategoryDebugger),
             new SettingsCategoryDescriptor(CategoryFormatter, UiStrings.SettingsCategoryFormatter),
         ];
 
@@ -171,6 +230,18 @@ public static class SettingsCatalog
                     [PreferenceOptions.LanguageEnglish] = UiStrings.SettingsLanguageEnglish,
                 }),
 
+            // §7.5. ⚠ Gates RESTORE, never CAPTURE — the workspace keeps being saved either way, so turning
+            // this back on restores the last session rather than whichever session last had it on. And it gates
+            // the TABS only: a connection's saved queries live in the same stored workspace and are the user's
+            // own content.
+            new SettingDescriptor(
+                SettingRestoreWorkspace,
+                CategoryGeneral,
+                UiStrings.SettingsRestoreWorkspaceLabel,
+                UiStrings.SettingsRestoreWorkspaceDescription,
+                UiStrings.SettingsRestoreWorkspaceKeywords,
+                valueKind: SettingValueKind.Toggle),
+
             // ⚠ An ACTION row, not a preference: two buttons and a folder shortcut, with nothing stored. It is
             // in this table anyway because SEARCH reads this table — typing "export" or "backup" has to land
             // here, and a row outside the catalog is invisible to it (design §5.4). Hence SettingKind.
@@ -181,6 +252,104 @@ public static class SettingsCatalog
                 UiStrings.SettingsImportExportDescription,
                 UiStrings.SettingsImportExportKeywords,
                 kind: SettingKind.Action),
+
+            // ── Editor ──────────────────────────────────────────────────────────────────────────────────
+            //
+            // §7.6, four rows. They replace four WorkspaceState flags that were written by whatever editor the
+            // user last toggled — an invisible side effect that made "this procedure opened in Easy mode" look
+            // like a bug. Toggling a mode in an editor is now a per-tab action only.
+            new SettingDescriptor(
+                SettingProcedureEasyMode,
+                CategoryEditor,
+                UiStrings.SettingsProcedureEasyModeLabel,
+                UiStrings.SettingsEditorModeDescription,
+                UiStrings.SettingsEditorModeKeywords,
+                valueKind: SettingValueKind.Toggle),
+
+            new SettingDescriptor(
+                SettingViewEasyMode,
+                CategoryEditor,
+                UiStrings.SettingsViewEasyModeLabel,
+                UiStrings.SettingsEditorModeDescription,
+                UiStrings.SettingsEditorModeKeywords,
+                valueKind: SettingValueKind.Toggle),
+
+            new SettingDescriptor(
+                SettingTriggerEasyMode,
+                CategoryEditor,
+                UiStrings.SettingsTriggerEasyModeLabel,
+                UiStrings.SettingsEditorModeDescription,
+                UiStrings.SettingsEditorModeKeywords,
+                valueKind: SettingValueKind.Toggle),
+
+            new SettingDescriptor(
+                SettingFunctionEasyMode,
+                CategoryEditor,
+                UiStrings.SettingsFunctionEasyModeLabel,
+                UiStrings.SettingsEditorModeDescription,
+                UiStrings.SettingsEditorModeKeywords,
+                valueKind: SettingValueKind.Toggle),
+
+            // §7.2. ⚠ FullSafetyCeiling is deliberately absent (ratified Q9): it is a memory backstop, and a
+            // user who raised it to 50 M would get an out-of-memory crash instead of a truncated grid.
+            new SettingDescriptor(
+                SettingPreviewRowLimit,
+                CategoryEditor,
+                UiStrings.SettingsPreviewRowLimitLabel,
+                UiStrings.SettingsPreviewRowLimitDescription,
+                UiStrings.SettingsPreviewRowLimitKeywords,
+                valueKind: SettingValueKind.Number,
+                range: PreferenceOptions.PreviewRowLimit),
+
+            new SettingDescriptor(
+                SettingFullLoadPromptThreshold,
+                CategoryEditor,
+                UiStrings.SettingsFullLoadPromptLabel,
+                UiStrings.SettingsFullLoadPromptDescription,
+                UiStrings.SettingsFullLoadPromptKeywords,
+                valueKind: SettingValueKind.Number,
+                range: PreferenceOptions.FullLoadPromptThreshold),
+
+            // ── Grid ────────────────────────────────────────────────────────────────────────────────────
+            //
+            // §7.7. ⚠ The label names the two grids on purpose: this is the page size of the SERVER-PAGED data
+            // grids, which is what Q9 admits. The SQL editor's results and the Procedure / Function exec grids
+            // page an already-materialized result in memory and keep their own constant.
+            new SettingDescriptor(
+                SettingDataPageSize,
+                CategoryGrid,
+                UiStrings.SettingsDataPageSizeLabel,
+                UiStrings.SettingsDataPageSizeDescription,
+                UiStrings.SettingsDataPageSizeKeywords,
+                valueKind: SettingValueKind.Number,
+                range: PreferenceOptions.DataPageSize),
+
+            // §7.4 — the last hard-coded layout default in GridLayoutBehavior. A grid the user has already
+            // adjusted keeps its own stored GridProfile; this decides what an unadjusted one does.
+            new SettingDescriptor(
+                SettingGridAutoFit,
+                CategoryGrid,
+                UiStrings.SettingsGridAutoFitLabel,
+                UiStrings.SettingsGridAutoFitDescription,
+                UiStrings.SettingsGridAutoFitKeywords,
+                valueKind: SettingValueKind.Toggle),
+
+            // ── Debugger ────────────────────────────────────────────────────────────────────────────────
+            //
+            // §7.3, closing a recorded D4 UX wish ("move transaction-isolation config to global Settings").
+            // ⚠ The launch panel's per-launch selector STAYS; this is only the value it opens with.
+            new SettingDescriptor(
+                SettingDebuggerIsolation,
+                CategoryDebugger,
+                UiStrings.SettingsDebuggerIsolationLabel,
+                UiStrings.SettingsDebuggerIsolationDescription,
+                UiStrings.SettingsDebuggerIsolationKeywords,
+                PreferenceOptions.DebuggerIsolation,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [PreferenceOptions.DebuggerIsolationReadCommitted] = UiStrings.DebuggerIsolationReadCommitted,
+                    [PreferenceOptions.DebuggerIsolationSnapshot] = UiStrings.DebuggerIsolationSnapshot,
+                }),
 
             // ⚠ Both formatter rows draw on the SAME Core option set (PreferenceOptions.Casing) — two
             // preferences over one declared vocabulary, which is why "Upper" cannot come to mean one thing for

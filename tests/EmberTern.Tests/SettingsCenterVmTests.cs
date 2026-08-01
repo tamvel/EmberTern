@@ -246,6 +246,336 @@ public class SettingsCenterVmTests
         });
     }
 
+    // ─── ETAP 6 — THE TWO NEW ROW KINDS ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every catalog row is projected as the row type its declared <see cref="SettingValueKind"/> asks for, and a
+    /// numeric row always has the range it is bounded by.
+    /// <para>⚠ The range check is what keeps the cast in the view model's construction honest: a
+    /// <c>Number</c> row with no range would throw at window-open time, which is a defect no view-model test
+    /// exercising only the rows it knows about would find.</para>
+    /// </summary>
+    [Fact]
+    public void EveryRowKind_HasItsRangeAndIsProjectedAsItsType()
+    {
+        foreach (var setting in SettingsCatalog.Settings)
+        {
+            switch (setting.ValueKind)
+            {
+                case SettingValueKind.Number:
+                    Assert.NotNull(setting.Range);
+                    Assert.Null(setting.Options);
+                    break;
+                case SettingValueKind.Toggle:
+                    Assert.Null(setting.Range);
+                    Assert.Null(setting.Options);
+                    break;
+                default:
+                    // An enumerated PREFERENCE draws on an option set; an ACTION row draws on nothing.
+                    Assert.Null(setting.Range);
+                    Assert.Equal(setting.Kind == SettingKind.Preference, setting.Options is not null);
+                    break;
+            }
+        }
+
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            Assert.IsType<BooleanSettingViewModel>(vm.RestoreWorkspace);
+            Assert.IsType<NumericSettingViewModel>(vm.PreviewRowLimit);
+            Assert.IsType<PreferenceSettingViewModel>(vm.DebuggerIsolation);
+            Assert.IsType<SettingActionViewModel>(vm.ImportExport);
+        });
+    }
+
+    /// <summary>A checkbox is discrete, so it commits the moment it is clicked — like a radio, unlike a
+    /// field.</summary>
+    [Fact]
+    public void AToggle_CommitsImmediately()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            Assert.True(vm.RestoreWorkspace.Value);
+
+            vm.RestoreWorkspace.Value = false;
+
+            Assert.False(new PreferencesStore(dir).Load().RestoreWorkspaceOnStartup);
+        });
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The blur-or-Enter commit path (design §5.5.1) — the debt §16.8 recorded for this etap.</b>
+    ///
+    /// <para>Typing must persist NOTHING. Every save reads + decrypts + rewrites the whole <c>settings.dat</c>,
+    /// and — the part that is not performance — <c>AtomicWrite</c> keeps exactly ONE generation of
+    /// <c>settings.dat.bak</c>, so a per-keystroke save would roll the single hand-recovery backup through four
+    /// generations while somebody is editing settings.</para>
+    /// </summary>
+    [Fact]
+    public void ANumericField_PersistsNothingWhileTyping_AndCommitsOnce()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            var store = new PreferencesStore(dir);
+
+            // Keystroke by keystroke: "2", "25", "250".
+            foreach (var text in new[] { "2", "25", "250" })
+            {
+                vm.PreviewRowLimit.EditText = text;
+                Assert.Equal(
+                    PreferenceOptions.PreviewRowLimit.Default,
+                    store.Load().PreviewRowLimit);
+                Assert.Equal(PreferenceOptions.PreviewRowLimit.Default, vm.PreviewRowLimit.Value);
+            }
+
+            vm.PreviewRowLimit.Commit();   // what LostFocus / Enter calls
+
+            Assert.Equal(250, vm.PreviewRowLimit.Value);
+            Assert.Equal(250, store.Load().PreviewRowLimit);
+        });
+    }
+
+    /// <summary>
+    /// Out of range clamps and the field ECHOES the stored number back, because the store would clamp it anyway
+    /// — a field still displaying <c>50000000</c> over a stored <c>1000000</c> would simply be lying.
+    /// </summary>
+    [Fact]
+    public void ANumericField_ClampsAndShowsWhatWasStored()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            var max = PreferenceOptions.PreviewRowLimit.Maximum;
+
+            vm.PreviewRowLimit.EditText = "50000000";
+            vm.PreviewRowLimit.Commit();
+
+            Assert.Equal(max, vm.PreviewRowLimit.Value);
+            Assert.Equal(max.ToString(System.Globalization.CultureInfo.CurrentCulture), vm.PreviewRowLimit.EditText);
+            Assert.Equal(max, new PreferencesStore(dir).Load().PreviewRowLimit);
+
+            vm.PreviewRowLimit.EditText = "0";
+            vm.PreviewRowLimit.Commit();
+            Assert.Equal(PreferenceOptions.PreviewRowLimit.Minimum, vm.PreviewRowLimit.Value);
+        });
+    }
+
+    /// <summary>
+    /// ⭐ <b>Non-numeric text never lands in the first place</b> — the field refuses it, keeping the digits the
+    /// user had already typed.
+    ///
+    /// <para>⚠ This test used to be <c>ANumericField_RevertsUnparseableText</c>, asserting that
+    /// <c>"not a number"</c> was accepted into <c>EditText</c> and undone by <c>Commit</c>. Its assertions
+    /// still pass unchanged under the gate — which is exactly why it was rewritten rather than left alone: a
+    /// test that passes for a reason it no longer describes stops being evidence. The behaviour it documented
+    /// was also the weaker one (the user lost the whole entry and was told nothing), and it is what QA asked
+    /// to change.</para>
+    /// </summary>
+    [Fact]
+    public void ANumericField_RefusesEveryShapeThatCouldNotBecomeANumber()
+    {
+        InTempDir(dir =>
+        {
+            var row = VmOver(dir).PreviewRowLimit;
+
+            foreach (var rejected in new[]
+                     {
+                         "not a number", "12a", "a12", "12 34", "1.5", "1,5",
+                         "-1",           // this range is positive, so a sign is not a legal keystroke
+                         "١٢٣",           // Unicode digits: char.IsDigit would admit these, and they do not parse
+                         "12345678901",  // longer than any int
+                     })
+            {
+                Assert.False(row.AcceptsText(rejected), rejected);
+            }
+        });
+    }
+
+    /// <summary>
+    /// ⚠ The gate judges a <b>PARTIAL</b> entry, so everything on the way to a number passes: an empty field
+    /// (the user is retyping) and an over-range value.
+    ///
+    /// <para>⭐ <b>Over-range is deliberately NOT refused</b> — typing <c>50000000</c> into a field whose maximum
+    /// is a million is the user saying "as many as possible", and clamping is §17.1's documented answer. An
+    /// earlier cut capped the length at the <i>maximum's</i> digits and silently made that impossible, which is
+    /// why the cap is <c>int</c>'s width instead.</para>
+    /// </summary>
+    [Fact]
+    public void ANumericField_AllowsEveryStepTowardsANumber_IncludingOverRange()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+
+            foreach (var accepted in new[] { "", "5", "50", "500", "50000000", "9999999999" })
+            {
+                Assert.True(vm.PreviewRowLimit.AcceptsText(accepted), accepted);
+            }
+
+            vm.PreviewRowLimit.EditText = "50000000";
+            vm.PreviewRowLimit.Commit();
+            Assert.Equal(PreferenceOptions.PreviewRowLimit.Maximum, vm.PreviewRowLimit.Value);
+
+            // ⚠ Ten digits above int.MaxValue: accepted, and it must still mean "the maximum" rather than
+            // reverting — which is why Commit parses as long before clamping.
+            vm.PreviewRowLimit.EditText = "9999999999";
+            vm.PreviewRowLimit.Commit();
+            Assert.Equal(PreferenceOptions.PreviewRowLimit.Maximum, vm.PreviewRowLimit.Value);
+
+            // An empty field commits to nothing rather than to zero — Commit's remaining backstop, since ""
+            // legitimately reaches it (clearing is an allowed step) and is not a number.
+            vm.PreviewRowLimit.EditText = string.Empty;
+            vm.PreviewRowLimit.Commit();
+            Assert.Equal(PreferenceOptions.PreviewRowLimit.Maximum, vm.PreviewRowLimit.Value);
+            Assert.Equal(
+                PreferenceOptions.PreviewRowLimit.Maximum.ToString(System.Globalization.CultureInfo.CurrentCulture),
+                vm.PreviewRowLimit.EditText);
+        });
+    }
+
+    /// <summary>
+    /// ⚠ <b>`EditText` itself stays tolerant, and that is a decision.</b> Vetoing in the setter was tried and
+    /// measured to fail twice: Avalonia's two-way binding ignores a `PropertyChanged` raised while it is
+    /// pushing target → source (so the refused text stayed on screen), and it would have made **paste** worse —
+    /// `Commit` would find the model already correct, notify nothing, and leave the pasted junk in the field
+    /// permanently. This test pins the paste path: junk gets in, and blur/Enter cleans it.
+    /// </summary>
+    [Fact]
+    public void ANumericField_PastedJunkIsUndoneAtCommit()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            vm.PreviewRowLimit.EditText = "1234";
+            vm.PreviewRowLimit.Commit();
+
+            vm.PreviewRowLimit.EditText = "not a number";   // what a paste does — no TextInput to refuse
+            Assert.Equal("not a number", vm.PreviewRowLimit.EditText);
+
+            vm.PreviewRowLimit.Commit();
+
+            Assert.Equal(1234, vm.PreviewRowLimit.Value);
+            Assert.Equal("1234", vm.PreviewRowLimit.EditText);
+            Assert.Equal(1234, new PreferencesStore(dir).Load().PreviewRowLimit);
+        });
+    }
+
+    /// <summary>
+    /// ⚠ The sign is admitted from the RANGE, not assumed away. Every range this build ships is positive, so
+    /// without this case the negative branch would be untested code that a future negative-minimum preference
+    /// would discover the hard way — as a field nobody could type into.
+    /// </summary>
+    [Fact]
+    public void ANumericField_AdmitsASignExactlyWhenItsRangeDoes()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+
+            // Positive range (the shipped case): a sign is not a legal keystroke at all.
+            Assert.False(vm.PreviewRowLimit.AcceptsText("-"));
+            Assert.False(vm.PreviewRowLimit.AcceptsText("-5"));
+
+            // A range that admits negatives accepts the lone "-" as a prefix, then the digits.
+            var signed = new NumericSettingViewModel(
+                SettingsCatalog.Settings.First(s => s.Id == SettingsCatalog.SettingPreviewRowLimit),
+                "Editor",
+                new PreferenceRange(minimum: -10, maximum: 10, @default: 0),
+                0);
+
+            Assert.True(signed.AcceptsText("-"));
+            Assert.True(signed.AcceptsText("-5"));
+            Assert.False(signed.AcceptsText("-a"));
+            Assert.False(signed.AcceptsText("5-"));
+        });
+    }
+
+    /// <summary>A commit that changes nothing writes nothing — blur fires on every focus change, so an idle
+    /// tab-through must not cost a full encrypted rewrite of the file.</summary>
+    [Fact]
+    public void ANumericField_CommittingAnUnchangedValue_WritesNothing()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            vm.DataPageSize.Commit();       // never edited
+
+            var path = Path.Combine(dir, "settings.dat");
+            Assert.False(File.Exists(path));
+        });
+    }
+
+    /// <summary>Every etap-6 row reaches the file, one row at a time, leaving the others alone — the
+    /// <c>ValueOf</c>/<c>FlagOf</c>/<c>NumberOf</c> → <c>Compose</c> mapping proved whole rather than
+    /// spot-checked.</summary>
+    [Fact]
+    public void EveryEtap6Row_ReachesTheFile()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+
+            vm.RestoreWorkspace.Value = false;
+            vm.ProcedureEasyMode.Value = true;
+            vm.ViewEasyMode.Value = true;
+            vm.TriggerEasyMode.Value = true;
+            vm.FunctionEasyMode.Value = true;
+            vm.GridAutoFitColumns.Value = false;
+            vm.DebuggerIsolation.Value = PreferenceOptions.DebuggerIsolationSnapshot;
+            vm.PreviewRowLimit.EditText = "111";
+            vm.PreviewRowLimit.Commit();
+            vm.FullLoadPromptThreshold.EditText = "2222";
+            vm.FullLoadPromptThreshold.Commit();
+            vm.DataPageSize.EditText = "333";
+            vm.DataPageSize.Commit();
+
+            var after = new PreferencesStore(dir).Load();
+            Assert.False(after.RestoreWorkspaceOnStartup);
+            Assert.True(after.ProcedureEasyModeDefault);
+            Assert.True(after.ViewEasyModeDefault);
+            Assert.True(after.TriggerEasyModeDefault);
+            Assert.True(after.FunctionEasyModeDefault);
+            Assert.False(after.GridAutoFitColumns);
+            Assert.Equal(PreferenceOptions.DebuggerIsolationSnapshot, after.DebuggerIsolation);
+            Assert.Equal(111, after.PreviewRowLimit);
+            Assert.Equal(2222, after.FullLoadPromptThreshold);
+            Assert.Equal(333, after.DataPageSize);
+
+            // And nothing this page also renders was disturbed on the way.
+            Assert.Equal(PreferenceOptions.ThemeDark, after.Theme);
+            Assert.Equal(PreferenceOptions.CaseLower, after.FormatterKeywordCase);
+        });
+    }
+
+    /// <summary>Every category the catalog declares has a page the window can show — otherwise selecting it
+    /// leaves the right pane blank, which is what a missing <c>IsVisible</c> property looks like.</summary>
+    [Fact]
+    public void EveryCategory_HasAPageVisibilityProperty()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            var visibilities = new Func<bool>[]
+            {
+                () => vm.IsGeneralPageVisible,
+                () => vm.IsEditorPageVisible,
+                () => vm.IsGridPageVisible,
+                () => vm.IsDebuggerPageVisible,
+                () => vm.IsFormatterPageVisible,
+            };
+
+            Assert.Equal(SettingsCatalog.Categories.Count, visibilities.Length);
+
+            foreach (var category in vm.Categories.ToArray())
+            {
+                vm.SelectedCategory = category;
+                Assert.Equal(1, visibilities.Count(v => v()));
+            }
+        });
+    }
+
     // ─── THE REFUSAL MUST BE SPOKEN ─────────────────────────────────────────────────────────
 
     /// <summary>

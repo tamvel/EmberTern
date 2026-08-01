@@ -123,14 +123,13 @@ public class WorkspaceUiStatePersistenceTests
     [Fact]
     public void Restore_PerTabEasyMode_OverridesGlobalPreference()
     {
-        // Tab was saved in Easy mode; the global default is Source. The restored tab
-        // must come back Easy (per-tab wins — hybrid model).
+        // Tab was saved in Easy mode; the stated default is Source. The restored tab must come back Easy —
+        // per-tab wins, and etap 6 deliberately left that half of the hybrid model alone.
         var captured = CaptureWithViewTab(easyMode: true, subTab: 0);
-        captured.ViewEasyMode = false; // global default = Source
 
         using var h = new Harness();
+        Assert.False(h.Main.ViewEasyModeDefault); // the default is Source
         h.Main.RestoreWorkspace(captured);
-        Assert.False(h.Main.ViewEasyModePreference); // global seed is Source
         h.Main.ApplyActiveConnectionChange("A");
 
         Assert.True(h.Main.WorkspaceTabs[1].ViewDetail!.EasyMode);
@@ -142,34 +141,51 @@ public class WorkspaceUiStatePersistenceTests
     public void Capture_GlobalUiPrefs_RoundTrip()
     {
         using var h = new Harness();
-        h.Main.ViewEasyModePreference = true;
-        h.Main.ProcedureEasyModePreference = true;
         h.Main.IsQueryPanelVisible = false;
         h.Main.SelectedBottomTabIndex = 2;
 
         var state = h.Main.CaptureWorkspace();
-        Assert.True(state.ViewEasyMode);
-        Assert.True(state.ProcedureEasyMode);
         Assert.False(state.QueryPanelVisible);
         Assert.Equal(2, state.BottomPanelTabIndex);
 
         using var h2 = new Harness();
         h2.Main.RestoreWorkspace(state);
-        Assert.True(h2.Main.ViewEasyModePreference);
-        Assert.True(h2.Main.ProcedureEasyModePreference);
         Assert.False(h2.Main.IsQueryPanelVisible);
         Assert.Equal(2, h2.Main.SelectedBottomTabIndex);
     }
 
+    /// <summary>
+    /// ⭐ The Source/Easy default is a <c>Preferences</c> value now (etap 6 / §7.6), not a
+    /// <c>WorkspaceState</c> flag — so it reaches a freshly opened editor through the app's one
+    /// <c>PreferencesService</c> and survives without the workspace being involved at all.
+    /// </summary>
     [Fact]
-    public void CreateViewDetail_AppliesGlobalEasyModePreference_ForFreshlyOpened()
+    public void CreateViewDetail_AppliesTheStatedEasyModeDefault_ForFreshlyOpened()
     {
         using var h = new Harness();
-        h.Main.ViewEasyModePreference = true;
+        h.Main.Preferences.Apply(h.Main.Preferences.Current with { ViewEasyModeDefault = true });
 
         var detail = h.Main.CreateViewDetail(new MetadataObject("V_X", MetadataObjectKind.View));
 
         Assert.True(detail.EasyMode);
+    }
+
+    /// <summary>
+    /// ⭐ And the half that etap 6 REMOVED: toggling a mode inside an editor no longer writes the global
+    /// default. That silent write-back is what made "this procedure opened in Easy mode" look like a bug — the
+    /// user had toggled a different object, days earlier, and nothing said so.
+    /// </summary>
+    [Fact]
+    public void TogglingEasyModeInAnEditor_DoesNotChangeTheStatedDefault()
+    {
+        using var h = new Harness();
+        Assert.False(h.Main.ViewEasyModeDefault);
+
+        var detail = h.Main.CreateViewDetail(new MetadataObject("V_X", MetadataObjectKind.View));
+        detail.EasyMode = true;
+
+        Assert.False(h.Main.ViewEasyModeDefault);
+        Assert.False(h.Main.Preferences.Current.ViewEasyModeDefault);
     }
 
     // Automated equivalent of the manual smoke test: build the full scenario, persist

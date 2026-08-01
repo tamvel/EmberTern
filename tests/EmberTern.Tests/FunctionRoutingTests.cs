@@ -110,24 +110,43 @@ public class FunctionRoutingTests
         Assert.Contains(ws!.Tabs, t => t.Kind == CoreTabKind.FunctionDetail && t.ObjectName == "ADD_TAX");
     }
 
+    /// <summary>
+    /// The Source/Easy default for a newly opened function is a <c>Preferences</c> value now (Settings Center
+    /// etap 6 / §7.6), not a <c>WorkspaceState</c> flag — so it round-trips through the same
+    /// <c>settings.dat</c> section every other preference uses, and reaches the editor at construction.
+    /// </summary>
     [Fact]
-    public void FunctionEasyMode_Preference_RoundTrips()
+    public void FunctionEasyModeDefault_RoundTripsThroughPreferences()
     {
-        using var h1 = new Harness();
-        h1.Main.FunctionEasyModePreference = true;
-        var state = h1.Main.CaptureWorkspace();
-        Assert.True(state.FunctionEasyMode);
+        var dir = Path.Combine(Path.GetTempPath(), "embertern-fn-easy-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var h1 = new Harness(dir))
+            {
+                Assert.True(h1.Main.Preferences.Apply(
+                    h1.Main.Preferences.Current with { FunctionEasyModeDefault = true }));
+            }
 
-        using var h2 = new Harness();
-        h2.Main.RestoreWorkspace(new WorkspaceState { FunctionEasyMode = true });
-        Assert.True(h2.Main.FunctionEasyModePreference);
+            using var h2 = new Harness(dir);
+            Assert.True(h2.Main.FunctionEasyModeDefault);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
     }
 
     private sealed class Harness : IDisposable
     {
-        public Harness()
+        private readonly bool _ownsDir;
+
+        // dir == null: a private random temp dir, deleted on Dispose. dir != null: a caller-owned dir shared
+        // across two sessions (for a disk round-trip) — the caller cleans it up, so session 1's Dispose does not
+        // wipe it before session 2 reads it.
+        public Harness(string? dir = null)
         {
-            TempDir = Path.Combine(Path.GetTempPath(), "embertern-tests-" + Guid.NewGuid().ToString("N"));
+            _ownsDir = dir is null;
+            TempDir = dir ?? Path.Combine(Path.GetTempPath(), "embertern-tests-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(TempDir);
             Store = new ConnectionProfileStore(TempDir);
             Service = new FirebirdConnectionService();
@@ -142,6 +161,7 @@ public class FunctionRoutingTests
         public void Dispose()
         {
             Service.Dispose();
+            if (!_ownsDir) return;
             try { Directory.Delete(TempDir, recursive: true); }
             catch { /* best-effort */ }
         }

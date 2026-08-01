@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -135,11 +136,16 @@ public sealed class SettingsCenterViewTests
 
                 // Every category's rows live in the visual tree; only the selected page's are RENDERED.
                 // ⚠ IsEffectivelyVisible, not IsVisible: a row on a hidden page still has its own
-                // IsVisible == true (its search filter matched), so IsVisible alone would count all four
-                // and this test would stop measuring what it is named for.
-                // General: Theme, Language, Import/export. SQL Formatter: keyword case, identifier case.
-                Assert.Equal(5, groups.Count);
-                Assert.Equal(3, groups.Count(g => g.IsEffectivelyVisible));
+                // IsVisible == true (its search filter matched), so IsVisible alone would count every page's
+                // rows and this test would stop measuring what it is named for.
+                //
+                // ⭐ Both counts are DERIVED from the catalog rather than written down. That is the assertion
+                // etap 6 wanted: "every catalog row has a rendered group, and exactly the selected category's
+                // are on screen" — which also catches a row that was added to the catalog and never given its
+                // XAML block, the one drift a hard-coded number would have hidden behind a passing update.
+                var generalRows = SettingsCatalog.SettingsIn(SettingsCatalog.CategoryGeneral).Count();
+                Assert.Equal(SettingsCatalog.Settings.Count, groups.Count);
+                Assert.Equal(generalRows, groups.Count(g => g.IsEffectivelyVisible));
 
                 var search = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");
                 var categories = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "CategoryList");
@@ -159,7 +165,7 @@ public sealed class SettingsCenterViewTests
 
                 search.Text = string.Empty;
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(3, groups.Count(g => g.IsEffectivelyVisible));
+                Assert.Equal(generalRows, groups.Count(g => g.IsEffectivelyVisible));
                 Assert.False(empty.IsVisible);
 
                 window.Close();
@@ -240,10 +246,14 @@ public sealed class SettingsCenterViewTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                // Select the SQL Formatter category the way the user does.
+                // Select the SQL Formatter category the way the user does — found by id rather than by a written
+                // index, so adding a category (etap 6 added three) cannot silently point this test at the wrong
+                // page and leave it asserting nothing about the formatter.
                 var categories = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "CategoryList");
-                Assert.Equal(2, categories.ItemCount);
-                categories.SelectedIndex = 1;
+                Assert.Equal(SettingsCatalog.Categories.Count, categories.ItemCount);
+                categories.SelectedIndex = SettingsCatalog.Categories
+                    .Select((c, i) => (c.Id, i))
+                    .Single(x => x.Id == SettingsCatalog.CategoryFormatter).i;
                 Dispatcher.UIThread.RunJobs();
 
                 var keyword = window.GetVisualDescendants().OfType<RadioButton>()
@@ -312,6 +322,188 @@ public sealed class SettingsCenterViewTests
                 app!.RequestedThemeVariant = original;
             }
         }, System.Threading.CancellationToken.None);
+    }
+
+    // ─── Etap 6 — the toggle and numeric rows on the real window ────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>The assertion no view-model test can make: the blur-or-Enter handlers are actually WIRED.</b>
+    ///
+    /// <para><c>NumericSettingViewModel.Commit</c> is called by the view, from <c>LostFocus</c> and from Enter. A
+    /// view-model test proves the method works; only this proves the XAML calls it. Forget one attribute and the
+    /// field accepts typing, shows the number, and persists <b>nothing</b> — with a green build and a green
+    /// view-model suite. That is the same shape as etap 4's shared-<c>GroupName</c> trap (§14.2f), and it is why
+    /// this class exists.</para>
+    ///
+    /// <para>It also pins the other half of §5.5.1: typing alone must not reach the file.</para>
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task ANumericSetting_CommitsOnBlurAndOnEnter_AndNotWhileTyping()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var window = new SettingsWindow(service, PortabilityOver(dir, service));
+                window.Show();
+                SelectCategory(window, SettingsCatalog.CategoryEditor);
+
+                var field = window.GetVisualDescendants().OfType<TextBox>()
+                    .Single(t => t.Name == "PreviewRowLimitBox");
+                var other = window.GetVisualDescendants().OfType<TextBox>()
+                    .Single(t => t.Name == "FullLoadPromptBox");
+
+                // ── Typing persists nothing ──
+                field.Text = "250";
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(PreferenceOptions.PreviewRowLimit.Default, service.Current.PreviewRowLimit);
+
+                // ── Enter commits ──
+                field.Focus();
+                Dispatcher.UIThread.RunJobs();
+                window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal(250, service.Current.PreviewRowLimit);
+                Assert.Equal(250, new PreferencesStore(dir).Load().PreviewRowLimit);
+
+                // ── Blur commits ──
+                field.Text = "700";
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(250, service.Current.PreviewRowLimit);   // still nothing on typing alone
+
+                other.Focus();                                        // moving focus away = LostFocus on `field`
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal(700, service.Current.PreviewRowLimit);
+                Assert.Equal(700, new PreferencesStore(dir).Load().PreviewRowLimit);
+
+                window.Close();
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The QA fix, at the surface: a letter typed into a numeric field never appears.</b>
+    ///
+    /// <para>The view-model test proves the gate refuses the text; only this proves the refusal reaches the
+    /// screen — because rejection works by re-raising <c>PropertyChanged</c> for a value that did not change,
+    /// and whether a bound control snaps back on that is a fact about Avalonia's binding, not about the model.
+    /// Assert it through real keyboard input, on the real window.</para>
+    ///
+    /// <para>⚠ Digits typed before the letter must SURVIVE — losing them is the behaviour QA asked to
+    /// remove.</para>
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task ANumericSetting_RefusesNonNumericKeystrokes_AtTheControl()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var window = new SettingsWindow(service, PortabilityOver(dir, service));
+                window.Show();
+                SelectCategory(window, SettingsCatalog.CategoryEditor);
+
+                var field = window.GetVisualDescendants().OfType<TextBox>()
+                    .Single(t => t.Name == "PreviewRowLimitBox");
+
+                field.Text = string.Empty;
+                field.Focus();
+                Dispatcher.UIThread.RunJobs();
+
+                foreach (var ch in "12a3x.5-")
+                {
+                    window.KeyTextInput(ch.ToString());
+                    Dispatcher.UIThread.RunJobs();
+                }
+
+                // Only the digits landed, in order, and nothing was lost to the rejected keystrokes.
+                Assert.Equal("1235", field.Text);
+
+                window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal(1235, service.Current.PreviewRowLimit);
+                Assert.Equal(1235, new PreferencesStore(dir).Load().PreviewRowLimit);
+
+                window.Close();
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    /// <summary>
+    /// The three etap-6 pages render their rows, and a checkbox commits on click — the discrete half of
+    /// apply-on-change, on the real window.
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task TheEtap6Pages_RenderTheirRows_AndACheckboxCommitsOnClick()
+    {
+        await _session.Dispatch(() =>
+        {
+            var dir = NewTempDir();
+            try
+            {
+                var service = new PreferencesService(new PreferencesStore(dir));
+                var window = new SettingsWindow(service, PortabilityOver(dir, service));
+                window.Show();
+
+                // Each page shows exactly its own catalog rows — the same catalog-derived assertion the search
+                // test makes, applied per page, so a row added without its XAML block fails here.
+                foreach (var id in new[]
+                         {
+                             SettingsCatalog.CategoryEditor,
+                             SettingsCatalog.CategoryGrid,
+                             SettingsCatalog.CategoryDebugger,
+                         })
+                {
+                    SelectCategory(window, id);
+                    var rendered = window.GetVisualDescendants().OfType<Border>()
+                        .Count(b => b.Classes.Contains("settings-group") && b.IsEffectivelyVisible);
+                    Assert.Equal(SettingsCatalog.SettingsIn(id).Count(), rendered);
+                }
+
+                SelectCategory(window, SettingsCatalog.CategoryGrid);
+                var autoFit = window.GetVisualDescendants().OfType<CheckBox>()
+                    .Single(c => c.Name == "GridAutoFitCheck");
+                Assert.True(autoFit.IsChecked);
+
+                autoFit.IsChecked = false;
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.False(service.Current.GridAutoFitColumns);
+                Assert.False(new PreferencesStore(dir).Load().GridAutoFitColumns);
+
+                window.Close();
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }, System.Threading.CancellationToken.None);
+    }
+
+    // Selects a category by its catalog id, the way the user clicks it — never by a written index, so adding a
+    // category cannot silently point a test at the wrong page.
+    private static void SelectCategory(SettingsWindow window, string categoryId)
+    {
+        var categories = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "CategoryList");
+        categories.SelectedIndex = SettingsCatalog.Categories
+            .Select((c, i) => (c.Id, i))
+            .Single(x => x.Id == categoryId).i;
+        Dispatcher.UIThread.RunJobs();
     }
 
     // ─── Etap 5b — export / import ──────────────────────────────────────────────────────────────────
