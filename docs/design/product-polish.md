@@ -1548,3 +1548,62 @@ kontraktem, a nie szczegółem.
 ⚠ **Pułapka warsztatowa, którą zapłaciłem:** zasadzenie naruszenia cofnięte przez
 `git checkout -- <plik>` **skasowało niezacommitowaną zmianę w tym samym pliku** (przemianowanie
 w `MainWindow.axaml`). Plant cofa się z kopii pliku, nie z gita, dopóki praca nie jest w commicie.
+
+### §15.4 Krok 3 — skala szarości Light (§7.2) + kontrast tekstu drugorzędnego (§7.4) + V‑1
+
+Zmiana **wartości** na już poprawnej strukturze z kroku 2. Jeden plik, siedem liczb.
+
+| Token | Dziś | Po | Powód |
+|---|---|---|---|
+| `BackgroundColor` (Light) | `#F3F3F3` | **`#FCFCFD`** | ratyfikowana Q7 (§7.2.1) |
+| `PanelColor` | `#E0E0E0` | **`#F3F4F6`** | chroma odróżnialna, nie dominująca |
+| `ChromeStrongColor` | `#D6D6D6` | **`#E8EAED`** | stopień dalej, wciąż spokojnie |
+| `BorderColor` | `#BDBDBD` | **`#D8DBE0`** | obramowanie ma oddzielać, nie rysować |
+| `ForegroundColor` | `#1F1F1F` | **`#1B1D1F`** | kosmetyka |
+| `SubtleForegroundColor` (Light) | `#6E6E6E` | **`#5F6570`** | H‑7 |
+| `SubtleForegroundColor` (Dark) | `#858585` | **`#9AA0A6`** | H‑7 — patrz niżej |
+
+**⭐ H‑7 zmierzone, a nie przyjęte za specyfikacją.** Specyfikacja twierdziła, że problem dotyczy
+głównie Light. Pomiar tego **nie potwierdził**: Light **3,86:1**, Dark **4,52:1** — obie na granicy
+albo poniżej AA, przy `FontSize=11`, dla głównego elementu nawigacyjnego. Po zmianie: Light
+**5,33:1**, Dark **6,31:1**. ⭐ To jest kolor nieaktywnych zakładek i podpisów pól, czyli dokładnie
+tego, co użytkownik zgłosił przy QA kroku 2 jako *„zbyt słabo widoczne"*.
+
+#### §15.4.1 ⛔ V‑1 — wynik, którego §7.3 nie przewidziała
+
+Przeliczone wszystkie barwy składni wobec nowego tła:
+
+| Element (Light) | na `#F3F3F3` | na `#FCFCFD` | AA 4,5 |
+|---|---|---|---|
+| **Komentarz `#2E8B57`** | 3,83:1 | **4,14:1** | ⛔ **poniżej** |
+| Typy `#0F766E` | 4,93 | 5,34 | ✓ |
+| Funkcje `#795E26` | 5,50 | 5,95 | ✓ |
+| PSQL `#5D30A6` | 7,76 | 8,40 | ✓ |
+| SQL `#0033B3` | 8,91 | 9,64 | ✓ |
+| Literały / liczby / operatory | — | 6,34 – 8,24 | ✓ |
+
+**Motyw ciemny przechodzi w całości** (4,69 – 11,80) i ten krok go nie dotyka.
+
+**⛔ §7.3 mówi: „jeśli któraś nie przejdzie — zmieniamy tło, nie paletę". Tutaj jest to
+NIEWYKONALNE.** Komentarz `#2E8B57` na **czystej bieli** daje **4,25:1** — czyli nawet maksymalne
+rozjaśnienie tła nie sięga progu 4,5. Reguła zakładała, że tło ma zawsze dość zapasu; ten jeden
+kolor pokazuje, że nie ma.
+
+⚠ **To nie jest regresja wprowadzona przez ten krok** — dziś jest **gorzej** (3,83) i zmiana tła
+sytuację *poprawia* o 0,31. Jest to defekt odziedziczony, który dopiero teraz został zmierzony.
+
+⭐ **Decyzja należy do użytkownika, bo paleta jest zamrożona (§6.3) po dwóch rundach jego QA.**
+Rozstrzygnięcie zapisane w §15.4.2.
+
+#### §15.4.2 Punkty do oceny wizualnej kroku 3
+
+1. **RB‑4 — ocena odłożona z kroku 2.** Użytkownik: *„aktywna zakładka wyglądała dobrze już
+   wcześniej; problemem są nieaktywne, nadal zbyt słabo widoczne"*. Krok 3 adresuje to przez H‑7
+   (5,33:1) i przez nową chromę. **Dopiero teraz można uczciwie ocenić efekt końcowy RB‑4.**
+2. **⚠ Powierzchnie uniesione w Light są oddzielone BARDZO subtelnie.** Zmierzone:
+   `SurfaceRaised #FFFFFF` vs `Panel #F3F4F6` = **1,10:1**, obramowanie `#D8DBE0` vs biel = **1,42:1**.
+   §7.1 zakłada, że krawędź to udźwignie. ⚠ Jeżeli popupy i menu okażą się „pływające w niczym",
+   właściwą odpowiedzią jest **mocniejsza krawędź albo cień dla powierzchni uniesionych** — nie
+   zmiana tła dokumentu, bo ta jest ratyfikowana (Q7).
+3. **`SearchableComboBox`** — użytkownik odnotował przy QA kroku 2 brak widocznej różnicy i słusznie
+   złożył to na karb nieprzebudowanej jeszcze kolorystyki. Teraz jest przebudowana.

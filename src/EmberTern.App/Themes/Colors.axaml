@@ -13,7 +13,12 @@
       <Color x:Key="SurfaceRaisedColor">#2D2D2D</Color>
       <Color x:Key="BorderColor">#3F3F46</Color>
       <Color x:Key="ForegroundColor">#D4D4D4</Color>
-      <Color x:Key="SubtleForegroundColor">#858585</Color>
+      <!-- ⭐ H‑7 / §7.4 — tekst drugorzędny. Poprzednia wartość #858585 dawała 4,52:1, czyli
+           DOKŁADNIE na granicy AA, przy FontSize 11 i dla głównego elementu nawigacyjnego narzędzia
+           używanego osiem godzin dziennie. ⚠ Specyfikacja twierdziła, że problem dotyczy głównie
+           motywu jasnego — pomiar tego NIE potwierdził: ciemny był równie słaby, po prostu mniej
+           rzucał się w oczy. Teraz 6,31:1. -->
+      <Color x:Key="SubtleForegroundColor">#9AA0A6</Color>
       <Color x:Key="AccentColor">#2D6BBF</Color>
       <Color x:Key="AccentMutedColor">#1A4F8F</Color>
       <Color x:Key="TransactionActiveColor">#F0A458</Color>
@@ -254,13 +259,28 @@
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
-      <Color x:Key="BackgroundColor">#F3F3F3</Color>
+      <Color x:Key="BackgroundColor">#FCFCFD</Color>
       <!-- Light theme panel hierarchy: editor/results stay near-white (BackgroundColor),
            sidebar is a step darker (PanelColor), titlebar is darker still
            (ChromeStrongColor). Borders sit between PanelColor and ChromeStrongColor
-           so panel edges read clearly without a sharp line. -->
-      <Color x:Key="PanelColor">#E0E0E0</Color>
-      <Color x:Key="ChromeStrongColor">#D6D6D6</Color>
+           so panel edges read clearly without a sharp line.
+
+           ⭐ PRZEPROJEKTOWANE W M2b, KROKU 3 (§7.2). Poprzednia skala — tło #F3F3F3, chroma
+           #E0E0E0/#D6D6D6, obramowania #BDBDBD — była po prostu ciężka: rysowała siatkę, która
+           konkurowała z treścią, zamiast ją oprawiać (narusza §3.4 specyfikacji, „calm interface").
+           Kierunek zmiany: chroma odróżnialna od dokumentu, ale nie dominująca; obramowanie ma
+           ODDZIELAĆ, nie RYSOWAĆ.
+
+           ⭐ Tło to #FCFCFD, a NIE czysta biel — ratyfikowana decyzja Q7 (§7.2.1), podjęta
+           z powodów ergonomicznych: „aplikacja będzie używana przez wiele godzin dziennie i zależy
+           mi bardziej na komforcie pracy niż maksymalnym kontraście". Nadmiar kontrastu nie poprawia
+           czytelności — podnosi jasność całego pola widzenia przy ośmiogodzinnej sesji. Tekst główny
+           ma tu 16,49:1, czyli ponad trzykrotność progu AA.
+           ⚠ Ta decyzja okazała się też poprawna architektonicznie: dopiero odsunięcie tła od bieli
+           daje `SurfaceRaisedColor = #FFFFFF` (RB‑4) DOKĄD się unieść. Przy tle #FFFFFF powierzchnia
+           uniesiona nie miałaby jak być jaśniejsza i §7.1 wymagałby innego mechanizmu. -->
+      <Color x:Key="PanelColor">#F3F4F6</Color>
+      <Color x:Key="ChromeStrongColor">#E8EAED</Color>
       <!-- ⭐⭐ RB‑4 — TU JEST CAŁY DEFEKT I JEGO ROZWIĄZANIE.
 
            Do tej pory jeden token (`ElevatedPanelBrush`) wykonywał DWIE sprzeczne prace:
@@ -281,9 +301,12 @@
            tło dokumentu — i to jest ta niezamierzona korzyść z decyzji Q7 (§7.2.1), która odsunęła
            tło od czystej bieli. Krawędź niesie `BorderBrush`, bo różnica wobec tła jest niewielka. -->
       <Color x:Key="SurfaceRaisedColor">#FFFFFF</Color>
-      <Color x:Key="BorderColor">#BDBDBD</Color>
-      <Color x:Key="ForegroundColor">#1F1F1F</Color>
-      <Color x:Key="SubtleForegroundColor">#6E6E6E</Color>
+      <Color x:Key="BorderColor">#D8DBE0</Color>
+      <Color x:Key="ForegroundColor">#1B1D1F</Color>
+      <!-- ⭐ H‑7 / §7.4 — tekst drugorzędny; na nowej chromie #F3F4F6 daje 5,33:1 zamiast
+           granicznych 3,86:1, jakie #6E6E6E dawało na #E0E0E0. To jest kolor nieaktywnych zakładek
+           i podpisów pól — czyli tego, co użytkownik czyta kątem oka przez cały dzień. -->
+      <Color x:Key="SubtleForegroundColor">#5F6570</Color>
       <!-- Light accent shares the dark blue palette so the Execute button + focus
            ring + transaction marker stay consistent across themes. Earlier
            purple values clashed against the rest of the chrome on light. -->
