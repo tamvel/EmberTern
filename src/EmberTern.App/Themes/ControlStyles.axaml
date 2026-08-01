@@ -60,7 +60,7 @@
        Elevated panel + border in both themes; item selection/hover colours come from the ListBoxItem
        overrides below. (Included after AvaloniaEdit's theme in App.axaml, so these setters win.) -->
   <Style Selector="aecc|CompletionListBox">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
@@ -71,7 +71,7 @@
        Fluent's default ListBoxItem padding is what made this read as a separate window. Chrome lives
        here rather than on the control so no future caller can invent a second look. -->
   <Style Selector="ListBox.code-action-menu">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
   </Style>
@@ -269,7 +269,7 @@
   </Style>
 
   <Style Selector="Border.sidebar-rail:pointerover">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
   </Style>
 
   <Style Selector="Button.flat">
@@ -359,7 +359,7 @@
   </Style>
 
   <!-- ── Active-tab design language (shared by bottom-tab + sub-tab) ─────────
-       Active tab = a raised, filled segment: ElevatedPanel background + SemiBold +
+       Active tab = a raised, filled segment: ChromeStrong background + SemiBold +
        full-contrast foreground, rounded corners. NO accent fill / outline / underline
        (accent is reserved for connection name / DEV MODE / toolbar actions). Inactive
        tabs read subtle on a transparent background. Height is identical in every state
@@ -383,7 +383,7 @@
   </Style>
 
   <Style Selector="TabItem.bottom-tab:selected /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
 
   <Style Selector="TabItem.bottom-tab:selected">
@@ -420,7 +420,7 @@
   </Style>
 
   <Style Selector="TabItem.sub-tab:selected /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
 
   <Style Selector="TabItem.sub-tab:selected">
@@ -482,7 +482,7 @@
        subtle border, themed foreground. Default FluentTheme picks SystemAccent for
        hover/press which clashes with the dark blue accent. -->
   <Style Selector="DataGridColumnHeader">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -640,7 +640,7 @@
        ============================================================================================ -->
 
   <Style Selector="ContextMenu">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="4" />

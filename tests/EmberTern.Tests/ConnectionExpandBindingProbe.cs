@@ -2757,7 +2757,7 @@ public sealed class ConnectionExpandBindingProbe
         var tokens = new[]
         {
             "AccentBrush", "AccentIconBrush", "BackgroundBrush", "BorderBrush", "DangerIconBrush",
-            "ElevatedPanelBrush", "ErrorBrush", "ForegroundBrush", "OnAccentBrush", "PanelBrush",
+            "ChromeStrongBrush", "ErrorBrush", "ForegroundBrush", "OnAccentBrush", "PanelBrush",
             "SubtleForegroundBrush", "SuccessIconBrush", "WarningBrush",
         };
 

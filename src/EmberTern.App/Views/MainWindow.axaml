@@ -43,7 +43,7 @@
     <!-- Custom titlebar: brand + active connection + connection toolbar + theme + window controls -->
     <Border Grid.Row="0"
             x:Name="Titlebar"
-            Background="{DynamicResource ElevatedPanelBrush}"
+            Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             PointerPressed="OnTitleBarPointerPressed"
@@ -1494,7 +1494,7 @@
                      accent, plain-language message, and a working [Load all rows] for a
                      truncated preview (hidden for a ceiling-hit Full — nothing more to load). -->
                 <Border Grid.Row="0"
-                        Background="{DynamicResource ElevatedPanelBrush}"
+                        Background="{DynamicResource ChromeStrongBrush}"
                         BorderBrush="{DynamicResource WarningBrush}"
                         BorderThickness="0,0,0,2"
                         Padding="12,6"
@@ -1525,7 +1525,7 @@
                      strings as the Table Data View. Client-side paging over the
                      materialized result set; the hint shows page + row counts. -->
                 <Border Grid.Row="1"
-                        Background="{DynamicResource ElevatedPanelBrush}"
+                        Background="{DynamicResource ChromeStrongBrush}"
                         BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="0,0,0,1"
                         Padding="6,2"

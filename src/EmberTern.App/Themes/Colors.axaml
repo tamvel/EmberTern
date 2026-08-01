@@ -5,7 +5,12 @@
     <ResourceDictionary x:Key="Dark">
       <Color x:Key="BackgroundColor">#1E1E1E</Color>
       <Color x:Key="PanelColor">#252526</Color>
-      <Color x:Key="ElevatedPanelColor">#2D2D2D</Color>
+      <Color x:Key="ChromeStrongColor">#2D2D2D</Color>
+      <!-- ⭐ RB‑4: powierzchnia UNIESIONA — popup, menu, lista uzupełniania, zaznaczona zakładka
+           panelu. W motywie ciemnym „o stopień dalej od dokumentu" i „unosi się nad kontenerem"
+           zbiegają się na tej samej wartości, dlatego jest identyczna z ChromeStrongColor. W jasnym
+           są PRZECIWNE i tam te dwie role się rozchodzą — patrz komentarz w słowniku Light. -->
+      <Color x:Key="SurfaceRaisedColor">#2D2D2D</Color>
       <Color x:Key="BorderColor">#3F3F46</Color>
       <Color x:Key="ForegroundColor">#D4D4D4</Color>
       <Color x:Key="SubtleForegroundColor">#858585</Color>
@@ -26,7 +31,7 @@
            purpose, by user request. Deliberately its own token rather than ErrorColor, which it sits
            next to in the palette: the two must be free to diverge, because this one means "this is why
            the row is here" and never "something is wrong". Chosen to stay legible on BOTH surfaces a row
-           can have — the popup's ElevatedPanel and the SelectionColor of the selected row. -->
+           can have — the popup's ChromeStrong and the SelectionColor of the selected row. -->
       <Color x:Key="CompletionMatchColor">#FF6B6B</Color>
       <Color x:Key="SelectionColor">#094771</Color>
       <Color x:Key="FocusBorderColor">#007FD4</Color>
@@ -127,7 +132,8 @@
 
       <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
-      <SolidColorBrush x:Key="ElevatedPanelBrush" Color="{StaticResource ElevatedPanelColor}" />
+      <SolidColorBrush x:Key="ChromeStrongBrush" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}" />
       <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
       <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
@@ -251,10 +257,30 @@
       <Color x:Key="BackgroundColor">#F3F3F3</Color>
       <!-- Light theme panel hierarchy: editor/results stay near-white (BackgroundColor),
            sidebar is a step darker (PanelColor), titlebar is darker still
-           (ElevatedPanelColor). Borders sit between PanelColor and ElevatedPanelColor
+           (ChromeStrongColor). Borders sit between PanelColor and ChromeStrongColor
            so panel edges read clearly without a sharp line. -->
       <Color x:Key="PanelColor">#E0E0E0</Color>
-      <Color x:Key="ElevatedPanelColor">#D6D6D6</Color>
+      <Color x:Key="ChromeStrongColor">#D6D6D6</Color>
+      <!-- ⭐⭐ RB‑4 — TU JEST CAŁY DEFEKT I JEGO ROZWIĄZANIE.
+
+           Do tej pory jeden token (`ElevatedPanelBrush`) wykonywał DWIE sprzeczne prace:
+             (a) „chroma o stopień dalej od dokumentu" — nagłówki kolumn, pasek tytułu,
+             (b) „element unosi się nad swoim kontenerem" — popup, menu, zaznaczona zakładka.
+
+           W motywie CIEMNYM obie schodzą się na tej samej wartości i defektu nie widać.
+           W JASNYM są przeciwne — i powód jest fizyczny, nie stylistyczny: *uniesienie* czyta się
+           jako ruch KU ŚWIATŁU w każdym motywie, bo światło pada z góry. Oddalenie się od bieli
+           to wejście w cień, czyli WGŁĘBIENIE. Dlatego zaznaczona zakładka, opisana w kodzie jako
+           „a raised, filled segment", w Light wyglądała na wciśniętą.
+
+           Rozwiązaniem musiał być nowy TOKEN, nie nowa wartość: podział na dwie prace jest
+           sprawdzalny mechanicznie („czy ten element pływa nad swoim kontenerem?" ma jednoznaczną
+           odpowiedź dla każdego z 33 miejsc), więc żadna pojedyncza wartość nie mogła obsłużyć obu.
+
+           ⚠ Biel, nie „jaśniejszy szary": powierzchnia uniesiona musi mieć dokąd się unieść ponad
+           tło dokumentu — i to jest ta niezamierzona korzyść z decyzji Q7 (§7.2.1), która odsunęła
+           tło od czystej bieli. Krawędź niesie `BorderBrush`, bo różnica wobec tła jest niewielka. -->
+      <Color x:Key="SurfaceRaisedColor">#FFFFFF</Color>
       <Color x:Key="BorderColor">#BDBDBD</Color>
       <Color x:Key="ForegroundColor">#1F1F1F</Color>
       <Color x:Key="SubtleForegroundColor">#6E6E6E</Color>
@@ -361,7 +387,8 @@
 
       <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
-      <SolidColorBrush x:Key="ElevatedPanelBrush" Color="{StaticResource ElevatedPanelColor}" />
+      <SolidColorBrush x:Key="ChromeStrongBrush" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}" />
       <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
       <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />

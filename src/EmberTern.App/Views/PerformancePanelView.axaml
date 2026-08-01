@@ -20,7 +20,7 @@
 
     <!-- (1) PRIMARY SUMMARY -->
     <Border Grid.Row="0"
-            Background="{DynamicResource ElevatedPanelBrush}"
+            Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="12,10">

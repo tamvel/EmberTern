@@ -670,7 +670,7 @@ internal sealed class NavigationController
         list.Classes.Add("code-action-menu");
         var card = new Border
         {
-            Background = ThemeBrush("ElevatedPanelBrush"),
+            Background = ThemeBrush("SurfaceRaisedBrush"),
             BorderBrush = ThemeBrush("BorderBrush"),
             BorderThickness = new Thickness(1),
             Child = list,
@@ -1037,7 +1037,7 @@ internal sealed class NavigationController
         _renameBorder = new Border
         {
             Child = _renameBox,
-            Background = Brush("ElevatedPanelBrush"),
+            Background = Brush("SurfaceRaisedBrush"),
             BorderBrush = Brush("FocusBorderBrush") ?? Brush("AccentBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
@@ -1244,7 +1244,7 @@ internal sealed class NavigationController
         var border = new Border
         {
             Child = panel,
-            Background = Brush("ElevatedPanelBrush") ?? Brush("BackgroundBrush"),
+            Background = Brush("SurfaceRaisedBrush") ?? Brush("BackgroundBrush"),
             BorderBrush = Brush("BorderBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),

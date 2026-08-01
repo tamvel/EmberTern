@@ -39,7 +39,7 @@
             <Popup x:Name="PART_Popup"
                    Placement="BottomEdgeAlignedLeft"
                    IsLightDismissEnabled="True">
-              <Border Background="{DynamicResource ElevatedPanelBrush}"
+              <Border Background="{DynamicResource SurfaceRaisedBrush}"
                       BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                       CornerRadius="3" MinWidth="480">
                 <ContentControl x:Name="PART_PopupHost" />

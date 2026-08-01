@@ -563,7 +563,7 @@ public partial class DebuggerTabView : UserControl
             Child = stack,
             Padding = new Thickness(10),
             BorderThickness = new Thickness(1),
-            Background = Brush("ElevatedPanelBrush"),
+            Background = Brush("SurfaceRaisedBrush"),
             BorderBrush = Brush("BorderBrush"),
         };
         border.AddHandler(KeyDownEvent, (_, e) =>

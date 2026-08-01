@@ -302,6 +302,69 @@ public class DesignTokenComplianceTests
             "first is dead:\n  " + string.Join("\n  ", offenders));
     }
 
+    /// <summary>
+    /// Token names that have been retired by a rename, with the name that replaced them. A straggler is not a
+    /// compile error in either direction — XAML resolves a missing <c>{DynamicResource}</c> to nothing, and the
+    /// C# call sites look it up <b>by string</b> (<c>Brush("…")</c>) with a <c>?? fallback</c>, so a missed
+    /// rename silently paints the fallback colour instead.
+    /// </summary>
+    private static readonly Dictionary<string, string> RetiredTokens = new(StringComparer.Ordinal)
+    {
+        // RB‑4 (M2b): one token was doing two opposite jobs — "chrome a step further from the document" and
+        // "this element floats above its container". They coincide in Dark and contradict each other in Light.
+        ["ElevatedPanelBrush"] = "ChromeStrongBrush (chrome) or SurfaceRaisedBrush (raised) — see §7.1",
+        ["ElevatedPanelColor"] = "ChromeStrongColor or SurfaceRaisedColor",
+    };
+
+    [Fact]
+    public void NoRetiredTokenName_SurvivesAnywhereInTheApplication()
+    {
+        var appRoot = AppRoot();
+        var stragglers = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(appRoot, "*", SearchOption.AllDirectories))
+        {
+            if (!file.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase) &&
+                !file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var text = WithoutComments(File.ReadAllText(file), file);
+            foreach (var (retired, replacement) in RetiredTokens)
+            {
+                if (text.Contains(retired, StringComparison.Ordinal))
+                {
+                    stragglers.Add($"{Path.GetRelativePath(appRoot, file).Replace('\\', '/')} still uses " +
+                                   $"`{retired}` — use {replacement}");
+                }
+            }
+        }
+
+        Assert.True(stragglers.Count == 0,
+            "A retired token name survived a rename:\n  " + string.Join("\n  ", stragglers) +
+            "\n\nNeither XAML nor C# fails on this: a missing DynamicResource resolves to nothing and the " +
+            "string-keyed lookups fall back to another brush, so the only symptom is a surface painted the " +
+            "wrong colour on one screen.");
+    }
+
+    /// <summary>
+    /// Strips comments before the retired-name scan. ⭐ The guard is about USAGE, not about mentioning history:
+    /// the comment in <c>Colors.axaml</c> that explains <i>why</i> a token was split has to be able to name the
+    /// token it replaced, and a guard that forbids documenting itself trains people to delete the explanation
+    /// instead of the code.
+    /// <para>⚠ Deliberately conservative on C#: only whole-line <c>//</c> comments and <c>/* … */</c> blocks. A
+    /// naive "strip from the first //" would also eat the tail of any line containing an <c>avares://</c> URI,
+    /// which is how a real straggler would go unnoticed — a guard is allowed to over-report, never to
+    /// under-report.</para>
+    /// </summary>
+    private static string WithoutComments(string text, string path) =>
+        path.EndsWith(".axaml", StringComparison.OrdinalIgnoreCase)
+            ? Regex.Replace(text, "<!--.*?-->", " ", RegexOptions.Singleline)
+            : Regex.Replace(
+                string.Join('\n', text.Split('\n').Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))),
+                @"/\*.*?\*/", " ", RegexOptions.Singleline);
+
     private static IEnumerable<string> ThemeFiles() =>
         Directory.EnumerateFiles(Path.Combine(AppRoot(), "Themes"), "*.axaml").OrderBy(f => f, StringComparer.Ordinal);
 

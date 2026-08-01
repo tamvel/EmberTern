@@ -660,7 +660,7 @@
             <Grid RowDefinitions="Auto,*">
 
               <Grid Grid.Row="0" ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,5"
-                    Background="{DynamicResource ElevatedPanelBrush}">
+                    Background="{DynamicResource ChromeStrongBrush}">
                 <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableColumnName}"
                            Classes="field-label" Margin="0" />
                 <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.ImportNewTableColumnType}"
@@ -782,7 +782,7 @@
 
             <!-- Column captions. Same proportions as the rows below, so they stay aligned. -->
             <Grid Grid.Row="0" ColumnDefinitions="2*,3*,2*,3*" ColumnSpacing="10" Margin="8,5"
-                  Background="{DynamicResource ElevatedPanelBrush}">
+                  Background="{DynamicResource ChromeStrongBrush}">
               <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportMappingColumnTarget}"
                          Classes="field-label" Margin="0" />
               <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.ImportMappingColumnSource}"
@@ -1125,7 +1125,7 @@
     </Border>
 
     <!-- ══ Band H — where the rows land, then the numbers. Never adjectives (§9.1 point 4) ══════ -->
-    <Border Grid.Row="8" Background="{DynamicResource ElevatedPanelBrush}"
+    <Border Grid.Row="8" Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12,4">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <TextBlock Text="{Binding DestinationStatus}" FontSize="12"

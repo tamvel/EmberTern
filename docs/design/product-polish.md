@@ -1469,3 +1469,82 @@ jest liczbą wymyśloną; jest liczbą, do której projekt już raz doszedł sam
 **Do oceny wizualnej użytkownika:** promień boxa czyta `Radius.Surface` (3). Na kwadracie 14 px to
 proporcjonalnie więcej niż 3 na 20 px u Fluenta — jeżeli okaże się zbyt okrągły, właściwą odpowiedzią
 jest **nowa rola `Radius.Control`**, a nie zmiana `Radius.Surface`, którą dzielą karty i panele.
+
+#### §15.2.1 QA kroku 1 — zaliczone, plus trzy ustalenia wiążące dalej
+
+**Werdykt użytkownika:** *„Checkbox przestał dominować nad zawartością DataGrid. Cała siatka wygląda
+znacznie lżej i bardziej profesjonalnie."* RB‑2 zamknięty.
+
+⭐ **Tło boxa w stanie normalnym ZOSTAJE** — użytkownik miał wątpliwość, czy nie jest zbyt ciemne,
+i rozstrzygnął ją po obejrzeniu **wszystkich stanów**: dzięki niemu normal, hover/focus i checked mają
+wyraźnie odróżnialne poziomy wizualne. ⚠ To jest argument z języka stanów, nie z pojedynczego widoku —
+i dlatego jest mocniejszy niż ocena samego stanu spoczynkowego.
+
+**⭐⭐ ZASADA WIĄŻĄCA DLA KAŻDEJ KOLEJNEJ KONTROLKI M2b (użytkownik, 2026-08-01):**
+
+> **Komponent ocenia się w KOMPLECIE STANÓW — normal · hover · checked/aktywny · indeterminate ·
+> disabled · focus — i w OBU MOTYWACH.** Wszystkie mają zachować tę samą spójność.
+
+Konsekwencja praktyczna: kontrolka bez pełnego zestawu stanów nie jest gotowa, nawet jeśli stan
+spoczynkowy wygląda dobrze. To jest kryterium odbioru każdego kroku od tej pory.
+
+**⛔ `Radius.Control` NIE POWSTAJE TERAZ — decyzja użytkownika, ważniejsza niż sam promień:**
+
+> *„Nowe role powstają dopiero wtedy, gdy wynikają z rzeczywistego użycia w kilku komponentach,
+> a nie z pojedynczego przypadku."*
+
+Pytanie wraca **po wykonaniu pozostałych kontrolek bazowych** — wtedy będzie widać, czy kilka
+komponentów potrzebuje własnego promienia, czy obecny podział wystarcza. ⚠ To jest ta sama reguła,
+którą zastosowaliśmy do `Stroke.Rail` (§4.2.3) i do `BorderThickness` w M2a: **katalog rośnie
+z potrzeby, nie z symetrii.** `Margin.MarkGap` przeszła, bo drugi konsument (`RadioButton`) był
+znany w chwili dodania; `Radius.Control` drugiego konsumenta jeszcze nie ma.
+
+**📌 Punkt do ponownej oceny w kroku DataGrid (nie teraz):** nasycenie koloru **zaznaczonego wiersza**.
+Użytkownik zgłosił to przy okazji QA checkboxa i wprost odłożył: *„po uspokojeniu całego Design
+Systemu może się okazać, że warto delikatnie zmniejszyć jego nasycenie"*. ⚠ Nie ruszamy go wcześniej —
+ocena nasycenia ma sens dopiero wtedy, gdy tło, obramowania i wiersze wokół są już docelowe.
+
+### §15.3 Krok 2 — RB‑4: rozdzielenie dwóch ról jednego tokenu
+
+Zmiana **strukturalna** przy niezmienionej skali szarości — żeby RB‑4 dało się ocenić w oderwaniu od
+przeprojektowania Light (§7.2), które przychodzi w kroku 3.
+
+| | |
+|---|---|
+| `ElevatedPanelBrush` → **`ChromeStrongBrush`** | praca (a): chroma o stopień dalej od dokumentu — **14 konsumentów** |
+| **`SurfaceRaisedBrush`** (nowy) | praca (b): element unosi się nad kontenerem — **14 konsumentów** |
+
+**Wartości:** Dark `#2D2D2D` dla obu (w ciemnym motywie obie prace zbiegają się — §7.1), Light
+`ChromeStrong #D6D6D6` bez zmian i `SurfaceRaised #FFFFFF`. ⚠ **W motywie ciemnym ten krok nie zmienia
+niczego wizualnie** — cała zmiana jest w Light i dotyczy wyłącznie powierzchni pływających.
+
+⭐ **Podział okazał się rozstrzygalny mechanicznie.** Pytanie *„czy ten element pływa nad swoim
+kontenerem?"* ma jednoznaczną odpowiedź dla każdego z 28 miejsc — i to jest właśnie dowód, że
+rozwiązaniem musiał być **nowy token**, a nie nowa wartość: gdyby granica była nieostra, żadna wartość
+by jej nie przecięła. Wynik 14/14 nie był planowany.
+
+⚠ **Jedna korekta wobec inwentarza z §7.1.1:** karta Peek Frame debuggera
+(`DebuggerTabView.axaml.cs`) była tam zaliczona do chromy — jest **powierzchnią pływającą** i przeszła
+do `SurfaceRaisedBrush`. Klasyfikacja z pomiaru wymaga otwarcia każdego miejsca, nie tylko nazwy pliku.
+
+**⭐ Nowy strażnik `NoRetiredTokenName_SurvivesAnywhereInTheApplication`** — przemianowanie tokenu nie
+jest błędem kompilacji w ŻADNĄ stronę: XAML rozwiązuje brakujący `{DynamicResource}` do niczego,
+a wywołania w C# szukają go **po ciągu znaków** (`Brush("…")`) z `?? fallback`, więc pominięte miejsce
+po cichu maluje kolor zastępczy. Lista `RetiredTokens` (stara nazwa → następczyni) jest sprawdzana
+w całym `EmberTern.App`.
+
+⚠⚠ **Strażnik pominiętego miejsca musi pomijać KOMENTARZE — inaczej zabrania dokumentowania samego
+siebie.** Pierwsza wersja zaświeciła się na komentarzu w `Colors.axaml`, który **wyjaśnia** podział
+i z konieczności wymienia starą nazwę. Guard dotyczy **użycia**, nie wzmianki; wersja bez tego
+rozróżnienia uczy ludzi kasować wyjaśnienie zamiast kodu. ⚠ Wycinanie komentarzy w C# jest celowo
+zachowawcze (tylko całe linie `//` i bloki `/* */`) — „tnij od pierwszego `//`" zjadłoby też koniec
+każdej linii z `avares://`, a strażnikowi wolno zgłaszać za dużo, nigdy za mało.
+
+**⚠ Przemianowanie złapał też istniejący test** — `ConnectionExpandBindingProbe.DataImportSurface_
+EveryThemeToken_ResolvesInBothPalettes` trzyma listę nazw tokenów używanych przez Data Import.
+To jest dokładnie ten rodzaj sprzężenia, dla którego warto mieć taki test: nazwa tokenu jest
+kontraktem, a nie szczegółem.
+
+⚠ **Pułapka warsztatowa, którą zapłaciłem:** zasadzenie naruszenia cofnięte przez
+`git checkout -- <plik>` **skasowało niezacommitowaną zmianę w tym samym pliku** (przemianowanie
+w `MainWindow.axaml`). Plant cofa się z kopii pliku, nie z gita, dopóki praca nie jest w commicie.

@@ -282,7 +282,7 @@ internal sealed class ParameterHelper
         return new Border
         {
             Child = panel,
-            Background = Brush("ElevatedPanelBrush") ?? Brush("BackgroundBrush"),
+            Background = Brush("SurfaceRaisedBrush") ?? Brush("BackgroundBrush"),
             BorderBrush = Brush("BorderBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),

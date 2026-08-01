@@ -173,7 +173,7 @@ internal sealed class LanguageExpansionController
             _card = new Border
             {
                 Child = row,
-                Background = Brush("ElevatedPanelBrush") ?? Brush("PanelBrush") ?? Brush("BackgroundBrush"),
+                Background = Brush("SurfaceRaisedBrush") ?? Brush("PanelBrush") ?? Brush("BackgroundBrush"),
                 BorderBrush = Brush("BorderBrush"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),

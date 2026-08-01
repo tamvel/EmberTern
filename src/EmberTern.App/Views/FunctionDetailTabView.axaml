@@ -456,7 +456,7 @@
     <!-- Persistent execution-info panel — feedback after any Execute regardless of tab. -->
     <StackPanel Grid.Row="1" Orientation="Vertical">
       <Border IsVisible="{Binding HasExecInfo}"
-              Background="{DynamicResource ElevatedPanelBrush}"
+              Background="{DynamicResource ChromeStrongBrush}"
               BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="0,1,0,0"
               Padding="10,3">

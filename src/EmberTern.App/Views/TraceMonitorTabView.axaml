@@ -54,7 +54,7 @@
   <Grid x:Name="RootGrid" RowDefinitions="Auto,Auto,*,4,240">
 
     <!-- ① Session bar -->
-    <Border Grid.Row="0" Background="{DynamicResource ElevatedPanelBrush}"
+    <Border Grid.Row="0" Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
       <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
         <Button Classes="icon" Command="{Binding StartCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStart}">
@@ -132,7 +132,7 @@
 
         <!-- Free-text search over the visible rows — full SQL, object/routine name, error message,
              session identity (user/role/process/host) and the ids (tx/attachment/pid). A FILLED
-             search field (BackgroundBrush contrasts the ElevatedPanel toolbar) so it reads clearly
+             search field (BackgroundBrush contrasts the ChromeStrong toolbar) so it reads clearly
              as a text input, not another segmented button group. Grouped with the quick chips +
              funnel as the one "filter" zone; distinct from the funnel (structured). -->
         <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}"
