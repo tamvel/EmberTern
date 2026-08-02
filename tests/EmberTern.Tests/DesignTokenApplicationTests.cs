@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Media;
@@ -369,6 +370,41 @@ public sealed class DesignTokenApplicationTests
             // composes into a template it was never pointed at.
             var inner = spin.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PART_TextBox");
             Assert.Equal(Token<double>("Size.Control"), inner.MinHeight);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Step 5.6 — <c>ToggleButton</c>. It derives from <c>Button</c>, but an Avalonia type selector matches the
+    /// EXACT type, so the step-5.4 style does not reach it. This pins that it now takes the same metrics, and —
+    /// more importantly — that the <b>checked</b> state is the app's accent without the Bridge mapping it.
+    ///
+    /// <para>⭐ Why the checked state is deliberately absent from <c>FluentBridge.axaml</c>: <c>SystemAccentColor</c>
+    /// is already overridden in <c>Colors.axaml</c>, so Fluent's <c>ToggleButtonBackgroundChecked</c> resolves to
+    /// our accent on its own. A Bridge entry would duplicate a value we already control — the same reason
+    /// <c>ControlCornerRadius</c> is absent. This test is what turns that coincidence into a checked invariant.</para>
+    /// </summary>
+    [Fact]
+    public async Task ToggleButton_TakesTheControlMetrics_AndItsCheckedStateIsTheAppAccent()
+    {
+        await _session.Dispatch(() =>
+        {
+            var toggle = new ToggleButton { Content = "Wrap", IsChecked = true };
+            var window = new Window { Content = new StackPanel { Children = { toggle } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(Token<double>("Size.Control"), toggle.MinHeight);
+            Assert.Equal(Token<Thickness>("Pad.Button"), toggle.Padding);
+            Assert.Equal(Token<double>("Text.Application.Size"), toggle.FontSize);
+
+            // The invariant the Bridge deliberately does NOT restate: Fluent's checked fill is already ours.
+            // ⚠ Read through the THEME-scoped lookup — Fluent's keys live in ThemeDictionaries, which the
+            // variant-less Token<T> cannot see (the same boundary measured in step 4).
+            var accent = ThemeToken<SolidColorBrush>("AccentBrush", ThemeVariant.Dark).Color;
+            var checkedFill = ThemeToken<SolidColorBrush>("ToggleButtonBackgroundChecked", ThemeVariant.Dark);
+            Assert.Equal(accent, checkedFill.Color);
 
             window.Close();
         }, default);

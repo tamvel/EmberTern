@@ -136,6 +136,26 @@
       <SolidColorBrush x:Key="RepeatButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="RepeatButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="RepeatButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── ToggleButton (Product Polish M2b, krok 5.6) ──────────────────────────────────────────
+           ⭐ Stany ZAZNACZONE celowo NIE SĄ tu mapowane i to jest decyzja, nie luka: `SystemAccentColor`
+           jest w tej aplikacji nadpisany naszym akcentem (`Colors.axaml`), więc
+           `ToggleButtonBackgroundChecked` Fluenta rozwiązuje się do `#2D6BBF` sam z siebie. Wpis
+           powielałby wartość, którą już kontrolujemy — dokładnie ten sam powód, dla którego nie ma
+           tu `ControlCornerRadius`. Zbieżność pinuje test.
+           Wadliwe były wyłącznie stany NEUTRALNE — ta sama pół-przezroczysta biel co w `Button`. -->
+      <SolidColorBrush x:Key="ToggleButtonBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundDisabled" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -236,6 +256,26 @@
       <SolidColorBrush x:Key="RepeatButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="RepeatButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="RepeatButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── ToggleButton (Product Polish M2b, krok 5.6) ──────────────────────────────────────────
+           ⭐ Stany ZAZNACZONE celowo NIE SĄ tu mapowane i to jest decyzja, nie luka: `SystemAccentColor`
+           jest w tej aplikacji nadpisany naszym akcentem (`Colors.axaml`), więc
+           `ToggleButtonBackgroundChecked` Fluenta rozwiązuje się do `#2D6BBF` sam z siebie. Wpis
+           powielałby wartość, którą już kontrolujemy — dokładnie ten sam powód, dla którego nie ma
+           tu `ControlCornerRadius`. Zbieżność pinuje test.
+           Wadliwe były wyłącznie stany NEUTRALNE — ta sama pół-przezroczysta biel co w `Button`. -->
+      <SolidColorBrush x:Key="ToggleButtonBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundDisabled" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>

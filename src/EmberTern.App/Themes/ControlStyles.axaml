@@ -216,6 +216,30 @@
   </Style>
 
   <!-- ================================================================================================
+       ToggleButton — Compact Controls, Product Polish M2b krok 5.6.
+
+       ⚠ Metryki identyczne z `Button` i to NIE JEST kopia przez niedbałość: `ToggleButton` dziedziczy
+       po `Button`, ale selektor typu w Avalonii dopasowuje TYP DOKŁADNY (stąd `:is(TextBlock)`
+       w tym pliku dla `SelectableTextBlock`) — więc styl `Button` go nie widzi. Alternatywa
+       `:is(Button)` byłaby gorsza: złapałaby też `RepeatButton` strzałek spinnera i przyciski
+       `ScrollBara`, którym wysokość kontrolki formularza jest wprost szkodliwa.
+
+       ⭐ STAN ZAZNACZONY BYŁ JUŻ POPRAWNY I TO NIE PRZYPADEK: `SystemAccentColor` jest w tej
+       aplikacji nadpisany naszym akcentem (`Colors.axaml`), więc `ToggleButtonBackgroundChecked`
+       Fluenta rozwiązuje się do `#2D6BBF` samoistnie. Wadliwe były wyłącznie stany NEUTRALNE —
+       ta sama pół-przezroczysta biel co w `Button`.
+       ================================================================================================ -->
+  <Style Selector="ToggleButton">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ================================================================================================
        NumericUpDown — Compact Controls, Product Polish M2b krok 5.5.
 
        ⚠ TA KONTROLKA NIE JEST JEDNĄ KONTROLKĄ, tylko trzema zagnieżdżonymi: `NumericUpDown` opakowuje

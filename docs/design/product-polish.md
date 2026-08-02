@@ -1408,9 +1408,10 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | 5.2 | **`TextBox`** — pierwsza kontrolka na moście | `9ec2c13` | ✅ zaliczone | §15.6.4 |
 | 5.3 | **`ComboBox`** — próba skalowania mostu | `3483296` | ✅ zaliczone | §15.6.5 |
 | 5.4 | **`Button`** (H‑8) + tokenizacja 4 wariantów | `267a4b8` | ⏳ oczekuje | §15.6.6 |
-| 5.5 | **`NumericUpDown`** — trzy kontrolki zagnieżdżone | — | ⏳ oczekuje | §15.6.7 |
+| 5.5 | **`NumericUpDown`** — trzy kontrolki zagnieżdżone | `d2a2475` | ⏳ oczekuje | §15.6.7 |
+| 5.6 | **`ToggleButton`** | — | ⏳ oczekuje | §15.6.8 |
 
-**Nierozpoczęte w kroku 5:** `ToggleButton` (następny) · `Expander`.
+**Nierozpoczęte w kroku 5:** `Expander` (ostatni).
 **Nierozpoczęte poza krokiem 5:** `ScrollBar` (H‑10) · DataGrid Standard (§8.4 specyfikacji).
 
 ⚠ **Stan bieżący suite: 7075** (7000 + 54 + 21). Każda iteracja dokłada 1–2 testy; licznik
@@ -2048,6 +2049,34 @@ wydobywa — ten sam podział, który `Button.icon` realizuje w pasku narzędzi.
 z `SubtleForeground` na `Foreground` przy najechaniu.
 
 Build 0/0; suite **7077** (7000 + 54 + 23); smoke czysty.
+
+##### §15.6.8 Iteracja 6 — `ToggleButton`
+
+Metryki identyczne z `Button`, kolory stanów neutralnych przez Bridge (12 kluczy w obu motywach).
+
+**⚠ Metryki są powtórzone i to NIE jest niedbałość.** `ToggleButton` **dziedziczy po `Button`**, ale
+**selektor typu w Avalonii dopasowuje typ DOKŁADNY** — dlatego w tym samym pliku stoi od dawna
+komentarz przy `:is(TextBlock)` dla `SelectableTextBlock`. Styl `Button` z kroku 5.4 go nie widzi.
+⛔ **Alternatywa `:is(Button)` byłaby gorsza, nie krótsza:** złapałaby też `RepeatButton` strzałek
+spinnera (krok 5.5) i przyciski `ScrollBara`, którym wysokość kontrolki **formularza** jest wprost
+szkodliwa — strzałka paska przewijania ma 16 px i ma taka zostać. Dokładność selektora jest tu
+zabezpieczeniem, nie ograniczeniem.
+
+**⭐ STAN ZAZNACZONY BYŁ JUŻ POPRAWNY I TO NIE PRZYPADEK — ani nie luka w Bridge'u.**
+`SystemAccentColor` jest w tej aplikacji nadpisany naszym akcentem (`Colors.axaml`, wraz z całą
+sześciostopniową rampą), więc `ToggleButtonBackgroundChecked` Fluenta rozwiązuje się do `#2D6BBF`
+**sam z siebie**. Wpis w Bridge'u powielałby wartość, którą już kontrolujemy — dokładnie ten sam
+powód, dla którego nie ma tam `ControlCornerRadius` (§16.3, wiersz trzeci). ⭐ **Zbieżność jest
+pinowana testem**, czyli zamieniona w sprawdzany niezmiennik zamiast w komentarz.
+
+Wadliwe były więc wyłącznie **stany neutralne** — ta sama pół-przezroczysta biel co w `Button`,
+z czystą bielą przy najechaniu.
+
+⚠ `ToggleButton.icon` (pasek narzędzi, m.in. przełącznik panelu filtra) zachowuje swój chromeless
+wygląd i własny stan `:checked` na `SelectionBrush` — wariant dopowiada podstawę, tak jak
+`Button.icon` po kroku 5.4.
+
+Build 0/0; suite **7078** (7000 + 54 + 24); smoke czysty.
 
 ---
 
