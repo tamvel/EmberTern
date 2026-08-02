@@ -426,9 +426,18 @@ noted.
 ## Current state
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a + 🔒 M2b ALL COMPLETE
-  AND USER-ACCEPTED (M2b closed 2026-08-02 — 21 iterations, 14 commits). ⭐ M2c IS UNDER WAY: its
-  **step 0 (the inventory) is COMPLETE, USER-ACCEPTED and committed (`20d4ad6`)**; iterations 1+ are
-  next.**
+  AND USER-ACCEPTED (M2b closed 2026-08-02 — 21 iterations, 14 commits). ⭐ M2c IS UNDER WAY: step 0
+  (the inventory) plus **iterations 1–4 are COMPLETE and USER-ACCEPTED**; the next session starts at
+  **iteration 5** (the eight object editors). Counters, measured: **`FontSize` 605 → 332** ·
+  **`CornerRadius` 37 → 31** · `FontFamily` 81 (out of scope by decision).**
+  **⭐⭐ `product-polish.md` §18.R IS THE COLLISION REGISTER AND IT IS THE STAGE'S SECOND OUTPUT.** The
+  recurring finding, hit in every iteration so far, is *a role that fits by FUNCTION but carries a
+  different NUMBER* — the debugger toolbar is 11 while `Text.Toolbar` is 12; several section headers are
+  12 SemiBold while `Text.SectionHeader` is 11; an `Expander` header is 26 while `ExpanderMinHeight` maps
+  to 24. ⛔ **The catalog is FROZEN** (user, 2026-08-02): *"M2c does not design a new typography system —
+  it only migrates the application onto the system accepted in M2a."* Such a case stays a **local value
+  with a written reason** and is added to §18.R **without asking**; the whole list is decided together at
+  the §13.3 review, on the complete picture rather than one view.
   **⭐⭐ START THE NEXT SESSION FROM
   [docs/design/product-polish-m2c-handover.md](docs/design/product-polish-m2c-handover.md) — it was
   rewritten after step 0 and is now SELF-CONTAINED (state · counters · R1–R12 · migration procedure ·

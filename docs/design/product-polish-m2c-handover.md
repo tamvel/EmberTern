@@ -34,9 +34,11 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | `20d4ad6` — *M2c krok 0: inwentarz, ratyfikacja R12, korekty wymuszone pomiarem* |
-| **Wypchnięte** | ⚠ `e388ad7` na oba remote'y; **`20d4ad6` jeszcze NIE** (push po akceptacji użytkownika) |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · **M2c — krok 0 ✅, iteracje 1+ przed Tobą** |
+| **Ostatni commit** | `59c7bb7` — *M2c iteracja 4 (bliźniacze edytory Procedure/Function)* |
+| **Wypchnięte** | ⚠ `e388ad7` na oba remote'y; **wszystko od `20d4ad6` w górę jeszcze NIE** (push po akceptacji użytkownika) |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · **M2c — krok 0 ✅, iteracje 1–4 ✅ (zaakceptowane); zaczynasz od ITERACJI 5** |
+| **Liczniki** | `FontSize` **332** (z 605) · `CornerRadius` **31** (z 37) · `FontFamily` **81** (poza zakresem) |
+| **⭐ Rejestr kolizji** | `product-polish.md` **§18.R** — 7 pozycji (K1–K7). Kolejną kolizję tego typu **dopisujesz bez pytania** i idziesz dalej |
 | **Build** | 0 błędów / 0 ostrzeżeń |
 | **Suite** | **7087**, zielony w trzech partycjach (7000 + 54 + 33) — ⚠ zapis „7088 / 54 + 34" poprawiony 2026-08-02 po pomiarze na czystym `HEAD` (§18.1.6); przyczyną była nieistniejąca klasa w filtrze, patrz §8.3/15 |
 | **Smoke** | czysty |
@@ -409,10 +411,10 @@ zmieniając wyniku.
 
 | # | Zakres | `FontSize` | Uwagi |
 |---|---|---|---|
-| **1** | `DebuggerTabView.axaml` + `.axaml.cs` | 85 + 6 | największe skupisko; 17 `FontFamily` **zostaje** |
-| **2** | `DataImportTabView.axaml` | 82 | dużo koszyka A (`TextBox`/`ComboBox`/`NumericUpDown` 12); 4 × `CornerRadius="3"` migrują |
-| **3** | `PerformancePanelView.axaml` | 42 | zawiera glif 9 px i glif 13 px → koszyk D; `CornerRadius` 6 to kapsuła → zostaje |
-| **4** | `ProcedureDetailTabView` + `FunctionDetailTabView` | 40 + 41 | bliźniacze, ta sama struktura — migrować razem, żeby nie rozjechać |
+| ✅ 1 | `DebuggerTabView.axaml` + `.axaml.cs` | 85 + 6 | największe skupisko; 17 `FontFamily` **zostaje** |
+| ✅ 2 | `DataImportTabView.axaml` | 82 | dużo koszyka A (`TextBox`/`ComboBox`/`NumericUpDown` 12); 4 × `CornerRadius="3"` migrują |
+| ✅ 3 | `PerformancePanelView.axaml` | 42 | zawiera glif 9 px i glif 13 px → koszyk D; `CornerRadius` 6 to kapsuła → zostaje |
+| ✅ 4 | `ProcedureDetailTabView` + `FunctionDetailTabView` | 40 + 41 | bliźniacze, ta sama struktura — migrować razem, żeby nie rozjechać |
 | **5** | edytory obiektów: Table 27 · Trigger 22 · View 20 · Package 17 · Domain 16 · Generator 15 · Exception 13 · Index 11 | 141 | grupa; wiele `ae:TextEditor` 13 → `Text.Code` |
 | **6** | monitory: `SessionManager` 26 · `TraceMonitor` 17 · `SecurityManager` 17 | 60 | ⚠ tu siedzi większość geometrii `CornerRadius` (koła, kapsuły) → zostaje |
 | **7** | `MainWindow.axaml` 26 + `Controls/` 7 | 33 | ⭐ powierzchnia trwała (§0.1) — najwyższa staranność |
