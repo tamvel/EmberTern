@@ -1,8 +1,8 @@
 # Product Polish — M2b — dokument startowy sesji
 
-> ## ✅ M2b — 18 ITERACJI DOSTARCZONYCH (2026-08-02), z rundą proporcji po QA
+> ## ✅ M2b — 19 ITERACJI DOSTARCZONYCH (2026-08-02), z DWIEMA rundami QA
 >
-> Kroki 0–5.3 odebrane przez użytkownika; **kroki 5.4–10 oczekują QA wizualnego**.
+> Kroki 0–5.3 odebrane przez użytkownika; **kroki 5.4–11 oczekują QA wizualnego**.
 > Po QA następny etap to **M2c** (sweep de‑lokalizacyjny) — ⛔ **nie zaczynać przed QA.**
 >
 > Ten dokument zachowany jako **punkt wejścia w M2b i zapis jego architektury**; sekcja §5
@@ -25,10 +25,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ dostarczony** (18 iteracji) |
-| **Następny krok** | ⭐ **QA wizualne kroków 5.4–10**, potem **M2c** |
-| **Ostatni commit** | `e0a59fd` — M2b kroki 8–10 (runda proporcji po QA) |
-| **Baseline** | build 0/0; suite **7084** (7000 + 54 + 30); smoke czysty |
+| **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ dostarczony** (19 iteracji) |
+| **Następny krok** | ⭐ **QA wizualne kroków 5.4–11**, potem **M2c** |
+| **Ostatni commit** | `1c7ccc1` — M2b krok 11 (druga runda QA) |
+| **Baseline** | build 0/0; suite **7085** (7000 + 54 + 31); smoke czysty |
 
 **Specyfikacja etapu (źródło prawdy):** `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`
 **Dokument etapu:** `docs/design/product-polish.md`
@@ -56,9 +56,10 @@
 | 6 | **`ScrollBar`** (H‑10) | `7ab3d27` | biały uchwyt na białym tle w Light |
 | 7 | **DataGrid Standard** (§8.4) | `e95913b` | + `Pad.CellEditor`; test znalazł defekt z kroku 5.2 |
 | 8–10 | ⭐ **runda proporcji po QA** | `e0a59fd` | dwie drabiny wysokości · Ustawienia jako panel referencyjny · kolumny Data Import |
+| 11 | ⭐⭐ **druga runda QA** | `1c7ccc1` | **kolor niesie priorytet, rozmiar nie** · pasma chromy (`Border.chrome`) · bliskość podpisu |
 
-Kroki 0–5.3 odebrane przez użytkownika; **5.4–10 oczekują QA**.
-Szczegóły: `product-polish.md` §15.1–§15.9.
+Kroki 0–5.3 odebrane przez użytkownika; **5.4–11 oczekują QA**.
+Szczegóły: `product-polish.md` §15.1–§15.10.
 
 ---
 
@@ -139,10 +140,10 @@ przy wczytywaniu).
 
 ## 5. ⛔ Co dalej — i czego NIE robić
 
-**M2b jest dostarczony w całości.** Kolejność: **QA wizualne kroków 5.4–10 → dopiero potem M2c.**
+**M2b jest dostarczony w całości.** Kolejność: **QA wizualne kroków 5.4–11 → dopiero potem M2c.**
 
 ⛔ **Nie zaczynać M2c przed QA.** M2c usuwa wartości lokalne z **widoków**; jeżeli QA odrzuci którąś
-decyzję kroków 5.4–10, poprawka wróci do `Themes/` — a sweep zrobiony wcześniej trzeba by powtórzyć
+decyzję kroków 5.4–11, poprawka wróci do `Themes/` — a sweep zrobiony wcześniej trzeba by powtórzyć
 na zmienionej podstawie. To jest ta sama zasada, którą §15.6.4a nazwał dla zgłoszeń użytkownika:
 ⛔ **nie strojić do stanu przejściowego.**
 
@@ -189,7 +190,9 @@ na zmienionej podstawie. To jest ta sama zasada, którą §15.6.4a nazwał dla z
 | **`Radius.Control`** | promień 3 na kwadracie 14 px jest proporcjonalnie większy niż u Fluenta | pytanie wraca **po wszystkich kontrolkach bazowych**, nie wcześniej |
 | **nasycenie zaznaczonego wiersza** | zgłoszone przy QA kroku 1 | 📌 **krok DataGrid**, nie wcześniej |
 | **badge DEV MODE** | „po uspokojeniu kontrolek jeszcze bardziej rzuca się w oczy" | 📌 **M3.2 (Toolbar)** |
-| ⭐ **drabina AKCJI 22 / 26 / 28** | jedyna decyzja rundy 8–10, w której **liczby są moje**, a nie wynikają z pomiaru | ⏳ **pierwsza do oceny przy QA** (§15.9.1) |
+| ⭐ **drabina AKCJI 22 / 28** | po kroku 11 **dwa szczeble**, nie trzy — priorytetu nie niesie już rozmiar | ⏳ **pierwsza do oceny przy QA** (§15.10.1) |
+| ⚠ **`Size.Row.Grid` = 22** | jeśli wiersz siatki nadal wydaje się wysoki, **to jest dźwignia** — `CheckBox` zmierzony, prosi o 14 px i nie rozpycha wiersza | ⏳ osobna decyzja: liczba stoi w **D1** i rządzi wszystkimi siatkami |
+| ⛔ **każde nowe pasmo chromy** | musi dostać `Classes="chrome"` — to cena reguły „kontener deklaruje wysokość dzieci" | ⚠ do zapamiętania, nie do naprawy |
 | **ocena Application Chrome** | użytkownik sam odmówił zamykania oceny na fragmencie | ⛔ **brama §13.3, po M3** |
 
 **⭐⭐ Wspólny mianownik czterech ostatnich wierszy — zjawisko nazwane w §15.6.4a: uspokojenie

@@ -425,15 +425,42 @@ noted.
 ## Current state
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a user-accepted;
-  ⭐ M2b — 18 ITERATIONS DELIVERED (2026-08-02), including a **post-QA proportions round (steps 8–10)**;
-  steps 0–5.3 user-QA'd, **5.4–10 await visual QA**. Next after that QA: **M2c**.**
-  **⭐⭐ THE POST-QA ROUND'S ONE CORRECTION, AND IT OUTRANKS A CATALOG NUMBER — THERE ARE TWO HEIGHT
-  LADDERS, NOT ONE (§15.9.1).** Step 5.4 assumed a button is a control like any other and gave it
+  ⭐ M2b — 19 ITERATIONS DELIVERED (2026-08-02), including **two post-QA rounds (steps 8–10, 11)**;
+  steps 0–5.3 user-QA'd, **5.4–11 await visual QA**. Next after that QA: **M2c**.**
+  **⛔⛔ RATIFIED AND IT OUTRANKS EVERY CATALOG NUMBER (user, 2026-08-02, §15.10.1): COLOUR MAY EXPRESS
+  AN ACTION'S PRIORITY, SIZE MAY NOT.** This *reverses* step 8, which had given `Button.primary` its own
+  height — and that one setter was behind "Execute is bigger than Cancel" in **every** dialog: 38 buttons
+  in 26 files. ⭐ **Deleting one setter fixed them all, which is the test of whether a defect was found in
+  the system or on a screen.** The deeper reason is not preference: a dialog footer is a **series** of
+  actions in one row, and a series must align — the same reason a form field takes `Size.Control`. A height
+  difference inside a row reads as sloppy layout, not as hierarchy. ⛔ **`Size.ControlPrimary` is RETIRED**
+  (guarded by `RetiredTokens`); `Size.ControlProminent` took 28, because *Cancel was too small*, not
+  *Execute too big*. **⭐ The rule that replaces it: A BUTTON'S HEIGHT COMES FROM ITS CONTEXT, NEVER FROM
+  ITS VARIANT** — chrome strip → `Size.ControlToolbar` · dialog footer and form → `Size.ControlProminent` ·
+  grid cell → the row · titlebar → `Size.TitleBar`. The variant carries **colour**.
+  **⚠ `Border.chrome` (renamed from `.toolbar`) is that rule's carrier, and it has a price worth knowing:
+  every chrome strip must be tagged.** Step 8 tagged one and the user immediately found an untagged one
+  ("Run is taller than it should be" in Script Executor). The class also covers **bottom status strips** —
+  Data Import's misaligned footer was the same defect — which is why it names the ROLE (Application Chrome,
+  §0.1.2) rather than one instance. All eight strips are tagged.
+  **⭐ A caption belongs to its field, and the catalog already said so.** The reported "the label looks like
+  it belongs to the previous section" measured as **two owners of one gap**: the caption carried a 4 px
+  margin and its container added 10 on top, so caption→field (14) exceeded field→field (10) and the eye
+  attached the caption upwards. `Margin.FieldGap` already states *a gap has one owner*; this was where it
+  was broken. The new `Margin.LabelGap` closes a proximity **scale** — caption 2 < option 4 < field 8 —
+  pinned as an **ordering**, never as numbers.
+  **⭐ A custom control that plays a base control's role must read the same catalog** — `SearchableComboBox`
+  never went through M2b and carried `MinHeight="24"` from before the catalog existed. And **a filter IS a
+  search field**, which gives `Size.ControlProminent` a third consumer and settles it as a role.
+  **⭐ MEASURED, because the user asked for a re-measurement: the grid `CheckBox` is NOT what makes a row
+  tall.** It asks for exactly **14 px** (its mark), the cell for 20, against a 22 px row floor. **The row is
+  22 because `Size.Row.Grid` says so** (declared in step 7). ⚠ If a row still feels tall the lever is
+  `Size.Row.Grid` — a separate decision, since that number sits in D1 and governs every grid at once.
+  **⚠ Step 8's framing, kept because it is still the live model — TWO HEIGHT LADDERS, NOT ONE (§15.9.1).** Step 5.4 assumed a button is a control like any other and gave it
   `Size.Control` (24). The user's QA named the missing distinction better than the catalog had:
   **a FIELD stands in a series and must align; an ACTION stands alone and is a mouse target.**
-  Fields keep `Size.Control` **24**; actions get **`Size.ControlToolbar` 22** (chrome) ·
-  **`Size.ControlProminent` 26** (dialog footer — Close/Cancel/OK) · **`Size.ControlPrimary` 28**
-  (main action). ⚠ **D1 is NOT changed** — 24/22/28 still mean what they meant; one number (26) and a
+  Fields keep `Size.Control` **24**; actions get **`Size.ControlToolbar` 22** (chrome) and
+  **`Size.ControlProminent` 28** (dialog footer, form) — two rungs after step 11 retired the third. ⚠ **D1 is NOT changed** — 24/22/28 still mean what they meant; one number (26) and a
   role assignment D1 never asked about were added. ⭐ `Size.ControlProminent` is a *role* rather than
   "a taller button" precisely because its second consumer is a different kind of control (the search
   field). **⚠⚠ And a toolbar button must never lift the bar: the CONTAINER declares its children's
@@ -3343,15 +3370,15 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7084 as of 2026-08-02
-  (after Product Polish M2b steps 8–10 — the post-QA proportions round, +2; 7082 after step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7085 as of 2026-08-02
+  (after Product Polish M2b step 11 — the second QA round, +1; 7084 after steps 8–10, +2; 7082 after step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
   step 5.7 — Expander + the alias guard, +2; 7078 after step 5.6 — ToggleButton, +1; 7077 after step 5.5 —
   NumericUpDown, +1; 7076 after step 5.4 — Button, +1; 7075 after step 5.3 — ComboBox, +1; 7074 after step 5.2 — TextBox + FluentBridge, +2; 7072 after step 5.1 — RadioButton, +1; 7071 after step 4 — ToolTip, +1; 7070 after step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
   partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
   segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**7000 + 54 + 30**).
+  three documented partitions (**7000 + 54 + 31**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
