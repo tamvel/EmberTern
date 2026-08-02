@@ -904,6 +904,38 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// ⭐ Pasek postępu sekcji 4 trzyma swoją STAŁĄ szerokość (§8.4.6, §19.7).
+    ///
+    /// <para>⚠⚠ Test istnieje z powodu jednej konkretnej pułapki: <b>Avalonia przycina <c>Width</c>
+    /// przez <c>MinWidth</c></b>, a Fluent nadaje <c>ProgressBar</c> własne minimum. Bez
+    /// <c>MinWidth=0</c> w stylu deklaracja „120 px" po cichu wyszłaby szersza — i nic by nie zawiodło.
+    /// To dokładnie ten defekt, którym M2b zapłacił strzałkę drzewa metadanych (20 px urosło do 100 przez
+    /// <c>MinWidth</c> na bazowym <c>Button</c>).</para>
+    ///
+    /// <para>⭐ Stała szerokość nie jest estetyką, tylko warunkiem układu: pasek rosnący z treścią
+    /// przesuwałby chipy stanu przy każdej operacji, czyli §13.3 („Zero Layout Shift") rozłożony
+    /// w czasie.</para>
+    /// </summary>
+    [Fact]
+    public async Task StatusProgressBar_KeepsItsFixedSize_DespiteFluentsMinimums()
+    {
+        await _session.Dispatch(() =>
+        {
+            var bar = new ProgressBar { Classes = { "status" }, IsIndeterminate = true };
+            // ⚠ W kontenerze, który NIE rozciąga — inaczej mierzylibyśmy okno, a nie kontrolkę.
+            var host = new StackPanel { Orientation = Orientation.Horizontal, Children = { bar } };
+            var window = new Window { Content = host };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(120, bar.Bounds.Width);
+            Assert.Equal(4, bar.Bounds.Height);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// ⭐⭐ Znak debuggera JEST ikoną Execute — ta sama geometria, nie kopia (§19.6).
     ///
     /// <para>Decyzja użytkownika w rundzie QA M3.1e: <i>„Debugger powinien być po prostu ikoną Execute

@@ -1926,7 +1926,42 @@
           </StackPanel>
         </StackPanel>
 
-        <!-- ── 4. POSTĘP — M3.1f ────────────────────────────────────────────────────────────────────── -->
+        <!-- ── 4. POSTĘP (§8.4.6) — „co się teraz liczy" ────────────────────────────────────────────
+             ⭐ GLOBALNA: operacja jest widoczna niezależnie od aktywnej zakładki. To trzecie
+             zastosowanie tego samego podziału (§19.5.1, §19.6.1) — „Loading… N rows" to POSTĘP i mieszka
+             tutaj, a „143 rows in 46 ms" to WYNIK i zostaje przy edytorze SQL w sekcji 2.
+             ⚠⚠ Przycisk Cancel wiąże `Progress.CancelCommand`, czyli TEN SAM obiekt komendy, który
+             naciska przycisk w toolbarze — dwa zasięgi jednej komendy, nie dwie implementacje. Zamyka to
+             realną lukę: `ShowCancelButton` jest bramkowane `IsQueryTabActive`, więc przełączenie
+             zakładki w trakcie długiego zapytania ODBIERAŁO możliwość anulowania.
+             ⚠ Cancel w pasku statusu nie łamie §8.4.5 („chip nigdy nie jest przyciskiem") — tamten zakaz
+             dotyczy operacji NIEODWRACALNEJ, a anulowanie jest zaworem bezpieczeństwa. -->
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8"
+                    Margin="16,0,0,0" VerticalAlignment="Center"
+                    IsVisible="{Binding Progress.IsRunning}">
+          <TextBlock Text="{Binding Progress.Label}"
+                     Classes="subtle"
+                     FontSize="{DynamicResource Text.Caption.Size}"
+                     VerticalAlignment="Center" />
+          <ProgressBar Classes="status"
+                       IsIndeterminate="{Binding Progress.IsIndeterminate}"
+                       Minimum="0" Maximum="100"
+                       Value="{Binding Progress.Percent}" />
+          <!-- ⭐ Bez własnych `Width`/`Height`: `Button.icon` bierze wysokość chromy
+               (`Size.ControlToolbar`) i nie ma podłogi szerokości, więc jego rozmiar wyznacza ikona,
+               a wysokość — pasek, w którym stoi. To decyzja architektoniczna 2 z M2b („kontener
+               rozstrzyga wielkość, element ją przyjmuje"); nadpisanie tutaj byłoby jej złamaniem. -->
+          <Button Classes="icon"
+                  Command="{Binding Progress.CancelCommand}"
+                  IsVisible="{Binding Progress.HasCancel}"
+                  ToolTip.Tip="{x:Static app:UiStrings.StatusBarCancelOperationTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.X}"
+                              Width="{DynamicResource Size.Icon.Sm}"
+                              Height="{DynamicResource Size.Icon.Sm}" />
+          </Button>
+        </StackPanel>
+
+        <!-- ── zarezerwowane ────────────────────────────────────────────────────────────────────── -->
         <!-- ⛔ Nazwa aplikacji i numer wersji NIE wracają tutaj (decyzja D3) — mieszkają w oknie About,
              gdzie są tematem. Pasek statusu mówi, co dzieje się TERAZ; wersja nie zmienia się w sesji. -->
       </Grid>

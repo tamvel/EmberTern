@@ -1101,13 +1101,31 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>Cancel is clickable exactly once per run.</summary>
     public bool CanCancelQuery => IsExecuting && !IsCancelling;
 
+    /// <summary>
+    /// Sekcja postępu paska statusu (§8.4.6). ⭐ Jest GLOBALNA — operacja widoczna niezależnie od
+    /// aktywnej zakładki. Tu trafia stan „operacja TRWA"; wynik zakończonej operacji zostaje
+    /// w <see cref="QueryStatsText"/>, które jest lokalne dla edytora SQL (§19.7.1).
+    /// </summary>
+    public StatusProgressViewModel Progress { get; } = new();
+
     // Drive the live elapsed timer off IsExecuting so every SQL Editor exit path (success, error,
     // cancel, finally) starts/stops it with no scattering.
+    //
+    // ⭐ Od M3.1f ten sam punkt prowadzi sekcję postępu, i z tego samego powodu: `IsExecuting` jest
+    // JEDYNYM miejscem, przez które przechodzi każde wejście i wyjście z wykonania — sukces, błąd,
+    // anulowanie i `finally`. Podpięcie postępu tutaj oznacza, że nie da się dodać ścieżki wyjścia,
+    // która zostawi zapalony pasek. ⛔ Nie wołać `Progress.Begin/End` z gałęzi wykonania.
     partial void OnIsExecutingChanged(bool value)
     {
         if (value) ExecutionTimer.Start();
         else ExecutionTimer.Stop();
         if (!value) IsCancelling = false;   // every exit path resets the cancel latch
+
+        // ⚠ Komenda jest PRZEKAZYWANA, nie odtwarzana: pasek statusu i przycisk w toolbarze naciskają
+        // ten sam obiekt `CancelQueryCommand`, więc zatrzask `IsCancelling` gasi oba naraz.
+        if (value) Progress.Begin(UiStrings.ExecutingStatus, CancelQueryCommand);
+        else Progress.End();
+
         OnPropertyChanged(nameof(CanCancelQuery));
     }
 
@@ -6519,7 +6537,10 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         IsExecuting = true;
-        QueryStatsText = UiStrings.ExecutingStatus;
+        // ⭐ M3.1f: „Executing…" to POSTĘP i mieszka w sekcji 4 (ustawia je `OnIsExecutingChanged`).
+        // Tutaj CZYŚCIMY wynik poprzedniego wykonania — zostawiony wisiałby jako „143 rows in 46 ms"
+        // obok paska mówiącego, że trwa coś innego, czyli kłamałby o bieżącej chwili.
+        QueryStatsText = string.Empty;
         ClearError();
         _executionCts = new CancellationTokenSource();
 
@@ -6618,7 +6639,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (_executionCts is not { IsCancellationRequested: false } cts) return;
         IsCancelling = true;
-        QueryStatsText = UiStrings.CancellingStatus;
+        Progress.Report(UiStrings.CancellingStatus);
         cts.Cancel();
     }
 
@@ -6634,8 +6655,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // A Full load's live "Loading… N rows" counter. Created on the UI thread → Progress<T>
     // marshals its callbacks back here, so QueryStatsText is written on the UI thread.
+    // ⭐ Od M3.1f licznik ładowania idzie do SEKCJI POSTĘPU, nie do `QueryStatsText`. To trzecie
+    // zastosowanie tego samego podziału (§19.5.1, §19.6.1): „Loading… N rows" to POSTĘP, więc należy do
+    // powierzchni globalnej; „143 rows in 46 ms" to WYNIK i zostaje przy edytorze SQL.
+    // ⚠ Tryb pozostaje NIEOKREŚLONY, bo strumieniowy odczyt nie zna sumy wierszy — nie ma z czego
+    // policzyć procentu i udawanie go byłoby zmyślaniem (§19.7.2).
     private IProgress<long> MakeLoadProgress()
-        => new Progress<long>(n => QueryStatsText = string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, n));
+        => new Progress<long>(n => Progress.Report(
+            string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, n)));
 
     // Soft-threshold choice ids (returned by the "keep loading?" dialog; wording can change freely).
     internal const string LoadAllKeepChoiceId = "keep";
@@ -6697,7 +6724,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IsExecuting = true;
         ClearError();
         _executionCts = new CancellationTokenSource();
-        QueryStatsText = string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, 0);
+        QueryStatsText = string.Empty;   // wynik poprzedniego wykonania — patrz komentarz w ExecuteQueryAsync
         try
         {
             var (result, reads) = await ExecuteWithMetricsAsync(

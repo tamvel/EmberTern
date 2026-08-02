@@ -1,4 +1,4 @@
-<Styles xmlns="https://github.com/avaloniaui"
+﻿<Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:EmberTern.App.Controls"
         xmlns:aecc="using:AvaloniaEdit.CodeCompletion">
@@ -477,6 +477,34 @@
   <Style Selector="TextBlock.shortcut-chip">
     <Setter Property="Foreground" Value="{DynamicResource OnAccentSubtleBrush}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⭐ Pasek postępu SEKCJI 4 PASKA STATUSU (§8.4.6, M3.1f). Klasa, a nie styl na wszystkich
+       `ProgressBar` — to osobna ROLA: cienki wskaźnik w chromie okna, a nie pasek w dialogu. Trzy inne
+       `ProgressBar` (Export, Batch, Data Import) mieszkają w dialogach, mają inną gęstość i NIE są
+       przedmiotem tej iteracji; ujednolicenie ich to temat M3b/§13.3, nie doklejka tutaj (R7).
+
+       ⚠⚠ `MinWidth`/`MinHeight` = 0 SĄ KONIECZNE, nie porządkowe: Avalonia przycina `Width` przez
+       `MinWidth`, a Fluent nadaje `ProgressBar` własne minimum — bez tego stała szerokość 120 px
+       (§8.4.6) po cichu wyszłaby szersza. To ta sama pułapka, którą M2b zapłacił strzałką drzewa
+       metadanych (20 px urosło do 100 przez `MinWidth` na bazowym `Button`).
+
+       ⚠ Szerokość jest STAŁA z powodu układu, nie estetyki: pasek rosnący z treścią przesuwałby chipy
+       stanu przy każdej operacji, czyli §13.3 („Zero Layout Shift") rozłożony w czasie. Pojawienie się
+       sekcji przesuwa układ RAZ, o znaną wartość. -->
+  <Style Selector="ProgressBar.status">
+    <Setter Property="Width" Value="120" />
+    <Setter Property="MinWidth" Value="0" />
+    <!-- ⚠ `4` LOKALNIE I ŚWIADOMIE. Katalog nie ma roli dla grubości wskaźnika, a jedynym kandydatem
+         przy tej liczbie jest `Space.Xs` (odstęp) — użycie go byłoby BŁĘDNĄ ROLĄ, czyli gorszym stanem
+         niż wartość lokalna (R12). Nowa rola z jednym konsumentem łamałaby R3; czy paski postępu
+         zasługują na wspólną metrykę, rozstrzyga §13.3 na komplecie (Export, Batch, Data Import). -->
+    <Setter Property="Height" Value="4" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 

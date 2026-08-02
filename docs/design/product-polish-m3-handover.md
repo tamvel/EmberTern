@@ -1,4 +1,4 @@
-# Product Polish — M3 — DOKUMENT STARTOWY (jedyny punkt wejścia)
+﻿# Product Polish — M3 — DOKUMENT STARTOWY (jedyny punkt wejścia)
 
 > **To jest prompt dla Claude'a, nie dla użytkownika.** Wchodzisz we **właściwe M3**: iteracja 0
 > (pomiar) jest **ZAKOŃCZONA** — jej pełny zapis to `product-polish.md` **§19.0**. Ten plik jest
@@ -35,14 +35,15 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | **M3.1e** — M3.1a–M3.1d są **wypchnięte na oba remote'y** (`bca5210`); commit M3.1e czeka na push świadomie, po akceptacji |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a ✅ · M3.1b ✅ · M3.1c ✅ · M3.1d ✅ · M3.1e ✅** (wszystkie odebrane przez użytkownika) |
+| **Ostatni commit** | **M3.1f** — wypchnięte na oba remote'y jest `bca5210` (koniec M3.1d); commity M3.1e i M3.1f czekają na push świadomie |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅** (wszystkie odebrane przez użytkownika). ⭐ **Cztery sekcje §8.4.3 istnieją — M3.1 domknięte co do zakresu** |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24**, temat 20 px wraca po M3 · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7111**, zielony w trzech partycjach (**7011 + 46 + 54**) — po M3.1e/§19.6 |
+| **Suite** | **7124**, zielony w trzech partycjach (**7023 + 47 + 54**) — po M3.1f/§19.7 |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⭐ **M3.1f — sekcja postępu (§8.4.6) + JEDNA operacja referencyjna.** Projekt paska jest w §8.4.6 (wysokość 4, szerokość **stała 120**, `AccentBrush` na `ChromeStrongBrush`, tryb nieokreślony **nigdy przez `Width`**, anulowanie jako `Button.icon` z `Icon.X`). Operacja referencyjna = **wykonanie zapytania SQL**; inwentarz źródeł postępu jest w §3.9 tego pliku. Reszta operacji to **M3b** (D4) |
+| **⏸ DŁUG Z ODBIORU M3.1f** | ⚠⚠ **Pionowe wyśrodkowanie `localhost:3050`** względem nazwy i badge'a DEV MODE — użytkownik zmienił zdanie po dłuższym używaniu i poprosił, żeby wziąć to „przy okazji następnej iteracji, bez zatrzymywania się". ⛔ **Musi zachować JEDEN `TextBlock`** — dwa `TextBlocki` z `VerticalAlignment="Center"` przywracają defekt DPI z §19.3.3, i to na monitorze zgłaszającego (125%). Kandydat: `Inline.BaselineAlignment` (istnienie API potwierdzone, zachowanie do zmierzenia). Pełny zapis: **§19.7.9** |
+| **NASTĘPNY KROK** | ⚠ **Do ustalenia z użytkownikiem.** Plan przewiduje po M3.1f przejście do **M3.2a** (H‑3 — stabilny układ paska tytułu i toolbara dokumentu, §3.6); użytkownik napisał natomiast „jedziemy dalej z **M3.1g**", którego w planie nie ma. Najprawdopodobniejsze odczytanie: mała iteracja domykająca M3.1 (dług powyżej + ewentualne drobiazgi), po niej M3.2a |
 
 ### 1.1 Co dostarczyły poprzednie etapy — trzy zdania
 
@@ -366,7 +367,7 @@ oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
 Pominięta, wpada do partycji głównej: nic nie zawiedzie, ale podział przestaje robić to, po co istnieje.
 To ta sama pułapka, co niedziałające wykluczenie `ContextMenuPresentationTests` (§18.1.6) — tam nazwa
 przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały etap.
-**Stan po M3.1a: `TabStripPresentationTests` DOPISANY**; po M3.1e partycje mierzą **7011 + 46 + 54 = 7111**.
+**Stan po M3.1a: `TabStripPresentationTests` DOPISANY**; po M3.1f partycje mierzą **7023 + 47 + 54 = 7124**.
 
 ⭐ **Kryterium, czy nowa klasa idzie do filtra, jest jedno: czy konstruuje kontrolki Avalonii.**
 `TransactionChipTests` (M3.1d) **nie idzie** — pinuje funkcję **statyczną**, więc nie potrzebuje sesji
@@ -445,7 +446,8 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 3 | **M3.1c** | Rail (§8.4.1–§8.4.2) + ⭐ **agregacja po `WorkspaceTabs` przeniesiona tu z M3.1e** (§19.4.2) | — |
 | ✅ 4 | **M3.1d** | Chip transakcji z czasem (§8.4.5); ⭐ **podział własności: chip = fakt globalny, pasek edytora SQL = licznik lokalny** (§19.5) | — |
 | ✅ 5 | **M3.1e** | Chipy Trace / Debugger (znak tożsamości + etykieta); ⭐ **chipy NIE dziedziczą pędzli railu — inny próg kontrastu** · ⛔ ikona debuggera zamknięta, jest teraz referencją do `Icon.Play` (§19.6) | — |
-| ⭐ **6** | **M3.1f** | **← TU ZACZYNASZ.** Sekcja postępu (§8.4.6) + **jedna** operacja referencyjna (wykonanie zapytania SQL). Inwentarz źródeł: §3.9 | — |
+| ✅ 6 | **M3.1f** | Sekcja postępu + operacja referencyjna; ⭐ **infrastruktura dla M3b — oba tryby**, choć operacja referencyjna umie tylko nieokreślony · ⭐ Cancel to **dwa zasięgi jednej komendy**, zamyka lukę bramkowania (§19.7) | — |
+| ⭐ **6b** | **M3.1g?** | **← TU ZACZYNASZ, po ustaleniu zakresu.** Dług z odbioru M3.1f: pionowe wyśrodkowanie `localhost:3050` (§19.7.9). Jeśli użytkownik miał na myśli przejście dalej — to jest M3.2a poniżej | — |
 | 7 | **M3.2a** | H‑3 — stabilny układ paska tytułu **i** toolbara dokumentu (72 bramki, §3.6) | — |
 | 8 | **M3.2b** | §7.5 — semantyka kolorów na pasku narzędzi | **DC** |
 | 9 | **M3.2c** | H‑5 — Commit / Rollback | **DD** |

@@ -746,6 +746,12 @@ internal static class UiStrings
     // przed podpięciem chipa). Lepszy niż chip pokazujący „0 s", który sugerowałby świeży start.
     public const string StatusBarTransactionChipBare = "Transaction";
 
+    // ⭐ Sekcja postępu (§8.4.6) — M3.1f. ⚠ Tekst jest ogólny („operation"), bo od M3b ta sekcja
+    // obsługuje każdą długo trwającą operację, nie tylko zapytanie SQL. Skrótu klawiaturowego nie
+    // podajemy: anulowanie nie ma gestu w `CommandCatalog`, a tooltip obiecujący nieistniejący
+    // klawisz uczyłby nieprawdy (reguła z etapu Keyboard Manager, gotcha #284).
+    public const string StatusBarCancelOperationTooltip = "Cancel the running operation";
+
     // ⭐ Chipy Trace i Debuggera (§8.4.3 sekcja 3) — M3.1e. Etykieta niesie sam FAKT („gdzieś żyje
     // sesja"), a szczegół idzie do tooltipa, który czyta `StatusText` z VM-a odpowiedniej zakładki.
     // ⚠ Rzeczownik, nie czasownik: chip mówi, CO jest prawdą, a nie co się dzieje — „co się dzieje"

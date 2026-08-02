@@ -4877,3 +4877,157 @@ a sonda jest udokumentowanym kształtem zawieszającym suite (§9.1/4 handovera)
 3. ⏸ **Strażnik progów §10** — osobna praca infrastrukturalna, do backlogu i §13.3.
 4. ⏸ **`TransactionActiveBrush` w Light 4,18:1** — do §13.3, razem z semantyką kolorów.
 5. ⛔ **Ikona debuggera zamknięta.** Rusza się kropka, nigdy znak bazowy.
+
+---
+
+### §19.7 Iteracja 6 (M3.1f) — sekcja postępu + operacja referencyjna (2026-08-02)
+
+> **Zakres:** §8.4.6 — sekcja 4 paska statusu plus **jedna** operacja referencyjna (wykonanie zapytania
+> SQL), zgodnie z ratyfikowanym podziałem **D4**. Odebrane przez użytkownika.
+> ⭐ **Tym samym M3.1 jest domknięte co do zakresu** — wszystkie cztery sekcje §8.4.3 istnieją.
+
+#### §19.7.1 ⭐ Trzeci raz ten sam podział własności — i tym razem jest już regułą, nie obserwacją
+
+`QueryStatsText` pełniło **dwie role naraz**: w trakcie `„Loading… 12 345 rows"` (POSTĘP), po zakończeniu
+`„143 rows in 46 ms"` (WYNIK) — i było bramkowane `IsQueryTabActive`, więc postęp znikał po przełączeniu
+zakładki. Dokładnie kształt z §19.5.1 (transakcja) i §19.6.1 (debugger).
+
+> **Użytkownik:** *„Sekcja postępu → pokazuje to, co dzieje się teraz. `QueryStatsText` → pokazuje
+> rezultat ostatnio zakończonej operacji… Żadna informacja nie znika ani nie zmienia właściciela
+> w zależności od aktywnej zakładki."*
+
+Z **dwunastu** pisarzy `QueryStatsText` przeniesiono **cztery** — te opisujące stan w toku
+(`ExecutingStatus`, `CancellingStatus`, dwa liczniki ładowania). Osiem pisarzy wyniku zostało nietkniętych.
+
+⚠ **Jedna konsekwencja wykonana świadomie: `QueryStatsText` jest teraz CZYSZCZONE na starcie wykonania.**
+Zostawiony wynik poprzedniego zapytania wisiałby jako „143 rows in 46 ms" obok paska mówiącego, że trwa
+coś innego — kłamałby o bieżącej chwili. Po anulowaniu albo błędzie pole jest puste, i to jest uczciwe.
+
+#### §19.7.2 ⚠⚠ Operacja referencyjna NIE POTRAFI pokazać procentu — pomiar czterech ścieżek
+
+| Ścieżka | Tryb | Zna sumę? |
+|---|---|---|
+| **Wykonanie zapytania SQL** (referencyjna) | **tylko nieokreślony** | ⛔ `IProgress<long>` to licznik wierszy; strumieniowy odczyt nie zna sumy, dopóki nie skończy |
+| Export (`ExportDialog`) | tylko nieokreślony (`IsIndeterminate="True"` na stałe) | nie |
+| Batch (`BatchResultsDialog`) | oba (`PreparationIsIndeterminate` + `PreparationTotal`) | tak |
+| Data Import | oba (`ProgressPercent` 0–100) | tak |
+
+§8.4.6 żąda „postępu procentowego, trybu nieokreślonego i anulowania"; operacja wyznaczona przez D4 może
+wyćwiczyć tylko drugie i trzecie.
+
+⭐ **Ratyfikowane: budujemy KOMPLETNĄ infrastrukturę.** Użytkownik: *„Batch i Data Import są już
+istniejącymi konsumentami trybu procentowego, więc nie projektujemy czegoś hipotetycznego… Nie chciałbym
+budować połowy rozwiązania i wracać do przebudowy tej samej sekcji w M3b tylko dlatego, że pierwsza
+operacja nie zna wartości Maximum."*
+
+⚠ **To nie jest złamanie dyrektywy „nic na zapas" (#233)** i warto rozumieć różnicę: #233 broni przed
+właściwością, dla której **nie wiadomo, kto ją wywoła**. Tutaj konsumenci istnieją, są policzeni i mają
+dziś własne paski procentowe — brakuje wyłącznie podłączenia, które jest zakresem M3b z definicji D4.
+⛔ Mimo to **ścieżka procentowa nie ma konsumenta NA ŻYWO**; wykonuje ją wyłącznie test. Nie zakładać,
+że jest sprawdzona wizualnie.
+
+#### §19.7.3 ⭐ Anulowanie — dwa zasięgi JEDNEJ komendy, i zamknięcie realnej luki funkcjonalnej
+
+```csharp
+ShowCancelButton => IsQueryTabActive && IsExecuting
+```
+
+**Przełączenie zakładki w trakcie długiego zapytania ODBIERAŁO możliwość anulowania** — trzeba było
+wrócić na zakładkę SQL. To pierwszy przypadek w M3, gdy bramkowanie zakładką ma konsekwencję
+**funkcjonalną**, a nie tylko czytelnościową.
+
+⭐ **`StatusProgressViewModel` NIE MA własnej komendy Cancel** — przyjmuje `ICommand` właściciela.
+Pasek statusu i toolbar naciskają **ten sam obiekt**, więc `CanExecute`, zatrzask `IsCancelling`
+i implementacja są jedne. Użytkownik: *„To są dwa zasięgi tej samej komendy, a nie dwie różne
+implementacje."* ⛔ Nie dodawać tu drugiej komendy — powstałby drugi właściciel stanu anulowania.
+
+⚠ **Przycisk w toolbarze ZOSTAJE** (decyzja użytkownika): jest naturalny podczas pracy w edytorze
+i użytkownicy są do niego przyzwyczajeni; pasek statusu **uzupełnia**, nie zastępuje.
+⚠ To nie łamie §8.4.5 („chip nigdy nie jest przyciskiem") — tamten zakaz dotyczy operacji
+**nieodwracalnej**, a anulowanie jest zaworem bezpieczeństwa, odwrotnością Commita.
+
+#### §19.7.4 Jeden punkt wpięcia — `OnIsExecutingChanged`
+
+`Progress.Begin/End` wisi tam, gdzie już wisi `ExecutionTimer`, i z tego samego powodu: `IsExecuting`
+jest **jedynym** miejscem, przez które przechodzi każde wejście i wyjście z wykonania — sukces, błąd,
+anulowanie i `finally`. ⭐ Dzięki temu **nie da się dodać ścieżki wyjścia, która zostawi zapalony pasek**.
+⛔ Nie wołać `Begin`/`End` z gałęzi wykonania.
+
+#### §19.7.5 ⚠⚠ POMIAR, KTÓRY URATOWAŁ „STAŁĄ SZEROKOŚĆ" — Fluent daje `ProgressBar` `MinWidth=200`
+
+Styl niesie `MinWidth="0"` jako zabezpieczenie. **Zweryfikowane przez usunięcie go:**
+
+```
+Assert.Equal() Failure  Expected: 120   Actual: 200
+```
+
+**Avalonia przycina `Width` przez `MinWidth`**, więc bez tego deklarowana w §8.4.6 stała szerokość
+120 px renderowałaby się jako **200 px** — po cichu, przy zielonym buildzie i zielonych pozostałych
+testach. ⭐ To ten sam defekt, którym M2b zapłacił strzałkę drzewa metadanych (20 px urosło do 100 przez
+`MinWidth` na bazowym `Button`) — **drugie wystąpienie tej samej pułapki w tym etapie**, co czyni ją
+kandydatką na stałą pozycję listy kontrolnej przy każdym `Width` na kontrolce Fluenta.
+
+⚠ Stała szerokość nie jest estetyką: pasek rosnący z treścią przesuwałby chipy stanu przy każdej
+operacji, czyli §13.3 („Zero Layout Shift") rozłożony w czasie.
+
+#### §19.7.6 Dwie rzeczy świadomie NIE zrobione
+
+**(a) Nie powstał token na grubość paska (4 px).** Jedyny kandydat przy tej liczbie to `Space.Xs`
+(odstęp) — użycie go byłoby **błędną rolą**, czyli stanem gorszym niż wartość lokalna (R12); nowa rola
+z jednym konsumentem łamałaby R3. Wartość została z powodem w miejscu. Pytanie *„czy paski postępu mają
+wspólną metrykę"* idzie do **§13.3** na komplecie czterech (status, Export, Batch, Data Import) — razem
+z pytaniem o chipy z §19.3.4 i §18.R/K11.
+
+**(b) Przycisk Cancel nie dostał własnych `Width`/`Height`.** `Button.icon` bierze wysokość chromy
+(`Size.ControlToolbar`) i nie ma podłogi szerokości, więc jego rozmiar wyznacza ikona, a wysokość —
+pasek, w którym stoi. Nadpisanie byłoby złamaniem **decyzji architektonicznej 2** z M2b („kontener
+rozstrzyga wielkość, element ją przyjmuje").
+
+⚠ Styl jest klasą `ProgressBar.status`, **nie** stylem na wszystkich `ProgressBar`: trzy pozostałe żyją
+w dialogach i mają inną gęstość. Ujednolicenie to M3b/§13.3, nie doklejka tutaj (R7).
+
+#### §19.7.7 Strażnicy
+
+**`StatusProgressTests`** (12 przypadków, czysta logika, zero Avalonii) opisuje kontrakt modelu **teraz,
+gdy konsument jest jeden** — a nie za pięć, gdy będzie już utrwalony. Pinuje w szczególności: tryb
+nieokreślony jako bezpieczny domyślny, **przycinanie procentu do 0–100** (producent liczy z dwóch liczb,
+z których jedna bywa oszacowana), reset trybu przy kolejnym `Begin` (inaczej zapytanie po imporcie
+pokazałoby pasek stojący na wartości tamtej operacji) oraz ⚠ **zwolnienie komendy w `End()`** — to ten
+sam kształt, co odpinanie subskrypcji railu w §19.4.2: pasek żyje tak długo jak okno, więc trzymana
+komenda utrzymywałaby przy życiu VM zakładki zamkniętej w trakcie operacji.
+
+**`StatusProgressBar_KeepsItsFixedSize_DespiteFluentsMinimums`** — §19.7.5, zweryfikowany usunięciem
+zabezpieczenia.
+
+#### §19.7.8 Definition of Done
+
+| # | Warunek | |
+|---|---|---|
+| 1 | zakres iteracji zamknięty | ✅ sekcja + operacja referencyjna |
+| 2 | pozostawione wartości lokalne mają powód w miejscu | ✅ grubość paska `4` (R3/R12) |
+| 3 | baza `DesignTokenComplianceTests` = stan faktyczny | ✅ bez zmian |
+| 4 | build 0/0 | ✅ |
+| 5 | testy zielone w trzech partycjach | ✅ **7023 + 47 + 54 = 7124** (+13) |
+| 6 | smoke + oba motywy | ✅ QA użytkownika: postęp przeżywa zmianę zakładki, Cancel działa z obu miejsc jako jedna komenda |
+| 7 | wpis w §19 | ✅ ta sekcja |
+| 8 | commit; push po akceptacji | ✅ / ⏸ |
+
+#### §19.7.9 ⏸ PRZENIESIONE DO NASTĘPNEJ ITERACJI — pionowe wyrównanie `localhost:3050`
+
+> **Użytkownik, przy odbiorze:** *„Zmieniam zdanie co do `localhost:3050`… powinien być jednak
+> wyśrodkowany pionowo względem nazwy bazy i badge'a DEV MODE… obecne wyrównanie do linii bazowej, choć
+> typograficznie poprawne, sprawia wrażenie lekkiego opadnięcia."* Wyraźnie oznaczone jako drobny polish,
+> **bez zatrzymywania iteracji**.
+
+⚠⚠ **To ODWRACA decyzję z §19.3.3 i ma pułapkę, której nie wolno wdepnąć drugi raz.** Naiwna realizacja —
+rozbicie na dwa `TextBlocki` z `VerticalAlignment="Center"` — przywraca **dokładnie** defekt tam
+zmierzony: dwa pudełka o różnych wysokościach (12 vs 11) i różnych pozycjach (6 vs 7), a
+`UseLayoutRounding` przycina **każdy element osobno**, więc przy **125% — czyli na monitorze
+zgłaszającego** — topy lądują po przeciwnych stronach zaokrąglenia i różnica rośnie do całego piksela.
+
+⭐ **Rozwiązanie musi zachować JEDEN `TextBlock`.** Zweryfikowane, że API istnieje:
+`Avalonia.Controls.Documents.Inline.BaselineAlignment` — pozwala wyśrodkować mniejszy `Run` **wewnątrz
+wspólnego pudełka**, czyli daje efekt optyczny bez oddawania jednego zaokrąglenia na element.
+⚠ Istnienie właściwości jest potwierdzone; **jej zachowanie przy tej parze rozmiarów pozostaje do
+zmierzenia** przy wdrożeniu. Gdyby nie dała efektu, następnym kandydatem jest korekta w obrębie tego
+samego pudełka — **nigdy** dwa osobne `TextBlocki`.
