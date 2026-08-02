@@ -34,8 +34,9 @@ verbatim, in the archive below.
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
 | **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
-| **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0 + M1 + M2a user-accepted; ⭐ M2b ALL 15 ITERATIONS DELIVERED (steps 5.4–7 await visual QA); M2c next.** ⭐ **§16 is the `FluentBridge` PROJECT PATTERN with its THREE routes — read it before restyling any base control**; §15 is the M2b as-built and **§15.-1 its state table** (every iteration, commit and QA verdict in one place); §14 is M2a. The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
-| **`docs/design/product-polish-m2b-handover.md`** | **⭐ START HERE for the next Product Polish session.** Entry point into the rest of M2b — what shipped (9 iterations + commits), the `FluentBridge` pattern in one page, the per-control procedure, known limits, and the next control (**`Button`**, then `NumericUpDown` · `ToggleButton` · `Expander`). Written so implementation starts without re-reading the design doc. | At the start of every remaining M2b session. |
+| **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0 + M1 + M2a + 🔒 M2b all COMPLETE and user-accepted (M2b closed 2026-08-02, 21 iterations). ⭐ M2c is next — the de-localization sweep.** ⭐⭐ **§17 is the M2b CLOSING SUMMARY — read it before any further Polish work**: what shipped, the four architectural decisions, the **11 ratified rules R1–R11**, and the eight lessons that cost the most. The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
+| **`docs/design/product-polish-m2c-handover.md`** | **⭐ START HERE for the next Product Polish session.** Entry point into **M2c** — why the sweep exists (a local value outranks a style setter, proved five times), the measured targets, the ratified rules it must not re-open, what M2c explicitly does NOT do, the work order, an 8-point DoD and the ten traps M2b already paid for. | At the start of every M2c session. |
+| **`docs/design/product-polish-m2b-handover.md`** | **🔒 CLOSED** — the M2b entry document, kept as the record of that etap's architecture. ⚠ Its "what next" and "open items" sections were superseded by `product-polish.md` §17.3/§17.5. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (289 entries, #1–#302), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
@@ -424,295 +425,60 @@ noted.
 
 ## Current state
 
-- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a user-accepted;
-  ⭐ M2b — 21 ITERATIONS DELIVERED (2026-08-02), including **four post-QA rounds (8–10, 11, 12, 13)**;
-  steps 0–5.3 user-QA'd, **5.4–13 await visual QA**. Next after that QA: **M2c**.**
-  **⛔⛔ A RULE WRITTEN NEGATIVELY ALWAYS LEAKS — IT LEAKED TWICE AND THE SECOND TIME IT WAS A REGRESSION
-  (§15.12.1).** The base `Button` style carried the ACTION geometry (`MinHeight` + `MinWidth` + `Padding`),
-  i.e. **dialog-footer dimensions imposed on every button in the application**, with every non-action button
-  having to opt out. The sidebar's expander arrow declares its own `Width=20 Height=20`, and **Avalonia clamps
-  `Width` by `MinWidth`** — so the base style silently grew it to 100×28 and it collided with the row's text.
-  ⭐ **The fix reverses the rule's DIRECTION rather than adding a fifth exception:** the geometry now lives on
-  the classes that ARE actions (`.primary`, `.flat` — every dialog footer in this app uses them, verified),
-  and the base style keeps only what is true of every button (font, radius, border, content alignment).
-  ⛔ **Never put `MinHeight`/`MinWidth` back on the base `Button`** — that is the exact setter that broke the
-  tree. Pinned by a test asserting BOTH halves; deleting the rule would satisfy the first half alone.
-  **⭐ A FLOOR ONLY EQUALISES IF IT SITS ABOVE THE NATURAL WIDTH OF THE LABELS IT MEANS TO EQUALISE
-  (§15.12.2).** Measured: `Save` 80 (on the floor) vs `Cancel` 98 (72 text + 24 padding + 2 border) — the
-  whole rest of the render path was identical (base style, both variants, `ContentPresenter`, padding, border,
-  radius, font, content alignment). The floor at 80 was **a dead letter: it looked like a rule and did
-  nothing.** `Size.ActionMinWidth` 80 → 100; measured after: **Save = Cancel = 100×28**. It stays a floor, so
-  a genuinely long label still expands.
-  ⚠ **Three assertions had to be repaired and all three were measuring the wrong subject** — two compared an
-  UNCLASSED button against `.primary` (an unclassed button is deliberately no longer an action), and one read
-  the Bridge's fill off `.flat`, which is deliberately transparent: it was measuring the variant's own setter
-  and calling it proof of the mapping. ⭐ **The witness for a Bridge mapping must be a button with no variant.**
-  **⭐⭐ THE ACCEPTANCE CRITERION CHANGED FOR THE REST OF THE STAGE (user, 2026-08-02, §15.11):**
-  *Measurement is still mandatory, but it is no longer the goal — it is only a tool. Judge the end of M2b
-  by whether it looks like a polished commercial application; if the numbers are right and something still
-  looks mediocre, fix the product rather than proving with a measurement that it is fine.*
-  ⛔ **A green test stops being a closing argument.** This strengthens §0.1.1 rather than replacing it.
-  **⭐⭐ AND THE GUARD ITSELF WAS COUNTING THE TARGET STATE AS DEBT (§15.11.5).** `DesignTokenComplianceTests`
-  went red and revealed a defect *in itself*: it counted every `FontSize=` assignment, so a value read from
-  the catalog — exactly what M2c is supposed to produce — scored identically to the literal it replaced.
-  ⛔ **M2c's exit condition was therefore unreachable: a fully migrated view would report the same total as
-  an untouched one.** The counter now excludes resource references, so it measures what its name says —
-  **local values**. ⚠ Baselines are **not** comparable with M2a's; that is recorded in the test itself.
-  **⚠ Two rules gained their missing half in step 12, on one diagnosis — *size was still carrying information
-  that colour carries*:** (a) a chrome strip declared its children's **height** but not their **line**, so the
-  Data Import status bar had three baselines — *a container that declares height must declare alignment, or it
-  aligns boxes while the user reads text*; (b) equal height was not enough for a dialog footer, because width
-  came from the **label** — hence `Size.ActionMinWidth`, a **floor** (a long label still expands) that chrome,
-  icon buttons and grid cells opt out of, exactly as they do for height.
-  ⚠ **The tag-based rules have now cost an instance twice** (chrome strips in step 11, the second picker's
-  filters in step 12): the rule was right and applied in one place out of several. Know this before adding a third.
-  ⛔ **RATIFIED — do NOT unify the Domain Picker's widths** (§15.11.4): it has *two* buttons where a `ComboBox`
-  has one, so narrower is correct. The system unifies what decides belonging — **height, icons, padding** —
-  not every dimension.
-  **⛔⛔ RATIFIED AND IT OUTRANKS EVERY CATALOG NUMBER (user, 2026-08-02, §15.10.1): COLOUR MAY EXPRESS
-  AN ACTION'S PRIORITY, SIZE MAY NOT.** This *reverses* step 8, which had given `Button.primary` its own
-  height — and that one setter was behind "Execute is bigger than Cancel" in **every** dialog: 38 buttons
-  in 26 files. ⭐ **Deleting one setter fixed them all, which is the test of whether a defect was found in
-  the system or on a screen.** The deeper reason is not preference: a dialog footer is a **series** of
-  actions in one row, and a series must align — the same reason a form field takes `Size.Control`. A height
-  difference inside a row reads as sloppy layout, not as hierarchy. ⛔ **`Size.ControlPrimary` is RETIRED**
-  (guarded by `RetiredTokens`); `Size.ControlProminent` took 28, because *Cancel was too small*, not
-  *Execute too big*. **⭐ The rule that replaces it: A BUTTON'S HEIGHT COMES FROM ITS CONTEXT, NEVER FROM
-  ITS VARIANT** — chrome strip → `Size.ControlToolbar` · dialog footer and form → `Size.ControlProminent` ·
-  grid cell → the row · titlebar → `Size.TitleBar`. The variant carries **colour**.
-  **⚠ `Border.chrome` (renamed from `.toolbar`) is that rule's carrier, and it has a price worth knowing:
-  every chrome strip must be tagged.** Step 8 tagged one and the user immediately found an untagged one
-  ("Run is taller than it should be" in Script Executor). The class also covers **bottom status strips** —
-  Data Import's misaligned footer was the same defect — which is why it names the ROLE (Application Chrome,
-  §0.1.2) rather than one instance. All eight strips are tagged.
-  **⭐ A caption belongs to its field, and the catalog already said so.** The reported "the label looks like
-  it belongs to the previous section" measured as **two owners of one gap**: the caption carried a 4 px
-  margin and its container added 10 on top, so caption→field (14) exceeded field→field (10) and the eye
-  attached the caption upwards. `Margin.FieldGap` already states *a gap has one owner*; this was where it
-  was broken. The new `Margin.LabelGap` closes a proximity **scale** — caption 2 < option 4 < field 8 —
-  pinned as an **ordering**, never as numbers.
-  **⭐ A custom control that plays a base control's role must read the same catalog** — `SearchableComboBox`
-  never went through M2b and carried `MinHeight="24"` from before the catalog existed. And **a filter IS a
-  search field**, which gives `Size.ControlProminent` a third consumer and settles it as a role.
-  **⭐ MEASURED, because the user asked for a re-measurement: the grid `CheckBox` is NOT what makes a row
-  tall.** It asks for exactly **14 px** (its mark), the cell for 20, against a 22 px row floor. **The row is
-  22 because `Size.Row.Grid` says so** (declared in step 7). ⚠ If a row still feels tall the lever is
-  `Size.Row.Grid` — a separate decision, since that number sits in D1 and governs every grid at once.
-  **⚠ Step 8's framing, kept because it is still the live model — TWO HEIGHT LADDERS, NOT ONE (§15.9.1).** Step 5.4 assumed a button is a control like any other and gave it
-  `Size.Control` (24). The user's QA named the missing distinction better than the catalog had:
-  **a FIELD stands in a series and must align; an ACTION stands alone and is a mouse target.**
-  Fields keep `Size.Control` **24**; actions get **`Size.ControlToolbar` 22** (chrome) and
-  **`Size.ControlProminent` 28** (dialog footer, form) — two rungs after step 11 retired the third. ⚠ **D1 is NOT changed** — 24/22/28 still mean what they meant; one number (26) and a
-  role assignment D1 never asked about were added. ⭐ `Size.ControlProminent` is a *role* rather than
-  "a taller button" precisely because its second consumer is a different kind of control (the search
-  field). **⚠⚠ And a toolbar button must never lift the bar: the CONTAINER declares its children's
-  height** — the third appearance of that one mechanism (grid-cell editor · `Expander` header · now the
-  toolbar). Emphasis still travels by colour and icon; only height, the carrier that damaged its
-  neighbours, is taken away.
-  **⭐ Two QA reports turned out to be ONE defect** (§15.9.2): the Settings category list and Saved
-  Queries were both on Fluent because **`ListBoxItem` never had a style**. One style, both screens —
-  and the sidebar is untouched *structurally*, since its own `ListBox.Styles` entry beats an
-  application style.
-  **⚠⚠ A guard written in step 5.1 caught a regression three iterations later.** The first fix for
-  "radio buttons are too tight" gave every `RadioButton` a margin — which enters `DesiredSize` and so
-  broke RB‑2's grid fit. The corrected selector (`ItemsControl RadioButton`) is also semantically
-  truer: the role names the gap between **options**, and an option is a radio that is a *list item*;
-  a standalone one (grid cell, form field) is not. ⭐ `DataGrid` is not an `ItemsControl`, so cells are
-  out of scope **by construction**, with no exception to remember.
-  **⭐ Data Import's reported defect had its cause NEXT DOOR** (§15.9.3): the hidden `Basis` column
-  still measured `3*`, so a third of the grid stood empty and the columns the user actually reads were
-  squeezed. ⚠ **Third occurrence of the same truth in this project — a container whose children are
-  collapsed is STILL MEASURED** (it also left the titlebar's empty inset in the branding sprint). The
-  difference is that `ColumnDefinition` has no `IsVisible`, so the width itself must react
-  (`BoolToStarWidthConverter`, view layer — `GridLength` is an Avalonia type and rule #1 keeps those
-  out of view models).
+- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a + 🔒 M2b ALL COMPLETE
+  AND USER-ACCEPTED (M2b closed 2026-08-02 — 21 iterations, 14 commits). ⭐ NEXT: M2c, the
+  de-localization sweep.**
   **⭐ START THE NEXT SESSION FROM
-  [docs/design/product-polish-m2b-handover.md](docs/design/product-polish-m2b-handover.md);
-  the per-iteration record is `product-polish.md` §15, its state table §15.-1.** Spec (source of
-  truth): `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`.
-  **⚠ The four items that must be raised at that QA, because each is a decision rather than an
-  omission:** ⛔ **`ScrollBar` arrows and geometry were deliberately NOT touched** (removing them is a
-  *functional* change and Fluent already hides them until hover — H‑10 was about the missing style,
-  and the colour is what shipped) · ⛔ **the SQL comment colour stays** (V‑1, ratified) ·
-  📌 **selected-row saturation** and 📌 **the DEV MODE badge** are both deferred on purpose (§15.6.4a).
-  ⚠ **Two views still carry a local `MinHeight="26"` workaround for Fluent's chunky `Expander`**
-  (`ProcedureDetailTabView`, `FunctionDetailTabView`) — now redundant, but removing a local value from
-  a *view* is **M2c**, not M2b, which works only in `Themes/`.
-  **⭐⭐ M2b'S ONE ARCHITECTURAL RESULT, AND IT OUTLIVES THIS STAGE — `FluentBridge` (product-polish.md
-  §16, ratified 2026-08-02): we do NOT restyle FluentTheme and do NOT copy its templates — we REPIN IT
-  ONTO OUR CATALOG.** Fluent paints control interiors (`PART_BorderElement` and friends) from its own
-  **named resources**; `Themes/FluentBridge.axaml` swaps those resources for our tokens, so every proven
-  framework behaviour (text selection, watermark, validation, scrolling, state animations) survives while
-  the look is catalog-driven. The project already had the precedent — `TreeViewItem*`/`DataGridCell*`
-  selection colours (UI rule #6). ⛔ **The Bridge is NOT a second token catalog** (the user's binding
-  rule): mapping only, no local values, no design decisions — enforced by
-  `FluentBridge_ContainsNoLocalValues`, which requires **every** entry to be a resource *reference*.
-  **⚠⚠ Metrics and colours travel SEPARATE ROUTES, and that split was forced by measurement, not taste:
-  XAML cannot ALIAS a scalar resource** — `<x:Double x:Key="TextControlThemeMinHeight">` must contain a
-  number, so a Bridge that owned metrics would have to write literals and break its own rule on line one.
-  A brush is the exception (`Color="{StaticResource …}"` *is* a reference). Hence **metrics → style
-  setters** in `ControlStyles.axaml` (an application style outranks Fluent's `ControlTheme`, and a setter
-  *can* read a token), **colours → the Bridge**. ⭐ The rule "no local values" is therefore **structural
-  in that file, not remembered** — there is nowhere to put a number. ⚠ Consequence for tests: assert the
-  **metric on the control** and the **colour on the part that actually paints it**; a colour assertion
-  read off the control itself passes while painting nothing.
-  **⭐⭐ THERE IS A THIRD ROUTE, ADDED IN STEP 5.7 AFTER A MEASUREMENT THAT DISPROVED §16.3's OWN
-  PREMISE.** The section claimed *"XAML cannot ALIAS a scalar resource"*. **Measured on Avalonia
-  12.0.3: it can** — `<StaticResource x:Key="A" ResourceKey="B" />` resolves (probe returned `24`,
-  `Double`). The real limit is narrower: XAML cannot **compose** a resource in element *content*
-  (`<x:Double>` must hold a number). ⭐ The split survived the correction but gained a route:
-  **when a template consumes a scalar as a LOCAL value on the element, a style setter cannot win**
-  (a local value outranks a setter — the project's own recurring lesson, here on the *framework's*
-  side), and an alias is the only mechanism. Measured cases: `ExpanderMinHeight` (a metric) and
-  `ScrollBarThumbBackgroundColor` (a `Color`, not a brush — so the same route serves both kinds).
-  ⭐ **An alias satisfies the user's rule better than a number**: it is a *reference*, so the catalog
-  stays the sole owner, and the guard passes unchanged because the tag itself is `StaticResource`.
-  ⚠ **It is an exception, not an alternative** — reach for it only when a setter has *measurably*
-  lost; a setter sits where you think about the control, an alias sits in a translation table.
-  **⛔ A custom `ControlTemplate` needs TWO measured conditions (§16.4)** — the size is not exposed
-  as a Fluent resource **and** the element to change has no `x:Name` (so a selector would hit it
-  positionally and silently retarget on an Avalonia upgrade). **Exactly two controls qualify:
-  `CheckBox` and `RadioButton`.** ⚠ That they are the *exception* was only shown by probing `TextBox` —
-  the original plan had assumed custom templates for every base control, and `ComboBox` (six painted
-  template parts) then needed **none**, which is what promoted the bridge from a one-case hypothesis to
-  a pattern. ⛔ Do not rewrite a template because "we already have two". ⚠ The rule proved its worth in
-  step 5.7: it *forbade* rewriting the `Expander` template and forced the alias to be found instead.
-  **⚠⚠ A TYPE STYLE REACHES INSIDE A FOREIGN TEMPLATE, AND THAT CUTS BOTH WAYS — the single most
-  transferable finding of M2b.** Step 5.5 got the height of `NumericUpDown`'s inner `TextBox` **for
-  free** (a type style applies wherever the type occurs, including inside another control's template —
-  which is the practical difference between *repinning* a framework and *copying* it). Step 5.6 then
-  centred the `Expander`'s header, because that header **is** a `ToggleButton`. One mechanism, two
-  signs; §16.5's procedure now has a step for checking which one you just got.
-  **⭐ M2b's governing rule, above the catalog's numbers (user, 2026-08-01):** *"We are not designing the
-  smallest possible controls. We are designing controls a developer works on comfortably for 8 hours a
-  day."* A catalog value that is technically right but worse in practice gets **stopped and proposed**
-  (§4.2.4), never quietly shipped — ⛔ the catalog must not win against product quality.
-  **⭐ A control is judged in the COMPLETE SET OF STATES** — normal · hover · checked/active ·
-  indeterminate · disabled · focus — **and in BOTH themes** (user, on accepting step 1). A control whose
-  resting state looks right is not done. **⭐ And a new ROLE is born only from real use in SEVERAL
-  components, never from one case** (user, same round) — which is why `Radius.Control` does **not** exist
-  yet and `Margin.MarkGap` does (its second consumer, `RadioButton`, was known when it was added).
-  ⚠ M2b works **only in `Themes/`**, which makes `DesignTokenComplianceTests` a **scope sensor**: it
-  measures `Views/`+`Controls/`, so any counter moving means M2c's territory.
-  **⭐⭐ THE PHENOMENON THAT WILL KEEP RECURRING, named at step 5.2 — calming the surroundings RAISES the
-  volume of everything not yet touched.** The DEV MODE badge did not change by a pixel; its background
-  did. So **an element reported as "too loud" after a step is often not that step's defect** but debt
-  that just became visible — and ⛔ **it must not be fixed immediately**, because a fix made against
-  half-calmed surroundings is tuning to a transitional state. Hence the deliberate deferrals (SQL comment
-  colour §7.3, selected-row saturation §15.2.1, DEV MODE badge → M3.2). It is also an independent
-  argument for the §13.3 gate.
-  **⚠ Iterations shipped (state table: §15.-1), each build 0/0 + three partitions + smoke:**
-  step 0 class styles read the catalog, byte-neutral (`0bbc745`) · **`CheckBox`** RB‑2 (`26243cb`) ·
-  **RB‑4** split (`a1d607a`) · **Light greyscale + H‑7 + V‑1** (`7975aaa`) · **`ToolTip`** (`e5b010f`) ·
-  **`RadioButton`** (`cf23a4c`) + its concentricity answer (`60f9278`) · **`TextBox` + `FluentBridge`**
-  (`9ec2c13`) · **`ComboBox`** (`3483296`) · **`Button`** H‑8 + the four variants tokenized (`267a4b8`) ·
-  **`NumericUpDown`** (`d2a2475`) · **`ToggleButton`** (`ce47aa7`) · **`Expander`** + the alias route
-  (`69ceff6`) · **`ScrollBar`** H‑10 (`7ab3d27`) · **DataGrid Standard** §8.4 (`e95913b`).
-  **⚠⚠ THE ARITHMETIC OF §5.1 MUST BE CHECKED ON THE SUM, NOT ON A TERM — it went wrong three times in
-  this stage and the third one shipped.** `Size.Row.Grid` (22) − `Pad.Cell` (3+3) = **16 px**, and
-  anything placed in a cell must fit that. (1) Step 1's first draft gave the `CheckBox` a 20 px click
-  target and its test compared against the ROW (22) instead of the room a CELL leaves — it passed while
-  reopening RB‑2. (2) Step 5.2 correctly stopped a cell `TextBox` from taking `MinHeight=24`… (3) …but
-  left it `Pad.CellCompact`'s 2 px of vertical padding, so it asked for **18 px against 16** and the row
-  jumped **on entering edit** — shipped, invisible for five iterations, and caught only by step 7's test,
-  whose subject is the grid *as a whole* and which therefore had a reason to add two tokens from two
-  different steps together. Fix: the new role **`Pad.CellEditor` (`6,0`)** — a grid-cell editor's height
-  is owned by the **row**, so its vertical padding must be zero (the `Pad.Control` rule one nesting level
-  down). ⭐ **A test that measures the intent instead of the constraint can confirm a defect rather than
-  catch it.**
-  **⚠ Three more measured facts that generalise past M2b:** (a) ⭐ **a control's declared property can
-  lie** — `RadioButton` reports `MinHeight=0` while its template forces 32; probe the tree, don't read
-  the property. (b) ⭐ **declaration ORDER decides between styles of equal specificity** — the base
-  `Button` style must precede `.icon`/`.flat`/`.primary`/`.caption`, or all four are silently flattened
-  with a green build (pinned by `primary.MinHeight > plain.MinHeight`). (c) ⭐ **an Avalonia type
-  selector matches the EXACT type**, so `ToggleButton` needed its own copy of `Button`'s metrics —
-  and `:is(Button)` would have been *worse*, catching the spinner's and scroll bar's `RepeatButton`s,
-  for which a form-control height is actively wrong.
-  ⚠ **`V‑1` is OPEN and it is the user's call, not a bug to fix:** against the new `#FCFCFD` every syntax
-  colour clears AA except the **SQL comment `#2E8B57` (4,14:1)** — and §7.3's remedy ("change the
-  background, not the palette") is **unachievable** here, because that colour yields only 4,25:1 on pure
-  white. Not a regression (today it is worse, 3,83); an inherited defect measured for the first time.
-  **Ratified: the colour stays**, revisited in normal use after the stage.
-  **⚠⚠ Step 0's finding, and it generalises past this stage: `{DynamicResource}` does NOT throw on a
-  missing key — the property silently keeps its default.** Verified by planting a typo: build stayed
-  **0 errors** while `FontSize` quietly fell 11 → 12 (Avalonia's default). Hence
-  `DesignTokenApplicationTests` (headless, joins `HeadlessCollection`, bare controls — never a
-  `MainWindow`), which asserts a token **reaches** a control, through **both** §3.2 layers (scalar
-  *and* `Thickness`/`CornerRadius` — different resolution paths). ⭐ It compares against the **catalog,
-  not a literal**: it pins *that the token arrives*, not *what number it carries* (§4.2.4).
-  ⭐ **`DynamicResource` for tokens is architectural, not stylistic** — §3.4 wants a future font/scale
-  preference to swap the base tokens at runtime, and a statically resolved value could not follow.
-  **§14 is the M2a as-built**, plus the three sections M2a added to the catalog: **§4.2** (icons, radii,
-  borders), **§6.4** (how a typography role is consumed), **§11.1** (the counter ratchet).
-  **⭐ M2a is STRICTLY ADDITIVE and that is its whole point: `Themes/Tokens.axaml` (7 spacings · 13
-  `Thickness` roles · 10 heights · 3 icon sizes · 2 radii · 3 border roles) + `Themes/Typography.axaml`
-  (2 base families + 12 roles × size/weight/line-height) + registration + `DesignTokenComplianceTests`.
-  ZERO view files touched** — the only edit outside the new files is two `ResourceInclude` lines, so
-  rendering cannot differ; nothing consumes a token yet. Build 0/0; suite **7066** (6998 + 54 + 14);
-  smoke clean.
-  **⭐ THE GUARD IS A COUNTER RATCHET, NOT A FILE LIST (§11.1), and the measurement is why:** 609
-  `FontSize` declarations over 49 files with one file holding 86 — a file-level exemption would clear
-  `DataImportTabView.axaml` wholesale and let it add an 87th in silence, which is the exact failure
-  (gotcha #284) the test exists to break. An exemption is `file → count`, checked in BOTH directions:
-  a rise is new drift, **a fall is progress nobody wrote down**. ⭐ **It detects drift, it does not veto
-  decisions** — deliberately raising a baseline and recording why is a correct part of the process, and
-  that sentence lives in the test's own failure message, where the person who sees red will read it.
-  Baseline: `FontSize` **609/49** · `FontFamily` **81/28** · `CornerRadius` **37/13** — M2c's exit
-  condition is now a number. ⚠ It counts **declarations**, not occurrences of the word (`FontFamily =
-  new FontFamily("…")` is one), and it needs **no headless session** — it reads `.axaml` as text, 124 ms.
-  **⭐ TWO OPEN QUESTIONS THE DOC LEFT WERE ANSWERED BY MEASUREMENT, NOT ASSUMPTION.** (1) *Can a
-  typography role be one resource in Avalonia 12?* — the mechanism **already exists in this codebase**:
-  `TextBlock.field-label`/`.shortcut-chip`/`.title`/`.h1`/`.group-header` are exactly those roles, with
-  the numbers hard-coded. So a role has **two layers** (§6.4): the scalar one is the only one consumable
-  everywhere (control styles, `ControlTemplate`, code-behind, AvaloniaEdit) and ships in M2a; the class
-  layer is **consumption**, so it waits for M2b and lands in `ControlStyles.axaml` beside the controls
-  that use it. (2) *Radii* — the five values were never a drift: **every 4/4.5/5/6 is a chip, every 3 is
-  a surface**. Two roles, `Radius.Surface`/`Radius.Chip`; the distinction was deliberate and only lacked
-  a name. ⚠ `Radius.Sm` from §8.4 was never defined and does **not** enter the catalog (it names a value,
-  not a role).
-  ⛔ **`Stroke.Rail` = 2 was deliberately LEFT OUT** although §8.4.2 ratifies it: the rail does not exist
-  yet, and a token with no consumer is indistinguishable from a regression (#233) — nobody can tell
-  whether its value is right. It arrives in **M3.1, with the rail.** ⭐ `Text.<Role>.Weight` exists even
-  for Regular roles so consuming a role is always the same three keys — a question asked at every use is
-  where drift comes from. ⭐ `Font.Ui` = `$Default`, not `"Inter"`: the UI family has ONE source
-  (`Program.cs` → `.WithInterFont()`) and the token is its name, not a second copy.
-  **⭐ The stage's one finding, and it reframes everything: EmberTern does not have a Design System —
-  it has a colour system and a set of variant styles.** `Colors.axaml` is mature; the component layer
-  (`Button.icon/.primary/.flat`, `TabItem.bottom-tab/.sub-tab`, `MessageBanner`, `ContextMenu`,
-  `SvgIcon`) exists wherever someone deliberately designed a component. **Everything between those
-  components stands on local values.** Measured: **zero implicit styles for the 11 base controls**
-  (all on Fluent `MinHeight=32`), **zero non-colour tokens**, 589 local `FontSize`, 114 `Margin`,
-  40 `Padding`, 7 icon sizes, 5 corner radii, 7 monospace `FontFamily` strings across 33 files.
-  **⚠⚠ THE PLAN'S LOAD-BEARING CORRECTION — the spec's M2 says "most screens will gain the new look
-  automatically". THAT IS FALSE IN THIS CODEBASE and the project has proved it four times** (the
-  `MessageBanner`'s six per-host variants, `MainWindow.Icon`, Batch Results' `Foreground`,
-  `DangerIconBrush`): **a local value outranks a style setter.** So a de-localization sweep is its own
-  mandatory milestone (**M2c**), and `DesignTokenComplianceTests` ships in **M2a — before the
-  migration, not after** — so M2c has a measurable exit condition instead of "looks alright now".
-  **⭐ RB‑4, the subtlest finding, and the obvious diagnosis is wrong.** The chrome ladder legitimately
-  reverses per theme (Dark `#1E1E1E→#252526→#2D2D2D` lighter; Light `#F3F3F3→#E0E0E0→#D6D6D6` darker) —
-  that is the VS Code convention and it stays. The defect is that **`ElevatedPanelBrush` does TWO
-  jobs**: *"chrome one step further from the document"* (column headers, titlebar) and *"this element
-  floats above its container"* (selected tab, popups, menus). **In Dark they coincide; in Light they
-  oppose** — because *raised* reads as movement toward the light in every theme. Hence the selected tab
-  reads recessed in Light only. **✅ SHIPPED in M2b step 2 (`a1d607a`): `ElevatedPanelBrush` →
-  `ChromeStrongBrush` + the new `SurfaceRaisedBrush`, and the split came out 14/14, unplanned** —
-  *"does this element float above its container?"* had an unambiguous answer at all 28 sites, which is
-  itself the proof the answer had to be a new TOKEN rather than a new value. ⛔ **`ElevatedPanelBrush`
-  no longer exists**; a guard (`NoRetiredTokenName_SurvivesAnywhereInTheApplication`) scans the whole
-  app for it, because renaming a token is a compile error in **neither** direction — XAML resolves a
-  missing `{DynamicResource}` to nothing and C# looks it up **by string** with a `?? fallback`, so a
-  missed site quietly paints a substitute colour. ⚠ The guard skips **comments**, or it would forbid
-  documenting itself (its first version fired on the comment explaining the split).
-  **⭐ COLOUR SEMANTICS — my first proposal was wrong and the correction matters.** I proposed
-  neutralising the toolbar's icons; a precise re-measurement showed **the toolbar already has a working
-  semantic system** — ten "New X" buttons carry `IconColor_*`, *the same colours the user reads in the
-  metadata tree and on document tabs all day*. That is its character and it stays. The real defect is
-  narrow: **six generic tools painted `AccentBrush` compete with it**, plus three tokens with
-  overlapping jobs (`Icon.Trash` on `WarningIconBrush` for a destructive action, `AccentIconBrush`
-  beside `AccentBrush`, `InfoIconBrush` on Refresh). Contract: **two independent systems — object KIND
-  and action EFFECT — with neutral as the correct default**, `AccentIconBrush`/`InfoIconBrush` deleted.
-  **The toolbar stays colourful; only the blue wallpaper goes.**
+  [docs/design/product-polish-m2c-handover.md](docs/design/product-polish-m2c-handover.md).**
+  **⭐⭐ `product-polish.md` §17 IS THE M2b CLOSING SUMMARY — read it before any further Polish work.**
+  It holds what shipped (§17.1), the four architectural decisions (§17.2), the **11 ratified rules
+  R1–R11** (§17.3 — ⛔ not to be re-opened), what the catalog gained and lost (§17.4), the **eight
+  lessons that cost the most** (§17.5) and the exit numbers (§17.6). §16 is the `FluentBridge` pattern;
+  §15 is the iteration record with its state table at §15.-1.
+  Spec (source of truth): `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`.
+  **⭐⭐ M2b'S FOUR ARCHITECTURAL DECISIONS, ALL OF WHICH OUTLIVE THE STAGE:**
+  (1) **`FluentBridge`** — we do NOT restyle FluentTheme and do NOT copy its templates; we **repin it
+  onto our catalog**. Three routes: metrics → style setter · colours painted by template internals →
+  the Bridge · a value the template holds LOCALLY → **a resource alias**. ⛔ The Bridge is mapping
+  only, never a second token catalog (guarded by a test). A custom `ControlTemplate` needs **two
+  measured conditions** and exactly two controls qualify (`CheckBox`, `RadioButton`).
+  (2) **⭐ THE CONTAINER DECIDES SIZE, THE ELEMENT ACCEPTS IT** — one mechanism, five appearances:
+  grid-cell editor · `Expander` header · chrome strip · dialog footer · status bar.
+  (3) **⭐ A RULE MUST BE WRITTEN POSITIVELY.** *"Everything is X unless…"* always leaks — it leaked
+  twice, the second time as a layout **regression**: the base `Button`'s `MinWidth` silently grew the
+  metadata tree's expander arrow from 20 to 100 px, because **Avalonia clamps `Width` by `MinWidth`**.
+  (4) **⭐ HEIGHT COMES FROM CONTEXT, NEVER FROM A VARIANT** — the variant carries **colour**.
+  **⛔ THE RULES THE USER RATIFIED (R1–R11, §17.3) — DO NOT RE-LITIGATE.** The load-bearing ones:
+  **R5 colour may express an action's priority, SIZE MAY NOT** · **R7 never patch single screens — find
+  the Design System rule first** · **R8 the acceptance criterion is "does this look like a polished
+  commercial application?", and a measurement is a tool, not a closing argument** · R2 judge a control
+  in the complete set of states and in both themes · R3 a role is born from several consumers, never
+  one · R9 do not unify the Domain Picker's widths · R10 the SQL comment colour stays · R11
+  `Size.Row.Grid` is its own product decision, not a `CheckBox` fix.
+  **⚠ THE EIGHT LESSONS (§17.5) — the three that generalise furthest:** ⭐ **§5.1's arithmetic is
+  checked on the SUM, not on a term** (three slips; the third shipped and hid for five iterations) ·
+  ⭐ **a floor only equalises if it sits ABOVE the natural width of the labels it means to equalise**
+  (80 against "Cancel" at 98 was a dead letter that looked like a rule) · ⭐ **a type style reaches
+  inside a FOREIGN template, and it cuts both ways** (it gave `NumericUpDown`'s inner `TextBox` its
+  height for free, and it centred the `Expander`'s header).
+  **⭐ Audit items closed by M2b:** RB‑2 · RB‑3 · RB‑4 · H‑7 · H‑8 · H‑10 · M‑2 · spec §8.4 (DataGrid
+  Standard). **⚠ Deliberately left open:** **V‑1** (the SQL comment colour measures 4,14:1 — ratified
+  to stay, revisited in normal use) and **H‑1, which IS M2c**: **605 local `FontSize` / 81 `FontFamily`
+  / 37 `CornerRadius`** still override the catalog point by point. ⭐ The counter measures **local
+  values only** — a `{DynamicResource}` reference no longer counts, which is what makes M2c's exit
+  condition reachable at all (it previously scored the target state identically to the debt).
+  **⛔ §13.3 IS STILL A QUALITY GATE THAT BLOCKS M4** — after M3 the four persistent surfaces are
+  reviewed *together, on a real database, in both themes*, for **visual reception, not document
+  compliance**. Anything that still looks ordinary despite green tests gets an M3.5 before migration.
+  ⚠ **R‑6 (DPI) stays open and is partly UNVERIFIABLE headlessly — do not report it as checked:**
+  `LayoutTransformControl` does **not** simulate DPI (it scales after layout, so bounds are identical
+  at 1,0–2,0) and `CaptureRenderedFrame()` returns **null** under `UseHeadlessDrawing`. Verify **150%
+  by eye**. ⭐ What that probe did yield: layout rounding snaps **each element separately** to the
+  device pixel — hence `UseLayoutRounding="False"` on `RadioButton`'s `PART_MarkArea` and deliberately
+  not on `CheckBox` (snapping helps a **straight edge** and has nothing to offer a circle).
+  ⚠ **Two views still carry a now-redundant local `MinHeight="26"`** workaround for Fluent's chunky
+  `Expander` (`ProcedureDetailTabView`, `FunctionDetailTabView`) — removing a local value from a *view*
+  is **M2c**.
   **⭐ RATIFIED (D1–D12), do not re-litigate:** control heights **24 / 22 / 28** · **Cascadia Mono** ·
   app name + version **removed** from the status bar · progress infrastructure (M3.1) split from wiring
   operations (M3b) · **two tab-strip modes**, multi-row default, row limit 1–10 default 3, only the
@@ -725,25 +491,11 @@ noted.
   **⭐ THREE PRINCIPLES THAT OUTRANK THE CATALOG:** **§0.1 Persistent UI** — Status Bar, Toolbar, tab
   strip, Metadata Explorer, DataGrid, base controls, context menus beat screens opened once a day;
   governs *order and effort, not scope*. **§0.1.1 tokens are a means, not the end** — ⛔ never report a
-  stage done on green tests alone; compliance is necessary, not sufficient. **§0.1.2 Application Chrome
-  is ONE surface, not four components** — designed separately they yield four correct components and one
-  incoherent frame.
-  **⛔ §13.3 IS A QUALITY GATE THAT BLOCKS M4** — after M3 the four persistent surfaces are reviewed
-  *together, on a real database, in both themes*, for **visual reception, not document compliance**.
-  Anything that still looks ordinary despite green tests gets an M3.5 before migration starts.
-  ⚠ **Ten risks recorded (§13.4).** R‑2 (**`CheckBox` `ControlTemplate`**) is **closed** — done first in
-  M2b and confirmed by probe: Fluent really does encode the box size inside the template, so
-  `Size.Checkbox=14` could not be a setter. **R‑6 (DPI) stays open and is now partly UNVERIFIABLE
-  headlessly — do not report it as checked:** `LayoutTransformControl` does **not** simulate DPI (it
-  scales after the child is laid out, so bounds are identical at 1,0–2,0) and `CaptureRenderedFrame()`
-  returns **null** because the headless session uses `UseHeadlessDrawing`. Verify **150% by eye**.
-  ⭐ What that probe did yield: layout rounding snaps **each element separately** to the device pixel, so
-  a ring and a dot can drift 1 px apart — hence `UseLayoutRounding="False"` on `RadioButton`'s
-  `PART_MarkArea` and **deliberately not on `CheckBox`**: snapping helps a **straight edge** and has
-  nothing to offer a circle. ⚠ Tab-strip preferences are **additive — `CurrentSchemaVersion` STAYS 2**, and
-  `TabStripMaxRows` is a numeric preference, so the whole settings-center §17.4/§17.4a pattern applies
-  (`PreferenceRange`, blur-or-Enter commit, digits-only on the tunnel, and ⚠⚠ **the control carries its
-  ROW as `DataContext`** — on the page's it types correctly and persists nothing).
+  stage done on green tests alone. **§0.1.2 Application Chrome is ONE surface, not four components.**
+  ⚠ Tab-strip preferences are **additive — `CurrentSchemaVersion` STAYS 2**, and `TabStripMaxRows` is a
+  numeric preference, so the whole settings-center §17.4/§17.4a pattern applies (`PreferenceRange`,
+  blur-or-Enter commit, digits-only on the tunnel, and ⚠⚠ **the control carries its ROW as
+  `DataContext`** — on the page's it types correctly and persists nothing).
 
 - **🐞 ET0003 NA NAZWIE GENERATORA W `GEN_ID(…)` — FIXED 2026-08-01 (minimal bugfix, awaits the user's
   confirmation in the running app).** `v = GEN_ID(gen_bomitem, 1);` w ciele PSQL zgłaszało **ET0003
@@ -3412,15 +3164,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7088 as of 2026-08-02
-  (after Product Polish M2b step 13 — the fourth QA round, +2; 7086 after step 12, +1; 7085 after step 11, +1; 7084 after steps 8–10, +2; 7082 after step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
-  step 5.7 — Expander + the alias guard, +2; 7078 after step 5.6 — ToggleButton, +1; 7077 after step 5.5 —
-  NumericUpDown, +1; 7076 after step 5.4 — Button, +1; 7075 after step 5.3 — ComboBox, +1; 7074 after step 5.2 — TextBox + FluentBridge, +2; 7072 after step 5.1 — RadioButton, +1; 7071 after step 4 — ToolTip, +1; 7070 after step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
-  partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
-  segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
-  etap 5a, 6784 after
-  etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**7000 + 54 + 34**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7088 as of 2026-08-02, at the close of Product Polish M2b** (21 iterations added 23
+  tests: `DesignTokenApplicationTests` grew from 2 to 20, `DesignTokenComplianceTests` from 9 to 11).
+  Green in the three documented partitions (**7000 + 54 + 34**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
@@ -4262,8 +4008,10 @@ The app has **one** central theming system. Every new window, dialog, UserContro
 5. **Reusable styles live in `ControlStyles.axaml`, not in views.** If a style (label, button variant, tab variant, grid styling) is or will be used in more than one place, it goes in the central file and views reference it by `Classes="..."`. A view's local `<X.Styles>` block is allowed **only** for genuinely view-specific, non-duplicated structure — and even then it must use theme tokens (e.g. row-height/padding sizing, opacity-only hover affordances, a `Classes.active-tab` background swap that reads `BackgroundBrush`). When in doubt, centralize.
 6. **Never override FluentTheme state colors with hardcoded values.** FluentTheme paints selection/hover/focus from `SystemAccentColor` (brown/orange on a default Win11 install). The fix is already centralized: the `TreeViewItem*` / `DataGridCell*` / `ListBoxItem` resource-key overrides in `Colors.axaml` + the Style selectors in `ControlStyles.axaml`. New selection-driven controls inherit these automatically — do not re-solve it locally with a hex color.
 7. **New windows/dialogs must set `Background="{DynamicResource BackgroundBrush}"` + `Foreground="{DynamicResource ForegroundBrush}"`** on the root so they theme correctly (FluentTheme's window default isn't our palette). Use `Classes="field-label"` for form captions, `Classes="h1"` for dialog headers, the `Button.primary` / `Button.flat` / `Button.icon` variants for buttons — don't restyle from scratch.
-8. ⭐ **Restyling a base control: repin Fluent, don't rewrite it — and metrics and colours take SEPARATE routes.** Full pattern + the per-control procedure: [`product-polish.md` §16](docs/design/product-polish.md). In short: **metrics** (`MinHeight`, `Padding`, `FontSize`, `BorderThickness`) → a **style setter** in `ControlStyles.axaml` reading a token; **colours painted by template internals** (`PART_BorderElement` and friends) → **`FluentBridge.axaml`**, as `Color="{StaticResource …Color}"`. The reason is measured, not stylistic: **XAML cannot alias a scalar resource**, so a Bridge owning metrics would have to write literal numbers — while a brush *is* a reference. ⛔ **No local values in the Bridge** (`FluentBridge_ContainsNoLocalValues` fails the build otherwise), and ⛔ **no new `ControlTemplate`** unless §16.4's two conditions are both measured true.
+8. ⭐ **Restyling a base control: repin Fluent, don't rewrite it — and metrics, colours and aliases take THREE SEPARATE ROUTES.** Full pattern + the per-control procedure: [`product-polish.md` §16](docs/design/product-polish.md). In short: **metrics** (`MinHeight`, `Padding`, `FontSize`, `BorderThickness`) → a **style setter** in `ControlStyles.axaml` reading a token; **colours painted by template internals** (`PART_BorderElement` and friends) → **`FluentBridge.axaml`**; **a value the template holds as a LOCAL value on the element** (measured: `ExpanderMinHeight`, `ScrollBarThumbBackgroundColor`) → a **resource alias** `<StaticResource x:Key="…" ResourceKey="…" />`, because a setter cannot beat a local value. ⛔ **No local values in the Bridge** (`FluentBridge_ContainsNoLocalValues` fails the build otherwise), and ⛔ **no new `ControlTemplate`** unless §16.4's two conditions are both measured true.
 9. ⭐ **Never write a number a token already names.** Spacing, control height, font size, radius, border width and icon size all have roles in `Tokens.axaml` / `Typography.axaml`; consume them with `{DynamicResource}` (architectural — §3.4 wants a future font/scale preference to swap the base tokens live). ⚠ `{DynamicResource}` **does not throw on a missing key** — the property silently keeps its default, so a typo is invisible at build time; that is what `DesignTokenApplicationTests` exists to catch.
+10. ⭐⭐ **A control's size comes from its CONTEXT, never from its variant** (M2b §17.2). A chrome strip (`Border.chrome`), a `DataGridCell`, an `Expander` header and a dialog footer each declare what their children may be; the variant (`.primary`) carries **colour**. ⛔ **Never put `MinHeight`/`MinWidth` on the base `Button` style** — that exact setter silently grew the metadata tree's expander arrow from 20 to 100 px, because Avalonia clamps `Width` by `MinWidth`.
+11. ⭐ **Write the rule POSITIVELY.** *"Everything is X unless…"* leaks: in M2b it leaked twice, the second time as a layout regression. State what a thing IS (a class, a container), never what it is not.
 
 **Token cheat-sheet** (semantic name → use): `BackgroundBrush` (window/editor), `PanelBrush` (sidebar/header panels), `ChromeStrongBrush` (titlebar/column headers — chrome one step further from the document), `SurfaceRaisedBrush` (⭐ anything that FLOATS above its container: popups, menus, tooltips, dropdown lists, the selected tab — **not** the same job as chrome, and in Light the two are opposites), `BorderBrush`, `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`). If none fit, add a new token (both dictionaries) — don't reach for a literal.
 

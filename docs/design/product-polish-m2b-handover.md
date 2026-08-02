@@ -1,22 +1,18 @@
 # Product Polish — M2b — dokument startowy sesji
 
-> ## ✅ M2b — 21 ITERACJI DOSTARCZONYCH (2026-08-02), z CZTEREMA rundami QA
+> ## 🔒 DOKUMENT ZAMKNIĘTY — M2b został ZAKOŃCZONY i zaakceptowany 2026-08-02.
 >
-> Kroki 0–5.3 odebrane przez użytkownika; **kroki 5.4–13 oczekują QA wizualnego**.
-> Po QA następny etap to **M2c** (sweep de‑lokalizacyjny) — ⛔ **nie zaczynać przed QA.**
+> Zachowany jako zapis wejścia w etap i jego architektury. **Nie jest już punktem startowym.**
 >
-> Ten dokument zachowany jako **punkt wejścia w M2b i zapis jego architektury**; sekcja §5
-> („następna iteracja") jest już historyczna. Stan faktyczny: `product-polish.md` §15.-1.
-
-> **To jest prompt dla Claude'a, nie dla użytkownika.** Punkt wejścia w każdą kolejną sesję M2b —
-> pozwala wejść w implementację bez ponownego czytania całej dokumentacji.
+> | Czego szukasz | Gdzie |
+> |---|---|
+> | **start następnej sesji (M2c)** | ⭐ **`product-polish-m2c-handover.md`** |
+> | **podsumowanie M2b** — co zrobiono, decyzje, ratyfikowane reguły, wnioski | ⭐ **`product-polish.md` §17** |
+> | wzorzec `FluentBridge` | `product-polish.md` **§16** |
+> | zapis iteracja po iteracji | `product-polish.md` §15 (tablica stanu §15.-1) |
 >
-> **Przeczytaj TEN plik + `docs/design/product-polish.md` §16 (wzorzec `FluentBridge`) i §15.-1
-> (tablica stanu).** Reszty §15 nie czytaj na starcie — sięgaj po konkretną sekcję, gdy iteracja jej
-> dotyczy. §8 (powierzchnie trwałe) to M3, nie czytaj.
->
-> ⛔ `product-polish-m2a-handover.md` jest **zamknięty**. Jego §6 opisuje M2b jednym wierszem
-> napisanym, zanim M2b istniał — nie planuj z niego.
+> ⚠ Sekcje §5 („co dalej") i §7 („sprawy otwarte") tego pliku były prowadzone w trakcie etapu
+> i **zostały zastąpione przez §17.3 (ratyfikowane reguły) i §17.5 (wnioski)**. Nie planuj z nich.
 
 ---
 

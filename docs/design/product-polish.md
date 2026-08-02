@@ -2679,3 +2679,109 @@ Tokens → Typography → Colors → FluentBridge → IconGeometries → Control
 `Color="{StaticResource …Color}"`, więc tokeny barw muszą już być wczytane) i `ControlThemes` **po**
 `IconGeometries` (szablon `CheckBoxa` sięga po `{StaticResource Icon.Check}`, a `StaticResource`
 rozwiązuje się przy wczytywaniu).
+
+---
+
+## §17 🔒 M2b — PODSUMOWANIE ZAMYKAJĄCE (etap ZAKOŃCZONY 2026-08-02, zaakceptowany przez użytkownika)
+
+> **Werdykt użytkownika:** *„M2b naprawdę zmieniło aplikację na plus i zaczyna wyglądać jak spójny
+> produkt… Dla mnie M2b można uznać za zakończone."*
+>
+> ⭐ **Ostatnie zgłoszenie zostało ZAMKNIĘTE BEZ ZMIANY W KODZIE i to jest dobry wzorzec na przyszłość:**
+> *„Save nadal wydaje się odrobinę większy, ale wynika to z tego, że jest przyciskiem Primary z pełnym
+> wypełnieniem, podczas gdy Cancel jest Flat. Jeżeli pomiar potwierdza identyczne wymiary, nie chciałbym
+> dalej z tym walczyć — na tym etapie łatwo byłoby pogorszyć spójność całego systemu."*
+> Wymiary są identyczne co do piksela (100×28); różnica jest **percepcyjna i wynika z wypełnienia**,
+> czyli z tego samego sygnału, który ma nieść priorytet. ⛔ Nie „naprawiać" tego.
+
+### §17.1 Co zostało dostarczone — 21 iteracji, 14 commitów
+
+| # | Krok | Commit | Wynik |
+|---|---|---|---|
+| 0 | style klasowe czytają katalog | `0bbc745` | dowód, że warstwa tokenów rozwija się w runtime; bajtowo neutralny |
+| 1 | **`CheckBox`** | `26243cb` | **RB‑2 zamknięty** — znak 14 px, brak `MinHeight`, `Margin.MarkGap` |
+| 2 | **RB‑4** | `a1d607a` | `ChromeStrongBrush` + `SurfaceRaisedBrush`, podział 14/14 |
+| 3 | **skala szarości Light** | `7975aaa` | `#FCFCFD`, H‑7 domknięte (3,86 → 5,33), **V‑1 zmierzone** |
+| 4 | **`ToolTip`** | `e5b010f` | **M‑2 zamknięte**; pierwszy nowy konsument `SurfaceRaised` |
+| 5.1 + 5.1a | **`RadioButton`** | `cf23a4c`, `60f9278` | rodzeństwo `CheckBoxa`; koncentryczność zmierzona i zapięta |
+| — | ⭐ **`FluentBridge`** | (w `9ec2c13`) | **decyzja architektoniczna etapu — §16** |
+| 5.2 | **`TextBox`** | `9ec2c13` | **RB‑3 ruszone** — 32 → 24 px, tekst 14 → 12 |
+| 5.3 | **`ComboBox`** | `3483296` | most zdał próbę skalowania — zero własnych szablonów |
+| 5.4 | **`Button`** + 4 warianty | `267a4b8` | **H‑8 zamknięte** — 25 surowych przycisków Fluenta |
+| 5.5 | **`NumericUpDown`** | `d2a2475` | trzy kontrolki zagnieżdżone; most działa kompozycyjnie |
+| 5.6 | **`ToggleButton`** | `ce47aa7` | selektor typu = typ dokładny |
+| 5.7 | **`Expander`** | `69ceff6` | ⭐ **trzecia trasa Bridge'a — alias zasobu** |
+| 6 | **`ScrollBar`** | `7ab3d27` | **H‑10 zamknięte** — biały uchwyt na białym tle w Light |
+| 7 | **DataGrid Standard** | `e95913b` | **§8.4 specyfikacji domknięte** + `Pad.CellEditor` |
+| 8–10 | runda proporcji po QA | `e0a59fd` | dwie drabiny wysokości · Ustawienia jako panel referencyjny |
+| 11 | druga runda QA | `1c7ccc1` | **kolor niesie priorytet, rozmiar nie** · `Border.chrome` |
+| 12 | trzecia runda QA | `b568168` | linia pasma chromy · podłoga szerokości · korekta licznika |
+| 13 | czwarta runda QA | `41e0cec` | **reguła przecząca → pozytywna** · regresja drzewa |
+
+**Zamknięte pozycje audytu:** RB‑2 · RB‑3 · RB‑4 · H‑7 · H‑8 · H‑10 · M‑2 · §8.4 specyfikacji.
+**Otwarte świadomie:** V‑1 (ratyfikowane — kolor komentarzy zostaje) · H‑1 (to jest **M2c**).
+
+### §17.2 ⭐⭐ Decyzje architektoniczne — cztery, wszystkie przeżyją ten etap
+
+1. **`FluentBridge` (§16)** — nie przestylowujemy Fluenta i nie kopiujemy jego szablonów, tylko
+   **przepinamy go na nasz katalog**. Trzy trasy: metryki → setter stylu · kolory malowane przez
+   wnętrze szablonu → Bridge · wartość trzymana przez szablon lokalnie → **alias zasobu**.
+   Własny `ControlTemplate` wymaga **dwóch zmierzonych warunków** i spełniają je dokładnie dwie
+   kontrolki (`CheckBox`, `RadioButton`).
+2. **⭐ KONTENER ROZSTRZYGA WIELKOŚĆ, ELEMENT JĄ PRZYJMUJE.** Jeden mechanizm, pięć wystąpień:
+   edytor w komórce siatki · nagłówek `Expandera` · pasmo chromy · stopka dialogu · pasek statusu.
+   Element wypełnia kontener, a nie rozpycha go.
+3. **⭐ REGUŁA MUSI BYĆ SFORMUŁOWANA POZYTYWNIE.** *„Wszystko jest X, chyba że…"* przecieka zawsze —
+   przeciekło dwa razy (pasma chromy, strzałka drzewa), za drugim razem jako **regresja układu**.
+   Geometria akcji siedzi dziś na klasach, które akcją **są**.
+4. **⭐ WYSOKOŚĆ BIERZE SIĘ Z KONTEKSTU, NIGDY Z WARIANTU.** Wariant niesie **kolor**.
+
+### §17.3 ⛔ Reguły ratyfikowane przez użytkownika — NIE otwierać ponownie
+
+| # | Reguła | Gdzie |
+|---|---|---|
+| R1 | *„Projektujemy kontrolki, na których programista pracuje komfortowo 8 godzin dziennie"* — katalog nie ma wygrać z jakością produktu | §15.0 |
+| R2 | Komponent ocenia się w **komplecie stanów** i w **obu motywach** | §15.2.1 |
+| R3 | Nowa **rola** powstaje z użycia w kilku komponentach, nigdy z jednego przypadku | §15.2.1 |
+| R4 | **Bridge nie jest drugim katalogiem tokenów** — wyłącznie mapowanie | §16.2 |
+| R5 | **Kolor może określać priorytet akcji, ROZMIAR NIE** | §15.10.1 |
+| R6 | **Ustawienia są panelem referencyjnym** — proporcje dopracowuje się tam, potem przenosi | §15.9 |
+| R7 | **Nie łatać pojedynczych ekranów** — najpierw reguła Design Systemu, potem ewentualny wyjątek | §15.10 |
+| R8 | **Kryterium odbioru: czy wygląda to jak dopracowana aplikacja komercyjna?** Pomiar jest narzędziem, nie argumentem końcowym | §15.11 |
+| R9 | **Domain Picker** — nie ujednolicać szerokości; system ujednolica wysokość, ikony i padding | §15.11.4 |
+| R10 | **Kolor komentarzy SQL zostaje** (V‑1) | §15.4.3 |
+| R11 | **`Size.Row.Grid`** to osobna decyzja produktowa, nie poprawka `CheckBoxa` | §15.10.5 |
+
+### §17.4 Katalog po M2b — co przybyło, co zniknęło
+
+**Nowe role:** `Margin.MarkGap` · `Pad.CellEditor` · `Margin.OptionGap` · `Margin.LabelGap` ·
+`Size.ControlToolbar` · `Size.ControlProminent` · `Size.ActionMinWidth` ·
+`ScrollBarThumbColor` (+Hover, +Pressed) · `SurfaceRaisedBrush`.
+**Wycofane (z strażnikiem `RetiredTokens`):** `ElevatedPanelBrush`/`Color` · `Size.ControlPrimary`.
+⭐ **Skala bliskości**, pinowana jako **porządek**, nie liczby: podpis 2 < opcje 4 < pola 8.
+⭐ **Dwie drabiny wysokości:** pola `Size.Control` 24 · akcje 22 (chroma) / 28 (dialog).
+
+### §17.5 ⚠ Wnioski, które kosztowały najwięcej — do zapamiętania poza tym etapem
+
+1. **⚠⚠ Arytmetykę §5.1 sprawdza się na SUMIE, nie na składniku.** Trzy potknięcia, trzecie
+   **wysłane** i niewidoczne przez pięć iteracji (edytor w komórce prosił o 18 px przy 16 px miejsca).
+   Złapał je dopiero test, którego przedmiotem była siatka **jako całość**.
+2. **⚠⚠ Podłoga wyrównuje tylko wtedy, gdy leży POWYŻEJ naturalnej szerokości etykiet.** Ustawiona
+   niżej wygląda jak reguła i nie robi nic (80 przy „Cancel" = 98).
+3. **⚠⚠ Styl typu sięga do CUDZEGO szablonu — w obie strony.** Raz dał wysokość za darmo
+   (`NumericUpDown` → wewnętrzny `TextBox`), raz wyśrodkował nagłówek `Expandera`.
+4. **⚠ Deklarowana właściwość potrafi kłamać.** `RadioButton` raportował `MinHeight=0`, a żądał 32.
+   **Sonduj drzewo, nie czytaj właściwości.**
+5. **⚠ Kolejność deklaracji rozstrzyga między stylami o równej trafności** — trzy razy w etapie była
+   treścią, a nie porządkiem.
+6. **⚠ Wartość lokalna bije setter stylu.** Dopóki stoi w widoku, żadna reguła systemu nie działa.
+   **To jest dokładnie teza M2c.**
+7. **⚠ Test potrafi mierzyć nie ten podmiot i wtedy potwierdza defekt zamiast go łapać.** Cztery
+   asercje w tym etapie mierzyły zamiar zamiast ograniczenia albo wariant zamiast mapowania.
+8. **⚠ Reguła oparta na tagowaniu wymaga otagowania WSZYSTKICH instancji.** Dwa razy zabrakło jednej.
+
+### §17.6 Stan liczbowy na wyjściu
+
+Build **0/0** · suite **7088** (7000 + 54 + 34) · smoke czysty · drzewo czyste.
+**Liczniki wartości lokalnych** (warunek wyjścia M2c, po korekcie znaczenia z §15.11.5):
+`FontSize` **605 / 49 plików** · `FontFamily` **81 / 28** · `CornerRadius` **37 / 13**.
