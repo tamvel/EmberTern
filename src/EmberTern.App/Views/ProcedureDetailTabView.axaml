@@ -47,7 +47,7 @@
                          IsVisible="{Binding IsSourceMode}"
                          ShowLineNumbers="True"
                          FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                         FontSize="13"
+                         FontSize="{DynamicResource Text.Code.Size}"
                          HorizontalScrollBarVisibility="Auto"
                          VerticalScrollBarVisibility="Auto"
                          Background="{DynamicResource BackgroundBrush}"
@@ -63,7 +63,7 @@
               <TextBlock Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                          Margin="0,0,8,0" Text="{x:Static app:UiStrings.ProcedureNameHeader}" />
               <TextBox Grid.Column="1" Text="{Binding EditableProcedureName, Mode=TwoWay}"
-                       IsReadOnly="{Binding !IsNew}" FontSize="12" />
+                       IsReadOnly="{Binding !IsNew}" />
             </Grid>
 
             <!-- Easy sub-tab strip. SelectedIndex drives ActiveEasyCollectionIndex so the
@@ -79,7 +79,7 @@
                           PointerPressed="OnEasyGridPointerPressed"
                           IsReadOnly="False" AutoGenerateColumns="False"
                           CanUserSortColumns="False" CanUserResizeColumns="True"
-                          CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
+                          CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="{DynamicResource Text.Grid.Size}"
                           GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrush}"
@@ -104,7 +104,7 @@
                           PointerPressed="OnEasyGridPointerPressed"
                           IsReadOnly="False" AutoGenerateColumns="False"
                           CanUserSortColumns="False" CanUserResizeColumns="True"
-                          CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
+                          CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="{DynamicResource Text.Grid.Size}"
                           GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrush}"
@@ -129,7 +129,7 @@
                           PointerPressed="OnEasyGridPointerPressed"
                           IsReadOnly="False" AutoGenerateColumns="False"
                           CanUserSortColumns="False" CanUserResizeColumns="True"
-                          CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
+                          CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="{DynamicResource Text.Grid.Size}"
                           GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrush}"
@@ -151,15 +151,15 @@
                 <Grid ColumnDefinitions="200,4,*">
                   <ListBox Grid.Column="0" ItemsSource="{Binding Cursors}"
                            SelectedItem="{Binding SelectedCursor, Mode=TwoWay}"
-                           FontSize="11" Background="{DynamicResource BackgroundBrush}">
+                           FontSize="{DynamicResource Text.Compact.Size}" Background="{DynamicResource BackgroundBrush}">
                     <ListBox.ItemTemplate>
                       <DataTemplate x:DataType="vm:ProcedureCursorRowViewModel">
                         <Grid ColumnDefinitions="*,Auto">
-                          <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="11"
+                          <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="{DynamicResource Text.Compact.Size}"
                                    BorderThickness="0" Background="Transparent" Padding="0" />
                           <CheckBox Grid.Column="1" IsChecked="{Binding Scroll, Mode=TwoWay}"
                                     Content="{x:Static app:UiStrings.ProcedureCursorScroll}"
-                                    FontSize="10" VerticalAlignment="Center"
+                                    FontSize="{DynamicResource Text.Caption.Size}" VerticalAlignment="Center"
                                     ToolTip.Tip="{x:Static app:UiStrings.ProcedureCursorScroll}" />
                         </Grid>
                       </DataTemplate>
@@ -167,6 +167,10 @@
                   </ListBox>
                   <GridSplitter Grid.Column="1" Width="4" Background="{DynamicResource BorderBrush}"
                                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                  <!-- ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4). Edytor stoi W WIERSZU SIATKI, więc
+                       o rozmiarze decyduje gęstość wiersza, a nie dryf — to ta sama zasada „kontener rozstrzyga
+                       wielkość", którą M2b ratyfikował (§17.2/2), a krok 0 zmierzył (§18.0.5/3). Rola `Text.Code`
+                       niesie 13, więc migracja byłaby skokiem układu. Rozstrzyga §13.3. -->
                   <ae:TextEditor x:Name="CursorSourceEditor" Grid.Column="2"
                                  IsReadOnly="False" ShowLineNumbers="True"
                                  FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
@@ -181,14 +185,16 @@
                 <Grid ColumnDefinitions="200,4,*">
                   <ListBox Grid.Column="0" ItemsSource="{Binding Subprograms}"
                            SelectedItem="{Binding SelectedSubprogram, Mode=TwoWay}"
-                           FontSize="11" Background="{DynamicResource BackgroundBrush}">
+                           FontSize="{DynamicResource Text.Compact.Size}" Background="{DynamicResource BackgroundBrush}">
                     <ListBox.ItemTemplate>
                       <DataTemplate x:DataType="vm:ProcedureSubprogramRowViewModel">
                         <Grid ColumnDefinitions="Auto,*">
+                          <!-- ⚠ 9 px lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4). Katalog nie ma roli o tej wartości,
+                               a `Text.Caption` (10) zmieniłaby wygląd. Rozstrzyga §13.3. -->
                           <TextBlock Grid.Column="0" Text="{Binding Kind}" FontSize="9"
                                      Foreground="{DynamicResource SubtleForegroundBrush}"
                                      VerticalAlignment="Center" Margin="0,0,6,0" />
-                          <TextBox Grid.Column="1" Text="{Binding Name, Mode=TwoWay}" FontSize="11"
+                          <TextBox Grid.Column="1" Text="{Binding Name, Mode=TwoWay}" FontSize="{DynamicResource Text.Compact.Size}"
                                    BorderThickness="0" Background="Transparent" Padding="0" />
                         </Grid>
                       </DataTemplate>
@@ -196,6 +202,10 @@
                   </ListBox>
                   <GridSplitter Grid.Column="1" Width="4" Background="{DynamicResource BorderBrush}"
                                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                  <!-- ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4). Edytor stoi W WIERSZU SIATKI, więc
+                       o rozmiarze decyduje gęstość wiersza, a nie dryf — to ta sama zasada „kontener rozstrzyga
+                       wielkość", którą M2b ratyfikował (§17.2/2), a krok 0 zmierzył (§18.0.5/3). Rola `Text.Code`
+                       niesie 13, więc migracja byłaby skokiem układu. Rozstrzyga §13.3. -->
                   <ae:TextEditor x:Name="SubprogramSourceEditor" Grid.Column="2"
                                  IsReadOnly="False" ShowLineNumbers="True"
                                  FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
@@ -214,7 +224,7 @@
                            Grid.Row="3"
                            ShowLineNumbers="True"
                            FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                           FontSize="13"
+                           FontSize="{DynamicResource Text.Code.Size}"
                            HorizontalScrollBarVisibility="Auto"
                            VerticalScrollBarVisibility="Auto"
                            Background="{DynamicResource BackgroundBrush}"
@@ -229,7 +239,7 @@
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
                       IsVisible="{Binding CanEditDescription}">
             <TextBlock Text="{x:Static app:UiStrings.ProcedureDescriptionEditLabel}"
-                       Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+                       Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
                     Command="{Binding SaveDescriptionCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.Save}" />
@@ -241,7 +251,7 @@
           <TextBox Grid.Row="1"
                    Text="{Binding EditableDescription, Mode=TwoWay}"
                    IsEnabled="{Binding CanEditDescription}"
-                   AcceptsReturn="True" TextWrapping="Wrap" FontSize="11"
+                   AcceptsReturn="True" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}"
                    Margin="8,0,8,8" Background="{DynamicResource BackgroundBrush}" />
         </Grid>
       </TabItem>
@@ -251,7 +261,7 @@
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
-                       FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
+                       FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
             <TreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}"
                       Background="{DynamicResource BackgroundBrush}">
               <TreeView.DataTemplates>
@@ -266,7 +276,7 @@
                         </MultiBinding>
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate DataType="vm:DependencyLeafNode">
@@ -282,8 +292,8 @@
                           </MultiBinding>
                         </controls:SvgIcon.Foreground>
                       </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding FieldName}" FontSize="10"
+                      <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding FieldName}" FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
                                  IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
@@ -298,7 +308,7 @@
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
-                       FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
+                       FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
             <TreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}"
                       Background="{DynamicResource BackgroundBrush}">
               <TreeView.DataTemplates>
@@ -313,7 +323,7 @@
                         </MultiBinding>
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate DataType="vm:DependencyLeafNode">
@@ -329,8 +339,8 @@
                           </MultiBinding>
                         </controls:SvgIcon.Foreground>
                       </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding FieldName}" FontSize="10"
+                      <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding FieldName}" FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
                                  IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
@@ -347,7 +357,7 @@
         <ae:TextEditor x:Name="ProcDdlEditor"
                        ShowLineNumbers="True" IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
                        Foreground="{DynamicResource ForegroundBrush}" />
@@ -377,9 +387,9 @@
                     Command="{Binding ExecLastPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
             </Button>
-            <TextBlock Text="{Binding ExecPaginationHint}" Classes="subtle" FontSize="11"
+            <TextBlock Text="{Binding ExecPaginationHint}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
-            <TextBlock Text="{Binding ExecRecordInfo}" Classes="subtle" FontSize="11"
+            <TextBlock Text="{Binding ExecRecordInfo}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" Margin="12,0,0,0" />
             <ToggleButton Classes="icon" Margin="12,0,0,0"
                     ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
@@ -405,7 +415,7 @@
           <views:AggregationBarView Grid.Row="2" DataContext="{Binding ExecAggregationBar}" />
 
           <TextBlock Grid.Row="3" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
-                     FontSize="11" Margin="8,4" IsVisible="{Binding !HasExecInfo}" />
+                     FontSize="{DynamicResource Text.Compact.Size}" Margin="8,4" IsVisible="{Binding !HasExecInfo}" />
           <!-- Execute Procedure failure — the IDE's ONE message surface (UX Polish Seam 4). Top-aligned so
                it stays a bar over the (hidden) result grid rather than filling the whole results area. -->
           <controls:MessageBanner Grid.Row="3" Severity="Error" Message="{Binding ExecError}"
@@ -415,7 +425,7 @@
           <DataGrid Grid.Row="3" x:Name="ProcResultGrid"
                     behaviors:GridLayoutBehavior.GridId="ProcedureDetail.Result"
                     SelectionChanged="OnProcResultSelectionChanged"
-                    IsReadOnly="True" FontSize="11"
+                    IsReadOnly="True" FontSize="{DynamicResource Text.Grid.Size}"
                     GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                     CanUserSortColumns="False" CanUserResizeColumns="True"
                     ColumnWidth="Auto" RowBackground="Transparent"
@@ -474,22 +484,29 @@
                PER-TABLE breakdown from the same MON$ delta. Default expanded; the user can
                collapse it. MinHeight + the header/content padding resources shrink the Fluent
                Expander's chunky 48px chrome so the COLLAPSED state stays compact. -->
+          <!-- ⚠ `MinHeight` 26 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4) — i to jest KOREKTA zapisu,
+               który nazywał tę wartość „redundantnym obejściem po M2b". ZMIERZONE: most `FluentBridge` mapuje
+               `ExpanderMinHeight` na `Size.Control` = 24, więc usunięcie tej linii obniżyłoby nagłówek o 2 px.
+               M2c nie zmienia wyglądu, więc wartość zostaje; „26 czy 24" rozstrzyga przegląd §13.3. -->
           <Expander IsExpanded="True" IsVisible="{Binding !ExecInfoIsError}" Padding="0" MinHeight="26">
             <Expander.Resources>
               <Thickness x:Key="ExpanderHeaderPadding">8,0,0,0</Thickness>
               <Thickness x:Key="ExpanderContentPadding">0</Thickness>
             </Expander.Resources>
             <Expander.Header>
-              <TextBlock Text="{Binding ExecInfoCompact}" Classes="subtle" FontSize="11" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding ExecInfoCompact}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap" />
             </Expander.Header>
             <StackPanel Margin="6,6,10,8" Spacing="6">
               <TextBlock Text="{x:Static app:UiStrings.ExecutionSummaryHeader}"
                          Foreground="{DynamicResource SubtleForegroundBrush}"
-                         FontSize="10" FontWeight="SemiBold" />
+                         FontSize="{DynamicResource Text.Caption.Size}" FontWeight="SemiBold" />
               <!-- What was CHANGED, one distinct card per table (reads live in Performance). -->
               <ItemsControl ItemsSource="{Binding ExecTableActivity}" IsVisible="{Binding HasExecTableActivity}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="core:TableActivityLine">
+                    <!-- ⚠ Promień 4 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4). To KARTA (tło + padding),
+                         a `Radius.Surface` niesie 3 — krok 0 oddał decyzję „karta: 3 czy 4" przeglądowi §13.3
+                         (§18.0.5/2). -->
                     <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="4"
                             Padding="8,6" Margin="0,0,0,8">
                       <StackPanel Spacing="5">
@@ -497,6 +514,9 @@
                           <controls:SvgIcon Data="{StaticResource Icon.Table}"
                                             Foreground="{DynamicResource AccentBrush}"
                                             Width="14" Height="14" VerticalAlignment="Center" />
+                          <!-- ⚠ 12 px + SemiBold lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4) — rejestr kolizji §18.R.
+                               To nagłówek karty, a rola nagłówka `Text.SectionHeader` niesie 11. Zachowanie wyglądu wygrywa
+                               z uzupełnieniem licznika (R12); całą listę takich kolizji rozstrzyga przegląd §13.3. -->
                           <TextBlock Text="{Binding Table}" FontSize="12" FontWeight="SemiBold"
                                      VerticalAlignment="Center" />
                         </StackPanel>
@@ -508,8 +528,8 @@
                                                   Foreground="{DynamicResource SuccessIconBrush}"
                                                   Width="12" Height="12" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Count}" Foreground="{DynamicResource SuccessIconBrush}"
-                                           FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+                                           FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                               </StackPanel>
                             </DataTemplate>
                             <DataTemplate x:DataType="core:UpdateChange">
@@ -518,8 +538,8 @@
                                                   Foreground="{DynamicResource WarningIconBrush}"
                                                   Width="12" Height="12" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Count}" Foreground="{DynamicResource WarningIconBrush}"
-                                           FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+                                           FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                               </StackPanel>
                             </DataTemplate>
                             <DataTemplate x:DataType="core:DeleteChange">
@@ -528,8 +548,8 @@
                                                   Foreground="{DynamicResource DangerIconBrush}"
                                                   Width="12" Height="12" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Count}" Foreground="{DynamicResource DangerIconBrush}"
-                                           FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+                                           FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                               </StackPanel>
                             </DataTemplate>
                           </ItemsControl.DataTemplates>
@@ -541,7 +561,7 @@
               </ItemsControl>
               <!-- No change cards: a read-only run shows a clean "nothing changed" line; a run
                    with unmeasured changes falls back to the concise aggregate (never the raw dump). -->
-              <TextBlock Text="{Binding ExecSummaryFallbackText}" Classes="subtle" FontSize="11" TextWrapping="Wrap"
+              <TextBlock Text="{Binding ExecSummaryFallbackText}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                          IsVisible="{Binding !HasExecTableActivity}" />
             </StackPanel>
           </Expander>
@@ -550,7 +570,7 @@
         </Panel>
       </Border>
       <TextBlock Text="{x:Static app:UiStrings.ProcedureDetailLoadingHint}" Classes="subtle"
-                 Margin="10,4" FontSize="11" IsVisible="{Binding IsLoading}" />
+                 Margin="10,4" FontSize="{DynamicResource Text.Compact.Size}" IsVisible="{Binding IsLoading}" />
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->
       <controls:MessageBanner Classes="docked" Severity="Error"

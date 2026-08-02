@@ -509,9 +509,13 @@ noted.
   by eye**. ⭐ What that probe did yield: layout rounding snaps **each element separately** to the
   device pixel — hence `UseLayoutRounding="False"` on `RadioButton`'s `PART_MarkArea` and deliberately
   not on `CheckBox` (snapping helps a **straight edge** and has nothing to offer a circle).
-  ⚠ **Two views still carry a now-redundant local `MinHeight="26"`** workaround for Fluent's chunky
-  `Expander` (`ProcedureDetailTabView`, `FunctionDetailTabView`) — removing a local value from a *view*
-  is **M2c**.
+  ⚠ **Two views still carry a local `MinHeight="26"`** workaround for Fluent's chunky `Expander`
+  (`ProcedureDetailTabView`, `FunctionDetailTabView`). ⚠⚠ **This line called it "now-redundant" and that is
+  CORRECTED (M2c iteration 4, 2026-08-02 — `product-polish.md` §18.4.4): measured, `FluentBridge` maps
+  `ExpanderMinHeight` onto `Size.Control` = **24**, so deleting the local value drops the header by 2 px.**
+  It is M2c's *file* to touch, but the removal is **not neutral**, and M2c does not change appearance — so
+  the value stays with a reason in place and is entry **K7** in the §18.R collision register. "26 or 24 for
+  an Expander header" is a §13.3 decision.
   **⭐ RATIFIED (D1–D12), do not re-litigate:** control heights **24 / 22 / 28** · **Cascadia Mono** ·
   app name + version **removed** from the status bar · progress infrastructure (M3.1) split from wiring
   operations (M3b) · **two tab-strip modes**, multi-row default, row limit 1–10 default 3, only the

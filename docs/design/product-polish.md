@@ -3421,3 +3421,90 @@ zachowujący wartość. Wykonanie ratyfikowanej reguły, ale przypadek, którego
 
 Build **0/0** · suite **7087** zielony w trzech partycjach · smoke czysty.
 Liczniki: `FontSize` **441 → 405** · `FontFamily` **81** · `CornerRadius` **33 → 31**.
+
+---
+
+### §18.R ⭐⭐ REJESTR KOLIZJI „rola pasuje funkcją, ale niesie inną liczbę"
+
+> **Ratyfikowane przez użytkownika 2026-08-02, po iteracji 3 — wariant „1 + 3":**
+> *„Jeżeli rola funkcjonalnie pasuje, ale wymagałaby zmiany liczby, aby zachować wygląd, to na tym etapie
+> nie zmieniamy katalogu tylko po to, żeby zmniejszyć liczbę wyjątków. Zostawiamy wartość lokalną
+> z uzasadnieniem, zapisujemy ją do rejestru kolizji, a po zakończeniu całego M2c przeglądamy wszystkie
+> takie przypadki jednocześnie podczas przeglądu katalogu (§13.3)."*
+>
+> ⭐ **Zdanie, które ustawia cały etap:** *„M2c nie projektuje nowego systemu typografii. M2c jedynie
+> migruje aplikację do systemu, który został zaakceptowany w M2a."* ⛔ **Katalog pozostaje ZAMROŻONY** —
+> nowa rola (np. `Text.SectionHeader.Large`) może powstać dopiero jako świadoma decyzja projektowa
+> podjęta na pełnym obrazie aplikacji, nigdy jako reakcja na pojedynczą iterację.
+
+**Zasada prowadzenia:** kolejna kolizja tego samego typu **nie wymaga pytania** — trafia tutaj i sweep
+idzie dalej. Rejestr jest wejściem do przeglądu §13.3.
+
+| # | Iter. | Element | Ma | Rola funkcjonalna | Co zrobiono |
+|---|---|---|---|---|---|
+| K1 | 1 | pasek poleceń debuggera (11 przycisków + etykiety) | 11 | `Text.Toolbar` = **12** | `Text.Compact` (chroma przy 11) |
+| K2 | 2 | pasmo poleceń Data Import — 3 elementy | 12 | `Text.Toolbar` = 12 ✔ | `Text.Application` — **instrukcja użytkownika: rola zostaje bez konsumenta do M3.2** |
+| K3 | 3 | „Findings", „Table access", tytuł karty ustalenia | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
+| K4 | 3 | `PlanLead` — wiodąca linia planu | 13 | brak roli tekstowej przy 13 | ⛔ lokalnie z powodem |
+| K5 | 3 | chip wagi ustalenia — promień | 3 | `Radius.Chip` = **4** | `Radius.Surface` (ratyfikowana reguła „każde 3 → Surface") |
+| K6 | 4 | nagłówek karty tabeli w obu bliźniakach | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
+| K7 | 4 | `MinHeight` nagłówka `Expandera` w obu bliźniakach | 26 | `Size.Control` = **24** (przez `ExpanderMinHeight`) | ⛔ lokalnie z powodem |
+
+⚠ **Wzorzec K1/K2/K3/K6 to jedno pytanie zadane cztery razy: ile mierzy pasek narzędzi i ile mierzy
+nagłówek sekcji.** Katalog M2a odpowiedział jedną liczbą na każde; produkt używa dwóch. Rozstrzygnięcie
+którejkolwiek z tych par **wewnątrz M2c** zmieniłoby wygląd, więc sweep zostawia obie strony widoczne.
+
+---
+
+### §18.4 Iteracja 4 — `ProcedureDetailTabView` + `FunctionDetailTabView` (2026-08-02)
+
+> **Zakres:** bliźniaki, migrowane **razem** (plan §18.0.7). 40 + 41 `FontSize`, po 1 `CornerRadius`.
+
+#### §18.4.1 Wynik
+
+| Plik | `FontSize` | `CornerRadius` |
+|---|---|---|
+| `ProcedureDetailTabView.axaml` | 40 → **4** | 1 → 1 (karta) |
+| `FunctionDetailTabView.axaml` | 41 → **4** | 1 → 1 (karta) |
+
+Po jednym usunięciu (koszyk A: `TextBox` przy 12). Role: `Text.Compact` 24 / 25 · `Text.Grid` 4 ·
+`Text.Caption` 4 · `Text.Code` 3. Wartości bez zmian.
+
+#### §18.4.2 ⭐ Dlaczego bliźniaki idą w JEDNEJ iteracji
+
+Oba pliki mają tę samą strukturę co do sekcji i różnią się jednym `CheckBox`em. Migrowane osobno
+**rozjechałyby się na pierwszej niejednoznacznej roli** — a rozjazd między dwoma widokami, które użytkownik
+czyta jako jeden wzorzec, jest gorszy niż wartość lokalna, bo nie widać go w żadnym pojedynczym pliku.
+Wynik potwierdza sens tej decyzji: **cztery wyjątki w każdym, identyczne co do rodzaju.**
+
+#### §18.4.3 `DataGrid` przy 11 — pierwszy raz, gdy deklaracja siatki ZGADZA SIĘ z rolą
+
+W Data Import cztery siatki deklarowały 12 przy roli niosącej 11 i **zostały** (§18.2.5). Tutaj osiem siatek
+deklaruje **11** — dokładnie tyle, ile niesie `Text.Grid`. To jest formalnie koszyk **A?** („usuń po
+weryfikacji"), ale poszły na **rolę**, nie do usunięcia: podmiana jest tak samo tania, zeruje licznik tak
+samo, a **dodatkowo mówi prawdę** — ta siatka ma rozmiar siatki. Usunięcie oddałoby wszystko, czego nie
+obejmują style `DataGridCell`/`DataGridColumnHeader`, domyślnej wielkości okna (14).
+
+#### §18.4.4 ⚠⚠ KOREKTA ZAPISU: `MinHeight="26"` w bliźniakach NIE jest redundantne
+
+`CLAUDE.md` opisywał tę wartość jako *„now-redundant local `MinHeight="26"` workaround for Fluent's chunky
+`Expander`"* i wskazywał M2c jako miejsce jej usunięcia. **Zmierzone: most `FluentBridge` mapuje
+`ExpanderMinHeight` na `Size.Control` = 24**, więc usunięcie obniżyłoby nagłówek o **2 px**.
+
+⭐ Zapis był prawdziwy w połowie: usunięcie faktycznie **należy** do M2c, ale **nie jest neutralne**, a M2c
+nie zmienia wyglądu. Wartość zostaje z powodem w miejscu i wchodzi do rejestru jako **K7**; „26 czy 24 dla
+nagłówka Expandera" rozstrzyga przegląd §13.3. Zapis w `CLAUDE.md` skorygowany.
+
+#### §18.4.5 Osiem wyjątków — cztery rodzaje, po dwa razy
+
+| Element (w każdym z bliźniaków) | Wart. | Powód |
+|---|---|---|
+| dwa `ae:TextEditor` w wierszu siatki (kursory / podprogramy Easy) | 12 | gęstość kontenera, nie dryf (§18.0.5/3); `Text.Code` niesie 13 |
+| znak rodzaju podprogramu | 9 | brak roli o tej wartości |
+| nagłówek karty tabeli, SemiBold | 12 | rola nagłówka niesie 11 → **K6** |
+| `CornerRadius` karty aktywności | 4 | `Radius.Surface` niesie 3 → decyzja §13.3 |
+
+#### §18.4.6 Stan po iteracji 4
+
+Build **0/0** · suite **7087** zielony w trzech partycjach · smoke czysty.
+Liczniki: `FontSize` **405 → 332** · `FontFamily` **81** · `CornerRadius` **31**.

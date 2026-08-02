@@ -65,8 +65,6 @@ public class DesignTokenComplianceTests
     /// </summary>
     private static readonly Dictionary<string, int> FontSizeBaseline = new(StringComparer.Ordinal)
     {
-        ["Views/FunctionDetailTabView.axaml"] = 41,
-        ["Views/ProcedureDetailTabView.axaml"] = 40,
         ["Views/TableDetailTabView.axaml"] = 27,
         ["Views/MainWindow.axaml"] = 26,
         ["Views/SessionManagerTabView.axaml"] = 26,
@@ -82,6 +80,13 @@ public class DesignTokenComplianceTests
         ["Views/ExecuteProcedureDialog.axaml"] = 9,
         ["Views/AddFieldDialog.axaml"] = 8,
         ["Views/ForeignKeyDialog.axaml"] = 8,
+        // ⭐ 41 → 4 i 40 → 4 (M2c iteracja 4). Bliźniaki, migrowane RAZEM — mają tę samą strukturę,
+        // więc osobno rozjechałyby się na pierwszej niejednoznacznej roli. Po jednym usunięciu (koszyk A),
+        // reszta na role. Cztery wyjątki w każdym, identyczne co do rodzaju: dwa edytory w WIERSZU SIATKI
+        // przy 12 px (§18.0.5/3 — gęstość kontenera, nie dryf), znak rodzaju przy 9 px (brak roli)
+        // i nagłówek karty 12 px + SemiBold przy roli nagłówka niosącej 11 (rejestr kolizji §18.R).
+        ["Views/FunctionDetailTabView.axaml"] = 4,
+        ["Views/ProcedureDetailTabView.axaml"] = 4,
         // ⭐ 42 → 6 (M2c iteracja 3). Ten widok wnosi TRZECIĄ postać tego samego konfliktu: rola,
         // która pasuje FUNKCJĄ, niesie inną LICZBĘ. Trzy nagłówki sekcji mają 12 px + SemiBold, a kanoniczna
         // rola nagłówka (`Text.SectionHeader`, tyle co `group-header`) niesie 11 — więc zostają lokalne
@@ -207,6 +212,8 @@ public class DesignTokenComplianceTests
         ["Views/SecurityManagerTabView.axaml"] = 2,
         ["Views/AggregationBarView.axaml"] = 1,
         ["Views/CheckConstraintDialog.axaml"] = 1,
+        // M2c iteracja 4: bez zmian. W obu bliźniakach to KARTA przy promieniu 4, a `Radius.Surface`
+        // niesie 3 — decyzja „karta: 3 czy 4” należy do przeglądu §13.3 (§18.0.5/2). Powody stoją w miejscu.
         ["Views/FunctionDetailTabView.axaml"] = 1,
         ["Views/MainWindow.axaml"] = 1,
         ["Views/ProcedureDetailTabView.axaml"] = 1,
