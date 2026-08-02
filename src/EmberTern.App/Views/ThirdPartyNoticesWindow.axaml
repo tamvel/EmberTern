@@ -31,7 +31,7 @@
                   Padding="20,16,16,16">
       <SelectableTextBlock x:Name="NoticesText"
                            FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                           FontSize="12"
+                           FontSize="{DynamicResource Text.Application.Size}"
                            LineHeight="17"
                            TextWrapping="Wrap" />
     </ScrollViewer>

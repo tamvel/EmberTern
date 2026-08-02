@@ -46,13 +46,13 @@
       <ComboBox Grid.Column="1"
                 ItemsSource="{Binding History}"
                 SelectedItem="{Binding SelectedHistory, Mode=TwoWay}"
-                HorizontalAlignment="Stretch" FontSize="11">
+                HorizontalAlignment="Stretch" FontSize="{DynamicResource Text.Compact.Size}">
         <ComboBox.ItemTemplate>
           <DataTemplate x:DataType="vm:ParameterHistorySnapshotViewModel">
             <StackPanel Spacing="1" Margin="0,2">
-              <TextBlock Text="{Binding TimestampText}" FontSize="11"
+              <TextBlock Text="{Binding TimestampText}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource SubtleForegroundBrush}" />
-              <TextBlock Text="{Binding PreviewText}" FontSize="11" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding PreviewText}" FontSize="{DynamicResource Text.Compact.Size}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </DataTemplate>
         </ComboBox.ItemTemplate>
@@ -72,21 +72,21 @@
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:ExecuteProcedureParamRowViewModel">
             <Grid ColumnDefinitions="170,130,46,*" Margin="0,3" MinHeight="30">
-              <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" />
-              <TextBlock Grid.Column="1" Text="{Binding TypeText}" FontSize="11"
+              <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding TypeText}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
               <CheckBox Grid.Column="2" IsChecked="{Binding IsNull, Mode=TwoWay}" VerticalAlignment="Center" />
               <Panel Grid.Column="3" VerticalAlignment="Center">
                 <!-- CHAR / VARCHAR -->
                 <TextBox IsVisible="{Binding IsSingleLineTextKind}" IsEnabled="{Binding IsValueEnabled}"
-                         Text="{Binding TextValue, Mode=TwoWay}" FontSize="11" />
+                         Text="{Binding TextValue, Mode=TwoWay}" FontSize="{DynamicResource Text.Compact.Size}" />
                 <!-- BLOB (text / binary) -->
                 <TextBox IsVisible="{Binding IsMultilineKind}" IsEnabled="{Binding IsValueEnabled}"
                          Text="{Binding TextValue, Mode=TwoWay}"
-                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" FontSize="11"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" FontSize="{DynamicResource Text.Compact.Size}"
                          ScrollViewer.VerticalScrollBarVisibility="Auto" />
                 <NumericUpDown IsVisible="{Binding IsNumericKind}" IsEnabled="{Binding IsValueEnabled}"
-                               Value="{Binding NumericValue, Mode=TwoWay}" FontSize="11" />
+                               Value="{Binding NumericValue, Mode=TwoWay}" FontSize="{DynamicResource Text.Compact.Size}" />
                 <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsDateTimeKind}">
                   <CalendarDatePicker IsVisible="{Binding IsDateKind}"
                                       SelectedDate="{Binding DateValue, Mode=TwoWay}"
@@ -95,7 +95,7 @@
                   <TextBox IsVisible="{Binding IsTimeKind}" IsEnabled="{Binding IsValueEnabled}"
                            Text="{Binding TimeText, Mode=TwoWay}"
                            Classes.time-error="{Binding HasTimeError}"
-                           Width="92" FontSize="11"
+                           Width="92" FontSize="{DynamicResource Text.Compact.Size}"
                            PlaceholderText="{x:Static app:UiStrings.ProcedureExecuteDialogTimeWatermark}"
                            GotFocus="OnTimeBoxGotFocus" LostFocus="OnTimeBoxLostFocus" />
                 </StackPanel>

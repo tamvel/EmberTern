@@ -742,8 +742,9 @@ public partial class TableDetailTabView : UserControl
             {
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(2, 0),
-                FontSize = 11,
             };
+            // Rozmiar z katalogu ról (M2c iteracja 8): edytor stoi w KOMÓRCE SIATKI, więc czyta `Text.Grid`.
+            tb.Bind(TextBox.FontSizeProperty, tb.GetResourceObservable("Text.Grid.Size"));
             if (row is not null && columnIndex < row.Length)
             {
                 tb.Text = row[columnIndex]?.ToString() ?? string.Empty;
@@ -763,9 +764,10 @@ public partial class TableDetailTabView : UserControl
             {
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(2, 0),
-                FontSize = 11,
                 MinWidth = 120,
             };
+            // Jak wyżej — kontrolka w komórce siatki czyta rolę siatki.
+            picker.Bind(CalendarDatePicker.FontSizeProperty, picker.GetResourceObservable("Text.Grid.Size"));
             if (row is not null && columnIndex < row.Length)
             {
                 picker.SelectedDate = row[columnIndex] is DateTime dt ? dt : (DateTime?)null;

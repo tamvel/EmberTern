@@ -41,7 +41,7 @@
                MinHeight="64"
                PlaceholderText="{x:Static app:UiStrings.CheckConstraintExpressionWatermark}"
                FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-               FontSize="12" />
+ />
     </StackPanel>
 
     <!-- Live DDL preview -->
@@ -49,13 +49,13 @@
       <TextBlock Text="{x:Static app:UiStrings.ConstraintDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
+              CornerRadius="{DynamicResource Radius.Surface}">
         <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
                  IsReadOnly="True"
                  AcceptsReturn="True"
                  TextWrapping="NoWrap"
                  FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  BorderThickness="0"
                  Padding="8,6"
                  MinHeight="56"
@@ -69,7 +69,7 @@
             IsVisible="{Binding HasValidationMessage}">
       <TextBlock Text="{Binding ValidationMessage}"
                  Classes="error"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  TextWrapping="Wrap" />
     </Border>
 

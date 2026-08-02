@@ -122,7 +122,7 @@
             </MultiBinding>
           </controls:SvgIcon.Foreground>
         </controls:SvgIcon>
-        <TextBlock Text="{Binding Blocked.Text}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center">
+        <TextBlock Text="{Binding Blocked.Text}" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap" VerticalAlignment="Center">
           <TextBlock.Foreground>
             <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
               <Binding Path="Blocked.BrushKey" />

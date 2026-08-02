@@ -41,7 +41,7 @@
                    IsEnabled="{Binding CanRename}" />
           <TextBlock Text="{x:Static app:UiStrings.AddFieldRenameBlockedHint}"
                      Classes="subtle error"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Compact.Size}"
                      TextWrapping="Wrap"
                      IsVisible="{Binding ShowRenameBlockedHint}" />
         </StackPanel>
@@ -73,7 +73,7 @@
                     HorizontalAlignment="Stretch" />
           <TextBlock Text="{x:Static app:UiStrings.AddFieldDomainHint}"
                      Classes="subtle"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Compact.Size}"
                      TextWrapping="Wrap"
                      Margin="0,4,0,0" />
           <!-- #3 — show the domain's underlying type so the user sees what it
@@ -81,7 +81,7 @@
                is selected (the domain governs the type). -->
           <SelectableTextBlock Text="{Binding SelectedDomainType, StringFormat='→ {0}'}"
                                FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                               FontSize="12"
+                               FontSize="{DynamicResource Text.Application.Size}"
                                Foreground="{DynamicResource AccentBrush}"
                                Margin="0,4,0,0"
                                IsVisible="{Binding HasDomainType}" />
@@ -142,7 +142,7 @@
                    TextWrapping="Wrap"
                    MinHeight="120"
                    FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                   FontSize="12" />
+ />
         </StackPanel>
       </TabItem>
 
@@ -155,7 +155,7 @@
                    TextWrapping="Wrap"
                    MinHeight="120"
                    FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                   FontSize="12" />
+ />
         </StackPanel>
       </TabItem>
 
@@ -168,7 +168,7 @@
                    TextWrapping="Wrap"
                    MinHeight="120"
                    FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                   FontSize="12" />
+ />
         </StackPanel>
       </TabItem>
 
@@ -219,7 +219,6 @@
                  AcceptsReturn="True"
                  TextWrapping="NoWrap"
                  FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 FontSize="12"
                  Margin="8"
                  MinHeight="180"
                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -234,7 +233,7 @@
             IsVisible="{Binding HasValidationMessage}">
       <TextBlock Text="{Binding ValidationMessage}"
                  Classes="error"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  TextWrapping="Wrap" />
     </Border>
 

@@ -24,7 +24,7 @@
       <DockPanel LastChildFill="True">
         <!-- Live elapsed timer (shared ExecutionTimer) — RIGHT-ALIGNED status element (docked
              right, outside the button StackPanel) so it never shifts the toolbar buttons. -->
-        <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}" FontSize="11"
+        <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}" FontSize="{DynamicResource Text.Compact.Size}"
                    FontFamily="Consolas,Menlo,monospace" Margin="8,0,4,0" VerticalAlignment="Center"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    IsVisible="{Binding ExecutionTimer.IsRunning}" />
@@ -107,7 +107,7 @@
     <ae:TextEditor Grid.Row="1" x:Name="ScriptEditor"
                    ShowLineNumbers="True"
                    FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                   FontSize="13"
+                   FontSize="{DynamicResource Text.Code.Size}"
                    HorizontalScrollBarVisibility="Auto"
                    VerticalScrollBarVisibility="Auto"
                    Background="{DynamicResource BackgroundBrush}"

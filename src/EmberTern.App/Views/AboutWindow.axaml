@@ -41,14 +41,14 @@
            HorizontalAlignment="Center" />
 
     <TextBlock Text="{Binding Product}"
-               FontSize="23"
+               FontSize="{DynamicResource Text.Display.Size}"
                FontWeight="SemiBold"
                HorizontalAlignment="Center"
                Margin="0,18,0,0" />
 
     <!-- Composed in the view model from UiStrings + the assembly's version. No literal here. -->
     <TextBlock Text="{Binding VersionText}"
-               FontSize="12"
+               FontSize="{DynamicResource Text.Application.Size}"
                Foreground="{DynamicResource SubtleForegroundBrush}"
                HorizontalAlignment="Center"
                Margin="0,5,0,0" />
@@ -57,7 +57,7 @@
          shows a label with nothing after it. Its value is assembly metadata from <ReleaseDate>. -->
     <TextBlock Text="{Binding ReleasedText}"
                IsVisible="{Binding HasReleaseDate}"
-               FontSize="11"
+               FontSize="{DynamicResource Text.Compact.Size}"
                Foreground="{DynamicResource SubtleForegroundBrush}"
                HorizontalAlignment="Center"
                Margin="0,3,0,0" />
@@ -73,11 +73,11 @@
     <!-- Labelled: "Created by …". Unlabelled it read as an unsigned line, and the name recurs in the
          copyright below — the label is what makes that repetition read as authorship. -->
     <TextBlock Text="{Binding AuthorText}"
-               FontSize="12"
+               FontSize="{DynamicResource Text.Application.Size}"
                HorizontalAlignment="Center" />
 
     <TextBlock Text="{Binding Copyright}"
-               FontSize="11"
+               FontSize="{DynamicResource Text.Compact.Size}"
                Foreground="{DynamicResource SubtleForegroundBrush}"
                HorizontalAlignment="Center"
                TextAlignment="Center"

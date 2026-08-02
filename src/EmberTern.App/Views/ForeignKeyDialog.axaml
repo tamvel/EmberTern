@@ -36,6 +36,8 @@
         </StackPanel>
         <StackPanel Grid.Row="0" Grid.Column="2" Spacing="4" MinWidth="220">
           <TextBlock Text="{x:Static app:UiStrings.ForeignKeySourceTableLabel}" Classes="field-label" />
+          <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 8, §18.8). Treść komunikatu, a katalog ma przy 13
+               wyłącznie rolę kodu — grupa „TextBlock 13 px" z §18.0.5/3. Rozstrzyga §13.3. -->
           <TextBlock Text="{Binding SourceTableName}"
                      FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                      FontSize="13"
@@ -52,13 +54,13 @@
       <Border Grid.Column="0"
               BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
+              CornerRadius="{DynamicResource Radius.Surface}">
         <Grid RowDefinitions="Auto,*">
           <Border Grid.Row="0"
                   Background="{DynamicResource PanelBrush}"
                   Padding="8,4">
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeySourceFieldsLabel}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        FontWeight="SemiBold" />
           </Border>
           <ListBox Grid.Row="1"
@@ -71,7 +73,7 @@
                      ContentPresenter doesn't treat "_" in the field name as an
                      access-key mnemonic (ID_NAGL → IDNAGL). See gotcha #76. -->
                 <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
-                  <TextBlock Text="{Binding Name}" FontSize="11" />
+                  <TextBlock Text="{Binding Name}" FontSize="{DynamicResource Text.Compact.Size}" />
                 </CheckBox>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -87,13 +89,13 @@
       <Border Grid.Column="2"
               BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
+              CornerRadius="{DynamicResource Radius.Surface}">
         <Grid RowDefinitions="Auto,Auto,*">
           <Border Grid.Row="0"
                   Background="{DynamicResource PanelBrush}"
                   Padding="8,4">
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsLabel}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        FontWeight="SemiBold" />
           </Border>
           <StackPanel Grid.Row="1" Margin="8,6,8,4" Spacing="4">
@@ -103,7 +105,7 @@
                       Watermark=""
                       HorizontalAlignment="Stretch" />
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsHint}"
-                       FontSize="10"
+                       FontSize="{DynamicResource Text.Caption.Size}"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="0,4,0,0" />
@@ -116,7 +118,7 @@
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:SelectableFieldViewModel">
                 <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
-                  <TextBlock Text="{Binding Name}" FontSize="11" />
+                  <TextBlock Text="{Binding Name}" FontSize="{DynamicResource Text.Compact.Size}" />
                 </CheckBox>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -160,13 +162,13 @@
       <TextBlock Text="{x:Static app:UiStrings.ForeignKeyDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
+              CornerRadius="{DynamicResource Radius.Surface}">
         <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
                  IsReadOnly="True"
                  AcceptsReturn="True"
                  TextWrapping="NoWrap"
                  FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  BorderThickness="0"
                  Padding="8,6"
                  MinHeight="80"
@@ -181,7 +183,7 @@
             IsVisible="{Binding HasValidationMessage}">
       <TextBlock Text="{Binding ValidationMessage}"
                  Classes="error"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  TextWrapping="Wrap" />
     </Border>
 

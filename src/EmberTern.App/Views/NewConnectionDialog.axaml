@@ -82,7 +82,7 @@
                     Content="{x:Static app:UiStrings.DialogFieldDeveloperMode}" />
           <TextBlock Text="{x:Static app:UiStrings.DeveloperModeDescription}"
                      Classes="subtle"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Compact.Size}"
                      TextWrapping="Wrap" />
         </StackPanel>
 
@@ -102,7 +102,7 @@
               </Grid>
               <TextBlock Text="{Binding ClientLibraryHint}"
                          Classes="subtle"
-                         FontSize="11"
+                         FontSize="{DynamicResource Text.Compact.Size}"
                          TextWrapping="Wrap" />
             </StackPanel>
           </StackPanel>
@@ -116,7 +116,7 @@
             IsVisible="{Binding HasTestMessage}">
       <TextBlock Text="{Binding TestMessage}"
                  TextWrapping="Wrap"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  Classes.success="{Binding IsTestSuccess}"
                  Classes.error="{Binding IsTestFailure}"
                  Classes.subtle="{Binding IsTesting}" />
@@ -135,7 +135,7 @@
         <TextBlock Grid.Column="1"
                    Text="{Binding ValidationMessage}"
                    Classes="error"
-                   FontSize="12"
+                   FontSize="{DynamicResource Text.Application.Size}"
                    VerticalAlignment="Center"
                    Margin="6,0,0,0"
                    IsVisible="{Binding HasValidationMessage}" />

@@ -25,7 +25,7 @@
               Padding="10,6">
         <TextBlock Text="{Binding StatusText}"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
-                   FontSize="12" TextWrapping="Wrap" />
+                   FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap" />
       </Border>
 
       <TreeView ItemsSource="{Binding Groups}"
@@ -71,6 +71,9 @@
 
     <!-- Right: read-only source preview with all matches highlighted -->
     <Grid Grid.Column="2">
+      <!-- ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 8, §18.8). Podgląd Global Search to jeden z sześciu
+           edytorów stojących w wierszu siatki — gęstość kontenera, nie dryf (§18.0.5/3). Rola `Text.Code`
+           niesie 13. Rozstrzyga §13.3. -->
       <ae:TextEditor x:Name="PreviewEditor"
                      IsReadOnly="True"
                      ShowLineNumbers="True"

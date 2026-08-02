@@ -26,7 +26,7 @@
     <StackPanel Grid.Row="1" Margin="20,18,20,18" Spacing="6">
       <TextBlock Text="{x:Static app:UiStrings.FolderDialogNameLabel}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
-                 FontSize="12" />
+                 FontSize="{DynamicResource Text.Application.Size}" />
       <TextBox x:Name="NameBox"
                Text=""
                KeyDown="OnNameBoxKeyDown" />

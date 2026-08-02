@@ -42,7 +42,7 @@
                   HorizontalAlignment="Stretch">
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="vm:NewTableTabViewModel+NamedTableKind">
-              <TextBlock Text="{Binding Label}" FontSize="12" />
+              <TextBlock Text="{Binding Label}" FontSize="{DynamicResource Text.Application.Size}" />
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
@@ -58,7 +58,7 @@
                     ItemsSource="{Binding Fields}"
                     SelectedItem="{Binding SelectedField, Mode=TwoWay}"
                     PointerPressed="OnEasyGridPointerPressed"
-                    FontSize="11"
+                    FontSize="{DynamicResource Text.Grid.Size}"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
                     CanUserSortColumns="False"
@@ -277,7 +277,6 @@
                  AcceptsReturn="True"
                  TextWrapping="NoWrap"
                  FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 FontSize="12"
                  MaxHeight="140"
                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
                  ScrollViewer.VerticalScrollBarVisibility="Auto" />
@@ -290,7 +289,7 @@
             IsVisible="{Binding HasValidationMessage}">
       <TextBlock Text="{Binding ValidationMessage}"
                  Classes="error"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  TextWrapping="Wrap" />
     </Border>
 

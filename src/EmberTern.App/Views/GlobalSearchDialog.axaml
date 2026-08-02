@@ -42,7 +42,7 @@
 
       <TextBlock Text="{x:Static app:UiStrings.GlobalSearchScopeHint}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
-                 FontSize="11" TextWrapping="Wrap" />
+                 FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap" />
     </StackPanel>
 
     <Border Grid.Row="2"

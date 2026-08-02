@@ -86,6 +86,11 @@ public class DesignTokenComplianceTests
         // obiektów: każdy z tych trzech widoków ma WŁASNE decyzje — pasek segmentowy, karty ostrzeżeń,
         // koła stanu, kapsuły postępu, nagłówki paneli szczegółów — i stąd wyjątki. Security Manager
         // trzyma OSIEM nagłówków przy 13 px, dla których katalog ma wyłącznie rolę kodu (§18.0.5/3).
+        // ⭐ OGON DIALOGÓW — 28 plików, 78 → 4 (M2c iteracja 8). 8 usunięć, 70 na role, 4 wyjątki:
+        // treść `ConfirmDialog`/`ChoiceDialog`/`ForeignKeyDialog` przy 13 px (katalog ma przy 13 wyłącznie
+        // rolę kodu) i podgląd Global Search — edytor w wierszu siatki przy 12 px. 24 wpisy zdjęte
+        // w całości. ⭐ `AggregationBarView` oddał swój promień na **`Radius.Chip`** — jedyny prawdziwy
+        // chip w aplikacji (§18.0.5/2), wartość i funkcja zgodne, więc bez wyjątku.
         ["Views/SessionManagerTabView.axaml"] = 4,
         ["Views/SecurityManagerTabView.axaml"] = 9,
         ["Views/TraceMonitorTabView.axaml"] = 3,
@@ -95,9 +100,7 @@ public class DesignTokenComplianceTests
         // elementy — pierwszy realny konsument tej roli poza Data Import), nazwa połączenia
         // `Text.Title`, plakietka DEV MODE `Text.Caption`, dwa edytory `Text.Code`, log komunikatów
         // `Text.Application`, reszta `Text.Compact`.
-        ["Views/ExecuteProcedureDialog.axaml"] = 9,
-        ["Views/AddFieldDialog.axaml"] = 8,
-        ["Views/ForeignKeyDialog.axaml"] = 8,
+        ["Views/ForeignKeyDialog.axaml"] = 1,
         // ⭐ 41 → 4 i 40 → 4 (M2c iteracja 4). Bliźniaki, migrowane RAZEM — mają tę samą strukturę,
         // więc osobno rozjechałyby się na pierwszej niejednoznacznej roli. Po jednym usunięciu (koszyk A),
         // reszta na role. Cztery wyjątki w każdym, identyczne co do rodzaju: dwa edytory w WIERSZU SIATKI
@@ -111,9 +114,6 @@ public class DesignTokenComplianceTests
         // z powodem, zamiast zostać opisane jako treść. Reszta wyjątków: dwa znaki przy 13 i 9 px oraz
         // jedna linia treści przy 13, gdzie katalog ma wyłącznie rolę kodu.
         ["Views/PerformancePanelView.axaml"] = 6,
-        ["Views/AboutWindow.axaml"] = 5,
-        ["Views/IndexDialog.axaml"] = 5,
-        ["Views/ConstraintFieldDialog.axaml"] = 4,
         // ⭐ 82 → 4 (M2c iteracja 2). Odwrotność iteracji 1: tu koszyk A był największy w całym etapie —
         // **35 wartości po prostu usunięto**, bo `ComboBox`/`TextBox`/`CheckBox`/`NumericUpDown`/
         // `RadioButton`/`Button` już dostają dokładnie te 12 px ze stylu M2b. 41 przeszło na rolę,
@@ -129,32 +129,13 @@ public class DesignTokenComplianceTests
         // tylko uzasadniona reszta. ⚠ Koszyk A był tu PUSTY — cały debugger stoi o stopień gęściej (11 px)
         // niż domyślny styl M2b (12), więc żadnej wartości nie dało się po prostu usunąć.
         ["Views/DebuggerTabView.axaml"] = 4,
-        ["Views/NewConnectionDialog.axaml"] = 4,
-        ["Views/NewTableTabView.axaml"] = 4,
-        ["Views/CheckConstraintDialog.axaml"] = 3,
-        ["Views/DiagnosticsPanelView.axaml"] = 3,
-        ["Views/BatchResultsDialog.axaml"] = 2,
-        ["Views/GlobalSearchTabView.axaml"] = 2,
-        ["Views/ScriptExecutorTabView.axaml"] = 2,
-        ["Views/TableDetailTabView.axaml.cs"] = 2,
-        ["Views/BlobEditorWindow.axaml"] = 1,
+        ["Views/GlobalSearchTabView.axaml"] = 1,
         ["Views/ChoiceDialog.axaml"] = 1,
         ["Views/ConfirmDialog.axaml"] = 1,
         // 6 → 1 (M2c iteracja 1). Pięć wywołań czyta rolę przez `BindFontSize` (odpowiednik
         // `{DynamicResource}` po stronie C#, bliźniak istniejącego `BindBrush`); zostaje ciało karty Peek —
         // powierzchnia KODU przy 12 px, gdy rola `Text.Code` niesie 13.
         ["Views/DebuggerTabView.axaml.cs"] = 1,
-        ["Views/ExportDialog.axaml"] = 1,
-        ["Views/GlobalSearchDialog.axaml"] = 1,
-        ["Views/KeyboardShortcutsWindow.axaml"] = 1,
-        ["Views/NewFolderDialog.axaml"] = 1,
-        ["Views/RecompileDependentsDialog.axaml"] = 1,
-        ["Views/SettingsExportDialog.axaml"] = 1,
-        ["Views/SettingsImportDialog.axaml"] = 1,
-        ["Views/SettingsWindow.axaml"] = 1,
-        ["Views/SubprogramKindDialog.axaml"] = 1,
-        ["Views/ThirdPartyNoticesWindow.axaml"] = 1,
-        ["Views/UserEditDialog.axaml"] = 1,
     };
 
     /// <summary>
@@ -224,11 +205,6 @@ public class DesignTokenComplianceTests
         // (`Radius.Surface` niesie 3 — decyzja produktowa oddana §13.3) i KAPSUŁA przy 6, gdzie promień
         // jest połową wysokości, czyli arytmetyką, a nie rolą (§18.0.5/2).
         ["Views/PerformancePanelView.axaml"] = 2,
-        ["Views/ForeignKeyDialog.axaml"] = 3,
-        ["Views/ConstraintFieldDialog.axaml"] = 2,
-        ["Views/IndexDialog.axaml"] = 2,
-        ["Views/AggregationBarView.axaml"] = 1,
-        ["Views/CheckConstraintDialog.axaml"] = 1,
         // M2c iteracja 4: bez zmian. W obu bliźniakach to KARTA przy promieniu 4, a `Radius.Surface`
         // niesie 3 — decyzja „karta: 3 czy 4” należy do przeglądu §13.3 (§18.0.5/2). Powody stoją w miejscu.
         ["Views/FunctionDetailTabView.axaml"] = 1,

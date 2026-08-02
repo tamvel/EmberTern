@@ -3669,3 +3669,49 @@ oba są żywe, oba są lokalnym idiomem swojego pliku.
 
 Build **0/0** · suite **7087** zielony w trzech partycjach · smoke czysty.
 Liczniki: `FontSize` **152 → 114** · `FontFamily` **81** · `CornerRadius` **30 → 28**.
+
+---
+
+### §18.8 Iteracja 8 — ogon dialogów + `TableDetailTabView.axaml.cs` (2026-08-02)
+
+> **Zakres:** 28 plików po 1–11 deklaracji — dialogi, okna narzędziowe, `AggregationBarView`,
+> `DiagnosticsPanelView`, `ScriptExecutorTabView`, `GlobalSearchTabView`, `NewTableTabView`
+> oraz dwie kontrolki budowane w code-behind Table Detail.
+
+#### §18.8.1 Wynik
+
+**`FontSize` 80 → 4 · `CornerRadius` 9 → 0.** 10 usunięć, 72 na role, 4 wyjątki.
+**24 wpisy zdjęte z bazy w całości.** Wartości bez zmian.
+
+#### §18.8.2 ⭐ `Radius.Chip` dostaje swojego jedynego konsumenta — i to bez wyjątku
+
+Krok 0 zmierzył, że z jedenastu promieni przy 4 **chipem jest dokładnie jeden**:
+`AggregationBarView` (§18.0.5/2). `Radius.Chip` niesie **4**, więc tutaj — jedyny raz w etapie —
+**funkcja i liczba się zgadzają**, i promień przechodzi na rolę bez żadnego zastrzeżenia.
+
+⚠ Warto to zestawić z **K5** (chip Performance przy promieniu 3, gdzie `Radius.Chip` = 4 i migracja
+poszła na `Radius.Surface`). Ta sama nazwa roli, dwa różne wyniki, bo **decyduje liczba, nie nazwa** —
+dokładnie to, co ratyfikuje R12.
+
+#### §18.8.3 Cztery wyjątki, wszystkie znanego rodzaju
+
+`ConfirmDialog`, `ChoiceDialog` i nagłówek `ForeignKeyDialog` przy **13 px** (katalog ma przy 13
+wyłącznie rolę kodu — grupa z §18.0.5/3) oraz podgląd **Global Search** przy 12 px, czyli szósty
+i ostatni z edytorów, które krok 0 zmierzył jako stojące **w wierszu siatki**.
+
+⭐ **Tym samym wszystkie sześć edytorów przy 12 px z §18.0.5/3 zostało odnalezione i udokumentowane
+w miejscu:** dwa w `ProcedureDetail`, dwa w `FunctionDetail`, szczegół Trace, podgląd Global Search.
+Pomiar kroku 0 zgadza się co do sztuki.
+
+#### §18.8.4 Code-behind Table Detail — czwarty idiom konsumpcji roli
+
+Dwie kontrolki edycji w komórce siatki (`TextBox`, `CalendarDatePicker`) budowane w `FuncDataTemplate`
+czytają **`Text.Grid`** przez `Bind(…, GetResourceObservable(…))`. To ta sama trasa co `BindFontSize`
+w debuggerze, tyle że bez pomocnika — plik nie miał go i jedno wywołanie nie uzasadnia nowego.
+
+#### §18.8.5 Stan po iteracji 8
+
+Build **0/0** · suite **7087** zielony · smoke czysty.
+Liczniki: `FontSize` **114 → 43** · `FontFamily` **81** · `CornerRadius` **28 → 19**.
+⭐ **Pozostałe 43 `FontSize` i 19 `CornerRadius` to WYŁĄCZNIE świadome wyjątki z powodem zapisanym
+w miejscu** — po raz pierwszy w etapie licznik nie zawiera już ani jednej wartości „do zrobienia".

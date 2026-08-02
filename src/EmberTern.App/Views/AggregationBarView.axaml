@@ -52,7 +52,7 @@
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:AggregationLineViewModel">
-            <Border CornerRadius="4" Padding="8,2" Margin="0,0,6,6"
+            <Border CornerRadius="{DynamicResource Radius.Chip}" Padding="8,2" Margin="0,0,6,6"
                     Background="{DynamicResource ChromeStrongBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1">

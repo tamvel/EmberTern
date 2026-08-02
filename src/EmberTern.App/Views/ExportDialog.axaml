@@ -75,7 +75,7 @@
               <TextBlock Text="{x:Static app:UiStrings.ExportDelimiterLabel}"
                          VerticalAlignment="Center"
                          Foreground="{DynamicResource SubtleForegroundBrush}"
-                         FontSize="12" Width="80" />
+                         FontSize="{DynamicResource Text.Application.Size}" Width="80" />
               <ComboBox MinWidth="180"
                         ItemsSource="{Binding DelimiterOptions}"
                         SelectedItem="{Binding SelectedDelimiterOption, Mode=TwoWay}">

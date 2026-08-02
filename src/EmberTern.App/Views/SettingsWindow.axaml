@@ -401,7 +401,7 @@
       <TextBlock Grid.Column="0"
                  Text="{x:Static app:UiStrings.SettingsAppliedImmediately}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  VerticalAlignment="Center" />
 
       <Button Grid.Column="1"
