@@ -46,7 +46,7 @@
          reachable when ShowExpand is set). -->
     <TextBlock Grid.Column="2" Text="{Binding #Root.Message}"
                IsVisible="{Binding !#Root.IsExpanded}"
-               VerticalAlignment="Center" Margin="0,5,8,5" FontSize="12" LineHeight="18"
+               VerticalAlignment="Center" Margin="0,5,8,5" FontSize="{DynamicResource Text.Application.Size}" LineHeight="18"
                TextTrimming="CharacterEllipsis">
       <TextBlock.Foreground>
         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -58,7 +58,7 @@
     <ScrollViewer Grid.Column="2" IsVisible="{Binding #Root.IsExpanded}"
                   MaxHeight="{Binding #Root.MaxExpandedHeight}"
                   VerticalAlignment="Center" Margin="0,5,8,5" VerticalScrollBarVisibility="Auto">
-      <SelectableTextBlock Text="{Binding #Root.Message}" FontSize="12" LineHeight="18"
+      <SelectableTextBlock Text="{Binding #Root.Message}" FontSize="{DynamicResource Text.Application.Size}" LineHeight="18"
                            TextWrapping="Wrap">
         <SelectableTextBlock.Foreground>
           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">

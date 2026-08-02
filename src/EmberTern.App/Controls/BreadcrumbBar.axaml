@@ -11,7 +11,7 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Padding" Value="4,1" />
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
     </Style>
@@ -36,7 +36,7 @@
     <ItemsControl.ItemTemplate>
       <DataTemplate x:DataType="controls:BreadcrumbSegment">
         <StackPanel Orientation="Horizontal">
-          <TextBlock Text="›" FontSize="11" Margin="1,0" VerticalAlignment="Center"
+          <TextBlock Text="›" FontSize="{DynamicResource Text.Compact.Size}" Margin="1,0" VerticalAlignment="Center"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding ShowSeparator}" />
           <Button Classes="crumb" Classes.selected="{Binding IsSelected}"

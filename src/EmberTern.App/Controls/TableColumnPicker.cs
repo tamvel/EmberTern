@@ -98,10 +98,13 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
         var g = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
         var caption = new TextBlock
         {
-            Text = header, FontSize = 10, FontWeight = FontWeight.SemiBold,
+            Text = header, FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(6, 4, 6, 0), [Grid.RowProperty] = 0,
         };
         caption[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("SubtleForegroundBrush");
+        // Rozmiar z katalogu ról (M2c iteracja 7) — idiom tego pliku: `DynamicResourceExtension`
+        // przez indekser, dokładnie jak `Foreground` w linii wyżej.
+        caption[!TextBlock.FontSizeProperty] = new DynamicResourceExtension("Text.Caption.Size");
         filter[Grid.RowProperty] = 1;
         list[Grid.RowProperty] = 2;
         g.Children.Add(caption);
@@ -114,14 +117,16 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
         => new((_, _) =>
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 2) };
-            var name = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+            var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+            name[!TextBlock.FontSizeProperty] = new DynamicResourceExtension("Text.Compact.Size");
             name[!TextBlock.TextProperty] = new Binding(nameof(ColumnSpec.Name));
             var type = new TextBlock
             {
-                FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(12, 0, 0, 0), [Grid.ColumnProperty] = 1,
             };
             type[!TextBlock.TextProperty] = new Binding(nameof(ColumnSpec.Type));
+            type[!TextBlock.FontSizeProperty] = new DynamicResourceExtension("Text.Compact.Size");
             type[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("SubtleForegroundBrush");
             g.Children.Add(name);
             g.Children.Add(type);

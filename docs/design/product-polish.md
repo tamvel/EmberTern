@@ -3620,3 +3620,52 @@ trójki w Security Managerze, w tym jedna jako setter stylu.
 
 Build **0/0** · suite **7087** zielony · smoke czysty.
 Liczniki: `FontSize` **191 → 152** · `FontFamily` **81** · `CornerRadius` **31 → 30**.
+
+---
+
+### §18.7 Iteracja 7 — `MainWindow` + `Controls/` (2026-08-02)
+
+> **Zakres:** ⭐ **powierzchnia trwała (§0.1)** — `MainWindow` 26 `FontSize` + 1 `CornerRadius`,
+> `BreadcrumbBar` 2, `MessageBanner` 2, `TableColumnPicker.cs` 3.
+
+#### §18.7.1 Wynik: **33 → 0, bez ani jednego wyjątku**
+
+Jedno usunięcie (filtr drzewa metadanych — cała linia, bo `FontSize` był jej jedyną treścią),
+32 na role, 1 promień na `Radius.Surface`. Wartości bez zmian.
+
+#### §18.7.2 ⭐ Zero wyjątków przy NAJWIĘKSZEJ różnorodności ról w jednym pliku
+
+`MainWindow` użył **sześciu** różnych ról — więcej niż którykolwiek inny plik w etapie:
+
+| Element | Rola |
+|---|---|
+| **pasek statusu** — stan połączenia, statystyki zapytania, status debuggera, chip wersji | **`Text.Status`** (4 elementy) |
+| nazwa aktywnego połączenia w tytule | `Text.Title` |
+| plakietka DEV MODE | `Text.Caption` |
+| dwa edytory (SQL + podgląd DDL) | `Text.Code` |
+| log komunikatów + notka nad wynikami | `Text.Application` |
+| reszta chromy — panele, listy, filtry | `Text.Compact` |
+
+⭐ **To jest pierwszy realny konsument `Text.Status` poza belką Data Import** — a więc pierwszy raz,
+gdy rola „pasek statusu jest powierzchnią trwałą i musi dać się wyregulować niezależnie" (§3.3
+`Typography.axaml`) faktycznie obejmuje **oba** paski statusu w aplikacji. Do dziś pasek `MainWindow`
+trzymał cztery własne jedenastki i żadna zmiana katalogu by go nie ruszyła.
+
+⚠ Zero wyjątków nie wzięło się z prostoty pliku, tylko z tego, że **katalog ma rolę dla każdego rodzaju
+tekstu, jaki niesie chroma aplikacji**. Kolizje K1–K8 dotyczą wyłącznie miejsc, gdzie widok ma własną
+skalę — a chroma `MainWindow` żadnej własnej nie miała.
+
+#### §18.7.3 `Controls/` — trzy komponenty współdzielone, trzy różne idiomy
+
+`BreadcrumbBar` migruje **setter stylu** (`Text.Compact`) i separator `›`, który jest częścią tekstu
+(reguła glifów §18.1.3). `MessageBanner` — obie linie treści na `Text.Application`, czyli jedna z ról
+dostaje wreszcie **ten** komponent, który jest jedyną powierzchnią komunikatów w IDE.
+`TableColumnPicker` jest w C#, więc czyta katalog **idiomem, który ten plik już miał**:
+`caption[!TextBlock.FontSizeProperty] = new DynamicResourceExtension("…")` — dokładnie tak, jak od zawsze
+czytał `Foreground`. ⭐ Trzeci wariant „jak skonsumować rolę poza XAML-em", obok `BindFontSize` z iteracji 1;
+oba są żywe, oba są lokalnym idiomem swojego pliku.
+
+#### §18.7.4 Stan po iteracji 7
+
+Build **0/0** · suite **7087** zielony w trzech partycjach · smoke czysty.
+Liczniki: `FontSize` **152 → 114** · `FontFamily` **81** · `CornerRadius` **30 → 28**.

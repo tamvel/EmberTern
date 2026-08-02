@@ -82,7 +82,6 @@ public class DesignTokenComplianceTests
         // wymaga usunięcia wpisu, nie wyzerowania go.
         // Zdjęte: TableDetail 27 · TriggerDetail 22 · ViewDetail 20 · PackageDetail 17 · DomainDetail 16
         // · GeneratorDetail 15 · ExceptionDetail 13 · IndexDetail 11.
-        ["Views/MainWindow.axaml"] = 26,
         // ⭐ 26 → 4 / 17 → 3 / 17 → 9 (M2c iteracja 6 — monitory). Tu odwrotnie niż w edytorach
         // obiektów: każdy z tych trzech widoków ma WŁASNE decyzje — pasek segmentowy, karty ostrzeżeń,
         // koła stanu, kapsuły postępu, nagłówki paneli szczegółów — i stąd wyjątki. Security Manager
@@ -90,6 +89,12 @@ public class DesignTokenComplianceTests
         ["Views/SessionManagerTabView.axaml"] = 4,
         ["Views/SecurityManagerTabView.axaml"] = 9,
         ["Views/TraceMonitorTabView.axaml"] = 3,
+        // ⭐ POWIERZCHNIA TRWAŁA (§0.1) — `MainWindow` 26 → 0 + 1 promień, `BreadcrumbBar` 2 → 0,
+        // `MessageBanner` 2 → 0, `TableColumnPicker` 3 → 0 (M2c iteracja 7). Zero wyjątków mimo
+        // największej różnorodności ról w jednym pliku: pasek statusu dostał `Text.Status` (cztery
+        // elementy — pierwszy realny konsument tej roli poza Data Import), nazwa połączenia
+        // `Text.Title`, plakietka DEV MODE `Text.Caption`, dwa edytory `Text.Code`, log komunikatów
+        // `Text.Application`, reszta `Text.Compact`.
         ["Views/ExecuteProcedureDialog.axaml"] = 9,
         ["Views/AddFieldDialog.axaml"] = 8,
         ["Views/ForeignKeyDialog.axaml"] = 8,
@@ -126,11 +131,8 @@ public class DesignTokenComplianceTests
         ["Views/DebuggerTabView.axaml"] = 4,
         ["Views/NewConnectionDialog.axaml"] = 4,
         ["Views/NewTableTabView.axaml"] = 4,
-        ["Controls/TableColumnPicker.cs"] = 3,
         ["Views/CheckConstraintDialog.axaml"] = 3,
         ["Views/DiagnosticsPanelView.axaml"] = 3,
-        ["Controls/BreadcrumbBar.axaml"] = 2,
-        ["Controls/MessageBanner.axaml"] = 2,
         ["Views/BatchResultsDialog.axaml"] = 2,
         ["Views/GlobalSearchTabView.axaml"] = 2,
         ["Views/ScriptExecutorTabView.axaml"] = 2,
@@ -230,7 +232,6 @@ public class DesignTokenComplianceTests
         // M2c iteracja 4: bez zmian. W obu bliźniakach to KARTA przy promieniu 4, a `Radius.Surface`
         // niesie 3 — decyzja „karta: 3 czy 4” należy do przeglądu §13.3 (§18.0.5/2). Powody stoją w miejscu.
         ["Views/FunctionDetailTabView.axaml"] = 1,
-        ["Views/MainWindow.axaml"] = 1,
         ["Views/ProcedureDetailTabView.axaml"] = 1,
     };
 

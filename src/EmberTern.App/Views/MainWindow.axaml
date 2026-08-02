@@ -84,7 +84,7 @@
                  Full name on hover. -->
             <TextBlock Text="{Binding ActiveConnectionName}"
                        FontWeight="Bold"
-                       FontSize="14"
+                       FontSize="{DynamicResource Text.Title.Size}"
                        MaxWidth="260"
                        TextTrimming="CharacterEllipsis"
                        ToolTip.Tip="{Binding ActiveConnectionName}"
@@ -104,12 +104,12 @@
           <!-- DEV MODE badge: shown only when the active connection has Developer Mode
                on (DDL waits for in-use objects). No transaction terminology surfaced. -->
           <Border Background="{DynamicResource ConnectedBrush}"
-                  CornerRadius="3" Padding="6,1"
+                  CornerRadius="{DynamicResource Radius.Surface}" Padding="6,1"
                   VerticalAlignment="Center"
                   IsVisible="{Binding IsDeveloperModeActive}"
                   ToolTip.Tip="{x:Static app:UiStrings.DeveloperModeBadgeTooltip}">
             <TextBlock Text="{x:Static app:UiStrings.DeveloperModeBadge}"
-                       FontSize="10" FontWeight="Bold"
+                       FontSize="{DynamicResource Text.Caption.Size}" FontWeight="Bold"
                        Foreground="{DynamicResource DevModeBadgeForegroundBrush}" />
           </Border>
         </StackPanel>
@@ -395,7 +395,6 @@
             <TextBox x:Name="SidebarFilterBox" Classes="search"
                      Text="{Binding FilterText, Mode=TwoWay}"
                      PlaceholderText="{Binding FilterPlaceholder}"
-                     FontSize="12"
                      Padding="6,4" />
           </Border>
 
@@ -510,12 +509,12 @@
                                         VerticalAlignment="Center" />
                       <TextBlock Text="{Binding Name}"
                                  FontWeight="SemiBold"
-                                 FontSize="11"
+                                 FontSize="{DynamicResource Text.Compact.Size}"
                                  VerticalAlignment="Center"
                                  DoubleTapped="OnFolderNameDoubleTapped" />
                     </StackPanel>
                     <TextBox Text="{Binding EditingName, Mode=TwoWay}"
-                             FontSize="11"
+                             FontSize="{DynamicResource Text.Compact.Size}"
                              Padding="2,1"
                              IsVisible="{Binding IsRenaming}"
                              behaviors:FocusBehavior.FocusOnVisible="True"
@@ -584,7 +583,7 @@
                     </controls:SvgIcon>
                     <TextBlock Text="{Binding DisplayName}"
                                FontWeight="SemiBold"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{Binding DisplayName}"
                                VerticalAlignment="Center" />
@@ -713,10 +712,10 @@
                                VerticalAlignment="Center"
                                Classes.subtle="{Binding IsPlaceholder}"
                                Classes.inactive="{Binding IsInactive}"
-                               FontSize="11" />
+                               FontSize="{DynamicResource Text.Compact.Size}" />
                     <TextBlock Text="…"
                                Classes="subtle"
-                               FontSize="10"
+                               FontSize="{DynamicResource Text.Caption.Size}"
                                VerticalAlignment="Center"
                                IsVisible="{Binding IsLoading}" />
                   </StackPanel>
@@ -754,7 +753,7 @@
               ToolTip.Tip="{x:Static app:UiStrings.SidebarExpandTooltip}"
               PointerPressed="OnSidebarRailPointerPressed">
         <TextBlock Text="›"
-                   FontSize="11"
+                   FontSize="{DynamicResource Text.Compact.Size}"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center" />
@@ -837,7 +836,7 @@
                             </controls:SvgIcon.Foreground>
                           </controls:SvgIcon>
                           <TextBlock Text="{Binding DisplayTitle}"
-                                     FontSize="11"
+                                     FontSize="{DynamicResource Text.Compact.Size}"
                                      VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
@@ -878,7 +877,7 @@
                    cohesive "Elapsed: mm:ss.f" while any SQL Editor / Execute Procedure / Execute
                    Function run is in progress; the final "N ms" is shown by the metrics display. -->
               <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}"
-                         FontSize="11" FontFamily="Consolas,Menlo,monospace" Margin="8,0,14,0"
+                         FontSize="{DynamicResource Text.Compact.Size}" FontFamily="Consolas,Menlo,monospace" Margin="8,0,14,0"
                          VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}"
                          IsVisible="{Binding ExecutionTimer.IsRunning}" />
             <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,4" VerticalAlignment="Center">
@@ -1235,7 +1234,7 @@
               <ae:TextEditor x:Name="SqlEditor"
                              ShowLineNumbers="True"
                              FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                             FontSize="13"
+                             FontSize="{DynamicResource Text.Code.Size}"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
                              Background="{DynamicResource BackgroundBrush}"
@@ -1245,7 +1244,7 @@
                              ShowLineNumbers="True"
                              IsReadOnly="True"
                              FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                             FontSize="13"
+                             FontSize="{DynamicResource Text.Code.Size}"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
                              Background="{DynamicResource BackgroundBrush}"
@@ -1325,7 +1324,7 @@
                     <TextBlock Grid.Column="0"
                                Text="{x:Static app:UiStrings.QueryPanelHeader}"
                                FontWeight="SemiBold"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
                       <Button Classes="icon"
@@ -1352,7 +1351,7 @@
                 <TextBlock Grid.Row="1"
                            Text="{x:Static app:UiStrings.QueryPanelEmptyHint}"
                            Classes="subtle"
-                           FontSize="11"
+                           FontSize="{DynamicResource Text.Compact.Size}"
                            Margin="10,8"
                            TextWrapping="Wrap"
                            IsVisible="{Binding ShowQueryPanelEmptyHint}" />
@@ -1397,7 +1396,7 @@
                                 IsVisible="{Binding IsNotRenaming}">
                             <TextBlock Grid.Column="0"
                                        Text="{Binding Name}"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource Text.Compact.Size}"
                                        Padding="2,1"
                                        VerticalAlignment="Center" />
                             <Button Grid.Column="1"
@@ -1410,7 +1409,7 @@
                             </Button>
                           </Grid>
                           <TextBox Text="{Binding EditingName, Mode=TwoWay}"
-                                   FontSize="11"
+                                   FontSize="{DynamicResource Text.Compact.Size}"
                                    Padding="2,1"
                                    IsVisible="{Binding IsRenaming}"
                                    behaviors:FocusBehavior.FocusOnVisible="True"
@@ -1517,7 +1516,7 @@
                                         Foreground="{DynamicResource WarningBrush}"
                                         Width="15" Height="15" VerticalAlignment="Center" />
                       <TextBlock Text="{Binding ResultsNoticeText}"
-                                 FontSize="12" VerticalAlignment="Center"
+                                 FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center"
                                  Foreground="{DynamicResource ForegroundBrush}" />
                     </StackPanel>
                   </DockPanel>
@@ -1554,12 +1553,12 @@
                     </Button>
                     <TextBlock Text="{Binding ResultPaginationHint}"
                                Classes="subtle"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                Margin="8,0,0,0"
                                VerticalAlignment="Center" />
                     <TextBlock Text="{Binding ResultRecordInfo}"
                                Classes="subtle"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                Margin="12,0,0,0"
                                VerticalAlignment="Center" />
                     <!-- Filter + aggregation toggles (right side of the pagination bar).
@@ -1699,12 +1698,12 @@
                                        Text="{Binding TimestampLabel}"
                                        Classes="subtle"
                                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource Text.Compact.Size}"
                                        Margin="14,0,0,0"
                                        VerticalAlignment="Top" />
                             <SelectableTextBlock Grid.Column="2"
                                        Text="{Binding Text}"
-                                       FontSize="12"
+                                       FontSize="{DynamicResource Text.Application.Size}"
                                        LineHeight="18"
                                        TextWrapping="Wrap">
                               <SelectableTextBlock.Foreground>
@@ -1753,7 +1752,7 @@
           <TextBlock Text="{Binding StatusText}"
                      Classes="subtle"
                      Classes.error="{Binding IsStatusError}"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Status.Size}"
                      VerticalAlignment="Center" />
         </StackPanel>
         <!-- Column 1 belongs to the ACTIVE TAB: the SQL Editor puts its query stats here, the debugger its
@@ -1767,7 +1766,7 @@
                    Text="{Binding QueryStatsText}"
                    IsVisible="{Binding IsQueryTabActive}"
                    Classes="subtle"
-                   FontSize="11"
+                   FontSize="{DynamicResource Text.Status.Size}"
                    Margin="20,0,0,0"
                    VerticalAlignment="Center" />
         <TextBlock Grid.Column="1"
@@ -1775,7 +1774,7 @@
                    IsVisible="{Binding IsDebuggerTabActive}"
                    Classes="subtle"
                    Classes.error="{Binding ActiveDebugger.IsFaulted}"
-                   FontSize="11"
+                   FontSize="{DynamicResource Text.Status.Size}"
                    Margin="20,0,0,0"
                    VerticalAlignment="Center" />
         <!-- Product + version from AppInfo — the same single source the About window reads. This used to be
@@ -1783,7 +1782,7 @@
         <TextBlock Grid.Column="3"
                    Text="{Binding AppVersionChip}"
                    Classes="subtle"
-                   FontSize="11"
+                   FontSize="{DynamicResource Text.Status.Size}"
                    VerticalAlignment="Center" />
       </Grid>
     </Border>
