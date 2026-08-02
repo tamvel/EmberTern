@@ -772,6 +772,43 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
+  <!-- ⭐ PASEK ZAKŁADEK ROZSTRZYGA WIELKOŚĆ SWOICH DZIECI — szóste wystąpienie decyzji architektonicznej
+       §17.2/2, w kształcie identycznym z regułą `DataGridCell Button` i z tego samego powodu.
+
+       ⚠⚠ ZMIERZONE w M3.1a (§19.1), nie wydedukowane: przycisk aktywujący zakładkę nosi `Classes="flat"`
+       dla WYGLĄDU, więc selektor `Button.primary, Button.flat` nadawał mu GEOMETRIĘ AKCJI DIALOGOWEJ —
+       `MinHeight` 28 (`Size.ControlProminent`) i `MinWidth` 100 (`Size.ActionMinWidth`). Sonda headless
+       zmierzyła zakładkę przed poprawką: H=30, W=132, przycisk H=28 W=108.
+
+       ⭐ To jest lekcja §17.2/3 („reguła musi być sformułowana pozytywnie") w drugim wydaniu: bazowy
+       `MinWidth` urósł raz strzałkę drzewa metadanych z 20 do 100 px i dostała ona wtedy jawną ucieczkę
+       (`Button.sidebar-chevron` ma własne `Width`/`Height`). Przycisk zakładki jej NIE dostał, a M2c nie
+       mógł tego zobaczyć — jego liczniki mierzyły wyłącznie `FontSize`/`CornerRadius`/`FontFamily`.
+
+       ⚠ Podłoga szerokości nie jest kosmetyką: `Size.ActionMinWidth` istnieje po to, żeby `Save` i `Cancel`
+       miały równą szerokość w stopce dialogu. Na pasku zakładek oznaczała, że KAŻDA zakładka zajmuje ≥132 px
+       niezależnie od długości nazwy — czyli mniej zakładek w wierszu i szybsze przepełnienie paska
+       wielowierszowego (D5/D7), co działa wprost przeciw decyzji D6/§8.1 chroniącej czytelność nazw.
+
+       ⚠⚠ POZYCJA W PLIKU JEST CZĘŚCIĄ REGUŁY, nie porządkiem alfabetycznym. Styl stoi PO wszystkich
+       wariantach `Button.*`, bo przy równej trafności rozstrzyga kolejność deklaracji (§17.5/5). Postawiony
+       wcześniej pokonywał `Button.flat` (zadeklarowany wyżej), ale PRZEGRYWAŁ z `Button.icon`. ⛔ Nie
+       przenosić w górę pliku.
+
+       ⚠⚠ SELEKTOR CELUJE W `.flat`, A NIE W KAŻDY `Button` — i to jest korekta wykonana PO POMIARZE, nie
+       zawężenie z ostrożności. Pierwsza wersja zerowała geometrię wszystkim przyciskom paska i zmierzone
+       skutki były dwa: zakładka faktycznie zeszła do 26, ale przycisk zamykania stracił wysokość CHROMY
+       (`Size.ControlToolbar` = 22) i zszedł do 16 px — czyli reguła naprawiła jeden cel kliknięcia i zepsuła
+       drugi. ⭐ Defektem nigdy nie było „przycisk w pasku ma wysokość"; defektem było, że przycisk zakładki
+       nosił geometrię AKCJI DIALOGOWEJ. Przycisk zamykania jest ikoną chromy i 22 px to jego właściwa
+       wysokość (R1 — komfort ośmiu godzin pracy). Zdejmujemy dokładnie to, co nie należy.
+
+       Wysokość wiersza deklaruje sam kafelek zakładki (`Size.Row.Tab`); przyciski ją PRZYJMUJĄ. -->
+  <Style Selector="Border.tab-strip Button.flat">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+  </Style>
+
   <Style Selector="TabControl">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Padding" Value="0" />

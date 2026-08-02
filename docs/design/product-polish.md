@@ -4089,3 +4089,112 @@ wejścia: stan · zakres · reguły R1–R12 · procedura · 13 pułapek · plan
 pokazała, że na powierzchniach trwałych problem jest o krok wcześniej — tam system nigdy nie został
 podłączony.** Trzy tokeny bez konsumenta, jeden nieutworzony i dwie liczby niezgodne ze stanem
 faktycznym to nie dług sweepu, tylko **obszar, którego żaden dotychczasowy licznik nie obejmował**.
+
+---
+
+### §19.1 Iteracja 1 (M3.1a) — rytm pionowy Application Chrome (2026-08-02)
+
+> **Zakres:** podłączenie `Size.TitleBar` / `Size.StatusBar` / `Size.Row.Tab`, nowy token
+> `Size.TabIndicator`, reguła kontenera dla paska zakładek. Pierwsza iteracja M3, która **zmienia wygląd**.
+
+#### §19.1.1 Wynik
+
+| Element | Przed | Po | Widoczne? |
+|---|---|---|---|
+| Pasek tytułu | 36 literał | `Size.TitleBar` (36) | nie |
+| Pasek statusu | **28** literał | `Size.StatusBar` (**24**) | **tak** |
+| Wiersz zakładki | **30** (wypadkowa) | `Size.Row.Tab` (**26**) | **tak** |
+| Szerokość zakładki | **≥ 132** (podłoga) | naturalna | **tak** |
+| Wskaźnik zakładki | `2` literał w `RowDefinitions` | `Size.TabIndicator` (2) | nie |
+
+Rytm **36 / 26 / 24** jest po raz pierwszy zastosowany w działającej aplikacji, a nie tylko zapisany
+w katalogu.
+
+#### §19.1.2 ⭐⭐ Główne ustalenie: 30 px nigdy nie było decyzją projektową
+
+Sonda headless na dokładnej strukturze szablonu zakładki (`MainWindow.axaml:791–855`) zmierzyła:
+
+```
+przed:  ZAKLADKA H=30  W=132     activate H=28 W=108 MinH=28 MinW=100     close H=22
+po:     ZAKLADKA H=26  W=natur.  activate H=22 W=natur. MinH=0 MinW=0     close H=22
+```
+
+Przycisk aktywujący zakładkę nosi `Classes="flat"` **dla wyglądu**, więc selektor
+`Button.primary, Button.flat` (M2b) nadawał mu **geometrię akcji dialogowej**: `MinHeight` 28
+(`Size.ControlProminent`) i `MinWidth` 100 (`Size.ActionMinWidth`).
+
+> **⭐ RATYFIKOWANE PRZEZ UŻYTKOWNIKA (2026-08-02), po obejrzeniu obu wariantów:** *„Potwierdzam 26 px.
+> Po porównaniu wariantów 30 i 26 widać, że 30 px jest po prostu za wysokie. 26 px wygląda lżej, mieści
+> więcej zakładek w wierszu i lepiej wpisuje się w rytm Application Chrome. […] Wcześniejsze 30 px nie
+> było świadomą decyzją projektową, tylko skutkiem ubocznym odziedziczonej geometrii przycisku
+> (`Button.flat` → `Size.ControlProminent` + `Size.ActionMinWidth`). M3 przywraca właściwą geometrię
+> paska zakładek zgodnie z zasadą, że **kontener definiuje rytm, a element go przyjmuje**."*
+
+⭐ **To jest lekcja §17.2/3 w drugim wydaniu.** Bazowy `MinWidth` urósł raz strzałkę drzewa metadanych
+z 20 do 100 px i dostała ona wtedy jawną ucieczkę (`Button.sidebar-chevron` ma własne `Width`/`Height`).
+**Przycisk zakładki jej nie dostał**, a M2c nie mógł tego zobaczyć — jego liczniki mierzyły wyłącznie
+`FontSize` / `CornerRadius` / `FontFamily`.
+
+⚠ **Podłoga szerokości nie była kosmetyką.** `Size.ActionMinWidth` istnieje po to, żeby `Save` i `Cancel`
+miały równą szerokość w stopce dialogu. Na pasku zakładek oznaczała, że **każda zakładka zajmuje ≥132 px
+niezależnie od długości nazwy** — mniej zakładek w wierszu i szybsze przepełnienie paska wielowierszowego
+(D5/D7), czyli działanie **wprost przeciw decyzji D6/§8.1**, która chroni pełną czytelność nazw.
+
+#### §19.1.3 ⚠⚠ Dwie korekty, obie wymuszone POMIAREM w trakcie iteracji
+
+**(a) Pozycja stylu w pliku jest częścią reguły.** Pierwsza wersja reguły kontenera stała zaraz za
+`DataGridCell Button`. Pokonywała `Button.flat` (zadeklarowany wyżej), ale **przegrywała z `Button.icon`** —
+przycisk zamykania dalej raportował `MinHeight=22`. Reguła musiała trafić **za wszystkie warianty
+`Button.*`**, bo przy równej trafności rozstrzyga kolejność deklaracji (§17.5/5). ⛔ Nie przenosić w górę.
+
+**(b) Selektor celuje w `.flat`, a nie w każdy `Button` — zawężenie PO pomiarze, nie z ostrożności.**
+Wersja `Border.tab-strip Button` dała poprawne 26 px, ale **zabrała przyciskowi zamykania wysokość chromy**
+(`Size.ControlToolbar` = 22 → **16 px**). Reguła naprawiłaby jeden cel kliknięcia i zepsuła drugi.
+⭐ Defektem nigdy nie było *„przycisk w pasku ma wysokość"*, tylko *„przycisk zakładki nosi geometrię akcji
+dialogowej"*. Przycisk zamykania **jest** ikoną chromy i 22 px to jego właściwa wysokość (R1).
+**Zdejmujemy dokładnie to, co nie należy — nie więcej.**
+
+#### §19.1.4 ⚠ Ograniczenie techniczne, które ukształtowało rozwiązanie
+
+`RowDefinition.Height` i `Grid.RowDefinitions` operują na `GridLength`, a tokeny są `x:Double` —
+`{DynamicResource}` **nie ma się na co skonwertować** (§3.2: katalog ma dwie warstwy, ale `GridLength`
+nie jest żadną z nich). Dlatego **wysokości chromy stoją na `Height` / `MinHeight` ELEMENTÓW**, a wiersze
+siatki są `Auto`. ⛔ Nie dodawać trzeciej warstwy katalogu z `GridLength` — byłaby drugą reprezentacją
+tej samej liczby.
+
+⚠ **Konsekwencja, którą trzeba było obsłużyć osobno:** wysokość wskaźnika aktywnej zakładki rezerwował
+dotąd **sztywny wiersz `2`** w siatce, więc `IsVisible="False"` na dziecku nic nie kosztowało. Odkąd
+wysokość niesie `Height` elementu, ukrycie zwinęłoby wiersz do zera i **zakładka aktywna byłaby o 2 px
+wyższa od nieaktywnej**. Wskaźnik jest więc **zawsze obecny**, a zmienia się wyłącznie jego tło —
+przez istniejącą klasę `active-tab`, czyli regułę sformułowaną pozytywnie (§17.2/3).
+
+#### §19.1.5 Sonda wizualna — dlaczego powstała i dlaczego zostaje
+
+**`tools/probes/TabStripVisualProbe`** renderuje pasek zakładek do PNG w obu motywach przy obu
+wysokościach, przez Skia, na **tych samych** słownikach zasobów i tym samym `ControlStyles.axaml`,
+których używa aplikacja.
+
+⚠ Powstała, bo żadna istniejąca droga nie dawała obrazu: pasek zakładek jest **pusty bez połączenia
+z bazą**, a testowa sesja headless działa z `UseHeadlessDrawing`, gdzie `CaptureRenderedFrame()` zwraca
+**null** (nota R‑6). ⭐ Zostaje w repo, bo pytanie *„jak to wygląda przy dwóch wartościach tokenu"*
+wróci w M3.3 (tryby paska zakładek) i na przeglądzie §13.3.
+
+#### §19.1.6 Czego iteracja NIE zrobiła
+
+⛔ Nie ruszono `Size.Row.Tree` (decyzja **DB** — wracamy po M3) · nie ruszono kolizji K1–K10 · nie
+tknięto `AccentIconBrush`/`InfoIconBrush` (decyzja **DC** — M4.3/M5) · nie tknięto Commit/Rollback
+(decyzja **DD** — iteracja M3.2c) · nie zmieniono sekcji, hierarchii ani zawartości paska statusu
+(to M3.1b–M3.1f).
+
+#### §19.1.7 Definition of Done
+
+| # | Warunek | |
+|---|---|---|
+| 1 | zakres iteracji zamknięty | ✅ |
+| 2 | każda pozostawiona wartość lokalna ma powód w miejscu | ✅ (nie przybyła żadna) |
+| 3 | baza `DesignTokenComplianceTests` odzwierciedla stan faktyczny | ✅ bez zmian — iteracja nie dodała ani nie usunęła literału `FontSize`/`CornerRadius` |
+| 4 | build 0/0 | ✅ |
+| 5 | testy zielone w trzech partycjach | ✅ **7000 + 34 + 54 = 7088** |
+| 6 | smoke + oba motywy | ✅ smoke czysty; oba motywy ocenione na renderach §19.1.5 |
+| 7 | wpis w §19 | ✅ ta sekcja |
+| 8 | commit; push po akceptacji | ✅ / ⏸ |

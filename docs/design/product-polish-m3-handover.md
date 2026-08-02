@@ -36,7 +36,8 @@
 |---|---|
 | **Branch** | `feat/product-polish` |
 | **Ostatni commit** | `8567ebc` — oba remote'y na tym samym |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ (odebrane 2026-08-02) · **M3 — iteracja 0 zakończona** |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ (odebrane 2026-08-02) · **M3 — iteracja 0 ✅ + M3.1a ✅** |
+| **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24**, temat 20 px wraca po M3 · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
 | **Suite** | **7088**, zielony w trzech partycjach (7000 + 54 + 34) |
 | **Smoke** | czysty |
@@ -396,7 +397,7 @@ oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
 
 | # | Podetap | Zakres | Wymaga decyzji |
 |---|---|---|---|
-| 1 | **M3.1a** | Rytm pionowy chromy — `Size.TabIndicator` (nowy token), podłączenie `Size.TitleBar` / `Size.StatusBar` / `Size.Row.Tab` | **DA** |
+| ✅ 1 | **M3.1a** | Rytm pionowy chromy — `Size.TabIndicator` (nowy token), podłączenie `Size.TitleBar` / `Size.StatusBar` / `Size.Row.Tab`; **zakładka 30 → 26, szerokość bez podłogi akcji** (§19.1) | **DA** ✅ |
 | 2 | **M3.1b** | Cztery sekcje (§8.4.3) + hierarchia wizualna (§8.4.4) + **D3** (usunięcie wersji z paska) | — |
 | 3 | **M3.1c** | Rail (§8.4.1–§8.4.2) — priorytet stanów, kolor nigdy jako jedyny nośnik | — |
 | 4 | **M3.1d** | Chip transakcji z czasem (§8.4.5) | — |

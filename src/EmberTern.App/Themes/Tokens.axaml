@@ -218,6 +218,14 @@
   <!-- Zakładka dokumentu i zakładka pomocnicza. -->
   <x:Double x:Key="Size.Row.Tab">26</x:Double>
 
+  <!-- Wskaźnik aktywnej zakładki — pasek akcentu nad zakładką wybraną (§8.2). ⭐ Ta sama liczba niesie
+       rail Status Bara (§8.4.1), i to jest celowe: jeden język wizualny sygnału stanu, nie dwa. Token
+       powstał w M3.1a — wcześniej `2` stało literałem w `RowDefinitions="2,*"` szablonu zakładki, gdzie
+       żaden licznik M2c go nie widział (liczniki mierzyły `FontSize`/`CornerRadius`/`FontFamily`).
+       ⚠ Wysokość siedzi na `Height` ELEMENTU, nie na wierszu siatki: `RowDefinition.Height` to `GridLength`,
+       a token jest `x:Double` — `{DynamicResource}` się nie skonwertuje (§3.2, dwie warstwy katalogu). -->
+  <x:Double x:Key="Size.TabIndicator">2</x:Double>
+
   <!-- Box `CheckBox`/`RadioButton`. ⚠ 14 px NIE da się ustawić setterem — Fluent koduje rozmiar
        boxa w `ControlTemplate`, nie we właściwości. Ten token czeka na własny szablon w M2b
        (ryzyko R‑2). Dopiero przy 14 px checkbox mieści się w wierszu 22 px (§5.1); dziś ten sam

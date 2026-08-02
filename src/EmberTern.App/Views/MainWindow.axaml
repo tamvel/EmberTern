@@ -38,11 +38,18 @@
        persisting (ApplicationSettingsStore.Save refuses rather than destroy data it cannot see — audit A-03),
        and a user who is not told that would reasonably assume their work is being saved. It is deliberately
        NOT the status bar: that line is rewritten on the next connection change, and this must not scroll away. -->
-  <Grid RowDefinitions="36,Auto,*,28">
+  <!-- ⚠ Wysokości chromy stoją na `Height` BORDERÓW, a nie w tym ciągu — `RowDefinition.Height` to
+       `GridLength`, a tokeny są `x:Double`, więc `{DynamicResource}` nie ma się na co skonwertować
+       (§3.2 — katalog ma dwie warstwy, ale `GridLength` nie jest żadną z nich). Wiersze 0 i 3 są
+       `Auto` i mierzą to, co zadeklarował ich Border. ⛔ Nie wracać do literałów „36" i „28": do M3.1a
+       stały tu obie liczby, żaden licznik M2c ich nie widział, a `Size.StatusBar` był konsumowany
+       wyłącznie przez belkę Data Importu — czyli wszędzie poza swoim własnym miejscem (§19.0.1). -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
 
     <!-- Custom titlebar: brand + active connection + connection toolbar + theme + window controls -->
     <Border Grid.Row="0"
             x:Name="Titlebar"
+            Height="{DynamicResource Size.TitleBar}"
             Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
@@ -776,7 +783,11 @@
           <!-- Tab strip — WrapPanel so overflow flows to a second row (IBExpert style)
                instead of horizontal scrolling. Auto-height (Grid row was 36; we replaced
                it with Auto on the parent below). -->
+          <!-- `Classes="tab-strip"` NIE jest kosmetyką — to deklaracja kontenera (§17.2/2). Reguła
+               `Border.tab-strip Button` w ControlStyles.axaml zdejmuje z przycisków zakładki geometrię
+               akcji dialogowej, którą dziedziczyły po `Button.flat`. Powód i pomiar stoją przy tej regule. -->
           <Border Grid.Row="0"
+                  Classes="tab-strip"
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,0,0,1">
@@ -790,11 +801,21 @@
                 <DataTemplate DataType="vm:WorkspaceTabViewModel">
                   <Border BorderBrush="{DynamicResource BorderBrush}"
                           BorderThickness="0,0,1,0"
+                          MinHeight="{DynamicResource Size.Row.Tab}"
                           Background="{DynamicResource PanelBrush}"
                           Classes.active-tab="{Binding IsSelected}">
                     <Border.Styles>
                       <Style Selector="Border.active-tab">
                         <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+                      </Style>
+                      <!-- Wskaźnik aktywnej zakładki maluje się przez PODMIANĘ TŁA, a nie przez `IsVisible`,
+                           i to jest wymuszone: wysokość rezerwował dotąd sztywny wiersz `2` w siatce, więc
+                           schowanie dziecka nic nie kosztowało. Odkąd wysokość niesie `Height` elementu
+                           (token `Size.TabIndicator`), `IsVisible="False"` zwinęłoby wiersz do zera i zakładka
+                           aktywna byłaby o 2 px wyższa od nieaktywnej — dokładnie to, przed czym broni się
+                           komentarz poniżej. Element jest więc ZAWSZE obecny; zmienia się wyłącznie kolor. -->
+                      <Style Selector="Border.active-tab Border.tab-indicator">
+                        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
                       </Style>
                       <!-- Active tab title: SemiBold + full-contrast (only the selected
                            tab; inactive tabs untouched). Pairs with the 2px accent top
@@ -809,10 +830,11 @@
                          active/inactive tabs keep identical height + content baseline;
                          only the selected tab paints the accent (over the existing
                          background swap, which alone read too subtly). -->
-                    <Grid RowDefinitions="2,*">
+                    <Grid RowDefinitions="Auto,*">
                       <Border Grid.Row="0"
-                              Background="{DynamicResource AccentBrush}"
-                              IsVisible="{Binding IsSelected}" />
+                              Classes="tab-indicator"
+                              Height="{DynamicResource Size.TabIndicator}"
+                              Background="Transparent" />
                       <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="0">
                       <Button Classes="flat"
                               Padding="8,4"
@@ -1741,7 +1763,12 @@
     </Grid>
 
     <!-- Status bar -->
+    <!-- ⚠ Wysokość z katalogu (`Size.StatusBar` = 24), nie literał. Do M3.1a stało tu 28, a token 24 nie
+         miał w pasku statusu ani jednego konsumenta. Decyzja DA (użytkownik, 2026-08-02): stosujemy katalog —
+         §8.5 specyfikacji zabrania WZROSTU paska, zmniejszenie jest dozwolone, a 36/26/24 to ratyfikowany
+         rytm pionowy Application Chrome (§0.1.2). ⛔ Nie zwiększać. -->
     <Border Grid.Row="3"
+            Height="{DynamicResource Size.StatusBar}"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0">
