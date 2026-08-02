@@ -4452,3 +4452,100 @@ aplikacji. ⚠ Znacznik diagnostyczny został cofnięty w całości (zweryfikowa
 
 > **Odbiór użytkownika:** *„Wygląda dobrze… Badge DEV MODE ma teraz właściwe proporcje i cała sekcja
 > połączenia czyta się naturalnie."* ⛔ Do tej sekcji nie wracamy, chyba że wyjdzie rzeczywista regresja.
+
+---
+
+### §19.4 Iteracja 3 (M3.1c) — rail (2026-08-02)
+
+> **Zakres:** §8.4.1 (rail jako górna krawędź paska) + §8.4.2 (stany i priorytet).
+> Odebrane przez użytkownika: *„Executing – rail poprawnie przechodzi na Accent. Error – rail zmienia
+> się na czerwony razem z komunikatem."*
+
+#### §19.4.1 Realizacja — rail nie dodaje ani jednego piksela
+
+Rail to **górna krawędź paska statusu**, która była tam zawsze jako separator obszaru roboczego.
+`BorderThickness` przeszedł na nowy token **`Border.Rail` (`0,2,0,0`)**, a `BorderBrush` czyta
+`RailBrushKey` przez `IconBrushConverter` — ten sam konwerter, którym maluje się severity komunikatu.
+Grubość jest **stała w każdym stanie**, więc zmiana stanu nie może przesunąć układu (§13.3 specyfikacji).
+
+⚠ `Border.Rail` musi być osobnym tokenem, mimo że niesie tę samą liczbę co `Size.TabIndicator`:
+`BorderThickness` to `Thickness`, a token tamten to `x:Double` — §3.2, katalog ma dwie warstwy i nie
+liczy w XAML. Powiązanie zapisane przy obu tokenach.
+
+| Priorytet | Stan | Źródło | Pędzel |
+|---|---|---|---|
+| 5 | Error | `StatusMessageSeverity` | `ErrorBrush` |
+| 4 | Warning | `StatusMessageSeverity` | `WarningBrush` |
+| 3 | Debug Active | **nowa agregacja** | `DebugCurrentLineBarBrush` |
+| 2 | Executing | `IsExecuting` | `AccentBrush` |
+| 1 | Trace Active | **nowa agregacja** | `IconColor_Query` |
+| 0 | Ready | — | `BorderBrush` — zwykły separator |
+
+#### §19.4.2 ⭐ Agregacja po `WorkspaceTabs` — przeniesiona z M3.1e, bo rail jest jej pierwszym konsumentem
+
+§19.0.3 zapowiedziało, że chipy Trace/Debugger nie mają źródła danych. Rail potrzebuje **tych samych
+dwóch stanów**, więc agregacja powstała tutaj; M3.1e dokłada na nią już tylko chipy. To resekwencjonowanie
+wewnątrz M3.1, nie zmiana zakresu.
+
+`IsDebugSessionLive` = jakakolwiek zakładka `Debugger` w fazie `Busy`/`Paused`;
+`IsTraceSessionLive` = jakikolwiek `TraceMonitor` w stanie innym niż `Stopped`/`Faulted`.
+⚠ To **nie** jest `IsDebuggerTabActive`, które znaczy *„ta zakładka jest wybrana"* — sygnał ma być
+prawdziwy, gdy sesja żyje na **innej** zakładce. Podpięcie idzie przez **istniejący** hak
+`WorkspaceTabs.CollectionChanged` (Seam 6d) — jeden punkt wiązania, nie ~39 miejsc dodawania zakładek.
+
+⚠⚠ **Odpinanie subskrypcji jest wymogiem POPRAWNOŚCI, nie higieny:** zakładka zamknięta, ale wciąż
+podpięta, trzymałaby rail zapalony po sesji, której już nie ma. ⭐ `Clear()` (rozłączenie) raportuje
+`Reset` **bez `OldItems`**, więc odpięcie po zdarzeniu jest niewykonalne — stąd własny zbiór
+`_railSources`. Bez niego rozłączenie zostawiałoby zapalony rail i wyciek.
+
+#### §19.4.3 ⚠⚠ Strażnik — bo rail nie czyta przez `{DynamicResource}`
+
+`IconBrushConverter` przy nieznanym kluczu zwraca `UnsetValue`, a wtedy `BorderBrush` po cichu zostaje
+przy wartości domyślnej. **Literówka albo pędzel zdefiniowany tylko w jednym motywie nie zawiodłyby
+buildu, żadnego innego testu ani nie rzuciłyby wyjątku** — rail po prostu przestałby sygnalizować,
+w jednym motywie albo w obu. `DesignTokenApplicationTests.RailStateBrush_ResolvesInBothThemes` pinuje
+sześć kluczy × dwa motywy; **zweryfikowany podłożeniem literówki** (`IconColor_Querry` → czerwony,
+po cofnięciu zielony).
+
+#### §19.4.4 ⏸ ODŁOŻONE DO M3b/M4 — semantyka kolorów railu (uwaga użytkownika + POMIAR)
+
+> **Użytkownik, po QA:** *„aktywny Debugger i zwykłe wykonywanie SQL są bardzo podobnie sygnalizowane
+> kolorystycznie… największą wartością tego raila jest możliwość natychmiastowego rozpoznania, co
+> w danej chwili robi aplikacja, bez czytania tekstu… Nie proponuję jednak zmieniać tego w M3.1c…
+> bardziej widzę to jako temat do późniejszego etapu (M3b/M4), kiedy wszystkie źródła aktywności będą
+> już podłączone i będzie można zaprojektować pełną semantykę kolorów zamiast podejmować decyzję tylko
+> dla jednego przypadku."*
+
+⭐ **Obserwacja potwierdzona pomiarem — to nie jest wrażenie:**
+
+| Stan | Dark | Light | Uwaga |
+|---|---|---|---|
+| Executing | `#2D6BBF` | `#2D6BBF` | |
+| Debug | `#5A8AC8` (α `E6`) | `#0033B3` (α `CC`) | ⚠ **ta sama rodzina barwna co Accent** — różnica głównie w jasności |
+| Trace | `#B0BEC5` | `#455A64` | ⚠ w Light ciemny szaroniebieski — jako sygnał słaby |
+
+⚠⚠ Dodatkowo `DebugCurrentLineBarColor` jest **półprzezroczysty i zaprojektowany jako pasek bieżącej
+linii W EDYTORZE** — rail pożycza kolor z innej domeny, co jest dokładnie tym rodzajem cichego
+rozjazdu, przed którym broni §7.5.
+
+⭐ **Teza użytkownika o istniejącej ikonografii się broni:** D15.2 wprowadziło `DebugLoopIconBrush`
+(teal) **właśnie po to**, żeby nie kolidować z fioletem słów kluczowych PSQL. Reguła *„każdy moduł ma
+własną barwę"* jest w projekcie już zapisana — rail jej po prostu nie realizuje.
+
+⛔ **Świadomie NIE rozstrzygane w M3.1c.** Powód jest ten sam, dla którego §18.R nie rozstrzygał kolizji
+pojedynczo: **pełna semantyka kolorów aktywności wymaga kompletu źródeł**, a Import danych i pozostałe
+operacje podłącza dopiero **M3b**. Decyzja podjęta teraz opierałaby się na dwóch przypadkach z pięciu.
+→ **wejście do M3b i do przeglądu §13.3.**
+
+#### §19.4.5 Definition of Done
+
+| # | Warunek | |
+|---|---|---|
+| 1 | zakres iteracji zamknięty | ✅ rail + agregacja |
+| 2 | pozostawione wartości lokalne mają powód | ✅ brak nowych |
+| 3 | baza strażnika = stan faktyczny | ✅ bez zmian |
+| 4 | build 0/0 | ✅ |
+| 5 | testy zielone w trzech partycjach | ✅ **7001 + 41 + 54 = 7096** (+6) |
+| 6 | smoke + QA na żywej bazie | ✅ Executing i Error potwierdzone przez użytkownika |
+| 7 | wpis w §19 | ✅ ta sekcja |
+| 8 | commit; push po akceptacji | ✅ / ⏸ (push po całym M3.1) |

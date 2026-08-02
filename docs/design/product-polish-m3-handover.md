@@ -39,7 +39,7 @@
 | **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a ✅ · M3.1b ✅** (obie odebrane przez użytkownika) |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24**, temat 20 px wraca po M3 · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7090**, zielony w trzech partycjach (**7001 + 35 + 54**) — po M3.1a/§19.2 |
+| **Suite** | **7096**, zielony w trzech partycjach (**7001 + 41 + 54**) — po M3.1c/§19.4 |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 
@@ -405,9 +405,9 @@ przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały
 |---|---|---|---|
 | ✅ 1 | **M3.1a** | Rytm pionowy chromy — `Size.TabIndicator` (nowy token), podłączenie `Size.TitleBar` / `Size.StatusBar` / `Size.Row.Tab`; **zakładka 30 → 26, szerokość bez podłogi akcji** (§19.1) | **DA** ✅ |
 | ✅ 2 | **M3.1b** | Cztery sekcje (§8.4.3) + hierarchia (§8.4.4) + **D3**; ⭐ tożsamość połączenia przeniesiona z paska tytułu (§19.3) | — |
-| 3 | **M3.1c** | Rail (§8.4.1–§8.4.2) — priorytet stanów, kolor nigdy jako jedyny nośnik | — |
+| ✅ 3 | **M3.1c** | Rail (§8.4.1–§8.4.2) + ⭐ **agregacja po `WorkspaceTabs` przeniesiona tu z M3.1e** (§19.4.2) | — |
 | 4 | **M3.1d** | Chip transakcji z czasem (§8.4.5) | — |
-| 5 | **M3.1e** | Chipy Trace / Debugger — **agregacja po `WorkspaceTabs`** (§3.3 tej listy) | — |
+| 5 | **M3.1e** | Chipy Trace / Debugger — ⭐ agregacja JUŻ ISTNIEJE (M3.1c); zostaje sama prezentacja | — |
 | 6 | **M3.1f** | Sekcja postępu (§8.4.6) + **jedna** operacja referencyjna | — |
 | 7 | **M3.2a** | H‑3 — stabilny układ paska tytułu **i** toolbara dokumentu (72 bramki, §3.6) | — |
 | 8 | **M3.2b** | §7.5 — semantyka kolorów na pasku narzędzi | **DC** |
@@ -418,7 +418,7 @@ przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały
 | 13 | **M3.3c** | Menu kontekstowe zakładki — 8 pozycji, **czwarte wejście do bramki** | — |
 | 14 | **M3.4a** | Metadata Explorer — wiersz drzewa | **DB** |
 | 15 | **M3.4b** | Przegląd menu kontekstowych | — |
-| 16 | **M3b** | Podłączenie pozostałych operacji do paska postępu (16 VM, 3 ścieżki `IProgress`) | — |
+| 16 | **M3b** | Podłączenie pozostałych operacji do paska postępu (16 VM, 3 ścieżki `IProgress`)<br>⏸ **+ pełna semantyka kolorów railu** — odłożona tu świadomie przez użytkownika, z pomiarem (§19.4.4) | — |
 | 17 | ⛔ **brama** | **§13.3** — cztery powierzchnie **jednocześnie**, żywa baza, oba motywy | — |
 | 18 | — | Podsumowanie zamykające §19.x + CLAUDE.md + handover M4 + prompt startowy | — |
 

@@ -1711,11 +1711,25 @@
          miał w pasku statusu ani jednego konsumenta. Decyzja DA (użytkownik, 2026-08-02): stosujemy katalog —
          §8.5 specyfikacji zabrania WZROSTU paska, zmniejszenie jest dozwolone, a 36/26/24 to ratyfikowany
          rytm pionowy Application Chrome (§0.1.2). ⛔ Nie zwiększać. -->
+    <!-- ⭐⭐ RAIL (§8.4.1) — to jest GÓRNA KRAWĘDŹ tego paska, nie nowy element. Linia była tu zawsze
+         jako separator obszaru roboczego; rail nadaje jej PRACĘ: w spoczynku maluje się `BorderBrush`
+         i pozostaje separatorem, a gdy coś się dzieje, przyjmuje kolor stanu o najwyższym priorytecie.
+         Zero nowych pikseli, jeden element więcej znaczy (§3.3 specyfikacji — *every pixel has a purpose*).
+
+         ⚠ Grubość jest STAŁA w każdym stanie (`Border.Rail`), więc zmiana stanu nie może przesunąć
+         układu. ⛔ Nie zmieniać koloru CAŁEGO paska — użytkownik odrzucił model Visual Studio.
+         ⚠ Kolor nie jest jedynym nośnikiem (§10): każdy stan ma też tekst albo ikonę w sekcji 2.
+         Priorytet i uzasadnienie kolejności stoją przy `RailBrushKey`. -->
     <Border Grid.Row="3"
             Height="{DynamicResource Size.StatusBar}"
             Background="{DynamicResource PanelBrush}"
-            BorderBrush="{DynamicResource BorderBrush}"
-            BorderThickness="0,1,0,0">
+            BorderThickness="{DynamicResource Border.Rail}">
+      <Border.BorderBrush>
+        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+          <Binding Path="RailBrushKey" />
+          <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+        </MultiBinding>
+      </Border.BorderBrush>
       <!-- ⭐⭐ CZTERY SEKCJE (§8.4.3). Kolejność kolumn `Auto,*,Auto,Auto` jest WYMOGIEM STRUKTURALNYM,
            nie estetycznym: §8.5 specyfikacji żąda, żeby komunikaty nie zasłaniały informacji o połączeniu,
            a przy tym układzie rosnący komunikat zjada WYŁĄCZNIE elastyczną kolumnę 1. Wymóg jest spełniony

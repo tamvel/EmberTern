@@ -871,6 +871,39 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// ⭐ Każdy stan railu Status Bara ma pędzel W OBU MOTYWACH (product-polish.md §8.4.2, §19.4).
+    ///
+    /// <para>⚠⚠ Rail nie czyta pędzla przez <c>{DynamicResource}</c>, tylko przez
+    /// <c>IconBrushConverter</c>, który przy nieznanym kluczu zwraca <c>UnsetValue</c> — a wtedy
+    /// <c>BorderBrush</c> po cichu zostaje przy wartości domyślnej. Literówka albo pędzel zdefiniowany
+    /// tylko w jednym motywie **nie zawiedzie buildu, nie zawiedzie żadnego innego testu i nie rzuci
+    /// wyjątku** — rail po prostu przestanie sygnalizować stan, w jednym motywie albo w obu.</para>
+    ///
+    /// <para>⚠ Lista kluczy jest tu powtórzona świadomie: <c>RailBrushKey</c> to łańcuch priorytetów,
+    /// a nie kolekcja, więc nie da się jej odczytać bez konstruowania <c>MainWindowViewModel</c> (czyli
+    /// bez sklepu, serwisu i zakładek). Dodając szósty stan railu, dopisz go tutaj — dokładnie tak, jak
+    /// robi to bliźniaczy strażnik severity <c>MessageBanner</c>.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("ErrorBrush")]
+    [InlineData("WarningBrush")]
+    [InlineData("DebugCurrentLineBarBrush")]
+    [InlineData("AccentBrush")]
+    [InlineData("IconColor_Query")]
+    [InlineData("BorderBrush")]
+    public async Task RailStateBrush_ResolvesInBothThemes(string key)
+    {
+        await _session.Dispatch(() =>
+        {
+            foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                var brush = ThemeToken<SolidColorBrush>(key, variant);
+                Assert.NotNull(brush);
+            }
+        }, default);
+    }
+
+    /// <summary>
     /// The same lookup for a THEME-SCOPED resource. ⚠ Measured, and worth knowing: the variant-less
     /// <see cref="Token{T}"/> above cannot see anything declared inside <c>ThemeDictionaries</c> — it reports the
     /// key as missing. That is precisely the line between the two colour-free dictionaries added in M2a

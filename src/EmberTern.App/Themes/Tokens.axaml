@@ -292,6 +292,15 @@
   <Thickness x:Key="Border.All">1</Thickness>
   <!-- Linia oddzielająca od treści POWYŻEJ (panel dokowany u dołu, pasek statusu). -->
   <Thickness x:Key="Border.Top">0,1,0,0</Thickness>
+  <!-- Rail Status Bara (§8.4.1) — górna krawędź paska statusu w roli sygnału stanu.
+       ⭐ Rail NIE DODAJE piksela do interfejsu: ta linia już tam była jako `Border.Top`, tylko cieńsza
+       i zawsze w kolorze `BorderBrush`. Rail nadaje jej PRACĘ — w spoczynku dalej jest separatorem,
+       a gdy coś się dzieje, przyjmuje kolor stanu. Grubość jest STAŁA w każdym stanie, więc zmiana
+       stanu nie może przesunąć układu (§13.3 specyfikacji).
+       ⚠ Wartość celowo równa `Size.TabIndicator` (2) — jeden język wizualny sygnału, nie dwa. Nie da
+       się jej wyliczyć z tamtego tokenu, bo `BorderThickness` to `Thickness`, a nie `double` (§3.2 —
+       katalog ma dwie warstwy). Zmieniając jedną, zmień drugą. -->
+  <Thickness x:Key="Border.Rail">0,2,0,0</Thickness>
   <!-- Linia oddzielająca od treści PONIŻEJ (toolbar, nagłówek, pasek zakładek). -->
   <Thickness x:Key="Border.Bottom">0,0,0,1</Thickness>
 

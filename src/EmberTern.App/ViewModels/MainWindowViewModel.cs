@@ -1087,6 +1087,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ExecuteQueryFullCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadAllRowsCommand))]
     [NotifyCanExecuteChangedFor(nameof(CancelQueryCommand))]
+    [NotifyPropertyChangedFor(nameof(RailBrushKey))]
     private bool _isExecuting;
 
     /// <summary>Set the moment Cancel is clicked, cleared when the run unwinds. Without it the
@@ -1134,11 +1135,13 @@ public partial class MainWindowViewModel : ViewModelBase
     // ⛔ Nie dopisywać tu drugiej definicji severity.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
+    [NotifyPropertyChangedFor(nameof(RailBrushKey))]
     private string _statusMessage = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusMessageBrushKey))]
     [NotifyPropertyChangedFor(nameof(StatusMessageGeometryKey))]
+    [NotifyPropertyChangedFor(nameof(RailBrushKey))]
     private MessageSeverity _statusMessageSeverity = MessageSeverity.Info;
 
     public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
@@ -1198,6 +1201,90 @@ public partial class MainWindowViewModel : ViewModelBase
     // środkowa odwzorowuje makietę z §8.4.3: `● Szkoleniowa · localhost:3050 · DEV`.
     public string ConnectionEndpointLabel
         => _service.ActiveProfile is { } p ? $" · {p.Host}:{p.Port}" : string.Empty;
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ RAIL STATUS BARA (§8.4.1–§8.4.2)
+    //
+    // Rail odpowiada na pytanie „co aplikacja ROBI teraz" i pokazuje DOKŁADNIE JEDEN stan — ten
+    // o najwyższym priorytecie spośród aktywnych. Chipy (§8.4.5, M3.1d–e) odpowiadają na inne pytanie
+    // („co jest PRAWDĄ teraz") i współistnieją dowolnie. ⛔ Nie mieszać tych dwóch ról.
+    //
+    // ⚠ Kolor NIGDY nie jest jedynym nośnikiem (§10): każdy stan ma też tekst albo ikonę w sekcji 2.
+    // Rail jest wzmocnieniem czytelnym kątem oka, a nie komunikatem.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Klucz pędzla railu — stan o najwyższym priorytecie spośród aktywnych (§8.4.2).
+    /// Kolejność jest uzasadniona, nie dowolna: błąd wygrywa ze wszystkim, bo wymaga reakcji;
+    /// debug wygrywa z wykonywaniem, bo krokowanie JEST wykonywaniem i „wykonuję" byłoby prawdziwe
+    /// i bezużyteczne; trace przegrywa z wykonywaniem, bo jest tłem pracy, a nie jej treścią.
+    /// </summary>
+    public string RailBrushKey =>
+        HasStatusMessage && StatusMessageSeverity == MessageSeverity.Error ? "ErrorBrush"        // 5
+        : HasStatusMessage && StatusMessageSeverity == MessageSeverity.Warning ? "WarningBrush"  // 4
+        : IsDebugSessionLive ? "DebugCurrentLineBarBrush"                                        // 3
+        : IsExecuting ? "AccentBrush"                                                            // 2
+        : IsTraceSessionLive ? "IconColor_Query"                                                 // 1
+        : "BorderBrush";                                                                         // 0 — separator
+
+    /// <summary>
+    /// Czy GDZIEKOLWIEK żyje sesja debuggera. ⚠ To NIE jest `IsDebuggerTabActive`, które znaczy
+    /// „ta zakładka jest wybrana" — rail i chip mają być prawdziwe także wtedy, gdy użytkownik patrzy
+    /// na inną zakładkę (§8.4: czas życia sygnału to „dopóki warunek jest prawdziwy"). Żywa sesja to
+    /// `Busy` albo `Paused`; `Completed`/`Faulted` są terminalne (stan zostaje widoczny do inspekcji,
+    /// ale sesji już nie ma), a `Preparing`/`ReadyToLaunch`/`Idle`/`Editing` jej jeszcze albo już nie mają.
+    /// </summary>
+    public bool IsDebugSessionLive => WorkspaceTabs
+        .Any(t => t.Debugger is { Phase: DebuggerPhase.Busy or DebuggerPhase.Paused });
+
+    /// <summary>
+    /// Czy GDZIEKOLWIEK żyje sesja Trace — czyli istnieje sesja na serwerze: wszystko poza
+    /// `Stopped` i `Faulted`.
+    /// </summary>
+    public bool IsTraceSessionLive => WorkspaceTabs
+        .Any(t => t.TraceMonitor is { State: TraceSessionState.Starting or TraceSessionState.Running
+                                          or TraceSessionState.Paused or TraceSessionState.Stopping });
+
+    // ⚠⚠ Subskrypcje MUSZĄ być zdejmowane. Rail czyta stan zakładek, więc zakładka zamknięta, ale wciąż
+    // podpięta, trzymałaby rail zapalony po czymś, czego już nie ma. `Reset` (czyli `Clear()` przy
+    // rozłączeniu) NIE niesie `OldItems`, dlatego trzymamy własny zbiór podpiętych zakładek — bez niego
+    // odpięcie przy rozłączeniu byłoby niewykonalne.
+    private readonly HashSet<WorkspaceTabViewModel> _railSources = [];
+
+    private void WireRailSource(WorkspaceTabViewModel tab)
+    {
+        if (tab.Debugger is null && tab.TraceMonitor is null) return;
+        if (!_railSources.Add(tab)) return;
+
+        if (tab.Debugger is { } dbg) dbg.PropertyChanged += OnRailSourceChanged;
+        if (tab.TraceMonitor is { } trace) trace.PropertyChanged += OnRailSourceChanged;
+        RaiseRailChanged();
+    }
+
+    private void UnwireRailSource(WorkspaceTabViewModel tab)
+    {
+        if (!_railSources.Remove(tab)) return;
+
+        if (tab.Debugger is { } dbg) dbg.PropertyChanged -= OnRailSourceChanged;
+        if (tab.TraceMonitor is { } trace) trace.PropertyChanged -= OnRailSourceChanged;
+        RaiseRailChanged();
+    }
+
+    private void OnRailSourceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // Tylko te dwie właściwości zmieniają odpowiedź; reszta zdarzeń zakładki nas nie dotyczy.
+        if (e.PropertyName is nameof(DebuggerTabViewModel.Phase) or nameof(TraceMonitorTabViewModel.State))
+        {
+            RaiseRailChanged();
+        }
+    }
+
+    private void RaiseRailChanged()
+    {
+        OnPropertyChanged(nameof(IsDebugSessionLive));
+        OnPropertyChanged(nameof(IsTraceSessionLive));
+        OnPropertyChanged(nameof(RailBrushKey));
+    }
 
     // Title-bar transaction-profile block: two stacked lines, each a static lane label
     // ("Data:" / "Meta:") plus the full profile name in a lane-colored badge. These
@@ -5877,10 +5964,33 @@ public partial class MainWindowViewModel : ViewModelBase
     // nothing needs to: the delegate lives on the tab's own editor, so tab and handler are collected together.
     private void OnWorkspaceTabsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        if (e.NewItems is null) return;
+        // ⚠ `Reset` (czyli `Clear()`, m.in. przy rozłączeniu) nie niesie ANI `NewItems`, ANI `OldItems`.
+        // Dlatego odpinamy po własnym zbiorze — inaczej zamknięte zakładki dalej zapalałyby rail.
+        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var tab in _railSources.ToList()) UnwireRailSource(tab);
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (var item in e.OldItems)
+            {
+                if (item is WorkspaceTabViewModel tab) UnwireRailSource(tab);
+            }
+        }
+
+        if (e.NewItems is null)
+        {
+            // Zakładka zniknęła — odpowiedź railu mogła się zmienić nawet bez nowych źródeł.
+            RaiseRailChanged();
+            return;
+        }
+
         foreach (var item in e.NewItems)
         {
-            if (item is WorkspaceTabViewModel tab) WireObjectCompiled(tab);
+            if (item is not WorkspaceTabViewModel tab) continue;
+            WireObjectCompiled(tab);
+            WireRailSource(tab);
         }
     }
 
