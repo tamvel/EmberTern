@@ -2580,7 +2580,8 @@ porównywały przycisk **bezklasowy** z `.primary` (bezklasowy przestał być ak
 Bridge'a z `.flat`, które jest **celowo przezroczyste** — czyli mierzyła setter wariantu i nazywała to
 dowodem na mapowanie. ⭐ Świadek mapowania musi być przyciskiem **bez wariantu**.
 
-Build 0/0; suite **7088** (7000 + 54 + 34); smoke czysty.
+Build 0/0; suite **7087** (7000 + 54 + 33); smoke czysty.
+⚠ Zapisane tu było 7088 / „54 + 34"; poprawione 2026-08-02 po pomiarze — §18.1.6.
 
 ---
 
@@ -2800,7 +2801,10 @@ rozwiązuje się przy wczytywaniu).
 
 ### §17.6 Stan liczbowy na wyjściu
 
-Build **0/0** · suite **7088** (7000 + 54 + 34) · smoke czysty · drzewo czyste.
+Build **0/0** · suite **7087** (7000 + 54 + 33) · smoke czysty · drzewo czyste.
+⚠⚠ Ten wiersz mówił **7088 (54 + 34)** i ta arytmetyka nigdy nie została przemierzona; poprawione
+2026-08-02 (§18.1.6) po pomiarze na czystym `HEAD`. Przyczyną był filtr partycji wymieniający klasę
+`ContextMenuPresentationTests`, która nie istnieje.
 **Liczniki wartości lokalnych** (warunek wyjścia M2c, po korekcie znaczenia z §15.11.5):
 `FontSize` **605 / 49 plików** · `FontFamily` **81 / 28** · `CornerRadius` **37 / 13**.
 
@@ -3222,9 +3226,13 @@ w którymś momencie wchłonięte przez `ConnectionExpandBindingProbe` (mieszka 
 `TheSameMenuOperationAlwaysCarriesTheSameIcon`), a nazwa w filtrze została. Po stronie *wykluczenia*
 jest to nieszkodliwe (wyklucza nic), ale arytmetyka „54 + 34" nigdy nie została przemierzona.
 
-→ **Poprawione w miejscu** (§18.0-E). ⚠ **Zgłoszone do decyzji użytkownika, NIE zmienione samodzielnie:**
-te same dwa fakty stoją w `CLAUDE.md` („pięć klas", „7088") i w handoverze §8.3/15 — to dokumenty
-międzyetapowe, więc czekają na akceptację.
+→ **Poprawione we wszystkich dokumentach** — na wyraźne polecenie użytkownika przy odbiorze iteracji 1:
+*„Jeżeli rzeczywisty wynik to 7087, a nie 7088, to popraw wszystkie miejsca, w których ta liczba występuje.
+Dokumentacja ma odzwierciedlać stan faktyczny, a nie historyczne założenia."* Objęte: `CLAUDE.md` (liczba,
+lista klas **pięć → cztery**, filtr), handover M2c §1 + §8.3/15 (liczba i filtr), `product-polish.md` §15.11.7
++ §17.6 + §18.0-E, handover M2b §1 (baseline). Handover M2a jest zamknięty, więc jego filtr **zostaje jako
+zapis historyczny, ale z ostrzeżeniem „nie kopiuj"** — jest nieaktualny również z drugiego powodu (brakuje
+w nim `DesignTokenApplicationTests`).
 
 #### §18.1.7 Mechanizm dla code-behind — `BindFontSize`, bliźniak istniejącego `BindBrush`
 

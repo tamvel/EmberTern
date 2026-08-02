@@ -38,7 +38,7 @@
 | **Wypchnięte** | ⚠ `e388ad7` na oba remote'y; **`20d4ad6` jeszcze NIE** (push po akceptacji użytkownika) |
 | **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · **M2c — krok 0 ✅, iteracje 1+ przed Tobą** |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7088**, zielony w trzech partycjach (7000 + 54 + 34) |
+| **Suite** | **7087**, zielony w trzech partycjach (7000 + 54 + 33) — ⚠ zapis „7088 / 54 + 34" poprawiony 2026-08-02 po pomiarze na czystym `HEAD` (§18.1.6); przyczyną była nieistniejąca klasa w filtrze, patrz §8.3/15 |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 
@@ -392,9 +392,13 @@ zmieniając wyniku.
 ### 8.3 Infrastruktura testów
 
 15. **⚠⚠ TRZY partycje, `ConnectionExpandBindingProbe` biegnie SAM** (54 zielone, ~9 s); pozostałe
-    cztery klasy headless razem (34, ~2 s); reszta (7000) osobno.
-    Filtr: `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~ContextMenuPresentationTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests"`
+    **trzy** klasy headless razem (**33**, ~2 s); reszta (7000) osobno.
+    Filtr: `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests"`
     i odwrotność z `|`.
+    ⚠⚠ **POPRAWIONE 2026-08-02 (§18.1.6).** Filtr wymieniał wcześniej **`ContextMenuPresentationTests`** —
+    klasę, która **nie istnieje** (jej testy wchłonął `ConnectionExpandBindingProbe`). Jako *wykluczenie*
+    nazwa nie szkodzi, bo nie pasuje do niczego — i dlatego nikt nie zauważył, że suma „54 + 34 = 7088"
+    jest o jeden za wysoka. Zmierzone na czystym `HEAD`: **7000 + 54 + 33 = 7087**.
 16. **⚠ Test headless konstruujący `MainWindow` ZAWIESZA SIĘ.** Asercje wykonuj na najtańszej
     kontrolce, która może nieść daną cechę (`new Window()`), a nowa klasa headless **dołącza do
     `HeadlessCollection`**, nigdy nie zakłada własnego `IClassFixture` (#94/#226/#286).

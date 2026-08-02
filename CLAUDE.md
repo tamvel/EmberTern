@@ -785,8 +785,9 @@ noted.
   nothing new to record.
   **⭐ ETAP 5b — the etap that connected the feature to the user. See "What's built" for what it IS; the notes
   here are the WHY.** Build 0/0; suite **6988** green (partitions 6924 + 64, up 28); smoke clean.
-  ⚠ **The headless partition now holds THREE classes** (`ConnectionExpandBindingProbe` ·
-  `SettingsCenterViewTests` · `ContextMenuPresentationTests`), all in `HeadlessCollection`.
+  ⚠ **The headless partition held THREE classes at that point** (`ConnectionExpandBindingProbe` ·
+  `SettingsCenterViewTests` · `ContextMenuPresentationTests`), all in `HeadlessCollection`. ⚠ Historical: the
+  third was later folded into the probe and **no longer exists** — the live list is under "Tests" below.
   **⚠⚠ THE QA DEFECT AND ITS ONE-SENTENCE CAUSE (2026-07-31, §16.6) — the generalisation outlives this module.**
   An exported workspace did not survive a restart. ⭐ **Cause: `SettingsPortability.ExportTo` read the whole
   configuration off `settings.dat`, which is correct for every section EXCEPT `Workspace` — the one section the
@@ -3197,21 +3198,29 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7088 as of 2026-08-02, at the close of Product Polish M2b** (21 iterations added 23
-  tests: `DesignTokenApplicationTests` grew from 2 to 20, `DesignTokenComplianceTests` from 9 to 11).
-  Green in the three documented partitions (**7000 + 54 + 34**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7087 as of 2026-08-02** (Product
+  Polish M2b close + M2c iteration 1, which added none). Green in the three documented partitions
+  (**7000 + 54 + 33**).
+  **⚠⚠ THIS LINE SAID 7088 / "54 + 34" AND THE ARITHMETIC WAS NEVER MEASURED — corrected 2026-08-02 (M2c
+  iteration 1, `product-polish.md` §18.1.6), verified on a clean `HEAD`.** The cause is the next paragraph's
+  own class list: it named **`ContextMenuPresentationTests`**, a class that **no longer exists** — the Keyboard
+  Manager sprint's context-menu tests were folded into `ConnectionExpandBindingProbe` (which is where
+  `TheSameMenuOperationAlwaysCarriesTheSameIcon` lives today), and the name survived in the filter. Excluding a
+  name that matches nothing is harmless *as a filter*, which is exactly why nobody noticed the total was one
+  too high. ⭐ The general shape is gotcha #284 one layer out: **a number kept in prose stays green while the
+  thing it counts moves.**
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition now holds **five** classes
-  (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `ContextMenuPresentationTests` +
-  `BrandingPresentationTests` + `DesignTokenApplicationTests`), all in
+  four times its own count. ⚠ The headless partition holds **four** classes — measured, not listed from memory
+  (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `BrandingPresentationTests` +
+  `DesignTokenApplicationTests`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
-  (#94/#226/#286). The partition filter is the five class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~ContextMenuPresentationTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests"`
+  (#94/#226/#286). The partition filter is the four class names excluded / included:
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests"`
   and its inverse with `|`.
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
   with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,

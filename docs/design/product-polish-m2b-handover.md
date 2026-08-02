@@ -24,7 +24,7 @@
 | **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ dostarczony** (21 iteracji) |
 | **Następny krok** | ⭐ **QA wizualne kroków 5.4–13**, potem **M2c** |
 | **Ostatni commit** | `41e0cec` — M2b krok 13 (czwarta runda QA) |
-| **Baseline** | build 0/0; suite **7088** (7000 + 54 + 34); smoke czysty |
+| **Baseline** | build 0/0; suite **7087** (7000 + 54 + 33); smoke czysty — ⚠ zapisane tu było 7088 / „54 + 34"; poprawione 2026-08-02 po pomiarze, `product-polish.md` §18.1.6 |
 
 **Specyfikacja etapu (źródło prawdy):** `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`
 **Dokument etapu:** `docs/design/product-polish.md`

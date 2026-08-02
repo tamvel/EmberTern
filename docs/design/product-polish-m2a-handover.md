@@ -120,6 +120,10 @@ skala szarości Light, `#FCFCFD`) to **M2b**.
 
 Suite **nie biegnie w jednym przebiegu**. Trzy partycje (CLAUDE.md „Tests"):
 
+⛔ **NIE KOPIUJ tego filtra — jest nieaktualny** (dokument zamknięty, zostawiony jako zapis stanu M2a).
+Brakuje w nim `DesignTokenApplicationTests`, a wymieniona `ContextMenuPresentationTests` **nie istnieje**
+(jej testy wchłonął `ConnectionExpandBindingProbe`). Aktualny filtr: `product-polish-m2c-handover.md` §8.3/15.
+
 ```bash
 dotnet test EmberTern.slnx --filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~ContextMenuPresentationTests&FullyQualifiedName!~BrandingPresentationTests"
 ```
