@@ -16,7 +16,7 @@
 | 3 | `product-polish.md` **§8** | ⭐ **wiążący** — model paska zakładek (§8.0–§8.3) i Status Bara 2.0 (§8.4) | M3.1 i M3.3 |
 | 4 | `product-polish.md` **§7.5** | ⭐ wiążący — semantyka kolorów | M3.2 |
 | 5 | `product-polish.md` **§13.3** | ⭐ wiążący — brama jakości po M3 | przed zamknięciem etapu |
-| 6 | `product-polish.md` **§17** + **§18.R** | ⭐ wiążący — reguły R1–R11, rejestr kolizji K1–K10 | zawsze |
+| 6 | `product-polish.md` **§17** + **§18.R** | ⭐ wiążący — reguły **R1–R13** (R13 ratyfikowana w M3.2a), rejestr kolizji **K1–K11** | zawsze |
 | 7 | `Themes/Tokens.axaml`, `Themes/Typography.axaml` | ⭐ **katalog — źródło prawdy o rolach** | przy każdej iteracji |
 
 ⛔ **NIE czytaj na starcie:**
@@ -35,14 +35,15 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | **M3.2a (H‑3)**. ⚠ Poprzednia wersja tego wiersza mówiła, że trzy commity czekają na push — **zweryfikowane 2026-08-02: nieaktualne**, oba remote'y stały już na `b16f476` (M3.1e + M3.1f + poprawki odbiorcze). Push M3.2a — po akceptacji użytkownika |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅** (M3.1 odebrane w całości; M3.2a czeka na QA wizualne). ⭐ **M3.1 ZAMKNIĘTE** — cztery sekcje §8.4.3 istnieją. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma już ani jednej bramki przesuwającej cokolwiek |
+| **Ostatni commit** | **M3.2b (§7.5)**. ⚠ Wcześniejsza wersja tego wiersza mówiła, że trzy commity czekają na push — **zweryfikowane 2026-08-02: nieaktualne**, oba remote'y stały już na `b16f476`. **Czekają cztery commity: M3.2a + dwa odbiorcze + M3.2b** — push po akceptacji użytkownika |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ✅** (M3.1 odebrane w całości; M3.2a odebrane **dwiema rundami wycofań**; M3.2b czeka na QA wizualne). ⭐ **M3.1 ZAMKNIĘTE**. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma ani jednej bramki przesuwającej cokolwiek |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7134**, zielony w trzech partycjach (**7031 + 49 + 54**) |
+| **Suite** | **7133**, zielony w trzech partycjach (**7031 + 48 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⭐⭐ **M3.2b** — §7.5, semantyka kolorów na pasku narzędzi (decyzja **DC** już podjęta: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5**, M3.2b ogranicza się do paska). ⏸ **Wziąć po drodze:** sekcja 3 toolbara jest jedynym znanym pozostałym drganiem *w obrębie jednego dokumentu* (`ShowCollectionEdit` 34 px, blok reorder 73 px, przy przełączaniu pod-zakładek) — zmierzone i świadomie nierozwiązane w M3.2a, bo rezerwacja kosztowałaby ~181 px dziury; zapis w §19.10.3 |
+| **NASTĘPNY KROK** | ⭐⭐ **M3.2c (H‑5)** — Commit / Rollback na `CommitButtonBrush` / `RollbackButtonBrush` (decyzja **DD** podjęta). ⚠ Audyt nazwał zły moduł: drugim jest **Data Import**, nie Script Executor, a oba moduły używają **tych samych ikon i tych samych pędzli** — różni je wyłącznie wariant przycisku, co jest zgodne z decyzją architektoniczną 4. ⭐ Prawdziwy defekt: **oba tokeny docelowe nie mają dziś ani jednego konsumenta**, a Rollback maluje się `DangerIconBrush` — tokenem kategorii „operacje nieodwracalne", którą Rollback nie jest |
+| **⏸ ZAMKNIĘTE PRZEZ R13** | Dług „sekcja 3 toolbara drga przy przełączaniu pod-zakładek" (§19.10.3) **nie wymaga już decyzji** — R13 rozstrzyga go z góry: nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Sekcja 3 zostaje jak jest |
 | **⏸ DROBIAZG DO WZIĘCIA PO DRODZE** | Wyłączone komórki Size/Scale/SubType/Charset dostały `Stretch`, ale **tło nadal maluje `FluentBridge`** (`TextControlBackgroundDisabled` → `BackgroundColor`), więc setter `Background="Transparent"` go nie zdejmuje. Jeśli po QA nadal widać pudełko — trasa jest przez **Bridge**, nie przez setter (reguła 8 §16). Zapis: §19.8.4 |
 
 ### 1.1 Co dostarczyły poprzednie etapy — trzy zdania
@@ -508,8 +509,9 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 6 | **M3.1f** | Sekcja postępu + operacja referencyjna; ⭐ **infrastruktura dla M3b — oba tryby**, choć operacja referencyjna umie tylko nieokreślony · ⭐ Cancel to **dwa zasięgi jednej komendy**, zamyka lukę bramkowania (§19.7) | — |
 | ✅ 6b | **poprawki odbiorcze** | Zamknięte bez osobnej iteracji (decyzja użytkownika): wyrównanie endpointu **zamknięte pomiarem bez zmiany kodu** · bug historii parametrów · pusta kolumna Type przy domenie · wygląd wyłączonych komórek (§19.8) | — |
 | ✅ 7 | **M3.2a** | H‑3. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. ⛔⛔ **Z czterech ruchów został JEDEN — Export DDL na koniec paska tytułu (T2).** Odbiór wizualny cofnął podłogę Execute/Cancel, dokowanie Commit/Rollback i rezerwację slotu sekcji 1: ⭐ **GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI** · rozmiar z wyrównania czyta się jak deklaracja ważności (R5 od drugiej strony) · ⭐⭐ **R13** — nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Wszystkie przesunięcia **świadomie zaakceptowane**. §19.10 + §19.11 + **§19.12** | — |
-| ⭐ **8** | **M3.2b** | **← TU ZACZYNASZ.** §7.5 — semantyka kolorów na pasku narzędzi. ⏸ + sekcja 3 (§19.10.3) | **DC** ✅ |
-| 9 | **M3.2c** | H‑5 — Commit / Rollback | **DD** |
+| ✅ 8 | **M3.2b** | §7.5 — semantyka kolorów. Pasek tytułu niesie teraz **wyłącznie 10 kolorów rodzaju + 1 Danger**. ⭐ Znalezione poza §7.5: **trzy naruszenia w toolbarze dokumentu** (Uncomment jako `Danger`, Comment jako `Info`, Execute procedury jako `Success`) — najgorszy jest Comment/Uncomment, bo **kolor niósł rozróżnienie, którego nie ma**. ⚠⚠ §7.5 skorygowane w miejscu: neutralny dla IKONY to `NeutralIconBrush` (brak `Foreground`), nie `ForegroundBrush` — dwa różne tokeny. §19.13 | **DC** ✅ |
+| ⭐ **9** | **M3.2c** | **← TU ZACZYNASZ.** H‑5 — Commit / Rollback na `CommitButtonBrush` / `RollbackButtonBrush`. ⚠ Audyt nazwał zły moduł: drugim jest **Data Import**, nie Script Executor. ⭐ Oba tokeny docelowe **nie mają dziś ani jednego konsumenta** | **DD** ✅ |
+
 | 10 | **M3.2d** | M‑1 — 10 literałów → `UiStrings` | — |
 | 11 | **M3.3a** | Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik; **K9/K10 zostają** | — |
 | 12 | **M3.3b** | Dwa tryby + preferencje (`TabStripMode`, `TabStripMaxRows`) + wiersze w Settings Center | — |

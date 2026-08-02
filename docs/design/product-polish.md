@@ -777,7 +777,13 @@ identyfikuje rodzaj obiektu: drzewo, zakładki, menu, przyciski „Nowy X", nag�
 | **Warning / Rollback** | `RollbackButtonBrush` | wycofanie, odrzucenie zmian |
 | **Dangerous** | `DangerIconBrush` | **wyłącznie** operacje nieodwracalne — Drop, Delete, Stop |
 
-**Neutralność.** `ForegroundBrush` dla wszystkiego, co nie odpowiada na żadne z tych dwóch pytań.
+**Neutralność.** ⚠⚠ **SKORYGOWANE W M3.2b PO POMIARZE — dla IKONY neutralnym jest `NeutralIconBrush`,
+nie `ForegroundBrush`, a realizuje się to przez BRAK `Foreground`.** To dwa różne tokeny i różnica jest
+celowa: Dark `#C8CCD2` vs `#D4D4D4`, Light `#3C3C3C` vs `#1B1D1F` — ikona stroke'owana czyta się inaczej
+niż litera, więc ma własną wartość neutralną, ustawioną jako domyślna w `ControlTheme` kontrolki
+`SvgIcon`. ⛔ Wpisanie `ForegroundBrush` na ikonę rozjechałoby pasek z ikonami całej reszty aplikacji
+i byłoby wartością lokalną tam, gdzie rola już odpowiada (reguła 9 UI). Zapis „ForegroundBrush" powyżej
+pochodził sprzed pomiaru; §19.13.
 ⚠ **Neutralny to nie „gorszy" — to poprawna odpowiedź dla narzędzia ogólnego.** Search, Refresh,
 Save, Open nie dotyczą konkretnego rodzaju obiektu i nie robią nic nieodwracalnego z danymi.
 
@@ -794,22 +800,24 @@ a trzeci szary?"*): zielony, bo dotyczy obiektu, który wszędzie indziej też j
 niebieski, bo to główna akcja tego ekranu; szary, bo to narzędzie ogólne. **Każda odpowiedź jest
 jednozdaniowa i sprawdzalna.**
 
-#### Zmiany do wykonania w M2b
+#### Zmiany do wykonania — ⭐ WYKONANE W M3.2b (§19.13), nie w M2b
 
 | Element | Dziś | Docelowo | Powód |
 |---|---|---|---|
-| 10 przycisków „Nowy X" | `IconColor_*` | **bez zmian** | działa, jest znaczące, daje charakter |
-| 6 narzędzi ogólnych | `AccentBrush` | `ForegroundBrush` | nie są akcją główną; konkurują z kolorami rodzajów |
-| `Icon.Trash` (Usuń połączenie) | `WarningIconBrush` | `DangerIconBrush` | operacja nieodwracalna; zgodnie z regułą zapisaną przy Seam 4 |
-| `Icon.PlugZap`, `Icon.RefreshCw` | `AccentIconBrush`, `InfoIconBrush` | `ForegroundBrush` | narzędzia ogólne |
-| `AccentIconBrush`, `InfoIconBrush` | 2 tokeny | **zlikwidowane** | dublują `AccentBrush` / `SubtleForegroundBrush` |
+| 10 przycisków „Nowy X" | `IconColor_*` | **bez zmian** ✅ | działa, jest znaczące, daje charakter |
+| 6 narzędzi ogólnych | `AccentBrush` | ~~`ForegroundBrush`~~ → **brak `Foreground`** ✅ | nie są akcją główną; konkurują z kolorami rodzajów |
+| `Icon.Trash` (Usuń połączenie) | `WarningIconBrush` | `DangerIconBrush` ✅ | operacja nieodwracalna; zgodnie z regułą zapisaną przy Seam 4 |
+| `Icon.PlugZap`, `Icon.RefreshCw` | `AccentIconBrush`, `InfoIconBrush` | **brak `Foreground`** ✅ | narzędzia ogólne |
+| `AccentIconBrush`, `InfoIconBrush` | 2 tokeny | ⏸ **zlikwidowane → M4.3/M5** | decyzja **DC**: sięga 24 wystąpień w 14 plikach, w tym powierzchni M4.3 |
 
 ⭐ **Efekt: pasek narzędzi POZOSTAJE kolorowy** — dziesięć ikon rodzajów, Commit, Rollback i akcje
 destrukcyjne nadal niosą barwę. Znika wyłącznie niebieska tapeta, na której te kolory dziś się gubią.
 **To jest realizacja §3.4 specyfikacji (*calm interface*) bez utraty tożsamości.**
 
 ⚠ Pełna tabela przypisań per przycisk powstaje w M2b i wchodzi do przeglądu — powyżej jest reguła,
-nie lista.
+nie lista. ⚠⚠ **Ta sekcja opisywała WYŁĄCZNIE pasek tytułu i to było jej ograniczenie, nie kompletność:**
+M3.2b znalazło w **toolbarze dokumentu** trzy dalsze naruszenia tego samego kontraktu (Uncomment jako
+`Danger`, Comment jako `Info`, Execute procedury jako `Success`) — §19.13.2.
 
 ---
 
@@ -5542,3 +5550,75 @@ nie jest ważniejsze.
 
 Build 0/0 · **7133** zielony w trzech partycjach (**7031 + 48 + 54**, czyli tyle co przed etapem) ·
 smoke czysty.
+
+---
+
+### §19.13 Iteracja 8 (M3.2b) — §7.5, semantyka kolorów na pasku narzędzi (2026-08-02)
+
+**Zakres:** realizacja ratyfikowanego kontraktu §7.5 na obu paskach. ⚠ Decyzja **DC** obowiązuje:
+likwidacja tokenów `AccentIconBrush` / `InfoIconBrush` **nie należy do tej iteracji** (24 wystąpienia
+w 14 plikach, w tym powierzchnie M4.3) — M3.2b przestaje ich **używać w paskach**, tokeny żyją dalej.
+
+#### §19.13.1 Pasek tytułu — dokładnie to, co §7.5 przewidział
+
+Pomiar zgodził się z audytem co do sztuki. Wykonane: **6 narzędzi ogólnych** (Activity Monitor ·
+Session Manager · Global Search · Script Executor · Data Import · Export DDL) traci `AccentBrush` ·
+**Connect** traci `AccentIconBrush` · **Refresh** traci `InfoIconBrush` · **Usuń połączenie**
+przechodzi z `WarningIconBrush` na `DangerIconBrush` (operacja nieodwracalna) · **10 × `IconColor_*`
+bez zmian**, w tym Security Manager, który jest narzędziem, ale niesie kolor RODZAJU (§3.4/uściślenie 1).
+
+⭐ **Wynik zmierzony po zmianie: pasek tytułu niesie teraz WYŁĄCZNIE dziesięć kolorów rodzaju i jeden
+`DangerIconBrush`.** Zniknęła niebieska tapeta, na której te dziesięć kolorów się gubiło — czyli
+dokładnie efekt zapowiedziany w §7.5 („pasek POZOSTAJE kolorowy"), a nie wyciszenie paska.
+
+#### §19.13.2 ⭐⭐ Toolbar dokumentu — trzy dalsze naruszenia, których §7.5 nie wymieniło
+
+§7.5 opisywało wyłącznie pasek tytułu. Toolbar dokumentu ma własne odstępstwa i **są ostrzejsze, bo
+dotyczą par, które przez kolor mówiły nieprawdę**:
+
+| Element | Było | Dlaczego to defekt |
+|---|---|---|
+| **Uncomment** (×3) | `DangerIconBrush` | odkomentowanie kodu **nie jest nieodwracalne** — jedno Ctrl+Z; token jest zarezerwowany dla Drop · Delete · Stop |
+| **Comment** (×3) | `InfoIconBrush` | razem z powyższym **symetryczna para edycyjna czytała się jako „bezpieczna / groźna"** |
+| **Execute procedury / funkcji** (×2) | `SuccessIconBrush` | `Success` w kontrakcie znaczy **wyłącznie zatwierdzenie transakcji**; uruchomienie procedury dzieje się w transakcji użytkownika i cofa je Rollback |
+
+⭐ **Najgorszy z tych trzech jest przypadek Comment/Uncomment i warto wiedzieć dlaczego: kolor niósł
+tam rozróżnienie, którego nie ma.** Brak koloru jest neutralny; kolor niosący fałszywą różnicę jest
+gorszy niż jego brak, bo użytkownik mu wierzy. ⚠ Zdjęcie koloru nic nie kosztuje w czytelności — obie
+ikony mają **różne geometrie** i własne tooltipy, więc kolor nigdy nie był tu jedynym nośnikiem (§8.4).
+
+#### §19.13.3 ⚠⚠ Korekta §7.5 w miejscu — neutralny dla IKONY to nie `ForegroundBrush`
+
+§7.5 mówiło: *„`ForegroundBrush` dla wszystkiego, co nie odpowiada na żadne z tych dwóch pytań"*.
+**Zmierzone: to dwa różne tokeny i różnica jest celowa.**
+
+| | Dark | Light |
+|---|---|---|
+| `ForegroundBrush` (tekst) | `#D4D4D4` | `#1B1D1F` |
+| `NeutralIconBrush` (ikona) | `#C8CCD2` | `#3C3C3C` |
+
+Ikona stroke'owana czyta się inaczej niż litera, więc ma własną wartość neutralną — **ustawioną jako
+domyślna w `ControlTheme` kontrolki `SvgIcon`**. ⭐ Dlatego neutralizacja polega na **usunięciu
+`Foreground`**, nie na podstawieniu innego tokenu: wpisanie `ForegroundBrush` rozjechałoby ikony paska
+z ikonami całej reszty aplikacji **i** byłoby wartością lokalną tam, gdzie rola już odpowiada
+(reguła 9 UI). §7.5 poprawione w miejscu.
+
+⚠ To trzeci raz w M3, gdy zapis w dokumencie okazał się starszy niż produkt (po `Size.StatusBar`
+i `Size.Row.Tree` z iteracji 0) — i pierwszy, w którym **poprawnie brzmiąca nazwa tokenu była pułapką**:
+`ForegroundBrush` istnieje, jest sensowny i podstawiony bez pomiaru dałby zielony build oraz subtelnie
+inny odcień ikon w jednym pasku.
+
+#### §19.13.4 Poza zakresem, z powodem
+
+| Element | Dlaczego nie tutaj |
+|---|---|
+| **Commit** (`SuccessIconBrush`) i **Rollback** (`DangerIconBrush`) → `CommitButtonBrush` / `RollbackButtonBrush` | to **decyzja DD** i osobny podetap **M3.2c** (H‑5). ⭐ Oba tokeny docelowe nie mają dziś **ani jednego konsumenta** w całej aplikacji |
+| likwidacja `AccentIconBrush` / `InfoIconBrush` | decyzja **DC** → M4.3/M5. Zmierzone: oba mają konsumentów **poza** `MainWindow.axaml` (Data Import, Debugger, Trace, Performance, Table Detail, trzy ViewModele) |
+| `OnAccentBrush` na ikonach przycisków `primary` (×12) | to nie kolor semantyczny, tylko **czytelność na wypełnieniu akcentem** — inny wymiar niż §7.5 |
+
+#### §19.13.5 Wynik
+
+Build 0/0 · **7133** zielony w trzech partycjach (**7031 + 48 + 54**) · smoke czysty · **bez nowych
+testów**: iteracja nie wprowadza mechanizmu, tylko usuwa wartości lokalne, a strażnikiem poprawności
+jest tu reguła zapisana w miejscu, nie asercja.
+⏸ **QA wizualne w obu motywach — po stronie użytkownika.**
