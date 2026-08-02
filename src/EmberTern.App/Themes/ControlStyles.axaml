@@ -240,6 +240,36 @@
   </Style>
 
   <!-- ================================================================================================
+       Expander — Compact Controls, Product Polish M2b krok 5.7.
+
+       ⚠⚠ TEN BLOK MUSI STAĆ PO STYLU `ToggleButton` I TO JEST JEGO POŁOWA TREŚCI. Nagłówek
+       `Expandera` JEST `ToggleButtonem`, więc styl z kroku 5.6 sięgnął do środka szablonu i wyrównał
+       jego treść do ŚRODKA (`HorizontalContentAlignment=Center`) — nagłówek sekcji wyśrodkowany jak
+       etykieta przycisku. Zmierzone, nie przewidziane: `Pad=12,0,12,0`, `HCA=Center`, `FS=12`.
+       ⭐ Lekcja ogólniejsza: styl typu obowiązuje TAKŻE wewnątrz cudzego szablonu — to ta sama
+       właściwość, która w kroku 5.5 zadziałała na naszą korzyść (wewnętrzny `TextBox` `NumericUpDown`
+       wziął wysokość za darmo). Jeden mechanizm, dwa znaki.
+
+       ⚠ `MinHeight` nagłówka NIE dało się naprawić setterem i to jest przypadek, który wymusił
+       trzecią trasę w `FluentBridge.axaml`: szablon Fluenta konsumuje `ExpanderMinHeight` jako
+       WARTOŚĆ LOKALNĄ elementu, a wartość lokalna outranks setter stylu — nagłówek trzymał 48 px
+       mimo settera z kroku 5.6. Rozwiązaniem jest ALIAS zasobu, nie kolejny selektor.
+       ================================================================================================ -->
+  <Style Selector="Expander">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+
+  <!-- Przywrócenie tego, co styl `ToggleButton` zabrał nagłówkowi. `Stretch`, nie `Left`: treść
+       nagłówka bywa całym `StackPanelem` (Procedure/Function — jednolinijkowe podsumowanie), więc ma
+       dostać całą szerokość, a nie zostać dosunięta do krawędzi. -->
+  <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <!-- ================================================================================================
        NumericUpDown — Compact Controls, Product Polish M2b krok 5.5.
 
        ⚠ TA KONTROLKA NIE JEST JEDNĄ KONTROLKĄ, tylko trzema zagnieżdżonymi: `NumericUpDown` opakowuje

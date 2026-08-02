@@ -6,6 +6,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -407,6 +408,64 @@ public sealed class DesignTokenApplicationTests
             Assert.Equal(accent, checkedFill.Color);
 
             window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Step 5.7 — <c>Expander</c>, and the two facts that make it the most instructive control of M2b.
+    ///
+    /// <para>⚠ Its header IS a <c>ToggleButton</c>, so step 5.6's type style reached inside Fluent's template
+    /// and centred the header content. A type style applies inside a foreign template too — the same property
+    /// that worked FOR us in step 5.5 (the nested <c>TextBox</c> of <c>NumericUpDown</c>) works against us here.
+    /// The alignment assertion is what keeps that from silently coming back.</para>
+    ///
+    /// <para>⭐ Its <c>MinHeight</c> could NOT be fixed by a setter: the template consumes
+    /// <c>ExpanderMinHeight</c> as a LOCAL value on the element, and a local value outranks a style setter. The
+    /// measured answer was a resource ALIAS in the Bridge — which also disproves §16.3's premise that XAML
+    /// cannot alias a scalar. This asserts the alias arrives; without it the header sits at Fluent's 48.</para>
+    /// </summary>
+    [Fact]
+    public async Task Expander_HeaderCollapsesThroughAResourceAlias_AndKeepsItsContentAlignment()
+    {
+        await _session.Dispatch(() =>
+        {
+            var expander = new Expander { Header = "Advanced", Content = new TextBlock { Text = "body" }, IsExpanded = true };
+            var window = new Window { Content = new StackPanel { Width = 300, Children = { expander } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            expander.Measure(new Size(300, 300));
+
+            var header = expander.GetVisualDescendants().OfType<ToggleButton>().Single(t => t.Name == "ExpanderHeader");
+
+            // The alias, not the setter: Fluent's ExpanderMinHeight is a template-local value that beat the
+            // step-5.6 ToggleButton style. 48 is the value that must not come back.
+            Assert.Equal(Token<double>("Size.Control"), header.MinHeight);
+            Assert.NotEqual(48d, header.MinHeight);
+
+            // What step 5.6 took away and this step gives back. A centred section header is the regression.
+            Assert.Equal(HorizontalAlignment.Stretch, header.HorizontalContentAlignment);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// The measurement that step 5.7 turned into a mechanism, kept as a checked invariant: <b>Avalonia resolves
+    /// a resource declared as an alias of another resource.</b> §16.3 originally claimed XAML cannot alias a
+    /// scalar; it can — what it cannot do is COMPOSE one in element content (<c>&lt;x:Double&gt;</c> must hold a
+    /// number). The distinction is what lets the Bridge own a metric without writing a literal.
+    ///
+    /// <para>⚠ If this ever fails, the three <c>Expander</c> metric aliases silently fall back to Fluent's own
+    /// values and the header returns to 48 px — with a green build.</para>
+    /// </summary>
+    [Fact]
+    public async Task Bridge_AliasesAScalarMetric_WithoutRestatingItsValue()
+    {
+        await _session.Dispatch(() =>
+        {
+            Assert.Equal(Token<double>("Size.Control"), Token<double>("ExpanderMinHeight"));
+            Assert.Equal(Token<Thickness>("Pad.Control"), Token<Thickness>("ExpanderHeaderPadding"));
+            Assert.Equal(Token<Thickness>("Pad.Panel"), Token<Thickness>("ExpanderContentPadding"));
         }, default);
     }
 

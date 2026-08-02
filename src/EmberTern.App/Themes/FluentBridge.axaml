@@ -28,6 +28,30 @@
        ma 3 — wpis powielałby liczbę, więc zamiast niego zbieżność pinuje test.
        ================================================================================================ -->
 
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       ⭐⭐ ALIASY METRYK — TRZECIA TRASA, dopisana w kroku 5.7 po pomiarze, który OBALIŁ przesłankę
+       §16.3. Zmierzone na Avalonii 12.0.3: `<StaticResource x:Key="A" ResourceKey="B" />` DZIAŁA
+       — `ProbeAliasScalar` rozwiązał się do `24` typu `Double`. XAML potrafi więc zaaliasować zasób
+       skalarny; nie potrafi jedynie ZŁOŻYĆ go w treści elementu (`<x:Double>` musi zawierać liczbę).
+
+       ⚠ To NIE unieważnia podziału z §16.3 — settery stylu zostają domyślną trasą dla metryk, bo są
+       widoczne tam, gdzie się o kontrolce myśli. Alias jest trasą dla JEDNEGO zmierzonego przypadku:
+       gdy szablon konsumuje zasób skalarny jako WARTOŚĆ LOKALNĄ elementu, setter stylu przegrywa
+       (wartość lokalna outranks setter — ta sama reguła, która w tym projekcie wypłynęła już przy
+       `MessageBanner`, `MainWindow.Icon` i `DangerIconBrush`). `ExpanderMinHeight` jest dokładnie
+       tym przypadkiem: mimo settera `ToggleButton` z kroku 5.6 nagłówek trzymał 48 px.
+
+       ⭐ Alias spełnia regułę użytkownika LEPIEJ niż liczba: jest ODWOŁANIEM, więc `Size.Control`
+       pozostaje jedynym właścicielem tej wartości. Strażnik `FluentBridge_ContainsNoLocalValues`
+       przepuszcza go, bo sam znacznik jest `StaticResource`.
+
+       ⚠ Te wpisy stoją POZA `ThemeDictionaries`, bo metryka nie zależy od motywu — dokładnie ten sam
+       podział, co między `Tokens.axaml` a `Colors.axaml`.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+  <StaticResource x:Key="ExpanderMinHeight" ResourceKey="Size.Control" />
+  <StaticResource x:Key="ExpanderHeaderPadding" ResourceKey="Pad.Control" />
+  <StaticResource x:Key="ExpanderContentPadding" ResourceKey="Pad.Panel" />
+
   <ResourceDictionary.ThemeDictionaries>
 
     <!-- ⚠ Oba słowniki mają IDENTYCZNĄ treść, bo mapowanie jest takie samo w obu motywach — różnią
@@ -156,6 +180,19 @@
       <SolidColorBrush x:Key="ToggleButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ToggleButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ToggleButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── Expander (Product Polish M2b, krok 5.7) ──────────────────────────────────────────────
+           Nagłówek jest pasmem klikalnym, więc bierze `Panel` — o stopień od dokumentu, tak jak
+           przycisk. Treść bierze tło DOKUMENTU: to, co rozwinięte, należy do czytanej zawartości,
+           a nie do chromy, która je otwiera.
+           ⚠ Chevron idzie na `SubtleForeground` — ta sama rola co strzałka `ComboBoxa` (krok 5.3)
+           i strzałki spinnera (krok 5.5): afordancja „to się rozwija", nie treść. -->
+      <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ExpanderHeaderForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ExpanderContentBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ExpanderChevronForeground" Color="{StaticResource SubtleForegroundColor}" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -276,6 +313,19 @@
       <SolidColorBrush x:Key="ToggleButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ToggleButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ToggleButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── Expander (Product Polish M2b, krok 5.7) ──────────────────────────────────────────────
+           Nagłówek jest pasmem klikalnym, więc bierze `Panel` — o stopień od dokumentu, tak jak
+           przycisk. Treść bierze tło DOKUMENTU: to, co rozwinięte, należy do czytanej zawartości,
+           a nie do chromy, która je otwiera.
+           ⚠ Chevron idzie na `SubtleForeground` — ta sama rola co strzałka `ComboBoxa` (krok 5.3)
+           i strzałki spinnera (krok 5.5): afordancja „to się rozwija", nie treść. -->
+      <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ExpanderHeaderForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ExpanderContentBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ExpanderChevronForeground" Color="{StaticResource SubtleForegroundColor}" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>

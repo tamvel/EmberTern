@@ -1409,9 +1409,10 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | 5.3 | **`ComboBox`** — próba skalowania mostu | `3483296` | ✅ zaliczone | §15.6.5 |
 | 5.4 | **`Button`** (H‑8) + tokenizacja 4 wariantów | `267a4b8` | ⏳ oczekuje | §15.6.6 |
 | 5.5 | **`NumericUpDown`** — trzy kontrolki zagnieżdżone | `d2a2475` | ⏳ oczekuje | §15.6.7 |
-| 5.6 | **`ToggleButton`** | — | ⏳ oczekuje | §15.6.8 |
+| 5.6 | **`ToggleButton`** | `ce47aa7` | ⏳ oczekuje | §15.6.8 |
+| 5.7 | **`Expander`** + ⭐ alias zasobu (korekta §16.3) | — | ⏳ oczekuje | §15.6.9 |
 
-**Nierozpoczęte w kroku 5:** `Expander` (ostatni).
+**Krok 5 (kontrolki bazowe) — ZAKOŃCZONY.**
 **Nierozpoczęte poza krokiem 5:** `ScrollBar` (H‑10) · DataGrid Standard (§8.4 specyfikacji).
 
 ⚠ **Stan bieżący suite: 7075** (7000 + 54 + 21). Każda iteracja dokłada 1–2 testy; licznik
@@ -2078,6 +2079,75 @@ wygląd i własny stan `:checked` na `SelectionBrush` — wariant dopowiada pods
 
 Build 0/0; suite **7078** (7000 + 54 + 24); smoke czysty.
 
+##### §15.6.9 Iteracja 7 — `Expander` (najbardziej pouczająca kontrolka M2b)
+
+Metryki przez **alias zasobu** (nowa trasa, niżej), kolory przez Bridge (6 kluczy w obu motywach),
+plus naprawa regresji, którą wprowadził krok 5.6.
+
+**⚠⚠ KROK 5.6 ZEPSUŁ NAGŁÓWEK `EXPANDERA` I ZOSTAŁO TO ZMIERZONE, NIE PRZEWIDZIANE.** Nagłówek
+`Expandera` **JEST `ToggleButtonem`**, więc styl typu z kroku 5.6 sięgnął do środka szablonu Fluenta
+i ustawił mu `HorizontalContentAlignment=Center` — nagłówek sekcji wyśrodkowany jak etykieta
+przycisku. Sonda: `Pad=12,0,12,0`, `HCA=Center`, `FS=12`.
+
+⭐ **Lekcja ogólniejsza, bo ma dwa znaki:** styl typu obowiązuje **także wewnątrz cudzego szablonu**.
+Ta sama właściwość zadziałała **na naszą korzyść** w kroku 5.5 (wewnętrzny `TextBox` `NumericUpDown`
+wziął wysokość za darmo) i **przeciwko nam** tutaj. To nie są dwa zjawiska, tylko jedno —
+i to jest powód, dla którego §16.5 każe uruchomić aplikację po każdej kontrolce, a nie po całym kroku.
+⚠ Naprawa jest selektorem na **nazwanej** części (`Expander /template/ ToggleButton#ExpanderHeader`),
+zadeklarowanym **po** stylu `ToggleButton` — przy tej samej trafności wygrywa setter późniejszy.
+`Stretch`, nie `Left`: treść nagłówka bywa całym `StackPanelem` (Procedure/Function), więc ma dostać
+całą szerokość.
+
+#### §15.6.9a ⭐⭐ POMIAR, KTÓRY OBALIŁ PRZESŁANKĘ §16.3 — XAML **POTRAFI** ZAALIASOWAĆ ZASÓB SKALARNY
+
+**`MinHeight` nagłówka nie dało się naprawić setterem** i to jest przypadek, który wymusił zbadanie
+sprawy do końca: szablon Fluenta konsumuje `ExpanderMinHeight` jako **wartość lokalną elementu**,
+a wartość lokalna **outranks setter stylu** — nagłówek trzymał 48 px mimo settera z kroku 5.6.
+⚠ To ta sama reguła, która w tym projekcie wypłynęła już trzy razy (`MessageBanner`, `MainWindow.Icon`,
+`DangerIconBrush`), tym razem po stronie **frameworka**, nie naszej.
+
+Zmierzone na Avalonii 12.0.3 sondą `ProbeAliasScalar`:
+
+```xml
+<StaticResource x:Key="ProbeAliasScalar" ResourceKey="Size.Control" />
+```
+> `found=True  value=24  type=Double`
+
+**⛔ §16.3 twierdziła: „XAML nie potrafi ZAALIASOWAĆ zasobu skalarnego". To jest FAŁSZ i zostało
+poprawione w miejscu.** Prawdziwe ograniczenie jest węższe: XAML nie potrafi **ZŁOŻYĆ** zasobu
+w treści elementu — `<x:Double>` musi zawierać liczbę. Aliasowanie przez osobny znacznik działa.
+
+**⚠ To NIE unieważnia podziału metryki/kolory i nie zmienia niczego, co już wysłano.** Settery stylu
+zostają **domyślną trasą** dla metryk — są widoczne tam, gdzie myśli się o kontrolce, i to one
+poprawnie biją `ControlTheme`. Alias jest **trzecią trasą dla jednego zmierzonego przypadku**: gdy
+szablon konsumuje zasób skalarny jako wartość lokalną, setter przegrywa i nie ma czym wygrać.
+
+**⭐ Alias spełnia regułę użytkownika LEPIEJ niż liczba, a nie „mimo wszystko":** jest
+**odwołaniem**, więc `Size.Control` pozostaje jedynym właścicielem wartości, a Bridge nadal niczego
+nie posiada. Strażnik `FluentBridge_ContainsNoLocalValues` przepuszcza go bez zmiany — sam znacznik
+jest `StaticResource`. ⚠ Wpisy stoją **poza `ThemeDictionaries`**, bo metryka nie zależy od motywu:
+ten sam podział, co między `Tokens.axaml` a `Colors.axaml`.
+
+⚠ **Był to jedyny sposób w ogóle.** Własny `ControlTemplate` **nie wchodził w grę** — §16.4 wymaga,
+by rozmiar **nie był** wystawiony jako zasób, a `ExpanderMinHeight` jest wystawiony. Reguła zadziałała
+poprawnie: zabroniła przepisania szablonu i zmusiła do znalezienia właściwego mechanizmu.
+
+#### §15.6.9b Reszta iteracji
+
+Nagłówek bierze `Panel` (pasmo klikalne, o stopień od dokumentu — jak przycisk), **treść bierze tło
+DOKUMENTU**: to, co rozwinięte, należy do czytanej zawartości, a nie do chromy, która je otwiera.
+Chevron idzie na `SubtleForeground` — ta sama rola co strzałka `ComboBoxa` (5.3) i strzałki spinnera
+(5.5).
+
+⚠ **Dwa widoki miały już lokalne obejście chunky `Expandera`** — `ProcedureDetailTabView` i
+`FunctionDetailTabView` niosą `MinHeight="26"` plus lokalne `ExpanderHeaderPadding`/
+`ExpanderContentPadding` w `<Expander.Resources>`. Po tym kroku są **zbędne**, ale zostają: usuwanie
+wartości lokalnych z widoków to **M2c**, a ten etap pracuje wyłącznie w `Themes/`. ⭐ To jest dobra
+ilustracja, po co M2c ma osobny licznik: obejście, które przestało być potrzebne, wygląda identycznie
+jak obejście, które nadal działa.
+
+Build 0/0; suite **7080** (7000 + 54 + 26); smoke czysty.
+
 ---
 
 ## §16 ⭐⭐ `FluentBridge` — WZORZEC PROJEKTOWY EmberTerna (nie ustalenie jednej iteracji)
@@ -2112,22 +2182,35 @@ Egzekwowane testem **`FluentBridge_ContainsNoLocalValues`**: każdy wpis w `Flue
 być **odwołaniem** do zasobu (`{StaticResource …}` / `{DynamicResource …}`). Wartość wpisana wprost
 wywala test. ⛔ Bez tego reguła przetrwałaby dokładnie do pierwszego *„tu jest szybciej wpisać kolor"*.
 
-### §16.3 ⚠⚠ Podział metryki / kolory — wynika z ograniczenia XAML‑a, nie z upodobania
+### §16.3 ⚠⚠ Trzy trasy: metryki / kolory / alias — podział wynika z pomiaru, nie z upodobania
 
-**XAML nie potrafi ZAALIASOWAĆ zasobu skalarnego.** `<x:Double x:Key="TextControlThemeMinHeight">`
-musi zawierać liczbę — nie da się tam napisać „to samo, co `Size.Control`". To samo dotyczy
-`Thickness` i `CornerRadius`. **Gdyby więc Bridge przejął metryki, musiałby wpisać liczby, czyli
-złamać §16.2 w pierwszej linijce.** Pędzel jest wyjątkiem, bo `Color="{StaticResource …}"` **jest**
-odwołaniem.
+> **⚠⚠ SEKCJA POPRAWIONA W KROKU 5.7 (2026-08-02) — jej pierwotna przesłanka była FAŁSZYWA.**
+> Twierdziła: *„XAML nie potrafi ZAALIASOWAĆ zasobu skalarnego"*. **Zmierzone: potrafi** —
+> `<StaticResource x:Key="A" ResourceKey="B" />` rozwiązuje się poprawnie (sonda `ProbeAliasScalar`
+> → `24`, `Double`, Avalonia 12.0.3, §15.6.9a). Prawdziwe ograniczenie jest **węższe**: XAML nie
+> potrafi **ZŁOŻYĆ** zasobu w treści elementu — `<x:Double>` musi zawierać liczbę.
+> ⭐ Wniosek podziału **przetrwał korektę przesłanki**, ale zyskał trzecią trasę. To ten sam kształt,
+> co §14.3: fałszywa przesłanka z działającym wnioskiem — i dlatego trzeba ją było poprawić,
+> a nie zostawić „bo i tak działa".
 
 | Co | Gdzie | Dlaczego |
 |---|---|---|
-| **Metryki** — `MinHeight`, `Padding`, `FontSize`, `BorderThickness` | **setter stylu** w `ControlStyles.axaml`, czytający token przez `{DynamicResource}` | styl aplikacji ma wyższy priorytet niż `ControlTheme` Fluenta, a setter **potrafi** odwołać się do tokenu |
+| **Metryki** — `MinHeight`, `Padding`, `FontSize`, `BorderThickness` | **setter stylu** w `ControlStyles.axaml`, czytający token przez `{DynamicResource}` | **trasa domyślna.** Styl aplikacji ma wyższy priorytet niż `ControlTheme` Fluenta, a setter jest widoczny tam, gdzie myśli się o kontrolce |
 | **Kolory malowane przez wnętrze szablonu** | **`FluentBridge.axaml`**, jako `SolidColorBrush Color="{StaticResource …Color}"` | setter na kontrolce tam nie dociera — maluje `PART_*`, nie kontrolka |
-| **Wartości, w których Fluent już się z nami zgadza** (`ControlCornerRadius` = 3 = `Radius.Surface`) | **nigdzie** — pinowane testem | wpis powielałby liczbę; test zamienia zbieżność w sprawdzany niezmiennik |
+| ⭐ **Metryka, którą szablon konsumuje jako WARTOŚĆ LOKALNĄ elementu** | **`FluentBridge.axaml`**, jako `<StaticResource x:Key="…" ResourceKey="…" />`, **poza `ThemeDictionaries`** | **wartość lokalna outranks setter stylu**, więc trasa pierwsza nie ma czym wygrać. Zmierzony przypadek: `ExpanderMinHeight` (§15.6.9a) |
+| **Wartości, w których Fluent już się z nami zgadza** (`ControlCornerRadius` = 3 = `Radius.Surface`; `ToggleButtonBackgroundChecked` = nasz akcent) | **nigdzie** — pinowane testem | wpis powielałby wartość, którą już kontrolujemy; test zamienia zbieżność w sprawdzany niezmiennik |
 
-⭐ **Skutek uboczny jest korzystny i warto go nazwać:** reguła „bez wartości lokalnych" staje się
-w tym pliku **strukturalna, nie pamięciowa** — nie ma tam gdzie wpisać liczby.
+⭐ **Alias NIE łamie §16.2 — spełnia ją lepiej niż liczba:** jest **odwołaniem**, więc właścicielem
+wartości pozostaje katalog, a Bridge nadal niczego nie posiada. `FluentBridge_ContainsNoLocalValues`
+przepuszcza go bez zmiany, bo sam znacznik jest `StaticResource`.
+
+⚠ **Trasa trzecia jest wyjątkiem, nie alternatywą dla pierwszej.** Sięgaj po nią **dopiero wtedy, gdy
+setter zmierzalnie przegrał** — nie „na wszelki wypadek". Setter jest czytelniejszy: stoi przy
+kontrolce, a nie w słowniku tłumaczeń.
+
+⚠ **Konsekwencja dla testów: trasy sprawdza się osobno.** Metrykę czytaj z kontrolki, kolor
+z elementu, który **faktycznie maluje**, a alias — z samego zasobu (`ExpanderMinHeight` == `Size.Control`).
+Alias, który przestanie się rozwiązywać, po cichu wróci do wartości Fluenta przy zielonym buildzie.
 
 ⚠ **Konsekwencja dla testów: obie połowy jadą innymi trasami i żadna nie dowodzi drugiej.**
 Test kontrolki musi sprawdzać **metrykę na kontrolce** i **kolor na elemencie, który faktycznie
@@ -2157,7 +2240,13 @@ z jednego katalogu tokenów, a nie z jednego mechanizmu dostarczania.
 2. **Sprawdź, czy Fluent wystawia potrzebne pokrętła jako zasoby** — jeżeli tak, §16.4 nie jest
    spełnione i własny szablon jest niedozwolony.
 3. **Metryki → setter stylu; kolory → Bridge** (§16.3), w **obu** motywach.
-4. **Test dwutorowy** — metryka z kontrolki, kolor z części malującej.
+   ⚠ Jeżeli setter **zmierzalnie przegrał** (szablon trzyma wartość lokalną) — dopiero wtedy alias.
+3a. ⚠⚠ **Sprawdź, czy styl typu nie sięgnął do CUDZEGO szablonu.** Styl typu obowiązuje wszędzie,
+   gdzie ten typ wystąpi — także wewnątrz szablonu innej kontrolki. Krok 5.6 (`ToggleButton`) w ten
+   sposób wyśrodkował nagłówek `Expandera`, a krok 5.5 w ten sam sposób dostał wysokość wewnętrznego
+   `TextBoxa` za darmo. **Jeden mechanizm, dwa znaki** — sprawdź, który wypadł tym razem.
+4. **Test — po jednej asercji na trasę** — metryka z kontrolki, kolor z części malującej, alias
+   z zasobu.
 5. ⚠ **Sprawdź wariant „w komórce siatki"** — `Size.Row.Grid` (22) − `Pad.Cell` (3+3) = **16 px**,
    więc kontrolka formularza o `MinHeight=24` podnosi każdy edytowany wiersz o 8 px (§15.6.4).
    **Wartość poprawna dla formularza bywa destrukcyjna dla siatki, a to ta sama klasa kontrolki.**
