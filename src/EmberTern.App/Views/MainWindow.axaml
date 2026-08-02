@@ -1881,6 +1881,49 @@
               </TextBlock.Foreground>
             </TextBlock>
           </StackPanel>
+
+          <!-- ⭐ CHIP DEBUGGERA (M3.1e). Prawdziwy, gdy sesja żyje GDZIEKOLWIEK — także na innej
+               zakładce. ⛔ To nie dubluje `ActiveDebugger.StatusText` z sekcji 2: tamten jest
+               bramkowany `IsDebuggerTabActive`, czyli znika dokładnie tam, gdzie fakt globalny zaczyna
+               mieć znaczenie (§0.1.2). Etykieta = fakt, tooltip = szczegół (nazwa procedury + status).
+               ⚠⚠ Kolor to `AccentIconBrush`, a NIE railowy `DebugCurrentLineBarBrush` — ten drugi jest
+               półprzezroczysty i na tle paska daje 3,77:1, czyli poniżej progu §10 dla tekstu (4,5:1).
+               Jako 2 px rail przechodzi (próg 3:1 dla elementu UI), jako napis nie. Zbieżność
+               z trójkątem `DebuggerIcon` jest przy okazji zaletą — znak i napis czytają się jako
+               jeden element. ⛔ Nie ujednolicać z railem bez ponownego policzenia kontrastu. -->
+          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                      IsVisible="{Binding IsDebugSessionLive}"
+                      ToolTip.Tip="{Binding DebugChipTooltip}">
+            <!-- Znak tożsamości debuggera (D15.2 Seam B) — kompozyt dwukolorowy w `Viewbox`, więc
+                 skaluje się dowolnie. 12 px zrównuje go z ikoną severity w sekcji 2. -->
+            <controls:DebuggerIcon Width="{DynamicResource Size.Icon.Sm}"
+                                   Height="{DynamicResource Size.Icon.Sm}"
+                                   VerticalAlignment="Center" />
+            <TextBlock Text="{x:Static app:UiStrings.StatusBarDebugChipLabel}"
+                       FontSize="{DynamicResource Text.Caption.Size}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource AccentIconBrush}" />
+          </StackPanel>
+
+          <!-- ⭐ CHIP TRACE (M3.1e). `Icon.Activity` to znak tożsamości Monitora Aktywności — ten sam,
+               który nosi jego zakładka i przycisk Monitoring; reuse-before-create.
+               Kolor `IconColor_Query` zgodnie z railem (§8.4.2) — tu akurat próg §10 spełnia
+               z zapasem (8,03:1 Dark / 6,58:1 Light), więc nie ma powodu go zmieniać.
+               Tooltip czyta `TraceMonitorTabViewModel.StatusText` („Recording · 12/40 events”),
+               czyli istniejące mapowanie stanu. ⛔ Zero drugiej definicji stanu Trace. -->
+          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                      IsVisible="{Binding IsTraceSessionLive}"
+                      ToolTip.Tip="{Binding TraceChipTooltip}">
+            <controls:SvgIcon Width="{DynamicResource Size.Icon.Sm}"
+                              Height="{DynamicResource Size.Icon.Sm}"
+                              VerticalAlignment="Center"
+                              Data="{StaticResource Icon.Activity}"
+                              Foreground="{DynamicResource IconColor_Query}" />
+            <TextBlock Text="{x:Static app:UiStrings.StatusBarTraceChipLabel}"
+                       FontSize="{DynamicResource Text.Caption.Size}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource IconColor_Query}" />
+          </StackPanel>
         </StackPanel>
 
         <!-- ── 4. POSTĘP — M3.1f ────────────────────────────────────────────────────────────────────── -->

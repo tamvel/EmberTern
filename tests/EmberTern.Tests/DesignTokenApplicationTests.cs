@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -899,6 +899,93 @@ public sealed class DesignTokenApplicationTests
             {
                 var brush = ThemeToken<SolidColorBrush>(key, variant);
                 Assert.NotNull(brush);
+            }
+        }, default);
+    }
+
+    /// <summary>
+    /// ⭐⭐ Znak debuggera JEST ikoną Execute — ta sama geometria, nie kopia (§19.6).
+    ///
+    /// <para>Decyzja użytkownika w rundzie QA M3.1e: <i>„Debugger powinien być po prostu ikoną Execute
+    /// z dodaną czerwoną kropką, a nie osobnym symbolem"</i>. <c>DebuggerIcon</c> nie ma więc własnej
+    /// ścieżki — jego <c>Path.Data</c> to <c>{StaticResource Icon.Play}</c>.</para>
+    ///
+    /// <para>⚠⚠ Ten test istnieje, bo POMIAR pokazał, że dotąd tak NIE było: znak nosił własny trójkąt
+    /// <c>(6,4)(18,12)(6,20)</c>, a <c>Icon.Play</c> to <c>(8,5)(19,12)(8,19)</c>. Rodzina była
+    /// przybliżeniem utrzymywanym ręcznie i rozjechała się przy pierwszej próbie poprawienia kropki —
+    /// **bez żadnego sygnału**, bo dwie osobne ścieżki nie mają jak o sobie wiedzieć.</para>
+    ///
+    /// <para>⭐ Asercja jest o TOŻSAMOŚCI INSTANCJI, nie o równości kształtu, i to jest celowe:
+    /// wpisana ścieżka o identycznych współrzędnych przeszłaby test na równość, a przywróciłaby
+    /// dokładnie tę możliwość rozjazdu, którą referencja usuwa.</para>
+    ///
+    /// <para>⚠ Build tego nie pokrywa: <c>{StaticResource}</c> wewnątrz <c>ControlTemplate</c> rozwiązuje
+    /// się przy instancjonowaniu szablonu, więc kontrolkę trzeba naprawdę zbudować i pokazać.</para>
+    /// </summary>
+    [Fact]
+    public async Task DebuggerIcon_IsTheExecuteIcon_ByReferenceNotByCopy()
+    {
+        await _session.Dispatch(() =>
+        {
+            var icon = new EmberTern.App.Controls.DebuggerIcon();
+            var window = new Window { Content = icon };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // ⚠ Kwalifikowana nazwa: `Path` jest niejednoznaczne (Avalonia.Controls.Shapes vs System.IO).
+            var triangle = icon.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single();
+            Assert.NotNull(triangle.Data);
+
+            // ⚠ `StreamGeometry`, nie `Geometry` — `Token<T>` porównuje typ DOKŁADNIE (`Assert.IsType`),
+            // a w katalogu ikony są `StreamGeometry`.
+            Assert.Same(Token<StreamGeometry>("Icon.Play"), triangle.Data);
+
+            // Druga połowa znaku: kropka przerwania. Pinujemy, że w ogóle jest — trójkąt bez kropki to
+            // po prostu ikona Execute i nic by nie zawiodło.
+            var dot = icon.GetVisualDescendants().OfType<Ellipse>().Single();
+            Assert.NotNull(dot.Fill);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// ⭐ Pędzle chipów stanu (§8.4.3 sekcja 3, §19.5–§19.6) — rozwiązują się w OBU motywach i są
+    /// NIEPRZEZROCZYSTE.
+    ///
+    /// <para>⚠⚠ Nieprzezroczystość jest tu asercją o KONTRAŚCIE, nie o stylu, i pilnuje decyzji
+    /// podjętej w M3.1e. Chip debuggera świadomie NIE dziedziczy pędzla railu: railowy
+    /// <c>DebugCurrentLineBarBrush</c> ma α 0,90 (Dark) / 0,80 (Light), bo zaprojektowano go jako
+    /// pasek bieżącej linii w edytorze. Na tle <c>PanelBrush</c> daje to 3,77:1 — wystarczy dla
+    /// 2 px railu (próg §10 dla elementu UI to 3:1), ale NIE dla tekstu 10 px (próg 4,5:1).</para>
+    ///
+    /// <para>⭐ Dlatego „ujednolicenie" chipa z railem — zmiana wyglądająca na porządkowanie — obniżyłoby
+    /// kontrast poniżej progu **bez żadnego sygnału**: `{DynamicResource}` przy nieznanym kluczu nic nie
+    /// rzuca, a przy kluczu ISTNIEJĄCYM, lecz półprzezroczystym, nie rzuca tym bardziej. Ten test jest
+    /// jedynym miejscem, które to zauważy.</para>
+    ///
+    /// <para>⚠ Nie liczy samego kontrastu — strażnik progów §10 dla całej aplikacji to osobna praca
+    /// infrastrukturalna, świadomie odłożona przez użytkownika poza M3.1e. Tu pilnujemy warunku
+    /// koniecznego, który jest tani i bezdyskusyjny.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("TransactionActiveBrush")]  // chip transakcji (M3.1d)
+    [InlineData("ErrorBrush")]              // chip transakcji w stanie błędu
+    [InlineData("AccentIconBrush")]         // chip debuggera (M3.1e)
+    [InlineData("IconColor_Query")]         // chip Trace (M3.1e)
+    public async Task StatusBarChipBrush_ResolvesInBothThemes_AndIsOpaque(string key)
+    {
+        await _session.Dispatch(() =>
+        {
+            foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                var brush = ThemeToken<SolidColorBrush>(key, variant);
+                Assert.NotNull(brush);
+                Assert.True(
+                    brush.Color.A == 255,
+                    $"Pędzel tekstu chipa `{key}` jest półprzezroczysty w motywie {variant} "
+                    + $"(α = {brush.Color.A}). Nakładanie się na tło obniża kontrast poniżej progu §10 "
+                    + "dla tekstu (4,5:1) w sposób niewidoczny dla buildu i pozostałych testów.");
             }
         }, default);
     }

@@ -746,6 +746,13 @@ internal static class UiStrings
     // przed podpięciem chipa). Lepszy niż chip pokazujący „0 s", który sugerowałby świeży start.
     public const string StatusBarTransactionChipBare = "Transaction";
 
+    // ⭐ Chipy Trace i Debuggera (§8.4.3 sekcja 3) — M3.1e. Etykieta niesie sam FAKT („gdzieś żyje
+    // sesja"), a szczegół idzie do tooltipa, który czyta `StatusText` z VM-a odpowiedniej zakładki.
+    // ⚠ Rzeczownik, nie czasownik: chip mówi, CO jest prawdą, a nie co się dzieje — „co się dzieje"
+    // to rola railu (§8.4.1). Stąd „Debug"/„Trace", a nie „Debugging"/„Tracing".
+    public const string StatusBarDebugChipLabel = "Debug";
+    public const string StatusBarTraceChipLabel = "Trace";
+
     // Zgrubny czas trwania, czytelny kątem oka (§8.4.5). ⛔ Nie zwiększać precyzji — pasek statusu
     // nie jest stoperem; dokładny czas wykonania niesie ExecutionTimer w toolbarze edytora.
     public const string DurationSecondsFormat = "{0} s";

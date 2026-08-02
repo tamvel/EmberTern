@@ -4689,3 +4689,191 @@ Do §19.4.4 dochodzi obserwacja z tej iteracji: **kolor jest już czwartym nośn
 (rail, severity komunikatu, chip transakcji, a wkrótce chipy Trace/Debuggera). Propozycja z odbioru —
 SQL → Accent, Debugger → własny kolor, Trace → własny, Import → własny — **zostaje zapisana i nie jest
 realizowana w M3.1**; wchodzi razem z §19.4.4 do **M3b** i do przeglądu **§13.3**, kiedy widać komplet.
+
+---
+
+### §19.6 Iteracja 5 (M3.1e) — chipy Trace i Debuggera (2026-08-02)
+
+> **Zakres:** §8.4.3 sekcja 3 — prezentacja dwóch pozostałych chipów. Agregacja powstała już w M3.1c
+> (§19.4.2), więc iteracja jest wyłącznie prezentacyjna. Odebrana przez użytkownika po trzech rundach QA
+> ikony — i to one, a nie chipy, są jej najważniejszą treścią (§19.6.6).
+
+#### §19.6.1 Ten sam podział własności, co w M3.1d — i to jest potwierdzenie, nie powtórzenie
+
+Sekcja 2 pokazuje `ActiveDebugger.StatusText` bramkowane **`IsDebuggerTabActive`**. To znowu *kontekst
+aktywnej zakładki* („Paused, linia 14") obok *faktu globalnego* („gdzieś żyje sesja"), czyli dokładnie
+układ, który użytkownik ratyfikował w §19.5.1. ⛔ Nie jest to redundancja: bramka czyni tamten nośnik
+niewidocznym **dokładnie tam, gdzie fakt globalny zaczyna mieć znaczenie** (§0.1.2).
+
+⭐ **Że ten sam wzorzec wyszedł drugi raz, niezależnie, jest sygnałem o Status Barze jako całości:**
+każda sekcja, która ma nieść stan globalny, musi być sprawdzona pod kątem *„czy ten fakt ma już
+właściciela i czy tamten nie jest bramkowany zakładką"*. To pytanie wchodzi do procedury M3.1f i dalej.
+
+Tooltipy **reużywają istniejących producentów tekstu** — `DebuggerTabViewModel.StatusText` i
+`TraceMonitorTabViewModel.StatusText` (to drugie już mapuje `TraceSessionState` na „Recording · 12/40
+events"). ⛔ Zero drugiego mapowania stanu w aplikacji. Etykieta niesie FAKT, tooltip SZCZEGÓŁ.
+
+⚠ Etykiety są **rzeczownikami** („Debug", „Trace"), nie czasownikami: chip mówi, **co jest prawdą**,
+a rail mówi, **co się dzieje** (§8.4.1). Gdyby chip mówił „Debugging", dublowałby rolę railu słowem.
+
+#### §19.6.2 ⚠⚠ CHIPY NIE DZIEDZICZĄ PĘDZLI RAILU — i to jest decyzja z pomiaru, nie z estetyki
+
+Naturalny odruch („ten sam stan, ten sam kolor") jest tutaj **błędny**, i to mierzalnie. Kontrast na tle
+`PanelBrush`, przy `Text.Caption.Size` = **10 px Normal**, czyli progu §10 = **4,5:1**:
+
+| Pędzel | Dark | Light | Jako tekst 10 px |
+|---|---|---|---|
+| `DebugCurrentLineBarBrush` (rail debuggera) | **3,77:1** | 5,69:1 | ⛔ **Dark nie przechodzi** |
+| `AccentIconBrush` | 5,17:1 | 4,81:1 | ✅ |
+| `IconColor_Query` (rail Trace) | 8,03:1 | 6,58:1 | ✅ |
+
+Przyczyna jest strukturalna: `DebugCurrentLineBarColor` jest **półprzezroczysty** (α 0,90 / 0,80), bo
+zaprojektowano go jako pasek bieżącej linii **w edytorze**.
+
+⭐⭐ **Wniosek ogólniejszy niż ta iteracja: ten sam token przechodzi jako RAIL i nie przechodzi jako
+TEKST.** §10 stawia 3:1 dla elementu UI i 4,5:1 dla tekstu, więc rail przy 3,77 jest poprawny (M3.1c
+zostaje bez zmian), a napis o tym samym kolorze już nie. **Zgodność wizualna między railem a chipem nie
+jest argumentem, bo to nie są elementy tej samej klasy dostępności.**
+
+Chip debuggera bierze więc `AccentIconBrush` — kolor, który trójkąt `DebuggerIcon` **i tak nosi**, więc
+znak i napis czytają się jako jeden obiekt. ⭐ **Ratyfikowane przez użytkownika:** *„Rail i chip pełnią
+inną funkcję, więc nie muszą używać identycznego pędzla… nie chciałbym świadomie schodzić poniżej progu
+kontrastu dla tekstu tylko po to, żeby chip miał dokładnie ten sam kolor co rail."*
+
+⏸ Pełna semantyka kolorów aktywności (SQL / Debugger / Trace / Import — każdy własny kolor) **pozostaje
+odłożona** do M3b i bramy §13.3 (§19.4.4). Użytkownik potwierdził to ponownie przy tej decyzji.
+
+#### §19.6.3 ⚠ Znalezisko o CHIPIE TRANSAKCJI (M3.1d) — zgłoszone, świadomie NIE naprawione
+
+Ten sam pomiar objął chip wysłany iterację wcześniej: `TransactionActiveBrush` daje **7,41:1 w Dark**,
+ale **4,18:1 w Light** — poniżej progu 4,5 dla tekstu. (Kropka jest w porządku: element UI, próg 3:1.)
+
+⭐ **Decyzja użytkownika — zapis do §13.3, bez zmiany teraz:** *„To nie jest błąd funkcjonalny ani
+regresja, tylko niewielka odchyłka kontrastu w jednym motywie… Nie chciałbym teraz zmieniać
+`TransactionActiveColor`, bo to token współdzielony i taka korekta mogłaby wpłynąć również na innych
+konsumentów. Lepiej rozstrzygnąć to razem z pełnym przeglądem semantyki kolorów."* Precedens: **V‑1**
+(kolor komentarzy SQL, 4,14:1), ratyfikowany do pozostawienia tą samą logiką.
+
+⚠⚠ **W całym repo NIE MA strażnika kontrastu.** §10 stawia progi, §11 mówi o egzekwowaniu, ale nic ich
+nie sprawdza — więc ta odchyłka nie mogła zawieść żadnego testu i nie zawiedzie następnej.
+⭐ Użytkownik uznał strażnika za dobry pomysł i **osobną pracę infrastrukturalną**, świadomie nie
+doklejaną do M3.1e. → wejście do backlogu i do §13.3.
+
+#### §19.6.4 ⭐ Defekt złapany na sobie przed buildem — alias, którego nikt by nie podniósł
+
+Pierwsza wersja miała `ShowDebugChip => IsDebugSessionLive` i `ShowTraceChip => IsTraceSessionLive`,
+a `RaiseActivityChanged` podnosiło tylko te drugie. **Chipy nigdy by się nie pojawiły — przy zielonym
+buildzie i zielonych testach.**
+
+⭐ Naprawa przez **usunięcie aliasów**, nie przez dodanie czwartego `OnPropertyChanged`: warunek
+pokazania jest tu **tożsamy z faktem**, więc druga nazwa nie niosła nic poza ryzykiem. Widok wiąże się
+wprost z `IsDebugSessionLive` / `IsTraceSessionLive`.
+⚠ Chip transakcji **zachowuje** `ShowTransactionChip`, bo tam warunek jest ZŁOŻONY (`aktywna || błąd`) —
+i ta różnica jest zapisana w kodzie, żeby ktoś nie „ujednolicił" jej w którąkolwiek stronę.
+
+#### §19.6.5 `RaiseRailChanged` → `RaiseActivityChanged`
+
+Od tej iteracji ta sama agregacja karmi **dwóch konsumentów o różnych rolach** — rail (jeden stan,
+najwyższy priorytet) i chipy (współistniejące fakty). Stara nazwa byłaby historią, nie
+odpowiedzialnością (reguła nazewnicza projektu). Podmienione **tylko wywołania**; wzmianka o starej
+nazwie została w komentarzu celowo.
+
+#### §19.6.6 ⭐⭐ TRZY RUNDY QA IKONY — I LEKCJA, KTÓRA JEST WAŻNIEJSZA NIŻ IKONA
+
+Chip postawił `DebuggerIcon` przy 12 px, czyli mniejszym niż kiedykolwiek wcześniej (zakładka 14,
+toolbar 16). Przy tej skali kropka przerwania **czytała się jak artefakt renderowania**.
+
+**Runda 1 — kropka w dół (16; 15,5) → (16; 20).** Zmierzone: nachodzenie to −1,45 j. prześwitu przy
+obrysie 2 px, czyli **0,72 px** dwóch wygładzanych kształtów zlewających się przy 12 px.
+> **Użytkownik:** *„kropka jest już odrobinę za nisko… problem wynika z tego, że próbujemy zrobić
+> miejsce tylko przesuwając ją w dół."*
+
+⭐ **Trafna diagnoza mechanizmu: miejsce zrobione przez odsunięcie jednego elementu jest miejscem
+zabranym kompozycji.** Płaciłem za prześwit jedyną walutą, jaką sobie zostawiłem.
+
+**Runda 2 — przekomponowanie trójkąta** (większy, dosunięty w prawo, kropka pod wierzchołkiem).
+Mierzyło się **lepiej** (+2,49 j. i kropka wyżej jednocześnie) i przy okazji zniosło realną wadę: stary
+znak miał margines ink **5 j.**, podczas gdy sąsiadujący z nim w tym samym chipie `Icon.Activity` ma
+**1 j.** — mark debuggera był optycznie mniejszy od ikon, obok których stoi.
+> **Użytkownik odrzucił to na pierwszy rzut oka:** *„zgubiliśmy ich wspólną tożsamość… Execute i Debug
+> powinny wyglądać jak rodzina ikon… spójność całego zestawu ikon ma większą wartość niż poprawienie
+> jednego szczegółu kosztem charakteru ikony."*
+
+⛔⛔ **TO JEST LEKCJA ETAPU, NIE TYLKO TEJ IKONY: spójność zestawu bije optimum pojedynczego znaku.**
+Wariant 2 wygrywał w każdej liczbie, którą umiałem policzyć — prześwit, margines ink, pozycja kropki —
+i **przegrywał w jedynym wymiarze, którego nie mierzyłem**. To R8 („pomiar jest narzędziem, nie
+argumentem końcowym") w najczystszej postaci, i R7 w drugiej połowie: szukałem reguły w obrębie jednego
+znaku zamiast w obrębie rodziny.
+
+**Runda 3 — POMIAR OBALIŁ ZAŁOŻENIE OBU STRON.** Sprawdzone przed cofnięciem: znak **nigdy nie był**
+ikoną Execute.
+
+| | geometria |
+|---|---|
+| `Icon.Play` (Execute) | **(8,5) (19,12) (8,19)** — 11 × 14 |
+| `DebuggerIcon` „oryginalny" | **(6,4) (18,12) (6,20)** — 12 × 16 |
+
+⭐ **Rodzina była PRZYBLIŻENIEM utrzymywanym ręcznie**, więc powrót „do poprzedniego kształtu" —
+o co użytkownik dosłownie prosił — odtworzyłby podatność, a nie usunął ją. Zasada użytkownika
+(*„Debugger to po prostu ikona Execute z dodaną czerwoną kropką"*) była **mocniejsza niż jego własna
+instrukcja**, więc wykonana została zasada:
+
+```xml
+<Path Data="{StaticResource Icon.Play}" … />
+```
+
+Trójkąt **nie ma już własnej ścieżki**. Pokrewieństwo jest **strukturalne**: nie może się rozjechać,
+bo nie ma dwóch rzeczy, które mogłyby się rozjechać — a zmiana `Icon.Play` pociąga znak debuggera
+automatycznie. Ruszyła się **wyłącznie kropka**: (16; 15,5) → **(19; 19)**, gdzie x = 19 to własny x
+wierzchołka, więc przerwanie siedzi na końcu wskaźnika wykonania. Prześwit **+2,66 j. = 1,33 px @12** —
+więcej niż w odrzuconym wariancie 2, **bez ruszania znaku bazowego**.
+
+> **Odbiór użytkownika:** *„Debugger jest teraz rzeczywiście wariantem ikony Execute, a nie osobnym
+> znakiem, więc cały zestaw ikon odzyskał spójność. To rozwiązanie jest lepsze architektonicznie niż
+> dalsze ręczne dostrajanie geometrii."* ⛔ **Temat ikony ZAMKNIĘTY** — nie szlifujemy jej dalej.
+
+⚠ **Reguła na przyszłość, zapisana też przy geometrii:** jeżeli kropka kiedykolwiek znów będzie
+potrzebowała miejsca — **rusza się KROPKA**. Znak bazowy nie jest częścią regulowaną.
+⚠ Jeden `ControlTheme` obsługuje wszystkie rozmiary (chip 12, zakładka 14, przyciski 16); wariant
+per-skala **nie powstał** i nie powinien — dla jednego konsumenta łamałby R3.
+
+#### §19.6.7 Dwa strażniki, oba zweryfikowane podłożeniem wady
+
+**(a) `StatusBarChipBrush_ResolvesInBothThemes_AndIsOpaque`** — cztery pędzle chipów × dwa motywy, plus
+wymóg **nieprzezroczystości**. To asercja o kontraście, nie o stylu: pilnuje §19.6.2, bo „ujednolicenie"
+chipa z railem wygląda jak porządkowanie, a zeszłoby poniżej progu §10 **bez żadnego sygnału**
+(`{DynamicResource}` nie rzuca przy nieznanym kluczu, a przy istniejącym-lecz-półprzezroczystym tym
+bardziej). Podłożono `DebugCurrentLineBarBrush` → *„jest półprzezroczysty w motywie Dark (α = 230)"*.
+
+**(b) `DebuggerIcon_IsTheExecuteIcon_ByReferenceNotByCopy`** — porównuje **tożsamość instancji**
+geometrii, nie zgodność współrzędnych. ⭐ To celowe i to jest cała jego wartość: podłożono wpisaną
+ścieżkę **identyczną co do liczb** i test i tak upadł (*„Values are not the same instance"*). Kopia
+o identycznych współrzędnych przeszłaby test na równość i przywróciłaby dokładnie tę podatność, którą
+referencja usuwa. ⚠ Build tego nie pokrywa — `{StaticResource}` w `ControlTemplate` rozwiązuje się przy
+instancjonowaniu, więc kontrolkę trzeba naprawdę zbudować i pokazać.
+
+⚠ Oba mieszkają w `DesignTokenApplicationTests`, nie w `ConnectionExpandBindingProbe` — istniejąca
+w sondzie asercja `new DebuggerIcon()` **nie stosuje szablonu**, więc nie złapałaby zerwanej referencji,
+a sonda jest udokumentowanym kształtem zawieszającym suite (§9.1/4 handovera).
+
+#### §19.6.8 Definition of Done
+
+| # | Warunek | |
+|---|---|---|
+| 1 | zakres iteracji zamknięty | ✅ dwa chipy + zamknięta korekta ikony |
+| 2 | pozostawione wartości lokalne mają powód w miejscu | ✅ bez nowych (chipy czytają role; geometria ikony to nie token) |
+| 3 | baza `DesignTokenComplianceTests` = stan faktyczny | ✅ bez zmian |
+| 4 | build 0/0 | ✅ |
+| 5 | testy zielone w trzech partycjach | ✅ **7011 + 46 + 54 = 7111** (+5) |
+| 6 | smoke + oba motywy | ✅ QA użytkownika na żywej bazie, trzy rundy ikony |
+| 7 | wpis w §19 | ✅ ta sekcja |
+| 8 | commit; push po akceptacji | ✅ / ⏸ |
+
+#### §19.6.9 Co ta iteracja zostawia następnym
+
+1. ⭐ **Pytanie kontrolne dla każdej kolejnej sekcji Status Bara:** czy ten fakt ma już właściciela
+   i czy tamten nie jest bramkowany zakładką? Dwa razy z rzędu odpowiedź brzmiała „tak" (§19.5.1, §19.6.1).
+2. ⚠ **Kontrast: rail i tekst to różne progi.** Nie przenosić pędzla między nimi bez policzenia.
+3. ⏸ **Strażnik progów §10** — osobna praca infrastrukturalna, do backlogu i §13.3.
+4. ⏸ **`TransactionActiveBrush` w Light 4,18:1** — do §13.3, razem z semantyką kolorów.
+5. ⛔ **Ikona debuggera zamknięta.** Rusza się kropka, nigdy znak bazowy.

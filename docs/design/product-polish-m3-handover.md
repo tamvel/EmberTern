@@ -35,14 +35,14 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | **M3.1d** — ⚠ **oba remote'y są ZA NAM**: ostatni wypchnięty na **oba** to `8567ebc` (koniec M2c, zweryfikowane `git log origin/… private/…`). **Sześć** commitów M3 (`5d9395f` iter. 0 · `7dde82a` M3.1a · `75a235c` poprawka M3.1a · `7e7b5cf` M3.1b · `5be9a32` M3.1c · M3.1d) czeka na push **świadomie** — push idzie po całym M3.1, na akceptację użytkownika |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a ✅ · M3.1b ✅ · M3.1c ✅ · M3.1d ✅** (wszystkie odebrane przez użytkownika) |
+| **Ostatni commit** | **M3.1e** — M3.1a–M3.1d są **wypchnięte na oba remote'y** (`bca5210`); commit M3.1e czeka na push świadomie, po akceptacji |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a ✅ · M3.1b ✅ · M3.1c ✅ · M3.1d ✅ · M3.1e ✅** (wszystkie odebrane przez użytkownika) |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24**, temat 20 px wraca po M3 · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7106**, zielony w trzech partycjach (**7011 + 41 + 54**) — po M3.1d/§19.5 |
+| **Suite** | **7111**, zielony w trzech partycjach (**7011 + 46 + 54**) — po M3.1e/§19.6 |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⭐ **M3.1e — chipy Trace / Debugger.** Agregacja (`IsTraceSessionLive`, `IsDebugSessionLive`) **już istnieje** od M3.1c; zostaje sama prezentacja, w tym samym `StackPanelu` sekcji 3, obok chipa transakcji |
+| **NASTĘPNY KROK** | ⭐ **M3.1f — sekcja postępu (§8.4.6) + JEDNA operacja referencyjna.** Projekt paska jest w §8.4.6 (wysokość 4, szerokość **stała 120**, `AccentBrush` na `ChromeStrongBrush`, tryb nieokreślony **nigdy przez `Width`**, anulowanie jako `Button.icon` z `Icon.X`). Operacja referencyjna = **wykonanie zapytania SQL**; inwentarz źródeł postępu jest w §3.9 tego pliku. Reszta operacji to **M3b** (D4) |
 
 ### 1.1 Co dostarczyły poprzednie etapy — trzy zdania
 
@@ -366,7 +366,7 @@ oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
 Pominięta, wpada do partycji głównej: nic nie zawiedzie, ale podział przestaje robić to, po co istnieje.
 To ta sama pułapka, co niedziałające wykluczenie `ContextMenuPresentationTests` (§18.1.6) — tam nazwa
 przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały etap.
-**Stan po M3.1a: `TabStripPresentationTests` DOPISANY**; po M3.1d partycje mierzą **7011 + 41 + 54 = 7106**.
+**Stan po M3.1a: `TabStripPresentationTests` DOPISANY**; po M3.1e partycje mierzą **7011 + 46 + 54 = 7111**.
 
 ⭐ **Kryterium, czy nowa klasa idzie do filtra, jest jedno: czy konstruuje kontrolki Avalonii.**
 `TransactionChipTests` (M3.1d) **nie idzie** — pinuje funkcję **statyczną**, więc nie potrzebuje sesji
@@ -392,7 +392,24 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
    ⚠ To jest realne ryzyko M3: cztery powierzchnie trwałe żyją w `MainWindow`.
 5. **⚠ Goły `TextBlock` dziedziczy 14**, nie 12. Usunięcie `FontSize` z `TextBlocka` to skok w górę.
 6. **⚠ Liczba nie wyznacza roli.** Pięć ról przy 11 px, dwie przy 12.
-7. ⭐⭐ **NOWA (M3.1d) — przeniesienie faktu zostawia po sobie „regresję", która nią nie jest.** M3.1d
+7. ⭐⭐ **NOWA (M3.1e) — SPÓJNOŚĆ ZESTAWU BIJE OPTIMUM POJEDYNCZEGO ELEMENTU.** Runda QA ikony
+   debuggera dostarczyła wariantu, który wygrywał w **każdej** mierzonej liczbie (prześwit, margines
+   ink, pozycja kropki) i został odrzucony na pierwszy rzut oka, bo Execute i Debug przestały czytać się
+   jako rodzina. ⭐ To R8 w najczystszej postaci — **wariant przegrał w jedynym wymiarze, którego nie
+   mierzyłem** — i R7 w drugiej połowie: szukałem reguły w obrębie jednego znaku zamiast rodziny.
+   ⚠ Praktycznie: zanim „poprawisz" element należący do zestawu (ikona, chip, wariant przycisku),
+   **sprawdź, z czym on tworzy rodzinę, i policz koszt po tamtej stronie.**
+   ⚠⚠ Drugie dno tej samej rundy: pomiar pokazał, że rodzina była **przybliżeniem utrzymywanym
+   ręcznie** (znak nigdy nie był `Icon.Play`), więc powrót „do poprzedniego stanu" odtworzyłby
+   podatność. **Gdy relacja ma być trwała, wyraź ją referencją, nie kopią** — `Path.Data =
+   {StaticResource Icon.Play}` i test na **tożsamość instancji**, bo kopia o identycznych
+   współrzędnych przechodzi każdy test na równość.
+8. ⭐⭐ **NOWA (M3.1e) — RAIL I TEKST TO RÓŻNE PROGI KONTRASTU.** §10 daje 3:1 elementowi UI i 4,5:1
+   tekstowi, więc **ten sam token bywa poprawny jako rail i niepoprawny jako napis**
+   (`DebugCurrentLineBarBrush`: 3,77:1 — rail OK, tekst nie). ⛔ Nie przenoś pędzla między nimi
+   „dla spójności" bez policzenia. ⚠ **W repo nie ma strażnika kontrastu** — §10 stawia progi, nic ich
+   nie sprawdza; odchyłka nie zawiedzie żadnego testu.
+9. ⭐⭐ **NOWA (M3.1d) — przeniesienie faktu zostawia po sobie „regresję", która nią nie jest.** M3.1d
    odebrało paskowi edytora SQL kropkę stanu i etykietę *„Active Transaction"*, bo fakt *„mam otwartą
    transakcję"* przeszedł do chipa w pasku statusu. **Ubytek w starym właścicielu wygląda dokładnie jak
    defekt** i *„pasek transakcji zgubił kropkę"* jest bardzo wiarygodnym zgłoszeniem. **Dlatego komentarz
@@ -427,8 +444,8 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 2 | **M3.1b** | Cztery sekcje (§8.4.3) + hierarchia (§8.4.4) + **D3**; ⭐ tożsamość połączenia przeniesiona z paska tytułu (§19.3) | — |
 | ✅ 3 | **M3.1c** | Rail (§8.4.1–§8.4.2) + ⭐ **agregacja po `WorkspaceTabs` przeniesiona tu z M3.1e** (§19.4.2) | — |
 | ✅ 4 | **M3.1d** | Chip transakcji z czasem (§8.4.5); ⭐ **podział własności: chip = fakt globalny, pasek edytora SQL = licznik lokalny** (§19.5) | — |
-| ⭐ **5** | **M3.1e** | **← TU ZACZYNASZ.** Chipy Trace / Debugger — ⭐ agregacja JUŻ ISTNIEJE (M3.1c); zostaje sama prezentacja, w `StackPanelu` sekcji 3 obok chipa transakcji | — |
-| 6 | **M3.1f** | Sekcja postępu (§8.4.6) + **jedna** operacja referencyjna | — |
+| ✅ 5 | **M3.1e** | Chipy Trace / Debugger (znak tożsamości + etykieta); ⭐ **chipy NIE dziedziczą pędzli railu — inny próg kontrastu** · ⛔ ikona debuggera zamknięta, jest teraz referencją do `Icon.Play` (§19.6) | — |
+| ⭐ **6** | **M3.1f** | **← TU ZACZYNASZ.** Sekcja postępu (§8.4.6) + **jedna** operacja referencyjna (wykonanie zapytania SQL). Inwentarz źródeł: §3.9 | — |
 | 7 | **M3.2a** | H‑3 — stabilny układ paska tytułu **i** toolbara dokumentu (72 bramki, §3.6) | — |
 | 8 | **M3.2b** | §7.5 — semantyka kolorów na pasku narzędzi | **DC** |
 | 9 | **M3.2c** | H‑5 — Commit / Rollback | **DD** |

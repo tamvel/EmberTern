@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="https://github.com/avaloniaui"
+﻿<ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="using:EmberTern.App.Controls">
 
@@ -315,15 +315,48 @@
       <ControlTemplate>
         <Viewbox Stretch="Uniform">
           <Canvas Width="24" Height="24">
-            <Path Data="M6 4 L18 12 L6 20 Z"
+            <!-- ⭐⭐ TRÓJKĄT TO DOSŁOWNIE `Icon.Play` — TA SAMA GEOMETRIA, NIE KOPIA.
+                 Decyzja użytkownika (M3.1e QA, §19.6): *„Debugger powinien być po prostu ikoną Execute
+                 z dodaną czerwoną kropką, a nie osobnym symbolem"*. Referencja zamiast własnej ścieżki
+                 czyni to POKREWIEŃSTWO STRUKTURALNYM: Execute i Debug nie mogą się rozjechać, bo jest
+                 jedna geometria, i zmiana `Icon.Play` pociąga za sobą znak debuggera automatycznie.
+
+                 ⚠⚠ POMIAR, KTÓRY TO WYMUSIŁ: znak NIGDY nie był ikoną Execute. Nosił własny trójkąt
+                 (6,4)(18,12)(6,20), podczas gdy `Icon.Play` to (8,5)(19,12)(8,19) — inny o 1 j. wszerz
+                 i 2 j. wzwyż. Rodzina była PRZYBLIŻENIEM utrzymywanym ręcznie, i dlatego rozjechała się
+                 przy pierwszej próbie poprawienia kropki. ⛔ Nie zamieniać tej referencji z powrotem na
+                 wpisaną ścieżkę, nawet identyczną — to przywraca dokładnie tę możliwość rozjazdu. -->
+            <Path Data="{StaticResource Icon.Play}"
                   Stroke="{DynamicResource AccentIconBrush}"
                   StrokeThickness="2"
                   StrokeLineCap="Round"
                   StrokeJoin="Round" />
-            <!-- The breakpoint dot is an accent on the pointer, not a second subject: kept at the same
-                 centre (16, 15.5) and the same overlap with the triangle's tip, diameter trimmed 6 → 4.5
-                 so it reads as a mark rather than competing with the play shape. -->
-            <Ellipse Canvas.Left="13.75" Canvas.Top="13.25" Width="4.5" Height="4.5"
+            <!-- The breakpoint dot is an accent on the pointer, not a second subject — diameter 4.5
+                 (trimmed 6 → 4.5 in the Seam 4 QA round) so it reads as a mark rather than competing
+                 with the play shape.
+
+                 ⚠⚠ CENTRE MOVED (16; 15.5) → (19; 19) in the M3.1e QA round (§19.6), and it is the ONLY
+                 thing that moved — the base symbol is untouched, by decision. The dot used to OVERLAP
+                 the triangle's lower edge, deliberately, so the two read as one glyph; at 16 px that
+                 worked. MEASURED against `Icon.Play`: the old position leaves −1.91 units of clearance
+                 past the 2 px stroke, i.e. at the chip's 12 px roughly a pixel of two antialiased shapes
+                 bleeding together. It stopped reading as one glyph and started reading as an artifact.
+
+                 ⭐ x = 19 is the apex's own x, so the breakpoint sits at the END OF THE EXECUTION
+                 POINTER — a stated relationship, not a tuned offset. Clearance +2.66 units
+                 = 1.33 px @12, 1.55 px @14, 1.77 px @16.
+
+                 ⛔⛔ THE LESSON, AND IT OUTRANKS THE DOT: an intermediate round redrew the TRIANGLE to
+                 make room (bigger, pushed right). It measured better and was rejected on sight, for the
+                 right reason — Execute and Debug stopped reading as one family. **Consistency of the
+                 icon set beats the optimum of any single glyph.** If this dot ever needs more room
+                 again, move the DOT; the base symbol is not the adjustable part.
+
+                 ⚠ ONE ControlTheme serves every size — chip 12, tab 14, editor "Debug…" buttons 16 —
+                 so a change here reaches every consumer; there is no per-scale variant and inventing one
+                 for a single consumer would violate R3. Canonical source updated in lockstep:
+                 Assets/Icons/Debugger/debugger.svg. -->
+            <Ellipse Canvas.Left="16.75" Canvas.Top="16.75" Width="4.5" Height="4.5"
                      Fill="{DynamicResource DebugBreakpointBrush}" />
           </Canvas>
         </Viewbox>

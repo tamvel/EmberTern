@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -1258,7 +1258,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (tab.Debugger is { } dbg) dbg.PropertyChanged += OnRailSourceChanged;
         if (tab.TraceMonitor is { } trace) trace.PropertyChanged += OnRailSourceChanged;
-        RaiseRailChanged();
+        RaiseActivityChanged();
     }
 
     private void UnwireRailSource(WorkspaceTabViewModel tab)
@@ -1267,7 +1267,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (tab.Debugger is { } dbg) dbg.PropertyChanged -= OnRailSourceChanged;
         if (tab.TraceMonitor is { } trace) trace.PropertyChanged -= OnRailSourceChanged;
-        RaiseRailChanged();
+        RaiseActivityChanged();
     }
 
     private void OnRailSourceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -1275,16 +1275,77 @@ public partial class MainWindowViewModel : ViewModelBase
         // Tylko te dwie właściwości zmieniają odpowiedź; reszta zdarzeń zakładki nas nie dotyczy.
         if (e.PropertyName is nameof(DebuggerTabViewModel.Phase) or nameof(TraceMonitorTabViewModel.State))
         {
-            RaiseRailChanged();
+            RaiseActivityChanged();
         }
     }
 
-    private void RaiseRailChanged()
+    // ⚠ Nazwa mówi „aktywność", nie „rail", i to jest celowe: od M3.1e ta sama agregacja karmi DWÓCH
+    // konsumentów o różnych rolach — rail (jeden stan, ten o najwyższym priorytecie) i chipy
+    // (współistniejące fakty). Nazwa `RaiseRailChanged` byłaby od tej iteracji historią, nie
+    // odpowiedzialnością.
+    private void RaiseActivityChanged()
     {
         OnPropertyChanged(nameof(IsDebugSessionLive));
         OnPropertyChanged(nameof(IsTraceSessionLive));
         OnPropertyChanged(nameof(RailBrushKey));
+        OnPropertyChanged(nameof(DebugChipTooltip));
+        OnPropertyChanged(nameof(TraceChipTooltip));
     }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐ CHIPY TRACE I DEBUGGERA (§8.4.3 sekcja 3, §8.4.5) — M3.1e
+    //
+    // Ten sam podział własności, który M3.1d wprowadziło dla transakcji, obowiązuje tu bez zmian:
+    //   • sekcja 2 pokazuje `ActiveDebugger.StatusText` — kontekst AKTYWNEJ zakładki („Paused, linia 14"),
+    //   • chip odpowiada GLOBALNIE: „gdzieś żyje sesja debuggera", także gdy patrzysz na inną zakładkę.
+    // ⛔ To nie jest redundancja — bramka `IsDebuggerTabActive` czyni tamten nośnik niewidocznym
+    // dokładnie tam, gdzie fakt globalny ma znaczenie (§0.1.2).
+    //
+    // ⚠⚠ CHIPY NIE DZIEDZICZĄ PĘDZLI RAILU, i to jest decyzja poparta pomiarem, nie estetyką.
+    // `DebugCurrentLineBarBrush` (rail debuggera, §19.4.1) jest PÓŁPRZEZROCZYSTY (α 0,90 / 0,80) i na
+    // tle `PanelBrush` daje 3,77:1 w Dark. Jako 2 px rail przechodzi (próg §10 dla elementu UI to 3:1);
+    // jako TEKST 10 px nie przechodzi (próg 4,5:1). Ten sam token, dwa progi, dwa werdykty.
+    // Chip debuggera bierze więc `AccentIconBrush` — 5,17:1 Dark / 4,81:1 Light — czyli dokładnie ten
+    // kolor, który trójkąt `DebuggerIcon` i tak nosi, dzięki czemu znak i napis czytają się jako
+    // JEDEN element. Trace zostaje na `IconColor_Query` (8,03:1 / 6,58:1), bo ten próg spełnia.
+    // ⛔ Nie „ujednolicać" tego z railem bez ponownego policzenia kontrastu.
+    //
+    // ⏸ Pełna semantyka kolorów aktywności (SQL / Debugger / Trace / Import — każdy własny, jednoznaczny
+    // kolor) pozostaje odłożona do M3b i bramy §13.3 (§19.4.4). Tutaj rozstrzygamy wyłącznie tyle, ile
+    // trzeba, żeby chip był czytelny.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    // ⚠ Widoczność chipów bierze się WPROST z `IsDebugSessionLive` / `IsTraceSessionLive` — bez aliasów
+    // typu `ShowDebugChip`. Alias byłby czwartą właściwością do podniesienia w `RaiseActivityChanged`,
+    // a jego pominięcie NIE zawodzi buildu ani testu: chip po prostu nigdy się nie pojawia. Warunek
+    // pokazania jest tu tożsamy z faktem, więc druga nazwa nie niesie nic poza ryzykiem.
+    // (Chip transakcji ma `ShowTransactionChip`, bo tam warunek jest ZŁOŻONY: aktywna LUB błąd.)
+
+    /// <summary>
+    /// Szczegóły żywych sesji debuggera — nazwa procedury plus status każdej z nich.
+    /// ⭐ Tekst statusu czyta z <c>DebuggerTabViewModel.StatusText</c>, czyli z tego samego producenta,
+    /// którym karmi się sekcja 2. Etykieta chipa niesie FAKT, tooltip niesie SZCZEGÓŁ — i żaden z nich
+    /// nie jest drugą definicją stanu debuggera.
+    /// </summary>
+    public string DebugChipTooltip => string.Join(
+        Environment.NewLine,
+        WorkspaceTabs
+            .Where(t => t.Debugger is { Phase: DebuggerPhase.Busy or DebuggerPhase.Paused })
+            .Select(t => string.IsNullOrWhiteSpace(t.ObjectName)
+                ? t.Debugger!.StatusText
+                : $"{t.ObjectName} — {t.Debugger!.StatusText}"));
+
+    /// <summary>
+    /// Szczegóły żywej sesji Trace — reużywa <c>TraceMonitorTabViewModel.StatusText</c>
+    /// („Recording · 12/40 events”), który już istnieje i już mapuje <c>TraceSessionState</c> na tekst.
+    /// ⛔ Zero drugiego mapowania stanu Trace w aplikacji.
+    /// </summary>
+    public string TraceChipTooltip => string.Join(
+        Environment.NewLine,
+        WorkspaceTabs
+            .Where(t => t.TraceMonitor is { State: TraceSessionState.Starting or TraceSessionState.Running
+                                                or TraceSessionState.Paused or TraceSessionState.Stopping })
+            .Select(t => t.TraceMonitor!.StatusText));
 
     // ══════════════════════════════════════════════════════════════════════════════════════════════
     // ⭐⭐ CHIP TRANSAKCJI (§8.4.5) — najważniejsza informacja w pasku
@@ -6074,7 +6135,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (e.NewItems is null)
         {
             // Zakładka zniknęła — odpowiedź railu mogła się zmienić nawet bez nowych źródeł.
-            RaiseRailChanged();
+            RaiseActivityChanged();
             return;
         }
 
