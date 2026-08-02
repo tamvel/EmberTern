@@ -3885,3 +3885,207 @@ smoke czysty.
 ⚠ **Suite ma znowu 7088 — ale z INNEGO powodu niż przed korektą z §18.1.6.** Tam 7088 było błędem
 arytmetycznym (filtr wymieniał nieistniejącą klasę, faktyczny stan to 7087); tutaj **7087 + 1 nowy pin**.
 Zapisane wprost, bo inaczej następny czytelnik uzna korektę za cofniętą.
+
+---
+
+## §19 As-built — M3 (powierzchnie trwałe)
+
+> **Punkt wejścia do etapu:** [`product-polish-m3-handover.md`](product-polish-m3-handover.md) —
+> samowystarczalny: stan, reguły, procedura, pułapki, plan 18 iteracji.
+>
+> **Zakres M3, ratyfikowany przez użytkownika 2026-08-02:** M3.1 Status Bar 2.0 · M3.2 Toolbar ·
+> M3.3 pasek zakładek · M3.4 Metadata Explorer · **M3b** (podłączenie wszystkich pozostałych operacji
+> do paska postępu) → ⛔ brama §13.3 → jedno podsumowanie zamykające cały etap.
+
+### §19.0 Iteracja 0 — POMIAR (2026-08-02)
+
+> **Cel:** zmierzyć stan faktyczny czterech powierzchni trwałych i zweryfikować **każde** założenie §8,
+> zanim cokolwiek zostanie ruszone. Ten krok **nie zmienia ani jednej linii kodu produkcyjnego.**
+>
+> **Powód, dla którego w ogóle powstał:** dokument wejściowy M3 nie istniał — M2c zamknął się
+> podsumowaniem §18.10 i poprawką odbiorczą §18.11, a jego własny handover przepozycjonował się na
+> *„zapis reguł i pułapek"*. Zamiast pisać plan z dokumentu, powtórzyliśmy wzorzec kroku 0 M2c,
+> który **obalił pięć założeń**, na których etap miał stanąć.
+
+#### §19.0.1 ⭐⭐ ZNALEZISKO GŁÓWNE — rytm pionowy Application Chrome nigdy nie został zastosowany
+
+| Powierzchnia | Katalog (M2a) | Rzeczywistość | Konsument tokenu |
+|---|---|---|---|
+| Pasek tytułu | `Size.TitleBar` **36** | **36** — literał `MainWindow.axaml:41` `RowDefinitions="36,Auto,*,28"` | tylko `Button.caption` (`ControlStyles.axaml:710`) |
+| Pasek zakładek | `Size.Row.Tab` **26** | **brak deklaracji** — wysokość wynika z treści (`Grid RowDefinitions="2,*"` + `Button Padding="8,4"` + ikona 14) | ⛔ **zero** |
+| Pasek statusu | `Size.StatusBar` **24** | ⚠ **28** — literał, ten sam `RowDefinitions` | ⚠ **tylko `DataImportTabView.axaml:1188`** |
+| Wiersz drzewa | `Size.Row.Tree` **20** | ⚠ **24** — `ListBoxItem.MinHeight`, `MainWindow.axaml:425` | ⛔ **zero** |
+| Wskaźnik zakładki | `Size.TabIndicator` **2** | **2** — literał `RowDefinitions="2,*"`, `MainWindow.axaml:812` | ⛔ **token nie istnieje** |
+
+**Dwie z czterech liczb są niezgodne ze stanem faktycznym, trzy tokeny nie mają ani jednego konsumenta,
+a jeden token w ogóle nie został utworzony.**
+
+⚠⚠ **Najostrzejszy pojedynczy fakt: `Size.StatusBar` konsumuje belka Data Importu, a nie pasek statusu
+aplikacji.** Belka Data Importu jest zresztą użyciem **poprawnym** (`Classes="chrome"`,
+`BorderThickness="0,1,0,0"` — ten sam kształt co pasek statusu), co czyni sytuację czytelniejszą,
+nie mniej czytelną: rola została zdefiniowana i zastosowana **wszędzie poza swoim własnym miejscem**.
+
+⭐ **Dlaczego M2c tego nie złapał — i to nie jest zarzut wobec M2c.** Liczniki M2c to `FontSize`,
+`CornerRadius` i `FontFamily`. **Wysokości nigdy nie należały do żadnego licznika.** Sweep przeszedł
+przez `MainWindow.axaml` w iteracji 7 (33 → 0) i te literały minął, bo nie były jego przedmiotem.
+⚠ To jest **czwarty raz** w tym etapie, gdy narzędzie pomiarowe mierzyło coś węższego niż sugeruje
+jego nazwa (§18.10.4 zebrało trzy poprzednie) — z tą różnicą, że tu narzędzie było **poprawne**,
+a za szerokie było wnioskowanie z jego zielonego wyniku.
+
+⚠⚠ **Konsekwencja dla bramy §13.3.** Pytanie kontrolne nr 2 brzmi: *„Czy rytm pionowy (36 / 26 / 24)
+czyta się jako hierarchia, czy jako trzy przypadkowe wysokości?"* — **dziś ten rytm nie istnieje
+w działającej aplikacji.** M3 jest etapem, w którym powstaje po raz pierwszy; brama go **ocenia**,
+a nie weryfikuje jego zachowanie.
+
+#### §19.0.2 Dwa otwarte pomiary z §8 — oba rozstrzygnięte na TAK
+
+**(a) Czas trwania transakcji (§8.4.5).** Zapis mówił: *„Czy da się je odczytać tanio i bez odpytywania
+`MON$`, jest do sprawdzenia w M3. Jeśli nie — chip pokazuje sam stan, a czas trafia do UX Debt."*
+
+Zmierzone: `TransactionService` **nie ma** żadnego znacznika czasu (zero `DateTime`, zero `Stopwatch`).
+Ale wystawia zdarzenie `TransactionStateChanged`, które `MainWindowViewModel` **już subskrybuje**
+(`:288`, handler `:7270`), oraz `State` / `IsActive` / `IsIdle`.
+
+⭐ **Odpowiedź: da się, i to całkowicie w warstwie App.** Chip zapamiętuje moment przejścia
+Idle → Active w istniejącym handlerze i sam mierzy czas. **Zero zapytań do serwera, zero round-tripów,
+zero zmian w Core i w `EmberTern.Firebird`.** Wariant rezerwowy z §8.4.5 nie jest potrzebny.
+
+**(b) `IconColor_Query` na rail Trace (§8.4.2, oznaczone *„do weryfikacji"*).** ✅ Token istnieje
+w `Colors.axaml` w **obu** motywach.
+
+#### §19.0.3 ⚠⚠ Ryzyko spoza dokumentu — chipy stanu nie mają dziś źródła danych
+
+§8.4.3 chce w sekcji „Stan" chipów **transakcji, Trace i Debuggera**, a tabela Rail/Chip w §8.4 definiuje
+czas życia chipa jako *„trwa, dopóki warunek jest prawdziwy"*. Zmierzone:
+
+| Sygnał | Co naprawdę znaczy | Gdzie |
+|---|---|---|
+| `IsTraceMonitorTabActive` / `IsDebuggerTabActive` | ⚠ **„ta zakładka jest wybrana"** | `MainWindowViewModel:532` / `:551` |
+| `TraceMonitorTabViewModel.State` (`TraceSessionState`) | stan faktyczny sesji | **VM zakładki** |
+| `DebuggerTabViewModel.Phase` (`DebuggerPhase`) | stan faktyczny sesji | **VM zakładki** |
+| agregacja po `WorkspaceTabs` | ⛔ **nie istnieje** — w `MainWindowViewModel` wyłącznie `Count` i indeksy | — |
+
+⭐ **Istniejący wzorzec się nie generalizuje, i warto rozumieć dlaczego.** Pasek statusu pokazuje dziś
+`ActiveDebugger.StatusText` i działa **wyłącznie** dlatego, że dotyczy zakładki **aktywnej** — Avalonia
+subskrybuje `PropertyChanged` wzdłuż ścieżki wiązania. Chip ma być prawdziwy, gdy sesja trwa
+**na innej zakładce**, więc potrzebuje nowej agregacji **oraz** ścieżki powiadomień.
+
+⚠ To jest realna praca w **M3.1e**, addytywna i wyłącznie w warstwie App — ale **nie jest to praca
+prezentacyjna** i nie wolno jej oszacować jak wiązania XAML.
+
+#### §19.0.4 §7.5 — potwierdzone co do sztuki, dwa uściślenia
+
+Zmierzone w pasku tytułu (`MainWindow.axaml:118–300`):
+**6 × `AccentBrush`** · `Icon.Trash` → `WarningIconBrush` · `Icon.PlugZap` → `AccentIconBrush` ·
+`Icon.RefreshCw` → `InfoIconBrush` · **10 × `IconColor_*`** · 22 ikony **bez** `Foreground`.
+⭐ **Liczby zgadzają się z audytem M0 dokładnie** — §7.5 jest wiarygodny.
+
+* **Uściślenie 1 (opisowe).** „10 przycisków *Nowy X*" to **9 kreatorów + 1 narzędzie** (Security Manager,
+  `IconColor_Role`). Reguła §7.5 obejmuje oba tak samo (*„kolor rodzaju odpowiada na pytanie czego to
+  dotyczy"*), więc **wniosek się nie zmienia** — zmienia się zdanie opisujące pomiar.
+* **⚠ Uściślenie 2 (zakresowe — wymaga decyzji DC).** Ostatni wiersz tabeli §7.5 — *„`AccentIconBrush`,
+  `InfoIconBrush` → **zlikwidowane**"* — czyta się jak zmiana dwóch linii, a jest zmianą
+  **w 24 wystąpieniach / 14 plikach**: `SvgIcon.cs`, `DebuggerIcon.cs`, `NavigationController.cs`,
+  **trzy ViewModele trzymające klucz jako string** (`FindingViewModel`, `SessionRowViewModel`,
+  `VerdictViewModel`) oraz widoki Data Import, Debugger, Performance, Table Detail i Trace Monitor —
+  czyli **powierzchnie M4.3**. ⭐ Kształt jest znajomy: **wiersz tabeli opisuje intencję, a nie
+  zasięg zmiany.**
+
+#### §19.0.5 ⚠ H‑5 — audyt nazwał zły moduł, a prawdziwy defekt jest gdzie indziej
+
+Zapis audytu (§1.3): *„titlebar `Button.icon`+`SvgIcon`; **Script Executor** `Button.flat`+tekst"*.
+
+**Zmierzone: Script Executor nie ma przycisków Commit/Rollback w ogóle.** Jedyne dwa miejsca to
+`MainWindow.axaml:1057–1064` (toolbar dokumentu) i `DataImportTabView.axaml:189–208`. Drugim modułem
+jest **Data Import**.
+
+I różnica jest **węższa**, niż opisano — oba używają **tych samych ikon** (`Icon.Check` / `Icon.Undo`)
+i **tych samych pędzli** (`SuccessIconBrush` / `DangerIconBrush`). Różni je wyłącznie wariant przycisku:
+`icon` w chromie, `flat` + etykieta w paśmie raportu. ⭐ **To jest zgodne z decyzją architektoniczną 4
+M2b** — kontener rozstrzyga wielkość, wariant niesie kolor — więc „ujednolicenie" tych dwóch przycisków
+byłoby **cofnięciem** ratyfikowanej reguły, nie jej zastosowaniem.
+
+⭐⭐ **Prawdziwy defekt, którego audyt nie nazwał.** Kontrakt „KOLOR SKUTKU" z §7.5 przypisuje
+Commit → `CommitButtonBrush`, Rollback → `RollbackButtonBrush`. **Oba tokeny są zdefiniowane w obu
+motywach (`Colors.axaml:176–177` i `:455–456`) i nie mają ani jednego konsumenta w całej aplikacji.**
+Rollback maluje się dziś `DangerIconBrush` — tokenem kategorii *„wyłącznie operacje nieodwracalne —
+Drop, Delete, Stop"*.
+
+⚠ **Rollback nie jest operacją nieodwracalną w tym sensie** — wycofuje niezatwierdzoną pracę, co jest
+dokładnie tym, przed czym `DangerIconBrush` ma ostrzegać w innych miejscach. §7.5 rozdziela
+*„Warning / Rollback"* i *„Dangerous"* na dwie kategorie **celowo**. → decyzja **DD**.
+
+#### §19.0.6 H‑3 — potwierdzone, ale to DWA różne paski, a drugi jest znacznie gorszy
+
+| Pasek | Gdzie | Bramki `IsVisible` | Mechanizm |
+|---|---|---|---|
+| **Pasek tytułu** | `MainWindow.axaml:44–367`, wysokość stała **36** | `HasActiveConnection` (blok, `:72`), `IsDeveloperModeActive` (`:103`, `:109`), `CanExportDdl` (×2) | `ColumnDefinitions="Auto,Auto,*,Auto,Auto"` — kolumna 0 rośnie po połączeniu i **przesuwa poziomo całą kolumnę 1** (25 przycisków) |
+| ⚠⚠ **Toolbar dokumentu** | `MainWindow.axaml:868–1230` | **72** | niemal wyłącznie `IsXxxDetailTabActive` (Procedure 8 · Function 8 · Trigger 7 · Package 7 · View 4 · Query 4 · Index 4 · …) — **przełączenie rodzaju zakładki przebudowuje zawartość paska** |
+
+⚠ **Opis audytu jest prawdziwy co do faktu, ale mylący co do osi.** Przesunięcie jest **poziome**,
+nie pionowe — pasek tytułu ma stałe 36 px i nigdy nie zmienia wysokości.
+
+⭐ **Przypadek odczuwany najczęściej to jednak toolbar dokumentu.** 72 bramki w jednym poziomym
+`StackPanelu` oznaczają, że przy każdej zmianie rodzaju zakładki te same operacje lądują pod innym
+kursorem. To jest **pytanie projektowe M3.2** — *czy pasek ma stałe kotwice sekcji, czy przepływa* —
+a nie poprawka do wykonania po cichu.
+
+#### §19.0.7 M‑1 — 13 literałów, rozkład na podetapy
+
+| Gdzie | Ile | Podetap |
+|---|---|---|
+| `MainWindow.axaml` — toolbar połączeń (New/Edit/Copy/Delete Connection, Connect, Disconnect, Reconnect) | 7 | **M3.2d** |
+| `MainWindow.axaml` — przyciski okna (Minimize, Maximize / Restore, Close) | 3 | **M3.2d** |
+| `MainWindow.axaml:848` — „Close tab" | 1 | **M3.3** |
+| `PerformancePanelView:277`, `SessionManagerTabView:214` | 2 | ⛔ **poza M3** (M4.3) |
+
+R‑7 przypisała M‑1 w całości do M3.2 z uzasadnieniem *„większość to tooltipy toolbara"*.
+Zmierzone: **10 tam trafia, 1 do M3.3, 2 zostają poza etapem** — R‑7 uściślona, nie obalona.
+
+#### §19.0.8 Co już istnieje i czego NIE trzeba budować
+
+| Potrzeba | Stan |
+|---|---|
+| Bramka Save / Discard / Cancel | ✅ `RequestCloseTabAsync` (`:6514`), `ChoiceRequested` (`:2476`); komentarz `:2482` mówi wprost **„three entry points"** — menu zakładki będzie **czwartym** |
+| Lista z filtrowaniem (tryb pojedynczego wiersza, §8.2) | ✅ `Controls/SearchableComboBox.cs` |
+| Odświeżenie zakładki (pozycja menu §8.3) | ✅ `WorkspaceTabViewModel.RefreshAsync()` |
+| Style `ContextMenu`/`MenuItem`, `{app:MenuIcon}`, `{app:CommandGesture}` | ✅ Keyboard Manager etap 5 — **zero nowej chromy** |
+| Severity → pędzel + ikona (§8.4.4) | ✅ `MessageBanner.BrushKeyFor` / `GeometryKeyFor` |
+| Wzorzec preferencji numerycznej (`TabStripMaxRows`, R‑5) | ✅ `PreferenceRange` + commit na blur/Enter + digits-only na tunelu (`settings-center.md` §17.4/§17.4a) |
+| `CurrentSchemaVersion` | ✅ **2** — preferencje paska zakładek są addytywne, ⛔ **nie podbijać** (R‑4) |
+
+#### §19.0.9 M3b — inwentarz operacji
+
+**16 ViewModeli** ma własny stan „trwa operacja" (`IsRunning` / `IsBusy` / `IsExecuting` / `IsLoading`):
+`BatchResults`, `DataImportTab`, `DomainDetail`, `ExceptionDetail`, `ExecutionTimer`, `GeneratorDetail`,
+`IndexDetail`, `MainWindow`, `MetadataExplorer`, `MetadataNode`, `PackageDetail`, `ScriptExecutorTab`,
+`SecurityManagerTab`, `SourceObjectDetail`, `TableDetail`, `ViewDetail`.
+
+**Trzy realne ścieżki `IProgress`:** eksport (`Export/ExportService.cs`), wykonanie zapytania
+(`MainWindowViewModel:3456` + `MakeLoadProgress():6333`), batch (`:5395`).
+**Trzy `ProgressBar` w widokach:** `BatchResultsDialog`, `DataImportTabView`, `ExportDialog`.
+
+⚠ Podział D4 zostaje: **M3.1f dostarcza sekcję i JEDNĄ operację referencyjną** (wykonanie zapytania SQL —
+jedyna z trzech, która ma i `IProgress`, i próg miękki, i anulowanie), **M3b podłącza resztę.**
+
+#### §19.0.10 ⛔ Cztery decyzje do podjęcia przed implementacją
+
+| # | Pytanie | Kiedy | Rekomendacja |
+|---|---|---|---|
+| **DA** | `Size.StatusBar` = 24, rzeczywistość **28** — zastosować katalog czy poprawić katalog? | przed **M3.1a** | zastosować katalog (28 → 24): §8.5 specyfikacji zabrania **wzrostu**, zmniejszenie jest dozwolone, a 36/26/24 to ratyfikowany rytm |
+| **DB** | `Size.Row.Tree` = 20, rzeczywistość **24** — to samo pytanie, ale na **najgęstszym widoku aplikacji** | przed **M3.4a** | ⚠ **wymaga oka użytkownika** — 24 → 20 to realna zmiana gęstości drzewa, nie porządkowanie |
+| **DC** | Likwidacja `AccentIconBrush` / `InfoIconBrush` sięga **14 plików**, w tym powierzchni M4.3 | przed **M3.2b** | ograniczyć M3.2 do paska narzędzi; likwidację przenieść do M4.3/M5 **z zapisem powodu** |
+| **DD** | Commit/Rollback → `CommitButtonBrush` / `RollbackButtonBrush`, czy zostają na `SuccessIconBrush` / `DangerIconBrush`? | przed **M3.2c** | przejść — dziś Rollback nosi kolor „operacji nieodwracalnej", a nią nie jest (§19.0.5) |
+
+#### §19.0.11 Stan na wyjściu z iteracji 0
+
+**Zero zmian w kodzie produkcyjnym.** Build **0/0** · suite **7088** · smoke czysty — wszystkie trzy
+niezmienione względem `8567ebc`, bo iteracja 0 dotknęła wyłącznie dokumentacji.
+
+**Powstało:** [`product-polish-m3-handover.md`](product-polish-m3-handover.md) (samowystarczalny punkt
+wejścia: stan · zakres · reguły R1–R12 · procedura · 13 pułapek · plan 18 iteracji) oraz ta sekcja.
+
+⭐ **Podsumowanie jednym zdaniem: M2c udowodnił, że wartość lokalna blokuje system; iteracja 0 M3
+pokazała, że na powierzchniach trwałych problem jest o krok wcześniej — tam system nigdy nie został
+podłączony.** Trzy tokeny bez konsumenta, jeden nieutworzony i dwie liczby niezgodne ze stanem
+faktycznym to nie dług sweepu, tylko **obszar, którego żaden dotychczasowy licznik nie obejmował**.
