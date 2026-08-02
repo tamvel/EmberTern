@@ -1,5 +1,13 @@
 # Product Polish — M2b — dokument startowy sesji
 
+> ## ✅ M2b — WSZYSTKIE 15 ITERACJI DOSTARCZONE (2026-08-02)
+>
+> Kroki 0–5.3 odebrane przez użytkownika; **kroki 5.4–7 oczekują QA wizualnego**.
+> Po QA następny etap to **M2c** (sweep de‑lokalizacyjny) — ⛔ **nie zaczynać przed QA.**
+>
+> Ten dokument zachowany jako **punkt wejścia w M2b i zapis jego architektury**; sekcja §5
+> („następna iteracja") jest już historyczna. Stan faktyczny: `product-polish.md` §15.-1.
+
 > **To jest prompt dla Claude'a, nie dla użytkownika.** Punkt wejścia w każdą kolejną sesję M2b —
 > pozwala wejść w implementację bez ponownego czytania całej dokumentacji.
 >
@@ -17,10 +25,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · ⏳ M2b W TOKU** — 9 iteracji dostarczonych i odebranych |
-| **Następny krok** | **`Button`** (§5 niżej) |
-| **Ostatni commit** | `3483296` — M2b krok 5.3 (`ComboBox`) |
-| **Baseline** | build 0/0; suite **7075** (7000 + 54 + 21); smoke czysty |
+| **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ dostarczony** (15 iteracji) |
+| **Następny krok** | ⭐ **QA wizualne kroków 5.4–7**, potem **M2c** |
+| **Ostatni commit** | `e95913b` — M2b krok 7 (DataGrid Standard) |
+| **Baseline** | build 0/0; suite **7082** (7000 + 54 + 28); smoke czysty |
 
 **Specyfikacja etapu (źródło prawdy):** `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`
 **Dokument etapu:** `docs/design/product-polish.md`
@@ -41,8 +49,15 @@
 | — | ⭐ **`FluentBridge`** | (w `9ec2c13`) | **decyzja architektoniczna — §16** |
 | 5.2 | **`TextBox`** | `9ec2c13` | 32 → 24 px, tekst 14 → 12; pierwsza kontrolka na moście |
 | 5.3 | **`ComboBox`** | `3483296` | most zdał próbę skalowania — **zero własnych szablonów** |
+| 5.4 | **`Button`** (H‑8) | `267a4b8` | + tokenizacja 4 wariantów; kolejność w pliku jest znacząca |
+| 5.5 | **`NumericUpDown`** | `d2a2475` | trzy kontrolki zagnieżdżone; most działa kompozycyjnie |
+| 5.6 | **`ToggleButton`** | `ce47aa7` | selektor typu = typ DOKŁADNY; stan checked był już nasz |
+| 5.7 | **`Expander`** | `69ceff6` | ⭐ **alias zasobu — trzecia trasa, korekta §16.3** |
+| 6 | **`ScrollBar`** (H‑10) | `7ab3d27` | biały uchwyt na białym tle w Light |
+| 7 | **DataGrid Standard** (§8.4) | `e95913b` | + `Pad.CellEditor`; test znalazł defekt z kroku 5.2 |
 
-Wszystkie odebrane przez użytkownika. Szczegóły: `product-polish.md` §15.1–§15.6.5a.
+Kroki 0–5.3 odebrane przez użytkownika; **5.4–7 oczekują QA**.
+Szczegóły: `product-polish.md` §15.1–§15.8.
 
 ---
 
@@ -59,13 +74,24 @@ podmienia te zasoby na nasze tokeny. Zachowujemy zachowanie frameworka, wygląd 
 `FluentBridge_ContainsNoLocalValues`): wyłącznie mapowanie, żadnych wartości lokalnych, żadnych
 nowych decyzji projektowych.
 
-**⚠⚠ Podział wymuszony pomiarem, nie upodobaniem — XAML nie potrafi zaaliasować zasobu skalarnego:**
+**⚠⚠ TRZY TRASY, podział wymuszony pomiarem, nie upodobaniem** (pełne uzasadnienie: §16.3):
 
 | Co | Gdzie |
 |---|---|
-| **metryki** — `MinHeight`, `Padding`, `FontSize`, `BorderThickness` | **setter stylu** w `ControlStyles.axaml`, czytający token |
+| **metryki** — `MinHeight`, `Padding`, `FontSize`, `BorderThickness` | **setter stylu** w `ControlStyles.axaml`, czytający token — **trasa domyślna** |
 | **kolory malowane przez wnętrze szablonu** | **`FluentBridge.axaml`**, `Color="{StaticResource …Color}"` |
+| ⭐ **metryka lub barwa, którą szablon trzyma jako WARTOŚĆ LOKALNĄ** | **`FluentBridge.axaml`**, `<StaticResource x:Key="…" ResourceKey="…" />` |
 | **wartości, w których Fluent już się z nami zgadza** | **nigdzie** — pinowane testem |
+
+⚠ **Korekta z kroku 5.7:** §16.3 twierdziła pierwotnie, że *„XAML nie potrafi zaaliasować zasobu
+skalarnego"*. **Zmierzone: potrafi.** Nie potrafi go **ZŁOŻYĆ** w treści elementu (`<x:Double>` musi
+zawierać liczbę). Trasa trzecia jest **wyjątkiem, nie alternatywą** — sięgaj po nią dopiero wtedy, gdy
+setter **zmierzalnie przegrał** (wartość lokalna outranks setter). Zmierzone przypadki:
+`ExpanderMinHeight`, `ScrollBarThumbBackgroundColor`.
+
+⚠⚠ **Styl typu sięga do CUDZEGO szablonu — sprawdzaj to zawsze.** Krok 5.5 dostał dzięki temu wysokość
+wewnętrznego `TextBoxa` `NumericUpDown` za darmo; krok 5.6 tym samym mechanizmem **wyśrodkował
+nagłówek `Expandera`**. Jeden mechanizm, dwa znaki.
 
 ### 3.2 ⛔ Kiedy WOLNO napisać własny `ControlTemplate` — dwa warunki, oba konieczne
 
@@ -104,35 +130,28 @@ przy wczytywaniu).
 
 ---
 
-## 5. ⭐ Następna iteracja — `Button`
+## 5. ⛔ Co dalej — i czego NIE robić
 
-**Dlaczego on:** to ostatnia kontrolka bazowa o dużym zasięgu, a jednocześnie pierwsza, w której
-wchodzi w grę **wysokość akcji głównej 28** (D1) obok standardowej 24 — czyli pierwsza, która
-sprawdzi, czy `Size.Control` / `Size.Action` są dwiema rolami, czy jedną z wyjątkiem.
+**M2b jest dostarczony w całości.** Kolejność: **QA wizualne kroków 5.4–7 → dopiero potem M2c.**
 
-**Stan wyjściowy (zmierzony, §15.6):** `MinHeight` **0** · żądana wysokość **29** · `Padding`
-`8,5,8,6` · `FontSize` **14**. ⚠ Jak `RadioButton` — deklarowana właściwość nie mówi prawdy.
+⛔ **Nie zaczynać M2c przed QA.** M2c usuwa wartości lokalne z **widoków**; jeżeli QA odrzuci którąś
+decyzję kroków 5.4–7, poprawka wróci do `Themes/` — a sweep zrobiony wcześniej trzeba by powtórzyć
+na zmienionej podstawie. To jest ta sama zasada, którą §15.6.4a nazwał dla zgłoszeń użytkownika:
+⛔ **nie strojić do stanu przejściowego.**
 
-**Zasoby, które Fluent prawdopodobnie wystawia** (zmierzone przy okazji kroku 5.2, do potwierdzenia
-sondą): `ButtonBackground`, `ButtonBorderBrush`, `ButtonForeground`, `ButtonPadding` (`8,5,8,6`).
-Jeżeli tak — **własny szablon jest niedozwolony** (§3.2 wyżej).
+**Cztery rzeczy, które trzeba przy QA podnieść samemu, bo każda jest DECYZJĄ, nie pominięciem:**
 
-**⚠ Co odróżnia `Button` od poprzednich iteracji i wymaga decyzji, nie rutyny:**
-- w `ControlStyles.axaml` istnieją już **cztery świadomie zaprojektowane warianty** —
-  `Button.icon`, `Button.primary`, `Button.flat`, `Button.caption`. **Zmiana stylu bazowego
-  wchodzi pod nie wszystkie.** Sprawdź każdy z osobna, zanim uznasz iterację za zamkniętą;
-- **`Button.icon`** to kwadratowy cel na ikonę — wysokość formularza może być dla niego zła
-  dokładnie tak, jak `MinHeight=24` było złe dla edytora w komórce (§15.6.4);
-- **przyciski na pasku tytułu i w stopkach dialogów** mają własne oczekiwania co do wysokości;
-- ⚠ **`Button` w komórce siatki** — ten sam test co przy `TextBoxie`: `Size.Row.Grid` (22) −
-  `Pad.Cell` (3+3) = **16 px**.
+1. ⛔ **`ScrollBar` — strzałki i geometria celowo nietknięte** (§15.7). Usunięcie strzałek to zmiana
+   *funkcjonalna*, a Fluent i tak ukrywa je do najechania. Gdyby mimo to przeszkadzały — osobna
+   propozycja, nie doklejka.
+2. ⛔ **Kolor komentarzy SQL zostaje** (V‑1, ratyfikowane) — wraca po etapie, w normalnej pracy.
+3. 📌 **Nasycenie zaznaczonego wiersza** — odłożone do kroku DataGrid, czyli **teraz jest właściwy
+   moment, żeby to ocenić** (siatka jest już docelowa).
+4. 📌 **Badge DEV MODE** — odłożony do **M3.2**, nie do tego QA.
 
-### Kolejność po `Button`
-
-`NumericUpDown` → `ToggleButton` → `Expander` → **DataGrid** → **`ScrollBar` (ostatni)**.
-Dopiero po zamknięciu całego M2b można rozpocząć **M2c** (sweep de‑lokalizacyjny).
-
----
+⚠ **Dwa widoki niosą już zbędne obejście** (`ProcedureDetailTabView`, `FunctionDetailTabView`:
+`MinHeight="26"` + lokalne zasoby paddingu `Expandera`). Po kroku 5.7 są niepotrzebne — ale to
+**M2c**, bo leżą w widoku, a M2b pracuje wyłącznie w `Themes/`.
 
 ## 6. Procedura iteracji (`product-polish.md` §16.5)
 

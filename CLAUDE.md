@@ -34,7 +34,7 @@ verbatim, in the archive below.
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
 | **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
-| **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0 + M1 + M2a COMPLETE and user-accepted; ⏳ M2b IN PROGRESS (9 iterations shipped, `CheckBox` → `ComboBox`).** ⭐ **§16 is the `FluentBridge` PROJECT PATTERN — read it before restyling any base control**; §15 is the M2b as-built and **§15.-1 its state table** (every iteration, commit and QA verdict in one place); §14 is M2a. The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
+| **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0 + M1 + M2a user-accepted; ⭐ M2b ALL 15 ITERATIONS DELIVERED (steps 5.4–7 await visual QA); M2c next.** ⭐ **§16 is the `FluentBridge` PROJECT PATTERN with its THREE routes — read it before restyling any base control**; §15 is the M2b as-built and **§15.-1 its state table** (every iteration, commit and QA verdict in one place); §14 is M2a. The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
 | **`docs/design/product-polish-m2b-handover.md`** | **⭐ START HERE for the next Product Polish session.** Entry point into the rest of M2b — what shipped (9 iterations + commits), the `FluentBridge` pattern in one page, the per-control procedure, known limits, and the next control (**`Button`**, then `NumericUpDown` · `ToggleButton` · `Expander`). Written so implementation starts without re-reading the design doc. | At the start of every remaining M2b session. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
 | **`docs/gotchas.md`** | The **complete** gotcha catalog (289 entries, #1–#302), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
@@ -425,11 +425,20 @@ noted.
 ## Current state
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a user-accepted;
-  ⏳ M2b IN PROGRESS — 9 iterations shipped and QA'd, `CheckBox` through `ComboBox`.**
+  ⭐ M2b — ALL 15 ITERATIONS DELIVERED (2026-08-02); steps 0–5.3 user-QA'd, **steps 5.4–7 await
+  visual QA**. Next after that QA: **M2c** (de-localization sweep).**
   **⭐ START THE NEXT SESSION FROM
-  [docs/design/product-polish-m2b-handover.md](docs/design/product-polish-m2b-handover.md).** Next
-  control: **`Button`**, then `NumericUpDown` · `ToggleButton` · `Expander`, then DataGrid, then
-  `ScrollBar` last. Spec (source of truth): `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`.
+  [docs/design/product-polish-m2b-handover.md](docs/design/product-polish-m2b-handover.md);
+  the per-iteration record is `product-polish.md` §15, its state table §15.-1.** Spec (source of
+  truth): `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`.
+  **⚠ The four items that must be raised at that QA, because each is a decision rather than an
+  omission:** ⛔ **`ScrollBar` arrows and geometry were deliberately NOT touched** (removing them is a
+  *functional* change and Fluent already hides them until hover — H‑10 was about the missing style,
+  and the colour is what shipped) · ⛔ **the SQL comment colour stays** (V‑1, ratified) ·
+  📌 **selected-row saturation** and 📌 **the DEV MODE badge** are both deferred on purpose (§15.6.4a).
+  ⚠ **Two views still carry a local `MinHeight="26"` workaround for Fluent's chunky `Expander`**
+  (`ProcedureDetailTabView`, `FunctionDetailTabView`) — now redundant, but removing a local value from
+  a *view* is **M2c**, not M2b, which works only in `Themes/`.
   **⭐⭐ M2b'S ONE ARCHITECTURAL RESULT, AND IT OUTLIVES THIS STAGE — `FluentBridge` (product-polish.md
   §16, ratified 2026-08-02): we do NOT restyle FluentTheme and do NOT copy its templates — we REPIN IT
   ONTO OUR CATALOG.** Fluent paints control interiors (`PART_BorderElement` and friends) from its own
@@ -448,13 +457,33 @@ noted.
   in that file, not remembered** — there is nowhere to put a number. ⚠ Consequence for tests: assert the
   **metric on the control** and the **colour on the part that actually paints it**; a colour assertion
   read off the control itself passes while painting nothing.
-  **⛔ A custom `ControlTemplate` now needs TWO measured conditions (§16.4)** — the size is not exposed
+  **⭐⭐ THERE IS A THIRD ROUTE, ADDED IN STEP 5.7 AFTER A MEASUREMENT THAT DISPROVED §16.3's OWN
+  PREMISE.** The section claimed *"XAML cannot ALIAS a scalar resource"*. **Measured on Avalonia
+  12.0.3: it can** — `<StaticResource x:Key="A" ResourceKey="B" />` resolves (probe returned `24`,
+  `Double`). The real limit is narrower: XAML cannot **compose** a resource in element *content*
+  (`<x:Double>` must hold a number). ⭐ The split survived the correction but gained a route:
+  **when a template consumes a scalar as a LOCAL value on the element, a style setter cannot win**
+  (a local value outranks a setter — the project's own recurring lesson, here on the *framework's*
+  side), and an alias is the only mechanism. Measured cases: `ExpanderMinHeight` (a metric) and
+  `ScrollBarThumbBackgroundColor` (a `Color`, not a brush — so the same route serves both kinds).
+  ⭐ **An alias satisfies the user's rule better than a number**: it is a *reference*, so the catalog
+  stays the sole owner, and the guard passes unchanged because the tag itself is `StaticResource`.
+  ⚠ **It is an exception, not an alternative** — reach for it only when a setter has *measurably*
+  lost; a setter sits where you think about the control, an alias sits in a translation table.
+  **⛔ A custom `ControlTemplate` needs TWO measured conditions (§16.4)** — the size is not exposed
   as a Fluent resource **and** the element to change has no `x:Name` (so a selector would hit it
   positionally and silently retarget on an Avalonia upgrade). **Exactly two controls qualify:
   `CheckBox` and `RadioButton`.** ⚠ That they are the *exception* was only shown by probing `TextBox` —
   the original plan had assumed custom templates for every base control, and `ComboBox` (six painted
   template parts) then needed **none**, which is what promoted the bridge from a one-case hypothesis to
-  a pattern. ⛔ Do not rewrite a template because "we already have two".
+  a pattern. ⛔ Do not rewrite a template because "we already have two". ⚠ The rule proved its worth in
+  step 5.7: it *forbade* rewriting the `Expander` template and forced the alias to be found instead.
+  **⚠⚠ A TYPE STYLE REACHES INSIDE A FOREIGN TEMPLATE, AND THAT CUTS BOTH WAYS — the single most
+  transferable finding of M2b.** Step 5.5 got the height of `NumericUpDown`'s inner `TextBox` **for
+  free** (a type style applies wherever the type occurs, including inside another control's template —
+  which is the practical difference between *repinning* a framework and *copying* it). Step 5.6 then
+  centred the `Expander`'s header, because that header **is** a `ToggleButton`. One mechanism, two
+  signs; §16.5's procedure now has a step for checking which one you just got.
   **⭐ M2b's governing rule, above the catalog's numbers (user, 2026-08-01):** *"We are not designing the
   smallest possible controls. We are designing controls a developer works on comfortably for 8 hours a
   day."* A catalog value that is technically right but worse in practice gets **stopped and proposed**
@@ -473,18 +502,33 @@ noted.
   half-calmed surroundings is tuning to a transitional state. Hence the deliberate deferrals (SQL comment
   colour §7.3, selected-row saturation §15.2.1, DEV MODE badge → M3.2). It is also an independent
   argument for the §13.3 gate.
-  **⚠ Iterations shipped (state table: §15.-1), each build 0/0 + three partitions + smoke + QA'd:**
+  **⚠ Iterations shipped (state table: §15.-1), each build 0/0 + three partitions + smoke:**
   step 0 class styles read the catalog, byte-neutral (`0bbc745`) · **`CheckBox`** RB‑2 (`26243cb`) ·
   **RB‑4** split (`a1d607a`) · **Light greyscale + H‑7 + V‑1** (`7975aaa`) · **`ToolTip`** (`e5b010f`) ·
   **`RadioButton`** (`cf23a4c`) + its concentricity answer (`60f9278`) · **`TextBox` + `FluentBridge`**
-  (`9ec2c13`) · **`ComboBox`** (`3483296`).
-  **⚠ Two measured facts from those iterations that generalise past M2b:** (a) ⭐ **a control's declared
-  property can lie** — `RadioButton` reports `MinHeight=0` while its template forces 32, so judging by
-  the property alone finds no defect; probe the tree, don't read the property. (b) ⭐ **a form-correct
-  value can be destructive in a grid** — `Size.Row.Grid` (22) − `Pad.Cell` (3+3) = **16 px**, so a
-  `MinHeight=24` editor raises every edited row by 8 px (a layout jump on entering edit). Grid-cell
-  editors take the ROW's height, not the control's. The same shape appeared twice: as the `CheckBox`
-  click target and as the `TextBox` in a cell.
+  (`9ec2c13`) · **`ComboBox`** (`3483296`) · **`Button`** H‑8 + the four variants tokenized (`267a4b8`) ·
+  **`NumericUpDown`** (`d2a2475`) · **`ToggleButton`** (`ce47aa7`) · **`Expander`** + the alias route
+  (`69ceff6`) · **`ScrollBar`** H‑10 (`7ab3d27`) · **DataGrid Standard** §8.4 (`e95913b`).
+  **⚠⚠ THE ARITHMETIC OF §5.1 MUST BE CHECKED ON THE SUM, NOT ON A TERM — it went wrong three times in
+  this stage and the third one shipped.** `Size.Row.Grid` (22) − `Pad.Cell` (3+3) = **16 px**, and
+  anything placed in a cell must fit that. (1) Step 1's first draft gave the `CheckBox` a 20 px click
+  target and its test compared against the ROW (22) instead of the room a CELL leaves — it passed while
+  reopening RB‑2. (2) Step 5.2 correctly stopped a cell `TextBox` from taking `MinHeight=24`… (3) …but
+  left it `Pad.CellCompact`'s 2 px of vertical padding, so it asked for **18 px against 16** and the row
+  jumped **on entering edit** — shipped, invisible for five iterations, and caught only by step 7's test,
+  whose subject is the grid *as a whole* and which therefore had a reason to add two tokens from two
+  different steps together. Fix: the new role **`Pad.CellEditor` (`6,0`)** — a grid-cell editor's height
+  is owned by the **row**, so its vertical padding must be zero (the `Pad.Control` rule one nesting level
+  down). ⭐ **A test that measures the intent instead of the constraint can confirm a defect rather than
+  catch it.**
+  **⚠ Three more measured facts that generalise past M2b:** (a) ⭐ **a control's declared property can
+  lie** — `RadioButton` reports `MinHeight=0` while its template forces 32; probe the tree, don't read
+  the property. (b) ⭐ **declaration ORDER decides between styles of equal specificity** — the base
+  `Button` style must precede `.icon`/`.flat`/`.primary`/`.caption`, or all four are silently flattened
+  with a green build (pinned by `primary.MinHeight > plain.MinHeight`). (c) ⭐ **an Avalonia type
+  selector matches the EXACT type**, so `ToggleButton` needed its own copy of `Button`'s metrics —
+  and `:is(Button)` would have been *worse*, catching the spinner's and scroll bar's `RepeatButton`s,
+  for which a form-control height is actively wrong.
   ⚠ **`V‑1` is OPEN and it is the user's call, not a bug to fix:** against the new `#FCFCFD` every syntax
   colour clears AA except the **SQL comment `#2E8B57` (4,14:1)** — and §7.3's remedy ("change the
   background, not the palette") is **unachievable** here, because that colour yields only 4,25:1 on pure
@@ -3269,13 +3313,15 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7075 as of 2026-08-02
-  (after Product Polish M2b step 5.3 — ComboBox, +1; 7074 after step 5.2 — TextBox + FluentBridge, +2; 7072 after step 5.1 — RadioButton, +1; 7071 after step 4 — ToolTip, +1; 7070 after step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7082 as of 2026-08-02
+  (after Product Polish M2b step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
+  step 5.7 — Expander + the alias guard, +2; 7078 after step 5.6 — ToggleButton, +1; 7077 after step 5.5 —
+  NumericUpDown, +1; 7076 after step 5.4 — Button, +1; 7075 after step 5.3 — ComboBox, +1; 7074 after step 5.2 — TextBox + FluentBridge, +2; 7072 after step 5.1 — RadioButton, +1; 7071 after step 4 — ToolTip, +1; 7070 after step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
   partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
   segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**7000 + 54 + 21**).
+  three documented partitions (**7000 + 54 + 28**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
