@@ -2975,20 +2975,26 @@ który §11 nazywa dryfem, tyle że w pliku wyłączonym z pomiaru.
 → **Propozycja: ująć te ~10 setterów w M2c jako osobną iterację** (`{DynamicResource Text.*}`,
 wartości bez zmian). Nie wymaga zmiany strażnika ani nowej roli.
 
-#### §18.0.7 Plan iteracji wynikający z inwentarza
+#### §18.0.7 Plan iteracji — PO wynikach inwentarza (zaktualizowany 2026-08-02)
 
-| # | Zakres | Skąd |
-|---|---|---|
-| 1 | `DebuggerTabView.axaml` (+ `.axaml.cs`) — 85 + 6 | największe skupisko (handover §4.2) |
-| 2 | `DataImportTabView.axaml` — 82 | drugie |
-| 3 | `PerformancePanelView.axaml` — 42 | trzecie |
-| 4 | `ProcedureDetailTabView` + `FunctionDetailTabView` — 81 | bliźniacze, ta sama struktura |
-| 5 | edytory obiektów: Table · Trigger · View · Package · Domain · Generator · Exception · Index | grupa |
-| 6 | monitory: `SessionManagerTabView` · `TraceMonitorTabView` · `SecurityManagerTabView` | grupa |
-| 7 | `MainWindow.axaml` + `Controls/` | powierzchnia trwała (§0.1) |
-| 8 | dialogi (18 plików, 1–9 wystąpień każdy) | ogon |
-| 9 | settery literalne w `ControlStyles.axaml` (§18.0.6) | jeżeli zatwierdzone |
-| 10 | podniesienie bazy w `DesignTokenComplianceTests` + korekta komentarza z §18.0.2 | krok końcowy |
+⚠ Kolejność 1–3 wynika z wielkości skupisk (handover §4.2); 4–8 z **pokrewieństwa struktury**, bo to
+ono decyduje, czy regułę wyboru roli da się zastosować spójnie, a nie liczba wystąpień.
+
+| # | Zakres | `FontSize` | Co ta iteracja spotka na pewno |
+|---|---|---|---|
+| **1** | `DebuggerTabView.axaml` + `.axaml.cs` | 85 + 6 | 17 × `FontFamily` **zostaje** (§18.0.5/1); 2 × 9 px glif → koszyk D |
+| **2** | `DataImportTabView.axaml` | 82 | dużo koszyka A (`TextBox`/`ComboBox`/`NumericUpDown` przy 12); 4 × `CornerRadius="3"` migrują |
+| **3** | `PerformancePanelView.axaml` | 42 | glif 9 px i glif 13 px → koszyk D; `CornerRadius="6"` to **kapsuła** → zostaje |
+| **4** | `ProcedureDetailTabView` + `FunctionDetailTabView` | 40 + 41 | bliźniacze — migrować **razem**, inaczej się rozjadą; po 2 edytory 12 px w wierszu siatki → koszyk D |
+| **5** | edytory obiektów: Table 27 · Trigger 22 · View 20 · Package 17 · Domain 16 · Generator 15 · Exception 13 · Index 11 | 141 | wiele `ae:TextEditor` 13 → `Text.Code` (koszyk B, mechaniczne) |
+| **6** | monitory: `SessionManager` 26 · `TraceMonitor` 17 · `SecurityManager` 17 | 60 | ⚠ tu siedzi **cała geometria** `CornerRadius` (koła 5 / 4.5, kapsuły) → zostaje; 8 × `TextBlock` 13 px → koszyk D |
+| **7** | `MainWindow.axaml` 26 + `Controls/` 7 | 33 | ⭐ **powierzchnia trwała** (§0.1) — najwyższa staranność |
+| **8** | dialogi — 18 plików po 1–9 | ~50 | ogon; `ConfirmDialog`/`ChoiceDialog` 13 px → koszyk D |
+| **9** | literały w `ControlStyles.axaml` (§18.0.6) | ~10 setterów | poza licznikiem, ten sam dług |
+| **10** | podniesienie bazy w `DesignTokenComplianceTests` do stanu faktycznego | — | krok końcowy; powód przy każdej pozostawionej pozycji |
+
+⚠ **Iteracje 1–8 mają zaplanowane spotkanie z koszykiem D w siedmiu z ośmiu przypadków.** To nie jest
+niepowodzenie sweepu, tylko konsekwencja R12: wyjątek z powodem jest **wynikiem**, nie resztą.
 
 #### §18.0.8 ⭐⭐ R12 — ZMIANA CELU ETAPU, RATYFIKOWANA PRZEZ UŻYTKOWNIKA (2026-08-02)
 
@@ -3023,3 +3029,102 @@ narzędziem.** Trzy konsekwencje, wszystkie operacyjne:
 | **handover §4.1 / §4.3** | „`FontFamily` → 0 poza uzasadnionymi" | `FontFamily` **poza zakresem M2c** w całości | §18.0.5/1 |
 | **`DesignTokenComplianceTests`** (komentarz `FontFamilyBaseline`) | „M2c should drive this list to empty" | lista zostaje; powód zapisany | §18.0.5/1 |
 | **`DesignTokenApplicationTests`** (komentarz) | „Avalonia's default TextBlock size is 12" | **14** — zmierzone sondą | §18.0.2 |
+
+#### §18.0.10 🔒 KROK 0 — PODSUMOWANIE ZAMYKAJĄCE (zaakceptowany przez użytkownika 2026-08-02, commit `20d4ad6`)
+
+> **Werdykt użytkownika:** *„Dla mnie krok 0 jest zakończony i zaakceptowany."*
+
+Krok 0 nie zmienił ani jednej linii kodu produkcyjnego. Zmienił natomiast **cztery zapisy, na których
+etap miał się oprzeć** — i to jest jego właściwy wynik.
+
+##### A. Założenia POTWIERDZONE
+
+| Założenie | Dowód |
+|---|---|
+| Liczniki z §17.6 są dokładne | `FontSize` 605/49 · `FontFamily` 81/28 · `CornerRadius` 37/13 — zgodne co do sztuki ze strażnikiem |
+| Teza etapu („wartość lokalna bije setter stylu") jest prawdziwa | 77 wystąpień to wartości **dokładnie równe** temu, co daje styl M2b — czyli martwe kopie, które i tak wygrywają |
+| M2b faktycznie zadziałało | `TextBox`/`ComboBox`/`CheckBox`/`RadioButton`/`Button`/`NumericUpDown` **mierzą 12 px ze stylu**, bez żadnej pomocy widoku |
+| Trzy największe skupiska są tam, gdzie wskazywał handover | `DebuggerTabView` 85 · `DataImportTabView` 82 · `PerformancePanelView` 42 |
+| Podział ról §3.3 („dwie role o tej samej liczbie to nie duplikat") był słuszny | to właśnie on ratuje sweep przed podmianą maszynową — patrz B/2 |
+
+##### B. Założenia OBALONE — pięć, każde z konsekwencją
+
+1. **⚠⚠ „Goły `TextBlock` ma domyślnie 12 px"** (komentarz w `DesignTokenApplicationTests`).
+   **Zmierzone: 14** (dziedziczone z `Window.FontSize`).
+   → **Konsekwencja: sweep ma DWA ruchy, nie jeden.** Usunięcie lokalnego `FontSize` z `TextBlocka`
+   to skok 11 → 14. Usuwamy tylko tam, gdzie styl daje **tę samą** wartość; wszędzie indziej
+   **zamieniamy na odwołanie do roli**. Gdyby ten pomiar nie padł przed pierwszą iteracją, etap
+   zacząłby się od masowej regresji typografii przy zielonym buildzie.
+
+2. **⚠⚠ „Sweep jest w większości mechaniczny".**
+   **Zmierzone: 605 deklaracji to siedem liczb, ale przy 11 px PIĘĆ ról ma tę samą wartość, a przy
+   12 px dwie.** 500 z 605 wystąpień (83%) siedzi w tych dwóch liczbach.
+   → **Konsekwencja: liczba nie wyznacza roli.** Podmiana `sed`-em zachowałaby wartość i wpisała złą
+   rolę — **błąd niewidoczny na ekranie i niewidoczny w teście**, ujawniający się dopiero przy
+   pierwszej zmianie katalogu. To jest formalne uzasadnienie rytmu „jeden widok = jedna iteracja".
+
+3. **⚠⚠ „`FontFamily` da się doprowadzić do zera"** (handover §4.1 + komentarz w strażniku).
+   **Zmierzone: token `Font.Code` niesie `Cascadia Mono`, a 65 z 81 wystąpień to `Cascadia Code`.
+   Ani jeden z 81 ciągów nie jest identyczny z tokenem.**
+   → **Konsekwencja: `FontFamily` wypada z zakresu M2c w całości** — nie z ostrożności, tylko
+   arytmetycznie. Reguła „podmień tylko ciąg już identyczny" daje zero migracji.
+
+4. **⚠⚠ „Wszystkie promienie 4 / 4.5 / 5 / 6 to chipy"** (§4.2.2).
+   **Zmierzone: nieprawda w obu połowach.** `4.5`/`5`/`6` (7 wystąpień) to **geometria** — koła
+   (`10×10`, promień 5) i kapsuły pasków postępu (`Height=12`, promień 6), gdzie promień jest połową
+   boku. `4` (11 wystąpień) to w większości **karty**, nie chipy; chipem jest jedno wystąpienie.
+   → **Konsekwencja: migruje wyłącznie 17 × `3`.** ⛔ Nie tokenizujemy geometrii wynikającej
+   z matematyki — token opisuje rolę projektową, nie przypadkową liczbę.
+
+5. **⚠ „Rozjazd rozmiaru = dryf do usunięcia"** (`Typography.axaml`, role `Text.Code` i `Text.Caption`).
+   **Zmierzone: sześć edytorów przy 12 px stoi W WIERSZU SIATKI** (kursory i podprogramy w trybie
+   Easy, podgląd Global Search, szczegół Trace), a dwa z siedmiu `FontSize="9"` to **glify**.
+   → **Konsekwencja: to nie dryf, tylko decyzja kontenera** — ta sama zasada „kontener rozstrzyga
+   wielkość", którą M2b ratyfikował jako decyzję architektoniczną (§17.2/2). Zostają.
+
+⭐ **Wspólny mianownik wszystkich pięciu: katalog M2a był ZAMIAREM, a nie opisem kodu.** Zapisy
+powstały, zanim ktokolwiek zderzył je z widokami. To nie jest zarzut wobec M2a — to jest powód,
+dla którego krok 0 w ogóle był w planie.
+
+##### C. Decyzje RATYFIKOWANE przez użytkownika
+
+| # | Decyzja | Uzasadnienie użytkownika |
+|---|---|---|
+| 1 | **`FontFamily` poza zakresem M2c**; `Font.Code` zostaje bez konsumenta | *„Jeżeli `Cascadia Code` jest dziś świadomą decyzją, to nie zamieniamy jej na `Mono` tylko dlatego, że istnieje token."* |
+| 2 | **Migruje wyłącznie `CornerRadius="3"`**; geometria i karty zostają | *„Nie tokenizujemy geometrii wynikającej z matematyki. Token ma opisywać rolę projektową, nie przypadkową wartość liczbową."* |
+| 3 | **28 wystąpień `FontSize` bez roli zostaje z komentarzem** | *„Jeżeli nie istnieje właściwa rola, nie wciskamy istniejącej tylko po to, żeby licznik spadł. Wolę uzasadnioną resztę niż błędną migrację."* |
+| 4 | **Dokumentacja opisuje stan zmierzony** — siedem zapisów poprawionych w miejscu (§18.0.9) | *„Zaktualizuj dokumentację tak, aby odzwierciedlała stan faktyczny, a nie odwrotnie."* |
+| 5 | ⭐ **R12 — nowy cel etapu** (§18.0.8) | patrz niżej |
+
+##### D. ⭐⭐ Czym jest R12 i dlaczego powstała
+
+**R12:** *celem M2c jest usunięcie **nieuzasadnionych** wartości lokalnych, a nie wyzerowanie
+licznika.*
+
+**Powstała, bo krok 0 pokazał, że oba cele się rozjeżdżają — i to nie na marginesie, tylko na
+około 130 wystąpieniach** (81 `FontFamily` + 20 `CornerRadius` + 28 `FontSize`). Przy celu
+„licznik → 0" każde z nich domagałoby się migracji, a każda taka migracja **zmieniłaby wygląd
+produktu** — czyli złamała DoD 6, warunek, który odróżnia M2c od M2b.
+
+Formalnie R12 jest **rozwinięciem R8 o jeden poziom**. R8 mówi: *pomiar jest narzędziem, nie
+argumentem końcowym*. R12 dodaje: **licznik też jest tylko narzędziem** — mierzy dług, ale nie
+odróżnia długu od decyzji, więc nie może być kryterium odbioru.
+
+⭐ **Najważniejsza konsekwencja, warta zapamiętania poza tym etapem: BŁĘDNA ROLA JEST GORSZA OD
+WARTOŚCI LOKALNEJ.** Wartość lokalna jest widoczna jako dług — strażnik ją liczy, a kolejny
+czytelnik ją widzi. Błędna rola **udaje, że długu nie ma**: przechodzi test, obniża licznik,
+wygląda na porządek — i przesuwa ekran dopiero przy pierwszej zmianie katalogu, miesiące później,
+daleko od przyczyny. To jest dokładnie ten sam kształt co gotcha #284 (skrót wpisany ręcznie
+w podpowiedź przeżył zmianę gestu przy zielonym buildzie), tylko o warstwę wyżej.
+
+⚠ **R12 nie rozluźnia etapu — przenosi rygor z liczby na zdanie.** Warunkiem wyjścia jest **powód
+zapisany przy każdej pozostawionej wartości**, a to jest wymaganie trudniejsze do spełnienia niż
+liczba, bo nie da się go osiągnąć hurtem.
+
+##### E. Stan liczbowy po kroku 0
+
+Build **0/0** · suite **7088** · smoke czysty · drzewo czyste.
+Liczniki **bez zmian** (krok 0 nie migrował niczego): `FontSize` **605 / 49** ·
+`FontFamily` **81 / 28** · `CornerRadius` **37 / 13**.
+**Przewidywany stan wyjściowy M2c:** `FontSize` ≈ **28 + reszta znaleziona w iteracjach** ·
+`FontFamily` **81** (poza zakresem) · `CornerRadius` **20**.
