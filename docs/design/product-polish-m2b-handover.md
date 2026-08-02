@@ -1,8 +1,8 @@
 # Product Polish — M2b — dokument startowy sesji
 
-> ## ✅ M2b — WSZYSTKIE 15 ITERACJI DOSTARCZONE (2026-08-02)
+> ## ✅ M2b — 18 ITERACJI DOSTARCZONYCH (2026-08-02), z rundą proporcji po QA
 >
-> Kroki 0–5.3 odebrane przez użytkownika; **kroki 5.4–7 oczekują QA wizualnego**.
+> Kroki 0–5.3 odebrane przez użytkownika; **kroki 5.4–10 oczekują QA wizualnego**.
 > Po QA następny etap to **M2c** (sweep de‑lokalizacyjny) — ⛔ **nie zaczynać przed QA.**
 >
 > Ten dokument zachowany jako **punkt wejścia w M2b i zapis jego architektury**; sekcja §5
@@ -25,10 +25,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ dostarczony** (15 iteracji) |
-| **Następny krok** | ⭐ **QA wizualne kroków 5.4–7**, potem **M2c** |
-| **Ostatni commit** | `e95913b` — M2b krok 7 (DataGrid Standard) |
-| **Baseline** | build 0/0; suite **7082** (7000 + 54 + 28); smoke czysty |
+| **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ dostarczony** (18 iteracji) |
+| **Następny krok** | ⭐ **QA wizualne kroków 5.4–10**, potem **M2c** |
+| **Ostatni commit** | `e0a59fd` — M2b kroki 8–10 (runda proporcji po QA) |
+| **Baseline** | build 0/0; suite **7084** (7000 + 54 + 30); smoke czysty |
 
 **Specyfikacja etapu (źródło prawdy):** `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`
 **Dokument etapu:** `docs/design/product-polish.md`
@@ -55,9 +55,10 @@
 | 5.7 | **`Expander`** | `69ceff6` | ⭐ **alias zasobu — trzecia trasa, korekta §16.3** |
 | 6 | **`ScrollBar`** (H‑10) | `7ab3d27` | biały uchwyt na białym tle w Light |
 | 7 | **DataGrid Standard** (§8.4) | `e95913b` | + `Pad.CellEditor`; test znalazł defekt z kroku 5.2 |
+| 8–10 | ⭐ **runda proporcji po QA** | `e0a59fd` | dwie drabiny wysokości · Ustawienia jako panel referencyjny · kolumny Data Import |
 
-Kroki 0–5.3 odebrane przez użytkownika; **5.4–7 oczekują QA**.
-Szczegóły: `product-polish.md` §15.1–§15.8.
+Kroki 0–5.3 odebrane przez użytkownika; **5.4–10 oczekują QA**.
+Szczegóły: `product-polish.md` §15.1–§15.9.
 
 ---
 
@@ -132,10 +133,10 @@ przy wczytywaniu).
 
 ## 5. ⛔ Co dalej — i czego NIE robić
 
-**M2b jest dostarczony w całości.** Kolejność: **QA wizualne kroków 5.4–7 → dopiero potem M2c.**
+**M2b jest dostarczony w całości.** Kolejność: **QA wizualne kroków 5.4–10 → dopiero potem M2c.**
 
 ⛔ **Nie zaczynać M2c przed QA.** M2c usuwa wartości lokalne z **widoków**; jeżeli QA odrzuci którąś
-decyzję kroków 5.4–7, poprawka wróci do `Themes/` — a sweep zrobiony wcześniej trzeba by powtórzyć
+decyzję kroków 5.4–10, poprawka wróci do `Themes/` — a sweep zrobiony wcześniej trzeba by powtórzyć
 na zmienionej podstawie. To jest ta sama zasada, którą §15.6.4a nazwał dla zgłoszeń użytkownika:
 ⛔ **nie strojić do stanu przejściowego.**
 
@@ -147,6 +148,8 @@ na zmienionej podstawie. To jest ta sama zasada, którą §15.6.4a nazwał dla z
 2. ⛔ **Kolor komentarzy SQL zostaje** (V‑1, ratyfikowane) — wraca po etapie, w normalnej pracy.
 3. 📌 **Nasycenie zaznaczonego wiersza** — odłożone do kroku DataGrid, czyli **teraz jest właściwy
    moment, żeby to ocenić** (siatka jest już docelowa).
+5. ⭐ **Drabina AKCJI (22 / 26 / 28) jest nowa i jest do oceny w pierwszej kolejności** — to jedyna
+   decyzja tej rundy, w której liczby są moje, a nie wynikające z pomiaru (§15.9.1).
 4. 📌 **Badge DEV MODE** — odłożony do **M3.2**, nie do tego QA.
 
 ⚠ **Dwa widoki niosą już zbędne obejście** (`ProcedureDetailTabView`, `FunctionDetailTabView`:

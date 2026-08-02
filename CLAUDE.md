@@ -425,8 +425,38 @@ noted.
 ## Current state
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a user-accepted;
-  ⭐ M2b — ALL 15 ITERATIONS DELIVERED (2026-08-02); steps 0–5.3 user-QA'd, **steps 5.4–7 await
-  visual QA**. Next after that QA: **M2c** (de-localization sweep).**
+  ⭐ M2b — 18 ITERATIONS DELIVERED (2026-08-02), including a **post-QA proportions round (steps 8–10)**;
+  steps 0–5.3 user-QA'd, **5.4–10 await visual QA**. Next after that QA: **M2c**.**
+  **⭐⭐ THE POST-QA ROUND'S ONE CORRECTION, AND IT OUTRANKS A CATALOG NUMBER — THERE ARE TWO HEIGHT
+  LADDERS, NOT ONE (§15.9.1).** Step 5.4 assumed a button is a control like any other and gave it
+  `Size.Control` (24). The user's QA named the missing distinction better than the catalog had:
+  **a FIELD stands in a series and must align; an ACTION stands alone and is a mouse target.**
+  Fields keep `Size.Control` **24**; actions get **`Size.ControlToolbar` 22** (chrome) ·
+  **`Size.ControlProminent` 26** (dialog footer — Close/Cancel/OK) · **`Size.ControlPrimary` 28**
+  (main action). ⚠ **D1 is NOT changed** — 24/22/28 still mean what they meant; one number (26) and a
+  role assignment D1 never asked about were added. ⭐ `Size.ControlProminent` is a *role* rather than
+  "a taller button" precisely because its second consumer is a different kind of control (the search
+  field). **⚠⚠ And a toolbar button must never lift the bar: the CONTAINER declares its children's
+  height** — the third appearance of that one mechanism (grid-cell editor · `Expander` header · now the
+  toolbar). Emphasis still travels by colour and icon; only height, the carrier that damaged its
+  neighbours, is taken away.
+  **⭐ Two QA reports turned out to be ONE defect** (§15.9.2): the Settings category list and Saved
+  Queries were both on Fluent because **`ListBoxItem` never had a style**. One style, both screens —
+  and the sidebar is untouched *structurally*, since its own `ListBox.Styles` entry beats an
+  application style.
+  **⚠⚠ A guard written in step 5.1 caught a regression three iterations later.** The first fix for
+  "radio buttons are too tight" gave every `RadioButton` a margin — which enters `DesiredSize` and so
+  broke RB‑2's grid fit. The corrected selector (`ItemsControl RadioButton`) is also semantically
+  truer: the role names the gap between **options**, and an option is a radio that is a *list item*;
+  a standalone one (grid cell, form field) is not. ⭐ `DataGrid` is not an `ItemsControl`, so cells are
+  out of scope **by construction**, with no exception to remember.
+  **⭐ Data Import's reported defect had its cause NEXT DOOR** (§15.9.3): the hidden `Basis` column
+  still measured `3*`, so a third of the grid stood empty and the columns the user actually reads were
+  squeezed. ⚠ **Third occurrence of the same truth in this project — a container whose children are
+  collapsed is STILL MEASURED** (it also left the titlebar's empty inset in the branding sprint). The
+  difference is that `ColumnDefinition` has no `IsVisible`, so the width itself must react
+  (`BoolToStarWidthConverter`, view layer — `GridLength` is an Avalonia type and rule #1 keeps those
+  out of view models).
   **⭐ START THE NEXT SESSION FROM
   [docs/design/product-polish-m2b-handover.md](docs/design/product-polish-m2b-handover.md);
   the per-iteration record is `product-polish.md` §15, its state table §15.-1.** Spec (source of
@@ -3313,15 +3343,15 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7082 as of 2026-08-02
-  (after Product Polish M2b step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7084 as of 2026-08-02
+  (after Product Polish M2b steps 8–10 — the post-QA proportions round, +2; 7082 after step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
   step 5.7 — Expander + the alias guard, +2; 7078 after step 5.6 — ToggleButton, +1; 7077 after step 5.5 —
   NumericUpDown, +1; 7076 after step 5.4 — Button, +1; 7075 after step 5.3 — ComboBox, +1; 7074 after step 5.2 — TextBox + FluentBridge, +2; 7072 after step 5.1 — RadioButton, +1; 7071 after step 4 — ToolTip, +1; 7070 after step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
   partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
   segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**7000 + 54 + 28**).
+  three documented partitions (**7000 + 54 + 30**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
