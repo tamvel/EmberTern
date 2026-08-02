@@ -65,11 +65,6 @@ public class DesignTokenComplianceTests
     /// </summary>
     private static readonly Dictionary<string, int> FontSizeBaseline = new(StringComparer.Ordinal)
     {
-        // ⭐ 82, nie 86 — pięć wartości lokalnych w dolnym pasku statusu zostało zamienionych na odwołania
-        // do katalogu (`Text.Status`), a jedna usunięta razem z lokalnym `FontSize` przycisku (M2b krok 12).
-        // To jest pierwszy wiersz tej listy, który SPADŁ z powodu migracji, a nie pomiaru — czyli dokładnie
-        // to, co M2c ma robić z całą resztą.
-        ["Views/DataImportTabView.axaml"] = 82,
         ["Views/PerformancePanelView.axaml"] = 42,
         ["Views/FunctionDetailTabView.axaml"] = 41,
         ["Views/ProcedureDetailTabView.axaml"] = 40,
@@ -91,6 +86,14 @@ public class DesignTokenComplianceTests
         ["Views/AboutWindow.axaml"] = 5,
         ["Views/IndexDialog.axaml"] = 5,
         ["Views/ConstraintFieldDialog.axaml"] = 4,
+        // ⭐ 82 → 4 (M2c iteracja 2). Odwrotność iteracji 1: tu koszyk A był największy w całym etapie —
+        // **35 wartości po prostu usunięto**, bo `ComboBox`/`TextBox`/`CheckBox`/`NumericUpDown`/
+        // `RadioButton`/`Button` już dostają dokładnie te 12 px ze stylu M2b. 41 przeszło na rolę,
+        // 4 zostają: `DataGrid FontSize="12"` przy roli siatki niosącej 11 (powód przy każdej z nich).
+        // ⚠ Dwa z pierwotnych 82 nie były wartościami, tylko PROZĄ W KOMENTARZU — strażnik czyta plik
+        // regexem i liczy również wzmiankę. Komentarz przeredagowano tak, by nie zapisywał składni
+        // atrybutu; to jedyny sposób, żeby licznik mierzył dług, a nie dokumentację.
+        ["Views/DataImportTabView.axaml"] = 4,
         // ⭐ 85 → 4 (M2c iteracja 1). Pierwszy widok przepięty na katalog ról w całości: 81 deklaracji czyta
         // dziś rolę z Themes/Typography.axaml, a cztery pozostają lokalne Z POWODEM ZAPISANYM W MIEJSCU —
         // dwa znaki 9 px (katalog nie ma roli o tej wartości) i dwa znaki 12 px dobrane do przycisku 18×18
@@ -186,7 +189,9 @@ public class DesignTokenComplianceTests
     {
         ["Views/SessionManagerTabView.axaml"] = 9,
         ["Views/TraceMonitorTabView.axaml"] = 6,
-        ["Views/DataImportTabView.axaml"] = 4,
+        // M2c iteracja 2: 4 → 0. Wszystkie cztery to `CornerRadius="3"` na kontenerach (siatka typów,
+        // siatka mapowania, ramka podglądu, ramka podglądu DDL) — czyli dokładnie `Radius.Surface`,
+        // jedyna grupa, którą krok 0 dopuścił do migracji (§18.0.5/2). Wpis usunięty.
         ["Views/PerformancePanelView.axaml"] = 4,
         ["Views/ForeignKeyDialog.axaml"] = 3,
         ["Views/ConstraintFieldDialog.axaml"] = 2,

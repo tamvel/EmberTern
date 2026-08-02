@@ -3275,3 +3275,84 @@ i z powodem; pod R12 to jest **wynik**, nie reszta do wyzerowania.
 zweryfikowano wobec `Typography.axaml` skryptem (`{DynamicResource}` **nie rzuca** przy literówce —
 pułapka #14 z handovera §8.2, największe ryzyko sweepu), a aplikację uruchomiono.
 ⚠ **Porównanie wizualne w obu motywach należy do QA użytkownika** — narzędzia headless go nie dają.
+
+---
+
+### §18.2 Iteracja 2 — `DataImportTabView` (2026-08-02)
+
+> **Zakres:** `Views/DataImportTabView.axaml` — 82 `FontSize` + **4 `CornerRadius`** (pierwsze spotkanie
+> etapu z promieniem). `FontFamily` 2 nietknięte.
+
+#### §18.2.1 Wynik
+
+| Właściwość | Przed | Po | Usunięte | Na rolę | Zostaje z powodem |
+|---|---|---|---|---|---|
+| `FontSize` | 82 | **4** | **35** | 41 | 4 |
+| `CornerRadius` | 4 | **0** | — | 4 | 0 |
+
+Role: `Text.Application` 22 · `Text.Compact` 18 · `Text.Code` 1 · `Radius.Surface` 4.
+**Ani jedna wartość liczbowa się nie zmieniła.** Wpis `CornerRadius` dla tego pliku **znika z bazy**.
+
+#### §18.2.2 ⭐ Dokładna odwrotność iteracji 1 — i to potwierdza tezę etapu
+
+W debuggerze koszyk A był **pusty**; tutaj jest **największy w całym etapie: 35 wartości po prostu
+usunięto**. Powód jest ten sam, tylko odwrócony — Data Import stoi na **domyślnej** gęstości aplikacji, więc
+`ComboBox` (15) · `CheckBox` (6) · `TextBox` (5) · `Button` (4) · `NumericUpDown` (3) · `RadioButton` (2)
+niosły dokładnie te 12 px, które daje im styl M2b. To są **martwe kopie**, które i tak wygrywały
+z setterem — dowód tezy §2 w jej najczystszej postaci.
+
+⚠ Razem obie iteracje ustalają regułę praktyczną na resztę etapu: **proporcja koszyków wynika z gęstości
+widoku, nie z jego wielkości.** Widok o własnej gęstości → same podmiany; widok domyślny → dużo usunięć.
+
+#### §18.2.3 ⚠⚠ STRAŻNIK LICZY RÓWNIEŻ PROZĘ W KOMENTARZU — dwa z 82 nie były wartościami
+
+`Measure` czyta plik **regexem po surowym tekście**; `WithoutComments` istnieje w tej klasie, ale wyłącznie
+dla skanu `RetiredTokens`. Komentarz z M2b kroku 12 opisywał naprawiony dług **cytując składnię atrybutu**
+i przez to **liczył się jako dwa lokalne `FontSize`** w pliku, w którym ta belka została naprawiona.
+
+⭐ **Złapane dwa razy w jednej iteracji** — bo pierwsza redakcja mojego własnego komentarza do wyjątku
+`DataGrid` popełniła dokładnie ten sam błąd i podniosła licznik z 4 na 8. Oba komentarze przeredagowano tak,
+żeby mówiły „12 px", a nie cytowały atrybutu.
+
+⚠ **Wniosek dla iteracji 3–9: pisząc uzasadnienie wyjątku, NIE cytuj składni atrybutu.** Rozważono zmianę
+`Measure`, żeby pomijała komentarze — **odrzucone**: to zmiana semantyki strażnika dotykająca wszystkich
+baz naraz, a nie sprzątanie w widoku. Zgłoszone jako obserwacja do przeglądu §13.3.
+
+#### §18.2.4 ⛔ `Text.Toolbar` NIE dostała konsumenta, choć tu by pasowała
+
+Pasmo poleceń Data Import (band B) ma **trzy elementy tekstowe przy dokładnie 12 px** — licznik postępu,
+znacznik otwartej transakcji i etykieta pozycji listy profili. To jest wprost definicja roli z §18.0.4
+(„tekst w pasku narzędzi przy 12"), a wartość jest **identyczna**, więc migracja byłaby bezpieczna.
+
+Mimo to poszły na `Text.Application`.
+
+> **Użytkownik, przy odbiorze iteracji 1:** *„`Text.Toolbar` zostawiamy bez zmian. Zostaje bez konsumenta
+> do M3.2 zgodnie z wcześniejszą decyzją. Nie twórz sztucznego użycia tylko po to, żeby rola nie była pusta."*
+
+⚠ **To jest odstępstwo od tablicy ról §18.0.4 i jest świadome** — instrukcja użytkownika jest nadrzędna, a
+M3.2 dostaje pełny obraz: **pasek debuggera pracuje na 11, pasek Data Import na 12.** Dopiero ta para mówi,
+że pytanie „ile mierzy pasek narzędzi w EmberTernie" nie ma dziś jednej odpowiedzi — i że rozstrzygnięcie go
+przez wpisanie roli w jednym z dwóch miejsc **pogłębiłoby** rozjazd zamiast go pokazać.
+
+#### §18.2.5 Cztery wyjątki — wszystkie tego samego rodzaju
+
+Cztery `DataGrid` deklarują **12**, a rolą siatki danych jest `Text.Grid` niosąca **11**. Podmiana zmieniłaby
+liczbę, usunięcie oddałoby wartość domyślnej wielkości okna (14).
+
+⭐ **Zastane, nie wprowadzone: zadeklarowane 12 jest tam w dużej mierze bezczynne.** Style `DataGridCell`
+(11) i `DataGridColumnHeader` (11) wygrywają nad dziedziczeniem, więc **komórki i tak renderują się na 11** —
+deklaracja rządzi tylko tym, czego te dwa style nie obejmują. „W dużej mierze bezczynne" to jednak nie
+„dowodliwie bezczynne", a M2c nie zmienia wyglądu na podstawie prawdopodobieństwa. Powód stoi przy każdej
+z czterech siatek; rozstrzyga przegląd §13.3.
+
+#### §18.2.6 `CornerRadius` — pierwsze zastosowanie ustalenia z kroku 0
+
+Wszystkie cztery wystąpienia to `3` na **kontenerach** (ramka siatki typów, ramka siatki mapowania, ramka
+podglądu po konwersji, ramka podglądu DDL) — czyli dokładnie ta jedna grupa, którą krok 0 dopuścił do
+migracji (§18.0.5/2). Żadnej geometrii ani karty w tym pliku nie ma, więc wpis znika z bazy w całości.
+
+#### §18.2.7 Stan po iteracji 2
+
+Build **0/0** · suite **7087** zielony w trzech partycjach (7000 + 33 + 54) · smoke czysty.
+Liczniki: `FontSize` **519 → 441** · `FontFamily` **81** (poza zakresem) · `CornerRadius` **37 → 33**.
+Wszystkie użyte klucze ról zweryfikowane wobec `Typography.axaml` / `Tokens.axaml`; aplikacja uruchomiona.

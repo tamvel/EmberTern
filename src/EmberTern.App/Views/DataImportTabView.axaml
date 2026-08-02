@@ -62,13 +62,13 @@
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
       <DockPanel LastChildFill="True">
 
-        <TextBlock DockPanel.Dock="Right" Text="{Binding Timer.ElapsedDisplay}" FontSize="11"
+        <TextBlock DockPanel.Dock="Right" Text="{Binding Timer.ElapsedDisplay}" FontSize="{DynamicResource Text.Compact.Size}"
                    FontFamily="Consolas,Menlo,monospace" Margin="8,0,4,0" VerticalAlignment="Center"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    IsVisible="{Binding Timer.IsRunning}" />
 
         <!-- The live counters sit beside the timer, so "what is happening" reads as one thing. -->
-        <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressText}" FontSize="12"
+        <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressText}" FontSize="{DynamicResource Text.Application.Size}"
                    Margin="8,0" VerticalAlignment="Center"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    IsVisible="{Binding IsRunning}" />
@@ -91,14 +91,14 @@
                indistinguishable from a profile that has gone missing. -->
           <TextBlock Text="{x:Static app:UiStrings.ImportProfileLabel}" Classes="field-label"
                      VerticalAlignment="Center" Margin="0" />
-          <ComboBox x:Name="ProfilePicker" MinWidth="170" VerticalAlignment="Center" FontSize="12"
+          <ComboBox x:Name="ProfilePicker" MinWidth="170" VerticalAlignment="Center"
                     ItemsSource="{Binding Profiles}"
                     SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
                     IsEnabled="{Binding IsConfigurationEnabled}"
                     ToolTip.Tip="{Binding ProfileScopeNote}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="vm:ImportProfileRowViewModel">
-                <TextBlock Text="{Binding Display}" FontSize="12" />
+                <TextBlock Text="{Binding Display}" FontSize="{DynamicResource Text.Application.Size}" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
@@ -181,7 +181,7 @@
                   IsVisible="{Binding Report.TransactionLeftOpen}" />
 
           <TextBlock Text="{x:Static app:UiStrings.ImportTransactionOpenMarker}"
-                     VerticalAlignment="Center" FontSize="12"
+                     VerticalAlignment="Center" FontSize="{DynamicResource Text.Application.Size}"
                      Foreground="{DynamicResource WarningBrush}"
                      ToolTip.Tip="{x:Static app:UiStrings.ImportTransactionOpenMarkerTooltip}"
                      IsVisible="{Binding Report.TransactionLeftOpen}" />
@@ -214,7 +214,7 @@
           <TextBlock Text="{x:Static app:UiStrings.ImportTransactionLabel}" Classes="field-label"
                      VerticalAlignment="Center" Margin="0" />
           <ComboBox x:Name="TransactionModePicker" SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="170"
-                    VerticalAlignment="Center" FontSize="12"
+                    VerticalAlignment="Center"
                     IsEnabled="{Binding IsConfigurationEnabled}"
                     ToolTip.Tip="{Binding TransactionModeDescription}">
             <ComboBoxItem Content="{x:Static app:UiStrings.ImportTransactionManual}" />
@@ -225,7 +225,7 @@
           <TextBlock Text="{x:Static app:UiStrings.ImportErrorPolicyLabel}" Classes="field-label"
                      VerticalAlignment="Center" Margin="0" />
           <ComboBox SelectedIndex="{Binding ErrorPolicyIndex, Mode=TwoWay}" MinWidth="180"
-                    VerticalAlignment="Center" FontSize="12"
+                    VerticalAlignment="Center"
                     IsEnabled="{Binding IsConfigurationEnabled}">
             <ComboBoxItem Content="{x:Static app:UiStrings.ImportErrorPolicyStop}" />
             <ComboBoxItem Content="{x:Static app:UiStrings.ImportErrorPolicySkip}" />
@@ -271,7 +271,7 @@
                         </MultiBinding>
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
-                    <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Title}" FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
               </DataTemplate>
@@ -280,7 +280,7 @@
         </StackPanel>
 
         <!-- When everything is green the strip collapses to one line (§3.2). -->
-        <TextBlock Text="{Binding Readiness.Summary}" Classes="subtle" FontSize="12"
+        <TextBlock Text="{Binding Readiness.Summary}" Classes="subtle" FontSize="{DynamicResource Text.Application.Size}"
                    IsVisible="{Binding !Readiness.HasItems}" />
 
         <!-- The findings — CAPPED (U6). Bound to VisibleItems, never Items: the cap is the VM's decision and
@@ -304,7 +304,7 @@
                   </controls:SvgIcon>
                   <!-- The message carries the severity colour too, exactly as MessageBanner does — the
                        whole point of the shared map is that a finding reads the same wherever it shows. -->
-                  <TextBlock Text="{Binding Message}" FontSize="12" TextWrapping="Wrap" MaxWidth="900">
+                  <TextBlock Text="{Binding Message}" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap" MaxWidth="900">
                     <TextBlock.Foreground>
                       <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                         <Binding Path="BrushKey" />
@@ -323,7 +323,7 @@
                 IsVisible="{Binding Readiness.HasHiddenItems}"
                 ToolTip.Tip="{x:Static app:UiStrings.ImportReadyExpandTooltip}"
                 Command="{Binding Readiness.ToggleExpandedCommand}">
-          <TextBlock Text="{Binding Readiness.MoreText}" Classes="subtle" FontSize="12" />
+          <TextBlock Text="{Binding Readiness.MoreText}" Classes="subtle" FontSize="{DynamicResource Text.Application.Size}" />
         </Button>
       </StackPanel>
     </Border>
@@ -340,7 +340,7 @@
                        Content="{x:Static app:UiStrings.ImportSourceFile}"
                        IsChecked="{Binding UseFile, Mode=TwoWay}" VerticalAlignment="Center" />
           <TextBox Grid.Column="1" x:Name="SourcePathBox" Text="{Binding FilePath, Mode=TwoWay}"
-                   IsEnabled="{Binding UseFile}" FontSize="12" VerticalAlignment="Center" />
+                   IsEnabled="{Binding UseFile}" VerticalAlignment="Center" />
           <Button Grid.Column="2" Classes="icon" VerticalAlignment="Center"
                   IsEnabled="{Binding UseFile}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportSourceBrowseTooltip}"
@@ -367,7 +367,7 @@
               <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="14" Height="14"
                                 VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
               <TextBlock Text="{x:Static app:UiStrings.ImportFormatOptionsHeader}"
-                         FontSize="12" VerticalAlignment="Center" />
+                         FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
         </Grid>
@@ -376,11 +376,11 @@
              so they share one subtle row instead of two full-height ones. For the clipboard the facts carry the
              READ TIME, which is what tells the user whether a live source is current. -->
         <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !IsExpanded}">
-          <TextBlock Text="{Binding SourceFacts}" Classes="subtle" FontSize="11"
+          <TextBlock Text="{Binding SourceFacts}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                      IsVisible="{Binding SourceFacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-          <TextBlock Text="·" Classes="subtle" FontSize="11"
+          <TextBlock Text="·" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                      IsVisible="{Binding SourceFacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-          <TextBlock Text="{Binding SummaryText}" Classes="subtle" FontSize="11"
+          <TextBlock Text="{Binding SummaryText}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                      TextTrimming="CharacterEllipsis" />
         </StackPanel>
 
@@ -407,7 +407,7 @@
               <ComboBox Grid.Column="1" ItemsSource="{Binding Sheets}"
                         SelectedItem="{Binding SelectedSheet, Mode=TwoWay}"
                         DisplayMemberBinding="{Binding Name}"
-                        HorizontalAlignment="Left" MinWidth="220" FontSize="12" />
+                        HorizontalAlignment="Left" MinWidth="220" />
             </Grid>
 
             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
@@ -418,15 +418,15 @@
               <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8"
                           IsVisible="{Binding SupportsDelimiters}">
                 <ComboBox ItemsSource="{Binding DelimiterOptions}" SelectedItem="{Binding Delimiter, Mode=TwoWay}"
-                          DisplayMemberBinding="{Binding Display}" Width="110" FontSize="12" />
+                          DisplayMemberBinding="{Binding Display}" Width="110" />
                 <CheckBox Content="{x:Static app:UiStrings.ImportAutoDetectLabel}"
-                          IsChecked="{Binding AutoDetectDelimiter, Mode=TwoWay}" FontSize="11"
+                          IsChecked="{Binding AutoDetectDelimiter, Mode=TwoWay}" FontSize="{DynamicResource Text.Compact.Size}"
                           VerticalAlignment="Center" />
               </StackPanel>
 
               <!-- The evidence behind the proposal — an automat that explains itself earns trust. -->
               <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DelimiterEvidence}"
-                         Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                         Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                          IsVisible="{Binding DelimiterEvidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
               <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static app:UiStrings.ImportEncodingLabel}"
@@ -435,14 +435,14 @@
               <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8"
                           IsVisible="{Binding SupportsEncoding}">
                 <ComboBox ItemsSource="{Binding EncodingOptions}" SelectedItem="{Binding Encoding, Mode=TwoWay}"
-                          DisplayMemberBinding="{Binding Display}" Width="110" FontSize="12" />
+                          DisplayMemberBinding="{Binding Display}" Width="110" />
                 <CheckBox Content="{x:Static app:UiStrings.ImportAutoDetectLabel}"
-                          IsChecked="{Binding AutoDetectEncoding, Mode=TwoWay}" FontSize="11"
+                          IsChecked="{Binding AutoDetectEncoding, Mode=TwoWay}" FontSize="{DynamicResource Text.Compact.Size}"
                           VerticalAlignment="Center" />
               </StackPanel>
 
               <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding EncodingEvidence}"
-                         Classes="subtle" FontSize="11" TextWrapping="Wrap"
+                         Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                          IsVisible="{Binding EncodingEvidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </Grid>
 
@@ -451,42 +451,42 @@
               <TextBlock Text="{x:Static app:UiStrings.ImportQuoteLabel}" Classes="field-label"
                          VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding QuoteOptions}" SelectedItem="{Binding Quote, Mode=TwoWay}"
-                        DisplayMemberBinding="{Binding Display}" Width="70" FontSize="12" />
+                        DisplayMemberBinding="{Binding Display}" Width="70" />
               <TextBlock Text="{x:Static app:UiStrings.ImportLineEndingLabel}" Classes="field-label"
                          VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding LineEndingOptions}" SelectedItem="{Binding LineEnding, Mode=TwoWay}"
-                        DisplayMemberBinding="{Binding Display}" Width="90" FontSize="12" />
+                        DisplayMemberBinding="{Binding Display}" Width="90" />
             </StackPanel>
 
             <!-- Row window: header flag and the first/last row bounds describe one thing. -->
             <StackPanel Orientation="Horizontal" Spacing="8">
               <CheckBox Content="{x:Static app:UiStrings.ImportHasHeaderLabel}"
-                        IsChecked="{Binding HasHeader, Mode=TwoWay}" FontSize="12"
+                        IsChecked="{Binding HasHeader, Mode=TwoWay}"
                         VerticalAlignment="Center" />
               <TextBlock Text="{x:Static app:UiStrings.ImportFirstDataRowLabel}"
                          Classes="field-label" VerticalAlignment="Center" />
               <NumericUpDown Value="{Binding FirstDataRow, Mode=TwoWay}"
-                             Minimum="1" Increment="1" Width="90" FontSize="12" FormatString="0" />
+                             Minimum="1" Increment="1" Width="90" FormatString="0" />
               <TextBlock Text="{x:Static app:UiStrings.ImportLastRowLabel}"
                          Classes="field-label" VerticalAlignment="Center" />
-              <TextBox Text="{Binding LastRowText, Mode=TwoWay}" Width="100" FontSize="12"
+              <TextBox Text="{Binding LastRowText, Mode=TwoWay}" Width="100"
                        PlaceholderText="{x:Static app:UiStrings.ImportLastRowPlaceholder}" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding SupportsDelimiters}">
               <CheckBox Content="{x:Static app:UiStrings.ImportTrimWhitespaceLabel}"
-                        IsChecked="{Binding TrimWhitespace, Mode=TwoWay}" FontSize="12"
+                        IsChecked="{Binding TrimWhitespace, Mode=TwoWay}"
                         VerticalAlignment="Center" />
               <TextBlock Text="{x:Static app:UiStrings.ImportNullTokenLabel}" Classes="field-label"
                          VerticalAlignment="Center" />
-              <TextBox Text="{Binding NullToken, Mode=TwoWay}" Width="110" FontSize="12"
+              <TextBox Text="{Binding NullToken, Mode=TwoWay}" Width="110"
                        PlaceholderText="{x:Static app:UiStrings.ImportNullTokenPlaceholder}" />
             </StackPanel>
 
             <!-- The spreadsheet's own value question: a date cell is a NUMBER plus a date format, and nothing
                  else distinguishes it (I0 / R3). Turning this off shows the raw Excel serial. -->
             <CheckBox Content="{x:Static app:UiStrings.ImportDatesAsDatesLabel}"
-                      IsChecked="{Binding DatesAsDates, Mode=TwoWay}" FontSize="12"
+                      IsChecked="{Binding DatesAsDates, Mode=TwoWay}"
                       IsVisible="{Binding SupportsSheets}" />
           </StackPanel>
           </Border>
@@ -502,24 +502,24 @@
                          Classes="field-label" VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding DecimalSeparatorOptions}"
                         SelectedItem="{Binding DecimalSeparator, Mode=TwoWay}"
-                        DisplayMemberBinding="{Binding Display}" Width="80" FontSize="12" />
+                        DisplayMemberBinding="{Binding Display}" Width="80" />
               <TextBlock Text="{x:Static app:UiStrings.ImportThousandsSeparatorLabel}"
                          Classes="field-label" VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding ThousandsSeparatorOptions}"
                         SelectedItem="{Binding ThousandsSeparator, Mode=TwoWay}"
-                        DisplayMemberBinding="{Binding Display}" Width="90" FontSize="12" />
+                        DisplayMemberBinding="{Binding Display}" Width="90" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="8">
               <TextBlock Text="{x:Static app:UiStrings.ImportDateOrderLabel}"
                          Classes="field-label" VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding DateOrderOptions}" SelectedItem="{Binding DateOrder, Mode=TwoWay}"
-                        DisplayMemberBinding="{Binding Display}" Width="150" FontSize="12" />
+                        DisplayMemberBinding="{Binding Display}" Width="150" />
               <TextBlock Text="{x:Static app:UiStrings.ImportDateSeparatorLabel}"
                          Classes="field-label" VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding DateSeparatorOptions}"
                         SelectedItem="{Binding DateSeparator, Mode=TwoWay}"
-                        DisplayMemberBinding="{Binding Display}" Width="80" FontSize="12" />
+                        DisplayMemberBinding="{Binding Display}" Width="80" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -527,7 +527,7 @@
                          Classes="field-label" VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding TimeSeparatorOptions}"
                         SelectedItem="{Binding TimeSeparator, Mode=TwoWay}"
-                        DisplayMemberBinding="{Binding Display}" Width="80" FontSize="12" />
+                        DisplayMemberBinding="{Binding Display}" Width="80" />
             </StackPanel>
           </StackPanel>
           </Border>
@@ -558,7 +558,7 @@
           <RadioButton Grid.Row="0" Grid.Column="0" GroupName="ImportTargetKind"
                        Content="{x:Static app:UiStrings.ImportTargetExistingTable}"
                        IsChecked="{Binding IsExistingTable, Mode=TwoWay}"
-                       VerticalAlignment="Center" FontSize="12" />
+                       VerticalAlignment="Center" />
 
           <controls:SearchableComboBox Grid.Row="0" Grid.Column="1" x:Name="TargetPicker"
                                        ItemsSource="{Binding Tables}"
@@ -572,18 +572,18 @@
                     Content="{x:Static app:UiStrings.ImportTargetEmptyFirst}"
                     ToolTip.Tip="{x:Static app:UiStrings.ImportTargetEmptyFirstTooltip}"
                     IsVisible="{Binding IsExistingTable}"
-                    IsChecked="{Binding EmptyBeforeImport, Mode=TwoWay}" FontSize="12" />
+                    IsChecked="{Binding EmptyBeforeImport, Mode=TwoWay}" />
 
           <RadioButton Grid.Row="1" Grid.Column="0" GroupName="ImportTargetKind"
                        Content="{x:Static app:UiStrings.ImportTargetNewTable}"
                        IsChecked="{Binding IsNewTable, Mode=TwoWay}"
-                       VerticalAlignment="Center" FontSize="12" />
+                       VerticalAlignment="Center" />
 
           <TextBox Grid.Row="1" Grid.Column="1" x:Name="NewTableNameBox"
                    Text="{Binding NewTableName, Mode=TwoWay}"
                    IsEnabled="{Binding IsNewTable}"
                    PlaceholderText="{x:Static app:UiStrings.ImportTargetNewTableWatermark}"
-                   HorizontalAlignment="Left" MinWidth="360" FontSize="12" />
+                   HorizontalAlignment="Left" MinWidth="360" />
 
           <!-- ⚠ §0.5: the CREATE is committed before the first row (gotcha #213), so this is the only
                way to undo it — and it is off by default, like every option that destroys something. -->
@@ -591,13 +591,13 @@
                     Content="{x:Static app:UiStrings.ImportNewTableDropOnFailure}"
                     ToolTip.Tip="{x:Static app:UiStrings.ImportNewTableDropOnFailureTooltip}"
                     IsVisible="{Binding IsNewTable}"
-                    IsChecked="{Binding DropTableOnFailure, Mode=TwoWay}" FontSize="12" />
+                    IsChecked="{Binding DropTableOnFailure, Mode=TwoWay}" />
 
           <!-- „Show DDL" moved to the Table types panel with the preview it toggles — a toggle in one band
                and the thing it reveals in another is how a control stops looking connected to anything. -->
         </Grid>
 
-        <TextBlock Text="{Binding FactsText}" Classes="subtle" FontSize="11"
+        <TextBlock Text="{Binding FactsText}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                    TextTrimming="CharacterEllipsis"
                    IsVisible="{Binding FactsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
@@ -641,12 +641,12 @@
                      Classes="group-header" VerticalAlignment="Center" Margin="0" />
           <!-- ⭐ Always visible (§3.4): the number of rows the types rest on. REK-7 makes that the WHOLE
                source, and a type is worth exactly as much as the evidence behind it. -->
-          <TextBlock Grid.Column="1" Text="{Binding InferenceBasisText}" Classes="subtle" FontSize="12"
+          <TextBlock Grid.Column="1" Text="{Binding InferenceBasisText}" Classes="subtle" FontSize="{DynamicResource Text.Application.Size}"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </Grid>
 
         <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportNewTableEmpty}"
-                   Classes="subtle" FontSize="12" TextWrapping="Wrap" MaxWidth="560"
+                   Classes="subtle" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap" MaxWidth="560"
                    HorizontalAlignment="Center" VerticalAlignment="Top"
                    IsVisible="{Binding !HasNewColumns}" />
 
@@ -657,7 +657,7 @@
              a Stretch-aligned control that cannot use its space gets CENTRED in it, so the grid floated with
              blank bands above and below while every property looked correct. -->
         <Border Grid.Row="1" IsVisible="{Binding HasNewColumns}"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}">
             <Grid RowDefinitions="Auto,*">
 
               <Grid Grid.Row="0" ColumnSpacing="8" Margin="8,5"
@@ -707,20 +707,20 @@
                           <ColumnDefinition Width="{Binding $parent[ItemsControl].((vm:ImportTargetSectionViewModel)DataContext).HasPerColumnBasis, Converter={x:Static conv:BoolToStarWidthConverter.Instance}, ConverterParameter=3}" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="12" />
+                        <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" />
 
                         <ComboBox Grid.Column="1" ItemsSource="{Binding TypeOptions}"
                                   SelectedItem="{Binding Type, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch" FontSize="12" />
+                                  HorizontalAlignment="Stretch" />
 
                         <!-- Size and Scale are enabled by the SHARED FieldTypeRules, so "does VARCHAR
                              take a length" has one answer app-wide (§4.6). -->
                         <NumericUpDown Grid.Column="2" Value="{Binding Size, Mode=TwoWay}"
                                        IsEnabled="{Binding IsSizeEnabled}" ShowButtonSpinner="False"
-                                       Minimum="1" FormatString="0" FontSize="12" />
+                                       Minimum="1" FormatString="0" />
                         <NumericUpDown Grid.Column="3" Value="{Binding Scale, Mode=TwoWay}"
                                        IsEnabled="{Binding IsScaleEnabled}" ShowButtonSpinner="False"
-                                       Minimum="0" FormatString="0" FontSize="12" />
+                                       Minimum="0" FormatString="0" />
 
                         <!-- ⚠ Wyśrodkowany w poziomie: dosunięty do lewej zostawiał po prawej pustkę,
                              którą użytkownik odczytał jako „kolumna NULL ma bardzo dużo wolnego miejsca". -->
@@ -736,7 +736,7 @@
                              nothing about what is available — the text is one hover away, and §0.6 is
                              about the evidence being reachable, not about it being the widest thing on
                              screen. -->
-                        <TextBlock Grid.Column="5" Text="{Binding Basis}" FontSize="11"
+                        <TextBlock Grid.Column="5" Text="{Binding Basis}" FontSize="{DynamicResource Text.Compact.Size}"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                    ToolTip.Tip="{Binding Basis}"
                                    IsVisible="{Binding $parent[ItemsControl].((vm:ImportTargetSectionViewModel)DataContext).HasPerColumnBasis}"
@@ -770,7 +770,7 @@
     <Grid Grid.Column="2" x:Name="MappingPanel" Margin="12,8" DataContext="{Binding Mapping}" x:DataType="vm:ImportMappingPanelViewModel">
 
       <TextBlock Text="{x:Static app:UiStrings.ImportMappingEmpty}"
-                 Classes="subtle" FontSize="12" MaxWidth="560"
+                 Classes="subtle" FontSize="{DynamicResource Text.Application.Size}" MaxWidth="560"
                  HorizontalAlignment="Center" VerticalAlignment="Top" TextWrapping="Wrap"
                  IsVisible="{Binding !HasTarget}" />
 
@@ -785,23 +785,23 @@
         <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,6">
           <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportMappingTitle}"
                      Classes="group-header" VerticalAlignment="Center" Margin="0" />
-          <TextBlock Grid.Column="1" Text="{Binding Headline}" Classes="subtle" FontSize="12"
+          <TextBlock Grid.Column="1" Text="{Binding Headline}" Classes="subtle" FontSize="{DynamicResource Text.Application.Size}"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-          <Button Grid.Column="2" Classes="flat" FontSize="12"
+          <Button Grid.Column="2" Classes="flat"
                   Content="{x:Static app:UiStrings.ImportMappingMatchByPosition}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportMappingMatchByPositionTooltip}"
                   Command="{Binding MatchByPositionCommand}" />
-          <Button Grid.Column="3" Classes="flat" FontSize="12"
+          <Button Grid.Column="3" Classes="flat"
                   Content="{x:Static app:UiStrings.ImportMappingClear}"
                   Command="{Binding ClearMappingCommand}" />
-          <CheckBox Grid.Column="4" VerticalAlignment="Center" FontSize="12"
+          <CheckBox Grid.Column="4" VerticalAlignment="Center"
                     Content="{x:Static app:UiStrings.ImportMappingOnlyUnmapped}"
                     IsChecked="{Binding ShowOnlyUnmapped, Mode=TwoWay}" />
         </Grid>
 
         <!-- The grid. Orientation is TARGET → SOURCE: the target column is the side with requirements
              (NOT NULL, a type, a length); the source field is the choice (§3.5). -->
-        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
+        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}">
           <Grid RowDefinitions="Auto,*">
 
             <!-- Column captions. Same proportions as the rows below, so they stay aligned. -->
@@ -826,9 +826,9 @@
                     <!-- Target column. A required column says so, because leaving it unmapped BLOCKS the
                          import rather than merely warning. -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding TargetColumnName}" FontSize="12" VerticalAlignment="Center"
+                      <TextBlock Text="{Binding TargetColumnName}" FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center"
                                  TextTrimming="CharacterEllipsis" />
-                      <TextBlock Text="*" FontSize="12" VerticalAlignment="Center"
+                      <TextBlock Text="*" FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center"
                                  Foreground="{DynamicResource ErrorBrush}"
                                  IsVisible="{Binding IsRequired}" />
                     </StackPanel>
@@ -845,37 +845,37 @@
                                 SelectedItem="{Binding SelectedOption, Mode=TwoWay}"
                                 DisplayMemberBinding="{Binding Display}"
                                 IsEnabled="{Binding IsPickerEnabled}"
-                                HorizontalAlignment="Stretch" FontSize="12" />
+                                HorizontalAlignment="Stretch" />
                       <CheckBox Grid.Column="1"
                                 Content="{x:Static app:UiStrings.ImportMappingUnlockIdentity}"
                                 IsChecked="{Binding IsIdentityUnlocked, Mode=TwoWay}"
                                 IsVisible="{Binding NeedsIdentityOverride}"
                                 ToolTip.Tip="{Binding LockReason}"
-                                FontSize="11" VerticalAlignment="Center" />
+                                FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                       <!-- Origin, in the debugger's ValueOrigin vocabulary: "matched" is quiet because it
                            rests on a provable fact; "assumed" is an ACCENT — worth a look, not an error. -->
-                      <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="11"
+                      <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="{DynamicResource Text.Compact.Size}"
                                  VerticalAlignment="Center" FontStyle="Italic"
                                  Foreground="{DynamicResource SubtleForegroundBrush}"
                                  IsVisible="{Binding IsAutomatic}" />
-                      <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="11"
+                      <TextBlock Grid.Column="2" Text="{Binding OriginText}" FontSize="{DynamicResource Text.Compact.Size}"
                                  VerticalAlignment="Center" FontWeight="SemiBold"
                                  Foreground="{DynamicResource AccentBrush}"
                                  IsVisible="{Binding IsAssumed}" />
                     </Grid>
 
-                    <TextBlock Grid.Column="2" Text="{Binding TypeText}" FontSize="12"
+                    <TextBlock Grid.Column="2" Text="{Binding TypeText}" FontSize="{DynamicResource Text.Application.Size}"
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                Foreground="{DynamicResource SubtleForegroundBrush}" />
 
                     <!-- The note: either why the column is locked, or what the planner said about it.
                          Both are reasons, and a blocked control without one is a UX defect (§9.1.3). -->
-                    <TextBlock Grid.Column="3" FontSize="11" VerticalAlignment="Center"
+                    <TextBlock Grid.Column="3" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center"
                                TextWrapping="Wrap"
                                Text="{Binding LockReason}"
                                Foreground="{DynamicResource SubtleForegroundBrush}"
                                IsVisible="{Binding !IsPickerEnabled}" />
-                    <TextBlock Grid.Column="3" FontSize="11" VerticalAlignment="Center"
+                    <TextBlock Grid.Column="3" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center"
                                TextWrapping="Wrap"
                                Text="{Binding DiagnosticText}"
                                IsVisible="{Binding HasDiagnostic}">
@@ -896,7 +896,7 @@
 
         <!-- The source fields nobody consumes — how "I forgot a column" becomes visible BEFORE the
              import instead of after it. -->
-        <TextBlock Grid.Row="2" Text="{Binding UnusedFieldsText}" Classes="subtle" FontSize="11"
+        <TextBlock Grid.Row="2" Text="{Binding UnusedFieldsText}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                    Margin="0,6,0,0" TextWrapping="Wrap"
                    IsVisible="{Binding HasUnusedFields}" />
       </Grid>
@@ -942,8 +942,14 @@
           <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ImportSourcePreviewTab}">
           <Grid IsVisible="{Binding !IsBottomPanelCollapsed}">
             <TextBlock Text="{x:Static app:UiStrings.ImportSourcePreviewEmpty}"
-                       Classes="subtle" Margin="12,10" FontSize="12"
+                       Classes="subtle" Margin="12,10" FontSize="{DynamicResource Text.Application.Size}"
                        IsVisible="{Binding !PreviewRows.Count}" />
+            <!-- ⚠ WŁASNY rozmiar pisma 12 px na SIATCE zostaje lokalnie, ŚWIADOMIE (M2c iteracja 2, §18.2). Rolą siatki
+                 danych jest `Text.Grid`, ale ta niesie 11, a tu zadeklarowano 12 — podmiana zmieniłaby liczbę,
+                 a usunięcie oddałoby wartość domyślnej wielkości okna (14). ⭐ Zadeklarowane 12 jest tu zresztą
+                 w dużej mierze bezczynne: styl `DataGridCell` (11) i `DataGridColumnHeader` (11) i tak wygrywają
+                 nad dziedziczeniem, więc komórki renderują się na 11. To rozbieżność zastana, nie wprowadzona
+                 przez sweep — rozstrzyga przegląd §13.3. -->
             <DataGrid x:Name="SourcePreviewGrid"
                       ItemsSource="{Binding PreviewRows}"
                       IsVisible="{Binding PreviewRows.Count}"
@@ -973,17 +979,23 @@
           <Grid RowDefinitions="Auto,*" Margin="12,8"
                 DataContext="{Binding ConvertedPreview}" x:DataType="vm:ImportConvertedPreviewViewModel">
 
-            <TextBlock Grid.Row="0" Text="{Binding Headline}" Classes="subtle" FontSize="12"
+            <TextBlock Grid.Row="0" Text="{Binding Headline}" Classes="subtle" FontSize="{DynamicResource Text.Application.Size}"
                        Margin="0,0,0,6" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding HasRows}" />
 
             <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportPreviewEmpty}"
-                       Classes="subtle" FontSize="12" MaxWidth="420" TextWrapping="Wrap"
+                       Classes="subtle" FontSize="{DynamicResource Text.Application.Size}" MaxWidth="420" TextWrapping="Wrap"
                        HorizontalAlignment="Center" VerticalAlignment="Top"
                        IsVisible="{Binding !HasRows}" />
 
-            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}"
                     IsVisible="{Binding HasRows}">
+              <!-- ⚠ WŁASNY rozmiar pisma 12 px na SIATCE zostaje lokalnie, ŚWIADOMIE (M2c iteracja 2, §18.2). Rolą siatki
+                   danych jest `Text.Grid`, ale ta niesie 11, a tu zadeklarowano 12 — podmiana zmieniłaby liczbę,
+                   a usunięcie oddałoby wartość domyślnej wielkości okna (14). ⭐ Zadeklarowane 12 jest tu zresztą
+                   w dużej mierze bezczynne: styl `DataGridCell` (11) i `DataGridColumnHeader` (11) i tak wygrywają
+                   nad dziedziczeniem, więc komórki renderują się na 11. To rozbieżność zastana, nie wprowadzona
+                   przez sweep — rozstrzyga przegląd §13.3. -->
               <DataGrid x:Name="ConvertedPreviewGrid"
                         ItemsSource="{Binding Rows}"
                         IsReadOnly="True"
@@ -1003,8 +1015,14 @@
           <TabItem Classes="bottom-tab" Header="{Binding ConvertedPreview.ProblemsTabHeader}">
           <Grid IsVisible="{Binding !IsBottomPanelCollapsed}">
             <TextBlock Text="{x:Static app:UiStrings.ImportErrorsEmpty}"
-                       Classes="subtle" Margin="12,10" FontSize="12"
+                       Classes="subtle" Margin="12,10" FontSize="{DynamicResource Text.Application.Size}"
                        IsVisible="{Binding !ConvertedPreview.HasProblems}" />
+            <!-- ⚠ WŁASNY rozmiar pisma 12 px na SIATCE zostaje lokalnie, ŚWIADOMIE (M2c iteracja 2, §18.2). Rolą siatki
+                 danych jest `Text.Grid`, ale ta niesie 11, a tu zadeklarowano 12 — podmiana zmieniłaby liczbę,
+                 a usunięcie oddałoby wartość domyślnej wielkości okna (14). ⭐ Zadeklarowane 12 jest tu zresztą
+                 w dużej mierze bezczynne: styl `DataGridCell` (11) i `DataGridColumnHeader` (11) i tak wygrywają
+                 nad dziedziczeniem, więc komórki renderują się na 11. To rozbieżność zastana, nie wprowadzona
+                 przez sweep — rozstrzyga przegląd §13.3. -->
             <DataGrid ItemsSource="{Binding ConvertedPreview.Problems}"
                       IsVisible="{Binding ConvertedPreview.HasProblems}"
                       IsReadOnly="True" AutoGenerateColumns="False" HeadersVisibility="Column"
@@ -1031,13 +1049,13 @@
                 DataContext="{Binding Report}" x:DataType="vm:ImportRunReportViewModel">
 
             <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.ImportReportEmpty}"
-                       Classes="subtle" Margin="12,10" FontSize="12"
+                       Classes="subtle" Margin="12,10" FontSize="{DynamicResource Text.Application.Size}"
                        IsVisible="{Binding !HasReport}" />
 
             <StackPanel Grid.Row="0" Spacing="4" Margin="12,8" IsVisible="{Binding HasReport}">
               <!-- The headline carries the severity colour through the shared MessageBanner table, so the
                    report describes a state the same way every other surface does (§9.3). -->
-              <TextBlock Text="{Binding Headline}" FontSize="12" TextWrapping="Wrap">
+              <TextBlock Text="{Binding Headline}" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap">
                 <TextBlock.Foreground>
                   <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                     <Binding Path="SeverityBrushKey" />
@@ -1046,7 +1064,7 @@
                 </TextBlock.Foreground>
               </TextBlock>
 
-              <TextBlock Text="{Binding Note}" Classes="subtle" FontSize="11" TextWrapping="Wrap"
+              <TextBlock Text="{Binding Note}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                          IsVisible="{Binding HasNote}" />
 
               <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
@@ -1058,16 +1076,22 @@
 
                 <!-- Export goes through the SHARED export framework — CSV / XLSX / clipboard for free,
                      without one line of new serialization (§4.6). -->
-                <Button Classes="flat" FontSize="12"
+                <Button Classes="flat"
                         Content="{x:Static app:UiStrings.ImportReportExport}"
                         IsEnabled="{Binding HasProblems}"
                         Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).ExportReportCommand}" />
-                <Button Classes="flat" FontSize="12"
+                <Button Classes="flat"
                         Content="{x:Static app:UiStrings.ImportReportCopy}"
                         Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).CopyReportCommand}" />
               </StackPanel>
             </StackPanel>
 
+            <!-- ⚠ WŁASNY rozmiar pisma 12 px na SIATCE zostaje lokalnie, ŚWIADOMIE (M2c iteracja 2, §18.2). Rolą siatki
+                 danych jest `Text.Grid`, ale ta niesie 11, a tu zadeklarowano 12 — podmiana zmieniłaby liczbę,
+                 a usunięcie oddałoby wartość domyślnej wielkości okna (14). ⭐ Zadeklarowane 12 jest tu zresztą
+                 w dużej mierze bezczynne: styl `DataGridCell` (11) i `DataGridColumnHeader` (11) i tak wygrywają
+                 nad dziedziczeniem, więc komórki renderują się na 11. To rozbieżność zastana, nie wprowadzona
+                 przez sweep — rozstrzyga przegląd §13.3. -->
             <DataGrid Grid.Row="1" ItemsSource="{Binding Problems}"
                       IsVisible="{Binding HasProblems}"
                       IsReadOnly="True" AutoGenerateColumns="False" HeadersVisibility="Column"
@@ -1111,11 +1135,11 @@
                 DataContext="{Binding Target}" x:DataType="vm:ImportTargetSectionViewModel">
 
             <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.ImportDdlLive}"
-                       Classes="subtle" FontSize="11" Margin="0,0,0,6"
+                       Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" Margin="0,0,0,6"
                        IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
             <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.ImportDdlEmpty}"
-                       Classes="subtle" FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                       Classes="subtle" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap" MaxWidth="480"
                        HorizontalAlignment="Center" VerticalAlignment="Top"
                        IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
 
@@ -1129,13 +1153,13 @@
                  what it is only showing. Line numbers are off: this is one short statement, not a document.
                  Its Text is PUSHED from the VM in code-behind (two-way TextEditor.Text binding is flaky —
                  the same gotcha every other DDL preview works around). -->
-            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+            <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}"
                     IsVisible="{Binding CreateTableSql, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
               <ae:TextEditor x:Name="DdlEditor"
                              ShowLineNumbers="False"
                              IsReadOnly="True"
                              FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                             FontSize="13"
+                             FontSize="{DynamicResource Text.Code.Size}"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
                              Background="{DynamicResource BackgroundBrush}"
@@ -1150,9 +1174,12 @@
 
     <!-- ══ Band H — where the rows land, then the numbers. Never adjectives (§9.1 point 4) ══════ -->
     <!-- ⚠⚠ TA BELKA MA CZYTAĆ SIĘ JAKO JEDNA LINIA, a nie jako pięć elementów obok siebie
-         (zgłoszenie QA, krok 12). Wcześniej każdy element decydował sam: część miała `FontSize="12"`,
-         część `VerticalAlignment="Center"`, a przycisk jeszcze własny padding i `FontSize="11"` —
+         (zgłoszenie QA, krok 12). Wcześniej każdy element decydował sam: część miała własny rozmiar
+         pisma 12 px, część `VerticalAlignment="Center"`, a przycisk jeszcze własny padding i 11 px —
          czyli trzy różne linie bazowe i trzy rozmiary tekstu w jednym pasku.
+         ⚠ Ten komentarz nie zapisuje już tych wartości w składni atrybutu, bo strażnik
+         `DesignTokenComplianceTests` czyta plik regexem i liczył JE TEŻ — dwa fałszywe trafienia
+         w prozie (M2c iteracja 2, §18.2).
          ⭐ Wszystkie te wartości są USUNIĘTE, a nie poprawione: pasmo `chrome` deklaruje teraz
          wyrównanie swoich dzieci, a rola `Text.Status` — ich rozmiar. Wartość lokalna bije setter
          stylu, więc dopóki tu stały, żadna reguła systemu nie mogła tej belki naprawić. -->
