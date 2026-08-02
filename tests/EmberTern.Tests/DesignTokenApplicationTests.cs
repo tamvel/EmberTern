@@ -320,7 +320,9 @@ public sealed class DesignTokenApplicationTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Equal(Token<double>("Size.Control"), plain.MinHeight);
+            // ⚠ `Size.ControlProminent`, not `Size.Control` — step 8 corrected step 5.4's premise after QA:
+            // a button is an ACTION (stands alone, is a mouse target), not a FIELD (stands in a series).
+            Assert.Equal(Token<double>("Size.ControlProminent"), plain.MinHeight);
             Assert.Equal(Token<Thickness>("Pad.Button"), plain.Padding);
             Assert.Equal(Token<double>("Text.Application.Size"), plain.FontSize);
             Assert.Equal(Token<CornerRadius>("Radius.Surface"), plain.CornerRadius);
@@ -396,7 +398,7 @@ public sealed class DesignTokenApplicationTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Equal(Token<double>("Size.Control"), toggle.MinHeight);
+            Assert.Equal(Token<double>("Size.ControlProminent"), toggle.MinHeight);
             Assert.Equal(Token<Thickness>("Pad.Button"), toggle.Padding);
             Assert.Equal(Token<double>("Text.Application.Size"), toggle.FontSize);
 
@@ -567,6 +569,86 @@ public sealed class DesignTokenApplicationTests
                     "entering edit would move the row (§8.4: a control in a cell must never grow it).");
                 w2.Close();
             }
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Steps 8–9 — the ACTION height ladder the user's QA asked for, as one invariant.
+    ///
+    /// <para>⭐ The correction step 8 encodes: step 5.4 gave a button <c>Size.Control</c> (24) on the assumption
+    /// that a button is a control like any other. It is not — a FIELD stands in a series and must align, an
+    /// ACTION stands alone and is a mouse target. So there are two ladders, and the actions' has three rungs:
+    /// toolbar (chrome) &lt; prominent (dialog footer) &lt; primary (main action).</para>
+    ///
+    /// <para>⚠ Written as ordering, not as numbers: the three must stay strictly increasing, which is the whole
+    /// content of "a deliberate hierarchy rather than an accident". It survives a re-tuning of any value.</para>
+    /// </summary>
+    [Fact]
+    public async Task ActionHeights_FormAStrictLadder_AndAToolbarButtonNeverLiftsTheBar()
+    {
+        await _session.Dispatch(() =>
+        {
+            var toolbar = Token<double>("Size.ControlToolbar");
+            var prominent = Token<double>("Size.ControlProminent");
+            var primary = Token<double>("Size.ControlPrimary");
+            var field = Token<double>("Size.Control");
+
+            Assert.True(toolbar < prominent && prominent < primary,
+                $"The action ladder must stay strictly increasing: toolbar {toolbar} < prominent {prominent} < primary {primary}.");
+
+            // A field is NOT on that ladder — it is the other one. If these ever collapse into a single value
+            // the distinction the QA asked for has quietly disappeared.
+            Assert.NotEqual(field, prominent);
+
+            // A dialog footer button takes the prominent rung…
+            var close = new Button { Content = "Close", Classes = { "flat" } };
+            // …while the very same variant inside the toolbar takes the toolbar rung, so the bar keeps one height.
+            var inBar = new Button { Content = "Execute", Classes = { "primary" } };
+            var bar = new Border { Classes = { "toolbar" }, Child = new StackPanel { Children = { inBar } } };
+
+            var window = new Window { Content = new StackPanel { Children = { close, bar } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(prominent, close.MinHeight);
+
+            // ⭐ The QA finding in one assertion: a primary button must not raise the toolbar. The container
+            // declares its children's height — the same mechanism as a grid cell and the Expander header — and
+            // the style that does it MUST be declared after Button.primary or this reverts silently.
+            Assert.Equal(toolbar, inBar.MinHeight);
+            Assert.NotEqual(primary, inBar.MinHeight);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Step 9 — the two list surfaces the QA reported separately ("the Settings category list is too tall and
+    /// its font one step too large", "Saved Queries should be denser") turn out to be one defect:
+    /// <c>ListBoxItem</c> never had a style, so both stood on Fluent.
+    /// </summary>
+    [Fact]
+    public async Task ListRow_AndSearchField_TakeTheirRoles()
+    {
+        await _session.Dispatch(() =>
+        {
+            var list = new ListBox { ItemsSource = new[] { "General", "Editor" } };
+            var search = new TextBox { Classes = { "search" } };
+            var window = new Window { Content = new StackPanel { Children = { list, search } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var row = list.GetVisualDescendants().OfType<ListBoxItem>().First();
+            Assert.Equal(Token<double>("Size.Row.Menu"), row.MinHeight);
+            Assert.Equal(Token<double>("Text.Application.Size"), row.FontSize);
+            Assert.NotEqual(14d, row.FontSize);
+
+            // The search field is the second consumer of the prominent role — which is what makes it a ROLE
+            // and not "a taller button".
+            Assert.Equal(Token<double>("Size.ControlProminent"), search.MinHeight);
+            Assert.Equal(VerticalAlignment.Center, search.VerticalContentAlignment);
 
             window.Close();
         }, default);

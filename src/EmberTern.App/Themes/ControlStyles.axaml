@@ -177,6 +177,62 @@
   </Style>
 
   <!-- ================================================================================================
+       ListBoxItem — Product Polish M2b krok 9, zgłoszenie QA (dwa punkty, jedna przyczyna).
+
+       ⭐ Użytkownik zgłosił to jako DWIE osobne rzeczy — „lista kategorii w Ustawieniach jest zbyt
+       wysoka, a czcionka o stopień za duża" oraz „lista Saved Queries powinna być bardziej zwarta,
+       to nie formularz tylko lista robocza" — a to jest JEDEN defekt: `ListBoxItem` nigdy nie dostał
+       stylu, więc obie listy stały na Fluencie (wysoki wiersz, `FontSize` 14).
+
+       ⭐ Rola dzielona z `ComboBoxItem` i wierszem menu jest tu POPRAWNA, nie oszczędnością (§3.3):
+       pozycja listy, pozycja listy rozwijanej i wiersz menu to ten sam gest — czytasz w pionowej
+       serii i wybierasz jednym kliknięciem.
+
+       ⚠ Pasek boczny jest NIETKNIĘTY i to nie przypadek: ma własny styl `ListBox.sidebar-list
+       ListBoxItem` zadeklarowany w `ListBox.Styles` samego drzewa, a styl bliższy w drzewie bije
+       styl aplikacji. Metadata Explorer jest świadomie poza zakresem tego etapu (decyzja D‑, §2).
+       ================================================================================================ -->
+  <Style Selector="ListBoxItem">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Menu}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.MenuItem}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ================================================================================================
+       Pole WYSZUKIWANIA — Product Polish M2b krok 9, zgłoszenie QA.
+
+       ⭐ To jest drugi konsument `Size.ControlProminent` i powód, dla którego ta rola jest ROLĄ,
+       a nie „wyższym przyciskiem": pole wyszukiwania nie stoi w serii pól formularza — stoi samotnie,
+       jest celem myszy i wpisuje się w nie często. `Size.Control` (24) czytało się w nim jako ciasne.
+       ⚠ `VerticalContentAlignment=Center` jest tu wymagane wprost przez zgłoszenie („idealne
+       wyśrodkowanie tekstu w pionie") i działa, bo `Pad.Control` ma pion zerowy — wysokość daje
+       `MinHeight`, więc tekst ma gdzie się wyśrodkować.
+       ================================================================================================ -->
+  <Style Selector="TextBox.search">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⚠ Odstęp między opcjami jednego wyboru. Zgłoszenie QA: „RadioButtony są ustawione zbyt ciasno
+       pionowo — brakuje oddechu". Przyczyna jest skutkiem kroku 5.1: `RadioButton` stracił wtedy
+       `MinHeight` (słusznie — kontrolka zaznaczenia nie ma własnej wysokości do narzucenia), więc
+       kolejne opcje stykają się swoimi znakami.
+
+       ⚠⚠ SELEKTOR JEST `ItemsControl RadioButton`, A NIE `RadioButton`, I ZŁAPAŁ TO DOPIERO TEST.
+       Pierwsza wersja dawała margines KAŻDEMU `RadioButtonowi` w aplikacji — i natychmiast wywróciła
+       `RadioButton_FitsInsideAGridRow_LikeItsCheckBoxSibling`, czyli niezmiennik RB‑2: margines wchodzi
+       do `DesiredSize`, więc kontrolka przestawała mieścić się w wierszu siatki. Guard z kroku 5.1
+       zadziałał dokładnie tak, jak miał.
+       ⭐ Poprawka jest zarazem trafniejsza semantycznie: rola nazywa odstęp **między OPCJAMI**, a opcja
+       to `RadioButton` będący POZYCJĄ LISTY. Przełącznik stojący samotnie (komórka siatki, pole
+       formularza) nie jest opcją i odstępu nie dostaje. ⚠ `DataGrid` nie jest `ItemsControl`, więc
+       komórki są poza zasięgiem tego selektora z konstrukcji — bez osobnego wyjątku do pamiętania. -->
+  <Style Selector="ItemsControl RadioButton">
+    <Setter Property="Margin" Value="{DynamicResource Margin.OptionGap}" />
+  </Style>
+
+  <!-- ================================================================================================
        Button — Compact Controls (RB‑3, D1) + H‑8, Product Polish M2b krok 5.4.
 
        ⭐ TA KONTROLKA MA JUŻ CZTERY ŚWIADOMIE ZAPROJEKTOWANE WARIANTY (`.icon`, `.flat`, `.primary`,
@@ -197,7 +253,10 @@
        `ButtonBackground` / `ButtonBorderBrush` / `ButtonForeground` jako zasoby (§16.4 niespełnione).
        ================================================================================================ -->
   <Style Selector="Button">
-    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <!-- ⭐ `Size.ControlProminent`, nie `Size.Control` — poprawka z kroku 8 po QA. Przycisk nie jest
+         polem formularza: pole stoi w SERII i ma się wyrównywać, przycisk stoi SAMOTNIE i jest CELEM
+         myszy. Wysokość pola (24) czytała się na stopce dialogu jako „za mały przycisk". -->
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
     <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
@@ -233,7 +292,7 @@
        ta sama pół-przezroczysta biel co w `Button`.
        ================================================================================================ -->
   <Style Selector="ToggleButton">
-    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
     <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
@@ -422,6 +481,9 @@
        a afordancję niesie dopiero najechanie. To jedyny wariant, w którym przycisk nie wygląda jak
        przycisk w stanie spoczynku — i dlatego ma własną, mocniejszą podświetlaną „pastylkę". -->
   <Style Selector="Button.icon">
+    <!-- ⚠ Przycisk ikonowy jest z natury CHROMĄ (pasek narzędzi, akcja w wierszu listy), więc bierze
+         wysokość chromy, a nie stopki dialogu — niezależnie od tego, gdzie akurat stoi. -->
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
@@ -451,6 +513,7 @@
        Override with our blue SelectionBrush so it matches the rest of the
        app's selection / accent visuals. -->
   <Style Selector="ToggleButton.icon">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
@@ -590,6 +653,29 @@
 
   <Style Selector="Button.caption:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <!-- ================================================================================================
+       ⭐⭐ PASEK NARZĘDZI MA JEDNĄ WYSOKOŚĆ — Product Polish M2b krok 8, zgłoszenie QA.
+
+       > „Przycisk może być wizualnie wyróżniony kolorem, ale nie powinien podnosić całego paska."
+
+       ⚠ `Button.primary` (28) stojący w pasku razem z przyciskami ikonowymi (22) rozpychał pasek do
+       swojej wysokości — Execute / Run / Commit „podnosiły" całą chromę i pasek czytał się ciężko.
+       ⭐ Rozwiązanie jest tym samym mechanizmem, którego użyliśmy dla edytora w komórce siatki
+       (§15.6.4) i dla nagłówka `Expandera` (§15.6.9): **KONTENER DEKLARUJE WYSOKOŚĆ SWOICH DZIECI.**
+       Element wypełnia kontener, a nie rozpycha go — niezależnie od tego, jakim jest wariantem.
+
+       ⚠ MUSI STAĆ PO `Button.primary` i po `Button.icon`: przy tej samej trafności wygrywa setter
+       zadeklarowany PÓŹNIEJ, a to właśnie `.primary` ma tu zostać pokonany. ⛔ Nie przenosić wyżej.
+       ⚠ Hierarchię niesie nadal KOLOR (akcent `.primary`) i ikona — traci tylko wysokość, czyli
+       jedyny nośnik, który psuł sąsiadów.
+       ================================================================================================ -->
+  <Style Selector="Border.toolbar Button">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+  </Style>
+  <Style Selector="Border.toolbar ToggleButton">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
   </Style>
 
   <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">

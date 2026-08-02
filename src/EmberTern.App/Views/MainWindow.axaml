@@ -867,6 +867,7 @@
                router (AddCollectionItem…) routed to the active editor's active collection,
                so there are NO per-editor collection bars and no special-case layouts. -->
           <Border Grid.Row="1"
+                  Classes="toolbar"
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,0,0,1"
@@ -916,7 +917,7 @@
                       IsVisible="{Binding ToolbarSep1Visible}" />
 
               <!-- ── SECTION 2 · Main actions (Execute / Compile / Commit / Rollback) ── -->
-              <Button Classes="primary" Padding="10,4"
+              <Button Classes="primary"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteTooltip}"
                       Command="{Binding ExecuteQueryCommand}" IsVisible="{Binding ShowExecuteButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -934,7 +935,7 @@
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}" IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -942,11 +943,11 @@
                       Command="{Binding ActiveTableDetail.DiscardPendingChangesCommand}" IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
                       Command="{Binding ActiveNewTable.CompileCommand}" IsVisible="{Binding IsNewTableTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
                       Command="{Binding ActiveViewDetail.CompileCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -954,7 +955,7 @@
                       Command="{Binding ActiveViewDetail.RevertChangesCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
                       Command="{Binding ActiveProcedureDetail.CompileCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -962,7 +963,7 @@
                       Command="{Binding ActiveProcedureDetail.RevertChangesCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.TriggerCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.TriggerCompileTooltip}"
                       Command="{Binding ActiveTriggerDetail.CompileCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -970,7 +971,7 @@
                       Command="{Binding ActiveTriggerDetail.RevertChangesCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FunctionCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.FunctionCompileTooltip}"
                       Command="{Binding ActiveFunctionDetail.CompileCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -980,7 +981,7 @@
               </Button>
               <!-- Generator: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for a generator tab). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.GeneratorCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.GeneratorCompileTooltip}"
                       Command="{Binding ActiveGeneratorDetail.CompileCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -994,7 +995,7 @@
               </Button>
               <!-- Domain: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for a domain tab). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.DomainCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.DomainCompileTooltip}"
                       Command="{Binding ActiveDomainDetail.CompileCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -1008,7 +1009,7 @@
               </Button>
               <!-- Package: Compile (header then body) / Revert / Delete. Compile
                    auto-commits via the autonomous DDL path, so no Commit/Rollback pair. -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.PackageCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.PackageCompileTooltip}"
                       Command="{Binding ActivePackageDetail.CompileCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -1022,7 +1023,7 @@
               </Button>
               <!-- Exception: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for an exception tab). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ExceptionCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ExceptionCompileTooltip}"
                       Command="{Binding ActiveExceptionDetail.CompileCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>
@@ -1037,7 +1038,7 @@
               <!-- Index: Compile / Revert / Recompute statistics / Delete. Compile auto-commits
                    via the autonomous DDL path, so no Commit/Rollback pair. Delete greys out for
                    constraint-backed indexes (CanDelete = !IsConstraintBacked). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.IndexCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.IndexCompileTooltip}"
                       Command="{Binding ActiveIndexDetail.CompileCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
               </Button>

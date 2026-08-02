@@ -1412,7 +1412,10 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | 5.6 | **`ToggleButton`** | `ce47aa7` | ⏳ oczekuje | §15.6.8 |
 | 5.7 | **`Expander`** + ⭐ alias zasobu (korekta §16.3) | `69ceff6` | ⏳ oczekuje | §15.6.9 |
 | 6 | **`ScrollBar`** (H‑10) | `7ab3d27` | ⏳ oczekuje | §15.7 |
-| 7 | **DataGrid Standard** (§8.4) + `Pad.CellEditor` | — | ⏳ oczekuje | §15.8 |
+| 7 | **DataGrid Standard** (§8.4) + `Pad.CellEditor` | `e95913b` | ⏳ oczekuje | §15.8 |
+| 8 | ⭐ **dwie drabiny wysokości** + pasek jednej wysokości | — | ⏳ oczekuje | §15.9.1 |
+| 9 | **Ustawienia jako panel referencyjny** | — | ⏳ oczekuje | §15.9.2 |
+| 10 | **Data Import** — proporcje kolumn | — | ⏳ oczekuje | §15.9.3 |
 
 **Krok 5 (kontrolki bazowe) — ZAKOŃCZONY.**
 ✅ **M2b — WSZYSTKIE KROKI DOSTARCZONE.** Pozostało **QA wizualne użytkownika** (kroków 5.4–7)
@@ -2250,6 +2253,94 @@ przewijania w kroku 6**, znaleziony przy okazji. Nagłówek i wiersz mają sette
 **nie** trafiają do Bridge'a (§16.3, wiersz czwarty).
 
 Build 0/0; suite **7082** (7000 + 54 + 28); smoke czysty.
+
+### §15.9 Kroki 8–10 — runda po QA użytkownika (proporcje Design Systemu)
+
+> **Werdykt wyjściowy:** *„M2b jest bardzo dużym krokiem do przodu… Natomiast właśnie teraz, kiedy
+> większość kontrolek została ujednolicona, ujawniły się miejsca wymagające dopracowania."*
+>
+> ⭐ To jest **§15.6.4a w skali całego etapu**: uspokojenie kontrolek podniosło głośność proporcji,
+> których wcześniej nie było widać. Użytkownik ratyfikował też ramę tej rundy — **Ustawienia są
+> panelem referencyjnym**: proporcje dopracowuje się tam, a potem przenosi na resztę, bo inaczej
+> „M2c utrwali drobne niedoskonałości w setkach miejsc".
+
+#### §15.9.1 ⭐⭐ Krok 8 — DWIE DRABINY WYSOKOŚCI ZAMIAST JEDNEJ (korekta kroku 5.4)
+
+> **Użytkownik:** *„nie wszystkie przyciski w aplikacji powinny mieć identyczną wysokość"* —
+> toolbar (niskie) · zwykłe przyciski formularzy (trochę wyższe) · główna akcja dialogu (najwyższa).
+
+**Krok 5.4 przyjął milczące założenie, że przycisk jest kontrolką jak każda inna, i dał mu
+`Size.Control` (24) — czyli wysokość POLA FORMULARZA. To założenie było błędne** i QA nazwało je
+precyzyjniej, niż zrobiłby to katalog: **pole stoi w SERII i ma się wyrównywać; przycisk stoi
+SAMOTNIE i jest CELEM MYSZY.** To dwie różne wielkości, które przypadkiem zbiegły się na 24.
+
+| Drabina | Rola | px | Kto |
+|---|---|---|---|
+| **POLA** | `Size.Control` | 24 | `TextBox`, `ComboBox`, `NumericUpDown` w formularzu |
+| **AKCJE** | `Size.ControlToolbar` | **22** | przycisk w pasku narzędzi (chroma) |
+| | `Size.ControlProminent` | **26** | stopka dialogu: Close, Cancel, OK |
+| | `Size.ControlPrimary` | 28 | akcja główna: Execute, Import |
+
+⚠ **D1 NIE JEST ZMIENIONE.** 24 / 22 / 28 znaczą dokładnie to samo co przedtem; doszła jedna nowa
+liczba (26) i **przypisanie ról, o które D1 nie pytało**.
+⭐ `Size.ControlProminent` jest **rolą, a nie „wyższym przyciskiem"**, i dowodzi tego drugi konsument
+**innego rodzaju**: pole wyszukiwania (§15.9.2). Gdyby konsument był jeden, byłaby to wartość.
+
+**⚠⚠ Pasek narzędzi: KONTENER DEKLARUJE WYSOKOŚĆ SWOICH DZIECI.** Zgłoszenie: *„przycisk może być
+wizualnie wyróżniony kolorem, ale nie powinien podnosić całego paska"* — `Button.primary` (28) stojąc
+obok przycisków ikonowych (22) rozpychał chromę do swojej wysokości. ⭐ Rozwiązanie to **trzecie
+wystąpienie tego samego mechanizmu w tym etapie**: edytor w komórce siatki (§15.6.4), nagłówek
+`Expandera` (§15.6.9), teraz pasek — *element wypełnia kontener, a nie rozpycha go*. Hierarchię niesie
+dalej **kolor i ikona**; traci tylko wysokość, czyli jedyny nośnik, który psuł sąsiadów.
+⚠ Styl `Border.toolbar Button` **musi stać po** `Button.primary` — to właśnie `.primary` ma tu zostać
+pokonany. Trzeci raz w etapie, gdy kolejność deklaracji jest treścią, a nie porządkiem.
+
+#### §15.9.2 Krok 9 — Ustawienia jako panel referencyjny
+
+**⭐ Dwa zgłoszenia okazały się JEDNYM defektem.** *„Lista kategorii w Ustawieniach jest zbyt wysoka,
+a czcionka o stopień za duża"* i *„lista Saved Queries powinna być bardziej zwarta — to nie formularz,
+tylko lista robocza"* mają wspólną przyczynę: **`ListBoxItem` nigdy nie dostał stylu**, więc obie listy
+stały na Fluencie (wysoki wiersz, `FontSize` 14). Jeden styl, oba ekrany.
+⭐ Rola dzielona z `ComboBoxItem` i wierszem menu jest tu **poprawna** (§3.3): pozycja listy, pozycja
+listy rozwijanej i wiersz menu to **ten sam gest** — czytasz w pionowej serii, wybierasz jednym
+kliknięciem. ⚠ Pasek boczny jest nietknięty **z konstrukcji**: ma własny styl w `ListBox.Styles`
+swojego drzewa, a styl bliższy w drzewie bije styl aplikacji. Metadata Explorer zostaje poza etapem.
+
+**Pole wyszukiwania** (Ustawienia + Global Search) — `Size.ControlProminent` + wyśrodkowanie w pionie.
+⚠ Wyśrodkowanie **działa dlatego, że `Pad.Control` ma pion zerowy**: wysokość daje `MinHeight`, więc
+tekst ma się gdzie wyśrodkować. To ta sama decyzja z kroku 5.2, tu spłacona.
+
+**⚠⚠ RadioButton — pierwsza wersja poprawki WYWRÓCIŁA RB‑2 i złapał to test.**
+Zgłoszenie *„brakuje oddechu"* jest skutkiem kroku 5.1: `RadioButton` stracił wtedy `MinHeight`
+(słusznie), więc kolejne opcje stykają się znakami. Pierwsza wersja dała margines **każdemu**
+`RadioButtonowi` — a margines wchodzi do `DesiredSize`, więc kontrolka natychmiast przestała mieścić
+się w wierszu siatki i `RadioButton_FitsInsideAGridRow_LikeItsCheckBoxSibling` zaświecił się na
+czerwono. ⭐ **Guard z kroku 5.1 zadziałał dokładnie tak, jak miał — trzy iteracje po tym, jak
+powstał.**
+⭐ Poprawka (`ItemsControl RadioButton`) jest zarazem **trafniejsza semantycznie**: rola nazywa odstęp
+między **OPCJAMI**, a opcja to przełącznik będący **pozycją listy**. Przełącznik stojący samotnie
+(komórka siatki, pole formularza) nie jest opcją. ⚠ `DataGrid` nie jest `ItemsControl`, więc komórki
+są poza zasięgiem **z konstrukcji** — bez osobnego wyjątku do zapamiętania.
+⭐ Nowa rola `Margin.OptionGap` = `0,0,0,4`; nie da się jej złożyć z `Margin.FieldGap` (`0,0,0,8`),
+bo tamta rozdziela **pola**, a opcje jednego wyboru mają czytać się jako **jedna grupa**.
+
+#### §15.9.3 ⭐ Krok 10 — Data Import: przyczyna była OBOK zgłoszenia
+
+Zgłoszone trzy rzeczy: kolumna `NULL` ma dużo wolnego miejsca, `Type` nie mieści nazw typów,
+a najważniejsza `Column` ma za mało miejsca.
+
+**⭐⭐ Przyczyna dwóch ostatnich jest jedna i leży gdzie indziej: kolumna `Basis` jest UKRYTA, ale jej
+`ColumnDefinition` dalej mierzy `3*`.** Przy imporcie bez per-kolumnowej podstawy **jedna trzecia
+siatki stała pusta**, a `Column` i `Type` gniotły się w reszcie. ⚠ To **trzecie wystąpienie tej samej
+prawdy w tym projekcie**: *kontener, którego dzieci są zwinięte, NADAL JEST MIERZONY* — dokładnie to
+zostawiło puste wcięcie po znaku w pasku tytułu podczas sprintu brandingowego. Różnica: `IsVisible`
+nie istnieje na `ColumnDefinition`, więc **reagować musi sama szerokość**.
+⭐ Stąd `BoolToStarWidthConverter` — w **warstwie widoku**, bo `GridLength` jest typem Avalonii,
+a reguła architektury #1 trzyma je poza VM. VM podaje `bool`; zamiana na szerokość to prezentacja.
+⚠ Proporcje przy okazji: `3*,2*` → **`4*,3*`**, `NULL` `50` → **`Auto` z `MinWidth` 40** i checkbox
+**wyśrodkowany** (dosunięty do lewej zostawiał pustkę, którą użytkownik odczytał jako szerokość).
+
+Build 0/0; suite **7084** (7000 + 54 + 30); smoke czysty.
 
 ---
 

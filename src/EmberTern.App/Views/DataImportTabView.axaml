@@ -3,6 +3,7 @@
              xmlns:app="clr-namespace:EmberTern.App"
              xmlns:controls="clr-namespace:EmberTern.App.Controls"
              xmlns:vm="clr-namespace:EmberTern.App.ViewModels"
+             xmlns:conv="clr-namespace:EmberTern.App.Converters"
              xmlns:ae="using:AvaloniaEdit"
 
              x:Name="ImportRoot"
@@ -659,8 +660,20 @@
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
             <Grid RowDefinitions="Auto,*">
 
-              <Grid Grid.Row="0" ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,5"
+              <Grid Grid.Row="0" ColumnSpacing="8" Margin="8,5"
                     Background="{DynamicResource ChromeStrongBrush}">
+                <!-- ⚠⚠ Szerokość kolumny "Basis" MUSI reagować na jej widoczność. Ukryty TextBlock znika,
+                     ale ColumnDefinition dalej mierzy swoje 3* — zgłoszenie QA („kolumna Column ma za mało
+                     miejsca") miało przyczynę OBOK: przy imporcie bez per-kolumnowej podstawy jedna trzecia
+                     siatki stała pusta. ColumnDefinition nie ma `IsVisible`, więc reaguje sama szerokość. -->
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="4*" />
+                  <ColumnDefinition Width="3*" />
+                  <ColumnDefinition Width="62" />
+                  <ColumnDefinition Width="62" />
+                  <ColumnDefinition Width="Auto" MinWidth="40" />
+                  <ColumnDefinition Width="{Binding HasPerColumnBasis, Converter={x:Static conv:BoolToStarWidthConverter.Instance}, ConverterParameter=3}" />
+                </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableColumnName}"
                            Classes="field-label" Margin="0" />
                 <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.ImportNewTableColumnType}"
@@ -670,7 +683,7 @@
                 <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.ImportNewTableColumnScale}"
                            Classes="field-label" Margin="0" />
                 <TextBlock Grid.Column="4" Text="{x:Static app:UiStrings.ImportNewTableColumnNullable}"
-                           Classes="field-label" Margin="0" />
+                           Classes="field-label" Margin="0" HorizontalAlignment="Center" />
                 <!-- ⭐ The caption goes with its cells. When every column shares one basis it is said once on
                      the section's line above, and a column header naming an empty column would be exactly the
                      kind of thing that reads as a control with nothing behind it. -->
@@ -683,7 +696,16 @@
                 <ItemsControl x:Name="NewTableColumnRows" ItemsSource="{Binding NewColumns}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ImportNewTableColumnRowViewModel">
-                      <Grid ColumnDefinitions="3*,2*,60,60,50,3*" ColumnSpacing="8" Margin="8,3">
+                      <Grid ColumnSpacing="8" Margin="8,3">
+                        <!-- ⚠ Identyczna definicja jak w nagłówku — obie muszą się zgadzać co do znaku. -->
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="4*" />
+                          <ColumnDefinition Width="3*" />
+                          <ColumnDefinition Width="62" />
+                          <ColumnDefinition Width="62" />
+                          <ColumnDefinition Width="Auto" MinWidth="40" />
+                          <ColumnDefinition Width="{Binding $parent[ItemsControl].((vm:ImportTargetSectionViewModel)DataContext).HasPerColumnBasis, Converter={x:Static conv:BoolToStarWidthConverter.Instance}, ConverterParameter=3}" />
+                        </Grid.ColumnDefinitions>
 
                         <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="12" />
 
@@ -700,8 +722,10 @@
                                        IsEnabled="{Binding IsScaleEnabled}" ShowButtonSpinner="False"
                                        Minimum="0" FormatString="0" FontSize="12" />
 
+                        <!-- ⚠ Wyśrodkowany w poziomie: dosunięty do lewej zostawiał po prawej pustkę,
+                             którą użytkownik odczytał jako „kolumna NULL ma bardzo dużo wolnego miejsca". -->
                         <CheckBox Grid.Column="4" IsChecked="{Binding IsNullable, Mode=TwoWay}"
-                                  VerticalAlignment="Center" />
+                                  VerticalAlignment="Center" HorizontalAlignment="Center" />
 
                         <!-- ⭐ "Basis" answers "where did that type come from" — and for a mixed column
                              (R19, the measured norm) it names the value and the row that decided it, so

@@ -123,6 +123,14 @@
        ⚠ Poziom 6, a nie 8: krawędź edytora nie ma dociskać tekstu do krawędzi komórki. -->
   <Thickness x:Key="Pad.CellEditor">6,0</Thickness>
 
+  <!-- ⭐ DOPISANE W M2b, kroku 9 — zgłoszenie QA: „RadioButtony są ustawione zbyt ciasno pionowo".
+       Rola: odstęp POD opcją jednego wyboru (`RadioButton`, `CheckBox` w liście opcji).
+       ⚠ Nie da się jej złożyć z `Margin.FieldGap` (`0,0,0,8`): tamta rozdziela POLA FORMULARZA,
+       a opcje jednego wyboru mają czytać się jako JEDNA grupa — 8 px rozbiłoby ją na cztery osobne
+       wiersze. Ten sam kierunek (dół, jeden właściciel), o stopień ciaśniej, bo to ta sama decyzja
+       użytkownika, nie dwie sąsiadujące. -->
+  <Thickness x:Key="Margin.OptionGap">0,0,0,4</Thickness>
+
   <!-- ══════════════════════════════════════════════════════════════════════════════════════════
        WYSOKOŚCI KONTROLEK (§5, decyzja D1 — ratyfikowana, nie podlega zmianie w tym etapie).
 
@@ -137,6 +145,35 @@
   <!-- Akcja główna: `Button.primary` — Execute, Start debugging, Import. Wyższa nie dla ozdoby:
        to jedyny sygnał hierarchii, który działa też wtedy, gdy kolor niesie już inne znaczenie. -->
   <x:Double x:Key="Size.ControlPrimary">28</x:Double>
+
+  <!-- ⭐⭐ DOPISANE W M2b, kroku 8 — po QA użytkownika, który nazwał brakującą część systemu:
+       „nie wszystkie przyciski w aplikacji powinny mieć identyczną wysokość".
+
+       ⭐ TO SĄ DWIE NIEZALEŻNE DRABINY, nie jedna. Krok 5.4 zakładał, że przycisk jest kontrolką
+       jak każda inna, i dał mu `Size.Control` (24) — czyli wysokość POLA FORMULARZA. QA pokazało,
+       że przycisk nie jest polem: pole stoi w SERII i ma się wyrównywać, przycisk stoi SAMOTNIE
+       i jest CELEM MYSZY. Dlatego:
+
+           POLA (seria, wyrównanie)      →  Size.Control            24
+           AKCJE (cel, hierarchia)       →  Size.ControlToolbar     22   chroma
+                                            Size.ControlProminent   26   stopka dialogu
+                                            Size.ControlPrimary     28   akcja główna
+
+       ⚠ D1 (24 / 22 / 28) NIE JEST ZMIENIONE — te trzy liczby dalej znaczą to samo. Doszła jedna
+       nowa (26) i jedno przypisanie ról, o które D1 nie pytało. -->
+
+  <!-- Akcja w pasku narzędzi. ⚠ Rola istnieje po to, żeby pasek miał JEDNĄ wysokość niezależnie od
+       tego, jaki wariant przycisku w nim stoi: przycisk może być wyróżniony kolorem, ale nie ma
+       prawa PODNIEŚĆ paska (zgłoszenie QA — `Button.primary` w toolbarze robił dokładnie to).
+       Ta sama zasada co przy edytorze w komórce: element wypełnia kontener, nie rozpycha go. -->
+  <x:Double x:Key="Size.ControlToolbar">22</x:Double>
+
+  <!-- Kontrolka SAMOTNA, w którą użytkownik celuje świadomie i często: przycisk stopki dialogu
+       (Close, Cancel, OK) oraz pole wyszukiwania. ⚠ Nie jest to „większe `Size.Control`" — to inna
+       rola: `Size.Control` opisuje kontrolkę stojącą w SERII, gdzie liczy się wyrównanie i gęstość,
+       a ta opisuje kontrolkę stojącą SAMOTNIE, gdzie liczy się wygoda trafienia. Dwaj konsumenci
+       różnego rodzaju (przycisk i pole tekstowe) byli znani w chwili dodania. -->
+  <x:Double x:Key="Size.ControlProminent">26</x:Double>
 
   <!-- Wiersz siatki danych i edytor w komórce. -->
   <x:Double x:Key="Size.Row.Grid">22</x:Double>

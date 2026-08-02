@@ -23,7 +23,7 @@
 
     <StackPanel Grid.Row="1" Margin="20,18" Spacing="10">
       <TextBlock Text="{x:Static app:UiStrings.GlobalSearchTermLabel}" Classes="field-label" />
-      <TextBox x:Name="TermBox" Text="{Binding Term}"
+      <TextBox x:Name="TermBox" Classes="search" Text="{Binding Term}"
                PlaceholderText="{x:Static app:UiStrings.GlobalSearchTermWatermark}"
                KeyDown="OnTermKeyDown" />
 
