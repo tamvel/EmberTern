@@ -54,8 +54,18 @@ public class DesignTokenComplianceTests
     // untouched one. The negative lookahead excludes a resource reference, so what is left is what the
     // name says: LOCAL VALUES. ⚠ The baselines below were re-measured against this rule, so they are NOT
     // comparable with the ones from M2a — that drop is migration already done, not unrecorded progress.
+    // ⚠⚠ DRUGA POŁOWA TEJ SAMEJ POPRAWKI — dopisana w M2c iteracji 6 (§18.6), po pomiarze.
+    // M2b krok 12 wyłączył z licznika ATRYBUT czytający katalog (`FontSize="{DynamicResource …}"`), ale
+    // drugi człon tego wzorca — STYL LOKALNY W WIDOKU (`<Setter Property="FontSize" Value="…" />`) — był
+    // liczony bezwarunkowo, więc `Value="{DynamicResource Text.Grid.Size}"` liczyło się dokładnie tak samo
+    // jak `Value="11"`. To ten sam defekt i to samo uzasadnienie: licznik ma mierzyć WARTOŚCI LOKALNE,
+    // a setter czytający rolę wartością lokalną nie jest — inaczej plik z lokalnym stylem NIE MOŻE
+    // osiągnąć stanu docelowego, choćby był zmigrowany w całości.
+    // ⭐ Zmiana NIE osłabia strażnika: setter z literałem (`Value="11"`) nadal się liczy, bo lookahead
+    // wyklucza wyłącznie odwołanie do zasobu. Przed M2c żaden setter w `Views/`/`Controls/` nie czytał
+    // katalogu, więc korekta nie rusza ani jednej bazy poza tymi, które ten etap właśnie migruje.
     private static Regex DeclarationOf(string property) =>
-        new($@"\b{property}\s*=(?!=)(?!\s*""{{)|Property\s*=\s*""{property}""", RegexOptions.Compiled);
+        new($@"\b{property}\s*=(?!=)(?!\s*""{{)|Property\s*=\s*""{property}""(?!\s*Value\s*=\s*""{{)", RegexOptions.Compiled);
 
     /// <summary>
     /// State measured on 2026-08-01, at the start of M2a — before any migration. A long list here is the
@@ -73,9 +83,13 @@ public class DesignTokenComplianceTests
         // Zdjęte: TableDetail 27 · TriggerDetail 22 · ViewDetail 20 · PackageDetail 17 · DomainDetail 16
         // · GeneratorDetail 15 · ExceptionDetail 13 · IndexDetail 11.
         ["Views/MainWindow.axaml"] = 26,
-        ["Views/SessionManagerTabView.axaml"] = 26,
-        ["Views/SecurityManagerTabView.axaml"] = 17,
-        ["Views/TraceMonitorTabView.axaml"] = 17,
+        // ⭐ 26 → 4 / 17 → 3 / 17 → 9 (M2c iteracja 6 — monitory). Tu odwrotnie niż w edytorach
+        // obiektów: każdy z tych trzech widoków ma WŁASNE decyzje — pasek segmentowy, karty ostrzeżeń,
+        // koła stanu, kapsuły postępu, nagłówki paneli szczegółów — i stąd wyjątki. Security Manager
+        // trzyma OSIEM nagłówków przy 13 px, dla których katalog ma wyłącznie rolę kodu (§18.0.5/3).
+        ["Views/SessionManagerTabView.axaml"] = 4,
+        ["Views/SecurityManagerTabView.axaml"] = 9,
+        ["Views/TraceMonitorTabView.axaml"] = 3,
         ["Views/ExecuteProcedureDialog.axaml"] = 9,
         ["Views/AddFieldDialog.axaml"] = 8,
         ["Views/ForeignKeyDialog.axaml"] = 8,
@@ -196,6 +210,9 @@ public class DesignTokenComplianceTests
     /// </summary>
     private static readonly Dictionary<string, int> CornerRadiusBaseline = new(StringComparer.Ordinal)
     {
+        // M2c iteracja 6: bez zmian — wszystkie dziewięć to GEOMETRIA albo KARTA. Koła (10×10 r=5,
+        // 9×9 r=4.5), kapsuła (Height 10, r=5), karty i kontenery przy 4 (`Radius.Surface` niesie 3)
+        // oraz jeden setter resetów przy 0. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). Powody w miejscu.
         ["Views/SessionManagerTabView.axaml"] = 9,
         ["Views/TraceMonitorTabView.axaml"] = 6,
         // M2c iteracja 2: 4 → 0. Wszystkie cztery to `CornerRadius="3"` na kontenerach (siatka typów,
@@ -208,7 +225,6 @@ public class DesignTokenComplianceTests
         ["Views/ForeignKeyDialog.axaml"] = 3,
         ["Views/ConstraintFieldDialog.axaml"] = 2,
         ["Views/IndexDialog.axaml"] = 2,
-        ["Views/SecurityManagerTabView.axaml"] = 2,
         ["Views/AggregationBarView.axaml"] = 1,
         ["Views/CheckConstraintDialog.axaml"] = 1,
         // M2c iteracja 4: bez zmian. W obu bliźniakach to KARTA przy promieniu 4, a `Radius.Surface`

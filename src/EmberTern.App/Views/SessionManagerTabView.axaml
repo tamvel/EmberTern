@@ -16,9 +16,11 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
       <Setter Property="BorderThickness" Value="0" />
+      <!-- ⚠ Promień 0 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to RESET, a nie rola — krok 0
+           ratyfikował, że zeru token nie jest potrzebny (§3.6 handovera). -->
       <Setter Property="CornerRadius" Value="0" />
       <Setter Property="Padding" Value="8,3" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     </Style>
     <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
@@ -31,6 +33,8 @@
     <!-- Detail-panel section header (matches the trace detail) -->
     <Style Selector="TextBlock.section">
       <Setter Property="FontWeight" Value="SemiBold" />
+      <!-- ⚠ 12 px + SemiBold lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6) — rejestr kolizji §18.R/K8.
+           Nagłówek sekcji panelu szczegółów, a rola `Text.SectionHeader` niesie 11. Rozstrzyga §13.3. -->
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Margin" Value="0,0,0,3" />
     </Style>
@@ -41,10 +45,10 @@
     <!-- Session Details key/value label -->
     <Style Selector="TextBlock.kv">
       <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     </Style>
     <Style Selector="TextBlock.kvv">
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     </Style>
   </UserControl.Styles>
 
@@ -52,6 +56,9 @@
     <!-- Shared warning card (Performance-findings shape) — ONE definition, used by the Warnings
          tab AND the scoped warnings in Session Details. -->
     <DataTemplate x:Key="SessionWarningCard" x:DataType="vm:SessionWarningViewModel">
+      <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+           (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+           i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
       <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
         <StackPanel Spacing="4">
@@ -67,24 +74,24 @@
             </controls:SvgIcon>
             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
           </StackPanel>
-          <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" FontSize="12" />
-          <TextBlock Text="{Binding Impact}" TextWrapping="Wrap" FontSize="11"
+          <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Application.Size}" />
+          <TextBlock Text="{Binding Impact}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}"
                      Foreground="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding HasImpact}" />
           <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <TextBlock Text="{Binding}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                <TextBlock Text="{Binding}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="{DynamicResource Text.Compact.Size}"
                            Foreground="{DynamicResource SubtleForegroundBrush}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <StackPanel IsVisible="{Binding HasWhatToCheck}" Margin="0,3,0,0" Spacing="1">
             <TextBlock Text="{x:Static app:UiStrings.SessionManagerWarningWhatToCheck}"
-                       FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                       FontSize="{DynamicResource Text.SectionHeader.Size}" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
             <ItemsControl ItemsSource="{Binding WhatToCheck}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Margin="0,1,0,0" />
+                  <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}" Margin="0,1,0,0" />
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -146,6 +153,9 @@
       <StackPanel Spacing="4">
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <!-- verdict dot (theme brush resolved from the grade key) -->
+          <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+               (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+               i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
           <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center">
             <Border.Background>
               <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -173,6 +183,9 @@
           <Border Width="1" Margin="6,1" Background="{DynamicResource BorderBrush}" />
 
           <!-- filter chips (segmented) -->
+          <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+               (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+               i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
           <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
             <StackPanel Orientation="Horizontal">
               <Button Classes="seg" Classes.active="{Binding IsFilterAll}" Command="{Binding FilterAllCommand}">
@@ -205,7 +218,7 @@
         </StackPanel>
 
         <!-- privilege banner (only when we can see just our own sessions) -->
-        <TextBlock Text="{x:Static app:UiStrings.SessionManagerPrivilegeBanner}" FontSize="11"
+        <TextBlock Text="{x:Static app:UiStrings.SessionManagerPrivilegeBanner}" FontSize="{DynamicResource Text.Compact.Size}"
                    Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"
                    IsVisible="{Binding ShowPrivilegeBanner}" />
       </StackPanel>
@@ -219,7 +232,7 @@
                 ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}"
                 AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
                 CanUserSortColumns="True" CanUserReorderColumns="True"
-                ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="11">
+                ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="{DynamicResource Text.Grid.Size}">
         <DataGrid.ContextMenu>
           <ContextMenu>
             <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuDisconnect}" Icon="{app:MenuIcon Icon.Unplug, Brush=DangerIconBrush}" Command="{Binding DisconnectCommand}" />
@@ -239,6 +252,9 @@
                                   CanUserResize="False" CanUserReorder="False" CanUserSort="False">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:SessionRowViewModel">
+                <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+                     (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+                     i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
                 <Border Width="10" Height="10" CornerRadius="5" HorizontalAlignment="Center" VerticalAlignment="Center"
                         ToolTip.Tip="{Binding HealthTooltip}">
                   <Border.Background>
@@ -272,6 +288,8 @@
         </DataGrid.Columns>
       </DataGrid>
 
+      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
       <TextBlock IsVisible="{Binding ShowSessionsEmpty}" Text="{x:Static app:UiStrings.SessionsEmpty}"
                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
                  Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="13" />
@@ -295,9 +313,9 @@
                     ToolTip.Tip="{x:Static app:UiStrings.SessionManagerGapExplain}">
               <StackPanel Spacing="3">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapCaption}" FontWeight="SemiBold" FontSize="11" />
+                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapCaption}" FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" />
                   <!-- value coloured by severity (grey when healthy — no permanent orange) -->
-                  <TextBlock Text="{Binding GapValueText}" FontSize="11" FontWeight="SemiBold">
+                  <TextBlock Text="{Binding GapValueText}" FontSize="{DynamicResource Text.Compact.Size}" FontWeight="SemiBold">
                     <TextBlock.Foreground>
                       <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                         <Binding Path="GapSeverityBrushKey" />
@@ -305,10 +323,13 @@
                       </MultiBinding>
                     </TextBlock.Foreground>
                   </TextBlock>
-                  <TextBlock Text="{Binding GapStatusText}" FontSize="10"
+                  <TextBlock Text="{Binding GapStatusText}" FontSize="{DynamicResource Text.Caption.Size}"
                              Foreground="{DynamicResource SubtleForegroundBrush}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the fill -->
+                <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+                     (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+                     i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
                 <Border Width="280" Height="10" HorizontalAlignment="Left" CornerRadius="5" ClipToBounds="True"
                         Background="{DynamicResource RowAlternateBrush}">
                   <Border Width="{Binding GapFillWidth}" HorizontalAlignment="Left">
@@ -321,8 +342,10 @@
                   </Border>
                 </Border>
                 <Grid Width="280" HorizontalAlignment="Left">
+                  <!-- ⚠ 9 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): katalog nie ma roli o tej wartości. -->
                   <TextBlock HorizontalAlignment="Left" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
                              Text="{x:Static app:UiStrings.SessionManagerGapScaleMin}" />
+                  <!-- ⚠ 9 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): katalog nie ma roli o tej wartości. -->
                   <TextBlock HorizontalAlignment="Right" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
                              Text="{Binding GapScaleMaxText, StringFormat='GC risk near {0}'}" />
                 </Grid>
@@ -330,11 +353,14 @@
             </Border>
 
             <!-- "Filtered by session N ✕" chip -->
+            <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+                 (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+                 i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
             <Border Grid.Row="1" Background="{DynamicResource SelectionBrush}" CornerRadius="4"
                     Padding="8,3" Margin="6,6,6,0" HorizontalAlignment="Left"
                     IsVisible="{Binding IsSessionFilterActive}">
               <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <TextBlock Text="{Binding SessionFilterText}" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding SessionFilterText}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                 <Button Classes="icon" Padding="2" Command="{Binding ClearSessionFilterCommand}">
                   <controls:SvgIcon Width="11" Height="11" Data="{StaticResource Icon.X}" />
                 </Button>
@@ -346,7 +372,7 @@
                       ItemsSource="{Binding Transactions}" SelectedItem="{Binding SelectedTransaction}"
                       AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
                       CanUserSortColumns="True" CanUserReorderColumns="True"
-                      ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="11">
+                      ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="{DynamicResource Text.Grid.Size}">
               <DataGrid.Columns>
                 <!-- Health: an always-on status dot (never blank), tooltip explains the state —
                      mirrors the Sessions grid so both grids read the same way -->
@@ -354,6 +380,9 @@
                                         CanUserResize="False" CanUserReorder="False" CanUserSort="False">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="vm:TransactionRowViewModel">
+                      <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+                           (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+                           i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
                       <Border Width="10" Height="10" CornerRadius="5" HorizontalAlignment="Center" VerticalAlignment="Center"
                               ToolTip.Tip="{Binding HealthTooltip}">
                         <Border.Background>
@@ -400,6 +429,9 @@
                 <StackPanel Spacing="4">
                   <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerGeneralHeader}" />
                   <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+                         (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+                         i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
                     <Border Width="9" Height="9" CornerRadius="4.5" VerticalAlignment="Center">
                       <Border.Background>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -408,7 +440,7 @@
                         </MultiBinding>
                       </Border.Background>
                     </Border>
-                    <TextBlock Text="{Binding SelectedSession.RiskText}" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding SelectedSession.RiskText}" FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                   <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
                     <TextBlock Grid.Row="0" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColId}" />
@@ -431,7 +463,7 @@
                 <!-- Why it matters (plain-language) -->
                 <StackPanel Spacing="3" IsVisible="{Binding HasSelectedSessionWhyItMatters}">
                   <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerWhyHeader}" />
-                  <TextBlock Text="{Binding SelectedSessionWhyItMatters}" TextWrapping="Wrap" FontSize="11" />
+                  <TextBlock Text="{Binding SelectedSessionWhyItMatters}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}" />
                 </StackPanel>
 
                 <!-- Current statement + integration bridges -->
@@ -449,7 +481,7 @@
                     </Button>
                   </Grid>
                   <TextBox Text="{Binding SelectedSession.CurrentStatement}" IsReadOnly="True" TextWrapping="Wrap"
-                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="{DynamicResource Text.Compact.Size}"
                            Background="{DynamicResource BackgroundBrush}" />
                 </StackPanel>
 
@@ -477,11 +509,11 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TransactionRowViewModel">
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,1">
-                          <TextBlock Text="{Binding TransactionIdText}" FontSize="11" FontWeight="SemiBold"
+                          <TextBlock Text="{Binding TransactionIdText}" FontSize="{DynamicResource Text.Compact.Size}" FontWeight="SemiBold"
                                      FontFamily="Cascadia Code,Consolas,monospace" />
-                          <TextBlock Text="{Binding IsolationText}" FontSize="11" />
-                          <TextBlock Text="{Binding AgeText}" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" />
-                          <TextBlock Text="{Binding GcImpactText, StringFormat='GC {0}'}" FontSize="11"
+                          <TextBlock Text="{Binding IsolationText}" FontSize="{DynamicResource Text.Compact.Size}" />
+                          <TextBlock Text="{Binding AgeText}" FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                          <TextBlock Text="{Binding GcImpactText, StringFormat='GC {0}'}" FontSize="{DynamicResource Text.Compact.Size}"
                                      Foreground="{DynamicResource SubtleForegroundBrush}" />
                         </StackPanel>
                       </DataTemplate>

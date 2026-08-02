@@ -3449,6 +3449,7 @@ idzie dalej. Rejestr jest wejściem do przeglądu §13.3.
 | K5 | 3 | chip wagi ustalenia — promień | 3 | `Radius.Chip` = **4** | `Radius.Surface` (ratyfikowana reguła „każde 3 → Surface") |
 | K6 | 4 | nagłówek karty tabeli w obu bliźniakach | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
 | K7 | 4 | `MinHeight` nagłówka `Expandera` w obu bliźniakach | 26 | `Size.Control` = **24** (przez `ExpanderMinHeight`) | ⛔ lokalnie z powodem |
+| K8 | 6 | `TextBlock.section` — nagłówek panelu szczegółów (Session + Trace) | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
 
 ⚠ **Wzorzec K1/K2/K3/K6 to jedno pytanie zadane cztery razy: ile mierzy pasek narzędzi i ile mierzy
 nagłówek sekcji.** Katalog M2a odpowiedział jedną liczbą na każde; produkt używa dwóch. Rozstrzygnięcie
@@ -3547,3 +3548,75 @@ rolą byłby `Text.Grid`, a nie `Text.Compact`, i pomyłka byłaby niewidoczna. 
 
 Build **0/0** · suite **7087** zielony · smoke czysty.
 Liczniki: `FontSize` **332 → 191** · `FontFamily` **81** · `CornerRadius` **31**.
+
+---
+
+### §18.6 Iteracja 6 — monitory (2026-08-02)
+
+> **Zakres:** `SessionManagerTabView` 26 · `TraceMonitorTabView` 17 · `SecurityManagerTabView` 17 =
+> **60 `FontSize`**, plus **17 `CornerRadius`** — tu siedzi cała geometria etapu.
+
+#### §18.6.1 Wynik
+
+| Plik | `FontSize` | `CornerRadius` |
+|---|---|---|
+| `SessionManagerTabView` | 26 → **4** | 9 → 9 (geometria + karty + reset) |
+| `TraceMonitorTabView` | 17 → **3** | 6 → 6 (j.w.) |
+| `SecurityManagerTabView` | 17 → **9** | 2 → **0** |
+
+44 na role, 16 wyjątków. Wartości bez zmian.
+
+#### §18.6.2 ⭐ Dokładna przeciwwaga iteracji 5 — potwierdza jej wniosek
+
+Iteracja 5 dała **0 wyjątków na 141 pozycjach**, bo osiem edytorów obiektów jest zbudowanych z jednego
+wzorca. Monitory są jej przeciwieństwem: **każdy z tych trzech widoków ma własne decyzje projektowe** —
+pasek segmentowy (`Button.seg`), karty ostrzeżeń, koła stanu, kapsuły postępu, nagłówki paneli szczegółów
+(`TextBlock.section`) — i stąd 16 wyjątków na 60 pozycjach.
+
+⭐ **Ten kontrast jest najlepszym dowodem tezy R12 w całym etapie:** licznik nie mierzy jakości pracy,
+tylko to, ile własnych rozstrzygnięć niesie dany widok. 141 → 0 i 60 → 16 to ta sama robota.
+
+#### §18.6.3 ⚠⚠ POMIAR ZNALAZŁ DEFEKT W SAMYM STRAŻNIKU — druga połowa poprawki z M2b kroku 12
+
+Po migracji `SecurityManagerTabView` licznik dalej pokazywał 10 zamiast 9, a `SessionManager` 7 zamiast 4.
+Przyczyna nie leżała w widoku, tylko w regexie strażnika:
+
+```
+\bFontSize\s*=(?!=)(?!\s*"{)      ← atrybut: odwołanie do zasobu WYŁĄCZONE (M2b krok 12)
+Property\s*=\s*"FontSize"          ← setter: liczony BEZWARUNKOWO
+```
+
+Czyli **`<Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />` liczyło się dokładnie
+tak samo jak `Value="11"`.** To ten sam defekt, który M2b krok 12 naprawił dla atrybutów — i to samo
+uzasadnienie, słowo w słowo: *„counting it identically made the stage's exit condition unreachable"*.
+Plik z lokalnym stylem **nie mógł osiągnąć stanu docelowego**, choćby był zmigrowany w całości.
+
+⭐ **Poprawka to jeden lookahead** (`(?!\s*Value\s*=\s*"{")`), i **nie osłabia strażnika**: setter
+z literałem nadal się liczy. ⚠ Przed M2c żaden setter w `Views/`/`Controls/` nie czytał katalogu, więc
+korekta **nie rusza ani jednej bazy poza tymi, które ten etap właśnie migruje** — sprawdzone pomiarem
+per plik przed i po.
+
+⚠ To trzeci raz w tym etapie, gdy narzędzie pomiarowe okazało się mniej dokładne niż zakładano
+(§18.1.6 liczba testów · §18.2.3 proza w komentarzu · tutaj setter). **Wspólny kształt: licznik mierzył
+COŚ INNEGO niż nazwa sugeruje, i za każdym razem widać to dopiero, gdy migracja dociera do granicy.**
+
+#### §18.6.4 Szesnaście wyjątków — cztery rodzaje
+
+| Rodzaj | Ile | Powód |
+|---|---|---|
+| nagłówki Security Managera przy 13 px | 8 | katalog ma przy 13 wyłącznie rolę kodu (§18.0.5/3) |
+| puste stany przy 13 px (Sessions, Trace) | 2 | j.w. |
+| `TextBlock.section` 12 px SemiBold (Session + Trace) | 2 | rola nagłówka niesie 11 → **K8** |
+| dwa znaki przy 9 px, edytor szczegółu Trace przy 12 px, glif przycisku `Height=18` przy 12 px | 4 | brak roli / gęstość kontenera / element układu |
+
+#### §18.6.5 `CornerRadius` — cała geometria etapu w dwóch plikach
+
+Piętnaście z siedemnastu zostaje, i **wszystkie z tego samego powodu, o którym mówi ratyfikacja
+§18.0.5/2**: koła (`10×10` r=5, `9×9` r=4.5), kapsuły pasków postępu (`Height=10` r=5), karty i kontenery
+przy 4 (gdzie `Radius.Surface` niesie 3) oraz dwa settery resetujące do 0. Migrują **dwa** — obie
+trójki w Security Managerze, w tym jedna jako setter stylu.
+
+#### §18.6.6 Stan po iteracji 6
+
+Build **0/0** · suite **7087** zielony · smoke czysty.
+Liczniki: `FontSize` **191 → 152** · `FontFamily` **81** · `CornerRadius` **31 → 30**.

@@ -27,7 +27,7 @@
         </controls:SvgIcon>
         <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
         <TextBlock Text="{Binding TypeLabel}" VerticalAlignment="Center"
-                   Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="10" />
+                   Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Caption.Size}" />
       </StackPanel>
     </DataTemplate>
   </UserControl.Resources>
@@ -35,7 +35,7 @@
   <UserControl.Styles>
     <Style Selector="DataGridRow"><Setter Property="Height" Value="28" /></Style>
     <Style Selector="DataGridCell"><Setter Property="Padding" Value="6 2" /></Style>
-    <Style Selector="DataGrid"><Setter Property="FontSize" Value="11" /></Style>
+    <Style Selector="DataGrid"><Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" /></Style>
     <!-- Grids with real interactive CheckBoxes need more row height (FluentTheme
          CheckBox is ~22px and gets clipped below ~32 — gotcha #1/#83). -->
     <Style Selector="DataGrid.checkbox-grid DataGridRow"><Setter Property="Height" Value="34" /></Style>
@@ -61,6 +61,9 @@
       <Setter Property="Padding" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
+      <!-- ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). To ELEMENT UKŁADU: rozmiar znaku dobrany
+           do przycisku o `Height="18"`, nie do sąsiedniego tekstu (ta sama zasada co gwiazdki w debuggerze,
+           §18.1.4). Rozstrzyga §13.3. -->
       <Setter Property="FontSize" Value="12" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -68,7 +71,7 @@
     </Style>
     <Style Selector="Button.bulk-glyph:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
-      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
     </Style>
     <!-- Per-row bulk trio lives in the Object cell, revealed only on row hover /
          selection so the grid stays clean at rest (gotcha #35). -->
@@ -95,7 +98,7 @@
                     Command="{Binding Users.RefreshCommand}" />
           </StackPanel>
           <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.SecurityUsersHint}"
-                     Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" Margin="0,0,0,6" />
+                     Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Compact.Size}" Margin="0,0,0,6" />
           <DataGrid Grid.Row="2" ItemsSource="{Binding Users.Items}"
                     SelectedItem="{Binding Users.SelectedUser, Mode=TwoWay}"
                     IsReadOnly="True" CanUserResizeColumns="True" GridLinesVisibility="Horizontal"
@@ -170,10 +173,10 @@
                         ItemTemplate="{StaticResource GranteeOptionTemplate}" />
             </StackPanel>
             <TextBlock DockPanel.Dock="Right" Text="{x:Static app:UiStrings.SecurityMembershipLegend}"
-                       Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" VerticalAlignment="Center" />
+                       Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
           </DockPanel>
           <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.SecurityMembershipHint}"
-                     Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" Margin="0,0,0,6" />
+                     Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Compact.Size}" Margin="0,0,0,6" />
           <DataGrid Grid.Row="2" ItemsSource="{Binding Membership.Rows}"
                     IsReadOnly="True" CanUserResizeColumns="True" CanUserSortColumns="False"
                     GridLinesVisibility="Horizontal" AutoGenerateColumns="False">
@@ -193,7 +196,7 @@
                       </controls:SvgIcon>
                       <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                       <TextBlock Text="{Binding TypeLabel}" VerticalAlignment="Center"
-                                 Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="10" />
+                                 Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Caption.Size}" />
                     </StackPanel>
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
@@ -203,6 +206,8 @@
                   <DataTemplate x:DataType="vm:MembershipRowViewModel">
                     <Button Classes="priv-cell" Command="{Binding CycleCommand}"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityMembershipLegend}">
+                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding State, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -272,7 +277,7 @@
               </Button>
             </StackPanel>
             <TextBlock DockPanel.Dock="Right" Text="{x:Static app:UiStrings.SecurityPrivilegeLegend}"
-                       Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" VerticalAlignment="Center" />
+                       Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
           </DockPanel>
 
           <!-- Privilege matrix (tri-state cells; right-click a row for Grant/Revoke all) -->
@@ -354,6 +359,8 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanSelect}"
                             Command="{Binding CycleCommand}" CommandParameter="S"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
+                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding SelectState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -393,6 +400,8 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanInsert}"
                             Command="{Binding CycleCommand}" CommandParameter="I"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
+                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding InsertState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -432,6 +441,8 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanUpdate}"
                             Command="{Binding CycleCommand}" CommandParameter="U"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
+                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding UpdateState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -471,6 +482,8 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanDelete}"
                             Command="{Binding CycleCommand}" CommandParameter="D"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
+                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding DeleteState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -510,6 +523,8 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanReferences}"
                             Command="{Binding CycleCommand}" CommandParameter="R"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
+                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding ReferencesState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -549,6 +564,8 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanExecute}"
                             Command="{Binding CycleCommand}" CommandParameter="X"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
+                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding ExecuteState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -588,6 +605,8 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanUsage}"
                             Command="{Binding CycleCommand}" CommandParameter="G"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
+                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding UsageState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -606,13 +625,13 @@
 
           <!-- Column-level privileges (Tables category only) -->
           <Border Grid.Row="3" Margin="0,8,0,0" IsVisible="{Binding Privileges.ShowColumnPanel}"
-                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3">
+                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}">
             <Grid RowDefinitions="Auto,Auto">
               <TextBlock Grid.Row="0" Margin="8,6" Classes="field-label"
                          Text="{Binding Privileges.ColumnPanelHeader}" />
               <TextBlock Grid.Row="1" Margin="8,2,8,10"
                          IsVisible="{Binding Privileges.ShowColumnHint}"
-                         Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11"
+                         Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Compact.Size}"
                          Text="{x:Static app:UiStrings.SecurityColumnHint}" />
               <DataGrid Grid.Row="1" Height="150" Classes="checkbox-grid"
                         IsVisible="{Binding Privileges.HasColumnTable}"

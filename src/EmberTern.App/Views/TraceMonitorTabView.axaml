@@ -27,9 +27,11 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
       <Setter Property="BorderThickness" Value="0" />
+      <!-- ⚠ Promień 0 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to RESET, a nie rola — krok 0
+           ratyfikował, że zeru token nie jest potrzebny (§3.6 handovera). -->
       <Setter Property="CornerRadius" Value="0" />
       <Setter Property="Padding" Value="10,3" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     </Style>
     <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
@@ -42,6 +44,8 @@
     <!-- Detail-panel section header -->
     <Style Selector="TextBlock.section">
       <Setter Property="FontWeight" Value="SemiBold" />
+      <!-- ⚠ 12 px + SemiBold lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6) — rejestr kolizji §18.R/K8.
+           Nagłówek sekcji panelu szczegółów, a rola `Text.SectionHeader` niesie 11. Rozstrzyga §13.3. -->
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Margin" Value="0,0,0,3" />
     </Style>
@@ -75,6 +79,9 @@
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <!-- Grouping / lens selector (segmented) -->
+        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+             (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+             i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
         <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
           <StackPanel Orientation="Horizontal">
             <Button Classes="seg" Classes.active="{Binding IsGroupNone}"
@@ -89,6 +96,9 @@
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <!-- Quick filter chips (segmented) -->
+        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+             (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+             i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
         <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
           <StackPanel Orientation="Horizontal">
             <Button Classes="seg" Classes.active="{Binding IsQuickFilterAll}"
@@ -135,6 +145,9 @@
              search field (BackgroundBrush contrasts the ChromeStrong toolbar) so it reads clearly
              as a text input, not another segmented button group. Grouped with the quick chips +
              funnel as the one "filter" zone; distinct from the funnel (structured). -->
+        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+             (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+             i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
         <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1" CornerRadius="4" Height="26" Padding="7,0,6,0" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
@@ -200,20 +213,20 @@
             <!-- Transaction lens: representative statement, then TRA · N stmt · duration -->
             <DataTemplate DataType="vm:TraceTransactionLensItem">
               <StackPanel Spacing="1" Margin="2,3">
-                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" FontSize="11"
+                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource Text.Compact.Size}"
                            FontFamily="Cascadia Code,Consolas,monospace" />
-                <TextBlock Text="{Binding SubText}" FontSize="10" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                <TextBlock Text="{Binding SubText}" FontSize="{DynamicResource Text.Caption.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" />
               </StackPanel>
             </DataTemplate>
             <!-- Statements lens: representative SQL, then ×N (accent) + total · avg · max -->
             <DataTemplate DataType="vm:TraceFingerprintLensItem">
               <StackPanel Spacing="1" Margin="2,3">
-                <TextBlock Text="{Binding Sql}" TextTrimming="CharacterEllipsis" FontSize="11"
+                <TextBlock Text="{Binding Sql}" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource Text.Compact.Size}"
                            FontFamily="Cascadia Code,Consolas,monospace" />
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="{Binding CountText}" FontSize="11" FontWeight="SemiBold"
+                  <TextBlock Text="{Binding CountText}" FontSize="{DynamicResource Text.Compact.Size}" FontWeight="SemiBold"
                              Foreground="{DynamicResource AccentBrush}" />
-                  <TextBlock Text="{Binding MetricsText}" FontSize="10"
+                  <TextBlock Text="{Binding MetricsText}" FontSize="{DynamicResource Text.Caption.Size}"
                              Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
                 </StackPanel>
               </StackPanel>
@@ -231,7 +244,7 @@
                   AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
                   CanUserSortColumns="False" CanUserReorderColumns="True"
                   ColumnWidth="Auto"
-                  GridLinesVisibility="Horizontal" FontSize="11">
+                  GridLinesVisibility="Horizontal" FontSize="{DynamicResource Text.Grid.Size}">
           <DataGrid.ContextMenu>
             <ContextMenu>
               <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnCopyCellClick" />
@@ -320,6 +333,8 @@
         </DataGrid>
 
         <!-- Empty state (no session / waiting / no match) -->
+        <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
+             a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
         <TextBlock IsVisible="{Binding ShowEmptyState}" Text="{Binding EmptyStateText}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
                    Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="13" />
@@ -387,6 +402,9 @@
                 </Panel>
               </Button>
             </Grid>
+            <!-- ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Szczegół Trace to jeden z sześciu edytorów,
+                 które krok 0 zmierzył jako stojące w wierszu siatki — gęstość kontenera, nie dryf (§18.0.5/3).
+                 Rola `Text.Code` niesie 13. Rozstrzyga §13.3. -->
             <ae:TextEditor x:Name="DetailSqlEditor" IsReadOnly="True"
                            FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
                            HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
@@ -400,16 +418,19 @@
             <StackPanel Spacing="10">
 
               <!-- error -->
+              <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+                   (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+                   i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
               <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="4" Padding="8,6"
                       IsVisible="{Binding Detail.HasError}">
                 <TextBlock Text="{Binding Detail.ErrorText}" Foreground="{DynamicResource ErrorBrush}"
-                           TextWrapping="Wrap" FontSize="11" />
+                           TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}" />
               </Border>
 
               <!-- timing -->
               <StackPanel IsVisible="{Binding Detail.HasTiming}">
                 <TextBlock Classes="section" Text="{x:Static app:UiStrings.TraceDetailTiming}" />
-                <TextBlock Text="{Binding Detail.TimingText}" FontSize="11" />
+                <TextBlock Text="{Binding Detail.TimingText}" FontSize="{DynamicResource Text.Compact.Size}" />
               </StackPanel>
 
               <!-- session (who ran this) -->
@@ -419,9 +440,9 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TraceDetailKv">
                       <Grid ColumnDefinitions="86,*" Margin="0,1">
-                        <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="11"
+                        <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="{DynamicResource Text.Compact.Size}"
                                    Foreground="{DynamicResource SubtleForegroundBrush}" />
-                        <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="11"
+                        <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="{DynamicResource Text.Compact.Size}"
                                    TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Value}" />
                       </Grid>
                     </DataTemplate>
@@ -436,10 +457,13 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TableAccessBarViewModel">
                       <Grid ColumnDefinitions="110,160,Auto" Margin="0,2" VerticalAlignment="Center">
-                        <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="11"
+                        <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="{DynamicResource Text.Compact.Size}"
                                    FontFamily="Consolas,Cascadia Code,monospace" TextTrimming="CharacterEllipsis"
                                    ToolTip.Tip="{Binding Table}" Margin="0,0,8,0" VerticalAlignment="Center" />
                         <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the seq/idx split -->
+                        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
+                             (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
+                             i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
                         <Border Grid.Column="1" Width="160" Height="10" CornerRadius="5" ClipToBounds="True"
                                 Background="{DynamicResource RowAlternateBrush}" VerticalAlignment="Center" HorizontalAlignment="Left">
                           <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
@@ -447,7 +471,7 @@
                             <Border Width="{Binding IdxWidth}" Background="{DynamicResource InfoIconBrush}" />
                           </StackPanel>
                         </Border>
-                        <TextBlock Grid.Column="2" Text="{Binding ReadsText}" FontSize="10" Margin="8,0,0,0"
+                        <TextBlock Grid.Column="2" Text="{Binding ReadsText}" FontSize="{DynamicResource Text.Caption.Size}" Margin="8,0,0,0"
                                    Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
                       </Grid>
                     </DataTemplate>
@@ -461,7 +485,7 @@
                 <ItemsControl ItemsSource="{Binding Detail.Parameters}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" />
+                      <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="{DynamicResource Text.Compact.Size}" />
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
