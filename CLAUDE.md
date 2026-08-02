@@ -425,8 +425,28 @@ noted.
 ## Current state
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a user-accepted;
-  ⭐ M2b — 20 ITERATIONS DELIVERED (2026-08-02), including **three post-QA rounds (8–10, 11, 12)**;
-  steps 0–5.3 user-QA'd, **5.4–12 await visual QA**. Next after that QA: **M2c**.**
+  ⭐ M2b — 21 ITERATIONS DELIVERED (2026-08-02), including **four post-QA rounds (8–10, 11, 12, 13)**;
+  steps 0–5.3 user-QA'd, **5.4–13 await visual QA**. Next after that QA: **M2c**.**
+  **⛔⛔ A RULE WRITTEN NEGATIVELY ALWAYS LEAKS — IT LEAKED TWICE AND THE SECOND TIME IT WAS A REGRESSION
+  (§15.12.1).** The base `Button` style carried the ACTION geometry (`MinHeight` + `MinWidth` + `Padding`),
+  i.e. **dialog-footer dimensions imposed on every button in the application**, with every non-action button
+  having to opt out. The sidebar's expander arrow declares its own `Width=20 Height=20`, and **Avalonia clamps
+  `Width` by `MinWidth`** — so the base style silently grew it to 100×28 and it collided with the row's text.
+  ⭐ **The fix reverses the rule's DIRECTION rather than adding a fifth exception:** the geometry now lives on
+  the classes that ARE actions (`.primary`, `.flat` — every dialog footer in this app uses them, verified),
+  and the base style keeps only what is true of every button (font, radius, border, content alignment).
+  ⛔ **Never put `MinHeight`/`MinWidth` back on the base `Button`** — that is the exact setter that broke the
+  tree. Pinned by a test asserting BOTH halves; deleting the rule would satisfy the first half alone.
+  **⭐ A FLOOR ONLY EQUALISES IF IT SITS ABOVE THE NATURAL WIDTH OF THE LABELS IT MEANS TO EQUALISE
+  (§15.12.2).** Measured: `Save` 80 (on the floor) vs `Cancel` 98 (72 text + 24 padding + 2 border) — the
+  whole rest of the render path was identical (base style, both variants, `ContentPresenter`, padding, border,
+  radius, font, content alignment). The floor at 80 was **a dead letter: it looked like a rule and did
+  nothing.** `Size.ActionMinWidth` 80 → 100; measured after: **Save = Cancel = 100×28**. It stays a floor, so
+  a genuinely long label still expands.
+  ⚠ **Three assertions had to be repaired and all three were measuring the wrong subject** — two compared an
+  UNCLASSED button against `.primary` (an unclassed button is deliberately no longer an action), and one read
+  the Bridge's fill off `.flat`, which is deliberately transparent: it was measuring the variant's own setter
+  and calling it proof of the mapping. ⭐ **The witness for a Bridge mapping must be a button with no variant.**
   **⭐⭐ THE ACCEPTANCE CRITERION CHANGED FOR THE REST OF THE STAGE (user, 2026-08-02, §15.11):**
   *Measurement is still mandatory, but it is no longer the goal — it is only a tool. Judge the end of M2b
   by whether it looks like a polished commercial application; if the numbers are right and something still
@@ -3392,15 +3412,15 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7086 as of 2026-08-02
-  (after Product Polish M2b step 12 — the third QA round, +1; 7085 after step 11, +1; 7084 after steps 8–10, +2; 7082 after step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7088 as of 2026-08-02
+  (after Product Polish M2b step 13 — the fourth QA round, +2; 7086 after step 12, +1; 7085 after step 11, +1; 7084 after steps 8–10, +2; 7082 after step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
   step 5.7 — Expander + the alias guard, +2; 7078 after step 5.6 — ToggleButton, +1; 7077 after step 5.5 —
   NumericUpDown, +1; 7076 after step 5.4 — Button, +1; 7075 after step 5.3 — ComboBox, +1; 7074 after step 5.2 — TextBox + FluentBridge, +2; 7072 after step 5.1 — RadioButton, +1; 7071 after step 4 — ToolTip, +1; 7070 after step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
   partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
   segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**7000 + 54 + 32**).
+  three documented partitions (**7000 + 54 + 34**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is

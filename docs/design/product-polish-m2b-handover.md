@@ -1,8 +1,8 @@
 # Product Polish — M2b — dokument startowy sesji
 
-> ## ✅ M2b — 20 ITERACJI DOSTARCZONYCH (2026-08-02), z TRZEMA rundami QA
+> ## ✅ M2b — 21 ITERACJI DOSTARCZONYCH (2026-08-02), z CZTEREMA rundami QA
 >
-> Kroki 0–5.3 odebrane przez użytkownika; **kroki 5.4–12 oczekują QA wizualnego**.
+> Kroki 0–5.3 odebrane przez użytkownika; **kroki 5.4–13 oczekują QA wizualnego**.
 > Po QA następny etap to **M2c** (sweep de‑lokalizacyjny) — ⛔ **nie zaczynać przed QA.**
 >
 > Ten dokument zachowany jako **punkt wejścia w M2b i zapis jego architektury**; sekcja §5
@@ -25,10 +25,10 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ dostarczony** (20 iteracji) |
-| **Następny krok** | ⭐ **QA wizualne kroków 5.4–12**, potem **M2c** |
-| **Ostatni commit** | `b568168` — M2b krok 12 (trzecia runda QA) |
-| **Baseline** | build 0/0; suite **7086** (7000 + 54 + 32); smoke czysty |
+| **Etap** | **M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ dostarczony** (21 iteracji) |
+| **Następny krok** | ⭐ **QA wizualne kroków 5.4–13**, potem **M2c** |
+| **Ostatni commit** | `41e0cec` — M2b krok 13 (czwarta runda QA) |
+| **Baseline** | build 0/0; suite **7088** (7000 + 54 + 34); smoke czysty |
 
 **Specyfikacja etapu (źródło prawdy):** `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`
 **Dokument etapu:** `docs/design/product-polish.md`
@@ -58,9 +58,10 @@
 | 8–10 | ⭐ **runda proporcji po QA** | `e0a59fd` | dwie drabiny wysokości · Ustawienia jako panel referencyjny · kolumny Data Import |
 | 11 | ⭐⭐ **druga runda QA** | `1c7ccc1` | **kolor niesie priorytet, rozmiar nie** · pasma chromy (`Border.chrome`) · bliskość podpisu |
 | 12 | ⭐⭐ **trzecia runda QA** | `b568168` | linia pasma chromy · `Size.ActionMinWidth` · filtry · picker · **korekta znaczenia licznika** |
+| 13 | ⭐⭐ **czwarta runda QA** | `41e0cec` | **reguła przecząca → pozytywna** · regresja strzałki w drzewie · podłoga 80 → 100 |
 
-Kroki 0–5.3 odebrane przez użytkownika; **5.4–12 oczekują QA**.
-Szczegóły: `product-polish.md` §15.1–§15.11.
+Kroki 0–5.3 odebrane przez użytkownika; **5.4–13 oczekują QA**.
+Szczegóły: `product-polish.md` §15.1–§15.12.
 
 ---
 
@@ -143,14 +144,14 @@ przy wczytywaniu).
 
 ## 5. ⛔ Co dalej — i czego NIE robić
 
-**M2b jest dostarczony w całości.** Kolejność: **QA wizualne kroków 5.4–12 → dopiero potem M2c.**
+**M2b jest dostarczony w całości.** Kolejność: **QA wizualne kroków 5.4–13 → dopiero potem M2c.**
 
 > ⭐⭐ **KRYTERIUM ODBIORU (ratyfikowane, §15.11):** *Czy wygląda to jak dopracowana aplikacja
 > komercyjna?* Pomiar jest obowiązkowy jako **narzędzie**, ale ⛔ **zielony test nie jest argumentem
 > końcowym.** Jeśli liczby się zgadzają, a coś wygląda przeciętnie — poprawiamy produkt.
 
 ⛔ **Nie zaczynać M2c przed QA.** M2c usuwa wartości lokalne z **widoków**; jeżeli QA odrzuci którąś
-decyzję kroków 5.4–12, poprawka wróci do `Themes/` — a sweep zrobiony wcześniej trzeba by powtórzyć
+decyzję kroków 5.4–13, poprawka wróci do `Themes/` — a sweep zrobiony wcześniej trzeba by powtórzyć
 na zmienionej podstawie. To jest ta sama zasada, którą §15.6.4a nazwał dla zgłoszeń użytkownika:
 ⛔ **nie strojić do stanu przejściowego.**
 
