@@ -128,14 +128,16 @@ przy wczytywaniu).
    `Radius.Control` **nie istnieje**, a `Margin.MarkGap` tak (drugi konsument był znany od razu).
 4. **Jedna iteracja = jeden commit**, po nim build 0/0, trzy partycje, smoke, uruchomienie aplikacji
    i ocena użytkownika **zanim ruszy następna**.
-5. ⚠ **M2b pracuje w `Themes/` — z JEDNYM wyjątkiem, który sam ma granicę.** Do kroku 7 włącznie
-   etap nie dotknął ani jednego widoku. Runda proporcji (kroki 8–10) dotknęła czterech
-   (`MainWindow` — klasa `toolbar`; `SettingsWindow` i `GlobalSearchDialog` — klasa `search`;
-   `DataImportTabView` — proporcje kolumn) plus jeden konwerter.
-   ⭐ **To NIE jest wejście w M2c i licznik to potwierdza:** M2c usuwa **wartości lokalne**
-   (`FontSize`, `FontFamily`, `CornerRadius`), a te zmiany żadnej nie dodają — dwie *usuwają*
-   (`Padding="10,4"`, `Padding="8,4"` z paska), reszta to nadanie klasy albo układ kolumn.
-   `DesignTokenComplianceTests` przeszedł bez zmiany bazy. **Jeżeli licznik drgnie — to jest M2c.**
+5. ⚠ **M2b pracuje w `Themes/` — z wyjątkiem trzech rund po QA, które musiały sięgnąć do widoków.**
+   Do kroku 7 włącznie etap nie dotknął ani jednego widoku. Rundy 8–10, 11 i 12 dotknęły widoków
+   tam, gdzie **wartość lokalna blokowała regułę systemu** (belka Data Import), gdzie trzeba było
+   **nadać klasę** (`Border.chrome` na ośmiu pasmach, `search` na polach filtra) albo poprawić
+   **układ** (kolumny Data Import, grupowanie podpisu w Global Search).
+   ⭐ **To wciąż NIE jest M2c, i różnicę widać w kierunku licznika:** M2c *usuwa* wartości lokalne —
+   te rundy również ich nie dodały, a `DataImportTabView` spadł **86 → 82**. ⚠ Baza zmieniła się
+   dwukrotnie i oba razy jest to zapisane: raz przez migrację, raz przez **korektę znaczenia
+   licznika** (§15.11.5 — odwołanie do katalogu przestało liczyć się jak dług).
+   **Jeżeli licznik ROŚNIE — to jest dług; jeżeli spada, to jest migracja i trzeba ją zapisać.**
 
 ---
 
