@@ -857,48 +857,10 @@
                   BorderThickness="0,0,0,1"
                   IsVisible="{Binding ShowEditorToolbar}">
             <DockPanel LastChildFill="True">
-              <!-- ⭐⭐ COMMIT / ROLLBACK — PARA TRANSAKCYJNA, DOKOWANA DO PRAWEJ (M3.2a, §19.10).
-                   Jedna para, automatycznie kierowana do otwartego pasa (lane).
-
-                   ⭐ POWÓD NIE JEST WYŁĄCZNIE GEOMETRYCZNY — to podział ZASIĘGU. Do M3.2a para stała
-                   w środku sekcji 2, między poleceniami dokumentu, choć jako jedyna w tej sekcji mówi
-                   o TRANSAKCJI, a nie o edytowanym obiekcie. Ta sama linia podziału, którą M3.1d
-                   poprowadziło w pasku statusu między globalnym chipem transakcji a lokalnym licznikiem
-                   paska edytora SQL — tylko o poziom wyżej, po stronie POLECEŃ zamiast FAKTU.
-
-                   ⚠ Geometrycznie to była największa pojedyncza różnica między rodzajami zakładek:
-                   `ShowTransactionButtons` obejmuje 5 z 12 rodzajów, więc para pojawiała się i znikała
-                   w ŚRODKU paska, przesuwając sekcje 3, 4 i przycisk zamknięcia o 68 px. Zmierzone
-                   Procedure vs Trigger: przy x=212 jedna zakładka miała **Execute**, druga **Comment**.
-
-                   ⚠⚠ KOLEJNOŚĆ DOKOWANIA JEST ZNACZĄCA I DLATEGO TA PARA STOI PRZED LICZNIKIEM CZASU.
-                   `DockPanel` przydziela krawędź w kolejności deklaracji, więc pierwsze zadeklarowane
-                   `Dock="Right"` jest najbardziej wysunięte w prawo i NIC nim później nie rusza.
-                   Odwrotna kolejność dałaby dokładnie ten defekt, który naprawiamy: pojawienie się
-                   licznika przesuwałoby Commit/Rollback w trakcie wykonania zapytania. Licznik jest
-                   biernym odczytem i to on ma pływać.
-
-                   ⛔ To NIE jest przeniesienie Commit/Rollback do paska statusu — tego zabrania §8.4.5
-                   (chip transakcji nigdy nie jest przyciskiem) i punkt 6 listy „czego M3 nie robi".
-                   Para zostaje na pasku narzędzi dokumentu, zmienia się tylko jej zakotwiczenie. -->
-              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6"
-                          Margin="0,4,10,4" VerticalAlignment="Center"
-                          IsVisible="{Binding ShowTransactionButtons}">
-                <Border Width="1" Margin="0,0,4,0" Background="{DynamicResource BorderBrush}" />
-                <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
-                        Command="{Binding CommitAllCommand}">
-                  <controls:SvgIcon Data="{StaticResource Icon.Check}" Foreground="{DynamicResource SuccessIconBrush}" />
-                </Button>
-                <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
-                        Command="{Binding RollbackAllCommand}">
-                  <controls:SvgIcon Data="{StaticResource Icon.Undo}" Foreground="{DynamicResource DangerIconBrush}" />
-                </Button>
-              </StackPanel>
               <!-- Live elapsed timer — a RIGHT-ALIGNED status element (docked right, outside the
                    button StackPanel) so appearing/updating never shifts the toolbar icons. One
                    cohesive "Elapsed: mm:ss.f" while any SQL Editor / Execute Procedure / Execute
-                   Function run is in progress; the final "N ms" is shown by the metrics display.
-                   ⚠ Dokowany PO parze Commit/Rollback, więc wchodzi z ich lewej strony i ich nie rusza. -->
+                   Function run is in progress; the final "N ms" is shown by the metrics display. -->
               <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}"
                          FontSize="{DynamicResource Text.Compact.Size}" FontFamily="Consolas,Menlo,monospace" Margin="8,0,14,0"
                          VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}"
@@ -968,31 +930,26 @@
                    ⚠ Commit / Rollback NIE NALEŻĄ JUŻ DO TEJ SEKCJI — od M3.2a dokują do prawej krawędzi
                    paska jako para transakcyjna (§19.10). Uzasadnienie przy nich samych; tu tylko tyle, że
                    sekcja 2 jest od tej pory czysto DOKUMENTOWA. -->
-              <!-- ⭐⭐ EXECUTE I CANCEL DZIELĄ PODŁOGĘ SZEROKOŚCI — to drugi z dwóch defektów H‑3
-                   i jedyny widoczny W OBRĘBIE JEDNEJ ZAKŁADKI (M3.2a, §19.10).
+              <!-- ⛔⛔ EXECUTE I CANCEL NIE MAJĄ WSPÓLNEJ PODŁOGI SZEROKOŚCI — I TO JEST DECYZJA,
+                   NIE PRZEOCZENIE (M3.2a, §19.11).
 
-                   Oba przyciski wykluczają się wzajemnie (`ShowExecuteButton` = `IsQueryTabActive &&
-                   !IsExecuting`, `ShowCancelButton` = ten sam warunek zanegowany), ale Execute niesie
-                   ikonę + etykietę + CHIP SKRÓTU, a Cancel tylko ikonę + etykietę. ⚠ Zmierzone headless
-                   (`ToolbarStabilityTests`): **Execute 156 px, Cancel 118 px**. Bez wspólnej podłogi
-                   naciśnięcie F5 przesuwało o 38 px całą resztę paska — sekcje 3 i 4 oraz przycisk
-                   zamknięcia — i oddawało ją po zakończeniu zapytania. Czyli układ drgał dokładnie
-                   wtedy, gdy użytkownik patrzy na pasek.
+                   Oba wykluczają się wzajemnie (`ShowExecuteButton` = `IsQueryTabActive &&
+                   !IsExecuting`, `ShowCancelButton` = ten sam warunek zanegowany), a Execute niesie
+                   ikonę + etykietę + CHIP SKRÓTU, Cancel tylko ikonę + etykietę. ⚠ Zmierzone headless:
+                   **Execute 156 px, Cancel 118 px**, więc naciśnięcie F5 przesuwa o 38 px resztę
+                   paska i oddaje ją po zakończeniu zapytania.
 
-                   ⚠⚠ NIE UŻYWAMY TU `Size.ActionMinWidth`, mimo że funkcją to dokładnie ta rola
-                   („podłoga, żeby para przycisków się wyrównała"). Dwa niezależne powody: jej własny
-                   komentarz w `Tokens.axaml` wyklucza chromę wprost (⛔ „Chroma, przycisk ikonowy
-                   i komórka siatki jej NIE biorą"), a jej wartość — 100 — leży PONIŻEJ naturalnych
-                   156 px Execute, więc niczego by nie zrównała. To jest ta sama pułapka, którą tamten
-                   komentarz opisuje na własnym przykładzie (80 przy „Cancel" o naturalnych 98):
-                   ⭐ podłoga działa wyłącznie wtedy, gdy leży POWYŻEJ naturalnej szerokości etykiet,
-                   które ma zrównać. Rejestr kolizji §18.R, wpis K12.
+                   M3.2a wyrównało to wspólną podłogą `MinWidth="156"`. ⛔ **Użytkownik odrzucił to po
+                   obejrzeniu w działającej aplikacji** (2026-08-02): *„Execute nie powinien mieć
+                   sztucznie wymuszonej dużej szerokości. Wygląda ciężko i dominuje toolbar."*
 
-                   ⚠ 156 to wartość lokalna WYLICZONA POMIAREM, nie dobrana na oko, i jest pinowana
-                   z dwóch stron: `ExecuteAndCancel_RenderToTheSameWidth_…` sprawdza sam efekt (obie
-                   szerokości równe), a `ExecuteCancelFloor_CoversBothVariants` pilnuje, żeby liczba
-                   nie zestarzała się po cichu, gdy zmieni się któraś etykieta (#284). -->
-              <Button Classes="primary" MinWidth="156"
+                   ⭐ Powód jest głębszy niż gust: podłoga rozciągała przycisk ponad jego treść, więc
+                   AKCJA GŁÓWNA rosła bez powodu semantycznego — a to jest R5 od drugiej strony
+                   („kolor może określać priorytet akcji, ROZMIAR NIE"). Rozmiar wzięty z wyrównania
+                   czyta się jak deklaracja ważności, której nikt nie zamierzał złożyć.
+
+                   ⛔ Nie przywracać podłogi. Drganie 38 px przy F5 jest ŚWIADOMIE ZAAKCEPTOWANE. -->
+              <Button Classes="primary"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteTooltip}"
                       Command="{Binding ExecuteQueryCommand}" IsVisible="{Binding ShowExecuteButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -1005,7 +962,7 @@
               <!-- ⚠ Lokalne `Padding="10,4"` USUNIĘTE (M3.2a) — nieudokumentowana wartość lokalna bijąca
                    rolę `Pad.Button`, czyli dokładnie ten kształt, który sprzątało M2c. Wysokości nie
                    zmienia: daje ją `Border.chrome Button` przez `Size.ControlToolbar`. -->
-              <Button Classes="flat" MinWidth="156"
+              <Button Classes="flat"
                       Command="{Binding CancelQueryCommand}" IsVisible="{Binding ShowCancelButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}"
@@ -1131,6 +1088,35 @@
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.IndexDeleteTooltip}"
                       Command="{Binding ActiveIndexDetail.DeleteCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
+              </Button>
+              <!-- ⭐⭐ COMMIT / ROLLBACK ZOSTAJĄ TUTAJ, W SEKCJI 2, PRZY EXECUTE — i to jest
+                   ROZSTRZYGNIĘCIE ODEBRANE NA ŻYWO, nie stan zastany (M3.2a, §19.11).
+
+                   M3.2a przeniosło tę parę na prawą krawędź paska: geometrycznie była to największa
+                   pojedyncza różnica między rodzajami zakładek (68 px), a argument zasięgowy brzmiał
+                   dobrze — jako jedyna w sekcji 2 mówi o TRANSAKCJI, nie o edytowanym obiekcie.
+                   ⛔ **Użytkownik odrzucił to po obejrzeniu w działającej aplikacji** (2026-08-02):
+                   *„Commit, Rollback i Execute tworzą jedną logiczną grupę i użytkownik intuicyjnie
+                   ich tam szuka. Po przeniesieniu Commit/Rollback na prawą stronę sam przez chwilę
+                   nie mogłem ich znaleźć."*
+
+                   ⭐ LEKCJA, KTÓRA OBOWIĄZUJE DALEJ: **grupa semantyczna bije stabilność pozycji.**
+                   Rozdzielenie akcji, których użytkownik szuka razem, kosztuje więcej niż przesunięcie
+                   o 68 px — i tego kosztu nie widać w żadnym pomiarze, bo pomiar mierzy piksele, a nie
+                   to, gdzie ktoś odruchowo patrzy. To ten sam kształt, co runda QA ikony debuggera
+                   w M3.1e: wariant wygrywał w każdej mierzonej liczbie i przegrał w wymiarze, którego
+                   nikt nie mierzył.
+
+                   ⛔ Nie przenosić tej pary — ani na prawą krawędź, ani do paska statusu (§8.4.5:
+                   chip transakcji nigdy nie jest przyciskiem). Przesuwanie się paska przy zmianie
+                   rodzaju zakładki jest tu ŚWIADOMIE ZAAKCEPTOWANYM kompromisem. -->
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
+                      Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
+                <controls:SvgIcon Data="{StaticResource Icon.Check}" Foreground="{DynamicResource SuccessIconBrush}" />
+              </Button>
+              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
+                      Command="{Binding RollbackAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep2Visible}" />

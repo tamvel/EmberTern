@@ -39,7 +39,7 @@
 | **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅** (M3.1 odebrane w całości; M3.2a czeka na QA wizualne). ⭐ **M3.1 ZAMKNIĘTE** — cztery sekcje §8.4.3 istnieją. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma już ani jednej bramki przesuwającej cokolwiek |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7136**, zielony w trzech partycjach (**7031 + 51 + 54**) |
+| **Suite** | **7134**, zielony w trzech partycjach (**7031 + 49 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 | **NASTĘPNY KROK** | ⭐⭐ **M3.2b** — §7.5, semantyka kolorów na pasku narzędzi (decyzja **DC** już podjęta: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5**, M3.2b ogranicza się do paska). ⏸ **Wziąć po drodze:** sekcja 3 toolbara jest jedynym znanym pozostałym drganiem *w obrębie jednego dokumentu* (`ShowCollectionEdit` 34 px, blok reorder 73 px, przy przełączaniu pod-zakładek) — zmierzone i świadomie nierozwiązane w M3.2a, bo rezerwacja kosztowałaby ~181 px dziury; zapis w §19.10.3 |
@@ -269,12 +269,10 @@ Zapisane tutaj, żeby były zadane raz i we właściwym momencie.
 
 ### 5.1 ⛔ Rejestr kolizji §18.R — status w M3 (ratyfikowany 2026-08-02)
 
-⭐ **Stan: K1–K12.** M3.2a dopisało **K12** (podłoga pary Execute/Cancel, `MinWidth` 156 vs
-`Size.ActionMinWidth` 100) — pierwszą kolizję, w której rola nie tylko niesie inną liczbę, ale **jawnie
-wyklucza kontekst**, w którym miałaby zadziałać (`Tokens.axaml`: ⛔ *„Chroma, przycisk ikonowy i komórka
-siatki jej NIE biorą"*), a jej wartość leży **poniżej** naturalnej szerokości wyrównywanego przycisku,
-więc przyjęta „dla porządku" byłaby martwym zapisem wyglądającym na regułę (§19.10.4). Wcześniej M3.1d
-dopisało **K11** (chip transakcji, `Spacing` 5 vs `Space.Sm` 6) — pierwszą
+⭐ **Stan: K1–K11.** ⚠ M3.2a dopisało na jedną iterację **K12** (podłoga pary Execute/Cancel) i **wycofało
+je razem z mechanizmem**, gdy użytkownik odrzucił samą podłogę (§19.11) — kolizja bez wartości lokalnej
+nie ma czego rozstrzygać. Wpis w §18.R został jako zapis ustalenia o `Size.ActionMinWidth`, nie jako dług.
+M3.1d dopisało **K11** (chip transakcji, `Spacing` 5 vs `Space.Sm` 6) — pierwszą
 kolizję **spoza M2c** i pierwszą dotyczącą **odstępu**, a nie typografii czy promienia. Rejestr okazał się
 szerszy niż licznik, który go zrodził. ⚠ Różnica 1 px czyni pokusę „weź po prostu rolę" największą właśnie
 tutaj — a wzięcie jej zmieniłoby wygląd **już odebrany przez użytkownika**.
@@ -373,7 +371,7 @@ Pominięta, wpada do partycji głównej: nic nie zawiedzie, ale podział przesta
 To ta sama pułapka, co niedziałające wykluczenie `ContextMenuPresentationTests` (§18.1.6) — tam nazwa
 przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały etap.
 **Stan po M3.2a: `ToolbarStabilityTests` DOPISANY** (konstruuje kontrolki Avalonii); partycje mierzą
-**7031 + 51 + 54 = 7136**.
+**7031 + 49 + 54 = 7134**.
 
 ⭐ **Kryterium, czy nowa klasa idzie do filtra, jest jedno: czy konstruuje kontrolki Avalonii.**
 `TransactionChipTests` (M3.1d) **nie idzie** — pinuje funkcję **statyczną**, więc nie potrzebuje sesji
@@ -456,6 +454,20 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
    czy zmierzona liczba w ogóle mogła wyjść z mierzonego mechanizmu** — zanim uznasz zielony za dowód.
    ⭐ To jest też druga połowa decyzji architektonicznej 2 („kontener rozstrzyga wielkość"): skoro
    kontener rozstrzyga, to test bez właściwego kontenera nie mierzy tej wielkości.
+15. ⭐⭐ **NOWA (M3.2a, §19.11) — GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI.** Odbiór cofnął dwie
+   zmiany, które **działały dokładnie tak, jak zaprojektowano** i wygrywały w jedynej wielkości, jaką
+   H‑3 dało się zmierzyć — w pikselach przesunięcia. Commit/Rollback przeniesione na prawą krawędź
+   miały poprawny argument **zasięgowy**, ale użytkownik nie szuka poleceń według zasięgu, tylko według
+   **sąsiedztwa z akcją, którą właśnie wykonał**; autor zmiany sam ich przez chwilę nie znalazł.
+   Wspólna podłoga Execute/Cancel usuwała drganie, ale rozciągała akcję główną ponad jej treść —
+   ⭐ **R5 od drugiej strony: nieważne, skąd rozmiar pochodzi (z podkreślenia czy z wyrównania), liczy
+   się, co komunikuje.** ⚠ Praktycznie: zanim „ustabilizujesz" układ przesuwając element, sprawdź,
+   z czym tworzy on grupę **w oczach użytkownika**, i policz koszt po tamtej stronie — odpowiedź
+   *„przesuwa się o N px"* jest pełna dopiero razem z *„a czego użytkownik będzie tam szukał"*.
+   ⚠⚠ Drugie dno, metodologiczne: **propozycja przed implementacją zadziałała tylko w połowie.**
+   Wybór wariantu na podstawie pomiaru był właściwym trybem, ale te dwie zmiany dało się ocenić
+   **dopiero na ekranie**. Dla zmian przestawiających elementy w polu widzenia krok 5 procedury
+   („uruchom aplikację i obejrzyj") jest **bramką odbioru, nie formalnością na koniec**.
 
 ### 9.2 Odziedziczone z M2b (§17.5)
 
@@ -485,7 +497,7 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 5 | **M3.1e** | Chipy Trace / Debugger (znak tożsamości + etykieta); ⭐ **chipy NIE dziedziczą pędzli railu — inny próg kontrastu** · ⛔ ikona debuggera zamknięta, jest teraz referencją do `Icon.Play` (§19.6) | — |
 | ✅ 6 | **M3.1f** | Sekcja postępu + operacja referencyjna; ⭐ **infrastruktura dla M3b — oba tryby**, choć operacja referencyjna umie tylko nieokreślony · ⭐ Cancel to **dwa zasięgi jednej komendy**, zamyka lukę bramkowania (§19.7) | — |
 | ✅ 6b | **poprawki odbiorcze** | Zamknięte bez osobnej iteracji (decyzja użytkownika): wyrównanie endpointu **zamknięte pomiarem bez zmiany kodu** · bug historii parametrów · pusta kolumna Type przy domenie · wygląd wyłączonych komórek (§19.8) | — |
-| ✅ 7 | **M3.2a** | H‑3 — stabilny układ obu pasków. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. Cztery ruchy: Export DDL na koniec paska tytułu (T2) · slot sekcji 1 rezerwowany, separator **w środku** rezerwacji · wspólna podłoga Execute/Cancel (zmierzone 156 vs 118) · **Commit/Rollback dokują do prawej jako para transakcyjna**. ⛔ Tożsamość pikselowa MIĘDZY rodzajami zakładek świadomie nieścigana (§19.10) | — |
+| ✅ 7 | **M3.2a** | H‑3. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. Z czterech ruchów **zostały dwa**: Export DDL na koniec paska tytułu (T2) · slot sekcji 1 rezerwowany, separator **w środku** rezerwacji (B1). ⛔⛔ **Odbiór wizualny cofnął podłogę Execute/Cancel i dokowanie Commit/Rollback do prawej** — ⭐ **GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI**, a rozmiar wzięty z wyrównania czyta się jak deklaracja ważności (R5 od drugiej strony). Drgania 38 px i 68 px **świadomie zaakceptowane**. §19.10 + **§19.11** | — |
 | ⭐ **8** | **M3.2b** | **← TU ZACZYNASZ.** §7.5 — semantyka kolorów na pasku narzędzi. ⏸ + sekcja 3 (§19.10.3) | **DC** ✅ |
 | 9 | **M3.2c** | H‑5 — Commit / Rollback | **DD** |
 | 10 | **M3.2d** | M‑1 — 10 literałów → `UiStrings` | — |
