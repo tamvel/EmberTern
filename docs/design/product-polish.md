@@ -3356,3 +3356,68 @@ migracji (§18.0.5/2). Żadnej geometrii ani karty w tym pliku nie ma, więc wpi
 Build **0/0** · suite **7087** zielony w trzech partycjach (7000 + 33 + 54) · smoke czysty.
 Liczniki: `FontSize` **519 → 441** · `FontFamily` **81** (poza zakresem) · `CornerRadius` **37 → 33**.
 Wszystkie użyte klucze ról zweryfikowane wobec `Typography.axaml` / `Tokens.axaml`; aplikacja uruchomiona.
+
+---
+
+### §18.3 Iteracja 3 — `PerformancePanelView` (2026-08-02)
+
+> **Zakres:** 42 `FontSize` + 4 `CornerRadius`. `FontFamily` 3 nietknięte.
+
+#### §18.3.1 Wynik
+
+| Właściwość | Przed | Po | Na rolę | Zostaje z powodem |
+|---|---|---|---|---|
+| `FontSize` | 42 | **6** | 36 | 6 |
+| `CornerRadius` | 4 | **2** | 2 | 2 |
+
+Role: `Text.Compact` 23 · `Text.Caption` 9 · `Text.Application` 3 · `Text.Title` 1 · `Radius.Surface` 2.
+Koszyk A **pusty** (ten panel nie ma ani jednej kontrolki formularza). Wartości bez zmian.
+
+#### §18.3.2 ⭐⭐ TRZECIA POSTAĆ TEGO SAMEGO KONFLIKTU — i to już jest wzorzec, nie przypadek
+
+Trzy iteracje, trzy razy ta sama sytuacja: **rola, która pasuje FUNKCJĄ, niesie inną LICZBĘ.**
+
+| Iteracja | Element | Ma | Rola funkcjonalna | Rozstrzygnięcie |
+|---|---|---|---|---|
+| 1 | pasek poleceń debuggera | 11 | `Text.Toolbar` = **12** | `Text.Compact` (chroma przy 11) |
+| 2 | pasmo poleceń Data Import | 12 | `Text.Toolbar` = 12 ✔ | `Text.Application` — **na wyraźną instrukcję użytkownika** |
+| 3 | trzy nagłówki sekcji | 12 + SemiBold | `Text.SectionHeader` = **11** | ⛔ zostają lokalne z powodem |
+
+⭐ **Wniosek, który wychodzi poza ten etap: katalog M2a opisał role przez JEDNĄ wartość każdą, a produkt
+używa niektórych z nich w dwóch rozmiarach.** To nie jest dryf do wyprostowania sweepem — to pytanie
+projektowe („ile mierzy pasek narzędzi", „ile mierzy nagłówek sekcji"), którego M2c z definicji nie
+rozstrzyga, bo każde rozstrzygnięcie zmienia wygląd. Sweep robi tu rzecz najbardziej użyteczną, jaką może:
+**zostawia obie strony widoczne** — jedna jako rola, druga jako wartość lokalna z zapisanym powodem — żeby
+przegląd §13.3 zobaczył rozjazd zamiast zastanego kompromisu.
+
+⚠ **Nagłówki sekcji są tu najostrzejszym przypadkiem**, bo kanoniczny `TextBlock.group-header` (styl M2b)
+czyta `Text.SectionHeader` = 11, a ten panel nigdy z tej klasy nie skorzystał i stoi na 12. Wpisanie
+`Text.Application` opisałoby nagłówek jako treść; wpisanie `Text.SectionHeader` zmieniłoby 12 → 11.
+Zgodnie z R12 obie odpowiedzi są gorsze od zapisanego powodu.
+
+#### §18.3.3 Sześć wyjątków `FontSize`
+
+| Element | Wart. | Powód |
+|---|---|---|
+| nagłówki „Findings", „Table access" oraz tytuł karty ustalenia | 12 | nagłówek przy roli nagłówka niosącej 11 (§18.3.2) |
+| `PlanLead` — wiodąca linia planu | 13 | treść, a katalog ma przy 13 wyłącznie `Text.Code` (grupa „TextBlock 13 px" z §18.0.5/3) |
+| znak oceny `●` | 13 | mark strojony do wiersza (sąsiedni tekst ma 14), brak roli przy 13 dla tekstu |
+| znak skanu sekwencyjnego `●` | 9 | brak roli o tej wartości |
+
+#### §18.3.4 `CornerRadius` — obie ratyfikowane kategorie w jednym pliku
+
+Ten widok pokazuje wszystkie trzy przypadki naraz i potwierdza obie połowy korekty §18.0.5/2:
+* **kapsuła** — `Height="12" CornerRadius="6"`: promień to połowa wysokości, czyli **arytmetyka**. Zostaje.
+* **karta** — obrys + `Padding="8,6"` przy promieniu 4: `Radius.Surface` niesie 3, więc migracja zmieniłaby
+  wygląd. Zostaje, decyzja „karta: 3 czy 4" należy do §13.3.
+* **powierzchnie** — dwa promienie 3 → `Radius.Surface`.
+
+⚠ **Zgłoszenie do §13.3:** jeden z tych dwóch trójek to funkcjonalnie **chip** (tło w kolorze wagi,
+`Padding="4,0"`, etykieta 10 px), a `Radius.Chip` niesie **4**. Poszedł na `Radius.Surface`, bo krok 0
+ratyfikował regułę *„migruje wyłącznie `CornerRadius="3"` → `Radius.Surface`"* i bo to jedyny wariant
+zachowujący wartość. Wykonanie ratyfikowanej reguły, ale przypadek, którego ona nie przewidziała.
+
+#### §18.3.5 Stan po iteracji 3
+
+Build **0/0** · suite **7087** zielony w trzech partycjach · smoke czysty.
+Liczniki: `FontSize` **441 → 405** · `FontFamily` **81** · `CornerRadius` **33 → 31**.

@@ -65,7 +65,6 @@ public class DesignTokenComplianceTests
     /// </summary>
     private static readonly Dictionary<string, int> FontSizeBaseline = new(StringComparer.Ordinal)
     {
-        ["Views/PerformancePanelView.axaml"] = 42,
         ["Views/FunctionDetailTabView.axaml"] = 41,
         ["Views/ProcedureDetailTabView.axaml"] = 40,
         ["Views/TableDetailTabView.axaml"] = 27,
@@ -83,6 +82,12 @@ public class DesignTokenComplianceTests
         ["Views/ExecuteProcedureDialog.axaml"] = 9,
         ["Views/AddFieldDialog.axaml"] = 8,
         ["Views/ForeignKeyDialog.axaml"] = 8,
+        // ⭐ 42 → 6 (M2c iteracja 3). Ten widok wnosi TRZECIĄ postać tego samego konfliktu: rola,
+        // która pasuje FUNKCJĄ, niesie inną LICZBĘ. Trzy nagłówki sekcji mają 12 px + SemiBold, a kanoniczna
+        // rola nagłówka (`Text.SectionHeader`, tyle co `group-header`) niesie 11 — więc zostają lokalne
+        // z powodem, zamiast zostać opisane jako treść. Reszta wyjątków: dwa znaki przy 13 i 9 px oraz
+        // jedna linia treści przy 13, gdzie katalog ma wyłącznie rolę kodu.
+        ["Views/PerformancePanelView.axaml"] = 6,
         ["Views/AboutWindow.axaml"] = 5,
         ["Views/IndexDialog.axaml"] = 5,
         ["Views/ConstraintFieldDialog.axaml"] = 4,
@@ -192,7 +197,10 @@ public class DesignTokenComplianceTests
         // M2c iteracja 2: 4 → 0. Wszystkie cztery to `CornerRadius="3"` na kontenerach (siatka typów,
         // siatka mapowania, ramka podglądu, ramka podglądu DDL) — czyli dokładnie `Radius.Surface`,
         // jedyna grupa, którą krok 0 dopuścił do migracji (§18.0.5/2). Wpis usunięty.
-        ["Views/PerformancePanelView.axaml"] = 4,
+        // M2c iteracja 3: 4 → 2. Dwa promienie 3 przeszły na `Radius.Surface`; zostają KARTA przy 4
+        // (`Radius.Surface` niesie 3 — decyzja produktowa oddana §13.3) i KAPSUŁA przy 6, gdzie promień
+        // jest połową wysokości, czyli arytmetyką, a nie rolą (§18.0.5/2).
+        ["Views/PerformancePanelView.axaml"] = 2,
         ["Views/ForeignKeyDialog.axaml"] = 3,
         ["Views/ConstraintFieldDialog.axaml"] = 2,
         ["Views/IndexDialog.axaml"] = 2,
