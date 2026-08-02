@@ -4310,3 +4310,145 @@ Build **0/0** · suite **7090** w trzech partycjach (**7001 + 35 + 54**, +2 nowe
 ⚠ Nowa klasa headless **musiała trafić do filtru partycji** — pominięta wpadłaby do partycji głównej
 bez żadnego sygnału błędu (ten sam kształt, co martwe wykluczenie z §18.1.6).
 ⛔ Wysokości **nie zmieniono**: `Size.Row.Tab` zostaje **26**, rytm 36 / 26 / 24 bez zmian.
+
+---
+
+### §19.3 Iteracja 2 (M3.1b) — cztery sekcje Status Bara, hierarchia, D3 (2026-08-02)
+
+> **Zakres:** §8.4.3 (sekcje) + §8.4.4 (hierarchia wizualna) + decyzja **D3**. Odebrane przez użytkownika
+> po trzech rundach QA.
+
+#### §19.3.1 ⭐⭐ H‑4 było GŁĘBSZE, niż mówi audyt — to nie była waga wizualna, tylko JEDNA WŁAŚCIWOŚĆ
+
+Audyt (§1.3/H‑4) opisał defekt jako *„stan połączenia i komunikaty w identycznej wadze wizualnej"*.
+Zmierzone: były **tą samą właściwością**.
+
+```csharp
+UpdateStatusFromConnection()  →  StatusText = "Connected to X" / "Disconnected"
+SetError(ex.Message)          →  StatusText = <treść wyjątku>        // 2 miejsca wywołania
+```
+
+Nadpisywały się nawzajem, a całą „severity" niósł `bool IsStatusError`. ⭐ **Żadne stylowanie nie mogło
+tego naprawić, bo nie było czego stylować osobno** — sekcje 1 i 2 z §8.4.3 nie mogły powstać przed
+rozdzieleniem tej właściwości. To jest właściwa treść tej iteracji; układ kolumn był konsekwencją.
+
+Powstały: **sekcja 1** — `ConnectionDisplayName` / `ConnectionEndpointLabel` (+ istniejące `IsConnected`,
+`IsDeveloperModeActive`); **sekcja 2** — `StatusMessage` / `StatusMessageSeverity` (enum, nie bool) +
+`StatusMessageBrushKey` / `StatusMessageGeometryKey` czytane z **`MessageBanner`**, czyli z tego samego
+mapowania, którym maluje się log Messages w edytorze SQL. ⛔ Zero drugiej definicji severity.
+
+#### §19.3.2 ⭐ Tożsamość połączenia ma jednego właściciela — pasek tytułu stracił blok
+
+> **Decyzja użytkownika (2026-08-02), po przedstawieniu trzech wariantów:** *„Status Bar powinien stać się
+> jedynym miejscem prezentacji bieżącego kontekstu połączenia… jedna informacja powinna mieć jednego
+> właściciela. To zmniejszy liczbę elementów w najbardziej zatłoczonym wierszu okna i uprości późniejsze
+> M3.2… pasek tytułu będzie odpowiadał wyłącznie za nawigację i polecenia."*
+
+Konflikt był realny: §8.4.3 przypisuje nazwę połączenia i DEV MODE **paskowi statusu**, a jedno i drugie
+stało wtedy w **pasku tytułu** — na podstawie świadomej, niedawnej decyzji (komentarz w kodzie nazywał je
+*„key 'where am I connected' info"*). §0.1.2 („Application Chrome to JEDNA powierzchnia") czytałby dwie
+kopie tej samej informacji jako defekt, nie jako redundancję.
+
+Usunięte z paska tytułu: nazwa z podkreśleniem `ConnectedBrush`, badge DEV MODE, separator wewnętrzny
+**oraz wiodący separator kolumny 1** — bez bloku po lewej byłby kreską opartą o krawędź okna, czyli tym
+samym „chromą po nieistniejącym elemencie", które sprzątał sprint brandingowy. Kolumny paska tytułu
+przenumerowane `Auto,Auto,*,Auto,Auto` → `Auto,*,Auto,Auto`.
+
+⭐ **Efekt uboczny, który był jednym z powodów decyzji: z trzech przyczyn H‑3 zniknęły dwie.** Do M3.2a
+zostaje `CanExportDdl`.
+
+#### §19.3.3 ⚠⚠ Wyrównanie sekcji 1 — pierwsza hipoteza UPADŁA W POMIARZE
+
+> **Zgłoszenie użytkownika:** *„`localhost:3050` jest delikatnie wyżej niż nazwa połączenia… jakby oba
+> napisy nie siedziały na tej samej linii bazowej."*
+
+Naturalna hipoteza — „różne rozmiary, więc linie bazowe się rozjeżdżają" — **jest fałszywa co do skali**:
+
+```
+nazwa     top=6,00  h=12  baseline=15,29   (11 px, SemiBold)
+endpoint  top=7,00  h=11  baseline=15,45   (10 px)
+```
+
+**Różnica linii bazowych to 0,16 px w DIP.** Niewidoczna. Prawdziwa przyczyna jest o krok dalej:
+pudełka mają **różne wysokości** (12 vs 11) i **różne pozycje** (6 vs 7), a `UseLayoutRounding` przycina
+**KAŻDY ELEMENT OSOBNO** do piksela urządzenia — pomiar zapisany już w M2b przy R‑6. Przy 125% te dwa
+topy lądują po przeciwnych stronach zaokrąglenia i różnica rośnie do całego piksela fizycznego.
+
+⛔ **Dlatego naprawą NIE był margines.** Nudge naprawiłby jedno DPI i zepsuł pozostałe — a zgłaszający
+pracuje właśnie na 125%, czyli tam, gdzie nudge byłby najbardziej kuszący i najbardziej mylący.
+
+⭐ **Naprawa: nazwa i endpoint to dwa `Run`‑y w JEDNYM `TextBlocku`.** Silnik tekstu układa runy na
+wspólnej linii bazowej **z konstrukcji** — jedno pudełko, jedno zaokrąglenie, jedna linia. Zmierzone po
+zmianie: **jeden baseline (15,83), odchyłka 0,00**. ⛔ Nie rozdzielać z powrotem na dwa `TextBlocki`.
+⚠ `Classes="subtle"` nie działa na `Run`, więc kolor idzie `{DynamicResource}` wprost (nadal motywowalny),
+a odstęp niesie separator w `ConnectionEndpointLabel`, bo między runami nie ma `Spacing` kontenera.
+Separator `·` odwzorowuje przy okazji makietę z §8.4.3.
+
+⚠ **Świadomie NIE wyrównywane, z liczbami:** tekst badge'a **−0,38 px**, środek badge'a **+0,5 px**
+(wysokość 13 w wierszu 24 — zaokrąglenie własnego pudełka), kropka **−0,33 px**. Wszystkie poniżej
+piksela i — co ważniejsze — **żadna nie zależy od różnicy rozmiarów czcionek**, więc DPI ich nie
+wzmocni tak, jak wzmacniało endpoint. Rozwiązanie strukturalne dla badge'a istnieje
+(`InlineUIContainer` w tej samej linii), ale komplikuje bramkowanie widoczności i nie zostało wdrożone
+„na wszelki wypadek".
+
+#### §19.3.4 Badge DEV MODE — proporcja, i dlaczego to wartość lokalna
+
+> **Zgłoszenie użytkownika:** *„poziomy padding jest trochę zbyt duży względem pionowego… zmniejsz tylko
+> lewy/prawy o 1–2 px."*
+
+`Padding` **6,1 → 4,1**; wysokość i font nietknięte. Wybrany koniec `−2`, bo zgłoszenie dotyczyło
+**proporcji** (6:1 przy tekście 10 px Bold), a `5,1` byłby zmianą na granicy dostrzegalności.
+
+⚠ **Zostaje wartością lokalną z powodem, a nie nowym tokenem.** Katalog nie ma roli dla paddingu chipa,
+a jedyny drugi element tego rodzaju (`AggregationBarView`, `8,2`) niesie inną wartość — nowa rola albo
+zmieniłaby tamten wygląd, albo powstałaby z **jednego** konsumenta wbrew R3. **Wyjątek jest lepszy od
+błędnej roli (R12).** ⭐ To już drugi raz w M3, gdy wartość na powierzchni trwałej nie ma roli w katalogu
+(pierwszy: `Size.TabIndicator`, utworzony, bo miał drugie zastosowanie — rail §8.4.1). Pytanie *„czy chipy
+zasługują na wspólną rolę"* idzie do przeglądu **§13.3**, który zobaczy je wszystkie naraz.
+
+#### §19.3.5 D3 — i test, który trzeba było PRZECELOWAĆ, a nie skasować
+
+`AppVersionChip` usunięty razem z trzema osieroconymi stałymi `UiStrings`
+(`StatusBarReady`, `StatusBarConnectedTo`, `StatusBarVersionFormat`).
+
+⚠ **Istniał test, którego przedmiot D3 właśnie zlikwidowało** — `StatusBarShowsTheSameVersionAsAbout`,
+napisany po tym, jak użytkownik zobaczył w pasku literał `EmberTern 0.1.0` niezgodny z About.
+⭐ **Skasowanie byłoby leniwym odczytem.** Właściwością wartą utrzymania nie jest *„pasek statusu to
+renderuje"*, tylko *„wersja trafia na ekran z `AppInfo`, a nie z literału"* — a ta ma po prostu nowy,
+jedyny dom. Test przecelowany na **`AboutWindowShowsTheVersionFromAppInfo`**; `AppInfoTests` pilnuje
+drugiej połowy (żadnego literału wersji pod `src/`).
+⭐ Przy okazji **zszedł z konstruowania `MainWindow`** — udokumentowanego kształtu zawieszającego suite,
+i to w klasie, w której hang jest zgłaszany (#94/#226/#286). `AboutWindow` ma bezparametrowy konstruktor
+i buduje własny VM, więc asercja jest tańsza **i mocniejsza**.
+
+#### §19.3.6 ⚠⚠ Błąd metody, który kosztował najwięcej — `CopyFromScreen` nie zrzuca OKNA
+
+Próbowałem zweryfikować wygląd zrzutem robionym przez `System.Drawing.Graphics.CopyFromScreen` na
+prostokącie okna z `GetWindowRect`. **Ta funkcja kopiuje EKRAN w danych współrzędnych, a nie okno** —
+aplikacja była przykryta terminalem, więc dostałem cudzą zawartość i **błędnie zdiagnozowałem, że pasek
+statusu w ogóle się nie renderuje**. Zdążyłem podłożyć jaskrawy znacznik diagnostyczny (czerwone tło,
+wysokość 60), zanim użytkownik przysłał zrzut pokazujący, że pasek działa poprawnie.
+
+> **Użytkownik:** *„Wszystko było dobrze, pasek był widoczny, niepotrzebnie zaczynasz z tym kombinować,
+> lepiej poproś mnie o zrzut."*
+
+⭐ **Reguła operacyjna na resztę etapu: weryfikację wizualną powierzchni trwałych zamawiamy u użytkownika,
+nie u siebie.** Sonda renderująca komponent w izolacji (§19.1.5) jest dobra do porównania **wariantów
+jednej kontrolki**; do pytania *„jak wygląda aplikacja"* jedynym wiarygodnym źródłem jest zrzut z żywej
+aplikacji. ⚠ Znacznik diagnostyczny został cofnięty w całości (zweryfikowane grepem).
+
+#### §19.3.7 Definition of Done
+
+| # | Warunek | |
+|---|---|---|
+| 1 | zakres iteracji zamknięty | ✅ sekcje · hierarchia · D3 |
+| 2 | pozostawione wartości lokalne mają powód w miejscu | ✅ `Padding="4,1"` badge'a |
+| 3 | baza `DesignTokenComplianceTests` = stan faktyczny | ✅ bez zmian |
+| 4 | build 0/0 | ✅ |
+| 5 | testy zielone w trzech partycjach | ✅ **7001 + 35 + 54 = 7090** |
+| 6 | smoke + oba motywy | ✅ smoke czysty; QA użytkownika na żywej bazie (Szkoleniowa, 2389 tabel) |
+| 7 | wpis w §19 | ✅ ta sekcja |
+| 8 | commit; push po akceptacji | ✅ / ⏸ (push po całym M3.1) |
+
+> **Odbiór użytkownika:** *„Wygląda dobrze… Badge DEV MODE ma teraz właściwe proporcje i cała sekcja
+> połączenia czyta się naturalnie."* ⛔ Do tej sekcji nie wracamy, chyba że wyjdzie rzeczywista regresja.

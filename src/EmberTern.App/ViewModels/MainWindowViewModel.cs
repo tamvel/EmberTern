@@ -1121,11 +1121,31 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string _queryStatsText = string.Empty;
 
+    // ⭐⭐ SEKCJA 2 PASKA STATUSU — komunikat aplikacji (product-polish.md §8.4.3).
+    //
+    // ⚠⚠ To POWSTAŁO Z ROZDZIELENIA jednej właściwości i tam leżała prawdziwa treść defektu H‑4.
+    // Audyt opisał go jako „stan połączenia i komunikaty mają identyczną wagę wizualną" — w rzeczywistości
+    // były TĄ SAMĄ WŁAŚCIWOŚCIĄ (`StatusText`): `UpdateStatusFromConnection` pisało do niej „Connected to X",
+    // a `SetError` treść wyjątku, więc nadpisywały się nawzajem. Żadne stylowanie nie mogło tego naprawić,
+    // bo nie było czego stylować osobno. Sekcja 1 czyta dziś `ConnectionDisplayName`/`ConnectionEndpoint`.
+    //
+    // ⚠ Severity jest ENUMEM, nie boolem (`IsStatusError` zniknął): §8.4.4 wymaga ikony i barwy per severity,
+    // a mapowanie czytamy z `MessageBanner` — tego samego, którym maluje się log Messages w edytorze SQL.
+    // ⛔ Nie dopisywać tu drugiej definicji severity.
     [ObservableProperty]
-    private string _statusText = UiStrings.StatusBarReady;
+    [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
+    private string _statusMessage = string.Empty;
 
     [ObservableProperty]
-    private bool _isStatusError;
+    [NotifyPropertyChangedFor(nameof(StatusMessageBrushKey))]
+    [NotifyPropertyChangedFor(nameof(StatusMessageGeometryKey))]
+    private MessageSeverity _statusMessageSeverity = MessageSeverity.Info;
+
+    public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
+
+    public string StatusMessageBrushKey => MessageBanner.BrushKeyFor(StatusMessageSeverity);
+
+    public string StatusMessageGeometryKey => MessageBanner.GeometryKeyFor(StatusMessageSeverity);
 
     public string AppTitle => UiStrings.AppTitle;
     public string AppSubtitle => UiStrings.AppSubtitle;
@@ -1140,8 +1160,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// hand-typed copy fails (gotcha #284). <c>AppInfoTests</c> now fails on any version literal in this
     /// project.</para>
     /// </summary>
-    public string AppVersionChip => string.Format(
-        CultureInfo.CurrentCulture, UiStrings.StatusBarVersionFormat, AppInfo.Product, AppInfo.Version);
+    // ⛔ `AppVersionChip` USUNIĘTY w M3.1b — decyzja D3: nazwa aplikacji i numer wersji nie należą do paska
+    // statusu, tylko do okna About, gdzie są tematem. Pasek statusu odpowiada na pytanie „co się dzieje
+    // TERAZ", a wersja produktu nie zmienia się nigdy w trakcie sesji. `AppInfo` pozostaje jedynym źródłem
+    // wersji i czyta ją About; gwarancje `AppInfoTests` (żadnego literału wersji w kodzie) są nietknięte.
     public string CommitLabel => UiStrings.TransactionCommit;
     public string RollbackLabel => UiStrings.TransactionRollback;
     public string MessagesLabel => UiStrings.BottomTabMessages;
@@ -1157,6 +1179,25 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsConnected => _service.IsConnected;
     public string ActiveConnectionName => _service.ActiveProfile?.Name ?? string.Empty;
     public bool HasActiveConnection => _service.ActiveProfile is not null;
+
+    // ⭐⭐ SEKCJA 1 PASKA STATUSU — tożsamość połączenia (product-polish.md §8.4.3).
+    //
+    // ⚠ Od M3.1b to jest JEDYNE miejsce w aplikacji, które odpowiada na pytanie „gdzie jestem podłączony?".
+    // Nazwa połączenia i badge DEV MODE zostały USUNIĘTE z paska tytułu — decyzja użytkownika (2026-08-02):
+    // „jedna informacja powinna mieć jednego właściciela… pasek tytułu będzie odpowiadał wyłącznie za
+    // nawigację i polecenia". ⛔ Nie przywracać ich na górę; to nie jest brak, tylko rozstrzygnięcie (§19.3).
+    //
+    // Rozdział ról jest częścią wymagania (§8.4.4): nazwa niesie `Text.Status` SemiBold i pełny kontrast,
+    // endpoint `Text.Caption` w kolorze drugorzędnym. Kropka stanu odpowiada za „połączony / nie".
+    public string ConnectionDisplayName
+        => HasActiveConnection ? ActiveConnectionName : UiStrings.StatusBarDisconnected;
+
+    // ⚠ Etykieta niesie SEPARATOR, a nie sam endpoint, i to nie jest przemycanie prezentacji do VM:
+    // nazwa i endpoint renderują się jako DWA RUNY W JEDNYM `TextBlocku` (§19.3.1), więc nie ma między
+    // nimi `Spacing` kontenera, który mógłby je rozdzielić. Odstęp musi być częścią tekstu. Kropka
+    // środkowa odwzorowuje makietę z §8.4.3: `● Szkoleniowa · localhost:3050 · DEV`.
+    public string ConnectionEndpointLabel
+        => _service.ActiveProfile is { } p ? $" · {p.Host}:{p.Port}" : string.Empty;
 
     // Title-bar transaction-profile block: two stacked lines, each a static lane label
     // ("Data:" / "Meta:") plus the full profile name in a lane-colored badge. These
@@ -7395,26 +7436,22 @@ public partial class MainWindowViewModel : ViewModelBase
         ShowSettingsHealthWarning = true;
     }
 
+    // ⚠ Nie pisze już żadnego tekstu — sekcja 1 czyta stan wprost z serwisu. Zadaniem tej metody jest
+    // POWIADOMIĆ o zmianie tożsamości i zgasić komunikat, który dotyczył poprzedniego połączenia.
+    // Gaszenie zachowuje zastane zachowanie: dopóki obie rzeczy dzieliły `StatusText`, zmiana połączenia
+    // nadpisywała błąd — i jest to samo w sobie słuszne, bo komunikat opisuje kontekst, którego już nie ma.
     private void UpdateStatusFromConnection()
     {
-        var active = _service.ActiveProfile;
-        StatusText = active is null
-            ? UiStrings.StatusBarDisconnected
-            : $"{UiStrings.StatusBarConnectedTo} {active.Name}";
-        IsStatusError = false;
+        OnPropertyChanged(nameof(ConnectionDisplayName));
+        OnPropertyChanged(nameof(ConnectionEndpointLabel));
+        ClearError();
     }
 
     private void SetError(string message)
     {
-        StatusText = message;
-        IsStatusError = true;
+        StatusMessageSeverity = MessageSeverity.Error;
+        StatusMessage = message;
     }
 
-    private void ClearError()
-    {
-        if (IsStatusError)
-        {
-            UpdateStatusFromConnection();
-        }
-    }
+    private void ClearError() => StatusMessage = string.Empty;
 }

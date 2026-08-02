@@ -3195,32 +3195,42 @@ public sealed class ConnectionExpandBindingProbe
         _out.WriteLine(log.ToString());
     }
 
-    // ⭐ ONE version for the whole application, proven where the user found the contradiction: on screen.
-    // The status bar used to carry the literal "EmberTern 0.1.0" while About read the assembly, so the two
-    // disagreed in front of them. Both now read AppInfo, and this asserts the status bar renders it.
+    // ⭐ ONE version for the whole application, proven where it is actually displayed: on screen.
+    //
+    // ⚠⚠ REPOINTED IN M3.1b (product-polish.md §19.3). This used to assert the STATUS BAR's version chip,
+    // written after the user found the literal "EmberTern 0.1.0" there disagreeing with About. Ratified
+    // decision D3 removed the chip — the application name and version belong to About, where they are the
+    // subject, and not to a bar that reports what is happening RIGHT NOW. The test's subject moved with it.
+    //
+    // ⭐ Deleting it would have been the lazy reading. The property worth keeping is not "the status bar
+    // renders it" but "the version reaches the SCREEN from AppInfo rather than from a literal" — and that
+    // property simply has a new single home. `AppInfoTests` guards the other half (no version literal
+    // anywhere under src/); this guards that the surviving display actually resolves.
+    //
+    // ⚠ It also stopped constructing `MainWindow`, which is the documented hang-prone shape — and this is
+    // the very class the full-suite hang keeps being reported in (#94/#226/#286). `AboutWindow` has a
+    // parameterless constructor and builds its own view model, so the assertion is both cheaper and
+    // stronger: nothing but the About window itself can be supplying the value.
     [Fact]
-    public async System.Threading.Tasks.Task StatusBarShowsTheSameVersionAsAbout()
+    public async System.Threading.Tasks.Task AboutWindowShowsTheVersionFromAppInfo()
     {
         await SharedSession.Dispatch(() =>
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "embertern-version-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempDir);
-            var store = new ConnectionProfileStore(tempDir);
-            using var service = new FirebirdConnectionService();
-            var vm = new MainWindowViewModel(store, service);
-
-            var window = new MainWindow { DataContext = vm };
+            var window = new AboutWindow();
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var chip = window.GetVisualDescendants().OfType<TextBlock>()
+            var shown = window.GetVisualDescendants().OfType<TextBlock>()
                 .Select(t => t.Text ?? string.Empty)
                 .Where(t => t.Contains(AppInfo.Version, StringComparison.Ordinal))
                 .ToArray();
 
-            _out.WriteLine("status bar version chip: " + string.Join(" | ", chip));
-            Assert.Single(chip);
-            Assert.Contains(AppInfo.Product, chip[0], StringComparison.Ordinal);
+            _out.WriteLine("About — teksty z wersją: " + string.Join(" | ", shown));
+            Assert.NotEmpty(shown);
+
+            var product = window.GetVisualDescendants().OfType<TextBlock>()
+                .Any(t => (t.Text ?? string.Empty).Contains(AppInfo.Product, StringComparison.Ordinal));
+            Assert.True(product, "Okno About nie pokazuje nazwy produktu z AppInfo.");
 
             window.Close();
         }, CancellationToken.None);

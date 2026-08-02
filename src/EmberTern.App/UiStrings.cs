@@ -832,8 +832,10 @@ internal static class UiStrings
     public const string DiagnosticSeverityWarning = "Warning";
     public const string DiagnosticSeverityInfo = "Info";
 
-    public const string StatusBarReady = "Ready";
-    public const string StatusBarConnectedTo = "Connected to";
+    // ⛔ `StatusBarReady` i `StatusBarConnectedTo` usunięte w M3.1b. Pasek statusu nie opisuje już
+    // połączenia zdaniem — sekcja 1 pokazuje NAZWĘ połączenia i endpoint, a stan „połączony / nie"
+    // niesie kropka. `StatusBarDisconnected` zostaje: jest etykietą w slocie nazwy, gdy połączenia
+    // nie ma (§19.3).
     public const string StatusBarDisconnected = "Disconnected";
 
     public const string ThemeToggleTooltip = "Toggle dark / light theme";
@@ -1181,10 +1183,8 @@ internal static class UiStrings
     public const string CommandTitleRollback = "Roll back transaction";
     public const string CommandTitleCloseTab = "Close tab";
 
-    // The status bar's version chip. It shows the SAME AppInfo value the About window does — it used to be the
-    // literal "EmberTern 0.1.0" in MainWindow.axaml, i.e. a second source of truth that had gone stale and
-    // then disagreed with About in front of the user.
-    public const string StatusBarVersionFormat = "{0} {1}";
+    // ⛔ `StatusBarVersionFormat` usunięty w M3.1b (decyzja D3): nazwa aplikacji i numer wersji nie należą
+    // do paska statusu, tylko do okna About. `AppInfo` pozostaje jedynym źródłem wersji.
     // No gesture is shown beside Exit: EmberTern does not own Alt+F4, and a gesture typed by hand is the
     // drift CommandTip exists to prevent (gotcha #284). It routes through the window's ordinary close, so
     // unsaved work and an open transaction still get their prompts.

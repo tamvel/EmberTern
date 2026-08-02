@@ -55,81 +55,30 @@
             BorderThickness="0,0,0,1"
             PointerPressed="OnTitleBarPointerPressed"
             DoubleTapped="OnTitleBarDoubleTapped">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+      <!-- ⭐⭐ KOLUMNA 0 ZNIKNĘŁA W M3.1b — i to nie jest pominięcie, tylko rozstrzygnięcie (§19.3).
+           Stał tu blok aktywnego połączenia: nazwa bazy (Bold 14 z zielonym podkreśleniem) + badge DEV MODE.
+           Cała ta informacja przeniosła się do SEKCJI 1 PASKA STATUSU, która jest od teraz jedynym miejscem
+           odpowiadającym na pytanie „gdzie jestem podłączony?".
 
-        <!-- Active-connection block. Every item is VerticalAlignment=Center; the
-             parent StackPanel is centered in the fixed 36px row, so all items share one
-             vertical axis. No manual margin nudges.
+           Decyzja użytkownika (2026-08-02): *„jedna informacja powinna mieć jednego właściciela… pasek tytułu
+           będzie odpowiadał wyłącznie za nawigację i polecenia"*. §8.4.3 przypisuje tożsamość połączenia
+           paskowi statusu, a §0.1.2 mówi, że Application Chrome to JEDNA powierzchnia — trzymanie tej samej
+           nazwy w dwóch miejscach naraz czytałoby się jako defekt, nie jako redundancja.
 
-             ⛔ There is deliberately NO application logo here, and it is not an omission: the brand
-             mark was removed from the titlebar on purpose (2026-08-01). A working surface's chrome
-             is for the document, not for the product's identity — ChatGPT, Claude and VS Code all
-             put nothing of the sort in this row — and the 26px mark plus its divider were spending
-             ~40px of the most contested horizontal space in the window on information the user
-             already knows. The branding lives in About, where it is the subject (AboutWindow.axaml).
-             The divider that used to separate the mark from the connection name went with it: with
-             nothing to its left it would be a rule against the window edge.
+           ⭐ Efekt uboczny, który był jednym z powodów: zwolniło się do ~300 px w najbardziej zatłoczonym
+           wierszu okna, a z trzech przyczyn H‑3 (przesuwanie się paska narzędzi przy zmianie stanu) zniknęły
+           dwie — blok połączenia i badge DEV MODE. Zostaje `CanExportDdl`, którym zajmie się M3.2a.
 
-             The whole block is gated on HasActiveConnection so that with no connection it is not
-             MEASURED at all. IsVisible on the children alone would leave the StackPanel's own Margin
-             behind — an empty inset at the window's left edge, exactly the "something left over
-             where the logo used to be" this change is meant to avoid. -->
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
-                    VerticalAlignment="Center" Margin="8,0,2,0"
-                    IsVisible="{Binding HasActiveConnection}">
-          <!-- Active DB name = key "where am I connected" info. Bold 14, full-contrast
-               ForegroundBrush (white), plus a 2px ConnectedBrush underline (same green
-               as the active-connection status) — Rider/DataGrip-style accent: instantly
-               recognizable, no badge / glow / border / colored text. The underline is a
-               stretched 2px Border inside a vertical StackPanel, so it spans exactly the
-               name width. -->
-          <!-- No IsVisible of its own: the block above already carries HasActiveConnection. -->
-          <StackPanel Orientation="Vertical" Spacing="2"
-                      VerticalAlignment="Center">
-            <!-- MaxWidth + ellipsis so a very long profile name can't expand the
-                 brand row and push the connection toolbar / window buttons off-screen.
-                 Full name on hover. -->
-            <TextBlock Text="{Binding ActiveConnectionName}"
-                       FontWeight="Bold"
-                       FontSize="{DynamicResource Text.Title.Size}"
-                       MaxWidth="260"
-                       TextTrimming="CharacterEllipsis"
-                       ToolTip.Tip="{Binding ActiveConnectionName}"
-                       Foreground="{DynamicResource ForegroundBrush}" />
-            <Border Height="2"
-                    HorizontalAlignment="Stretch"
-                    Background="{DynamicResource ConnectedBrush}" />
-          </StackPanel>
-          <!-- Right separator: mirrors the left one so the connection name reads as its
-               own section between the brand and the transaction-profile block. Same
-               inline Border pattern (1px, 14 high, BorderBrush) used across the titlebar. -->
-          <Border Width="1" Height="14"
-                  Background="{DynamicResource BorderBrush}"
-                  Margin="4,0"
-                  VerticalAlignment="Center"
-                  IsVisible="{Binding IsDeveloperModeActive}" />
-          <!-- DEV MODE badge: shown only when the active connection has Developer Mode
-               on (DDL waits for in-use objects). No transaction terminology surfaced. -->
-          <Border Background="{DynamicResource ConnectedBrush}"
-                  CornerRadius="{DynamicResource Radius.Surface}" Padding="6,1"
-                  VerticalAlignment="Center"
-                  IsVisible="{Binding IsDeveloperModeActive}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DeveloperModeBadgeTooltip}">
-            <TextBlock Text="{x:Static app:UiStrings.DeveloperModeBadge}"
-                       FontSize="{DynamicResource Text.Caption.Size}" FontWeight="Bold"
-                       Foreground="{DynamicResource DevModeBadgeForegroundBrush}" />
-          </Border>
-        </StackPanel>
+           ⛔ Nie przywracać tu ani nazwy połączenia, ani badge'a DEV MODE. ⛔ Nie ma tu też logo — mark
+           został usunięty osobną decyzją (2026-08-01) i mieszka w About. -->
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
 
         <!-- Connection toolbar (moved from sidebar) -->
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2"
                     VerticalAlignment="Center" Margin="4,0,0,0">
-          <!-- Leading divider between the connection block and the toolbar. Same style as the
-               toolbar's own group separators (1px, Margin 4,6). Gated on the same condition as the
-               block it separates: with no connection there is nothing to its left, and a divider
-               against the window edge is chrome left over from something that is not there. -->
-          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}"
-                  IsVisible="{Binding HasActiveConnection}" />
+          <!-- ⛔ Wiodący separator USUNIĘTY razem z blokiem połączenia (M3.1b): oddzielał go od paska
+               narzędzi, a bez niczego po lewej byłby kreską opartą o krawędź okna — dokładnie ten rodzaj
+               chromy po nieistniejącym elemencie, który sprzątał sprint brandingowy. -->
           <!-- ☰ Application Menu — the FIRST button of the action zone, and deliberately NOT fenced off
                with a separator of its own: ChatGPT and its peers do not, and it reads better (design §6).
                The rows are application-level only; anything belonging to the active document stays on the
@@ -337,10 +286,10 @@
           </Button>
         </StackPanel>
 
-        <!-- Drag spacer (column 2 = *) -->
+        <!-- Drag spacer (kolumna 1 = *) -->
 
         <!-- Theme toggle -->
-        <Button Grid.Column="3" Classes="icon"
+        <Button Grid.Column="2" Classes="icon"
                 ToolTip.Tip="{Binding ThemeToggleTooltip}"
                 Click="OnThemeToggleClick"
                 VerticalAlignment="Center"
@@ -352,7 +301,7 @@
         </Button>
 
         <!-- Window controls -->
-        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch">
+        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch">
           <Button Classes="caption" Click="OnMinimizeClick" ToolTip.Tip="Minimize">
             <controls:SvgIcon Data="{StaticResource Icon.WindowMinimize}" Width="16" Height="16" />
           </Button>
@@ -1767,45 +1716,128 @@
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="14,0">
+      <!-- ⭐⭐ CZTERY SEKCJE (§8.4.3). Kolejność kolumn `Auto,*,Auto,Auto` jest WYMOGIEM STRUKTURALNYM,
+           nie estetycznym: §8.5 specyfikacji żąda, żeby komunikaty nie zasłaniały informacji o połączeniu,
+           a przy tym układzie rosnący komunikat zjada WYŁĄCZNIE elastyczną kolumnę 1. Wymóg jest spełniony
+           przez układ, a nie przez ostrożność autora kolejnej zmiany.
+           ⚠ Sekcje 3 (chipy stanu) i 4 (postęp) powstają w M3.1d–M3.1f; ich kolumny już tu są, żeby
+           dołożenie zawartości nie przesuwało niczego, co użytkownik zdążył zapamiętać. -->
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="14,0">
+
+        <!-- ── 1. POŁĄCZENIE — jedyne miejsce odpowiadające na „gdzie jestem podłączony?" ───────────── -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <Ellipse Width="7" Height="7" Fill="{DynamicResource ConnectedBrush}" IsVisible="{Binding IsConnected}" />
           <Ellipse Width="7" Height="7" Fill="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding !IsConnected}" />
-          <TextBlock Text="{Binding StatusText}"
+          <!-- ⭐⭐ NAZWA I ENDPOINT TO DWA RUNY W JEDNYM `TextBlocku`, A NIE DWA `TextBlocki` — i to jest
+               naprawa przyczyny, nie kosmetyka (§19.3.1).
+
+               Nazwa = element główny (§8.4.4): pełny kontrast + SemiBold. Endpoint = informacja podrzędna,
+               mniejsza i wyciszona. Rozróżnienie wagi jest CAŁYM sensem tej sekcji — wcześniej stan
+               połączenia i komunikat miały identyczną wagę, co audyt nazwał „Status Bar jest tylko
+               miejscem na tekst".
+
+               ⚠⚠ Ale dwa napisy o RÓŻNYCH ROZMIARACH, każdy we własnym `TextBlocku` z
+               `VerticalAlignment="Center"`, wyrównują się PUDEŁKAMI, a nie liniami bazowymi. Zmierzone:
+               linie bazowe rozjeżdżały się o 0,16 px w DIP — samo w sobie niewidoczne, ale pudełka miały
+               różne wysokości (12 vs 11) i różne pozycje (6 vs 7), a `UseLayoutRounding` przycina KAŻDY
+               ELEMENT OSOBNO do piksela urządzenia. Przy 125% te dwa topy lądują po różnych stronach
+               zaokrąglenia i tekst widocznie „siada wyżej" — dokładnie to zgłosił użytkownik.
+
+               ⭐ Run-y w jednym `TextBlocku` układa silnik tekstu na WSPÓLNEJ linii bazowej z konstrukcji:
+               jedno pudełko, jedno zaokrąglenie, jedna linia. Zmierzone po zmianie: jeden baseline zamiast
+               dwóch. ⛔ Nie rozdzielać tego z powrotem na dwa `TextBlocki` i nie „naprawiać" marginesem —
+               nudge naprawiłby jedno DPI i zepsuł pozostałe.
+
+               ⚠ `Classes="subtle"` nie działa na `Run`, więc kolor idzie `{DynamicResource}` wprost —
+               nadal w pełni motywowalny. Odstęp niesie separator w `ConnectionEndpointLabel`, bo między
+               runami nie ma `Spacing` kontenera. -->
+          <TextBlock VerticalAlignment="Center">
+            <Run Text="{Binding ConnectionDisplayName}"
+                 FontSize="{DynamicResource Text.Status.Size}"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource ForegroundBrush}" />
+            <Run Text="{Binding ConnectionEndpointLabel}"
+                 FontSize="{DynamicResource Text.Caption.Size}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}" />
+          </TextBlock>
+          <!-- DEV MODE — badge PRZY NAZWIE POŁĄCZENIA, bo jest własnością tego połączenia, a nie okna.
+               Przeniesiony z paska tytułu w M3.1b (§19.3).
+
+               ⚠ `Padding="4,1"` LOKALNIE I ŚWIADOMIE. Katalog nie ma roli dla paddingu chipa, a jedyny
+               drugi element tego rodzaju (`AggregationBarView`, `8,2`) niesie inną wartość — nowa rola
+               albo zmieniłaby tamten wygląd, albo powstałaby z JEDNEGO konsumenta wbrew R3. Wyjątek jest
+               lepszy od błędnej roli (R12). Rozstrzygnięcie „czy chipy zasługują na wspólną rolę" należy
+               do przeglądu §13.3, który zobaczy je wszystkie naraz.
+               ⚠ Pion (1) jest nietykalny — wysokość badge'a i rozmiar fontu były w QA ocenione jako dobre;
+               poziom zszedł 6 → 4, bo przy tekście 10 px Bold proporcja 6:1 czytała się jako zbyt szeroka
+               (zgłoszenie użytkownika, QA M3.1b). -->
+          <Border Background="{DynamicResource ConnectedBrush}"
+                  CornerRadius="{DynamicResource Radius.Surface}" Padding="4,1"
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding IsDeveloperModeActive}"
+                  ToolTip.Tip="{x:Static app:UiStrings.DeveloperModeBadgeTooltip}">
+            <TextBlock Text="{x:Static app:UiStrings.DeveloperModeBadge}"
+                       FontSize="{DynamicResource Text.Caption.Size}" FontWeight="Bold"
+                       Foreground="{DynamicResource DevModeBadgeForegroundBrush}" />
+          </Border>
+        </StackPanel>
+
+        <!-- ── 2. KOMUNIKATY — kolumna elastyczna; wszystko, co ma coś do powiedzenia o BIEŻĄCEJ chwili ── -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                    Margin="20,0,0,0" VerticalAlignment="Center">
+
+          <!-- Komunikat aplikacji z ikoną severity. ⚠ Mapowanie severity → pędzel i geometria czyta
+               z `MessageBanner.BrushKeyFor`/`GeometryKeyFor` — tego samego, którym maluje się log Messages
+               w edytorze SQL. ⛔ Zero drugiej definicji severity w aplikacji (§8.4.4). -->
+          <controls:SvgIcon Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
+                            IsVisible="{Binding HasStatusMessage}"
+                            VerticalAlignment="Center"
+                            Data="{Binding StatusMessageGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+            <controls:SvgIcon.Foreground>
+              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                <Binding Path="StatusMessageBrushKey" />
+                <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+              </MultiBinding>
+            </controls:SvgIcon.Foreground>
+          </controls:SvgIcon>
+          <TextBlock Text="{Binding StatusMessage}"
+                     IsVisible="{Binding HasStatusMessage}"
+                     FontSize="{DynamicResource Text.Status.Size}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding StatusMessage}"
+                     VerticalAlignment="Center">
+            <TextBlock.Foreground>
+              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                <Binding Path="StatusMessageBrushKey" />
+                <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+              </MultiBinding>
+            </TextBlock.Foreground>
+          </TextBlock>
+
+          <!-- Kontekst AKTYWNEJ ZAKŁADKI: edytor SQL kładzie tu statystyki wykonania, debugger status sesji
+               (UX Polish Seam 6a — wyprowadzony z paska debuggera, który potrzebował miejsca na Break on
+               exception + Save). Każdy inny rodzaj zakładki zostawia to puste, a obie pozycje wykluczają się
+               bramkami `IsVisible`. ⚠ VM debuggera jest nietknięty: `MainWindowViewModel` wystawia
+               `ActiveDebugger`, a Avalonia subskrybuje `PropertyChanged` zagnieżdżonego VM wzdłuż ścieżki
+               wiązania. ⛔ Status debuggera nigdy nie może być wpisywany w komunikat okna — to dwaj różni
+               właściciele i właśnie ich zlanie w jedno było defektem H‑4. -->
+          <TextBlock Text="{Binding QueryStatsText}"
+                     IsVisible="{Binding IsQueryTabActive}"
                      Classes="subtle"
-                     Classes.error="{Binding IsStatusError}"
+                     FontSize="{DynamicResource Text.Status.Size}"
+                     VerticalAlignment="Center" />
+          <TextBlock Text="{Binding ActiveDebugger.StatusText}"
+                     IsVisible="{Binding IsDebuggerTabActive}"
+                     Classes="subtle"
+                     Classes.error="{Binding ActiveDebugger.IsFaulted}"
                      FontSize="{DynamicResource Text.Status.Size}"
                      VerticalAlignment="Center" />
         </StackPanel>
-        <!-- Column 1 belongs to the ACTIVE TAB: the SQL Editor puts its query stats here, the debugger its
-             session status (UX Polish Seam 6a — moved out of the debugger toolbar, which needed the room for
-             Break on exception + Save). Every other tab kind leaves it empty. The two are mutually exclusive
-             by their IsVisible gates, so the Auto column only ever measures the one that is showing.
-             The debugger VM is untouched: MainWindowViewModel already exposes ActiveDebugger, and Avalonia
-             subscribes to the nested VM's PropertyChanged along the binding path. Column 0 keeps its own
-             owner (connection state); debugger status must never be written into MainWindowViewModel.StatusText. -->
-        <TextBlock Grid.Column="1"
-                   Text="{Binding QueryStatsText}"
-                   IsVisible="{Binding IsQueryTabActive}"
-                   Classes="subtle"
-                   FontSize="{DynamicResource Text.Status.Size}"
-                   Margin="20,0,0,0"
-                   VerticalAlignment="Center" />
-        <TextBlock Grid.Column="1"
-                   Text="{Binding ActiveDebugger.StatusText}"
-                   IsVisible="{Binding IsDebuggerTabActive}"
-                   Classes="subtle"
-                   Classes.error="{Binding ActiveDebugger.IsFaulted}"
-                   FontSize="{DynamicResource Text.Status.Size}"
-                   Margin="20,0,0,0"
-                   VerticalAlignment="Center" />
-        <!-- Product + version from AppInfo — the same single source the About window reads. This used to be
-             the literal "EmberTern 0.1.0", which had gone stale and then disagreed with About on screen. -->
-        <TextBlock Grid.Column="3"
-                   Text="{Binding AppVersionChip}"
-                   Classes="subtle"
-                   FontSize="{DynamicResource Text.Status.Size}"
-                   VerticalAlignment="Center" />
+
+        <!-- ── 3. STAN (chipy: transakcja, Trace, Debugger) — M3.1d / M3.1e ──────────────────────────── -->
+        <!-- ── 4. POSTĘP — M3.1f ────────────────────────────────────────────────────────────────────── -->
+        <!-- ⛔ Nazwa aplikacji i numer wersji NIE wracają tutaj (decyzja D3) — mieszkają w oknie About,
+             gdzie są tematem. Pasek statusu mówi, co dzieje się TERAZ; wersja nie zmienia się w sesji. -->
       </Grid>
     </Border>
 
