@@ -34,11 +34,12 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | `59c7bb7` — *M2c iteracja 4 (bliźniacze edytory Procedure/Function)* |
+| **Ostatni commit** | *M2c iteracje 5–9 + podsumowanie zamykające* |
 | **Wypchnięte** | ⚠ `e388ad7` na oba remote'y; **wszystko od `20d4ad6` w górę jeszcze NIE** (push po akceptacji użytkownika) |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · **M2c — krok 0 ✅, iteracje 1–4 ✅ (zaakceptowane); zaczynasz od ITERACJI 5** |
-| **Liczniki** | `FontSize` **332** (z 605) · `CornerRadius` **31** (z 37) · `FontFamily` **81** (poza zakresem) |
-| **⭐ Rejestr kolizji** | `product-polish.md` **§18.R** — 7 pozycji (K1–K7). Kolejną kolizję tego typu **dopisujesz bez pytania** i idziesz dalej |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · **M2c — WSZYSTKIE 10 KROKÓW WYKONANE** (krok 0 + iteracje 1–9 + domknięcie bazy). Zostaje **jeden pełny odbiór wizualny** (DoD 6) — patrz `product-polish.md` **§18.10** |
+| **Liczniki** | `FontSize` **43** (z 605) · `CornerRadius` **19** (z 37) · `FontFamily` **81** (poza zakresem). ⭐ Wszystkie 62 pozostałe to **świadome wyjątki z powodem zapisanym w miejscu** |
+| **⭐ Rejestr kolizji** | `product-polish.md` **§18.R** — **10 pozycji (K1–K10)**, drugi właściwy wynik etapu i wejście do przeglądu §13.3 |
+| **⛔ Po co jeszcze ten plik** | Nie jest już punktem wejścia do pracy — M2c jest zamknięty. Zostaje jako **zapis reguł i pułapek** (R1–R12, procedura, 16 pułapek), bo M3 pracuje na tych samych powierzchniach |
 | **Build** | 0 błędów / 0 ostrzeżeń |
 | **Suite** | **7087**, zielony w trzech partycjach (7000 + 54 + 33) — ⚠ zapis „7088 / 54 + 34" poprawiony 2026-08-02 po pomiarze na czystym `HEAD` (§18.1.6); przyczyną była nieistniejąca klasa w filtrze, patrz §8.3/15 |
 | **Smoke** | czysty |
@@ -415,12 +416,12 @@ zmieniając wyniku.
 | ✅ 2 | `DataImportTabView.axaml` | 82 | dużo koszyka A (`TextBox`/`ComboBox`/`NumericUpDown` 12); 4 × `CornerRadius="3"` migrują |
 | ✅ 3 | `PerformancePanelView.axaml` | 42 | zawiera glif 9 px i glif 13 px → koszyk D; `CornerRadius` 6 to kapsuła → zostaje |
 | ✅ 4 | `ProcedureDetailTabView` + `FunctionDetailTabView` | 40 + 41 | bliźniacze, ta sama struktura — migrować razem, żeby nie rozjechać |
-| **5** | edytory obiektów: Table 27 · Trigger 22 · View 20 · Package 17 · Domain 16 · Generator 15 · Exception 13 · Index 11 | 141 | grupa; wiele `ae:TextEditor` 13 → `Text.Code` |
-| **6** | monitory: `SessionManager` 26 · `TraceMonitor` 17 · `SecurityManager` 17 | 60 | ⚠ tu siedzi większość geometrii `CornerRadius` (koła, kapsuły) → zostaje |
-| **7** | `MainWindow.axaml` 26 + `Controls/` 7 | 33 | ⭐ powierzchnia trwała (§0.1) — najwyższa staranność |
-| **8** | dialogi — 18 plików po 1–9 | ~50 | ogon |
-| **9** | literały w `ControlStyles.axaml` (§3.8) | ~10 setterów | poza licznikiem, ten sam dług |
-| **10** | podniesienie bazy w `DesignTokenComplianceTests` do stanu faktycznego | — | krok końcowy; powód przy każdej pozostawionej pozycji |
+| ✅ 5 | edytory obiektów: Table 27 · Trigger 22 · View 20 · Package 17 · Domain 16 · Generator 15 · Exception 13 · Index 11 | 141 | grupa; wiele `ae:TextEditor` 13 → `Text.Code` |
+| ✅ 6 | monitory: `SessionManager` 26 · `TraceMonitor` 17 · `SecurityManager` 17 | 60 | ⚠ tu siedzi większość geometrii `CornerRadius` (koła, kapsuły) → zostaje |
+| ✅ 7 | `MainWindow.axaml` 26 + `Controls/` 7 | 33 | ⭐ powierzchnia trwała (§0.1) — najwyższa staranność |
+| ✅ 8 | dialogi — 18 plików po 1–9 | ~50 | ogon |
+| ✅ 9 | literały w `ControlStyles.axaml` (§3.8) | ~10 setterów | poza licznikiem, ten sam dług |
+| ✅ 10 | podniesienie bazy w `DesignTokenComplianceTests` do stanu faktycznego | — | krok końcowy; powód przy każdej pozostawionej pozycji |
 
 ⚠ Kolejność 1–3 wynika z handovera (największe skupiska); 4–8 z pokrewieństwa struktury, bo to ono
 decyduje, czy reguła wyboru roli da się zastosować spójnie.

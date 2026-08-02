@@ -3450,6 +3450,8 @@ idzie dalej. Rejestr jest wejściem do przeglądu §13.3.
 | K6 | 4 | nagłówek karty tabeli w obu bliźniakach | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
 | K7 | 4 | `MinHeight` nagłówka `Expandera` w obu bliźniakach | 26 | `Size.Control` = **24** (przez `ExpanderMinHeight`) | ⛔ lokalnie z powodem |
 | K8 | 6 | `TextBlock.section` — nagłówek panelu szczegółów (Session + Trace) | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
+| K9 | 9 | `TabItem` — etykieta zakładki roboczej (`ControlStyles.axaml`) | 13 | brak roli tekstowej przy 13 | ⛔ lokalnie z powodem → **M3.3** |
+| K10 | 9 | `TabItem.bottom-tab` / `.sub-tab` — kształt zakładki | promień 4 | `Radius.Chip` = 4, ale zakładka chipem nie jest | ⛔ lokalnie z powodem → **M3.3** |
 
 ⚠ **Wzorzec K1/K2/K3/K6 to jedno pytanie zadane cztery razy: ile mierzy pasek narzędzi i ile mierzy
 nagłówek sekcji.** Katalog M2a odpowiedział jedną liczbą na każde; produkt używa dwóch. Rozstrzygnięcie
@@ -3715,3 +3717,113 @@ Build **0/0** · suite **7087** zielony · smoke czysty.
 Liczniki: `FontSize` **114 → 43** · `FontFamily` **81** · `CornerRadius` **28 → 19**.
 ⭐ **Pozostałe 43 `FontSize` i 19 `CornerRadius` to WYŁĄCZNIE świadome wyjątki z powodem zapisanym
 w miejscu** — po raz pierwszy w etapie licznik nie zawiera już ani jednej wartości „do zrobienia".
+
+---
+
+### §18.9 Iteracja 9 — literały w `ControlStyles.axaml` (2026-08-02)
+
+> **Zakres:** 7 `FontSize` + 7 `CornerRadius` **poza zasięgiem strażnika** (`Themes/` jest wyłączone —
+> „tam mieszka system"). Krok 0 nazwał to *katalogiem zapisanym drugi raz* (§18.0.6).
+
+**Zmigrowane (7):** `ListBox.code-action-menu ListBoxItem` 12 · `ContextMenu` 12 · `MenuItem` 12 →
+`Text.Application` · `TabItem.bottom-tab` 11 · `TabItem.sub-tab` 11 · `PART_InputGestureText` 11 →
+`Text.Compact` · `MenuItem` PART_LayoutRoot 3 → `Radius.Surface`.
+
+**Zostaje z powodem (7):** `TabItem` 13 (**K9** — brak roli tekstowej przy 13; pasek zakładek to M3.3) ·
+dwa promienie zakładek przy 4 (**K10** — `Radius.Chip` niesie tę samą liczbę, ale zakładka chipem nie
+jest) · `ContextMenu` 4 (powierzchnia unosząca się; `Radius.Surface` niesie 3) · kropka filtra 3.5
+(geometria: 7×7, promień = połowa boku) · dwa resety do 0.
+
+⭐ **Ta iteracja nie zmienia żadnego licznika** — `Themes/` nigdy nie był mierzony. Jej wartość jest inna:
+**usuwa ostatnie miejsce, w którym system opisywał sam siebie drugi raz.** Zmiana `Text.Application` w
+katalogu dosięga teraz również menu kontekstowych, a `Text.Compact` — dolnych i pod-zakładek.
+
+---
+
+### §18.10 🔒 M2c — PODSUMOWANIE ZAMYKAJĄCE (2026-08-02)
+
+#### §18.10.1 Wynik liczbowy
+
+| Licznik | Start | Koniec | Co zostało |
+|---|---|---|---|
+| `FontSize` | **605** / 49 plików | **43** / 13 plików | wyłącznie wyjątki z powodem w miejscu |
+| `CornerRadius` | **37** / 13 plików | **19** / 5 plików | geometria, karty i resety |
+| `FontFamily` | 81 / 28 | **81** | ⛔ poza zakresem etapu (ratyfikowane, §18.0.5/1) |
+
+**Baza w `DesignTokenComplianceTests` zgadza się z pomiarem co do sztuki** — 43 i 19, plik po pliku.
+Build **0/0** · suite **7087** zielony w trzech partycjach · smoke czysty po każdej z dziewięciu iteracji.
+**Ani jedna wartość liczbowa w aplikacji się nie zmieniła.**
+
+#### §18.10.2 ⭐⭐ Czym naprawdę okazał się ten etap
+
+> **R12, ratyfikowana w kroku 0:** *„celem jest usunięcie NIEUZASADNIONYCH wartości lokalnych, nie
+> wyzerowanie licznika."*
+
+Dziewięć iteracji dało temu zdaniu **liczbowy kształt: 562 wartości zniknęły, 62 zostały z powodem.**
+I rozkład tych 62 nie jest przypadkowy — **wyjątek pojawia się dokładnie tam, gdzie widok podjął własną
+decyzję projektową**, a nie tam, gdzie kod jest stary albo plik duży:
+
+| Widok | Wynik | Dlaczego |
+|---|---|---|
+| osiem edytorów obiektów | 141 → **0** | jeden wzorzec, zero własnych skal |
+| `MainWindow` + `Controls/` | 33 → **0** | chroma aplikacji, sześć ról, żadnej własnej skali |
+| ogon 28 dialogów | 80 → **4** | zwykłe formularze |
+| debugger, Data Import, Performance, monitory | 285 → **30** | własne paski, karty, chipy, glify, gęstości |
+
+⭐ **Licznik nigdy nie mierzył jakości pracy — mierzył liczbę własnych rozstrzygnięć widoku.**
+
+#### §18.10.3 ⭐⭐ Drugi wynik etapu: rejestr kolizji K1–K10
+
+Rejestr §18.R jest **produktem M2c na równi ze sweepem**. Dziesięć pozycji, ale **jedno pytanie zadane
+wielokrotnie: katalog M2a opisał każdą rolę JEDNĄ liczbą, a produkt używa niektórych w dwóch.**
+
+* **pasek narzędzi** — debugger 11, Data Import 12 (K1, K2)
+* **nagłówek sekcji** — kanoniczny `group-header` 11, ale Performance 12, karty bliźniaków 12, panele
+  szczegółów monitorów 12 (K3, K6, K8)
+* **rozmiar kodu** — pełnowymiarowy edytor 13, sześć edytorów w wierszu siatki 12 (ratyfikowane jako
+  decyzja kontenera, nie dryf)
+* **promień** — chip Performance 3 vs `Radius.Chip` 4 (K5), zakładka 4 vs `Radius.Surface` 3 (K10)
+* **pojedyncze** — `PlanLead` 13 (K4), `Expander` 26 vs 24 (K7), zakładka robocza 13 (K9)
+
+⛔ **Żadna z nich nie została rozstrzygnięta w M2c i to jest właściwe.** Rozstrzygnięcie którejkolwiek
+zmieniłoby wygląd, a M2c migruje do systemu z M2a, nie projektuje nowego.
+
+#### §18.10.4 ⚠⚠ Trzy razy narzędzie pomiarowe okazało się mniej dokładne niż zakładano
+
+| Gdzie | Co mierzyło naprawdę | Skutek |
+|---|---|---|
+| liczba testów (§18.1.6) | filtr partycji zawierał **nieistniejącą klasę** | suita 7088 → **7087** we wszystkich dokumentach |
+| licznik vs komentarz (§18.2.3) | **prozę cytującą składnię atrybutu** | dwa fałszywe trafienia; złapane dwa razy w jednej iteracji |
+| licznik vs setter (§18.6.3) | setter czytający katalog liczony jak literał | **poprawka regexu** — druga połowa naprawy z M2b kroku 12 |
+
+⭐ **Wspólny kształt: narzędzie mierzyło COŚ INNEGO niż mówi jego nazwa, i za każdym razem widać to
+dopiero, gdy migracja dociera do granicy.** Gdyby M2c szedł automatem, wszystkie trzy przeszłyby
+niezauważone przy zielonym buildzie.
+
+#### §18.10.5 Cztery idiomy konsumpcji roli — wszystkie żywe, każdy na swoim miejscu
+
+1. **XAML** — `FontSize="{DynamicResource Text.Compact.Size}"` (dominujący).
+2. **Setter stylu** — `<Setter Property="FontSize" Value="{DynamicResource …}" />` (`ControlStyles`,
+   `BreadcrumbBar`, style lokalne monitorów).
+3. **C# z pomocnikiem** — `BindFontSize(control, "…")` w `DebuggerTabView`, bliźniak istniejącego
+   `BindBrush` (6 wywołań uzasadnia pomocnika).
+4. **C# bez pomocnika** — `DynamicResourceExtension` przez indekser (`TableColumnPicker`, idiom tego
+   pliku) albo `Bind(…, GetResourceObservable(…))` (`TableDetailTabView`, dwa wywołania).
+
+#### §18.10.6 Definition of Done — stan
+
+| # | Warunek | |
+|---|---|---|
+| 1 | każda pozostała wartość ma komentarz z powodem | ✅ 62 pozycje, powód w miejscu |
+| 2 | baza odzwierciedla stan faktyczny | ✅ 43 i 19, zweryfikowane pomiarem |
+| 3 | build 0/0 | ✅ |
+| 4 | suite zielony w trzech partycjach | ✅ 7000 + 33 + 54 |
+| 5 | smoke czysty | ✅ po każdej iteracji |
+| 6 | ⭐ **aplikacja wygląda IDENTYCZNIE** | ⏳ **odbiór wizualny użytkownika** — narzędzia headless tego nie dają |
+| 7 | §18 prowadzone iteracja po iteracji | ✅ §18.1–§18.10 + rejestr §18.R |
+| 8 | push na oba remote'y | ⏳ po akceptacji |
+
+⚠ **Warunek 6 jest jedynym, którego nie potrafię sprawdzić sam** — i jest tym, który odróżnia M2c od M2b.
+Po każdej iteracji weryfikowałem skryptem, że **każdy użyty klucz roli istnieje w katalogu**
+(`{DynamicResource}` nie rzuca przy literówce, pułapka #14) i uruchamiałem aplikację; to jest maksimum
+dostępnego dowodu bez ludzkiego oka.

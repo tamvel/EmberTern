@@ -78,7 +78,7 @@
   <Style Selector="ListBox.code-action-menu ListBoxItem">
     <Setter Property="Padding" Value="9,3" />
     <Setter Property="MinHeight" Value="0" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
   </Style>
 
   <Style Selector="Window">
@@ -350,6 +350,7 @@
   <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- ⚠ Promień 0 zostaje: RESET, nie rola (§3.6 handovera). -->
     <Setter Property="CornerRadius" Value="0" />
   </Style>
 
@@ -579,6 +580,7 @@
   <Style Selector="Border.filter-active-dot">
     <Setter Property="Width" Value="7" />
     <Setter Property="Height" Value="7" />
+    <!-- ⚠ Promień 3.5 zostaje: to GEOMETRIA — kropka 7×7, promień to połowa boku (§18.0.5/2). -->
     <Setter Property="CornerRadius" Value="3.5" />
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BackgroundBrush}" />
@@ -683,6 +685,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
+    <!-- ⚠ Promień 0 zostaje: RESET, nie rola. -->
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="Width" Value="46" />
@@ -757,6 +760,9 @@
   </Style>
 
   <Style Selector="TabItem">
+    <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 9, §18.9) — rejestr kolizji §18.R/K9. Katalog ma
+             przy 13 wyłącznie rolę kodu, a to jest etykieta zakładki roboczej. Pasek zakładek to M3.3,
+             więc pytanie „ile mierzy zakładka" rozstrzyga tamten etap albo przegląd §13.3. -->
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Padding" Value="14,8" />
     <Setter Property="MinHeight" Value="0" />
@@ -772,13 +778,16 @@
 
   <!-- Bottom-panel + main editor tabs (Results / Messages / Output, Editor / Fields / …). -->
   <Style Selector="TabItem.bottom-tab">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     <Setter Property="Padding" Value="8,4" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
   <Style Selector="TabItem.bottom-tab /template/ Border#PART_LayoutRoot">
+    <!-- ⚠ Promień 4 zostaje, ŚWIADOMIE (M2c iteracja 9, §18.9) — §18.R/K10: kształt zakładki.
+             `Radius.Chip` niesie tę samą liczbę, ale zakładka chipem nie jest, a `Radius.Surface` (3)
+             zmieniłaby wygląd. -->
     <Setter Property="CornerRadius" Value="4" />
   </Style>
 
@@ -805,13 +814,14 @@
        SAME active-state language as bottom-tab — elevated fill + SemiBold, no accent,
        no border, no underline. .empty greys an empty group's label. -->
   <Style Selector="TabItem.sub-tab">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     <Setter Property="Padding" Value="11,5" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
   <Style Selector="TabItem.sub-tab /template/ Border#PART_LayoutRoot">
+    <!-- ⚠ Jak wyżej — kształt zakładki, §18.R/K10. -->
     <Setter Property="CornerRadius" Value="4" />
   </Style>
 
@@ -1079,10 +1089,12 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
+    <!-- ⚠ Promień 4 zostaje, ŚWIADOMIE: menu kontekstowe unosi się nad treścią, a `Radius.Surface`
+             niesie 3. Decyzja „powierzchnia unosząca się: 3 czy 4" → przegląd §13.3. -->
     <Setter Property="CornerRadius" Value="4" />
     <!-- A 4px band top and bottom so the first and last row do not touch the border. -->
     <Setter Property="Padding" Value="0,4" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
   </Style>
 
   <Style Selector="ContextMenu, MenuItem">
@@ -1092,13 +1104,13 @@
   <!-- The row. 12px type (down from 14) and a symmetric 3px vertical pad bring a row from 27px to ~22px
        without crowding the text; MinHeight keeps an icon-less row exactly as tall as one with an icon. -->
   <Style Selector="MenuItem">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="Padding" Value="10,3" />
     <Setter Property="MinHeight" Value="22" />
   </Style>
 
   <Style Selector="MenuItem /template/ Border#PART_LayoutRoot">
-    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
     <Setter Property="Margin" Value="3,0" />
   </Style>
 
@@ -1136,7 +1148,7 @@
        template; the left margin guarantees a gap even when a label is long. -->
   <Style Selector="MenuItem /template/ TextBlock#PART_InputGestureText">
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     <Setter Property="Margin" Value="24,0,0,0" />
   </Style>
 

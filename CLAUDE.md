@@ -426,10 +426,21 @@ noted.
 ## Current state
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a + 🔒 M2b ALL COMPLETE
-  AND USER-ACCEPTED (M2b closed 2026-08-02 — 21 iterations, 14 commits). ⭐ M2c IS UNDER WAY: step 0
-  (the inventory) plus **iterations 1–4 are COMPLETE and USER-ACCEPTED**; the next session starts at
-  **iteration 5** (the eight object editors). Counters, measured: **`FontSize` 605 → 332** ·
-  **`CornerRadius` 37 → 31** · `FontFamily` 81 (out of scope by decision).**
+  AND USER-ACCEPTED (M2b closed 2026-08-02 — 21 iterations, 14 commits). ⭐⭐ **M2c — ALL TEN STEPS ARE
+  DONE** (step 0 + iterations 1–9 + the baseline close-out); iterations 1–4 are user-accepted, 5–9 await
+  the one full visual review that is DoD 6. Counters, measured: **`FontSize` 605 → 43** ·
+  **`CornerRadius` 37 → 19** · `FontFamily` 81 (out of scope by decision). ⭐ **All 62 remaining values
+  are deliberate exceptions with the reason written beside them** — that, not a number, is R12's exit
+  condition. Closing summary: `product-polish.md` **§18.10**.
+  ⭐ **The distribution of those 62 is the stage's real finding: an exception appears exactly where a view
+  made its OWN design decision, never where the code is old or the file large.** The eight object editors
+  went 141 → **0** and `MainWindow` + `Controls/` 33 → **0** (no own scale); the debugger, Data Import,
+  Performance and the three monitors went 285 → **30** (own toolbars, cards, chips, glyphs, densities).
+  ⚠⚠ **Three times the measuring tool proved less accurate than assumed** — a partition filter naming a
+  class that no longer exists (suite 7088 → **7087**), the counter scoring **prose in a comment**, and the
+  counter scoring a **setter that reads the catalog** exactly like a literal (fixed: the second half of
+  M2b step 12's correction). Each was invisible under a green build and each surfaced only when the
+  migration reached its boundary.**
   **⭐⭐ `product-polish.md` §18.R IS THE COLLISION REGISTER AND IT IS THE STAGE'S SECOND OUTPUT.** The
   recurring finding, hit in every iteration so far, is *a role that fits by FUNCTION but carries a
   different NUMBER* — the debugger toolbar is 11 while `Text.Toolbar` is 12; several section headers are
