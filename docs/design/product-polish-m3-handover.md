@@ -14,9 +14,9 @@
 | 1 | **ten plik** | ⭐ **wiążący, punkt wejścia** | zawsze, w całości |
 | 2 | `product-polish.md` **§19** | ⭐ **wiążący** — as-built M3, wynik iteracji 0 | zawsze |
 | 3 | `product-polish.md` **§8** | ⭐ **wiążący** — model paska zakładek (§8.0–§8.3) i Status Bara 2.0 (§8.4) | M3.1 i M3.3 |
-| 4 | `product-polish.md` **§7.5** | ⭐ wiążący — semantyka kolorów | M3.2 |
+| 4 | ⭐⭐ **`color-language.md`** | ⭐⭐ **WIĄŻĄCY I ZAAKCEPTOWANY — jedyne źródło prawdy o kolorach.** Dokument PRODUKTU, nie etapu. ⚠ `product-polish.md` §7.5 jest od 2026-08-02 tylko **jednym z jego wejść** i jego tabela „zmiany do wykonania" **NIE OBOWIĄZUJE** | M3.2 i każda nowa funkcja |
 | 5 | `product-polish.md` **§13.3** | ⭐ wiążący — brama jakości po M3 | przed zamknięciem etapu |
-| 6 | `product-polish.md` **§17** + **§18.R** | ⭐ wiążący — reguły **R1–R13** (R13 ratyfikowana w M3.2a), rejestr kolizji **K1–K11** | zawsze |
+| 6 | `product-polish.md` **§17** + **§18.R** | ⭐ wiążący — reguły **R1–R14** (R13 i R14 ratyfikowane w M3.2), rejestr kolizji **K1–K11** | zawsze |
 | 7 | `Themes/Tokens.axaml`, `Themes/Typography.axaml` | ⭐ **katalog — źródło prawdy o rolach** | przy każdej iteracji |
 
 ⛔ **NIE czytaj na starcie:**
@@ -42,7 +42,7 @@
 | **Suite** | **7133**, zielony w trzech partycjach (**7031 + 48 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⭐⭐ **M3.2b′ — PROJEKT JĘZYKA KOLORÓW.** Kolejność ODWRÓCONA i ratyfikowana: ✅ **inwentarz całego produktu = §20 (ZROBIONY)** → **projekt języka** (role · zastosowania · wyjątki) → **akceptacja** → dopiero przypisanie przycisków. ⛔ Nie dedukować reguły z istniejących przycisków (§19.14.5). ⭐ Trzy odpowiedzi użytkownika już wiążą: **🟢 dwie osobne role (Execute / Commit), na razie ten sam odcień** · **🟡 = ostrzeżenie / wstrzymanie, NIGDY destrukcja** (⇒ usuń połączenie i usuń zapytanie idą na czerwony) · **🔵🟣 tożsamość modułu tylko wewnątrz modułu — ale WOLNO jej użyć w pasku globalnym, gdy element niesie STAN, nie akcję** (chip Debug/Trace) |
+| **NASTĘPNY KROK** | ⭐⭐ **`color-language.md` §11 / KROK K1** — nowy token `ActionRunBrush` o wartości identycznej z `SuccessIconColor`, podstawiony pod Execute procedury/funkcji i Start trace. **Krok NEUTRALNY wizualnie** (zero zmiany na ekranie), więc najbezpieczniejszy możliwy start. ⛔ **Projekt języka jest ZAAKCEPTOWANY — nie projektuj go ponownie, wykonuj §11 krok po kroku.** ⛔ **R14: jeden krok = jedna iteracja = jedno obejrzenie na żywo** |
 | **⏸ ZAMKNIĘTE PRZEZ R13** | Dług „sekcja 3 toolbara drga przy przełączaniu pod-zakładek" (§19.10.3) **nie wymaga już decyzji** — R13 rozstrzyga go z góry: nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Sekcja 3 zostaje jak jest |
 | **⏸ DROBIAZG DO WZIĘCIA PO DRODZE** | Wyłączone komórki Size/Scale/SubType/Charset dostały `Stretch`, ale **tło nadal maluje `FluentBridge`** (`TextControlBackgroundDisabled` → `BackgroundColor`), więc setter `Background="Transparent"` go nie zdejmuje. Jeśli po QA nadal widać pudełko — trasa jest przez **Bridge**, nie przez setter (reguła 8 §16). Zapis: §19.8.4 |
 
@@ -242,7 +242,7 @@ Zapisane tutaj, żeby były zadane raz i we właściwym momencie.
 
 ---
 
-## 5. Reguły obowiązujące — R1–R12
+## 5. Reguły obowiązujące — R1–R14
 
 ⛔ **Zmienia je wyłącznie użytkownik. Nie otwierać ponownie.**
 
@@ -261,6 +261,7 @@ Zapisane tutaj, żeby były zadane raz i we właściwym momencie.
 | R11 | **`Size.Row.Grid`** to osobna decyzja produktowa |
 | R12 | ⭐ **Celem jest usunięcie NIEUZASADNIONYCH wartości lokalnych, nie wyzerowanie licznika**; **błędna rola jest gorsza od wartości lokalnej** |
 | **R13** | ⭐⭐ **NIE REZERWUJEMY MIEJSCA NA ELEMENT, KTÓRY W DANYM KONTEKŚCIE NIGDY SIĘ NIE POJAWI.** Stabilizacja układu ma sens **tylko wtedy, gdy nie pogarsza wykorzystania przestrzeni** — pusta dziura czyta się jako błąd układu, a niewielkie przesunięcie nie. Ratyfikowana 2026-08-02 na odbiorze M3.2a (§19.12) |
+| **R14** | ⭐⭐ **KAŻDY KROK MUSI BYĆ EWIDENTNYM ULEPSZENIEM UX SAM W SOBIE.** *„Wolę pięć małych, oczywistych poprawek niż jedną dużą rewolucję."* ⛔ Krok, którego jedynym uzasadnieniem jest *„teraz jest zgodne z regułą"*, jest **zły** — ryzyko niezerowe, zysk zerowy. ⚠ Nie dotyczy kroków **neutralnych wizualnie** (zero zmiany na ekranie), bo te nie mogą pogorszyć UX. Ratyfikowana 2026-08-02 przy akceptacji `color-language.md` (§0.4) |
 
 **Cztery decyzje architektoniczne M2b (§17.2) — również wiążące:**
 1. **`FluentBridge`** — przepinamy Fluenta na nasz katalog; trzy trasy (metryki → setter · kolory
@@ -471,6 +472,15 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
    Wybór wariantu na podstawie pomiaru był właściwym trybem, ale te dwie zmiany dało się ocenić
    **dopiero na ekranie**. Dla zmian przestawiających elementy w polu widzenia krok 5 procedury
    („uruchom aplikację i obejrzyj") jest **bramką odbioru, nie formalnością na koniec**.
+16. ⭐⭐ **NOWA (M3.2a, §19.12) — GDY AUDYT NAZYWA PROBLEM JEDNĄ WIELKOŚCIĄ, TO JEST HIPOTEZA O PROBLEMIE,
+   A NIE JEGO DEFINICJA.** H‑3 brzmiało *„toolbar się przesuwa"*, więc pomiar dał liczbę pikseli, a każde
+   z trzech rozwiązań tę liczbę zmniejszało — i **każde płaciło inną walutą**: rozmiarem akcji głównej,
+   sąsiedztwem poleceń, gęstością układu. Wszystkie trzy działały i wszystkie trzy zostały odrzucone.
+   ⚠ Praktycznie: zanim zaczniesz minimalizować wielkość, którą podał audyt, **wypisz, co jeszcze na tej
+   powierzchni ma wartość** — i sprawdź, czy któraś z tych rzeczy nie jest ważniejsza. ⭐ Asymetria warta
+   zapamiętania: **pusta przestrzeń kosztuje przez cały czas, przesunięcie kosztuje przez chwilę** — bo
+   dziury w spoczynku nic nie tłumaczy, a przesunięcie widać tylko w momencie zmiany.
+
 17. ⛔⛔ **NAJWAŻNIEJSZA (M3.2b, §19.14) — REGUŁA OPISUJE TO, CO JUŻ JEST DOBRE; NIE JEST MANDATEM DO
    ZMIANY WSZYSTKIEGO, CO DO NIEJ NIE PASUJE.** Cztery odrzucenia z rzędu, jeden mechanizm: pomiar →
    reguła → **doprowadzenie reguły do końca** → produkt gorszy. Ani razu nie zawiódł pomiar; za każdym
@@ -482,15 +492,6 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
    się mylę?"*. ⚠⚠ I trzecie, mierzalne: **czy mierzyłem tam, gdzie problem jest, czy tam, gdzie patrzę?**
    §19.14.2 — 91% ikon aplikacji jest już neutralnych, a ja wyciszałem, bo wszystkie kolorowe skupiają
    się w dwóch paskach, czyli dokładnie w moim polu widzenia.
-16. ⭐⭐ **NOWA (M3.2a, §19.12) — GDY AUDYT NAZYWA PROBLEM JEDNĄ WIELKOŚCIĄ, TO JEST HIPOTEZA O PROBLEMIE,
-   A NIE JEGO DEFINICJA.** H‑3 brzmiało *„toolbar się przesuwa"*, więc pomiar dał liczbę pikseli, a każde
-   z trzech rozwiązań tę liczbę zmniejszało — i **każde płaciło inną walutą**: rozmiarem akcji głównej,
-   sąsiedztwem poleceń, gęstością układu. Wszystkie trzy działały i wszystkie trzy zostały odrzucone.
-   ⚠ Praktycznie: zanim zaczniesz minimalizować wielkość, którą podał audyt, **wypisz, co jeszcze na tej
-   powierzchni ma wartość** — i sprawdź, czy któraś z tych rzeczy nie jest ważniejsza. ⭐ Asymetria warta
-   zapamiętania: **pusta przestrzeń kosztuje przez cały czas, przesunięcie kosztuje przez chwilę** — bo
-   dziury w spoczynku nic nie tłumaczy, a przesunięcie widać tylko w momencie zmiany.
-
 ### 9.2 Odziedziczone z M2b (§17.5)
 
 7. **⚠⚠ Arytmetykę wysokości sprawdza się na SUMIE, nie na składniku.** Trzy potknięcia w M2b, trzecie
@@ -521,18 +522,17 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 6b | **poprawki odbiorcze** | Zamknięte bez osobnej iteracji (decyzja użytkownika): wyrównanie endpointu **zamknięte pomiarem bez zmiany kodu** · bug historii parametrów · pusta kolumna Type przy domenie · wygląd wyłączonych komórek (§19.8) | — |
 | ✅ 7 | **M3.2a** | H‑3. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. ⛔⛔ **Z czterech ruchów został JEDEN — Export DDL na koniec paska tytułu (T2).** Odbiór wizualny cofnął podłogę Execute/Cancel, dokowanie Commit/Rollback i rezerwację slotu sekcji 1: ⭐ **GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI** · rozmiar z wyrównania czyta się jak deklaracja ważności (R5 od drugiej strony) · ⭐⭐ **R13** — nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Wszystkie przesunięcia **świadomie zaakceptowane**. §19.10 + §19.11 + **§19.12** | — |
 | ⛔ 8 | ~~**M3.2b**~~ | **WYCOFANA W CAŁOŚCI** (§19.13 + §19.14). Wyprowadziłem regułę z §7.5 i doprowadziłem ją do końca; UX wyszedł gorszy. ⭐ Ocalała jedna rzecz — korekta §7.5: neutralny dla IKONY to `NeutralIconBrush` (brak `Foreground`), nie `ForegroundBrush` | — |
-| ⭐⭐ **9** | **M3.2b′ — JĘZYK KOLORÓW** | **← TU ZACZYNASZ, i kolejność jest ODWRÓCONA (ratyfikowane):** najpierw **projekt języka** (role · zastosowania · wyjątki) → **akceptacja** → dopiero potem przypisanie przycisków. ⛔ Nie dedukować reguły z istniejących przycisków. Wejścia: pomiar §19.14.2/§19.14.3 + szkic ról użytkownika (🟢 uruchom · 🟢 commit · 🔵 debugger · 🟣 monitoring · 🟡 pomocnicze · 🔴 destrukcja/stop) + §7.5 jako **jedno z wejść, nie źródło** | — |
-| 10 | **M3.2c** | H‑5 — Commit / Rollback na `CommitButtonBrush` / `RollbackButtonBrush`. ⚠ Audyt nazwał zły moduł: drugim jest **Data Import**, nie Script Executor. ⭐ Oba tokeny docelowe **nie mają dziś ani jednego konsumenta**. ⏸ Prawdopodobnie wchłonie go język kolorów | **DD** ✅ |
-
-| 10 | **M3.2d** | M‑1 — 10 literałów → `UiStrings` | — |
-| 11 | **M3.3a** | Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik; **K9/K10 zostają** | — |
-| 12 | **M3.3b** | Dwa tryby + preferencje (`TabStripMode`, `TabStripMaxRows`) + wiersze w Settings Center | — |
-| 13 | **M3.3c** | Menu kontekstowe zakładki — 8 pozycji, **czwarte wejście do bramki** | — |
-| 14 | **M3.4a** | Metadata Explorer — wiersz drzewa | **DB** |
-| 15 | **M3.4b** | Przegląd menu kontekstowych | — |
-| 16 | **M3b** | Podłączenie pozostałych operacji do paska postępu (16 VM, 3 ścieżki `IProgress`)<br>⏸ **+ pełna semantyka kolorów railu** — odłożona tu świadomie przez użytkownika, z pomiarem (§19.4.4) | — |
-| 17 | ⛔ **brama** | **§13.3** — cztery powierzchnie **jednocześnie**, żywa baza, oba motywy | — |
-| 18 | — | Podsumowanie zamykające §19.x + CLAUDE.md + handover M4 + prompt startowy | — |
+| ✅ 9 | **projekt języka kolorów** | ⭐⭐ **ZAAKCEPTOWANY 2026-08-02 → [`color-language.md`](color-language.md).** Dokument PRODUKTU: cztery niezależne systemy (rodzaj · akcja · tożsamość modułu · hierarchia przycisku), siedem ról R‑1…R‑7, sześć nazwanych wyjątków, reguła rozstrzygająca dla nowych funkcji, plan wdrożenia §11. ⛔ **Nie projektuj go ponownie** | — |
+| ⭐⭐ **10** | **K1–K7 — WDROŻENIE JĘZYKA** | **← TU ZACZYNASZ, od K1.** `color-language.md` **§11** — siedem małych kroków, **jeden krok = jedna iteracja = jeden commit = jedno obejrzenie na żywo** (R14). K1 jest **neutralny wizualnie**, K2 to zgłoszone przez użytkownika żółte usuwanie, K6 (Odśwież) ma **największe ryzyko** i stoi na końcu części wizualnej | **DD** przy K7 |
+| 11 | **M3.2d** | M‑1 — 10 literałów → `UiStrings` | — |
+| 12 | **M3.3a** | Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik; **K9/K10 zostają** | — |
+| 13 | **M3.3b** | Dwa tryby + preferencje (`TabStripMode`, `TabStripMaxRows`) + wiersze w Settings Center | — |
+| 14 | **M3.3c** | Menu kontekstowe zakładki — 8 pozycji, **czwarte wejście do bramki** | — |
+| 15 | **M3.4a** | Metadata Explorer — wiersz drzewa | **DB** |
+| 16 | **M3.4b** | Przegląd menu kontekstowych | — |
+| 17 | **M3b** | Podłączenie pozostałych operacji do paska postępu (16 VM, 3 ścieżki `IProgress`)<br>⏸ **+ pełna semantyka kolorów railu** — odłożona tu świadomie przez użytkownika, z pomiarem (§19.4.4) | — |
+| 18 | ⛔ **brama** | **§13.3** — cztery powierzchnie **jednocześnie**, żywa baza, oba motywy | — |
+| 19 | — | Podsumowanie zamykające §19.x + CLAUDE.md + handover M4 + prompt startowy | — |
 
 ⚠ **Podział M3.1 na sześć iteracji jest celowy.** Status Bar to najbogatsza sekcja dokumentu (§8.4 ma
 siedem podsekcji) i jedyna powierzchnia, którą użytkownik widzi **zawsze**. Jedna iteracja „Status Bar"
@@ -549,7 +549,7 @@ byłaby zmianą, której nie da się sensownie odebrać wizualnie.
 
 Jeżeli znajdziesz rozwiązanie wyraźnie lepsze od zapisanego:
 **propozycja → akceptacja → aktualizacja dokumentu → implementacja.**
-⛔ Ani ciche odstępstwo, ani ślepa zgodność. ⛔ Decyzje D1–D12 i reguły R1–R12 zmienia wyłącznie użytkownik.
+⛔ Ani ciche odstępstwo, ani ślepa zgodność. ⛔ Decyzje D1–D12 i reguły R1–R14 zmienia wyłącznie użytkownik.
 
 ⭐ **Dotyczy to w szczególności railu (§8.4.1)**, gdzie użytkownik przyznał wprost swobodę projektową:
 wiążące są **wymagania** (rozdzielenie Rail/Chip, cztery sekcje, hierarchia, widoczna transakcja, brak

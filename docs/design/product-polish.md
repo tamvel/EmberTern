@@ -777,8 +777,9 @@ identyfikuje rodzaj obiektu: drzewo, zakładki, menu, przyciski „Nowy X", nag�
 | **Warning / Rollback** | `RollbackButtonBrush` | wycofanie, odrzucenie zmian |
 | **Dangerous** | `DangerIconBrush` | **wyłącznie** operacje nieodwracalne — Drop, Delete, Stop |
 
-**Neutralność.** ⚠⚠ **SKORYGOWANE W M3.2b PO POMIARZE — dla IKONY neutralnym jest `NeutralIconBrush`,
-nie `ForegroundBrush`, a realizuje się to przez BRAK `Foreground`.** To dwa różne tokeny i różnica jest
+**Neutralność.** ⚠⚠ **SKORYGOWANE POMIAREM W M3.2b — i to JEDYNA rzecz z tamtej iteracji, która
+przetrwała jej wycofanie, bo jest faktem o kodzie, nie decyzją projektową. Dla IKONY neutralnym jest
+`NeutralIconBrush`, nie `ForegroundBrush`, a realizuje się to przez BRAK `Foreground`.** To dwa różne tokeny i różnica jest
 celowa: Dark `#C8CCD2` vs `#D4D4D4`, Light `#3C3C3C` vs `#1B1D1F` — ikona stroke'owana czyta się inaczej
 niż litera, więc ma własną wartość neutralną, ustawioną jako domyślna w `ControlTheme` kontrolki
 `SvgIcon`. ⛔ Wpisanie `ForegroundBrush` na ikonę rozjechałoby pasek z ikonami całej reszty aplikacji
@@ -800,15 +801,25 @@ a trzeci szary?"*): zielony, bo dotyczy obiektu, który wszędzie indziej też j
 niebieski, bo to główna akcja tego ekranu; szary, bo to narzędzie ogólne. **Każda odpowiedź jest
 jednozdaniowa i sprawdzalna.**
 
-#### Zmiany do wykonania — ⭐ WYKONANE W M3.2b (§19.13), nie w M2b
+#### ⛔⛔ Zmiany do wykonania — TA TABELA JEST HISTORYCZNA I NIE OBOWIĄZUJE
 
-| Element | Dziś | Docelowo | Powód |
+⚠⚠ **M3.2b wykonało ją co do litery i zostało WYCOFANE W CAŁOŚCI** (§19.13 + §19.14). Wiersz
+*„6 narzędzi ogólnych → neutralne"* okazał się głównym powodem odrzucenia: te sześć przycisków
+**otwiera moduły**, co jest osobną rolą, której ta tabela nie znała.
+
+⭐⭐ **Źródłem prawdy o kolorach jest od 2026-08-02 osobny dokument produktu:
+[`color-language.md`](color-language.md).** Ta sekcja zostaje jako **jedno z jego wejść** i jako zapis
+tego, jak wąsko postawione pytanie („co zrobić z sześcioma przyciskami w pasku tytułu") prowadzi do
+odpowiedzi poprawnej lokalnie i złej dla produktu.
+
+| Element | Dziś | ⛔ Zapis historyczny | Co mówi `color-language.md` |
 |---|---|---|---|
-| 10 przycisków „Nowy X" | `IconColor_*` | **bez zmian** ✅ | działa, jest znaczące, daje charakter |
-| 6 narzędzi ogólnych | `AccentBrush` | ~~`ForegroundBrush`~~ → **brak `Foreground`** ✅ | nie są akcją główną; konkurują z kolorami rodzajów |
-| `Icon.Trash` (Usuń połączenie) | `WarningIconBrush` | `DangerIconBrush` ✅ | operacja nieodwracalna; zgodnie z regułą zapisaną przy Seam 4 |
-| `Icon.PlugZap`, `Icon.RefreshCw` | `AccentIconBrush`, `InfoIconBrush` | **brak `Foreground`** ✅ | narzędzia ogólne |
-| `AccentIconBrush`, `InfoIconBrush` | 2 tokeny | ⏸ **zlikwidowane → M4.3/M5** | decyzja **DC**: sięga 24 wystąpień w 14 plikach, w tym powierzchni M4.3 |
+| 10 przycisków „Nowy X" | `IconColor_*` | bez zmian | ✅ to samo — system **S1**, bez zmian |
+| 6 narzędzi ogólnych | `AccentBrush` | ~~neutralne~~ | ⭐ **ZOSTAJĄ KOLOROWE** — rola **R‑6** „wejście do narzędzia" |
+| `Icon.Trash` (Usuń połączenie) | `WarningIconBrush` | `DangerIconBrush` | ✅ to samo — rola **R‑4** |
+| `Icon.PlugZap` | `AccentIconBrush` | neutralny | ✅ to samo — **R‑7** (nie otwiera modułu) |
+| `Icon.RefreshCw` | `InfoIconBrush` | neutralny | ✅ to samo — **R‑7** |
+| `AccentIconBrush`, `InfoIconBrush` | 2 tokeny | zlikwidowane | ⏸ **DC** — M4.3/M5, poza językiem |
 
 ⭐ **Efekt: pasek narzędzi POZOSTAJE kolorowy** — dziesięć ikon rodzajów, Commit, Rollback i akcje
 destrukcyjne nadal niosą barwę. Znika wyłącznie niebieska tapeta, na której te kolory dziś się gubią.
@@ -5357,7 +5368,9 @@ i `ShowCollectionReorder` zmieniają się przy przełączaniu **pod-zakładek**,
 dokumentu** — a więc mieszczą się w kryterium użytkownika. Zmierzone: Edit to 34 px, blok reorder
 (separator wewnętrzny + dwa przyciski) to 73 px. Rezerwacja całej sekcji 3 kosztowałaby ~181 px dziury
 na zakładkach bez kolekcji, więc rozwiązanie nie jest oczywiste i **nie zostało podjęte po cichu**
-(R7 — najpierw reguła, nie łatka na jeden ekran). Do rozstrzygnięcia w M3.2b lub na przeglądzie §13.3.
+(R7 — najpierw reguła, nie łatka na jeden ekran). ⭐ **ROZSTRZYGNIĘTE tego samego dnia przez R13
+(§19.12): nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie — więc sekcja 3
+zostaje jak jest i nie wymaga już decyzji.**
 
 #### §19.10.4 ⚠⚠ K12 — rola pasowała funkcją i była zakazana wprost (wpis WYCOFANY wraz z B2, §19.11)
 

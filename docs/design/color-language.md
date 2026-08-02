@@ -1,8 +1,13 @@
 # EmberTern — Język kolorów
 
-> **Status: PROJEKT DO AKCEPTACJI (2026-08-02).** Nic z tego dokumentu nie jest jeszcze wdrożone.
-> Powstał na polecenie użytkownika po wycofaniu M3.2b, w odwróconej kolejności: **pomiar → projekt →
-> akceptacja → dopiero implementacja.**
+> **Status: ⭐ PROJEKT ZAAKCEPTOWANY PRZEZ UŻYTKOWNIKA (2026-08-02). NIC NIE JEST WDROŻONE.**
+> Powstał po wycofaniu M3.2b, w odwróconej kolejności: **pomiar → projekt → akceptacja → dopiero
+> implementacja.** Użytkownik na zamknięcie sesji: *„Dokument bardzo mi się podoba i właśnie o taki
+> poziom mi chodziło. To jest projekt produktu, a nie próba uzasadnienia implementacji."*
+>
+> ⛔⛔ **RAZEM Z AKCEPTACJĄ PRZYSZŁO OGRANICZENIE TEMPA — §0.4. Przeczytaj je, ZANIM cokolwiek
+> zaimplementujesz.** Akceptacja projektu **nie jest** zgodą na ujednolicenie produktu w jednej
+> iteracji.
 >
 > **To NIE jest lista zmian dla jednego etapu.** To dokument produktu — ma służyć przy każdej nowej
 > funkcji, długo po zamknięciu Product Polish. Lista zmian wynika z niego, a nie odwrotnie.
@@ -38,6 +43,29 @@ wtedy, gdy jest przewidywalny.
 | **W4** | **Execute i Commit to DWIE role** → osobne tokeny, **na razie ten sam odcień** zieleni. Rozdzielenie w przyszłości ma nie wymagać ruszania drugiego |
 | **W5** | **🟡 żółty = ostrzeżenie · stan wymagający uwagi · wstrzymanie. NIGDY destrukcja.** Usuwanie jest konsekwentnie czerwone |
 | **W6** | **Moduły mogą mieć tożsamość kolorystyczną, ale tylko wewnątrz modułu.** ⭐ Wyjątek: w pasku globalnym **wolno** użyć koloru modułu, gdy element niesie **STAN** („który moduł jest aktywny?"), a nie akcję |
+
+### §0.4 ⛔⛔ R14 — TEMPO WDROŻENIA JEST CZĘŚCIĄ PROJEKTU (ratyfikowane 2026-08-02)
+
+> **Użytkownik:** *„Chcę jednak, żeby implementacja nadal była bardzo ostrożna. Nie zależy mi na tym,
+> żeby w jednej iteracji ujednolicić cały produkt. Bardziej zależy mi na tym, żeby każdy kolejny krok
+> był ewidentnym ulepszeniem UX i nie powtórzył sytuacji z pierwszym M3.2b, gdzie reguły były
+> spójniejsze, ale produkt wyglądał gorzej. **Wolę pięć małych, oczywistych poprawek niż jedną dużą
+> rewolucję.**"*
+
+**R14 — kryterium pojedynczego kroku:**
+
+| | |
+|---|---|
+| ✅ **Krok jest dobry, gdy** | jest **ewidentnym ulepszeniem UX sam w sobie** — da się go obejrzeć i powiedzieć „tak, lepiej", bez odwoływania się do reguły |
+| ⛔ **Krok jest zły, gdy** | jego jedynym uzasadnieniem jest *„teraz jest zgodne z językiem"* |
+
+⭐ **To jest R8 zastosowane do TEMPA, a nie do pojedynczej decyzji**, i domyka pułapkę 17 od strony
+praktycznej: reguła spójna + zmiana niewidoczna dla użytkownika = zmiana, która może tylko zaszkodzić,
+bo ryzyko jest niezerowe, a zysk zerowy.
+
+⚠ **Konsekwencja dla kolejności prac: §8.2 NIE jest listą jednej iteracji.** Rozstrzyga to pytanie
+**O‑3** — implementacja idzie **podetapami, posortowanymi od najbardziej oczywistego zysku**, a każdy
+kończy się obejrzeniem na żywo. Kolejność w §11.
 
 ### §0.3 ⛔ Reguła metody — dlaczego ten dokument ma sekcję wyjątków
 
@@ -289,7 +317,7 @@ iteracja czytała się jako wyszarzenie.
 |---|---|---|
 | **O‑1** | **Debugger Continue** — dziś `AccentIconBrush`, ratyfikowany w **D15.2 Seam A** jako „jedyna akcja pierwszorzędna debuggera". Wg R‑1 powinien być zielony. **Kolizja dwóch ratyfikacji** — nie rozstrzygam sam | zmiana dotknęłaby powierzchni odebranej wizualnie |
 | **O‑2** | **Comment / Uncomment — jakie dwa kolory?** Dziś `Info` + `Danger`. Rozróżnienie zostaje (W‑1), ale **`Danger` na Uncomment osłabia jednoznaczność czerwieni** („nieodwracalne"), a odkomentowanie cofa się jednym Ctrl+Z | opcje w §9.1 |
-| **O‑3** | **Zakres pierwszej implementacji** — całość §8.2 naraz, czy podetapami | całość to ~20 miejsc w 6 plikach |
+| ~~**O‑3**~~ | ~~Zakres pierwszej implementacji~~ | ⭐ **ROZSTRZYGNIĘTE 2026-08-02 przez R14 (§0.4): podetapami, sortowane od najbardziej oczywistego zysku.** Plan w §11 |
 
 ### §9.1 Opcje dla O‑2
 
@@ -310,3 +338,40 @@ iteracja czytała się jako wyszarzenie.
 4. Neutralny dla **ikony** to `NeutralIconBrush` (brak `Foreground`), **nie `ForegroundBrush`** —
    to dwa różne tokeny i różnica jest celowa (`product-polish.md` §19.13.3).
 5. Nowy kolor tylko wtedy, gdy ma **kilku konsumentów** (R3). Jeden przypadek to wyjątek, nie rola.
+
+---
+
+## §11 ⭐⭐ PLAN WDROŻENIA — siedem małych kroków, nie jedna rewolucja
+
+> Realizacja **R14** (§0.4). **Jeden krok = jedna iteracja = jeden commit = jedno obejrzenie na żywo.**
+> ⛔ Nie łączyć kroków „bo to i tak ta sama tabela".
+
+### §11.1 ⚠ Dwie klasy kroków — i tylko jedna podlega R14
+
+| Klasa | Definicja | Kryterium odbioru |
+|---|---|---|
+| **WIZUALNY** | zmienia to, co widać na ekranie | ⛔ **R14: musi być ewidentnym ulepszeniem sam w sobie** |
+| **NEUTRALNY** | zero zmiany na ekranie (np. nowy token o identycznej wartości) | bezpieczny z definicji — **nie może pogorszyć UX, bo nic nie zmienia**; wystarczy pomiar dowodzący zerowej różnicy |
+
+### §11.2 Kolejność
+
+| # | Krok | Klasa | Miejsc | Dlaczego tutaj |
+|---|---|---|---|---|
+| **K1** | **`ActionRunBrush`** — nowy token o wartości identycznej z `SuccessIconColor`, podstawiony pod Execute procedury / funkcji / Start trace | **neutralny** | 3 | ⭐ **Zero zmiany wizualnej** (ta sama wartość), a realizuje W4 i daje R‑1 własny token. Najbezpieczniejszy możliwy start; pomiar dowodzi zerowej różnicy |
+| **K2** | **Destrukcja: 🟡 → 🔴** — Usuń połączenie · Usuń zapytanie · Wyczyść wszystkie zapytania | wizualny | 3 | ⭐⭐ **Najbardziej oczywisty zysk w całym planie: użytkownik zgłosił to SAM, patrząc na ekran.** Ta sama operacja przestaje mieć dwa kolory. Realizacja W5 |
+| **K3** | **Edytuj → ⚪** — Procedure, Function (dziś 🟡), profil importu (dziś 🔵) | wizualny | 3 | żółty na „Edytuj" **ostrzega przed czymś, co nie jest groźne** — zdjęcie go jest czytelnym zyskiem, a nie tylko porządkiem |
+| **K4** | **Wskaż plik: `AccentIconBrush` → `AccentBrush`** (Data Import) | wizualny | 1 | dwa odcienie niebieskiego dla tej samej roli R‑6; różnica minimalna, ryzyko minimalne |
+| **K5** | **Dodaj → ⚪** (Procedure, Function) · **Szukaj w widoku → ⚪** (Trace) | wizualny | 3 | „Dodaj" na zielono myli się z R‑1 Uruchom — to jedyny zielony, który nie uruchamia |
+| **K6** | **Odśwież → ⚪** — metadane, dane tabeli, Data Import | wizualny | 3 | ⚠⚠ **NAJWIĘKSZE RYZYKO W PLANIE, dlatego jest na końcu części wizualnej.** Dotyka paska tytułu, czyli powierzchni, na której M3.2b zostało odrzucone. ⛔ Obejrzeć osobno, nie w pakiecie |
+| **K7** | **Commit / Rollback → `CommitButtonBrush` / `RollbackButtonBrush`** (decyzja DD) | wizualny | 6 | ⛔ **Zaczyna się od nadania tokenom wartości per motyw** (§7.2), nie od podmiany odwołań. Do rozważenia dopiero po K1–K6 |
+
+### §11.3 ⛔ Czego plan świadomie NIE obejmuje
+
+| | Powód |
+|---|---|
+| **6 narzędzi w pasku tytułu** | ⭐ **ZOSTAJĄ KOLOROWE** — rola R‑6. To nie jest odłożenie, to jest rozstrzygnięcie |
+| **Comment / Uncomment** | czeka na **O‑2**; do tego czasu **bez zmian** (W‑1) |
+| **Debugger Continue** | czeka na **O‑1** — kolizja R‑1 z ratyfikacją D15.2 |
+| **Likwidacja `AccentIconBrush` / `InfoIconBrush`** | decyzja **DC** → M4.3/M5, poza językiem |
+| **`WarningBrush` vs `WarningIconBrush`** | §7.4 — porządek tokenów, nie zmiana wyglądu; przy okazji K3 albo osobno |
+| **Menu kontekstowe** | osobny, już spójny system (§2) |

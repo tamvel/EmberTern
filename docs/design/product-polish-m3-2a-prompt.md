@@ -1,7 +1,13 @@
-﻿# EmberTern — M3.2a (H‑3) — PROMPT STARTOWY NOWEJ SESJI
+﻿# EmberTern — M3.2a (H‑3) — PROMPT STARTOWY 🔒 ZUŻYTY, HISTORYCZNY
 
-> Wklej to jako pierwszą wiadomość nowej sesji. Dokument jest **samowystarczalny w zakresie stanu
-> i decyzji** — do implementacji sięgniesz jeszcze po dwie sekcje wskazane w §1.
+> ⛔⛔ **NIE UŻYWAJ TEGO PROMPTU.** M3.2a zostało wykonane i **odebrane dwiema rundami wycofań**
+> (z czterech ruchów został jeden), a M3.2b — które ten dokument planuje w §5.3 — **zostało wycofane
+> w całości**.
+>
+> ⭐ **Aktualny prompt startowy: [`product-polish-m3-next-session.md`](product-polish-m3-next-session.md).**
+> Aktualne źródło prawdy o kolorach: [`color-language.md`](color-language.md).
+>
+> Plik zostaje wyłącznie jako zapis stanu wejściowego M3.2a i pomiarów, które wtedy zebrano.
 
 ---
 
