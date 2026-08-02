@@ -136,6 +136,24 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
+  <!-- ================================================================================================
+       ⭐ POLE WIELOWIERSZOWE ZACZYNA TEKST OD GÓRY (zgłoszenie użytkownika przy odbiorze M2c, §18.11).
+
+       Styl wyżej wyśrodkowuje pionowo KAŻDY `TextBox`, i dla pola jednowierszowego jest to konieczne
+       (`Pad.Control` ma pion zerowy, bo wysokość daje `Size.Control`). Ale to samo wyśrodkowanie
+       w polu na kilkanaście wierszy — opis wyjątku, komentarz obiektu, treść CHECK — zawiesza krótki
+       tekst w połowie ramki, a użytkownik oczekuje tam standardowego zachowania edytora tekstu.
+
+       ⭐ Reguła jest sformułowana POZYTYWNIE (decyzja architektoniczna §17.2/3): mówi, czym pole JEST
+       („przyjmuje Enter, więc jest polem wielowierszowym"), a nie „wszystko jest wyśrodkowane, chyba
+       że…". Selektor własnościowy czyta `AcceptsReturn` z samej kontrolki, więc żaden widok nie musi
+       o niczym pamiętać — obejmuje wszystkie 29 pól w 21 plikach i każde następne.
+       ⚠ MUSI stać PO stylu bazowym: przy równej trafności rozstrzyga kolejność deklaracji (M2b §17.5/5).
+       ================================================================================================ -->
+  <Style Selector="TextBox[AcceptsReturn=True]">
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+  </Style>
+
   <!-- ⚠ Edytor w komórce siatki NIE jest kontrolką formularza i nie może narzucać wiersza.
        `Size.Row.Grid` (22) minus `Pad.Cell` (3+3) zostawia 16 px — pole o `MinHeight` 24 podniosłoby
        każdy edytowany wiersz o 8 px, czyli wprowadziłoby skok układu przy wejściu w edycję

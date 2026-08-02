@@ -841,6 +841,36 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// ⭐ A MULTILINE text field starts its text at the TOP; a single-line one stays vertically centred.
+    /// <para>Reported by the user when accepting M2c: the Description tabs (exception, object comment, CHECK
+    /// body) hung a short text in the middle of a tall frame. The cause was not the sweep — M2b's <c>TextBox</c>
+    /// style centres EVERY text box, which is necessary for a one-line field (<c>Pad.Control</c> has zero
+    /// vertical padding, so without centring the text would sit on the top edge of a 24 px control) and wrong
+    /// for a field that is fifteen lines tall.</para>
+    /// <para>⚠ The pin asserts BOTH halves against a real visual tree, because the rule is a property selector
+    /// layered over the base style: if the two styles were declared the other way round the multiline case would
+    /// silently lose (M2b §17.5/5 — declaration order decides between equally specific styles), and if the
+    /// selector did not match at all nothing would fail except the appearance.</para>
+    /// </summary>
+    [Fact]
+    public async Task AMultilineTextBox_StartsItsTextAtTheTop_AndASingleLineOneStaysCentred()
+    {
+        await _session.Dispatch(() =>
+        {
+            var multiline = new TextBox { AcceptsReturn = true, Text = "opis" };
+            var singleLine = new TextBox { Text = "nazwa" };
+            var window = new Window { Content = new StackPanel { Children = { multiline, singleLine } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(VerticalAlignment.Top, multiline.VerticalContentAlignment);
+            Assert.Equal(VerticalAlignment.Center, singleLine.VerticalContentAlignment);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// The same lookup for a THEME-SCOPED resource. ⚠ Measured, and worth knowing: the variant-less
     /// <see cref="Token{T}"/> above cannot see anything declared inside <c>ThemeDictionaries</c> — it reports the
     /// key as missing. That is precisely the line between the two colour-free dictionaries added in M2a

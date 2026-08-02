@@ -3751,8 +3751,9 @@ katalogu dosięga teraz również menu kontekstowych, a `Text.Compact` — dolny
 | `FontFamily` | 81 / 28 | **81** | ⛔ poza zakresem etapu (ratyfikowane, §18.0.5/1) |
 
 **Baza w `DesignTokenComplianceTests` zgadza się z pomiarem co do sztuki** — 43 i 19, plik po pliku.
-Build **0/0** · suite **7087** zielony w trzech partycjach · smoke czysty po każdej z dziewięciu iteracji.
-**Ani jedna wartość liczbowa w aplikacji się nie zmieniła.**
+Build **0/0** · suite **7088** zielony w trzech partycjach (7000 + 54 + 34) · smoke czysty po każdej
+z dziewięciu iteracji. **Ani jedna wartość liczbowa w aplikacji się nie zmieniła** — jedyna celowa zmiana
+wyglądu w całym etapie to poprawka odbiorcza §18.11, na wyraźne polecenie użytkownika.
 
 #### §18.10.2 ⭐⭐ Czym naprawdę okazał się ten etap
 
@@ -3819,11 +3820,68 @@ niezauważone przy zielonym buildzie.
 | 3 | build 0/0 | ✅ |
 | 4 | suite zielony w trzech partycjach | ✅ 7000 + 33 + 54 |
 | 5 | smoke czysty | ✅ po każdej iteracji |
-| 6 | ⭐ **aplikacja wygląda IDENTYCZNIE** | ⏳ **odbiór wizualny użytkownika** — narzędzia headless tego nie dają |
+| 6 | ⭐ **aplikacja wygląda IDENTYCZNIE** | ✅ **odebrane przez użytkownika 2026-08-02** — jedyne zgłoszenie dotyczyło defektu ZASTANEGO, nie migracji (§18.11) |
 | 7 | §18 prowadzone iteracja po iteracji | ✅ §18.1–§18.10 + rejestr §18.R |
-| 8 | push na oba remote'y | ⏳ po akceptacji |
+| 8 | push na oba remote'y | ✅ |
 
 ⚠ **Warunek 6 jest jedynym, którego nie potrafię sprawdzić sam** — i jest tym, który odróżnia M2c od M2b.
 Po każdej iteracji weryfikowałem skryptem, że **każdy użyty klucz roli istnieje w katalogu**
 (`{DynamicResource}` nie rzuca przy literówce, pułapka #14) i uruchamiałem aplikację; to jest maksimum
 dostępnego dowodu bez ludzkiego oka.
+
+---
+
+### §18.11 Poprawka odbiorcza — pole wielowierszowe zaczyna tekst od góry (2026-08-02)
+
+> **Zgłoszenie użytkownika przy odbiorze M2c:** *„W polach wielowierszowych (np. zakładka Description
+> w edytorze tabeli/wyjątku) tekst jest wyśrodkowany w pionie. To nie wygląda dobrze — przy krótkim opisie
+> tekst ląduje w środku pola. Moja wcześniejsza prośba o pionowe wyśrodkowanie dotyczyła wyłącznie pól,
+> o których wiemy, że zawsze są jednowierszowe."*
+
+#### §18.11.1 To NIE był efekt sweepu — i to jest istotne dla oceny etapu
+
+Przyczyną jest styl `TextBox` z **M2b**, który wyśrodkowuje pionowo **każde** pole tekstowe. Dla pola
+jednowierszowego jest to konieczne, a nie kosmetyczne: `Pad.Control` ma **pion zerowy** (wysokość ma dawać
+`Size.Control`, jedna wielkość jeden właściciel), więc bez wyśrodkowania tekst osiadłby na górnej krawędzi
+24-pikselowej kontrolki. Ta sama reguła w polu na kilkanaście wierszy zawiesza krótki opis w połowie ramki.
+
+⭐ **M2c niczego tu nie zmienił** — zgłoszenie potwierdza DoD 6 od drugiej strony: wygląd po migracji jest
+identyczny, łącznie z zastanym defektem.
+
+#### §18.11.2 Poprawka — jedna reguła, sformułowana pozytywnie
+
+```xml
+<Style Selector="TextBox[AcceptsReturn=True]">
+  <Setter Property="VerticalContentAlignment" Value="Top" />
+</Style>
+```
+
+⭐ Selektor własnościowy czyta `AcceptsReturn` **z samej kontrolki**, więc mówi, czym pole **JEST**
+(decyzja architektoniczna §17.2/3), a nie „wszystko jest wyśrodkowane, chyba że…". Obejmuje **29 pól
+w 21 plikach** i każde następne — żaden widok nie musi o niczym pamiętać i nie ma gdzie zapomnieć.
+⚠ **Stoi PO stylu bazowym**: przy równej trafności rozstrzyga kolejność deklaracji (§17.5/5).
+
+#### §18.11.3 Pin zweryfikowany PODŁOŻENIEM NARUSZENIA
+
+`AMultilineTextBox_StartsItsTextAtTheTop_AndASingleLineOneStaysCentred` sprawdza **obie połowy** na realnym
+drzewie wizualnym. Ryzyko tej poprawki jest bowiem takie samo jak ryzyko całego etapu: **gdyby selektor nie
+pasował, nic by nie zawiodło poza wyglądem.** Test uruchomiono z odwróconą wartością w stylu i **zawiódł
+z właściwym komunikatem**, a po przywróceniu przechodzi.
+
+#### §18.11.4 Zakres — celowo minimalny
+
+⛔ Nie ruszono ani stylu bazowego, ani `Pad.Control`, ani żadnego widoku. Poprawka nie jest częścią sweepu
+i **nie zmienia żadnego licznika**; jest jedynym miejscem w całym M2c, w którym wygląd zmienia się celowo —
+na wyraźne polecenie użytkownika i wyłącznie w klasie pól, której dotyczyło zgłoszenie.
+
+#### §18.11.5 🔒 M2c ZAKOŃCZONE I ODEBRANE
+
+> **Użytkownik:** *„M2c odbieram pozytywnie. Nie znalazłem problemów wynikających z migracji katalogu…
+> M2c po tej poprawce uznaję za zakończone."*
+
+**DoD 6 spełniony.** Build **0/0** · suite **7088** zielony w trzech partycjach (7000 + 54 + 34) ·
+smoke czysty.
+
+⚠ **Suite ma znowu 7088 — ale z INNEGO powodu niż przed korektą z §18.1.6.** Tam 7088 było błędem
+arytmetycznym (filtr wymieniał nieistniejącą klasę, faktyczny stan to 7087); tutaj **7087 + 1 nowy pin**.
+Zapisane wprost, bo inaczej następny czytelnik uzna korektę za cofniętą.

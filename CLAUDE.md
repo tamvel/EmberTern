@@ -426,9 +426,10 @@ noted.
 ## Current state
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a + 🔒 M2b ALL COMPLETE
-  AND USER-ACCEPTED (M2b closed 2026-08-02 — 21 iterations, 14 commits). ⭐⭐ **M2c — ALL TEN STEPS ARE
-  DONE** (step 0 + iterations 1–9 + the baseline close-out); iterations 1–4 are user-accepted, 5–9 await
-  the one full visual review that is DoD 6. Counters, measured: **`FontSize` 605 → 43** ·
+  AND USER-ACCEPTED (M2b closed 2026-08-02 — 21 iterations, 14 commits). ⭐⭐ **M2c IS CLOSED AND
+  USER-ACCEPTED (2026-08-02)** — step 0 + iterations 1–9 + the baseline close-out + one acceptance fix
+  (§18.11: a multiline `TextBox` starts its text at the TOP; the defect was **inherited from M2b's
+  centre-everything rule**, not caused by the sweep — which is DoD 6 confirmed from the other side). Counters, measured: **`FontSize` 605 → 43** ·
   **`CornerRadius` 37 → 19** · `FontFamily` 81 (out of scope by decision). ⭐ **All 62 remaining values
   are deliberate exceptions with the reason written beside them** — that, not a number, is R12's exit
   condition. Closing summary: `product-polish.md` **§18.10**.
@@ -3222,9 +3223,13 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7087 as of 2026-08-02** (Product
-  Polish M2b close + M2c iteration 1, which added none). Green in the three documented partitions
-  (**7000 + 54 + 33**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7088 as of 2026-08-02**
+  (Product Polish M2c closed; the whole stage added exactly one test — the multiline-field pin, §18.11).
+  Green in the three documented partitions (**7000 + 54 + 34**).
+  ⚠⚠ **This number is accidentally equal to the WRONG one this same line carried earlier on 2026-08-02, and
+  the reason is different.** Then, 7088 came from a partition filter naming a class that no longer exists and
+  the measured state was **7087** (`product-polish.md` §18.1.6). Now it is 7087 + 1 real test. Stated
+  explicitly so the next reader does not read that correction as reverted.
   **⚠⚠ THIS LINE SAID 7088 / "54 + 34" AND THE ARITHMETIC WAS NEVER MEASURED — corrected 2026-08-02 (M2c
   iteration 1, `product-polish.md` §18.1.6), verified on a clean `HEAD`.** The cause is the next paragraph's
   own class list: it named **`ContextMenuPresentationTests`**, a class that **no longer exists** — the Keyboard

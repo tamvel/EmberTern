@@ -36,12 +36,12 @@
 | **Branch** | `feat/product-polish` |
 | **Ostatni commit** | *M2c iteracje 5–9 + podsumowanie zamykające* |
 | **Wypchnięte** | ⚠ `e388ad7` na oba remote'y; **wszystko od `20d4ad6` w górę jeszcze NIE** (push po akceptacji użytkownika) |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · **M2c — WSZYSTKIE 10 KROKÓW WYKONANE** (krok 0 + iteracje 1–9 + domknięcie bazy). Zostaje **jeden pełny odbiór wizualny** (DoD 6) — patrz `product-polish.md` **§18.10** |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · 🔒 **M2c ZAKOŃCZONE I ODEBRANE 2026-08-02** (krok 0 + iteracje 1–9 + domknięcie bazy + poprawka odbiorcza §18.11). Podsumowanie: `product-polish.md` **§18.10** |
 | **Liczniki** | `FontSize` **43** (z 605) · `CornerRadius` **19** (z 37) · `FontFamily` **81** (poza zakresem). ⭐ Wszystkie 62 pozostałe to **świadome wyjątki z powodem zapisanym w miejscu** |
 | **⭐ Rejestr kolizji** | `product-polish.md` **§18.R** — **10 pozycji (K1–K10)**, drugi właściwy wynik etapu i wejście do przeglądu §13.3 |
 | **⛔ Po co jeszcze ten plik** | Nie jest już punktem wejścia do pracy — M2c jest zamknięty. Zostaje jako **zapis reguł i pułapek** (R1–R12, procedura, 16 pułapek), bo M3 pracuje na tych samych powierzchniach |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7087**, zielony w trzech partycjach (7000 + 54 + 33) — ⚠ zapis „7088 / 54 + 34" poprawiony 2026-08-02 po pomiarze na czystym `HEAD` (§18.1.6); przyczyną była nieistniejąca klasa w filtrze, patrz §8.3/15 |
+| **Suite** | **7088**, zielony w trzech partycjach (7000 + 54 + 34) — czyli **7087 + 1 pin** dodany poprawką odbiorczą §18.11. ⚠⚠ Ta liczba jest przypadkowo równa błędnemu zapisowi sprzed korekty §18.1.6 (tam 7088 brało się z filtru wymieniającego nieistniejącą klasę; faktyczny stan to było 7087). Zapisane wprost, żeby korekta nie wyglądała na cofniętą. |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 
