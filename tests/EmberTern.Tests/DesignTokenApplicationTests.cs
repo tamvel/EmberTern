@@ -66,10 +66,14 @@ public sealed class DesignTokenApplicationTests
             Assert.Equal(Token<double>("Text.SectionHeader.Size"), header.FontSize);
             Assert.Equal(Token<FontWeight>("Text.SectionHeader.Weight"), header.FontWeight);
 
-            // The guard that catches a silently unresolved resource: Avalonia's default TextBlock size is 12,
-            // which happens to be a real token value elsewhere — so "it looks plausible" is not evidence. The
-            // section-header role is 11, so a failed resolution is visible rather than coincidental.
-            Assert.NotEqual(12d, header.FontSize);
+            // The guard that catches a silently unresolved resource. ⚠⚠ CORRECTED 2026-08-02 (M2c step 0,
+            // product-polish.md §18.0.2): this comment used to claim the inherited default is 12. MEASURED with
+            // a headless probe — a bare TextBlock inherits **14** from Window.FontSize, not 12. The assertion
+            // still does its job (the role is 11), but the number it must not equal is the inherited one.
+            // ⭐ That measurement is load-bearing well beyond this line: it is why M2c REPLACES a local FontSize
+            // on a TextBlock with a token reference and never just deletes it — deleting would raise the text
+            // from 11 to 14.
+            Assert.NotEqual(14d, header.FontSize);
 
             window.Close();
         }, default);

@@ -63,11 +63,18 @@ Dodatkowo obowiązują **cztery decyzje architektoniczne** z §17.2 — w szczeg
 
 ### 4.1 Cel mierzalny
 
+> ⭐⭐ **CEL ETAPU ZOSTAŁ DOPRECYZOWANY PRZEZ UŻYTKOWNIKA PO INWENTARZU — reguła R12
+> (`product-polish.md` §18.0.8), wiążąca:** *„Nie traktuj celem etapu wyzerowania liczników. Celem
+> jest usunięcie **nieuzasadnionych** wartości lokalnych."* Licznik jest narzędziem, nie oceną —
+> warunkiem wyjścia jest **zdanie z powodem przy każdej pozostałej wartości**, a nie liczba.
+> ⛔ Migracja wartości na rolę, która do niej nie pasuje, jest **gorsza** niż wartość lokalna:
+> wartość lokalna jest widoczna jako dług, błędna rola udaje, że długu nie ma.
+
 | Licznik | Stan wejściowy | Cel |
 |---|---|---|
 | `FontSize` | **605** w 49 plikach | uzasadniona reszta |
-| `FontFamily` | **81** w 28 plikach | **0** poza uzasadnionymi |
-| `CornerRadius` | **37** w 13 plikach | uzasadniona reszta |
+| `FontFamily` | **81** w 28 plikach | ⛔ **poza zakresem M2c** — patrz §4.3 |
+| `CornerRadius` | **37** w 13 plikach | uzasadniona reszta (migruje wyłącznie 17 × `3`) |
 
 ⚠ **Licznik mierzy WARTOŚCI LOKALNE** — odwołanie `{DynamicResource …}` **nie liczy się** (korekta
 z §15.11.5). Migracja pojedynczego widoku obniża liczbę realnie, a nie pozornie.
@@ -84,15 +91,27 @@ podniesienie bazy jest poprawną częścią procesu.
 | `Views/DataImportTabView.axaml` | **82** | — | już częściowo ruszony w M2b (belka statusu) |
 | `Views/PerformancePanelView.axaml` | **42** | — | |
 
-### 4.3 ⭐ `FontFamily` ma osobny status i NIE jest zwykłą wartością lokalną
+### 4.3 ⛔ `FontFamily` WYPADŁO Z ZAKRESU M2c W CAŁOŚCI (ratyfikowane 2026-08-02)
 
-**81 wystąpień to w większości ciągi monospace.** ⛔ **Ujednolicenie rodziny monospace NIE należy do
-M2c** — zostało zmierzone (7 różnych ciągów / 95 wystąpień / 33 pliki) i **przekazane do backlogowego
-sprintu UX**, bo rozstrzyga `Cascadia Code` vs `Cascadia Mono` dla edytora, debuggera, kart hover
-i jedenastu podglądów DDL **naraz** (`settings-center.md` §2.7 + §7.1).
-⭐ **M2c wolno tylko podmienić ciąg na token `Font.Code`, jeżeli ciąg jest już dziś identyczny
-z tym, co token niesie.** Gdzie ciągi się różnią — **zostaw i zapisz**, to decyzja typograficzna
-tamtego sprintu.
+> **Ta sekcja została POPRAWIONA POMIAREM.** Jej pierwsza redakcja mówiła: *„M2c wolno podmienić
+> ciąg na token `Font.Code`, jeżeli ciąg jest już dziś identyczny z tym, co token niesie"* — i była
+> poprawna jako reguła, tylko jej wynik okazał się **zerowy**.
+
+**81 wystąpień to w większości ciągi monospace, a token `Font.Code` niesie `Cascadia Mono, Consolas,
+Menlo, monospace`.** Zmierzone w kroku 0: 65 z 81 wystąpień to `Cascadia **Code**,Consolas,Menlo,
+monospace`, a **ani jeden z 81 ciągów nie jest identyczny z tokenem**. Reguła powyżej daje więc
+**zero migracji** — nie z ostrożności, tylko arytmetycznie.
+
+⛔ **Ujednolicenie rodziny monospace NIE należy do M2c** — zostało zmierzone (7 różnych ciągów /
+95 wystąpień / 33 pliki) i **przekazane do backlogowego sprintu UX**, bo rozstrzyga `Cascadia Code`
+vs `Cascadia Mono` dla edytora, debuggera, kart hover i jedenastu podglądów DDL **naraz**
+(`settings-center.md` §2.7 + §7.1).
+
+⭐ **Werdykt użytkownika:** *„Jeżeli `Cascadia Code` jest dziś świadomą decyzją, to nie zamieniamy
+jej na `Mono` tylko dlatego, że istnieje token."* Wszystkie 81 zostaje, z powodem zapisanym
+w `Typography.axaml` przy samym tokenie. ⚠ **Konsekwencja przyjęta świadomie: `Font.Code` pozostaje
+tokenem bez konsumenta** — kształt, przed którym ostrzega reguła #233, tutaj dopuszczony, bo powód
+stoi przy tokenie i ma nazwany termin realizacji.
 
 ---
 

@@ -46,9 +46,19 @@
 
   <!-- Rodzina kodu (decyzja D2). ⭐ Mono, nie Code — świadomie BEZ LIGATUR: w SQL/PSQL ligatura
        zlepia `<=` czy `!=` w jeden glif, a to jest język, w którym operator porównania czyta się
-       znak po znaku. Zastępuje 7 rozjechanych ciągów (65× „Cascadia Code,Consolas,Menlo,monospace”
-       i sześć wariantów) i obowiązuje jednocześnie edytor SQL, debugger, karty hover
-       i 11 podglądów DDL. -->
+       znak po znaku. Docelowo obowiązuje jednocześnie edytor SQL, debugger, karty hover
+       i 11 podglądów DDL.
+
+       ⚠⚠ TEN TOKEN NIE MA DZIŚ ANI JEDNEGO KONSUMENTA I TO JEST STAN RATYFIKOWANY (M2c krok 0,
+       2026-08-02 — product-polish.md §18.0.5/1). Pierwsza redakcja tego komentarza mówiła, że
+       „zastępuje 7 rozjechanych ciągów"; pomiar pokazał, że NIE ZASTĘPUJE ŻADNEGO: 65 z 81
+       wystąpień w widokach to `Cascadia Code,…`, a token niesie `Cascadia Mono,…`, więc podmiana
+       ZMIENIŁABY KRÓJ PISMA w edytorze, debuggerze i jedenastu podglądach DDL naraz.
+       ⛔ M2c jest sweepem de-lokalizacyjnym o niezmienionym wyglądzie, więc `FontFamily` wypadło
+       z jego zakresu w całości. Decyzja `Cascadia Code` (z ligaturami) vs `Cascadia Mono` (bez)
+       należy do backlogowego sprintu UX razem z konsolidacją 7 ciągów / 95 wystąpień / 33 plików
+       (settings-center.md §2.7 + §7.1) — to jest decyzja typograficzna o produkcie, nie
+       sprzątanie. Do tego czasu token czeka, świadomie i z zapisanym powodem. -->
   <FontFamily x:Key="Font.Code">Cascadia Mono, Consolas, Menlo, monospace</FontFamily>
 
   <!-- ══════════════════════════════════════════════════════════════════════════════════════════
@@ -66,10 +76,19 @@
        ══════════════════════════════════════════════════════════════════════════════════════════ -->
 
   <!-- KOD — AvaloniaEdit i 11 podglądów DDL. Rodzina: Font.Code.
-       ⭐ 13 px jednoznacznie: zmierzono 25 edytorów na 13 i 6 na 12. Edytor kodu o dwóch rozmiarach
-       w jednej aplikacji jest defektem, nie decyzją; wybrano wartość dominującą, na której stroił
+       ⭐ 13 px: zmierzono 25 edytorów na 13 i 6 na 12; wybrano wartość dominującą, na której stroił
        się kontrast palety składni z D15.1.
-       ⚠ Bez interlinii — wysokość wiersza w edytorze kodu należy do samego edytora. -->
+       ⚠ Bez interlinii — wysokość wiersza w edytorze kodu należy do samego edytora.
+
+       ⚠⚠ KOREKTA (M2c krok 0, 2026-08-02 — §18.0.5/3, ratyfikowana). Pierwsza redakcja pisała
+       „edytor kodu o dwóch rozmiarach w jednej aplikacji jest defektem, nie decyzją". Pomiar tego
+       nie potwierdził: te SZEŚĆ edytorów przy 12 px to edytory stojące W WIERSZU SIATKI (kursory
+       i podprogramy w trybie Easy, podgląd Global Search, szczegół Trace), gdzie o rozmiarze
+       decyduje gęstość wiersza, a nie dryf — czyli ta sama zasada „kontener rozstrzyga wielkość",
+       którą M2b ratyfikował jako decyzję architektoniczną (§17.2/2).
+       ⛔ Rolę `Text.Code` biorą w M2c wyłącznie edytory pełnowymiarowe (25 × 13 px). Sześć
+       pozostałych zostaje lokalnych z komentarzem na miejscu; „12 → 13" byłoby zmianą wyglądu
+       i możliwym skokiem układu, a rozstrzyga je przegląd §13.3. -->
   <x:Double x:Key="Text.Code.Size">13</x:Double>
   <FontWeight x:Key="Text.Code.Weight">Normal</FontWeight>
 
@@ -107,8 +126,15 @@
   <x:Double x:Key="Text.Toolbar.LineHeight">17</x:Double>
 
   <!-- PODPIS POMOCNICZY, chip skrótu klawiszowego. Rodzina: Font.Ui.
-       ⚠ Najmniejszy stopień pisma w aplikacji. `FontSize=9` znika — 7 wystąpień wchodzi tutaj;
-       wyjątkiem są dwa glify (`▶`, `●`), gdzie 9 px stroi ROZMIAR ZNAKU, a nie stopień pisma. -->
+       ⚠ Najmniejszy stopień pisma w aplikacji.
+
+       ⚠⚠ KOREKTA (M2c krok 0, 2026-08-02 — §18.0.5/3, ratyfikowana). Pierwsza redakcja zapowiadała,
+       że „`FontSize=9` znika — 7 wystąpień wchodzi tutaj". Tak się NIE STANIE w M2c: dwa z tych
+       siedmiu to glify (`▶`, `●`), gdzie 9 px stroi ROZMIAR ZNAKU i sam ten komentarz je zawsze
+       wyłączał, a pozostałe pięć to realna zmiana 9 → 10, czyli zmiana wyglądu.
+       ⛔ M2c nie zmienia wyglądu, a reguła R12 (§18.0.8) zabrania wpisywania roli, która do wartości
+       nie pasuje, wyłącznie po to, żeby licznik spadł. Wszystkie siedem zostaje lokalnych
+       z komentarzem; „czy 9 px ma prawo istnieć" rozstrzyga przegląd §13.3. -->
   <x:Double x:Key="Text.Caption.Size">10</x:Double>
   <FontWeight x:Key="Text.Caption.Weight">Normal</FontWeight>
   <x:Double x:Key="Text.Caption.LineHeight">14</x:Double>

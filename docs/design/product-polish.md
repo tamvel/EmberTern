@@ -379,6 +379,24 @@ jednoznacznie: wszystkie wystąpienia `4`, `4.5`, `5` i `6` siedzą w Trace Moni
 Managerze i pasku agregacji i **wszystkie są chipami**; `3` to wyłącznie powierzchnie. Różnica
 nie była przypadkowa — brakowało jej tylko nazwy.
 
+> ⚠⚠ **AKAPIT POWYŻEJ ZOSTAŁ OBALONY POMIAREM W M2c (krok 0, 2026-08-02) — czytaj go jako zapis
+> tego, co M2a *założyło*, nie jako opis kodu.** Zdanie „wszystkie są chipami" jest nieprawdziwe
+> **w obu połowach**, a rozstrzygnięcie jest ratyfikowane (§18.0.5/2):
+>
+> * **`4.5` / `5` / `6` (7 wystąpień) to nie chipy, tylko GEOMETRIA.** `Width=10 Height=10
+>   CornerRadius=5` i `Width=9 Height=9 CornerRadius=4.5` to **koła**; `Height=12 CornerRadius=6`
+>   i `Height=10 CornerRadius=5` to **kapsuły** pasków postępu. Promień jest połową boku, czyli
+>   wynikiem arytmetyki, a nie decyzją projektową. ⛔ **Nie tokenizujemy geometrii wynikającej
+>   z matematyki** — `Radius.Chip` (4) zamieniłby koło w kwadrat ze ściętymi rogami.
+> * **`4` (11 wystąpień) to w większości KARTY, nie chipy** — `BorderThickness="1" Padding="10,8"`,
+>   kontenery `ClipToBounds`, kafelek wiersza. Chipem jest tam **jedno** wystąpienie
+>   (`AggregationBarView`). Rolą trafną byłby `Radius.Surface`, ale to zmiana 4 → 3, więc jest to
+>   **decyzja produktowa oddana przeglądowi §13.3**, nie sprzątanie.
+>
+> ⭐ **Do katalogu to nic nie dodaje i nic z niego nie zabiera** — obie role zostają dokładnie takie,
+> jakie są. Zmienia się wyłącznie **zasięg**: M2c migruje `3` → `Radius.Surface` i zostawia resztę
+> z uzasadnieniem (R12, §18.0.8).
+
 ⚠ **Poprawka do §8.4.6:** pasek postępu Status Bara czyta `Radius.Surface`. Nazwa `Radius.Sm`
 z pierwszej redakcji tej sekcji nie została nigdy zdefiniowana i **nie wchodzi do katalogu** —
 byłaby nazwą wartości, nie roli (§3.1).
@@ -2785,3 +2803,223 @@ rozwiązuje się przy wczytywaniu).
 Build **0/0** · suite **7088** (7000 + 54 + 34) · smoke czysty · drzewo czyste.
 **Liczniki wartości lokalnych** (warunek wyjścia M2c, po korekcie znaczenia z §15.11.5):
 `FontSize` **605 / 49 plików** · `FontFamily` **81 / 28** · `CornerRadius` **37 / 13**.
+
+---
+
+## §18 As-built — M2c (sweep de-lokalizacyjny)
+
+### §18.0 Krok 0 — INWENTARZ (2026-08-02)
+
+> **Cel kroku:** zmierzyć, *co faktycznie stoi w widokach*, zanim cokolwiek zostanie ruszone.
+> Bez tego sweep jest zgadywaniem (handover §6/1). Ten krok **nie zmienia ani jednej linii kodu**.
+
+#### §18.0.1 Pomiar wejściowy — potwierdzony
+
+`FontSize` **605 / 49 plików** · `FontFamily` **81 / 28** · `CornerRadius` **37 / 13**.
+Zgadza się co do sztuki z §17.6 i z bazą w `DesignTokenComplianceTests`.
+
+**⭐ Rozkład wartości jest znacznie węższy, niż sugeruje liczba wystąpień.** 605 deklaracji
+`FontSize` to **siedem różnych liczb**:
+
+| Wartość | Wystąpień | Rola w katalogu |
+|---|---|---|
+| 11 | **345** | ⚠ **pięć ról** — `Text.Compact` · `Text.Grid` · `Text.GridHeader` · `Text.Status` · `Text.SectionHeader` |
+| 12 | **155** | ⚠ **dwie role** — `Text.Application` · `Text.Toolbar` |
+| 10 | 54 | `Text.Caption` |
+| 13 | 40 | `Text.Code` — ⚠ ale tylko 25 z nich to edytor kodu |
+| 9 | 7 | ⛔ **brak roli** |
+| 14 | 3 | `Text.Title` |
+| 23 | 1 | `Text.Display` |
+
+⭐ **To jest dobra wiadomość i zła naraz.** Dobra: nie ma 605 decyzji do podjęcia, tylko siedem
+liczb. Zła: **liczba nie wyznacza roli** — przy 11 px pięć ról ma tę samą wartość, więc 345
+wystąpień wymaga rozstrzygnięcia *per miejsce*, a nie podmiany maszynowej. To jest dokładnie ten
+podział, którego broni §3.3 („dwie role o tej samej liczbie to nie duplikat") — i to on decyduje,
+że M2c musi iść widok po widoku, a nie automatem.
+
+#### §18.0.2 ⭐⭐ POMIAR, KTÓRY ZMIENIA MECHANIKĘ CAŁEGO SWEEPU — i obala komentarz w teście
+
+Sonda headless (`Window` + gołe kontrolki, wzorzec `DesignTokenApplicationTests`), Avalonia 12.0.3:
+
+```
+Window.FontSize              = 14
+bare TextBlock               = 14      SelectableTextBlock = 14      TextBlock.subtle = 14
+TextBox = ComboBox = CheckBox = Button = 12   (ze stylu M2b)
+```
+
+⚠⚠ **Goły `TextBlock` dziedziczy 14, nie 12.** Komentarz w `DesignTokenApplicationTests`
+(*„Avalonia's default TextBlock size is 12"*) jest **fałszywy** — asercja `NotEqual(12d, …)` nadal
+działa, ale jej uzasadnienie nie. Do poprawienia razem z pierwszą iteracją.
+
+⭐ **Konsekwencja jest podstawowa: usunięcie `FontSize` z `TextBlocka` NIE JEST neutralne — podnosi
+go do 14.** Sweep ma więc **dwa różne ruchy**, a nie jeden, i pomylenie ich jest defektem widocznym
+gołym okiem:
+
+| Ruch | Kiedy | Efekt |
+|---|---|---|
+| **USUŃ** | kontrolka dostaje **tę samą** wartość ze stylu M2b (`TextBox`/`ComboBox`/`CheckBox`/`RadioButton`/`Button`/`NumericUpDown` = 12) | zero zmian |
+| **ZAMIEŃ na `{DynamicResource …}`** | wszystko inne, w szczególności każdy `TextBlock` | zero zmian |
+
+#### §18.0.3 Klasyfikacja 605 deklaracji `FontSize` — cztery koszyki
+
+| # | Koszyk | Ile | Działanie | Ryzyko wizualne |
+|---|---|---|---|---|
+| **A** | **Nadmiarowe** — kontrolka ma już tę wartość ze stylu | **77** | usuń | **żadne, dowodliwie** |
+| **A?** | `DataGrid FontSize="11"` — `DataGridCell` i `DataGridColumnHeader` mają własne settery (11) | 25 | usuń **po weryfikacji** | do sprawdzenia (pusty stan, nagłówek grupy) |
+| **B** | **Jedna rola, wprost** — `ae:TextEditor` 13 (25) · `TextBlock` 10 (49) · 23 (1) · 14 (3) | **78** | zamień na rolę | żadne |
+| **C** | **Rola do rozstrzygnięcia** — wartość zostaje, rola wybierana per miejsce (całe 11 i 12) | **~390** | zamień na rolę | żadne, jeśli rola trafna |
+| **D** | **Brak roli o tej wartości** | **~28** | ⛔ decyzja użytkownika | **zmiana wyglądu** |
+
+**Koszyk A, dokładnie:** `TextBox` 36 · `ComboBox` 18 · `NumericUpDown` 11 · `CheckBox` 6 ·
+`Button` 4 · `RadioButton` 2. ⭐ To jest jedyna część sweepu, która zmniejsza licznik **nic nie
+dopisując** — i jednocześnie dowód, że M2b faktycznie zadziałało.
+
+**Rozkład właścicieli (XAML, 585 z 605; reszta to 10 setterów w widokach i 11 wywołań w code-behind):**
+
+```
+TextBlock 11 x244   TextBlock 12 x57   TextBlock 10 x49   TextBox 12 x36   TextBox 11 x28
+DataGrid 11 x25     ae:TextEditor 13 x25   ComboBox 12 x18   TextBlock 13 x15   Button 11 x13
+NumericUpDown 12 x11   CheckBox 11 x9   TextBlock 9 x7   ae:TextEditor 12 x6   CheckBox 12 x6
+ComboBox 11 x5   ListBox 11 x4   Button 12 x4   SelectableTextBlock 12 x4   DataGrid 12 x4
+TextBlock 14 x3   CheckBox 10 x3   NumericUpDown 11 x3   RadioButton 12 x2   TextBlock 23 x1
+```
+
+Z tego `Classes="subtle"` niesie **73** wystąpienia 11 px i 12 wystąpień 12 px — czyli podpisy
+pomocnicze są największą pojedynczą grupą i mają wspólny kształt.
+
+#### §18.0.4 Reguła rozróżniania ról przy 11 i 12 px — propozycja do zatwierdzenia
+
+Ponieważ liczba nie wyznacza roli, potrzebna jest **jedna reguła czytana z KONTEKSTU** (decyzja
+architektoniczna §17.2/2 — kontener rozstrzyga). Proponowana, do zastosowania w każdej iteracji:
+
+| Gdzie stoi element | Rola |
+|---|---|
+| w `DataTemplate` kolumny / komórki siatki | `Text.Grid` |
+| w dolnym pasku statusu okna | `Text.Status` |
+| nagłówek sekcji (SemiBold, nazywa temat) | `Text.SectionHeader` |
+| **wszystko pozostałe przy 11** — panel, pasek, chip, podpis | `Text.Compact` |
+| treść czytana świadomie — komunikat, opis, etykieta pola | `Text.Application` |
+| tekst **w pasku narzędzi** przy 12 | `Text.Toolbar` |
+
+⚠ Reguła jest sformułowana **pozytywnie** (§17.2/3): każdy wiersz mówi, czym element **jest**.
+Domyślną odpowiedzią przy 11 px jest `Text.Compact`, a nie „coś, co nie jest siatką".
+
+#### §18.0.5 🔒 TRZY USTALENIA — WSZYSTKIE TRZY RATYFIKOWANE PRZEZ UŻYTKOWNIKA (2026-08-02)
+
+> **Werdykt użytkownika, przyjęty w całości — trzy razy „zgoda", z jednym wspólnym uzasadnieniem:**
+> *„W tym etapie liczy się zachowanie identycznego wyglądu. Zaktualizuj dokumentację tak, aby
+> odzwierciedlała stan faktyczny, a nie odwrotnie."*
+> *„Nie tokenizujemy geometrii wynikającej z matematyki. Token ma opisywać rolę projektową, nie
+> przypadkową wartość liczbową."*
+> *„Jeżeli nie istnieje właściwa rola, nie wciskamy istniejącej tylko po to, żeby licznik spadł.
+> Wolę uzasadnioną resztę niż błędną migrację."*
+
+Wszystkie trzy to ten sam konflikt: **DoD 6 („wygląd identyczny") kontra zapis w katalogu.**
+Katalog powstał w M2a jako *zamiar*, a pomiar M2c pokazuje, że w tych trzech punktach zamiar
+oznacza **widoczną zmianę**. Rozstrzygnięcie jest w każdym z nich to samo: **wygrywa pomiar,
+a dokument zostaje poprawiony w miejscu.**
+
+**(1) `FontFamily` — M2c nie może zrobić prawie nic, wbrew planowi.**
+Handover §4.1 stawia cel „`FontFamily` → 0", a komentarz w teście mówi *„M2c should drive this list
+to empty"*. **Pomiar temu przeczy:** token `Font.Code` niesie `Cascadia **Mono**, Consolas, Menlo,
+monospace`, a 65 z 81 wystąpień to `Cascadia **Code**,Consolas,Menlo,monospace`. **Ani jeden z 81
+ciągów nie jest identyczny z tokenem.** Reguła handovera §4.3 („wolno podmienić tylko ciąg już
+identyczny") daje więc **zero migracji**. `Cascadia Code` → `Cascadia Mono` to decyzja typograficzna
+oddana backlogowemu sprintowi UX (ligatury), a nie sweep.
+→ **Propozycja: `FontFamily` wypada z celów M2c**; 81 zostaje z komentarzem, a §4.1 handovera
+i komentarz w teście zostają skorygowane. ⚠ Skutek uboczny: `Font.Code` **pozostaje tokenem bez
+konsumenta** (dziś ma zero), czyli w kształcie, przed którym ostrzega reguła #233.
+
+**(2) `CornerRadius` — §4.2.2 pomylił się w OBIE strony.**
+Zapis §4.2.2 twierdzi: *„wszystkie wystąpienia 4 / 4.5 / 5 / 6 … są CHIPAMI, 3 to wyłącznie
+powierzchnie"*. Zmierzone — nieprawda w obu połowach:
+
+* **4.5 / 5 / 6 (7 wystąpień) to nie chipy, tylko GEOMETRIA**: `Width=10 Height=10 CornerRadius=5`
+  i `Width=9 Height=9 CornerRadius=4.5` to **koła**, a `Height=12 CornerRadius=6` /
+  `Height=10 CornerRadius=5` to **pigułki** pasków postępu. Promień = połowa boku. Wpisanie tam
+  `Radius.Chip` (4) zamienia koło w kwadrat ze ściętymi rogami — zmiana widoczna.
+* **4 (11 wystąpień) to w większości KARTY, nie chipy**: `BorderThickness="1" Padding="10,8"`,
+  kontenery `ClipToBounds`, kafelek wiersza. Chipem jest tylko `AggregationBarView:55`.
+  `Radius.Surface` (3) byłoby rolą trafną, ale zmienia 4 → 3.
+
+→ **Propozycja:** migrować **wyłącznie 17 wystąpień `CornerRadius="3"` → `Radius.Surface`**
+(zerowe ryzyko); 7 „geometrycznych" **zostawić lokalnie z komentarzem** (promień pochodzi z rozmiaru
+elementu — to arytmetyka, nie rola); **10 kart przy 4 px oddać do przeglądu §13.3**, bo 3-czy-4 dla
+karty jest decyzją produktową, nie sprzątaniem. §4.2.2 do skorygowania w miejscu.
+
+**(3) Trzy grupy `FontSize` bez roli o tej wartości (28 wystąpień).**
+
+* **`FontSize="9"` x7** — Typography §6 zapowiada zwinięcie do `Text.Caption` (10). Dwa z nich to
+  glify (`▶`, `●`) i sam katalog je wyłącza; pozostałe **pięć** to realna zmiana 9 → 10.
+* **`ae:TextEditor FontSize="12"` x6** — katalog ratyfikował **jeden** rozmiar kodu (13) słowami
+  *„edytor kodu o dwóch rozmiarach w jednej aplikacji jest defektem, nie decyzją"*. ⚠ Pomiar mówi,
+  że te sześć to edytory **w wierszu siatki** (kursory i podprogramy w trybie Easy, podgląd Global
+  Search, szczegół Trace) — czyli 12 px jest tam **konsekwencją gęstości wiersza**, a nie dryfem.
+  Zamiana na 13 to zmiana wyglądu i możliwy skok układu.
+* **`TextBlock FontSize="13"` x15** — 13 px istnieje w katalogu **wyłącznie jako `Text.Code`**,
+  a to jest treść (komunikat `ConfirmDialog`/`ChoiceDialog`, nagłówki Security Managera, wiodąca
+  linia planu). Brak roli.
+
+→ **Propozycja: wszystkie 28 zostają lokalne z komentarzem**, a decyzje „9 → 10", „12 → 13"
+i „czy 13 px zasługuje na własną rolę" idą do przeglądu §13.3 / M5. To jest wprost „uzasadniona
+reszta" z handovera §4.1 — i jedyny wariant, który nie łamie DoD 6.
+
+#### §18.0.6 ⚠ Ustalenie poboczne — `ControlStyles.axaml` ma ten sam dług, tylko niewidoczny
+
+Strażnik świadomie pomija `Themes/` (*„tam mieszka system"*). Pomiar pokazuje, że to **za szerokie
+założenie**: `ControlStyles.axaml` ma dziś **literały** tam, gdzie powinien czytać rolę —
+`TabItem` 13 · `TabItem.bottom-tab` 11 · `TabItem.sub-tab` 11 · `ContextMenu` 12 · `MenuItem` 12 ·
+`PART_InputGestureText` 11 · `ListBox.code-action-menu ListBoxItem` 12 · `CornerRadius` 4/3/3.5.
+To nie jest „katalog robiący swoje", tylko **katalog zapisany drugi raz** — i dokładnie ten kształt,
+który §11 nazywa dryfem, tyle że w pliku wyłączonym z pomiaru.
+→ **Propozycja: ująć te ~10 setterów w M2c jako osobną iterację** (`{DynamicResource Text.*}`,
+wartości bez zmian). Nie wymaga zmiany strażnika ani nowej roli.
+
+#### §18.0.7 Plan iteracji wynikający z inwentarza
+
+| # | Zakres | Skąd |
+|---|---|---|
+| 1 | `DebuggerTabView.axaml` (+ `.axaml.cs`) — 85 + 6 | największe skupisko (handover §4.2) |
+| 2 | `DataImportTabView.axaml` — 82 | drugie |
+| 3 | `PerformancePanelView.axaml` — 42 | trzecie |
+| 4 | `ProcedureDetailTabView` + `FunctionDetailTabView` — 81 | bliźniacze, ta sama struktura |
+| 5 | edytory obiektów: Table · Trigger · View · Package · Domain · Generator · Exception · Index | grupa |
+| 6 | monitory: `SessionManagerTabView` · `TraceMonitorTabView` · `SecurityManagerTabView` | grupa |
+| 7 | `MainWindow.axaml` + `Controls/` | powierzchnia trwała (§0.1) |
+| 8 | dialogi (18 plików, 1–9 wystąpień każdy) | ogon |
+| 9 | settery literalne w `ControlStyles.axaml` (§18.0.6) | jeżeli zatwierdzone |
+| 10 | podniesienie bazy w `DesignTokenComplianceTests` + korekta komentarza z §18.0.2 | krok końcowy |
+
+#### §18.0.8 ⭐⭐ R12 — ZMIANA CELU ETAPU, RATYFIKOWANA PRZEZ UŻYTKOWNIKA (2026-08-02)
+
+> **Użytkownik, przy akceptacji inwentarza:** *„Nie traktuj celem etapu wyzerowania liczników.
+> Celem jest usunięcie **nieuzasadnionych** wartości lokalnych. Jeżeli po zakończeniu zostanie
+> niewielka liczba świadomie pozostawionych wyjątków z udokumentowanym uzasadnieniem, to M2c nadal
+> będzie uznany za zakończony. Dokument ma odzwierciedlać architekturę produktu, a nie zmuszać
+> produkt do spełniania wcześniejszych założeń, które zostały obalone pomiarami."*
+
+**R12 dołącza do R1–R11 (§17.3) i jest wiążąca poza tym etapem.** Jest bezpośrednim rozwinięciem
+R8 („pomiar jest narzędziem, nie argumentem końcowym") o jeden poziom: **licznik też jest tylko
+narzędziem.** Trzy konsekwencje, wszystkie operacyjne:
+
+1. ⛔ **Nie wolno migrować wartości na rolę, która do niej nie pasuje, żeby licznik spadł.**
+   Błędna rola jest **gorsza** od wartości lokalnej: wartość lokalna jest widoczna jako dług,
+   a błędna rola udaje, że długu nie ma — i przy pierwszej zmianie katalogu przesuwa ekran,
+   o którym nikt nie pamięta.
+2. ⭐ **Warunkiem wyjścia M2c NIE jest liczba, tylko zdanie przy każdej pozostałej wartości.**
+   „605 → N" nie jest oceną etapu; oceną jest to, czy **każda** z pozostałych N ma powód zapisany
+   na miejscu.
+3. ⭐ **Kiedy pomiar obala zapis, poprawiamy zapis — w miejscu, z datą i powodem.** Dokument
+   opisuje produkt, nie odwrotnie. Trzy takie korekty ten etap już wykonał (§18.0.9).
+
+#### §18.0.9 Korekty dokumentów wymuszone pomiarem (krok 0)
+
+| Gdzie | Było | Jest | Dowód |
+|---|---|---|---|
+| **§4.2.2** (ten dokument) | „wszystkie 4 / 4.5 / 5 / 6 są CHIPAMI" | 4.5/5/6 to **geometria** (koła, kapsuły); 4 to w większości **karty** | §18.0.5/2 |
+| **`Typography.axaml`**, rola `Text.Caption` | „`FontSize=9` znika — 7 wystąpień wchodzi tutaj" | 9 → 10 to **zmiana wyglądu**; zostaje, decyzja oddana §13.3 | §18.0.5/3 |
+| **`Typography.axaml`**, rola `Text.Code` | „13 px jednoznacznie … edytor o dwóch rozmiarach to defekt" | 6 edytorów przy 12 px stoi **w wierszu siatki** — to gęstość, nie dryf | §18.0.5/3 |
+| **`Typography.axaml`**, rola `Font.Code` | „Zastępuje 7 rozjechanych ciągów" | **nie zastępuje żadnego w M2c** — token niesie `Mono`, widoki `Code` | §18.0.5/1 |
+| **handover §4.1 / §4.3** | „`FontFamily` → 0 poza uzasadnionymi" | `FontFamily` **poza zakresem M2c** w całości | §18.0.5/1 |
+| **`DesignTokenComplianceTests`** (komentarz `FontFamilyBaseline`) | „M2c should drive this list to empty" | lista zostaje; powód zapisany | §18.0.5/1 |
+| **`DesignTokenApplicationTests`** (komentarz) | „Avalonia's default TextBlock size is 12" | **14** — zmierzone sondą | §18.0.2 |

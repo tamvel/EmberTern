@@ -121,9 +121,21 @@ public class DesignTokenComplianceTests
     };
 
     /// <summary>
-    /// Seven divergent monospace strings across the app, six of them in these files (D2 collapses them into the
-    /// one <c>Font.Code</c> token). Unlike the other two guards this one has <b>no legitimate residue</b>: a
-    /// view has no reason to name a font family, so M2c should drive this list to empty.
+    /// Seven divergent monospace strings across the app, six of them in these files.
+    /// <para>
+    /// ⚠⚠ <b>THIS COMMENT USED TO SAY "M2c should drive this list to empty", AND THE M2c INVENTORY MEASURED
+    /// THAT TO BE IMPOSSIBLE</b> (2026-08-02, ratified by the user — <c>product-polish.md</c> §18.0.5/1). The
+    /// <c>Font.Code</c> token carries <c>Cascadia <b>Mono</b>, …</c> while 65 of the 81 occurrences are
+    /// <c>Cascadia <b>Code</b>, …</c> — <b>not one of the 81 strings is identical to the token</b>, so swapping
+    /// any of them changes the typeface in the SQL editor, the debugger, the hover cards and eleven DDL
+    /// previews at once. M2c is a de-localization sweep with an unchanged appearance, so <c>FontFamily</c> left
+    /// its scope entirely; <c>Cascadia Code</c> (ligatures) vs <c>Cascadia Mono</c> (none) belongs to the
+    /// backlogged UX sprint together with collapsing the 7 strings / 95 occurrences / 33 files.
+    /// </para>
+    /// <para>
+    /// ⭐ So this baseline is a <b>ratchet against new drift</b>, not a countdown to zero: nothing may be added,
+    /// and the existing entries carry their reason at the token itself (<c>Themes/Typography.axaml</c>).
+    /// </para>
     /// </summary>
     private static readonly Dictionary<string, int> FontFamilyBaseline = new(StringComparer.Ordinal)
     {
