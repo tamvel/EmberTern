@@ -193,6 +193,30 @@
       <SolidColorBrush x:Key="ExpanderContentBackground" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{StaticResource BorderColor}" />
       <SolidColorBrush x:Key="ExpanderChevronForeground" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── ScrollBar (H‑10, Product Polish M2b krok 6) ──────────────────────────────────────────
+           ⚠ Fluent maluje uchwyt pół-przezroczystą bielą, a stan wciśnięcia niemal czystą
+           (`#33ffffff` → `#66ffffff` → `#99ffffff`) — w motywie JASNYM biały uchwyt na białym tle
+           jest praktycznie niewidoczny. To jest cała treść H‑10.
+
+           ⭐ `ScrollBarThumbBackgroundColor` jest KOLOREM, nie pędzlem, więc idzie ALIASEM (§16.3,
+           trasa trzecia) — nie da się w treści `<Color>` napisać odwołania, ale osobnym znacznikiem
+           już tak. Ten sam mechanizm, który krok 5.7 zmierzył dla metryki, działa dla barwy.
+
+           ⚠ TOR (`ScrollBarTrackFill`) bierze tło DOKUMENTU, nie chromy: pasek przewijania przylega
+           do treści, którą przewija, i ma się z nią zlewać. Widoczny ma być UCHWYT — on niesie
+           informację o pozycji — a nie rynna, w której się porusza.
+           ⚠ Strzałki na `SubtleForeground`, jak każda afordancja drugorzędna w tym etapie
+           (chevron `ComboBoxa`, strzałki spinnera, chevron `Expandera`). -->
+      <StaticResource x:Key="ScrollBarThumbBackgroundColor" ResourceKey="ScrollBarThumbColor" />
+      <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{StaticResource ScrollBarThumbColor}" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="{StaticResource ScrollBarThumbHoverColor}" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="{StaticResource ScrollBarThumbPressedColor}" />
+      <SolidColorBrush x:Key="ScrollBarTrackFill" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPressed" Color="{StaticResource ForegroundColor}" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -326,6 +350,30 @@
       <SolidColorBrush x:Key="ExpanderContentBackground" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{StaticResource BorderColor}" />
       <SolidColorBrush x:Key="ExpanderChevronForeground" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── ScrollBar (H‑10, Product Polish M2b krok 6) ──────────────────────────────────────────
+           ⚠ Fluent maluje uchwyt pół-przezroczystą bielą, a stan wciśnięcia niemal czystą
+           (`#33ffffff` → `#66ffffff` → `#99ffffff`) — w motywie JASNYM biały uchwyt na białym tle
+           jest praktycznie niewidoczny. To jest cała treść H‑10.
+
+           ⭐ `ScrollBarThumbBackgroundColor` jest KOLOREM, nie pędzlem, więc idzie ALIASEM (§16.3,
+           trasa trzecia) — nie da się w treści `<Color>` napisać odwołania, ale osobnym znacznikiem
+           już tak. Ten sam mechanizm, który krok 5.7 zmierzył dla metryki, działa dla barwy.
+
+           ⚠ TOR (`ScrollBarTrackFill`) bierze tło DOKUMENTU, nie chromy: pasek przewijania przylega
+           do treści, którą przewija, i ma się z nią zlewać. Widoczny ma być UCHWYT — on niesie
+           informację o pozycji — a nie rynna, w której się porusza.
+           ⚠ Strzałki na `SubtleForeground`, jak każda afordancja drugorzędna w tym etapie
+           (chevron `ComboBoxa`, strzałki spinnera, chevron `Expandera`). -->
+      <StaticResource x:Key="ScrollBarThumbBackgroundColor" ResourceKey="ScrollBarThumbColor" />
+      <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{StaticResource ScrollBarThumbColor}" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="{StaticResource ScrollBarThumbHoverColor}" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="{StaticResource ScrollBarThumbPressedColor}" />
+      <SolidColorBrush x:Key="ScrollBarTrackFill" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPressed" Color="{StaticResource ForegroundColor}" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>

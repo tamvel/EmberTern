@@ -135,6 +135,17 @@
            toolbar icon's hover reads clearly. ARGB: ~13% white on dark. -->
       <Color x:Key="IconHoverColor">#22FFFFFF</Color>
 
+      <!-- ⭐ Pasek przewijania (H‑10, Product Polish M2b krok 6) — TRZY WŁASNE ROLE, bo żadna
+           istniejąca nie pasuje bez łamania §3.1. Uchwyt jest WYPEŁNIENIEM, a jedyne tokeny o dobrym
+           kontraście w obu motywach są rolami TEKSTU (`SubtleForeground`) — użycie ich tutaj
+           odebrałoby tamtej roli znaczenie. Konsument istnieje od pierwszej linii (każdy przewijalny
+           widok w aplikacji), więc reguła „token bez konsumenta wygląda jak regresja" jest spełniona.
+           ⚠ Uchwyt musi być widoczny bez bycia głośnym: to jedyny element chromy, który użytkownik
+           śledzi wzrokiem przy przewijaniu i zarazem ignoruje przez resztę czasu. -->
+      <Color x:Key="ScrollBarThumbColor">#4A4A50</Color>
+      <Color x:Key="ScrollBarThumbHoverColor">#5F5F67</Color>
+      <Color x:Key="ScrollBarThumbPressedColor">#7A7A83</Color>
+
       <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
       <SolidColorBrush x:Key="ChromeStrongBrush" Color="{StaticResource ChromeStrongColor}" />
@@ -407,6 +418,12 @@
       <SolidColorBrush x:Key="DebugLoopIconBrush" Color="{StaticResource DebugLoopIconColor}" />
       <!-- ARGB: ~9% black on light. -->
       <Color x:Key="IconHoverColor">#18000000</Color>
+
+      <!-- ⭐ Pasek przewijania (H‑10) — patrz komentarz w motywie ciemnym. W Light uchwyt jest
+           CIEMNIEJSZY od tła, czyli kierunek jest odwrotny, a rola ta sama. -->
+      <Color x:Key="ScrollBarThumbColor">#C3C7CE</Color>
+      <Color x:Key="ScrollBarThumbHoverColor">#A6ABB4</Color>
+      <Color x:Key="ScrollBarThumbPressedColor">#888E98</Color>
 
       <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />

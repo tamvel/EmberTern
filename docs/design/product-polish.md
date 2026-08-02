@@ -1410,10 +1410,11 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | 5.4 | **`Button`** (H‑8) + tokenizacja 4 wariantów | `267a4b8` | ⏳ oczekuje | §15.6.6 |
 | 5.5 | **`NumericUpDown`** — trzy kontrolki zagnieżdżone | `d2a2475` | ⏳ oczekuje | §15.6.7 |
 | 5.6 | **`ToggleButton`** | `ce47aa7` | ⏳ oczekuje | §15.6.8 |
-| 5.7 | **`Expander`** + ⭐ alias zasobu (korekta §16.3) | — | ⏳ oczekuje | §15.6.9 |
+| 5.7 | **`Expander`** + ⭐ alias zasobu (korekta §16.3) | `69ceff6` | ⏳ oczekuje | §15.6.9 |
+| 6 | **`ScrollBar`** (H‑10) | — | ⏳ oczekuje | §15.7 |
 
 **Krok 5 (kontrolki bazowe) — ZAKOŃCZONY.**
-**Nierozpoczęte poza krokiem 5:** `ScrollBar` (H‑10) · DataGrid Standard (§8.4 specyfikacji).
+**Pozostało w M2b:** DataGrid Standard (§8.4 specyfikacji) — ostatni krok etapu.
 
 ⚠ **Stan bieżący suite: 7075** (7000 + 54 + 21). Każda iteracja dokłada 1–2 testy; licznik
 w `CLAUDE.md` („Tests") jest aktualizowany w tym samym commicie co iteracja.
@@ -2147,6 +2148,45 @@ ilustracja, po co M2c ma osobny licznik: obejście, które przestało być potrz
 jak obejście, które nadal działa.
 
 Build 0/0; suite **7080** (7000 + 54 + 26); smoke czysty.
+
+### §15.7 Krok 6 — `ScrollBar` (H‑10)
+
+Wyłącznie kolory — przez Bridge, 9 kluczy w obu motywach. Bez zmiany geometrii i bez własnego
+szablonu.
+
+**⚠ Defekt był NIESYMETRYCZNY WOBEC MOTYWÓW i dlatego audyt zapisał go jako „paski bez stylu",
+a nie jako „zły kolor".** Fluent maluje uchwyt pół-przezroczystą bielą, wciśnięcie prawie czystą
+(`#33ffffff` → `#66ffffff` → `#99ffffff`). W motywie ciemnym to wygląda poprawnie. **W jasnym jest to
+biały uchwyt na tle `#FCFCFD`** — praktycznie niewidoczny, a po kroku 3 (nowa, jaśniejsza skala Light)
+jeszcze mniej widoczny niż przed etapem. To jest §15.6.4a raz jeszcze: **uspokojenie otoczenia
+podniosło głośność — tu raczej *obniżyło czytelność* — elementu, którego nikt nie ruszał.**
+
+**⭐ TRZY NOWE ROLE W `Colors.axaml` i to jest uzasadniony wyjątek od reguły „rola z drugiego
+konsumenta".** Uchwyt jest **wypełnieniem**, a jedyne tokeny o dobrym kontraście w obu motywach są
+rolami **tekstu** (`SubtleForeground`) — użycie ich tutaj odebrałoby tamtej roli znaczenie (§3.1).
+⚠ Reguła użytkownika mówi o **rolach bez konsumenta** (`Stroke.Rail`, `Radius.Control`); tutaj
+konsument istnieje od pierwszej linii — **każdy przewijalny widok w aplikacji**. To jest ta sama
+sytuacja co `Margin.MarkGap`: rola powstała z potrzeby, nie z symetrii.
+
+**⭐ Drugi przypadek trasy aliasu (§16.3) i to on pokazuje, że nie jest ona jednorazowa.**
+`ScrollBarThumbBackgroundColor` jest **`Color`, nie pędzlem** — nie da się napisać
+`Color="{StaticResource …}"`, bo to sam `Color` jest zasobem. Mechanizm zmierzony w kroku 5.7 dla
+**metryki** obsłużył więc **barwę**, bez żadnej zmiany reguły.
+
+**⚠ Tor bierze tło DOKUMENTU, nie chromy.** Pasek przewijania przylega do treści, którą przewija,
+i ma się z nią zlewać; widoczny ma być **uchwyt** — on niesie informację o pozycji — a nie rynna,
+w której się porusza. Strzałki idą na `SubtleForeground`, jak każda afordancja drugorzędna tego etapu
+(chevron `ComboBoxa`, strzałki spinnera, chevron `Expandera`) — **cztery kontrolki, jedna reguła**.
+
+**⛔ GEOMETRIA I STRZAŁKI CELOWO NIETKNIĘTE — i to jest decyzja, nie pominięcie.** Rozważane było
+usunięcie strzałek (konwencja VS Code / Rider). Odrzucone z dwóch powodów: (a) to **zmiana
+funkcjonalna**, nie stylistyczna — użytkownik traci możliwość przewijania o krok kliknięciem,
+a audyt H‑10 mówi o *braku stylu*, nie o nadmiarze przycisków; (b) **Fluent już robi rzecz nowoczesną**
+— pasek ma stan zwinięty (cienki uchwyt, strzałki ukryte) i rozwija się dopiero pod kursorem, więc
+strzałki nie są widoczne w spoczynku. ⚠ Gdyby po QA okazało się, że mimo to przeszkadzają, właściwą
+odpowiedzią jest **osobna propozycja** (§15.0), a nie doklejenie jej do kroku o kolorach.
+
+Build 0/0; suite **7081** (7000 + 54 + 27); smoke czysty.
 
 ---
 

@@ -470,6 +470,47 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// Step 6 — <c>ScrollBar</c> (H‑10). Fluent paints the thumb in semi-transparent WHITE, which in the LIGHT
+    /// theme is a white thumb on a near-white surface — the finding itself.
+    ///
+    /// <para>⚠ Written in the LIGHT variant for the same reason step 4's ToolTip test was: this is the theme in
+    /// which the defect is visible. A dark-theme assertion would pass on Fluent's own value.</para>
+    ///
+    /// <para>⭐ It also pins the second use of the alias route (§16.3): <c>ScrollBarThumbBackgroundColor</c> is a
+    /// <c>Color</c>, not a brush, so it cannot be written as <c>Color="{StaticResource …}"</c> — the mechanism
+    /// measured for a metric in step 5.7 turns out to serve a colour too.</para>
+    /// </summary>
+    [Fact]
+    public async Task ScrollBar_ThumbTakesTheCatalogColour_NotFluentsWhite()
+    {
+        await _session.Dispatch(() =>
+        {
+            var app = Application.Current!;
+            var original = app.RequestedThemeVariant;
+            try
+            {
+                app.RequestedThemeVariant = ThemeVariant.Light;
+
+                var thumb = ThemeToken<Color>("ScrollBarThumbBackgroundColor", ThemeVariant.Light);
+                Assert.Equal(ThemeToken<Color>("ScrollBarThumbColor", ThemeVariant.Light), thumb);
+
+                // The defect in one assertion: on Light the catalog thumb must not be white-ish, or it vanishes
+                // against BackgroundColor (#FCFCFD). Fluent's own value is a semi-transparent white.
+                var surface = ThemeToken<Color>("BackgroundColor", ThemeVariant.Light);
+                Assert.True(surface.R - thumb.R > 24,
+                    $"A Light-theme scroll thumb ({thumb}) must read against the surface ({surface}) — this is H‑10.");
+
+                var pointerOver = ThemeToken<SolidColorBrush>("ScrollBarThumbFillPointerOver", ThemeVariant.Light);
+                Assert.Equal(ThemeToken<Color>("ScrollBarThumbHoverColor", ThemeVariant.Light), pointerOver.Color);
+            }
+            finally
+            {
+                app.RequestedThemeVariant = original;
+            }
+        }, default);
+    }
+
+    /// <summary>
     /// Reads a token straight from the application's merged resources — the same lookup a style performs. If
     /// the key is missing this fails loudly here, instead of leaving a control on a silent default.
     /// </summary>
