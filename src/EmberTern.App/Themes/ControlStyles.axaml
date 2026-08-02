@@ -166,6 +166,61 @@
          wiersz rósł w momencie wejścia w edycję. Właścicielem wysokości jest tu WIERSZ. -->
     <Setter Property="Padding" Value="{DynamicResource Pad.CellEditor}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+    <!-- ⭐ Edytor WYPEŁNIA wysokość komórki, zamiast obejmować sam tekst (§19.8). Bez tego pudełko
+         zaciska się do ~14 px w 16-px obszarze i czyta się jak wąski „dysk" wrzucony w wiersz, a nie
+         jak kontrolka tej siatki — najmocniej przy stanie wyłączonym, gdzie nie ma kursora ani
+         zawartości, które nadałyby mu sens.
+         ⚠ `Stretch`, a NIE `Height`: element ma PRZYJĄĆ wysokość od komórki (decyzja architektoniczna 2
+         z M2b), a nie deklarować własną. To także jedyny wariant, który nie może podnieść wiersza —
+         `Stretch` nie zwiększa `DesiredSize`, więc §13.3 (Zero Layout Shift) zostaje nienaruszone,
+         w przeciwieństwie do `MinHeight`, które w kroku 7 M2b urosło wiersz o 2 px. -->
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- ⭐ Chroma edytora komórki należy TU, a nie do kodu budującego kolumnę. `FieldGridColumns`
+         ustawiał to jako wartości lokalne, przez co żaden setter tego stylu nie miał do nich dostępu
+         (§19.9). Edytor w komórce jest bez ramki i bez własnego tła — pudełko rysuje dopiero fokus,
+         a spoczynkowy wiersz siatki ma się czytać jako dane, nie jako formularz. -->
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- ⭐⭐ EDYTOR W SIATCE DEFINICJI PÓL PROSI O TĘ SAMĄ WYSOKOŚĆ, CO `ComboBox` OBOK (§19.9).
+       ⚠ `Stretch` na samym `TextBoxie` NIE WYSTARCZY i to jest zmierzone: `DataGridCell` ma
+       `VerticalContentAlignment="Center"`, więc komórka CENTRUJE dziecko zamiast je rozciągać —
+       po naprawie wartości lokalnych `VA` raportowało już `Stretch`, a wysokość dalej 12 px przy
+       komórce 30 px. ⛔ Tamtego settera nie wolno odwrócić: istnieje po to, żeby zwykły TEKST nie
+       osiadał przy górnej krawędzi komórki (§8.4).
+
+       ⭐ Dlatego element ma PROSIĆ o wysokość, a nie liczyć na kontener — dokładnie tak, jak robi to
+       `ComboBox`, który w tej samej komórce wygląda poprawnie wyłącznie dzięki `Size.Control` ze
+       swojego stylu. To ta sama ROLA, nie dobrana liczba.
+
+       ⚠⚠ KLASA, a nie styl na wszystkich `DataGridCell TextBox` — i to jest warunek bezpieczeństwa.
+       Siatki definicji pól mają w wierszu `ComboBox`, więc już dziś mierzą 30 px i minimum 24 niczego
+       nie podniesie. Siatki DANYCH (Table Data, wyniki) `ComboBoxa` nie mają — tam ten sam setter
+       urósłby każdy wiersz, czyli odtworzyłby regresję z kroku 7 M2b. -->
+  <Style Selector="DataGridCell TextBox.field-editor">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+  </Style>
+
+  <!-- ⭐ EDYTOR W KOMÓRCE, KTÓREGO NIE DA SIĘ EDYTOWAĆ, MA WYGLĄDAĆ JAK INFORMACJA, A NIE JAK PUSTE
+       POLE DO WYPEŁNIENIA (§19.8). Siatki pól trzymają w komórkach ZAWSZE WIDOCZNY `TextBox`, bo
+       `DataGridTextColumn` umie tylko `IsReadOnly` per KOLUMNA, a bramka jest per WIERSZ
+       (gotcha #83/#124). Gdy typ narzuca domena albo `TYPE OF`, kolumny Size/Scale/SubType/Charset są
+       wyłączane — i wtedy pudełko wejściowe kłamie: sugeruje brakującą daną tam, gdzie dana nie jest
+       ani brakująca, ani do wpisania.
+
+       ⚠ To UJAWNIONY DŁUG, nie regresja: te pola były wyłączone od zawsze, ale przed M2b nieaktywny
+       `TextBox` zlewał się z tłem. Nadanie kontrolce spójnej ramki sprawiło, że zaczął czytać się jak
+       pole edycyjne — użytkownik zgłosił to jako „puste prostokąty".
+
+       ⛔ Selektor celuje w `DataGridCell`, więc NIE dotyka wyłączonych `TextBox`ów w formularzach, gdzie
+       ramka niesie sens „tu normalnie się wpisuje, ale teraz nie można". W komórce siatki tej roli nie
+       ma — wiersz obok pokazuje to samo pole aktywne, więc kontrast sam nazywa stan. -->
+  <Style Selector="DataGridCell TextBox:disabled">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
   <!-- ================================================================================================

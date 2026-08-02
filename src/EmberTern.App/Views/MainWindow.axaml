@@ -1765,6 +1765,24 @@
                  FontSize="{DynamicResource Text.Status.Size}"
                  FontWeight="SemiBold"
                  Foreground="{DynamicResource ForegroundBrush}" />
+            <!-- ⛔⛔ NIE PRÓBUJ WYŚRODKOWAĆ TEGO RUNU W PIONIE. Zmierzone w rundzie po M3.1f (§19.8),
+                 bo użytkownik zgłosił, że endpoint „opada" — sprawdzone TRZY mechanizmy:
+
+                   środek nazwy (11 px SemiBold)      8,54
+                   środek endpointu — dziś (baseline) 8,83   → +0,30 px
+                   środek endpointu — InlineUIContainer 7,50 → −1,04 px
+
+                 ⚠⚠ `BaselineAlignment="Center"` na `Run` jest w Avalonii **IGNOROWANE** — per-run
+                 baseline wychodzi identyczny (8,45) z nim i bez niego. Właściwość istnieje w API i nie
+                 robi nic; wstawienie jej byłoby martwym kodem udającym poprawkę.
+                 ⚠ `InlineUIContainer` DZIAŁA, ale przestrzeliwuje ponad trzykrotnie w drugą stronę.
+                 ⚠ Dwa osobne `TextBlocki` z `VerticalAlignment="Center"` przywracają defekt DPI
+                 z §19.3.3 (osobne zaokrąglenie na element; przy 125% cały piksel).
+
+                 ⭐ Wniosek: obecne wyrównanie do linii bazowej jest NAJBLIŻSZE optycznego środka ze
+                 wszystkiego, co jest dostępne. Wrażenie osiadania bierze się z tego, że nazwy połączeń
+                 bywają WERSALIKAMI („GAL"), a endpoint jest minuskułą — to różnica wysokości wersalika
+                 i x-height przy wspólnej linii bazowej, nie błąd wyrównania pudełek. -->
             <Run Text="{Binding ConnectionEndpointLabel}"
                  FontSize="{DynamicResource Text.Caption.Size}"
                  Foreground="{DynamicResource SubtleForegroundBrush}" />

@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
@@ -63,14 +63,16 @@ internal static class FieldGridColumns
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<ProcedureFieldRowBase>((_, _) =>
             {
-                var tb = new TextBox
-                {
-                    BorderThickness = new Thickness(0),
-                    Background = Brushes.Transparent,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    VerticalContentAlignment = VerticalAlignment.Center,
-                    Padding = new Thickness(4, 0),
-                };
+                // ⭐⭐ ŻADNEJ CHROMY TUTAJ — całość niesie styl `DataGridCell TextBox`.
+                // ⚠⚠ To nie jest porządkowanie, tylko NAPRAWA (§19.9). Ta metoda ustawiała
+                // `VerticalAlignment`, `VerticalContentAlignment`, `Padding`, `BorderThickness`
+                // i `Background` jako WARTOŚCI LOKALNE, a wartość lokalna BIJE SETTER STYLU — więc
+                // styl nie mógł ich dosięgnąć. Zmierzone: komórka 30 px, `TextBox` 12 px, `VA=Center`
+                // mimo `Stretch` w stylu. Pole czytało się jak cienki pasek wrzucony w wiersz, obok
+                // `ComboBoxa`, który wysokość bierze ze swojego stylu (`Size.Control`).
+                // ⛔ Nie przywracać tu ani jednej z tych właściwości — to dokładnie ten mechanizm,
+                // przez który `MessageBanner` dorobił się sześciu wariantów chromy per host.
+                var tb = new TextBox { Classes = { "field-editor" } };
                 tb.Bind(TextBox.TextProperty, new Binding(path) { Mode = BindingMode.TwoWay });
                 tb.Bind(InputElement.IsEnabledProperty, new Binding(enabledPath));
                 return tb;

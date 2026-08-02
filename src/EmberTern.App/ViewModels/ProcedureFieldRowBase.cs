@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -40,7 +40,7 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject, ITypeSou
                 OnPropertyChanged(nameof(SelectedTypeSource));
                 // Domains load asynchronously after the rows are built — once the list
                 // arrives, resolve a domain-typed row's Type cell so it isn't blank.
-                if (!string.IsNullOrEmpty(DomainName)) SyncTypeDisplayFromDomain(DomainName!);
+                if (!string.IsNullOrEmpty(DomainName)) SyncTypeDisplayFromDomain(DomainName!, adoptNotNull: false);
             };
         }
     }
@@ -142,7 +142,7 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject, ITypeSou
             // Type column shows the effective type instead of going blank. ComposeType
             // still returns the domain NAME (DomainName wins), so the canonical type is
             // the domain — the display sync is informational only.
-            SyncTypeDisplayFromDomain(value!);
+            SyncTypeDisplayFromDomain(value!, adoptNotNull: true);
         }
         Recompose();
     }
@@ -166,7 +166,14 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject, ITypeSou
     // selected domain's definition (e.g. domain T_KODPOCZ → VARCHAR(6)) for display,
     // WITHOUT clearing DomainName. ComposeType still returns the domain NAME (domain
     // wins), so this is informational only and never corrupts the generated DDL.
-    private void SyncTypeDisplayFromDomain(string domain)
+    /// <param name="adoptNotNull">
+    /// ⚠⚠ Czy przejąć również <c>NOT NULL</c> domeny. <c>true</c> tylko wtedy, gdy użytkownik WŁAŚNIE
+    /// WYBRAŁ domenę — wtedy przyjmuje jej atrybuty w komplecie. <c>false</c> przy WCZYTYWANIU
+    /// istniejącej deklaracji: tam `NOT NULL` zostało już sparsowane z samej deklaracji i bywa własnym
+    /// ustawieniem zmiennej, niezależnym od domeny. Nadpisanie go zmieniłoby zapisany kod użytkownika
+    /// przy samym otwarciu edytora — a to reguła #11, nie kosmetyka (§19.8).
+    /// </param>
+    private void SyncTypeDisplayFromDomain(string domain, bool adoptNotNull)
     {
         DomainSpec? d = null;
         foreach (var x in AvailableDomains)
@@ -182,7 +189,7 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject, ITypeSou
             Scale = d.Scale;
             SubType = ExtractSubType(d.Type);
             Charset = d.Charset ?? string.Empty;
-            NotNull = d.NotNull;
+            if (adoptNotNull) NotNull = d.NotNull;
         }
         finally { _syncingType = false; }
     }
@@ -281,6 +288,16 @@ public abstract partial class ProcedureFieldRowBase : ObservableObject, ITypeSou
                 // Unknown base — most likely a domain. Show it in the Domain column;
                 // ComposeType returns it verbatim, so it round-trips.
                 DomainName = baseTok;
+
+                // ⭐⭐ …i od razu rozwiąż typ bazowy domeny do kolumn Type/Size/Scale/SubType/Charset.
+                // ⚠ Bez tej linii kolumna Type zostawała PUSTA, a Size/Scale wyglądały jak brakujące
+                // dane (§19.8). Mechanizm istniał w dwóch miejscach, ale żadne tu nie sięgało:
+                // `OnDomainNameChanged` wychodzi na `_suppressCompose`, które `LoadType` właśnie trzyma,
+                // a subskrypcja `AvailableDomains.CollectionChanged` ratowała sytuację TYLKO wtedy, gdy
+                // lista domen dojeżdżała PO zbudowaniu wierszy. Przy połączeniu, w którym domeny były
+                // już wczytane, kolekcja się nie zmieniała i nie odpalało się nic.
+                // ⚠ `adoptNotNull: false` — to WCZYTANIE, nie wybór: `NOT NULL` pochodzi z deklaracji.
+                SyncTypeDisplayFromDomain(baseTok, adoptNotNull: false);
             }
         }
         finally

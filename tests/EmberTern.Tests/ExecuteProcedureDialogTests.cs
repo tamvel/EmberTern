@@ -235,6 +235,77 @@ public class ExecuteProcedureDialogTests
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
     }
 
+    /// <summary>
+    /// ⭐⭐ Wybór wpisu z listy historii RĘKĄ przywraca wartości także z wpisu SPRZED C3 (product-polish.md
+    /// §19.8) — zgłoszone przez użytkownika: „historia zawiera wartości, a kontrolki pozostają z NULL".
+    ///
+    /// <para>⚠ Przyczyną NIE była wymiana kontrolek. C3 wprowadziło dowód zgodności typu
+    /// (<c>ParameterValue.TypeText</c>) i regułę „wpis bez typu nigdy nie jest dowiedziony", a wpisy
+    /// zapisane przed C3 tego pola nie mają. Reguła była projektowana dla zastosowania AUTOMATYCZNEGO,
+    /// ale konstruktor i ręczny wybór dzielą jedną ścieżkę, więc obejmowała też jawną decyzję
+    /// użytkownika — i odmawiała po cichu.</para>
+    ///
+    /// <para>⭐ Rozstrzygnięcie: przy jawnym wyborze dowód typu nie obowiązuje, bo użytkownik właśnie
+    /// wskazał TEN wpis i widzi jego wartości na etykiecie. Zabezpieczeniem zostaje PARSOWANIE — wartość,
+    /// której nie da się wczytać w typ parametru, dalej nie jest stosowana.</para>
+    /// </summary>
+    [Fact]
+    public void Dialog_ManualHistoryPick_RestoresALegacyEntryWithNoRecordedType()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            // Wpis w kształcie sprzed C3: wartość jest, TypeText nie istnieje.
+            var store = new ParameterHistoryStore(dir);
+            store.Record("c1", "Procedure", "SP", new[]
+            {
+                new ParameterValue { Name = "N", IsNull = false, Text = "42", TypeText = null },
+            });
+
+            var dialog = new ExecuteProcedureDialogViewModel(
+                new[] { Param("N", "INTEGER") }, "SP", "c1", "Procedure", new ParameterHistoryStore(dir));
+
+            // Konstruktor NIE stosuje wpisu bez dowodu — to ratyfikowana reguła C3 i zostaje.
+            Assert.True(dialog.Params[0].IsNull);
+
+            // Użytkownik wybiera ten sam wpis RĘKĄ — teraz wartość ma wrócić.
+            dialog.SelectedHistory = null;
+            dialog.SelectedHistory = dialog.History[0];
+
+            Assert.False(dialog.Params[0].IsNull);
+            Assert.Equal(42m, dialog.Params[0].NumericValue);
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>
+    /// ⚠ Druga połowa tej samej reguły: zniesienie dowodu typu przy jawnym wyborze NIE znosi
+    /// zabezpieczenia. Wartość, której nie da się sparsować w typ parametru, dalej nie ląduje w wierszu —
+    /// inaczej odznaczenie NULL pokazałoby domyślną wartość konstruktora jako wpisaną przez użytkownika.
+    /// </summary>
+    [Fact]
+    public void Dialog_ManualHistoryPick_StillRefusesAValueThatCannotParse()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var store = new ParameterHistoryStore(dir);
+            store.Record("c1", "Procedure", "SP", new[]
+            {
+                new ParameterValue { Name = "N", IsNull = false, Text = "zupełnie nie liczba", TypeText = null },
+            });
+
+            var dialog = new ExecuteProcedureDialogViewModel(
+                new[] { Param("N", "INTEGER") }, "SP", "c1", "Procedure", new ParameterHistoryStore(dir));
+
+            dialog.SelectedHistory = null;
+            dialog.SelectedHistory = dialog.History[0];
+
+            Assert.True(dialog.Params[0].IsNull);
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+    }
+
     private static void AssertRoundTrip(string type, Action<ExecuteProcedureParamRowViewModel> set,
         Action<ExecuteProcedureParamRowViewModel> assert)
     {

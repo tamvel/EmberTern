@@ -904,6 +904,61 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// ⭐⭐ `TextBox` i `ComboBox` w siatce definicji pól należą do TEJ SAMEJ RODZINY KONTROLEK —
+    /// mają jednakową wysokość (§19.9).
+    ///
+    /// <para>⚠⚠ Test istnieje, bo droga do tego stanu miała TRZY warstwy i każda maskowała następną.
+    /// (1) `FieldGridColumns` ustawiał `VerticalAlignment`/`Padding`/`BorderThickness`/`Background`
+    /// jako WARTOŚCI LOKALNE w kodzie, a wartość lokalna bije setter stylu, więc styl nie mógł ich
+    /// dosięgnąć. (2) Po ich usunięciu `Stretch` już się stosował, ale wysokość dalej wynosiła 12 px
+    /// przy komórce 30 px — bo `DataGridCell` ma `VerticalContentAlignment="Center"` i CENTRUJE
+    /// dziecko zamiast je rozciągać. ⛔ Tamtego settera nie wolno odwrócić: pilnuje, żeby zwykły TEKST
+    /// nie osiadał przy górnej krawędzi. (3) Dopiero `MinHeight` = `Size.Control` — ta sama ROLA,
+    /// z której `ComboBox` bierze swoją wysokość — zrównał obie kontrolki.</para>
+    ///
+    /// <para>⭐ Asercja porównuje `TextBox` z `ComboBoxem` **obok, w tej samej siatce**, a nie z liczbą.
+    /// Dzięki temu przetrwa zmianę wartości `Size.Control` i upadnie dokładnie wtedy, gdy jedna z tych
+    /// kontrolek przestanie należeć do rodziny — czyli na tym, o co w tej poprawce chodziło.</para>
+    ///
+    /// <para>⚠ Druga połowa asercji pilnuje, że minimum edytora NIE PODNIOSŁO wiersza. Klasa
+    /// `field-editor` istnieje właśnie po to, żeby ten setter nie sięgnął siatek DANYCH, które
+    /// `ComboBoxa` nie mają — tam urósłby każdy wiersz (regresja z kroku 7 M2b).</para>
+    /// </summary>
+    [Fact]
+    public async Task FieldGridEditors_TextBoxAndComboBox_ShareOneHeight()
+    {
+        await _session.Dispatch(() =>
+        {
+            var row = EmberTern.App.ViewModels.ProcedureVariableRowViewModel.From(
+                new EmberTern.Core.Sql.ProcedureVariable { Name = "V", TypeText = "VARCHAR(20)" });
+
+            var grid = new DataGrid { AutoGenerateColumns = false, ItemsSource = new[] { row } };
+            EmberTern.App.Views.FieldGridColumns.Build(grid, includeDefault: true);
+
+            var window = new Window { Content = grid, Width = 1200, Height = 200 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var cells = grid.GetVisualDescendants().OfType<DataGridCell>().ToList();
+            var combo = cells.SelectMany(c => c.GetVisualDescendants().OfType<ComboBox>()).First();
+            // ⚠ Tylko edytory z klasy `field-editor`: kolumna Name to zwykły `DataGridTextColumn`,
+            // którego `TextBox` istnieje wyłącznie w trybie edycji i mierzy 0.
+            var editor = cells
+                .SelectMany(c => c.GetVisualDescendants().OfType<TextBox>())
+                .First(t => t.Classes.Contains("field-editor"));
+
+            Assert.Equal(combo.Bounds.Height, editor.Bounds.Height);
+
+            // Wiersz pozostaje własnością siatki — edytor go nie podnosi.
+            var cellHeight = cells.First().Bounds.Height;
+            Assert.True(editor.Bounds.Height <= cellHeight,
+                $"Edytor prosi o {editor.Bounds.Height} px przy komórce {cellHeight} px — podniósłby wiersz.");
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// ⭐ Pasek postępu sekcji 4 trzyma swoją STAŁĄ szerokość (§8.4.6, §19.7).
     ///
     /// <para>⚠⚠ Test istnieje z powodu jednej konkretnej pułapki: <b>Avalonia przycina <c>Width</c>

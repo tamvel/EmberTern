@@ -1,4 +1,4 @@
-# Product Polish — audyt, ratyfikowane decyzje i katalog Design Tokens
+﻿# Product Polish — audyt, ratyfikowane decyzje i katalog Design Tokens
 
 > **STATUS: M0 (audyt) ✅ · M1 (ten katalog) ✅ zaakceptowany 2026-08-01 ·
 > M2a (infrastruktura tokenów) ⏳ ZAIMPLEMENTOWANY 2026-08-01, oczekuje na QA wizualne.**
@@ -5031,3 +5031,217 @@ wspólnego pudełka**, czyli daje efekt optyczny bez oddawania jednego zaokrągl
 ⚠ Istnienie właściwości jest potwierdzone; **jej zachowanie przy tej parze rozmiarów pozostaje do
 zmierzenia** przy wdrożeniu. Gdyby nie dała efektu, następnym kandydatem jest korekta w obrębie tego
 samego pudełka — **nigdy** dwa osobne `TextBlocki`.
+
+---
+
+### §19.8 Poprawki odbiorcze po M3.1f — trzy defekty i jeden pomiar zamykający temat (2026-08-02)
+
+> **To nie jest iteracja** — zestaw poprawek zebranych przy odbiorze M3.1f, na wyraźną instrukcję
+> użytkownika dołączonych do commita następnego kroku, bez zatrzymywania planu. Wspólny mianownik
+> całej trójki: **każde zgłoszenie wskazywało inną przyczynę niż rzeczywista**, a pomiar to za
+> każdym razem zmienił.
+
+#### §19.8.1 Wyrównanie `localhost:3050` — ZAMKNIĘTE POMIAREM, bez zmiany kodu
+
+> **Użytkownik:** *„Zmieniam zdanie… powinien być jednak wyśrodkowany pionowo… obecne wyrównanie do
+> linii bazowej sprawia wrażenie lekkiego opadnięcia."*
+
+To odwracało decyzję z §19.3.3, więc zamiast wykonać, zmierzono **trzy** mechanizmy:
+
+| | środek pudełka | odchyłka od nazwy |
+|---|---|---|
+| nazwa (11 px SemiBold) | 8,54 | — |
+| **endpoint dziś (linia bazowa)** | 8,83 | **+0,30 px** |
+| endpoint przez `InlineUIContainer` | 7,50 | **−1,04 px** |
+
+⚠⚠ **`BaselineAlignment="Center"` na `Run` jest w Avalonii IGNOROWANE** — per-run baseline wychodzi
+identyczny (8,45) z nim i bez niego. Właściwość **istnieje w API** (sprawdzone w dokumentacji pakietu),
+więc pierwszy odruch był taki, że wystarczy ją dopisać; wstawienie jej byłoby **martwym kodem
+udającym poprawkę**. To pułapka „deklarowana właściwość potrafi kłamać" (§9.2/9 handovera), tym razem
+w wariancie *istnieje, ale nic nie robi*.
+
+⭐ **Wniosek: obecne wyrównanie jest NAJBLIŻSZE optycznego środka ze wszystkiego, co dostępne.**
+Wrażenie osiadania bierze się stąd, że nazwy połączeń bywają **wersalikami** („GAL"), a endpoint jest
+minuskułą — to różnica wysokości wersalika i x-height przy wspólnej linii bazowej, a nie błąd
+wyrównania pudełek, których środki dzieli 0,30 px.
+
+> **Użytkownik, na zamknięcie:** *„nie chcę zmieniać hierarchii typograficznej tylko po to, żeby
+> skorygować złudzenie optyczne. Nie zwiększaj rozmiaru endpointu do 11 px."*
+
+⛔ **Temat zamknięty.** Cały pomiar wraz z trzema odrzuconymi mechanizmami stoi w komentarzu **przy tym
+runie** — to jedyny trwały efekt rundy i jego sens: następna osoba, która zobaczy „opadający
+localhost", zobaczy też liczby i nie przejdzie tej drogi trzeci raz.
+
+#### §19.8.2 🐞 Historia parametrów nie przywracała wartości — przyczyną C3, nie kontrolki
+
+> **Użytkownik:** *„po wybraniu pozycji z historii nie odtwarzają się wartości parametrów…
+> Podejrzewam, że to efekt wymiany kontrolek podczas ostatnich zmian."*
+
+**Zmierzone: podejrzenie nietrafione.** Przyczyną jest **C3 z etapu debuggera** (2026-07-25), które
+wprowadziło `ParameterValue.TypeText` i dowód zgodności typu:
+
+```csharp
+// „A value with no recorded type (legacy history) is never provable."
+private bool IsProvablyCompatible(ParameterValue value)
+    => value.TypeText is { Length: > 0 } stored && ClassifyKind(stored) == Kind;
+```
+
+Wpis z historii użytkownika pochodził z **2026-07-20**, czyli sprzed C3 — nie ma zapisanego typu, więc
+`ApplyHistoryValue` zwraca `false`, a `OnSelectedHistoryChanged` **ignoruje ten `bool`**. Odmowa jest
+całkowicie cicha: etykieta pokazuje wartości, kontrolki zostają na NULL.
+
+⭐⭐ **Sedno defektu: reguła C3 była projektowana dla zastosowania AUTOMATYCZNEGO** (CLAUDE.md mówi
+wprost *„not auto-applied"*), **ale konstruktor zasiewa `SelectedHistory = History[0]`, więc auto-apply
+i ręczny wybór to JEDNA ścieżka kodu.** Dowód obejmował więc także jawną decyzję użytkownika, który
+właśnie wskazał ten wpis i widzi jego wartości.
+
+**Naprawa: rozdzielenie tych dwóch przypadków znacznikiem `_seedingHistory`.**
+Zasiew z konstruktora → dowód typu obowiązuje (ratyfikowana reguła C3 **nietknięta**).
+Jawny wybór → dowód nie obowiązuje; zabezpieczeniem zostaje **parsowanie**.
+⚠ `LaunchValueCarryOver` (panel startowy debuggera, właściwa powierzchnia C3) używa domyślnego
+`requireProvenType: true`, więc jest bez zmian — sprawdzone, że to jedyni pozostali wywołujący.
+
+⭐ Efekt uboczny: naprawia **każdy** wpis sprzed 2026-07-25. Notatka *„self-heals after one run"* była
+prawdziwa tylko dla auto-apply — ręczny wybór nie miał jak się uleczyć.
+
+#### §19.8.3 🐞 Kolumna Type pusta przy domenie — KOLEJNOŚĆ, i defekt nie był tam, gdzie go widziano
+
+> **Użytkownik:** *„zmienne oparte na domenie mają poprawnie wybraną domenę, ale kolumna Type jest
+> pusta… Parameters działają poprawnie, Fields tabel również… problem jest lokalny dla Variables."*
+
+**Zmierzone: obie lokalizacje nietrafione.**
+
+**(a) Nie jest lokalny dla Variables.** `ProcedureFieldRowBase` obsługuje **7 siatek** — parametry
+wejściowe i wyjściowe procedury, argumenty i Result funkcji oraz zmienne procedury, funkcji i triggera.
+W zgłoszonej procedurze parametry po prostu nie były oparte na domenie. Test
+`Parameter_OnADomain_GetsTheSameTreatment` **upadał przed naprawą** i to jest dowód zasięgu.
+
+**(b) Nie jest brakiem funkcji.** `SyncTypeDisplayFromDomain` istniał i był wołany z **dwóch** miejsc.
+⭐⭐ **Przyczyną jest KOLEJNOŚĆ:** `OnDomainNameChanged` wychodzi na `_suppressCompose`, które `LoadType`
+właśnie trzyma, gdy ustawia `DomainName`; a subskrypcja `AvailableDomains.CollectionChanged` ratowała
+sytuację **wyłącznie wtedy, gdy lista domen dojeżdżała PO zbudowaniu wierszy**. Przy połączeniu,
+w którym domeny były już wczytane, kolekcja się nie zmieniała i nie odpalało się **nic**. Stąd
+zależność od kolejności, wyglądająca jak defekt jednej zakładki.
+
+**Naprawa: jedna linia w `LoadType`** — wywołanie istniejącego sync po ustawieniu `DomainName`.
+
+⚠⚠ **Reguła #11 była realnie zagrożona i to jest najważniejsza część tej poprawki.**
+`SyncTypeDisplayFromDomain` ustawia `BaseType`, ale `ComposeType` zwraca **nazwę domeny** (domena
+wygrywa), więc `TypeText` — źródło DDL — pozostaje `T_ID`. Gdyby to się rozjechało, kompilacja
+podmieniłaby domenę na jej rozwinięcie i **cicho zerwała powiązanie** zmiennej z domeną. Pinowane
+osobnym testem (`…KeepsTheDomainAsTheCanonicalType`).
+
+⚠ **Druga pułapka: `NOT NULL`.** Sync przejmował też `NotNull` domeny, a `From()` ustawia go **przed**
+`LoadType`, z samej deklaracji. Bez rozdzielenia otwarcie edytora zmieniałoby zapisany kod użytkownika.
+Stąd parametr `adoptNotNull`: **wybór domeny ręką** → przejmuje komplet atrybutów; **wczytanie
+deklaracji** → nie rusza `NOT NULL`. ⭐ Poprawiło to przy okazji ścieżkę „domeny dojechały późno", która
+miała ten sam problem, tylko rzadziej widoczny.
+
+#### §19.8.4 Wygląd komórek zależnych od typu — ujawniony dług, nie regresja
+
+Siatki pól trzymają w komórkach **zawsze widoczny `TextBox`**, bo `DataGridTextColumn` umie tylko
+`IsReadOnly` per KOLUMNA, a bramka jest per WIERSZ (gotcha #83/#124). Gdy typ narzuca domena albo
+`TYPE OF`, kolumny Size/Scale/SubType/Charset są **wyłączane** — zamiar zapisany w `FieldGridColumns`
+od początku.
+
+⚠ **To zachowanie jest stare; nowa jest tylko jego widoczność.** Przed M2b nieaktywny `TextBox` zlewał
+się z tłem; nadanie kontrolce spójnej ramki sprawiło, że zaczął czytać się jak pole edycyjne —
+użytkownik zgłosił to jako *„puste prostokąty"*. Klasyczny **ujawniony dług** (pułapka §9.1/2).
+
+Dwa `Style`:
+* `DataGridCell TextBox:disabled` → tło i ramka `Transparent`, tekst `SubtleForegroundBrush`.
+  ⚠ Zmierzone: `FluentBridge` mapuje `TextControlBackgroundDisabled` na `BackgroundColor`, czyli tło
+  maluje **wnętrze szablonu**, a nie setter — więc sam setter `Background` tego nie zdejmuje (reguła 8
+  §16: kolory wnętrza szablonu idą przez Bridge). Zapisane, **nie rozwiązane w tej poprawce**.
+* `DataGridCell TextBox` → `VerticalAlignment="Stretch"` + `VerticalContentAlignment="Center"`.
+  > **Użytkownik:** *„wyglądają trochę jak wąskie »dyski«. Nie wykorzystują wysokości wiersza."*
+
+  ⭐ `Stretch`, a **nie** `Height`: element PRZYJMUJE wysokość od komórki (decyzja architektoniczna 2
+  z M2b) i — co ważniejsze — `Stretch` **nie zwiększa `DesiredSize`**, więc nie może podnieść wiersza.
+  `MinHeight` w kroku 7 M2b urosło wiersz o 2 px; to jest ten sam błąd o jeden krok wcześniej.
+
+#### §19.8.5 ⏸ Dług architektoniczny do §13.3 — DWIE równoległe implementacje wiersza pola
+
+Analiza §19.8.3 odsłoniła, że **`FieldRowViewModel` (pola tabel) i `ProcedureFieldRowBase`
+(procedury / funkcje / triggery) to dwie niezależne realizacje tego samego pomysłu** — osobne klasy,
+osobne budowanie kolumn, osobna obsługa asynchronicznego ładowania domen. Objaw ze zgłoszenia dotyczył
+tylko drugiej z nich, i tylko dlatego „Fields tabel działały".
+
+> **Użytkownik:** *„nie rozwijaj teraz architektury dwóch ViewModeli… odnotuj to jako dług
+> architektoniczny do §13.3. Nie rozszerzaj zakresu M3.2a tylko dlatego, że wyszło przy analizie."*
+
+⛔ Świadomie nie ruszane. → wejście do przeglądu **§13.3**.
+
+#### §19.8.6 ⭐ Co te trzy defekty mówią razem
+
+Wszystkie trzy zgłoszenia wskazywały **inną przyczynę niż rzeczywista**, i za każdym razem w tę samą
+stronę: *„to od ostatnich zmian"* / *„to lokalne dla tego ekranu"*. Rzeczywiste przyczyny były
+**starsze i szersze** — reguła z innego etapu (C3), zależność od kolejności ładowania i zamiar sprzed
+lat, który dopiero teraz stał się widoczny.
+
+⭐ **Reguła praktyczna na resztę etapu: obserwacja użytkownika o OBJAWIE jest wiarygodna; jego wniosek
+o PRZYCZYNIE i ZASIĘGU trzeba zmierzyć.** Dwa razy w tej rundzie pomiar rozszerzył naprawę
+(7 siatek zamiast jednej, cała historia zamiast jednego wpisu), a raz — zamknął temat bez zmiany kodu.
+
+---
+
+### §19.9 Wysokość edytora w siatce definicji pól — TRZY WARSTWY, każda maskowała następną (2026-08-02)
+
+> **Użytkownik:** *„`TextBox` w DataGrid nadal ma zbyt małą wysokość… W porównaniu z `ComboBoxem`
+> w tej samej siatce od razu widać, że nie należą do tej samej rodziny kontrolek… znajdź właściwą
+> przyczynę zamiast maskować to kolejną liczbą."*
+
+Instrukcja była trafna co do metody: **dwie pierwsze „naprawy" nic nie dały i dowiedziałbym się o tym
+dopiero od użytkownika**, gdyby nie pomiar po każdej z nich. Zmierzone w sondzie budującej prawdziwą
+siatkę przez `FieldGridColumns`:
+
+| krok | `VerticalAlignment` | wysokość `TextBox` | komórka |
+|---|---|---|---|
+| stan zastany | `Center` | **12,00** | 30,00 |
+| po usunięciu wartości lokalnych | `Stretch` | **12,00** | 30,00 |
+| po `MinHeight` = `Size.Control` | `Stretch` | **24,00** | 30,00 |
+
+#### §19.9.1 ⚠⚠ Warstwa 1 — WARTOŚĆ LOKALNA BIJE SETTER STYLU
+
+`FieldGridColumns.TextEditCol` ustawiał **w kodzie**, na instancji: `VerticalAlignment`,
+`VerticalContentAlignment`, `Padding`, `BorderThickness`, `Background`. Wszystkie moje settery
+w `DataGridCell TextBox` — łącznie z dodanym wcześniej `Stretch` — były przez nie **przykryte**.
+
+⭐ To ten sam mechanizm, przez który `MessageBanner` dorobił się sześciu wariantów chromy per host,
+i ta sama reguła, którą projekt zapisał wtedy: **host ustawia wiązania i zachowanie, styl ustawia
+chromę.** Chroma przeniesiona do stylu; w budowniczym kolumny została goła konstrukcja + dwa `Bind`.
+
+#### §19.9.2 ⚠⚠ Warstwa 2 — `Stretch` NIE WYSTARCZA, bo centruje KOMÓRKA
+
+Po warstwie 1 `VA` raportowało już `Stretch`, a wysokość **nadal 12 px przy komórce 30 px**.
+Przyczyna leży o poziom wyżej: `DataGridCell` ma `VerticalContentAlignment="Center"`.
+
+⛔ **Tego settera nie wolno odwrócić** — istnieje po to, żeby zwykły TEKST nie osiadał przy górnej
+krawędzi komórki (§8.4), i jego komentarz mówi to wprost. Odwrócenie naprawiłoby jedną kontrolkę
+i zepsuło wszystkie komórki tekstowe w aplikacji.
+
+#### §19.9.3 ⭐ Warstwa 3 — element ma PROSIĆ o wysokość, tak jak robi to `ComboBox`
+
+`ComboBox` wygląda w tej komórce poprawnie **wyłącznie dzięki `Size.Control` ze swojego stylu** —
+jest centrowany dokładnie tak samo, tylko prosi o 24 px. Edytor dostał więc **tę samą rolę**, a nie
+dobraną liczbę: `MinHeight` = `Size.Control`.
+
+⚠⚠ **Ale jako KLASA `field-editor`, nie jako styl na wszystkich `DataGridCell TextBox`** — i to jest
+warunek bezpieczeństwa, nie estetyka. Siatki definicji pól mają w wierszu `ComboBox`, więc już dziś
+mierzą 30 px i minimum 24 niczego nie podniesie (zmierzone). **Siatki DANYCH — Table Data, wyniki
+zapytań — `ComboBoxa` nie mają**; tam ten sam setter urósłby każdy wiersz, czyli odtworzyłby dokładnie
+regresję z kroku 7 M2b, gdzie edytor prosił o 18 px przy 16 px dostępnych.
+
+#### §19.9.4 Strażnik
+
+`FieldGridEditors_TextBoxAndComboBox_ShareOneHeight` porównuje `TextBox` z `ComboBoxem`
+**obok, w tej samej siatce** — nie z liczbą. Przetrwa więc zmianę wartości `Size.Control` i upadnie
+dokładnie wtedy, gdy jedna z kontrolek przestanie należeć do rodziny. Druga asercja pilnuje, że
+minimum edytora **nie podniosło wiersza**.
+
+#### §19.9.5 ⭐ Wniosek metodologiczny
+
+Trzy warstwy, z których **każda wyglądała na przyczynę i każda maskowała następną**. Gdyby po
+warstwie 1 poprzestać na „usunąłem wartości lokalne, teraz styl działa", raport brzmiałby *naprawione*,
+a na ekranie nic by się nie zmieniło. ⭐ **Reguła: po każdej warstwie mierz PONOWNIE ten sam parametr,
+który był przedmiotem zgłoszenia** — zniknięcie przyczyny nie jest dowodem zniknięcia objawu.
