@@ -244,10 +244,12 @@
        tej samej trafności wygrywa setter zadeklarowany PÓŹNIEJ. Wariant ma dopowiadać podstawę,
        a nie z nią przegrywać. ⛔ Nie przenosić tego bloku poniżej `Button.icon`.
 
-       ⚠ `Size.Control` (24) jest MINIMUM, nie wysokością sztywną: `Button.primary` podnosi się do
-       `Size.ControlPrimary` (28), a `Button.caption` ma własną wysokość paska tytułu. Trzy role
-       wysokości dla jednej kontrolki nie są niekonsekwencją — hierarchia akcji to jedyny sygnał,
-       który działa też wtedy, gdy kolor niesie już inne znaczenie (§5).
+       ⭐⭐ WYSOKOŚĆ PRZYCISKU BIERZE SIĘ Z KONTEKSTU, NIGDY Z WARIANTU (ratyfikowane, krok 11).
+       Podstawa daje `Size.ControlProminent` (stopka dialogu, formularz); pasek narzędzi obniża swoje
+       dzieci do `Size.ControlToolbar`; `Button.caption` ma wysokość paska tytułu; komórka siatki —
+       wysokość wiersza. ⛔ Wariant `.primary` NIE zmienia wysokości: kolor określa priorytet akcji,
+       rozmiar nie. To jest ta sama reguła, którą realizują `Border.toolbar` i `DataGridCell`:
+       **kontener rozstrzyga wielkość, element ją przyjmuje.**
 
        Kolory: `FluentBridge.axaml`. Metryki: tutaj. Bez własnego szablonu — Fluent wystawia
        `ButtonBackground` / `ButtonBorderBrush` / `ButtonForeground` jako zasoby (§16.4 niespełnione).
@@ -416,10 +418,17 @@
        in every dialog's local Window.Styles). Application-level styles apply inside
        dialog windows too, so each dialog just uses Classes="field-label".
        Rola: Text.Application (§6). -->
+  <!-- ⚠⚠ `Margin.LabelGap` (2), nie 4 — i przyczyną zgłoszenia QA („label wygląda, jakby należał do
+       poprzedniej sekcji") było DWÓCH WŁAŚCICIELI JEDNEGO ODSTĘPU: podpis niósł margines 4, a kontener
+       dokładał do tego swoje `Spacing`, więc w Global Search odstęp podpis→pole wynosił 14 przy
+       odstępie pole→pole 10 — **proporcja odwrócona**, a oko przypisuje podpis do tego, co bliżej.
+       ⭐ Katalog już tę regułę zna (`Margin.FieldGap`: „odstęp ma jednego właściciela") — tutaj była
+       złamana. ⛔ Kontener trzymający podpis i jego pole NIE MOŻE dokładać między nie odstępu;
+       jeżeli używa `Spacing`, podpis i pole muszą być jednym dzieckiem (patrz Global Search). -->
   <Style Selector="TextBlock.field-label">
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
-    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="Margin" Value="{DynamicResource Margin.LabelGap}" />
   </Style>
 
   <!-- The keyboard-shortcut hint shown beside a command's label on an accent (primary) button — e.g.
@@ -599,11 +608,20 @@
     <Setter Property="Opacity" Value="0.5" />
   </Style>
 
-  <!-- ⭐ `Size.ControlPrimary` (28) — jedyne miejsce w aplikacji, które konsumuje tę rolę, i powód,
-       dla którego ona istnieje: wysokość jest jedynym sygnałem hierarchii działającym również tam,
-       gdzie kolor niesie już inne znaczenie (§5). -->
+  <!-- ⛔⛔ `Button.primary` NIE MA WŁASNEJ WYSOKOŚCI I TO JEST RATYFIKOWANA REGUŁA CAŁEJ APLIKACJI
+       (użytkownik, 2026-08-02): **kolor może określać priorytet akcji, ROZMIAR NIE POWINIEN.**
+
+       ⚠ Krok 8 dał temu wariantowi `Size.ControlPrimary` (28) przy 26 na rodzeństwie — i to była
+       przyczyna, dla której Execute był większy od Cancel w KAŻDYM oknie: 38 przycisków w 26 plikach,
+       jeden setter. Zgłoszenie brzmiało „dialogi są niespójne", ale poprawianie ich po kolei leczyłoby
+       objaw. ⭐ Usunięcie jednego settera naprawia wszystkie naraz — i to jest test na to, czy defekt
+       został znaleziony w systemie, czy na ekranie.
+
+       ⭐ Powód głębszy: stopka dialogu to SERIA przycisków w jednym rzędzie, a seria musi się
+       wyrównywać (dokładnie ta sama racja, dla której pole formularza ma `Size.Control`). Różnica
+       wysokości w rzędzie nie czyta się jako hierarchia, tylko jako niedbałość układu.
+       ⛔ Nie przywracać tu `MinHeight` „dla podkreślenia akcji głównej" — podkreśla ją akcent. -->
   <Style Selector="Button.primary">
-    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlPrimary}" />
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
@@ -656,7 +674,13 @@
   </Style>
 
   <!-- ================================================================================================
-       ⭐⭐ PASEK NARZĘDZI MA JEDNĄ WYSOKOŚĆ — Product Polish M2b krok 8, zgłoszenie QA.
+       ⭐⭐ PASMO CHROMY MA JEDNĄ WYSOKOŚĆ — Product Polish M2b krok 8, rozszerzone w kroku 11.
+
+       ⚠ Klasa nazywa się `chrome`, a nie `toolbar`, i to jest poprawka nazwy z kroku 11: obejmuje
+       również DOLNE paski statusu (Data Import), a te nie są paskami narzędzi. `toolbar` nazywał
+       INSTANCJĘ, `chrome` nazywa ROLĘ — pasmo Application Chrome (§0.1.2).
+       ⛔ KAŻDE nowe pasmo chromy musi tę klasę dostać. Krok 8 otagował tylko jedno i użytkownik
+       natychmiast znalazł nieotagowane (Script Executor: „Run jest wyższy niż powinien").
 
        > „Przycisk może być wizualnie wyróżniony kolorem, ale nie powinien podnosić całego paska."
 
@@ -671,10 +695,10 @@
        ⚠ Hierarchię niesie nadal KOLOR (akcent `.primary`) i ikona — traci tylko wysokość, czyli
        jedyny nośnik, który psuł sąsiadów.
        ================================================================================================ -->
-  <Style Selector="Border.toolbar Button">
+  <Style Selector="Border.chrome Button">
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
   </Style>
-  <Style Selector="Border.toolbar ToggleButton">
+  <Style Selector="Border.chrome ToggleButton">
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
   </Style>
 

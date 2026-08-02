@@ -314,6 +314,11 @@ public class DesignTokenComplianceTests
         // "this element floats above its container". They coincide in Dark and contradict each other in Light.
         ["ElevatedPanelBrush"] = "ChromeStrongBrush (chrome) or SurfaceRaisedBrush (raised) — see §7.1",
         ["ElevatedPanelColor"] = "ChromeStrongColor or SurfaceRaisedColor",
+
+        // M2b step 11: the user ratified that COLOUR may express an action's priority and SIZE may not.
+        // The role lost its only consumer (Button.primary's MinHeight), and a token with no consumer is
+        // indistinguishable from a regression (#233) — so it leaves the catalog with it.
+        ["Size.ControlPrimary"] = "nothing — a primary action is marked by the accent, not by height",
     };
 
     [Fact]

@@ -110,7 +110,7 @@
          launch/parameter screen gets no empty command strip. The session status line moved to the app status
          bar (UX Polish Seam 6a); the room it freed here is deliberately left empty for the Draft-model
          actions to come. -->
-    <Border Grid.Row="0"
+    <Border Classes="chrome" Grid.Row="0"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"

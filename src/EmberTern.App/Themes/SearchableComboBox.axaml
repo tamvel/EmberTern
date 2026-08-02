@@ -9,7 +9,12 @@
     <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="MinHeight" Value="24" />
+    <!-- ⚠⚠ Kontrolka WŁASNA, która odgrywa rolę kontrolki bazowej, MUSI czytać ten sam katalog —
+         inaczej stoi obok systemu i widać to natychmiast (zgłoszenie QA: „Domain, zwykły ComboBox
+         i CheckBox nie wyglądają jak elementy jednego systemu"). Ta liczba była tu wpisana na sztywno
+         od czasów, gdy katalogu nie było; wartość się nie zmienia, właściciel tak. -->
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="Template">
       <ControlTemplate>
         <Border x:Name="PART_Shell"

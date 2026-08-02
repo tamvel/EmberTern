@@ -300,17 +300,21 @@ public sealed class DesignTokenApplicationTests
 
     /// <summary>
     /// Step 5.4 — <c>Button</c>. The first control M2b restyles that <b>already had a designed family</b>
-    /// (<c>.icon</c> / <c>.flat</c> / <c>.primary</c> / <c>.caption</c>), so the risk is the opposite of the
+    /// (<c>.icon</c> / <c>.flat</c> / <c>.primary</c> / <c>.caption</c>), so the risk was the opposite of the
     /// previous iterations: not "does the base style arrive" but "does it arrive <i>without</i> flattening a
     /// variant that deliberately differs".
     ///
     /// <para>⚠ Style precedence in Avalonia is by declaration ORDER at equal specificity, not by selector
-    /// weight — so a base <c>Button</c> style placed after <c>Button.primary</c> in the same stylesheet would
-    /// silently win over it. This asserts the two heights stay different, which is the cheapest way to catch
-    /// that reordering.</para>
+    /// weight — a base <c>Button</c> style placed after <c>Button.primary</c> would silently win over it. That
+    /// hazard is still real for COLOUR, which is what the accent assertion below covers.</para>
+    ///
+    /// <para>⚠⚠ REWRITTEN IN STEP 11. It used to assert that <c>.primary</c> stayed TALLER — the very rule the
+    /// user's QA reversed: <b>colour may express priority, size may not.</b> The variant now differs in accent
+    /// alone, so the assertion is inverted on purpose rather than deleted: an equality here is what keeps
+    /// "Execute is bigger than Cancel" from coming back to all 26 dialog files at once.</para>
     /// </summary>
     [Fact]
-    public async Task Button_TakesTheBaseHeight_WhileThePrimaryVariantStaysTaller()
+    public async Task Button_AndItsPrimaryVariant_DifferInColourOnly()
     {
         await _session.Dispatch(() =>
         {
@@ -327,10 +331,14 @@ public sealed class DesignTokenApplicationTests
             Assert.Equal(Token<double>("Text.Application.Size"), plain.FontSize);
             Assert.Equal(Token<CornerRadius>("Radius.Surface"), plain.CornerRadius);
 
-            // The variant must still outrank the base — hierarchy is the point of the second height role.
-            Assert.Equal(Token<double>("Size.ControlPrimary"), primary.MinHeight);
-            Assert.True(primary.MinHeight > plain.MinHeight,
-                "Button.primary must stay taller than a plain Button — Size.ControlPrimary exists for that hierarchy.");
+            // ⭐ The ratified rule, as one equality: the accent variant is the same SIZE as its neutral sibling.
+            Assert.Equal(plain.MinHeight, primary.MinHeight);
+            Assert.Equal(plain.Padding, primary.Padding);
+
+            // …and differs where it is supposed to. The variant must still win on colour, which is the half of
+            // the declaration-order hazard that remains.
+            var accent = Assert.IsType<SolidColorBrush>(primary.Background);
+            Assert.Equal(ThemeToken<SolidColorBrush>("AccentBrush", ThemeVariant.Dark).Color, accent.Color);
 
             // Colour arrives through the Bridge, on the element that paints it. Fluent's own value here is a
             // semi-transparent white (#33ffffff) whose hover state is pure White; neither belongs to the palette.
@@ -592,33 +600,40 @@ public sealed class DesignTokenApplicationTests
         {
             var toolbar = Token<double>("Size.ControlToolbar");
             var prominent = Token<double>("Size.ControlProminent");
-            var primary = Token<double>("Size.ControlPrimary");
             var field = Token<double>("Size.Control");
 
-            Assert.True(toolbar < prominent && prominent < primary,
-                $"The action ladder must stay strictly increasing: toolbar {toolbar} < prominent {prominent} < primary {primary}.");
+            // ⚠ Two rungs, not three — `Size.ControlPrimary` was retired in step 11 when priority stopped
+            // being expressed by size. Chrome is denser than a dialog action; that difference stays.
+            Assert.True(toolbar < prominent,
+                $"Chrome must stay denser than a dialog action: toolbar {toolbar} < prominent {prominent}.");
 
             // A field is NOT on that ladder — it is the other one. If these ever collapse into a single value
             // the distinction the QA asked for has quietly disappeared.
             Assert.NotEqual(field, prominent);
 
-            // A dialog footer button takes the prominent rung…
+            // ⭐⭐ THE RATIFIED RULE OF STEP 11, and the one this test exists for: COLOUR may express an
+            // action's priority, SIZE may not. A dialog footer is a ROW of actions, and a row must align —
+            // so the accent variant and the neutral one are the SAME height. Before step 11 they were 28
+            // and 26, which is why Execute was bigger than Cancel in all 26 dialog files at once.
             var close = new Button { Content = "Close", Classes = { "flat" } };
-            // …while the very same variant inside the toolbar takes the toolbar rung, so the bar keeps one height.
-            var inBar = new Button { Content = "Execute", Classes = { "primary" } };
-            var bar = new Border { Classes = { "toolbar" }, Child = new StackPanel { Children = { inBar } } };
+            var accept = new Button { Content = "Execute", Classes = { "primary" } };
+            // …while the very same accent variant inside a chrome strip takes the chrome rung, so the bar
+            // keeps one height whatever stands in it.
+            var inBar = new Button { Content = "Run", Classes = { "primary" } };
+            var bar = new Border { Classes = { "chrome" }, Child = new StackPanel { Children = { inBar } } };
 
-            var window = new Window { Content = new StackPanel { Children = { close, bar } } };
+            var window = new Window { Content = new StackPanel { Children = { close, accept, bar } } };
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
             Assert.Equal(prominent, close.MinHeight);
+            Assert.Equal(prominent, accept.MinHeight);
+            Assert.Equal(close.MinHeight, accept.MinHeight);
 
-            // ⭐ The QA finding in one assertion: a primary button must not raise the toolbar. The container
-            // declares its children's height — the same mechanism as a grid cell and the Expander header — and
-            // the style that does it MUST be declared after Button.primary or this reverts silently.
+            // ⭐ The other half: a button must never raise the strip it stands in. The CONTAINER declares its
+            // children's height — the same mechanism as a grid cell and the Expander header — and the style
+            // that does it MUST be declared after Button.primary or this reverts silently.
             Assert.Equal(toolbar, inBar.MinHeight);
-            Assert.NotEqual(primary, inBar.MinHeight);
 
             window.Close();
         }, default);
@@ -650,6 +665,46 @@ public sealed class DesignTokenApplicationTests
             Assert.Equal(Token<double>("Size.ControlProminent"), search.MinHeight);
             Assert.Equal(VerticalAlignment.Center, search.VerticalContentAlignment);
 
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Step 11 — the proximity rule the QA report named without naming it: <b>a caption belongs to its field.</b>
+    ///
+    /// <para>⚠ The reported symptom was "the label looks like it belongs to the previous section", and the cause
+    /// was TWO OWNERS OF ONE GAP — the caption carried a 4 px margin and its container added its own spacing on
+    /// top, so caption→field ended up LARGER than field→field. The eye then attaches the caption upwards. The
+    /// catalog already states the rule for <c>Margin.FieldGap</c> ("a gap has one owner"); this is where it was
+    /// being broken.</para>
+    ///
+    /// <para>⚠ Asserted as an ORDERING, never as numbers — that is what the rule actually says, and it survives
+    /// a re-tuning of either value.</para>
+    /// </summary>
+    [Fact]
+    public async Task ACaptionSitsCloserToItsField_ThanTwoFieldsSitToEachOther()
+    {
+        await _session.Dispatch(() =>
+        {
+            var label = Token<Thickness>("Margin.LabelGap");
+            var betweenFields = Token<Thickness>("Margin.FieldGap");
+            var betweenOptions = Token<Thickness>("Margin.OptionGap");
+
+            Assert.True(label.Bottom < betweenFields.Bottom,
+                $"A caption ({label.Bottom}px) must sit closer to its field than two fields sit to each other " +
+                $"({betweenFields.Bottom}px) — otherwise the caption reads as belonging to whatever is above it.");
+
+            // Options of one choice are a group, so they sit tighter than separate fields but looser than a
+            // caption on its own field. The three gaps form one scale rather than three unrelated numbers.
+            Assert.True(label.Bottom < betweenOptions.Bottom && betweenOptions.Bottom < betweenFields.Bottom,
+                $"The proximity scale must stay ordered: caption {label.Bottom} < option {betweenOptions.Bottom} " +
+                $"< field {betweenFields.Bottom}.");
+
+            var caption = new TextBlock { Text = "Search for", Classes = { "field-label" } };
+            var window = new Window { Content = new StackPanel { Children = { caption } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(label, caption.Margin);
             window.Close();
         }, default);
     }

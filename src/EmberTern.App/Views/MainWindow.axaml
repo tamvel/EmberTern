@@ -392,7 +392,7 @@
 
           <!-- Filter -->
           <Border DockPanel.Dock="Top" Margin="8,6,8,4">
-            <TextBox x:Name="SidebarFilterBox"
+            <TextBox x:Name="SidebarFilterBox" Classes="search"
                      Text="{Binding FilterText, Mode=TwoWay}"
                      PlaceholderText="{Binding FilterPlaceholder}"
                      FontSize="12"
@@ -867,7 +867,7 @@
                router (AddCollectionItem…) routed to the active editor's active collection,
                so there are NO per-editor collection bars and no special-case layouts. -->
           <Border Grid.Row="1"
-                  Classes="toolbar"
+                  Classes="chrome"
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,0,0,1"

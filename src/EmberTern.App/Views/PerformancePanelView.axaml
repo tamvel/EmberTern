@@ -19,7 +19,7 @@
   <Grid RowDefinitions="Auto,*">
 
     <!-- (1) PRIMARY SUMMARY -->
-    <Border Grid.Row="0"
+    <Border Classes="chrome" Grid.Row="0"
             Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"

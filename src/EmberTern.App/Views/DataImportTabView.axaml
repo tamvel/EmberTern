@@ -667,11 +667,11 @@
                      miejsca") miało przyczynę OBOK: przy imporcie bez per-kolumnowej podstawy jedna trzecia
                      siatki stała pusta. ColumnDefinition nie ma `IsVisible`, więc reaguje sama szerokość. -->
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="4*" />
+                  <ColumnDefinition Width="5*" />
                   <ColumnDefinition Width="3*" />
                   <ColumnDefinition Width="62" />
                   <ColumnDefinition Width="62" />
-                  <ColumnDefinition Width="Auto" MinWidth="40" />
+                  <ColumnDefinition Width="Auto" MinWidth="32" />
                   <ColumnDefinition Width="{Binding HasPerColumnBasis, Converter={x:Static conv:BoolToStarWidthConverter.Instance}, ConverterParameter=3}" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ImportNewTableColumnName}"
@@ -699,11 +699,11 @@
                       <Grid ColumnSpacing="8" Margin="8,3">
                         <!-- ⚠ Identyczna definicja jak w nagłówku — obie muszą się zgadzać co do znaku. -->
                         <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="4*" />
+                          <ColumnDefinition Width="5*" />
                           <ColumnDefinition Width="3*" />
                           <ColumnDefinition Width="62" />
                           <ColumnDefinition Width="62" />
-                          <ColumnDefinition Width="Auto" MinWidth="40" />
+                          <ColumnDefinition Width="Auto" MinWidth="32" />
                           <ColumnDefinition Width="{Binding $parent[ItemsControl].((vm:ImportTargetSectionViewModel)DataContext).HasPerColumnBasis, Converter={x:Static conv:BoolToStarWidthConverter.Instance}, ConverterParameter=3}" />
                         </Grid.ColumnDefinitions>
 
@@ -1149,7 +1149,7 @@
     </Border>
 
     <!-- ══ Band H — where the rows land, then the numbers. Never adjectives (§9.1 point 4) ══════ -->
-    <Border Grid.Row="8" Background="{DynamicResource ChromeStrongBrush}"
+    <Border Grid.Row="8" Classes="chrome" Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12,4">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <TextBlock Text="{Binding DestinationStatus}" FontSize="12"

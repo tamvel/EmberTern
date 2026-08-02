@@ -254,6 +254,10 @@ public sealed class SearchableComboBox : TemplatedControl
             Margin = new Thickness(4),
             [Grid.RowProperty] = 0,
         };
+        // ⚠ A filter IS a search field, and takes the same role (M2b step 11, QA: "the domain filter box
+        // is too low"). Three consumers now — Settings, Global Search, every picker — which is what makes
+        // `Size.ControlProminent` a role rather than one control's value.
+        _filterBox.Classes.Add("search");
         _filterBox.AddHandler(TextBox.TextChangedEvent, (_, _) => ApplyFilter(_filterBox.Text ?? string.Empty));
         _filterBox.AddHandler(InputElement.KeyDownEvent, OnPopupKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         root.Children.Add(_filterBox);

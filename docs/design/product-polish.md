@@ -1415,7 +1415,8 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | 7 | **DataGrid Standard** (§8.4) + `Pad.CellEditor` | `e95913b` | ⏳ oczekuje | §15.8 |
 | 8 | ⭐ **dwie drabiny wysokości** + pasek jednej wysokości | — | ⏳ oczekuje | §15.9.1 |
 | 9 | **Ustawienia jako panel referencyjny** | — | ⏳ oczekuje | §15.9.2 |
-| 10 | **Data Import** — proporcje kolumn | — | ⏳ oczekuje | §15.9.3 |
+| 10 | **Data Import** — proporcje kolumn | `e0a59fd` | ⏳ oczekuje | §15.9.3 |
+| 11 | ⭐⭐ **kolor niesie priorytet, rozmiar nie** + pasma chromy + bliskość podpisu | — | ⏳ oczekuje | §15.10 |
 
 **Krok 5 (kontrolki bazowe) — ZAKOŃCZONY.**
 ✅ **M2b — WSZYSTKIE KROKI DOSTARCZONE.** Pozostało **QA wizualne użytkownika** (kroków 5.4–7)
@@ -2341,6 +2342,105 @@ a reguła architektury #1 trzyma je poza VM. VM podaje `bool`; zamiana na szerok
 **wyśrodkowany** (dosunięty do lewej zostawiał pustkę, którą użytkownik odczytał jako szerokość).
 
 Build 0/0; suite **7084** (7000 + 54 + 30); smoke czysty.
+
+### §15.10 Krok 11 — druga runda QA: **przyczyna w systemie, nie na ekranie**
+
+> **Dyrektywa użytkownika, która rządzi całym tym krokiem:** *„Bardzo zależy mi, żebyśmy nie zaczęli
+> teraz łatania każdego okna osobno. Jeżeli jakiś ekran wygląda źle, to chcę najpierw znaleźć regułę
+> Design Systemu, która za to odpowiada."*
+>
+> ⭐ **To jest kryterium odbioru tego kroku, a nie preambuła.** Każdy z pięciu punktów QA dostał
+> odpowiedź w postaci **reguły**, a liczba zmienionych ekranów jest jej skutkiem ubocznym.
+
+#### §15.10.1 ⛔⛔ RATYFIKOWANE: kolor określa priorytet akcji, ROZMIAR NIE
+
+> **Użytkownik:** *„Kolor może określać priorytet akcji. Rozmiar nie powinien."*
+
+**To odwraca decyzję kroku 8 i to jest poprawne.** Krok 8 dał `Button.primary` własną wysokość
+(`Size.ControlPrimary` 28) przy 26 na rodzeństwie — i **to był jeden setter stojący za „Execute jest
+większy od Cancel" w KAŻDYM oknie**: 38 przycisków w 26 plikach. Zgłoszenie brzmiało „dialogi są
+niespójne", ale poprawianie ich po kolei leczyłoby objaw.
+⭐ **Usunięcie jednego settera naprawia wszystkie naraz — i to jest właśnie test na to, czy defekt
+został znaleziony w systemie, czy na ekranie.**
+
+⭐ **Powód głębszy niż preferencja:** stopka dialogu to **seria** przycisków w jednym rzędzie, a seria
+musi się wyrównywać — dokładnie ta sama racja, dla której pole formularza ma `Size.Control`. Różnica
+wysokości w rzędzie nie czyta się jako hierarchia, tylko jako niedbałość układu.
+**⛔ `Size.ControlPrimary` WYCOFANY z katalogu** (`RetiredTokens`): rola straciła jedynego konsumenta,
+a token bez konsumenta jest nieodróżnialny od regresji (#233).
+⚠ `Size.ControlProminent` **26 → 28**: po wycofaniu tamtej to jedyna wysokość akcji poza chromą, więc
+przejmuje wartość, która w stopce czytała się dobrze — *„za mały" był Cancel, nie „za duży" Execute*.
+
+**⭐ Wynikowa reguła, jedna dla całej aplikacji: WYSOKOŚĆ PRZYCISKU BIERZE SIĘ Z KONTEKSTU, NIGDY
+Z WARIANTU.** Pasmo chromy → `Size.ControlToolbar`; stopka dialogu i formularz → `Size.ControlProminent`;
+komórka siatki → wysokość wiersza; pasek tytułu → `Size.TitleBar`. Wariant niesie **kolor**.
+
+#### §15.10.2 Pasmo chromy — klasa nazywa ROLĘ, nie instancję
+
+Zgłoszenie: *„SQL Editor wygląda dobrze, Script Executor już nie — Run jest wyższy niż powinien"*.
+⚠ **Przyczyną było to, że krok 8 otagował JEDNO pasmo.** Reguła „kontener deklaruje wysokość swoich
+dzieci" jest poprawna, ale działa tylko tam, gdzie kontener jest oznaczony — a użytkownik natychmiast
+znalazł nieoznaczony.
+⭐ Klasa **`Border.toolbar` → `Border.chrome`**: obejmuje również **dolne paski statusu** (rozjechany
+pasek Data Import to ten sam defekt, punkt 4), a te nie są paskami narzędzi. `toolbar` nazywał
+**instancję**, `chrome` nazywa **rolę** — pasmo Application Chrome (§0.1.2). Otagowane **wszystkie
+osiem** pasm: MainWindow · Script Executor · Data Import (status) · Debugger · Trace Monitor ·
+Session Manager · Global Search · Performance.
+⛔ **Każde nowe pasmo chromy musi tę klasę dostać** — to jest cena tej reguły i trzeba ją znać.
+
+**⭐ Run pokazuje `F5`, bo to ta sama akcja.** Zgłoszenie *„jeżeli Execute pokazuje skrót, Run również
+powinien"* jest wprost regułą jednego źródła: Run to `CommandId.Go`, ta sama komenda co Execute, więc
+chip czyta ten sam `ToolbarExecuteHint` (czyli `CommandTip.Gesture` z katalogu komend). ⚠ Nie jest to
+skopiowany napis — gest jest zapisany w **jednym** miejscu, więc nie da się ich rozjechać (#284).
+
+#### §15.10.3 ⭐ Podpis należy do swojego pola — dwóch właścicieli jednego odstępu
+
+Zgłoszenie: *„odstęp między napisem Search for a polem jest zbyt duży; label wygląda, jakby należał do
+poprzedniej sekcji"*. **Zmierzone: podpis niósł margines 4, a kontener dokładał `Spacing` 10 — razem
+14, przy odstępie pole→pole równym 10.** Proporcja **odwrócona**, a oko przypisuje podpis do tego, co
+bliżej.
+⭐ **Katalog tę regułę już znał** — `Margin.FieldGap` mówi wprost, że *odstęp ma jednego właściciela*.
+Tutaj była złamana. Nowa rola `Margin.LabelGap` (2) domyka skalę bliskości:
+**podpis (2) < opcje jednej grupy (4) < pola (8)** — trzy odstępy, jedna skala, zapięte asercją
+porządku, nie liczb.
+⚠ Konsekwencja dla widoków: **kontener trzymający podpis i jego pole nie może dokładać między nie
+odstępu**; jeżeli używa `Spacing`, podpis i pole muszą być **jednym dzieckiem** (poprawione w Global
+Search).
+
+#### §15.10.4 Kontrolka własna musi czytać ten sam katalog
+
+Zgłoszenie: *„Domain, zwykły ComboBox i CheckBox nie wyglądają jak elementy jednego systemu"*.
+⚠ **Przyczyna: `SearchableComboBox` to kontrolka WŁASNA i nigdy nie przeszła przez M2b** — miała
+`MinHeight="24"` wpisane na sztywno z czasów sprzed katalogu. Wartość się nie zmienia, **właściciel
+tak**. ⭐ Reguła: *kontrolka własna odgrywająca rolę kontrolki bazowej konsumuje ten sam katalog* —
+inaczej stoi obok systemu i widać to natychmiast.
+⭐ **Pole filtra w pickerze dostało klasę `search`** — filtr **jest** polem wyszukiwania. Rola
+`Size.ControlProminent` ma dzięki temu **trzech** konsumentów (Ustawienia · Global Search · każdy
+picker + filtr paska bocznego), co ostatecznie czyni ją rolą, a nie wartością jednej kontrolki.
+
+#### §15.10.5 ⭐ CheckBox w siatce — ZMIERZONY, i nie jest przyczyną
+
+Użytkownik poprosił o ponowny pomiar. Sonda headless:
+
+```
+CheckBox  Desired = 28 × 14      (znak 14, cel kliknięcia 20 szer., MarkGap 8)
+Komórka   Desired = 44 × 20      (14 + Pad.Cell 3+3)
+Wiersz    Size.Row.Grid = 22
+```
+
+**`CheckBox` prosi o dokładnie 14 px — tyle, ile ma jego znak, i ani piksela więcej.** Nie rozpycha
+wiersza: 14 ≤ 16 px, jakie zostawia komórka, a komórka 20 ≤ 22 px podłogi wiersza.
+⭐ **Wiersz ma 22 px, bo `Size.Row.Grid` tak mówi** (zadeklarowane w kroku 7), a nie przez `CheckBox`.
+⚠ Jeżeli wiersz nadal wydaje się wysoki, **dźwignią jest `Size.Row.Grid`, nie kontrolka** — i to jest
+osobna decyzja, bo ta liczba stoi w D1 i rządzi wszystkimi siatkami naraz.
+
+#### §15.10.6 Data Import
+
+Kolumna nazwy `4*` → **`5*`**, `NULL` `MinWidth` 40 → **32** (i tak było już `Auto` + wyśrodkowany
+znak). Pasek statusu naprawiony **regułą z §15.10.2**, nie lokalnie: to pasmo chromy, więc jego
+przycisk *Clear* bierze wysokość chromy zamiast wysokości stopki dialogu.
+
+Build 0/0; suite **7085** (7000 + 54 + 31); smoke czysty.
 
 ---
 

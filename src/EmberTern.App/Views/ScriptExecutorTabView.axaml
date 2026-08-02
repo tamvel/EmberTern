@@ -16,6 +16,7 @@
 
     <!-- Toolbar: Run / Stop · transaction mode + stop-on-error · Commit / Rollback -->
     <Border Grid.Row="0"
+            Classes="chrome"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
@@ -34,7 +35,13 @@
           <StackPanel Orientation="Horizontal" Spacing="6">
             <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="14" Height="14"
                               Foreground="{DynamicResource OnAccentBrush}" />
-            <TextBlock Text="{x:Static app:UiStrings.ScriptRun}" />
+            <TextBlock Text="{x:Static app:UiStrings.ScriptRun}" VerticalAlignment="Center" />
+            <!-- ⭐ TA SAMA AKCJA, TEN SAM SKRÓT, TO SAMO ŹRÓDŁO. Run w Script Executorze to `CommandId.Go`
+                 — dokładnie ta, którą pasek SQL Editora pokazuje jako „Execute F5". Chip czyta ten sam
+                 `ToolbarExecuteHint` (czyli katalog komend), więc nie da się ich rozjechać: gest jest
+                 zapisany w JEDNYM miejscu (gotcha #284). Zgłoszenie QA: „jeżeli Execute pokazuje F5,
+                 Run również powinien — to jest ta sama akcja". -->
+            <TextBlock Classes="shortcut-chip" Text="{x:Static app:UiStrings.ToolbarExecuteHint}" />
           </StackPanel>
         </Button>
 

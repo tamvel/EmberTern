@@ -131,6 +131,15 @@
        użytkownika, nie dwie sąsiadujące. -->
   <Thickness x:Key="Margin.OptionGap">0,0,0,4</Thickness>
 
+  <!-- ⭐ DOPISANE W M2b, kroku 11 — zgłoszenie QA: „odstęp między napisem Search for a polem jest
+       zbyt duży; label wygląda, jakby należał do poprzedniej sekcji".
+       Rola: odstęp między PODPISEM a JEGO polem.
+       ⚠⚠ To jest reguła BLISKOŚCI, nie liczba: podpis należy do pola, więc odstęp podpis→pole musi
+       być MNIEJSZY niż odstęp pole→pole (`Margin.FieldGap` = 8). Jeżeli oba są równe albo odwrócone,
+       oko przypisuje podpis do elementu POWYŻEJ — dokładnie to zgłosił użytkownik.
+       ⚠ Wartość 2, bo to jedyny odstęp w katalogu, który ma być wyraźnie ciaśniejszy od `Space.Xs`. -->
+  <Thickness x:Key="Margin.LabelGap">0,0,0,2</Thickness>
+
   <!-- ══════════════════════════════════════════════════════════════════════════════════════════
        WYSOKOŚCI KONTROLEK (§5, decyzja D1 — ratyfikowana, nie podlega zmianie w tym etapie).
 
@@ -142,9 +151,12 @@
   <!-- Kontrolka standardowa: `TextBox`, `ComboBox`, `Button.flat`, `NumericUpDown`,
        `SearchableComboBox`. -->
   <x:Double x:Key="Size.Control">24</x:Double>
-  <!-- Akcja główna: `Button.primary` — Execute, Start debugging, Import. Wyższa nie dla ozdoby:
-       to jedyny sygnał hierarchii, który działa też wtedy, gdy kolor niesie już inne znaczenie. -->
-  <x:Double x:Key="Size.ControlPrimary">28</x:Double>
+  <!-- ⛔ `Size.ControlPrimary` ZOSTAŁ WYCOFANY (M2b, krok 11) — ratyfikowana reguła użytkownika:
+       **kolor może określać priorytet akcji, ROZMIAR NIE POWINIEN.** Rola nie ma już konsumenta,
+       a token bez konsumenta jest nieodróżnialny od regresji (#233), więc znika z katalogu razem
+       z nim. Akcję główną niesie akcent `Button.primary`. Strażnik: `RetiredTokens`.
+       ⚠ To NIE unieważnia D1 w częściach, które D1 faktycznie rozstrzygnęło (24 / 22): zmienia się
+       przypisanie roli, o które D1 nie pytało, i to na wniosek użytkownika. -->
 
   <!-- ⭐⭐ DOPISANE W M2b, kroku 8 — po QA użytkownika, który nazwał brakującą część systemu:
        „nie wszystkie przyciski w aplikacji powinny mieć identyczną wysokość".
@@ -173,7 +185,11 @@
        rola: `Size.Control` opisuje kontrolkę stojącą w SERII, gdzie liczy się wyrównanie i gęstość,
        a ta opisuje kontrolkę stojącą SAMOTNIE, gdzie liczy się wygoda trafienia. Dwaj konsumenci
        różnego rodzaju (przycisk i pole tekstowe) byli znani w chwili dodania. -->
-  <x:Double x:Key="Size.ControlProminent">26</x:Double>
+  <!-- ⚠ 28, a nie 26 (korekta z kroku 11 po QA). Po wycofaniu `Size.ControlPrimary` to jest JEDYNA
+       wysokość akcji poza chromą, więc przejmuje wartość, która w stopce dialogu czytała się dobrze —
+       „za mały" był Cancel, nie „za duży" Execute. Drugi konsument (pole wyszukiwania) zgłosił
+       niezależnie tę samą potrzebę: „lekkie zwiększenie wysokości". Dwie kontrolki, jedna liczba. -->
+  <x:Double x:Key="Size.ControlProminent">28</x:Double>
 
   <!-- Wiersz siatki danych i edytor w komórce. -->
   <x:Double x:Key="Size.Row.Grid">22</x:Double>

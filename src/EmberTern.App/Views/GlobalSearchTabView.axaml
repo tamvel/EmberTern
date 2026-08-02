@@ -20,7 +20,7 @@
   <Grid ColumnDefinitions="5*,4,7*">
     <!-- Left: status + results tree -->
     <DockPanel Grid.Column="0" Background="{DynamicResource PanelBrush}">
-      <Border DockPanel.Dock="Top"
+      <Border Classes="chrome" DockPanel.Dock="Top"
               BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
               Padding="10,6">
         <TextBlock Text="{Binding StatusText}"
