@@ -5479,3 +5479,66 @@ wróciłoby jako „defekt do naprawienia" razem z rozwiązaniem, które właśn
 **tu śladu nie zostawia zmiana, tylko jej wycofanie.**
 
 Build 0/0 · **7134** zielony w trzech partycjach (**7031 + 49 + 54**) · smoke czysty.
+⚠ **To nie był jeszcze stan końcowy** — drugi odbiór cofnął także B1, patrz §19.12.
+
+---
+
+### §19.12 ⭐⭐ Drugi odbiór M3.2a — R13: nie rezerwujemy miejsca na element, którego nie będzie (2026-08-02)
+
+Po cofnięciu B2 i B3 użytkownik obejrzał pasek ponownie i **wycofał także B1** — ostatni ruch po stronie
+toolbara. Powód zobaczył w **SQL Editorze**, gdzie żadna z pięciu bramek sekcji 1 nie jest prawdziwa,
+więc rezerwacja 43 px zostawiała pustą przestrzeń przy lewej krawędzi.
+
+> **Użytkownik:** *„Nie chcę kotwicy sekcji 1 za wszelką cenę. Jeżeli w danym rodzaju dokumentu nie ma
+> żadnej akcji w tej sekcji, to nie zostawiaj pustej przestrzeni. To wygląda gorzej niż niewielkie
+> przesunięcie toolbara. […] Stabilizacja ma sens tylko wtedy, gdy nie pogarsza wykorzystania
+> przestrzeni. Pusta dziura w SQL Editorze nie wnosi żadnej wartości i sprawia wrażenie błędu układu."*
+
+#### §19.12.1 ⭐⭐ R13 — reguła ratyfikowana, obowiązuje w całej aplikacji
+
+> **R13: NIE REZERWUJEMY MIEJSCA NA ELEMENT, KTÓRY W DANYM KONTEKŚCIE NIGDY SIĘ NIE POJAWI.**
+> Stabilizacja układu ma sens **tylko wtedy, gdy nie pogarsza wykorzystania przestrzeni.**
+
+⭐ Reguła jest **mocniejsza niż przypadek, z którego wyrosła**, i to jest jej wartość: rozstrzyga
+z góry każdą przyszłą pokusę „zarezerwujmy slot, żeby nic nie skakało" — w pasku zakładek (M3.3),
+w Metadata Explorerze (M3.4), w sekcji postępu (M3b). ⚠ Zamyka też przy okazji wariant A z §19.10.3
+w sposób ostateczny: **~500 px dziur to R13 pomnożone przez pięć**, a nie tylko „gorzej pod R8".
+
+⚠ Warto zauważyć asymetrię, którą R13 wprowadza świadomie: **pustej przestrzeni użytkownik nie czyta
+jako „tu czasem coś jest", tylko jako błąd** — bo w spoczynku nic jej nie tłumaczy. Przesunięcie ma
+odwrotną własność: jest widoczne **tylko w momencie zmiany**, a w spoczynku układ wygląda poprawnie.
+⭐ To jest cała różnica kosztów: **dziura kosztuje przez cały czas, przesunięcie kosztuje przez chwilę.**
+
+#### §19.12.2 Bilans M3.2a — trzy ruchy z czterech wycofane, i to jest wynik, nie porażka
+
+| Ruch | Los |
+|---|---|
+| **T2** — Export DDL na koniec paska tytułu | ✅ **jedyny, który został** — pasek tytułu bez żadnej bramki przesuwającej |
+| **B1** — slot sekcji 1 (43 px) | ⛔ wycofane — **R13** |
+| **B2** — wspólna podłoga Execute/Cancel | ⛔ wycofane — R5 od drugiej strony |
+| **B3** — Commit/Rollback do prawej | ⛔ wycofane — grupa semantyczna bije stabilność pozycji |
+| `Padding="10,4"` na Cancel | ✅ usunięcie zostaje — porządkowanie wartości lokalnej |
+| `ToolbarStabilityTests` | ⛔ **klasa usunięta w całości** — jej jedyny pozostały pin dotyczył B1 |
+| **K12** w §18.R | ⛔ wycofane wraz z B2 |
+
+⭐ **M3.2a kończy się bez ani jednego nowego testu i z jedną przeniesioną kontrolką** — a mimo to jest
+najbardziej produktywną iteracją M3 pod względem **reguł**: dała R13, rozszerzyła R5 o wniosek
+„nieważne, skąd rozmiar pochodzi", i dołożyła dwie pułapki (14 i 15). ⚠ To jest R8 w praktyce:
+*kryterium odbioru brzmi „czy wygląda to jak dopracowana aplikacja komercyjna?"*, a nie „ile rzeczy
+udało się zmienić".
+
+#### §19.12.3 ⚠⚠ Wniosek metodologiczny — trzy odrzucenia z rzędu mają jeden wspólny mianownik
+
+Wszystkie trzy ruchy **działały**, każdy usuwał zmierzone drganie, żaden nie miał defektu. Odrzucone
+zostały, bo każdy płacił za stabilność **inną walutą niż piksele**: rozmiarem akcji głównej (B2),
+sąsiedztwem poleceń (B3), gęstością układu (B1).
+
+⭐ **H‑3 było postawione jako problem geometryczny i dlatego wszystkie moje odpowiedzi były
+geometryczne.** Pomiar pokazał, o ile pasek się przesuwa, więc każde rozwiązanie zmniejszało tę liczbę
+— i każde robiło to kosztem czegoś, czego audyt nie zmierzył, bo nie umiał. ⚠ Praktycznie, na resztę
+etapu: **gdy audyt nazywa problem jedną wielkością, to jest hipoteza o problemie, a nie jego definicja.**
+Zanim zaczniesz ją minimalizować, zapytaj, co jeszcze na tej powierzchni ma wartość — i czy przypadkiem
+nie jest ważniejsze.
+
+Build 0/0 · **7133** zielony w trzech partycjach (**7031 + 48 + 54**, czyli tyle co przed etapem) ·
+smoke czysty.

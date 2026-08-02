@@ -868,31 +868,23 @@
             <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,4" VerticalAlignment="Center">
 
               <!-- ── SECTION 1 · Mode toggle (Table Grid-Edit / View+Procedure Easy) ────────────────
-                   ⭐⭐ SEKCJA 1 REZERWUJE SWÓJ SLOT ZAWSZE — to jest kotwica całego paska (M3.2a, §19.10).
+                   ⛔⛔ TA SEKCJA NIE REZERWUJE MIEJSCA, GDY JEST PUSTA — i to jest ROZSTRZYGNIĘCIE
+                   ODEBRANE NA ŻYWO, nie stan zastany (M3.2a, §19.12).
 
-                   Sekcja niesie co najwyżej JEDEN przycisk (pięć bramek poniżej wyklucza się wzajemnie —
-                   to różne rodzaje zakładek), więc rezerwacja kosztuje jeden slot i nic więcej. Dzięki niej
-                   AKCJA GŁÓWNA DOKUMENTU (Execute / Compile — pierwszy element sekcji 2) startuje pod tym
-                   samym x we wszystkich 12 rodzajach zakładek, zamiast przeskakiwać o 43 px między
-                   zakładką z trybem (Procedure, Trigger, View, Function, Table→Pola) a zakładką bez trybu
-                   (Generator, Domain, Package, Exception, Index, New Table, SQL).
+                   M3.2a dało jej stały slot 43 px (przycisk + separator w środku rezerwacji), żeby akcja
+                   główna dokumentu startowała pod tym samym x we wszystkich 12 rodzajach zakładek.
+                   Mechanizm działał. ⛔ **Użytkownik odrzucił go po obejrzeniu w SQL Editorze**
+                   (2026-08-02), gdzie żadna z pięciu bramek poniżej nie jest prawdziwa i rezerwacja
+                   zostawiała pustą dziurę przy lewej krawędzi: *„Pusta dziura w SQL Editorze nie wnosi
+                   żadnej wartości i sprawia wrażenie błędu układu."*
 
-                   ⚠ SEPARATOR JEST W ŚRODKU REZERWACJI, I TO JEST ISTOTA TEGO ROZWIĄZANIA. Gdyby stał na
-                   zewnątrz, `ToolbarSep1Visible` zabierałby swoje 15 px przy pustej sekcji i kotwica
-                   przestałaby trzymać. Gdyby z kolei kreska świeciła zawsze, przy pustej sekcji byłaby
-                   „kreską po nieistniejącym elemencie" — dokładnie tym, co sprzątał sprint brandingowy
-                   (patrz komentarz o wiodącym separatorze w pasku tytułu). Wewnątrz rezerwacji dostajemy
-                   oba naraz: stałą szerokość ORAZ kreskę tylko wtedy, gdy jest co oddzielać.
+                   ⭐⭐ REGUŁA R13, KTÓRA Z TEGO ZOSTAŁA I OBOWIĄZUJE W CAŁEJ APLIKACJI:
+                   **nie rezerwujemy miejsca na element, który w danym kontekście nigdy się nie pojawi.**
+                   Stabilizacja układu ma sens tylko wtedy, gdy nie pogarsza wykorzystania przestrzeni.
 
-                   ⚠ 43 = 28 (przycisk ikonowy: `Pad.ButtonIcon` 6+6 + `Size.Icon.Lg` 16) + 6 (`Spacing`
-                   rodzica) + 9 (separator: `Width` 1 + `Margin` 4,6 poziomo). Wartość lokalna WYLICZONA
-                   Z RÓL, nie dobrana na oko — nie ma roli „szerokość przycisku ikonowego", a wprowadzanie
-                   jej dla jednego konsumenta łamałoby R3. Rozstrzyga przegląd §13.3, jeśli takich miejsc
-                   przybędzie.
-
-                   ⚠ `MinWidth`, nie `Width` — gdyby kiedyś dwie bramki stały się prawdziwe naraz, drugi
-                   przycisk ma urosnąć kontener, a nie zostać po cichu przycięty. -->
-              <StackPanel Orientation="Horizontal" Spacing="6" MinWidth="43" VerticalAlignment="Center">
+                   ⛔ Nie przywracać slotu. Przesunięcie paska do lewej krawędzi na zakładkach bez trybu
+                   (Generator, Domain, Package, Exception, Index, New Table, SQL) jest ŚWIADOMIE
+                   ZAAKCEPTOWANE — zwarty układ wygrywa z nieruchomym. -->
               <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleFieldEditTooltip}"
                             IsChecked="{Binding ActiveTableDetail.IsFieldEditMode, Mode=TwoWay}"
                             IsVisible="{Binding ShowFieldEditTools}">
@@ -924,12 +916,8 @@
               </ToggleButton>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep1Visible}" />
-              </StackPanel>
 
-              <!-- ── SECTION 2 · Main actions (Execute / Compile / Revert / Delete) ─────────────────
-                   ⚠ Commit / Rollback NIE NALEŻĄ JUŻ DO TEJ SEKCJI — od M3.2a dokują do prawej krawędzi
-                   paska jako para transakcyjna (§19.10). Uzasadnienie przy nich samych; tu tylko tyle, że
-                   sekcja 2 jest od tej pory czysto DOKUMENTOWA. -->
+              <!-- ── SECTION 2 · Main actions (Execute / Compile / Commit / Rollback) ── -->
               <!-- ⛔⛔ EXECUTE I CANCEL NIE MAJĄ WSPÓLNEJ PODŁOGI SZEROKOŚCI — I TO JEST DECYZJA,
                    NIE PRZEOCZENIE (M3.2a, §19.11).
 

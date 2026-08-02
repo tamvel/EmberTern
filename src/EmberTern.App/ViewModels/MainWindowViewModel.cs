@@ -643,20 +643,20 @@ public partial class MainWindowViewModel : ViewModelBase
     // dzieci i każda zmiana stanu przesuwa wszystko na prawo od siebie. Zmierzone Procedure vs Trigger:
     // przy x=212 px jedna zakładka ma **Execute**, druga **Comment**.
     //
-    // ⭐ Z czterech ruchów, które M3.2a zaproponowało, ZOSTAŁ JEDEN — i to jest wynik odbioru na żywo,
-    // nie niedokończona praca: sekcja 1 rezerwuje swój jeden slot ZAWSZE, więc akcja główna startuje pod
-    // tym samym x we wszystkich 12 rodzajach zakładek (separator jest wewnątrz rezerwacji).
-    // ⛔ Wspólna podłoga Execute/Cancel oraz dokowanie Commit/Rollback do prawej ZOSTAŁY WYCOFANE przez
-    // użytkownika po obejrzeniu w działającej aplikacji (§19.11): pierwsze rozdymało akcję główną, drugie
-    // rozbijało grupę Execute + Commit + Rollback, której szuka się razem.
+    // ⛔⛔ WSZYSTKIE TRZY RUCHY M3.2a PO STRONIE TOOLBARA ZOSTAŁY WYCOFANE PRZEZ UŻYTKOWNIKA po obejrzeniu
+    // w działającej aplikacji (§19.11 + §19.12) — mimo że każdy działał tak, jak zaprojektowano:
+    //   • wspólna podłoga Execute/Cancel  — rozdymała akcję główną ponad jej treść (R5 od drugiej strony),
+    //   • Commit/Rollback dokowane do prawej — rozbijały grupę, której szuka się razem (⭐ GRUPA
+    //     SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI),
+    //   • rezerwacja slotu sekcji 1 — zostawiała pustą dziurę w SQL Editorze (⭐ R13: NIE REZERWUJEMY
+    //     MIEJSCA NA ELEMENT, KTÓRY W DANYM KONTEKŚCIE NIGDY SIĘ NIE POJAWI).
+    // ⛔ Nie przywracać żadnego z nich. Przesuwanie się paska przy zmianie rodzaju zakładki oraz przy
+    // F5 jest ŚWIADOMIE ZAAKCEPTOWANYM kompromisem: zwarty i naturalny układ wygrywa z nieruchomym.
     //
-    // ⛔ Pikselowa tożsamość MIĘDZY rodzajami zakładek nie jest celem i nie była ścigana — decyzja
-    // użytkownika (2026-08-02): Procedure, Trigger i Table mają inną semantykę i mogą mieć inny zestaw
-    // narzędzi; toolbar ma być stabilny i przewidywalny W OBRĘBIE danego typu dokumentu. Jedyny sposób
-    // na pełną zgodność to rezerwacja najgorszego przypadku każdej sekcji — zmierzone ~617 px stałej
-    // rezerwy, czyli ~500 px dziur na uboższych zakładkach, co pod R8 wygląda gorzej niż przesunięcie.
-    // ⭐⭐ A po odbiorze M3.2a wiemy więcej: GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI. Przesunięcie
-    // paska jest kosztem akceptowalnym; rozdzielenie akcji, których użytkownik szuka razem, nie jest.
+    // ⛔ Pikselowa tożsamość MIĘDZY rodzajami zakładek również nie jest celem — Procedure, Trigger
+    // i Table mają inną semantykę i mogą mieć inny zestaw narzędzi. Jedyny sposób na pełną zgodność to
+    // rezerwacja najgorszego przypadku każdej sekcji: zmierzone ~617 px stałej rezerwy, czyli ~500 px
+    // dziur na uboższych zakładkach — czyli R13 pomnożone przez pięć.
     // Section 3 routes Add/Remove/Move to the active editor's collection via the four
     // commands below; a future Trigger/Function/Package editor plugs a new case into
     // ActiveCollection() and gets the toolbar for free — no new layout pattern.

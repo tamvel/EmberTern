@@ -259,6 +259,7 @@ Zapisane tutaj, żeby były zadane raz i we właściwym momencie.
 | R10 | **Kolor komentarzy SQL zostaje** (V‑1) |
 | R11 | **`Size.Row.Grid`** to osobna decyzja produktowa |
 | R12 | ⭐ **Celem jest usunięcie NIEUZASADNIONYCH wartości lokalnych, nie wyzerowanie licznika**; **błędna rola jest gorsza od wartości lokalnej** |
+| **R13** | ⭐⭐ **NIE REZERWUJEMY MIEJSCA NA ELEMENT, KTÓRY W DANYM KONTEKŚCIE NIGDY SIĘ NIE POJAWI.** Stabilizacja układu ma sens **tylko wtedy, gdy nie pogarsza wykorzystania przestrzeni** — pusta dziura czyta się jako błąd układu, a niewielkie przesunięcie nie. Ratyfikowana 2026-08-02 na odbiorze M3.2a (§19.12) |
 
 **Cztery decyzje architektoniczne M2b (§17.2) — również wiążące:**
 1. **`FluentBridge`** — przepinamy Fluenta na nasz katalog; trzy trasy (metryki → setter · kolory
@@ -362,7 +363,7 @@ analiza → propozycja (akceptacja) → implementacja → uruchomienie aplikacji
 **Trzy partycje testów** (⚠ `ConnectionExpandBindingProbe` biegnie **sam** — hangs, gdy dołączony):
 
 ```
---filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~ToolbarStabilityTests"
+--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests"
 ```
 oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
 
@@ -370,8 +371,9 @@ oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
 Pominięta, wpada do partycji głównej: nic nie zawiedzie, ale podział przestaje robić to, po co istnieje.
 To ta sama pułapka, co niedziałające wykluczenie `ContextMenuPresentationTests` (§18.1.6) — tam nazwa
 przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały etap.
-**Stan po M3.2a: `ToolbarStabilityTests` DOPISANY** (konstruuje kontrolki Avalonii); partycje mierzą
-**7031 + 49 + 54 = 7134**.
+⚠ **Stan po M3.2a: bez zmian — `ToolbarStabilityTests` istniało przez dwa commity i zostało usunięte
+razem z mechanizmem, który pinowało** (odbiór cofnął wszystkie trzy ruchy po stronie toolbara, §19.12).
+Partycje mierzą **7031 + 48 + 54 = 7133**, czyli tyle co przed etapem.
 
 ⭐ **Kryterium, czy nowa klasa idzie do filtra, jest jedno: czy konstruuje kontrolki Avalonii.**
 `TransactionChipTests` (M3.1d) **nie idzie** — pinuje funkcję **statyczną**, więc nie potrzebuje sesji
@@ -468,6 +470,14 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
    Wybór wariantu na podstawie pomiaru był właściwym trybem, ale te dwie zmiany dało się ocenić
    **dopiero na ekranie**. Dla zmian przestawiających elementy w polu widzenia krok 5 procedury
    („uruchom aplikację i obejrzyj") jest **bramką odbioru, nie formalnością na koniec**.
+16. ⭐⭐ **NOWA (M3.2a, §19.12) — GDY AUDYT NAZYWA PROBLEM JEDNĄ WIELKOŚCIĄ, TO JEST HIPOTEZA O PROBLEMIE,
+   A NIE JEGO DEFINICJA.** H‑3 brzmiało *„toolbar się przesuwa"*, więc pomiar dał liczbę pikseli, a każde
+   z trzech rozwiązań tę liczbę zmniejszało — i **każde płaciło inną walutą**: rozmiarem akcji głównej,
+   sąsiedztwem poleceń, gęstością układu. Wszystkie trzy działały i wszystkie trzy zostały odrzucone.
+   ⚠ Praktycznie: zanim zaczniesz minimalizować wielkość, którą podał audyt, **wypisz, co jeszcze na tej
+   powierzchni ma wartość** — i sprawdź, czy któraś z tych rzeczy nie jest ważniejsza. ⭐ Asymetria warta
+   zapamiętania: **pusta przestrzeń kosztuje przez cały czas, przesunięcie kosztuje przez chwilę** — bo
+   dziury w spoczynku nic nie tłumaczy, a przesunięcie widać tylko w momencie zmiany.
 
 ### 9.2 Odziedziczone z M2b (§17.5)
 
@@ -497,7 +507,7 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 5 | **M3.1e** | Chipy Trace / Debugger (znak tożsamości + etykieta); ⭐ **chipy NIE dziedziczą pędzli railu — inny próg kontrastu** · ⛔ ikona debuggera zamknięta, jest teraz referencją do `Icon.Play` (§19.6) | — |
 | ✅ 6 | **M3.1f** | Sekcja postępu + operacja referencyjna; ⭐ **infrastruktura dla M3b — oba tryby**, choć operacja referencyjna umie tylko nieokreślony · ⭐ Cancel to **dwa zasięgi jednej komendy**, zamyka lukę bramkowania (§19.7) | — |
 | ✅ 6b | **poprawki odbiorcze** | Zamknięte bez osobnej iteracji (decyzja użytkownika): wyrównanie endpointu **zamknięte pomiarem bez zmiany kodu** · bug historii parametrów · pusta kolumna Type przy domenie · wygląd wyłączonych komórek (§19.8) | — |
-| ✅ 7 | **M3.2a** | H‑3. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. Z czterech ruchów **zostały dwa**: Export DDL na koniec paska tytułu (T2) · slot sekcji 1 rezerwowany, separator **w środku** rezerwacji (B1). ⛔⛔ **Odbiór wizualny cofnął podłogę Execute/Cancel i dokowanie Commit/Rollback do prawej** — ⭐ **GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI**, a rozmiar wzięty z wyrównania czyta się jak deklaracja ważności (R5 od drugiej strony). Drgania 38 px i 68 px **świadomie zaakceptowane**. §19.10 + **§19.11** | — |
+| ✅ 7 | **M3.2a** | H‑3. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. ⛔⛔ **Z czterech ruchów został JEDEN — Export DDL na koniec paska tytułu (T2).** Odbiór wizualny cofnął podłogę Execute/Cancel, dokowanie Commit/Rollback i rezerwację slotu sekcji 1: ⭐ **GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI** · rozmiar z wyrównania czyta się jak deklaracja ważności (R5 od drugiej strony) · ⭐⭐ **R13** — nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Wszystkie przesunięcia **świadomie zaakceptowane**. §19.10 + §19.11 + **§19.12** | — |
 | ⭐ **8** | **M3.2b** | **← TU ZACZYNASZ.** §7.5 — semantyka kolorów na pasku narzędzi. ⏸ + sekcja 3 (§19.10.3) | **DC** ✅ |
 | 9 | **M3.2c** | H‑5 — Commit / Rollback | **DD** |
 | 10 | **M3.2d** | M‑1 — 10 literałów → `UiStrings` | — |
