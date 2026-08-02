@@ -35,14 +35,14 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | **M3.1f + poprawki odbiorcze** — wypchnięte na oba remote'y jest `bca5210` (koniec M3.1d). **Trzy commity czekają na push**: M3.1e, M3.1f i ten. ⛔ Push dopiero po sprawdzeniu w nowej sesji (decyzja użytkownika) |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅** (wszystkie odebrane). ⭐ **M3.1 ZAMKNIĘTE** — cztery sekcje §8.4.3 istnieją |
+| **Ostatni commit** | **M3.2a (H‑3)**. ⚠ Poprzednia wersja tego wiersza mówiła, że trzy commity czekają na push — **zweryfikowane 2026-08-02: nieaktualne**, oba remote'y stały już na `b16f476` (M3.1e + M3.1f + poprawki odbiorcze). Push M3.2a — po akceptacji użytkownika |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅** (M3.1 odebrane w całości; M3.2a czeka na QA wizualne). ⭐ **M3.1 ZAMKNIĘTE** — cztery sekcje §8.4.3 istnieją. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma już ani jednej bramki przesuwającej cokolwiek |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7133**, zielony w trzech partycjach (**7031 + 48 + 54**) |
+| **Suite** | **7136**, zielony w trzech partycjach (**7031 + 51 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⭐⭐ **M3.2a (H‑3)** — stabilny układ paska tytułu i toolbara dokumentu. **Nie zaczęte**, świadomie: użytkownik wstrzymał start pod koniec sesji, bo H‑3 jest za duży, żeby urwać go w połowie. Stan wejściowy w §3.6 |
+| **NASTĘPNY KROK** | ⭐⭐ **M3.2b** — §7.5, semantyka kolorów na pasku narzędzi (decyzja **DC** już podjęta: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5**, M3.2b ogranicza się do paska). ⏸ **Wziąć po drodze:** sekcja 3 toolbara jest jedynym znanym pozostałym drganiem *w obrębie jednego dokumentu* (`ShowCollectionEdit` 34 px, blok reorder 73 px, przy przełączaniu pod-zakładek) — zmierzone i świadomie nierozwiązane w M3.2a, bo rezerwacja kosztowałaby ~181 px dziury; zapis w §19.10.3 |
 | **⏸ DROBIAZG DO WZIĘCIA PO DRODZE** | Wyłączone komórki Size/Scale/SubType/Charset dostały `Stretch`, ale **tło nadal maluje `FluentBridge`** (`TextControlBackgroundDisabled` → `BackgroundColor`), więc setter `Background="Transparent"` go nie zdejmuje. Jeśli po QA nadal widać pudełko — trasa jest przez **Bridge**, nie przez setter (reguła 8 §16). Zapis: §19.8.4 |
 
 ### 1.1 Co dostarczyły poprzednie etapy — trzy zdania
@@ -269,7 +269,12 @@ Zapisane tutaj, żeby były zadane raz i we właściwym momencie.
 
 ### 5.1 ⛔ Rejestr kolizji §18.R — status w M3 (ratyfikowany 2026-08-02)
 
-⭐ **Stan: K1–K11.** M3.1d dopisało **K11** (chip transakcji, `Spacing` 5 vs `Space.Sm` 6) — pierwszą
+⭐ **Stan: K1–K12.** M3.2a dopisało **K12** (podłoga pary Execute/Cancel, `MinWidth` 156 vs
+`Size.ActionMinWidth` 100) — pierwszą kolizję, w której rola nie tylko niesie inną liczbę, ale **jawnie
+wyklucza kontekst**, w którym miałaby zadziałać (`Tokens.axaml`: ⛔ *„Chroma, przycisk ikonowy i komórka
+siatki jej NIE biorą"*), a jej wartość leży **poniżej** naturalnej szerokości wyrównywanego przycisku,
+więc przyjęta „dla porządku" byłaby martwym zapisem wyglądającym na regułę (§19.10.4). Wcześniej M3.1d
+dopisało **K11** (chip transakcji, `Spacing` 5 vs `Space.Sm` 6) — pierwszą
 kolizję **spoza M2c** i pierwszą dotyczącą **odstępu**, a nie typografii czy promienia. Rejestr okazał się
 szerszy niż licznik, który go zrodził. ⚠ Różnica 1 px czyni pokusę „weź po prostu rolę" największą właśnie
 tutaj — a wzięcie jej zmieniłoby wygląd **już odebrany przez użytkownika**.
@@ -359,7 +364,7 @@ analiza → propozycja (akceptacja) → implementacja → uruchomienie aplikacji
 **Trzy partycje testów** (⚠ `ConnectionExpandBindingProbe` biegnie **sam** — hangs, gdy dołączony):
 
 ```
---filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests"
+--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~ToolbarStabilityTests"
 ```
 oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
 
@@ -367,7 +372,8 @@ oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
 Pominięta, wpada do partycji głównej: nic nie zawiedzie, ale podział przestaje robić to, po co istnieje.
 To ta sama pułapka, co niedziałające wykluczenie `ContextMenuPresentationTests` (§18.1.6) — tam nazwa
 przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały etap.
-**Stan po M3.1a: `TabStripPresentationTests` DOPISANY**; po poprawkach odbiorczych partycje mierzą **7031 + 48 + 54 = 7133**.
+**Stan po M3.2a: `ToolbarStabilityTests` DOPISANY** (konstruuje kontrolki Avalonii); partycje mierzą
+**7031 + 51 + 54 = 7136**.
 
 ⭐ **Kryterium, czy nowa klasa idzie do filtra, jest jedno: czy konstruuje kontrolki Avalonii.**
 `TransactionChipTests` (M3.1d) **nie idzie** — pinuje funkcję **statyczną**, więc nie potrzebuje sesji
@@ -440,6 +446,16 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
    ⚠ Przy każdej kolejnej sekcji Status Bara zadaj to samo pytanie: **czy ten fakt ma już właściciela
    gdzie indziej i czy tamten właściciel nie jest bramkowany zakładką?** Bramka `IsXxxTabActive` na
    nośniku stanu **globalnego** to defekt §0.1.2, nawet gdy wygląda jak porządek.
+14. ⭐⭐ **NOWA (M3.2a, §19.10.5) — POMIAR GEOMETRII MUSI ODTWORZYĆ KONTENER, BO KONTENER JEST CZĘŚCIĄ
+   MECHANIZMU.** Pin rezerwacji slotu sekcji 1 wstawiony wprost do okna zmierzył **1024 px** zamiast 43:
+   `StackPanel` rozciąga się w kontenerze pionowym, więc test mierzył **rozciąganie zamiast rezerwacji**.
+   To wariant pułapki 12, ale ostrzejszy i wart osobnego wpisu z jednego powodu: **wyszła liczba
+   absurdalna i dlatego się obroniła.** Gdyby kontener przypadkiem dał wynik prawdopodobny, pin byłby
+   **fałszywie zielony** i potwierdzałby kotwicę, której nie ma. ⚠ Praktycznie: przy każdej asercji
+   na `Bounds` odtwórz rodzica z produktu (poziomy vs pionowy, `Border.chrome` vs gołe okno) i **zapytaj,
+   czy zmierzona liczba w ogóle mogła wyjść z mierzonego mechanizmu** — zanim uznasz zielony za dowód.
+   ⭐ To jest też druga połowa decyzji architektonicznej 2 („kontener rozstrzyga wielkość"): skoro
+   kontener rozstrzyga, to test bez właściwego kontenera nie mierzy tej wielkości.
 
 ### 9.2 Odziedziczone z M2b (§17.5)
 
@@ -469,8 +485,8 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 5 | **M3.1e** | Chipy Trace / Debugger (znak tożsamości + etykieta); ⭐ **chipy NIE dziedziczą pędzli railu — inny próg kontrastu** · ⛔ ikona debuggera zamknięta, jest teraz referencją do `Icon.Play` (§19.6) | — |
 | ✅ 6 | **M3.1f** | Sekcja postępu + operacja referencyjna; ⭐ **infrastruktura dla M3b — oba tryby**, choć operacja referencyjna umie tylko nieokreślony · ⭐ Cancel to **dwa zasięgi jednej komendy**, zamyka lukę bramkowania (§19.7) | — |
 | ✅ 6b | **poprawki odbiorcze** | Zamknięte bez osobnej iteracji (decyzja użytkownika): wyrównanie endpointu **zamknięte pomiarem bez zmiany kodu** · bug historii parametrów · pusta kolumna Type przy domenie · wygląd wyłączonych komórek (§19.8) | — |
-| ⭐ **7** | **M3.2a** | **← TU ZACZYNASZ.** H‑3 — stabilny układ paska tytułu **i** toolbara dokumentu (72 bramki, §3.6) | — |
-| 8 | **M3.2b** | §7.5 — semantyka kolorów na pasku narzędzi | **DC** |
+| ✅ 7 | **M3.2a** | H‑3 — stabilny układ obu pasków. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. Cztery ruchy: Export DDL na koniec paska tytułu (T2) · slot sekcji 1 rezerwowany, separator **w środku** rezerwacji · wspólna podłoga Execute/Cancel (zmierzone 156 vs 118) · **Commit/Rollback dokują do prawej jako para transakcyjna**. ⛔ Tożsamość pikselowa MIĘDZY rodzajami zakładek świadomie nieścigana (§19.10) | — |
+| ⭐ **8** | **M3.2b** | **← TU ZACZYNASZ.** §7.5 — semantyka kolorów na pasku narzędzi. ⏸ + sekcja 3 (§19.10.3) | **DC** ✅ |
 | 9 | **M3.2c** | H‑5 — Commit / Rollback | **DD** |
 | 10 | **M3.2d** | M‑1 — 10 literałów → `UiStrings` | — |
 | 11 | **M3.3a** | Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik; **K9/K10 zostają** | — |

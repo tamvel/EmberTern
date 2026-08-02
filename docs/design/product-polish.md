@@ -3453,6 +3453,15 @@ idzie dalej. Rejestr jest wejściem do przeglądu §13.3.
 | K9 | 9 | `TabItem` — etykieta zakładki roboczej (`ControlStyles.axaml`) | 13 | brak roli tekstowej przy 13 | ⛔ lokalnie z powodem → **M3.3** |
 | K10 | 9 | `TabItem.bottom-tab` / `.sub-tab` — kształt zakładki | promień 4 | `Radius.Chip` = 4, ale zakładka chipem nie jest | ⛔ lokalnie z powodem → **M3.3** |
 | K11 | **M3.1d** | chip transakcji — odstęp kropka ↔ tekst (`MainWindow.axaml`) | `Spacing` 5 | `Space.Sm` = **6** | ⛔ lokalnie z powodem → **§13.3** |
+| K12 | **M3.2a** | podłoga pary Execute / Cancel (`MainWindow.axaml`) | `MinWidth` 156 | `Size.ActionMinWidth` = **100** — i jej własny komentarz **wyklucza chromę wprost** | ⛔ lokalnie z powodem → **§13.3** |
+
+⚠⚠ **K12 jest pierwszą kolizją, w której rola nie tyle „niesie inną liczbę", co JAWNIE ZABRANIA tego
+kontekstu** — `Tokens.axaml` mówi przy niej ⛔ *„Chroma, przycisk ikonowy i komórka siatki jej NIE
+biorą"*. Drugi powód jest jednak groźniejszy, bo cichy: **100 leży PONIŻEJ naturalnych 156 px** przycisku
+Execute, więc rola przyjęta „dla porządku" nie wyrównałaby niczego i zostałaby martwym zapisem
+wyglądającym na regułę. ⭐ To dokładnie ta pułapka, którą komentarz przy `Size.ActionMinWidth` opisuje
+**na własnym przykładzie** (80 przy „Cancel" o naturalnych 98) — trafiliśmy w nią drugi raz, w innym
+miejscu, dwa etapy później. Pełny zapis: §19.10.4.
 
 ⚠ **K11 jest pierwszą kolizją spoza M2c i pierwszą dotyczącą ODSTĘPU, a nie typografii ani promienia** —
 rejestr okazał się szerszy niż licznik, który go zrodził. Różnica to **1 px**, więc pokusa „po prostu
@@ -5245,3 +5254,147 @@ Trzy warstwy, z których **każda wyglądała na przyczynę i każda maskowała 
 warstwie 1 poprzestać na „usunąłem wartości lokalne, teraz styl działa", raport brzmiałby *naprawione*,
 a na ekranie nic by się nie zmieniło. ⭐ **Reguła: po każdej warstwie mierz PONOWNIE ten sam parametr,
 który był przedmiotem zgłoszenia** — zniknięcie przyczyny nie jest dowodem zniknięcia objawu.
+
+---
+
+### §19.10 Iteracja 7 (M3.2a) — H‑3, stabilny układ paska tytułu i toolbara dokumentu (2026-08-02)
+
+**Zakres:** H‑3 w całości — obie powierzchnie. Wariant **B** (toolbar) + **T2** (pasek tytułu), oba
+wybrane przez użytkownika po przedstawieniu pomiaru i trzech wariantów dla każdej powierzchni.
+
+#### §19.10.1 Pomiar — audyt miał rację co do faktu, ale nie co do skali
+
+Metryki wyliczone z katalogu: przycisk ikonowy = `Pad.ButtonIcon` 6+6 + `Size.Icon.Lg` 16 = **28 px**,
+`Spacing="6"` → skok **34 px**; separator (`Width` 1 + `Margin` 4,4) = **9 px**, ze skokiem **15 px**.
+
+⭐ **Pasek tytułu miał już tylko JEDNĄ bramkę** — `CanExportDdl` (separator + przycisk). Dwie z trzech
+przyczyn wymienionych w §3.6 handovera zabrało M3.1b. Pokazanie tej pary wstawiało **43 px**
+i przesuwało wszystkie **dziewięć kreatorów *Nowy X*** — najczęściej klikaną grupę tego paska.
+
+⭐⭐ **Fakt, którego audyt nie nazwał: `CanExportDdl` czyta `SelectedWorkspaceTab`.** To jedyna bramka
+**dokumentowa** w pasku, który po decyzji M3.1b odpowiada za nawigację i polecenia **połączenia**.
+Przyczyną niestabilności było więc pomieszanie zasięgów, a nie sama bramka.
+
+⭐⭐ **Toolbar dokumentu — model pięciu sekcji JUŻ ISTNIAŁ i to jest najważniejsze ustalenie iteracji.**
+`MainWindowViewModel:630–655` deklaruje `[ Mode ] | [ Main ] | [ Collection ] | [ Helper ] | [ Close ]`
+ze świadomym zwijaniem separatorów. Czyli **kolejność była zagwarantowana; niezagwarantowana była
+POZYCJA** — wszystkie sekcje leżą w jednym poziomym `StackPanelu`, więc szerokość każdej to suma jej
+widocznych dzieci. H‑3 nie było brakiem architektury, tylko brakiem geometrii.
+
+**Policzone dla dwóch sąsiadujących rodzajów** (bez aktywnej kolekcji, offset od pierwszego dziecka):
+
+| x | Procedure | Trigger |
+|---|---|---|
+| 144–172 | Rollback | **Debug** |
+| 212–240 | **Execute** | **Comment** |
+| 246–274 | **Debug** | **Uncomment** |
+
+Dwie przyczyny się sumowały: Trigger nie ma Commit/Rollback (−68 px — `ShowTransactionButtons` pomija
+go celowo, bo Compile triggera auto-commituje) i nie ma Execute (−34 px w sekcji 4).
+
+⚠⚠ **Drugi rodzaj drgania — W OBRĘBIE JEDNEJ ZAKŁADKI — i w odbiorze gorszy.** Zmierzone headless:
+**Execute 156 px, Cancel 118 px**. Oba wykluczają się wzajemnie, więc **naciśnięcie F5 przesuwało
+o 38 px** sekcje 3 i 4 oraz przycisk zamknięcia i oddawało je po zakończeniu — czyli układ drgał
+dokładnie wtedy, gdy użytkownik patrzy na pasek.
+
+#### §19.10.2 Co zostało zrobione
+
+| # | Ruch | Efekt |
+|---|---|---|
+| **T2** | Export DDL + jego separator na **koniec** kolumny 0, za kreatory | pasek tytułu nie ma już **ani jednej** bramki, która cokolwiek przesuwa |
+| **B1** | sekcja 1 rezerwuje slot **43 px** zawsze, **separator w środku rezerwacji** | akcja główna dokumentu startuje pod tym samym x we wszystkich 12 rodzajach zakładek |
+| **B2** | Execute i Cancel dostają wspólną podłogę `MinWidth="156"` | koniec przeskoku przy F5 |
+| **B3** | Commit / Rollback dokują do **prawej** krawędzi paska | znika największa różnica między rodzajami (68 px) |
+
+⭐ **B1 — separator jest WEWNĄTRZ rezerwacji i to jest istota rozwiązania.** Na zewnątrz
+`ToolbarSep1Visible` zabierałby swoje 15 px przy pustej sekcji i kotwica przestałaby trzymać. Kreska
+świecąca zawsze byłaby z kolei „kreską po nieistniejącym elemencie" — tym, co sprzątał sprint
+brandingowy. Wewnątrz dostajemy oba naraz: **stałą szerokość ORAZ kreskę tylko wtedy, gdy jest co
+oddzielać.** ⚠ `MinWidth`, nie `Width` — gdyby dwie bramki stały się prawdziwe naraz, drugi przycisk
+ma urosnąć kontener, a nie zostać po cichu przycięty.
+
+⭐⭐ **B3 nie jest ruchem geometrycznym, tylko podziałem ZASIĘGU.** Commit/Rollback były jedyną parą
+w sekcji 2 mówiącą o **transakcji**, a nie o edytowanym obiekcie. To ta sama linia, którą M3.1d
+poprowadziło w pasku statusu między globalnym chipem a lokalnym licznikiem — tylko o poziom wyżej,
+po stronie **poleceń** zamiast **faktu**. ⛔ To **nie** jest przeniesienie ich do paska statusu
+(zabrania tego §8.4.5 i punkt 6 listy „czego M3 nie robi") — para zostaje na pasku narzędzi, zmienia
+się wyłącznie zakotwiczenie.
+
+⚠⚠ **Kolejność dokowania jest znacząca i para stoi PRZED licznikiem czasu.** `DockPanel` przydziela
+krawędź w kolejności deklaracji, więc pierwsze `Dock="Right"` jest najbardziej wysunięte i nic nim
+później nie rusza. Odwrotna kolejność dałaby dokładnie ten defekt, który naprawiamy: pojawienie się
+licznika przesuwałoby Commit/Rollback w trakcie wykonania. Licznik jest biernym odczytem i to on pływa.
+
+#### §19.10.3 ⛔ Czego iteracja świadomie NIE zrobiła — i dlaczego to nie jest niedoróbka
+
+**Pikselowa tożsamość MIĘDZY rodzajami zakładek nie była celem.** Decyzja użytkownika (2026-08-02):
+*„Procedure, Trigger czy Table mają inną semantykę i mogą mieć inny zestaw narzędzi. Ważne jest, żeby
+toolbar był stabilny i przewidywalny w obrębie danego typu dokumentu, a nie żeby wszystkie dokumenty
+wyglądały identycznie kosztem sztucznych pustych miejsc."*
+
+Wariant pełnych kotwic **został zmierzony, nie odrzucony z góry**: rezerwacja najgorszego przypadku
+każdej sekcji to ~**617 px** stałej rezerwy, czyli ~**500 px dziur** na zakładce generatora (3 przyciski).
+Pod R8 pasek z dziurami wygląda gorzej niż pasek, który się przesuwa — a żadne komercyjne IDE nie
+gwarantuje tu tożsamości pikselowej.
+
+⏸ **Nie ruszona sekcja 3, i to jest jedyny znany dług tej iteracji.** `ShowCollectionEdit`
+i `ShowCollectionReorder` zmieniają się przy przełączaniu **pod-zakładek**, czyli **w obrębie jednego
+dokumentu** — a więc mieszczą się w kryterium użytkownika. Zmierzone: Edit to 34 px, blok reorder
+(separator wewnętrzny + dwa przyciski) to 73 px. Rezerwacja całej sekcji 3 kosztowałaby ~181 px dziury
+na zakładkach bez kolekcji, więc rozwiązanie nie jest oczywiste i **nie zostało podjęte po cichu**
+(R7 — najpierw reguła, nie łatka na jeden ekran). Do rozstrzygnięcia w M3.2b lub na przeglądzie §13.3.
+
+#### §19.10.4 ⚠⚠ K12 — rola pasowała funkcją i była zakazana wprost
+
+`Size.ActionMinWidth` = 100 jest dokładnie tą rolą co do funkcji: *„podłoga, żeby para przycisków się
+wyrównała"*. **Nie została użyta, z dwóch niezależnych powodów.** (a) Jej własny komentarz
+w `Tokens.axaml` wyklucza chromę wprost: ⛔ *„Chroma, przycisk ikonowy i komórka siatki jej NIE biorą"*.
+(b) 100 leży **poniżej** naturalnych 156 px Execute, więc niczego by nie zrównała.
+
+⭐ Punkt (b) jest tą samą pułapką, którą tamten komentarz opisuje **na własnym przykładzie** (80 przy
+„Cancel" o naturalnych 98): *podłoga działa wyłącznie wtedy, gdy leży POWYŻEJ naturalnej szerokości
+etykiet, które ma zrównać*. Trafiliśmy w nią drugi raz, w innym miejscu, dwa etapy później — co jest
+argumentem, żeby ten zapis w `Tokens.axaml` traktować jako regułę, a nie anegdotę.
+
+**Wpis do rejestru §18.R: K12** — `Size.ActionMinWidth` vs podłoga pary Execute/Cancel (100 vs 156,
+plus jawne wykluczenie chromy). Rozstrzyga przegląd §13.3.
+
+#### §19.10.5 Strażnik — trzy piny, `ToolbarStabilityTests`
+
+Nowa klasa headless (dołącza do `HeadlessCollection`, **dopisana do filtra partycji**; kryterium
+spełnione — konstruuje kontrolki Avalonii).
+
+1. `ExecuteAndCancel_RenderToTheSameWidth_…` — pinuje **efekt**, nie liczbę: obie renderowane
+   szerokości równe.
+2. `ExecuteCancelFloor_CoversBothVariants` — ⭐ pinuje, że **liczba nie zestarzeje się po cichu**
+   (#284). Podłoga jest drugą kopią wartości z `MainWindow.axaml` i to jest świadomy koszt: odczytać
+   jej z produktu nie da się bez konstruowania `MainWindow`, a to udokumentowany kształt zawieszający
+   suite. Test zamienia cichą regresję w głośną — komunikat podaje zmierzone szerokości i wartość do
+   wpisania. Druga asercja pilnuje **założenia**, na którym stoi mechanizm: Execute jest wariantem
+   szerszym, bo niesie chip skrótu.
+3. `ModeSectionSlot_ReservesItsWidth_EvenWhenEveryToggleIsHidden` — ⚠ istnieje, bo *„`MinWidth` jest
+   w API"* nie znaczy *„`MinWidth` rezerwuje miejsce na kontenerze bez widocznych dzieci"*
+   (pułapka 10). Bez działającej rezerwacji kotwica byłaby **martwym zapisem przy zielonym buildzie**.
+
+⚠⚠ **Pułapka 12 uderzyła w trzeci pin przy pierwszym uruchomieniu i warto to zapisać.** Slot wstawiony
+wprost do okna zmierzył **1024 px** — szerokość okna — bo `StackPanel` rozciąga się w pionowym
+kontenerze. Test mierzył **rozciąganie zamiast rezerwacji**. Naprawione przez odtworzenie realnego
+kontekstu (slot w **poziomym** `StackPanelu`, jak w produkcie). ⭐ Ta sama lekcja co w §19.2: *asercję
+robi się przeciw mechanizmowi produktu, nie przeciw zamiarowi* — a różnicę widać było tylko dlatego, że
+liczba wyszła absurdalna. **Gdyby wyszła prawdopodobna, pin byłby fałszywie zielony.**
+
+#### §19.10.6 Wartości lokalne pozostawione, każda z powodem
+
+| Wartość | Gdzie | Powód |
+|---|---|---|
+| `MinWidth="43"` | kontener sekcji 1 | wyliczona z ról (28 + 6 + 9); nie ma roli „szerokość przycisku ikonowego", a tworzenie jej dla jednego konsumenta łamałoby R3 |
+| `MinWidth="156"` | Execute + Cancel | wyliczona **pomiarem**; `Size.ActionMinWidth` wykluczona dwukrotnie — K12 |
+
+⭐ **Usunięta** przy okazji jedna wartość lokalna bez uzasadnienia: `Padding="10,4"` na przycisku Cancel
+(biła rolę `Pad.Button` — dokładnie kształt, który sprzątało M2c). Wysokości nie zmienia: daje ją
+`Border.chrome Button` przez `Size.ControlToolbar`.
+
+#### §19.10.7 Wynik
+
+Build 0/0 · **7136** zielony w trzech partycjach (**7031 + 51 + 54**, +3) · smoke czysty.
+⏸ **QA wizualne w obu motywach — po stronie użytkownika.**

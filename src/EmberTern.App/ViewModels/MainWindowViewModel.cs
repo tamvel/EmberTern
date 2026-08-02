@@ -610,6 +610,13 @@ public partial class MainWindowViewModel : ViewModelBase
     // so the user needs the Commit/Rollback buttons there to finalize (#3).
     // IsTableDetailTabActive covers all sub-tabs (it's keyed on the workspace
     // tab kind, not the inner sub-tab).
+    // ⭐⭐ M3.2a — ta para NIE STOI JUŻ W SEKCJI 2 paska narzędzi: dokuje do jego PRAWEJ krawędzi
+    // (product-polish.md §19.10). Sam predykat jest niezmieniony; zmieniło się zakotwiczenie.
+    // Powód jest dwojaki i oba są zapisane przy samych przyciskach w MainWindow.axaml: (a) ZASIĘG —
+    // to jedyna para w sekcji 2 mówiąca o TRANSAKCJI, a nie o edytowanym obiekcie, więc dzieli tę
+    // samą linię, którą M3.1d poprowadziło w pasku statusu między globalnym chipem a lokalnym
+    // licznikiem; (b) GEOMETRIA — pokrywając 5 z 12 rodzajów zakładek, para pojawiała się i znikała
+    // w ŚRODKU paska i przesuwała wszystko na prawo od siebie o 68 px.
     // ViewDetail joins this set: Compile opens the working (metadata) transaction,
     // so Commit/Rollback must be reachable from a View Detail tab too.
     // ProcedureDetail joins this set: Compile opens the working (metadata)
@@ -630,15 +637,31 @@ public partial class MainWindowViewModel : ViewModelBase
     // ─── Unified editor toolbar — fixed 5-section model ───────────────────
     //
     // One toolbar, five sections in a fixed order for EVERY object editor:
-    //   [ Mode ] | [ Main ] | [ Collection: + − | ↑ ↓ ] | [ Helper ] | [ Close ]
+    //   [ Mode ] | [ Main ] | [ Collection: + − | ↑ ↓ ] | [ Helper ] | [ Close ]   …   [ Commit / Rollback ]
     // Each section + its leading separator collapse when empty for the active editor.
+    //
+    // ⭐⭐ M3.2a — MODEL SEKCJI GWARANTOWAŁ KOLEJNOŚĆ, ALE NIE POZYCJĘ (product-polish.md §19.10).
+    // Wszystkie sekcje leżą w jednym poziomym StackPanelu, więc szerokość każdej to suma jej widocznych
+    // dzieci i każda zmiana stanu przesuwa wszystko na prawo od siebie. Zmierzone Procedure vs Trigger:
+    // przy x=212 px jedna zakładka miała **Execute**, druga **Comment**. Naprawione trzema ruchami:
+    //   1. sekcja 1 rezerwuje swój jeden slot ZAWSZE ⇒ akcja główna startuje pod tym samym x
+    //      we wszystkich 12 rodzajach zakładek (kotwica; separator jest wewnątrz rezerwacji),
+    //   2. Execute i Cancel dzielą podłogę szerokości ⇒ F5 nie przesuwa już paska w trakcie wykonania,
+    //   3. Commit / Rollback dokują do PRAWEJ jako para transakcyjna ⇒ znika największa różnica
+    //      między rodzajami zakładek (68 px).
+    // ⛔ Pikselowa tożsamość MIĘDZY rodzajami zakładek nie jest celem i nie była ścigana — decyzja
+    // użytkownika (2026-08-02): Procedure, Trigger i Table mają inną semantykę i mogą mieć inny zestaw
+    // narzędzi; toolbar ma być stabilny i przewidywalny W OBRĘBIE danego typu dokumentu. Jedyny sposób
+    // na pełną zgodność to rezerwacja najgorszego przypadku każdej sekcji — zmierzone ~617 px stałej
+    // rezerwy, czyli ~500 px dziur na uboższych zakładkach, co pod R8 wygląda gorzej niż przesunięcie.
     // Section 3 routes Add/Remove/Move to the active editor's collection via the four
     // commands below; a future Trigger/Function/Package editor plugs a new case into
     // ActiveCollection() and gets the toolbar for free — no new layout pattern.
 
     // Section 1 — a mode toggle exists for Table (Grid-Edit), View + Procedure + Trigger + Function (Easy).
     public bool ShowModeSection => ShowFieldEditTools || IsViewDetailTabActive || IsProcedureDetailTabActive || IsTriggerDetailTabActive || IsFunctionDetailTabActive;
-    // Section 2 — every editor has a primary action (Execute / Compile / Commit).
+    // Section 2 — every editor has a primary action (Execute / Compile). ⚠ Od M3.2a sekcja jest
+    // czysto DOKUMENTOWA: Commit / Rollback z niej wyszły i dokują do prawej krawędzi paska.
     public bool ShowMainSection => SelectedWorkspaceTab is not null;
     // Section 4 — helpers exist for SQL editor, View, Procedure, Trigger, Function, Package.
     // (Dane's refresh + pagination moved into the sub-tab's own grid toolbar, so the Data
