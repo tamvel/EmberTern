@@ -126,8 +126,14 @@ przy wczytywaniu).
    `Radius.Control` **nie istnieje**, a `Margin.MarkGap` tak (drugi konsument był znany od razu).
 4. **Jedna iteracja = jeden commit**, po nim build 0/0, trzy partycje, smoke, uruchomienie aplikacji
    i ocena użytkownika **zanim ruszy następna**.
-5. ⚠ **M2b pracuje wyłącznie w `Themes/`.** `DesignTokenComplianceTests` mierzy `Views/`+`Controls/`
-   i jest w tym etapie **czujnikiem zakresu** — drgnięcie licznika oznacza wejście w M2c.
+5. ⚠ **M2b pracuje w `Themes/` — z JEDNYM wyjątkiem, który sam ma granicę.** Do kroku 7 włącznie
+   etap nie dotknął ani jednego widoku. Runda proporcji (kroki 8–10) dotknęła czterech
+   (`MainWindow` — klasa `toolbar`; `SettingsWindow` i `GlobalSearchDialog` — klasa `search`;
+   `DataImportTabView` — proporcje kolumn) plus jeden konwerter.
+   ⭐ **To NIE jest wejście w M2c i licznik to potwierdza:** M2c usuwa **wartości lokalne**
+   (`FontSize`, `FontFamily`, `CornerRadius`), a te zmiany żadnej nie dodają — dwie *usuwają*
+   (`Padding="10,4"`, `Padding="8,4"` z paska), reszta to nadanie klasy albo układ kolumn.
+   `DesignTokenComplianceTests` przeszedł bez zmiany bazy. **Jeżeli licznik drgnie — to jest M2c.**
 
 ---
 
@@ -183,6 +189,7 @@ na zmienionej podstawie. To jest ta sama zasada, którą §15.6.4a nazwał dla z
 | **`Radius.Control`** | promień 3 na kwadracie 14 px jest proporcjonalnie większy niż u Fluenta | pytanie wraca **po wszystkich kontrolkach bazowych**, nie wcześniej |
 | **nasycenie zaznaczonego wiersza** | zgłoszone przy QA kroku 1 | 📌 **krok DataGrid**, nie wcześniej |
 | **badge DEV MODE** | „po uspokojeniu kontrolek jeszcze bardziej rzuca się w oczy" | 📌 **M3.2 (Toolbar)** |
+| ⭐ **drabina AKCJI 22 / 26 / 28** | jedyna decyzja rundy 8–10, w której **liczby są moje**, a nie wynikają z pomiaru | ⏳ **pierwsza do oceny przy QA** (§15.9.1) |
 | **ocena Application Chrome** | użytkownik sam odmówił zamykania oceny na fragmencie | ⛔ **brama §13.3, po M3** |
 
 **⭐⭐ Wspólny mianownik czterech ostatnich wierszy — zjawisko nazwane w §15.6.4a: uspokojenie
