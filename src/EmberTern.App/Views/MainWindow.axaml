@@ -808,15 +808,11 @@
                       <Style Selector="Border.active-tab">
                         <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
                       </Style>
-                      <!-- Wskaźnik aktywnej zakładki maluje się przez PODMIANĘ TŁA, a nie przez `IsVisible`,
-                           i to jest wymuszone: wysokość rezerwował dotąd sztywny wiersz `2` w siatce, więc
-                           schowanie dziecka nic nie kosztowało. Odkąd wysokość niesie `Height` elementu
-                           (token `Size.TabIndicator`), `IsVisible="False"` zwinęłoby wiersz do zera i zakładka
-                           aktywna byłaby o 2 px wyższa od nieaktywnej — dokładnie to, przed czym broni się
-                           komentarz poniżej. Element jest więc ZAWSZE obecny; zmienia się wyłącznie kolor. -->
-                      <Style Selector="Border.active-tab Border.tab-indicator">
-                        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                      </Style>
+                      <!-- ⛔ Wskaźnik aktywnej zakładki NIE jest stylowany tutaj — oba jego stany
+                           (spoczynkowy i akcent) mieszkają w `ControlStyles.axaml`, razem z powodem.
+                           Krótko: stały tu z lokalnym `Background="Transparent"`, które biło setter stylu,
+                           więc akcent nie malował się nigdy (§19.2). ⛔ Nie przywracać ani stylu, ani —
+                           tym bardziej — atrybutu `Background` na samym wskaźniku. -->
                       <!-- Active tab title: SemiBold + full-contrast (only the selected
                            tab; inactive tabs untouched). Pairs with the 2px accent top
                            line for a clear Rider/DataGrip active-tab read. -->
@@ -833,8 +829,7 @@
                     <Grid RowDefinitions="Auto,*">
                       <Border Grid.Row="0"
                               Classes="tab-indicator"
-                              Height="{DynamicResource Size.TabIndicator}"
-                              Background="Transparent" />
+                              Height="{DynamicResource Size.TabIndicator}" />
                       <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="0">
                       <Button Classes="flat"
                               Padding="8,4"

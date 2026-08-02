@@ -39,7 +39,7 @@
 | **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ (odebrane 2026-08-02) · **M3 — iteracja 0 ✅ + M3.1a ✅** |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24**, temat 20 px wraca po M3 · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7088**, zielony w trzech partycjach (7000 + 54 + 34) |
+| **Suite** | **7090**, zielony w trzech partycjach (**7001 + 35 + 54**) — po M3.1a/§19.2 |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 
@@ -352,9 +352,15 @@ analiza → propozycja (akceptacja) → implementacja → uruchomienie aplikacji
 **Trzy partycje testów** (⚠ `ConnectionExpandBindingProbe` biegnie **sam** — hangs, gdy dołączony):
 
 ```
---filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests"
+--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests"
 ```
 oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
+
+⚠⚠ **Filtr jest listą nazw i dlatego STARZEJE SIĘ CICHO — nowa klasa headless musi do niego trafić.**
+Pominięta, wpada do partycji głównej: nic nie zawiedzie, ale podział przestaje robić to, po co istnieje.
+To ta sama pułapka, co niedziałające wykluczenie `ContextMenuPresentationTests` (§18.1.6) — tam nazwa
+przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały etap.
+**Stan po M3.1a: `TabStripPresentationTests` DOPISANY**; partycje mierzą **7001 + 35 + 54 = 7090**.
 
 ---
 

@@ -809,6 +809,34 @@
     <Setter Property="MinWidth" Value="0" />
   </Style>
 
+  <!-- ⭐ WSKAŹNIK AKTYWNEJ ZAKŁADKI — pasek akcentu nad zakładką wybraną (styl Rider/DataGrip).
+       Dwa stany, OBA jako setter stylu, i to jest cała istota tego bloku.
+
+       ⚠⚠ REGRESJA, KTÓRA TU MIESZKAŁA (M3.1a → naprawione w §19.2). Wskaźnik stał w szablonie zakładki
+       z LOKALNYM `Background="Transparent"`, a akcent próbował nadać mu setter stylu. **Wartość lokalna
+       bije setter stylu**, więc akcent nie malował się NIGDY — aktywna zakładka została wyłącznie
+       z podmianą tła i pogrubieniem etykiety. ⭐ To jest dosłownie teza M2c, popełniona w pierwszej
+       iteracji po jego zamknięciu: dopóki wartość lokalna stoi w widoku, żadna reguła systemu nie działa.
+
+       ⭐ DLATEGO STAN SPOCZYNKOWY TEŻ JEST SETTEREM, a nie wartością w widoku: gdyby „przezroczysty"
+       wrócił do szablonu jako atrybut, defekt odtworzyłby się natychmiast i znowu bezgłośnie. Reguła jest
+       sformułowana pozytywnie (§17.2/3) — wskaźnik ZAWSZE istnieje i ZAWSZE ma tło; zmienia się barwa.
+
+       ⚠ Wskaźnik musi być obecny także wtedy, gdy nie jest aktywny: od M3.1a jego wysokość niesie `Height`
+       elementu (`Size.TabIndicator`), a nie sztywny wiersz siatki, więc `IsVisible="False"` zwinęłoby wiersz
+       i aktywna zakładka byłaby o 2 px wyższa od nieaktywnej.
+
+       ⚠ Blok stoi tutaj, a nie w `Border.Styles` szablonu, bo reguła wewnątrz szablonu w `MainWindow.axaml`
+       jest NIEOSIĄGALNA DLA TESTU (headless test konstruujący `MainWindow` zawiesza suite — #94/#226/#286).
+       Tutaj zapina ją `TabStripPresentationTests` na gołym `Window`. Pozostałe style `active-tab` (podmiana
+       tła kafelka, pogrubienie etykiety) zostają w szablonie do czasu, aż M3.3 skonsoliduje cały pasek. -->
+  <Style Selector="Border.tab-indicator">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.active-tab Border.tab-indicator">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
   <Style Selector="TabControl">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Padding" Value="0" />

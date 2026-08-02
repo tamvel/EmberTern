@@ -26,6 +26,13 @@ internal static class Program
         ("FN_ADD_TAX",               "Icon.Function",  "IconColor_Function",  false, true),
     ];
 
+    /// <summary>
+    /// Przełącznik dowodowy §19.2: czy wskaźnik aktywnej zakładki niesie LOKALNE `Background="Transparent"`.
+    /// Wartość lokalna bije setter stylu, więc przy `true` akcent nie ma szans się namalować.
+    /// </summary>
+    private static bool LocalTransparentOnIndicator =
+        Environment.GetEnvironmentVariable("PROBE_LOCAL_TRANSPARENT") == "1";
+
     public static void Main()
     {
         var app = AppBuilder.Configure<ProbeApp>()
@@ -44,7 +51,7 @@ internal static class Program
                 Application.Current!.Resources["Size.Row.Tab"] = rowHeight;
 
                 var strip = BuildStrip();
-                var file = System.IO.Path.Combine(outDir, $"tabstrip-{variant}-{rowHeight:0}px.png");
+                var file = System.IO.Path.Combine(outDir, $"tabstrip-{variant}-{rowHeight:0}px{(LocalTransparentOnIndicator ? "-LOCAL" : "-FIXED")}.png");
                 Render(strip, file);
                 Console.WriteLine($"{file}");
             }
@@ -128,10 +135,14 @@ internal static class Program
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         grid.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
 
-        var indicator = new Border { Classes = { "tab-indicator" }, Background = Brushes.Transparent };
+        // ⚠⚠ WIERNIE JAK W XAML: wskaźnik NIE dostaje tła bezpośrednio. Klasę `active-tab` niesie RODZIC,
+        //    a akcent maluje styl instancyjny (poniżej). Pierwsza wersja tej sondy wiązała tło wprost dla
+        //    zakładki aktywnej i przez to MIERZYŁA INNY MECHANIZM niż produkt — obraz wychodził poprawny,
+        //    mimo że w aplikacji wskaźnik się nie malował (§19.2, pułapka 12).
+        var indicator = new Border { Classes = { "tab-indicator" } };
+        if (LocalTransparentOnIndicator)
+            indicator.Background = Brushes.Transparent;
         indicator.Bind(Layoutable.HeightProperty, new DynamicResourceExtension("Size.TabIndicator"));
-        if (active)
-            indicator.Bind(Border.BackgroundProperty, new DynamicResourceExtension("AccentBrush"));
 
         Grid.SetRow(indicator, 0);
         Grid.SetRow(row, 1);
@@ -142,6 +153,17 @@ internal static class Program
         tab.Bind(Layoutable.MinHeightProperty, new DynamicResourceExtension("Size.Row.Tab"));
         tab.Bind(Border.BorderBrushProperty, new DynamicResourceExtension("BorderBrush"));
         tab.Bind(Border.BackgroundProperty, new DynamicResourceExtension(active ? "BackgroundBrush" : "PanelBrush"));
+
+        // Styl instancyjny — odpowiednik bloku `Border.Styles` z szablonu zakładki.
+        if (active)
+        {
+            tab.Classes.Add("active-tab");
+            tab.Styles.Add(new Style(x => x.OfType<Border>().Class("active-tab").Descendant().OfType<Border>().Class("tab-indicator"))
+            {
+                Setters = { new Setter(Border.BackgroundProperty, new DynamicResourceExtension("AccentBrush")) },
+            });
+        }
+
         return tab;
     }
 

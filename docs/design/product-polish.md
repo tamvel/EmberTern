@@ -4198,3 +4198,115 @@ tknięto `AccentIconBrush`/`InfoIconBrush` (decyzja **DC** — M4.3/M5) · nie t
 | 6 | smoke + oba motywy | ✅ smoke czysty; oba motywy ocenione na renderach §19.1.5 |
 | 7 | wpis w §19 | ✅ ta sekcja |
 | 8 | commit; push po akceptacji | ✅ / ⏸ |
+
+⚠ **Warunek 6 był spełniony tylko połowicznie i wyszło to dzień później** — patrz §19.2.
+
+---
+
+### §19.2 Poprawka odbiorcza M3.1a — wskaźnik aktywnej zakładki nie malował się wcale (2026-08-02)
+
+> **Zgłoszenie użytkownika:** *„Aktywna zakładka jest teraz znacznie gorzej widoczna niż wcześniej.
+> W poprzedniej wersji niebieski wskaźnik był wyraźniejszy… Nie chcę wracać do wysokości 30 px — 26 px
+> zostaje. Chciałbym natomiast, żebyś poprawił widoczność aktywnej zakładki, a nie jej wysokość."*
+
+#### §19.2.1 Odpowiedź na trzy pytania kontrolne — dwa razy „bez zmian", raz „nie malował się w ogóle"
+
+| Pytanie | Odpowiedź |
+|---|---|
+| Czy grubość i warstwa są te same? | **Tak.** 2 px (`Size.TabIndicator` = dokładnie ta sama liczba, co poprzedni literał), ten sam wiersz 0 tej samej siatki, to samo dziecko malowane nad tłem rodzica. |
+| Czy nie został przykryty albo optycznie zmniejszony? | **Nie został przykryty.** Nie był **malowany w ogóle**. |
+| Czy kolor/kontrast nadal odpowiada Accentowi? | **Tak** — styl wskazuje `AccentBrush`, bez zmian. |
+
+⭐ **Regresja była binarna, nie stopniowa** — akcent albo się maluje, albo nie. Dlatego **nie zwiększono
+ani kontrastu, ani grubości**: po poprawce wskaźnik jest identyczny jak przed M3.1a, a przy wysokości
+26 px zamiast 30 px czyta się nawet odrobinę mocniej (2/26 zamiast 2/30).
+
+#### §19.2.2 ⚠⚠ Przyczyna — DOSŁOWNIE teza M2c, popełniona w pierwszej iteracji po jego zamknięciu
+
+M3.1a przeniosło wysokość wskaźnika ze sztywnego wiersza siatki na `Height` elementu, a że wiersz przestał
+rezerwować miejsce, `IsVisible` trzeba było zastąpić podmianą tła. Powstało to:
+
+```xml
+<Border Classes="tab-indicator" Height="{DynamicResource Size.TabIndicator}"
+        Background="Transparent" />          <!-- ⛔ WARTOŚĆ LOKALNA -->
+```
+```xml
+<Style Selector="Border.active-tab Border.tab-indicator">
+  <Setter Property="Background" Value="{DynamicResource AccentBrush}" />   <!-- nigdy nie wygrał -->
+</Style>
+```
+
+**Wartość lokalna bije setter stylu.** Styl był poprawny przez cały czas i nigdy nie miał szansy zadziałać.
+Aktywna zakładka została z samą podmianą tła kafelka i pogrubieniem etykiety — czyli dokładnie
+*„muszę się chwilę przyglądać"*.
+
+⭐ **To jest teza M2c w jednym zdaniu** (*„dopóki wartość lokalna stoi w widoku, żadna reguła Design
+Systemu nie działa"*), popełniona w **pierwszej iteracji po zamknięciu tamtego etapu**. Zapisane bez
+łagodzenia, bo to najlepszy możliwy dowód, że reguła nie jest historyczna.
+
+#### §19.2.3 ⚠⚠ Dlaczego przeszło przez WSZYSTKIE bramki — sonda mierzyła inny mechanizm niż produkt
+
+Defekt minął: **build 0/0**, **7088 zielonych testów**, **czysty smoke** i — najważniejsze — **render sondy
+wizualnej, na którym wskaźnik był widoczny.** Ostatni punkt jest jedyną prawdziwą lekcją:
+
+```csharp
+// sonda M3.1a — BŁĄD
+var indicator = new Border { Classes = { "tab-indicator" }, Background = Brushes.Transparent };
+if (active)
+    indicator.Bind(Border.BackgroundProperty, new DynamicResourceExtension("AccentBrush"));
+```
+
+Sonda **wiązała tło bezpośrednio**, zamiast oprzeć się na klasie `active-tab` rodzica i stylu — czyli
+**omijała dokładnie tę ścieżkę, którą zmieniała iteracja**. Obraz wychodził poprawny, bo powstawał innym
+mechanizmem niż ten, który działa w aplikacji.
+
+⭐ **To jest pułapka 12 (§17.5/7 — *„test potrafi mierzyć nie ten podmiot"*) w najdroższym możliwym
+wydaniu: narzędzie zbudowane po to, żeby ocenić zmianę, potwierdziło stan, którego nie było.**
+⚠ Sonda została naprawiona: buduje kafelek **wiernie jak XAML** (klasa na rodzicu + styl instancyjny)
+i ma przełącznik `PROBE_LOCAL_TRANSPARENT=1`, który odtwarza defekt — renderowanie obu wariantów obok
+siebie jest tym, co ostatecznie potwierdziło diagnozę.
+
+#### §19.2.4 Poprawka — oba stany jako setter, w miejscu osiągalnym dla testu
+
+Wskaźnik stracił atrybut `Background`, a **oba** jego stany przeniosły się do `ControlStyles.axaml`:
+
+```xml
+<Style Selector="Border.tab-indicator">                      <!-- spoczynek -->
+  <Setter Property="Background" Value="Transparent" />
+</Style>
+<Style Selector="Border.active-tab Border.tab-indicator">    <!-- akcent -->
+  <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+</Style>
+```
+
+⭐ **Stan spoczynkowy też musi być setterem** — gdyby „przezroczysty" wrócił do widoku jako atrybut,
+defekt odtworzyłby się natychmiast i znowu bezgłośnie. Reguła jest sformułowana pozytywnie (§17.2/3):
+wskaźnik **zawsze** istnieje i **zawsze** ma tło; zmienia się wyłącznie barwa.
+
+⚠ **Przeniesienie do `ControlStyles.axaml` jest wymuszone testowalnością, nie porządkiem.** Reguła
+wewnątrz `Border.Styles` w `MainWindow.axaml` jest **nieosiągalna dla jakiegokolwiek testu** — headless
+test konstruujący `MainWindow` zawiesza suite (#94/#226/#286). Pozostałe style `active-tab` (podmiana tła
+kafelka, pogrubienie etykiety) zostają w szablonie do czasu, aż **M3.3** skonsoliduje cały pasek.
+
+#### §19.2.5 ⭐ Dwa testy, bo żaden osobno by tego nie złapał
+
+| Test | Co pilnuje | Gdzie |
+|---|---|---|
+| `TabStripPresentationTests.ActiveTabIndicator_PaintsTheAccent_AndAnInactiveOneDoesNot` | **styl istnieje i się rozwiązuje** — na gołym `Window`, przeciw mechanizmowi klas | partycja headless |
+| `DesignTokenComplianceTests.TabIndicator_CarriesNoLocalBackground` | **widok nie przykrywa stylu** wartością lokalną | partycja główna |
+
+⚠⚠ **Sam pierwszy test NIE złapałby tej regresji** — styl był poprawny; zawiniła wartość lokalna.
+Sam drugi nie wychwyci literówki w kluczu zasobu. **Dwie połówki jednej gwarancji.**
+⭐ Drugi zweryfikowany **podłożeniem naruszenia**: z przywróconym `Background="Transparent"` zawodzi
+z właściwym komunikatem, po cofnięciu przechodzi.
+
+⚠ **`{DynamicResource}` nadal nie rzuca przy literówce** (pułapka 14), dlatego pierwszy test porównuje
+z **katalogiem**, a nie z literałem — i szuka pędzla **z wariantem motywu**, bo `FindResource(key)` bez
+wariantu zwraca `UnsetValue` (gotcha #250; kosztowało jeden przebieg).
+
+#### §19.2.6 Stan
+
+Build **0/0** · suite **7090** w trzech partycjach (**7001 + 35 + 54**, +2 nowe testy) · smoke czysty.
+⚠ Nowa klasa headless **musiała trafić do filtru partycji** — pominięta wpadłaby do partycji głównej
+bez żadnego sygnału błędu (ten sam kształt, co martwe wykluczenie z §18.1.6).
+⛔ Wysokości **nie zmieniono**: `Size.Row.Tab` zostaje **26**, rytm 36 / 26 / 24 bez zmian.

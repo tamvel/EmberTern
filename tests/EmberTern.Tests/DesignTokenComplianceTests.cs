@@ -448,6 +448,44 @@ public class DesignTokenComplianceTests
             "(§4.2.4) — not here.");
     }
 
+    /// <summary>
+    /// ⭐ Wskaźnik aktywnej zakładki nie może nieść LOKALNEGO <c>Background</c>.
+    ///
+    /// <para>⚠⚠ Ten strażnik pilnuje dokładnie tego, co się zepsuło w M3.1a (naprawione w §19.2), i jest
+    /// napisany przeciw PRZYCZYNIE, a nie przeciw objawowi. Styl nadający akcent był przez cały czas
+    /// poprawny; defektem było <c>Background="Transparent"</c> postawione lokalnie na tym samym elemencie —
+    /// a <b>wartość lokalna bije setter stylu</b>, więc akcent nie malował się nigdy.</para>
+    ///
+    /// <para>⭐ Dlatego bliźniaczy test <c>TabStripPresentationTests</c> NIE wystarcza: sprawdza on, że styl
+    /// się rozwiązuje, a styl był w porządku. Dwie połówki jednej gwarancji — styl musi istnieć (tam)
+    /// i widok nie może go przykryć (tutaj). Żadna z nich osobno nie złapałaby tej regresji.</para>
+    ///
+    /// <para>⚠ Objaw był wyłącznie wizualny: zielony build, 7088 zielonych testów i czysty smoke. Zgłosił
+    /// go użytkownik, patrząc na aplikację.</para>
+    /// </summary>
+    [Fact]
+    public void TabIndicator_CarriesNoLocalBackground()
+    {
+        var view = Path.Combine(AppRoot(), "Views", "MainWindow.axaml");
+        Assert.True(File.Exists(view), $"MainWindow.axaml is missing at {view}");
+
+        var text = Regex.Replace(File.ReadAllText(view), "<!--.*?-->", " ", RegexOptions.Singleline);
+
+        // Element otwierający z klasą `tab-indicator` — od `<` do najbliższego `>`.
+        var offenders = Regex.Matches(text, @"<[A-Za-z:]+[^>]*Classes=""tab-indicator""[^>]*>")
+            .Select(m => m.Value)
+            .Where(el => Regex.IsMatch(el, @"\bBackground\s*="))
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "Wskaźnik aktywnej zakładki niesie lokalne `Background`:\n  " +
+            string.Join("\n  ", offenders) +
+            "\n\nOba jego stany — spoczynkowy i akcent — mieszkają w ControlStyles.axaml (`Border.tab-indicator` " +
+            "oraz `Border.active-tab Border.tab-indicator`). Wartość lokalna bije setter stylu, więc atrybut " +
+            "postawiony tutaj sprawia, że akcent nie maluje się NIGDY — bezgłośnie, przy zielonym buildzie. " +
+            "Dokładnie ta regresja zdarzyła się w M3.1a (product-polish.md §19.2).");
+    }
+
     private static IEnumerable<string> ThemeFiles() =>
         Directory.EnumerateFiles(Path.Combine(AppRoot(), "Themes"), "*.axaml").OrderBy(f => f, StringComparer.Ordinal);
 
