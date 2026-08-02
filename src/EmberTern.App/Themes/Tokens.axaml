@@ -104,6 +104,25 @@
        prawej i przestałby być wyśrodkowany w komórce. Ten sam odstęp, inny właściciel, inna rola. -->
   <Thickness x:Key="Margin.MarkGap">8,0,0,0</Thickness>
 
+  <!-- ⭐ DOPISANE W M2b, kroku 7 (DataGrid Standard) — druga i ostatnia rola dopisana w tym etapie,
+       również procedurą z §4.1, i również wykryta POMIAREM, a nie zaplanowana.
+
+       Rola: wnętrze EDYTORA W KOMÓRCE siatki (`TextBox`, `Button` w trybie edycji).
+
+       ⚠⚠ Dlaczego pion MUSI być zerowy — to jest arytmetyka §5.1, nie estetyka. Wiersz 22 minus
+       `Pad.Cell` (3+3) zostawia 16 px. Edytor z `Pad.CellCompact` (`6,2`) prosi o 18 px: tekst 14
+       plus 2+2 pionu. Wiersz rośnie wtedy do 24 **w momencie wejścia w edycję** — czyli dokładnie
+       ten skok układu, którego zabrania §13.3 specyfikacji (Zero Layout Shift). Defekt wszedł
+       w kroku 5.2 i był niewidoczny do chwili, w której test §8.4 policzył obie liczby naraz.
+
+       ⚠ Dlaczego nie `Pad.CellCompact`: tamta rola opisuje wnętrze GĘSTEJ KOMÓRKI (Trace Monitor,
+       Session Manager) — treści czytanej, nie edytowanej — i jej pion 2 px jest tam poprawny, bo to
+       ona jest właścicielem wysokości. W edytorze właścicielem wysokości jest WIERSZ, więc padding
+       pionowy musi zniknąć. Ta sama reguła „jedna wielkość, jeden właściciel", co przy `Pad.Control`
+       w kroku 5.2 — tam wysokość dawał `Size.Control`, tu daje `Size.Row.Grid`.
+       ⚠ Poziom 6, a nie 8: krawędź edytora nie ma dociskać tekstu do krawędzi komórki. -->
+  <Thickness x:Key="Pad.CellEditor">6,0</Thickness>
+
   <!-- ══════════════════════════════════════════════════════════════════════════════════════════
        WYSOKOŚCI KONTROLEK (§5, decyzja D1 — ratyfikowana, nie podlega zmianie w tym etapie).
 

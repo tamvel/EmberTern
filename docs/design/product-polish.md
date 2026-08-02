@@ -1411,10 +1411,12 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | 5.5 | **`NumericUpDown`** — trzy kontrolki zagnieżdżone | `d2a2475` | ⏳ oczekuje | §15.6.7 |
 | 5.6 | **`ToggleButton`** | `ce47aa7` | ⏳ oczekuje | §15.6.8 |
 | 5.7 | **`Expander`** + ⭐ alias zasobu (korekta §16.3) | `69ceff6` | ⏳ oczekuje | §15.6.9 |
-| 6 | **`ScrollBar`** (H‑10) | — | ⏳ oczekuje | §15.7 |
+| 6 | **`ScrollBar`** (H‑10) | `7ab3d27` | ⏳ oczekuje | §15.7 |
+| 7 | **DataGrid Standard** (§8.4) + `Pad.CellEditor` | — | ⏳ oczekuje | §15.8 |
 
 **Krok 5 (kontrolki bazowe) — ZAKOŃCZONY.**
-**Pozostało w M2b:** DataGrid Standard (§8.4 specyfikacji) — ostatni krok etapu.
+✅ **M2b — WSZYSTKIE KROKI DOSTARCZONE.** Pozostało **QA wizualne użytkownika** (kroków 5.4–7)
+i dopiero po nim **M2c** (sweep de‑lokalizacyjny).
 
 ⚠ **Stan bieżący suite: 7075** (7000 + 54 + 21). Każda iteracja dokłada 1–2 testy; licznik
 w `CLAUDE.md` („Tests") jest aktualizowany w tym samym commicie co iteracja.
@@ -2187,6 +2189,67 @@ strzałki nie są widoczne w spoczynku. ⚠ Gdyby po QA okazało się, że mimo 
 odpowiedzią jest **osobna propozycja** (§15.0), a nie doklejenie jej do kroku o kolorach.
 
 Build 0/0; suite **7081** (7000 + 54 + 27); smoke czysty.
+
+### §15.8 Krok 7 — DataGrid Standard (§8.4 specyfikacji) — OSTATNI KROK M2b
+
+**⚠ Ten krok nie jest przebudową, tylko DOMKNIĘCIEM — i to jest jego najważniejsza cecha.**
+Specyfikacja §8.4 wylicza osiem rzeczy, które standard ma definiować. **Sześć było już zrobionych,
+tylko rozproszonych po etapie i wyrażonych LICZBAMI zamiast rolami:**
+
+| §8.4 żąda | Gdzie powstało |
+|---|---|
+| wysokość checkboxów | krok 1 — własny szablon, `Size.Checkbox` |
+| wysokość edytorów | kroki 5.2 i 5.4 — `DataGridCell TextBox` / `Button` |
+| zaznaczenie aktywnego wiersza | istniejące `SelectionBrush` na `Rectangle#BackgroundRectangle` |
+| zachowanie podczas edycji | konsekwencja dwóch powyższych — edytor bierze wysokość WIERSZA |
+| odstępy | `Pad.Cell` — istniał od M2a, tu podpięty |
+| wyrównanie tekstu | `VerticalContentAlignment` — dopisane tutaj |
+| **wysokość wiersza** | **brakowało — `Size.Row.Grid`** |
+| **wysokość nagłówka** | **brakowało — `Size.Row.Header`** |
+
+⚠ Dotąd `DataGridRow` miał `MinHeight="0"`, czyli siatka **nie miała standardu, tylko wynik pomiaru
+zawartości**: identyczne dane dawały identyczne wiersze przypadkiem, a nie z decyzji. `MinHeight` jest
+**podłogą**, nie sztywną wysokością — wyższa zawartość nadal rozpycha wiersz.
+⚠ Nagłówek jest o stopień wyższy od wiersza (24 vs 22) i **to jest cała jego rama**: czyta się jako
+nagłówek bez ramki, kreski i bez innego tła niż chroma.
+
+#### §15.8.1 ⭐⭐ TEST ZNALAZŁ DEFEKT, KTÓRY WSZEDŁ W KROKU 5.2 I BYŁ NIEWIDOCZNY PRZEZ PIĘĆ ITERACJI
+
+Asercja §8.4 („nic w komórce nie może rozepchnąć wiersza") **zaświeciła się na czerwono przy pierwszym
+uruchomieniu**:
+
+> `TextBox (step 5.2) asks for 18 px inside a cell that leaves 16 px`
+
+**Arytmetyka:** wiersz 22 − `Pad.Cell` (3+3) = **16 px**. Edytor z `Pad.CellCompact` (`6,2`) prosi
+o **18** — tekst 14 plus 2+2 pionu. Wiersz rósł więc do 24 **w momencie wejścia w edycję**, czyli
+dokładnie ten skok układu, którego zabrania §13.3 specyfikacji (**Zero Layout Shift**).
+
+⭐ **Dlaczego to przetrwało pięć iteracji: krok 5.2 sprawdzał WŁAŚCIWĄ rzecz, ale tylko jedną jej
+połowę.** Pilnował, żeby edytor nie miał `MinHeight` kontrolki (24) — i tego dopilnował. Nikt nie
+policzył, ile zostaje **po odjęciu paddingu komórki**, bo to wymaga zestawienia **dwóch tokenów
+z dwóch różnych kroków**. Dopiero test, którego przedmiotem jest siatka **jako całość**, ma powód
+je zestawić.
+⚠ **To jest ten sam kształt błędu co w kroku 1** (asercja mierzyła wysokość wiersza zamiast miejsca,
+jakie zostawia komórka) — trzeci raz w tym etapie. Wniosek do zapamiętania: **arytmetyka §5.1 musi być
+sprawdzana na SUMIE, nie na składniku.**
+
+**Poprawka: nowa rola `Pad.CellEditor` = `6,0`** — druga i ostatnia rola dopisana w M2b, również
+procedurą z §4.1 i również wykryta pomiarem, a nie zaplanowana. ⚠ **Nie da się jej złożyć
+z `Pad.CellCompact`**: tamta opisuje wnętrze **gęstej komórki** (Trace Monitor, Session Manager) —
+treści **czytanej**, nie edytowanej — i jej pion 2 px jest tam poprawny, bo to **ona** jest
+właścicielem wysokości. W edytorze właścicielem wysokości jest **wiersz**, więc pion musi zniknąć.
+⭐ To jest dokładnie ta sama reguła „jedna wielkość, jeden właściciel", która w kroku 5.2 kazała dać
+`Pad.Control` zerowy pion — o jeden poziom zagnieżdżenia dalej. Dwaj konsumenci (`TextBox`, `Button`
+w komórce) byli znani w chwili dodania, więc reguła użytkownika o powstawaniu ról jest spełniona.
+
+⚠ **Poziom 6, a nie 8:** krawędź edytora nie ma dociskać tekstu do krawędzi komórki.
+
+⚠ **Linie siatki przez Bridge** (`DataGridGridLinesBrush` → `BorderColor`): Fluent dawał tam
+pół-przezroczystą biel, więc w motywie jasnym linie znikały — **ten sam defekt co uchwyt paska
+przewijania w kroku 6**, znaleziony przy okazji. Nagłówek i wiersz mają settery stylu, więc ich kolory
+**nie** trafiają do Bridge'a (§16.3, wiersz czwarty).
+
+Build 0/0; suite **7082** (7000 + 54 + 28); smoke czysty.
 
 ---
 

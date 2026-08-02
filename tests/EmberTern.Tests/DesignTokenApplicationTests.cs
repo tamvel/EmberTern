@@ -511,6 +511,68 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// Step 7 — the <b>DataGrid Standard</b> (specification §8.4), which demands ONE standard across every grid:
+    /// header height · row height · editor height · checkbox height · text alignment · spacing · selection ·
+    /// edit behaviour.
+    ///
+    /// <para>⭐ The load-bearing assertion is the LAST one, and it is the spec's own sentence turned into
+    /// arithmetic: <i>"no checkbox may force a row to grow"</i> generalises to <b>nothing placed in a cell may
+    /// exceed the room a cell leaves</b>. That is what "behaviour during editing" means in practice — an editor
+    /// taller than the row makes the row jump the moment the user clicks into it (Zero Layout Shift, §13.3).</para>
+    ///
+    /// <para>⚠ It asserts the ROLES agree, not the numbers: the header must stay one step taller than the row,
+    /// and the row must leave room for its own cell content. Both survive a deliberate change of either value.</para>
+    /// </summary>
+    [Fact]
+    public async Task DataGridStandard_HeaderIsTallerThanTheRow_AndNothingInACellCanForceItToGrow()
+    {
+        await _session.Dispatch(() =>
+        {
+            var row = Token<double>("Size.Row.Grid");
+            var header = Token<double>("Size.Row.Header");
+            var cell = Token<Thickness>("Pad.Cell");
+            var room = row - cell.Top - cell.Bottom;
+
+            // A header reads as a header because it is one step taller — not because of a frame or a rule.
+            Assert.True(header > row,
+                $"Size.Row.Header ({header}) must stay taller than Size.Row.Grid ({row}) — that step IS the header's frame.");
+
+            // A row must be able to hold its own text: the grid role's line height has to fit the room left.
+            Assert.True(Token<double>("Text.Grid.LineHeight") <= room,
+                $"Text.Grid.LineHeight must fit the {room} px a cell leaves, or every row silently grows.");
+
+            // ⭐ The spec's rule, as arithmetic. Each of these was fixed in its own iteration; this is the one
+            // place that says they must all keep holding TOGETHER.
+            var editors = new (string What, Control Control)[]
+            {
+                ("CheckBox (step 1)", new CheckBox()),
+                ("TextBox (step 5.2)", new TextBox { Text = "x", Classes = { } }),
+                ("Button (step 5.4)", new Button { Content = "…" }),
+            };
+            var grid = new DataGrid();
+            var window = new Window { Content = new StackPanel { Children = { grid } } };
+            window.Show();
+
+            foreach (var (what, control) in editors)
+            {
+                var cellHost = new DataGridCell { Content = control };
+                var probe = new StackPanel { Children = { cellHost } };
+                var w2 = new Window { Content = probe };
+                w2.Show();
+                Dispatcher.UIThread.RunJobs();
+                control.Measure(new Size(400, 400));
+
+                Assert.True(control.DesiredSize.Height <= room,
+                    $"{what} asks for {control.DesiredSize.Height} px inside a cell that leaves {room} px — " +
+                    "entering edit would move the row (§8.4: a control in a cell must never grow it).");
+                w2.Close();
+            }
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// Reads a token straight from the application's merged resources — the same lookup a style performs. If
     /// the key is missing this fails loudly here, instead of leaving a control on a silent default.
     /// </summary>

@@ -143,7 +143,10 @@
        wiersza siatki, nie kontrolki. -->
   <Style Selector="DataGridCell TextBox">
     <Setter Property="MinHeight" Value="0" />
-    <Setter Property="Padding" Value="{DynamicResource Pad.CellCompact}" />
+    <!-- ⚠ `Pad.CellEditor` (pion ZEROWY), nie `Pad.CellCompact` — poprawka z kroku 7, wykryta
+         pomiarem. Z pionem 2 px edytor prosił o 18 px przy 16 px, jakie zostawia komórka, więc
+         wiersz rósł w momencie wejścia w edycję. Właścicielem wysokości jest tu WIERSZ. -->
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellEditor}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
   </Style>
 
@@ -211,7 +214,7 @@
        w widokach — to nie jest przypadek teoretyczny. -->
   <Style Selector="DataGridCell Button">
     <Setter Property="MinHeight" Value="0" />
-    <Setter Property="Padding" Value="{DynamicResource Pad.CellCompact}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellEditor}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
   </Style>
 
@@ -695,15 +698,42 @@
     <Setter Property="Fill" Value="{DynamicResource HoverOverlayBrush}" />
   </Style>
 
-  <!-- Compact rows: smaller font, tighter cell padding for dense result sets. -->
+  <!-- ================================================================================================
+       ⭐ DATAGRID STANDARD — §8.4 specyfikacji, Product Polish M2b krok 7 (ostatni krok etapu).
+
+       Specyfikacja żąda JEDNEGO standardu dla wszystkich siatek i wylicza, co ma definiować:
+       wysokość nagłówków · wysokość wierszy · wysokość edytorów · wysokość checkboxów ·
+       wyrównanie tekstu · odstępy · zaznaczenie aktywnego wiersza · zachowanie podczas edycji.
+
+       ⚠ TEN KROK NIE JEST PRZEBUDOWĄ — jest DOMKNIĘCIEM. Sześć z ośmiu punktów było już zrobionych,
+       tylko rozproszonych po etapie i wyrażonych LICZBAMI zamiast rolami:
+         · wysokość checkboxów  → krok 1 (własny szablon, `Size.Checkbox`)
+         · wysokość edytorów    → kroki 5.2 i 5.4 (`DataGridCell TextBox` / `Button`)
+         · zaznaczenie wiersza  → istniejące `SelectionBrush` na `Rectangle#BackgroundRectangle`
+         · zachowanie w edycji  → konsekwencja dwóch powyższych: edytor bierze wysokość WIERSZA,
+                                   więc wejście w edycję nie rusza układu (Zero Layout Shift)
+       Brakowało dwóch: **zadeklarowanej wysokości wiersza i nagłówka**. Reszta to zamiana liczb
+       (11 · `8,3` · `8,4` · `SemiBold`) na role, które i tak niosły dokładnie te wartości.
+
+       ⚠ `MinHeight` wiersza to PODŁOGA, nie sztywna wysokość — wyższa zawartość nadal rozpycha
+       wiersz. Dotąd stało tu `0`, czyli „siatka nie ma standardu, ma wynik pomiaru zawartości":
+       identyczne dane dawały identyczne wiersze przypadkiem, a nie z decyzji.
+       ================================================================================================ -->
   <Style Selector="DataGridCell">
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Grid.Weight}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Cell}" />
+    <!-- ⚠ Komórka nie ma własnej wysokości — daje ją WIERSZ. Dwa źródła wysokości w jednym miejscu
+         zawsze wygrywa większe, więc jedno z nich musi być zerowe (ta sama reguła co `Pad.Control`
+         z zerowym pionem w kroku 5.2). -->
     <Setter Property="MinHeight" Value="0" />
+    <!-- „Wyrównanie tekstu" z §8.4: przy podłodze wiersza wyższej niż zawartość tekst bez
+         wyśrodkowania osiadłby przy górnej krawędzi komórki. -->
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
   <Style Selector="DataGridRow">
-    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Grid}" />
   </Style>
 
   <!-- Zebra stripes: tint every other row. Avalonia 12's DataGrid doesn't expose
@@ -728,12 +758,17 @@
   <!-- Column headers consistent with the rest of the UI: elevated panel background,
        subtle border, themed foreground. Default FluentTheme picks SystemAccent for
        hover/press which clashes with the dark blue accent. -->
+  <!-- ⚠ Nagłówek jest o stopień WYŻSZY od wiersza (`Size.Row.Header` 24 vs `Size.Row.Grid` 22) i to
+       jest cała jego rama: czyta się jako nagłówek bez potrzeby ramki, kreski ani innego tła
+       niż chroma. Dwie role wysokości, jedna decyzja (§5). -->
   <Style Selector="DataGridColumnHeader">
     <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Header}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.GridHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.GridHeader.Weight}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Cell}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="SeparatorBrush" Value="{DynamicResource BorderBrush}" />
   </Style>
 

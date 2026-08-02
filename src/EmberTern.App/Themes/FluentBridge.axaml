@@ -217,6 +217,13 @@
       <SolidColorBrush x:Key="ScrollBarButtonArrowForeground" Color="{StaticResource SubtleForegroundColor}" />
       <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPressed" Color="{StaticResource ForegroundColor}" />
+
+      <!-- ── DataGrid (§8.4 specyfikacji, Product Polish M2b krok 7) ─────────────────────────────
+           ⚠ Tylko siatka linii. Nagłówek i wiersz mają już settery stylu, więc wpis powielałby
+           wartość, którą już kontrolujemy (§16.3, wiersz czwarty).
+           Fluent daje tu pół-przezroczystą biel — w motywie jasnym linie siatki na białym tle
+           znikają, dokładnie ten sam defekt co uchwyt paska przewijania w kroku 6. -->
+      <SolidColorBrush x:Key="DataGridGridLinesBrush" Color="{StaticResource BorderColor}" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -374,6 +381,13 @@
       <SolidColorBrush x:Key="ScrollBarButtonArrowForeground" Color="{StaticResource SubtleForegroundColor}" />
       <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPressed" Color="{StaticResource ForegroundColor}" />
+
+      <!-- ── DataGrid (§8.4 specyfikacji, Product Polish M2b krok 7) ─────────────────────────────
+           ⚠ Tylko siatka linii. Nagłówek i wiersz mają już settery stylu, więc wpis powielałby
+           wartość, którą już kontrolujemy (§16.3, wiersz czwarty).
+           Fluent daje tu pół-przezroczystą biel — w motywie jasnym linie siatki na białym tle
+           znikają, dokładnie ten sam defekt co uchwyt paska przewijania w kroku 6. -->
+      <SolidColorBrush x:Key="DataGridGridLinesBrush" Color="{StaticResource BorderColor}" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>
