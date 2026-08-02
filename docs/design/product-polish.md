@@ -1416,7 +1416,8 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | 8 | ⭐ **dwie drabiny wysokości** + pasek jednej wysokości | — | ⏳ oczekuje | §15.9.1 |
 | 9 | **Ustawienia jako panel referencyjny** | — | ⏳ oczekuje | §15.9.2 |
 | 10 | **Data Import** — proporcje kolumn | `e0a59fd` | ⏳ oczekuje | §15.9.3 |
-| 11 | ⭐⭐ **kolor niesie priorytet, rozmiar nie** + pasma chromy + bliskość podpisu | — | ⏳ oczekuje | §15.10 |
+| 11 | ⭐⭐ **kolor niesie priorytet, rozmiar nie** + pasma chromy + bliskość podpisu | `1c7ccc1` | ⏳ oczekuje | §15.10 |
+| 12 | **domknięcie pod nowym kryterium** — belka statusu · podłoga szerokości akcji · filtry · picker · korekta licznika | — | ⏳ oczekuje | §15.11 |
 
 **Krok 5 (kontrolki bazowe) — ZAKOŃCZONY.**
 ✅ **M2b — WSZYSTKIE KROKI DOSTARCZONE.** Pozostało **QA wizualne użytkownika** (kroków 5.4–7)
@@ -2441,6 +2442,73 @@ znak). Pasek statusu naprawiony **regułą z §15.10.2**, nie lokalnie: to pasmo
 przycisk *Clear* bierze wysokość chromy zamiast wysokości stopki dialogu.
 
 Build 0/0; suite **7085** (7000 + 54 + 31); smoke czysty.
+
+### §15.11 Krok 12 — domknięcie M2b pod NOWYM kryterium odbioru
+
+> **⭐⭐ RATYFIKOWANA ZMIANA KRYTERIUM (użytkownik, 2026-08-02) — obowiązuje do końca etapu:**
+> *„Pomiar nadal jest obowiązkowy. Ale nie jest już celem. Jest tylko narzędziem. Końcówkę M2b
+> chciałbym oceniać przede wszystkim pytaniem: czy wygląda to jak dopracowana aplikacja komercyjna?
+> Jeżeli liczby są poprawne, ale coś nadal wygląda przeciętnie albo niespójnie, to znaczy, że trzeba
+> poprawić produkt, a nie udowadniać pomiarem, że jest dobrze."*
+>
+> ⚠ To jest **wzmocnienie §0.1.1** („tokeny są środkiem, nie celem"), a nie nowa zasada — ale
+> wzmocnienie istotne: ⛔ **zielony test przestaje być argumentem końcowym.** Pomiar zostaje
+> obowiązkowy jako narzędzie diagnozy; przestaje być dowodem jakości.
+
+#### §15.11.1 Belka statusu — kontener wyrównywał PUDEŁKA, a użytkownik czyta TREŚĆ
+
+Zgłoszenie: *„elementy nie wyglądają jak jedna linia, każdy żyje własnym życiem"*.
+**Zmierzone:** pasmo `chrome` deklarowało od kroku 11 wysokość **przycisków**, ale **nic nie deklarowało
+dla tekstu**. Część `TextBlock`ów miała `VerticalAlignment="Center"`, część nic (czyli `Stretch`, przy
+którym tekst osiada u GÓRY), a przycisk niósł jeszcze własny padding i `FontSize="11"` przy tekście 12
+— **trzy linie bazowe i dwa rozmiary w jednym pasku**.
+⭐ **Reguła, której brakowało: kontener deklarujący wysokość dzieci musi deklarować też ich LINIĘ.**
+Inaczej wyrównuje pudełka, a użytkownik widzi treść.
+⚠ Wartości lokalne w widoku zostały **usunięte, a nie poprawione** — dopóki tam stały, żadna reguła
+systemu nie mogła tej belki naprawić (wartość lokalna bije setter stylu). Belka bierze teraz
+`Size.StatusBar` i rolę `Text.Status`.
+
+#### §15.11.2 Stopka dialogu — sama równa wysokość nie wystarczyła
+
+Krok 11 wyrównał wysokości i pary **nadal nie czytały się jako jeden komponent**, bo szerokość brał
+**tekst**: krótka etykieta dawała mały przycisk, długa duży. ⭐ Czyli **rozmiar znów niósł informację,
+której nieść nie ma** — ta sama diagnoza co w §15.10.1, tylko na drugiej osi.
+**Nowa rola `Size.ActionMinWidth` (80) — PODŁOGA, nie szerokość sztywna**: dłuższa etykieta nadal
+rozpycha przycisk, krótsza już go nie kurczy. To konwencja stopki dialogu w Windows i macOS.
+⚠ Z podłogi **wychodzą** dokładnie te konteksty, które wychodzą też z wysokości: pasmo chromy,
+przycisk ikonowy, komórka siatki — inaczej każda ikona w toolbarze niosłaby 80 px powietrza.
+
+#### §15.11.3 Filtr na zakładce Columns — reguła była dobra, brakowało instancji
+
+*„Poprawiłeś pole na zakładce Domain, ale identyczne pole na zakładce Columns zostało po staremu"* —
+krok 11 nadał klasę `search` filtrowi w `SearchableComboBox`, a `TableColumnPicker` ma **własne dwa**
+(`_tableFilter`, `_columnFilter`). ⚠ **Drugi raz w tym etapie ta sama klasa błędu**: reguła poprawna,
+zastosowana w jednym miejscu z kilku (pierwszy raz — pasma chromy, §15.10.2). To jest cena reguł
+opartych na tagowaniu i trzeba ją znać.
+
+#### §15.11.4 ⛔ Domain Picker — RATYFIKOWANE: nie ujednolicać szerokości
+
+> **Użytkownik:** *„To nie jest zwykły ComboBox. Ma dwa przyciski: Clear i DropDown. Dlatego naturalne
+> jest, że oba są węższe niż pojedynczy przycisk zwykłego ComboBoxa. Dla mnie to jest poprawne."*
+
+⭐ **To jest ważne rozstrzygnięcie o granicy spójności**: system ma ujednolicać to, co decyduje
+o przynależności — **wysokość, ikony, padding** — a nie każdy wymiar. Ujednolicona została geometria
+przycisków (20×20, oba tak samo) i rozmiar ikon (`Size.Icon.Sm`); **szerokość zostaje wolna**.
+⛔ Nie „naprawiać" tego w przyszłości.
+
+#### §15.11.5 ⭐⭐ Strażnik liczył stan DOCELOWY jako dług — korekta znaczenia licznika
+
+Przy tym kroku `DesignTokenComplianceTests` zaświecił się na czerwono i **pokazał defekt w sobie**:
+regex liczył **każde** przypisanie `FontSize=`, więc `FontSize="{DynamicResource Text.Status.Size}"` —
+czyli dokładnie stan, do którego M2c ma doprowadzić — liczyło się **tak samo jak literał, który
+zastąpiło**.
+⛔ **Warunek wyjścia M2c był przez to nieosiągalny: w pełni zmigrowany widok raportowałby tę samą
+liczbę co nietknięty.** Po korekcie (negatywne wyprzedzenie na `"{`) licznik mierzy to, co mówi jego
+nazwa — **wartości lokalne**.
+⚠ **Bazy nie są porównywalne z tymi z M2a** i jest to zapisane w samym teście. Pierwszy wiersz, który
+spadł z powodu migracji, a nie pomiaru: `DataImportTabView` **86 → 82**.
+
+Build 0/0; suite **7086** (7000 + 54 + 32); smoke czysty.
 
 ---
 

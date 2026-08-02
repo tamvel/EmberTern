@@ -1149,24 +1149,32 @@
     </Border>
 
     <!-- ══ Band H — where the rows land, then the numbers. Never adjectives (§9.1 point 4) ══════ -->
+    <!-- ⚠⚠ TA BELKA MA CZYTAĆ SIĘ JAKO JEDNA LINIA, a nie jako pięć elementów obok siebie
+         (zgłoszenie QA, krok 12). Wcześniej każdy element decydował sam: część miała `FontSize="12"`,
+         część `VerticalAlignment="Center"`, a przycisk jeszcze własny padding i `FontSize="11"` —
+         czyli trzy różne linie bazowe i trzy rozmiary tekstu w jednym pasku.
+         ⭐ Wszystkie te wartości są USUNIĘTE, a nie poprawione: pasmo `chrome` deklaruje teraz
+         wyrównanie swoich dzieci, a rola `Text.Status` — ich rozmiar. Wartość lokalna bije setter
+         stylu, więc dopóki tu stały, żadna reguła systemu nie mogła tej belki naprawić. -->
     <Border Grid.Row="8" Classes="chrome" Background="{DynamicResource ChromeStrongBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12,4">
-      <StackPanel Orientation="Horizontal" Spacing="10">
-        <TextBlock Text="{Binding DestinationStatus}" FontSize="12"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12,0"
+            MinHeight="{DynamicResource Size.StatusBar}">
+      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <TextBlock Text="{Binding DestinationStatus}" FontSize="{DynamicResource Text.Status.Size}"
                    Foreground="{DynamicResource SubtleForegroundBrush}" />
-        <TextBlock Text="│" FontSize="12" Foreground="{DynamicResource BorderBrush}" />
-        <TextBlock Text="{Binding SurfaceStatus}" FontSize="12"
+        <TextBlock Text="│" FontSize="{DynamicResource Text.Status.Size}" Foreground="{DynamicResource BorderBrush}" />
+        <TextBlock Text="{Binding SurfaceStatus}" FontSize="{DynamicResource Text.Status.Size}"
                    Foreground="{DynamicResource SubtleForegroundBrush}" />
 
         <!-- The quiet restore note (§4.8.4): an automatic restore the user cannot see is a configuration
              they did not choose, so it says so — and offers to forget it in one click. -->
-        <TextBlock Text="│" FontSize="12" Foreground="{DynamicResource BorderBrush}"
+        <TextBlock Text="│" FontSize="{DynamicResource Text.Status.Size}" Foreground="{DynamicResource BorderBrush}"
                    IsVisible="{Binding RestoredLastConfiguration}" />
-        <TextBlock Text="{x:Static app:UiStrings.ImportRestoredLastConfiguration}" FontSize="12"
-                   FontStyle="Italic" VerticalAlignment="Center"
+        <TextBlock Text="{x:Static app:UiStrings.ImportRestoredLastConfiguration}"
+                   FontSize="{DynamicResource Text.Status.Size}" FontStyle="Italic"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    IsVisible="{Binding RestoredLastConfiguration}" />
-        <Button Classes="flat" Padding="4,0" FontSize="11" VerticalAlignment="Center"
+        <Button Classes="flat"
                 Content="{x:Static app:UiStrings.ImportForgetLastConfiguration}"
                 IsVisible="{Binding RestoredLastConfiguration}"
                 Command="{Binding ForgetLastConfigurationCommand}" />

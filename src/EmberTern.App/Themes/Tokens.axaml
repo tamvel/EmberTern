@@ -191,6 +191,15 @@
        niezależnie tę samą potrzebę: „lekkie zwiększenie wysokości". Dwie kontrolki, jedna liczba. -->
   <x:Double x:Key="Size.ControlProminent">28</x:Double>
 
+  <!-- ⭐ DOPISANE W M2b, kroku 12 — PODŁOGA SZEROKOŚCI AKCJI (stopka dialogu, formularz).
+       Rola: minimalna szerokość przycisku stojącego w PARZE albo w SERII z innymi.
+       ⚠ Sama równa wysokość nie wystarczyła — dopóki szerokość brał tekst, `Save` obok `Cancel`
+       nie czytało się jak jeden komponent. To jest ta sama zasada co przy wysokości (§15.10.1):
+       rozmiar nie ma nieść informacji, którą niesie kolor.
+       ⚠ PODŁOGA, nie szerokość sztywna: „Test connection" nadal rozpycha się do swojej treści.
+       ⛔ Chroma, przycisk ikonowy i komórka siatki jej NIE biorą — tam szerokość wyznacza treść. -->
+  <x:Double x:Key="Size.ActionMinWidth">80</x:Double>
+
   <!-- Wiersz siatki danych i edytor w komórce. -->
   <x:Double x:Key="Size.Row.Grid">22</x:Double>
   <!-- Nagłówek kolumny — o stopień wyższy niż wiersz, żeby czytał się jako nagłówek bez ramki. -->

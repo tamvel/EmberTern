@@ -710,6 +710,57 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// Step 12 — the two halves of "these look like ONE component", both reported by eye and both fixed as
+    /// rules rather than per screen.
+    ///
+    /// <para>⭐ A dialog footer needs a WIDTH floor, not only a shared height. Step 11 equalised the heights and
+    /// the pairs still did not read as one component, because width was being set by the LABEL — a short
+    /// caption gave a small button and a long one a big button, so size carried information again. The floor is
+    /// a floor, not a fixed width: a long label still expands.</para>
+    ///
+    /// <para>⭐ A chrome strip declares the vertical alignment of its content. It already declared its children's
+    /// height; without the line, it aligned boxes while the user reads text — which is exactly how the Data
+    /// Import status bar ended up with three different baselines.</para>
+    /// </summary>
+    [Fact]
+    public async Task DialogActionsShareAWidthFloor_AndAChromeStripAlignsItsContentOnOneLine()
+    {
+        await _session.Dispatch(() =>
+        {
+            var save = new Button { Content = "Save", Classes = { "primary" } };
+            var cancel = new Button { Content = "Cancel", Classes = { "flat" } };
+
+            var label = new TextBlock { Text = "Szkoleniowa · Data lane" };
+            var stripButton = new Button { Content = "Clear", Classes = { "flat" } };
+            var strip = new Border
+            {
+                Classes = { "chrome" },
+                Child = new StackPanel { Children = { label, stripButton } },
+            };
+
+            var window = new Window { Content = new StackPanel { Children = { save, cancel, strip } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // ⭐ The pair reads as one component: same height AND the same width floor, so the shorter label
+            // cannot shrink its button below its neighbour.
+            var floor = Token<double>("Size.ActionMinWidth");
+            Assert.Equal(floor, save.MinWidth);
+            Assert.Equal(floor, cancel.MinWidth);
+            Assert.Equal(save.MinHeight, cancel.MinHeight);
+
+            // ⚠ …and a chrome strip opts OUT of that floor, or every toolbar icon would carry 80 px of air.
+            Assert.Equal(0d, stripButton.MinWidth);
+            Assert.Equal(Token<double>("Size.ControlToolbar"), stripButton.MinHeight);
+
+            // The strip puts its text on the strip's line rather than letting each child choose.
+            Assert.Equal(VerticalAlignment.Center, label.VerticalAlignment);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// Reads a token straight from the application's merged resources — the same lookup a style performs. If
     /// the key is missing this fails loudly here, instead of leaving a control on a silent default.
     /// </summary>

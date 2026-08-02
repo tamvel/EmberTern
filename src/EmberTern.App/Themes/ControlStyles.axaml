@@ -259,6 +259,13 @@
          polem formularza: pole stoi w SERII i ma się wyrównywać, przycisk stoi SAMOTNIE i jest CELEM
          myszy. Wysokość pola (24) czytała się na stopce dialogu jako „za mały przycisk". -->
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <!-- ⭐⭐ PODŁOGA SZEROKOŚCI — druga połowa reguły „stopka dialogu to jeden komponent" (krok 12).
+         Sama równa wysokość nie wystarczyła: `Save` obok `Cancel` i `Execute` obok `Cancel` nadal nie
+         czytały się jak para, bo szerokość brał TEKST. Krótka etykieta dawała mały przycisk, długa
+         duży — czyli rozmiar znów niósł informację, której nieść nie ma (§15.10.1).
+         ⚠ Podłoga, nie szerokość sztywna: dłuższa etykieta nadal rozpycha przycisk, ale krótsza już
+         go nie kurczy. To jest konwencja stopki dialogu w Windows i macOS, nie nasz wynalazek. -->
+    <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
     <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
@@ -275,6 +282,7 @@
        w widokach — to nie jest przypadek teoretyczny. -->
   <Style Selector="DataGridCell Button">
     <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
     <Setter Property="Padding" Value="{DynamicResource Pad.CellEditor}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
   </Style>
@@ -491,8 +499,10 @@
        przycisk w stanie spoczynku — i dlatego ma własną, mocniejszą podświetlaną „pastylkę". -->
   <Style Selector="Button.icon">
     <!-- ⚠ Przycisk ikonowy jest z natury CHROMĄ (pasek narzędzi, akcja w wierszu listy), więc bierze
-         wysokość chromy, a nie stopki dialogu — niezależnie od tego, gdzie akurat stoi. -->
+         wysokość chromy, a nie stopki dialogu — niezależnie od tego, gdzie akurat stoi. Z tego samego
+         powodu nie ma podłogi szerokości: jego szerokość wyznacza ikona. -->
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <Setter Property="MinWidth" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
@@ -523,6 +533,7 @@
        app's selection / accent visuals. -->
   <Style Selector="ToggleButton.icon">
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <Setter Property="MinWidth" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
@@ -695,8 +706,28 @@
        ⚠ Hierarchię niesie nadal KOLOR (akcent `.primary`) i ikona — traci tylko wysokość, czyli
        jedyny nośnik, który psuł sąsiadów.
        ================================================================================================ -->
+  <!-- ⭐⭐ PASMO CHROMY JEST JEDNĄ LINIĄ — i to jest reguła, nie opis (krok 12, zgłoszenie QA:
+       „elementy nie wyglądają jak jedna linia, każdy żyje własnym życiem").
+
+       ⚠ Przyczyna była systemowa: pasmo deklarowało wysokość PRZYCISKÓW (krok 11), ale nic nie
+       deklarowało dla TEKSTU. Każdy `TextBlock` sam decydował o wyrównaniu pionowym — część miała
+       `VerticalAlignment="Center"`, część nic (czyli `Stretch`, przy którym tekst osiada u GÓRY) —
+       więc etykiety, separatory i przycisk stały na trzech różnych liniach bazowych.
+       ⭐ Kontener, który deklaruje wysokość dzieci, musi też deklarować ich LINIĘ. Inaczej wyrównuje
+       pudełka, a nie treść — a użytkownik widzi treść. -->
+  <Style Selector="Border.chrome TextBlock">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.chrome :is(TextBlock)">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="Border.chrome Button">
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <!-- ⚠ Pasmo chromy wychodzi też z podłogi SZEROKOŚCI: przycisk paska jest tak szeroki, jak jego
+         treść. Podłoga istnieje dla stopki dialogu, gdzie przyciski stoją w parze i mają się
+         wyrównać — w pasku narzędzi wymusiłaby puste 80 px wokół każdej ikony. -->
+    <Setter Property="MinWidth" Value="0" />
   </Style>
   <Style Selector="Border.chrome ToggleButton">
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />

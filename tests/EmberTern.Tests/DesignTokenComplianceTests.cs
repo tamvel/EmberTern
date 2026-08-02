@@ -47,8 +47,15 @@ public class DesignTokenComplianceTests
     // `label.FontSize = 12`) or a style setter (`<Setter Property="FontSize" …>`). `(?!=)` keeps a C# equality
     // comparison out, and matching on `=` rather than the bare word keeps `new FontFamily("…")` from counting
     // twice for one declaration.
+    // ⭐⭐ A VALUE READ FROM THE CATALOG IS NOT COUNTED, and that correction (M2b step 12) is what makes
+    // this number mean something. `FontSize="{DynamicResource Text.Status.Size}"` is precisely the state
+    // M2c is supposed to arrive at — counting it identically to the `FontSize="12"` it replaced made the
+    // stage's exit condition unreachable: a fully migrated view would report the same total as an
+    // untouched one. The negative lookahead excludes a resource reference, so what is left is what the
+    // name says: LOCAL VALUES. ⚠ The baselines below were re-measured against this rule, so they are NOT
+    // comparable with the ones from M2a — that drop is migration already done, not unrecorded progress.
     private static Regex DeclarationOf(string property) =>
-        new($@"\b{property}\s*=(?!=)|Property\s*=\s*""{property}""", RegexOptions.Compiled);
+        new($@"\b{property}\s*=(?!=)(?!\s*""{{)|Property\s*=\s*""{property}""", RegexOptions.Compiled);
 
     /// <summary>
     /// State measured on 2026-08-01, at the start of M2a — before any migration. A long list here is the
@@ -58,7 +65,11 @@ public class DesignTokenComplianceTests
     /// </summary>
     private static readonly Dictionary<string, int> FontSizeBaseline = new(StringComparer.Ordinal)
     {
-        ["Views/DataImportTabView.axaml"] = 86,
+        // ⭐ 82, nie 86 — pięć wartości lokalnych w dolnym pasku statusu zostało zamienionych na odwołania
+        // do katalogu (`Text.Status`), a jedna usunięta razem z lokalnym `FontSize` przycisku (M2b krok 12).
+        // To jest pierwszy wiersz tej listy, który SPADŁ z powodu migracji, a nie pomiaru — czyli dokładnie
+        // to, co M2c ma robić z całą resztą.
+        ["Views/DataImportTabView.axaml"] = 82,
         ["Views/DebuggerTabView.axaml"] = 85,
         ["Views/PerformancePanelView.axaml"] = 42,
         ["Views/FunctionDetailTabView.axaml"] = 41,

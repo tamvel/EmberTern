@@ -56,9 +56,15 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
 
     public TableColumnPicker()
     {
+        // ⚠ TA SAMA REGUŁA CO W `SearchableComboBox` — filtr JEST polem wyszukiwania. Krok 11 nadał
+        // klasę tylko zakładce Domain i użytkownik natychmiast znalazł pominiętą zakładkę Column:
+        // reguła była poprawna, brakowało JEDNEJ instancji. Oba filtry tej kontrolki biorą ją teraz
+        // w jednym miejscu, więc nie da się już rozjechać ich pojedynczo.
         _tableFilter = new TextBox { PlaceholderText = "Filter tables…", Margin = new Thickness(4) };
+        _tableFilter.Classes.Add("search");
         _tableList = new ListBox { MaxHeight = 320 };
         _columnFilter = new TextBox { PlaceholderText = "Filter columns…", Margin = new Thickness(4) };
+        _columnFilter.Classes.Add("search");
         _columnList = new ListBox { MaxHeight = 320, ItemTemplate = ColumnRowTemplate() };
 
         _tableFilter.AddHandler(TextBox.TextChangedEvent, (_, _) => RefreshTables());
