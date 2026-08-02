@@ -425,8 +425,30 @@ noted.
 ## Current state
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M0 + M1 + M2a user-accepted;
-  ⭐ M2b — 19 ITERATIONS DELIVERED (2026-08-02), including **two post-QA rounds (steps 8–10, 11)**;
-  steps 0–5.3 user-QA'd, **5.4–11 await visual QA**. Next after that QA: **M2c**.**
+  ⭐ M2b — 20 ITERATIONS DELIVERED (2026-08-02), including **three post-QA rounds (8–10, 11, 12)**;
+  steps 0–5.3 user-QA'd, **5.4–12 await visual QA**. Next after that QA: **M2c**.**
+  **⭐⭐ THE ACCEPTANCE CRITERION CHANGED FOR THE REST OF THE STAGE (user, 2026-08-02, §15.11):**
+  *Measurement is still mandatory, but it is no longer the goal — it is only a tool. Judge the end of M2b
+  by whether it looks like a polished commercial application; if the numbers are right and something still
+  looks mediocre, fix the product rather than proving with a measurement that it is fine.*
+  ⛔ **A green test stops being a closing argument.** This strengthens §0.1.1 rather than replacing it.
+  **⭐⭐ AND THE GUARD ITSELF WAS COUNTING THE TARGET STATE AS DEBT (§15.11.5).** `DesignTokenComplianceTests`
+  went red and revealed a defect *in itself*: it counted every `FontSize=` assignment, so a value read from
+  the catalog — exactly what M2c is supposed to produce — scored identically to the literal it replaced.
+  ⛔ **M2c's exit condition was therefore unreachable: a fully migrated view would report the same total as
+  an untouched one.** The counter now excludes resource references, so it measures what its name says —
+  **local values**. ⚠ Baselines are **not** comparable with M2a's; that is recorded in the test itself.
+  **⚠ Two rules gained their missing half in step 12, on one diagnosis — *size was still carrying information
+  that colour carries*:** (a) a chrome strip declared its children's **height** but not their **line**, so the
+  Data Import status bar had three baselines — *a container that declares height must declare alignment, or it
+  aligns boxes while the user reads text*; (b) equal height was not enough for a dialog footer, because width
+  came from the **label** — hence `Size.ActionMinWidth`, a **floor** (a long label still expands) that chrome,
+  icon buttons and grid cells opt out of, exactly as they do for height.
+  ⚠ **The tag-based rules have now cost an instance twice** (chrome strips in step 11, the second picker's
+  filters in step 12): the rule was right and applied in one place out of several. Know this before adding a third.
+  ⛔ **RATIFIED — do NOT unify the Domain Picker's widths** (§15.11.4): it has *two* buttons where a `ComboBox`
+  has one, so narrower is correct. The system unifies what decides belonging — **height, icons, padding** —
+  not every dimension.
   **⛔⛔ RATIFIED AND IT OUTRANKS EVERY CATALOG NUMBER (user, 2026-08-02, §15.10.1): COLOUR MAY EXPRESS
   AN ACTION'S PRIORITY, SIZE MAY NOT.** This *reverses* step 8, which had given `Button.primary` its own
   height — and that one setter was behind "Execute is bigger than Cancel" in **every** dialog: 38 buttons
@@ -3370,15 +3392,15 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7085 as of 2026-08-02
-  (after Product Polish M2b step 11 — the second QA round, +1; 7084 after steps 8–10, +2; 7082 after step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7086 as of 2026-08-02
+  (after Product Polish M2b step 12 — the third QA round, +1; 7085 after step 11, +1; 7084 after steps 8–10, +2; 7082 after step 7 — DataGrid Standard, +1; 7081 after step 6 — ScrollBar, +1; 7080 after
   step 5.7 — Expander + the alias guard, +2; 7078 after step 5.6 — ToggleButton, +1; 7077 after step 5.5 —
   NumericUpDown, +1; 7076 after step 5.4 — Button, +1; 7075 after step 5.3 — ComboBox, +1; 7074 after step 5.2 — TextBox + FluentBridge, +2; 7072 after step 5.1 — RadioButton, +1; 7071 after step 4 — ToolTip, +1; 7070 after step 2 — RB‑4, +1; 7069 after step 1 — RB‑2, +1; 7068 after M2b step 0, +2 — `DesignTokenApplicationTests`, headless, proves a token REACHES a control; 7066 after M2a, +9 — `DesignTokenComplianceTests`, a plain text-reading test in the MAIN
   partition, no headless session; 7057 after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
   segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
   etap 5a, 6784 after
   etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**7000 + 54 + 31**).
+  three documented partitions (**7000 + 54 + 32**).
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
