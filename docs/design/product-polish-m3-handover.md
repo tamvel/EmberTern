@@ -35,13 +35,14 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | `8567ebc` — oba remote'y na tym samym |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a ✅ · M3.1b ✅** (obie odebrane przez użytkownika) |
+| **Ostatni commit** | **M3.1d** — ⚠ **oba remote'y są ZA NAM**: ostatni wypchnięty na **oba** to `8567ebc` (koniec M2c, zweryfikowane `git log origin/… private/…`). **Sześć** commitów M3 (`5d9395f` iter. 0 · `7dde82a` M3.1a · `75a235c` poprawka M3.1a · `7e7b5cf` M3.1b · `5be9a32` M3.1c · M3.1d) czeka na push **świadomie** — push idzie po całym M3.1, na akceptację użytkownika |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a ✅ · M3.1b ✅ · M3.1c ✅ · M3.1d ✅** (wszystkie odebrane przez użytkownika) |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24**, temat 20 px wraca po M3 · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7096**, zielony w trzech partycjach (**7001 + 41 + 54**) — po M3.1c/§19.4 |
+| **Suite** | **7106**, zielony w trzech partycjach (**7011 + 41 + 54**) — po M3.1d/§19.5 |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
+| **NASTĘPNY KROK** | ⭐ **M3.1e — chipy Trace / Debugger.** Agregacja (`IsTraceSessionLive`, `IsDebugSessionLive`) **już istnieje** od M3.1c; zostaje sama prezentacja, w tym samym `StackPanelu` sekcji 3, obok chipa transakcji |
 
 ### 1.1 Co dostarczyły poprzednie etapy — trzy zdania
 
@@ -267,7 +268,12 @@ Zapisane tutaj, żeby były zadane raz i we właściwym momencie.
 
 ### 5.1 ⛔ Rejestr kolizji §18.R — status w M3 (ratyfikowany 2026-08-02)
 
-**K1–K10 zostają w rejestrze aż do przeglądu §13.3.** M3.3 przebudowuje pasek zakładek, ale
+⭐ **Stan: K1–K11.** M3.1d dopisało **K11** (chip transakcji, `Spacing` 5 vs `Space.Sm` 6) — pierwszą
+kolizję **spoza M2c** i pierwszą dotyczącą **odstępu**, a nie typografii czy promienia. Rejestr okazał się
+szerszy niż licznik, który go zrodził. ⚠ Różnica 1 px czyni pokusę „weź po prostu rolę" największą właśnie
+tutaj — a wzięcie jej zmieniłoby wygląd **już odebrany przez użytkownika**.
+
+**K1–K11 zostają w rejestrze aż do przeglądu §13.3.** M3.3 przebudowuje pasek zakładek, ale
 **zachowuje obecne wartości lokalne wraz z uzasadnieniem** — dotyczy to w szczególności **K9**
 (etykieta zakładki 13 px) i **K10** (promień zakładki 4).
 
@@ -360,7 +366,12 @@ oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno.
 Pominięta, wpada do partycji głównej: nic nie zawiedzie, ale podział przestaje robić to, po co istnieje.
 To ta sama pułapka, co niedziałające wykluczenie `ContextMenuPresentationTests` (§18.1.6) — tam nazwa
 przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały etap.
-**Stan po M3.1a: `TabStripPresentationTests` DOPISANY**; partycje mierzą **7001 + 35 + 54 = 7090**.
+**Stan po M3.1a: `TabStripPresentationTests` DOPISANY**; po M3.1d partycje mierzą **7011 + 41 + 54 = 7106**.
+
+⭐ **Kryterium, czy nowa klasa idzie do filtra, jest jedno: czy konstruuje kontrolki Avalonii.**
+`TransactionChipTests` (M3.1d) **nie idzie** — pinuje funkcję **statyczną**, więc nie potrzebuje sesji
+headless i należy do partycji głównej. Sprawdź to, zamiast zakładać w którąkolwiek stronę: klasa headless
+poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciemnia liczby partycji.
 
 ---
 
@@ -381,6 +392,15 @@ przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały
    ⚠ To jest realne ryzyko M3: cztery powierzchnie trwałe żyją w `MainWindow`.
 5. **⚠ Goły `TextBlock` dziedziczy 14**, nie 12. Usunięcie `FontSize` z `TextBlocka` to skok w górę.
 6. **⚠ Liczba nie wyznacza roli.** Pięć ról przy 11 px, dwie przy 12.
+7. ⭐⭐ **NOWA (M3.1d) — przeniesienie faktu zostawia po sobie „regresję", która nią nie jest.** M3.1d
+   odebrało paskowi edytora SQL kropkę stanu i etykietę *„Active Transaction"*, bo fakt *„mam otwartą
+   transakcję"* przeszedł do chipa w pasku statusu. **Ubytek w starym właścicielu wygląda dokładnie jak
+   defekt** i *„pasek transakcji zgubił kropkę"* jest bardzo wiarygodnym zgłoszeniem. **Dlatego komentarz
+   idzie w OBA miejsca — do tego, które fakt oddało, i do tego, które go przejęło** — a nie tylko do
+   dokumentacji etapu.
+   ⚠ Przy każdej kolejnej sekcji Status Bara zadaj to samo pytanie: **czy ten fakt ma już właściciela
+   gdzie indziej i czy tamten właściciel nie jest bramkowany zakładką?** Bramka `IsXxxTabActive` na
+   nośniku stanu **globalnego** to defekt §0.1.2, nawet gdy wygląda jak porządek.
 
 ### 9.2 Odziedziczone z M2b (§17.5)
 
@@ -406,8 +426,8 @@ przestała pasować do czegokolwiek i licznik był o jeden za wysoki przez cały
 | ✅ 1 | **M3.1a** | Rytm pionowy chromy — `Size.TabIndicator` (nowy token), podłączenie `Size.TitleBar` / `Size.StatusBar` / `Size.Row.Tab`; **zakładka 30 → 26, szerokość bez podłogi akcji** (§19.1) | **DA** ✅ |
 | ✅ 2 | **M3.1b** | Cztery sekcje (§8.4.3) + hierarchia (§8.4.4) + **D3**; ⭐ tożsamość połączenia przeniesiona z paska tytułu (§19.3) | — |
 | ✅ 3 | **M3.1c** | Rail (§8.4.1–§8.4.2) + ⭐ **agregacja po `WorkspaceTabs` przeniesiona tu z M3.1e** (§19.4.2) | — |
-| 4 | **M3.1d** | Chip transakcji z czasem (§8.4.5) | — |
-| 5 | **M3.1e** | Chipy Trace / Debugger — ⭐ agregacja JUŻ ISTNIEJE (M3.1c); zostaje sama prezentacja | — |
+| ✅ 4 | **M3.1d** | Chip transakcji z czasem (§8.4.5); ⭐ **podział własności: chip = fakt globalny, pasek edytora SQL = licznik lokalny** (§19.5) | — |
+| ⭐ **5** | **M3.1e** | **← TU ZACZYNASZ.** Chipy Trace / Debugger — ⭐ agregacja JUŻ ISTNIEJE (M3.1c); zostaje sama prezentacja, w `StackPanelu` sekcji 3 obok chipa transakcji | — |
 | 6 | **M3.1f** | Sekcja postępu (§8.4.6) + **jedna** operacja referencyjna | — |
 | 7 | **M3.2a** | H‑3 — stabilny układ paska tytułu **i** toolbara dokumentu (72 bramki, §3.6) | — |
 | 8 | **M3.2b** | §7.5 — semantyka kolorów na pasku narzędzi | **DC** |

@@ -1286,6 +1286,89 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RailBrushKey));
     }
 
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ CHIP TRANSAKCJI (§8.4.5) — najważniejsza informacja w pasku
+    //
+    // Chip odpowiada GLOBALNIE na pytanie „czy aplikacja ma otwartą transakcję i od jak dawna?".
+    // Pasek nad wynikami edytora SQL odpowiada na inne, LOKALNE: „ile instrukcji poszło w tej
+    // transakcji". ⭐ To nie jest redundancja, tylko dwa poziomy informacji (decyzja użytkownika,
+    // 2026-08-02): przechodząc do debuggera albo edytora obiektu nadal chcę wiedzieć, że mam otwartą
+    // transakcję — ale licznik instrukcji przestaje mnie wtedy obchodzić, bo nie pracuję w edytorze.
+    //
+    // ⚠⚠ CHIP NIGDY NIE JEST PRZYCISKIEM (§8.4.5). Commit i Rollback zostają w toolbarze pod F6 /
+    // Shift+F6. Operacja nieodwracalna nie może stać w miejscu, które użytkownik czyta kątem oka.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Moment otwarcia bieżącej transakcji — albo <c>null</c>, gdy żadna nie jest otwarta.
+    /// ⭐ Mierzymy CZAS PO STRONIE KLIENTA i to jest rozstrzygnięcie z iteracji 0 (§19.0.2):
+    /// `TransactionService` nie ma znacznika czasu, ale ma zdarzenie `TransactionStateChanged`,
+    /// które ten VM już subskrybuje. Zero zapytań do `MON$`, zero round-tripów, zero zmian w Core
+    /// i w warstwie Firebird. ⚠ Konsekwencja przyjęta świadomie: to czas od chwili, w której
+    /// EmberTern otworzył transakcję, a nie odczyt z serwera — dla pytania „jak długo TO trzymam"
+    /// jest to właściwa odpowiedź.
+    /// </summary>
+    private DateTimeOffset? _transactionStartedAt;
+
+    private DispatcherTimer? _transactionChipTimer;
+
+    public bool ShowTransactionChip => IsTransactionActive || IsTransactionError;
+
+    public string TransactionChipBrushKey => IsTransactionError ? "ErrorBrush" : "TransactionActiveBrush";
+
+    /// <summary>Tooltip chipa — profil i lane (§8.4.5). Tekst chipa zostaje krótki; szczegóły na żądanie.</summary>
+    public string TransactionChipTooltip => DataTransactionProfileTooltip;
+
+    /// <summary>Treść chipa: etykieta + czas trwania, np. „Transakcja · 2 min".</summary>
+    public string TransactionChipText => _transactionStartedAt is { } started
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            UiStrings.StatusBarTransactionChipFormat,
+            FormatTransactionDuration(DateTimeOffset.UtcNow - started))
+        : UiStrings.StatusBarTransactionChipBare;
+
+    /// <summary>
+    /// Czas trwania w postaci zgrubnej i czytelnej kątem oka. ⭐ Funkcja CZYSTA — bierze `TimeSpan`,
+    /// nie zegar — więc daje się przetestować bez timera i bez czekania (gotcha #251: wyzwalacz
+    /// oparty wyłącznie na timerze jest nieosiągalny dla testu headless).
+    /// ⚠ Zgrubna świadomie: pasek statusu czyta się kątem oka, a „02:37.4" wymagałoby czytania.
+    /// </summary>
+    internal static string FormatTransactionDuration(TimeSpan elapsed)
+    {
+        if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+
+        if (elapsed.TotalMinutes < 1)
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.DurationSecondsFormat, (int)elapsed.TotalSeconds);
+
+        if (elapsed.TotalHours < 1)
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.DurationMinutesFormat, (int)elapsed.TotalMinutes);
+
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            UiStrings.DurationHoursFormat,
+            (int)elapsed.TotalHours,
+            elapsed.Minutes);
+    }
+
+    // ⚠ Timer odświeża WYŁĄCZNIE wyświetlany tekst — fakt (`_transactionStartedAt`) jest od niego
+    // niezależny i testowalny. Chodzi co sekundę i tylko wtedy, gdy transakcja jest otwarta; przy
+    // Idle jest zatrzymywany, żeby aplikacja nie tykała w nieskończoność po zamkniętej transakcji.
+    private void UpdateTransactionChipTimer()
+    {
+        if (ShowTransactionChip)
+        {
+            _transactionChipTimer ??= new DispatcherTimer(
+                TimeSpan.FromSeconds(1),
+                DispatcherPriority.Background,
+                (_, _) => OnPropertyChanged(nameof(TransactionChipText)));
+            _transactionChipTimer.Start();
+        }
+        else
+        {
+            _transactionChipTimer?.Stop();
+        }
+    }
+
     // Title-bar transaction-profile block: two stacked lines, each a static lane label
     // ("Data:" / "Meta:") plus the full profile name in a lane-colored badge. These
     // expose the badge text (profile name only); the label prefix is static in XAML.
@@ -1365,13 +1448,22 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowDataTransactionButtons
         => IsQueryTabActive || IsDataTabActive || IsTransactionActive || IsTransactionError;
 
+    // ⭐ Od M3.1d ten pasek niesie WYŁĄCZNIE kontekst lokalny edytora SQL — liczbę instrukcji
+    // wykonanych w transakcji. FAKT „transakcja jest otwarta" przejął chip w pasku statusu (§8.4.5),
+    // który jest widoczny także wtedy, gdy użytkownik pracuje w debuggerze albo w edytorze obiektu,
+    // a ten pasek jest bramkowany `IsQueryTabActive` i wtedy go nie ma.
+    //
+    // > Użytkownik (2026-08-02): „to nie jest zbędna redundancja, tylko dwa różne poziomy informacji…
+    // > licznik instrukcji przestaje być istotny, gdy nie pracuję już w SQL Editorze".
+    //
+    // ⛔ Nie przywracać tu kropki stanu ani etykiety „Active Transaction" — to byłby drugi właściciel
+    // tego samego faktu (§0.1.2).
     private static string BuildTransactionBarText(TransactionService tx) => tx.State switch
     {
-        TransactionState.Active when tx.HasExecutedStatements
-            => $"{UiStrings.TransactionBarActive} · {string.Format(UiStrings.TransactionStatementCountFormat, tx.StatementCount)}",
-        TransactionState.Active => UiStrings.TransactionBarActive,
         TransactionState.Error => UiStrings.TransactionBarError,
-        _ => UiStrings.TransactionBarInactive,
+        _ when tx.HasExecutedStatements
+            => string.Format(UiStrings.TransactionStatementCountFormat, tx.StatementCount),
+        _ => string.Empty,
     };
     public void ReloadConnections()
     {
@@ -7468,11 +7560,20 @@ public partial class MainWindowViewModel : ViewModelBase
                     if (tab.TableDetail is { } committed) committed.HasPendingDataEdits = false;
             }
 
+            // ⭐ Znacznik czasu chipa (§8.4.5) — jedyne miejsce, w którym powstaje i ginie. `becameActive`
+            // i `settled` są już policzone wyżej, więc chip nie potrzebuje własnej maszyny stanów.
+            if (becameActive) _transactionStartedAt = DateTimeOffset.UtcNow;
+            if (settled) _transactionStartedAt = null;
+
             OnPropertyChanged(nameof(IsTransactionIdle));
             OnPropertyChanged(nameof(IsTransactionActive));
             OnPropertyChanged(nameof(IsTransactionError));
             OnPropertyChanged(nameof(HasExecutedInTransaction));
             OnPropertyChanged(nameof(TransactionBarText));
+            OnPropertyChanged(nameof(ShowTransactionChip));
+            OnPropertyChanged(nameof(TransactionChipBrushKey));
+            OnPropertyChanged(nameof(TransactionChipText));
+            UpdateTransactionChipTimer();
             OnPropertyChanged(nameof(ShowDataTransactionButtons));
             CommitCommand.NotifyCanExecuteChanged();
             RollbackCommand.NotifyCanExecuteChanged();

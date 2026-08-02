@@ -3452,6 +3452,14 @@ idzie dalej. Rejestr jest wejściem do przeglądu §13.3.
 | K8 | 6 | `TextBlock.section` — nagłówek panelu szczegółów (Session + Trace) | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
 | K9 | 9 | `TabItem` — etykieta zakładki roboczej (`ControlStyles.axaml`) | 13 | brak roli tekstowej przy 13 | ⛔ lokalnie z powodem → **M3.3** |
 | K10 | 9 | `TabItem.bottom-tab` / `.sub-tab` — kształt zakładki | promień 4 | `Radius.Chip` = 4, ale zakładka chipem nie jest | ⛔ lokalnie z powodem → **M3.3** |
+| K11 | **M3.1d** | chip transakcji — odstęp kropka ↔ tekst (`MainWindow.axaml`) | `Spacing` 5 | `Space.Sm` = **6** | ⛔ lokalnie z powodem → **§13.3** |
+
+⚠ **K11 jest pierwszą kolizją spoza M2c i pierwszą dotyczącą ODSTĘPU, a nie typografii ani promienia** —
+rejestr okazał się szerszy niż licznik, który go zrodził. Różnica to **1 px**, więc pokusa „po prostu
+weź rolę" jest tu największa; zamiana zmieniłaby jednak wygląd chipa **już odebranego przez użytkownika**,
+a to jest dokładnie ten rodzaj cichej zmiany, przed którym broni R12. ⭐ Pytanie *„czy chipy mają wspólną
+metrykę"* jest wspólne z §19.3.4 (padding badge'a DEV MODE) i idzie do §13.3 **razem z nim** — dwa
+konsumenty to dopiero moment, w którym R3 pozwala rozważyć rolę.
 
 ⚠ **Wzorzec K1/K2/K3/K6 to jedno pytanie zadane cztery razy: ile mierzy pasek narzędzi i ile mierzy
 nagłówek sekcji.** Katalog M2a odpowiedział jedną liczbą na każde; produkt używa dwóch. Rozstrzygnięcie
@@ -4549,3 +4557,135 @@ operacje podłącza dopiero **M3b**. Decyzja podjęta teraz opierałaby się na 
 | 6 | smoke + QA na żywej bazie | ✅ Executing i Error potwierdzone przez użytkownika |
 | 7 | wpis w §19 | ✅ ta sekcja |
 | 8 | commit; push po akceptacji | ✅ / ⏸ (push po całym M3.1) |
+
+---
+
+### §19.5 Iteracja 4 (M3.1d) — chip transakcji z czasem trwania (2026-08-02)
+
+> **Zakres:** §8.4.5 — chip transakcji w sekcji 3 paska statusu. Odebrane przez użytkownika.
+
+#### §19.5.1 ⭐⭐ TREŚCIĄ TEJ ITERACJI NIE BYŁ CHIP, TYLKO PODZIAŁ WŁASNOŚCI JEDNEGO FAKTU
+
+Chip sam w sobie to kilkanaście linii XAML. Rzeczywista decyzja iteracji jest gdzie indziej i jest
+**decyzją użytkownika**: fakt *„mam otwartą transakcję"* miał do tej pory właściciela w pasku nad
+wynikami edytora SQL — kropkę stanu (`IsTransactionIdle` / `Active` / `Error`) plus etykietę
+*„Active Transaction"*. Ten pasek jest bramkowany `IsQueryTabActive`, więc **fakt o stanie CAŁEJ
+aplikacji znikał, gdy tylko użytkownik przechodził do debuggera albo do edytora obiektu** — czyli
+dokładnie tam, gdzie dalej pracuje w tej samej transakcji.
+
+> **Użytkownik (2026-08-02), zapytany, czy chip nie będzie redundancją wobec paska edytora:**
+> *„to nie jest zbędna redundancja, tylko dwa różne poziomy informacji… przechodząc do debuggera albo
+> edytora obiektu nadal chcę wiedzieć, że mam otwartą transakcję — ale licznik instrukcji przestaje być
+> istotny, gdy nie pracuję już w SQL Editorze."*
+
+⭐ **To rozstrzygnięcie zamienia dwie kopie w dwa poziomy** i dopiero ono czyni chip zgodnym z §0.1.2
+(*„Application Chrome to JEDNA powierzchnia"*), który dwie niezależne prezentacje tego samego stanu
+czytałby jako defekt:
+
+| Powierzchnia | Pytanie | Zasięg |
+|---|---|---|
+| **Chip w pasku statusu** | *„czy mam otwartą transakcję i od jak dawna?"* | **globalny** — widoczny na każdej zakładce |
+| **Pasek nad wynikami edytora SQL** | *„ile instrukcji poszło w tej transakcji?"* | **lokalny** — tylko tam, gdzie instrukcje powstają |
+
+Pasek edytora stracił zatem **trzy `Ellipse` stanu i etykietę `TransactionBarActive`**;
+`BuildTransactionBarText` zwraca dziś sam licznik (a przy braku instrukcji — pusty łańcuch).
+⛔ Kropka i etykieta **nie wracają** — komentarze mówią to w obu miejscach, bo *„pasek transakcji
+zgubił kropkę stanu"* jest bardzo wiarygodnie brzmiącą regresją.
+
+⚠ **Stan `Error` został w pasku edytora celowo** (`TransactionBarError`): błąd transakcji jest
+komunikatem o tym, co się właśnie stało z **wykonaniem**, a nie trwałym atrybutem sesji — i tam jest
+czytany. Chip również przechodzi wtedy na `ErrorBrush`, więc sygnał nie ginie po zmianie zakładki.
+
+#### §19.5.2 Czas trwania — obietnica z §8.4.5 zrealizowana, i to bez dotykania Core
+
+§8.4.5 zapisało czas trwania jako **niepewny**: *„czy da się je odczytać tanio i bez odpytywania `MON$`,
+jest do sprawdzenia w M3. Jeśli nie — chip pokazuje sam stan"*. Iteracja 0 rozstrzygnęła to na TAK
+(§19.0.2); ta iteracja to realizuje. Wariant rezerwowy **nie był potrzebny**.
+
+Znacznik czasu powstaje i ginie **w jednym miejscu** — w istniejącym handlerze `TransactionStateChanged`,
+na już policzonych flagach `becameActive` (`:7527`) i `settled`:
+
+```csharp
+if (becameActive) _transactionStartedAt = DateTimeOffset.UtcNow;
+if (settled)      _transactionStartedAt = null;
+```
+
+⭐ **Chip nie dostał własnej maszyny stanów** — czyta tę, która już rozstrzyga o Commit/Rollback,
+o pasku edytora i o railu. Zero zapytań do serwera, zero round-tripów, **zero zmian w `EmberTern.Core`
+i w `EmberTern.Firebird`**.
+
+⚠ **Konsekwencja przyjęta świadomie i zapisana w kodzie:** to czas mierzony **zegarem klienta** od chwili,
+w której EmberTern otworzył transakcję — nie odczyt z serwera. Dla pytania *„jak długo JA to trzymam"*
+jest to właściwa odpowiedź; dla pytania *„od kiedy ta transakcja istnieje na serwerze"* właściwym
+narzędziem pozostaje Session Manager i jego detektor long-running transaction.
+
+#### §19.5.3 ⚠ Zgrubność formatu jest DECYZJĄ, nie uproszczeniem
+
+`FormatTransactionDuration` daje `12 s` → `3 min` → `1 h 7 min`. Sekundy i minuty są **obcinane w dół**,
+nigdy zaokrąglane — `59 s` nie może przeskoczyć na `1 min`, zanim minuta faktycznie minie.
+
+⭐ **Powód jest ten sam, dla którego pasek nie rośnie:** pasek statusu czyta się **kątem oka**, a
+`02:37.4` wymaga *czytania*. Precyzyjny pomiar ma już właściciela — `ExecutionTimer` w toolbarze edytora,
+inne pytanie i inna precyzja. ⛔ Nie podbijać dokładności chipa „bo się da".
+
+#### §19.5.4 ⭐ Testowalność wymusiła kształt kodu — funkcja czysta obok timera
+
+Chip składa się z dwóch rzeczy o skrajnie różnej testowalności: z **faktu** (`_transactionStartedAt`)
+i z **odświeżania tekstu**, które napędza `DispatcherTimer`. Gotcha **#251** mówi wprost, że wyzwalacz
+oparty wyłącznie na timerze jest **nieosiągalny dla testu headless** — więc formatowanie zostało wydzielone
+jako **funkcja czysta biorąca `TimeSpan`, a nie zegar**. Timer woła wyłącznie `OnPropertyChanged`;
+cała treść, którą warto pinować, leży poza nim. Nowa klasa `TransactionChipTests` — **10 przypadków, bez
+jednego `Sleep`** i bez konstruowania `MainWindow` (pułapka §9.1/4), bo funkcja jest statyczna.
+⚠ Klasa **nie jest headless**, więc do filtra partycji headless **nie trafia** — sprawdzone, nie założone.
+
+⚠ **Zacisk ujemnego czasu nie jest asekuracją teoretyczną.** Znacznik pochodzi z zegara klienta, więc
+korekta NTP albo ręczna zmiana czasu systemowego **w trakcie otwartej transakcji** cofa „teraz" za moment
+startu. Chip ma wtedy pokazać `0 s`, a nie `-3 s` ani wyjątek — i to jest osobny, pinowany przypadek.
+
+⚠ **Timer chodzi tylko wtedy, gdy chip jest widoczny.** `UpdateTransactionChipTimer` zatrzymuje go przy
+przejściu do Idle; inaczej aplikacja tykałaby co sekundę przez całą sesję po jednej zamkniętej transakcji.
+Priorytet `Background` — odświeżenie napisu nigdy nie może konkurować z wpisywaniem tekstu.
+
+#### §19.5.5 Odstępstwa od projektu z §8.4.5 — dwa, oba zapisane
+
+| Projekt §8.4.5 | Jak jest | Dlaczego |
+|---|---|---|
+| `⚡ Transakcja · <czas>` | **kropka** 7×7 w kolorze stanu + `Transaction · <czas>` | ⚡ jest glifem, a nie ikoną z `IconGeometries.axaml`; ⭐ kropka to ten sam nośnik, który pasek edytora właśnie **oddał** — informacja zmieniła miejsce, nie formę |
+| dwa stany (brak / aktywna) | **trzy** — doszedł `Error` na `ErrorBrush` | `TransactionService` ma trzeci stan i był on prezentowany także wcześniej; pominięcie go w chipie oznaczałoby, że globalny nośnik faktu jest **uboższy** niż lokalny, który zastępuje |
+
+⚠ Chip **nie** czyta pędzla przez `{DynamicResource}`, tylko przez `IconBrushConverter` z klucza
+`TransactionChipBrushKey` — bo pędzel zależy od stanu. To ta sama ścieżka, którą maluje się rail
+(§19.4.3), **z tą samą pułapką**: nieznany klucz daje `UnsetValue`, a kontrolka po cichu zostaje przy
+wartości domyślnej. Oba klucze (`TransactionActiveBrush`, `ErrorBrush`) są zdefiniowane w **obu** motywach
+— zweryfikowane w `Colors.axaml`.
+
+⚠ **Wartości lokalne pozostawione z powodem w miejscu:** kropka `7×7` (geometria — §18.0.5 ratyfikowało,
+że geometrii wychodzącej z arytmetyki nie tokenizujemy) oraz `Spacing="5"`, które jest **kolizją**
+(`Space.Sm` = 6, różnica 1 px) i dlatego trafiło do rejestru **§18.R jako K11**. Tekst chipa czyta rolę
+`Text.Caption.Size` — bez wyjątku.
+
+#### §19.5.6 Definition of Done
+
+| # | Warunek | |
+|---|---|---|
+| 1 | zakres iteracji zamknięty | ✅ chip + czas + podział własności z paskiem edytora |
+| 2 | pozostawione wartości lokalne mają powód w miejscu | ✅ kropka 7×7, `Spacing="5"` (+ K11 w §18.R) |
+| 3 | baza `DesignTokenComplianceTests` = stan faktyczny | ✅ bez zmian — strażnik liczy `FontSize`/`FontFamily`/`CornerRadius`, a chip żadnej z nich lokalnie nie deklaruje |
+| 4 | build 0/0 | ✅ |
+| 5 | testy zielone w trzech partycjach | ✅ **7011 + 41 + 54 = 7106** (+10, `TransactionChipTests`) |
+| 6 | smoke + oba motywy | ✅ QA użytkownika: chip widoczny niezależnie od zakładki, znika po Commit/Rollback |
+| 7 | wpis w §19 | ✅ ta sekcja |
+| 8 | commit; push po akceptacji | ✅ / ⏸ (push po całym M3.1) |
+
+> **Odbiór użytkownika:** chip pokazuje czas trwania, jest widoczny niezależnie od aktywnej zakładki
+> i znika po Commit / Rollback; rozdział odpowiedzialności (Status Bar = stan globalny, edytor SQL =
+> licznik lokalny) zaakceptowany.
+
+#### §19.5.7 ⏸ Zapis do przyszłego przeglądu UX — NIE realizować w M3.1
+
+> **Użytkownik, przy odbiorze M3.1c:** semantyka kolorów railu wymaga kompletu źródeł aktywności.
+
+Do §19.4.4 dochodzi obserwacja z tej iteracji: **kolor jest już czwartym nośnikiem w pasku statusu**
+(rail, severity komunikatu, chip transakcji, a wkrótce chipy Trace/Debuggera). Propozycja z odbioru —
+SQL → Accent, Debugger → własny kolor, Trace → własny, Import → własny — **zostaje zapisana i nie jest
+realizowana w M3.1**; wchodzi razem z §19.4.4 do **M3b** i do przeglądu **§13.3**, kiedy widać komplet.

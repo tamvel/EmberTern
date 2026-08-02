@@ -1396,19 +1396,14 @@
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,1,0,0"
                   IsVisible="{Binding IsQueryTabActive}">
-            <!-- ONE transaction, so ONE status chip. (There used to be a second "metadata lane"
-                 chip beside it, because F5 silently routed DDL onto a hidden second transaction.
-                 The SQL Editor is a classic console now: one attachment, one transaction.) -->
+            <!-- ⭐ KONTEKST LOKALNY EDYTORA SQL — liczba instrukcji wykonanych w transakcji.
+                 FAKT „transakcja jest otwarta" przejął w M3.1d chip w pasku statusu (§8.4.5), bo to
+                 stan CAŁEJ aplikacji: ma być widoczny także w debuggerze i w edytorze obiektu, a ten
+                 pasek jest bramkowany `IsQueryTabActive`. Licznik zostaje tutaj, bo ma sens dokładnie
+                 tam, gdzie instrukcje są wykonywane.
+                 ⛔ Nie przywracać kropek stanu ani etykiety „Active Transaction" — drugi właściciel
+                 tego samego faktu (§0.1.2). -->
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="14,0" VerticalAlignment="Center">
-              <Ellipse Width="8" Height="8"
-                       Fill="{DynamicResource SubtleForegroundBrush}"
-                       IsVisible="{Binding IsTransactionIdle}" />
-              <Ellipse Width="8" Height="8"
-                       Fill="{DynamicResource TransactionActiveBrush}"
-                       IsVisible="{Binding IsTransactionActive}" />
-              <Ellipse Width="8" Height="8"
-                       Fill="{DynamicResource ErrorBrush}"
-                       IsVisible="{Binding IsTransactionError}" />
               <TextBlock Text="{Binding TransactionBarText}"
                          Classes="subtle"
                          Classes.error="{Binding IsTransactionError}"
@@ -1848,7 +1843,46 @@
                      VerticalAlignment="Center" />
         </StackPanel>
 
-        <!-- ── 3. STAN (chipy: transakcja, Trace, Debugger) — M3.1d / M3.1e ──────────────────────────── -->
+        <!-- ── 3. STAN — chipy współistniejące (§8.4.5). Trace i Debugger dochodzą w M3.1e ──────────── -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                    Margin="12,0,0,0" VerticalAlignment="Center">
+
+          <!-- ⭐ CHIP TRANSAKCJI. Nieobecny, gdy transakcji nie ma — brak transakcji to stan domyślny
+               i nie wymaga komunikatu (§8.4.5). Odpowiada GLOBALNIE na „czy mam otwartą transakcję
+               i od jak dawna", niezależnie od aktywnej zakładki.
+               ⚠⚠ TO NIE JEST PRZYCISK i nigdy nim nie będzie. Commit/Rollback zostają w toolbarze pod
+               F6 / Shift+F6 — operacja nieodwracalna nie może stać w miejscu czytanym kątem oka. -->
+          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                      IsVisible="{Binding ShowTransactionChip}"
+                      ToolTip.Tip="{Binding TransactionChipTooltip}">
+            <!-- ⚠ 7×7 i Spacing 5 to WARTOŚCI LOKALNE ze świadomego wyboru.
+                 Kropka jest GEOMETRIĄ (§18.0.5 ratyfikowało, że geometrii wychodzącej z arytmetyki
+                 nie tokenizujemy) — katalog nie ma dla niej roli i mieć nie powinien.
+                 ⚠ `Spacing="5"` to KOLIZJA, nie brak roli: `Space.Sm` niesie 6, czyli pasuje funkcją
+                 i różni się o 1 px. Zamiana zmieniłaby wygląd chipa odebranego już przez użytkownika,
+                 więc zgodnie z regułą etapu wartość zostaje z powodem, a kolizja idzie do rejestru
+                 §18.R (K11). Rozstrzyga ją przegląd §13.3 — na komplecie chipów, nie na tym jednym. -->
+            <Ellipse Width="7" Height="7" VerticalAlignment="Center">
+              <Ellipse.Fill>
+                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                  <Binding Path="TransactionChipBrushKey" />
+                  <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                </MultiBinding>
+              </Ellipse.Fill>
+            </Ellipse>
+            <TextBlock Text="{Binding TransactionChipText}"
+                       FontSize="{DynamicResource Text.Caption.Size}"
+                       VerticalAlignment="Center">
+              <TextBlock.Foreground>
+                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                  <Binding Path="TransactionChipBrushKey" />
+                  <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                </MultiBinding>
+              </TextBlock.Foreground>
+            </TextBlock>
+          </StackPanel>
+        </StackPanel>
+
         <!-- ── 4. POSTĘP — M3.1f ────────────────────────────────────────────────────────────────────── -->
         <!-- ⛔ Nazwa aplikacji i numer wersji NIE wracają tutaj (decyzja D3) — mieszkają w oknie About,
              gdzie są tematem. Pasek statusu mówi, co dzieje się TERAZ; wersja nie zmienia się w sesji. -->

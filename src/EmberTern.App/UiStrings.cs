@@ -737,6 +737,20 @@ internal static class UiStrings
     public const string TransactionCommit = "Commit";
     public const string TransactionRollback = "Rollback";
     public const string TransactionStatementCountFormat = "{0} statement(s)";
+
+    // ⭐ Chip transakcji w pasku statusu (§8.4.5) — GLOBALNA odpowiedź na „czy mam otwartą transakcję
+    // i od jak dawna". Pasek nad wynikami edytora SQL niesie osobną, LOKALNĄ informację: liczbę
+    // instrukcji. Dwa poziomy informacji, nie redundancja (decyzja użytkownika, 2026-08-02).
+    public const string StatusBarTransactionChipFormat = "Transaction · {0}";
+    // Stan przejściowy: transakcja jest otwarta, ale znacznik czasu jeszcze nie powstał (np. otwarta
+    // przed podpięciem chipa). Lepszy niż chip pokazujący „0 s", który sugerowałby świeży start.
+    public const string StatusBarTransactionChipBare = "Transaction";
+
+    // Zgrubny czas trwania, czytelny kątem oka (§8.4.5). ⛔ Nie zwiększać precyzji — pasek statusu
+    // nie jest stoperem; dokładny czas wykonania niesie ExecutionTimer w toolbarze edytora.
+    public const string DurationSecondsFormat = "{0} s";
+    public const string DurationMinutesFormat = "{0} min";
+    public const string DurationHoursFormat = "{0} h {1} min";
     public const string TransactionStartedMessage = "Transaction started.";
     public const string TransactionCommittedFormat = "Transaction committed ({0} statement(s)).";
     public const string TransactionRolledBackFormat = "Transaction rolled back ({0} statement(s)).";
