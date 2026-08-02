@@ -3508,3 +3508,42 @@ nagłówka Expandera" rozstrzyga przegląd §13.3. Zapis w `CLAUDE.md` skorygowa
 
 Build **0/0** · suite **7087** zielony w trzech partycjach · smoke czysty.
 Liczniki: `FontSize` **405 → 332** · `FontFamily` **81** · `CornerRadius` **31**.
+
+---
+
+### §18.5 Iteracja 5 — osiem edytorów obiektów (2026-08-02)
+
+> **Zakres:** Table 27 · Trigger 22 · View 20 · Package 17 · Domain 16 · Generator 15 · Exception 13 ·
+> Index 11 = **141 `FontSize`**. Żadnego `CornerRadius`.
+
+#### §18.5.1 Wynik: **141 → 0. Pierwsza iteracja bez ani jednego wyjątku.**
+
+31 usunięć (kontrolki formularza przy 12) · 110 na role · **0 wyjątków**. Osiem wpisów **znika z bazy**
+(strażnik wymaga usunięcia wpisu, nie wyzerowania go). Wartości bez zmian.
+
+Role: `Text.Compact` 74 · `Text.Code` 12 · `Text.Grid` 12 · `Text.Caption` 12.
+
+#### §18.5.2 ⭐ Dlaczego akurat tu wyszło zero — i co to mówi o poprzednich iteracjach
+
+Te osiem widoków jest zbudowanych z **jednego wzorca**: formularz właściwości + dwa drzewa zależności
+(`Header` / `ObjectName` / `FieldName`) + podgląd DDL + ewentualna siatka. Wzorzec jest na tyle
+konsekwentny, że **każda wartość miała rolę o dokładnie tej samej liczbie** — 11 dla treści paneli i drzew,
+10 dla podpisów podrzędnych, 12 dla pól formularza (ze stylu), 13 dla pełnowymiarowego edytora DDL.
+
+⭐ **Wniosek: wyjątki nie biorą się z wielkości pliku ani z jego wieku, tylko z tego, ile RÓŻNYCH decyzji
+projektowych w nim zapadło.** Debugger, Data Import i Performance mają własne paski, karty, chipy, glify
+i miary gęstości — i tam siedzą wszystkie kolizje K1–K7. Edytory obiektów nie mają nic własnego; są
+najczystszą częścią aplikacji i przeszły mechanicznie.
+
+⚠ To także sprawdzian samego katalogu: **na 141 pozycjach zbudowanych z jednego wzorca katalog M2a
+wystarczył w 100%.** Rejestr kolizji nie urósł.
+
+#### §18.5.3 Zweryfikowane, nie założone
+
+Przed migracją sprawdzono skryptem, czy któraś deklaracja nie stoi **wewnątrz `DataGrid.Columns`** — tam
+rolą byłby `Text.Grid`, a nie `Text.Compact`, i pomyłka byłaby niewidoczna. **Żadna nie stoi.**
+
+#### §18.5.4 Stan po iteracji 5
+
+Build **0/0** · suite **7087** zielony · smoke czysty.
+Liczniki: `FontSize` **332 → 191** · `FontFamily` **81** · `CornerRadius` **31**.

@@ -46,7 +46,7 @@
                          IsVisible="{Binding IsSourceMode}"
                          ShowLineNumbers="True"
                          FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                         FontSize="13"
+                         FontSize="{DynamicResource Text.Code.Size}"
                          HorizontalScrollBarVisibility="Auto"
                          VerticalScrollBarVisibility="Auto"
                          Background="{DynamicResource BackgroundBrush}"
@@ -62,7 +62,7 @@
               <TextBlock Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                          Margin="0,0,8,0" Text="{x:Static app:UiStrings.ViewNameHeader}" />
               <TextBox Grid.Column="1" Text="{Binding EditableViewName, Mode=TwoWay}"
-                       IsReadOnly="{Binding !IsNew}" FontSize="12" />
+                       IsReadOnly="{Binding !IsNew}" />
             </Grid>
 
             <!-- Column list. Add / Remove / Move live in the main toolbar (Collection
@@ -75,7 +75,7 @@
                         SelectedItem="{Binding SelectedColumn, Mode=TwoWay}"
                         IsReadOnly="False" AutoGenerateColumns="False"
                         CanUserSortColumns="False" CanUserResizeColumns="False"
-                        CanUserReorderColumns="False" FontSize="11"
+                        CanUserReorderColumns="False" FontSize="{DynamicResource Text.Grid.Size}"
                         GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                         HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                         VerticalGridLinesBrush="{DynamicResource BorderBrush}"
@@ -98,7 +98,7 @@
               <ae:TextEditor Grid.Row="1" x:Name="ViewBodyEditor"
                              ShowLineNumbers="True"
                              FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                             FontSize="13"
+                             FontSize="{DynamicResource Text.Code.Size}"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
                              Background="{DynamicResource BackgroundBrush}"
@@ -116,7 +116,7 @@
                   behaviors:GridLayoutBehavior.GridId="ViewDetail.Fields"
                   ItemsSource="{Binding Fields}"
                   IsReadOnly="True"
-                  FontSize="11"
+                  FontSize="{DynamicResource Text.Grid.Size}"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
                   CanUserSortColumns="True"
@@ -163,7 +163,7 @@
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
                        Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="0,4,0,4" />
             <TreeView Grid.Row="1"
@@ -183,7 +183,7 @@
                         </MultiBinding>
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate DataType="vm:DependencyLeafNode">
@@ -201,9 +201,9 @@
                           </MultiBinding>
                         </controls:SvgIcon.Foreground>
                       </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                       <TextBlock Text="{Binding FieldName}"
-                                 FontSize="10"
+                                 FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}"
                                  VerticalAlignment="Center"
                                  IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -223,7 +223,7 @@
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
                        Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="0,4,0,4" />
             <TreeView Grid.Row="1"
@@ -243,7 +243,7 @@
                         </MultiBinding>
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate DataType="vm:DependencyLeafNode">
@@ -261,9 +261,9 @@
                           </MultiBinding>
                         </controls:SvgIcon.Foreground>
                       </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                       <TextBlock Text="{Binding FieldName}"
-                                 FontSize="10"
+                                 FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}"
                                  VerticalAlignment="Center"
                                  IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -305,12 +305,12 @@
             </Button>
             <TextBlock Text="{Binding DataPreviewHint}"
                        Classes="subtle"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center"
                        Margin="6,0,0,0" />
             <TextBlock Text="{Binding DataRecordInfo}"
                        Classes="subtle"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center"
                        Margin="12,0,0,0" />
             <ToggleButton Classes="icon" Margin="12,0,0,0"
@@ -347,7 +347,7 @@
                     behaviors:GridLayoutBehavior.GridId="ViewDetail.Data"
                     SelectionChanged="OnViewDataSelectionChanged"
                     IsReadOnly="True"
-                    FontSize="11"
+                    FontSize="{DynamicResource Text.Grid.Size}"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
                     CanUserSortColumns="True"
@@ -382,7 +382,7 @@
                       IsVisible="{Binding CanEditDescription}">
             <TextBlock Text="{x:Static app:UiStrings.ViewDescriptionEditLabel}"
                        Classes="subtle"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" />
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
@@ -399,7 +399,7 @@
                    IsEnabled="{Binding CanEditDescription}"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
-                   FontSize="11"
+                   FontSize="{DynamicResource Text.Compact.Size}"
                    Margin="8,0,8,8"
                    Background="{DynamicResource BackgroundBrush}" />
         </Grid>
@@ -411,7 +411,7 @@
                        ShowLineNumbers="True"
                        IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto"
                        VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
@@ -433,7 +433,7 @@
       <TextBlock Text="{x:Static app:UiStrings.ViewDetailLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  IsVisible="{Binding IsLoading}" />
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->

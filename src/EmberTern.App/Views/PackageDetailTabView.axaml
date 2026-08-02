@@ -26,7 +26,7 @@
         <ae:TextEditor x:Name="PackageHeaderEditor"
                        ShowLineNumbers="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto"
                        VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
@@ -38,7 +38,7 @@
         <ae:TextEditor x:Name="PackageBodyEditor"
                        ShowLineNumbers="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto"
                        VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
@@ -52,7 +52,7 @@
           <TextBlock Text="{x:Static app:UiStrings.PackageDetailMembersEmpty}"
                      Classes="subtle"
                      Margin="10,8"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Compact.Size}"
                      IsVisible="{Binding ShowMembersEmpty}" />
           <!-- The tree is navigation only; the Debug ACTION for the selected member lives on the editor
                toolbar (D15.3 Seam E), so SelectedItem drives that toolbar button's enabled state + tooltip. -->
@@ -74,7 +74,7 @@
                       </MultiBinding>
                     </controls:SvgIcon.Foreground>
                   </controls:SvgIcon>
-                  <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                 </StackPanel>
               </TreeDataTemplate>
               <DataTemplate DataType="vm:PackageMemberItemNode">
@@ -116,7 +116,7 @@
                         </MultiBinding>
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
-                    <TextBlock Text="{Binding DisplayName}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding DisplayName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                 </Border>
               </DataTemplate>
@@ -132,7 +132,7 @@
                       IsVisible="{Binding CanEditDescription}">
             <TextBlock Text="{x:Static app:UiStrings.PackageDescriptionEditLabel}"
                        Classes="subtle"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" />
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
@@ -149,7 +149,7 @@
                    IsEnabled="{Binding CanEditDescription}"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
-                   FontSize="11"
+                   FontSize="{DynamicResource Text.Compact.Size}"
                    Margin="8,0,8,8"
                    Background="{DynamicResource BackgroundBrush}" />
         </Grid>
@@ -161,7 +161,7 @@
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
                        Text="{x:Static app:UiStrings.PackageDetailDependedOnByHeader}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="0,4,0,4" />
             <TreeView Grid.Row="1"
@@ -181,7 +181,7 @@
                         </MultiBinding>
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate DataType="vm:DependencyLeafNode">
@@ -199,9 +199,9 @@
                           </MultiBinding>
                         </controls:SvgIcon.Foreground>
                       </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                       <TextBlock Text="{Binding FieldName}"
-                                 FontSize="10"
+                                 FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}"
                                  VerticalAlignment="Center"
                                  IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -221,7 +221,7 @@
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
                        Text="{x:Static app:UiStrings.PackageDetailDependsOnHeader}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="0,4,0,4" />
             <TreeView Grid.Row="1"
@@ -241,7 +241,7 @@
                         </MultiBinding>
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                 </TreeDataTemplate>
                 <DataTemplate DataType="vm:DependencyLeafNode">
@@ -259,9 +259,9 @@
                           </MultiBinding>
                         </controls:SvgIcon.Foreground>
                       </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                       <TextBlock Text="{Binding FieldName}"
-                                 FontSize="10"
+                                 FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}"
                                  VerticalAlignment="Center"
                                  IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -280,7 +280,7 @@
                        ShowLineNumbers="True"
                        IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto"
                        VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
@@ -303,7 +303,7 @@
       <TextBlock Text="{x:Static app:UiStrings.PackageDetailLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  IsVisible="{Binding IsLoading}" />
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->

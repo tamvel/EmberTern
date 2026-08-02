@@ -98,7 +98,7 @@
                   SelectedItem="{Binding SelectedFieldRow, Mode=TwoWay}"
                   PointerPressed="OnFieldsGridPointerPressed"
                   IsReadOnly="{Binding IsFieldsReadOnly}"
-                  FontSize="11"
+                  FontSize="{DynamicResource Text.Grid.Size}"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
                   CanUserSortColumns="True"
@@ -377,7 +377,7 @@
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="0,0,0,1">
               <TextBlock Text="{x:Static app:UiStrings.FieldDependenciesHeader}"
-                         FontSize="11"
+                         FontSize="{DynamicResource Text.Compact.Size}"
                          FontWeight="SemiBold" />
             </Border>
 
@@ -385,7 +385,7 @@
             <TextBlock Grid.Row="1"
                        Text="{x:Static app:UiStrings.FieldDependenciesNoSelection}"
                        Classes="subtle"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        IsVisible="{Binding ShowFieldDependenciesNoSelection}" />
@@ -394,7 +394,7 @@
             <TextBlock Grid.Row="1"
                        Text="{x:Static app:UiStrings.FieldDependenciesEmpty}"
                        Classes="subtle"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        IsVisible="{Binding ShowFieldDependenciesEmpty}" />
@@ -408,7 +408,7 @@
                       ItemsSource="{Binding FieldDependencies}"
                       SelectedItem="{Binding SelectedFieldDependency, Mode=TwoWay}"
                       IsReadOnly="True"
-                      FontSize="11"
+                      FontSize="{DynamicResource Text.Grid.Size}"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
                       CanUserSortColumns="True"
@@ -485,7 +485,7 @@
                       SelectedItem="{Binding SelectedPrimaryKey, Mode=TwoWay}"
                       PointerPressed="OnConstraintGridPointerPressed"
                       IsReadOnly="True"
-                      FontSize="11"
+                      FontSize="{DynamicResource Text.Grid.Size}"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
                       CanUserSortColumns="True"
@@ -532,7 +532,7 @@
                       SelectedItem="{Binding SelectedForeignKey, Mode=TwoWay}"
                       PointerPressed="OnConstraintGridPointerPressed"
                       IsReadOnly="True"
-                      FontSize="11"
+                      FontSize="{DynamicResource Text.Grid.Size}"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
                       CanUserSortColumns="True"
@@ -588,7 +588,7 @@
                       SelectedItem="{Binding SelectedCheck, Mode=TwoWay}"
                       PointerPressed="OnConstraintGridPointerPressed"
                       IsReadOnly="True"
-                      FontSize="11"
+                      FontSize="{DynamicResource Text.Grid.Size}"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
                       CanUserSortColumns="True"
@@ -630,7 +630,7 @@
                       SelectedItem="{Binding SelectedUnique, Mode=TwoWay}"
                       PointerPressed="OnConstraintGridPointerPressed"
                       IsReadOnly="True"
-                      FontSize="11"
+                      FontSize="{DynamicResource Text.Grid.Size}"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
                       CanUserSortColumns="True"
@@ -678,7 +678,7 @@
                   SelectedItem="{Binding SelectedIndex, Mode=TwoWay}"
                   PointerPressed="OnIndexGridPointerPressed"
                   IsReadOnly="True"
-                  FontSize="11"
+                  FontSize="{DynamicResource Text.Grid.Size}"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
                   CanUserSortColumns="True"
@@ -783,7 +783,7 @@
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
                        Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="0,4,0,4" />
             <!-- "Used by" (left) — objects that depend on this table
@@ -806,7 +806,7 @@
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
                     <TextBlock Text="{Binding Header}"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                VerticalAlignment="Center" />
                   </StackPanel>
                 </TreeDataTemplate>
@@ -826,10 +826,10 @@
                         </controls:SvgIcon.Foreground>
                       </controls:SvgIcon>
                       <TextBlock Text="{Binding ObjectName}"
-                                 FontSize="11"
+                                 FontSize="{DynamicResource Text.Compact.Size}"
                                  VerticalAlignment="Center" />
                       <TextBlock Text="{Binding FieldName}"
-                                 FontSize="10"
+                                 FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}"
                                  VerticalAlignment="Center"
                                  IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -849,7 +849,7 @@
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
                        Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="0,4,0,4" />
             <!-- "Depends on" (right) — what this table uses. Domains via field
@@ -873,7 +873,7 @@
                       </controls:SvgIcon.Foreground>
                     </controls:SvgIcon>
                     <TextBlock Text="{Binding Header}"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                VerticalAlignment="Center" />
                   </StackPanel>
                 </TreeDataTemplate>
@@ -893,10 +893,10 @@
                         </controls:SvgIcon.Foreground>
                       </controls:SvgIcon>
                       <TextBlock Text="{Binding ObjectName}"
-                                 FontSize="11"
+                                 FontSize="{DynamicResource Text.Compact.Size}"
                                  VerticalAlignment="Center" />
                       <TextBlock Text="{Binding FieldName}"
-                                 FontSize="10"
+                                 FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}"
                                  VerticalAlignment="Center"
                                  IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -940,9 +940,9 @@
                     Command="{Binding GoToLastPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="14" Height="14" />
             </Button>
-            <TextBlock Text="{Binding DataPreviewHint}" Classes="subtle" FontSize="11"
+            <TextBlock Text="{Binding DataPreviewHint}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
-            <TextBlock Text="{Binding DataRecordInfo}" Classes="subtle" FontSize="11"
+            <TextBlock Text="{Binding DataRecordInfo}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" Margin="12,0,0,0" />
             <ToggleButton Classes="icon" Margin="12,0,0,0"
                           ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
@@ -973,7 +973,7 @@
           <TextBlock Grid.Row="1"
                      Text="{Binding EditModeHint}"
                      Classes="subtle"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Compact.Size}"
                      Margin="8,0,8,4"
                      VerticalAlignment="Center"
                      IsVisible="{Binding EditModeHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -998,7 +998,7 @@
                     SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
                     SelectionChanged="OnDataSelectionChanged"
                     IsReadOnly="{Binding IsDataReadOnly}"
-                    FontSize="11"
+                    FontSize="{DynamicResource Text.Grid.Size}"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
                     CanUserSortColumns="True"
@@ -1070,7 +1070,7 @@
                       IsVisible="{Binding CanEditDescription}">
             <TextBlock Text="{x:Static app:UiStrings.TableDescriptionEditLabel}"
                        Classes="subtle"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" />
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
@@ -1087,7 +1087,7 @@
                    IsEnabled="{Binding CanEditDescription}"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
-                   FontSize="11"
+                   FontSize="{DynamicResource Text.Compact.Size}"
                    Margin="8,0,8,8"
                    Background="{DynamicResource BackgroundBrush}" />
         </Grid>
@@ -1098,7 +1098,7 @@
                        ShowLineNumbers="True"
                        IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto"
                        VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
@@ -1111,7 +1111,7 @@
       <TextBlock Text="{x:Static app:UiStrings.TableDetailLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  IsVisible="{Binding IsLoading}" />
       <!-- Surface load errors in the view directly — the Messages tab is
            hidden on TableDetail tabs (per the SQL-Editor-only bottom panel),
@@ -1125,7 +1125,7 @@
       <TextBlock Text="{Binding StatusMessage}"
                  Classes="subtle"
                  Margin="10,4"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  TextWrapping="Wrap"
                  IsVisible="{Binding HasStatusMessage}" />
     </StackPanel>

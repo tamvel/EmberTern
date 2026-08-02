@@ -65,18 +65,17 @@ public class DesignTokenComplianceTests
     /// </summary>
     private static readonly Dictionary<string, int> FontSizeBaseline = new(StringComparer.Ordinal)
     {
-        ["Views/TableDetailTabView.axaml"] = 27,
+        // ⭐⭐ OSIEM EDYTORÓW OBIEKTÓW — 141 → 0 (M2c iteracja 5). Pierwsza iteracja BEZ ANI JEDNEGO
+        // WYJĄTKU, i to nie przypadek: te widoki są zbudowane z jednego wzorca (formularz + drzewa
+        // zależności + podgląd DDL), więc każda wartość miała rolę o tej samej liczbie. 31 usunięć
+        // (kontrolki formularza przy 12), 110 na role. Wpisy USUNIĘTE, bo pliki są czyste — straznik
+        // wymaga usunięcia wpisu, nie wyzerowania go.
+        // Zdjęte: TableDetail 27 · TriggerDetail 22 · ViewDetail 20 · PackageDetail 17 · DomainDetail 16
+        // · GeneratorDetail 15 · ExceptionDetail 13 · IndexDetail 11.
         ["Views/MainWindow.axaml"] = 26,
         ["Views/SessionManagerTabView.axaml"] = 26,
-        ["Views/TriggerDetailTabView.axaml"] = 22,
-        ["Views/ViewDetailTabView.axaml"] = 20,
-        ["Views/PackageDetailTabView.axaml"] = 17,
         ["Views/SecurityManagerTabView.axaml"] = 17,
         ["Views/TraceMonitorTabView.axaml"] = 17,
-        ["Views/DomainDetailTabView.axaml"] = 16,
-        ["Views/GeneratorDetailTabView.axaml"] = 15,
-        ["Views/ExceptionDetailTabView.axaml"] = 13,
-        ["Views/IndexDetailTabView.axaml"] = 11,
         ["Views/ExecuteProcedureDialog.axaml"] = 9,
         ["Views/AddFieldDialog.axaml"] = 8,
         ["Views/ForeignKeyDialog.axaml"] = 8,
