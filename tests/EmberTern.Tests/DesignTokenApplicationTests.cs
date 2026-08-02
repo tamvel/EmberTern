@@ -339,6 +339,42 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// Step 5.5 — <c>NumericUpDown</c>, which is not one control but three nested ones: it wraps a
+    /// <c>ButtonSpinner</c>, which wraps a <c>TextBox</c> and two <c>RepeatButton</c>s. The 32 px is imposed by
+    /// the MIDDLE one, so a setter on <c>NumericUpDown</c> alone changes nothing measurable.
+    ///
+    /// <para>⭐ The assertion that matters is <see cref="Layoutable.DesiredSize"/>, not <c>MinHeight</c> — the
+    /// property can be set correctly on the outer control while an inner one still forces the old height, which
+    /// is exactly the failure this iteration exists to prevent (and the same shape as <c>RadioButton</c>'s
+    /// <c>MinHeight=0</c> lie in §15.6.1).</para>
+    /// </summary>
+    [Fact]
+    public async Task NumericUpDown_CollapsesToTheStandardControlHeight_ThroughItsNestedSpinner()
+    {
+        await _session.Dispatch(() =>
+        {
+            var spin = new NumericUpDown { Value = 1, Width = 160 };
+            var window = new Window { Content = new StackPanel { Children = { spin } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            spin.Measure(new Size(300, 300));
+
+            Assert.Equal(Token<double>("Size.Control"), spin.MinHeight);
+
+            // The real test: what the control ASKS FOR. Fluent asks for 32 through the inner ButtonSpinner.
+            Assert.Equal(Token<double>("Size.Control"), spin.DesiredSize.Height);
+            Assert.NotEqual(32d, spin.DesiredSize.Height);
+
+            // The nested TextBox took the catalog height back in step 5.2 with no change here — the bridge
+            // composes into a template it was never pointed at.
+            var inner = spin.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PART_TextBox");
+            Assert.Equal(Token<double>("Size.Control"), inner.MinHeight);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// Reads a token straight from the application's merged resources — the same lookup a style performs. If
     /// the key is missing this fails loudly here, instead of leaving a control on a silent default.
     /// </summary>

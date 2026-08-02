@@ -215,6 +215,48 @@
     <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
   </Style>
 
+  <!-- ================================================================================================
+       NumericUpDown — Compact Controls, Product Polish M2b krok 5.5.
+
+       ⚠ TA KONTROLKA NIE JEST JEDNĄ KONTROLKĄ, tylko trzema zagnieżdżonymi: `NumericUpDown` opakowuje
+       `ButtonSpinner` (`PART_Spinner`), a ten opakowuje `TextBox` (`PART_TextBox`) i dwa
+       `RepeatButton`y. Wysokość 32 wymusza ŚRODKOWA z nich — dlatego sam setter na `NumericUpDown`
+       niczego by nie dał, a to jest inny kształt problemu niż w krokach 5.2–5.4.
+       ⭐ Wewnętrzny `TextBox` wziął `Size.Control` już w kroku 5.2, bez żadnej zmiany tutaj — most
+       sięga w głąb szablonu sam z siebie. To najtańszy możliwy dowód, że warstwa działa kompozycyjnie.
+
+       ⚠ `ButtonSpinner` dostaje własny implicit style, a nie selektor `/template/`, bo jest osobnym
+       TYPEM kontrolki, nie częścią szablonu — i bywa używany samodzielnie.
+       ================================================================================================ -->
+  <Style Selector="NumericUpDown">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ButtonSpinner">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⚠ Strzałki spinnera: Fluent daje im `MinWidth` 34 px, czyli kolumnę SZERSZĄ niż wysokość całej
+       kontrolki po zmianie (24). Przy 15 z 18 użyć spinner jest widoczny, więc to nie jest szczegół.
+       Obie są NAZWANYMI częściami szablonu, więc selektor `/template/` trafia w nie jednoznacznie
+       i §16.4 nie wchodzi w grę — to nie jest własny szablon, tylko setter na nazwanej części
+       (precedens: `TextBox.frameless /template/ Border#PART_BorderElement`). -->
+  <Style Selector="ButtonSpinner /template/ RepeatButton#PART_IncreaseButton">
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+  </Style>
+  <Style Selector="ButtonSpinner /template/ RepeatButton#PART_DecreaseButton">
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+  </Style>
+
   <Style Selector="ToolTip">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />

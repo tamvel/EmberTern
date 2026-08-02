@@ -119,6 +119,23 @@
       <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── RepeatButton — strzałki spinnera (`NumericUpDown`, krok 5.5) ─────────────────────────
+           Ta sama rodzina co `Button` i ten sam defekt: Fluent maluje je pół-przezroczystą bielą.
+           ⚠ Strzałka jest afordancją drugorzędną — niesie „zwiększ/zmniejsz", a nie treść — więc
+           w spoczynku jest BEZ TŁA i dopiero najechanie ją wydobywa. To ten sam podział, który
+           `Button.icon` realizuje w pasku narzędzi. -->
+      <SolidColorBrush x:Key="RepeatButtonBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrushPointerOver" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrushPressed" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -202,6 +219,23 @@
       <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── RepeatButton — strzałki spinnera (`NumericUpDown`, krok 5.5) ─────────────────────────
+           Ta sama rodzina co `Button` i ten sam defekt: Fluent maluje je pół-przezroczystą bielą.
+           ⚠ Strzałka jest afordancją drugorzędną — niesie „zwiększ/zmniejsz", a nie treść — więc
+           w spoczynku jest BEZ TŁA i dopiero najechanie ją wydobywa. To ten sam podział, który
+           `Button.icon` realizuje w pasku narzędzi. -->
+      <SolidColorBrush x:Key="RepeatButtonBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrushPointerOver" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrushPressed" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>

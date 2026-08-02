@@ -1407,9 +1407,10 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | — | **⭐ `FluentBridge` — decyzja architektoniczna** | (w `9ec2c13`) | ✅ ratyfikowana | §15.6.3 · **§16** |
 | 5.2 | **`TextBox`** — pierwsza kontrolka na moście | `9ec2c13` | ✅ zaliczone | §15.6.4 |
 | 5.3 | **`ComboBox`** — próba skalowania mostu | `3483296` | ✅ zaliczone | §15.6.5 |
-| 5.4 | **`Button`** (H‑8) + tokenizacja 4 wariantów | — | ⏳ oczekuje | §15.6.6 |
+| 5.4 | **`Button`** (H‑8) + tokenizacja 4 wariantów | `267a4b8` | ⏳ oczekuje | §15.6.6 |
+| 5.5 | **`NumericUpDown`** — trzy kontrolki zagnieżdżone | — | ⏳ oczekuje | §15.6.7 |
 
-**Nierozpoczęte w kroku 5:** `NumericUpDown` (następny) · `ToggleButton` · `Expander`.
+**Nierozpoczęte w kroku 5:** `ToggleButton` (następny) · `Expander`.
 **Nierozpoczęte poza krokiem 5:** `ScrollBar` (H‑10) · DataGrid Standard (§8.4 specyfikacji).
 
 ⚠ **Stan bieżący suite: 7075** (7000 + 54 + 21). Każda iteracja dokłada 1–2 testy; licznik
@@ -2014,6 +2015,39 @@ a nie jako „przycisk zaprojektowany wobec przycisku Fluenta".
 a nie rola w katalogu (§4.2.4: rola powstaje z drugiego konsumenta).
 
 Build 0/0; suite **7076** (7000 + 54 + 22); smoke czysty.
+
+##### §15.6.7 Iteracja 5 — `NumericUpDown`
+
+Metryki przez styl, kolory strzałek przez Bridge (11 kluczy `RepeatButton*` w obu motywach).
+
+**⚠⚠ TO NIE JEST JEDNA KONTROLKA, TYLKO TRZY ZAGNIEŻDŻONE — i to jest inny kształt problemu niż
+w krokach 5.2–5.4.** `NumericUpDown` opakowuje `ButtonSpinner` (`PART_Spinner`), a ten opakowuje
+`TextBox` (`PART_TextBox`) i dwa `RepeatButton`y. **Wysokość 32 wymusza ŚRODKOWA z nich**, więc setter
+na `NumericUpDown` sam z siebie nie zmieniłby nic mierzalnego. `ButtonSpinner` dostaje własny implicit
+style, a nie selektor `/template/`, bo jest osobnym **typem** kontrolki, nie częścią szablonu.
+
+**⭐ NAJTAŃSZY MOŻLIWY DOWÓD, ŻE MOST DZIAŁA KOMPOZYCYJNIE: wewnętrzny `TextBox` wziął `Size.Control`
+już w kroku 5.2, bez ani jednej zmiany w tej iteracji.** Warstwa sięgnęła w głąb szablonu, na który
+nikt jej nie kierował — bo styl typu obowiązuje wszędzie, gdzie ten typ wystąpi, także wewnątrz
+cudzego szablonu. To jest praktyczna różnica między *przepięciem* frameworka a *skopiowaniem* go:
+kopia szablonu `NumericUpDown` musiałaby powtórzyć decyzje `TextBoxa`.
+
+**⚠ Asercja mierzy `DesiredSize`, nie `MinHeight` — i to jest istota tego kroku.** Właściwość można
+ustawić poprawnie na kontrolce zewnętrznej, podczas gdy wewnętrzna nadal wymusza starą wysokość;
+`MinHeight` pokazywałby wtedy 24, a kontrolka miałaby 32. Ten sam kształt co kłamiące `MinHeight=0`
+`RadioButtona` (§15.6.1), o poziom zagnieżdżenia dalej.
+
+**⚠ Strzałki spinnera miały `MinWidth` 34 px — kolumnę SZERSZĄ niż wysokość całej kontrolki po
+zmianie (24).** Przy 15 z 18 użyć spinner jest widoczny, więc to nie jest szczegół. Obie są
+**nazwanymi** częściami szablonu, więc selektor `/template/` trafia w nie jednoznacznie i §16.4
+nie wchodzi w grę — to nie jest własny szablon, tylko setter na nazwanej części (istniejący precedens:
+`TextBox.frameless /template/ Border#PART_BorderElement`).
+
+⭐ **Strzałka jest afordancją drugorzędną**, więc w spoczynku nie ma tła i dopiero najechanie ją
+wydobywa — ten sam podział, który `Button.icon` realizuje w pasku narzędzi. Kolor tekstu idzie
+z `SubtleForeground` na `Foreground` przy najechaniu.
+
+Build 0/0; suite **7077** (7000 + 54 + 23); smoke czysty.
 
 ---
 
