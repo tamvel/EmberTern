@@ -35,14 +35,14 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | **M3.2b (§7.5)**. ⚠ Wcześniejsza wersja tego wiersza mówiła, że trzy commity czekają na push — **zweryfikowane 2026-08-02: nieaktualne**, oba remote'y stały już na `b16f476`. **Czekają cztery commity: M3.2a + dwa odbiorcze + M3.2b** — push po akceptacji użytkownika |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ✅** (M3.1 odebrane w całości; M3.2a odebrane **dwiema rundami wycofań**; M3.2b czeka na QA wizualne). ⭐ **M3.1 ZAMKNIĘTE**. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma ani jednej bramki przesuwającej cokolwiek |
+| **Ostatni commit** | **wycofanie M3.2b**. ⚠ Wcześniejsza wersja tego wiersza mówiła, że trzy commity czekają na push — **zweryfikowane 2026-08-02: nieaktualne**, oba remote'y stały już na `b16f476`. **Czekają cztery commity: M3.2a + dwa odbiorcze + M3.2b** — push po akceptacji użytkownika |
+| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ WYCOFANA** (M3.1 odebrane w całości; M3.2a odebrane **dwiema rundami wycofań**; M3.2b **cofnięta w całości** — §19.14). ⭐ **M3.1 ZAMKNIĘTE**. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma ani jednej bramki przesuwającej cokolwiek |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
 | **Suite** | **7133**, zielony w trzech partycjach (**7031 + 48 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⭐⭐ **M3.2c (H‑5)** — Commit / Rollback na `CommitButtonBrush` / `RollbackButtonBrush` (decyzja **DD** podjęta). ⚠ Audyt nazwał zły moduł: drugim jest **Data Import**, nie Script Executor, a oba moduły używają **tych samych ikon i tych samych pędzli** — różni je wyłącznie wariant przycisku, co jest zgodne z decyzją architektoniczną 4. ⭐ Prawdziwy defekt: **oba tokeny docelowe nie mają dziś ani jednego konsumenta**, a Rollback maluje się `DangerIconBrush` — tokenem kategorii „operacje nieodwracalne", którą Rollback nie jest |
+| **NASTĘPNY KROK** | ⭐⭐ **M3.2b′ — PROJEKT JĘZYKA KOLORÓW**, i kolejność jest ODWRÓCONA: najpierw język (role · zastosowania · wyjątki) → akceptacja → dopiero przypisanie przycisków. ⛔ Nie dedukować reguły z istniejących przycisków (§19.14.5) |
 | **⏸ ZAMKNIĘTE PRZEZ R13** | Dług „sekcja 3 toolbara drga przy przełączaniu pod-zakładek" (§19.10.3) **nie wymaga już decyzji** — R13 rozstrzyga go z góry: nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Sekcja 3 zostaje jak jest |
 | **⏸ DROBIAZG DO WZIĘCIA PO DRODZE** | Wyłączone komórki Size/Scale/SubType/Charset dostały `Stretch`, ale **tło nadal maluje `FluentBridge`** (`TextControlBackgroundDisabled` → `BackgroundColor`), więc setter `Background="Transparent"` go nie zdejmuje. Jeśli po QA nadal widać pudełko — trasa jest przez **Bridge**, nie przez setter (reguła 8 §16). Zapis: §19.8.4 |
 
@@ -471,6 +471,17 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
    Wybór wariantu na podstawie pomiaru był właściwym trybem, ale te dwie zmiany dało się ocenić
    **dopiero na ekranie**. Dla zmian przestawiających elementy w polu widzenia krok 5 procedury
    („uruchom aplikację i obejrzyj") jest **bramką odbioru, nie formalnością na koniec**.
+17. ⛔⛔ **NAJWAŻNIEJSZA (M3.2b, §19.14) — REGUŁA OPISUJE TO, CO JUŻ JEST DOBRE; NIE JEST MANDATEM DO
+   ZMIANY WSZYSTKIEGO, CO DO NIEJ NIE PASUJE.** Cztery odrzucenia z rzędu, jeden mechanizm: pomiar →
+   reguła → **doprowadzenie reguły do końca** → produkt gorszy. Ani razu nie zawiódł pomiar; za każdym
+   razem zawiodło przekonanie, że skoro reguła jest prawdziwa, to jej pełne zastosowanie jest ulepszeniem.
+   ⚠ **Element niezgodny z regułą bywa wyjątkiem, który DZIAŁA** — Comment/Uncomment miały różne kolory
+   na wyraźne życzenie użytkownika, bo ikony są podobne; uznałem to za „kolor niosący fałszywą różnicę".
+   ⭐ Praktycznie, przed każdą zmianą wyprowadzoną z reguły zadaj **dwa** pytania: *„czy ten element jest
+   niezgodny, bo to błąd — czy dlatego, że ktoś świadomie tak chciał?"* oraz *„co użytkownik traci, jeśli
+   się mylę?"*. ⚠⚠ I trzecie, mierzalne: **czy mierzyłem tam, gdzie problem jest, czy tam, gdzie patrzę?**
+   §19.14.2 — 91% ikon aplikacji jest już neutralnych, a ja wyciszałem, bo wszystkie kolorowe skupiają
+   się w dwóch paskach, czyli dokładnie w moim polu widzenia.
 16. ⭐⭐ **NOWA (M3.2a, §19.12) — GDY AUDYT NAZYWA PROBLEM JEDNĄ WIELKOŚCIĄ, TO JEST HIPOTEZA O PROBLEMIE,
    A NIE JEGO DEFINICJA.** H‑3 brzmiało *„toolbar się przesuwa"*, więc pomiar dał liczbę pikseli, a każde
    z trzech rozwiązań tę liczbę zmniejszało — i **każde płaciło inną walutą**: rozmiarem akcji głównej,
@@ -509,8 +520,9 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 6 | **M3.1f** | Sekcja postępu + operacja referencyjna; ⭐ **infrastruktura dla M3b — oba tryby**, choć operacja referencyjna umie tylko nieokreślony · ⭐ Cancel to **dwa zasięgi jednej komendy**, zamyka lukę bramkowania (§19.7) | — |
 | ✅ 6b | **poprawki odbiorcze** | Zamknięte bez osobnej iteracji (decyzja użytkownika): wyrównanie endpointu **zamknięte pomiarem bez zmiany kodu** · bug historii parametrów · pusta kolumna Type przy domenie · wygląd wyłączonych komórek (§19.8) | — |
 | ✅ 7 | **M3.2a** | H‑3. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. ⛔⛔ **Z czterech ruchów został JEDEN — Export DDL na koniec paska tytułu (T2).** Odbiór wizualny cofnął podłogę Execute/Cancel, dokowanie Commit/Rollback i rezerwację slotu sekcji 1: ⭐ **GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI** · rozmiar z wyrównania czyta się jak deklaracja ważności (R5 od drugiej strony) · ⭐⭐ **R13** — nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Wszystkie przesunięcia **świadomie zaakceptowane**. §19.10 + §19.11 + **§19.12** | — |
-| ✅ 8 | **M3.2b** | §7.5 — semantyka kolorów. Pasek tytułu niesie teraz **wyłącznie 10 kolorów rodzaju + 1 Danger**. ⭐ Znalezione poza §7.5: **trzy naruszenia w toolbarze dokumentu** (Uncomment jako `Danger`, Comment jako `Info`, Execute procedury jako `Success`) — najgorszy jest Comment/Uncomment, bo **kolor niósł rozróżnienie, którego nie ma**. ⚠⚠ §7.5 skorygowane w miejscu: neutralny dla IKONY to `NeutralIconBrush` (brak `Foreground`), nie `ForegroundBrush` — dwa różne tokeny. §19.13 | **DC** ✅ |
-| ⭐ **9** | **M3.2c** | **← TU ZACZYNASZ.** H‑5 — Commit / Rollback na `CommitButtonBrush` / `RollbackButtonBrush`. ⚠ Audyt nazwał zły moduł: drugim jest **Data Import**, nie Script Executor. ⭐ Oba tokeny docelowe **nie mają dziś ani jednego konsumenta** | **DD** ✅ |
+| ⛔ 8 | ~~**M3.2b**~~ | **WYCOFANA W CAŁOŚCI** (§19.13 + §19.14). Wyprowadziłem regułę z §7.5 i doprowadziłem ją do końca; UX wyszedł gorszy. ⭐ Ocalała jedna rzecz — korekta §7.5: neutralny dla IKONY to `NeutralIconBrush` (brak `Foreground`), nie `ForegroundBrush` | — |
+| ⭐⭐ **9** | **M3.2b′ — JĘZYK KOLORÓW** | **← TU ZACZYNASZ, i kolejność jest ODWRÓCONA (ratyfikowane):** najpierw **projekt języka** (role · zastosowania · wyjątki) → **akceptacja** → dopiero potem przypisanie przycisków. ⛔ Nie dedukować reguły z istniejących przycisków. Wejścia: pomiar §19.14.2/§19.14.3 + szkic ról użytkownika (🟢 uruchom · 🟢 commit · 🔵 debugger · 🟣 monitoring · 🟡 pomocnicze · 🔴 destrukcja/stop) + §7.5 jako **jedno z wejść, nie źródło** | — |
+| 10 | **M3.2c** | H‑5 — Commit / Rollback na `CommitButtonBrush` / `RollbackButtonBrush`. ⚠ Audyt nazwał zły moduł: drugim jest **Data Import**, nie Script Executor. ⭐ Oba tokeny docelowe **nie mają dziś ani jednego konsumenta**. ⏸ Prawdopodobnie wchłonie go język kolorów | **DD** ✅ |
 
 | 10 | **M3.2d** | M‑1 — 10 literałów → `UiStrings` | — |
 | 11 | **M3.3a** | Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik; **K9/K10 zostają** | — |

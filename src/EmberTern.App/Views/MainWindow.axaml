@@ -144,20 +144,18 @@
                   Command="{Binding Metadata.CopySelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Copy}" />
           </Button>
-          <!-- ⚠ `DangerIconBrush`, nie `WarningIconBrush` (M3.2b / §7.5): usunięcie połączenia jest
-               operacją nieodwracalną, a to jest dokładnie kategoria, którą `DangerIconBrush` rezerwuje
-               (Drop · Delete · Stop). Ostrzeżenie nosi ten sam ciężar co Usuń w pasku dokumentu. -->
           <Button Classes="icon"
                   ToolTip.Tip="Delete Connection"
                   Command="{Binding Metadata.DeleteSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Trash}"
-                              Foreground="{DynamicResource DangerIconBrush}" />
+                              Foreground="{DynamicResource WarningIconBrush}" />
           </Button>
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
                   ToolTip.Tip="Connect"
                   Command="{Binding Metadata.ConnectSelectedCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.PlugZap}" />
+            <controls:SvgIcon Data="{StaticResource Icon.PlugZap}"
+                              Foreground="{DynamicResource AccentIconBrush}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="Disconnect"
@@ -172,29 +170,12 @@
           <Button Classes="icon"
                   ToolTip.Tip="{Binding Metadata.RefreshTooltip}"
                   Command="{Binding Metadata.RefreshCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
+            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
+                              Foreground="{DynamicResource InfoIconBrush}" />
           </Button>
           <!-- Security Manager — sits between the Connection/Database section and the
                Create-Object section, separated on both sides (it's a tool, not a
-               "new object" creator).
-               ⚠ ZOSTAJE kolorowy (`IconColor_Role`) mimo że jest NARZĘDZIEM, nie kreatorem: niesie
-               KOLOR RODZAJU — dotyczy ról i użytkowników, a rola ma ten sam kolor w drzewie metadanych
-               i na zakładce. §7.5 obejmuje kreatory i to narzędzie tak samo (§3.4/uściślenie 1). -->
-          <!-- ⭐⭐ OD M3.2b IKONY NARZĘDZI OGÓLNYCH NIE MAJĄ `Foreground` — I TO JEST REGUŁA, NIE
-               NIEDOPATRZENIE (§7.5, §19.13). Sześć narzędzi poniżej (Activity Monitor, Session Manager,
-               Global Search, Script Executor, Data Import, Export DDL) świeciło `AccentBrush`, a Connect
-               i Refresh — `AccentIconBrush` / `InfoIconBrush`. Żadne z nich nie odpowiada ani na pytanie
-               „czego to dotyczy?" (nie identyfikują rodzaju obiektu), ani na „co to zrobi z moimi
-               danymi?" (nic nieodwracalnego), więc **poprawną odpowiedzią jest neutralność** — a nie
-               niebieska tapeta, na której gubi się dziesięć znaczących kolorów rodzajów obok.
-
-               ⚠ Neutralność realizujemy przez BRAK `Foreground`, nie przez podstawienie
-               `ForegroundBrush`. `SvgIcon` ma w swoim `ControlTheme` domyślny `NeutralIconBrush`, który
-               jest CELOWO INNY niż kolor tekstu (Dark #C8CCD2 vs #D4D4D4, Light #3C3C3C vs #1B1D1F —
-               ikona stroke'owana czyta się inaczej niż litera). ⛔ Wpisanie tu `ForegroundBrush`
-               rozjechałoby ikony paska z ikonami całej reszty aplikacji; §7.5 mówi „ForegroundBrush",
-               ale to zapis sprzed pomiaru i został skorygowany w miejscu. -->
-          <!-- Monitoring section: live database Activity Monitor (trace) + Session Manager. -->
+               "new object" creator). -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarSecurityManagerTooltip}"
@@ -206,31 +187,36 @@
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarActivityMonitorTooltip}"
                   Command="{Binding OpenTraceMonitorCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.Activity}" />
+            <controls:SvgIcon Data="{StaticResource Icon.Activity}"
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarSessionManagerTooltip}"
                   Command="{Binding OpenSessionManagerCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.Connection}" />
+            <controls:SvgIcon Data="{StaticResource Icon.Connection}"
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Global Search (metadata names + source bodies) — Ctrl+Shift+F. -->
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarGlobalSearchTooltip}"
                   Command="{Binding OpenGlobalSearchCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.Search}" />
+            <controls:SvgIcon Data="{StaticResource Icon.Search}"
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Script Executor: run a multi-statement / migration script in one transaction. -->
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarScriptExecutorTooltip}"
                   Command="{Binding OpenScriptExecutorCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.FileText}" />
+            <controls:SvgIcon Data="{StaticResource Icon.FileText}"
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Data Import: clipboard / TXT / CSV / XLSX into a table. Sits beside the Script Executor
                because it is its peer — a tools tab, near-singleton, active only while connected (D6). -->
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarDataImportTooltip}"
                   Command="{Binding OpenDataImportCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.Import}" />
+            <controls:SvgIcon Data="{StaticResource Icon.Import}"
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Table-creation section sits AFTER all connection-related buttons.
                Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
@@ -314,7 +300,8 @@
                   IsVisible="{Binding CanExportDdl}"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarExportDdlTooltip}"
                   Command="{Binding ExportDdlCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.Save}" />
+            <controls:SvgIcon Data="{StaticResource Icon.Save}"
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
         </StackPanel>
 
@@ -1155,25 +1142,7 @@
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep3Visible}" />
 
-              <!-- ── SECTION 4 · Helper actions ───────────────────────────────────────
-                   ⭐⭐ TRZY NARUSZENIA KONTRAKTU KOLORÓW ZDJĘTE W M3.2b (§7.5, §19.13). Audyt objął
-                   §7.5 wyłącznie pasek tytułu; toolbar dokumentu miał własne odstępstwa i są one
-                   ostrzejsze, bo dotyczą par, które przez kolor mówiły nieprawdę:
-
-                   1. **Uncomment nosił `DangerIconBrush`** — a odkomentowanie kodu NIE jest operacją
-                      nieodwracalną (jedno Ctrl+Z). Ten token jest zarezerwowany dla Drop · Delete ·
-                      Stop, czyli dla rzeczy, których cofnąć się nie da.
-                   2. **Comment nosił `InfoIconBrush`** — razem z powyższym para symetrycznych operacji
-                      edycyjnych czytała się jako „bezpieczna / groźna". To jest gorsze niż brak koloru:
-                      kolor niósł rozróżnienie, którego nie ma.
-                   3. **Execute procedury i funkcji nosiło `SuccessIconBrush`** — a `Success` w kontrakcie
-                      §7.5 znaczy **wyłącznie zatwierdzenie transakcji**. Uruchomienie procedury dzieje
-                      się w transakcji użytkownika i jest odwracalne Rollbackiem, więc nie jest ani
-                      sukcesem, ani operacją nieodwracalną.
-
-                   ⭐ Wszystkie trzy to teraz neutralne ikony pomocnicze (brak `Foreground` ⇒
-                   `NeutralIconBrush` z `ControlTheme`). Kolor nie był tu jedynym nośnikiem i nie jest
-                   potrzebny: Comment i Uncomment mają RÓŻNE geometrie i własne tooltipy. -->
+              <!-- ── SECTION 4 · Helper actions ─────────────────────────────────────── -->
               <!-- SQL editor -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
                       Command="{Binding NewQueryCommand}" IsVisible="{Binding IsQueryTabActive}">
@@ -1201,7 +1170,7 @@
               <!-- Procedure: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
                       Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Play}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
               </Button>
               <!-- Debugger entry point (Stage X / D5) — same launch as the sidebar "Debug procedure…". -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureDebugTooltip}"
@@ -1214,11 +1183,11 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
                       Command="{Binding ActiveProcedureDetail.CommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Comment}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <!-- Trigger: debug / format / comment / uncomment -->
               <!-- Debugger entry point (Stage X / D10) — same launch as the sidebar "Debug trigger…". -->
@@ -1232,16 +1201,16 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
                       Command="{Binding ActiveTriggerDetail.CommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Comment}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveTriggerDetail.UncommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <!-- Function: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionExecuteTooltip}"
                       Command="{Binding ActiveFunctionDetail.ExecuteFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Play}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
               </Button>
               <!-- Debugger entry point (D-function) — same launch as the sidebar "Debug function…"; the
                    function runs as the debug root (Return group in Variables). -->
@@ -1255,11 +1224,11 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
                       Command="{Binding ActiveFunctionDetail.CommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Comment}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveFunctionDetail.UncommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <!-- Package: debug the selected Members-tab member (D15.3 Seam E) — the action lives on the
                    editor toolbar, like the procedure/trigger Debug buttons, rather than as a row inside the
@@ -1283,11 +1252,11 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
                       Command="{Binding ActivePackageDetail.CommentBodyCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Comment}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActivePackageDetail.UncommentBodyCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep4Visible}" />

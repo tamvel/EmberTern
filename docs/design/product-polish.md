@@ -5553,7 +5553,15 @@ smoke czysty.
 
 ---
 
-### §19.13 Iteracja 8 (M3.2b) — §7.5, semantyka kolorów na pasku narzędzi (2026-08-02)
+### §19.13 Iteracja 8 (M3.2b) — §7.5, semantyka kolorów ⛔ WYCOFANA W CAŁOŚCI (2026-08-02)
+
+> ⛔⛔ **CAŁA TA ITERACJA ZOSTAŁA COFNIĘTA — czytaj razem z §19.14, która niesie powód i pomiar.**
+> Kod wrócił do stanu sprzed M3.2b; zapis zostaje, bo pokazuje **jak poprawne wykonanie ratyfikowanego
+> zapisu może dać zły produkt**. ⭐ Jedno ustalenie z tej iteracji **przetrwało i obowiązuje**: korekta
+> §7.5 o `NeutralIconBrush` vs `ForegroundBrush` (§19.13.3) — to fakt o kodzie, niezależny od kierunku.
+
+**Poniższy zapis opisuje stan, który NIE ISTNIEJE w produkcie.**
+
 
 **Zakres:** realizacja ratyfikowanego kontraktu §7.5 na obu paskach. ⚠ Decyzja **DC** obowiązuje:
 likwidacja tokenów `AccentIconBrush` / `InfoIconBrush` **nie należy do tej iteracji** (24 wystąpienia
@@ -5621,4 +5629,95 @@ inny odcień ikon w jednym pasku.
 Build 0/0 · **7133** zielony w trzech partycjach (**7031 + 48 + 54**) · smoke czysty · **bez nowych
 testów**: iteracja nie wprowadza mechanizmu, tylko usuwa wartości lokalne, a strażnikiem poprawności
 jest tu reguła zapisana w miejscu, nie asercja.
-⏸ **QA wizualne w obu motywach — po stronie użytkownika.**
+⛔ **Wycofane w całości po QA — §19.14.**
+
+---
+
+### §19.14 ⭐⭐ Odbiór M3.2b — WZORZEC, KTÓRY TRZEBA PRZERWAĆ, I POMIAR, KTÓRY ODWRACA PROBLEM (2026-08-02)
+
+Użytkownik odrzucił kierunek M3.2b i — ważniejsze — **nazwał powtarzalny wzorzec w trzech ostatnich
+iteracjach**. To jest najcenniejsza rzecz, jaka wyszła z M3.2, i dlatego stoi przed opisem samej zmiany.
+
+#### §19.14.1 ⛔⛔ Diagnoza użytkownika — cytat, bo parafraza by go osłabiła
+
+> *„Analiza jest bardzo dobra, pomiary są bardzo dobre, ale później próbujesz doprowadzić regułę do
+> logicznej konsekwencji, zamiast jeszcze raz spojrzeć na gotową aplikację. Tak było z przeniesieniem
+> Commit/Rollback na prawą stronę, kotwicami zostawiającymi puste miejsca, a teraz z kolorami.
+> Za każdym razem argumentacja była logiczna, ale po uruchomieniu aplikacji UX okazywał się gorszy.
+> Myślę, że problem leży w założeniu, że musi istnieć jedna uniwersalna reguła."*
+
+⭐ **Cztery odrzucenia z rzędu, jeden mechanizm.** Za każdym razem: pomiar → reguła → **doprowadzenie
+reguły do końca** → produkt gorszy. Ani razu nie zawiódł pomiar; za każdym razem zawiodło przekonanie,
+że skoro reguła jest prawdziwa, to jej pełne zastosowanie jest ulepszeniem.
+
+⚠ **To jest R8 łamane od strony, której R8 nie przewidywała.** R8 ostrzega przed traktowaniem pomiaru
+jako argumentu końcowego — a ja pomiar wykonywałem uczciwie i dopiero **wniosek** z niego rozciągałem
+za daleko. ⛔ Nowa formuła, mocniejsza: **reguła opisuje to, co już jest dobre, i nie jest mandatem do
+zmiany wszystkiego, co do niej nie pasuje.** Element niezgodny z regułą bywa wyjątkiem, który działa.
+
+#### §19.14.2 ⭐⭐ POMIAR, KTÓRY ODWRACA POSTAWIENIE PROBLEMU
+
+Zmierzone po odrzuceniu, na **całej aplikacji**, a nie na dwóch paskach:
+
+```
+442 instancje SvgIcon w widokach
+ 39 z nich niesie Foreground        ⇒  91 % ikon aplikacji JEST JUŻ NEUTRALNYCH
+```
+
+⭐⭐ **To unieważnia sposób, w jaki postawiłem M3.2b.** Pracowałem tak, jakby aplikacja była przekolorowana
+i trzeba ją wyciszyć — a wyciszona jest w 91%. Kolor jest **rzadkim wyjątkiem**, nie tapetą. Wrażenie
+nadmiaru brało się stąd, że wszystkie kolorowe ikony skupiają się w dwóch paskach, czyli **dokładnie tam,
+gdzie patrzyłem**. ⚠ To ta sama pułapka co przy monospace w Settings Center (§2.7): *survey próbkujący
+miejsca, które ma powód oglądać, myli lokalne zagęszczenie z rozkładem globalnym.*
+
+#### §19.14.3 ⭐⭐ PRAWDZIWA NIESPÓJNOŚĆ — ta sama akcja ma różne kolory w różnych modułach
+
+Pełny inwentarz 39 kolorowych ikon pokazał defekt, którego §7.5 nie opisuje **i którego moja reguła
+by nie naprawiła**:
+
+| Akcja | Ile kolorów | Gdzie |
+|---|---|---|
+| **uruchom** (`Icon.Play`) | **3** | `OnAccentBrush` (SQL, Script) · `SuccessIconBrush` (procedura, funkcja, Trace) · `AccentIconBrush` (debugger Continue) |
+| **edytuj** (`Icon.Pencil`) | **3** | `WarningIconBrush` (Procedure, Function) · `AccentIconBrush` (Data Import) · neutralny (Edit Connection) |
+| **odśwież** (`Icon.RefreshCw`) | **3** | `InfoIconBrush` (pasek tytułu, Table) · `AccentIconBrush` (Data Import) · neutralny (Index) |
+| **usuń trwale** (`Icon.Trash`) | **2** | `DangerIconBrush` (7×) · `WarningIconBrush` (usuń połączenie, usuń zapytanie) |
+| **dodaj** (`Icon.Plus`) | **2** | `SuccessIconBrush` (Procedure, Function) · neutralny (pasek tytułu, sekcja 3) |
+
+⭐ **Użytkownik znalazł jeden z tych przypadków sam, patrząc na ekran** — żółte przyciski przy Saved
+Queries. Zmierzone: to `Icon.Trash` i `Icon.ListX` na `WarningIconBrush`, czyli **dwie operacje
+destrukcyjne w kolorze ostrzeżenia**, podczas gdy identyczna operacja w pasku dokumentu jest czerwona.
+
+⚠ Spójne już dziś i **nie wymagające niczego**: `Icon.Check` → zawsze `SuccessIconBrush` (5×),
+`Icon.Stop` → zawsze `DangerIconBrush` (5×), 10 × `IconColor_*`. ⭐ To są **wzorce do naśladowania,
+a nie do ujednolicania** — język kolorów powinien je opisać, nie zmienić.
+
+#### §19.14.4 ⛔ Dlaczego kierunek M3.2b był zły — trzy konkretne straty
+
+| Zmiana | Dlaczego pogorszyła |
+|---|---|
+| Execute procedury `Success` → neutralny | 🟢 to naturalny kolor „Uruchom". ⭐ **Nie kolidował z zielonym Commitem, bo konteksty są rozłączne i użytkownik ich nie myli** — czego moja reguła („`Success` = wyłącznie commit") nie dopuszczała |
+| Comment / Uncomment → oba neutralne | ⚠⚠ **Rozróżnienie było CELOWE i zamówione wcześniej przez użytkownika**: ikony są bardzo podobne, a kolor pozwala je rozpoznać błyskawicznie. Uznałem je za „kolor niosący fałszywą różnicę"; w rzeczywistości niósł różnicę **prawdziwą i użyteczną** — po prostu inną niż moja kategoria |
+| 6 narzędzi + Connect + Refresh → neutralne | wyszarzenie bez zysku; ⛔ **żółte Saved Queries — czyli miejsce z naprawdę wątpliwą semantyką — zostały nietknięte**, bo leżały poza dwoma paskami, które mierzyłem |
+
+⭐⭐ **Wniosek, który obowiązuje dalej: w IDE kolor nie koduje wyłącznie „success / danger / neutral".
+Koduje także RODZAJ AKCJI, i to jest jego główna praca — pozwala rozpoznać przycisk, zanim się go
+przeczyta.** Te dwa systemy nie są sprzeczne, bo działają w rozłącznych kontekstach.
+
+#### §19.14.5 ⭐ Nowe podejście — ratyfikowany przez użytkownika ODWRÓT KOLEJNOŚCI
+
+> **Użytkownik:** *„Nie próbujmy teraz wyprowadzać reguły z istniejących przycisków. Najpierw zdefiniujmy
+> język kolorów EmberTerna: jakie role kolorów chcemy mieć, do czego każdy kolor służy, gdzie dopuszczamy
+> wyjątki, a dopiero potem przypiszmy do tych ról wszystkie przyciski."*
+
+⛔ **M3.2b nie zostanie wznowione w dawnej postaci.** Kolejność prac jest odwrócona: **projekt języka →
+akceptacja → przypisanie przycisków**. §7.5 przestaje być źródłem, z którego się dedukuje — staje się
+jednym z wejść do projektu, obok pomiaru z §19.14.2/§19.14.3 i szkicu ról od użytkownika
+(🟢 uruchom · 🟢 commit · 🔵 debugger · 🟣 monitoring · 🟡 pomocnicze/specjalne · 🔴 destrukcja/stop).
+
+#### §19.14.6 Stan
+
+Kod wrócony do stanu sprzed M3.2b (`MainWindow.axaml` z commita wycofującego B1). ⭐ Zachowana jedyna
+rzecz, która nie zależy od kierunku: **korekta §7.5 o `NeutralIconBrush` vs `ForegroundBrush`** — to
+fakt o kodzie, nie decyzja projektowa.
+
+Build 0/0 · **7133** zielony w trzech partycjach (**7031 + 48 + 54**) · smoke czysty.
