@@ -3123,8 +3123,147 @@ liczba, bo nie da się go osiągnąć hurtem.
 
 ##### E. Stan liczbowy po kroku 0
 
-Build **0/0** · suite **7088** · smoke czysty · drzewo czyste.
+Build **0/0** · suite **7087** (⚠ patrz §18.1.6 — zapis „7088" był zawyżony o 1; zmierzone) ·
+smoke czysty · drzewo czyste.
 Liczniki **bez zmian** (krok 0 nie migrował niczego): `FontSize` **605 / 49** ·
 `FontFamily` **81 / 28** · `CornerRadius` **37 / 13**.
 **Przewidywany stan wyjściowy M2c:** `FontSize` ≈ **28 + reszta znaleziona w iteracjach** ·
 `FontFamily` **81** (poza zakresem) · `CornerRadius` **20**.
+
+---
+
+### §18.1 Iteracja 1 — `DebuggerTabView` (2026-08-02)
+
+> **Zakres:** `Views/DebuggerTabView.axaml` (85) + `Views/DebuggerTabView.axaml.cs` (6). Największe
+> skupisko w aplikacji. `CornerRadius` w tych plikach **nie występuje** (0/0 — zweryfikowane, plik nie ma
+> wpisu w `CornerRadiusBaseline`); `FontFamily` 17 + 2 **nietknięte** (poza zakresem etapu, §18.0.5/1).
+
+#### §18.1.1 Wynik
+
+| Plik | Przed | Po | Zmigrowane | Zostaje z powodem |
+|---|---|---|---|---|
+| `DebuggerTabView.axaml` | 85 | **4** | 81 | 4 |
+| `DebuggerTabView.axaml.cs` | 6 | **1** | 5 | 1 |
+
+Rozkład ról: `Text.Compact` 62 · `Text.Caption` 13 (+1 w code-behind) · `Text.SectionHeader` 2 (+1) ·
+`Text.Application` 2 · `Text.Code` 1 · `Text.Grid` 1 · `Text.Compact` w code-behind 3.
+**Ani jedna wartość liczbowa się nie zmieniła.**
+
+#### §18.1.2 ⭐ Koszyk A był PUSTY — i to jest wynik pomiaru, nie brak pracy
+
+W tym pliku **żadnej wartości nie dało się po prostu usunąć**. Powód jest systematyczny: **cały widok
+debuggera stoi o jeden stopień gęściej niż domyślny styl M2b** — 11 px tam, gdzie styl daje 12 (pola
+parametrów, filtr zmiennych, wejście Immediate, warunek breakpointu, wszystkie przyciski paska). To nie
+dryf, tylko decyzja D15.3 Seam A („compact parameter row… tighter rows").
+
+⚠ **Konsekwencja dla kolejnych iteracji:** przewidywanie z §18.0.3, że koszyk A zdejmie 77 wystąpień,
+dotyczy plików o **domyślnej** gęstości. Tam, gdzie widok ma własną gęstość, koszyk A znika i wszystko
+jest podmianą na rolę. Nie zakładaj proporcji z inwentarza per plik.
+
+#### §18.1.3 ⭐⭐ NOWA REGUŁA RATYFIKOWANA — GLIF: funkcja, nie rozmiar
+
+Krok 0 rozstrzygnął tylko glify przy 9 px („brak roli"). Ten plik zawiera 8 znaków-ikon renderowanych
+jako tekst (`▾ ▸ ★ ☆ ▶ ◆ ● ± △`) przy 9/10/11/12 px, więc regułę trzeba było postawić.
+
+> **Użytkownik, ratyfikując 2026-08-02:** *„Nie dzielmy glifów według rozmiaru, tylko według funkcji.
+> Glif będący częścią tekstu → korzysta z roli tekstowej; glif będący elementem geometrii lub układu →
+> zostaje lokalny jako wyjątek. To jest spójne z decyzją dotyczącą `CornerRadius` i nie tworzy sztucznych
+> wyjątków."*
+
+| Czym znak JEST | Działanie | Dlaczego |
+|---|---|---|
+| **część tekstu** — stoi w wierszu obok etykiety i jest wobec niej podrzędny | rola przy **tej samej** wartości | ma skalować się razem z tekstem, który adnotuje; inaczej pierwsza zmiana skali pisma rozjedzie wiersz |
+| **element układu / geometrii** — rozmiar wyznacza pudełko, w które znak jest rysowany | **koszyk D** + komentarz | podpięcie pod rolę treści przycięłoby znak przy pierwszej zmianie katalogu |
+
+⭐ Reguła jest sformułowana **pozytywnie** (decyzja architektoniczna §17.2/3) i jest **rozszerzeniem
+ratyfikowanej zasady o geometrii `CornerRadius`** (§18.0.5/2) o jeden rodzaj wartości: *token opisuje
+rolę projektową, nie zbieżną liczbę.* **Obowiązuje w iteracjach 2–9.**
+
+#### §18.1.4 Pięć wyjątków — każdy z powodem zapisanym W MIEJSCU (R12)
+
+| Miejsce | Wart. | Dlaczego rola nie pasuje | Rozstrzyga |
+|---|---|---|---|
+| `ParamRowTemplate` — `OriginLabel` („restored"/„assumed") | 9 | katalog nie ma roli o tej wartości; `Text.Caption` (10) zmieniłby wygląd | §13.3 |
+| Variables — `★` / `☆` w `Button 18×18 Padding=0` | 12 | **element układu**: rozmiar dobrany do przycisku; `Text.Application` (dziś też 12) przycięłaby znak przy pierwszej zmianie skali | §13.3 |
+| Call Stack — `▶` marker bieżącej ramki | 9 | dwa niezależne powody: brak roli przy 9 **i** kolumna o stałej szerokości 14 px | §13.3 |
+| `.axaml.cs` — ciało karty Peek Frame (`TextBox`, mono) | 12 | powierzchnia **KODU**, a rola kodu (`Text.Code`) niesie 13 | §13.3 |
+
+⚠ **Ostatni wpis to świadome odrzucenie koszyka A.** Technicznie usunięcie tej linii byłoby dziś
+wizualnie neutralne (styl `TextBox` daje dokładnie 12), ale **podpięłoby podgląd kodu pod rolę TREŚCI
+przez dziedziczenie** — czyli wprowadziło błędną rolę tylnymi drzwiami. To jest dokładnie kształt, przed
+którym ostrzega R12, tyle że o warstwę niżej: rola nie musi być wpisana wprost, żeby była błędna.
+
+#### §18.1.5 ⚠ `Text.Toolbar` (12 px) nie ma konsumenta, bo realny pasek narzędzi mierzy 11
+
+Tablica ról §18.0.4 kieruje „tekst w pasku narzędzi" do `Text.Toolbar` (12). **Pasek poleceń debuggera
+stoi na 11** — 11 przycisków `Button.flat` plus ich etykiety. Wpisanie tam `Text.Toolbar` byłoby zmianą
+11 → 12, czyli złamaniem DoD 6, więc pasek dostał `Text.Compact` (rola chromy przy 11).
+
+Zmierzone: `Text.Toolbar` **nie ma dziś ANI JEDNEGO konsumenta w całej aplikacji** (`grep -rn` trafia
+wyłącznie w `Typography.axaml`).
+
+> **Użytkownik, ratyfikując:** *„Nie twórz sztucznego konsumenta tylko dlatego, że rola istnieje. Jeśli
+> obecny toolbar realnie pracuje na 11 px, to M2c nie jest miejscem na zmianę jego wyglądu. Niech
+> `Text.Toolbar` pozostanie chwilowo bez konsumenta i wrócimy do tego podczas M3 (Toolbar)."*
+
+⛔ Nie „naprawiać" tego w M2c. Pozycja przechodzi do **M3.2 (Toolbar)** wraz z pytaniem, czy paski
+narzędzi mają pracować na 11 czy na 12.
+
+#### §18.1.6 ⚠⚠ Pomiar obalił zapis — suite ma **7087**, nie 7088, a filtr partycji nazywa nieistniejącą klasę
+
+Zapis §17.6 / §18.0-E i handover §1 mówią **7088 = 7000 + 54 + 34**. Zmierzone: **7000 + 54 + 33 = 7087**.
+
+**Sprawdzone, że to NIE pochodzi z tej iteracji** — pomiar wykonano na czystym `HEAD` (`git stash`,
+przebudowa, trzy partycje) i dał identyczne 7000 + 33 + 54. Zapis był zawyżony wcześniej.
+
+⭐ **Przyczyna jest w drugim zapisie:** filtr partycji (CLAUDE.md + handover §8.3/15) wymienia **pięć**
+klas headless, w tym `ContextMenuPresentationTests` — **taka klasa nie istnieje**. Jej testy zostały
+w którymś momencie wchłonięte przez `ConnectionExpandBindingProbe` (mieszka tam dziś
+`TheSameMenuOperationAlwaysCarriesTheSameIcon`), a nazwa w filtrze została. Po stronie *wykluczenia*
+jest to nieszkodliwe (wyklucza nic), ale arytmetyka „54 + 34" nigdy nie została przemierzona.
+
+→ **Poprawione w miejscu** (§18.0-E). ⚠ **Zgłoszone do decyzji użytkownika, NIE zmienione samodzielnie:**
+te same dwa fakty stoją w `CLAUDE.md` („pięć klas", „7088") i w handoverze §8.3/15 — to dokumenty
+międzyetapowe, więc czekają na akceptację.
+
+#### §18.1.7 Mechanizm dla code-behind — `BindFontSize`, bliźniak istniejącego `BindBrush`
+
+W C# nie ma `{DynamicResource}`; odpowiednikiem jest obserwabla zasobu. Plik **miał już ten wzorzec** dla
+pędzli, więc rola dostała jednolinijkowego bliźniaka obok:
+
+```csharp
+private void BindFontSize(Control control, string roleSizeKey)
+    => control.Bind(TextBlock.FontSizeProperty, this.GetResourceObservable(roleSizeKey));
+```
+
+⚠ Stoi **poza `#if DEBUG`** (karta Peek Frame jest poza nim, `BindBrush` w środku). ⚠ `Mono(...)`
+przestało być `static` — czyta zasób przez `this`, dokładnie jak `BindBrush`. ⚠ Nazwa metody nie wpada
+w regex strażnika (`\bFontSize\s*=` nie ma granicy słowa w `BindFontSize`, a `FontSizeProperty` nie ma po
+sobie `=`) — sprawdzone licznikiem. **Ten sam pomocnik obsłuży pozostałe wywołania w code-behind
+(iteracje 7 i 8).**
+
+#### §18.1.8 ⚠ Zgłoszone, NIE zrobione — `FontWeight` zostaje literałem
+
+Trzy miejsca (`Variables` header, nagłówki grup, nagłówek karty Peek) deklarują `SemiBold` lokalnie, a
+rola `Text.SectionHeader` **też** niesie `SemiBold`. Zmigrowano wyłącznie `Size`, bo `FontWeight` nie jest
+właściwością liczoną przez strażnika, nie ma go w DoD ani w planie iteracji.
+
+⚠ Warto to widzieć jako dług: `Typography.axaml` definiuje rolę jako **komplet** (rodzina + rozmiar +
+waga + interlinia), więc sweep po samym rozmiarze zostawia połowę. **Decyzja o zakresie należy do
+użytkownika i dotyczy całego M2c, nie jednego pliku.**
+
+⚠ Rozważono i **odrzucono** dopisanie `FontSize` do klasy `.subtle` w `ControlStyles.axaml` (zdjęłoby
+12 deklaracji jednym setterem): klasa jest w tym pliku używana przy 10 **i** przy 11, więc niesie
+**kolor**, nie rolę — setter zmieniłby wygląd połowy użyć.
+
+#### §18.1.9 Stan po iteracji 1
+
+Build **0/0** · suite **7087** zielony w trzech partycjach (7000 + 33 + 54) · smoke czysty.
+Liczniki: `FontSize` **605 → 519** · `FontFamily` **81** (poza zakresem) · `CornerRadius` **37**.
+⚠ Liczba plików zostaje **49** — oba pliki debuggera nadal niosą wartości lokalne (4 i 1), świadomie
+i z powodem; pod R12 to jest **wynik**, nie reszta do wyzerowania.
+
+⭐ **Kontrola, która w tym etapie zastępuje „zielony build":** wszystkie 6 użytych kluczy ról
+zweryfikowano wobec `Typography.axaml` skryptem (`{DynamicResource}` **nie rzuca** przy literówce —
+pułapka #14 z handovera §8.2, największe ryzyko sweepu), a aplikację uruchomiono.
+⚠ **Porównanie wizualne w obu motywach należy do QA użytkownika** — narzędzia headless go nie dają.

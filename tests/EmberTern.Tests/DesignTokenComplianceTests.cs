@@ -70,7 +70,6 @@ public class DesignTokenComplianceTests
         // To jest pierwszy wiersz tej listy, który SPADŁ z powodu migracji, a nie pomiaru — czyli dokładnie
         // to, co M2c ma robić z całą resztą.
         ["Views/DataImportTabView.axaml"] = 82,
-        ["Views/DebuggerTabView.axaml"] = 85,
         ["Views/PerformancePanelView.axaml"] = 42,
         ["Views/FunctionDetailTabView.axaml"] = 41,
         ["Views/ProcedureDetailTabView.axaml"] = 40,
@@ -89,10 +88,16 @@ public class DesignTokenComplianceTests
         ["Views/ExecuteProcedureDialog.axaml"] = 9,
         ["Views/AddFieldDialog.axaml"] = 8,
         ["Views/ForeignKeyDialog.axaml"] = 8,
-        ["Views/DebuggerTabView.axaml.cs"] = 6,
         ["Views/AboutWindow.axaml"] = 5,
         ["Views/IndexDialog.axaml"] = 5,
         ["Views/ConstraintFieldDialog.axaml"] = 4,
+        // ⭐ 85 → 4 (M2c iteracja 1). Pierwszy widok przepięty na katalog ról w całości: 81 deklaracji czyta
+        // dziś rolę z Themes/Typography.axaml, a cztery pozostają lokalne Z POWODEM ZAPISANYM W MIEJSCU —
+        // dwa znaki 9 px (katalog nie ma roli o tej wartości) i dwa znaki 12 px dobrane do przycisku 18×18
+        // (element układu, nie tekst). To jest kształt, do którego zmierza całe M2c wg reguły R12: nie zero,
+        // tylko uzasadniona reszta. ⚠ Koszyk A był tu PUSTY — cały debugger stoi o stopień gęściej (11 px)
+        // niż domyślny styl M2b (12), więc żadnej wartości nie dało się po prostu usunąć.
+        ["Views/DebuggerTabView.axaml"] = 4,
         ["Views/NewConnectionDialog.axaml"] = 4,
         ["Views/NewTableTabView.axaml"] = 4,
         ["Controls/TableColumnPicker.cs"] = 3,
@@ -107,6 +112,10 @@ public class DesignTokenComplianceTests
         ["Views/BlobEditorWindow.axaml"] = 1,
         ["Views/ChoiceDialog.axaml"] = 1,
         ["Views/ConfirmDialog.axaml"] = 1,
+        // 6 → 1 (M2c iteracja 1). Pięć wywołań czyta rolę przez `BindFontSize` (odpowiednik
+        // `{DynamicResource}` po stronie C#, bliźniak istniejącego `BindBrush`); zostaje ciało karty Peek —
+        // powierzchnia KODU przy 12 px, gdy rola `Text.Code` niesie 13.
+        ["Views/DebuggerTabView.axaml.cs"] = 1,
         ["Views/ExportDialog.axaml"] = 1,
         ["Views/GlobalSearchDialog.axaml"] = 1,
         ["Views/KeyboardShortcutsWindow.axaml"] = 1,

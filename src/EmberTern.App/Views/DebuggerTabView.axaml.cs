@@ -530,13 +530,14 @@ public partial class DebuggerTabView : UserControl
     private Control BuildPeekCard(string header, string source)
     {
         var stack = new StackPanel { Spacing = 4 };
-        stack.Children.Add(new TextBlock
+        var title = new TextBlock
         {
             Text = header,
             FontWeight = FontWeight.SemiBold,
-            FontSize = 11,
             Foreground = Brush("ForegroundBrush"),
-        });
+        };
+        BindFontSize(title, "Text.SectionHeader.Size");
+        stack.Children.Add(title);
         var body = new TextBox
         {
             Text = source,
@@ -544,6 +545,12 @@ public partial class DebuggerTabView : UserControl
             AcceptsReturn = true,
             TextWrapping = TextWrapping.NoWrap,
             FontFamily = new FontFamily("Cascadia Code,Consolas,Menlo,monospace"),
+            // ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 1 — product-polish.md §18.1). To jest powierzchnia
+            // KODU, a katalog ma dla kodu jedną rolę: `Text.Code` = 13. Usunięcie tej linii byłoby dziś
+            // wizualnie neutralne (styl `TextBox` daje dokładnie 12), ale podpięłoby podgląd kodu pod rolę
+            // TREŚCI (`Text.Application`) — czyli wprowadziłoby błędną rolę tylnymi drzwiami, przez
+            // dziedziczenie, i to jest dokładnie to, przed czym ostrzega R12. Decyzja „czy karta Peek ma
+            // czytać `Text.Code`, i czy kod ma dwa rozmiary" należy do przeglądu §13.3.
             FontSize = 12,
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
@@ -580,6 +587,13 @@ public partial class DebuggerTabView : UserControl
         var theme = ActualThemeVariant;
         return Application.Current?.Resources.TryGetResource(key, theme, out var res) == true && res is IBrush b ? b : null;
     }
+
+    // Rozmiar pisma czytany z katalogu ról jako ŻYWY zasób — odpowiednik `{DynamicResource …}` po stronie C#
+    // (M2c iteracja 1). Bliźniak `BindBrush` niżej: kontrolki budowane w code-behind mają czytać rolę z
+    // Themes/Typography.axaml, a nie nieść własnej liczby. ⚠ Nie ma tu wariantu „snapshot": rola jest
+    // niezależna od motywu, ale `GetResourceObservable` jest jedyną drogą, która przeżyje podmianę skali pisma.
+    private void BindFontSize(Control control, string roleSizeKey)
+        => control.Bind(TextBlock.FontSizeProperty, this.GetResourceObservable(roleSizeKey));
 
     private void ClosePeek()
     {
@@ -716,10 +730,10 @@ public partial class DebuggerTabView : UserControl
 
         var time = new TextBlock
         {
-            FontSize = 10,
             Margin = new Thickness(0, 0, 6, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
+        BindFontSize(time, "Text.Caption.Size");
         time.Bind(TextBlock.TextProperty, new Binding("TimestampText"));
         BindBrush(time, TextBlock.ForegroundProperty, "SubtleForegroundBrush");
         Grid.SetColumn(time, 0);
@@ -730,7 +744,10 @@ public partial class DebuggerTabView : UserControl
         Grid.SetColumn(fragment, 1);
         head.Children.Add(fragment);
 
-        var glyph = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        // Glif `±` czyta rolę tekstową, bo jest CZĘŚCIĄ TEKSTU — stoi w wierszu obok fragmentu i ma się z nim
+        // skalować (M2c iteracja 1, §18.1). Znaki będące elementem układu/geometrii zostają lokalne.
+        var glyph = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        BindFontSize(glyph, "Text.Compact.Size");
         glyph.Bind(TextBlock.TextProperty, new Binding("SideEffectGlyph"));
         BindBrush(glyph, TextBlock.ForegroundProperty, "WarningBrush");
         Grid.SetColumn(glyph, 2);
@@ -757,18 +774,20 @@ public partial class DebuggerTabView : UserControl
     // A subtle, wrapping caption (matches the "subtle" style used for the other panels' hints/descriptions).
     private TextBlock Subtle(string text, Thickness margin)
     {
-        var tb = new TextBlock { Text = text, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = margin };
+        var tb = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = margin };
+        BindFontSize(tb, "Text.Compact.Size");
         BindBrush(tb, TextBlock.ForegroundProperty, "SubtleForegroundBrush");
         return tb;
     }
 
-    private static TextBlock Mono(string path)
+    // ⚠ Instancyjna, nie `static` — `BindFontSize` czyta zasób przez `this`, dokładnie jak `BindBrush` obok.
+    private TextBlock Mono(string path)
     {
         var tb = new TextBlock
         {
-            FontSize = 11,
             FontFamily = new FontFamily("Cascadia Code,Consolas,Menlo,monospace"),
         };
+        BindFontSize(tb, "Text.Compact.Size");
         tb.Bind(TextBlock.TextProperty, new Binding(path));
         return tb;
     }
