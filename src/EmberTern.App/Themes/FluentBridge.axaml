@@ -88,6 +88,37 @@
       <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{StaticResource HoverOverlayColor}" />
       <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{StaticResource SelectionColor}" />
+
+      <!-- ── Button (Product Polish M2b, krok 5.4) ────────────────────────────────────────────────
+           H‑8: 25 surowych przycisków Fluenta bez `Classes`. Fluent maluje je pół-przezroczystą
+           bielą (`#33ffffff`), a stan najechania CZYSTĄ BIELĄ — stąd „przycisk zapala się na biało",
+           efekt obcy palecie warsztatu w obu motywach.
+
+           ⭐ Drabina stanów jest MONOTONICZNA W OBU MOTYWACH i to jest cała jej treść:
+           Panel → ChromeStrong to w Dark rozjaśnienie (#252526 → #2D2D2D), a w Light przyciemnienie
+           (#F3F4F6 → #E8EAED). Kierunek jest przeciwny, znaczenie to samo — „o stopień bliżej
+           kursora". To ta sama zasada, którą RB‑4 wydobyło z `ElevatedPanelBrush`.
+
+           ⚠ WCIŚNIĘCIE NIESIE KRAWĘDŹ, NIE TRZECI ODCIEŃ SZAROŚCI — świadomie, i to jest ten sam
+           język, który krok 5.3 ustalił dla `ComboBoxa`. Trzeci stopień szarości musiałby sięgnąć po
+           `BorderColor` jako WYPEŁNIENIE, czyli użyć tokenu wbrew jego roli (§3.1) — a rola „krawędź"
+           przestałaby cokolwiek znaczyć. Akcent na krawędzi jest czytelniejszy i tańszy.
+           ⚠ Stan `:disabled` NIE zmienia tła: przygaszony jest TEKST. Zmiana tła czytałaby się jak
+           inny rodzaj przycisku, a nie jak przycisk chwilowo niedostępny. -->
+      <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="{StaticResource PanelColor}" />
+
+      <SolidColorBrush x:Key="ButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
@@ -140,6 +171,37 @@
       <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{StaticResource HoverOverlayColor}" />
       <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{StaticResource SelectionColor}" />
+
+      <!-- ── Button (Product Polish M2b, krok 5.4) ────────────────────────────────────────────────
+           H‑8: 25 surowych przycisków Fluenta bez `Classes`. Fluent maluje je pół-przezroczystą
+           bielą (`#33ffffff`), a stan najechania CZYSTĄ BIELĄ — stąd „przycisk zapala się na biało",
+           efekt obcy palecie warsztatu w obu motywach.
+
+           ⭐ Drabina stanów jest MONOTONICZNA W OBU MOTYWACH i to jest cała jej treść:
+           Panel → ChromeStrong to w Dark rozjaśnienie (#252526 → #2D2D2D), a w Light przyciemnienie
+           (#F3F4F6 → #E8EAED). Kierunek jest przeciwny, znaczenie to samo — „o stopień bliżej
+           kursora". To ta sama zasada, którą RB‑4 wydobyło z `ElevatedPanelBrush`.
+
+           ⚠ WCIŚNIĘCIE NIESIE KRAWĘDŹ, NIE TRZECI ODCIEŃ SZAROŚCI — świadomie, i to jest ten sam
+           język, który krok 5.3 ustalił dla `ComboBoxa`. Trzeci stopień szarości musiałby sięgnąć po
+           `BorderColor` jako WYPEŁNIENIE, czyli użyć tokenu wbrew jego roli (§3.1) — a rola „krawędź"
+           przestałaby cokolwiek znaczyć. Akcent na krawędzi jest czytelniejszy i tańszy.
+           ⚠ Stan `:disabled` NIE zmienia tła: przygaszony jest TEKST. Zmiana tła czytałaby się jak
+           inny rodzaj przycisku, a nie jak przycisk chwilowo niedostępny. -->
+      <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="{StaticResource PanelColor}" />
+
+      <SolidColorBrush x:Key="ButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>

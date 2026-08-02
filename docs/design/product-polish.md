@@ -539,6 +539,14 @@ do `ControlStyles.axaml`, obok kontrolek, które go użyją — zgodnie z reguł
 
 ## §7 Katalog — powierzchnie i kolory
 
+> **⚠ STATUS: §7.1 (RB‑4), §7.2 (skala Light) i §7.4 (H‑7) SĄ JUŻ DOSTARCZONE** — kroki 2 i 3 M2b
+> (`a1d607a`, `7975aaa`). Ta sekcja pozostaje zapisem **projektu i uzasadnienia**; ⭐ **liczby
+> wykonawcze — inwentarz konsumentów, ostateczne wartości hex, wynik V‑1 — czytaj z §15.3 i §15.4**,
+> bo pomiar wykonawczy skorygował część z nich (m.in. inwentarz §7.1.1: karta Peek Frame debuggera
+> jest powierzchnią pływającą, nie chromą, więc podział wyszedł 14/14, a nie 20/12).
+> §7.3 i §7.5 nie są jeszcze dostarczone — §7.3 zamknęła decyzja użytkownika (kolor komentarzy
+> zostaje, §15.4.3), §7.5 przypisane do **M3.2**.
+
 ### §7.1 RB‑4 — dlaczego aktywna zakładka czyta się odwrotnie w dwóch motywach
 
 To jest najsubtelniejszy defekt w audycie i warto go opisać dokładnie, bo „oczywista" diagnoza
@@ -1385,6 +1393,28 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 > **Status: W TOKU.** Etap prowadzony małymi, zamkniętymi krokami — po każdym build 0/0,
 > trzy partycje, smoke, commit. Kolejność i uzasadnienie: patrz plan przyjęty 2026-08-01.
 
+### §15.-1 Tablica stanu M2b (aktualizowana po każdej iteracji)
+
+| # | Krok | Commit | QA użytkownika | Sekcja |
+|---|---|---|---|---|
+| 0 | style klasowe czytają katalog (bajtowo neutralne) | `0bbc745` | n/d — brak zmiany wizualnej | §15.1 |
+| 1 | **`CheckBox`** (RB‑2) | `26243cb` | ✅ zaliczone | §15.2 |
+| 2 | **RB‑4** — `ChromeStrong` / `SurfaceRaised` | `a1d607a` | ✅ (ocena odłożona do kroku 3) | §15.3 |
+| 3 | skala szarości Light (§7.2) + H‑7 (§7.4) + V‑1 | `7975aaa` | ✅ zaliczone | §15.4 |
+| 4 | **`ToolTip`** (M‑2) | `e5b010f` | ✅ zaliczone | §15.5 |
+| 5.1 | **`RadioButton`** | `cf23a4c` | ⚠ zgłoszenie → 5.1a | §15.6.1 |
+| 5.1a | koncentryczność kropki (odpowiedź na zgłoszenie) | `60f9278` | ✅ zaliczone | §15.6.1a |
+| — | **⭐ `FluentBridge` — decyzja architektoniczna** | (w `9ec2c13`) | ✅ ratyfikowana | §15.6.3 · **§16** |
+| 5.2 | **`TextBox`** — pierwsza kontrolka na moście | `9ec2c13` | ✅ zaliczone | §15.6.4 |
+| 5.3 | **`ComboBox`** — próba skalowania mostu | `3483296` | ✅ zaliczone | §15.6.5 |
+| 5.4 | **`Button`** (H‑8) + tokenizacja 4 wariantów | — | ⏳ oczekuje | §15.6.6 |
+
+**Nierozpoczęte w kroku 5:** `NumericUpDown` (następny) · `ToggleButton` · `Expander`.
+**Nierozpoczęte poza krokiem 5:** `ScrollBar` (H‑10) · DataGrid Standard (§8.4 specyfikacji).
+
+⚠ **Stan bieżący suite: 7075** (7000 + 54 + 21). Każda iteracja dokłada 1–2 testy; licznik
+w `CLAUDE.md` („Tests") jest aktualizowany w tym samym commicie co iteracja.
+
 ### §15.0 ⭐ Zasada nadrzędna M2b (użytkownik, 2026-08-01)
 
 > *„Nie projektujemy możliwie najmniejszych kontrolek. Projektujemy kontrolki, na których
@@ -1757,6 +1787,13 @@ kosztu, którego tam nie ma, na ryzyko, które tam jest.
 Koncentryczność jest teraz **zapięta testem** — dwie niezależnie wyrównywane figury są współśrodkowe
 tylko dopóki nikt nie doda jednej z nich marginesu, innego wyrównania albo nieparzystego rozmiaru.
 
+**QA po poprawce: zaliczone** — użytkownik potwierdził, że kropka wygląda poprawnie. ⭐ **Warto
+zapamiętać kształt tego zgłoszenia, bo będzie wracać:** pomiar mówił „geometria jest dokładnie
+koncentryczna", a mimo to zgłoszenie było zasadne — bo dotyczyło **rasteryzacji**, warstwy, której
+żaden z trzech pomiarów nie dotyka. ⛔ Odpowiedź „zmierzyłem, jest dobrze" byłaby tu formalnie
+prawdziwa i praktycznie bezużyteczna. Właściwa kolejność to: **zmierz → nazwij, czego pomiar NIE
+obejmuje → jeżeli w tej luce istnieje realny mechanizm, usuń go zamiast czekać na dowód.**
+
 ##### §15.6.2 ⛔ Iteracja 2 (`TextBox`) — WSTRZYMANA: pomiar zmienia podejście do całej reszty kroku 5
 
 Sonda szablonu `TextBoxa` pokazała, że tło i krawędź maluje `PART_BorderElement`, a nie sama
@@ -1784,6 +1821,10 @@ kolory zaznaczenia `TreeViewItem*` i `DataGridCell*` (reguła UI #6 w `CLAUDE.md
 Propozycja przedstawiona użytkownikowi przed implementacją — rozstrzygnięcie w §15.6.3.
 
 ##### §15.6.3 ⭐ RATYFIKOWANE — `FluentBridge.axaml`: przepinamy Fluenta na katalog, zamiast go kopiować
+
+> **⭐ Ta sekcja jest zapisem, JAK doszliśmy do decyzji (pomiar, który ją wymusił, i moment jej
+> podjęcia). Kanoniczną definicją wzorca — czym JEST i jak się go stosuje — jest §16.**
+> Przy rozbieżności rozstrzyga §16; ta sekcja się nie aktualizuje, bo jest datowana.
 
 > **Decyzja użytkownika, 2026-08-02:** *„Wykorzystujemy mechanizmy Avalonia zamiast je kopiować,
 > zachowujemy wszystkie sprawdzone zachowania Fluent, a jednocześnie cała aplikacja pozostaje
@@ -1907,3 +1948,166 @@ kursorem, i w siatce ustawień dawała efekt „to pole jest jakieś inne".
 Pozycja listy rozwijanej jest wierszem MENU, nie polem formularza: czyta się ją w pionowej serii,
 wybiera jednym kliknięciem i nigdy nie edytuje. Rola dzielona z menu kontekstowym jest tu poprawna
 (§3.3), a nie oszczędnością na tokenie.
+
+##### §15.6.5a QA iteracji 5.3 — zaliczone
+
+**Werdykt użytkownika: zaakceptowane.** Iteracja zamknięta bez zgłoszeń.
+
+⭐ **Co ta akceptacja właściwie potwierdza — i to jest ważniejsze niż sam `ComboBox`:** była to
+pierwsza kontrolka, na której most z §16 mógł się złamać, bo ma **sześć części szablonu** malowanych
+z zasobów Fluenta zamiast jednej. Nie złamał się i **nie powstał ani jeden własny szablon.** Od tego
+momentu „przepinamy Fluenta zamiast go kopiować" nie jest hipotezą z jednego przypadku (`TextBox`),
+tylko wzorcem sprawdzonym na kontrolce złożonej — dlatego dopiero teraz został podniesiony do rangi
+wzorca projektowego (§16).
+
+⭐ **Trzeci naturalny konsument `SurfaceRaised` bez planowania.** Lista rozwijana trafiła na token
+z RB‑4 dlatego, że *jest* powierzchnią pływającą — nie dlatego, że ktoś ją tam przypisał. Po
+zakładkach panelu i `ToolTipie` podział z kroku 2 zaczyna się **obsługiwać sam**, co jest praktycznym
+potwierdzeniem, że rozwiązaniem RB‑4 musiał być nowy token, a nie nowa wartość (§15.3).
+
+##### §15.6.6 Iteracja 4 — `Button` (H‑8) + tokenizacja czterech wariantów
+
+Metryki przez styl (`Size.Control` · `Pad.Button` · `Text.Application` · `Border.All` ·
+`Radius.Surface`), kolory przez Bridge (12 kluczy w obu motywach).
+
+**⭐ Pierwsza kontrolka M2b, która MIAŁA JUŻ ZAPROJEKTOWANĄ RODZINĘ — i to zmienia rodzaj ryzyka.**
+Przy `TextBoxie` i `ComboBoxie` pytanie brzmiało „czy styl dociera". Tutaj brzmi **„czy dociera, nie
+spłaszczając wariantu, który celowo się różni"**: `Button.icon`, `.flat`, `.primary` i `.caption` to
+cztery świadome decyzje, a audyt H‑8 zmierzył **25 przycisków bez `Classes`** — czyli takich, które
+nie należą do żadnej z nich i stały na gołym Fluencie.
+
+⚠ **Kolejność w pliku jest znacząca i to jest jedyna nowa pułapka tego kroku.** W Avalonii przy tej
+samej trafności wygrywa setter zadeklarowany **później**, więc styl bazowy `Button` musi stać **przed**
+wariantami. Blok bazowy siedzi w sekcji kontrolek (obok `TextBoxa` i `ComboBoxa`), warianty zostają
+tam, gdzie były. ⛔ Przeniesienie bazy poniżej `Button.icon` po cichu unieważniłoby cztery warianty —
+build zielony, wygląd zrównany do jednego. Zapięte asercją `primary.MinHeight > plain.MinHeight`.
+
+**⭐ Trzy role wysokości dla jednej kontrolki i to nie jest niekonsekwencja.** `Size.Control` (24) jest
+**minimum**, `Button.primary` podnosi się do `Size.ControlPrimary` (28), `Button.caption` bierze
+`Size.TitleBar` (36). To pierwszy i jedyny konsument `Size.ControlPrimary` — rola istnieje właśnie po
+to, żeby hierarchia akcji miała sygnał działający również tam, gdzie kolor niesie już inne znaczenie.
+
+**⚠ Fluent malował te przyciski półprzezroczystą bielą, a stan najechania — CZYSTĄ BIELĄ**
+(`#33ffffff` → `White`). Nowa drabina jest **monotoniczna w obu motywach**: `Panel` → `ChromeStrong`
+to w Dark rozjaśnienie (`#252526` → `#2D2D2D`), w Light przyciemnienie (`#F3F4F6` → `#E8EAED`).
+Kierunek przeciwny, znaczenie to samo — „o stopień bliżej kursora". To ta sama zasada, którą RB‑4
+wydobyło z `ElevatedPanelBrush`.
+
+**⚠ Wciśnięcie niesie KRAWĘDŹ, nie trzeci odcień szarości — i to jest decyzja, nie oszczędność.**
+Trzeci stopień szarości musiałby sięgnąć po `BorderColor` jako **wypełnienie**, czyli użyć tokenu
+wbrew jego roli (§3.1); rola „krawędź" przestałaby wtedy cokolwiek znaczyć. Akcent na krawędzi jest
+czytelniejszy i **jest już językiem tej aplikacji** — krok 5.3 ustalił go dla `ComboBoxa`.
+⚠ Stan `:disabled` nie zmienia tła; przygaszony jest **tekst**. Zmiana tła czytałaby się jak *inny
+rodzaj* przycisku, a nie jak przycisk chwilowo niedostępny.
+
+⚠ **Przycisk w komórce siatki dostaje tę samą regułę co `TextBox`** (§15.6.4): `MinHeight=0`,
+`Pad.CellCompact`, `Text.Grid`. Zmierzone **182 kolumny szablonowe** w widokach — to nie jest przypadek
+teoretyczny, tylko trzecie wystąpienie tego samego kształtu błędu w tym kroku 5.
+
+**⭐ Cztery warianty zostały przy okazji przepięte na katalog** (`Pad.ButtonIcon`, `Pad.Button`,
+`Radius.Chip`, `Radius.Surface`, `Border.All`, `Size.TitleBar`) — dotąd nosiły liczby wpisane wprost.
+⚠ `Button.icon` **nadal znosi tło i krawędź** podstawy: ikona w pasku narzędzi ma być samą ikoną,
+a afordancję niesie dopiero najechanie. To jedyny wariant, w którym przycisk nie wygląda jak przycisk
+w spoczynku — i po tym kroku jest to widoczne jako **wariant chromeless wobec własnej podstawy**,
+a nie jako „przycisk zaprojektowany wobec przycisku Fluenta".
+⚠ Szerokość 46 px w `Button.caption` **zostaje lokalna** — to konwencja przycisków okna Windows,
+a nie rola w katalogu (§4.2.4: rola powstaje z drugiego konsumenta).
+
+Build 0/0; suite **7076** (7000 + 54 + 22); smoke czysty.
+
+---
+
+## §16 ⭐⭐ `FluentBridge` — WZORZEC PROJEKTOWY EmberTerna (nie ustalenie jednej iteracji)
+
+> **Status: RATYFIKOWANY przez użytkownika 2026-08-02, sprawdzony na dwóch kontrolkach
+> (`TextBox` §15.6.4, `ComboBox` §15.6.5). Obowiązuje w całym projekcie, nie tylko w M2b.**
+
+Ta sekcja jest **kanoniczną definicją wzorca**. §15.6.2/§15.6.3 zostają jako zapis *jak do niego
+doszliśmy* (pomiar, który go wymusił); tutaj jest to, czym on **jest** i jak się go stosuje.
+
+### §16.1 Zasada w jednym zdaniu
+
+> **Nie przestylowujemy FluentTheme i nie kopiujemy jego szablonów — PRZEPINAMY GO NA NASZ KATALOG.**
+
+Fluent maluje wnętrza kontrolek (`PART_BorderElement` i podobne) z **własnych zasobów nazwanych**.
+Zamiast pisać własny `ControlTemplate`, podmieniamy te zasoby na nasze tokeny. Zachowujemy przez to
+całe sprawdzone zachowanie frameworka — zaznaczanie tekstu, watermark, walidację, przewijanie,
+animacje stanów — a wygląd i tak jest sterowany katalogiem.
+
+⭐ **To nie jest pomysł nowy w tym projekcie, tylko uogólnienie istniejącego.** Dokładnie tak
+rozwiązano kolory zaznaczenia `TreeViewItem*` / `DataGridCell*` (reguła UI #6 w `CLAUDE.md`) — tam
+zadziałało na kolorach stanu, tu zostało rozciągnięte na całą powierzchnię kontrolek bazowych.
+
+### §16.2 ⛔ REGUŁA WIĄŻĄCA — Bridge nie jest drugim katalogiem tokenów
+
+> **Użytkownik, 2026-08-02:** *„Ma być wyłącznie warstwą mapującą zasoby Fluent na `Tokens.axaml`,
+> `Typography.axaml` i `Colors.axaml`. Nie powinny pojawiać się tam lokalne wartości ani nowe
+> decyzje projektowe. Wszystkie liczby i role pozostają właścicielami odpowiednich katalogów,
+> a Bridge jedynie je tłumaczy."*
+
+Egzekwowane testem **`FluentBridge_ContainsNoLocalValues`**: każdy wpis w `FluentBridge.axaml` musi
+być **odwołaniem** do zasobu (`{StaticResource …}` / `{DynamicResource …}`). Wartość wpisana wprost
+wywala test. ⛔ Bez tego reguła przetrwałaby dokładnie do pierwszego *„tu jest szybciej wpisać kolor"*.
+
+### §16.3 ⚠⚠ Podział metryki / kolory — wynika z ograniczenia XAML‑a, nie z upodobania
+
+**XAML nie potrafi ZAALIASOWAĆ zasobu skalarnego.** `<x:Double x:Key="TextControlThemeMinHeight">`
+musi zawierać liczbę — nie da się tam napisać „to samo, co `Size.Control`". To samo dotyczy
+`Thickness` i `CornerRadius`. **Gdyby więc Bridge przejął metryki, musiałby wpisać liczby, czyli
+złamać §16.2 w pierwszej linijce.** Pędzel jest wyjątkiem, bo `Color="{StaticResource …}"` **jest**
+odwołaniem.
+
+| Co | Gdzie | Dlaczego |
+|---|---|---|
+| **Metryki** — `MinHeight`, `Padding`, `FontSize`, `BorderThickness` | **setter stylu** w `ControlStyles.axaml`, czytający token przez `{DynamicResource}` | styl aplikacji ma wyższy priorytet niż `ControlTheme` Fluenta, a setter **potrafi** odwołać się do tokenu |
+| **Kolory malowane przez wnętrze szablonu** | **`FluentBridge.axaml`**, jako `SolidColorBrush Color="{StaticResource …Color}"` | setter na kontrolce tam nie dociera — maluje `PART_*`, nie kontrolka |
+| **Wartości, w których Fluent już się z nami zgadza** (`ControlCornerRadius` = 3 = `Radius.Surface`) | **nigdzie** — pinowane testem | wpis powielałby liczbę; test zamienia zbieżność w sprawdzany niezmiennik |
+
+⭐ **Skutek uboczny jest korzystny i warto go nazwać:** reguła „bez wartości lokalnych" staje się
+w tym pliku **strukturalna, nie pamięciowa** — nie ma tam gdzie wpisać liczby.
+
+⚠ **Konsekwencja dla testów: obie połowy jadą innymi trasami i żadna nie dowodzi drugiej.**
+Test kontrolki musi sprawdzać **metrykę na kontrolce** i **kolor na elemencie, który faktycznie
+maluje** (`PART_BorderElement`). Asercja koloru odczytana z samej kontrolki przechodzi, malując
+po cichu nic.
+
+### §16.4 Kiedy WOLNO napisać własny `ControlTemplate` — dwa warunki, oba konieczne
+
+Własny szablon jest **wyjątkiem wymagającym uzasadnienia pomiarem**, nie domyślną odpowiedzią.
+
+1. potrzebna wielkość **nie jest wystawiona jako zasób** Fluenta, tylko zakodowana w szablonie, **oraz**
+2. sonda drzewa szablonu pokazuje, że element do zmiany **nie ma nazwy** (`x:Name`), więc selektor
+   trafiałby w niego pozycyjnie — a to działa dziś i po cichu zmienia cel przy aktualizacji Avalonii.
+
+**Dotąd spełniły oba warunki dokładnie dwie kontrolki: `CheckBox` (§15.2) i `RadioButton` (§15.6.1)** —
+u obu rozmiar znaku jest wartością lokalną wewnątrz szablonu. ⚠ To, że są wyjątkiem, a nie regułą,
+**pokazała dopiero sonda `TextBoxa`** — czyli kolejność „najpierw zmierz, potem wybierz mechanizm"
+nie jest formalnością.
+
+⛔ **Nie wolno przepisywać szablonu, bo „i tak już mamy dwa własne".** Spójność systemu bierze się
+z jednego katalogu tokenów, a nie z jednego mechanizmu dostarczania.
+
+### §16.5 Procedura dla następnej kontrolki
+
+1. **Sonda headless** — wypisz drzewo szablonu i zmierzone `MinHeight` / `Padding` / `FontSize`
+   (⚠ nie ufaj samej właściwości: `RadioButton` miał `MinHeight=0` i żądaną wysokość 32).
+2. **Sprawdź, czy Fluent wystawia potrzebne pokrętła jako zasoby** — jeżeli tak, §16.4 nie jest
+   spełnione i własny szablon jest niedozwolony.
+3. **Metryki → setter stylu; kolory → Bridge** (§16.3), w **obu** motywach.
+4. **Test dwutorowy** — metryka z kontrolki, kolor z części malującej.
+5. ⚠ **Sprawdź wariant „w komórce siatki"** — `Size.Row.Grid` (22) − `Pad.Cell` (3+3) = **16 px**,
+   więc kontrolka formularza o `MinHeight=24` podnosi każdy edytowany wiersz o 8 px (§15.6.4).
+   **Wartość poprawna dla formularza bywa destrukcyjna dla siatki, a to ta sama klasa kontrolki.**
+6. **Uruchom aplikację i oceń w komplecie stanów, w obu motywach** (zasada z §15.2.1) — normal ·
+   hover · aktywny · disabled · focus.
+
+### §16.6 Rejestracja i kolejność wczytywania (`App.axaml`)
+
+```
+Tokens → Typography → Colors → FluentBridge → IconGeometries → ControlThemes → SearchableComboBox → PickerTemplates
+```
+
+⚠ **Dwie kolejności są wymuszone, nie kosmetyczne:** `FluentBridge` **po** `Colors` (mapuje przez
+`Color="{StaticResource …Color}"`, więc tokeny barw muszą już być wczytane) i `ControlThemes` **po**
+`IconGeometries` (szablon `CheckBoxa` sięga po `{StaticResource Icon.Check}`, a `StaticResource`
+rozwiązuje się przy wczytywaniu).

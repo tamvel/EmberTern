@@ -1,10 +1,20 @@
 # Product Polish — M2a — dokument startowy sesji
 
-> ## ⛔ DOKUMENT ZAMKNIĘTY — M2a został wykonany 2026-08-01.
+> ## ⛔ DOKUMENT ZAMKNIĘTY — M2a został wykonany 2026-08-01 (commit `109c7dc`).
 >
-> Zachowany jako zapis wejścia w etap. **Stan faktyczny i decyzje: `product-polish.md` §14 (as-built)**;
-> uzupełnienia katalogu, które powstały w trakcie: §4.2 · §6.4 · §11.1.
-> Następny krok to **M2b** — start z `product-polish.md`, nie stąd.
+> Zachowany jako zapis wejścia w etap — **nie jest już punktem startowym żadnej sesji.**
+>
+> | Czego szukasz | Gdzie |
+> |---|---|
+> | **start następnej sesji** | ⭐ **`product-polish-m2b-handover.md`** |
+> | stan faktyczny M2a | `product-polish.md` §14 |
+> | stan faktyczny M2b (w toku) | `product-polish.md` §15 — tablica stanu w §15.-1 |
+> | wzorzec `FluentBridge` | `product-polish.md` **§16** |
+> | uzupełnienia katalogu z M2a | `product-polish.md` §4.2 · §6.4 · §11.1 |
+>
+> ⚠ **Czego ten plik NIE opisuje, choć wygląda, jakby opisywał:** §6 („Kolejne etapy") wymienia M2b
+> jednym wierszem, napisanym **przed** jego rozpoczęciem. M2b okazał się serią zamkniętych iteracji
+> z własną decyzją architektoniczną (§16), której ten wiersz nie przewiduje. Nie planuj z niego.
 
 > **To jest prompt dla Claude'a, nie dla użytkownika.** Punkt wejścia w nową sesję —
 > pozwala wejść w implementację bez ponownego czytania całej dokumentacji.

@@ -2,6 +2,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Media;
@@ -290,6 +291,48 @@ public sealed class DesignTokenApplicationTests
             var painter = combo.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Background");
             var background = Assert.IsType<SolidColorBrush>(painter.Background);
             Assert.Equal(ThemeToken<SolidColorBrush>("BackgroundBrush", ThemeVariant.Dark).Color, background.Color);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Step 5.4 — <c>Button</c>. The first control M2b restyles that <b>already had a designed family</b>
+    /// (<c>.icon</c> / <c>.flat</c> / <c>.primary</c> / <c>.caption</c>), so the risk is the opposite of the
+    /// previous iterations: not "does the base style arrive" but "does it arrive <i>without</i> flattening a
+    /// variant that deliberately differs".
+    ///
+    /// <para>⚠ Style precedence in Avalonia is by declaration ORDER at equal specificity, not by selector
+    /// weight — so a base <c>Button</c> style placed after <c>Button.primary</c> in the same stylesheet would
+    /// silently win over it. This asserts the two heights stay different, which is the cheapest way to catch
+    /// that reordering.</para>
+    /// </summary>
+    [Fact]
+    public async Task Button_TakesTheBaseHeight_WhileThePrimaryVariantStaysTaller()
+    {
+        await _session.Dispatch(() =>
+        {
+            var plain = new Button { Content = "Run" };
+            var primary = new Button { Content = "Execute", Classes = { "primary" } };
+            var window = new Window { Content = new StackPanel { Children = { plain, primary } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(Token<double>("Size.Control"), plain.MinHeight);
+            Assert.Equal(Token<Thickness>("Pad.Button"), plain.Padding);
+            Assert.Equal(Token<double>("Text.Application.Size"), plain.FontSize);
+            Assert.Equal(Token<CornerRadius>("Radius.Surface"), plain.CornerRadius);
+
+            // The variant must still outrank the base — hierarchy is the point of the second height role.
+            Assert.Equal(Token<double>("Size.ControlPrimary"), primary.MinHeight);
+            Assert.True(primary.MinHeight > plain.MinHeight,
+                "Button.primary must stay taller than a plain Button — Size.ControlPrimary exists for that hierarchy.");
+
+            // Colour arrives through the Bridge, on the element that paints it. Fluent's own value here is a
+            // semi-transparent white (#33ffffff) whose hover state is pure White; neither belongs to the palette.
+            var painter = plain.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
+            var background = Assert.IsType<SolidColorBrush>(painter.Background);
+            Assert.Equal(ThemeToken<SolidColorBrush>("PanelBrush", ThemeVariant.Dark).Color, background.Color);
 
             window.Close();
         }, default);

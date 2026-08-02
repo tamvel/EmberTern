@@ -173,6 +173,48 @@
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
   </Style>
 
+  <!-- ================================================================================================
+       Button — Compact Controls (RB‑3, D1) + H‑8, Product Polish M2b krok 5.4.
+
+       ⭐ TA KONTROLKA MA JUŻ CZTERY ŚWIADOMIE ZAPROJEKTOWANE WARIANTY (`.icon`, `.flat`, `.primary`,
+       `.caption`) i to jest różnica wobec kroków 5.2–5.3: nie stylujemy pustego miejsca, tylko
+       DODAJEMY BRAKUJĄCĄ PODSTAWĘ pod istniejącą rodzinę. Audyt H‑8 zmierzył 25 przycisków bez
+       `Classes` — czyli takich, które nie należą do żadnego wariantu i stoją na gołym Fluencie.
+
+       ⚠ KOLEJNOŚĆ W PLIKU JEST ZNACZĄCA: styl bazowy musi stać PRZED wariantami, bo w Avalonii przy
+       tej samej trafności wygrywa setter zadeklarowany PÓŹNIEJ. Wariant ma dopowiadać podstawę,
+       a nie z nią przegrywać. ⛔ Nie przenosić tego bloku poniżej `Button.icon`.
+
+       ⚠ `Size.Control` (24) jest MINIMUM, nie wysokością sztywną: `Button.primary` podnosi się do
+       `Size.ControlPrimary` (28), a `Button.caption` ma własną wysokość paska tytułu. Trzy role
+       wysokości dla jednej kontrolki nie są niekonsekwencją — hierarchia akcji to jedyny sygnał,
+       który działa też wtedy, gdy kolor niesie już inne znaczenie (§5).
+
+       Kolory: `FluentBridge.axaml`. Metryki: tutaj. Bez własnego szablonu — Fluent wystawia
+       `ButtonBackground` / `ButtonBorderBrush` / `ButtonForeground` jako zasoby (§16.4 niespełnione).
+       ================================================================================================ -->
+  <Style Selector="Button">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <!-- Ta sama konieczność co w `TextBoxie` (krok 5.2): `Pad.Button` ma pion ZEROWY, bo wysokość
+         daje `MinHeight`. Bez wyśrodkowania treść osiadłaby przy górnej krawędzi. -->
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⚠ Przycisk w komórce siatki — ta sama reguła i ten sam powód co przy `TextBoxie` (§15.6.4):
+       `Size.Row.Grid` (22) − `Pad.Cell` (3+3) = 16 px, więc `MinHeight` 24 podniósłby wiersz o 8 px.
+       Kontrolka w komórce bierze wysokość WIERSZA, nie kontrolki. Zmierzone 182 kolumny szablonowe
+       w widokach — to nie jest przypadek teoretyczny. -->
+  <Style Selector="DataGridCell Button">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellCompact}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+  </Style>
+
   <Style Selector="ToolTip">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
@@ -277,12 +319,15 @@
     <Setter Property="Margin" Value="0,0,0,8" />
   </Style>
 
+  <!-- ⚠ `Button.icon` znosi tło i krawędź podstawy CELOWO: ikona w pasku narzędzi ma być samą ikoną,
+       a afordancję niesie dopiero najechanie. To jedyny wariant, w którym przycisk nie wygląda jak
+       przycisk w stanie spoczynku — i dlatego ma własną, mocniejszą podświetlaną „pastylkę". -->
   <Style Selector="Button.icon">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="Padding" Value="8,4" />
-    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Chip}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
@@ -310,8 +355,8 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="Padding" Value="8,4" />
-    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Chip}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
   <Style Selector="ToggleButton.icon:pointerover /template/ ContentPresenter">
@@ -367,13 +412,16 @@
     <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
   </Style>
 
+  <!-- ⚠ `Button.flat` różni się od podstawy JEDNĄ rzeczą: przezroczystym tłem. Po kroku 5.4 nie jest
+       to już „przycisk zaprojektowany" wobec „przycisku Fluenta", tylko wariant CHROMELESS wobec
+       własnej podstawy — dlatego zostają tu wyłącznie te settery, które podstawę faktycznie zmieniają. -->
   <Style Selector="Button.flat">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="Padding" Value="10,4" />
-    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
@@ -389,12 +437,16 @@
     <Setter Property="Opacity" Value="0.5" />
   </Style>
 
+  <!-- ⭐ `Size.ControlPrimary` (28) — jedyne miejsce w aplikacji, które konsumuje tę rolę, i powód,
+       dla którego ona istnieje: wysokość jest jedynym sygnałem hierarchii działającym również tam,
+       gdzie kolor niesie już inne znaczenie (§5). -->
   <Style Selector="Button.primary">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlPrimary}" />
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
-    <Setter Property="Padding" Value="12,4" />
-    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
@@ -420,6 +472,10 @@
     <Setter Property="Opacity" Value="0.5" />
   </Style>
 
+  <!-- ⚠ Przycisk paska tytułu ma wysokość PASKA, nie kontrolki — `Size.TitleBar` jest tu tym samym
+       rodzajem decyzji co `Size.Row.Grid` dla edytora w komórce: element wypełnia swój kontener
+       i nie ma prawa go rozpychać. Szerokość 46 zostaje lokalna — to konwencja przycisków okna
+       Windows, a nie rola w katalogu (§4.2.4: rola powstaje z drugiego konsumenta). -->
   <Style Selector="Button.caption">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
@@ -427,7 +483,7 @@
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="Width" Value="46" />
-    <Setter Property="Height" Value="36" />
+    <Setter Property="Height" Value="{DynamicResource Size.TitleBar}" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
