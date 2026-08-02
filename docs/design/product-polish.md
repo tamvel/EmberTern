@@ -1417,7 +1417,8 @@ sprawdzianem, że warstwa skalarna faktycznie działa.
 | 9 | **Ustawienia jako panel referencyjny** | — | ⏳ oczekuje | §15.9.2 |
 | 10 | **Data Import** — proporcje kolumn | `e0a59fd` | ⏳ oczekuje | §15.9.3 |
 | 11 | ⭐⭐ **kolor niesie priorytet, rozmiar nie** + pasma chromy + bliskość podpisu | `1c7ccc1` | ⏳ oczekuje | §15.10 |
-| 12 | **domknięcie pod nowym kryterium** — belka statusu · podłoga szerokości akcji · filtry · picker · korekta licznika | — | ⏳ oczekuje | §15.11 |
+| 12 | **domknięcie pod nowym kryterium** — belka statusu · podłoga szerokości akcji · filtry · picker · korekta licznika | `b568168` | ⏳ oczekuje | §15.11 |
+| 13 | ⭐⭐ **reguła przecząca → pozytywna** — regresja strzałki w drzewie + prawdziwa przyczyna nierównych stopek | — | ⏳ oczekuje | §15.12 |
 
 **Krok 5 (kontrolki bazowe) — ZAKOŃCZONY.**
 ✅ **M2b — WSZYSTKIE KROKI DOSTARCZONE.** Pozostało **QA wizualne użytkownika** (kroków 5.4–7)
@@ -2509,6 +2510,59 @@ nazwa — **wartości lokalne**.
 spadł z powodu migracji, a nie pomiaru: `DataImportTabView` **86 → 82**.
 
 Build 0/0; suite **7086** (7000 + 54 + 32); smoke czysty.
+
+### §15.12 Krok 13 — regresja w drzewie i prawdziwa przyczyna nierównych stopek
+
+⭐ **Oba zgłoszenia mają JEDNĄ przyczynę i jest nią kształt reguły, a nie żadna liczba.**
+
+#### §15.12.1 ⛔ Reguła sformułowana PRZECZĄCO przecieka zawsze — i przeciekła drugi raz
+
+Styl bazowy `Button` niósł od kroku 8 **geometrię akcji** (`MinHeight` 28 + `MinWidth` 80 +
+`Pad.Button`) — czyli **wymiary stopki dialogu narzucone każdemu przyciskowi w aplikacji** — a każdy
+przycisk, który akcją nie jest, musiał się z tego **wypisywać** (`Button.icon`, `Border.chrome Button`,
+`DataGridCell Button`, `Button.caption`).
+
+**Strzałka rozgałęzienia w drzewie deklaruje własne `Width=20 Height=20 Padding=0`. Avalonia klamruje
+`Width` przez `MinWidth`, więc styl bazowy po cichu rozdął ją do 100×28** — stąd strzałka wjechała na
+tekst i zniknął odstęp. ⚠ **To była regresja układu, nie estetyka**, i zgłoszenie było trafne.
+
+⭐ **Poprawka jest zmianą KIERUNKU reguły, nie dopisaniem piątego wyjątku:** geometrię akcji niosą
+teraz klasy, które akcją **są** — `.primary` i `.flat`. Wszystkie stopki dialogów w tej aplikacji są
+nimi konsekwentnie oznaczone (sprawdzone), więc reguła nie traci zasięgu, a **przestaje przeciekać na
+przyciski o własnym rozmiarze**. Styl bazowy niesie już tylko to, co jest prawdą o każdym przycisku:
+font, promień, grubość krawędzi, wyrównanie treści.
+⛔ **Nie wracać tu z `MinHeight`/`MinWidth`** — to jest dokładnie ten setter, który zepsuł drzewo.
+⚠ Zapięte testem `AButtonThatDeclaresItsOwnSize_KeepsIt`, który sprawdza **obie** połowy: przycisk
+z własnym rozmiarem go zachowuje, a zadeklarowana akcja nadal dostaje podłogę. Sam pierwszy warunek
+przechodziłby po zwykłym skasowaniu reguły.
+
+#### §15.12.2 ⭐ Stopki — podłoga leżała PONIŻEJ szerokości etykiety, którą miała wyrównać
+
+Zmierzone przed poprawką:
+
+```
+Save   (primary)  =  80 px   ← siada na podłodze
+Cancel (flat)     =  98 px   ← 72 tekst + 24 padding + 2 obramowanie
+```
+
+**Cała reszta mechanizmu renderowania była identyczna** — sprawdzone kolejno: styl bazowy, `.primary`,
+`.flat`, `ContentPresenter`, `Padding` (`12,0` w obu), `BorderThickness` (`1`), `CornerRadius` (`3`),
+`FontSize` (12), `HorizontalContentAlignment` (Center). **Jedyną różnicą była szerokość**, a jej
+przyczyną to, że podłoga **80** leżała *poniżej* naturalnych **98** px słowa „Cancel": krótsza
+etykieta siadała na podłodze, dłuższa ją przekraczała.
+
+⭐ **Zasada, którą warto zapamiętać: podłoga wyrównuje tylko wtedy, gdy leży POWYŻEJ naturalnej
+szerokości etykiet, które ma zrównać. Ustawiona niżej jest zapisem martwym** — wygląda jak reguła,
+nie robi nic. `Size.ActionMinWidth` **80 → 100**; zmierzone po poprawce: **Save = Cancel = 100×28**.
+⚠ To nadal **podłoga**, nie szerokość wspólna: naprawdę długa etykieta („Test connection") rozpycha
+się dalej i to jest zamierzone.
+
+⚠ **Trzy asercje trzeba było przy okazji naprawić i wszystkie trzy mierzyły nie ten podmiot:** dwie
+porównywały przycisk **bezklasowy** z `.primary` (bezklasowy przestał być akcją), a jedna czytała tło
+Bridge'a z `.flat`, które jest **celowo przezroczyste** — czyli mierzyła setter wariantu i nazywała to
+dowodem na mapowanie. ⭐ Świadek mapowania musi być przyciskiem **bez wariantu**.
+
+Build 0/0; suite **7088** (7000 + 54 + 34); smoke czysty.
 
 ---
 

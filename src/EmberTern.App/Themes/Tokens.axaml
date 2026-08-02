@@ -198,7 +198,12 @@
        rozmiar nie ma nieść informacji, którą niesie kolor.
        ⚠ PODŁOGA, nie szerokość sztywna: „Test connection" nadal rozpycha się do swojej treści.
        ⛔ Chroma, przycisk ikonowy i komórka siatki jej NIE biorą — tam szerokość wyznacza treść. -->
-  <x:Double x:Key="Size.ActionMinWidth">80</x:Double>
+  <!-- ⚠ 100, nie 80 (korekta z kroku 13, po pomiarze). 80 było PONIŻEJ naturalnej szerokości zwykłej
+       etykiety: „Cancel" mierzy 72 px tekstu + 24 paddingu + 2 obramowania = 98, więc `Save` siadał na
+       podłodze (80), a `Cancel` ją przekraczał — para różniła się o 18 px i podłoga nie wyrównała
+       niczego. ⭐ Podłoga działa tylko wtedy, gdy leży POWYŻEJ naturalnej szerokości etykiet, które ma
+       zrównać; ustawiona niżej jest martwym zapisem. -->
+  <x:Double x:Key="Size.ActionMinWidth">100</x:Double>
 
   <!-- Wiersz siatki danych i edytor w komórce. -->
   <x:Double x:Key="Size.Row.Grid">22</x:Double>

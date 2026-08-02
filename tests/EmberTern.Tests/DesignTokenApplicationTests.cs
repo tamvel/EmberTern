@@ -318,7 +318,9 @@ public sealed class DesignTokenApplicationTests
     {
         await _session.Dispatch(() =>
         {
-            var plain = new Button { Content = "Run" };
+            // ⚠ `.flat`, not a bare Button — since step 13 the ACTION geometry lives on the action classes,
+            // so a class-less Button is deliberately not an action and comparing against it proves nothing.
+            var plain = new Button { Content = "Run", Classes = { "flat" } };
             var primary = new Button { Content = "Execute", Classes = { "primary" } };
             var window = new Window { Content = new StackPanel { Children = { plain, primary } } };
             window.Show();
@@ -337,14 +339,26 @@ public sealed class DesignTokenApplicationTests
 
             // …and differs where it is supposed to. The variant must still win on colour, which is the half of
             // the declaration-order hazard that remains.
-            var accent = Assert.IsType<SolidColorBrush>(primary.Background);
-            Assert.Equal(ThemeToken<SolidColorBrush>("AccentBrush", ThemeVariant.Dark).Color, accent.Color);
+            // ⚠ `ISolidColorBrush`, not the concrete `SolidColorBrush`: Avalonia may hand back an immutable
+            // brush depending on how the value was resolved, and the assertion is about the COLOUR — pinning
+            // the implementation type makes it fail for a reason that has nothing to do with the design system.
+            var accent = Assert.IsAssignableFrom<ISolidColorBrush>(primary.Background);
+            Assert.Equal(ThemeToken<Color>("AccentColor", ThemeVariant.Dark), accent.Color);
 
             // Colour arrives through the Bridge, on the element that paints it. Fluent's own value here is a
             // semi-transparent white (#33ffffff) whose hover state is pure White; neither belongs to the palette.
-            var painter = plain.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
-            var background = Assert.IsType<SolidColorBrush>(painter.Background);
-            Assert.Equal(ThemeToken<SolidColorBrush>("PanelBrush", ThemeVariant.Dark).Color, background.Color);
+            // ⚠ Read from an UNCLASSED button on purpose: the Bridge maps `ButtonBackground`, which is what a
+            // button with no variant paints with. `.flat` is deliberately transparent and `.primary` is the
+            // accent, so neither of them can witness the Bridge — asserting on one of those would be measuring
+            // the variant's own setter and calling it proof of the mapping.
+            var bare = new Button { Content = "Bare" };
+            var w2 = new Window { Content = new StackPanel { Children = { bare } } };
+            w2.Show();
+            Dispatcher.UIThread.RunJobs();
+            var painter = bare.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
+            var background = Assert.IsAssignableFrom<ISolidColorBrush>(painter.Background);
+            Assert.Equal(ThemeToken<Color>("PanelColor", ThemeVariant.Dark), background.Color);
+            w2.Close();
 
             window.Close();
         }, default);
@@ -742,8 +756,15 @@ public sealed class DesignTokenApplicationTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            // ⭐ The pair reads as one component: same height AND the same width floor, so the shorter label
-            // cannot shrink its button below its neighbour.
+            // ⭐⭐ MEASURED EQUALITY, not a shared setter — this is what step 12's floor failed to deliver and
+            // step 13 fixed. The floor was 80 while "Cancel" needs 98 (72 text + 24 padding + 2 border), so
+            // Save sat on the floor and Cancel overshot it: the pair differed by 18 px and the floor equalised
+            // nothing. ⚠ A floor only works ABOVE the natural width of the labels it is meant to equalise.
+            save.Measure(new Size(400, 200));
+            cancel.Measure(new Size(400, 200));
+            Assert.Equal(cancel.DesiredSize.Width, save.DesiredSize.Width);
+            Assert.Equal(cancel.DesiredSize.Height, save.DesiredSize.Height);
+
             var floor = Token<double>("Size.ActionMinWidth");
             Assert.Equal(floor, save.MinWidth);
             Assert.Equal(floor, cancel.MinWidth);
@@ -757,6 +778,49 @@ public sealed class DesignTokenApplicationTests
             Assert.Equal(VerticalAlignment.Center, label.VerticalAlignment);
 
             window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Step 13 — the regression that proved a NEGATIVE rule always leaks, kept as the guard against writing it
+    /// again.
+    ///
+    /// <para>⚠⚠ The base <c>Button</c> style used to carry the ACTION geometry (<c>MinHeight</c> +
+    /// <c>MinWidth</c> + <c>Padding</c>) — i.e. dialog-footer dimensions imposed on every button in the
+    /// application, with every non-action button having to opt out. The sidebar's expander arrow declares its
+    /// own <c>Width=20 Height=20</c>, and Avalonia clamps <c>Width</c> by <c>MinWidth</c> — so the base style
+    /// silently grew it to 100×28 and it collided with the row's text. That is a layout regression, not a
+    /// styling preference.</para>
+    ///
+    /// <para>⭐ The rule is positive now: geometry lives on the classes that ARE actions. This asserts a button
+    /// with a declared size keeps it — which is only true while no application-level style asserts a floor on
+    /// every <c>Button</c>.</para>
+    /// </summary>
+    [Fact]
+    public async Task AButtonThatDeclaresItsOwnSize_KeepsIt()
+    {
+        await _session.Dispatch(() =>
+        {
+            var sized = new Button { Content = "›", Width = 20, Height = 20, Padding = new Thickness(0) };
+            var window = new Window { Content = new StackPanel { Children = { sized } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            sized.Measure(new Size(200, 200));
+
+            Assert.Equal(20d, sized.DesiredSize.Width);
+            Assert.Equal(20d, sized.DesiredSize.Height);
+            Assert.Equal(0d, sized.MinWidth);
+            Assert.Equal(0d, sized.MinHeight);
+
+            // …while a declared ACTION still gets the floor. Both halves, or the fix is just a deletion.
+            var action = new Button { Content = "OK", Classes = { "flat" } };
+            var w2 = new Window { Content = new StackPanel { Children = { action } } };
+            w2.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Token<double>("Size.ActionMinWidth"), action.MinWidth);
+
+            window.Close();
+            w2.Close();
         }, default);
     }
 

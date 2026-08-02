@@ -254,26 +254,38 @@
        Kolory: `FluentBridge.axaml`. Metryki: tutaj. Bez własnego szablonu — Fluent wystawia
        `ButtonBackground` / `ButtonBorderBrush` / `ButtonForeground` jako zasoby (§16.4 niespełnione).
        ================================================================================================ -->
+  <!-- ⭐⭐ STYL BAZOWY NIESIE WYŁĄCZNIE TO, CO JEST PRAWDĄ O KAŻDYM PRZYCISKU (korekta z kroku 13).
+
+       ⚠⚠ Wcześniej trzymał tu GEOMETRIĘ AKCJI (`MinHeight` 28 + `MinWidth` 80 + `Pad.Button`), czyli
+       wymiary STOPKI DIALOGU narzucone każdemu przyciskowi w aplikacji — a każdy przycisk, który
+       akcją nie jest, musiał się z tego WYPISYWAĆ. Reguła sformułowana przecząco („wszystko jest
+       akcją, chyba że…") przecieka zawsze i przeciekła dwa razy: najpierw na pasma chromy (krok 11),
+       potem na strzałkę rozgałęzienia w drzewie — która ma własne `Width=20 Height=20`, ale
+       `MinWidth`/`MinHeight` ze stylu bazowego ją NADPISAŁY (Avalonia klamruje `Width` przez
+       `MinWidth`), więc strzałka urosła do 80×28 i wjechała na tekst. To była regresja, nie estetyka.
+
+       ⭐ Reguła jest teraz POZYTYWNA: geometrię akcji niosą klasy, które akcją SĄ — `.primary`
+       i `.flat`. Wszystkie stopki dialogów w tej aplikacji są nimi konsekwentnie oznaczone, więc
+       reguła nie traci zasięgu, a przestaje przeciekać na przyciski o własnym rozmiarze.
+       ⛔ Nie wolno tu wracać z `MinHeight`/`MinWidth` „dla wygody" — to jest dokładnie ten setter,
+       który zepsuł drzewo. -->
   <Style Selector="Button">
-    <!-- ⭐ `Size.ControlProminent`, nie `Size.Control` — poprawka z kroku 8 po QA. Przycisk nie jest
-         polem formularza: pole stoi w SERII i ma się wyrównywać, przycisk stoi SAMOTNIE i jest CELEM
-         myszy. Wysokość pola (24) czytała się na stopce dialogu jako „za mały przycisk". -->
-    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
-    <!-- ⭐⭐ PODŁOGA SZEROKOŚCI — druga połowa reguły „stopka dialogu to jeden komponent" (krok 12).
-         Sama równa wysokość nie wystarczyła: `Save` obok `Cancel` i `Execute` obok `Cancel` nadal nie
-         czytały się jak para, bo szerokość brał TEKST. Krótka etykieta dawała mały przycisk, długa
-         duży — czyli rozmiar znów niósł informację, której nieść nie ma (§15.10.1).
-         ⚠ Podłoga, nie szerokość sztywna: dłuższa etykieta nadal rozpycha przycisk, ale krótsza już
-         go nie kurczy. To jest konwencja stopki dialogu w Windows i macOS, nie nasz wynalazek. -->
-    <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
-    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
     <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
-    <!-- Ta sama konieczność co w `TextBoxie` (krok 5.2): `Pad.Button` ma pion ZEROWY, bo wysokość
-         daje `MinHeight`. Bez wyśrodkowania treść osiadłaby przy górnej krawędzi. -->
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⭐ GEOMETRIA AKCJI — jedno miejsce dla obu wariantów, żeby `Save` i `Cancel` nie mogły się
+       rozjechać. Wysokość: akcja stoi samotnie i jest celem myszy (§15.10.1). Szerokość: PODŁOGA,
+       bo bez niej szerokość bierze TEKST i krótka etykieta daje mniejszy przycisk niż długa — czyli
+       rozmiar znowu niesie informację, której nieść nie ma.
+       ⚠ `Pad.Button` ma pion ZEROWY (wysokość daje `MinHeight`), stąd wyśrodkowanie w stylu bazowym. -->
+  <Style Selector="Button.primary, Button.flat">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
   </Style>
 
   <!-- ⚠ Przycisk w komórce siatki — ta sama reguła i ten sam powód co przy `TextBoxie` (§15.6.4):
@@ -726,7 +738,8 @@
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
     <!-- ⚠ Pasmo chromy wychodzi też z podłogi SZEROKOŚCI: przycisk paska jest tak szeroki, jak jego
          treść. Podłoga istnieje dla stopki dialogu, gdzie przyciski stoją w parze i mają się
-         wyrównać — w pasku narzędzi wymusiłaby puste 80 px wokół każdej ikony. -->
+         wyrównać — w pasku narzędzi wymusiłaby puste 100 px wokół każdej etykiety. ⚠ Nadal potrzebne
+         po kroku 13, bo `Button.flat` bywa właśnie w pasmie chromy (Data Import → Clear). -->
     <Setter Property="MinWidth" Value="0" />
   </Style>
   <Style Selector="Border.chrome ToggleButton">
