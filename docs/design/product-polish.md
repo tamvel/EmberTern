@@ -5721,3 +5721,89 @@ rzecz, która nie zależy od kierunku: **korekta §7.5 o `NeutralIconBrush` vs `
 fakt o kodzie, nie decyzja projektowa.
 
 Build 0/0 · **7133** zielony w trzech partycjach (**7031 + 48 + 54**) · smoke czysty.
+
+---
+
+## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
+
+> ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:
+> *„najpierw zrób pełną inwentaryzację wszystkich akcji w aplikacji — nie według modułów, tylko według
+> znaczenia — i pokaż, gdzie dana akcja występuje oraz jakiego koloru używa. Dopiero mając taki obraz
+> całości będziemy mogli zaprojektować spójny język kolorów."*
+> ⛔ **Nie zawiera projektu języka.** Język powstaje osobno, po akceptacji tego obrazu.
+
+### §20.0 Metoda i jej jedno ograniczenie
+
+Zebrane maszynowo ze **wszystkich** widoków i kontrolek: każde wystąpienie ikony sparowane z jej pędzlem
+(lub jego brakiem) **oraz z tooltipem/komendą**. ⚠⚠ **Parowanie z tooltipem jest konieczne, bo IKONA ≠
+AKCJA:** `Icon.Play` to Execute SQL, Execute procedury, Start trace **i** Continue w debuggerze — cztery
+różne akcje o wspólnym znaku; a `Icon.Trash` i `Icon.ListX` to obie „usuń". Grupowanie po ikonie dałoby
+inny — i fałszywy — obraz.
+
+### §20.1 Skala
+
+| | |
+|---|---|
+| Instancje `SvgIcon` w widokach | **442** |
+| z tego niesie `Foreground` | **39** ⇒ ⭐ **91 % ikon aplikacji jest już neutralnych** |
+| Pozycje menu kontekstowego (`{app:MenuIcon}`) | **131**, z tego **13** z `Brush=DangerIconBrush` |
+| Różnych ikon | 81 |
+| Ikon renderowanych w **więcej niż jednym** kolorze | **22** |
+
+⭐ **Menu kontekstowe są osobnym, JUŻ SPÓJNYM systemem** i nie są przedmiotem języka: konwencja z etapu 5
+Keyboard Managera mówi „neutralnie, wyjątkiem jest destrukcja" i 131 pozycji jej przestrzega. ⛔ Nie
+ujednolicać ich z przyciskami — to inna powierzchnia i inna reguła.
+
+### §20.2 ⭐⭐ AKCJE, KTÓRE MAJĄ RÓŻNY KOLOR W RÓŻNYCH MIEJSCACH — to jest defekt
+
+| Akcja | Kolorów | Rozkład |
+|---|---|---|
+| **Uruchom** | **4** | `OnAccent` (SQL Editor, Script Executor — na przycisku `primary`) · **`Success`** (procedura, funkcja, Trace Start) · **`AccentIcon`** (debugger Continue) |
+| **Usuń trwale** | **3** | `Danger` ×8 (Domain, Exception, Generator, Index, Package, profil importu, Procedure, Function) · **`Warning`** (Usuń połączenie, Usuń zapytanie) · **`Warning`** na `Icon.ListX` (Wyczyść wszystkie zapytania) |
+| **Odśwież** | **3** | **`Info`** (metadane w pasku tytułu, dane tabeli) · **`AccentIcon`** (Data Import) · neutralny (Generator, Index, Session Manager) |
+| **Edytuj / zmień nazwę** | **3** | **`Warning`** (Procedure, Function) · **`AccentIcon`** (profil importu) · neutralny (Edit Connection, zmiana nazwy zapytania, kolekcje, Table Detail) |
+| **Otwórz plik** | **2** | `Accent` (Script Executor) · `AccentIcon` (Data Import) |
+| **Zapisz** | **2** | `Accent` (Script Executor, Export DDL) · neutralny (debugger Save, opis obiektu ×6) |
+| **Dodaj** | **2** | **`Success`** (Procedure, Function) · neutralny (20 pozostałych) |
+| **Szukaj** | **2** | `Accent` (Global Search) · neutralny (7 pól filtrowania) |
+| **Rozłącz** | **2** | `Danger` (cudza sesja w Session Managerze) · neutralny (własne połączenie) |
+
+⚠⚠ **Najostrzejszy pojedynczy przypadek to „usuń trwale":** ta sama operacja jest czerwona w ośmiu
+miejscach i żółta w dwóch. ⭐ **Użytkownik znalazł ją sam, patrząc na ekran** (żółte przyciski przy Saved
+Queries) — czyli defekt jest widoczny bez żadnego narzędzia, a mój wcześniejszy pomiar go nie objął,
+bo mierzyłem dwa paski zamiast produktu.
+
+### §20.3 ⭐ AKCJE JUŻ SPÓJNE — wzorce do OPISANIA, nie do zmiany
+
+| Akcja | Kolor | Wystąpienia |
+|---|---|---|
+| **Zatrzymaj** (`Icon.Stop`) | `DangerIconBrush` | **5/5** — SQL Editor, debugger, Data Import, Script Executor, Trace |
+| **Zatwierdź transakcję** (`Icon.Check`) | `SuccessIconBrush` | **5/5** — toolbar, Data Import, Script Executor, Session Manager, walidacja importu |
+| **Kompiluj** (`Icon.Hammer`) | `OnAccentBrush` na `Button.primary` | **11/11** — wszystkie edytory obiektów |
+| **Rodzaj obiektu** (`IconColor_*`) | 10 tokenów | 10/10 — kreatory + Security Manager |
+| **Menu kontekstowe** | neutralnie, destrukcja czerwono | 131 pozycji, 13 wyjątków |
+
+### §20.4 ⚠ RÓŻNICE, KTÓRE SĄ ŚWIADOME — i nie wolno ich „naprawić"
+
+| Para | Różnica | Powód |
+|---|---|---|
+| **Comment / Uncomment** | `Info` vs `Danger` | ⛔ **Zamówione wcześniej przez użytkownika**: ikony są bardzo podobne, a kolor pozwala je rozpoznać błyskawicznie. M3.2b uznało to za defekt i **to był błąd** (§19.14.4) |
+| **Rollback vs Revert** (oba `Icon.Undo`) | `Danger` vs neutralny | to **dwie różne akcje**: wycofanie transakcji jest cięższe niż porzucenie edycji w buforze |
+| **Rozłącz cudzą sesję vs własne połączenie** | `Danger` vs neutralny | rozłączenie cudzej sesji dotyka pracy innego użytkownika |
+| **Ikona na `Button.primary`** | `OnAccentBrush` | ⭐ **to nie jest kolor semantyczny, tylko kontrast na wypełnieniu akcentem.** Kolor niesie tam WARIANT PRZYCISKU, nie ikona — decyzja architektoniczna 4 |
+
+### §20.5 ⚠ Dwa tokeny o nakładającej się pracy
+
+`WarningBrush` (Icon.Exception w pasku, Pause w Trace) i `WarningIconBrush` (Break on exception,
+Edytuj ×2, Usuń połączenie, Usuń zapytanie, Wyczyść wszystkie) — **dwie nazwy na jedną rolę**, używane
+zamiennie. Do rozstrzygnięcia razem z językiem, nie osobno.
+
+### §20.6 Co z tego wynika dla projektu języka
+
+1. ⭐⭐ **Problemem nie jest liczba kolorów, tylko ich NIESTAŁOŚĆ.** 91% aplikacji jest neutralne;
+   defekt polega na tym, że dziewięć akcji ma po 2–4 kolory zależnie od modułu, w którym stoi.
+2. ⭐ **Pięć akcji jest już wzorcowo spójnych** — język ma je opisać i utrwalić, a nie zmieniać.
+3. ⚠ **Cztery różnice są świadome** i muszą zostać w języku jako **nazwane wyjątki z powodem**,
+   inaczej następna iteracja „naprawi" je ponownie.
+4. ⚠ **Kolor przycisku `primary` to inny wymiar niż kolor ikony** i musi być w języku rozdzielony,
+   inaczej Execute w SQL Editorze i Execute procedury nigdy nie dadzą się porównać.

@@ -42,7 +42,7 @@
 | **Suite** | **7133**, zielony w trzech partycjach (**7031 + 48 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⭐⭐ **M3.2b′ — PROJEKT JĘZYKA KOLORÓW**, i kolejność jest ODWRÓCONA: najpierw język (role · zastosowania · wyjątki) → akceptacja → dopiero przypisanie przycisków. ⛔ Nie dedukować reguły z istniejących przycisków (§19.14.5) |
+| **NASTĘPNY KROK** | ⭐⭐ **M3.2b′ — PROJEKT JĘZYKA KOLORÓW.** Kolejność ODWRÓCONA i ratyfikowana: ✅ **inwentarz całego produktu = §20 (ZROBIONY)** → **projekt języka** (role · zastosowania · wyjątki) → **akceptacja** → dopiero przypisanie przycisków. ⛔ Nie dedukować reguły z istniejących przycisków (§19.14.5). ⭐ Trzy odpowiedzi użytkownika już wiążą: **🟢 dwie osobne role (Execute / Commit), na razie ten sam odcień** · **🟡 = ostrzeżenie / wstrzymanie, NIGDY destrukcja** (⇒ usuń połączenie i usuń zapytanie idą na czerwony) · **🔵🟣 tożsamość modułu tylko wewnątrz modułu — ale WOLNO jej użyć w pasku globalnym, gdy element niesie STAN, nie akcję** (chip Debug/Trace) |
 | **⏸ ZAMKNIĘTE PRZEZ R13** | Dług „sekcja 3 toolbara drga przy przełączaniu pod-zakładek" (§19.10.3) **nie wymaga już decyzji** — R13 rozstrzyga go z góry: nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Sekcja 3 zostaje jak jest |
 | **⏸ DROBIAZG DO WZIĘCIA PO DRODZE** | Wyłączone komórki Size/Scale/SubType/Charset dostały `Stretch`, ale **tło nadal maluje `FluentBridge`** (`TextControlBackgroundDisabled` → `BackgroundColor`), więc setter `Background="Transparent"` go nie zdejmuje. Jeśli po QA nadal widać pudełko — trasa jest przez **Bridge**, nie przez setter (reguła 8 §16). Zapis: §19.8.4 |
 
