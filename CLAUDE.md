@@ -429,7 +429,20 @@ noted.
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
   FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
-  (a ready-made startup prompt), then the handover it points at.**
+  (a ready-made startup prompt for **M3.4**), then the handover it points at.**
+  🔒 **M3.3 (TAB STRIP) IS CLOSED AND ACCEPTED (2026-08-03)** — `product-polish.md` **§19.25** is its closing
+  summary. Three sub-etaps: **M3.3a** paid off the strip's technical debt (12 → 5 local values), **M3.3b**
+  delivered **two modes + two preferences + a Tabs category** in Settings Center, **M3.3c** added the
+  **context menu** and took the rule-#11 gate from three entries to four. ⛔ Do not return to the tab strip
+  without a real functional defect.
+  ⭐⭐ **Four findings from M3.3 that outlive it:** (1) **moving a rule changes its PRIORITY** — the same style
+  in `Border.Styles` and in the global sheet behaves differently against a local value, so *"I moved the style
+  unchanged"* is a sentence you may not say without measuring; (2) **a tool that computes ONCE cannot rule on
+  CONVERGENCE** — the visual probe renders one layout pass, so a feedback-loop defect is outside its reach by
+  construction, not by mistake; (3) **a stage plan goes stale exactly as silently as a string or a comment** —
+  check in the code that a sub-etap's subject still exists before starting it; (4) **a test on a property's
+  VALUE is not a test that the screen works** — the binding re-queries only on `PropertyChanged`, so the
+  notification must be an assertion, verified by planting the violation (R16).
   Build 0/0; suite **7243** (7132 + 57 + 54); smoke clean. ⏸ **Next: M3.4a** (Metadata Explorer tree row;
   decision **DB** already settled — **the row STAYS 24**), then M3.4b → M3b → ⛔ the §13.3 gate.
   ✅ **M3.3c DONE (2026-08-03) — the tab context menu; the tab strip is complete** (`product-polish.md`

@@ -35,16 +35,16 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | `2839d22` — optyczne wyrównanie bloku połączenia w pasku statusu. ⭐ **Drzewo czyste, oba remote'y zsynchronizowane** (`origin` + `private`), nic nie czeka na push |
-| **Etap** | M0–M2c ✅ · **M3: iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ wycofana · 🔒 JĘZYK KOLORÓW WDROŻONY I ODEBRANY ✅** (K1–K7 + przegląd domykający + poprawka paska statusu, §19.15–§19.20). ⭐ **M3.1 ZAMKNIĘTE** · ⭐ **H‑3 ZAMKNIĘTE** · ⭐ **H‑5 ZAMKNIĘTE** (Commit/Rollback na własnych tokenach, K7) · ⭐ **§7.5 ZAMKNIĘTE** — zastąpione przez `color-language.md` |
+| **Ostatni commit** | dokumentacyjne domknięcie M3.3. ⚠ **Sprawdź `git log --oneline -1` zamiast wierzyć temu wierszowi** — hasze starzeją się tu najszybciej |
+| **Etap** | M0–M2c ✅ · **M3: iteracja 0 ✅ · M3.1 ✅ · M3.2 ✅ · 🔒 JĘZYK KOLORÓW ✅ · 🔒 M3.3 PASEK ZAKŁADEK ✅ ODEBRANY 2026-08-03** (§19.22–§19.25). ⭐ **M3.1 ZAMKNIĘTE** · ⭐ **H‑3 ZAMKNIĘTE** · ⭐ **H‑5 ZAMKNIĘTE** (K7) · ⭐ **§7.5 ZAMKNIĘTE** — zastąpione przez `color-language.md` · ⭐ **M‑1 ZAMKNIĘTE wewnątrz M3** (zostały 2 literały, oba w M4.3) |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
 | **Suite** | **7243**, zielony w trzech partycjach (**7132 + 57 + 54**). ⚠ Ten wiersz podawał kiedyś **7138 (7032 + 52 + 54)** — wartość sprzed rundy poprawek odbiorczych (`85c8747`, §21). **Mierz przed cytowaniem** |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 | ⭐⭐ **NASTĘPNY KROK** | **M3.4a — Metadata Explorer, wiersz drzewa** (pozycja 15 w planie §10). ⚠ Niesie decyzję **DB**, już rozstrzygniętą: **wiersz ZOSTAJE 24** (`Size.Row.Tree` = 20 to zamiar katalogu, nie opis; zejście do 20 zmieniałoby gęstość najgęstszego widoku aplikacji i wymaga oka użytkownika). ⭐ **§0.1 stawia tę powierzchnię wysoko** — użytkownik patrzy na nią cały dzień. Potem M3.4b → M3b → ⛔ brama §13.3 |
-| ✅ **PASEK ZAKŁADEK ZAMKNIĘTY** | M3.3a + M3.3b + M3.3c dostarczone. ⏸ Czeka odbiór M3.3c na żywej bazie: reveal na dużym schemacie (czy PRZEWIJA), stany menu na pierwszej/ostatniej zakładce, bramka przy „Zamknij wszystkie" z kilkoma brudnymi edytorami |
-| **⚠ TRYB PRACY** | ⭐ **R15** (§5): wielkość iteracji idzie za **niepewnością**. ⭐⭐ **Instrukcja użytkownika z 2026-08-03:** *„Po zakończeniu tej iteracji nie zatrzymujemy się na odbiór, tylko przechodzimy od razu do M3.3b. Zatrzymamy się dopiero wtedy, gdy pojawi się decyzja produktowa wymagająca mojej akceptacji albo gdy będzie gotowy cały pasek zakładek do obejrzenia."* Czyli: M3.3b i M3.3c **idą bez przerwy na odbiór**, a przystanek jest **po całym pasku zakładek**. Powrót do użytkownika wcześniej: dokument nie rozstrzyga · realny konflikt projektowy · zmiana pogorszyłaby produkt mimo zgodności |
+| 🔒 **PASEK ZAKŁADEK ZAMKNIĘTY** | M3.3a + M3.3b + M3.3c **dostarczone i odebrane** (§19.25). ⛔ Nie wracać do niego bez realnego defektu funkcjonalnego |
+| **⚠ TRYB PRACY** | ⭐ **R15** (§5): wielkość iteracji idzie za **niepewnością**. ⭐⭐ **Wzorzec z M3.3, potwierdzony przez użytkownika:** podetapy o ustalonej architekturze **idą bez przerwy na odbiór**, a przystanek jest **po całej powierzchni**. Powrót do użytkownika wcześniej: dokument nie rozstrzyga · realny konflikt projektowy · zmiana pogorszyłaby produkt mimo zgodności · decyzja produktowa (np. gęstość, widoczność opcji) |
 | ⭐ **PRZED KAŻDYM PODETAPEM** | ⚠⚠ **Sprawdź w KODZIE, czy przedmiot podetapu jeszcze istnieje.** M3.3a wszedł z zakresem, który M3.1a już dostarczyła — **plan etapu starzeje się tak samo cicho jak string i jak komentarz** (#284, pułapki 20/21). Kosztowało to jedną iterację; drugi raz nie musi (§19.22.1) |
 | ⛔ **BRAMKA KOLORU** | Przy **każdym** dotknięciu koloru obowiązuje `color-language.md` **§0.5**: *czy użytkownik rozpozna akcję SZYBCIEJ?* „Nie" albo „nie wiadomo" ⇒ zatrzymaj się i wróć z propozycją |
 | **⛔⛔ BRAMKA NADRZĘDNA** | **`color-language.md` §0.5** (ratyfikowana 2026-08-03): **przed każdą zmianą koloru odpowiedz, czy użytkownik dzięki niej SZYBCIEJ ROZPOZNA AKCJĘ.** „Nie" albo „nie wiadomo" ⇒ ⛔ zatrzymaj się i wróć z propozycją. Stoi **przed** §6 i przed R14: zgodność z rolą jest warunkiem koniecznym, nigdy wystarczającym, a *„teraz jest zgodne z językiem"* **nie jest odpowiedzią na to pytanie** — to było jedyne uzasadnienie M3.2b. ⭐ Jeśli reguła pogarsza UX — poprawiamy **regułę w dokumencie**, nie bronimy implementacji |
@@ -66,8 +66,8 @@
 |---|---|
 | **M3.1** | **Status Bar 2.0** (§8.4) — rytm pionowy chromy, rail, cztery sekcje, hierarchia, chip transakcji, chipy stanu, sekcja postępu + **jedna** operacja referencyjna |
 | **M3.2** | **Toolbar** — stabilny układ (H‑3), semantyka kolorów (§7.5), Commit/Rollback (H‑5), literały (M‑1) |
-| **M3.3** | **Pasek zakładek** — dwa tryby, limit wierszy, menu kontekstowe (D5–D9) + wiersze w Settings Center |
-| **M3.4** | **Metadata Explorer** (§0.1) + przegląd menu kontekstowych |
+| **M3.3** | ✅ **ZAMKNIĘTE** — **Pasek zakładek**: dwa tryby, limit wierszy, menu kontekstowe (D5–D9) + wiersze w Settings Center |
+| ⭐ **M3.4** | **Metadata Explorer** (§0.1) + przegląd menu kontekstowych ← **TU JESTEŚMY** |
 | **M3b** | **Podłączenie wszystkich pozostałych operacji** do infrastruktury paska postępu (D4) |
 | **brama** | ⛔ **§13.3** — przegląd czterech powierzchni **jednocześnie**, na żywej bazie, w obu motywach |
 
@@ -221,14 +221,15 @@ To jest pytanie projektowe M3.2 — *czy pasek ma stałe kotwice sekcji, czy prz
 
 R‑7 przypisała M‑1 w całości do M3.2. Zmierzone: **10 tam trafia, 1 do M3.3, 2 zostają poza etapem.**
 
-✅ **Wykonane w M3.2d (§19.21): 13 → 3.** Zostały dokładnie te trzy z ostatnich dwóch wierszy tabeli.
-⭐ Dla wiersza M3.3 stała **już istnieje** — `UiStrings.TabCloseTooltip = "Close tab"`, dziś bez konsumenta.
+✅ **M‑1 ZAMKNIĘTE wewnątrz M3.** M3.2d zdjęło 10 (13 → 3), M3.3a zdjęło ostatni literał paska zakładek
+(„Close tab" — stała `UiStrings.TabCloseTooltip` **już istniała**, była tylko nieużywana). **Zostały 2**,
+oba świadomie poza etapem: `PerformancePanelView` i `SessionManagerTabView` → **M4.3**.
 
 ### 3.8 Co już istnieje i czego NIE trzeba budować
 
 | Potrzeba | Stan |
 |---|---|
-| Bramka Save / Discard / Cancel dla zamykania | ✅ `RequestCloseTabAsync` (`:6514`), `ChoiceRequested` (`:2476`); komentarz `:2482` mówi wprost **„three entry points"** — menu będzie czwartym |
+| Bramka Save / Discard / Cancel dla zamykania | ✅ **CZTERY wejścia od M3.3c**: zamknięcie zakładki, rozłączenie, zamknięcie aplikacji, zamykanie masowe z menu. ⭐ Jej trzy metody pomocnicze przyjmują **ZASIĘG** (`scope == null` = wszystkie) — kolejne wejście na podzbiorze nie wymaga już żadnej zmiany |
 | Lista z filtrowaniem dla trybu pojedynczego wiersza (§8.2) | ✅ `Controls/SearchableComboBox.cs` |
 | Odświeżenie zakładki (pozycja menu) | ✅ `WorkspaceTabViewModel.RefreshAsync()` (Seam 6d) |
 | Style `ContextMenu`/`MenuItem`, `{app:MenuIcon}`, `{app:CommandGesture}` | ✅ Keyboard Manager etap 5 — **zero nowej chromy** |
@@ -302,9 +303,18 @@ kolizję **spoza M2c** i pierwszą dotyczącą **odstępu**, a nie typografii cz
 szerszy niż licznik, który go zrodził. ⚠ Różnica 1 px czyni pokusę „weź po prostu rolę" największą właśnie
 tutaj — a wzięcie jej zmieniłoby wygląd **już odebrany przez użytkownika**.
 
-**K1–K11 zostają w rejestrze aż do przeglądu §13.3.** M3.3 przebudowuje pasek zakładek, ale
-**zachowuje obecne wartości lokalne wraz z uzasadnieniem** — dotyczy to w szczególności **K9**
-(etykieta zakładki 13 px) i **K10** (promień zakładki 4).
+**K1–K14 zostają w rejestrze aż do przeglądu §13.3.** M3.3 przebudowało pasek zakładek i **zachowało
+obecne wartości lokalne wraz z uzasadnieniem**, dopisując **K12–K14** (dwa paddingi + margines przycisku
+zamykania).
+
+⚠⚠ **KOREKTA Z M3.3a — K9 i K10 NIGDY NIE DOTYCZYŁY TEGO PASKA.** Zmierzone: oba stoją na `TabItem`,
+czyli na **dolnym panelu i pod‑zakładkach edytorów**. Pasek zakładek dokumentów nie ma ani `TabItem`, ani
+13 px (etykieta na `Text.Compact.Size` = 11), ani żadnego `CornerRadius`. ⭐ Rejestr indeksował po nazwie,
+a „zakładka" jest nośnikiem **dwóch różnych rzeczy** (pułapka 19 w wydaniu rejestrowym).
+
+⭐ **K12–K14 idą na §13.3 JAKO JEDNO PYTANIE**, nie trzy: wszystkie zmieniają szerokość zakładki, czyli
+**ile zakładek mieści się w wierszu**. To nie jest pytanie o zgodność z katalogiem, tylko o **gęstość
+paska** — a ta jest decyzją użytkownika (D6/§8.1 chroni pełną czytelność nazw).
 
 ⛔ **Nie rozszerzaj katalogu. Nie usuwaj K9/K10 z rejestru.** Dopiero przegląd §13.3 ma pełny obraz
 wszystkich kolizji z całej aplikacji i wtedy zapada decyzja, czy katalog należy rozszerzyć.

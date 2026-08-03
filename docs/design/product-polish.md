@@ -1215,7 +1215,7 @@ domyślna, pasek **pozostaje kolorowy**.
 | **M2c** | Sweep de‑lokalizacyjny (H‑1) — lista wyjątków do minimum | tak |
 | **M3.1** | **Status Bar 2.0** (§8.4) — rail, cztery sekcje, hierarchia, chip transakcji, sekcja postępu + **jedna** operacja referencyjna | tak |
 | **M3.2** | Toolbar: stabilny układ (H‑3), semantyka kolorów (§7.5), spójność Commit/Rollback (H‑5) | tak |
-| **M3.3** | **Pasek zakładek**: dwa tryby, limit wierszy, menu kontekstowe (D5–D9) + wiersze w Settings Center | tak |
+| **M3.3** | ✅ **DOSTARCZONE I ODEBRANE 2026-08-03** (§19.22–§19.25). **Pasek zakładek**: dwa tryby, limit wierszy, menu kontekstowe (D5–D9) + wiersze w Settings Center | tak |
 | **M3.4** | **Metadata Explorer** (⭐ wyciągnięty z M4.2 — §0.1) + przegląd menu kontekstowych | tak |
 | **M3b** | Podłączenie **pozostałych** operacji do paska postępu (D4) | tak |
 | **M4.1** | SQL Editor, Script Executor, Data Import | tak |
@@ -3469,8 +3469,8 @@ idzie dalej. Rejestr jest wejściem do przeglądu §13.3.
 | K6 | 4 | nagłówek karty tabeli w obu bliźniakach | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
 | K7 | 4 | `MinHeight` nagłówka `Expandera` w obu bliźniakach | 26 | `Size.Control` = **24** (przez `ExpanderMinHeight`) | ⛔ lokalnie z powodem |
 | K8 | 6 | `TextBlock.section` — nagłówek panelu szczegółów (Session + Trace) | 12 SemiBold | `Text.SectionHeader` = **11** | ⛔ lokalnie z powodem |
-| K9 | 9 | `TabItem` — etykieta zakładki roboczej (`ControlStyles.axaml`) | 13 | brak roli tekstowej przy 13 | ⛔ lokalnie z powodem → **M3.3** |
-| K10 | 9 | `TabItem.bottom-tab` / `.sub-tab` — kształt zakładki | promień 4 | `Radius.Chip` = 4, ale zakładka chipem nie jest | ⛔ lokalnie z powodem → **M3.3** |
+| K9 | 9 | `TabItem` — etykieta ⚠ **dolnego panelu i pod‑zakładek**, NIE paska zakładek (`ControlStyles.axaml`) | 13 | brak roli tekstowej przy 13 | ⛔ lokalnie z powodem → **§13.3** |
+| K10 | 9 | `TabItem.bottom-tab` / `.sub-tab` — kształt zakładki | promień 4 | `Radius.Chip` = 4, ale zakładka chipem nie jest | ⛔ lokalnie z powodem → **§13.3** |
 | K11 | **M3.1d** | chip transakcji — odstęp kropka ↔ tekst (`MainWindow.axaml`) | `Spacing` 5 | `Space.Sm` = **6** | ⛔ lokalnie z powodem → **§13.3** |
 | **K12** | **M3.3a** | przycisk aktywujący zakładkę roboczą — `Padding` | 8,4 | `Pad.Tab` = **10,4** | ⛔ lokalnie z powodem → **§13.3** |
 | **K13** | **M3.3a** | przycisk zamykania zakładki — `Padding` | 4,2 | `Pad.ButtonIcon` = **6,0** | ⛔ lokalnie z powodem → **§13.3** |
@@ -3494,6 +3494,13 @@ i komórka siatki jej NIE biorą"*, **a jej wartość 100 leży poniżej natural
 Execute** — więc gdyby ktoś kiedyś sięgnął po nią „dla porządku" w pasku narzędzi, dostałby martwy zapis
 wyglądający na regułę. To ta sama pułapka, którą tamten komentarz opisuje na własnym przykładzie
 (80 przy „Cancel" o naturalnych 98).
+
+⚠⚠ **KOREKTA Z M3.3a (2026-08-03): K9 i K10 NIE DOTYCZĄ PASKA ZAKŁADEK ROBOCZYCH.** Rejestr indeksował po
+nazwie („zakładka"), a produkt ma **dwa** systemy zakładek: pasek dokumentów to `ItemsControl` + `WrapPanel`
++ szablon `Border`/`Button` (etykieta na `Text.Compact.Size` = 11, **żadnego `CornerRadius`**), natomiast
+K9/K10 stoją na `TabItem` — czyli na **dolnym panelu i pod‑zakładkach edytorów**. ⭐ To pułapka 19 w wydaniu
+rejestrowym: **nazwa jest nośnikiem dwóch różnych rzeczy**. Instrukcja „K9/K10 zostają" obowiązuje dalej, ale
+z innego powodu — nie były w przedmiocie M3.3.
 
 ⚠ **K11 jest pierwszą kolizją spoza M2c i pierwszą dotyczącą ODSTĘPU, a nie typografii ani promienia** —
 rejestr okazał się szerszy niż licznik, który go zrodził. Różnica to **1 px**, więc pokusa „po prostu
@@ -3778,7 +3785,8 @@ w miejscu** — po raz pierwszy w etapie licznik nie zawiera już ani jednej war
 `Text.Application` · `TabItem.bottom-tab` 11 · `TabItem.sub-tab` 11 · `PART_InputGestureText` 11 →
 `Text.Compact` · `MenuItem` PART_LayoutRoot 3 → `Radius.Surface`.
 
-**Zostaje z powodem (7):** `TabItem` 13 (**K9** — brak roli tekstowej przy 13; pasek zakładek to M3.3) ·
+**Zostaje z powodem (7):** `TabItem` 13 (**K9** — brak roli tekstowej przy 13; ⚠ **skorygowane w M3.3a: to
+dolny panel i pod‑zakładki, NIE pasek zakładek roboczych** — §18.R) ·
 dwa promienie zakładek przy 4 (**K10** — `Radius.Chip` niesie tę samą liczbę, ale zakładka chipem nie
 jest) · `ContextMenu` 4 (powierzchnia unosząca się; `Radius.Surface` niesie 3) · kropka filtra 3.5
 (geometria: 7×7, promień = połowa boku) · dwa resety do 0.
@@ -4336,6 +4344,8 @@ wskaźnik **zawsze** istnieje i **zawsze** ma tło; zmienia się wyłącznie bar
 wewnątrz `Border.Styles` w `MainWindow.axaml` jest **nieosiągalna dla jakiegokolwiek testu** — headless
 test konstruujący `MainWindow` zawiesza suite (#94/#226/#286). Pozostałe style `active-tab` (podmiana tła
 kafelka, pogrubienie etykiety) zostają w szablonie do czasu, aż **M3.3** skonsoliduje cały pasek.
+✅ **Skonsolidowane w M3.3a (§19.22.3)** — i przeniesienie ODTWORZYŁO tę samą regresję jeden poziom wyżej,
+bo kafelek niósł lokalne `Background`. Recepta ta sama: oba stany jako setter.
 
 #### §19.2.5 ⭐ Dwa testy, bo żaden osobno by tego nie złapał
 
@@ -6770,6 +6780,67 @@ na stronę, a nie zepsuć okno, gdy kategoria kiedyś zmieni nazwę.
 
 ⏸ **Do odbioru na żywej bazie:** reveal na dużym schemacie (czy przewija), stany menu na pierwszej/ostatniej
 zakładce, bramka przy „Zamknij wszystkie" z kilkoma brudnymi edytorami.
+
+---
+
+### §19.25 🔒 PODSUMOWANIE ZAMYKAJĄCE — M3.3 (pasek zakładek) ODEBRANE (2026-08-03)
+
+> **Użytkownik:** *„Odbieram M3.3 jako zakończone. Wszystko działa zgodnie z założeniami."*
+> Trzeci z czterech podetapów M3. Zostaje **M3.4** (Metadata Explorer) → **M3b** → ⛔ brama §13.3.
+
+#### §19.25.1 Co dostarczono
+
+| Podetap | Wynik |
+|---|---|
+| **M3.2d** | M‑1: 13 literałów `ToolTip.Tip` → **3** (1 spadł na M3.3a, 2 zostają M4.3). Zero zmian wizualnych |
+| **M3.3a** | Dług techniczny paska: **12 → 5** wartości lokalnych, komplet reguł zakładki aktywnej w `ControlStyles.axaml`, ostatni literał M‑1 |
+| **M3.3b** | **Dwa tryby** (`MultiRow` \| `SingleRow`) + **dwie preferencje**, własna kategoria **Tabs** w Settings Center |
+| **M3.3c** | **Menu kontekstowe** — 9 pozycji, zero nowej chromy, **czwarte wejście do bramki reguły #11** |
+
+**Stan:** build 0/0 · suite **7243** (7132 + 57 + 54, **+15** w całym M3.3) · smoke czysty ·
+`CurrentSchemaVersion` **bez zmian** (R‑4) · zero nowych stylów.
+
+#### §19.25.2 ⭐⭐ Cztery ustalenia, które przeżyją ten podetap
+
+1. ⭐⭐ **ZMIANA MIEJSCA REGUŁY JEST ZMIANĄ JEJ PRIORYTETU.** Przeniesienie stylu `active-tab`
+   z `Border.Styles` do arkusza globalnego odtworzyło regresję §19.2 — lokalne `Background` zaczęło bić
+   setter, choć „nic się nie zmieniło". ⛔ *„Przeniosłem styl bez zmian"* to zdanie, którego **nie wolno
+   powiedzieć bez pomiaru**. Recepta jest z §19.2: **oba stany jako setter**, plus **kotwica klasy
+   komponentu** (`workspace-tab`), bo klasa stanu mówi JAKI stan, a klasa komponentu — CZEGO.
+2. ⭐⭐ **NARZĘDZIE, KTÓRE LICZY RAZ, NIE MOŻE ORZEC O ZBIEŻNOŚCI.** Rezerwacja miejsca `Paddingiem`
+   wychodziła w sondzie poprawnie, bo sonda renderuje jeden przebieg układu; w aplikacji sprzężenie
+   `padding → viewport → widoczność → padding` nie ustalało się nigdy. ⭐ Rozwiązaniem jest **struktura,
+   nie liczba**: rodzeństwo w osobnym wierszu siatki nie ma jak nachodzić na sąsiada, a widoczność paska
+   zależy od wymiaru **ortogonalnego** do tego, na który pasek wpływa.
+3. ⭐⭐ **PLAN ETAPU STARZEJE SIĘ TAK SAMO CICHO JAK STRING I JAK KOMENTARZ.** M3.3a wszedł z zakresem,
+   który M3.1a już dostarczyła. ⚠ To pułapka 20 zastosowana do **własnej dokumentacji projektu** —
+   i dlatego handover ma teraz wiersz *„przed każdym podetapem sprawdź w KODZIE, czy jego przedmiot jeszcze
+   istnieje"*. Ta sama runda pokazała, że **K9/K10 nigdy nie dotyczyły tego paska** (stoją na `TabItem`).
+4. ⭐⭐ **TEST NA WARTOŚĆ WŁAŚCIWOŚCI NIE JEST TESTEM NA DZIAŁANIE EKRANU.** Dwa razy w tym podetapie
+   (`ShowTabStripMaxRows`, bramkowanie menu) właściwość czytana wprost była poprawna, a wiązanie odpytuje
+   ją **wyłącznie po `PropertyChanged`** — czyli test byłby zielony przy niedziałającym UI (**R16**).
+   ⭐ Notyfikacja jest **asercją**, w obu miejscach **zweryfikowaną podłożeniem naruszenia**.
+
+#### §19.25.3 ⭐ Trzy decyzje użytkownika, które uchyliły moje
+
+Warto zapisać, bo każda była lepsza od tego, co zaproponowałem:
+
+* **Przeskalowanie M3.3a** — *„nie cofajmy się do planu tylko dlatego, że plan jest nieaktualny"*. Zamiast
+  robić etap dla etapu, podetap domknął realny dług.
+* **Ukrycie „Maximum rows"** w trybie jednowierszowym. Broniłem widoczności, bo wartość przeżywa
+  przełączenie trybu — **myliłem ukrycie wiersza z porzuceniem wartości**.
+* **„Najpierw układ, potem przycisk przepełnienia"** — *„próbujesz naprawić objaw zamiast układ"*. Trafna
+  diagnoza; poprawka strukturalna wyszła z niej, nie z kolejnej iteracji łatania.
+
+#### §19.25.4 ⏸ Co M3.3 zostawia otwarte
+
+| # | Co | Gdzie |
+|---|---|---|
+| **K12–K14** | paddingi + margines zakładki = **gęstość paska**; idą na §13.3 **jako jedno pytanie** | brama §13.3 |
+| **K9/K10** | ⚠ **nie dotyczą tego paska** — stoją na `TabItem` (dolny panel, pod‑zakładki) | brama §13.3 |
+| ⏸ **przycisk/licznik przepełnienia** | odłożony przez użytkownika; §8.2 nadal go wymaga. ⚠ Znana usterka: lista popupu renderuje przez `ItemTemplate`, więc sam `DisplayMemberPath` nie wystarczy | do zaplanowania |
+| **sieroty w `UiStrings`** | 6 stałych bez konsumenta (w tym `TabCloseTooltip`, już wykorzystany) | §13.3 / M4.3 |
+| **`Pad.Tab`, `Size.Icon.Lg`** | role bez konsumentów; `Size.Icon` (14) ma od M3.3a **jednego**, przy **64** literałach w aplikacji | §13.3 / M4.3 |
 
 ---
 
