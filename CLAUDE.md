@@ -430,10 +430,25 @@ noted.
 - **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
   FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
   (a ready-made startup prompt), then the handover it points at.**
-  Build 0/0; suite **7228** (7118 + 56 + 54); smoke clean. ⏸ **Next: M3.2d** (M‑1, 10 literals →
-  `UiStrings`; purely housekeeping, zero visual change), then M3.3 tab strip → M3.4 Metadata Explorer →
-  M3b → ⛔ the §13.3 gate.
-  ⚠ **An ACCEPTANCE FIX ROUND ran first (2026-08-03) and is NOT pushed yet** — 14 defects from ordinary
+  Build 0/0; suite **7228** (7118 + 56 + 54); smoke clean. ⏸ **Next: M3.3a** (tab strip geometry,
+  `Size.Row.Tab`, indicator; ⛔ K9/K10 stay in the collision register), then M3.3b/c → M3.4 Metadata
+  Explorer → M3b → ⛔ the §13.3 gate.
+  ✅ **M3.2d DONE (2026-08-03) — M‑1, pure housekeeping, zero visual change and zero test-count change**
+  (`product-polish.md` §19.21): the 13 English `ToolTip.Tip` literals are **13 → 3** (7 connection-toolbar
+  + 3 window-caption buttons migrated to `UiStrings`; 1 belongs to M3.3, 2 to M4.3). ⭐ They got their **own
+  `*Tooltip` constants rather than reusing the existing label strings** — a label and a tooltip answer
+  different questions, and the *reverse* of that reuse is already recorded as a defect (Keyboard Manager
+  audit finding **D6**: seven menu items whose `Header` read a tooltip constant, which is how "Add item"
+  became a menu entry). ⚠ **None carries a gesture, by rule**: the commands are `Tree`-scoped (F3/F4/F8), and
+  a toolbar tooltip promising a key that only works in the tree teaches something false
+  (`keyboard-manager.md` §14). ⚠ `{x:Static}` is **compile-checked**, so a typo is a build error — the exact
+  opposite failure mode from `{DynamicResource}`, which silently keeps the inherited value.
+  ⭐ **Side finding, measured and deliberately NOT fixed** (scope was literals in XAML, not orphans in
+  `UiStrings`): six constants have **no consumer anywhere** — `ConnectionConnect`, `ConnectionDisconnect`,
+  `ConnectionDelete`, `ConnectionNew`, `ConnectionsEmptyHint` and **`TabCloseTooltip`**. The last one matters
+  for planning: the string for M3.3's remaining literal **already exists**, so that item is probably one
+  substitution rather than new work.
+  ⚠ **An ACCEPTANCE FIX ROUND ran first (2026-08-03)** — 14 defects from ordinary
   use, grouped into 6 causes: [docs/history/23-acceptance-fix-round.md](docs/history/23-acceptance-fix-round.md).
   ⭐⭐ **One of them was a data-loss bug: two instances of EmberTern could publish an EMPTY `settings.dat`**
   and the empty file then loaded as `Missing`, so the next write made defaults permanent (gotcha #304 —
@@ -501,7 +516,7 @@ noted.
   so the VM switches on the **kind of source**, never on a kind of statement — a third origin would be a new fact
   plus one arm. ⚠ Refusals, each with a reason: no column list · a column/value length mismatch · `WHERE col = :p`
   (a predicate is a token fragment at structural depth) · a value that is not the whole placeholder (gotcha #312).
-  ⏸ Awaits the user's visual QA (both themes) and the push to both remotes.
+  ✅ Pushed to both remotes (`85c8747`). ⏸ Awaits the user's visual QA (both themes).
   **Closed and not returning:** M3.1 (Status Bar 2.0, six iterations) · **H‑3** (stable titlebar
   layout) · **H‑5** (Commit/Rollback on their own tokens) · **§7.5** (superseded by the colour
   language) · 🔒 **the colour language itself — designed, ratified, rolled out across the whole product

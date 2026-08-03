@@ -1,4 +1,4 @@
-# EmberTern — PROMPT STARTOWY: M3.2d i dalej (pasek zakładek, Metadata Explorer, brama §13.3)
+# EmberTern — PROMPT STARTOWY: M3.3a i dalej (pasek zakładek, Metadata Explorer, brama §13.3)
 
 > Wklej to jako pierwszą wiadomość nowej sesji. Dokument jest **samowystarczalny w zakresie stanu,
 > decyzji i planu** — do implementacji sięgniesz jeszcze po dokumenty wskazane w §1.
@@ -7,10 +7,11 @@
 
 ## 0. Jednozdaniowe streszczenie poprzedniej sesji
 
-**Język kolorów został zaprojektowany, zaakceptowany, wdrożony w całym produkcie i odebrany wizualnie**
-(K1–K7 + przegląd domykający + poprawka optyczna paska statusu) — ⭐ **nie ma tam nic do dokończenia**,
-a wyniósł z siebie trzy nowe reguły (**R15, R16, R17**) i cztery pułapki (**18–21**), które obowiązują
-od teraz w całym projekcie.
+**M3.2d zamknięte** — 13 literałów `ToolTip.Tip` → **3** (10 przeszło do `UiStrings`, 1 należy do M3.3,
+2 do M4.3), zero zmian wizualnych, zero zmian licznika testów; ⭐ przy okazji zmierzono **6 sierocych
+stałych `UiStrings`**, w tym **`TabCloseTooltip`**, która jest gotową stałą dla literału czekającego
+w M3.3a. Wcześniej: **język kolorów wdrożony w całym produkcie i odebrany wizualnie** — nic tam nie
+zostało do dokończenia, a wyniósł trzy reguły (**R15, R16, R17**) i cztery pułapki (**18–21**).
 
 ---
 
@@ -34,12 +35,12 @@ podsekcję, gdy dotyczy tego, co robisz) · handoverów M2a/M2b/M2c.
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | `2839d22` — ⭐ **drzewo czyste, oba remote'y (`origin` + `private`) zsynchronizowane, NIC nie czeka na push** |
+| **Ostatni commit** | `chore(ui-strings): M3.2d — M‑1` (po nim `85c8747` runda poprawek odbiorczych). ⚠ **Sprawdź `git status` i `git log origin/feat/product-polish -1`** zamiast wierzyć temu wierszowi — hasze starzeją się tu najszybciej |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7138** zielony w trzech partycjach (**7032 + 52 + 54**) |
+| **Suite** | **7228** zielony w trzech partycjach (**7118 + 56 + 54**). ⚠ Ten wiersz podawał wcześniej 7138 — wartość sprzed rundy poprawek odbiorczych. **Zmierz przed cytowaniem** |
 | **Smoke** | czysty |
-| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ wycofana · **🔒 język kolorów ✅ WDROŻONY I ODEBRANY** |
-| ⭐⭐ **START** | **M3.2d — M‑1: 10 literałów → `UiStrings`** (pozycja 11 w planie §10 handovera) |
+| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ wycofana · **🔒 język kolorów ✅ WDROŻONY I ODEBRANY** · **M3.2d ✅** |
+| ⭐⭐ **START** | **M3.3a — pasek zakładek: geometria, `Size.Row.Tab`, wskaźnik** (pozycja 12 w planie §10 handovera) |
 
 ### 2.1 Co jest zamknięte i nie wraca
 
@@ -49,33 +50,36 @@ podsekcję, gdy dotyczy tego, co robisz) · handoverów M2a/M2b/M2c.
 
 ---
 
-## 3. ⭐⭐ Zadanie: M3.2d — M‑1
+## 3. ⭐⭐ Zadanie: M3.3a — pasek zakładek, geometria
 
-> Krok **czysto porządkowy, ZERO zmian wizualnych.** Dobry na rozgrzewkę po zamknięciu języka.
+> Pierwsza z trzech iteracji M3.3. **Zmienia wygląd** — a więc obowiązuje krok 5 procedury (uruchom
+> aplikację i obejrzyj w obu motywach) jako **bramka odbioru, nie formalność na koniec** (pułapka 15).
 
-| Gdzie | Ile | Uwaga |
-|---|---|---|
-| `MainWindow.axaml` — toolbar połączeń | **7** | `ToolTip.Tip="Edit Connection"`, `"Copy Connection"`, `"Delete Connection"`, `"Connect"`, `"Disconnect"`, `"Reconnect"` i sąsiedzi — literały zamiast `x:Static app:UiStrings.*` |
-| `MainWindow.axaml` — przyciski okna | **3** | Minimize / Maximize / Close |
-| ⛔ `PerformancePanelView`, `SessionManagerTabView` | 2 | **poza M3** — M4.3 |
+**Zakres:** geometria paska zakładek — podłączenie roli **`Size.Row.Tab`**, wskaźnik aktywnej zakładki
+(**`Size.TabIndicator`**, token dodany w M3.1a), rytm pionowy chromy **36 / 26 / 24**. Model: `product-polish.md`
+**§8.0–§8.3**.
 
-⚠ **Zmierzone w iteracji 0** (handover §3.7): audyt przypisał M‑1 w całości do M3.2; realnie **10 trafia
-tutaj, 1 do M3.3** („Close tab"), **2 zostają poza etapem**.
+⛔ **K9 (etykieta zakładki 13 px) i K10 (promień 4) ZOSTAJĄ** — wraz z uzasadnieniem w miejscu. Rejestr
+kolizji rozstrzyga **brama §13.3**, która widzi wszystkie kolizje naraz (R3: nowa rola nie powstaje jako
+reakcja na jedną iterację).
 
-**Definicja ukończenia:** żaden z tych 10 literałów nie zostaje w XAML · nowe stałe w `UiStrings`
-nazwane spójnie z sąsiadami · build 0/0 · trzy partycje zielone · smoke · commit.
+⭐ **Weź po drodze ostatni literał M‑1**: `MainWindow.axaml:862` `ToolTip.Tip="Close tab"` — **stała już
+istnieje** (`UiStrings.TabCloseTooltip`, dziś bez konsumenta, §19.21.4), więc to jedna podmiana, nie nowa
+robota. ⚠ **Nie myl jej z `ToolbarCloseTabTooltip`** = *„Close active tab · Ctrl+W"* — to komponowany
+tooltip przycisku toolbara, inny przycisk i inna komenda.
 
-⚠ **Nie dopisuj skrótu klawiszowego do tekstu tooltipa ręcznie** — jeśli któryś z tych przycisków ma
-gest, komponuje go `CommandTip` z katalogu komend (gotcha **#284**: gest wpisany ręcznie starzeje się
-po cichu, przy zielonym buildzie).
+⚠ **Nie dopisuj skrótu klawiszowego do tekstu tooltipa ręcznie** — komponuje go `CommandTip` z katalogu
+komend (gotcha **#284**: gest wpisany ręcznie starzeje się po cichu, przy zielonym buildzie), i pokazuje
+się **tylko tam, gdzie działa** (keyboard-manager §14).
 
 ---
 
-## 4. Plan po M3.2d
+## 4. Plan po M3.3a
 
 | # | Podetap | Zakres | Decyzja |
 |---|---|---|---|
-| 12 | **M3.3a** | Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik. ⛔ **K9/K10 zostają** w rejestrze kolizji | — |
+| ✅ 11 | **M3.2d** | **ZROBIONE** — M‑1, 13 → 3 literały (§19.21) | — |
+| ⭐⭐ 12 | **M3.3a** | **← TU ZACZYNASZ** (§3) — geometria paska zakładek | — |
 | 13 | **M3.3b** | Dwa tryby + preferencje (`TabStripMode`, `TabStripMaxRows`) + wiersze w Settings Center | ⚠ preferencje |
 | 14 | **M3.3c** | Menu kontekstowe zakładki — 8 pozycji, **czwarte wejście do bramki** Save/Discard/Cancel | — |
 | 15 | **M3.4a** | Metadata Explorer — wiersz drzewa | **DB** (wiersz **zostaje 24**) |

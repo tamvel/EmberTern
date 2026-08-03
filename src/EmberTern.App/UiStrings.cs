@@ -868,6 +868,32 @@ internal static class UiStrings
     public const string ThemeToggleTooltip = "Toggle dark / light theme";
     public const string SidebarToggleTooltip = "Show / hide the connections panel";
 
+    // ── Title bar — connection toolbar (M‑1, M3.2d) ─────────────────────────────────────────────────
+    // The seven buttons between the sidebar toggle and the separator. They carried English literals in
+    // MainWindow.axaml since the sidebar was built; the text is unchanged here, only its home.
+    // ⚠ Deliberately their OWN `*Tooltip` members rather than a reuse of `ConnectionConnect` /
+    // `ConnectionDisconnect` / `ConnectionNew` above: those are (orphaned) LABEL strings, and the UX
+    // Consistency Pass recorded the reverse mistake as audit finding D6 — seven menu items whose Header
+    // read a tooltip constant, which is how "Add item" became a menu entry. A label and a tooltip answer
+    // different questions and are free to diverge the moment either is reworded.
+    // ⚠ No gesture is spelled here, and that is the ratified rule, not an omission: these commands are
+    // Tree-scoped (F3 / F4 / F8 reach them only while the tree has focus), so a toolbar tooltip promising
+    // a key would teach something false outside the tree — keyboard-manager.md §14.
+    public const string ConnectionNewTooltip = "New Connection";
+    public const string ConnectionEditTooltip = "Edit Connection";
+    public const string ConnectionCopyTooltip = "Copy Connection";
+    public const string ConnectionDeleteTooltip = "Delete Connection";
+    public const string ConnectionConnectTooltip = "Connect";
+    public const string ConnectionDisconnectTooltip = "Disconnect";
+    public const string ConnectionReconnectTooltip = "Reconnect";
+
+    // ── Title bar — window caption buttons (M‑1, M3.2d) ─────────────────────────────────────────────
+    // EmberTern draws its own caption buttons (the window is `ExtendClientAreaToDecorationsHint`), so
+    // these three are ordinary application strings and not the OS's.
+    public const string WindowMinimizeTooltip = "Minimize";
+    public const string WindowMaxRestoreTooltip = "Maximize / Restore";
+    public const string WindowCloseTooltip = "Close";
+
     // ── Application Menu (the hamburger) ────────────────────────────────────────────────────────────
     // A rarely-used ADMINISTRATIVE menu for application-level functions — never commands of the active
     // document, which stay on the toolbars, the shortcuts and the context menus. Design + the reasoning

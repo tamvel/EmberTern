@@ -39,10 +39,10 @@
 | **Etap** | M0–M2c ✅ · **M3: iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ wycofana · 🔒 JĘZYK KOLORÓW WDROŻONY I ODEBRANY ✅** (K1–K7 + przegląd domykający + poprawka paska statusu, §19.15–§19.20). ⭐ **M3.1 ZAMKNIĘTE** · ⭐ **H‑3 ZAMKNIĘTE** · ⭐ **H‑5 ZAMKNIĘTE** (Commit/Rollback na własnych tokenach, K7) · ⭐ **§7.5 ZAMKNIĘTE** — zastąpione przez `color-language.md` |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7138**, zielony w trzech partycjach (**7032 + 52 + 54**) |
+| **Suite** | **7228**, zielony w trzech partycjach (**7118 + 56 + 54**). ⚠ Ten wiersz podawał wcześniej **7138 (7032 + 52 + 54)** — wartość sprzed rundy poprawek odbiorczych (`85c8747`, §21), która dołożyła 90 testów. **Mierz przed cytowaniem** |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| ⭐⭐ **NASTĘPNY KROK** | **M3.2d — M‑1: 10 literałów → `UiStrings`** (§3.7). Pozycja 11 w planie §10. ⚠ To krok **czysto porządkowy, zero zmian wizualnych** — dobry na rozgrzewkę po zamknięciu języka. Potem M3.3a → M3.3b → M3.3c → M3.4a → M3.4b → M3b → ⛔ brama §13.3 |
+| ⭐⭐ **NASTĘPNY KROK** | **M3.3a — pasek zakładek: geometria, `Size.Row.Tab`, wskaźnik** (pozycja 12 w planie §10). ⛔ **K9/K10 zostają w rejestrze.** ⭐ Przy okazji: literał „Close tab" (`MainWindow.axaml:862`, ostatnia pozycja M‑1 wewnątrz M3) ma **już gotową stałą `UiStrings.TabCloseTooltip`**, dziś bez konsumenta — to prawdopodobnie jedna podmiana, nie nowa robota (§19.21.4). Potem M3.3b → M3.3c → M3.4a → M3.4b → M3b → ⛔ brama §13.3 |
 | **⚠ TRYB PRACY** | ⭐ **R15** (§5): wielkość iteracji idzie za **niepewnością**. M3.2d i M3.3a mają zamknięty zakres ⇒ **jedna iteracja każdy, bez zatrzymań po drodze**. M3.3b/M3.4a niosą decyzje (**DB**, preferencje) ⇒ propozycja przed implementacją. Powrót do użytkownika: dokument nie rozstrzyga · realny konflikt projektowy · zmiana pogorszyłaby produkt mimo zgodności |
 | ⛔ **BRAMKA KOLORU** | Przy **każdym** dotknięciu koloru obowiązuje `color-language.md` **§0.5**: *czy użytkownik rozpozna akcję SZYBCIEJ?* „Nie" albo „nie wiadomo" ⇒ zatrzymaj się i wróć z propozycją |
 | **⛔⛔ BRAMKA NADRZĘDNA** | **`color-language.md` §0.5** (ratyfikowana 2026-08-03): **przed każdą zmianą koloru odpowiedz, czy użytkownik dzięki niej SZYBCIEJ ROZPOZNA AKCJĘ.** „Nie" albo „nie wiadomo" ⇒ ⛔ zatrzymaj się i wróć z propozycją. Stoi **przed** §6 i przed R14: zgodność z rolą jest warunkiem koniecznym, nigdy wystarczającym, a *„teraz jest zgodne z językiem"* **nie jest odpowiedzią na to pytanie** — to było jedyne uzasadnienie M3.2b. ⭐ Jeśli reguła pogarsza UX — poprawiamy **regułę w dokumencie**, nie bronimy implementacji |
@@ -218,6 +218,9 @@ To jest pytanie projektowe M3.2 — *czy pasek ma stałe kotwice sekcji, czy prz
 | `PerformancePanelView`, `SessionManagerTabView` | 2 | ⛔ **poza M3** (M4.3) |
 
 R‑7 przypisała M‑1 w całości do M3.2. Zmierzone: **10 tam trafia, 1 do M3.3, 2 zostają poza etapem.**
+
+✅ **Wykonane w M3.2d (§19.21): 13 → 3.** Zostały dokładnie te trzy z ostatnich dwóch wierszy tabeli.
+⭐ Dla wiersza M3.3 stała **już istnieje** — `UiStrings.TabCloseTooltip = "Close tab"`, dziś bez konsumenta.
 
 ### 3.8 Co już istnieje i czego NIE trzeba budować
 
@@ -571,8 +574,8 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ⛔ 8 | ~~**M3.2b**~~ | **WYCOFANA W CAŁOŚCI** (§19.13 + §19.14). Wyprowadziłem regułę z §7.5 i doprowadziłem ją do końca; UX wyszedł gorszy. ⭐ Ocalała jedna rzecz — korekta §7.5: neutralny dla IKONY to `NeutralIconBrush` (brak `Foreground`), nie `ForegroundBrush` | — |
 | ✅ 9 | **projekt języka kolorów** | ⭐⭐ **ZAAKCEPTOWANY 2026-08-02 → [`color-language.md`](color-language.md).** Dokument PRODUKTU: cztery niezależne systemy (rodzaj · akcja · tożsamość modułu · hierarchia przycisku), siedem ról R‑1…R‑7, sześć nazwanych wyjątków, reguła rozstrzygająca dla nowych funkcji, plan wdrożenia §11. ⛔ **Nie projektuj go ponownie** | — |
 | ✅ **10** | **K1–K7 — WDROŻENIE JĘZYKA** | 🔒 **ZAMKNIĘTE I ODEBRANE 2026-08-03** (§19.15–§19.20). K1 neutralny · K2 destrukcja 🟡→🔴 · K3–K7 jednym przebiegiem · przegląd domykający zamknął **pięć pozostałości** i **wszystkie pytania O‑1…O‑5** · poprawka optyczna paska statusu. **230 ikon, 81 z kolorem, ani jeden przycisk akcji poza językiem.** ⭐ Wyniosło **R15/R16/R17** i pułapki 18–21 | **DD** ✅ |
-| ⭐⭐ **11** | **M3.2d** | **← TU ZACZYNASZ.** M‑1 — 10 literałów → `UiStrings` (§3.7: 7 w toolbarze połączeń + 3 przyciski okna). ⚠ **Zero zmian wizualnych** — czysty porządek, jedna iteracja | — |
-| 12 | **M3.3a** | Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik; **K9/K10 zostają** | — |
+| ✅ **11** | **M3.2d** | **ZROBIONE** (§19.21). M‑1 — 10 literałów → `UiStrings`, **13 → 3** (1 → M3.3, 2 → M4.3). Zero zmian wizualnych, licznik testów bez zmiany. ⭐ Własne stałe `*Tooltip` zamiast reuse'u etykiet — odwrotność findingu **D6** · ⚠ żaden tooltip nie dostaje gestu (komendy są `Tree`‑scoped, keyboard-manager §14) · ⚠ znalezisko poboczne: **6 sierocych stałych `UiStrings`**, zapisane, świadomie nienaprawione | — |
+| ⭐⭐ **12** | **M3.3a** | **← TU ZACZYNASZ.** Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik; **K9/K10 zostają** | — |
 | 13 | **M3.3b** | Dwa tryby + preferencje (`TabStripMode`, `TabStripMaxRows`) + wiersze w Settings Center | — |
 | 14 | **M3.3c** | Menu kontekstowe zakładki — 8 pozycji, **czwarte wejście do bramki** | — |
 | 15 | **M3.4a** | Metadata Explorer — wiersz drzewa | **DB** |

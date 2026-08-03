@@ -125,7 +125,7 @@
             <controls:SvgIcon Data="{StaticResource Icon.PanelLeft}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="New Connection"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionNewTooltip}"
                   Click="OnNewConnectionClick">
             <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
           </Button>
@@ -135,17 +135,17 @@
             <controls:SvgIcon Data="{StaticResource Icon.FolderPlus}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Edit Connection"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionEditTooltip}"
                   Command="{Binding Metadata.EditSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Pencil}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Copy Connection"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionCopyTooltip}"
                   Command="{Binding Metadata.CopySelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Copy}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Delete Connection"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionDeleteTooltip}"
                   Command="{Binding Metadata.DeleteSelectedCommand}">
             <!-- ⭐ Rola R‑4 „Destrukcja" (`color-language.md` §3, krok K2). Żółty był resztką
                  PORZUCONEGO schematu („Warning=delete" z pierwotnej legendy Colors.axaml), a nie
@@ -159,7 +159,7 @@
           </Button>
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
-                  ToolTip.Tip="Connect"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionConnectTooltip}"
                   Command="{Binding Metadata.ConnectSelectedCommand}">
             <!-- ⭐ Rola R‑7 (domknięcie K‑final, dawne O‑4 — §8.2 języka). ⚠⚠ WCZEŚNIEJ WSTRZYMANE
                  I TERAZ WYKONANE, bo kontekst wokół się zmienił: po K6 (Odśwież → neutralny) Connect
@@ -172,12 +172,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.PlugZap}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Disconnect"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionDisconnectTooltip}"
                   Command="{Binding Metadata.DisconnectSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Unplug}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Reconnect"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionReconnectTooltip}"
                   Command="{Binding Metadata.ReconnectSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.RotateCw}" />
           </Button>
@@ -347,16 +347,19 @@
 
         <!-- Window controls -->
         <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch">
-          <Button Classes="caption" Click="OnMinimizeClick" ToolTip.Tip="Minimize">
+          <Button Classes="caption" Click="OnMinimizeClick"
+                  ToolTip.Tip="{x:Static app:UiStrings.WindowMinimizeTooltip}">
             <controls:SvgIcon Data="{StaticResource Icon.WindowMinimize}" Width="16" Height="16" />
           </Button>
-          <Button Classes="caption" Click="OnMaxRestoreClick" ToolTip.Tip="Maximize / Restore"
+          <Button Classes="caption" Click="OnMaxRestoreClick"
+                  ToolTip.Tip="{x:Static app:UiStrings.WindowMaxRestoreTooltip}"
                   x:Name="MaxRestoreButton">
             <controls:SvgIcon x:Name="MaxRestoreGlyph"
                               Data="{StaticResource Icon.WindowMaximize}"
                               Width="16" Height="16" />
           </Button>
-          <Button Classes="caption close" Click="OnCloseClick" ToolTip.Tip="Close">
+          <Button Classes="caption close" Click="OnCloseClick"
+                  ToolTip.Tip="{x:Static app:UiStrings.WindowCloseTooltip}">
             <controls:SvgIcon Data="{StaticResource Icon.WindowClose}" Width="16" Height="16" />
           </Button>
         </StackPanel>

@@ -6185,6 +6185,87 @@ argumentem końcowym dla *reguły*; R16 mówi to samo o *teście*, który tę re
 
 ---
 
+### §19.21 Iteracja 12 (M3.2d) — M‑1: literały tooltipów → `UiStrings` (2026-08-03)
+
+> **Zakres zamknięty, zero zmian wizualnych, jedna iteracja** — zgodnie z **R15** (wielkość iteracji idzie
+> za niepewnością; tutaj niepewności nie ma). Krok czysto porządkowy: teksty są **niezmienione co do bajtu**,
+> zmienia się wyłącznie ich miejsce zamieszkania.
+
+#### §19.21.1 Pomiar wejściowy — audyt zgadza się co do jednego
+
+Audyt (§205, pozycja **M‑1**) mówił o **13 literałach angielskich w `ToolTip.Tip`**, a §19.0.7 rozbił je na
+podetapy. Przeliczone ponownie przed pierwszą linią kodu, maszynowo, po **całym** `src/EmberTern.App`:
+
+| Gdzie | Ile | Podetap | Stan po iteracji |
+|---|---|---|---|
+| `MainWindow.axaml` — toolbar połączeń (New / Edit / Copy / Delete / Connect / Disconnect / Reconnect) | 7 | **M3.2d** | ✅ zdjęte |
+| `MainWindow.axaml` — przyciski okna (Minimize / Maximize-Restore / Close) | 3 | **M3.2d** | ✅ zdjęte |
+| `MainWindow.axaml:862` — „Close tab" (× na zakładce) | 1 | **M3.3** | ⏸ zostaje |
+| `PerformancePanelView:277`, `SessionManagerTabView:214` | 2 | ⛔ **poza M3** (M4.3) | ⏸ zostają |
+
+**13 → 3.** Rozkład z §19.0.7 potwierdzony bez poprawki.
+
+#### §19.21.2 ⭐ Dlaczego to WŁASNE stałe `*Tooltip`, a nie reuse istniejących etykiet
+
+W `UiStrings` stoją już `ConnectionConnect = "Connect"`, `ConnectionDisconnect = "Disconnect"`,
+`ConnectionNew`, `ConnectionEdit`, `ConnectionDelete` — teksty **identyczne albo bliskie**. Pokusa reuse'u
+jest realna i została **odrzucona świadomie**:
+
+* **Etykieta i tooltip odpowiadają na różne pytania** i mogą się rozejść przy pierwszym przeredagowaniu
+  (etykieta jest nazwą polecenia, tooltip może opisywać skutek). Jedna stała nie obsłuży obu.
+* ⭐ **Odwrotność tego błędu jest już zapisana w projekcie jako defekt:** UX Consistency Pass (Keyboard
+  Manager) znalazł **siedem pozycji menu, których `Header` czytał stałą tooltipową** (finding **D6**) — tak
+  „Add item" trafiło do menu jako pozycja. Reuse w drugą stronę ma dokładnie ten sam kształt.
+* Projekt już stosuje ten podział przy identycznym tekście: `FolderNewTooltip` = `FolderDialogTitle` =
+  *„New folder"*, a to **trzy różne stałe**.
+
+#### §19.21.3 ⚠ Żaden z tych tooltipów nie dostaje gestu — i to jest reguła, nie przeoczenie
+
+Sprawdzone w `CommandCatalog`: **żaden** z dziesięciu przycisków nie ma `CommandId`. Trzy z operacji są
+osiągalne z klawiatury, ale przez komendy o zasięgu **`Tree`** (`F3` Nowy · `F4` Odśwież · `F8` Usuń), a
+`keyboard-manager.md` §14 ratyfikuje: **gest pokazujemy tylko tam, gdzie działa** — tooltip przycisku
+toolbara obiecujący `F3` uczyłby nieprawdy poza drzewem. Stałe są więc zwykłymi `const`, nie
+`CommandTip.For`, i przechodzą `UiStringsShortcutSourceTests` bez wpisu w allowliście (nie zawierają
+tekstu w kształcie gestu).
+
+⚠ **`{x:Static}` jest sprawdzane przy kompilacji** — literówka w nazwie składowej to błąd builda, nie cicha
+awaria. To odwrotność pułapki §9.1/1 (`{DynamicResource}` nie rzuca przy brakującym kluczu), i warto o tym
+pamiętać: te dwie składnie mają **przeciwne** tryby porażki.
+
+#### §19.21.4 ⚠ Znalezisko poboczne — ZMIERZONE I ZAPISANE, ŚWIADOMIE NIE NAPRAWIONE
+
+Przy szukaniu miejsca dla nowych stałych wyszło, że **sześć istniejących stałych `UiStrings` nie ma ani
+jednego konsumenta** w `src/` ani `tests/`:
+
+`ConnectionConnect` · `ConnectionDisconnect` · `ConnectionDelete` · `ConnectionNew` ·
+`ConnectionsEmptyHint` · `TabCloseTooltip`
+
+⭐ **`TabCloseTooltip = "Close tab"` jest tu najciekawszy:** stała dla literału z linii 862 **już istnieje**,
+tylko widok jej nie używa. Czyli pozycja M‑1 przypisana do M3.3 to prawdopodobnie **jedna podmiana bez nowej
+stałej**, a nie pełna robota — do sprawdzenia w M3.3a.
+
+⛔ **Nic z tego nie zostało usunięte.** Zakres M3.2d to *literały w XAML*, a nie *sieroty w `UiStrings`*;
+kasowanie sześciu stałych to osobna decyzja (reguła §7/12: mierz, opisz, zapisz — **nie rozwiązuj bez
+decyzji**). Naturalne miejsce: przegląd §13.3 albo M4.3.
+
+#### §19.21.5 Wynik
+
+| | |
+|---|---|
+| Literały `ToolTip.Tip` | **13 → 3** (pozostałe: 1 × M3.3, 2 × M4.3) |
+| Nowe stałe | **10** — 7 × `Connection*Tooltip`, 3 × `Window*Tooltip` |
+| Zmiana wizualna | **żadna** — teksty niezmienione co do bajtu |
+| Build | 0 błędów / 0 ostrzeżeń |
+| Testy | **7228** zielone (7118 + 56 + 54) — **bez zmiany licznika**, co jest właściwym wynikiem dla kroku porządkowego |
+| Smoke | czysty |
+
+⚠ **Korekta licznika w dokumentach startowych:** prompt startowy M3.2d podawał **7138 (7032 + 52 + 54)**.
+To wartość sprzed **rundy poprawek odbiorczych** (§21, commit `85c8747`), która dołożyła 90 testów. Stan
+faktyczny przed tą iteracją i po niej: **7228 (7118 + 56 + 54)**. Ta sama pułapka co zawsze — **liczba
+trzymana w prozie starzeje się po cichu**; mierz przed cytowaniem.
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:
