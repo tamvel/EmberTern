@@ -85,29 +85,34 @@ internal static class Program
 
     private static Control BuildTab(string name, string iconKey, string colorKey, bool active, bool closable)
     {
-        var icon = new EmberTern.App.Controls.SvgIcon { Width = 14, Height = 14, VerticalAlignment = VerticalAlignment.Center };
+        // ⚠⚠ M3.3a — SONDA ODTWARZA MECHANIZM, NIE WYNIK. Wszystko, co w produkcie pochodzi ze stylu,
+        //    musi tu pochodzić ze stylu; wszystko, co jest rolą, musi być rolą. Sonda, która wiąże wynik
+        //    bezpośrednio, potwierdza stan, którego może nie być — to jest dokładnie ten błąd, który
+        //    kosztował §19.2 (pułapka 12) i który po tej iteracji byłby jeszcze łatwiejszy do popełnienia,
+        //    bo tła kafelka i wagi etykiety nie ustawia już nic w widoku.
+        var icon = new EmberTern.App.Controls.SvgIcon { VerticalAlignment = VerticalAlignment.Center };
+        icon.Bind(Layoutable.WidthProperty, new DynamicResourceExtension("Size.Icon"));
+        icon.Bind(Layoutable.HeightProperty, new DynamicResourceExtension("Size.Icon"));
         if (Application.Current!.TryFindResource(iconKey, out var geometry) && geometry is Geometry g)
             icon.Data = g;
         icon.Bind(TemplatedControl.ForegroundProperty, new DynamicResourceExtension(colorKey));
 
+        // ⛔ Waga i kontrast etykiety aktywnej NIE są tu ustawiane — niesie je styl
+        //    `Border.workspace-tab.active-tab TextBlock`.
         var label = new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center };
         label.Bind(TextBlock.FontSizeProperty, new DynamicResourceExtension("Text.Compact.Size"));
-        if (active)
-        {
-            label.FontWeight = FontWeight.SemiBold;
-            label.Bind(TextBlock.ForegroundProperty, new DynamicResourceExtension("ForegroundBrush"));
-        }
 
-        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        var content = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        content.Bind(StackPanel.SpacingProperty, new DynamicResourceExtension("Space.Sm"));
         content.Children.Add(icon);
         content.Children.Add(label);
 
+        // ⛔ Bez `Background` i bez `BorderThickness` — pierwsze daje `Button.flat`, drugie reguła
+        //    kontenera `Border.tab-strip Button.flat`. Wiernie jak w szablonie.
         var activate = new Button
         {
             Classes = { "flat" },
             Padding = new Thickness(8, 4),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
             Content = content,
         };
 
@@ -116,16 +121,19 @@ internal static class Program
 
         if (closable)
         {
-            var x = new EmberTern.App.Controls.SvgIcon { Width = 12, Height = 12 };
+            var x = new EmberTern.App.Controls.SvgIcon();
+            x.Bind(Layoutable.WidthProperty, new DynamicResourceExtension("Size.Icon.Sm"));
+            x.Bind(Layoutable.HeightProperty, new DynamicResourceExtension("Size.Icon.Sm"));
             if (Application.Current!.TryFindResource("Icon.X", out var xg) && xg is Geometry xgeom)
                 x.Data = xgeom;
 
+            // ⚠ `BorderThickness` ZOSTAJE — w szablonie też zostaje, bo `Button.icon` go nie ustawia
+            //   (w odróżnieniu od `Button.flat`). `Background` zniknęło po obu stronach.
             row.Children.Add(new Button
             {
                 Classes = { "icon" },
                 Padding = new Thickness(4, 2),
                 Margin = new Thickness(0, 0, 3, 0),
-                Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Content = x,
             });
@@ -149,20 +157,25 @@ internal static class Program
         grid.Children.Add(indicator);
         grid.Children.Add(row);
 
-        var tab = new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = grid };
+        // ⛔⛔ ŻADNEGO `Background` — i to jest po M3.3a najważniejsza linia tej sondy. Kafelek bierze tło
+        //    ze stylu `Border.workspace-tab` (spoczynek) albo `.workspace-tab.active-tab` (aktywna), więc
+        //    związanie go tutaj wprost — jak robiła poprzednia wersja — sprawiłoby, że obraz jest poprawny
+        //    NIEZALEŻNIE od tego, czy styl w produkcie działa. Iteracja zmierzyła, że przy wartości lokalnej
+        //    właśnie NIE działa, więc to nie jest ryzyko teoretyczne.
+        var tab = new Border
+        {
+            Classes = { "workspace-tab" },
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Child = grid,
+        };
         tab.Bind(Layoutable.MinHeightProperty, new DynamicResourceExtension("Size.Row.Tab"));
         tab.Bind(Border.BorderBrushProperty, new DynamicResourceExtension("BorderBrush"));
-        tab.Bind(Border.BackgroundProperty, new DynamicResourceExtension(active ? "BackgroundBrush" : "PanelBrush"));
 
-        // Styl instancyjny — odpowiednik bloku `Border.Styles` z szablonu zakładki.
+        // ⛔ Bez stylu instancyjnego — po M3.3a KOMPLET reguł zakładki aktywnej (tło kafelka, etykieta,
+        //    wskaźnik) mieszka w `ControlStyles.axaml`, czyli w stylach aplikacji, które ta sonda ładuje.
+        //    Wystarczy klasa stanu; resztę robi produkt.
         if (active)
-        {
             tab.Classes.Add("active-tab");
-            tab.Styles.Add(new Style(x => x.OfType<Border>().Class("active-tab").Descendant().OfType<Border>().Class("tab-indicator"))
-            {
-                Setters = { new Setter(Border.BackgroundProperty, new DynamicResourceExtension("AccentBrush")) },
-            });
-        }
 
         return tab;
     }

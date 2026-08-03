@@ -74,4 +74,66 @@ public sealed class TabStripPresentationTests
             window.Close();
         }, default);
     }
+
+    /// <summary>
+    /// ⭐⭐ M3.3a — pozostałe dwa stany zakładki aktywnej (tło kafelka, waga + kontrast etykiety) przeniosły
+    /// się z <c>Border.Styles</c> szablonu do <c>ControlStyles.axaml</c>, więc dopiero teraz DA SIĘ je zapiąć.
+    ///
+    /// <para>⚠⚠ I ten test odpowiada na pytanie, którego nie da się rozstrzygnąć czytaniem kodu: kafelek
+    /// zakładki niesie <b>lokalne</b> <c>Background="{DynamicResource PanelBrush}"</c>, a §19.2 udowodniła,
+    /// że wartość lokalna potrafi zabić setter stylu — bezgłośnie. Dlatego atrapa odtwarza tę wartość lokalną
+    /// <b>wiernie</b>; bez niej test mierzyłby łatwiejszy przypadek niż produkt (pułapka 12).</para>
+    ///
+    /// <para>⭐⭐ I NAPRAWDĘ TO ZŁAPAŁ. Pierwsza wersja przeniesienia zostawiła w szablonie lokalne
+    /// <c>Background="{DynamicResource PanelBrush}"</c> i sam setter <c>.active-tab</c> — test zawiódł
+    /// natychmiast (<c>#ff252526</c> zamiast <c>#ff1e1e1e</c>), czyli podmiana tła przestałaby działać
+    /// dokładnie tak, jak wcześniej przestał działać wskaźnik. Rozwiązaniem jest recepta z §19.2:
+    /// <b>oba stany jako setter</b>, zakotwiczone na klasie komponentu <c>workspace-tab</c>.</para>
+    /// </summary>
+    [Fact]
+    public async Task ActiveTab_SwapsItsBackground_AndBoldensItsLabel_WithoutAnyLocalValueInTheTemplate()
+    {
+        await _session.Dispatch(() =>
+        {
+            // Atrapa wierna szablonowi: klasa komponentu + klasa stanu + etykieta w środku.
+            // ⚠ Żadnego `Background` w kodzie — bo w szablonie też go już nie ma, i to jest cały punkt.
+            var activeLabel = new TextBlock { Text = "PROC_X" };
+            var activeTab = new Border { Classes = { "workspace-tab", "active-tab" }, Child = activeLabel };
+
+            var idleLabel = new TextBlock { Text = "PROC_Y" };
+            var idleTab = new Border { Classes = { "workspace-tab" }, Child = idleLabel };
+
+            var window = new Window
+            {
+                Content = new StackPanel { Children = { activeTab, idleTab } },
+            };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(
+                window.TryFindResource("PanelBrush", window.ActualThemeVariant, out var panelValue),
+                "Token `PanelBrush` nie jest w zasobach aplikacji.");
+            Assert.True(
+                window.TryFindResource("BackgroundBrush", window.ActualThemeVariant, out var docValue),
+                "Token `BackgroundBrush` nie jest w zasobach aplikacji.");
+            var panel = Assert.IsAssignableFrom<IBrush>(panelValue);
+            var document = Assert.IsAssignableFrom<IBrush>(docValue);
+
+            // Sam warunek testu ma sens tylko wtedy, gdy oba tokeny się różnią — inaczej asercja niżej
+            // przechodziłaby bez względu na to, czy styl w ogóle zadziałał (R16: test zielony przy złym
+            // wyglądzie jest gorszy niż brak testu).
+            Assert.NotEqual(panel, document);
+
+            // ⭐ Obie strony pochodzą ze stylu. Druga asercja jest równie ważna jak pierwsza: gdyby stan
+            //   spoczynkowy wrócił do szablonu jako atrybut, to właśnie ona przestałaby cokolwiek znaczyć.
+            Assert.Equal(document, activeTab.Background);
+            Assert.Equal(panel, idleTab.Background);
+
+            // Etykieta zakładki aktywnej — SemiBold i pełny kontrast; nieaktywna nietknięta.
+            Assert.Equal(FontWeight.SemiBold, activeLabel.FontWeight);
+            Assert.NotEqual(FontWeight.SemiBold, idleLabel.FontWeight);
+
+            window.Close();
+        }, default);
+    }
 }

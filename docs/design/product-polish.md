@@ -3472,6 +3472,18 @@ idzie dalej. Rejestr jest wejściem do przeglądu §13.3.
 | K9 | 9 | `TabItem` — etykieta zakładki roboczej (`ControlStyles.axaml`) | 13 | brak roli tekstowej przy 13 | ⛔ lokalnie z powodem → **M3.3** |
 | K10 | 9 | `TabItem.bottom-tab` / `.sub-tab` — kształt zakładki | promień 4 | `Radius.Chip` = 4, ale zakładka chipem nie jest | ⛔ lokalnie z powodem → **M3.3** |
 | K11 | **M3.1d** | chip transakcji — odstęp kropka ↔ tekst (`MainWindow.axaml`) | `Spacing` 5 | `Space.Sm` = **6** | ⛔ lokalnie z powodem → **§13.3** |
+| **K12** | **M3.3a** | przycisk aktywujący zakładkę roboczą — `Padding` | 8,4 | `Pad.Tab` = **10,4** | ⛔ lokalnie z powodem → **§13.3** |
+| **K13** | **M3.3a** | przycisk zamykania zakładki — `Padding` | 4,2 | `Pad.ButtonIcon` = **6,0** | ⛔ lokalnie z powodem → **§13.3** |
+| **K14** | **M3.3a** | przycisk zamykania zakładki — `Margin` prawy | 3 | brak roli (`Space` daje 2/4/6) | ⛔ lokalnie z powodem → **§13.3** |
+
+⭐⭐ **K12–K14 są pierwszą trójką, którą łączy JEDEN skutek produktowy, a nie jeden rodzaj wielkości:**
+wszystkie trzy zmieniają **szerokość zakładki**, czyli **ile zakładek mieści się w wierszu**. To już nie jest
+pytanie o zgodność z katalogiem, tylko o **gęstość paska** — a ta jest decyzją użytkownika, bo D6/§8.1 chroni
+pełną czytelność nazw, a M3.1a osiągnęło swoje, właśnie **zdejmując** podłogę szerokości. Wzięcie samego
+`Pad.Tab` poszerza każdą zakładkę o 4 px.
+⚠ **Dlatego idą na §13.3 RAZEM i jako jedno pytanie**, nie trzy — dokładnie tak, jak K11 idzie tam w parze
+z paddingiem badge'a DEV MODE. Rozstrzygać je pojedynczo znaczyłoby trzy razy zmienić gęstość paska, nie
+oglądając jej ani razu jako całości (**R17**).
 ⚠⚠ **K12 ISTNIAŁO PRZEZ JEDNĄ ITERACJĘ I ZOSTAŁO WYCOFANE — wpis zachowany jako zapis, nie jako dług.**
 M3.2a dało parze Execute/Cancel wspólną podłogę `MinWidth="156"` i odnotowało kolizję z
 `Size.ActionMinWidth` (100). ⛔ **Użytkownik wycofał samą podłogę po obejrzeniu w działającej aplikacji**
@@ -6263,6 +6275,149 @@ decyzji**). Naturalne miejsce: przegląd §13.3 albo M4.3.
 To wartość sprzed **rundy poprawek odbiorczych** (§21, commit `85c8747`), która dołożyła 90 testów. Stan
 faktyczny przed tą iteracją i po niej: **7228 (7118 + 56 + 54)**. Ta sama pułapka co zawsze — **liczba
 trzymana w prozie starzeje się po cichu**; mierz przed cytowaniem.
+
+---
+
+### §19.22 Iteracja 13 (M3.3a) — domknięcie długu paska zakładek (2026-08-03)
+
+> ⭐⭐ **Iteracja PRZESKALOWANA przez użytkownika przed startem** — i to jest jej pierwsza treść.
+> Pomiar pokazał, że zakres z planu (*„geometria, `Size.Row.Tab`, wskaźnik"*) **był już dostarczony**;
+> użytkownik odrzucił robienie „etapu dla etapu": *„Jeżeli M3.1a faktycznie dostarczyło geometrię M3.3a,
+> to nie cofajmy się do planu tylko dlatego, że plan jest nieaktualny."*
+
+#### §19.22.1 ⭐⭐ Plan był nieaktualny, bo M3.1a wciągnęła geometrię paska do rytmu chromy
+
+| Pozycja planu M3.3a | Gdzie faktycznie stoi |
+|---|---|
+| `Size.Row.Tab` (26) | ✅ `MinHeight` kafelka — **M3.1a**, ratyfikowane przez użytkownika |
+| `Size.TabIndicator` (2) | ✅ `Height` wskaźnika — **M3.1a** |
+| Wskaźnik, oba stany | ✅ settery w `ControlStyles.axaml` — **§19.2** |
+| Podłoga `Size.ActionMinWidth` | ✅ zdjęta regułą kontenera — **M3.1a** |
+
+⚠ **To pułapka 20 w czystej postaci.** Wiersz planu pisano *przed* M3.1a; wcześniejszy zapis był prawdziwy,
+tylko odpowiadał na pytanie sprzed dwóch tygodni. ⭐ Wniosek metodyczny, szerszy niż ta iteracja:
+**plan etapu też się starzeje — i starzeje się dokładnie tak samo cicho jak string i jak komentarz**
+(#284, pułapka 21). Przed każdym podetapem M3 sprawdź w KODZIE, czy jego przedmiot jeszcze istnieje.
+
+#### §19.22.2 ⚠ K9 i K10 nie dotyczą tego paska — to inny system zakładek
+
+Handover zapowiadał, że *„M3.3 zachowuje wartości lokalne, w szczególności K9 i K10"*. Zmierzone: oba wpisy
+stoją na **`TabItem`** (`Style Selector="TabItem"` `FontSize=13` oraz `CornerRadius=4` na `.bottom-tab`/
+`.sub-tab`) — czyli na **dolnym panelu i pod‑zakładkach edytorów**. Pasek zakładek dokumentów to
+`ItemsControl` + `WrapPanel` + szablon `Border`/`Button`: **nie ma tam ani `TabItem`, ani 13 px** (etykieta
+stoi na `Text.Compact.Size` = 11), **ani żadnego `CornerRadius`**.
+
+⭐ Instrukcja „K9/K10 zostają" obowiązuje dalej, ale z **innego powodu**: nie są w przedmiocie tej iteracji.
+⚠ To ta sama pomyłka rodzaju co pułapka 19 — **nazwa „zakładka" jest nośnikiem dwóch różnych rzeczy**,
+a rejestr indeksował po nazwie.
+
+#### §19.22.3 ⭐⭐ NAJWAŻNIEJSZE: przeniesienie stylu ODTWORZYŁO REGRESJĘ §19.2 — i test ją złapał
+
+Przeniesienie dwóch reguł `active-tab` z `Border.Styles` do `ControlStyles.axaml` wyglądało na czystą
+przeprowadzkę. **Nie było.** Kafelek zakładki niósł
+
+```xml
+Background="{DynamicResource PanelBrush}"   <!-- WARTOŚĆ LOKALNA -->
+```
+
+a przeniesiony setter `Border.active-tab { Background = BackgroundBrush }` **przegrywał z nią**. Nowy test
+zawiódł natychmiast i konkretnie:
+
+```
+Assert.Equal() Failure: Values differ
+Expected: #ff1e1e1e      (BackgroundBrush — tło dokumentu)
+Actual:   #ff252526      (PanelBrush — tło panelu)
+```
+
+⭐ **To jest §19.2 popełniona drugi raz, jeden poziom wyżej** — tam padł wskaźnik, tu padłaby podmiana tła
+kafelka. I znów byłoby to **bezgłośne**: build zielony, suite zielona, smoke czysty.
+⚠⚠ **Sama zmiana miejsca reguły jest zmianą jej priorytetu.** Reguła w `Border.Styles` szablonu i ta sama
+reguła w globalnym arkuszu **nie są tym samym** wobec wartości lokalnej na tym samym elemencie. „Przeniosłem
+styl bez zmian" jest zdaniem, którego **nie wolno powiedzieć bez pomiaru**.
+
+**Poprawka to recepta, którą §19.2 już ustaliła: oba stany jako setter** — plus kotwica na klasie komponentu:
+
+```xml
+<Style Selector="Border.workspace-tab">              <!-- spoczynek -->
+  <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+</Style>
+<Style Selector="Border.workspace-tab.active-tab">   <!-- aktywna -->
+  <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+</Style>
+```
+
+⚠ **Kotwica `workspace-tab` nie jest ozdobą.** Bez niej reguła SPOCZYNKOWA (`Background = PanelBrush`)
+trafiłaby w **każdy `Border` aplikacji** — czyli stan spoczynkowy zakładki przemalowałby pół produktu.
+⭐ Ogólniej: **klasa stanu mówi JAKI stan, klasa komponentu mówi CZEGO** — a przy przenoszeniu reguły do
+zasięgu globalnego brak tej drugiej przestaje być stylistyką i staje się defektem.
+
+#### §19.22.4 Co się zmieniło w kodzie
+
+**Neutralne wizualnie — migracja na role:**
+
+| Element | Było | Jest | Δ |
+|---|---|---|---|
+| ikony zakładki (×2) | `14×14` | `Size.Icon` | 0 |
+| ikona zamknięcia | `12×12` | `Size.Icon.Sm` | 0 |
+| odstęp ikona ↔ etykieta | `Spacing="6"` | `Space.Sm` | 0 |
+| tooltip zamknięcia | `"Close tab"` | `UiStrings.TabCloseTooltip` | 0 |
+
+⭐ **Zakładka jest PIERWSZYM konsumentem roli `Size.Icon`** — a komentarz tej roli w `Tokens.axaml` wymienia
+zakładkę **wprost** jako jej miejsce.
+
+**Usunięte jako rzeczywiście redundantne:** `Background="Transparent"` na obu przyciskach (daje je już
+`Button.flat` / `Button.icon`).
+
+**Przeniesione do `ControlStyles.axaml`:** `BorderThickness="0"` przycisku aktywującego → trzeci setter
+istniejącej reguły kontenera `Border.tab-strip Button.flat` · komplet reguł zakładki aktywnej (tło kafelka,
+waga + kontrast etykiety) → obok wskaźnika, który już tam był.
+
+⚠⚠ **`BorderThickness="0"` przycisku ZAMYKANIA zostaje i NIE jest redundantne** — `Button.icon`, w odróżnieniu
+od `Button.flat`, **w ogóle nie ustawia `BorderThickness`**. W spoczynku byłoby to niewidoczne
+(`BorderBrush="Transparent"`), ale `Button.icon:focus` podmienia pędzel na `FocusBorderBrush`, więc zdjęcie
+tej wartości dotknęłoby **stanu fokusu** — a tego iteracja nie mierzyła (**R2**: komponent ocenia się
+w komplecie stanów). Zostaje na §13.3 razem z pytaniem o widoczność fokusu na ikonach chromy.
+
+**Zostawione świadomie:** K12/K13/K14 (§18.R) — paddingi i margines, bo zmieniają **gęstość paska**.
+Decyzja użytkownika: *„Nie chcę teraz ruszać paddingów i marginesów zakładek. […] Wrócimy do tego przy
+bramie §13.3, kiedy będziemy oglądać cały pasek jako całość."*
+
+#### §19.22.5 ⚠ Trzy znaleziska katalogowe — ZAPISANE, nie naprawione
+
+| Rola | Konsumenci | Uwaga |
+|---|---|---|
+| `Pad.Tab` (10,4) | **0** | jedynym możliwym konsumentem jest ten pasek → K12 |
+| `Size.Icon` (14) | **0 → 1** | ⚠ literał `14` występuje w aplikacji **64 ×** |
+| `Size.Icon.Lg` (16) | **0** | ⚠ literał `16` występuje **15 ×** |
+
+⭐ To **czwarty i piąty raz**, gdy pomiar obala zapis w `Tokens.axaml` (kształt §3.1: *katalog bywa zamiarem,
+nie opisem*). ⛔ **Sweep 64 + 15 literałów jest robotą app‑wide, nie sprawą M3.3a** — idzie do §13.3/M4.3
+razem z resztą rejestru. Zakładka bierze rolę, bo komentarz roli ją wymienia; nic poza nią nie tknięto.
+
+#### §19.22.6 Sonda wizualna — poprawiona, bo inaczej potwierdzałaby stan, którego nie ma
+
+`TabStripVisualProbe` wiązała tło kafelka **wprost** (`active ? BackgroundBrush : PanelBrush`) i dodawała
+własny styl instancyjny wskaźnika — to była wierna rekonstrukcja **starego** szablonu. Po tej iteracji byłaby
+**dokładnie tym błędem, który §19.2 opisała**: obraz poprawny niezależnie od tego, czy styl w produkcie
+działa. ⭐ Sonda nie ustawia już **niczego**, co w produkcie pochodzi ze stylu — dostaje wyłącznie klasy
+`workspace-tab` / `active-tab` i resztę robi arkusz aplikacji. Rendery w obu motywach: akcent, podniesione
+tło i SemiBold na miejscu.
+
+#### §19.22.7 Wynik
+
+| | |
+|---|---|
+| Wartości lokalne w szablonie zakładki | **12 → 5** (4 na role · 2 usunięte jako redundantne · 3 przeniesione do stylów · **3 zostają w rejestrze** + 1 z powodem R2) |
+| Zmiana wizualna | **żadna** — potwierdzone renderami w obu motywach |
+| Build | 0 / 0 |
+| Testy | **7229** (7118 + **57** + 54), +1 |
+| Smoke | czysty |
+
+⭐ **Nowy test `ActiveTab_SwapsItsBackground_AndBoldensItsLabel_WithoutAnyLocalValueInTheTemplate`
+zweryfikowany tak, jak wymaga tego projekt — zawiedzeniem przed poprawką**, i to nie z planowanego
+podłożenia naruszenia, tylko dlatego, że **naruszenie było prawdziwe**. Test zawiera też asercję
+`Assert.NotEqual(panel, document)`: bez niej przechodziłby przy tożsamych tokenach niezależnie od tego, czy
+styl zadziałał — **R16**, test zielony przy złym wyglądzie jest gorszy niż brak testu.
 
 ---
 

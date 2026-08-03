@@ -796,28 +796,25 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vm:WorkspaceTabViewModel">
-                  <Border BorderBrush="{DynamicResource BorderBrush}"
+                  <Border Classes="workspace-tab"
+                          BorderBrush="{DynamicResource BorderBrush}"
                           BorderThickness="0,0,1,0"
                           MinHeight="{DynamicResource Size.Row.Tab}"
-                          Background="{DynamicResource PanelBrush}"
                           Classes.active-tab="{Binding IsSelected}">
-                    <Border.Styles>
-                      <Style Selector="Border.active-tab">
-                        <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
-                      </Style>
-                      <!-- ⛔ Wskaźnik aktywnej zakładki NIE jest stylowany tutaj — oba jego stany
-                           (spoczynkowy i akcent) mieszkają w `ControlStyles.axaml`, razem z powodem.
-                           Krótko: stały tu z lokalnym `Background="Transparent"`, które biło setter stylu,
-                           więc akcent nie malował się nigdy (§19.2). ⛔ Nie przywracać ani stylu, ani —
-                           tym bardziej — atrybutu `Background` na samym wskaźniku. -->
-                      <!-- Active tab title: SemiBold + full-contrast (only the selected
-                           tab; inactive tabs untouched). Pairs with the 2px accent top
-                           line for a clear Rider/DataGrip active-tab read. -->
-                      <Style Selector="Border.active-tab TextBlock">
-                        <Setter Property="FontWeight" Value="SemiBold" />
-                        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-                      </Style>
-                    </Border.Styles>
+                    <!-- ⛔ ZAKŁADKA AKTYWNA NIE JEST STYLOWANA TUTAJ. Wszystkie trzy jej stany —
+                         tło kafelka, waga i kontrast etykiety oraz 2 px wskaźnika — mieszkają
+                         w `ControlStyles.axaml`, razem z powodem. Krótko: reguła w `Border.Styles`
+                         jest nieosiągalna dla jakiegokolwiek testu (headless test konstruujący
+                         `MainWindow` zawiesza suite, #94/#226/#286), a wskaźnik już raz przez to
+                         przepadł bezgłośnie — stał tu z lokalnym `Background="Transparent"`, które
+                         biło setter stylu, więc akcent nie malował się nigdy (§19.2).
+                         ⛔⛔ DLATEGO KAFELEK NIE MA JUŻ ATRYBUTU `Background` — i to nie jest kosmetyka.
+                         Przy przenoszeniu stylu w M3.3a test odtworzył ten sam mechanizm i pokazał, że
+                         lokalne `Background="{DynamicResource PanelBrush}"` BIŁO setter `Border.active-tab`,
+                         więc podmiana tła przestałaby działać dokładnie tak samo jak wtedy wskaźnik.
+                         Oba stany — spoczynkowy PanelBrush i aktywny BackgroundBrush — są teraz setterami
+                         na klasie `workspace-tab` (reguła sformułowana POZYTYWNIE, §17.2/3).
+                         ⛔ Nie przywracać tu ani stylu, ani atrybutu `Background`. -->
                     <!-- Rider/DataGrip-style active-tab indicator: a 2px accent line at
                          the top of the SELECTED tab. The 2px row is always reserved so
                          active/inactive tabs keep identical height + content baseline;
@@ -828,18 +825,34 @@
                               Classes="tab-indicator"
                               Height="{DynamicResource Size.TabIndicator}" />
                       <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="0">
+                      <!-- ⚠ `Padding="8,4"` ZOSTAJE wartością lokalną — rejestr §18.R / K12. Rola
+                           `Pad.Tab` (10,4) pasuje funkcją, ale niesie inną liczbę: wzięcie jej
+                           poszerza KAŻDĄ zakładkę o 4 px, czyli mieści ich mniej w wierszu — wprost
+                           przeciw D6/§8.1 (pełna czytelność nazw) i przeciw temu, co M3.1a osiągnęło,
+                           zdejmując podłogę szerokości. To decyzja produktowa o gęstości paska
+                           i rozstrzyga ją użytkownik na przeglądzie §13.3, nie iteracja.
+                           ⚠ `Background`/`BorderThickness` już tu nie stoją: pierwsze dawał
+                           `Button.flat`, drugie jest teraz regułą kontenera `Border.tab-strip
+                           Button.flat` w `ControlStyles.axaml`. -->
                       <Button Classes="flat"
                               Padding="8,4"
-                              Background="Transparent"
-                              BorderThickness="0"
                               Command="{Binding ActivateCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="{DynamicResource Space.Sm}"
+                                    VerticalAlignment="Center">
                           <!-- The debugger tab wears the two-colour debugger identity mark
-                               (D15.2 Seam B); every other tab uses its single-colour SvgIcon. -->
-                          <controls:DebuggerIcon Width="14" Height="14" VerticalAlignment="Center"
+                               (D15.2 Seam B); every other tab uses its single-colour SvgIcon.
+                               ⭐ Rozmiar z roli `Size.Icon` (14) — komentarz tej roli w `Tokens.axaml`
+                               wymienia zakładkę wprost jako jej miejsce. Zakładka jest jej PIERWSZYM
+                               konsumentem; pozostałe 64 wystąpienia literału 14 w aplikacji to sweep
+                               spoza tego etapu (§19.22.4). -->
+                          <controls:DebuggerIcon Width="{DynamicResource Size.Icon}"
+                                                 Height="{DynamicResource Size.Icon}"
+                                                 VerticalAlignment="Center"
                                                  IsVisible="{Binding IsDebuggerTab}" />
                           <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                            Width="14" Height="14"
+                                            Width="{DynamicResource Size.Icon}"
+                                            Height="{DynamicResource Size.Icon}"
                                             VerticalAlignment="Center"
                                             IsVisible="{Binding !IsDebuggerTab}">
                             <controls:SvgIcon.Foreground>
@@ -854,15 +867,30 @@
                                      VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
+                      <!-- ⚠ `Padding="4,2"` (rola `Pad.ButtonIcon` = 6,0) i `Margin="0,0,3,0"` (3 nie ma
+                           roli — `Space` daje 2/4/6) ZOSTAJĄ wartościami lokalnymi: rejestr §18.R / K13
+                           i K14. Obie zmieniają szerokość zakładki, więc dzielą los K12 i idą na §13.3.
+                           ⚠⚠ `BorderThickness="0"` ZOSTAJE i NIE jest redundantne — w odróżnieniu od
+                           `Button.flat`, wariant `Button.icon` w ogóle nie ustawia `BorderThickness`,
+                           więc zdjęcie tej wartości przywróciłoby grubość bazowego `Button`. Przy
+                           `BorderBrush="Transparent"` w spoczynku byłoby to niewidoczne, ale reguła
+                           `Button.icon:focus` podmienia pędzel na `FocusBorderBrush` — czyli zmiana
+                           dotyczyłaby STANU FOKUSU, a tego ta iteracja nie mierzyła (R2: komponent
+                           ocenia się w komplecie stanów). Zostaje do §13.3 razem z pytaniem o widoczność
+                           fokusu na ikonach chromy.
+                           ⭐ `Background="Transparent"` usunięte — to akurat dawał już `Button.icon`. -->
                       <Button Classes="icon"
                               Padding="4,2"
                               Margin="0,0,3,0"
-                              Background="Transparent"
                               BorderThickness="0"
-                              ToolTip.Tip="Close tab"
+                              ToolTip.Tip="{x:Static app:UiStrings.TabCloseTooltip}"
                               IsVisible="{Binding IsClosable}"
                               Command="{Binding CloseCommand}">
-                        <controls:SvgIcon Data="{StaticResource Icon.X}" Width="12" Height="12" />
+                        <!-- `Size.Icon.Sm` (12) — rola „ikona inline przy tekście 11 px"; etykieta
+                             zakładki stoi dokładnie na `Text.Compact.Size` = 11. -->
+                        <controls:SvgIcon Data="{StaticResource Icon.X}"
+                                          Width="{DynamicResource Size.Icon.Sm}"
+                                          Height="{DynamicResource Size.Icon.Sm}" />
                       </Button>
                       </StackPanel>
                     </Grid>

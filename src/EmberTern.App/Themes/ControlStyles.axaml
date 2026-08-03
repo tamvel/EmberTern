@@ -984,6 +984,14 @@
   <Style Selector="Border.tab-strip Button.flat">
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="MinWidth" Value="0" />
+    <!-- ⭐ M3.3a — trzeci setter tej samej reguły i z tego samego powodu. `Button.flat` nadaje
+         `BorderThickness = Border.All` (ramka wariantu dialogowego); kafelek zakładki własną ramkę
+         już ma (`BorderThickness="0,0,1,0"` na `Border`ze zakładki), więc ramka przycisku rysowałaby
+         drugi obrys wewnątrz pierwszego. Stało to jako wartość lokalna w szablonie — tu jest
+         DEKLARACJĄ KONTENERA (§17.2/2), a nie wyjątkiem w widoku.
+         ⚠ `0` nie jest rolą i nie potrzebuje tokenu: „brak ramki" to nieobecność, nie wartość
+         z katalogu (`Border.*` nazywa krawędzie, które SĄ). -->
+    <Setter Property="BorderThickness" Value="0" />
   </Style>
 
   <!-- ⭐ WSKAŹNIK AKTYWNEJ ZAKŁADKI — pasek akcentu nad zakładką wybraną (styl Rider/DataGrip).
@@ -1005,13 +1013,42 @@
 
        ⚠ Blok stoi tutaj, a nie w `Border.Styles` szablonu, bo reguła wewnątrz szablonu w `MainWindow.axaml`
        jest NIEOSIĄGALNA DLA TESTU (headless test konstruujący `MainWindow` zawiesza suite — #94/#226/#286).
-       Tutaj zapina ją `TabStripPresentationTests` na gołym `Window`. Pozostałe style `active-tab` (podmiana
-       tła kafelka, pogrubienie etykiety) zostają w szablonie do czasu, aż M3.3 skonsoliduje cały pasek. -->
+       Tutaj zapina ją `TabStripPresentationTests` na gołym `Window`. ✅ Pozostałe style `active-tab` dołączyły
+       tu w M3.3a (§19.22) — cały wygląd zakładki aktywnej mieszka od tego momentu w jednym miejscu. -->
   <Style Selector="Border.tab-indicator">
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="Border.active-tab Border.tab-indicator">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- ⭐ KAFELEK ZAKŁADKI ROBOCZEJ — pozostałe dwa stany, przeniesione z `Border.Styles` szablonu w M3.3a.
+       Razem ze wskaźnikiem wyżej dają PEŁNY opis zakładki wybranej w jednym miejscu: tło kafelka
+       podnosi się do tła dokumentu, etykieta idzie na SemiBold i pełny kontrast, a nad wszystkim
+       stoi 2 px akcentu. Wcześniej trzy reguły opisujące jeden stan leżały w dwóch plikach.
+       ⚠ Powód przeniesienia jest ten sam co przy wskaźniku i jest nim TESTOWALNOŚĆ, nie porządek:
+       reguła w `Border.Styles` wewnątrz `MainWindow.axaml` jest nieosiągalna dla jakiegokolwiek testu.
+
+       ⛔⛔ STAN SPOCZYNKOWY JEST SETTEREM, I TO JEST CAŁA ISTOTA TEGO BLOKU — nie porządek, tylko warunek
+       działania. Kafelek niósł `Background="{DynamicResource PanelBrush}"` jako WARTOŚĆ LOKALNĄ; przy
+       samym przeniesieniu setter `.active-tab` przegrywał z nią i podmiana tła przestawała działać —
+       ZMIERZONE testem w trakcie iteracji, nie wywnioskowane. To dokładnie ta sama regresja, którą §19.2
+       naprawiała na wskaźniku, powtórzona jeden poziom wyżej. ⭐ Skoro obie strony są setterami, reguła
+       jest sformułowana POZYTYWNIE (§17.2/3): kafelek ZAWSZE ma tło, zmienia się wyłącznie które.
+
+       ⚠ Selektor kotwiczy na `workspace-tab`, a nie na samym `active-tab`, i to też jest celowe: klasa
+       stanu opisuje STAN, a klasa komponentu mówi, CZEGO ten stan dotyczy. Bez kotwicy reguła spoczynkowa
+       (`Background = PanelBrush`) trafiłaby w KAŻDY `Border` aplikacji — czyli stan spoczynkowy zakładki
+       przemalowałby pół produktu. ⛔ Nie skracać selektora. -->
+  <Style Selector="Border.workspace-tab">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+  </Style>
+  <Style Selector="Border.workspace-tab.active-tab">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+  </Style>
+  <Style Selector="Border.workspace-tab.active-tab TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
   </Style>
 
   <Style Selector="TabControl">

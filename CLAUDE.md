@@ -430,9 +430,35 @@ noted.
 - **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
   FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
   (a ready-made startup prompt), then the handover it points at.**
-  Build 0/0; suite **7228** (7118 + 56 + 54); smoke clean. ⏸ **Next: M3.3a** (tab strip geometry,
-  `Size.Row.Tab`, indicator; ⛔ K9/K10 stay in the collision register), then M3.3b/c → M3.4 Metadata
-  Explorer → M3b → ⛔ the §13.3 gate.
+  Build 0/0; suite **7229** (7118 + 57 + 54); smoke clean. ⏸ **Next: M3.3b** (two tab-strip modes +
+  `TabStripMode`/`TabStripMaxRows` preferences; ⚠ `CurrentSchemaVersion` stays 2), then M3.3c → M3.4
+  Metadata Explorer → M3b → ⛔ the §13.3 gate. ⭐ User directive (2026-08-03): **M3.3b and M3.3c run without
+  stopping for acceptance** — the next stop is the finished tab strip, or any product decision that needs a
+  ratification.
+  ✅ **M3.3a DONE (2026-08-03) — RE-SCOPED BY THE USER BEFORE IT STARTED, and that is its first lesson**
+  (`product-polish.md` §19.22). The plan row read *"geometry, `Size.Row.Tab`, indicator"* — **all three were
+  already delivered by M3.1a**, so the user refused to do the etap for the etap's sake: *"jeżeli M3.1a
+  faktycznie dostarczyło geometrię M3.3a, to nie cofajmy się do planu tylko dlatego, że plan jest
+  nieaktualny."* ⭐⭐ **A stage plan goes stale exactly as silently as a string or a comment** (#284, traps
+  20/21) — check in the CODE that a sub-etap's subject still exists before starting it.
+  The iteration instead closed the strip's **technical debt**: 12 → 5 local values (4 onto roles, 2 deleted
+  as genuinely redundant, 3 moved into styles), and the last M‑1 literal.
+  ⚠⚠ **Moving a style is a change to its PRIORITY, and this one re-created the §19.2 regression.** The tab
+  Border carried a local `Background="{DynamicResource PanelBrush}"`; the relocated
+  `Border.active-tab { Background = BackgroundBrush }` **lost to it**, so the active-tab background swap
+  would have silently stopped working — build, suite and smoke all green, exactly like the indicator in
+  §19.2. The new test failed with `#ff252526` vs `#ff1e1e1e` and named it. ⭐ Fix is §19.2's own recipe —
+  **both states as setters** — plus a component-class anchor: `Border.workspace-tab` (rest) and
+  `Border.workspace-tab.active-tab` (active). ⚠ **The anchor is load-bearing**: without it the *resting*
+  rule would paint every `Border` in the application. **A state class says WHICH state; a component class
+  says OF WHAT.**
+  ⚠ **K9/K10 were never about this strip** — both sit on `TabItem` (bottom-panel + editor sub-tabs); the
+  document tab strip has no `TabItem`, no 13 px label and no `CornerRadius`. New **K12–K14** (the two
+  paddings + the close-button margin) go to §13.3 **as one question**, because all three change how many
+  tabs fit in a row — a density decision, not a catalog one.
+  ⭐ Three catalog findings recorded, not acted on: **`Pad.Tab` has 0 consumers**, and **`Size.Icon` (14) /
+  `Size.Icon.Lg` (16) have 0** while the literals appear **64 ×** and **15 ×** app-wide — an app-wide sweep
+  for §13.3/M4.3. The tab strip is now `Size.Icon`'s first consumer (the role's own comment names it).
   ✅ **M3.2d DONE (2026-08-03) — M‑1, pure housekeeping, zero visual change and zero test-count change**
   (`product-polish.md` §19.21): the 13 English `ToolTip.Tip` literals are **13 → 3** (7 connection-toolbar
   + 3 window-caption buttons migrated to `UiStrings`; 1 belongs to M3.3, 2 to M4.3). ⭐ They got their **own
