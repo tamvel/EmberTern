@@ -504,6 +504,26 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     // A kind with nothing to reload (Query, a read-only Ddl snapshot, the live-tool tabs) does nothing, so the
     // caller does not need to know which kinds those are. The DEBUGGER is deliberately absent: reloading it
     // would reset the source its session was built from, which belongs to the Draft model, not here.
+    /// <summary>
+    /// Czy ten rodzaj zakładki w ogóle się odświeża — <b>piąty członek tej samej rodziny per-kind</b>
+    /// co <see cref="UnsavedWork"/> / <see cref="SavableEditor"/> / <see cref="RefreshAsync"/> /
+    /// <c>ResolveCommand</c>.
+    ///
+    /// <para>⚠ Istnieje, bo <see cref="RefreshAsync"/> ma ramię <c>_ =&gt; Task.CompletedTask</c>: samo
+    /// wywołanie go na zakładce SQL Editora czy Trace jest bezpieczne, ale pozycja menu „Odśwież", która
+    /// jest klikalna i nic nie robi, uczy użytkownika, że polecenie nie działa. ⛔ Nie zastępować tego
+    /// listą rodzajów w drugim miejscu — lista jest jedna, tuż niżej, i te dwie muszą się zgadzać.</para>
+    /// </summary>
+    public bool CanRefresh => Kind is WorkspaceTabKind.ViewDetail
+        or WorkspaceTabKind.ProcedureDetail
+        or WorkspaceTabKind.TriggerDetail
+        or WorkspaceTabKind.FunctionDetail
+        or WorkspaceTabKind.GeneratorDetail
+        or WorkspaceTabKind.DomainDetail
+        or WorkspaceTabKind.PackageDetail
+        or WorkspaceTabKind.ExceptionDetail
+        or WorkspaceTabKind.IndexDetail;
+
     public Task RefreshAsync() => Kind switch
     {
         WorkspaceTabKind.ViewDetail => ViewDetail?.RefreshAsync() ?? Task.CompletedTask,

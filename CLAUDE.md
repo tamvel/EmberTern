@@ -430,10 +430,36 @@ noted.
 - **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
   FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
   (a ready-made startup prompt), then the handover it points at.**
-  Build 0/0; suite **7233** (7122 + 57 + 54); smoke clean. ⏸ **Next: M3.3c** (the tab context menu — 8 items,
-  and ⚠⚠ the three bulk-close ones are the **fourth entry into the existing Save/Discard/Cancel gate**, rule
-  #11), then M3.4 Metadata Explorer → M3b → ⛔ the §13.3 gate. ⭐ User directive (2026-08-03): **M3.3b/M3.3c
-  run without stopping for acceptance** — the next stop is the finished tab strip.
+  Build 0/0; suite **7243** (7132 + 57 + 54); smoke clean. ⏸ **Next: M3.4a** (Metadata Explorer tree row;
+  decision **DB** already settled — **the row STAYS 24**), then M3.4b → M3b → ⛔ the §13.3 gate.
+  ✅ **M3.3c DONE (2026-08-03) — the tab context menu; the tab strip is complete** (`product-polish.md`
+  §19.24). Nine items, **zero new chrome** (the Keyboard Manager's `ContextMenu`/`MenuItem` styles +
+  `{app:MenuIcon}` already exist).
+  ⭐⭐ **The rule-#11 gate went from three entries to four by gaining a SCOPE, and that was the only change it
+  needed.** `CollectUnsavedWork` / `HasSavableDirtyEditors` / `SaveDirtyEditorsAsync` iterated over *all*
+  tabs, because the three existing entries always concern the whole set — but *"close tabs to the right"*
+  concerns a **subset**, and without a scope the fourth entry would have to either **bypass the gate** or
+  **ask about work in tabs it does not close** (the first is data loss, the second is a lie). ⭐ `scope ==
+  null` means "all", so the three existing entries are untouched and their 26 tests passed unchanged.
+  ⛔ Do not build a second "save many tabs" path. ⚠ The gate is **aggregating, not N prompts in a row** — a
+  question asked eight times is not a gate, it is an obstacle to click through — and a failed save closes
+  **nothing** (a partial close after a failed save is the worst outcome).
+  ⚠ **Every command takes the tab as a PARAMETER, never the selection**: a context menu opens over a tab that
+  need not be active, so reading `SelectedWorkspaceTab` would close someone else's document — gotcha #16/#99
+  one level up.
+  ⭐ **Every item has its own `CanExecute`** (user's request before implementation): *close to the right* is
+  disabled on the last tab, *close unmodified* when every tab is dirty, *refresh* for a dirty tab **or a kind
+  that does not refresh** — hence `WorkspaceTabViewModel.CanRefresh`, the **fifth member of the per-kind
+  family**, because `RefreshAsync`'s `_ => Task.CompletedTask` arm makes the call *safe* but the menu item
+  *dead*, and a clickable item that does nothing teaches that the command is broken. ⚠⚠ Gating depends on the
+  COLLECTION's composition and `[RelayCommand]` knows nothing about it, so it is recomputed in the one
+  existing `OnWorkspaceTabsChanged` hook — pinned on `CanExecuteChanged`, not on the value (§19.23.10's
+  lesson again).
+  ⭐ **"Show in Metadata Explorer" selects AND scrolls** — a selection off screen is indistinguishable from no
+  reaction. ⚠⚠ **Expanding the category must be AWAITED, not merely requested**: setting `IsExpanded` fires
+  `LoadGroupAsync` fire-and-forget, so looking for the leaf straight after would hit a category with no
+  children — the item would do nothing the first time and work the second, the worst kind of defect. ⚠ Select
+  synchronously, `ScrollIntoView` posted at `Background` (gotcha #221's shape).
   ✅ **M3.3b DONE (2026-08-03) — two tab-strip modes + two preferences** (`product-polish.md` §19.23).
   ⭐⭐ **Two modes, ONE mechanism**: one `ItemsControl`, one tab template, and the mode is *only* the
   `ScrollViewer`'s scroll directions — a `WrapPanel` wraps exactly when it is given a **finite** width, so

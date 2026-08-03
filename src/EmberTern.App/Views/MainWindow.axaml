@@ -819,6 +819,49 @@
                           BorderThickness="0,0,1,0"
                           MinHeight="{DynamicResource Size.Row.Tab}"
                           Classes.active-tab="{Binding IsSelected}">
+                    <!-- ⭐ MENU KONTEKSTOWE ZAKŁADKI (M3.3c / §8.3) — zero nowej chromy: style
+                         `ContextMenu`/`MenuItem`, `{app:MenuIcon}` i `{app:CommandGesture}` są gotowe
+                         od etapu 5 Keyboard Managera.
+                         ⚠⚠ Każda pozycja przekazuje `CommandParameter` = TA zakładka, nigdy zaznaczenie:
+                         menu otwiera się nad zakładką, która nie musi być aktywna, a czytanie zaznaczenia
+                         zamykałoby cudzy dokument (kształt gotchy #16/#99).
+                         ⚠ Komendy mieszkają na `MainWindowViewModel`, więc wiązanie idzie przez
+                         `$parent[Window].DataContext` — DataContext tego szablonu to zakładka. -->
+                    <Border.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuClose}"
+                                  Icon="{app:MenuIcon Icon.X}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseOthers}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseOthersCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseToTheRight}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseToTheRightCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseUnmodified}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseUnmodifiedCommand}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseAll}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseAllCommand}" />
+                        <Separator />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuRefresh}"
+                                  Icon="{app:MenuIcon Icon.RefreshCw}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuRefreshCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCopyObjectName}"
+                                  Icon="{app:MenuIcon Icon.Copy}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCopyObjectNameCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuRevealInExplorer}"
+                                  Icon="{app:MenuIcon Icon.Crosshair}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuRevealInExplorerCommand}"
+                                  CommandParameter="{Binding}" />
+                        <Separator />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuSettings}"
+                                  Icon="{app:MenuIcon Icon.Settings}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuSettingsCommand}" />
+                      </ContextMenu>
+                    </Border.ContextMenu>
                     <!-- ⛔ ZAKŁADKA AKTYWNA NIE JEST STYLOWANA TUTAJ. Wszystkie trzy jej stany —
                          tło kafelka, waga i kontrast etykiety oraz 2 px wskaźnika — mieszkają
                          w `ControlStyles.axaml`, razem z powodem. Krótko: reguła w `Border.Styles`

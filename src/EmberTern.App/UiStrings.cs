@@ -1087,6 +1087,29 @@ internal static class UiStrings
     public const string TabStripOverflowTooltip = "Tabs that do not fit — click to search all open tabs";
     public const string TabStripOverflowFilterWatermark = "Filter tabs…";
 
+    // ── Menu kontekstowe zakładki (M3.3c / §8.3) ────────────────────────────────────────────────────
+    // ⚠ Ikony przez `{app:MenuIcon}`, gesty przez `{app:CommandGesture}` — zero nowej chromy
+    // (Keyboard Manager etap 5). Tu mieszkają wyłącznie słowa.
+    public const string TabMenuClose = "Close";
+    public const string TabMenuCloseOthers = "Close others";
+    public const string TabMenuCloseAll = "Close all";
+    public const string TabMenuCloseToTheRight = "Close tabs to the right";
+    public const string TabMenuCloseUnmodified = "Close unmodified";
+    public const string TabMenuRefresh = "Refresh";
+    public const string TabMenuCopyObjectName = "Copy object name";
+    public const string TabMenuRevealInExplorer = "Show in Metadata Explorer";
+    public const string TabMenuSettings = "Tab settings…";
+
+    // ⚠⚠ Bramka reguły #11 dla zamykania masowego — CZWARTE wejście do tej samej bramki, obok
+    // zamknięcia zakładki, rozłączenia i zamknięcia aplikacji.
+    // ⭐ Komunikat WYMIENIA zakładki z pracą ({0} = lista), bo „kilka zakładek ma niezapisane zmiany"
+    // nie pozwala podjąć decyzji — a to jest moment, w którym użytkownik ją podejmuje.
+    public const string TabsCloseUnsavedTitle = "Unsaved changes";
+    public const string TabsCloseUnsavedFormat =
+        "These tabs have uncompiled changes:\n\n{0}\n\nSave them before closing?";
+    public const string TabsCloseUnsavedSave = "Save and close";
+    public const string TabsCloseUnsavedDiscard = "Discard and close";
+
     // ── Debugger (etap 6) ───────────────────────────────────────────────────────────────────────────
     public const string SettingsCategoryDebugger = "Debugger";
 

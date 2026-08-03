@@ -471,6 +471,60 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Prosi widok o zaznaczenie wiersza i PRZEWINIĘCIE go w pole widzenia.
+    /// <para>⚠ Przewinięcie jest sprawą widoku, nie modelu: to płaska lista wirtualizująca, więc
+    /// „pokaż" znaczy „wywołaj <c>ScrollIntoView</c> na kontrolce". VM ustala WIERSZ, widok go pokazuje —
+    /// ta sama granica, którą trzyma cały ten etap.</para>
+    /// </summary>
+    public event Action<SidebarRow>? RevealRowRequested;
+
+    /// <summary>
+    /// Rozwija właściwą kategorię, znajduje obiekt po nazwie i prosi widok o pokazanie go.
+    ///
+    /// <para>⭐ <b>Rozwinięcie musi być POCZEKANE, a nie tylko zażądane.</b> Ustawienie
+    /// <c>IsExpanded</c> odpala <see cref="LoadGroupAsync"/> jako „fire and forget"
+    /// (<c>_ = _owner.LoadGroupAsync(this)</c>), więc szukanie liścia zaraz po tym trafiłoby
+    /// w kategorię, która jeszcze nie ma dzieci — i pozycja menu po cichu nic by nie robiła przy
+    /// pierwszym użyciu, a działała przy drugim. Dlatego ładowanie jest tu wywołane wprost.</para>
+    ///
+    /// <para>⚠ Nazwy obiektów Firebirda porównujemy bez uwzględniania wielkości liter: identyfikator
+    /// niecytowany jest składany do wersalików, a nazwa zakładki bierze się z katalogu.</para>
+    /// </summary>
+    internal async Task<bool> RevealObjectAsync(MetadataObjectKind kind, string name)
+    {
+        if (!_connectionService.IsConnected || string.IsNullOrEmpty(name)) return false;
+
+        var connection = Connections.FirstOrDefault(c => c.IsConnected);
+        if (connection is null) return false;
+
+        var group = connection.Children.FirstOrDefault(g => g.IsGroup && g.Kind == kind);
+        if (group is null) return false;
+
+        connection.IsExpanded = true;
+
+        if (!group.IsLoaded && !group.IsLoading)
+        {
+            await LoadGroupAsync(group).ConfigureAwait(true);
+        }
+
+        group.IsExpanded = true;
+
+        var leaf = group.Children.FirstOrDefault(
+            c => c.IsActionable
+                 && string.Equals(c.Object?.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (leaf is null) return false;
+
+        // ⚠ Wiersz szukamy PO rozwinięciu, bo dopiero wtedy istnieje w płaskiej projekcji — a jeśli
+        //   projekcja jeszcze go nie ma (filtr!), nie udajemy sukcesu.
+        var row = SidebarRows.FirstOrDefault(r => ReferenceEquals(r.Node, leaf));
+        if (row is null) return false;
+
+        SelectedNode = leaf;
+        RevealRowRequested?.Invoke(row);
+        return true;
+    }
+
     internal async Task LoadGroupAsync(MetadataNodeViewModel group)
     {
         if (!group.IsGroup || group.IsLoading)

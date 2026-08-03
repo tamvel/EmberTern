@@ -2840,29 +2840,38 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // ─── Data-loss WorkGuard ───────────────────────────────────────────────
     //
-    // One aggregation feeding three entry points: tab close (RequestCloseTabAsync),
-    // disconnect (ConfirmDisconnectAsync), and app close (TryCloseApplicationAsync).
+    // One aggregation feeding FOUR entry points: tab close (RequestCloseTabAsync),
+    // disconnect (ConfirmDisconnectAsync), app close (TryCloseApplicationAsync) and — since
+    // M3.3c — the tab context menu's bulk closes (CloseTabsAsync).
     // Unsaved CODE work (uncompiled new objects / modified source / queued structural
     // changes) lives only in the open tabs; transactions live on the server and can't
     // survive a restart, so they always need a conscious Commit/Roll-back decision.
+    //
+    // ⭐⭐ M3.3c NADAŁO TYM TRZEM METODOM ZASIĘG, i to jest jedyna zmiana, jakiej bramka
+    // potrzebowała. „Zamknij zakładki po prawej" dotyczy PODZBIORU, a metody iterowały po
+    // wszystkich — bez zasięgu czwarte wejście musiałoby albo ominąć bramkę, albo pytać
+    // o pracę w zakładkach, których nie zamyka. ⚠ `scope == null` ZNACZY „wszystkie", więc
+    // trzy istniejące wejścia są nietknięte i nie było potrzeby dotykać ich kodu.
+    // ⛔ Nie budować drugiej ścieżki „zapisz wiele zakładek" — ta jest przetestowana.
 
     // Unsaved-work descriptors across the currently-open tabs (the active connection's).
     // Other connections' tabs are stashed serialized and hold no live uncompiled source.
-    internal IReadOnlyList<UnsavedWorkItem> CollectUnsavedWork()
+    internal IReadOnlyList<UnsavedWorkItem> CollectUnsavedWork(
+        IReadOnlyCollection<WorkspaceTabViewModel>? scope = null)
     {
         var items = new List<UnsavedWorkItem>();
-        foreach (var tab in WorkspaceTabs)
+        foreach (var tab in scope ?? (IReadOnlyCollection<WorkspaceTabViewModel>)WorkspaceTabs)
         {
             if (tab.UnsavedWork is { } item) items.Add(item);
         }
         return items;
     }
 
-    // True when at least one open tab holds unsaved work AND can compile it (every object
+    // True when at least one tab IN SCOPE holds unsaved work AND can compile it (every object
     // editor can). Drives whether the WorkGuard offers "Save …" alongside Discard/Cancel.
-    private bool HasSavableDirtyEditors()
+    private bool HasSavableDirtyEditors(IReadOnlyCollection<WorkspaceTabViewModel>? scope = null)
     {
-        foreach (var tab in WorkspaceTabs)
+        foreach (var tab in scope ?? (IReadOnlyCollection<WorkspaceTabViewModel>)WorkspaceTabs)
             if (tab.UnsavedWork is not null && tab.SavableEditor is not null) return true;
         return false;
     }
@@ -2877,10 +2886,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // lane), so a mid-batch failure does NOT undo the ones already saved — only the failing
     // objects remain to fix and retry. Save order = tab order (a deliberate v1 simplification;
     // dependency-derived order is a possible future refinement, not required here).
-    private async Task<bool> SaveDirtyEditorsAsync()
+    private async Task<bool> SaveDirtyEditorsAsync(
+        IReadOnlyCollection<WorkspaceTabViewModel>? scope = null)
     {
         var savable = new List<(WorkspaceTabViewModel Tab, ISavableObjectEditor Editor)>();
-        foreach (var tab in WorkspaceTabs)
+        foreach (var tab in scope ?? (IReadOnlyCollection<WorkspaceTabViewModel>)WorkspaceTabs)
             if (tab.UnsavedWork is not null && tab.SavableEditor is { } editor)
                 savable.Add((tab, editor));
         if (savable.Count == 0) return true;
@@ -6197,6 +6207,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // nothing needs to: the delegate lives on the tab's own editor, so tab and handler are collected together.
     private void OnWorkspaceTabsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
+        // ⚠ Pozycje menu zakładki bramkują się SKŁADEM tej kolekcji, więc każda jej zmiana musi je
+        //   przeliczyć — inaczej „Zamknij po prawej" zostaje aktywne po zamknięciu ostatniej zakładki.
+        //   Podpięte TUTAJ, w jednym istniejącym punkcie, a nie przy ~39 miejscach dodających zakładkę.
+        RaiseTabMenuCanExecuteChanged();
+
         // ⚠ `Reset` (czyli `Clear()`, m.in. przy rozłączeniu) nie niesie ANI `NewItems`, ANI `OldItems`.
         // Dlatego odpinamy po własnym zbiorze — inaczej zamknięte zakładki dalej zapalałyby rail.
         if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
@@ -7045,6 +7060,207 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         }
         CloseTab(tab);
+    }
+
+    // ─── Menu kontekstowe zakładki — zamykanie masowe (M3.3c / §8.3) ───────────────────────
+    //
+    // ⚠⚠ REGUŁA #11 OBOWIĄZUJE BEZWZGLĘDNIE, I TO JEST TA METODA. „Zamknij wszystkie" nie może po
+    // cichu odrzucić nieskompilowanej pracy w ośmiu edytorach, więc CZTERY pozycje menu schodzą się
+    // tutaj i przechodzą przez ISTNIEJĄCĄ bramkę Save / Discard / Cancel — czwarte jej wejście,
+    // obok zamknięcia zakładki, rozłączenia i zamknięcia aplikacji.
+    //
+    // ⭐ Bramka jest AGREGUJĄCA, a nie „N pytań po kolei", i tak być musi: pytanie zadane osiem razy
+    // pod rząd nie jest bramką, tylko przeszkodą, którą użytkownik przeklika bez czytania. Ten sam
+    // kształt ma rozłączenie i zamknięcie aplikacji — jedno okno wymienia wszystkie zakładki z pracą.
+    //
+    // ⚠ ZASIĘG JEST ARGUMENTEM, nie założeniem: „Zamknij po prawej" dotyczy podzbioru, więc bramka
+    // pyta wyłącznie o pracę w zakładkach, KTÓRE FAKTYCZNIE ZOSTANĄ ZAMKNIĘTE. Pytanie o cudzą pracę
+    // byłoby fałszywe, a pominięcie własnej — utratą danych.
+    //
+    // ⚠ Po „Zapisz" nie ufamy zgłoszonemu sukcesowi: `SaveDirtyEditorsAsync` zwraca false, gdy
+    // którykolwiek edytor nie zapisał, i sam zaznacza winną zakładkę z jej błędem. Wtedy nie
+    // zamykamy NICZEGO — częściowe zamknięcie po nieudanym zapisie byłoby najgorszym wynikiem.
+    private async Task CloseTabsAsync(IReadOnlyList<WorkspaceTabViewModel> targets, string messageFormat)
+    {
+        var closable = targets.Where(t => t.IsClosable).ToArray();
+        if (closable.Length == 0) return;
+
+        var unsaved = CollectUnsavedWork(closable);
+        if (unsaved.Count > 0)
+        {
+            var message = string.Format(
+                CultureInfo.CurrentCulture,
+                messageFormat,
+                string.Join(Environment.NewLine, unsaved.Select(u => "• " + u.Label)));
+
+            var options = new List<ChoiceOption>();
+            if (HasSavableDirtyEditors(closable))
+                options.Add(new ChoiceOption
+                {
+                    Id = "save", Label = UiStrings.TabsCloseUnsavedSave, IsDefault = true,
+                });
+            options.Add(new ChoiceOption
+            {
+                Id = "discard", Label = UiStrings.TabsCloseUnsavedDiscard, IsDestructive = true,
+            });
+            options.Add(new ChoiceOption
+            {
+                Id = "cancel", Label = UiStrings.DialogCancel, IsCancel = true, IsDefault = options.Count == 1,
+            });
+
+            var id = await RequestChoiceAsync(new ChoiceRequest
+            {
+                Title = UiStrings.TabsCloseUnsavedTitle,
+                Message = message,
+                Options = options,
+            }).ConfigureAwait(true);
+
+            if (id is null or "cancel") return;
+            if (id == "save" && !await SaveDirtyEditorsAsync(closable).ConfigureAwait(true)) return;
+        }
+
+        // ⚠ Zamykamy po ROZSTRZYGNIĘCIU bramki, więc `CloseTab` (bezpytaniowe), a nie
+        //   `RequestCloseTabAsync` — inaczej użytkownik dostałby drugie pytanie o to samo.
+        foreach (var tab in closable) CloseTab(tab);
+    }
+
+    /// <summary>Zakładki, których dotyczy „Zamknij pozostałe" — wszystkie zamykalne poza wskazaną.</summary>
+    private IReadOnlyList<WorkspaceTabViewModel> TabsOtherThan(WorkspaceTabViewModel keep)
+        => WorkspaceTabs.Where(t => !ReferenceEquals(t, keep)).ToArray();
+
+    /// <summary>
+    /// Zakładki na PRAWO od wskazanej. ⚠ „Na prawo" znaczy dalej w kolekcji, i to jest prawdziwe
+    /// w obu trybach paska: w wielowierszowym „dalej" to kolejny wiersz, co czyta się tak samo.
+    /// </summary>
+    private IReadOnlyList<WorkspaceTabViewModel> TabsRightOf(WorkspaceTabViewModel anchor)
+    {
+        var index = WorkspaceTabs.IndexOf(anchor);
+        return index < 0
+            ? Array.Empty<WorkspaceTabViewModel>()
+            : WorkspaceTabs.Skip(index + 1).ToArray();
+    }
+
+    /// <summary>
+    /// Zakładki bez niezapisanej pracy. ⭐ Ta jedna pozycja menu NIE POTRZEBUJE bramki — z definicji
+    /// nie ma czego stracić — i właśnie dlatego jest w menu: daje sposób na uprzątnięcie paska bez
+    /// odpowiadania na jakiekolwiek pytanie.
+    /// </summary>
+    private IReadOnlyList<WorkspaceTabViewModel> UnmodifiedTabs()
+        => WorkspaceTabs.Where(t => t.UnsavedWork is null).ToArray();
+
+    // ─── Menu kontekstowe zakładki — komendy (M3.3c / §8.3) ────────────────────────────────
+    //
+    // ⚠ Każda bierze zakładkę PARAMETREM, a nie z `SelectedWorkspaceTab`. Menu kontekstowe otwiera się
+    // nad zakładką, która NIE MUSI być aktywna — czytanie zaznaczenia zamykałoby cudzy dokument, i to
+    // jest dokładnie ten defekt, przed którym broni gotcha #16/#99 przy siatkach.
+
+    // ⭐⭐ KAŻDA POZYCJA MA WŁASNE `CanExecute` — żadna nie jest ani martwa, ani zawsze aktywna.
+    // Menu, w którym „Zamknij po prawej" jest klikalne na ostatniej zakładce, uczy, że polecenie nie
+    // działa; menu, w którym „Odśwież" stoi na zakładce SQL Editora, uczy tego samego. ⚠ Predykaty
+    // pytają o STAN, na który patrzy użytkownik otwierając menu, a nie o zaznaczenie.
+
+    private static bool CanTabMenuClose(WorkspaceTabViewModel? tab) => tab is { IsClosable: true };
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuClose))]
+    private Task TabMenuCloseAsync(WorkspaceTabViewModel? tab)
+        => tab is null ? Task.CompletedTask : RequestCloseTabAsync(tab);
+
+    private bool CanTabMenuCloseOthers(WorkspaceTabViewModel? tab)
+        => tab is not null && TabsOtherThan(tab).Any(t => t.IsClosable);
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuCloseOthers))]
+    private Task TabMenuCloseOthersAsync(WorkspaceTabViewModel? tab)
+        => tab is null
+            ? Task.CompletedTask
+            : CloseTabsAsync(TabsOtherThan(tab), UiStrings.TabsCloseUnsavedFormat);
+
+    private bool CanTabMenuCloseAll() => WorkspaceTabs.Any(t => t.IsClosable);
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuCloseAll))]
+    private Task TabMenuCloseAllAsync()
+        => CloseTabsAsync(WorkspaceTabs.ToArray(), UiStrings.TabsCloseUnsavedFormat);
+
+    /// <summary>⚠ Wyłączone na OSTATNIEJ zakładce — nie ma czego zamknąć po prawej.</summary>
+    private bool CanTabMenuCloseToTheRight(WorkspaceTabViewModel? tab)
+        => tab is not null && TabsRightOf(tab).Any(t => t.IsClosable);
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuCloseToTheRight))]
+    private Task TabMenuCloseToTheRightAsync(WorkspaceTabViewModel? tab)
+        => tab is null
+            ? Task.CompletedTask
+            : CloseTabsAsync(TabsRightOf(tab), UiStrings.TabsCloseUnsavedFormat);
+
+    /// <summary>⚠ Wyłączone, gdy nie ma ani jednej zamykalnej niezmodyfikowanej zakładki.</summary>
+    private bool CanTabMenuCloseUnmodified() => UnmodifiedTabs().Any(t => t.IsClosable);
+
+    /// <summary>⭐ Nie przechodzi przez bramkę, bo z definicji nie ma czego stracić — patrz
+    /// <see cref="UnmodifiedTabs"/>.</summary>
+    [RelayCommand(CanExecute = nameof(CanTabMenuCloseUnmodified))]
+    private Task TabMenuCloseUnmodifiedAsync()
+        => CloseTabsAsync(UnmodifiedTabs(), UiStrings.TabsCloseUnsavedFormat);
+
+    /// <summary>⚠ Tylko rodzaje, które NAPRAWDĘ się odświeżają (<c>WorkspaceTabViewModel.CanRefresh</c> —
+    /// piąty członek tej samej rodziny per-kind), i tylko gdy nie ma niezapisanej pracy.</summary>
+    private static bool CanTabMenuRefresh(WorkspaceTabViewModel? tab)
+        => tab is { CanRefresh: true, UnsavedWork: null };
+
+    /// <summary>Przeładowuje zakładkę z bazy. ⚠ Zakładka z niezapisaną pracą NIE jest odświeżana —
+    /// `RefreshAsync` przeładowuje źródło i czyści dirty, więc odświeżenie brudnej zakładki
+    /// zniszczyłoby edycję (reguła #11, to samo wykluczenie co w Seam 6d).</summary>
+    [RelayCommand(CanExecute = nameof(CanTabMenuRefresh))]
+    private async Task TabMenuRefreshAsync(WorkspaceTabViewModel? tab)
+    {
+        if (tab is null || tab.UnsavedWork is not null) return;
+        await tab.RefreshAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>⚠ Zakładki narzędziowe (SQL Editor, Trace, Import…) nie mają nazwy obiektu.</summary>
+    private static bool CanTabMenuCopyObjectName(WorkspaceTabViewModel? tab)
+        => tab?.ObjectName is { Length: > 0 };
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuCopyObjectName))]
+    private async Task TabMenuCopyObjectNameAsync(WorkspaceTabViewModel? tab)
+    {
+        if (tab?.ObjectName is not { Length: > 0 } name) return;
+        if (ClipboardWriteRequested is { } write) await write(name).ConfigureAwait(true);
+    }
+
+    /// <summary>⚠ Wymaga RODZAJU i NAZWY — bez obu nie ma czego szukać w drzewie — oraz połączenia.</summary>
+    private bool CanTabMenuRevealInExplorer(WorkspaceTabViewModel? tab)
+        => tab is { ObjectKind: not null, ObjectName: { Length: > 0 } } && HasActiveConnection;
+
+    /// <summary>⭐ Zaznacza obiekt w Metadata Explorerze <b>i przewija listę tak, żeby był widoczny</b> —
+    /// samo zaznaczenie poza ekranem jest nieodróżnialne od braku reakcji.</summary>
+    [RelayCommand(CanExecute = nameof(CanTabMenuRevealInExplorer))]
+    private async Task TabMenuRevealInExplorerAsync(WorkspaceTabViewModel? tab)
+    {
+        if (tab is not { ObjectKind: { } kind, ObjectName: { Length: > 0 } name }) return;
+        await Metadata.RevealObjectAsync(kind, name).ConfigureAwait(true);
+    }
+
+    /// <summary>Skrót do Settings Center, prosto na kategorię „Tabs" (decyzja D8).</summary>
+    [RelayCommand]
+    private void TabMenuSettings() => SettingsRequested?.Invoke(SettingsCatalog.CategoryTabs);
+
+    /// <summary>Prosi widok o otwarcie Settings Center na wskazanej kategorii.</summary>
+    public event Action<string>? SettingsRequested;
+
+    /// <summary>
+    /// ⚠⚠ Odświeża stan WŁĄCZENIA pozycji menu zakładki. Ich `CanExecute` zależy od SKŁADU kolekcji
+    /// (ile jest zakładek, czy któraś jest na prawo, czy któraś jest czysta), a `[RelayCommand]` sam
+    /// z siebie o zmianie kolekcji nic nie wie — bez tego „Zamknij po prawej" zostałoby aktywne po
+    /// zamknięciu ostatniej zakładki, czyli dokładnie martwe polecenie, którego menu ma nie mieć.
+    /// </summary>
+    internal void RaiseTabMenuCanExecuteChanged()
+    {
+        TabMenuCloseCommand.NotifyCanExecuteChanged();
+        TabMenuCloseOthersCommand.NotifyCanExecuteChanged();
+        TabMenuCloseAllCommand.NotifyCanExecuteChanged();
+        TabMenuCloseToTheRightCommand.NotifyCanExecuteChanged();
+        TabMenuCloseUnmodifiedCommand.NotifyCanExecuteChanged();
+        TabMenuRefreshCommand.NotifyCanExecuteChanged();
+        TabMenuCopyObjectNameCommand.NotifyCanExecuteChanged();
+        TabMenuRevealInExplorerCommand.NotifyCanExecuteChanged();
     }
 
     public string? BuildCopyText(CopyGridMode mode, int rowIndex, int columnIndex)

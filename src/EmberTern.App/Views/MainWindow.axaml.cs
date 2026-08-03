@@ -561,6 +561,33 @@ public partial class MainWindow : Window
     // ⚠ It takes the view model's PreferencesService rather than opening a store of its own: the store saves a
     // whole Preferences at a time (etap 2, §12.3), so a second snapshot holder would write its stale copy of
     // Theme back over whatever the titlebar toggle had just set.
+    /// <summary>
+    /// Zaznacza wiersz w drzewie metadanych <b>i przewija listę tak, żeby był widoczny</b>.
+    ///
+    /// <para>⚠⚠ Przewinięcie jest OSOBNYM krokiem i bez niego pozycja menu jest bezużyteczna: przy
+    /// dwóch tysiącach obiektów zaznaczony wiersz niemal na pewno leży poza ekranem, a zaznaczenie,
+    /// którego nie widać, jest nieodróżnialne od braku reakcji.</para>
+    ///
+    /// <para>⚠ `ScrollIntoView` jest ODŁOŻONE na `Background`: rozwinięcie kategorii dopiero co
+    /// przebudowało płaską projekcję, więc kontener wiersza jeszcze nie istnieje i natychmiastowe
+    /// przewinięcie nie miałoby do czego celować. ⛔ Zaznaczenie ustawiamy SYNCHRONICZNIE — odłożone
+    /// razem z przewinięciem przegrałoby z kolejnym kliknięciem użytkownika (kształt gotchy #221).</para>
+    /// </summary>
+    private void OnRevealSidebarRow(SidebarRow row)
+    {
+        var list = this.FindControl<ListBox>("SidebarList");
+        if (list is null) return;
+
+        list.SelectedItem = row;
+        Dispatcher.UIThread.Post(() => list.ScrollIntoView(row), DispatcherPriority.Background);
+    }
+
+    private async void OnSettingsRequested(string categoryId)
+    {
+        if (_currentVm is null) return;
+        await new SettingsWindow(_currentVm.Preferences, _currentVm.Portability, categoryId).ShowDialog(this);
+    }
+
     private async void OnAppMenuSettingsClick(object? sender, RoutedEventArgs e)
     {
         if (_currentVm is null) return;
@@ -631,6 +658,8 @@ public partial class MainWindow : Window
             _currentVm.EditorFocusRequested -= OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
+            _currentVm.Metadata.RevealRowRequested -= OnRevealSidebarRow;
+            _currentVm.SettingsRequested -= OnSettingsRequested;
         }
 
         _currentVm = DataContext as MainWindowViewModel;
@@ -660,6 +689,14 @@ public partial class MainWindow : Window
             // Pasek zakładek — tryb czytany z preferencji przy starcie i po każdej zmianie
             // (OnVmPropertyChanged). Jedno miejsce, w którym preferencja staje się układem.
             ApplyTabStripMode();
+
+            // ⭐ „Pokaż w Metadata Explorer" — VM ustala WIERSZ, widok go pokazuje. Przewinięcie jest
+            //   sprawą kontrolki (lista wirtualizuje), a samo zaznaczenie poza ekranem byłoby
+            //   nieodróżnialne od braku reakcji.
+            _currentVm.Metadata.RevealRowRequested += OnRevealSidebarRow;
+
+            // „Ustawienia zakładek…" — skrót prosto na kategorię (D8).
+            _currentVm.SettingsRequested += OnSettingsRequested;
 
             // D3 — wire the main SQL editor's language capabilities ONCE, now that the stable VM has
             // arrived, through the SAME shared path the object editors use (SqlEditorBehavior.Attach). The

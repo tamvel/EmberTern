@@ -6672,6 +6672,107 @@ widok nie odpyta."*
 
 ---
 
+### §19.24 Iteracja 15 (M3.3c) — menu kontekstowe zakładki (2026-08-03)
+
+> ⚠⚠ **Podetap objęty regułą #11 najmocniej z całego M3:** trzy pozycje zamykają wiele dokumentów
+> jednym kliknięciem. Zamknięcie M3.3 i całego paska zakładek.
+
+#### §19.24.1 ⭐⭐ Bramka dostała ZASIĘG — i to była jedyna zmiana, jakiej potrzebowała
+
+`CollectUnsavedWork`, `HasSavableDirtyEditors` i `SaveDirtyEditorsAsync` iterowały po **wszystkich**
+zakładkach, bo trzy dotychczasowe wejścia (zamknięcie zakładki, rozłączenie, zamknięcie aplikacji) zawsze
+dotyczą całości. **„Zamknij zakładki po prawej" dotyczy PODZBIORU.** Bez zasięgu czwarte wejście musiałoby
+albo **ominąć bramkę**, albo **pytać o pracę w zakładkach, których nie zamyka** — pierwsze jest utratą
+danych, drugie kłamstwem.
+
+⭐ **`scope == null` znaczy „wszystkie"**, więc trzy istniejące wejścia są nietknięte — ich kodu nie
+trzeba było dotykać, a ich 26 testów przeszło bez zmiany. ⛔ Nie budować drugiej ścieżki „zapisz wiele
+zakładek"; ta jest przetestowana od sprintu Save-and-close.
+
+**Bramka jest AGREGUJĄCA, nie „N pytań po kolei"**, i tak być musi: pytanie zadane osiem razy pod rząd nie
+jest bramką, tylko przeszkodą, którą użytkownik przeklika bez czytania. Ten sam kształt ma rozłączenie
+i zamknięcie aplikacji. ⚠ Komunikat **wymienia zakładki z pracą** — *„kilka zakładek ma niezapisane
+zmiany"* nie pozwala podjąć decyzji, a to jest moment, w którym użytkownik ją podejmuje.
+
+⚠ **Po „Zapisz" nie ufamy zgłoszonemu sukcesowi** (lekcja z `RequestCloseTabAsync`): nieudany zapis nie
+zamyka **niczego**. Częściowe zamknięcie po nieudanym zapisie byłoby najgorszym wynikiem — część pracy
+przepadła, a operacja zgłosiła sukces.
+
+#### §19.24.2 ⚠ Menu czyta ZAKŁADKĘ, nie zaznaczenie
+
+Każda komenda bierze zakładkę **parametrem**. Menu kontekstowe otwiera się nad zakładką, która **nie musi
+być aktywna**; czytanie `SelectedWorkspaceTab` zamykałoby cudzy dokument. ⭐ To ten sam kształt, co gotcha
+#16/#99 przy siatkach (prawy przycisk nie zaznacza wiersza), tylko o poziom wyżej — i tam też objawem było
+działanie na niewłaściwym obiekcie.
+
+#### §19.24.3 ⭐ Bramkowanie pozycji — zgłoszone przez użytkownika PRZED implementacją
+
+> *„Sprawdź, czy wszystkie pozycje poprawnie włączają się i wyłączają zależnie od kontekstu […], żeby nie
+> zostawić martwych lub zawsze aktywnych poleceń."*
+
+| Pozycja | Wyłączona, gdy |
+|---|---|
+| Zamknij | zakładka niezamykalna |
+| Zamknij pozostałe | jest jedyną zamykalną |
+| Zamknij po prawej | **jest ostatnia** |
+| Zamknij niezmodyfikowane | wszystkie zakładki są brudne |
+| Zamknij wszystkie | nie ma zamykalnych |
+| Odśwież | zakładka jest brudna **albo jej rodzaj się nie odświeża** |
+| Kopiuj nazwę obiektu | zakładka narzędziowa (brak nazwy) |
+| Pokaż w Explorerze | brak rodzaju/nazwy albo brak połączenia |
+
+⭐ **`WorkspaceTabViewModel.CanRefresh` to PIĄTY członek rodziny per-kind** (obok `UnsavedWork`,
+`SavableEditor`, `RefreshAsync`, `ResolveCommand`). Istnieje, bo `RefreshAsync` ma ramię
+`_ => Task.CompletedTask`: wywołanie go na zakładce SQL Editora jest **bezpieczne**, ale pozycja menu, która
+jest klikalna i nic nie robi, **uczy, że polecenie nie działa** — trwale.
+
+⚠⚠ **Bramkowanie zależy od SKŁADU kolekcji, a `[RelayCommand]` sam z siebie o jej zmianie nic nie wie.**
+Bez przeliczenia „Zamknij po prawej" zostałoby aktywne po zamknięciu ostatniej zakładki. Przeliczenie wisi
+w **jednym istniejącym punkcie** (`OnWorkspaceTabsChanged`), a nie przy ~39 miejscach dodających zakładkę —
+ten sam wzorzec, co subskrypcja Seam 6d. ⭐ To ta sama luka co przy `ShowTabStripMaxRows` (§19.23.10):
+wartość czytana wprost byłaby poprawna, a menu i tak pokazywałoby stan sprzed zmiany. **Zapięte testem na
+`CanExecuteChanged`, nie na samej wartości.**
+
+#### §19.24.4 ⭐ „Pokaż w Metadata Explorer" — zaznaczenie NIE WYSTARCZA
+
+> **Użytkownik:** *„Powinno nie tylko zaznaczyć obiekt, ale również przewinąć listę tak, żeby był
+> widoczny."*
+
+⚠ Przy dwóch tysiącach obiektów zaznaczony wiersz niemal na pewno leży poza ekranem, a **zaznaczenie,
+którego nie widać, jest nieodróżnialne od braku reakcji.**
+
+⭐⭐ **Rozwinięcie kategorii musi być POCZEKANE, a nie tylko zażądane.** Ustawienie `IsExpanded` odpala
+`LoadGroupAsync` jako *fire and forget* (`_ = _owner.LoadGroupAsync(this)`), więc szukanie liścia zaraz po
+tym trafiłoby w kategorię **bez dzieci** — pozycja menu nie robiłaby nic przy pierwszym użyciu i działała
+przy drugim, czyli najgorszy możliwy rodzaj usterki. Dlatego ładowanie jest wywołane wprost i oczekiwane.
+
+⚠ **Podział odpowiedzialności:** VM ustala **wiersz**, widok go **pokazuje** — przewijanie jest sprawą
+kontrolki, bo lista wirtualizuje. ⚠ `ScrollIntoView` jest **odłożone na `Background`** (kontener dopiero
+co powstał), ale **zaznaczenie ustawiane SYNCHRONICZNIE** — odłożone razem przegrałoby z kolejnym
+kliknięciem użytkownika (kształt gotchy #221, ta sama korekta co przy nawigacji po diagnostykach).
+
+#### §19.24.5 Zero nowej chromy
+
+Menu stoi na stylach `ContextMenu`/`MenuItem` + `{app:MenuIcon}` + `{app:CommandGesture}` z etapu 5
+Keyboard Managera — **nie powstał ani jeden nowy styl**. „Ustawienia zakładek…" otwiera Settings Center
+**prosto na kategorii Tabs** (D8); ⚠ nieznane id kategorii znaczy „zostaw domyślną" — skrót ma zaprowadzić
+na stronę, a nie zepsuć okno, gdy kategoria kiedyś zmieni nazwę.
+
+#### §19.24.6 Wynik
+
+| | |
+|---|---|
+| Pozycje menu | 9 (8 + skrót do ustawień), dwa separatory |
+| Wejścia do bramki reguły #11 | **3 → 4** |
+| Build | 0 / 0 |
+| Testy | **7243** (7132 + 57 + 54), **+10** |
+| Smoke | czysty |
+
+⏸ **Do odbioru na żywej bazie:** reveal na dużym schemacie (czy przewija), stany menu na pierwszej/ostatniej
+zakładce, bramka przy „Zamknij wszystkie" z kilkoma brudnymi edytorami.
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:
