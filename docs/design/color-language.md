@@ -1,20 +1,22 @@
 # EmberTern — Język kolorów
 
-> **Status: ⭐ PROJEKT ZAAKCEPTOWANY PRZEZ UŻYTKOWNIKA (2026-08-02). NIC NIE JEST WDROŻONE.**
-> Powstał po wycofaniu M3.2b, w odwróconej kolejności: **pomiar → projekt → akceptacja → dopiero
-> implementacja.** Użytkownik na zamknięcie sesji: *„Dokument bardzo mi się podoba i właśnie o taki
-> poziom mi chodziło. To jest projekt produktu, a nie próba uzasadnienia implementacji."*
+> **Status: 🔒 WDROŻONY W CAŁOŚCI I ODEBRANY WIZUALNIE (2026-08-03). Zero otwartych pytań.**
+> Projekt zaakceptowany 2026-08-02, wdrożony krokami K1–K7 + przeglądem domykającym; zapis wykonania:
+> `product-polish.md` **§19.15–§19.19**.
 >
-> ⛔⛔ **RAZEM Z AKCEPTACJĄ PRZYSZŁO OGRANICZENIE TEMPA — §0.4. Przeczytaj je, ZANIM cokolwiek
-> zaimplementujesz.** Akceptacja projektu **nie jest** zgodą na ujednolicenie produktu w jednej
-> iteracji.
+> ⭐⭐ **OD TEJ CHWILI TO JEST DOKUMENT REFERENCYJNY, NIE PLAN.** Służy przy **każdej nowej funkcji**
+> — dodajesz przycisk, bierzesz mu rolę z **§6**. Nie ma tu już nic do „dokończenia".
 >
-> **To NIE jest lista zmian dla jednego etapu.** To dokument produktu — ma służyć przy każdej nowej
-> funkcji, długo po zamknięciu Product Polish. Lista zmian wynika z niego, a nie odwrotnie.
+> ⛔⛔ **PRZED ZMIANĄ JAKIEGOKOLWIEK KOLORU PRZECZYTAJ §0.5** — bramka nadrzędna („czy użytkownik
+> rozpozna akcję SZYBCIEJ?"), która stoi **ponad** regułą ról z §6 i ponad tempem z §0.4.
 >
-> **Wejścia:** pomiar całego produktu (`product-polish.md` §20) · trzy ratyfikowane odpowiedzi
+> **Wejścia (historyczne):** pomiar całego produktu (`product-polish.md` §20) · ratyfikowane odpowiedzi
 > użytkownika (§0.2) · `product-polish.md` §7.5 jako **jedno z wejść, nie źródło dedukcji** ·
 > lekcja z §19.14 (pułapka 17).
+>
+> ⚠ **§0.4 (R14, tempo krok‑po‑kroku) jest ZAMKNIĘTE i historyczne** — obowiązywało, dopóki język był
+> projektowany. Aktualną regułę tempa niesie **R15** (handover §5): *wielkość iteracji idzie za
+> niepewnością.*
 
 ---
 
@@ -44,7 +46,15 @@ wtedy, gdy jest przewidywalny.
 | **W5** | **🟡 żółty = ostrzeżenie · stan wymagający uwagi · wstrzymanie. NIGDY destrukcja.** Usuwanie jest konsekwentnie czerwone |
 | **W6** | **Moduły mogą mieć tożsamość kolorystyczną, ale tylko wewnątrz modułu.** ⭐ Wyjątek: w pasku globalnym **wolno** użyć koloru modułu, gdy element niesie **STAN** („który moduł jest aktywny?"), a nie akcję |
 
-### §0.4 ⛔⛔ R14 — TEMPO WDROŻENIA JEST CZĘŚCIĄ PROJEKTU (ratyfikowane 2026-08-02)
+### §0.4 🔒 R14 — TEMPO WDROŻENIA (ratyfikowane 2026-08-02, **ZAMKNIĘTE 2026-08-03**)
+
+> 🔒 **HISTORYCZNE.** Obowiązywało, dopóki język był PROJEKTOWANY — i wtedy było słuszne: kilka razy
+> poprawna reguła dawała gorszy ekran. Po akceptacji dokumentu użytkownik sam je zdjął: *„nie chcę
+> dalej pracować w tak drobnych iteracjach, zaczyna nas to bardziej spowalniać niż pomagać"*, i K2–K7
+> poszły jednym przebiegiem. ⭐ Uogólnienie tej pary decyzji to **R15** (handover §5): **wielkość
+> iteracji idzie za NIEPEWNOŚCIĄ, nie za ostrożnością.**
+>
+> ⚠ Treść R14 nie zniknęła — żyje dalej jako **§0.5**, tylko przeniesiona z *tempa* na *kryterium*.
 
 > **Użytkownik:** *„Chcę jednak, żeby implementacja nadal była bardzo ostrożna. Nie zależy mi na tym,
 > żeby w jednej iteracji ujednolicić cały produkt. Bardziej zależy mi na tym, żeby każdy kolejny krok

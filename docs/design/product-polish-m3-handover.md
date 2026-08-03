@@ -14,7 +14,7 @@
 | 1 | **ten plik** | ⭐ **wiążący, punkt wejścia** | zawsze, w całości |
 | 2 | `product-polish.md` **§19** | ⭐ **wiążący** — as-built M3, wynik iteracji 0 | zawsze |
 | 3 | `product-polish.md` **§8** | ⭐ **wiążący** — model paska zakładek (§8.0–§8.3) i Status Bara 2.0 (§8.4) | M3.1 i M3.3 |
-| 4 | ⭐⭐ **`color-language.md`** | ⭐⭐ **WIĄŻĄCY I ZAAKCEPTOWANY — jedyne źródło prawdy o kolorach.** Dokument PRODUKTU, nie etapu. ⚠ `product-polish.md` §7.5 jest od 2026-08-02 tylko **jednym z jego wejść** i jego tabela „zmiany do wykonania" **NIE OBOWIĄZUJE** | M3.2 i każda nowa funkcja |
+| 4 | ⭐⭐ **`color-language.md`** | 🔒 **WDROŻONY W CAŁOŚCI (2026-08-03) — od teraz dokument REFERENCYJNY, nie plan.** Jedyne źródło prawdy o kolorach; dodajesz przycisk → bierzesz mu rolę z **§6**, a przed każdą zmianą koloru przechodzisz **§0.5**. ⛔ Nie ma tu nic do „dokończenia". ⚠ `product-polish.md` §7.5 **NIE OBOWIĄZUJE** — zastąpione | **przy każdej nowej akcji/ikonie**; §0.5 przy każdej zmianie koloru |
 | 5 | `product-polish.md` **§13.3** | ⭐ wiążący — brama jakości po M3 | przed zamknięciem etapu |
 | 6 | `product-polish.md` **§17** + **§18.R** | ⭐ wiążący — reguły **R1–R14** (R13 i R14 ratyfikowane w M3.2), rejestr kolizji **K1–K11** | zawsze |
 | 7 | `Themes/Tokens.axaml`, `Themes/Typography.axaml` | ⭐ **katalog — źródło prawdy o rolach** | przy każdej iteracji |
@@ -35,15 +35,16 @@
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | **wycofanie M3.2b**. ⚠ Wcześniejsza wersja tego wiersza mówiła, że trzy commity czekają na push — **zweryfikowane 2026-08-02: nieaktualne**, oba remote'y stały już na `b16f476`. **Czekają cztery commity: M3.2a + dwa odbiorcze + M3.2b** — push po akceptacji użytkownika |
-| **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ WYCOFANA** (M3.1 odebrane w całości; M3.2a odebrane **dwiema rundami wycofań**; M3.2b **cofnięta w całości** — §19.14). ⭐ **M3.1 ZAMKNIĘTE**. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma ani jednej bramki przesuwającej cokolwiek |
+| **Ostatni commit** | `2839d22` — optyczne wyrównanie bloku połączenia w pasku statusu. ⭐ **Drzewo czyste, oba remote'y zsynchronizowane** (`origin` + `private`), nic nie czeka na push |
+| **Etap** | M0–M2c ✅ · **M3: iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ wycofana · 🔒 JĘZYK KOLORÓW WDROŻONY I ODEBRANY ✅** (K1–K7 + przegląd domykający + poprawka paska statusu, §19.15–§19.20). ⭐ **M3.1 ZAMKNIĘTE** · ⭐ **H‑3 ZAMKNIĘTE** · ⭐ **H‑5 ZAMKNIĘTE** (Commit/Rollback na własnych tokenach, K7) · ⭐ **§7.5 ZAMKNIĘTE** — zastąpione przez `color-language.md` |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
 | **Suite** | **7138**, zielony w trzech partycjach (**7032 + 52 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⏸⏸ **PEŁNE QA WIZUALNE CAŁEGO ETAPU — język kolorów jest wdrożony W CAŁOŚCI (K1–K7 + przegląd domykający; `product-polish.md` §19.15–§19.18).** ⭐ **Zero otwartych pytań O‑1…O‑5.** Zmierzone: **230 `SvgIcon` w widokach, 81 z kolorem, ani jeden przycisk akcji poza językiem.** ⛔ Nie dokładaj zmian kolorów przed QA. Punkty do obejrzenia: pasek tytułu jako **jedna rodzina** (6 × niebieski R‑6, reszta szara, kosz czerwony) · nagłówek Saved Queries (dwie czerwone ikony, §19.16.4) · debugger (Continue zielony wśród neutralnych kroków) · Comment 🔵 vs Uncomment ⚪ |
-| **⚠ TRYB PRACY** | ⭐ **Zmieniony 2026-08-03 przez użytkownika:** drobne iteracje krok‑po‑kroku obowiązywały, **dopóki budowaliśmy język**. Po jego akceptacji K2–K7 poszły jako **jedna implementacja**, z powrotem do użytkownika tylko gdy: dokument nie rozstrzyga · realny konflikt projektowy · zmiana pogorszyłaby produkt mimo zgodności z dokumentem. ⛔ R14 (jeden krok = jedno obejrzenie) **nie obowiązuje już jako tempo**; jego treść żyje dalej w §0.5 |
+| ⭐⭐ **NASTĘPNY KROK** | **M3.2d — M‑1: 10 literałów → `UiStrings`** (§3.7). Pozycja 11 w planie §10. ⚠ To krok **czysto porządkowy, zero zmian wizualnych** — dobry na rozgrzewkę po zamknięciu języka. Potem M3.3a → M3.3b → M3.3c → M3.4a → M3.4b → M3b → ⛔ brama §13.3 |
+| **⚠ TRYB PRACY** | ⭐ **R15** (§5): wielkość iteracji idzie za **niepewnością**. M3.2d i M3.3a mają zamknięty zakres ⇒ **jedna iteracja każdy, bez zatrzymań po drodze**. M3.3b/M3.4a niosą decyzje (**DB**, preferencje) ⇒ propozycja przed implementacją. Powrót do użytkownika: dokument nie rozstrzyga · realny konflikt projektowy · zmiana pogorszyłaby produkt mimo zgodności |
+| ⛔ **BRAMKA KOLORU** | Przy **każdym** dotknięciu koloru obowiązuje `color-language.md` **§0.5**: *czy użytkownik rozpozna akcję SZYBCIEJ?* „Nie" albo „nie wiadomo" ⇒ zatrzymaj się i wróć z propozycją |
 | **⛔⛔ BRAMKA NADRZĘDNA** | **`color-language.md` §0.5** (ratyfikowana 2026-08-03): **przed każdą zmianą koloru odpowiedz, czy użytkownik dzięki niej SZYBCIEJ ROZPOZNA AKCJĘ.** „Nie" albo „nie wiadomo" ⇒ ⛔ zatrzymaj się i wróć z propozycją. Stoi **przed** §6 i przed R14: zgodność z rolą jest warunkiem koniecznym, nigdy wystarczającym, a *„teraz jest zgodne z językiem"* **nie jest odpowiedzią na to pytanie** — to było jedyne uzasadnienie M3.2b. ⭐ Jeśli reguła pogarsza UX — poprawiamy **regułę w dokumencie**, nie bronimy implementacji |
 | **⏸ ZAMKNIĘTE PRZEZ R13** | Dług „sekcja 3 toolbara drga przy przełączaniu pod-zakładek" (§19.10.3) **nie wymaga już decyzji** — R13 rozstrzyga go z góry: nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Sekcja 3 zostaje jak jest |
 | **⏸ DROBIAZG DO WZIĘCIA PO DRODZE** | Wyłączone komórki Size/Scale/SubType/Charset dostały `Stretch`, ale **tło nadal maluje `FluentBridge`** (`TextControlBackgroundDisabled` → `BackgroundColor`), więc setter `Background="Transparent"` go nie zdejmuje. Jeśli po QA nadal widać pudełko — trasa jest przez **Bridge**, nie przez setter (reguła 8 §16). Zapis: §19.8.4 |
@@ -155,11 +156,18 @@ i działa wyłącznie dlatego, że dotyczy zakładki **aktywnej** — Avalonia s
 wzdłuż ścieżki wiązania. Chip ma być prawdziwy, gdy sesja trwa **na innej zakładce**, więc potrzebuje
 nowej agregacji **i** ścieżki powiadomień. To realna praca w M3.1, addytywna i wyłącznie w warstwie App.
 
-### 3.4 §7.5 — potwierdzone co do sztuki, dwa uściślenia
+### 3.4 🔒 §7.5 — ZASTĄPIONE przez `color-language.md`, wdrożone w K1–K7. Zapis wejściowy poniżej
 
-Zmierzone w pasku tytułu: **6 × `AccentBrush`** (narzędzia ogólne) · `Icon.Trash` → `WarningIconBrush` ·
-`Icon.PlugZap` → `AccentIconBrush` · `Icon.RefreshCw` → `InfoIconBrush` · **10 × `IconColor_*`**.
-**Liczby zgadzają się z audytem dokładnie.**
+> ⛔ **Tabela „zmiany do wykonania" z §7.5 NIE OBOWIĄZUJE** — M3.2b wykonało ją co do litery i zostało
+> wycofane w całości. Zastąpił ją język kolorów, wdrożony i odebrany 2026-08-03 (§19.20).
+> ⭐ Stan po wdrożeniu: `Icon.Trash` → 🔴 · `Icon.PlugZap` → ⚪ · `Icon.RefreshCw` → ⚪ ·
+> Security Manager → `AccentBrush` (**7 × `AccentBrush`** w pasku, jedna rodzina R‑6).
+> ⏸ Ostatni wiersz §7.5 (likwidacja `AccentIconBrush`/`InfoIconBrush`) — decyzja **DC**, → M4.3/M5;
+> ⚠ oba tokeny **nadal mają konsumentów** i nie są sierotami.
+
+Zmierzone **przed wdrożeniem** w pasku tytułu: **6 × `AccentBrush`** (narzędzia ogólne) ·
+`Icon.Trash` → `WarningIconBrush` · `Icon.PlugZap` → `AccentIconBrush` ·
+`Icon.RefreshCw` → `InfoIconBrush` · **10 × `IconColor_*`**. **Liczby zgadzały się z audytem dokładnie.**
 
 * **Uściślenie 1 (kosmetyczne):** „10 przycisków *Nowy X*" to w rzeczywistości **9 kreatorów + 1 narzędzie**
   (Security Manager, `IconColor_Role`). Reguła §7.5 obejmuje oba tak samo — zmienia się opis, nie wniosek.
@@ -168,7 +176,11 @@ Zmierzone w pasku tytułu: **6 × `AccentBrush`** (narzędzia ogólne) · `Icon.
   `SvgIcon.cs`, `DebuggerIcon.cs`, `NavigationController.cs`, **trzy ViewModele trzymające klucz jako string**
   oraz widoki Data Import, Debugger, Performance, Table Detail i Trace Monitor — czyli powierzchnie **M4.3**.
 
-### 3.5 ⚠ H‑5 — audyt nazwał zły moduł, a defekt jest gdzie indziej i poważniejszy
+### 3.5 🔒 H‑5 — ZAMKNIĘTE w K7 (2026-08-03). Zapis wejściowy poniżej
+
+> ✅ **Wykonane:** Commit i Rollback stoją na własnych tokenach `CommitButtonBrush` /
+> `RollbackButtonBrush`, którym najpierw nadano **wartości per motyw** (§19.17.4) — krok wyszedł
+> **neutralny wizualnie**. Poniższy pomiar zostaje jako opis stanu wejściowego.
 
 Audyt: *„titlebar `Button.icon`+`SvgIcon`; **Script Executor** `Button.flat`+tekst"*.
 
@@ -244,7 +256,7 @@ Zapisane tutaj, żeby były zadane raz i we właściwym momencie.
 
 ---
 
-## 5. Reguły obowiązujące — R1–R14
+## 5. Reguły obowiązujące — R1–R17
 
 ⛔ **Zmienia je wyłącznie użytkownik. Nie otwierać ponownie.**
 
@@ -263,7 +275,10 @@ Zapisane tutaj, żeby były zadane raz i we właściwym momencie.
 | R11 | **`Size.Row.Grid`** to osobna decyzja produktowa |
 | R12 | ⭐ **Celem jest usunięcie NIEUZASADNIONYCH wartości lokalnych, nie wyzerowanie licznika**; **błędna rola jest gorsza od wartości lokalnej** |
 | **R13** | ⭐⭐ **NIE REZERWUJEMY MIEJSCA NA ELEMENT, KTÓRY W DANYM KONTEKŚCIE NIGDY SIĘ NIE POJAWI.** Stabilizacja układu ma sens **tylko wtedy, gdy nie pogarsza wykorzystania przestrzeni** — pusta dziura czyta się jako błąd układu, a niewielkie przesunięcie nie. Ratyfikowana 2026-08-02 na odbiorze M3.2a (§19.12) |
-| **R14** | ⭐⭐ **KAŻDY KROK MUSI BYĆ EWIDENTNYM ULEPSZENIEM UX SAM W SOBIE.** *„Wolę pięć małych, oczywistych poprawek niż jedną dużą rewolucję."* ⛔ Krok, którego jedynym uzasadnieniem jest *„teraz jest zgodne z regułą"*, jest **zły** — ryzyko niezerowe, zysk zerowy. ⚠ Nie dotyczy kroków **neutralnych wizualnie** (zero zmiany na ekranie), bo te nie mogą pogorszyć UX. Ratyfikowana 2026-08-02 przy akceptacji `color-language.md` (§0.4) |
+| **R14** | ⭐⭐ **KAŻDY KROK MUSI BYĆ EWIDENTNYM ULEPSZENIEM UX SAM W SOBIE.** *„Wolę pięć małych, oczywistych poprawek niż jedną dużą rewolucję."* ⛔ Krok, którego jedynym uzasadnieniem jest *„teraz jest zgodne z regułą"*, jest **zły** — ryzyko niezerowe, zysk zerowy. ⚠ Nie dotyczy kroków **neutralnych wizualnie**. ⚠⚠ **Jako reguła TEMPA zastąpiona przez R15** (2026-08-03); jako kryterium POJEDYNCZEJ zmiany obowiązuje dalej |
+| **R15** | ⭐⭐ **WIELKOŚĆ ITERACJI IDZIE ZA NIEPEWNOŚCIĄ, NIE ZA OSTROŻNOŚCIĄ.** Drobne kroki, **dopóki projekt się formuje**; jeden przebieg, **gdy jest zaakceptowany**. *„Nie chcę dalej pracować w tak drobnych iteracjach, zaczyna nas to bardziej spowalniać niż pomagać."* ⚠ Utrzymywanie mikro‑iteracji po ustaniu niepewności jest **własnym trybem porażki** — wygląda na staranność, a kosztuje tempo. Ratyfikowana 2026-08-03 (§19.20.2) |
+| **R16** | ⭐⭐ **POMIAR JEST NARZĘDZIEM DIAGNOSTYCZNYM; KRYTERIUM ODBIORU JEST EKRAN.** *„Użytkownik nie patrzy na środki geometryczne elementów — patrzy na efekt optyczny."* ⛔ Konsekwencja twarda: **test, który świeci na zielono przy złym wyglądzie, jest GORSZY niż brak testu** — zamyka temat zamiast go otworzyć; taki test należy **zawęzić do tego, o czym maszyna ma coś sensownego do powiedzenia**, a nie „wzmacniać". ⭐ To R8 rozszerzone na NARZĘDZIA. Ratyfikowana 2026-08-03 (§19.19.4) |
+| **R17** | ⭐ **ZGODNOŚĆ Z DOKUMENTEM ≠ SPÓJNOŚĆ PRODUKTU.** Przegląd całej powierzchni jest **osobnym krokiem**, nigdy sumą odbiorów pojedynczych iteracji. ⚠ Dowód empiryczny: w przeglądzie domykającym języka kolorów **dwie pozostałości stały się rozstrzygalne dopiero, gdy patrzyło się na cały pasek naraz** — obie wcześniej odłożone jako „nie wiadomo". Ratyfikowana 2026-08-03 (§19.18) |
 
 **Cztery decyzje architektoniczne M2b (§17.2) — również wiążące:**
 1. **`FluentBridge`** — przepinamy Fluenta na nasz katalog; trzy trasy (metryki → setter · kolory
@@ -494,6 +509,36 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
    się mylę?"*. ⚠⚠ I trzecie, mierzalne: **czy mierzyłem tam, gdzie problem jest, czy tam, gdzie patrzę?**
    §19.14.2 — 91% ikon aplikacji jest już neutralnych, a ja wyciszałem, bo wszystkie kolorowe skupiają
    się w dwóch paskach, czyli dokładnie w moim polu widzenia.
+18. ⭐⭐ **NOWA (§19.19) — PUDEŁKO TO NIE FARBA, a oko czyta farbę.** Wysokość `TextBlocka` to
+   **INTERLINIA**: linia bazowa leży ok. ¾ wysokości, więc dolna część pudełka to obszar znaków
+   schodzących — **w napisie bez schodzących PUSTY**. Farba siedzi wtedy nisko w pudełku i wyrównanie
+   `VerticalAlignment="Center"` zostawia **widoczny rozjazd** wobec elementu, którego farba JEST jego
+   pudełkiem (kropka, ikona). ⭐ Praktycznie: **korekta optyczna przez `RenderTransform`** (nie margines
+   — nie rusza układu i nie przesuwa sąsiadów), wartość **całkowita** (ułamek rozmywa tekst).
+   ⚠ Konsekwencja dla `UseLayoutRounding="False"`: to narzędzie dla elementu, **który JEST swoją farbą**
+   (koło, tło). Postawione na elemencie z tekstem w środku **pogarsza** — zdjęło badge o pół piksela
+   w górę, bo wersaliki leżą wysoko w swoim pudełku i zaokrąglenie w dół tę różnicę nadrabiało.
+
+19. ⭐ **NOWA (§19.17.2) — POMIAR PO NOŚNIKU NIE ODRÓŻNIA ROLI OD STANU.** Inwentarz §20 zliczał
+   `SvgIcon` po tokenie, więc glif **stanu** (wiersz podsumowania zmian) i glif **dekoracji** (lupa
+   w polu tekstowym) trafiły do tabeli **akcji** — trzy wiersze §8.2 nie przetrwały dokładniejszego
+   sprawdzenia. ⭐ Praktycznie: **każdą pozycję inwentarza przepuść przez §2 języka** (*co jest stanem,
+   a co akcją*), zanim uznasz ją za robotę do wykonania. Rolę rozstrzyga **kontekst, w którym element
+   stoi**, nigdy sam nośnik.
+
+20. ⭐ **NOWA (§19.19.1) — PRZECZYTAJ ZAKRES WCZEŚNIEJSZEGO POMIARU, ZANIM UŻYJESZ GO JAKO ODPOWIEDZI.**
+   W miejscu zgłoszenia stał komentarz **„⛔⛔ NIE PRÓBUJ WYŚRODKOWAĆ TEGO W PIONIE"** poparty trzema
+   pomiarami — i o mały włos posłużyłby za odpowiedź. Był prawdziwy, ale odpowiadał na **inne pytanie**
+   (relacja dwóch runów WEWNĄTRZ `TextBlocka`, nie bloku wobec sąsiada). ⚠ Im bardziej stanowczy
+   komentarz, tym większa pokusa potraktowania go jako zamknięcia tematu — sprawdź, **czego dokładnie
+   dotyczył**.
+
+21. ⚠ **NOWA (§19.16.2) — NIEAKTUALNY KOMENTARZ UCZY NIEPRAWDY DOKŁADNIE TAK JAK NIEAKTUALNY STRING.**
+   Legenda „Warning=delete" w `Colors.axaml` przeżyła zmianę, którą opisywała (osiem edytorów i 131
+   pozycji menu dawno przeszło na czerwień) i **wygenerowała cały dryf** naprawiany w K2. To gotcha
+   **#284** w komentarzu zamiast w stringu. ⭐ Praktycznie: gdy zmieniasz regułę, **poszukaj miejsc,
+   które ją opisują prozą** — build ich nie sprawdzi.
+
 ### 9.2 Odziedziczone z M2b (§17.5)
 
 7. **⚠⚠ Arytmetykę wysokości sprawdza się na SUMIE, nie na składniku.** Trzy potknięcia w M2b, trzecie
@@ -525,8 +570,8 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ 7 | **M3.2a** | H‑3. ⭐ Model 5 sekcji **już istniał**: gwarantował KOLEJNOŚĆ, nie POZYCJĘ. ⛔⛔ **Z czterech ruchów został JEDEN — Export DDL na koniec paska tytułu (T2).** Odbiór wizualny cofnął podłogę Execute/Cancel, dokowanie Commit/Rollback i rezerwację slotu sekcji 1: ⭐ **GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI** · rozmiar z wyrównania czyta się jak deklaracja ważności (R5 od drugiej strony) · ⭐⭐ **R13** — nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Wszystkie przesunięcia **świadomie zaakceptowane**. §19.10 + §19.11 + **§19.12** | — |
 | ⛔ 8 | ~~**M3.2b**~~ | **WYCOFANA W CAŁOŚCI** (§19.13 + §19.14). Wyprowadziłem regułę z §7.5 i doprowadziłem ją do końca; UX wyszedł gorszy. ⭐ Ocalała jedna rzecz — korekta §7.5: neutralny dla IKONY to `NeutralIconBrush` (brak `Foreground`), nie `ForegroundBrush` | — |
 | ✅ 9 | **projekt języka kolorów** | ⭐⭐ **ZAAKCEPTOWANY 2026-08-02 → [`color-language.md`](color-language.md).** Dokument PRODUKTU: cztery niezależne systemy (rodzaj · akcja · tożsamość modułu · hierarchia przycisku), siedem ról R‑1…R‑7, sześć nazwanych wyjątków, reguła rozstrzygająca dla nowych funkcji, plan wdrożenia §11. ⛔ **Nie projektuj go ponownie** | — |
-| ⭐⭐ **10** | **K1–K7 — WDROŻENIE JĘZYKA** | **← TU ZACZYNASZ, od K1.** `color-language.md` **§11** — siedem małych kroków, **jeden krok = jedna iteracja = jeden commit = jedno obejrzenie na żywo** (R14). K1 jest **neutralny wizualnie**, K2 to zgłoszone przez użytkownika żółte usuwanie, K6 (Odśwież) ma **największe ryzyko** i stoi na końcu części wizualnej | **DD** przy K7 |
-| 11 | **M3.2d** | M‑1 — 10 literałów → `UiStrings` | — |
+| ✅ **10** | **K1–K7 — WDROŻENIE JĘZYKA** | 🔒 **ZAMKNIĘTE I ODEBRANE 2026-08-03** (§19.15–§19.20). K1 neutralny · K2 destrukcja 🟡→🔴 · K3–K7 jednym przebiegiem · przegląd domykający zamknął **pięć pozostałości** i **wszystkie pytania O‑1…O‑5** · poprawka optyczna paska statusu. **230 ikon, 81 z kolorem, ani jeden przycisk akcji poza językiem.** ⭐ Wyniosło **R15/R16/R17** i pułapki 18–21 | **DD** ✅ |
+| ⭐⭐ **11** | **M3.2d** | **← TU ZACZYNASZ.** M‑1 — 10 literałów → `UiStrings` (§3.7: 7 w toolbarze połączeń + 3 przyciski okna). ⚠ **Zero zmian wizualnych** — czysty porządek, jedna iteracja | — |
 | 12 | **M3.3a** | Pasek zakładek — geometria, `Size.Row.Tab`, wskaźnik; **K9/K10 zostają** | — |
 | 13 | **M3.3b** | Dwa tryby + preferencje (`TabStripMode`, `TabStripMaxRows`) + wiersze w Settings Center | — |
 | 14 | **M3.3c** | Menu kontekstowe zakładki — 8 pozycji, **czwarte wejście do bramki** | — |

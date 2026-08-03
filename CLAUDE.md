@@ -1,4 +1,4 @@
-# EmberTern — Claude Code Context
+﻿# EmberTern — Claude Code Context
 
 A modern desktop developer workbench for Firebird database developers, built with **.NET 9 + Avalonia 12**. Target users: ERP and backend devs who work daily with SQL, procedures, triggers, metadata, and transactions. Design philosophy: **less features, better experience; workflow quality over feature count; transaction-aware by default**.
 
@@ -34,13 +34,13 @@ verbatim, in the archive below.
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
 | **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
-| **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0 + M1 + M2a + 🔒 M2b all COMPLETE and user-accepted (M2b closed 2026-08-02, 21 iterations). ⭐ M2c is UNDER WAY — the de-localization sweep; its step 0 (inventory) is closed and accepted.** ⭐⭐ **§18 is M2c's as-built: §18.0.2 the measurement that decides the sweep's mechanics · §18.0.5 the three ratified findings · §18.0.7 the 10-iteration plan · §18.0.8 rule R12 · §18.0.9 the seven documents measurement forced us to correct · §18.0.10 the step-0 closing summary (confirmed / refuted / ratified).** ⭐⭐ **§17 is the M2b CLOSING SUMMARY — read it before any further Polish work**: what shipped, the four architectural decisions, the **11 ratified rules R1–R11**, and the eight lessons that cost the most. The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
-| **`docs/design/color-language.md`** | **⭐⭐ THE COLOUR LANGUAGE — a PRODUCT document, accepted 2026-08-02; rollout under way — ⭐ step K1 delivered 2026-08-03, K2–K7 open.** The single source of truth for what colour means in EmberTern, meant to outlive Product Polish and govern every new feature. Four independent systems (rodzaj · akcja · tożsamość modułu · hierarchia przycisku), seven action roles R‑1…R‑7, six **named exceptions** (an exception with a written reason is the target state, not debt), a decision tree for colouring a NEW action, and a seven-step rollout plan (§11) under **R14** (*one step must be an obvious UX win on its own*). ⚠ Supersedes `product-polish.md` §7.5, whose "zmiany do wykonania" table was executed by M3.2b and **withdrawn in full**. | **Before touching any icon colour, and when adding any new action.** |
-| **`docs/design/product-polish-m3-handover.md`** | **⭐⭐ START HERE for the next Product Polish session — the single entry point into M3, self-contained.** State · scope M3.1–M3.4 + M3b · rules **R1–R14** · collision register K1–K11 · the per-iteration procedure · **17 traps** · the iteration plan. | At the start of every M3 session, in full. |
-| **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical.** Was the entry point into M2c. Rewritten 2026-08-02 after M2c's step 0 (the inventory) closed: current state · all three counters · the measured facts that overturned the plan (⭐ a bare `TextBlock` inherits **14**, so removing a local `FontSize` is NOT neutral · a value does not determine a role — 5 roles share 11 px) · the four buckets of the 605 declarations · **rules R1–R12** · the per-view migration procedure with the positively-worded role table · how to document an exception · what M2c must NOT do · the mandatory order (analysis → proposal → implementation → build → tests → smoke → docs → commit) · per-iteration exit criteria · 16 traps · the 10-iteration plan. | At the start of every M2c session, in full. |
-| **`docs/design/product-polish-m2b-handover.md`** | **🔒 CLOSED** — the M2b entry document, kept as the record of that etap's architecture. ⚠ Its "what next" and "open items" sections were superseded by `product-polish.md` §17.3/§17.5. | Historical only. |
+| **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0–M2c COMPLETE and user-accepted; M3 in progress (M3.1 ✅ · M3.2 ✅ · colour language 🔒 rolled out).** ⭐⭐ **§19 is M3's as-built — and §19.20 is its closing summary for the colour language: what shipped, rules R15–R17, traps 18–21, the four architectural decisions, and what stays open.** §17 (M2b closing summary) and §18 (M2c) are **historical** — read a specific subsection, never the whole thing. The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
+| **`docs/design/color-language.md`** | **⭐⭐ THE COLOUR LANGUAGE — a PRODUCT document. 🔒 Accepted 2026-08-02, ROLLED OUT IN FULL and visually accepted 2026-08-03; zero open questions.** From now on it is a **reference, not a plan** — it outlives Product Polish and governs every new feature. Four independent systems (rodzaj · akcja · tożsamość modułu · hierarchia przycisku), seven action roles R‑1…R‑7, **named exceptions** (an exception with a written reason is the target state, not debt), and **§6**, the decision tree for colouring a NEW action. ⛔⛔ **§0.5 is an overriding gate — before changing ANY colour: "will the user recognise the action FASTER?"; "no"/"don't know" ⇒ stop and propose.** ⚠ Supersedes `product-polish.md` §7.5 entirely. ⚠ §0.4 (R14 tempo) is closed and historical — superseded by R15. | **Whenever you add an action or touch a colour** (§6 + §0.5). |
+| **`docs/design/product-polish-m3-next-session.md`** | ⭐⭐ **THE STARTUP PROMPT for the next Product Polish session — paste it and go, no context reconstruction needed.** State · the exact next task (M3.2d) · the plan after it · rules R15–R17 · traps 18–21 · the mandatory order + the three test partitions · what is forbidden · what stays open. | **First, at the start of every M3 session.** |
+| **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
+| **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (289 entries, #1–#302), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (291 entries, #1–#304), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -427,285 +427,96 @@ noted.
 
 ## Current state
 
-- **🎨 PRODUCT POLISH — ACTIVE STAGE, NOW IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT
-  SESSION FROM
-  [docs/design/product-polish-m3-handover.md](docs/design/product-polish-m3-handover.md) + the new
-  [docs/design/color-language.md](docs/design/color-language.md) — the M2c handover below is CLOSED.**
-  Build 0/0; suite **7138** (7032 + 52 + 54); smoke clean. ⭐ **Pushed to both remotes 2026-08-03.**
-  **M3.1 (Status Bar 2.0) is CLOSED and accepted** — four sections, rail, transaction chip with elapsed
-  time, Debug/Trace chips, progress section + one reference operation (§19.0–§19.9).
-  **⭐⭐ M3.2 IS THE STAGE'S HARDEST LESSON AND IT IS ABOUT METHOD, NOT PIXELS.** Of four moves in
-  M3.2a (H‑3, stable toolbar layout) **one survived**; M3.2b (colour semantics) was **withdrawn in
-  full**. Every rejected change *worked* and removed a measured defect — and the user's diagnosis names
-  the mechanism: *"analiza jest bardzo dobra, pomiary są bardzo dobre, ale później próbujesz doprowadzić
-  regułę do logicznej konsekwencji, zamiast jeszcze raz spojrzeć na gotową aplikację."* ⛔ **Pułapka 17,
-  stronger than R8: a rule DESCRIBES what is already good; it is not a mandate to change everything that
-  does not fit it. An element that breaks the rule is often an exception that WORKS** (Comment/Uncomment
-  carried different colours *by the user's own earlier request*; M3.2b "fixed" that).
-  **⭐ Three ratified rules came out of it — R13, R14 and the reversed order of work:**
-  **R13** *nie rezerwujemy miejsca na element, który w danym kontekście nigdy się nie pojawi* (a hole
-  reads as a layout bug; a small shift does not) · **R14** *każdy krok musi być ewidentnym ulepszeniem
-  UX sam w sobie — „wolę pięć małych, oczywistych poprawek niż jedną dużą rewolucję"* · and **design
-  BEFORE deduction**: measure the whole product → design the language → get it accepted → only then
-  touch buttons.
-  **⭐⭐ THE OUTPUT IS A NEW PRODUCT DOCUMENT: [`docs/design/color-language.md`](docs/design/color-language.md)
-  — ACCEPTED; ROLLOUT UNDER WAY (K1 done, K2–K7 open).** Its core is that colour in an IDE answers **four** different
-  questions in disjoint contexts, so they are not contradictory: **S1 rodzaj** (`IconColor_*`) ·
-  **S2 akcja** (roles R‑1…R‑7) · **S3 tożsamość modułu** (state only, never a button) · **S4 hierarchia
-  przycisku** (`primary` + `OnAccentBrush` = contrast, *not* semantics). ⭐ Separating S4 dissolves the
-  measured "Uruchom has 4 colours": Execute on `primary` and Execute as an icon are **one role in two
-  variants**. ⚠ Measured and decisive: **442 `SvgIcon` in views, 39 coloured — 91 % of the app is already
-  neutral**, so the defect was never *too many colours* but **the same action changing colour between
-  modules** (Uruchom 4 · Usuń trwale 3 · Odśwież 3 · Edytuj 3). Implementation is **§11: seven small
-  steps, one per iteration**, starting with the visually **neutral** K1.
-  **⭐ K1 IS DELIVERED (2026-08-03, `product-polish.md` §19.15) — role R‑1 "Uruchom" now has its own
-  `ActionRunBrush`, on Execute procedure / Execute function / Start trace; ZERO visual change (the
-  value is deliberately identical to `SuccessIconColor` in both themes).** ⭐ It is a **new
-  `ActionRunColor`, not an alias** over `SuccessIconColor` — and that is the whole of decision W4: an
-  alias would mean *"Run IS the success colour"*, so retuning Commit's green would silently move
-  Execute too. ⛔ **The pin does NOT assert the two are equal**, although today they are: that equality
-  is temporary *by design* (§7.3), so pinning it would be a test forbidding the very change the token
-  exists for — *a value meant to diverge is a measurement with a date, not an assertion*.
-  **⭐ K2 IS DELIVERED (2026-08-03, §19.16) and awaits the user's visual QA — the first VISUAL step.**
-  Three yellow deletes went red (Delete connection · Delete saved query · Clear all queries); the app
-  now has **no yellow delete button left**. ⭐ The decisive measurement was not the catalog: **each
-  button disagreed with its OWN context menu** (the tree's `Delete` and the query row's delete were
-  already red), and **the code already classified all three as destruction** (`IsDestructive = true`) —
-  only the colour dissented. ⚠ Yellow was a residue of an **abandoned** scheme, not a deliberate
-  exception: `Colors.axaml`'s legend said *"Warning=delete"* long after 8 editors and 131 menu items
-  had gone red — **gotcha #284's shape in a comment instead of a string**, so the legend was replaced
-  by a pointer to `color-language.md` as the one authority. Guarded by
-  `DestructiveIcon_AlwaysCarriesTheDangerToken` (scans view SOURCE; verified by planting a violation;
-  carries its own `scanned >= 8` backstop because a regex that stopped matching passes forever).
-  **⛔⛔ NEW OVERRIDING GATE, RATIFIED 2026-08-03 — `color-language.md` §0.5, and it outranks §6 AND
-  R14: before changing ANY colour, answer "will the user recognise the action FASTER because of this?"
-  — "no" or "don't know" means STOP and come back with a proposal.** Conformance to a role is
-  necessary, never sufficient; *"it now matches the language"* is **not an answer to that question** —
-  it was M3.2b's only justification. ⭐ And if a rule turns out to make the UX worse, **the rule in the
-  document gets fixed, not the implementation defended.**
-  **⭐⭐ K3–K7 ARE DELIVERED TOO (2026-08-03, §19.17) — THE COLOUR LANGUAGE IS FULLY ROLLED OUT; the whole
-  stage now awaits ONE full visual QA.** The user changed the working mode on accepting K2: small
-  step-by-step iterations held *while the language was being built*; once accepted, K2–K7 ran as **one
-  implementation**, returning only when the document does not decide, a real design conflict appears, or
-  a change would worsen the product despite conforming. ⛔ R14 no longer governs **tempo**; its content
-  lives on in §0.5.
-  **⚠⚠ MEASUREMENT OVERTURNED THREE ROWS OF THE LANGUAGE'S OWN §8.2, and that is the iteration's most
-  transferable finding: the §20 inventory counted `SvgIcon` BY TOKEN, so a STATE glyph landed in the
-  ACTIONS table.** "Edytuj / Dodaj (Procedure, Function)" are `UpdateChange`/`InsertChange` rows in a
-  change-summary card — messages, which §2 excludes; "Szukaj w widoku" is a glyph **inside a TextBox**,
-  where darkening it would make a decoration louder than its content. ⇒ **K5 dropped to zero sites and
-  K3 shrank 3 → 1.** ⭐ The rule: *a measurement by CARRIER (icon + token) cannot tell a role from a
-  state — only the context the element sits in can.*
-  **⭐ K6 turned out to be the opposite of its reputation.** The plan called it the biggest risk
-  ("touches the titlebar"); measured, it **strengthens** blue instead of greying the bar — in that same
-  strip blue carries R‑6 "entry into a tool" (5 buttons), and Refresh opens nothing, so one colour meant
-  two things. ⛔ Unlike M3.2b it does **not** touch the six module entries, which stay coloured.
-  **⭐ K7 came out visually NEUTRAL because §7.2's order was obeyed** — values first, references second.
-  The two tokens carried raw Material (`#4CAF50`/`#F44336`) **identical in both themes** with zero
-  consumers; they were given the **tuned `Success`/`Danger` pairs**, i.e. exactly what Commit and
-  Rollback already rendered. ⛔ No new hues were invented — that would be designing what the document
-  does not, and would risk the Light-contrast regression §7.2 warns about. Guarded by
-  `TransactionRoleBrush_IsTunedPerTheme`, which pins the **condition** (tuned per theme), never a value.
-  **⏸ ONE §8.2 ROW WAS DELIBERATELY NOT DONE — `Connect` (new O‑4).** The rule says R‑7 and is formally
-  right, but §0.5 answers *"don't know"*, which is a refusal: Connect is that strip's **primary action**
-  and blue is the only thing distinguishing it from Edit/Copy/Disconnect/Reconnect — removing it may
-  *slow* recognition, which is M3.2b's mechanism. ⚠ Telling detail: **§11 never numbered that row**
-  either. Also newly recorded: **O‑5** (Security Manager carries `IconColor_Role`, a *kind* colour, on
-  an R‑6 button). Both go to the §13.3 review, judged on the whole strip at once.
-  **⭐⭐ THE CLOSING SWEEP (§19.18) THEN SHUT ALL FIVE OPEN ITEMS — the language is now implemented in
-  FULL, and the user's framing is the lesson: *"chyba zostaliśmy zbyt zachowawczy… chcę mieć poczucie,
-  że język został wdrożony w całym produkcie, a nie w 90%."*** Five residues closed: **Security
-  Manager** (the user spotted it — the only R‑6 tool wearing an object-KIND colour; §1.2/3 says effect
-  beats kind) · **Connect** (O‑4) · **Debugger Continue** (O‑1) · **Uncomment ×4** (O‑2) · **Validate**
-  in Data Import (it carried the *same icon AND the same green* as Commit in one strip).
-  ⭐ **Two of those I had myself put on hold as "don't know", and both became decidable once the whole
-  STRIP was looked at rather than the single button** — Connect only after K6 left it the last
-  `AccentIconBrush` beside six `AccentBrush`; Continue once it was clear D15.2 wanted *emphasis*, not
-  blue specifically (blue predated the R‑1 token, and blue is the debugger's *identity* colour, which
-  W6 forbids on an action button). ⚠ That is the argument for §13.3 being its own step rather than the
-  sum of per-iteration acceptances.
-  ⚠⚠ **§9.1's own recommended option for Comment/Uncomment was measured and REFUTED**: `InfoIconColor`
-  `#5BA7D0` vs `AccentIconColor` `#5B9BD5` differ by 12 units on one channel — as an icon stroke they
-  are indistinguishable, so "a pair within one blue" would have erased the very exception (W‑1) it was
-  meant to protect. Shipped as **blue vs neutral**; ⛔ **W‑1 itself stands** — only the pair changed,
-  because red on an action undone by one Ctrl+Z weakened exactly the red K2 had just built.
-  ⭐ **Final measurement: 230 `SvgIcon` in views, 81 coloured, and NOT ONE action button outside the
-  language.** What is left is roles R‑1…R‑7, two named exceptions (W‑1, W‑3), `IconColor_*` (S1),
-  `OnAccentBrush` (S4), plus states and decorations §2 excludes — the change-summary rows, the "no
-  warnings" state, chevrons and the search glyph inside a TextBox. ⚠ `AccentIconBrush`/`InfoIconBrush`
-  are **not orphans** and were not liquidated (decision DC stands): the first paints the debugger state
-  chip, the Quick Fix bulb and `DebuggerIcon`; the second carries Comment.
-  ⭐ **The lesson, confirmed a third time: conformance to the document is not the same as coherence of
-  the product** — all five residues were "compliant" in the sense that nobody had recorded them as
-  defects, and every one of them is visible at a glance on a finished screen.
-  **⭐ ONE ACCEPTANCE FIX CLOSED THE STAGE (§19.19) — the status bar's connection block now shares ONE
-  vertical axis, and its lesson is about reading a prior measurement's SCOPE.** The user reported the
-  text sitting a few px below the green dot. That exact spot carries a very firm §19.8 comment —
-  *"⛔⛔ NIE PRÓBUJ WYŚRODKOWAĆ TEGO RUNU W PIONIE"* — backed by three measurements, and treating it as
-  the answer would have been wrong: **it answers a different question** (endpoint ↔ name, two runs
-  INSIDE one `TextBlock`), while the report was about **adjacent row elements**. ⭐ Measured: dot
-  **7.50** · text **8.00** · badge **8.50** — three elements, three axes. The cause is arithmetic, not
-  typographic: `VerticalAlignment="Center"` computes `(16 − h) / 2`, so an **odd-height** child lands on
-  a half pixel and `UseLayoutRounding` snaps **each element separately** — the dot (7) up, the badge
-  (13) down, while the text (16 = full row height) does not move at all. Fixed with
-  **`UseLayoutRounding="False"` on the dot and the badge**, so **no size changes** (the report said the
-  dot looked right — the defect was position, not size); ⛔ not by resizing (7→8, 13→14) and ⛔ not by a
-  margin (a nudge fixes one DPI and breaks the rest). ⭐ Same precedent as `RadioButton`'s
-  `PART_MarkArea`: snapping helps a **straight edge** and has nothing to offer a **circle**.
-  **⛔⛔ THAT FIX WAS NOT ENOUGH, AND THE SECOND ACCEPTANCE IS THE STAGE'S PUREST R8 — this time against
-  the TOOL, not a rule.** The user: *"użytkownik nie patrzy na środki geometryczne elementów — patrzy
-  na efekt optyczny… potraktuj pomiary jako narzędzie diagnostyczne, a nie kryterium zakończenia
-  zadania."* I had aligned **box** centres; the test was green and the screen was still wrong.
-  ⭐ **Why a box lies: a `TextBlock`'s height is the LINE HEIGHT, not the height of the ink.** The
-  baseline sits at 11.83 of 16, so the bottom ~4 px is descender space — **empty here, because
-  `Szkoleniowa · localhost:3050` has no descenders at all.** The ink therefore sits high in the ascent
-  and **low in the box**: its mass centre lands near **9.0** while the dot — whose ink *is* its box —
-  sits at **8.0**. Fixed with a `TranslateTransform Y="-1"` on the text (a `RenderTransform`, not a
-  margin: it does not touch layout, so it cannot interact with box rounding or move its neighbours).
-  ⚠⚠ **`UseLayoutRounding="False"` was REVERTED on the badge — it was making things worse, and the
-  reason generalises: the dot is the only element in that row whose INK IS ITS BOX**, so for it the
-  geometric fix is also the optical one; the badge holds caps with padding, so its ink sits *high* in
-  its box and the downward snap that "broke" the geometry was in fact compensating. ⭐ **That attribute
-  is a tool for an element that IS its own ink; for an element with text inside, look at the ink.**
-  ⭐ **The pin was NARROWED because it proved the wrong thing** — the three-box-centre version passed
-  while the screen was wrong, and ⛔ *a test that goes green on a bad screen is worse than no test: it
-  closes the question instead of opening it.* It is now `StatusBarConnectionDot_SitsOnTheRowAxis`,
-  covering only the dot; ⛔ do not "strengthen" it back to the text and badge, whose alignment is an
-  optical correction whose acceptance criterion is the screen.
-  ⚠ **`product-polish.md` §7.5's "zmiany do wykonania" table NO LONGER APPLIES** — M3.2b executed it to
-  the letter and was withdrawn; the six titlebar tools **stay coloured** (role R‑6, "wejście do
-  narzędzia"), which that table did not know.
-  Historical M2c/M2b record follows.
-  M0 + M1 + M2a + 🔒 M2b ALL COMPLETE
-  AND USER-ACCEPTED (M2b closed 2026-08-02 — 21 iterations, 14 commits). ⭐⭐ **M2c IS CLOSED AND
-  USER-ACCEPTED (2026-08-02)** — step 0 + iterations 1–9 + the baseline close-out + one acceptance fix
-  (§18.11: a multiline `TextBox` starts its text at the TOP; the defect was **inherited from M2b's
-  centre-everything rule**, not caused by the sweep — which is DoD 6 confirmed from the other side). Counters, measured: **`FontSize` 605 → 43** ·
-  **`CornerRadius` 37 → 19** · `FontFamily` 81 (out of scope by decision). ⭐ **All 62 remaining values
-  are deliberate exceptions with the reason written beside them** — that, not a number, is R12's exit
-  condition. Closing summary: `product-polish.md` **§18.10**.
-  ⭐ **The distribution of those 62 is the stage's real finding: an exception appears exactly where a view
-  made its OWN design decision, never where the code is old or the file large.** The eight object editors
-  went 141 → **0** and `MainWindow` + `Controls/` 33 → **0** (no own scale); the debugger, Data Import,
-  Performance and the three monitors went 285 → **30** (own toolbars, cards, chips, glyphs, densities).
-  ⚠⚠ **Three times the measuring tool proved less accurate than assumed** — a partition filter naming a
-  class that no longer exists (suite 7088 → **7087**), the counter scoring **prose in a comment**, and the
-  counter scoring a **setter that reads the catalog** exactly like a literal (fixed: the second half of
-  M2b step 12's correction). Each was invisible under a green build and each surfaced only when the
-  migration reached its boundary.**
-  **⭐⭐ `product-polish.md` §18.R IS THE COLLISION REGISTER AND IT IS THE STAGE'S SECOND OUTPUT.** The
-  recurring finding, hit in every iteration so far, is *a role that fits by FUNCTION but carries a
-  different NUMBER* — the debugger toolbar is 11 while `Text.Toolbar` is 12; several section headers are
-  12 SemiBold while `Text.SectionHeader` is 11; an `Expander` header is 26 while `ExpanderMinHeight` maps
-  to 24. ⛔ **The catalog is FROZEN** (user, 2026-08-02): *"M2c does not design a new typography system —
-  it only migrates the application onto the system accepted in M2a."* Such a case stays a **local value
-  with a written reason** and is added to §18.R **without asking**; the whole list is decided together at
-  the §13.3 review, on the complete picture rather than one view.
-  **⭐⭐ START THE NEXT SESSION FROM
-  [docs/design/product-polish-m2c-handover.md](docs/design/product-polish-m2c-handover.md) — it was
-  rewritten after step 0 and is now SELF-CONTAINED (state · counters · R1–R12 · migration procedure ·
-  role table · traps · the 10-iteration plan). `product-polish.md` §18 is its as-built.**
-  **⭐⭐ STEP 0 OVERTURNED FIVE ASSUMPTIONS THE STAGE WAS ABOUT TO REST ON (§18.0.10/B) — do not
-  re-derive them:** (1) ⭐⭐ **a bare `TextBlock` inherits 14, not 12** (measured; the comment in
-  `DesignTokenApplicationTests` said 12 and was corrected) ⇒ **deleting a local `FontSize` from a
-  `TextBlock` is NOT neutral, it jumps 11 → 14**, so the sweep has **two different moves**: DELETE only
-  where an M2b style already supplies the identical value (77 sites), otherwise REPLACE with a
-  `{DynamicResource}` role · (2) ⭐⭐ **a value does not determine a role** — the 605 declarations are only
-  seven numbers, but **five roles share 11 px and two share 12**, and those two numbers hold 500 of the
-  605, so a mechanical substitution would keep the number and write the WRONG role — invisible on screen
-  *and* invisible to the test · (3) **`FontFamily` cannot be driven to zero**: `Font.Code` carries
-  `Cascadia **Mono**` while 65 of 81 sites carry `Cascadia **Code**`, and **not one of the 81 strings is
-  identical to the token**, so the "swap only what already matches" rule yields zero — `FontFamily` left
-  M2c's scope entirely and `Font.Code` stays a **consumer-less token by decision** · (4) **§4.2.2's "every
-  4 / 4.5 / 5 / 6 is a chip" is false in both halves** — 4.5/5/6 are **geometry** (circles `10×10 r=5`,
-  progress-bar capsules `h=12 r=6`: radius = half the side) and the 4s are mostly **cards**; ⛔ we do not
-  tokenize geometry that comes out of arithmetic, so **only the 17 × `CornerRadius="3"` migrate** ·
-  (5) **a size that looks like drift can be the container's decision** — the six `ae:TextEditor` at 12 px
-  sit **inside grid rows**, which is §17.2/2 ("the container decides size"), not drift.
-  **⭐⭐ R12 — RATIFIED 2026-08-02, JOINS R1–R11 AND OUTLIVES THIS STAGE:** *"the goal is removing
-  **unjustified** local values, NOT zeroing the counter."* It extends R8 one level (**the counter is also
-  only a tool**), and its load-bearing corollary is: **⛔ A WRONG ROLE IS WORSE THAN A LOCAL VALUE** — a
-  local value is visible as debt and the guard counts it, whereas a wrong role *pretends the debt is
-  gone*, passes the test, lowers the counter, and shifts a screen only at the first catalog change,
-  months later and far from its cause (gotcha #284's shape, one layer up). The exit condition is therefore
-  **a written reason beside every remaining value**, not a number. ⚠ Step 0 corrected **seven** documents
-  and comments in place (§18.0.9) on the user's directive: *"the document must reflect the product's
-  architecture, not force the product to satisfy earlier assumptions that measurement has refuted."*
-  **⭐⭐ `product-polish.md` §17 IS THE M2b CLOSING SUMMARY — read it before any further Polish work.**
-  It holds what shipped (§17.1), the four architectural decisions (§17.2), the **11 ratified rules
-  R1–R11** (§17.3 — ⛔ not to be re-opened), what the catalog gained and lost (§17.4), the **eight
-  lessons that cost the most** (§17.5) and the exit numbers (§17.6). §16 is the `FluentBridge` pattern;
-  §15 is the iteration record with its state table at §15.-1.
-  Spec (source of truth): `C:\Users\grzegorz.gronski\Desktop\Product Polish.mdown`.
-  **⭐⭐ M2b'S FOUR ARCHITECTURAL DECISIONS, ALL OF WHICH OUTLIVE THE STAGE:**
-  (1) **`FluentBridge`** — we do NOT restyle FluentTheme and do NOT copy its templates; we **repin it
-  onto our catalog**. Three routes: metrics → style setter · colours painted by template internals →
-  the Bridge · a value the template holds LOCALLY → **a resource alias**. ⛔ The Bridge is mapping
-  only, never a second token catalog (guarded by a test). A custom `ControlTemplate` needs **two
-  measured conditions** and exactly two controls qualify (`CheckBox`, `RadioButton`).
-  (2) **⭐ THE CONTAINER DECIDES SIZE, THE ELEMENT ACCEPTS IT** — one mechanism, five appearances:
-  grid-cell editor · `Expander` header · chrome strip · dialog footer · status bar.
-  (3) **⭐ A RULE MUST BE WRITTEN POSITIVELY.** *"Everything is X unless…"* always leaks — it leaked
-  twice, the second time as a layout **regression**: the base `Button`'s `MinWidth` silently grew the
-  metadata tree's expander arrow from 20 to 100 px, because **Avalonia clamps `Width` by `MinWidth`**.
-  (4) **⭐ HEIGHT COMES FROM CONTEXT, NEVER FROM A VARIANT** — the variant carries **colour**.
-  **⛔ THE RULES THE USER RATIFIED (R1–R11, §17.3) — DO NOT RE-LITIGATE.** The load-bearing ones:
-  **R5 colour may express an action's priority, SIZE MAY NOT** · **R7 never patch single screens — find
-  the Design System rule first** · **R8 the acceptance criterion is "does this look like a polished
-  commercial application?", and a measurement is a tool, not a closing argument** · R2 judge a control
-  in the complete set of states and in both themes · R3 a role is born from several consumers, never
-  one · R9 do not unify the Domain Picker's widths · R10 the SQL comment colour stays · R11
-  `Size.Row.Grid` is its own product decision, not a `CheckBox` fix.
-  **⚠ THE EIGHT LESSONS (§17.5) — the three that generalise furthest:** ⭐ **§5.1's arithmetic is
-  checked on the SUM, not on a term** (three slips; the third shipped and hid for five iterations) ·
-  ⭐ **a floor only equalises if it sits ABOVE the natural width of the labels it means to equalise**
-  (80 against "Cancel" at 98 was a dead letter that looked like a rule) · ⭐ **a type style reaches
-  inside a FOREIGN template, and it cuts both ways** (it gave `NumericUpDown`'s inner `TextBox` its
-  height for free, and it centred the `Expander`'s header).
-  **⭐ Audit items closed by M2b:** RB‑2 · RB‑3 · RB‑4 · H‑7 · H‑8 · H‑10 · M‑2 · spec §8.4 (DataGrid
-  Standard). **⚠ Deliberately left open:** **V‑1** (the SQL comment colour measures 4,14:1 — ratified
-  to stay, revisited in normal use) and **H‑1, which IS M2c**: **605 local `FontSize` / 81 `FontFamily`
-  / 37 `CornerRadius`** still override the catalog point by point. ⭐ The counter measures **local
-  values only** — a `{DynamicResource}` reference no longer counts, which is what makes M2c's exit
-  condition reachable at all (it previously scored the target state identically to the debt).
-  ⚠ **M2c's step 0 then narrowed H‑1's addressable scope, with reasons (§18.0.5, all three ratified):
-  `FontFamily`'s 81 are OUT of the stage entirely, only 17 of the 37 `CornerRadius` migrate, and ~28
-  `FontSize` have no role at their value and stay with a comment.** Under R12 that is the *result*, not
-  a shortfall — the measure of M2c is a written reason beside every remaining value.
-  **⛔ §13.3 IS STILL A QUALITY GATE THAT BLOCKS M4** — after M3 the four persistent surfaces are
-  reviewed *together, on a real database, in both themes*, for **visual reception, not document
-  compliance**. Anything that still looks ordinary despite green tests gets an M3.5 before migration.
-  ⚠ **R‑6 (DPI) stays open and is partly UNVERIFIABLE headlessly — do not report it as checked:**
-  `LayoutTransformControl` does **not** simulate DPI (it scales after layout, so bounds are identical
-  at 1,0–2,0) and `CaptureRenderedFrame()` returns **null** under `UseHeadlessDrawing`. Verify **150%
-  by eye**. ⭐ What that probe did yield: layout rounding snaps **each element separately** to the
-  device pixel — hence `UseLayoutRounding="False"` on `RadioButton`'s `PART_MarkArea` and deliberately
-  not on `CheckBox` (snapping helps a **straight edge** and has nothing to offer a circle).
-  ⚠ **Two views still carry a local `MinHeight="26"`** workaround for Fluent's chunky `Expander`
-  (`ProcedureDetailTabView`, `FunctionDetailTabView`). ⚠⚠ **This line called it "now-redundant" and that is
-  CORRECTED (M2c iteration 4, 2026-08-02 — `product-polish.md` §18.4.4): measured, `FluentBridge` maps
-  `ExpanderMinHeight` onto `Size.Control` = **24**, so deleting the local value drops the header by 2 px.**
-  It is M2c's *file* to touch, but the removal is **not neutral**, and M2c does not change appearance — so
-  the value stays with a reason in place and is entry **K7** in the §18.R collision register. "26 or 24 for
-  an Expander header" is a §13.3 decision.
+- **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
+  FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
+  (a ready-made startup prompt), then the handover it points at.**
+  Build 0/0; suite **7138** (7032 + 52 + 54); smoke clean. ⭐ **Tree clean, both remotes in sync
+  (2026-08-03) — nothing awaits push.** ⏸ **Next: M3.2d** (M‑1, 10 literals → `UiStrings`; purely
+  housekeeping, zero visual change), then M3.3 tab strip → M3.4 Metadata Explorer → M3b → ⛔ the §13.3
+  gate.
+  **Closed and not returning:** M3.1 (Status Bar 2.0, six iterations) · **H‑3** (stable titlebar
+  layout) · **H‑5** (Commit/Rollback on their own tokens) · **§7.5** (superseded by the colour
+  language) · 🔒 **the colour language itself — designed, ratified, rolled out across the whole product
+  and visually accepted** (K1–K7 + a closing sweep + one optical fix; `product-polish.md`
+  §19.15–§19.20). Measured on close: **230 `SvgIcon` in views, 81 coloured, not one action button
+  outside the language**, zero open questions.
+  **⭐⭐ THE STAGE'S HARDEST LESSON IS ABOUT METHOD, NOT PIXELS.** Of four moves in M3.2a **one
+  survived**; M3.2b was **withdrawn in full**. Every rejected change *worked* and removed a measured
+  defect — the user's diagnosis names the mechanism: *"analiza jest bardzo dobra, pomiary są bardzo
+  dobre, ale później próbujesz doprowadzić regułę do logicznej konsekwencji, zamiast jeszcze raz
+  spojrzeć na gotową aplikację."* ⛔ **Trap 17: a rule DESCRIBES what is already good; it is not a
+  mandate to change everything that does not fit it. An element that breaks the rule is often an
+  exception that WORKS.**
+  **⭐⭐ SEVENTEEN RATIFIED RULES (R1–R17) — handover §5 holds them all; six are load-bearing
+  everywhere:** **R5** colour may express an action's priority, SIZE MAY NOT · **R8** the acceptance
+  criterion is *"does this look like a polished commercial application?"* · **R13** never reserve space
+  for an element that cannot appear in that context · ⭐ **R15** *iteration size follows UNCERTAINTY,
+  not caution* — small steps while a design is forming, one pass once it is accepted; keeping
+  micro-iterations after the uncertainty is gone is its own failure mode · ⭐⭐ **R16** *a measurement is
+  a DIAGNOSTIC tool; the acceptance criterion is the screen*, with the hard corollary that **a test
+  which goes green on a bad screen is worse than no test** — such a test is NARROWED to what a machine
+  can judge, never "strengthened" · ⭐ **R17** *conformance to the document ≠ coherence of the product*;
+  a whole-surface review is its own step, never the sum of per-iteration acceptances.
+  **⭐ [docs/design/color-language.md](docs/design/color-language.md) IS NOW A REFERENCE DOCUMENT, NOT A
+  PLAN — read it whenever you add an action or touch a colour.** Colour in an IDE answers **four**
+  disjoint questions, which is why they never contradict: **S1 rodzaj** (`IconColor_*`) · **S2 akcja**
+  (roles R‑1…R‑7) · **S3 tożsamość modułu** (state only, never a button) · **S4 hierarchia przycisku**
+  (`primary` + `OnAccentBrush` = contrast, *not* semantics). ⛔⛔ **§0.5 is an overriding gate that
+  outranks the role table: before changing ANY colour, answer "will the user recognise the action
+  FASTER?" — "no" or "don't know" means STOP and come back with a proposal.** *"It now matches the
+  language"* is **not** an answer to that question — it was M3.2b's only justification. ⭐ And if a rule
+  turns out to make the UX worse, the **rule in the document gets fixed, not the implementation
+  defended**.
+  **⚠ Four traps this stage paid for, all wider than Product Polish** (handover §9; gotchas
+  **#303/#304**): ⭐⭐ **a text control's BOX is not its INK** — line height includes descent, which
+  descender-free text leaves empty, so box-centring still reads as misaligned against an element whose
+  ink *is* its box; correct it with a `RenderTransform` (never a margin), and note that
+  `UseLayoutRounding="False"` helps only an element that IS its own ink · ⭐ **a measurement by CARRIER
+  cannot tell a role from a state** (the icon inventory counted by token, so state glyphs landed in the
+  actions table and three planned rows evaporated) · ⭐ **read what a prior measurement was MEASURING
+  before using it as an answer** — the more emphatic the old comment, the stronger the pull to treat it
+  as closed · ⚠ **a stale comment teaches the wrong thing exactly like a stale string**
+  (`Colors.axaml`'s "Warning=delete" legend outlived the change it described and generated the whole
+  drift K2 had to undo — gotcha #284's shape in prose).
+  **⭐ Four architectural decisions from the colour rollout that outlive it:** a role gets its **own
+  value, never an alias** (an alias re-couples what was just uncoupled, silently), and **a value meant
+  to diverge is a measurement with a date, not an assertion** · an optical correction goes through
+  `RenderTransform` · when moving a role onto its own token, **give the token per-theme values BEFORE
+  repointing consumers** (that is what made K7 visually neutral instead of a contrast regression) ·
+  `UseLayoutRounding="False"` is for an element that is its own ink.
+  **⏸ Still open, each with a home:** **DC** (retiring `AccentIconBrush`/`InfoIconBrush` → M4.3/M5;
+  ⚠ both still have consumers and are **not** orphans) · the **K1–K11 collision register** (§18.R → the
+  §13.3 gate) · **V‑1** (the SQL comment colour, ratified to stay) · **R‑6 (DPI)** — ⚠ partly
+  **unverifiable headlessly**, check 150% by eye.
+  ⛔ **§13.3 IS A QUALITY GATE THAT BLOCKS M4** — after M3 the four persistent surfaces are reviewed
+  *together, on a real database, in both themes*, for **visual reception, not document compliance**.
+  ⭐ R17 raised its weight: the colour language's closing sweep found two residues that became decidable
+  only when the whole strip was looked at at once.
+  **⭐ THREE PRINCIPLES THAT OUTRANK THE CATALOG:** **§0.1 Persistent UI** — Status Bar, Toolbar, tab
+  strip, Metadata Explorer, DataGrid, base controls and context menus beat screens opened once a day;
+  governs *order and effort, not scope*. **§0.1.1 tokens are a means, not the end** — ⛔ never report a
+  stage done on green tests alone. **§0.1.2 Application Chrome is ONE surface, not four components.**
   **⭐ RATIFIED (D1–D12), do not re-litigate:** control heights **24 / 22 / 28** · **Cascadia Mono** ·
   app name + version **removed** from the status bar · progress infrastructure (M3.1) split from wiring
   operations (M3b) · **two tab-strip modes**, multi-row default, row limit 1–10 default 3, only the
   strip scrolls · ⛔ **no `MaxWidth`/ellipsis on tabs** — measured refutation: `XXX_GG_WYSTCECHKART_AU99`
-  and `…_BU99` differ at **character 20**, so truncation renders them identically; DB object names share
-  prefixes by nature and the distinguishing part is at the END · Metadata Explorer unchanged (a
-  decision, not debt) · Dependencies trees (18 `TreeView` in 9 editors) migrate for **consistency, not
-  performance**, onto a new shared `TreeListView` — **never onto `SidebarFlatController`**, which exists
-  for scale it does not need.
-  **⭐ THREE PRINCIPLES THAT OUTRANK THE CATALOG:** **§0.1 Persistent UI** — Status Bar, Toolbar, tab
-  strip, Metadata Explorer, DataGrid, base controls, context menus beat screens opened once a day;
-  governs *order and effort, not scope*. **§0.1.1 tokens are a means, not the end** — ⛔ never report a
-  stage done on green tests alone. **§0.1.2 Application Chrome is ONE surface, not four components.**
+  and `…_BU99` differ at **character 20**, so truncation renders them identically · Metadata Explorer
+  unchanged (a decision, not debt) · Dependencies trees migrate for **consistency, not performance**,
+  onto a shared `TreeListView` — **never onto `SidebarFlatController`**.
   ⚠ Tab-strip preferences are **additive — `CurrentSchemaVersion` STAYS 2**, and `TabStripMaxRows` is a
-  numeric preference, so the whole settings-center §17.4/§17.4a pattern applies (`PreferenceRange`,
+  numeric preference, so the settings-center §17.4/§17.4a pattern applies (`PreferenceRange`,
   blur-or-Enter commit, digits-only on the tunnel, and ⚠⚠ **the control carries its ROW as
-  `DataContext`** — on the page's it types correctly and persists nothing).
-
+  `DataContext`**).
+  **Earlier sub-stages (M0–M2c) — one line each; detail lives in `product-polish.md`:** **M2a** built
+  the catalog (`Tokens.axaml`, `Typography.axaml`) with zero visual change; **M2b** switched the base
+  controls onto it over 21 iterations and produced the **`FluentBridge`** pattern plus four
+  architectural decisions (⛔ the Bridge is mapping only · **the container decides size, the element
+  accepts it** · **a rule must be written POSITIVELY** · **height comes from context, the variant
+  carries colour**); **M2c** removed what the catalog blocked — `FontSize` 605 → 43, `CornerRadius`
+  37 → 19, **62 deliberate exceptions each with its reason written beside it** (R12), appearance
+  unchanged. ⚠ Two views still carry a local `MinHeight="26"` for Fluent's chunky `Expander`
+  (`ProcedureDetailTabView`, `FunctionDetailTabView`) — **removing it is NOT neutral** (the Bridge maps
+  `ExpanderMinHeight` to 24), so it stays with a reason as register entry **K7**.
 - **🐞 ET0003 NA NAZWIE GENERATORA W `GEN_ID(…)` — FIXED 2026-08-01 (minimal bugfix, awaits the user's
   confirmation in the running app).** `v = GEN_ID(gen_bomitem, 1);` w ciele PSQL zgłaszało **ET0003
   UnresolvedVariable** na istniejącym generatorze. Build 0/0; suite **7057** green (6989 + 14 + 54, up 17).
@@ -3374,13 +3185,12 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7088 as of 2026-08-02**
-  (Product Polish M2c closed; the whole stage added exactly one test — the multiline-field pin, §18.11).
-  Green in the three documented partitions (**7000 + 54 + 34**).
-  ⚠⚠ **This number is accidentally equal to the WRONG one this same line carried earlier on 2026-08-02, and
-  the reason is different.** Then, 7088 came from a partition filter naming a class that no longer exists and
-  the measured state was **7087** (`product-polish.md` §18.1.6). Now it is 7087 + 1 real test. Stated
-  explicitly so the next reader does not read that correction as reverted.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7138 as of 2026-08-03**
+  (Product Polish M3 through the colour-language rollout). Green in the three documented partitions
+  (**7032 + 52 + 54**).
+  ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
+  partition filter named a class that no longer existed (so the total read one too high, `product-polish.md`
+  §18.1.6), and once because the sub-stage's own numbers moved under it. **Re-measure before quoting it.**
   **⚠⚠ THIS LINE SAID 7088 / "54 + 34" AND THE ARITHMETIC WAS NEVER MEASURED — corrected 2026-08-02 (M2c
   iteration 1, `product-polish.md` §18.1.6), verified on a clean `HEAD`.** The cause is the next paragraph's
   own class list: it named **`ContextMenuPresentationTests`**, a class that **no longer exists** — the Keyboard
@@ -3395,13 +3205,15 @@ noted.
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition holds **four** classes — measured, not listed from memory
+  four times its own count. ⚠ The headless partition holds **five** classes — measured, not listed from memory
   (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `BrandingPresentationTests` +
-  `DesignTokenApplicationTests`), all in
+  `DesignTokenApplicationTests` + `TabStripPresentationTests`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
-  (#94/#226/#286). The partition filter is the four class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests"`
-  and its inverse with `|`.
+  (#94/#226/#286). The partition filter is those class names excluded / included:
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests"`
+  and its inverse with `|`. ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
+  that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
+  criterion for adding a class: **does it construct Avalonia controls?**
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
   with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,
   ~9 s) and the other four together (21 green, ~2 s). Both were clean that way on the same commit where a
@@ -4476,7 +4288,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (289 entries, #1–#302), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (291 entries, #1–#304), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

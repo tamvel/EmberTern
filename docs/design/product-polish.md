@@ -6120,6 +6120,71 @@ Build 0/0 · **7138** zielony w trzech partycjach (**7032 + 52 + 54**) · smoke 
 
 ---
 
+### §19.20 🔒 PODSUMOWANIE ZAMYKAJĄCE — język kolorów wdrożony i odebrany (2026-08-03)
+
+> **Czytaj to przed jakąkolwiek dalszą pracą nad M3.** Zastępuje potrzebę czytania §19.13–§19.19
+> w całości.
+
+#### §19.20.1 Co zostało dostarczone
+
+| | |
+|---|---|
+| **Projekt** | [`color-language.md`](color-language.md) — dokument **produktu**, nie etapu; obowiązuje przy każdej nowej funkcji |
+| **Wdrożenie** | K1 (§19.15) · K2 (§19.16) · K3–K7 (§19.17) · przegląd domykający (§19.18) · poprawka odbiorcza paska statusu (§19.19) |
+| **Stan** | **230 `SvgIcon` w widokach, 81 z kolorem, ani jeden przycisk akcji poza językiem.** Zero otwartych pytań O‑1…O‑5 |
+| **Nowe tokeny** | `ActionRunColor`/`Brush` (R‑1) · wartości per motyw dla `CommitButtonForeground`/`RollbackButtonForeground` (R‑2/R‑3) |
+| **Strażnicy** | `DestructiveIcon_AlwaysCarriesTheDangerToken` · `TransactionRoleBrush_IsTunedPerTheme` · `StatusBarConnectionDot_SitsOnTheRowAxis` |
+| **Odbiór** | ✅ użytkownik, 2026-08-03. Wypchnięte na oba remote'y |
+
+#### §19.20.2 ⭐⭐ Trzy nowe reguły — R15, R16, R17
+
+Wszystkie trzy padły z ust użytkownika w tej sesji i **dołączają do R1–R14** (handover §5).
+
+| # | Reguła | Skąd |
+|---|---|---|
+| **R15** | ⭐ **Wielkość iteracji idzie za NIEPEWNOŚCIĄ, nie za ostrożnością.** Drobne kroki, dopóki projekt się formuje; jeden przebieg, gdy jest zaakceptowany | *„Nie chcę dalej pracować w tak drobnych iteracjach, zaczyna nas to bardziej spowalniać niż pomagać"* — po akceptacji `color-language.md` |
+| **R16** | ⭐⭐ **Pomiar jest narzędziem DIAGNOSTYCZNYM; kryterium odbioru jest ekran.** Konsekwencja twarda: **test, który świeci na zielono przy złym wyglądzie, jest GORSZY niż brak testu** — zamyka temat zamiast go otworzyć | *„Użytkownik nie patrzy na środki geometryczne elementów — patrzy na efekt optyczny… potraktuj pomiary jako narzędzie diagnostyczne, a nie kryterium zakończenia zadania"* (§19.19.4) |
+| **R17** | ⭐ **Zgodność z dokumentem ≠ spójność produktu.** Przegląd całej powierzchni jest **osobnym krokiem**, nigdy sumą odbiorów pojedynczych iteracji | *„Chcę jeszcze raz przejrzeć całość pod kątem spójności produktu, a nie tylko zgodności z dokumentem"* (§19.18) |
+
+⚠ **R16 jest rozszerzeniem R8 na NARZĘDZIA**, nie jego powtórzeniem: R8 mówił, że pomiar nie jest
+argumentem końcowym dla *reguły*; R16 mówi to samo o *teście*, który tę regułę pilnuje.
+
+#### §19.20.3 ⚠ Cztery pułapki, za które ta sesja zapłaciła
+
+| # | Pułapka | Koszt |
+|---|---|---|
+| **18** | ⭐⭐ **Pudełko ≠ farba.** Wysokość `TextBlocka` to INTERLINIA; tekst bez znaków schodzących zostawia dolne ~4 px puste, więc farba leży nisko w pudełku. Wyrównanie pudełek zostawia widoczny rozjazd | dwie rundy odbioru na jednej poprawce (§19.19) |
+| **19** | ⭐ **Pomiar po NOŚNIKU nie odróżnia roli od stanu.** Inwentarz zliczał `SvgIcon` po tokenie, więc glif STANU trafił do tabeli AKCJI — trzy wiersze §8.2 nie przetrwały dokładniejszego sprawdzenia | K5 spadł do zera miejsc, K3 z 3 do 1 (§19.17.2) |
+| **20** | ⭐ **Zakres wcześniejszego pomiaru trzeba przeczytać, zanim się go użyje jako odpowiedzi.** Stanowcze „⛔⛔ NIE PRÓBUJ" z §19.8 dotyczyło *innego pytania* (runy między sobą), a wyglądało na zamknięcie tematu | o mały włos odesłanie użytkownika z cytatem zamiast poprawki (§19.19.1) |
+| **21** | ⚠ **Nieaktualny komentarz uczy nieprawdy dokładnie tak jak nieaktualny string.** Legenda „Warning=delete" w `Colors.axaml` przeżyła zmianę, którą opisywała, i **wygenerowała cały dryf** naprawiany w K2 | kształt gotchy #284, tylko w komentarzu (§19.16.2) |
+
+#### §19.20.4 ⭐ Decyzje architektoniczne, które przeżyją ten etap
+
+1. ⭐⭐ **Rola dostaje WŁASNĄ WARTOŚĆ, nigdy aliasu** — nawet jeśli dziś jest identyczna z inną
+   (`ActionRunColor` vs `SuccessIconColor`, K1). Alias re‑sprzęga to, co właśnie rozsprzęgnięto, i robi
+   to **po cichu**. Konsekwencja dla testów: **wartość, która ma się rozejść, nie jest asercją — jest
+   pomiarem z datą.**
+2. ⭐ **`UseLayoutRounding="False"` jest narzędziem dla elementu, który JEST swoją farbą** (koło, tło).
+   Dla elementu z tekstem w środku trzeba patrzeć na farbę, nie na pudełko (§19.19.4).
+3. ⭐ **Korekta optyczna idzie przez `RenderTransform`, nie przez margines** — nie rusza układu, więc
+   nie wchodzi w interakcję z zaokrąglaniem i nie przesuwa sąsiadów.
+4. ⭐ **Kolejność „wartości przed odwołaniami"** przy przenoszeniu roli na własny token (§7.2 → K7):
+   nadanie wartości per motyw PRZED podmianą konsumentów sprawiło, że krok wyszedł **neutralny
+   wizualnie** zamiast wnieść regres kontrastu.
+
+#### §19.20.5 ⏸ Co ten pod‑etap ZOSTAWIA otwarte
+
+⭐ **Nic z języka kolorów.** Otwarte pozostają wyłącznie rzeczy, które nigdy do niego nie należały:
+
+* **DC** — likwidacja `AccentIconBrush` / `InfoIconBrush` → **M4.3/M5**. ⚠ Oba tokeny **mają
+  konsumentów** i nie są sierotami (chip debuggera, żarówka Quick Fix, `DebuggerIcon`, Comment).
+* **§13.3** — brama jakości po M3, gdzie cztery powierzchnie ogląda się **jednocześnie**. ⭐ Po R17
+  jest to krok tym ważniejszy: przegląd domykający języka pokazał, że **dwie pozostałości stały się
+  rozstrzygalne dopiero, gdy patrzyło się na cały pasek naraz**.
+* **Rejestr kolizji K1–K11** (§18.R) — nadal czeka na §13.3, bez zmian.
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:
