@@ -370,3 +370,30 @@ roboczej, a nie mechanizm metadanych.
 2. **Warstwa 3** — uzgodnić prefetch z `RefreshAsync` (martwa gałąź `LoadCountAsync`), kategoria `Domain`
    (79 ms, skan `RDB$FIELDS`), kategoria `User` (odpytuje bazę bezpieczeństwa).
 3. **Koszt startu** — zmierzyć na realnej bazie instrumentem z §6 i dopiero wtedy decydować.
+
+### 7.6. ⚠⚠ ŚCIEŻKA, KTÓREJ TEN DOKUMENT NIE ZMIERZYŁ — rozwinięcie KLIKNIĘCIEM (dopisane 2026-08-03)
+
+> Powód dopisania: użytkownik zgłosił rzadkie (2–3 razy przez cały okres używania) **zawieszenie
+> aplikacji przy rozwijaniu dużej kategorii**, poprzedzone tym, że **drzewo samo przewija się w dół**.
+> Pełny zapis zgłoszenia i plan sprawdzenia: `product-polish-m3-handover.md` **§3.7a**.
+
+⭐ **§2 tego dokumentu mierzył `OnChildrenChanged`** — czyli ścieżkę, którą idzie `SetLeaves` przy
+ŁADOWANIU i ODŚWIEŻANIU kategorii. To ona była Θ(N²) i to ją naprawiła Warstwa 1.
+
+⚠ **Istnieje druga ścieżka i nie została zmierzona:** `SidebarFlatController.OnExpandedChanged`, którą
+idzie **rozwinięcie kliknięciem** na kategorii **już załadowanej**. Ona również wstawia liście
+**pojedynczo**, a strażnik zbiorczy jej **nie obejmuje — pomija ją** (`if (_suspendDepth > 0) return;`),
+bo przy operacjach zbiorczych projekcję i tak domyka `EndUpdate → Rebuild`.
+
+**Szacowany koszt (do zweryfikowania pomiarem, nie przyjmować na wiarę):**
+
+| | `OnChildrenChanged` przed Warstwą 1 | `OnExpandedChanged` (dziś) |
+|---|---|---|
+| powiadomienia `CollectionChanged` | **Θ(N²)** — 5 760 000 przy N=2 400 | **Θ(N)** — po jednym na liść |
+| przesunięcia w `List<T>` | Θ(N²) | **Θ(N × ogon)** — każdy `Insert` przesuwa to, co stoi ZA kategorią |
+
+⭐ Czyli **wyraźnie taniej niż naprawiony defekt, ale nieporównanie drożej niż jedna `Rebuild`.**
+⛔ **Nie „naprawiać" tego przed pomiarem.** Może się okazać, że koszt jest pomijalny, a przyczyną
+zgłoszonego zawieszenia jest co innego — kotwiczenie przewijania w wirtualizującym `ListBox`ie albo
+`Dispatcher.Post` w `MetadataNodeViewModel.OnIsExpandedChanged`. **Instrument istnieje**
+(`tools/probes/MetadataPerfProbe`, schemat 2 400 tabel); brakuje przypadku „rozwiń kliknięciem".

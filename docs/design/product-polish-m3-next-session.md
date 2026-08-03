@@ -42,6 +42,7 @@ podsekcję) · handoverów M2a/M2b/M2c.
 | **Smoke** | czysty |
 | **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅** |
 | ⭐⭐ **START** | **M3.4a — Metadata Explorer, wiersz drzewa** (pozycja 15 w planie §10 handovera) |
+| ⚠⚠ **CHECKLISTA M3.4** | Trzy pozycje dołożone przez użytkownika przed startem (**§3.3** + handover §3.7a): rzadkie **zawieszenie drzewa** przy rozwijaniu dużej kategorii · pytanie, **czy dzieli mechanizm z zawieszającym się testem** · **krótki przegląd wydajności** rozwijania. ⭐ Jest już zmierzony kandydat na mechanizm — przeczytaj §3.3(a) **zanim** zaczniesz cokolwiek zmieniać |
 
 ### 2.1 Co jest zamknięte i nie wraca
 
@@ -79,7 +80,45 @@ M3.1a już dostarczyła (§19.22.1). Konkretnie zmierz:
 * czy `Size.Icon` (14) jest tam literałem — od M3.3a ta rola ma **jednego** konsumenta przy **64**
   literałach w aplikacji; drzewo jest naturalnym drugim, ale ⛔ **sweep app‑wide to nie ten etap**.
 
-### 3.3 Po M3.4a
+### 3.3 ⚠⚠ TRZY DODATKOWE POZYCJE CHECKLISTY — zgłoszone przez użytkownika przed startem
+
+> Pełny zapis: **handover §3.7a**. ⭐ To **nie jest nowe wymaganie funkcjonalne**, tylko checklista do
+> przejścia **przy okazji**. ⛔ Nie zamieniać w osobny etap, nie naprawiać „w ciemno".
+
+**(a) 🐞 Rzadkie zawieszenie drzewa.** Rozwinięcie **dużej** kategorii → drzewo **samo przewija się
+w dół** → aplikacja zawiesza się i zamyka. Zaobserwowane **2–3 razy przez cały okres używania**, więc
+**nie** z Product Polish i bardzo trudne do odtworzenia.
+
+⭐⭐ **Jest zmierzony kandydat na mechanizm, znaleziony przy zamykaniu M3.3:**
+`SidebarFlatController.OnExpandedChanged` wstawia dzieci **pojedynczo** (`Rows.Insert` w pętli),
+a strażnik zbiorczy tej ścieżki **nie obejmuje — pomija ją** (`if (_suspendDepth > 0) return;`). Czyli
+rozwinięcie *z kodu* idzie pod strażnikiem (to naprawiła Layer 1), ale rozwinięcie **kliknięciem** na
+już załadowanej kategorii robi **N pojedynczych `Insert`ów** do kolekcji związanej z wirtualizującym
+`ListBox`em.
+
+⚠⚠ **Uwaga na skalę — to NIE jest to samo Θ(N²), co defekt z Layer 1.** Tutaj jest **Θ(N) powiadomień**
+(po jednym na liść) plus **Θ(N × ogon)** przesunięć w `List<T>` pod spodem. Czyli **taniej niż przed
+Layer 1, ale nieporównanie drożej niż jedna `Rebuild`** pod strażnikiem. ⭐ **Tej ścieżki nikt jeszcze nie
+zmierzył** — Layer 1 mierzył *odświeżanie*, nie *rozwijanie kliknięciem*.
+⭐ **Pierwszy krok: ZMIERZ ją** (`tools/probes/MetadataPerfProbe` ma schemat 2 400 tabel) — przed
+jakąkolwiek zmianą. ⛔ Nie „naprawiaj" wcześniej: może się okazać, że koszt jest pomijalny, a przyczyna
+leży gdzie indziej (kotwiczenie przewijania, `Dispatcher.Post` w `OnIsExpandedChanged`).
+
+**(b) ⚠ Skojarzenie: czy to ten sam mechanizm, co zawieszający się test?** Użytkownik prosi wprost,
+żeby **nie zakładać**, że tak, ale sprawdzić. **ZA:** klasa nazywa się `ConnectionExpandBindingProbe`,
+a jej `AutoExpandOnConnect_ReflectedInFlatList` ćwiczy dokładnie tę ścieżkę. **PRZECIW:** zmierzono
+(Keyboard Manager etap 5), że nazwa testu raportowanego przy zawieszeniu **całej suity jest
+POZYCYJNA**, a podejrzanym jest **teardown sesji**. ⭐ **To dwie różne obserwacje.**
+⭐⭐ **Test rozstrzygający:** jeśli mechanizmem jest inkrementalny splice, to wymuszenie rozwinięcia
+dużej kategorii w teście headless powinno odtworzyć zawieszenie **deterministycznie** — wtedy test
+przestaje być „feleryczny" i staje się **regresyjnym testem prawdziwego defektu**. Jeśli nie odtworzy,
+hipoteza upada i **też to zapisz**.
+
+**(c) ⚠ Krótki przegląd wydajności rozwijania.** Czy przy ładowaniu kategorii nie ma zbędnej pracy albo
+taniego usprawnienia architektonicznego. ⛔ **Nic na siłę** — brak znaleziska jest poprawnym wynikiem.
+⚠ Nie mylić z **Layer 2/3** (`metadata-refresh-analysis.md`) — to osobny etap po M3.
+
+### 3.4 Po M3.4a
 
 **M3.4b** — przegląd menu kontekstowych. ⭐ Menu zakładki z M3.3c jest świeżym punktem odniesienia:
 ikony przez `{app:MenuIcon}`, gesty przez `{app:CommandGesture}`, **każda pozycja z własnym

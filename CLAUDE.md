@@ -435,6 +435,29 @@ noted.
   delivered **two modes + two preferences + a Tabs category** in Settings Center, **M3.3c** added the
   **context menu** and took the rule-#11 gate from three entries to four. ⛔ Do not return to the tab strip
   without a real functional defect.
+  ⚠⚠ **THREE ITEMS ADDED TO M3.4's CHECKLIST BY THE USER (2026-08-03), before implementation** — full
+  record in the handover **§3.7a**, and they are a checklist to walk *while* working on the Metadata
+  Explorer, **not** a new feature. (a) 🐞 **A rare tree hang**: expanding a **large** category makes the
+  tree **scroll down on its own**, then the app freezes and closes — seen **2–3 times in the whole life of
+  EmberTern**, so it predates Product Polish. ⭐⭐ **A measured mechanism candidate already exists, found by
+  reading during the M3.3 close-out:** `SidebarFlatController.OnExpandedChanged` inserts children **one at a
+  time** (`Rows.Insert` in a loop) and the bulk guard **does not cover that path — it SKIPS it**
+  (`if (_suspendDepth > 0) return;`). So an expand *from code* runs under the guard (what Layer 1 fixed),
+  while an expand **by click** on an already-loaded category does **N individual inserts** into an
+  `ObservableCollection` bound to a virtualizing `ListBox`. ⚠⚠ **Scale, stated precisely because the first
+  draft of this note overstated it:** this is **not** Layer 1's Θ(N²) — it is **Θ(N) notifications** plus
+  **Θ(N × tail)** element shifts in the backing `List<T>`, i.e. far cheaper than the fixed defect but far
+  dearer than the guarded single `Rebuild`. ⭐ **Nobody has measured this path** — Layer 1 measured
+  *refresh*, not *click-expand*. ⛔ Measure before "fixing": the cost may turn out negligible and the real
+  cause lie elsewhere (scroll anchoring, or the `Dispatcher.Post` in `OnIsExpandedChanged`). (b) ⚠ The user asks whether this **shares a mechanism with the long-standing flaky
+  test** — and explicitly says *not* to assume it does. **For:** the class is `ConnectionExpandBindingProbe`
+  and its `AutoExpandOnConnect_ReflectedInFlatList` exercises exactly that path. **Against:** it was measured
+  (Keyboard Manager etap 5) that the full-suite hang reports the last headless test **positionally**, with
+  teardown as the suspect. ⭐ Two different observations; the decisive experiment is cheap — if the mechanism
+  is the incremental splice, forcing a large-category expand in a headless test should reproduce the hang
+  **deterministically**, which would turn a "flaky test" into a **regression test for a real defect**.
+  Record the outcome either way. (c) ⚠ A **short performance review** of category expansion — ⛔ nothing
+  forced; finding nothing is a valid result, and this is *not* `metadata-refresh-analysis.md`'s Layer 2/3.
   ⭐⭐ **Four findings from M3.3 that outlive it:** (1) **moving a rule changes its PRIORITY** — the same style
   in `Border.Styles` and in the global sheet behaves differently against a local value, so *"I moved the style
   unchanged"* is a sentence you may not say without measuring; (2) **a tool that computes ONCE cannot rule on

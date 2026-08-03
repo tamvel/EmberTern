@@ -225,6 +225,80 @@ R‑7 przypisała M‑1 w całości do M3.2. Zmierzone: **10 tam trafia, 1 do M3
 („Close tab" — stała `UiStrings.TabCloseTooltip` **już istniała**, była tylko nieużywana). **Zostały 2**,
 oba świadomie poza etapem: `PerformancePanelView` i `SessionManagerTabView` → **M4.3**.
 
+### 3.7a ⚠⚠ M3.4 — TRZY DODATKOWE POZYCJE CHECKLISTY (użytkownik, 2026-08-03)
+
+> ⭐ **To nie jest nowe wymaganie funkcjonalne**, tylko checklista do przejścia **przy okazji** pracy nad
+> Metadata Explorerem. ⛔ Nie zamieniać jej w osobny etap i nie naprawiać niczego „w ciemno".
+
+#### (a) 🐞 Rzadkie zawieszenie drzewa — zgłoszenie z realnego użycia
+
+Objaw, zaobserwowany **2–3 razy przez cały okres używania EmberTern** (więc **nie** z Product Polish):
+
+1. rozwinięcie **dużej** kategorii (np. listy tabel),
+2. drzewo **samo zaczyna przewijać się w dół**,
+3. przewijanie wygląda, jakby aplikacja straciła kontrolę nad pozycją,
+4. aplikacja zawiesza się i ostatecznie zamyka.
+
+⭐⭐ **ZMIERZONY KANDYDAT NA MECHANIZM — znaleziony czytaniem kodu przy zamykaniu M3.3, do
+zweryfikowania w M3.4.** `SidebarFlatController.OnExpandedChanged` wstawia dzieci **pojedynczo**
+(`Rows.Insert` w pętli po `ChildrenOf(node)`), a **strażnik zbiorczy go NIE obejmuje** — `BeginUpdate`
+sprawia, że ta ścieżka jest **pomijana** (`if (_suspendDepth > 0) return;`), a nie wsadowa. Czyli:
+
+* **rozwinięcie z poziomu kodu** (`LoadGroupAsync`, prefetch, filtr) idzie pod strażnikiem → jedna
+  projekcja — i to naprawiła Layer 1 (`metadata-refresh-analysis.md` §7);
+* **rozwinięcie KLIKNIĘCIEM użytkownika** na już załadowanej kategorii idzie ścieżką inkrementalną →
+  **N pojedynczych `Insert`ów** do `ObservableCollection` związanej z wirtualizującym `ListBox`em.
+
+⚠⚠ **UŚCIŚLENIE KOSZTU — pierwsza wersja tej notatki go PRZESZACOWAŁA i zostało to poprawione od razu.**
+Ta ścieżka **nie jest** tym samym Θ(N²), co defekt naprawiony przez Layer 1 (§2 `metadata-refresh-analysis.md`:
+5 762 400 operacji i 5 760 000 powiadomień przy 2 400 liściach). Tutaj jest:
+
+* **Θ(N) powiadomień** `CollectionChanged` — po jednym na liść, nie N na liść;
+* **Θ(N × ogon)** przesunięć elementów wewnątrz `List<T>` pod spodem — każdy `Insert` przesuwa wszystko,
+  co stoi **za** kategorią, więc koszt zależy od tego, ile wierszy jest pod nią (kategoria na końcu
+  drzewa = tanio, na początku przy wielu rozwiniętych = drogo).
+
+⭐ Czyli **wyraźnie taniej niż przed Layer 1, ale wciąż nieporównanie drożej niż jedna `Rebuild`** pod
+strażnikiem. ⚠ **To nadal HIPOTEZA co do zawieszenia**: nie odtworzono jej, a Layer 1 mierzył
+*odświeżanie*, nie *rozwijanie kliknięciem* — czyli tej ścieżki **nikt jeszcze nie zmierzył**.
+⭐ Pierwszy krok w M3.4: **zmierzyć ją** (`tools/probes/MetadataPerfProbe` ma schemat 2 400 tabel),
+zanim cokolwiek zostanie zmienione. ⛔ Nie „naprawiać" jej wcześniej — mogłoby się okazać, że koszt jest
+pomijalny, a prawdziwa przyczyna leży gdzie indziej (np. w kotwiczeniu przewijania albo w `Dispatcher.Post`
+z `OnIsExpandedChanged`).
+
+#### (b) ⚠ Skojarzenie użytkownika: czy to ten sam mechanizm, co zawieszający się test?
+
+> *„Nie zakładaj, że tak jest — może to być zwykły przypadek. Ale jeżeli oba zjawiska prowadzą do tego
+> samego mechanizmu […], to warto potraktować ten test jako potencjalny wskaźnik prawdziwego defektu,
+> a nie jako «felerny test»."*
+
+**Co jest ZMIERZONE i mówi ZA:** klasa nazywa się `ConnectionExpandBindingProbe`, a jej test
+`AutoExpandOnConnect_ReflectedInFlatList` ćwiczy **dokładnie tę ścieżkę** — zmianę `IsExpanded`
+odbijaną przez kontroler w płaskiej liście. Użytkownik wydał też osobną instrukcję (2026-08-01), żeby
+tę klasę uruchamiać **samą**, bo zawiesza się dostatecznie często.
+
+**Co jest ZMIERZONE i mówi PRZECIW:** przy zamykaniu etapu 5 Keyboard Managera ustalono, że nazwa
+testu raportowanego przy zawieszeniu **całej suity jest POZYCYJNA** — gdy ostatnia w przebiegu była
+inna klasa headless, raportowany był *jej* ostatni test. Podejrzanym jest wtedy **teardown sesji /
+zamykanie pętli dispatchera**, a nie asercja.
+
+⭐ **Uczciwy wniosek: to DWIE różne obserwacje, nie jedna.** Hipoteza użytkownika jest sensowna
+i **warto ją przetestować**, ale nie jest ustalona. ⛔ Nie łączyć ich w raporcie, dopóki pomiar tego
+nie pokaże.
+
+⭐⭐ **Test rozstrzygający, tani i możliwy w M3.4:** jeżeli mechanizmem jest inkrementalny splice, to
+**wymuszenie rozwinięcia dużej kategorii w teście headless powinno odtworzyć zawieszenie
+deterministycznie**. Jeśli odtworzy — test przestaje być „feleryczny" i staje się **regresyjnym testem
+prawdziwego defektu**, dokładnie jak chce użytkownik. Jeśli nie odtworzy — hipoteza upada i wracamy do
+tropu „teardown", **też zapisując wynik**.
+
+#### (c) ⚠ Krótki przegląd wydajności rozwijania
+
+Sprawdzić, czy przy ładowaniu kategorii nie ma zbędnej pracy albo taniego usprawnienia
+architektonicznego. ⛔ **Nic na siłę** — brak znaleziska jest poprawnym wynikiem i należy go zapisać.
+⚠ Nie mylić z **Layer 2/3** z `metadata-refresh-analysis.md`: tamto jest osobnym etapem wydajnościowym
+po M3, a to jest przegląd przy okazji.
+
 ### 3.8 Co już istnieje i czego NIE trzeba budować
 
 | Potrzeba | Stan |
