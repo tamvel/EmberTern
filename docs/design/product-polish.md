@@ -6031,6 +6031,65 @@ Build 0/0 · **7137** zielony w trzech partycjach (**7032 + 51 + 54**) · smoke 
 
 ---
 
+### §19.19 Poprawka odbiorcza — wspólna oś pionowa bloku połączenia (2026-08-03)
+
+> Ostatnia rzecz przed zamknięciem etapu. Użytkownik: *„tekst z nazwą połączenia oraz adresem nie jest
+> optycznie wyśrodkowany względem zielonej kropki… kropka wygląda poprawnie, natomiast tekst sprawia
+> wrażenie osadzonego kilka pikseli niżej."*
+
+#### §19.19.1 ⚠⚠ To NIE było zgłoszenie, które §19.8 już rozstrzygnęło
+
+W tym samym miejscu stoi bardzo stanowczy komentarz z §19.8: **„⛔⛔ NIE PRÓBUJ WYŚRODKOWAĆ TEGO RUNU
+W PIONIE"**, poparty trzema pomiarami. Łatwo było uznać sprawę za zamkniętą — i byłby to błąd, bo tamten
+pomiar odpowiadał na **inne pytanie**: relację *endpoint ↔ nazwa* (dwa runy WEWNĄTRZ jednego
+`TextBlocka`). Zgłoszenie dotyczyło relacji *tekst ↔ kropka*, czyli **sąsiadujących elementów wiersza**.
+
+⭐ **Lekcja: zakres wcześniejszego pomiaru trzeba przeczytać, zanim się go użyje jako odpowiedzi.**
+Komentarz był prawdziwy i nadal obowiązuje; po prostu nie dotyczył tego, o co pytano. Dopisano do niego
+zdanie rozgraniczające, żeby następny czytelnik nie uznał tematu za zamknięty w całości.
+
+#### §19.19.2 Pomiar — trzy elementy, trzy osie
+
+Wiersz ma 16 px; współrzędne w układzie wiersza:
+
+| Element | Wysokość | Środek PRZED | Środek PO |
+|---|---|---|---|
+| kropka | 7 | **7,50** | **8,00** |
+| tekst | 16 | 8,00 | 8,00 |
+| badge `DEV MODE` | 13 | **8,50** | **8,00** |
+
+⭐ **Przyczyna jest arytmetyczna, nie typograficzna.** `VerticalAlignment="Center"` liczy
+`(16 − h) / 2`, więc element o wysokości **nieparzystej** ląduje na połówce piksela — a
+`UseLayoutRounding` przycina **każdy element osobno**: kropkę (7) w górę, badge (13) w dół. Tekst ma
+16, czyli pełną wysokość wiersza, i nie przesuwa się wcale. Stąd **cały piksel** rozjazdu między
+skrajnymi elementami i pół piksela między kropką a tekstem; przy 125 % robi się z tego pełny piksel
+urządzenia — i to właśnie było widać.
+
+#### §19.19.3 Poprawka — i dwie drogi, których nie wybrano
+
+**`UseLayoutRounding="False"`** na kropce i na badge'u. ⭐ **Żaden rozmiar się nie zmienia** — a to
+było wymaganie wprost ze zgłoszenia (*„kropka wygląda poprawnie"*): problemem jest pozycja, nie
+wielkość.
+
+* ⛔ **Nie przez zmianę rozmiarów** (kropka 7→8, badge 13→14): działa arytmetycznie, ale zmienia wygląd
+  elementów, na które nikt się nie skarżył.
+* ⛔ **Nie marginesem**: nudge trafia w jedno DPI i psuje pozostałe (§19.3.3).
+
+⭐ **Precedens w tym repo:** `PART_MarkArea` w `RadioButton` — *przyciąganie do piksela pomaga PROSTEJ
+KRAWĘDZI i nie ma nic do zaoferowania KOŁU*. Kropka jest kołem; badge jest wypełnieniem bez obrysu,
+więc pół piksela zbiera antyaliasing, a nie widoczna kreska.
+
+#### §19.19.4 Pin
+
+`StatusBarConnectionBlock_SharesOneVerticalAxis` porównuje **środki trzech elementów ze sobą**, nigdy
+z liczbą — wysokości wolno zmieniać (font, padding), rozjechać się im nie wolno. Upada, gdy ktoś
+zdejmie `UseLayoutRounding="False"` albo doda do wiersza czwarty element o nieparzystej wysokości bez
+tego samego zabiegu. Próg 0,25 px: poniżej widoczności, powyżej szumu zmiennoprzecinkowego.
+
+Build 0/0 · **7138** zielony w trzech partycjach (**7032 + 52 + 54**, +1) · smoke czysty.
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:

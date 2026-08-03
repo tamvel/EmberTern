@@ -1870,8 +1870,36 @@
 
         <!-- ── 1. POŁĄCZENIE — jedyne miejsce odpowiadające na „gdzie jestem podłączony?" ───────────── -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <Ellipse Width="7" Height="7" Fill="{DynamicResource ConnectedBrush}" IsVisible="{Binding IsConnected}" />
-          <Ellipse Width="7" Height="7" Fill="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding !IsConnected}" />
+          <!-- ⭐⭐ `UseLayoutRounding="False"` NA KROPCE I NA BADGE'U — wspólna oś pionowa całego bloku.
+               ⚠⚠ To NIE jest ten sam problem co w komentarzu przy `Run` niżej. Tamten dotyczy DWÓCH
+               RUNÓW WEWNĄTRZ jednego `TextBlocka` i pozostaje w mocy. Ten dotyczy TRZECH SĄSIADUJĄCYCH
+               ELEMENTÓW wiersza, których pudełka mają różne wysokości.
+
+               Zmierzone (wiersz 16 px, współrzędne wiersza):
+
+                          wysokość   środek PRZED   środek PO
+                 kropka       7          7,50         8,00
+                 tekst       16          8,00         8,00
+                 badge       13          8,50         8,00
+
+               ⭐ Przyczyna: `VerticalAlignment="Center"` liczy `(16 − h) / 2`, co dla wysokości
+               NIEPARZYSTEJ daje połówkę piksela — a `UseLayoutRounding` przycina KAŻDY ELEMENT OSOBNO,
+               więc kropka (7) zaokrągla się w GÓRĘ, a badge (13) w DÓŁ. Tekst ma 16, czyli pełną
+               wysokość wiersza, i nie przesuwa się wcale. Stąd rozjazd o cały piksel między kropką
+               a badge'em i pół piksela między kropką a tekstem — przy 125 % robi się z tego pełny
+               piksel urządzenia i to właśnie widać.
+
+               ⛔ Świadomie NIE naprawione zmianą ROZMIARÓW (kropka 7→8, badge 13→14). Użytkownik
+               zgłosił, że „kropka wygląda poprawnie" — problemem jest pozycja, nie wielkość, a zmiana
+               rozmiaru zmieniłaby wygląd elementu, który nikomu nie przeszkadzał.
+               ⛔ NIE naprawione też marginesem: nudge trafia w jedno DPI i psuje pozostałe (§19.3.3).
+               ⭐ Precedens w tym repo: `PART_MarkArea` w `RadioButton` — przyciąganie do piksela pomaga
+               PROSTEJ KRAWĘDZI i nie ma nic do zaoferowania KOŁU. Badge to wypełnienie bez obrysu,
+               więc pół piksela zbiera antyaliasing, a nie widoczna kreska. -->
+          <Ellipse Width="7" Height="7" UseLayoutRounding="False"
+                   Fill="{DynamicResource ConnectedBrush}" IsVisible="{Binding IsConnected}" />
+          <Ellipse Width="7" Height="7" UseLayoutRounding="False"
+                   Fill="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding !IsConnected}" />
           <!-- ⭐⭐ NAZWA I ENDPOINT TO DWA RUNY W JEDNYM `TextBlocku`, A NIE DWA `TextBlocki` — i to jest
                naprawa przyczyny, nie kosmetyka (§19.3.1).
 
@@ -1917,7 +1945,13 @@
                  ⭐ Wniosek: obecne wyrównanie do linii bazowej jest NAJBLIŻSZE optycznego środka ze
                  wszystkiego, co jest dostępne. Wrażenie osiadania bierze się z tego, że nazwy połączeń
                  bywają WERSALIKAMI („GAL"), a endpoint jest minuskułą — to różnica wysokości wersalika
-                 i x-height przy wspólnej linii bazowej, nie błąd wyrównania pudełek. -->
+                 i x-height przy wspólnej linii bazowej, nie błąd wyrównania pudełek.
+
+                 ⚠⚠ UZUPEŁNIENIE 2026-08-03: powyższe pozostaje prawdziwe i dotyczy WYŁĄCZNIE relacji
+                 nazwa ↔ endpoint. Zgłoszenie „tekst siedzi niżej niż kropka" miało JEDNAK przyczynę
+                 mierzalną i została naprawiona — ale wyżej, na poziomie WIERSZA (zaokrąglanie pudełek
+                 o nieparzystej wysokości), nie tutaj. Patrz komentarz przy `Ellipse`. ⛔ Nie czytaj
+                 tego bloku jako „temat zamknięty, nie ruszać" — on zamyka jedno z dwóch pytań. -->
             <Run Text="{Binding ConnectionEndpointLabel}"
                  FontSize="{DynamicResource Text.Caption.Size}"
                  Foreground="{DynamicResource SubtleForegroundBrush}" />
@@ -1935,7 +1969,7 @@
                (zgłoszenie użytkownika, QA M3.1b). -->
           <Border Background="{DynamicResource ConnectedBrush}"
                   CornerRadius="{DynamicResource Radius.Surface}" Padding="4,1"
-                  VerticalAlignment="Center"
+                  VerticalAlignment="Center" UseLayoutRounding="False"
                   IsVisible="{Binding IsDeveloperModeActive}"
                   ToolTip.Tip="{x:Static app:UiStrings.DeveloperModeBadgeTooltip}">
             <TextBlock Text="{x:Static app:UiStrings.DeveloperModeBadge}"

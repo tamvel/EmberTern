@@ -39,7 +39,7 @@
 | **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ WYCOFANA** (M3.1 odebrane w całości; M3.2a odebrane **dwiema rundami wycofań**; M3.2b **cofnięta w całości** — §19.14). ⭐ **M3.1 ZAMKNIĘTE**. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma ani jednej bramki przesuwającej cokolwiek |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7137**, zielony w trzech partycjach (**7032 + 51 + 54**) |
+| **Suite** | **7138**, zielony w trzech partycjach (**7032 + 52 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 | **NASTĘPNY KROK** | ⏸⏸ **PEŁNE QA WIZUALNE CAŁEGO ETAPU — język kolorów jest wdrożony W CAŁOŚCI (K1–K7 + przegląd domykający; `product-polish.md` §19.15–§19.18).** ⭐ **Zero otwartych pytań O‑1…O‑5.** Zmierzone: **230 `SvgIcon` w widokach, 81 z kolorem, ani jeden przycisk akcji poza językiem.** ⛔ Nie dokładaj zmian kolorów przed QA. Punkty do obejrzenia: pasek tytułu jako **jedna rodzina** (6 × niebieski R‑6, reszta szara, kosz czerwony) · nagłówek Saved Queries (dwie czerwone ikony, §19.16.4) · debugger (Continue zielony wśród neutralnych kroków) · Comment 🔵 vs Uncomment ⚪ |

@@ -431,8 +431,7 @@ noted.
   SESSION FROM
   [docs/design/product-polish-m3-handover.md](docs/design/product-polish-m3-handover.md) + the new
   [docs/design/color-language.md](docs/design/color-language.md) — the M2c handover below is CLOSED.**
-  Build 0/0; suite **7137** (7032 + 51 + 54); smoke clean. **⚠ Eight commits await push on the user's
-  decision.**
+  Build 0/0; suite **7138** (7032 + 52 + 54); smoke clean. ⭐ **Pushed to both remotes 2026-08-03.**
   **M3.1 (Status Bar 2.0) is CLOSED and accepted** — four sections, rail, transaction chip with elapsed
   time, Debug/Trace chips, progress section + one reference operation (§19.0–§19.9).
   **⭐⭐ M3.2 IS THE STAGE'S HARDEST LESSON AND IT IS ABOUT METHOD, NOT PIXELS.** Of four moves in
@@ -539,6 +538,22 @@ noted.
   ⭐ **The lesson, confirmed a third time: conformance to the document is not the same as coherence of
   the product** — all five residues were "compliant" in the sense that nobody had recorded them as
   defects, and every one of them is visible at a glance on a finished screen.
+  **⭐ ONE ACCEPTANCE FIX CLOSED THE STAGE (§19.19) — the status bar's connection block now shares ONE
+  vertical axis, and its lesson is about reading a prior measurement's SCOPE.** The user reported the
+  text sitting a few px below the green dot. That exact spot carries a very firm §19.8 comment —
+  *"⛔⛔ NIE PRÓBUJ WYŚRODKOWAĆ TEGO RUNU W PIONIE"* — backed by three measurements, and treating it as
+  the answer would have been wrong: **it answers a different question** (endpoint ↔ name, two runs
+  INSIDE one `TextBlock`), while the report was about **adjacent row elements**. ⭐ Measured: dot
+  **7.50** · text **8.00** · badge **8.50** — three elements, three axes. The cause is arithmetic, not
+  typographic: `VerticalAlignment="Center"` computes `(16 − h) / 2`, so an **odd-height** child lands on
+  a half pixel and `UseLayoutRounding` snaps **each element separately** — the dot (7) up, the badge
+  (13) down, while the text (16 = full row height) does not move at all. Fixed with
+  **`UseLayoutRounding="False"` on the dot and the badge**, so **no size changes** (the report said the
+  dot looked right — the defect was position, not size); ⛔ not by resizing (7→8, 13→14) and ⛔ not by a
+  margin (a nudge fixes one DPI and breaks the rest). ⭐ Same precedent as `RadioButton`'s
+  `PART_MarkArea`: snapping helps a **straight edge** and has nothing to offer a **circle**. Pinned by
+  `StatusBarConnectionBlock_SharesOneVerticalAxis`, which compares the three centres **to each other**,
+  never to a number.
   ⚠ **`product-polish.md` §7.5's "zmiany do wykonania" table NO LONGER APPLIES** — M3.2b executed it to
   the letter and was withdrawn; the six titlebar tools **stay coloured** (role R‑6, "wejście do
   narzędzia"), which that table did not know.

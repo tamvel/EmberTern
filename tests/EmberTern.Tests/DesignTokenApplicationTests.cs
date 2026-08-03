@@ -1152,6 +1152,67 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// ⭐ Blok połączenia w pasku statusu — <b>kropka, tekst i badge stoją na JEDNEJ osi pionowej</b>.
+    ///
+    /// <para>⚠⚠ Zgłoszone przez użytkownika przy zamykaniu M3 („tekst sprawia wrażenie osadzonego kilka
+    /// pikseli niżej"). Zmierzone w wierszu 16 px: kropka <b>7,50</b> · tekst <b>8,00</b> · badge
+    /// <b>8,50</b> — trzy elementy, trzy osie, rozjazd całego piksela między skrajnymi.</para>
+    ///
+    /// <para>⭐ Przyczyna nie jest typograficzna, tylko arytmetyczna: <c>VerticalAlignment="Center"</c>
+    /// liczy <c>(16 − h) / 2</c>, więc element o wysokości NIEPARZYSTEJ ląduje na połówce piksela,
+    /// a <c>UseLayoutRounding</c> przycina KAŻDY ELEMENT OSOBNO — kropka (7) w górę, badge (13) w dół.
+    /// Tekst ma 16, czyli pełną wysokość wiersza, i nie rusza się wcale.</para>
+    ///
+    /// <para>⛔ Dlatego test porównuje ŚRODKI TRZECH ELEMENTÓW ze sobą, a nie z liczbą. Wysokości wolno
+    /// zmieniać (font, padding, rozmiar kropki) — nie wolno dopuścić, żeby znów się rozjechały. Pin
+    /// upada, gdy ktoś zdejmie <c>UseLayoutRounding="False"</c> albo doda do wiersza czwarty element
+    /// o nieparzystej wysokości bez tego samego zabiegu.</para>
+    ///
+    /// <para>⚠ Nie myl tego z komentarzem przy <c>Run</c> w <c>MainWindow.axaml</c> (§19.8): tamten
+    /// dotyczy dwóch runów WEWNĄTRZ jednego <c>TextBlocka</c> i nadal obowiązuje. To są dwa różne
+    /// pytania na dwóch różnych poziomach.</para>
+    /// </summary>
+    [Fact]
+    public async Task StatusBarConnectionBlock_SharesOneVerticalAxis()
+    {
+        await _session.Dispatch(() =>
+        {
+            // Odwzorowanie sekcji 1 paska statusu: te same wysokości, te same wyrównania.
+            var dot = new Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center, UseLayoutRounding = false };
+            var text = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+            text.Inlines!.Add(new Avalonia.Controls.Documents.Run { Text = "Szkoleniowa", FontSize = 11, FontWeight = FontWeight.SemiBold });
+            text.Inlines.Add(new Avalonia.Controls.Documents.Run { Text = " · localhost:3050", FontSize = 10 });
+            var badge = new Border
+            {
+                Padding = new Thickness(4, 1),
+                VerticalAlignment = VerticalAlignment.Center,
+                UseLayoutRounding = false,
+                Child = new TextBlock { Text = "DEV MODE", FontSize = 10, FontWeight = FontWeight.Bold },
+            };
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            row.Children.Add(dot);
+            row.Children.Add(text);
+            row.Children.Add(badge);
+
+            var window = new Window { Content = new Border { Height = 24, Child = row }, Width = 400, Height = 60 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            static double Mid(Control c) => c.Bounds.Top + c.Bounds.Height / 2;
+            var (d, t, b) = (Mid(dot), Mid(text), Mid(badge));
+            window.Close();
+
+            // Ćwierć piksela — poniżej progu widoczności, a powyżej szumu zmiennoprzecinkowego.
+            Assert.True(System.Math.Abs(d - t) < 0.25 && System.Math.Abs(b - t) < 0.25,
+                $"Blok połączenia rozjechał się w pionie: kropka {d:0.00} · tekst {t:0.00} · badge {b:0.00}. "
+                + "Elementy o NIEPARZYSTEJ wysokości w wierszu o PARZYSTEJ lądują na połówce piksela, "
+                + "a UseLayoutRounding przycina każdy osobno — w przeciwne strony. Rozwiązaniem jest "
+                + "UseLayoutRounding=\"False\" na tym elemencie, nie margines (nudge trafia w jedno DPI).");
+        }, default);
+    }
+
+    /// <summary>
     /// The same lookup for a THEME-SCOPED resource. ⚠ Measured, and worth knowing: the variant-less
     /// <see cref="Token{T}"/> above cannot see anything declared inside <c>ThemeDictionaries</c> — it reports the
     /// key as missing. That is precisely the line between the two colour-free dictionaries added in M2a
