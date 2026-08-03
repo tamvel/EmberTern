@@ -129,8 +129,15 @@ public sealed class UiStringsShortcutSourceTests
     [Fact]
     public void MigratedTooltips_CarryTheCatalogsGesture()
     {
-        Assert.Equal("Format SQL · Ctrl+K", UiStrings.ToolbarFormatSqlTooltip);
-        Assert.DoesNotContain("Alt+F", UiStrings.ToolbarFormatSqlTooltip, StringComparison.Ordinal);
+        // ⭐⭐ THIS PAIR OF LINES IS THE WHOLE POINT OF CommandTip, AND IT HAS NOW FIRED IN BOTH DIRECTIONS.
+        // It was written because the tooltip read "Format SQL · Alt+F" after etap 3 re-bound the command to
+        // Ctrl+K — a hand-typed gesture teaching a key that no longer existed. On 2026-08-03 the user ratified
+        // Alt+F back, and this assertion failed again, in the opposite direction, without anyone touching a
+        // string. That is exactly the property being bought: the tooltip cannot disagree with the catalog.
+        Assert.Equal("Format SQL · Alt+F", UiStrings.ToolbarFormatSqlTooltip);
+        // ⚠ And it shows the PRIMARY gesture only. Ctrl+K is a live alternate — it still works — but a tooltip
+        // listing both would be teaching two keys for one action in the app's most crowded strip.
+        Assert.DoesNotContain("Ctrl+K", UiStrings.ToolbarFormatSqlTooltip, StringComparison.Ordinal);
 
         Assert.EndsWith("· F7", UiStrings.ProcedureCompileTooltip, StringComparison.Ordinal);
         Assert.EndsWith("· F7", UiStrings.IndexCompileTooltip, StringComparison.Ordinal);

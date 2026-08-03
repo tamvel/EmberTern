@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -178,10 +179,16 @@ public partial class MainWindow : Window
             _resultGrid.PointerPressed += OnResultGridPointerPressed;
             // 3-state header sort (asc → desc → none). Avalonia's DataGridColumnEventArgs
             // can't be cancelled, so instead of using the built-in (2-state) sort we keep
-            // the grid non-sortable and detect header clicks via a tunneled PointerPressed,
-            // driving the cycle through the VM (client-side sort over the materialized set
-            // via the shared RowIndexComparer).
+            // the grid non-sortable and detect header clicks ourselves, driving the cycle
+            // through the VM (client-side sort over the materialized set via the shared
+            // RowIndexComparer).
+            //
+            // ⚠⚠ A CLICK IS PRESS **AND** RELEASE, AND THAT IS A BUG FIX, NOT A REFINEMENT. This used to sort on
+            // PointerPressed alone — but a column RESIZE also begins with a press inside the header, so dragging a
+            // separator sorted the grid on mouse-up (user report 2026-08-03). Both handlers stay on the TUNNEL
+            // phase, because the header's own gripper handles the press before it would bubble.
             _resultGrid.AddHandler(PointerPressedEvent, OnResultHeaderPointerPressed, RoutingStrategies.Tunnel);
+            _resultGrid.AddHandler(PointerReleasedEvent, OnResultHeaderPointerReleased, RoutingStrategies.Tunnel);
             // Filter-from-cell: capture the right-clicked cell (gotcha #99) so the
             // context-menu's Filter-by/Exclude/Contains act on the exact cell.
             _resultGrid.CellPointerPressed += OnResultCellPointerPressed;
@@ -1393,13 +1400,54 @@ public partial class MainWindow : Window
         }
     }
 
+    // The header a left-press landed on, and where — a sort fires only if the RELEASE comes back to the same
+    // header without the pointer having travelled (i.e. it was a click, not the start of a resize drag).
+    private DataGridColumnHeader? _pressedResultHeader;
+    private Point _pressedResultHeaderAt;
+
+    // A pointer that moved further than this between press and release was dragging, not clicking. Column
+    // resize is the drag that matters here; the same threshold also forgives the sub-pixel jitter of a real click.
+    private const double HeaderClickSlopPx = 4;
+
     private void OnResultHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        _pressedResultHeader = null;
         if (_currentVm is null || _resultGrid is null) return;
         if (!e.GetCurrentPoint(_resultGrid).Properties.IsLeftButtonPressed) return;
         if (e.Source is not Visual visual) return;
+
+        // ⚠ A press on the resize gripper is never a sort. Matched by TYPE rather than by the template part's
+        // name: the name is Avalonia's to change, the fact that a gripper is a Thumb is what the control IS.
+        // And if that ever stops holding, the travel check below still catches the drag — the two guards are
+        // deliberately independent, because this defect reached the user once already.
+        if (visual.FindAncestorOfType<Thumb>(includeSelf: true) is not null) return;
+
         var header = visual.FindAncestorOfType<DataGridColumnHeader>(includeSelf: true);
         if (header is null) return;
+
+        _pressedResultHeader = header;
+        _pressedResultHeaderAt = e.GetCurrentPoint(_resultGrid).Position;
+    }
+
+    private void OnResultHeaderPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        var header = _pressedResultHeader;
+        _pressedResultHeader = null;
+
+        if (header is null || _currentVm is null || _resultGrid is null) return;
+        if (e.InitialPressMouseButton != MouseButton.Left) return;
+
+        // Same header, and the pointer stayed put: a click. A resize drag fails the second test even when it
+        // ends over the header it started on, which is the case that used to sort.
+        if (e.Source is not Visual visual) return;
+        if (!ReferenceEquals(visual.FindAncestorOfType<DataGridColumnHeader>(includeSelf: true), header)) return;
+
+        var released = e.GetCurrentPoint(_resultGrid).Position;
+        if (Math.Abs(released.X - _pressedResultHeaderAt.X) > HeaderClickSlopPx
+            || Math.Abs(released.Y - _pressedResultHeaderAt.Y) > HeaderClickSlopPx)
+        {
+            return;
+        }
 
         // DataGridColumnHeader.OwningColumn is internal (gotcha #43), so map the
         // header back to a column index by its (arrow-stripped) text against the

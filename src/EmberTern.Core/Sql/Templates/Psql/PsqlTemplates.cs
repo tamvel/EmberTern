@@ -3,15 +3,31 @@ using static EmberTern.Core.Sql.Templates.TemplateHelpers;
 
 namespace EmberTern.Core.Sql.Templates.Psql;
 
+// ⭐⭐ EVERY SCAFFOLD IN THIS FILE IS OFFERED IN EVERY EDITOR (`SnippetContexts.Any`) — ratified by the user
+// (2026-08-03) after asking twice for `FOR SELECT … INTO` in the SQL Editor, in their words: *"To, że jest
+// oznaczony jako Plain SQL, nie jest wystarczającym argumentem do ukrywania tego szablonu, ponieważ w SQL
+// Editorze normalnie tworzy się także EXECUTE BLOCK, CREATE PROCEDURE, CREATE TRIGGER i inne konstrukcje PSQL."*
+//
+// ⚠ These were all `PsqlOnly`, which hid them from the editor where most PSQL actually gets written. Two narrower
+// answers were tried and both were wrong: widening only the one template that had been reported (an exception, not
+// a rule), and deriving the context from whether the drop offset sits inside a `BEGIN … END` (which fails for the
+// case that matters — a scaffold is what you reach for to START a body, so there is no block yet). The reasoning
+// applies to all of them equally, so the rule is one line and has no exceptions.
+//
+// ⚠ `SnippetInsertionContext` / `SnippetContexts.PsqlOnly` remain in the model with **no template using them**.
+// That is deliberate rather than dead: the catalog already declares user/plugin templates as the next step, and a
+// third-party scaffold may legitimately need to be body-only. ⛔ Do not re-gate a built-in with it to "give it a
+// consumer" — that would undo the decision above.
+
 /// <summary>
 /// <c>FOR SELECT &lt;cols&gt; FROM t INTO :cols DO BEGIN … END</c> — a cursor loop over a
-/// table, generated from its columns. PSQL body only.
+/// table, generated from its columns.
 /// </summary>
 public sealed class TableForSelectTemplate : ISqlTemplate
 {
     public SqlTemplateDescriptor Descriptor { get; } =
         new("table.for-select", "FOR SELECT", SqlTemplateGroup.PsqlScaffold, 90,
-            new[] { MetadataObjectKind.Table }, SnippetContexts.PsqlOnly);
+            new[] { MetadataObjectKind.Table }, SnippetContexts.Any);
 
     public bool AppliesTo(SnippetContext ctx) => KindAndContext(Descriptor, ctx) && ctx.Columns.Count > 0;
 
@@ -40,13 +56,13 @@ public sealed class TableForSelectTemplate : ISqlTemplate
 
 /// <summary>
 /// <c>DECLARE VARIABLE V_col TYPE OF COLUMN t.col;</c> per column — declares locals typed
-/// to a table's columns. PSQL body only.
+/// to a table's columns.
 /// </summary>
 public sealed class TableDeclareVariablesTemplate : ISqlTemplate
 {
     public SqlTemplateDescriptor Descriptor { get; } =
         new("table.declare-vars", "DECLARE VARIABLES", SqlTemplateGroup.PsqlScaffold, 100,
-            new[] { MetadataObjectKind.Table }, SnippetContexts.PsqlOnly);
+            new[] { MetadataObjectKind.Table }, SnippetContexts.Any);
 
     public bool AppliesTo(SnippetContext ctx) => KindAndContext(Descriptor, ctx) && ctx.Columns.Count > 0;
 
@@ -69,13 +85,18 @@ public sealed class TableDeclareVariablesTemplate : ISqlTemplate
 
 /// <summary>
 /// <c>FOR SELECT &lt;outputs&gt; FROM p(:in) INTO :outputs DO BEGIN … END</c> — a cursor loop
-/// over a selectable procedure. PSQL body only; needs output parameters.
+/// over a selectable procedure. Needs output parameters.
+///
+/// <para>⭐ <b>This is the template the user asked for twice</b> (2026-08-03) — the reason the file-level rule
+/// above exists. It is what a developer reaches for <b>to START writing</b> a report body, which is precisely why
+/// gating it on already being inside a <c>BEGIN … END</c> was the wrong answer: there is no block yet at the
+/// moment it is wanted.</para>
 /// </summary>
 public sealed class ProcedureForSelectFromTemplate : ISqlTemplate
 {
     public SqlTemplateDescriptor Descriptor { get; } =
-        new("procedure.for-select-from", "FOR SELECT FROM procedure", SqlTemplateGroup.PsqlScaffold, 130,
-            new[] { MetadataObjectKind.Procedure }, SnippetContexts.PsqlOnly);
+        new("procedure.for-select-from", "FOR SELECT … INTO", SqlTemplateGroup.PsqlScaffold, 130,
+            new[] { MetadataObjectKind.Procedure }, SnippetContexts.Any);
 
     public bool AppliesTo(SnippetContext ctx) => KindAndContext(Descriptor, ctx) && ctx.ProcedureIsSelectable;
 
@@ -114,12 +135,12 @@ public sealed class ProcedureForSelectFromTemplate : ISqlTemplate
     }
 }
 
-/// <summary><c>EXCEPTION exception_name;</c> — raise an exception. PSQL body only.</summary>
+/// <summary><c>EXCEPTION exception_name;</c> — raise an exception.</summary>
 public sealed class ExceptionRaiseTemplate : ISqlTemplate
 {
     public SqlTemplateDescriptor Descriptor { get; } =
         new("exception.raise", "EXCEPTION", SqlTemplateGroup.PsqlScaffold, 400,
-            new[] { MetadataObjectKind.Exception }, SnippetContexts.PsqlOnly);
+            new[] { MetadataObjectKind.Exception }, SnippetContexts.Any);
 
     public bool AppliesTo(SnippetContext ctx) => KindAndContext(Descriptor, ctx);
 
@@ -129,13 +150,13 @@ public sealed class ExceptionRaiseTemplate : ISqlTemplate
 
 /// <summary>
 /// <c>EXCEPTION exception_name 'message';</c> — raise with a custom message (FB 2.0+).
-/// The message literal is a tab-stop. PSQL body only.
+/// The message literal is a tab-stop.
 /// </summary>
 public sealed class ExceptionRaiseMessageTemplate : ISqlTemplate
 {
     public SqlTemplateDescriptor Descriptor { get; } =
         new("exception.raise-message", "EXCEPTION with message", SqlTemplateGroup.PsqlScaffold, 410,
-            new[] { MetadataObjectKind.Exception }, SnippetContexts.PsqlOnly);
+            new[] { MetadataObjectKind.Exception }, SnippetContexts.Any);
 
     public bool AppliesTo(SnippetContext ctx) => KindAndContext(Descriptor, ctx);
 

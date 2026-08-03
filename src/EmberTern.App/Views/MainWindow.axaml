@@ -967,7 +967,7 @@
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteTooltip}"
                       Command="{Binding ExecuteQueryCommand}" IsVisible="{Binding ShowExecuteButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource OnAccentBrush}"
+                  <controls:SvgIcon Data="{StaticResource Icon.Play}"
                                     Width="14" Height="14" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
                   <TextBlock Classes="shortcut-chip" Text="{Binding ExecuteHint}" />
@@ -986,7 +986,7 @@
               </Button>
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}" IsVisible="{Binding ShowStructureCompileTools}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FieldEditDiscardTooltip}"
                       Command="{Binding ActiveTableDetail.DiscardPendingChangesCommand}" IsVisible="{Binding ShowStructureCompileTools}">
@@ -994,11 +994,11 @@
               </Button>
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
                       Command="{Binding ActiveNewTable.CompileCommand}" IsVisible="{Binding IsNewTableTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
                       Command="{Binding ActiveViewDetail.CompileCommand}" IsVisible="{Binding IsViewDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveViewDetail.RevertChangesCommand}" IsVisible="{Binding IsViewDetailTabActive}">
@@ -1006,7 +1006,7 @@
               </Button>
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
                       Command="{Binding ActiveProcedureDetail.CompileCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveProcedureDetail.RevertChangesCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
@@ -1014,7 +1014,7 @@
               </Button>
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.TriggerCompileTooltip}"
                       Command="{Binding ActiveTriggerDetail.CompileCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveTriggerDetail.RevertChangesCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
@@ -1022,7 +1022,7 @@
               </Button>
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.FunctionCompileTooltip}"
                       Command="{Binding ActiveFunctionDetail.CompileCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveFunctionDetail.RevertChangesCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
@@ -1032,7 +1032,7 @@
                    autonomous DDL path, so no Commit/Rollback pair is shown for a generator tab). -->
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.GeneratorCompileTooltip}"
                       Command="{Binding ActiveGeneratorDetail.CompileCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveGeneratorDetail.RevertChangesCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
@@ -1046,7 +1046,7 @@
                    autonomous DDL path, so no Commit/Rollback pair is shown for a domain tab). -->
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.DomainCompileTooltip}"
                       Command="{Binding ActiveDomainDetail.CompileCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveDomainDetail.RevertChangesCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
@@ -1060,7 +1060,7 @@
                    auto-commits via the autonomous DDL path, so no Commit/Rollback pair. -->
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.PackageCompileTooltip}"
                       Command="{Binding ActivePackageDetail.CompileCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActivePackageDetail.RevertChangesCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
@@ -1074,7 +1074,7 @@
                    autonomous DDL path, so no Commit/Rollback pair is shown for an exception tab). -->
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ExceptionCompileTooltip}"
                       Command="{Binding ActiveExceptionDetail.CompileCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveExceptionDetail.RevertChangesCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
@@ -1089,7 +1089,7 @@
                    constraint-backed indexes (CanDelete = !IsConstraintBacked). -->
               <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.IndexCompileTooltip}"
                       Command="{Binding ActiveIndexDetail.CompileCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="16" Height="16" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveIndexDetail.RevertChangesCommand}" IsVisible="{Binding IsIndexDetailTabActive}">

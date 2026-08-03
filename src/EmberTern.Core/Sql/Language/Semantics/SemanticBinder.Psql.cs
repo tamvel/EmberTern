@@ -675,12 +675,13 @@ internal sealed partial class SemanticBinder
 
             if (IsNameToken(tok) && At(t, k + 1).Kind != TokenKind.LParen)
             {
-                // A generator name (NEXT VALUE FOR <seq>, GEN_ID(<seq>, …)) is not a local at all — the
-                // grammar fixes its meaning, and BindGlobalCatalogReferences is the one binder that resolves
-                // it. Leaving the occurrence UNCLAIMED here is what lets it: that scan skips an offset some
-                // other binder already referenced, so a reference recorded now would win the position and
-                // the generator would read as an unresolved VARIABLE (ET0003).
-                if (IsGeneratorNamePosition(t, k)) { k++; continue; }
+                // Some positions are fixed by the grammar to mean something that is not a local variable at
+                // all — a generator name (NEXT VALUE FOR <seq>, GEN_ID(<seq>, …)) or a date/time part
+                // (EXTRACT(<part> FROM …)). Leaving the occurrence UNCLAIMED here is what makes that work:
+                // BindGlobalCatalogReferences skips an offset some other binder already referenced, so a
+                // reference recorded now would win the position and the name would read as an unresolved
+                // VARIABLE (ET0003). See IsGrammarPinnedNonLocal for why the two stay separate predicates.
+                if (IsGrammarPinnedNonLocal(t, k)) { k++; continue; }
 
                 BindBareLocal(tok, scope, flagUnresolvedLocals);
                 k++;

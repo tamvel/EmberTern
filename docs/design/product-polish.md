@@ -6268,3 +6268,28 @@ zamiennie. Do rozstrzygnięcia razem z językiem, nie osobno.
    inaczej następna iteracja „naprawi" je ponownie.
 4. ⚠ **Kolor przycisku `primary` to inny wymiar niż kolor ikony** i musi być w języku rozdzielony,
    inaczej Execute w SQL Editorze i Execute procedury nigdy nie dadzą się porównać.
+
+---
+
+## §21 Runda poprawek odbiorczych przed M3.2d (2026-08-03) — trzy pozostałości M2b/M2c
+
+⚠ **To NIE jest etap Product Polish** — to zamknięcie zgłoszeń z normalnej pracy z aplikacją, wykonane przed
+M3.2d. Trafia tutaj, bo trzy z nich są bezpośrednimi pozostałościami migracji na tokeny i mają ten sam kształt:
+**wartość poprawna w jednym kontekście, użyta tam, gdzie jej przesłanka nie obowiązuje.** Pełny opis w komentarzach
+przy kodzie; tu jest tylko lista i wniosek.
+
+| Zgłoszenie | Przesłanka, która nie obowiązywała | Naprawa |
+|---|---|---|
+| Tekst przy górnej krawędzi pola wielowierszowego | `Pad.Control` ma pion 0, bo wysokość pola JEDNOWIERSZOWEGO daje `Size.Control`; pole wielowierszowe jest właścicielem własnej wysokości | nowa rola `Pad.ControlMultiline`, ten sam selektor `TextBox[AcceptsReturn=True]` |
+| Zbyt niski edytor w siatkach definicji (parametry procedury) | `field-editor` sięga tylko edytorów, które buduje `FieldGridColumns`; Name/Collate/Default/Description to `DataGridTextColumn`, którego `TextBox` tworzy sama siatka | klasa **na siatce** (`field-grid`), nadawana w jednym miejscu — zmierzone 12 → 24 px |
+| Nieaktywny młotek ginie w jasnym motywie | `Opacity 0.5` jest bez motywu, a przepuszcza tło paska: biała ikona blaknąca w stronę jasnego tła traci kontrast, w stronę ciemnego go zyskuje | nieprzezroczyste `AccentDisabledBrush` + `OnAccentDisabledBrush`, wartości per motyw |
+
+⭐ **Wniosek metodologiczny, ważniejszy od trzech poprawek.** Dwie z nich wymagały najpierw **zabrania wartości
+lokalnych**, żeby styl miał gdzie trafić — dwanaście ikon `SvgIcon` w `MainWindow` miało `Foreground` wpisany
+lokalnie, a wartość lokalna bije setter, więc stan `:disabled` nie mógł ich dosięgnąć. To trzeci raz, kiedy ten
+mechanizm kosztuje osobne zgłoszenie (`MessageBanner` — sześć wariantów chromy per host; `FieldGridColumns` —
+edytor 12 px; teraz nieaktywna ikona). ⛔ **Host ustawia `Data`, rozmiar i wyrównanie. Kolor ustawia styl.**
+
+⚠ Poza zakresem, decyzją użytkownika: lokalne `DataGridRow Height` (22/28/30/34) w ośmiu widokach **zostają** —
+część ma pisany powód (CheckBox w wierszu), a pułapka 17 mówi, że reguła opisuje to, co jest dobre, i nie jest
+mandatem na zmianę wszystkiego, co do niej nie pasuje.

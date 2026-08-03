@@ -27,8 +27,27 @@ namespace EmberTern.App.Views;
 /// </summary>
 internal static class FieldGridColumns
 {
+    /// <summary>The class every grid built here carries, so a style can reach the editors this builder does NOT
+    /// construct. See the note in <see cref="Build"/>.</summary>
+    internal const string GridClass = "field-grid";
+
     public static void Build(DataGrid grid, bool includeDefault, bool includeName = true)
     {
+        // ⭐⭐ THE GRID ITSELF IS MARKED, and that is the other half of the editor-height fix (user report
+        // 2026-08-03: "the TextBoxes are still too low, e.g. procedure parameters in Easy mode").
+        //
+        // §19.9 gave the always-visible cell editors the `field-editor` role — but only the ones THIS builder
+        // constructs (TextEditCol). Name / Collate / Default / Description are plain DataGridTextColumns, whose
+        // editing TextBox the DataGrid creates itself when the user enters the cell, and there is nowhere to put
+        // a class on it. So those four kept `DataGridCell TextBox`'s MinHeight of 0 and read as a thin strip
+        // beside the correctly-sized ones — in the FIRST and most-used column of the grid.
+        //
+        // ⚠ A class on the GRID, not a global style, and the reason is the measured one from M2b step 7: a
+        // 24 px minimum in a DATA grid (Table Data, query results — 22 px rows, no ComboBox) would grow every
+        // row the moment the user enters edit mode, which is the layout shift §13.3 forbids. Definition grids
+        // already measure 30 px because of the ComboBox, so nothing moves there.
+        if (!grid.Classes.Contains(GridClass)) grid.Classes.Add(GridClass);
+
         grid.Columns.Clear();
         // The function Result is a single, unnamed return value — its grid omits Name.
         if (includeName)

@@ -140,7 +140,7 @@ public sealed partial class BooleanSettingViewModel : SettingRowViewModel
 /// <para>⭐ <b>This is the class §16.8 recorded as etap 6's debt: the blur-or-Enter commit path (design
 /// §5.5.1).</b> <see cref="EditText"/> follows every keystroke and commits <b>nothing</b>; the view calls
 /// <see cref="Commit"/> on lost focus and on Enter. The reason is not performance: every save does a full
-/// read + decrypt + deserialize of <c>settings.dat</c> before rewriting it, and <c>AtomicWrite</c> keeps exactly
+/// read + decrypt + deserialize of <c>settings.dat</c> before rewriting it, and <c>TryAtomicWrite</c> keeps exactly
 /// <b>one</b> generation of <c>settings.dat.bak</c> — so typing <c>5000</c> per-keystroke would roll the single
 /// hand-recovery backup through four generations at precisely the moment someone is editing settings.</para>
 ///

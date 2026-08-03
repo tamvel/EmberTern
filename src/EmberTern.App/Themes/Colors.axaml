@@ -120,6 +120,38 @@
       <Color x:Key="OnAccentSubtleColor">#80FFFFFF</Color>
       <Color x:Key="CloseButtonHoverColor">#E81123</Color>
 
+      <!-- ⭐⭐ NIEAKTYWNY PRZYCISK GŁÓWNY — WYPEŁNIENIE NIEPRZEZROCZYSTE, NIE PRZEZROCZYSTOŚĆ, i to jest
+           mechanizm defektu, nie dobór barwy (zgłoszenie użytkownika 2026-08-03: „na jasnym motywie nieaktywny
+           młotek praktycznie znika").
+           ⚠ Wcześniej stan nieaktywny to było `Opacity 0.5` na CAŁYM przycisku. `AccentColor` i `OnAccentColor`
+           są w obu motywach IDENTYCZNE, więc winna nie mogła być barwa — winne było to, przez co przezroczystość
+           przepuszcza: pod spodem stoi pasek narzędzi, w ciemnym `#2D2D2D`, w jasnym `#E8EAED`. Biała ikona
+           blaknąca w stronę jasnego tła traci kontrast prawie do zera, a w stronę ciemnego go ZYSKUJE — jedna
+           liczba, przeciwny skutek w dwóch motywach.
+           ⭐ Dlatego to są dwie role z wartościami PER MOTYW, a nie jedna liczba: nieprzezroczyste wypełnienie
+           odcina tło, więc kontrast ikony przestaje zależeć od tego, co za przyciskiem. -->
+      <Color x:Key="AccentDisabledColor">#3A3F46</Color>
+      <Color x:Key="OnAccentDisabledColor">#9AA0A6</Color>
+
+      <!-- ⭐⭐ POLE STOJĄCE NA POWIERZCHNI UNOSZĄCEJ SIĘ — WYPEŁNIENIE **I** RAMKA (zgłoszenie użytkownika
+           2026-08-03, PONOWIONE po pierwszej poprawce: „pola filtrów nadal zlewają się z tłem, na OBU motywach").
+           Dotyczy filtra w liście rozwijanej domeny i obu filtrów w okienku wyboru kolumny.
+
+           ⚠⚠ Pierwsza poprawka ruszyła TYLKO ramkę i była za słaba — i to jest zmierzone, nie odczute:
+           selektor stosował się poprawnie (`PART_BorderElement`, 1 px, moje kolory na miejscu), ale
+           w motywie jasnym tło pola to `#FCFCFD` na powierzchni `#FFFFFF`, czyli **różnica trzech jednostek** —
+           wypełnienie nie odcinało pola w ogóle i cały ciężar spoczynkowej widoczności spadał na jedną
+           kreskę. ⭐ Dlatego pole dostaje teraz WKLĘSŁE TŁO: to ono nadaje kształt, ramka go tylko domyka.
+           Tak samo działa każde pole wyszukiwania na jasnym panelu w dojrzałych edytorach.
+
+           ⚠ Skoki są celowo WYRAŹNE, a nie „o włos": ciemny `#171717` przy powierzchni `#2D2D2D` i jasny
+           `#EDEFF2` przy `#FFFFFF`. Trzy jednostki to był właśnie ten włos. -->
+      <Color x:Key="FieldOnRaisedColor">#171717</Color>
+      <!-- ⭐ Ramka trafia w PRÓG 3:1 wobec powierzchni, na której stoi — to kryterium §10 dla granic
+           nietekstowych (WCAG 1.4.11), a nie dobór na oko. Zmierzone: `#6E757E` dawało 2,96 (pod progiem),
+           `#767D87` daje 3,31. Dokładnie ten rodzaj różnicy, którego „prawie widać" nie odróżnia od „widać". -->
+      <Color x:Key="FieldOnRaisedBorderColor">#767D87</Color>
+
       <!-- Semantic icon colors (dark theme). Subtle, professional tones — not the
            loud primary green/red. Applied via Foreground on SvgIcon. Disabled state is
            conveyed by button Opacity, not a separate color.
@@ -208,6 +240,10 @@
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}" />
       <SolidColorBrush x:Key="OnAccentSubtleBrush" Color="{StaticResource OnAccentSubtleColor}" />
+      <SolidColorBrush x:Key="AccentDisabledBrush" Color="{StaticResource AccentDisabledColor}" />
+      <SolidColorBrush x:Key="FieldOnRaisedBrush" Color="{StaticResource FieldOnRaisedColor}" />
+      <SolidColorBrush x:Key="FieldOnRaisedBorderBrush" Color="{StaticResource FieldOnRaisedBorderColor}" />
+      <SolidColorBrush x:Key="OnAccentDisabledBrush" Color="{StaticResource OnAccentDisabledColor}" />
       <SolidColorBrush x:Key="CloseButtonHoverBrush" Color="{StaticResource CloseButtonHoverColor}" />
 
       <SolidColorBrush x:Key="AccentIconBrush" Color="{StaticResource AccentIconColor}" />
@@ -434,6 +470,22 @@
       <Color x:Key="OnAccentSubtleColor">#80FFFFFF</Color>
       <Color x:Key="CloseButtonHoverColor">#E81123</Color>
 
+      <!-- ⭐ Nieaktywny przycisk główny — patrz komentarz w słowniku Dark, gdzie stoi cały mechanizm.
+           ⚠ TU wartości MUSZĄ się różnić od ciemnych i to jest sedno zgłoszenia: nieaktywna kontrolka ma być
+           przygaszona względem SWOJEGO otoczenia, a otoczenie w tym motywie jest jasne. Ciemnoszare wypełnienie
+           z Darka czytałoby się tutaj jak przycisk WŁĄCZONY, tylko w innym kolorze. -->
+      <Color x:Key="AccentDisabledColor">#DDE1E6</Color>
+      <Color x:Key="OnAccentDisabledColor">#8A9199</Color>
+
+      <!-- ⭐ Pole na powierzchni unoszącej się — patrz słownik Dark, gdzie stoi cały pomiar. ⚠ TO jest motyw,
+           w którym przesłanka zawodzi najmocniej: `SurfaceRaised` to tutaj `#FFFFFF`, a domyślne tło pola
+           `#FCFCFD` — trzy jednostki. Wklęsłe `#EDEFF2` daje osiemnaście i pole wreszcie ma kształt
+           w spoczynku, bez najeżdżania kursorem. -->
+      <Color x:Key="FieldOnRaisedColor">#E9ECF1</Color>
+      <!-- ⭐ Ten sam próg 3:1 wobec powierzchni (§10 / WCAG 1.4.11), zmierzony w tym motywie: `#9AA3B0` dawało
+           2,55, `#8A94A3` daje 3,08. Na białym podłożu jasna kreska „prawie widoczna" to kreska niewidoczna. -->
+      <Color x:Key="FieldOnRaisedBorderColor">#8A94A3</Color>
+
       <!-- Semantic icon colors (light theme): darker + more saturated than the dark
            variants so icons stay legible on the near-white surfaces. Same semantic
            keys; see the Dark dictionary for the mapping. -->
@@ -495,6 +547,10 @@
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}" />
       <SolidColorBrush x:Key="OnAccentSubtleBrush" Color="{StaticResource OnAccentSubtleColor}" />
+      <SolidColorBrush x:Key="AccentDisabledBrush" Color="{StaticResource AccentDisabledColor}" />
+      <SolidColorBrush x:Key="FieldOnRaisedBrush" Color="{StaticResource FieldOnRaisedColor}" />
+      <SolidColorBrush x:Key="FieldOnRaisedBorderBrush" Color="{StaticResource FieldOnRaisedBorderColor}" />
+      <SolidColorBrush x:Key="OnAccentDisabledBrush" Color="{StaticResource OnAccentDisabledColor}" />
       <SolidColorBrush x:Key="CloseButtonHoverBrush" Color="{StaticResource CloseButtonHoverColor}" />
 
       <SolidColorBrush x:Key="AccentIconBrush" Color="{StaticResource AccentIconColor}" />

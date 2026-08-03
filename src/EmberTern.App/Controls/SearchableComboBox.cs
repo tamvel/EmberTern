@@ -258,6 +258,11 @@ public sealed class SearchableComboBox : TemplatedControl
         // is too low"). Three consumers now — Settings, Global Search, every picker — which is what makes
         // `Size.ControlProminent` a role rather than one control's value.
         _filterBox.Classes.Add("search");
+        // ⭐ …and this filter lives inside PART_Popup, i.e. on `SurfaceRaised`, where the field's resting border
+        // (tuned against the WINDOW background) disappears and the box only becomes visible under the pointer
+        // (user report 2026-08-03). Two classes, two independent roles: `search` is about SIZE, `on-raised`
+        // about the surface it stands on.
+        _filterBox.Classes.Add("on-raised");
         _filterBox.AddHandler(TextBox.TextChangedEvent, (_, _) => ApplyFilter(_filterBox.Text ?? string.Empty));
         _filterBox.AddHandler(InputElement.KeyDownEvent, OnPopupKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         root.Children.Add(_filterBox);

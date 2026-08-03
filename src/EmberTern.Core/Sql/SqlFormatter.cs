@@ -1828,7 +1828,7 @@ public static class SqlFormatter
         if (intoIdx >= 0)
         {
             var into = sig.GetRange(intoIdx, doIdx - intoIdx); // "into <vars>", loop indent
-            EmitPsqlLines(lines, indent, Emit(style, into));
+            EmitPsqlLines(lines, indent, FormatIntoClause(style, into));
         }
 
         AddPsqlLine(lines, indent, Kw("do", style));
@@ -1959,7 +1959,7 @@ public static class SqlFormatter
         // from the comment-free token list, and an INTERNAL subquery comment is emitted once (its enclosing
         // Emit skips the spliced node's tokens).
         string head = StripLeadingLeafComments(EmitQuery(style, query), query.Tokens);
-        if (into > 0) return head + "\n" + Emit(style, stmt.GetRange(into, stmt.Count - into));
+        if (into > 0) return head + "\n" + FormatIntoClause(style, stmt.GetRange(into, stmt.Count - into));
         // No INTO — glue any trailing tokens after the query (the terminating ';').
         int qEnd = stmt.Count;
         for (int k = 0; k < stmt.Count; k++) { if (stmt[k].Start >= query.End) { qEnd = k; break; } }
@@ -1996,10 +1996,42 @@ public static class SqlFormatter
         {
             int into = FindTopLevelWord(stmt, "INTO");
             if (into > 0)
-                return Emit(style, stmt.GetRange(0, into)) + "\n" + Emit(style, stmt.GetRange(into, stmt.Count - into));
+                return Emit(style, stmt.GetRange(0, into)) + "\n"
+                    + FormatIntoClause(style, stmt.GetRange(into, stmt.Count - into));
         }
 
         return Emit(style, stmt);
+    }
+
+    // Lays out a PSQL INTO clause — "into &lt;target&gt;, &lt;target&gt;, …" — where <paramref name="tokens"/> begins
+    // at the INTO keyword and may end with the statement's ';'.
+    //
+    // ⚠ THE ONE PLACE INTO IS LAID OUT, and it exists because this was the ONE comma list P8's convergence
+    // missed. Every other list in the formatter — SELECT columns, VALUES, INSERT columns, MATCHING, IN, call
+    // arguments — goes through the shared adaptive builder; the INTO target list was still rendered by the
+    // generic Emit, which glues a comma list onto one line however long it gets (user report 2026-08-03).
+    // All three callers (the AST SELECT leaf, the token-only fallback, and FOR SELECT) route here, so the
+    // clause cannot end up with two layouts again.
+    //
+    // ⚠ A short list is byte-identical to what Emit produced: the adaptive builder joins with ", " whenever the
+    // result fits, so the §0 corpus and the pinned formatter expectations do not move.
+    private static string FormatIntoClause(FormatterStyle style, List<FToken> tokens)
+    {
+        if (tokens.Count == 0 || !IsWordTok(tokens[0], "INTO")) return Emit(style, tokens);
+
+        int end = tokens.Count;
+        bool semi = IsPunctTok(tokens[end - 1], ";");
+        if (semi) end--;
+
+        // "into" with nothing after it (mid-edit) — nothing to lay out, and the generic path stays lossless.
+        if (end <= 1) return Emit(style, tokens);
+
+        var sb = new StringBuilder();
+        sb.Append(Kw("into", style)).Append(' ');
+        var items = SplitTopLevelCommas(tokens, 1, end);
+        sb.Append(FormatAdaptiveBareList(style, items, CurrentColumn(sb)));
+        if (semi) sb.Append(';');
+        return sb.ToString();
     }
 
     private static void EmitPsqlLines(List<string> lines, int indent, string emitted)

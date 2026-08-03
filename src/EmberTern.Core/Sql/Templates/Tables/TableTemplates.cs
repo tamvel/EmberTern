@@ -103,6 +103,52 @@ public sealed class TableInsertTemplate : ISqlTemplate
     }
 }
 
+/// <summary>
+/// <c>INSERT INTO t (cols) SELECT cols FROM t</c> — the copy/transform shape, where the value list is a query
+/// rather than literals.
+///
+/// <para>⭐ Requested by the user (2026-08-03) as one of the two templates that were missing from the
+/// drag-and-drop menu, and it is the one genuinely new generator: <see cref="TableInsertTemplate"/> produces the
+/// <c>VALUES</c> form, and there was no way to get the <c>SELECT</c> form without retyping the column list twice.
+/// Typing it by hand is exactly the error-prone part — the two lists must agree in order and length.</para>
+///
+/// <para>⚠ The source table defaults to the SAME table, deliberately: it is the shape a developer edits (usually
+/// into an archive/history twin), it keeps the generated statement syntactically complete, and it never guesses at
+/// a table the user did not name. Both column lists come from one call to <c>Insertable</c>, so they cannot drift
+/// out of correspondence — which is the whole value of generating this rather than writing it.</para>
+/// </summary>
+public sealed class TableInsertFromSelectTemplate : ISqlTemplate
+{
+    public SqlTemplateDescriptor Descriptor { get; } =
+        new("table.insert-select", "INSERT INTO … SELECT", SqlTemplateGroup.Dml, 55,
+            new[] { MetadataObjectKind.Table }, SnippetContexts.Any);
+
+    public bool AppliesTo(SnippetContext ctx) => KindAndContext(Descriptor, ctx) && ctx.Columns.Count > 0;
+
+    public SqlSnippet Generate(SnippetContext ctx)
+    {
+        var nl = ctx.Options.NewLine;
+        var cols = Insertable(ctx);
+
+        var b = new SqlSnippetBuilder().Add("INSERT INTO ").Add(Q(ctx.Object.Name)).Add(" (");
+        for (var i = 0; i < cols.Count; i++)
+        {
+            if (i > 0) b.Add(", ");
+            b.Add(Q(cols[i].Name));
+        }
+
+        b.Add(")").Add(nl).Add("SELECT ");
+        for (var i = 0; i < cols.Count; i++)
+        {
+            if (i > 0) b.Add(", ");
+            b.Add(Q(cols[i].Name));
+        }
+
+        b.Add(nl).Add("FROM ").Add(Q(ctx.Object.Name));
+        return b.Build();
+    }
+}
+
 /// <summary><c>UPDATE t SET col = :col … WHERE pk = :pk</c> — SET excludes PK; WHERE is PK-aware.</summary>
 public sealed class TableUpdateTemplate : ISqlTemplate
 {

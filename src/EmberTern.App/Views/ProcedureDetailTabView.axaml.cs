@@ -16,6 +16,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
@@ -225,7 +226,7 @@ public partial class ProcedureDetailTabView : UserControl
         }
     }
 
-    // Ctrl+K in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE.
+    // Alt+F (or Ctrl+K) in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE.
     //
     // ⚠ This is the one gesture etap 3 could not move into Commands.CommandCatalog, and the reason is
     // structural rather than incidental: "format the object's source" (the VM's FormatSqlCommand, which the
@@ -233,12 +234,19 @@ public partial class ProcedureDetailTabView : UserControl
     // and the second one is identified by a specific TextEditor INSTANCE. The router resolves commands, not
     // control instances, so it has nothing to route to here.
     //
-    // It stays deliberately narrow: it handles the key ONLY for those two editors, so Ctrl+K anywhere else
+    // It stays deliberately narrow: it handles the key ONLY for those two editors, so the gesture anywhere else
     // in the tab falls through to the router and reaches the catalog's FormatSql exactly like the other five
     // formattable tabs. The body/source editors are no longer special-cased here at all.
+    //
+    // ⭐⭐ THE GESTURE IS READ FROM THE CATALOG, NOT TYPED HERE. It used to be a literal
+    // `e.Key != Key.K || e.KeyModifiers != Control`, which was fine until Format SQL moved to Alt+F with Ctrl+K
+    // as its alternate (2026-08-03): the shortcut would then have worked everywhere in the application EXCEPT
+    // these two editors, with a green build and no failing test — gotcha #284's drift, in a key handler instead
+    // of a string. What cannot be moved into the router is the TARGET (a specific TextEditor instance), never
+    // the gesture.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.K || e.KeyModifiers != KeyModifiers.Control) return;
+        if (CommandCatalog.For(CommandId.FormatSql)?.Matches(e.Key, e.KeyModifiers) != true) return;
         if (sender is TextEditor ed && (ReferenceEquals(ed, _cursorEditor) || ReferenceEquals(ed, _subprogramEditor)))
         {
             FormatEditorInPlace(ed, StyleForFormatting());

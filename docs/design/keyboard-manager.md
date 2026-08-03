@@ -11,7 +11,9 @@ tooltip, shortcut-chip and context menu from there.
 **The shortcut map was ratified by the user on accepting etap 1** — `F3` New · `F4` Refresh ·
 `F5` Execute (Continue in the debugger stays the one accepted contradiction) · `F6` Commit ·
 `Shift+F6` Rollback · `F7` Compile · `F8` Delete in trees and lists, Next Diagnostic in the editor ·
-`Ctrl+K` Format SQL · **no `Alt+letter` exceptions at all**, and F-keys are reserved for the most
+~~`Ctrl+K` Format SQL · **no `Alt+letter` exceptions at all**~~ → ⭐ **AMENDED 2026-08-03 (see §18):
+`Alt+F` Format SQL, with `Ctrl+K` retained as its alternate — the single ratified `Alt+letter`
+exception**, and F-keys are reserved for the most
 frequent operations. The architecture (`CommandDescriptor` + `CommandResolver`, no `ICommand` in the
 registry) was ratified with it, and the double `SearchPanel` (§2.2) was pulled into the sprint.
 
@@ -762,7 +764,8 @@ used in a `const` expression (attribute argument, `case` label, another `const` 
 one thing that would have made this unsafe.
 
 Migrated: the 11 Compile tooltips (**new** — `F7` had no tooltip presence at all), Commit `F6`, Rollback
-`Shift+F6`, Close tab `Ctrl+W`, Format SQL `Ctrl+K`, Execute (both `F5` preview and `Shift+F5` all rows),
+`Shift+F6`, Close tab `Ctrl+W`, Format SQL (whose gesture has since changed — §18, which is the point),
+Execute (both `F5` preview and `Shift+F5` all rows),
 Global Search, Quick Fix (tooltip + hover hint), Import Run / Validate / Refresh, Script Run, the nine
 debugger toolbar tooltips, Save, Evaluate, both shortcut **chips**, and three **prose** messages that name a
 key mid-sentence (the two debugger session-ended lines, the Session Manager analyze tip, the Harness Log
@@ -1032,3 +1035,46 @@ deleted, since the toolbar's tooltips are computed.
 | `CollectionTooltips_NameTheActiveCollectionAndCarryItsGesture` | the toolbar's words and key match the menu's |
 | `CollectionEdit_IsARoutedGridCommand_AndResolvesToTheRouter` | Edit really exists, and declines when there is nothing to edit |
 | `FieldsGridLegacyKeys_AreCatalogAlternates_NotLocalBindings` | Insert / Delete are aliases in the catalog, not local bindings |
+
+---
+
+## 18. `Alt+F` came back for Format SQL — the one ratified `Alt+letter` (2026-08-03)
+
+**User decision, after living with `Ctrl+K`:** *"Przywróć skrót Alt+F. Obecny Ctrl+K jest znacznie mniej
+ergonomiczny i wymaga dwóch rąk."* Format SQL is used constantly, and a two-handed chord for it is a real cost
+paid many times a day. **`Alt+F` is primary; `Ctrl+K` stays as `AlternateGesture`**, so nobody who learned the
+etap-3 binding loses it. One line in `CommandCatalog`; `CommandTip` recomposes every tooltip, chip and the
+Keyboard Shortcuts window from the catalog, so nothing else had to be edited to stay truthful.
+
+### 18.1 The `Alt+letter` retirement is NARROWED, not withdrawn
+
+⭐ Its reason was never stylistic, which is exactly why it survives the exception. On the Polish (Programmers)
+layout **AltGr composes `ą ć ę ł ń ó ś ź ż`**, so `Alt` + those letters is genuinely unusable (§13, C6). **`F` is
+not one of them** — a fact §13 had already measured and recorded when it called `Alt+F` "not itself stealing a
+letter". So the rule now reads: *no command uses `Alt`+letter, apart from the ratified `Alt+F`.*
+
+⛔ **`NoCommandUsesAltPlusALetter` was NARROWED, never deleted.** It carries `Alt+F` as an explicit allowlist
+entry with its reason, so (a) a second `Alt+letter` still fails the build, and (b) the next author reads *which*
+one is allowed and why, instead of finding no rule at all. ⚠ An allowlist entry that matched nothing would let
+that test pass while `Alt+F` quietly did not exist (gotcha #289), so a second test asserts the descriptor really
+answers both gestures.
+
+### 18.2 The two local handlers now read the gesture from the catalog
+
+§12.4 left two `OnEditorKeyDown` handlers alive — the Easy-mode cursor / subprogram editors, where the action is
+identified by a **specific `TextEditor` instance** and the router resolves commands rather than controls. They
+matched the key with a literal `e.Key != Key.K || e.KeyModifiers != Control`.
+
+⭐ They now ask `CommandCatalog.For(CommandId.FormatSql)?.Matches(e.Key, e.KeyModifiers)`. **The gesture is no
+longer typed anywhere outside the catalog — not even in the one place the router cannot reach.** Only the TARGET
+is local, which was always the real exception. Had they kept the literal, `Alt+F` would have worked everywhere in
+the application *except* those two editors, with a green build and no failing test — gotcha **#284**'s silent
+drift, in a key handler instead of a string. §12.4's own table said "narrowed to `Ctrl+K`"; that line is now
+historical.
+
+### 18.3 The collision, stated as an accepted cost
+
+`Alt+F` is the conventional **File-menu mnemonic** on Windows. EmberTern has **no menu bar** — the application
+menu is a hamburger *button* — so there is nothing for it to collide with in this application. Recorded here
+rather than silently ignored, per the standing instruction that collisions with platform conventions are
+**reported**, not resolved by omission (§13).

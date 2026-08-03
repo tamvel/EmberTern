@@ -21,6 +21,7 @@ public static class SqlTemplateCatalog
         new TableFieldListTemplate(),
         new TableParameterListTemplate(),
         new TableInsertTemplate(),
+        new TableInsertFromSelectTemplate(),
         new TableUpdateTemplate(),
         new TableDeleteTemplate(),
         new TableUpsertTemplate(),

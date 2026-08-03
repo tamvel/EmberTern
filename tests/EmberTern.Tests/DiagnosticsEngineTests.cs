@@ -247,6 +247,81 @@ public class DiagnosticsEngineTests
         Assert.Equal(sql.IndexOf("v_typo", StringComparison.Ordinal), d.Start);
     }
 
+    // ══ EXTRACT's date/time part is syntax, not a variable ════════════════════════════════════
+    //
+    // `EXTRACT(YEAR FROM …)` in a PSQL body reported ET0003 on YEAR. Same shape as the GEN_ID case above: the
+    // part names are NOT in the keyword catalog — deliberately, because they are not reserved words in Firebird
+    // and a column may be called MONTH — so they lex as identifiers, and the PSQL walker read one as a local.
+    //
+    // ⭐ The fix is the POSITION, so these two groups of tests are the pair that matters: nothing after
+    // `EXTRACT (` is flagged, and the very same word elsewhere behaves exactly as it did before.
+
+    [Theory]
+    [InlineData("YEAR")]
+    [InlineData("MONTH")]
+    [InlineData("DAY")]
+    [InlineData("HOUR")]
+    [InlineData("MINUTE")]
+    [InlineData("SECOND")]
+    [InlineData("MILLISECOND")]
+    [InlineData("WEEK")]
+    [InlineData("WEEKDAY")]
+    [InlineData("YEARDAY")]
+    [InlineData("QUARTER")]
+    public void ExtractPart_InPsqlBody_IsNotFlagged(string part)
+    {
+        var sql = "create procedure p as declare variable v integer;\n"
+            + "begin\n  v = extract(" + part + " from current_date);\nend";
+        Assert.Empty(Analyze(sql));
+    }
+
+    // Every PSQL position the walker flags from: an assignment RHS, a RETURN, an IF and a WHILE header.
+    [Theory]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = extract(year from current_date);\nend")]
+    [InlineData("create function f returns integer as\nbegin\n  return extract(month from current_date);\nend")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  if (extract(year from current_date) > 2000) then v = 1;\nend")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  while (extract(year from current_date) > 0) do v = 1;\nend")]
+    [InlineData("execute block as declare variable v integer;\nbegin\n  v = extract(year from current_date);\nend")]
+    // Nested inside another call, and twice in one expression.
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = coalesce(extract(year from current_date), 0);\nend")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = extract(year from current_date) - extract(month from current_date);\nend")]
+    public void ExtractPart_InEveryFlaggingPosition_IsNotFlagged(string sql)
+        => Assert.Empty(Analyze(sql));
+
+    // ⛔ The word is not exempt — only the position is. An undeclared bare YEAR outside EXTRACT is still an
+    // unresolved variable, which is what stops this fix from becoming a silent hole named YEAR.
+    [Fact]
+    public void TheSameWord_OutsideExtract_IsStillFlagged()
+    {
+        const string sql = "create procedure p as declare variable v integer;\nbegin\n  v = year;\nend";
+        var d = Assert.Single(Analyze(sql));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal("ET0003", d.Code);
+        Assert.Equal(sql.IndexOf("year;", StringComparison.Ordinal), d.Start);
+    }
+
+    // …and EXTRACT's SECOND operand is an ordinary expression, so a typo there still reports.
+    [Fact]
+    public void ExtractValueOperand_UndeclaredVariable_IsStillFlagged()
+    {
+        const string sql = "create procedure p as declare variable v integer;\n"
+            + "begin\n  v = extract(year from v_typo);\nend";
+        var d = Assert.Single(Analyze(sql));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal("ET0003", d.Code);
+        Assert.Equal(sql.IndexOf("v_typo", StringComparison.Ordinal), d.Start);
+    }
+
+    // A variable a user genuinely called MONTH still resolves to itself — the position rule leaves the
+    // declaration and every ordinary use of it completely alone.
+    [Fact]
+    public void AVariableNamedLikeADatePart_StillResolves()
+    {
+        const string sql = "create procedure p as declare variable month integer;\n"
+            + "begin\n  month = extract(month from current_date);\nend";
+        Assert.Empty(Analyze(sql));
+    }
+
     // ══ EXECUTE BLOCK — declarations reach the body (segmentation regression) ═════════════════
     //
     // A variable DECLAREd in an EXECUTE BLOCK must resolve in its body exactly as in a procedure. It did

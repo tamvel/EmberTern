@@ -373,6 +373,165 @@ is genuinely ambiguous (column vs variable vs label), but in a position the gram
 unknown name is *provably* an unknown object — so it is recorded **unresolved** rather than dropped, which is
 what makes ET0001 reachable there. Dropping the reference is not conservatism, it is losing the finding.
 
+303. **A grammatically-pinned position is decided by the POSITION, never by adding its words to the keyword
+catalog — and the difference is whether a user's column named `MONTH` survives.** `EXTRACT(YEAR FROM d)` inside a
+PSQL body reported **ET0003 UnresolvedVariable** on `YEAR`. The date/time parts (`YEAR`/`MONTH`/`DAY`/`HOUR`/
+`MINUTE`/`SECOND`/`MILLISECOND`/`WEEK`/`WEEKDAY`/`YEARDAY`/`QUARTER`/`TIMEZONE_*`) are **deliberately not** in
+`FirebirdSyntax` — they are not reserved words in Firebird, so a column or a variable may legitimately be called
+`MONTH` — which means they lex as identifiers and the PSQL walker read one as a local. ⛔ **The tempting fix
+(catalog them as keywords) is wrong twice over:** it would colour and re-case every legitimate `MONTH` in the
+application, and it answers a question about vocabulary when the actual question is about position. The fix is a
+sibling of `IsGeneratorNamePosition` (#302) asking *"is this identifier immediately after `EXTRACT (`"*, composed
+with it at the ONE caller that has the shared job (*"does the grammar pin this to something that is not a
+local?"*) — ⚠ **composed at the caller, not merged into one predicate**, because the two have opposite
+consequences: a generator name must be RESOLVED by the catalog scan (an unknown one is a provable ET0001), while
+a date part resolves to nothing and must simply go unclaimed. ⚠ The predicate deliberately does **not** also
+require the next token to be `FROM`: nothing else can stand in that position, so the extra condition buys no
+precision and costs a false ET0003 on every keystroke of a half-typed `EXTRACT(YEA`.
+
+304. **A write is only atomic within one process if the temp file it swaps in is unique to that process — and a
+shared temp name turns two instances of the app into total data loss.** `ApplicationSettingsStore.AtomicWrite`
+wrote to the FIXED path `settings.dat.tmp`, identical in every process, then `File.Replace`d it in. The user ran a
+second EmberTern from the same exe (a smoke test beside a working instance) and lost every setting. The mechanism
+is arithmetic, not chance: `File.WriteAllText` **truncates before it writes**, so the shared temp is momentarily
+zero-length, and a second instance reaching its `File.Replace` inside that window **publishes an empty
+settings.dat**. From there the loss is automatic and silent — an empty file loads as `Missing` (correctly: that is
+what a killed-mid-write leaves behind), every section facade answers `Missing` with `Load() ?? new()`, the save
+guard lets a blank file through, and the next write makes defaults permanent while `File.Replace` rolls the single
+`.bak` generation away. ⭐ **Two independent lessons.** (a) *A benign read classification is only as safe as the
+guarantee that nothing FABRICATES its input* — "an empty file holds no user data, so replacing it destroys
+nothing" was sound reasoning about the disk and became a data-loss path once a bug could produce an empty file
+from a good one. ⛔ Do not "harden" the read side by calling an empty file `Corrupt`; that strands the genuinely
+truncated case for a cause fixed where it lived, on the write side. (b) ⭐⭐ **A race is the wrong instrument for
+pinning a race.** A concurrent-save stress test (4 threads × 15 writes, asserting the file always deserializes)
+passes against the *broken* code — the window is microseconds wide. What fails on the pre-fix code is the
+DETERMINISTIC statement of the property: plant a file at the shared temp path and require the save to leave it
+untouched. Keep both, but know which one is the guard. The full fix is a per-write temp name (`<pid>.<guid>`), a
+named `Local\` mutex spanning the whole read-judge-write, and an I/O failure that becomes
+`LastSaveDiagnostic` + a refusal instead of an exception escaping into `MainWindow`'s Closing handler.
+
+305. **Ask the panel that HOLDS a popup to remove it — never re-derive the container from a control that may
+already be detached.** Every `OverlayLayer`-hosted card in the editor (hover info, Parameter Helper, code-action
+menu, construct hint) closed itself with `OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card)`. That
+answers *"which overlay would this editor use NOW"* — and after a tab switch the editor is detached, so it answers
+**null**, `Remove` does nothing, and clearing the field drops the last reference to a card still parented in the
+**window's** overlay. The overlay outlives every tab, so the card stays on screen: no tab change removes it, no
+pointer exit removes it, no click removes it — only restarting the application does. ⭐ The rule was already
+written in this very file, on `HideBulb`, with its reason (*"clearing the field while the control stayed parented
+is how one gets stranded in the overlay"*) — and missing from the other four sites, which is #302's shape one
+layer up: **one piece of knowledge, partially copied**. ⚠ The correct form needs no container lookup at all:
+`(card.Parent as Panel)?.Children.Remove(card)`. ⚠⚠ **And the first fix attempted here was inert.** The symptom
+was reported as a "tooltip", so the first fix closed `ToolTip.IsOpen` on the owner's detach — measured
+afterwards, it changed nothing, because Avalonia's own tooltip service already resets that state on detach. It was
+deleted rather than kept as belt-and-braces (§15.7: an inert guard reads to the next author as a real safety net).
+**A fix whose mechanism you cannot demonstrate is not a cautious fix, it is a false record of what was wrong.**
+
+306. **Persist a layout decision only where the user can make it — a remembered column ORDER replayed onto a grid
+that cannot be reordered is not a preference, it is corruption.** `GridLayoutBehavior` remembered column order for
+every grid carrying a `GridId`, and the SQL editor's result grid has ONE profile (`GridId="QueryResults"`) shared
+by every query. So the column order of an earlier result was replayed onto the next result's columns and the grid
+stopped matching the `SELECT` list. ⚠ **The producer was innocent and looked guilty:** `PopulateResultGrid` adds
+columns strictly in `result.Columns` order, so every hypothesis that starts at the grid-building code is a dead
+end. ⭐ The fix is a rule read from the grid itself — `CanUserReorderColumns` — applied to **both** the restore and
+the save (they must agree on whose order it is, or the save keeps re-seeding a profile the next result has replayed
+onto it). Reading the criterion from the control rather than declaring it per `GridId` means nothing has to be
+remembered when a grid is added: *whether the user can arrange the columns is the same question as whether an
+order is worth storing.* It corrected five grids at once, of which three had never shown the symptom — the two
+table-data grids because a table's own column order does not change between loads. ⚠ Widths are NOT affected and
+should not be: they are keyed by header name, so a column that is absent simply has no width to restore, whereas
+only ORDER can put a column that IS present in the wrong place.
+
+307. **Firebird calls a procedure TWO ways, and code that recognises only `EXECUTE PROCEDURE` silently ignores the
+one users reach for most.** A **selectable** procedure is invoked from a `FROM` clause —
+`select … from XXX_SEL_RAP_CZASUPRACY(:p_dataod, :p_datado, :p_id_jedkadr)` — which parses to a
+`SelectStatement`, not an `ExecuteProcedureStatement`. The Smart-Parameters type lookup tested only the latter, so
+for every selectable procedure it returned before consulting the catalog and the dialog showed `Unknown` for every
+parameter with a plain text box. ⚠ Selectable procedures are how reports and parameterised views are written in
+ERP code, i.e. the overwhelming majority of real uses of that dialog. ⭐⭐ **The methodological half is the
+transferable one: a correct fix to a real defect can leave the reported symptom completely untouched.** The first
+round of this bug found and fixed a genuine defect in the same method (an all-or-nothing
+`catalog.Count == names.Count` gate, which breaks on parameters with DEFAULTS, a repeated placeholder, or
+`RETURNING_VALUES`), verified it with tests, and shipped — and the user saw no change at all, because the question
+asked was *"why does the count gate fail?"* instead of *"is this statement even the shape the code looks for?"*
+The screenshot they attached answered it in one line. ⚠ Ask what shape the input actually is before asking why the
+handling of that shape is wrong. ⚠⚠ **And one measured trap inside the fix:** a `TableReference`'s own `Tokens`
+hold **only the name** — the parser models a FROM entry's name and alias, and a selectable-procedure argument list
+is not a node — so scanning the entry for `(` finds nothing while looking entirely correct. The argument spans
+live in the enclosing **clause's** tokens.
+
+308. **"Almost visible" is indistinguishable from "invisible" to the person using it — move a contrast value to a
+THRESHOLD, not merely in the right direction.** Filter fields in the domain/column picker sit on
+`SurfaceRaised`, where the `TextBox`'s resting colours (tuned for a field on the WINDOW background) leave it
+blending in; only hover revealed it, because hover swaps the border to `AccentMuted`. The first fix strengthened
+the border alone and the user re-reported the defect **on both themes** — and the measurement then said two things
+at once: the selector *was* applying (so "it does not work" was the wrong reading), and it was still not enough.
+In Light the field's fill was `#FCFCFD` on a `#FFFFFF` surface — a **three-unit** difference, so the field's whole
+shape rested on one pixel of line, and that line measured **2.55:1**, under the 3:1 floor for a non-text boundary
+(WCAG 1.4.11). ⭐ The fix is a **recessed fill plus a border that clears the threshold** — the fill is what gives a
+field its shape; the border only closes it. ⚠⚠ And an app-level style beats the `ControlTheme`, so a stateless
+`/template/ Border#PART_BorderElement` setter must be accompanied by `:pointerover` **and** `:focus` overrides —
+otherwise fixing resting visibility silently removes the hover cue and the focus ring. Pin the **threshold**, not
+the shade: such a test survives a change of tint and fails exactly when the field starts blending again.
+
+
+309. **When a consumer starts enumerating statement shapes, the missing thing is a fact on the AST — and each
+"one more syntax" fix leaves the next one silently dead.** Firebird invokes a procedure through unrelated
+syntaxes: `EXECUTE PROCEDURE P(a, b)`, and a SELECTABLE procedure standing where a table would (`… FROM P(a, b)`),
+which then appears inside a plain `SELECT`, a PSQL `FOR SELECT … INTO`, an `INSERT … SELECT`, a CTE body, a
+`MERGE … USING`, a cursor declaration, or any subquery of any of those. The Smart-Parameters type lookup asked
+*"which statement kind is this?"* and was fixed three times — `EXECUTE PROCEDURE`, then `SELECT … FROM P(…)`, then
+the user stopped it: *"AST powinno umieć odpowiedzieć na pytanie: «W tym miejscu wykonywane jest wywołanie
+procedury z listą argumentów»."* ⭐ The fix is an interface on the tree (`IRoutineInvocation`: routine, package,
+argument spans) plus **the parser no longer discarding the argument list** — `ParsePrimaryFromItem` read the name
+and jumped to the alias, so `rap(:a, :b) r` produced a node carrying the single token `rap`, neither arguments
+**nor alias**; consumers re-scanned text because the structure was not there to read. Consumers now ask
+`DescendantNodesAndSelf().OfType<IRoutineInvocation>()` and know nothing about statements; ~130 lines of token
+walking were deleted. ⭐⭐ **The test for whether you fixed the cause or added a patch: write the theory for every
+syntax you can think of, and check how many needed code.** Here eight rows — FOR SELECT, INSERT…SELECT, UPDATE OR
+INSERT, CTE, MERGE USING, cursor declaration, derived table, EXISTS subquery — passed with **none**, because the
+parser already hangs each embedded query off its owning statement. ⚠ Model the invocation as its OWN node type
+(`RoutineTableReference`, a *subclass* of `TableReference` so existing consumers are untouched) rather than adding
+a possibly-empty `Arguments` to the table node: "arguments is empty" would conflate a no-argument call with a
+plain table, and every consumer would carry the filter. ⚠ A bare `FROM MY_PROC` with no parentheses stays a table
+— a name alone is not evidence of a call.
+
+310. **A drag-and-drop template that generates code and the parser that reads it are one feature; pin the
+round-trip or they drift.** Two things fell out of the same session. (a) ⚠ **`FOR SELECT … INTO` for selectable
+procedures existed and was unreachable**: the snippet insertion context was fixed when the drop target was
+*attached* — body editors `PsqlBody`, the SQL Editor always `PlainSql` — while PSQL scaffolds are `PsqlOnly`. That
+is right about body editors and wrong about the SQL Editor, where writing `CREATE OR ALTER PROCEDURE … BEGIN … END`
+is ordinary work. Resolve the context from the **drop offset** by asking the parser whether it lies inside a
+`BlockStatement`; ⛔ never by counting `BEGIN`/`END`, which is wrong for `CASE … END` (#117/#128/#129). (b) ⭐⭐ The
+contract worth having: **feed every template that emits a routine call back through the same AST walk the
+parameter dialog uses**, asserting the same routine, the same argument count and each generated `:param` bound to
+the slot it was generated into. Otherwise a generator can emit a shape the model does not recognise — the exact
+defect above — and nothing fails until a user drops it into an editor and presses F5.
+
+311. **Before shipping an architecture, inventory what ELSE consumes the behaviour it replaced — and check that
+the surfaces built on it still read correctly to a user.** A model-driven rewrite of routine-call recognition was
+correct, broadly tested, and the user rejected the round anyway with four findings, of which only two were code
+defects. The inventory they demanded took minutes and separated the questions cleanly: *"does this SQL carry named
+placeholders?"* (scope: **any** SQL — gates the parameter dialog) versus *"is this placeholder provably a routine
+argument?"* (scope: **typing only**). ⭐ With that written down it was provable — from `git show HEAD:`, not from
+argument — that the new model **could not** have widened the dialog's reach, because it is consulted only for
+types. ⚠⚠ **What the user was actually seeing was a MISLABELLED surface:** the parameter editor is reused for any
+parameterised statement, so a plain `INSERT … VALUES (:a, :b)` opened a window titled *"Execute Procedure"*. The
+behaviour was right and only the label lied — **and a lying label is indistinguishable from a malfunction**, which
+is why it was reported as one. Two rules follow: when a dialog is reused for a second purpose, its title is part of
+the reuse, not decoration; and *"my change cannot have caused this"* is worth proving from history before saying
+it, because it is equally worth **saying** once proved — it stops the wrong thing being fixed.
+
+312. **A value's declared type can have more than one provable origin; model each as its own AST fact and give the
+consumer ONE uniform answer.** In Firebird DML a placeholder's type comes either from an invoked routine's input
+parameter or from the column it is written into — two different metadata, so two facts (`IRoutineInvocation`,
+`IColumnValueTarget`), but one resolver returning one `ParameterTypeSource` so the consumer switches on the **kind
+of source** and never on a kind of statement. ⭐ Model the column fact as **(column, value-span) PAIRS**, not as two
+parallel lists: `INSERT (cols) VALUES (…)` and `UPDATE OR INSERT` pair positionally while `UPDATE SET col = expr`
+pairs by adjacency, and pairs let one interface serve both while keeping that difference out of the consumer.
+⚠ Refuse rather than guess, each with a written reason: no column list (matching values to columns would need the
+catalog's order — a lookup, not a fact about the text), a length mismatch (Firebird rejects the statement anyway;
+pairing the prefix types values whose column is undecided), a predicate (`WHERE col = :p` is a token fragment at
+structural depth), and a value that is not the whole placeholder (`:a + 1`).
 
 ## Avalonia UI: controls, XAML binding & templates
 

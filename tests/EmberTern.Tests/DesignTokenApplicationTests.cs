@@ -959,6 +959,196 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// ⭐⭐ POLE FILTRA NA POWIERZCHNI UNOSZĄCEJ SIĘ ODCINA SIĘ OD NIEJ JUŻ W SPOCZYNKU — próg 3:1 dla granicy
+    /// nietekstowej (§10 / WCAG 1.4.11), w OBU motywach.
+    ///
+    /// <para>⚠⚠ Ten test istnieje, bo defekt wrócił. Pierwsza poprawka ruszyła samą ramkę i użytkownik zgłosił
+    /// go PONOWNIE, na obu motywach. Pomiar pokazał wtedy dwie rzeczy naraz: selektor stosował się poprawnie
+    /// (więc „nie działa" było mylące), a mimo to w motywie jasnym tło pola `#FCFCFD` stało na powierzchni
+    /// `#FFFFFF` — <b>trzy jednostki</b> — i ramka dawała 2,55, czyli pod progiem. „Prawie widać" nie różni się
+    /// dla użytkownika od „nie widać".</para>
+    ///
+    /// <para>⭐ Dlatego asercja jest na PROGU, nie na wartości: przetrwa dobranie odcienia i upadnie dokładnie
+    /// wtedy, gdy pole znowu zacznie się zlewać. ⚠ I nie jest dowodem, że wygląda dobrze — kryterium jest ekran
+    /// (R16); to jest podłoga, poniżej której nie wolno zejść.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task AFilterFieldOnARaisedSurface_StandsOutAtRest(string variant)
+    {
+        await _session.Dispatch(() =>
+        {
+            var box = new TextBox { Classes = { "search", "on-raised" }, Width = 200 };
+            var window = new Window
+            {
+                Content = new Panel { Children = { box } },
+                Width = 400,
+                Height = 120,
+                RequestedThemeVariant = variant == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light,
+            };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var part = box.GetVisualDescendants().OfType<Border>()
+                .FirstOrDefault(b => b.Name == "PART_BorderElement");
+            Assert.NotNull(part);
+
+            var surface = ColorOf(window.FindResource(window.ActualThemeVariant, "SurfaceRaisedBrush") as IBrush);
+            var border = ColorOf(part!.BorderBrush);
+            var fill = ColorOf(part.Background);
+
+            var borderRatio = ContrastRatio(border, surface);
+            Assert.True(borderRatio >= 3.0,
+                $"{variant}: the field's resting border is {borderRatio:F2}:1 against the raised surface "
+                + $"({border} on {surface}) — under the 3:1 floor for a non-text boundary.");
+
+            // …and the fill recedes as well, so the field has a SHAPE and not just an outline. A bare outline is
+            // what the first attempt shipped, and it was not enough.
+            Assert.True(ContrastRatio(fill, surface) > 1.10,
+                $"{variant}: the field's fill ({fill}) is indistinguishable from the surface ({surface}).");
+
+            window.Close();
+        }, default);
+    }
+
+    private static Color ColorOf(IBrush? brush)
+        => brush is ISolidColorBrush s ? s.Color : Colors.Transparent;
+
+    // Relative luminance per WCAG 2.x, and the ratio between two opaque colours.
+    private static double ContrastRatio(Color a, Color b)
+    {
+        static double Channel(double v)
+            => v <= 0.03928 ? v / 12.92 : System.Math.Pow((v + 0.055) / 1.055, 2.4);
+        static double Luminance(Color c)
+            => 0.2126 * Channel(c.R / 255.0) + 0.7152 * Channel(c.G / 255.0) + 0.0722 * Channel(c.B / 255.0);
+
+        double la = Luminance(a), lb = Luminance(b);
+        return (System.Math.Max(la, lb) + 0.05) / (System.Math.Min(la, lb) + 0.05);
+    }
+
+    /// <summary>
+    /// ⭐⭐ KARTA W WARSTWIE NAKŁADKI ZNIKA Z EKRANU, GDY EDYTOR, KTÓRY JĄ POKAZAŁ, ZOSTAŁ ODŁĄCZONY
+    /// (zgłoszenie użytkownika 2026-08-03: karta zostawała na wierzchu NA ZAWSZE — nie usuwała jej zmiana
+    /// zakładki, zejście kursorem ani klik, tylko restart aplikacji).
+    ///
+    /// <para><b>Mechanizm.</b> Karty (hover, Parameter Helper, menu akcji, podpowiedź konstrukcji) mieszkają
+    /// w <c>OverlayLayer</c>, który należy do OKNA, więc przeżywa każdą zakładkę. Zamykanie szukało warstwy
+    /// przez <c>GetOverlayLayer(_editor)</c> — a to odpowiada na pytanie „której warstwy ten edytor użyłby
+    /// TERAZ". Po przełączeniu zakładki edytor jest odłączony, odpowiedź brzmi <c>null</c>, <c>Remove</c> nie
+    /// robi nic, a wyzerowanie pola porzuca ostatnią referencję do karty wciąż wiszącej w nakładce.</para>
+    ///
+    /// <para>⭐ Reguła („usuwaj z panelu, który FAKTYCZNIE trzyma kartę") była już w kodzie — w <c>HideBulb</c>,
+    /// razem z powodem. Brakowało jej w czterech pozostałych miejscach; to dokładnie ten kształt, co
+    /// „częściowa kopia jednej wiedzy" (gotcha #302).</para>
+    ///
+    /// <para>⚠ Test odtwarza defekt bez kursora i bez sesji podpowiedzi: karta w nakładce + odłączony edytor,
+    /// czyli te dwa fakty, na których stał defekt.</para>
+    /// </summary>
+    [Fact]
+    public async Task AnOverlayCard_IsRemovedFromThePanelThatHoldsIt_EvenAfterItsEditorDetaches()
+    {
+        await _session.Dispatch(() =>
+        {
+            var editor = new TextBox();
+            var host = new Panel { Children = { editor } };
+            var window = new Window { Content = host, Width = 400, Height = 200 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = OverlayLayer.GetOverlayLayer(editor);
+            Assert.NotNull(overlay);
+
+            var card = new Border { Width = 80, Height = 20 };
+            overlay!.Children.Add(card);
+
+            // What a tab switch does to the content it replaces — and the overlay belongs to the WINDOW, so
+            // the card stays in it.
+            host.Children.Remove(editor);
+            Dispatcher.UIThread.RunJobs();
+
+            // The pre-fix close path: ask the DETACHED editor which overlay to clean up.
+            Assert.Null(OverlayLayer.GetOverlayLayer(editor));
+            Assert.Contains(card, overlay.Children);
+
+            // The rule the fix applies everywhere: remove from the panel that actually holds it.
+            (card.Parent as Panel)?.Children.Remove(card);
+            Assert.DoesNotContain(card, overlay.Children);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// ⭐⭐ …I TEN SAM WYMIAR DLA EDYTORA, KTÓREGO NIE BUDUJE `FieldGridColumns` (zgłoszenie użytkownika
+    /// 2026-08-03: „nadal są miejsca, gdzie TextBox jest zbyt niski, np. parametry procedury w Easy Mode").
+    ///
+    /// <para>⚠ Test wyżej celowo pomija kolumnę Name — z komentarzem „jej `TextBox` istnieje wyłącznie w trybie
+    /// edycji i mierzy 0". To było prawdziwe stwierdzenie o teście, ale przeczytane jako stwierdzenie o
+    /// APLIKACJI zamykało sprawę o jedną kolumnę za wcześnie: Name, Collate, Default i Description to zwykłe
+    /// <c>DataGridTextColumn</c>, ich edytor tworzy sama siatka i nie ma na czym postawić klasy
+    /// <c>field-editor</c>. Zostawały więc na <c>MinHeight</c> 0 — w PIERWSZEJ i najczęściej edytowanej
+    /// kolumnie.</para>
+    ///
+    /// <para>⭐ Dlatego ten test wchodzi w tryb edycji, czyli mierzy element, który istnieje tylko wtedy, i
+    /// porównuje go z `ComboBoxem` obok — tą samą asercją rodziny, nie liczbą.</para>
+    /// </summary>
+    [Fact]
+    public async Task FieldGridEditors_EvenTheOnesTheGridCreatesItself_ShareThatHeight()
+    {
+        await _session.Dispatch(() =>
+        {
+            var row = EmberTern.App.ViewModels.ProcedureVariableRowViewModel.From(
+                new EmberTern.Core.Sql.ProcedureVariable { Name = "V", TypeText = "VARCHAR(20)" });
+
+            var grid = new DataGrid { AutoGenerateColumns = false, ItemsSource = new[] { row } };
+            EmberTern.App.Views.FieldGridColumns.Build(grid, includeDefault: true);
+
+            var window = new Window { Content = grid, Width = 1200, Height = 200 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // The grid marks itself, which is what lets a style reach an editor it does not construct.
+            Assert.Contains(EmberTern.App.Views.FieldGridColumns.GridClass, grid.Classes);
+
+            var combo = grid.GetVisualDescendants().OfType<DataGridCell>()
+                .SelectMany(c => c.GetVisualDescendants().OfType<ComboBox>()).First();
+
+            // Enter edit mode on the Name column — the only way its TextBox exists at all.
+            grid.SelectedIndex = 0;
+            grid.CurrentColumn = grid.Columns[0];
+            grid.BeginEdit();
+            Dispatcher.UIThread.RunJobs();
+
+            // ⚠⚠ NOT EVERY TextBox UNDER A CELL IS A CELL EDITOR, and this exclusion was MEASURED, not assumed.
+            // Avalonia's ComboBox template carries its own TextBox (type-ahead input), unrealized while the
+            // control is idle — so it reports height 0 and the base control padding (8,0 rather than the cell
+            // editor's 6,0). Left in, it made this assertion fail against a perfectly correct application; two
+            // guesses at what it was (a SearchableComboBox popup filter, then a Popup boundary) were both wrong,
+            // and printing the ancestor chain settled it in one run. An unrealized control has no height to judge
+            // — the "added ≠ paints" trap of gotcha #251, met from the test side.
+            var editing = grid.GetVisualDescendants().OfType<DataGridCell>()
+                .SelectMany(c => c.GetVisualDescendants().OfType<TextBox>())
+                .Where(t => !t.Classes.Contains("field-editor"))
+                .Where(t => t.FindAncestorOfType<ComboBox>() is null)
+                .Where(t => t.FindAncestorOfType<EmberTern.App.Controls.SearchableComboBox>() is null)
+                .ToList();
+
+            Assert.NotEmpty(editing);
+            var report = string.Join("; ", editing.Select(b =>
+                $"h={b.Bounds.Height} min={b.MinHeight} pad={b.Padding}"));
+            foreach (var box in editing)
+            {
+                Assert.True(combo.Bounds.Height == box.Bounds.Height,
+                    $"combo={combo.Bounds.Height}  editors: {report}");
+            }
+
+            grid.CancelEdit();
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
     /// ⭐ Pasek postępu sekcji 4 trzyma swoją STAŁĄ szerokość (§8.4.6, §19.7).
     ///
     /// <para>⚠⚠ Test istnieje z powodu jednej konkretnej pułapki: <b>Avalonia przycina <c>Width</c>

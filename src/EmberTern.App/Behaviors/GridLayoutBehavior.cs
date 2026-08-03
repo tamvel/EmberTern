@@ -58,6 +58,13 @@ public static class GridLayoutBehavior
     internal static GridProfile FallbackProfile(string gridId)
         => new() { GridId = gridId, AutoFitColumns = DefaultAutoFitColumns?.Invoke() ?? true };
 
+    /// <summary>
+    /// Whether column ORDER is this grid's to remember. See <c>GridLayoutState.RemembersColumnOrder</c> for the
+    /// reasoning; it lives here as a named static so the rule is greppable and assertable rather than an inline
+    /// property read buried in two methods.
+    /// </summary>
+    internal static bool RemembersOrder(DataGrid grid) => grid.CanUserReorderColumns;
+
     public static readonly AttachedProperty<string?> GridIdProperty =
         AvaloniaProperty.RegisterAttached<DataGrid, string?>("GridId", typeof(GridLayoutBehavior));
 
@@ -212,8 +219,36 @@ public static class GridLayoutBehavior
             }
         }
 
+        /// <summary>
+        /// Whether column ORDER is this grid's to remember — answered by the grid itself.
+        ///
+        /// <para>⭐⭐ <b>Order is remembered only where the user can set it.</b> A grid with
+        /// <c>CanUserReorderColumns="False"</c> offers no way to arrange its columns, so a stored order can only
+        /// ever be a REPLAY of something else onto columns that arrived in a meaningful order of their own — and
+        /// that is exactly the reported defect: the SQL editor's result grid shares one profile
+        /// (<c>GridId="QueryResults"</c>) across every query, so the column order of an earlier result was
+        /// replayed onto the next one and the columns stopped matching the SELECT list (user report 2026-08-03).
+        /// <c>PopulateResultGrid</c> was building them in the right order the whole time.</para>
+        ///
+        /// <para>⚠ The criterion is read from the grid rather than declared per <c>GridId</c>, so nothing has to be
+        /// remembered when a grid is added: whether the user can reorder the columns is the same question as
+        /// whether an order is worth storing. It fixes five grids at once — <c>QueryResults</c>,
+        /// <c>ProcedureDetail.Result</c>, <c>FunctionDetail.ExecResult</c>, <c>TableDetail.Data</c> and
+        /// <c>ViewDetail.Data</c> — of which the last two never showed the symptom, because a table's own column
+        /// order does not change between loads.</para>
+        ///
+        /// <para>⚠ Widths and auto-fit are NOT affected. A width is worth remembering on a dynamic grid (the same
+        /// query re-run wants its columns the way they were left), and it is keyed by header name, so a column
+        /// that is not there simply has no width to restore. Only ORDER can put a present column in the wrong
+        /// place. Existing stored <c>ColumnOrder</c> values for these grids are left in the file and simply stop
+        /// being read — nothing is migrated, because the field is still live for every other grid.</para>
+        /// </summary>
+        private bool RemembersColumnOrder => RemembersOrder(Grid);
+
         private void ApplyOrder(GridProfile profile)
         {
+            if (!RemembersColumnOrder) return;
+
             var current = Grid.Columns.Select(HeaderText).ToList();
             var ordered = GridLayoutOrdering.OrderedNames(current, profile.ColumnOrder);
             for (int target = 0; target < ordered.Count; target++)
@@ -256,11 +291,17 @@ public static class GridLayoutBehavior
 
             var profile = LoadProfile();
 
-            profile.ColumnOrder = Grid.Columns
-                .OrderBy(c => c.DisplayIndex)
-                .Select(HeaderText)
-                .Where(h => !string.IsNullOrEmpty(h))
-                .ToList();
+            // ⚠ Not saved either, and that is the half that matters for a grid whose columns CHANGE: writing the
+            // current order would keep re-seeding a profile the next result set then has replayed onto it. Reading
+            // and writing have to agree on whose order it is (see RemembersColumnOrder).
+            if (RemembersColumnOrder)
+            {
+                profile.ColumnOrder = Grid.Columns
+                    .OrderBy(c => c.DisplayIndex)
+                    .Select(HeaderText)
+                    .Where(h => !string.IsNullOrEmpty(h))
+                    .ToList();
+            }
 
             if (!profile.AutoFitColumns)
             {

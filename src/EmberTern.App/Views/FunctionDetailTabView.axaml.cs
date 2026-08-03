@@ -14,6 +14,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
@@ -216,13 +217,16 @@ public partial class FunctionDetailTabView : UserControl
         }
     }
 
-    // Ctrl+K in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE — the same
+    // Format SQL in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE — the same
     // deliberately narrow exception as ProcedureDetailTabView, for the same reason: the action is identified
     // by a specific TextEditor instance, and the router resolves commands rather than controls. Everything
     // else falls through to Commands.CommandCatalog's FormatSql.
+    //
+    // ⭐ The GESTURE comes from the catalog (Alt+F, with Ctrl+K as the alternate since 2026-08-03) — only the
+    // target is local. See the fuller note on the twin handler in ProcedureDetailTabView.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.K || e.KeyModifiers != KeyModifiers.Control) return;
+        if (CommandCatalog.For(CommandId.FormatSql)?.Matches(e.Key, e.KeyModifiers) != true) return;
         if (sender is TextEditor ed && (ReferenceEquals(ed, _cursorEditor) || ReferenceEquals(ed, _subprogramEditor)))
         {
             FormatEditorInPlace(ed, StyleForFormatting());

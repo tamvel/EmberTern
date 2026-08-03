@@ -308,7 +308,7 @@ public class SettingsCenterVmTests
     /// ⭐⭐ <b>The blur-or-Enter commit path (design §5.5.1) — the debt §16.8 recorded for this etap.</b>
     ///
     /// <para>Typing must persist NOTHING. Every save reads + decrypts + rewrites the whole <c>settings.dat</c>,
-    /// and — the part that is not performance — <c>AtomicWrite</c> keeps exactly ONE generation of
+    /// and — the part that is not performance — <c>TryAtomicWrite</c> keeps exactly ONE generation of
     /// <c>settings.dat.bak</c>, so a per-keystroke save would roll the single hand-recovery backup through four
     /// generations while somebody is editing settings.</para>
     /// </summary>

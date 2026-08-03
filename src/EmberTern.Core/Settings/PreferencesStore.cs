@@ -47,7 +47,7 @@ namespace EmberTern.Core.Settings;
 ///     complete encrypted rewrites of every setting the user owns.
 ///   </description></item>
 ///   <item><description>
-///     ⭐ And the consequence that is not performance: <c>AtomicWrite</c> keeps exactly <b>one</b> generation
+///     ⭐ And the consequence that is not performance: <c>TryAtomicWrite</c> keeps exactly <b>one</b> generation
 ///     of <c>settings.dat.bak</c>. Four keystrokes roll it through four generations, destroying the pre-edit
 ///     state the hardening sprint added it to preserve — the one hand-recovery net, gone at precisely the
 ///     moment someone is editing settings. That backup's value depends on saves being <i>deliberate</i>.

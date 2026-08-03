@@ -84,10 +84,20 @@ public static class CommandCatalog
             G(Key.Enter, Ctrl), TabKinds: QueryTab),
         new(CommandId.ExecuteQueryFull, UiStrings.CommandTitleExecuteQueryFull, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.F5, Shift), TabKinds: QueryTab),
-        // Ctrl+K, not Alt+F: the user retired Alt+letter with no exceptions. This one descriptor replaced
-        // the window binding AND three of the five local Alt+F handlers outright.
+        // ⭐⭐ Alt+F IS BACK, AND IT IS THE ONE RATIFIED EXCEPTION TO "no Alt+letter" (user decision,
+        // 2026-08-03): Ctrl+K needs two hands for an action used constantly. Ctrl+K stays as the alternate, so
+        // nobody's muscle memory breaks.
+        //
+        // ⚠ This comment used to read "Ctrl+K, not Alt+F: the user retired Alt+letter with no exceptions" —
+        // true when written, and exactly the kind of confident stale note that teaches the next reader the
+        // wrong rule (gotcha #284's shape, in prose).
+        //
+        // ⚠ The retirement itself is NOT withdrawn, and its reason is technical rather than stylistic: on the
+        // Polish (Programmers) layout AltGr composes ą/ć/ę/ł/ń/ó/ś/ź/ż, so Alt+those letters are unusable.
+        // F is not one of them. NoCommandUsesAltPlusALetter still guards every other letter and names this
+        // single exception explicitly.
         new(CommandId.FormatSql, UiStrings.CommandTitleFormatSql, CommandScope.Tab, CommandDispatch.Routed,
-            G(Key.K, Ctrl), TabKinds: FormattableTabs),
+            G(Key.F, Alt), TabKinds: FormattableTabs, AlternateGesture: G(Key.K, Ctrl)),
         new(CommandId.Compile, UiStrings.CommandTitleCompile, CommandScope.Tab, CommandDispatch.Routed,
             G(Key.F7), TabKinds: CompilableTabs),
         new(CommandId.ImportValidate, UiStrings.CommandTitleImportValidate, CommandScope.Tab, CommandDispatch.Routed,

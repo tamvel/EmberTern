@@ -104,26 +104,51 @@ public sealed class CommandCatalogTests
     [InlineData(CommandId.Compile, Key.F7, KeyModifiers.None)]
     [InlineData(CommandId.DeleteObject, Key.F8, KeyModifiers.None)]
     [InlineData(CommandId.CollectionRemove, Key.F8, KeyModifiers.None)]
-    [InlineData(CommandId.FormatSql, Key.K, KeyModifiers.Control)]
+    // ⭐ AMENDED 2026-08-03 on the user's decision: Format SQL is Alt+F again (Ctrl+K needs two hands for an
+    // action used constantly). Ctrl+K survives as the ALTERNATE, pinned by FormatSql_AcceptsAltF_AndKeepsCtrlK —
+    // this table declares the PRIMARY gesture, which is what tooltips and menus display.
+    [InlineData(CommandId.FormatSql, Key.F, KeyModifiers.Alt)]
     [InlineData(CommandId.CloseTab, Key.W, KeyModifiers.Control)]
     public void RatifiedGesture_IsTheDeclaredOne(CommandId id, Key key, KeyModifiers modifiers)
         => Assert.Equal(new KeyGesture(key, modifiers), CommandCatalog.For(id)?.Gesture);
 
-    // Alt+letter is retired with no exceptions — Format SQL was the app's only one. Alt+F12 (Peek) is
+    // Alt+letter is retired apart from ONE ratified exception (Format SQL). Alt+F12 (Peek) is
     // Alt + a FUNCTION key, outside the rule and deliberately kept.
     [Fact]
     public void NoCommandUsesAltPlusALetter()
     {
+        // ⭐ NARROWED, NOT DELETED (2026-08-03). Alt+F came back for Format SQL on the user's decision — Ctrl+K
+        // needs two hands for an action used constantly. The retirement's REASON is unaffected and still worth
+        // guarding: on the Polish (Programmers) layout AltGr composes ą/ć/ę/ł/ń/ó/ś/ź/ż, so Alt+those letters
+        // are genuinely unusable. F is not one of them.
+        //
+        // ⚠ The exception is listed here BY VALUE rather than the test being deleted, so adding a second
+        // Alt+letter still fails — and so the next author reads which one is allowed and why, instead of finding
+        // no rule at all.
+        var allowed = new[] { new KeyGesture(Key.F, KeyModifiers.Alt) };
+
         var offenders = CommandCatalog.All
             .SelectMany(d => new[] { d.Gesture, d.AlternateGesture })
             .Where(g => g is not null)
             .Where(g => g!.KeyModifiers.HasFlag(KeyModifiers.Alt) && g.Key is >= Key.A and <= Key.Z)
+            .Where(g => !allowed.Any(a => a.Key == g!.Key && a.KeyModifiers == g.KeyModifiers))
             .Select(g => g!.ToString())
             .ToArray();
 
         Assert.True(offenders.Length == 0,
-            "Alt+letter is unusable on the Polish keyboard (AltGr) and is retired: "
-            + string.Join(", ", offenders));
+            "Alt+letter is unusable on the Polish keyboard (AltGr) and is retired, apart from the ratified "
+            + "Alt+F for Format SQL: " + string.Join(", ", offenders));
+    }
+
+    /// <summary>The ratified exception is actually in force — an allowlist entry that matched nothing would let
+    /// the test above pass while Alt+F quietly did not exist (gotcha #289: a guard keyed to a value cannot tell
+    /// "absent" from "present").</summary>
+    [Fact]
+    public void FormatSql_AcceptsAltF_AndKeepsCtrlK()
+    {
+        var format = CommandCatalog.All.Single(d => d.Id == CommandId.FormatSql);
+        Assert.True(format.Matches(Key.F, KeyModifiers.Alt), "Alt+F does not reach Format SQL");
+        Assert.True(format.Matches(Key.K, KeyModifiers.Control), "Ctrl+K stopped working");
     }
 
     // F3 and F8 are each claimed by two commands — a tree one and a grid one. Legal because the focus is in

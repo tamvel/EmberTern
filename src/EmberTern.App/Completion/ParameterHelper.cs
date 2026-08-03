@@ -131,7 +131,11 @@ internal sealed class ParameterHelper
     {
         if (_card is { } card)
         {
-            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            // ⚠ The panel that HOLDS it, not the one the editor would resolve to now: after a tab switch the
+            // editor is detached, GetOverlayLayer answers null, Remove does nothing and the card is stranded in
+            // the window's overlay — where it survives every later tab change. Same rule as
+            // NavigationController.HideBulb / HideHover.
+            (card.Parent as Panel)?.Children.Remove(card);
             _card = null;
         }
     }

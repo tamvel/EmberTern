@@ -150,8 +150,15 @@
        o niczym pamiętać — obejmuje wszystkie 29 pól w 21 plikach i każde następne.
        ⚠ MUSI stać PO stylu bazowym: przy równej trafności rozstrzyga kolejność deklaracji (M2b §17.5/5).
        ================================================================================================ -->
+  <!-- ⚠⚠ I DLATEGO TEN SELEKTOR USTAWIA TAKŻE PADDING (zgłoszenie użytkownika 2026-08-03). Samo wyrównanie
+       do góry przeniosło tekst z połowy ramki na jej KRAWĘDŹ, bo `Pad.Control` ma pion zerowy — i zero było
+       tam poprawne wyłącznie dlatego, że pole jednowierszowe bierze wysokość z `Size.Control`, a padding
+       pionowy z nią walczy. W polu wielowierszowym wysokość daje samo pole, więc ta przesłanka nie
+       obowiązuje: nie ma z czym konkurować, a został sam skutek. Dwie własności, jedna rola, jeden selektor —
+       bo to jedna decyzja („tak wygląda wnętrze pola wielowierszowego"), nie dwie. -->
   <Style Selector="TextBox[AcceptsReturn=True]">
     <Setter Property="VerticalContentAlignment" Value="Top" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ControlMultiline}" />
   </Style>
 
   <!-- ⚠ Edytor w komórce siatki NIE jest kontrolką formularza i nie może narzucać wiersza.
@@ -200,6 +207,22 @@
        nie podniesie. Siatki DANYCH (Table Data, wyniki) `ComboBoxa` nie mają — tam ten sam setter
        urósłby każdy wiersz, czyli odtworzyłby regresję z kroku 7 M2b. -->
   <Style Selector="DataGridCell TextBox.field-editor">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+  </Style>
+
+  <!-- ⭐⭐ …I TO SAMO DLA EDYTORA, KTÓREGO NIE BUDUJEMY MY (zgłoszenie użytkownika 2026-08-03: „nadal są
+       miejsca, gdzie TextBox jest zbyt niski, np. parametry procedury w Easy Mode").
+
+       Reguła wyżej sięga tylko edytorów, którym `FieldGridColumns` może nadać klasę. Kolumny Name / Collate /
+       Default / Description to zwykłe `DataGridTextColumn`, a ich `TextBox` tworzy sama siatka w chwili wejścia
+       w komórkę — nie ma na czym postawić klasy. Zostawały więc na `MinHeight` 0 i czytały się jak cienki pasek
+       obok poprawnie wymiarowanych sąsiadów, w PIERWSZEJ i najczęściej edytowanej kolumnie.
+
+       ⭐ Jedna ROLA i jedna wartość, dwie drogi powstawania elementu — dlatego dwa selektory, a nie dwie
+       decyzje. ⚠ Zasięg daje klasa NA SIATCE (nadawana w jednym miejscu, w `FieldGridColumns.Build`), bo
+       globalny setter urósłby wiersze siatek DANYCH w momencie wejścia w edycję — zmierzona regresja z kroku 7
+       M2b i skok układu, którego zabrania §13.3. -->
+  <Style Selector="DataGrid.field-grid DataGridCell TextBox">
     <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
   </Style>
 
@@ -285,6 +308,46 @@
   <Style Selector="TextBox.search">
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ================================================================================================
+       ⭐ POLE STOJĄCE NA POWIERZCHNI UNOSZĄCEJ SIĘ (zgłoszenie użytkownika 2026-08-03: „w ciemnym motywie
+       pola filtrów praktycznie zlewają się z tłem, dopiero po najechaniu myszką stają się widoczne").
+
+       ⚠ Ramka `TextBoxa` jest dobrana do pola stojącego na tle OKNA. Filtr w liście rozwijanej domeny
+       i oba filtry w okienku wyboru kolumny stoją na `SurfaceRaised`, gdzie ta przesłanka nie obowiązuje:
+       w spoczynku ramka jest jedynym wyróżnikiem pola i ginie, a po najechaniu przechodzi na
+       `AccentMuted` — dlatego pole „pojawia się" dopiero pod kursorem. To jest dokładnie ten objaw.
+
+       ⚠⚠ Selektor MUSI celować w `PART_BorderElement`, a nie w samą kontrolkę: kolory `TextBoxa` maluje
+       wnętrze szablonu Fluenta, więc setter `BorderBrush` na `TextBox` nie ma dokąd trafić (§15.6.3).
+       Precedens obok: `TextBox.frameless /template/ Border#PART_BorderElement`.
+
+       ⚠⚠ WYPEŁNIENIE, NIE TYLKO RAMKA — pierwsza wersja ruszała samą ramkę i użytkownik zgłosił defekt
+       PONOWNIE, na obu motywach. Zmierzone wtedy: selektor stosował się poprawnie, kolory były na miejscu,
+       tylko w motywie jasnym tło pola `#FCFCFD` stało na powierzchni `#FFFFFF` — trzy jednostki różnicy,
+       czyli kształt pola niósł wyłącznie jeden piksel kreski. Tło jest tu nośnikiem kształtu.
+
+       ⚠ Stany `:pointerover` i `:focus` są POWTÓRZONE świadomie i to jest warunek poprawności, nie ozdoba.
+       Styl aplikacji bije `ControlTheme` Fluenta, więc bezstanowy selektor przykryłby również te dwa stany —
+       pole straciłoby reakcję na kursor ORAZ obwódkę fokusa, czyli naprawiając widoczność spoczynkową
+       zabralibyśmy afordancję i wskazanie klawiatury.
+
+       ⛔ Rola jest nadawana KLASĄ tam, gdzie pole faktycznie stoi na powierzchni unoszącej się, a nie
+       wszystkim polom `.search`: to samo pole w Settings Center i w Global Search stoi na tle okna, gdzie
+       obecna ramka jest poprawna i nikt jej nie zgłaszał (pułapka 17 — reguła opisuje to, co jest dobre).
+       ================================================================================================ -->
+  <Style Selector="TextBox.on-raised /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource FieldOnRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource FieldOnRaisedBorderBrush}" />
+  </Style>
+  <Style Selector="TextBox.on-raised:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource FieldOnRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
+  </Style>
+  <Style Selector="TextBox.on-raised:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource FieldOnRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
   <!-- ⚠ Odstęp między opcjami jednego wyboru. Zgłoszenie QA: „RadioButtony są ustawione zbyt ciasno
@@ -764,6 +827,17 @@
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
+  <!-- ⭐⭐ IKONA W PRZYCISKU GŁÓWNYM BIERZE KOLOR ZE STYLU, A NIE Z WARTOŚCI LOKALNEJ W WIDOKU — i to nie jest
+       porządkowanie, to WARUNEK naprawy stanu nieaktywnego (zgłoszenie użytkownika 2026-08-03). Dwanaście ikon
+       w `MainWindow` miało `Foreground="{DynamicResource OnAccentBrush}"` wpisane lokalnie, a **wartość lokalna
+       bije setter stylu**, więc żaden selektor `:disabled` nie mógł ich dosięgnąć. Ta sama reguła i ten sam
+       mechanizm, którym `MessageBanner` dorobił się sześciu wariantów chromy per host, a `FieldGridColumns`
+       trzymał 12-pikselowy edytor (§19.9).
+       ⛔ Nie wpisywać `Foreground` na ikonie w widoku — host ustawia `Data`, rozmiar i wyrównanie. -->
+  <Style Selector="Button.primary controls|SvgIcon">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
@@ -774,8 +848,28 @@
     <Setter Property="Opacity" Value="0.85" />
   </Style>
 
+  <!-- ⭐⭐ STAN NIEAKTYWNY TO PRZYGASZONE WYPEŁNIENIE, NIE PRZEZROCZYSTOŚĆ (zgłoszenie użytkownika 2026-08-03:
+       „na jasnym motywie nieaktywny młotek praktycznie znika"; aktywny wyglądał poprawnie).
+       ⚠ Stało tu `Opacity 0.5` na całym przycisku — i to jest kształt pułapki, nie zły odcień: `AccentColor`
+       i `OnAccentColor` są w OBU motywach identyczne, więc barwa nie mogła być winna. Winne było to, co
+       przezroczystość przepuszcza — pasek narzędzi pod przyciskiem, ciemny `#2D2D2D` albo jasny `#E8EAED`.
+       Biała ikona blaknąca w stronę jasnego tła traci kontrast niemal do zera, a w stronę ciemnego go ZYSKUJE:
+       jedna liczba, przeciwny skutek w dwóch motywach.
+       ⭐ Nieprzezroczyste wypełnienie odcina tło, więc kontrast ikony przestaje od niego zależeć — a `Foreground`
+       może wreszcie zgasić i tekst, i ikonę, bo styl wyżej zabrał im wartości lokalne.
+       ⛔ Nie dokładać tu z powrotem `Opacity` — wróci dokładnie ten defekt, tylko słabszy. -->
   <Style Selector="Button.primary:disabled">
-    <Setter Property="Opacity" Value="0.5" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
+  </Style>
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentDisabledBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentDisabledBrush}" />
+  </Style>
+  <Style Selector="Button.primary:disabled TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
+  </Style>
+  <Style Selector="Button.primary:disabled controls|SvgIcon">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
   </Style>
 
   <!-- ⚠ Przycisk paska tytułu ma wysokość PASKA, nie kontrolki — `Size.TitleBar` jest tu tym samym

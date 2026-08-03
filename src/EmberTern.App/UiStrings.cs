@@ -1999,7 +1999,14 @@ internal static class UiStrings
     public const string ProcedureLocalMoveDownTooltip = "Move down";
 
     // Execute Procedure parameter dialog
-    public const string ProcedureExecuteDialogTitle = "Execute Procedure";
+    // ⚠⚠ NEUTRAL ON PURPOSE (user decision, 2026-08-03). This dialog stopped being only about procedures long
+    // ago: Smart SQL Parameters reuses it to collect values for ANY statement carrying `:name` placeholders, so a
+    // plain INSERT or UPDATE OR INSERT opened a window headed "Execute Procedure". The user read that as the
+    // Execute-Procedure feature misfiring — *"To nie jest wywołanie procedury"* — which is exactly what a
+    // mislabelled surface causes: the behaviour was correct and only the label lied.
+    // ⛔ Do not narrow it back to a procedure-specific wording; the reuse is the design (one parameter editor, not
+    // two), and the dialog is reached from procedure execution AND from F5 on parameterised SQL.
+    public const string ProcedureExecuteDialogTitle = "Execute";
     public const string ProcedureExecuteDialogColumnName = "Parameter";
     public const string ProcedureExecuteDialogColumnType = "Type";
     public const string ProcedureExecuteDialogColumnValue = "Value";

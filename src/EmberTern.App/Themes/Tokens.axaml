@@ -62,6 +62,13 @@
        pion jest zerowy. Padding pionowy w polu tekstowym walczy z wysokością kontrolki i wygrywa
        ten, który jest większy; jedna z tych dwóch rzeczy musi być jedynym źródłem wysokości. -->
   <Thickness x:Key="Pad.Control">8,0</Thickness>
+  <!-- ⭐ Wnętrze pola WIELOWIERSZOWEGO (`TextBox` z `AcceptsReturn`) — i pion NIE jest tu zerowy, bo
+       przesłanka `Pad.Control` w takim polu nie obowiązuje. Tam wysokość daje `Size.Control`, więc padding
+       pionowy musiałby z nią walczyć; pole na kilkanaście wierszy jest właścicielem własnej wysokości, więc
+       nic z niczym nie konkuruje i zostaje sam skutek zera: tekst dociśnięty do górnej krawędzi ramki
+       (zgłoszenie użytkownika 2026-08-03, po wyrównaniu do góry z M2c §18.11).
+       ⚠ Jedna wielkość, jeden właściciel — reguła się nie zmieniła, zmienił się właściciel. -->
+  <Thickness x:Key="Pad.ControlMultiline">8,4</Thickness>
   <!-- Wnętrze przycisku tekstowego. -->
   <Thickness x:Key="Pad.Button">12,0</Thickness>
   <!-- Wnętrze przycisku ikonowego — węższe, bo ikona ma własny margines optyczny. -->

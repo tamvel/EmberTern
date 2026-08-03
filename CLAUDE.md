@@ -1,4 +1,4 @@
-﻿# EmberTern — Claude Code Context
+# EmberTern — Claude Code Context
 
 A modern desktop developer workbench for Firebird database developers, built with **.NET 9 + Avalonia 12**. Target users: ERP and backend devs who work daily with SQL, procedures, triggers, metadata, and transactions. Design philosophy: **less features, better experience; workflow quality over feature count; transaction-aware by default**.
 
@@ -40,7 +40,7 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (291 entries, #1–#304), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (301 entries, #1–#312), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -430,10 +430,78 @@ noted.
 - **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
   FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
   (a ready-made startup prompt), then the handover it points at.**
-  Build 0/0; suite **7138** (7032 + 52 + 54); smoke clean. ⭐ **Tree clean, both remotes in sync
-  (2026-08-03) — nothing awaits push.** ⏸ **Next: M3.2d** (M‑1, 10 literals → `UiStrings`; purely
-  housekeeping, zero visual change), then M3.3 tab strip → M3.4 Metadata Explorer → M3b → ⛔ the §13.3
-  gate.
+  Build 0/0; suite **7228** (7118 + 56 + 54); smoke clean. ⏸ **Next: M3.2d** (M‑1, 10 literals →
+  `UiStrings`; purely housekeeping, zero visual change), then M3.3 tab strip → M3.4 Metadata Explorer →
+  M3b → ⛔ the §13.3 gate.
+  ⚠ **An ACCEPTANCE FIX ROUND ran first (2026-08-03) and is NOT pushed yet** — 14 defects from ordinary
+  use, grouped into 6 causes: [docs/history/23-acceptance-fix-round.md](docs/history/23-acceptance-fix-round.md).
+  ⭐⭐ **One of them was a data-loss bug: two instances of EmberTern could publish an EMPTY `settings.dat`**
+  and the empty file then loaded as `Missing`, so the next write made defaults permanent (gotcha #304 —
+  `AtomicWrite` shared one temp filename across processes). ⭐ **Four reports were NOT where they pointed:**
+  the result grid's column order was `GridLayoutBehavior` replaying a saved order, not `PopulateResultGrid`;
+  the disabled hammer's problem was `Opacity` letting the toolbar through, not a colour (`AccentColor` is
+  identical in both themes); the "tooltip" that only a restart removed is an `OverlayLayer` card, not a
+  tooltip — the first fix for it was measured **inert** and deleted; and the parameter-type dialog was fed a
+  **selectable procedure called from `FROM`**, a shape the lookup did not recognise at all (gotcha #307).
+  ⭐ **`Alt+F` is Format SQL again**, with `Ctrl+K` as its alternate — the one ratified `Alt+letter`
+  (`keyboard-manager.md` §18).
+  ⚠⚠ **TWO of the six needed further rounds after the user's acceptance passes, and the lesson is the SCOPE OF THE
+  QUESTION, not the analysis.** (a) The picker filter fields — round one moved the border only, and the measurement
+  then showed the selector **was** applying while the value still sat at **2.55:1**, under §10's 3:1 floor;
+  ⭐ *"almost visible" is indistinguishable from "invisible"*, and the fix is a recessed **fill** plus a border over
+  the threshold, pinned at the threshold in both themes (gotcha #308). (b) Parameter types took **four** rounds and
+  ended in an architectural change — see below.
+  ⚠⚠ **AND ROUND FOUR'S LESSON IS THE BIGGEST: an architecture is not verified by the tests of the thing it
+  replaced.** The user rejected round three with four findings, of which **only two were code defects** — and the
+  inventory they demanded (*which consumers must work for a routine call, which for any parameterised SQL, which
+  must not fire at all*) settled it in minutes: **"does this SQL carry named placeholders?"** is scoped to **any SQL**
+  and gates the parameter dialog, while **`IRoutineInvocation`** is scoped to **typing only**. So the new model
+  *could not* have widened the dialog — provable from `git show HEAD:`, and the gate is unchanged since `54b630c`.
+  ⭐ What the screenshots really showed was a **mislabelled dialog**: the parameter editor is reused for any
+  parameterised statement, so a plain `INSERT … VALUES (:a, :b)` opened a window headed *"Execute Procedure"*.
+  Title and header are now neutral (**"Execute"**, the user's choice). ⭐⭐ **A lying label is indistinguishable from
+  a malfunction** (gotcha #311).
+  **⭐⭐ THE ROUTINE-INVOCATION MODEL (2026-08-03) — the round's most durable result, and it came from the user
+  refusing a third patch.** Parameter typing had been fixed twice by adding a STATEMENT SHAPE to a consumer
+  (`EXECUTE PROCEDURE`, then `SELECT … FROM P(…)`), and each fix left the next syntax dead — `FOR SELECT … INTO`,
+  `INSERT … SELECT`, and a long tail after them. The user named the cause: *the AST should be able to answer "a
+  procedure is invoked here with an argument list"*. Delivered: **`IRoutineInvocation`** on the AST (routine ·
+  package · argument spans), implemented by `ExecuteProcedureStatement` and a new **`RoutineTableReference`**
+  (⚠ a **subclass** of `TableReference`, so the binder/highlighting/navigation are untouched); the parser **stopped
+  discarding the argument list** — `ParsePrimaryFromItem` read the name then jumped to the alias, so `rap(:a,:b) r`
+  carried the single token `rap`, neither arguments **nor alias**, which is *why* consumers were re-scanning text;
+  `MERGE … USING <name>(args)` modelled through the same `ParsePrimaryFromItem`; and the consumer now asks
+  `DescendantNodesAndSelf().OfType<IRoutineInvocation>()`, with ~130 lines of token walking and
+  `TryExtractExecuteProcedureName` **deleted**. Typing resolves **per placeholder** (one statement can invoke
+  several routines), so a binding carries its routine plus the slot and a name standing in two routines claims
+  nothing. ⭐ **The proof it is architecture and not a patch: the pinning theory has rows for FOR SELECT,
+  INSERT…SELECT, UPDATE OR INSERT, a CTE body, MERGE USING, a cursor declaration, a derived table and an EXISTS
+  subquery — and none of them has a line of code behind it.** ⛔ **Do not add a statement-kind branch to that walk;
+  a call it cannot find is a call the parser does not model** (gotcha #309, Contract #1).
+  **⭐ Two drag-and-drop templates, on that same foundation:** `INSERT INTO … SELECT` for tables (new — both column
+  lists from ONE `Insertable` call, so they cannot drift), and `FOR SELECT … INTO` for selectable procedures, which
+  **already existed and was unreachable from the SQL Editor** because the snippet context was fixed at attach time.
+  New `SnippetInsertionContextResolver` decides it from the **drop offset** by asking the parser whether it is
+  inside a `BlockStatement` — so scaffolds appear inside a routine being written in the console and stay hidden at
+  the top of an empty one (⛔ never by counting `BEGIN`/`END`: wrong for `CASE … END`, #117/#128/#129).
+  ⭐⭐ **`EveryGeneratedInvocation_IsRecognisedByTheModel` is what makes generation and parsing ONE feature** — every
+  template that emits a call is fed back through the walk the parameter dialog uses (gotcha #310).
+  ⚠ **And EVERY built-in scaffold is now offered in every editor**, ratified on the user's general argument (the SQL
+  Editor is where `EXECUTE BLOCK` / `CREATE PROCEDURE` / `CREATE TRIGGER` get written). Two narrower answers were
+  built and removed: widening only the reported template (an exception, not a rule), and deriving the context from
+  the drop offset — which fails for the case that matters, since a scaffold is what you reach for **to start** a
+  body. Pinned once over the whole catalog by `NoBuiltInTemplate_IsHiddenByTheInsertionContext`.
+  **⭐⭐ A TYPE HAS TWO PROVABLE ORIGINS, AND THAT IS THE SECOND AST FACT (round four).** On the user's directive
+  (*"nie seria if-ów dla kolejnych instrukcji, tylko wykorzystanie modelu AST jako jednego źródła wiedzy"*):
+  **`IColumnValueTarget`** — table + **(column, value-span) PAIRS** — implemented by `InsertStatement`,
+  `UpdateOrInsertStatement` (positional `(cols)`↔`VALUES`, ONE producer since the shape is identical) and
+  `UpdateStatement` (`SET col = expr`, paired by adjacency). ⭐ Pairs rather than two parallel lists is what lets one
+  interface serve shapes that pair differently while keeping that difference out of the consumer. One
+  **`ParameterTypeSource`** (`RoutineParameter(owner, slot)` | `TableColumn(owner, column)`) is the uniform answer,
+  so the VM switches on the **kind of source**, never on a kind of statement — a third origin would be a new fact
+  plus one arm. ⚠ Refusals, each with a reason: no column list · a column/value length mismatch · `WHERE col = :p`
+  (a predicate is a token fragment at structural depth) · a value that is not the whole placeholder (gotcha #312).
+  ⏸ Awaits the user's visual QA (both themes) and the push to both remotes.
   **Closed and not returning:** M3.1 (Status Bar 2.0, six iterations) · **H‑3** (stable titlebar
   layout) · **H‑5** (Commit/Rollback on their own tokens) · **§7.5** (superseded by the colour
   language) · 🔒 **the colour language itself — designed, ratified, rolled out across the whole product
@@ -3185,9 +3253,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7138 as of 2026-08-03**
-  (Product Polish M3 through the colour-language rollout). Green in the three documented partitions
-  (**7032 + 52 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7228 as of 2026-08-03**
+  (Product Polish M3 through the colour-language rollout, plus the acceptance fix round). Green in the three
+  documented partitions (**7118 + 56 + 54**).
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
   partition filter named a class that no longer existed (so the total read one too high, `product-polish.md`
   §18.1.6), and once because the sub-stage's own numbers moved under it. **Re-measure before quoting it.**
@@ -4288,7 +4356,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (291 entries, #1–#304), organized thematically.
+- **`docs/gotchas.md`** — the complete gotcha catalog (301 entries, #1–#312), organized thematically.
   Search it whenever a bug looks familiar.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a

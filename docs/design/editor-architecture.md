@@ -997,3 +997,88 @@ text, in **[`docs/gotchas.md`](../gotchas.md)** under "SQL lexing, parsing, form
 scanning" and "Never lose information / correctness-over-convenience". The ~6 most load-bearing
 ones (the §0 round-trip guarantee, the end-of-span-inclusive lookup rule, the no-transitional-names
 rule) are also in `CLAUDE.md`'s short "Live gotchas" list.
+
+---
+
+## 16. `IRoutineInvocation` — the model answers "a routine is invoked here" (2026-08-03)
+
+**Added outside any etap, on the user's diagnosis**, after parameter typing had been fixed twice by adding a
+statement shape to a *consumer* and each fix had left the next syntax dead. The user's words are the requirement:
+*"AST powinno umieć odpowiedzieć na pytanie: «W tym miejscu wykonywane jest wywołanie procedury z listą
+argumentów»."*
+
+### 16.1 What it is
+
+`IRoutineInvocation` (`Ast/StatementNodes.cs`) — `RoutineName` · `PackageName` · `Arguments` — implemented by:
+
+| Node | Syntax |
+|---|---|
+| `ExecuteProcedureStatement` | `EXECUTE PROCEDURE P(a, b)` |
+| `RoutineTableReference` | a **selectable** procedure standing where a table would: `… FROM P(a, b) [[AS] alias]` |
+
+Consumers ask the tree: `root.DescendantNodesAndSelf().OfType<IRoutineInvocation>()`. Because the parser already
+hangs every embedded query off the statement that owns it, that one walk reaches `SELECT`, PSQL
+`FOR SELECT … INTO`, `INSERT … SELECT`, `UPDATE OR INSERT`, CTE bodies, `MERGE … USING`, `DECLARE … CURSOR`,
+derived tables and subqueries — **with no code per syntax**, which is the property the design is for.
+
+### 16.2 Two parser gaps this closed (both were *dropping* structure, not merely not modelling it)
+
+1. ⭐⭐ **`ParsePrimaryFromItem` read the routine's name and jumped straight to the alias.** For `rap(:a, :b) r`
+   the resulting `TableReference` carried the single token `rap` — neither the arguments **nor the alias**. That is
+   *why* consumers were re-scanning SQL text: the structure was not there to read (Contract #1).
+2. **`MERGE … USING <name>(args)`** was noted as "bare table source" and skipped, making it the last place a
+   routine could be invoked with the tree unaware. It now parses through the same `ParsePrimaryFromItem` and lands
+   on the new `MergeStatement.SourceItem`.
+
+### 16.3 Decisions to keep
+
+- ⚠ **`RoutineTableReference` is a SUBCLASS of `TableReference`.** Every existing consumer matches
+  `is TableReference` to resolve the name against the catalog (that is how a selectable procedure in `FROM` is
+  coloured and navigated today); the capability is purely additive.
+- ⚠ **Its own node type, not a possibly-empty `Arguments` on `TableReference`.** "Arguments is empty" would
+  conflate a no-argument call with a plain table, and every consumer would carry the filter.
+- ⚠ **`FROM MY_PROC` with no parentheses stays a table.** A legal no-argument selectable call is
+  indistinguishable from a table at parse time, and guessing would make every table look like a call.
+- ⛔ **No statement-kind branch in a consumer.** If a call is not found, the parser is not modelling it.
+
+### 16.4 The SECOND fact: `IColumnValueTarget` — a type has two provable origins
+
+Added in the same arc, on the user's directive that the model must answer for DML too. A placeholder's declared
+type comes from exactly one of two places in Firebird DML:
+
+| Fact | Origin of the type | Producers |
+|---|---|---|
+| `IRoutineInvocation` | an input **parameter** of the invoked routine | `ExecuteProcedureStatement`, `RoutineTableReference` |
+| `IColumnValueTarget` | a **column** of the table written to | `InsertStatement`, `UpdateOrInsertStatement`, `UpdateStatement` |
+
+⭐ **`IColumnValueTarget` carries (column, value-span) PAIRS, not two parallel lists.** `INSERT (cols) VALUES (…)`
+and `UPDATE OR INSERT` pair **positionally** (one producer serves both — the shape is identical, the same reason
+`SqlFormatter` lays them out through one `FormatInsertFamily`), while `UPDATE … SET col = expr` pairs by
+**adjacency**. Pairs let one interface serve both and keep that difference away from every consumer.
+
+### 16.5 One answer to the consumer: `ParameterTypeSource`
+
+`SqlParameterScanner.ResolveTypeSources(sql, names)` walks for **both** facts and returns, per placeholder, either
+`RoutineParameter(owner, slot)`, `TableColumn(owner, column)`, or nothing. The consumer switches on the **kind of
+source** to pick a catalog — ⛔ never on a kind of statement. A third origin arrives as a new AST fact plus one arm
+there, not as a branch anywhere.
+
+⚠ **What it refuses, and why each refusal is correct rather than a gap** (rule #11): an insert with no column list
+(pairing would need the catalog's column order — a lookup, not a fact about the text) · a column/value length
+mismatch (Firebird rejects the statement anyway; pairing the prefix types values whose column is undecided) ·
+`WHERE col = :p` (a predicate is a token fragment at structural depth) · a value that is not the whole placeholder
+(`:a + 1` — there the placeholder's type is not the column's).
+
+### 16.6 Who consumes it
+
+`SqlParameterScanner.ResolveTypeSources` → the Smart-Parameters dialog, and the template round-trip guard
+`EveryGeneratedInvocation_IsRecognisedByTheModel`, which feeds every code-generating template back through the
+invocation walk so generation and parsing cannot drift.
+
+⚠ **Not a consumer, and this distinction was worth an inventory:** the parameter dialog's *gate* asks a different
+question — *"does this SQL carry named placeholders?"* (`RewriteToDriverMarkers`), scoped to **any** SQL, because
+running a parameterised `INSERT`/`UPDATE`/`SELECT` by hand is what Smart SQL Parameters is for. Neither fact above
+can widen or narrow that gate; they are consulted only for **types**. Confusing the two is what made a mislabelled
+dialog look like a scope regression (gotcha #311).
+
+A future call hierarchy, "go to routine", or Execute entry point reads the same facts.

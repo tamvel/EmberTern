@@ -412,7 +412,14 @@ internal sealed class NavigationController
         _hoverDwell.Stop();
         if (_hoverCard is { } card)
         {
-            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            // ⭐⭐ REMOVE FROM THE PANEL THAT ACTUALLY HOLDS IT — the rule HideBulb already states, and this is
+            // the site that made the user pay for it (report 2026-08-03: a hover card left on screen that no
+            // tab change, no pointer exit and no click could remove — only restarting the application).
+            // GetOverlayLayer(_editor) answers "which overlay would this editor use NOW". Once the tab has been
+            // switched the editor is detached, so it answers null (or a different window's layer) and Remove
+            // silently does nothing — while the card is still parented in the OLD overlay, which belongs to the
+            // WINDOW and therefore outlives every tab. Clearing the field then drops the last reference to it.
+            (card.Parent as Panel)?.Children.Remove(card);
             _hoverCard = null;
         }
         _hoverSpan = null;
@@ -945,7 +952,7 @@ internal sealed class NavigationController
 
     private void HideBulb()
     {
-        if (_bulb is not null)        if (_bulb is { } bulb)
+        if (_bulb is { } bulb)
         {
             // Remove from the panel that ACTUALLY holds it, not from whatever GetOverlayLayer resolves
             // to now: clearing the field while the control stayed parented is how one gets stranded in
@@ -967,7 +974,9 @@ internal sealed class NavigationController
     {
         if (_codeActionMenu is { } card)
         {
-            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            // Same rule as HideBulb / HideHover: the panel that holds it, not the one the editor would resolve
+            // to now — otherwise a tab switch strands the menu in the window's overlay for good.
+            (card.Parent as Panel)?.Children.Remove(card);
             _codeActionMenu = null;
             _codeActionList = null;
             _codeActionOffset = -1;

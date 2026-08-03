@@ -187,6 +187,39 @@ internal sealed partial class SemanticBinder
         return k >= 2 && t[k - 1].Kind == TokenKind.LParen && IsWordText(t[k - 2], "GEN_ID");
     }
 
+    // Does Firebird's grammar say the name token at <paramref name="k"/> is a DATE/TIME PART — the first
+    // operand of <c>EXTRACT(&lt;part&gt; FROM &lt;value&gt;)</c> — rather than an ordinary expression?
+    //
+    // ⚠ Needed because YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / MILLISECOND / WEEK / WEEKDAY / YEARDAY /
+    // QUARTER / TIMEZONE_* are NOT in the keyword catalog, and deliberately so: they are not reserved words in
+    // Firebird, so a column or a variable may legitimately be called MONTH. They therefore lex as IDENTIFIERS,
+    // and in a PSQL value position the expression walker read `EXTRACT(YEAR FROM …)` as a reference to an
+    // undeclared variable YEAR (user report 2026-08-03, reported as ET0003).
+    //
+    // ⛔ THE FIX IS POSITIONAL, NOT LEXICAL, and that distinction is the whole point. Adding these words to the
+    // keyword catalog would colour and re-case every column named MONTH everywhere in the application; this asks
+    // only about the ONE position where the grammar admits nothing else, and leaves the identifier alone
+    // elsewhere. Same shape as IsGeneratorNamePosition above (gotcha #302).
+    //
+    // ⚠ Deliberately does NOT also require the following token to be FROM. The position immediately after
+    // `EXTRACT (` can only ever hold a date/time part, so the extra condition would buy no precision — and it
+    // would cost a false ET0003 on every keystroke of a half-typed `EXTRACT(YEA`, which is the state the editor
+    // spends most of its time in.
+    private static bool IsDateTimePartPosition(IReadOnlyList<SqlToken> t, int k)
+        => k >= 2 && t[k - 1].Kind == TokenKind.LParen && IsWordText(t[k - 2], "EXTRACT");
+
+    // The ONE question the PSQL expression walker asks before treating a bare identifier as a local: does the
+    // grammar already pin this name to something that is not a variable?
+    //
+    // ⚠ The two predicates it composes stay SEPARATE on purpose, because they have opposite consequences.
+    // A generator name is an object the catalog scan must RESOLVE (an unknown one is a provable ET0001);
+    // a date/time part resolves to nothing at all and simply must not be claimed by anyone. Merging them into a
+    // single predicate would either make the catalog scan look up a sequence called YEAR, or stop it looking up
+    // generators — which is why the composition lives here, at the caller with the shared job, and not in either
+    // predicate.
+    private static bool IsGrammarPinnedNonLocal(IReadOnlyList<SqlToken> t, int k)
+        => IsGeneratorNamePosition(t, k) || IsDateTimePartPosition(t, k);
+
     private void BindStatement(SqlStatement stmt)
     {
         switch (stmt)

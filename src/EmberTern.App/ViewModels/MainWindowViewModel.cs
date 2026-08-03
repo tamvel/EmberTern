@@ -6427,30 +6427,116 @@ public partial class MainWindowViewModel : ViewModelBase
     /// without an extra click. The view marshals + focuses; the VM stays free of Avalonia types.</summary>
     public event Action? EditorFocusRequested;
 
-    // Types each scanned parameter: catalog types for an EXECUTE PROCEDURE call (positional, only
-    // when the count matches), otherwise "Unknown" — never a guessed type (the user's rule).
+    // Types each scanned parameter from the catalog: the input parameter whose ARGUMENT SLOT the placeholder
+    // fills. Anything not provably a whole argument stays "Unknown" — never a guessed type (the user's rule).
+    //
+    // ⚠⚠ TWO DEFECTS LIVED HERE, AND THE SECOND IS WHY THE FIRST FIX CHANGED NOTHING THE USER COULD SEE
+    // (report 2026-08-03, re-opened after that fix):
+    //
+    //   1. It required `catalog.Count == names.Count`. A placeholder is not an input parameter, so counting them
+    //      is not the question — a call that omits parameters carrying DEFAULTS, repeats a placeholder, or uses
+    //      `RETURNING_VALUES :r` breaks the equality while being perfectly typeable, and lost EVERY type at once.
+    //
+    //   2. ⭐⭐ It enumerated STATEMENT SHAPES. First `EXECUTE PROCEDURE` only; then also a `SELECT` whose FROM
+    //      held a call. Each version left the next syntax silently unhandled — a PSQL `FOR SELECT … FROM P(…)
+    //      INTO …`, an `INSERT … SELECT … FROM P(…)`, a CTE body, `MERGE … USING P(…)`, a call in any subquery —
+    //      and the user reported the same defect three times, each time on a shape the last fix had not listed.
+    //
+    // ⭐⭐ THE FIX IS THAT THE MODEL NOW ANSWERS THE QUESTION. `IRoutineInvocation` makes "a routine is invoked
+    // here, with these argument spans" a fact the AST carries, so this method asks the TREE
+    // (`SqlParameterScanner.MapNamesToArgumentSlots`) and knows nothing about statements at all. Every shape
+    // above — and every shape added later — is reached by the same walk. ⛔ If a call is ever not found, the
+    // parser is not modelling it; fix it there, never with a branch here.
+    //
+    // ⚠ Typing is resolved PER PLACEHOLDER, because one statement can have several type sources: two selectable
+    // procedures joined, a call inside a subquery, or a table being written to. Each source names its own owner,
+    // so the catalog is read per owner and cached for the statement.
     private async Task<IReadOnlyList<(string Name, string TypeText)>> BuildSmartParamSpecsAsync(
         string sql, IReadOnlyList<string> names)
     {
-        var procName = SqlParameterScanner.TryExtractExecuteProcedureName(sql);
-        if (procName is not null)
+        var sources = SqlParameterScanner.ResolveTypeSources(sql, names);
+        var cache = new MetadataTypeCache();
+        var specs = new List<(string Name, string TypeText)>(names.Count);
+
+        for (int i = 0; i < names.Count; i++)
         {
-            try
-            {
-                var catalog = await _tableDetailReader
-                    .GetProcedureParametersAsync(procName, 0, CancellationToken.None) // 0 = input params
-                    .ConfigureAwait(true);
-                if (catalog.Count == names.Count)
-                {
-                    return names.Select((n, idx) => (n, catalog[idx].Type)).ToList();
-                }
-            }
-            catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
-            {
-                // fall through to Unknown — never guess
-            }
+            specs.Add((names[i], await TypeForSourceAsync(sources[i], cache).ConfigureAwait(true)));
         }
-        return names.Select(n => (n, UiStrings.SmartParamUnknownType)).ToList();
+
+        return specs;
+    }
+
+    // Per-statement memo of what was read, so one owner costs one catalog round trip however many placeholders
+    // point at it — and an owner that cannot be read is remembered as unreadable rather than retried per value.
+    private sealed class MetadataTypeCache
+    {
+        public Dictionary<string, IReadOnlyList<ProcedureParameterInfo>> Routines { get; } = new(StringComparer.Ordinal);
+
+        public Dictionary<string, IReadOnlyList<FieldInfo>> Tables { get; } = new(StringComparer.Ordinal);
+    }
+
+    // The declared type the MODEL proved this placeholder has, or Unknown.
+    //
+    // ⭐ Switches on the KIND OF SOURCE, never on the kind of statement — that is the whole point of
+    // ParameterTypeSource. Two sources exist because a type has two provable origins in Firebird DML (a routine's
+    // input parameter, a table's column); a third would arrive as a new AST fact plus one arm here, not as a
+    // statement branch anywhere.
+    private async Task<string> TypeForSourceAsync(
+        SqlParameterScanner.ParameterTypeSource source, MetadataTypeCache cache)
+    {
+        if (!source.IsResolved) return UiStrings.SmartParamUnknownType;
+        var owner = source.Owner!;
+
+        switch (source.Kind)
+        {
+            case SqlParameterScanner.TypeSourceKind.RoutineParameter:
+            {
+                if (!cache.Routines.TryGetValue(owner, out var parameters))
+                {
+                    parameters = await ReadOrEmptyAsync(
+                        () => _tableDetailReader.GetProcedureParametersAsync(owner, 0, CancellationToken.None))
+                        .ConfigureAwait(true);
+                    cache.Routines[owner] = parameters;
+                }
+
+                // A slot the routine does not have is Unknown — a call with more arguments than the routine has
+                // parameters is the user's error to see from Firebird, not ours to paper over with the wrong one.
+                return source.Slot < parameters.Count
+                    ? parameters[source.Slot].Type
+                    : UiStrings.SmartParamUnknownType;
+            }
+
+            case SqlParameterScanner.TypeSourceKind.TableColumn:
+            {
+                if (!cache.Tables.TryGetValue(owner, out var columns))
+                {
+                    columns = await ReadOrEmptyAsync(
+                        () => _tableDetailReader.GetFieldsAsync(owner, CancellationToken.None))
+                        .ConfigureAwait(true);
+                    cache.Tables[owner] = columns;
+                }
+
+                var column = columns.FirstOrDefault(
+                    c => string.Equals(c.Name, source.ColumnName, StringComparison.OrdinalIgnoreCase));
+                return column?.Type ?? UiStrings.SmartParamUnknownType;
+            }
+
+            default:
+                return UiStrings.SmartParamUnknownType;
+        }
+    }
+
+    // A metadata read whose failure means "no type", never an exception into the execute path (rule: never guess).
+    private static async Task<IReadOnlyList<T>> ReadOrEmptyAsync<T>(Func<Task<IReadOnlyList<T>>> read)
+    {
+        try
+        {
+            return await read().ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+        {
+            return Array.Empty<T>();
+        }
     }
 
     internal static IReadOnlyList<QueryParameter> BuildQueryParameters(

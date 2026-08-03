@@ -213,7 +213,9 @@ internal sealed class LanguageExpansionController
     {
         if (_card is { } card)
         {
-            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            // ⚠ The panel that HOLDS it — see NavigationController.HideHover for the mechanism and the report
+            // it came from. Resolving the overlay from a detached editor removes nothing and strands the hint.
+            (card.Parent as Panel)?.Children.Remove(card);
             _card = null;
             _label = null;
             _shownText = null;
