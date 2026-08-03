@@ -5962,6 +5962,75 @@ kolorystyczną całej aplikacji naraz, w obu motywach, a nie krok po kroku.
 
 ---
 
+### §19.18 Przegląd domykający — pięć pozostałości, zero otwartych wyjątków (2026-08-03)
+
+> **Użytkownik po obejrzeniu K1–K7:** *„Kierunek jest dobry i najważniejsze, że nie powtórzyła się
+> sytuacja z pierwszego M3.2b… Natomiast mam podobne odczucie jak Ty sam opisałeś przy Connect —
+> chyba zostaliśmy zbyt zachowawczy… Chcę mieć poczucie, że język został wdrożony w całym produkcie,
+> a nie w 90%."* Zadanie: **nie szukać reguł, szukać wyjątków wartych domknięcia**; wyjątek świadomy
+> i poprawiający UX zostaje, pozostałość po starym stanie — do zgodności.
+
+#### §19.18.1 Pięć domkniętych pozostałości
+
+| Element | Było | Jest | Dlaczego to była pozostałość, a nie decyzja |
+|---|---|---|---|
+| **Security Manager** (pasek tytułu) | `IconColor_Role` | `AccentBrush` | ⭐ **Wskazany przez użytkownika.** Jedyny z sześciu przycisków R‑6, który zamiast koloru ROLI (S2) nosił kolor RODZAJU obiektu (S1) — ślad po czasach, gdy przycisk „dziedziczył" kolor po tym, **o czym** jest. §1.2/3 mówi wprost: przy kolizji rodzaju ze skutkiem **wygrywa skutek** |
+| **Connect** (dawne O‑4) | `AccentIconBrush` | ⚪ | ⚠⚠ **Wstrzymane w §19.17 i wykonane teraz — bo zmienił się kontekst, nie zdanie.** Po K6 Connect został **ostatnim** elementem paska na `AccentIconBrush`, obok sześciu `AccentBrush` w roli R‑6. Dwa odcienie niebieskiego znaczące co innego w jednym pasku |
+| **Debugger Continue** (dawne O‑1) | `AccentIconBrush` | `ActionRunBrush` | ⭐ **Kolizja dwóch ratyfikacji okazała się pozorna:** D15.2 Seam A chciało **wyróżnienia**, nie akurat niebieskiego — ten wybrano, gdy token R‑1 nie istniał. Continue nadal jest jedynym wyróżnionym przyciskiem tego paska. ⚠ Niebieski jest w debuggerze kolorem **tożsamości modułu**, a W6 zabrania malować nim przycisk akcji |
+| **Uncomment ×4** (dawne O‑2) | `DangerIconBrush` | ⚪ | ⛔ **W‑1 ZOSTAJE** — rozróżnienie kolorem było zamówione i działa; zmieniła się para. Czerwień obiecywała nieodwracalność na akcji cofanej **jednym Ctrl+Z**, osłabiając czerwień dokładnie tam, gdzie K2 ją zbudowało |
+| **Waliduj** (Data Import) | `SuccessIconBrush` | ⚪ | ⚠ Zmierzona kolizja: **„Waliduj" i „Zatwierdź" niosły w JEDNYM pasku tę samą ikonę `Icon.Check` w tym samym zielonym.** Walidacja niczego nie zapisuje ani nie zatwierdza |
+
+#### §19.18.2 ⚠⚠ Wariant (c) z §9.1 zmierzony i odrzucony
+
+Dokument sam rekomendował dla Comment/Uncomment „parę w obrębie jednego odcienia": `InfoIconBrush` +
+ciemniejszy `AccentIconBrush`. **Zmierzone: `#5BA7D0` vs `#5B9BD5` w Dark** (i `#2A7AA8` vs `#2D6BBF`
+w Light) — dwanaście jednostek na jednym kanale, jako **kreska ikony nie do odróżnienia**. Wariant
+skasowałby wyjątek, który miał chronić.
+
+⭐ Zamiast wymyślać nowy odcień (czego dokument nie robi i o co użytkownik nie prosił) para poszła
+w **niebieski vs szary** — rozróżnienie natychmiastowe, zero nowych tokenów, czerwień zwolniona.
+⚠ To jedyne miejsce tego przeglądu, gdzie podjąłem decyzję projektową w otwartym pytaniu; reszta to
+doprowadzenie do już zapisanego stanu.
+
+#### §19.18.3 Co świadomie ZOSTAŁO — i dlaczego to nie jest dług
+
+* **W‑3** rozłącz cudzą sesję 🔴 — dotyka pracy innego użytkownika.
+* **W‑1** Comment 🔵 vs Uncomment ⚪ — zamówione rozróżnienie, teraz uczciwą parą.
+* **Wiersze podsumowania zmian** w edytorach Procedure/Function (`+3 / ~2 / −1`), **stan „brak
+  ostrzeżeń"** w Session Managerze, **chevrony** i **glif lupy** w polu tekstowym — to **stany
+  i dekoracje**, które §2 wyklucza z języka. ⚠ To one wcześniej trafiły do inwentarza §20 jako
+  „akcje" (§19.17.2).
+* **`AccentIconBrush` i `InfoIconBrush` NIE są sierotami** i nie zostały zlikwidowane (decyzja **DC**
+  → M4.3/M5): pierwszy maluje chip stanu debuggera, żarówkę Quick Fix i znak `DebuggerIcon`, drugi
+  niesie Comment.
+
+#### §19.18.4 Stan końcowy — pomiar
+
+**230 `SvgIcon` w widokach, 81 z kolorem.** ⭐ **Ani jeden przycisk akcji nie stoi poza językiem.**
+Rozkład: `DangerIconBrush` 17 (R‑4) · `OnAccentBrush` 15 (S4) · `AccentBrush` 12 (R‑6) ·
+`ActionRunBrush` 4 (R‑1) · `WarningIconBrush` 4 (R‑5 + 2 wiersze stanu) · `InfoIconBrush` 4 (W‑1) ·
+`CommitButtonBrush` 3 (R‑2) · `RollbackButtonBrush` 3 (R‑3) · `IconColor_*` 10 (S1) · reszta to
+dekoracje i stany.
+
+⚠ Poprawiona przy okazji **lista tokenów Data Importu** w `ConnectionExpandBindingProbe` — wymieniała
+`AccentIconBrush`/`SuccessIconBrush`, których moduł już nie maluje, i nie znała `CommitButtonBrush`/
+`RollbackButtonBrush`. ⭐ To ten sam kształt co filtr partycji z §18.1.6: **lista nazw starzeje się
+cicho, bo nazwa, której nikt nie używa, nadal się rozwiązuje i test przechodzi.**
+
+#### §19.18.5 ⭐ Lekcja, którą ten przegląd potwierdził trzeci raz
+
+> **Zgodność z dokumentem nie jest tym samym co spójność produktu.**
+
+Wszystkie pięć pozostałości było „zgodnych" w tym sensie, że nikt nie zapisał ich jako defektu —
+a każdą widać na pierwszy rzut oka na gotowym ekranie. ⚠ Dwie z nich (Connect, Continue) sam
+wcześniej **wstrzymałem** jako „nie wiadomo"; obie okazały się rozstrzygalne, gdy patrzyło się na
+**cały pasek naraz**, a nie na pojedynczy przycisk. To jest argument za przeglądem całości (§13.3)
+jako osobnym krokiem, a nie sumą odbiorów pojedynczych iteracji.
+
+Build 0/0 · **7137** zielony w trzech partycjach (**7032 + 51 + 54**) · smoke czysty.
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:

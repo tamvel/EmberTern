@@ -431,7 +431,7 @@ noted.
   SESSION FROM
   [docs/design/product-polish-m3-handover.md](docs/design/product-polish-m3-handover.md) + the new
   [docs/design/color-language.md](docs/design/color-language.md) — the M2c handover below is CLOSED.**
-  Build 0/0; suite **7137** (7032 + 51 + 54); smoke clean. **⚠ Seven commits await push on the user's
+  Build 0/0; suite **7137** (7032 + 51 + 54); smoke clean. **⚠ Eight commits await push on the user's
   decision.**
   **M3.1 (Status Bar 2.0) is CLOSED and accepted** — four sections, rail, transaction chip with elapsed
   time, Debug/Trace chips, progress section + one reference operation (§19.0–§19.9).
@@ -513,9 +513,32 @@ noted.
   *slow* recognition, which is M3.2b's mechanism. ⚠ Telling detail: **§11 never numbered that row**
   either. Also newly recorded: **O‑5** (Security Manager carries `IconColor_Role`, a *kind* colour, on
   an R‑6 button). Both go to the §13.3 review, judged on the whole strip at once.
-  ⭐ **State after the rollout: no yellow delete button · no coloured Refresh · one "Run" · one R‑5 token ·
-  Commit and Rollback on their own roles.** Every action button is in a language role except the three
-  open ones (O‑4 Connect, O‑1 Debugger Continue, O‑2 Comment/Uncomment).
+  **⭐⭐ THE CLOSING SWEEP (§19.18) THEN SHUT ALL FIVE OPEN ITEMS — the language is now implemented in
+  FULL, and the user's framing is the lesson: *"chyba zostaliśmy zbyt zachowawczy… chcę mieć poczucie,
+  że język został wdrożony w całym produkcie, a nie w 90%."*** Five residues closed: **Security
+  Manager** (the user spotted it — the only R‑6 tool wearing an object-KIND colour; §1.2/3 says effect
+  beats kind) · **Connect** (O‑4) · **Debugger Continue** (O‑1) · **Uncomment ×4** (O‑2) · **Validate**
+  in Data Import (it carried the *same icon AND the same green* as Commit in one strip).
+  ⭐ **Two of those I had myself put on hold as "don't know", and both became decidable once the whole
+  STRIP was looked at rather than the single button** — Connect only after K6 left it the last
+  `AccentIconBrush` beside six `AccentBrush`; Continue once it was clear D15.2 wanted *emphasis*, not
+  blue specifically (blue predated the R‑1 token, and blue is the debugger's *identity* colour, which
+  W6 forbids on an action button). ⚠ That is the argument for §13.3 being its own step rather than the
+  sum of per-iteration acceptances.
+  ⚠⚠ **§9.1's own recommended option for Comment/Uncomment was measured and REFUTED**: `InfoIconColor`
+  `#5BA7D0` vs `AccentIconColor` `#5B9BD5` differ by 12 units on one channel — as an icon stroke they
+  are indistinguishable, so "a pair within one blue" would have erased the very exception (W‑1) it was
+  meant to protect. Shipped as **blue vs neutral**; ⛔ **W‑1 itself stands** — only the pair changed,
+  because red on an action undone by one Ctrl+Z weakened exactly the red K2 had just built.
+  ⭐ **Final measurement: 230 `SvgIcon` in views, 81 coloured, and NOT ONE action button outside the
+  language.** What is left is roles R‑1…R‑7, two named exceptions (W‑1, W‑3), `IconColor_*` (S1),
+  `OnAccentBrush` (S4), plus states and decorations §2 excludes — the change-summary rows, the "no
+  warnings" state, chevrons and the search glyph inside a TextBox. ⚠ `AccentIconBrush`/`InfoIconBrush`
+  are **not orphans** and were not liquidated (decision DC stands): the first paints the debugger state
+  chip, the Quick Fix bulb and `DebuggerIcon`; the second carries Comment.
+  ⭐ **The lesson, confirmed a third time: conformance to the document is not the same as coherence of
+  the product** — all five residues were "compliant" in the sense that nobody had recorded them as
+  defects, and every one of them is visible at a glance on a finished screen.
   ⚠ **`product-polish.md` §7.5's "zmiany do wykonania" table NO LONGER APPLIES** — M3.2b executed it to
   the letter and was withdrawn; the six titlebar tools **stay coloured** (role R‑6, "wejście do
   narzędzia"), which that table did not know.

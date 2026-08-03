@@ -152,8 +152,13 @@
           <Button Classes="flat" Command="{Binding ValidateCommand}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportValidateTooltip}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
-                                Foreground="{DynamicResource SuccessIconBrush}" />
+              <!-- ⭐ Rola R‑7 (domknięcie K‑final). Zmierzona kolizja: „Waliduj" i „Zatwierdź" niosły
+                   W TYM SAMYM PASKU tę samą ikonę (`Icon.Check`) w tym samym zielonym — dwie różne
+                   akcje nie do odróżnienia inaczej niż po etykiecie. Walidacja niczego nie zapisuje
+                   ani nie zatwierdza (przebiega pipeline w trybie sprawdzenia), więc nie ma skutku
+                   z R‑1…R‑5; po zdjęciu koloru zieleń w tym pasku znaczy już tylko decyzję
+                   transakcyjną, a znak „ptaszka" nadal mówi „sprawdź". -->
+              <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14" />
               <TextBlock Text="{x:Static app:UiStrings.ImportValidate}" />
             </StackPanel>
           </Button>

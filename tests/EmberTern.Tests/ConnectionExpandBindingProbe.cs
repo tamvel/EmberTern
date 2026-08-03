@@ -2756,9 +2756,14 @@ public sealed class ConnectionExpandBindingProbe
         // Every {DynamicResource} key used by DataImportTabView.axaml and TextPromptDialog.axaml.
         var tokens = new[]
         {
-            "AccentBrush", "AccentIconBrush", "BackgroundBrush", "BorderBrush", "DangerIconBrush",
-            "ChromeStrongBrush", "ErrorBrush", "ForegroundBrush", "OnAccentBrush", "PanelBrush",
-            "SubtleForegroundBrush", "SuccessIconBrush", "WarningBrush",
+            // ⚠ Zaktualizowane 2026-08-03 przy domknięciu języka kolorów: moduł nie maluje już
+            // `AccentIconBrush` ani `SuccessIconBrush` (wskaż plik → `AccentBrush`, odśwież i waliduj →
+            // neutralnie), za to Commit/Rollback dostały własne tokeny ról. ⭐ Lista kluczy jest tym
+            // samym rodzajem zapisu co filtr partycji z §18.1.6: starzeje się CICHO, bo nazwa, której
+            // nikt nie używa, nadal się rozwiązuje i test przechodzi.
+            "AccentBrush", "BackgroundBrush", "BorderBrush", "ChromeStrongBrush", "CommitButtonBrush",
+            "DangerIconBrush", "ErrorBrush", "ForegroundBrush", "OnAccentBrush", "PanelBrush",
+            "RollbackButtonBrush", "SubtleForegroundBrush", "WarningBrush",
         };
 
         await session.Dispatch(() =>

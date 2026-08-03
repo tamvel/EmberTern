@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.App.ViewModels"
         xmlns:app="using:EmberTern.App"
@@ -161,8 +161,15 @@
           <Button Classes="icon"
                   ToolTip.Tip="Connect"
                   Command="{Binding Metadata.ConnectSelectedCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.PlugZap}"
-                              Foreground="{DynamicResource AccentIconBrush}" />
+            <!-- ⭐ Rola R‑7 (domknięcie K‑final, dawne O‑4 — §8.2 języka). ⚠⚠ WCZEŚNIEJ WSTRZYMANE
+                 I TERAZ WYKONANE, bo kontekst wokół się zmienił: po K6 (Odśwież → neutralny) Connect
+                 został OSTATNIM elementem tego paska na `AccentIconBrush`, czyli na retiring‑owym
+                 tokenie „ważnej ikony", podczas gdy sześć przycisków obok niesie `AccentBrush` w roli
+                 R‑6 „wejście do modułu". Dwa odcienie niebieskiego w jednym pasku, znaczące co innego.
+                 ⭐ Po zmianie pasek czyta się jedną regułą: SZARY działa na zaznaczeniu · NIEBIESKI
+                 otwiera moduł · CZERWONY usuwa. Connect nie przestaje być główną akcją tej grupy —
+                 przestaje udawać, że otwiera narzędzie. -->
+            <controls:SvgIcon Data="{StaticResource Icon.PlugZap}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="Disconnect"
@@ -194,8 +201,13 @@
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarSecurityManagerTooltip}"
                   Command="{Binding OpenSecurityManagerCommand}">
+            <!-- ⭐ Rola R‑6 „Wejście do narzędzia" (domknięcie K‑final, dawne O‑5). Security Manager
+                 otwiera moduł dokładnie tak jak pięć przycisków obok — i był jedynym, który zamiast
+                 koloru ROLI (S2) nosił kolor RODZAJU obiektu (S1, `IconColor_Role`). ⚠ To pozostałość
+                 po czasach, gdy przycisk „dziedziczył" kolor po tym, o czym jest; §1.2/3 mówi wprost,
+                 że gdy element miałby nieść i rodzaj, i skutek — **wygrywa skutek**. -->
             <controls:SvgIcon Data="{StaticResource Icon.Role}"
-                              Foreground="{DynamicResource IconColor_Role}" />
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Monitoring section: live database Activity Monitor (trace) + Session Manager. -->
           <Button Classes="icon"
@@ -1208,7 +1220,18 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+                <!-- ⭐⭐ Domknięcie K‑final, dawne O‑2 — i uważnie: WYJĄTEK W‑1 ZOSTAJE W MOCY.
+                     Użytkownik zamówił, żeby Comment i Uncomment dało się rozróżnić kolorem, bo ikony
+                     są bardzo podobne — i to nadal obowiązuje. Zmienia się tylko to, KTÓRYM kolorem:
+                     odkomentowanie nosiło `DangerIconBrush`, czyli po K2 kolor operacji NIEODWRACALNEJ,
+                     będąc najłagodniejszą akcją paska (cofa się jednym Ctrl+Z). Czerwień traciła na tym
+                     jednoznaczność dokładnie tam, gdzie K2 ją zbudowało.
+                     ⚠⚠ Wariant (c) z §9.1 („para w obrębie jednego niebieskiego") ZMIERZONY I ODRZUCONY:
+                     `InfoIconColor` #5BA7D0 i `AccentIconColor` #5B9BD5 różnią się o 12 jednostek na
+                     jednym kanale — jako kreska ikony są nie do odróżnienia, więc skasowałby wyjątek,
+                     który miał chronić. Para NIEBIESKI vs SZARY rozróżnia natychmiast, nie kłamie
+                     i nie wymaga nowego tokenu. -->
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <!-- Trigger: debug / format / comment / uncomment -->
               <!-- Debugger entry point (Stage X / D10) — same launch as the sidebar "Debug trigger…". -->
@@ -1226,7 +1249,7 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveTriggerDetail.UncommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <!-- Function: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionExecuteTooltip}"
@@ -1250,7 +1273,7 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveFunctionDetail.UncommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <!-- Package: debug the selected Members-tab member (D15.3 Seam E) — the action lives on the
                    editor toolbar, like the procedure/trigger Debug buttons, rather than as a row inside the
@@ -1278,7 +1301,7 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActivePackageDetail.UncommentBodyCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep4Visible}" />

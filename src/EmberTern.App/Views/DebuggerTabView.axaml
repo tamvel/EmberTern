@@ -131,8 +131,18 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerContinueTooltip}"
                   Command="{Binding ContinueCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
+              <!-- ⭐⭐ Rola R‑1 „Uruchom" (domknięcie K‑final, dawne O‑1). Wyglądało to na kolizję
+                   dwóch ratyfikacji — D15.2 Seam A wybrało akcent jako „jedyną akcję pierwszorzędną
+                   debuggera", a R‑1 mówi zielony. ⭐ Kolizja znika, gdy się zauważy, CZEGO chciało
+                   D15.2: **wyróżnienia**, a nie akurat niebieskiego. Niebieski wybrano wtedy, gdy
+                   token roli „Uruchom" jeszcze nie istniał. Continue nadal jest jedynym wyróżnionym
+                   przyciskiem tego paska (kroki są neutralne, operacje pętli mają własny teal, Stop
+                   jest czerwony) — zmienia się tylko to, że nosi ten sam znak co Execute w reszcie
+                   produktu, a wznowienie wykonania jest dokładnie tym samym rodzajem akcji.
+                   ⚠ Dodatkowo: niebieski jest tu kolorem TOŻSAMOŚCI debuggera (chip stanu w pasku
+                   statusu), a §4/W6 zabrania malować nim PRZYCISK AKCJI. -->
               <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="14" Height="14"
-                                Foreground="{DynamicResource AccentIconBrush}" />
+                                Foreground="{DynamicResource ActionRunBrush}" />
               <TextBlock Text="Continue" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>

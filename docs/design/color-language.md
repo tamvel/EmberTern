@@ -213,7 +213,7 @@ i należy do R‑6.
 
 | # | Wyjątek | Powód |
 |---|---|---|
-| **W‑1** | **Comment / Uncomment mają różne kolory** | ⛔ **Zamówione przez użytkownika**: ikony są bardzo podobne, a kolor pozwala je rozpoznać błyskawicznie. Realizacja W2. ⚠ M3.2b uznało to za defekt i **to był błąd** |
+| **W‑1** | **Comment / Uncomment mają różne kolory** — ⭐ od 2026-08-03 **🔵 `InfoIconBrush` vs ⚪ neutralny** | ⛔ **Zamówione przez użytkownika**: ikony są bardzo podobne, a kolor pozwala je rozpoznać błyskawicznie. Realizacja W2. ⚠ M3.2b uznało to za defekt i **to był błąd**. ⚠⚠ Wyjątek **zostaje**, zmieniła się tylko para kolorów: `DangerIconBrush` na odkomentowaniu obiecywał nieodwracalność akcji cofanej jednym Ctrl+Z i osłabiał czerwień dokładnie tam, gdzie K2 ją zbudowało (O‑2) |
 | **W‑2** | **Rollback 🔴 vs Revert ⚪** | dwie różne role (§3.2), nie dwa kolory jednej |
 | **W‑3** | **Rozłącz cudzą sesję 🔴 vs własne połączenie ⚪** | rozłączenie cudzej sesji dotyka pracy innego użytkownika i jest dla niego nieodwracalne |
 | **W‑4** | **Ikona `OnAccentBrush` na `primary`** | kontrast, nie semantyka (§1.1) |
@@ -352,10 +352,17 @@ iteracja czytała się jako wyszarzenie.
 
 ## §9 ⛔ Otwarte — wymaga decyzji przed implementacją
 
-| # | Pytanie | Kontekst |
+> ⭐⭐ **WSZYSTKIE PYTANIA ZAMKNIĘTE 2026-08-03** w przeglądzie domykającym (`product-polish.md` §19.18),
+> na polecenie użytkownika: *„Chcę jeszcze raz przejrzeć całość pod kątem spójności produktu, a nie
+> tylko zgodności z dokumentem… jeśli wyjątek jest tylko pozostałością po starym stanie aplikacji,
+> po prostu go doprowadź do zgodności."*
+
+| # | Pytanie | Rozstrzygnięcie |
 |---|---|---|
-| **O‑1** | **Debugger Continue** — dziś `AccentIconBrush`, ratyfikowany w **D15.2 Seam A** jako „jedyna akcja pierwszorzędna debuggera". Wg R‑1 powinien być zielony. **Kolizja dwóch ratyfikacji** — nie rozstrzygam sam | zmiana dotknęłaby powierzchni odebranej wizualnie |
-| **O‑2** | **Comment / Uncomment — jakie dwa kolory?** Dziś `Info` + `Danger`. Rozróżnienie zostaje (W‑1), ale **`Danger` na Uncomment osłabia jednoznaczność czerwieni** („nieodwracalne"), a odkomentowanie cofa się jednym Ctrl+Z | opcje w §9.1 |
+| ~~**O‑1**~~ | ~~Debugger Continue~~ | ✅ **ZAMKNIĘTE → `ActionRunBrush`.** ⭐ Kolizja dwóch ratyfikacji była pozorna: D15.2 chciało **wyróżnienia**, a nie akurat niebieskiego — ten wybrano, gdy token roli „Uruchom" jeszcze nie istniał. Continue nadal jest jedynym wyróżnionym przyciskiem tego paska. ⚠ Dodatkowo niebieski jest w debuggerze kolorem **tożsamości modułu**, a W6 zabrania malować nim przycisk akcji |
+| ~~**O‑2**~~ | ~~Comment / Uncomment~~ | ✅ **ZAMKNIĘTE → Comment 🔵 `InfoIconBrush`, Uncomment ⚪.** ⭐ **W‑1 zostaje w mocy** — rozróżnienie kolorem było zamówione i nadal działa; zmienia się tylko to, KTÓRYM kolorem. ⚠⚠ **Wariant (c) z §9.1 zmierzony i ODRZUCONY:** `InfoIconColor` `#5BA7D0` i `AccentIconColor` `#5B9BD5` różnią się o 12 jednostek na jednym kanale — jako kreska ikony nie do odróżnienia, więc skasowałby wyjątek, który miał chronić. Niebieski vs szary rozróżnia natychmiast i **zwalnia czerwień** |
+| ~~**O‑4**~~ | ~~Connect~~ | ✅ **ZAMKNIĘTE → ⚪** (§8.2 wykonane). Wstrzymane w §19.17, wykonane teraz, bo **kontekst się zmienił**: po K6 Connect został ostatnim elementem paska na `AccentIconBrush` obok sześciu `AccentBrush` w roli R‑6 |
+| ~~**O‑5**~~ | ~~Security Manager~~ | ✅ **ZAMKNIĘTE → `AccentBrush`.** Pozostałość po czasach, gdy przycisk dziedziczył kolor po tym, **o czym** jest; §1.2/3 mówi wprost, że przy kolizji rodzaju ze skutkiem **wygrywa skutek** |
 | ~~**O‑3**~~ | ~~Zakres pierwszej implementacji~~ | ⭐ **ROZSTRZYGNIĘTE 2026-08-02 przez R14 (§0.4): podetapami, sortowane od najbardziej oczywistego zysku.** Plan w §11 |
 | **O‑4** | ⭐ **Connect w pasku tytułu — zdejmować niebieski czy nie?** §8.2 mówi **R‑7 ⚪** („nie otwiera modułu, działa na zaznaczeniu") i formalnie ma rację. ⛔ **Nie wykonane 2026-08-03, świadomie**, bo §0.5 odpowiada **„nie wiadomo"**: Connect jest **główną akcją tego paska**, a niebieski jest dziś jedyną rzeczą, która odróżnia go od Edytuj / Kopiuj / Rozłącz / Połącz ponownie. Po zdjęciu koloru cała lewa część paska staje się jednolicie szara poza czerwonym koszem — możliwe, że rozpoznanie **spowolni**, a to jest dokładnie mechanizm M3.2b. ⚠ Zauważ, że §11 sam nie ponumerował tego wiersza — prawdopodobnie z tego samego powodu. **Do rozstrzygnięcia w pełnym QA §13.3, na całym pasku naraz** |
 | **O‑5** | **Security Manager niesie `IconColor_Role`**, czyli kolor RODZAJU (S1), choć jest przyciskiem otwierającym moduł (R‑6). Jedyny taki przypadek wśród sześciu narzędzi paska. Możliwy świadomy wyjątek („to jest o rolach") albo pozostałość. Poza K2–K7; do §13.3 |
@@ -412,8 +419,23 @@ iteracja czytała się jako wyszarzenie.
 | | Powód |
 |---|---|
 | **6 narzędzi w pasku tytułu** | ⭐ **ZOSTAJĄ KOLOROWE** — rola R‑6. To nie jest odłożenie, to jest rozstrzygnięcie |
-| **Comment / Uncomment** | czeka na **O‑2**; do tego czasu **bez zmian** (W‑1) |
-| **Debugger Continue** | czeka na **O‑1** — kolizja R‑1 z ratyfikacją D15.2 |
-| **Likwidacja `AccentIconBrush` / `InfoIconBrush`** | decyzja **DC** → M4.3/M5, poza językiem |
-| **`WarningBrush` vs `WarningIconBrush`** | §7.4 — porządek tokenów, nie zmiana wyglądu; przy okazji K3 albo osobno |
+| ~~Comment / Uncomment~~ | ✅ zamknięte — **O‑2** |
+| ~~Debugger Continue~~ | ✅ zamknięte — **O‑1** |
+| **Likwidacja `AccentIconBrush` / `InfoIconBrush`** | decyzja **DC** → M4.3/M5, poza językiem. ⚠ Oba tokeny **nadal mają konsumentów** i nie są sierotami: `AccentIconBrush` maluje chip stanu debuggera (W‑5), żarówkę Quick Fix i złożony znak `DebuggerIcon`; `InfoIconBrush` niesie Comment (W‑1) |
+| ~~`WarningBrush` vs `WarningIconBrush`~~ | ✅ wykonane przy K3–K7 — R‑5 ma jeden token ikonowy, `WarningBrush` został przy tekście i komunikatach |
 | **Menu kontekstowe** | osobny, już spójny system (§2) |
+
+### §11.4 ⭐⭐ Przegląd domykający (2026-08-03) — język jest wdrożony w całości
+
+Po K1–K7 użytkownik zgłosił, że **byliśmy zbyt zachowawczy** i że część zmian nie została doprowadzona
+do końca (przykład: Security Manager). Przegląd całego produktu z dokumentem w ręku domknął **pięć**
+pozostałości: Security Manager · Connect · Debugger Continue · Uncomment ×4 · Waliduj (Data Import —
+niósł tę samą ikonę **i ten sam zielony** co Zatwierdź, w jednym pasku).
+
+⭐ **Stan końcowy, zmierzony: 230 `SvgIcon` w widokach, 81 z kolorem — i ANI JEDEN przycisk akcji nie
+stoi poza językiem.** Cały pozostały kolor to role R‑1…R‑7, dwa nazwane wyjątki (**W‑1**, **W‑3**),
+`IconColor_*` (S1), `OnAccentBrush` (S4) oraz stany i dekoracje wykluczone przez §2.
+
+⚠ **Reguła, którą ten przegląd potwierdził trzeci raz:** *zgodność z dokumentem nie jest tym samym co
+spójność produktu.* Wszystkie pięć pozostałości było „zgodnych" w tym sensie, że nikt nie zapisał ich
+jako defektu — a widać je było na pierwszy rzut oka na gotowym ekranie.
