@@ -430,11 +430,37 @@ noted.
 - **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
   FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
   (a ready-made startup prompt), then the handover it points at.**
-  Build 0/0; suite **7229** (7118 + 57 + 54); smoke clean. ⏸ **Next: M3.3b** (two tab-strip modes +
-  `TabStripMode`/`TabStripMaxRows` preferences; ⚠ `CurrentSchemaVersion` stays 2), then M3.3c → M3.4
-  Metadata Explorer → M3b → ⛔ the §13.3 gate. ⭐ User directive (2026-08-03): **M3.3b and M3.3c run without
-  stopping for acceptance** — the next stop is the finished tab strip, or any product decision that needs a
-  ratification.
+  Build 0/0; suite **7231** (7120 + 57 + 54); smoke clean. ⏸ **Next: M3.3c** (the tab context menu — 8 items,
+  and ⚠⚠ the three bulk-close ones are the **fourth entry into the existing Save/Discard/Cancel gate**, rule
+  #11), then M3.4 Metadata Explorer → M3b → ⛔ the §13.3 gate. ⭐ User directive (2026-08-03): **M3.3b/M3.3c
+  run without stopping for acceptance** — the next stop is the finished tab strip.
+  ✅ **M3.3b DONE (2026-08-03) — two tab-strip modes + two preferences** (`product-polish.md` §19.23).
+  ⭐⭐ **Two modes, ONE mechanism**: one `ItemsControl`, one tab template, and the mode is *only* the
+  `ScrollViewer`'s scroll directions — a `WrapPanel` wraps exactly when it is given a **finite** width, so
+  horizontal-`Disabled` gives multi-row (+ `MaxHeight` = `Size.Row.Tab` × rows, so **only the strip scrolls**)
+  and horizontal-`Auto` gives an infinite width and therefore a single row, forever. ⛔ Do not split it into
+  two `ItemsControl`s: the ~60-line tab template would be duplicated and could then drift between modes.
+  ⚠ `MaxHeight` is computed in code-behind because it is a **product of a role and a preference** and
+  `{DynamicResource}` does not multiply — ⛔ no third catalog layer of ready-made heights (§19.1.4 settled the
+  same question for `GridLength`).
+  ⭐⭐ **The overflow counter counts the tabs you CANNOT see, not the tabs you have** (ratified) — the first is
+  the only number nothing else on screen tells you. It is therefore measured from the **real layout**, not from
+  the collection; a half-clipped tab counts as hidden. ⚠ Recorded risk: the strip does not virtualise, so the
+  count is complete — if it ever starts to, the counter goes **silently low**. Reuse before create: the
+  filtered list is the existing `SearchableComboBox`, the count rides its `SelectionBoxText`, zero new chrome.
+  ⚠ Preferences are additive — **`CurrentSchemaVersion` stays 2** — and travel in the `.etsettings` export for
+  free. `TabStripMaxRows` **survives a round trip through single-row mode** (pinned): resetting a limit that
+  momentarily does not apply would look like tidiness and read as lost settings. Its minimum is **1, not 2**,
+  because one row of a *multi*-row strip still hides nothing behind a menu, which `SingleRow` does not.
+  ⭐ Settings Center got its own **Tabs** category (user's call — the tab strip is a separate surface, and it
+  gives M3.3c's *"Tab settings…"* a precise destination).
+  ⚠ **Two Settings Center guards fired on the first run and both were right** — a missing page-visibility
+  property (selecting "Tabs" would have left the right pane blank) and a preference with no row and no
+  recorded reason. That mechanism was not ceremony.
+  ⚠ **Third time the visual probe showed a state that did not exist**: it loaded six resource dictionaries and
+  `SearchableComboBox.axaml` was not among them, so the overflow control had no `ControlTheme`, no template,
+  and rendered as **nothing** — a plausible-looking image with the subject missing. ⭐ **The probe must load
+  the same dictionaries as `App.axaml`**; a missing one does not fail, it silently removes an element.
   ✅ **M3.3a DONE (2026-08-03) — RE-SCOPED BY THE USER BEFORE IT STARTED, and that is its first lesson**
   (`product-polish.md` §19.22). The plan row read *"geometry, `Size.Row.Tab`, indicator"* — **all three were
   already delivered by M3.1a**, so the user refused to do the etap for the etap's sake: *"jeżeli M3.1a

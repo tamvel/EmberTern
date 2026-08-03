@@ -186,6 +186,11 @@ public partial class MainWindowViewModel : ViewModelBase
         // Settings Center). The service loads here and is handed to both.
         _preferences = new PreferencesService(new PreferencesStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector));
+        // ⭐ Pasek zakładek reaguje na apply-on-change. Subskrypcja jest TUTAJ, a nie w widoku, bo widok
+        // dostaje `PropertyChanged` z tego VM i nie musi znać drugiego źródła zdarzeń — to ta sama zasada
+        // co przy motywie: jedno miejsce zamienia preferencję na skutek. ⚠ Serwis żyje tak długo jak ten
+        // VM (oba są własnością okna głównego), więc wypisanie się nie ma czego chronić.
+        _preferences.Changed += (_, _) => RaiseTabStripPreferencesChanged();
         // Settings export / import (etap 5b). Same settings.dat + protector again, and the app version comes from
         // AppInfo because Core cannot see it and must not be able to branch on it (§15.3a). AfterImport is this
         // view model's own refresh: the import rewrites the file several in-memory holders were loaded from.
@@ -361,6 +366,38 @@ public partial class MainWindowViewModel : ViewModelBase
     /// the user's own text, whereas generated statements are EmberTern's output.</para>
     /// </summary>
     public FormatterStyle FormatterStyle => FormatterStylePreference.From(_preferences.Current);
+
+    // ── Pasek zakładek — dwa tryby (M3.3b / product-polish §8.2) ─────────────────────────────────────
+    //
+    // ⭐ VM odpowiada wyłącznie na pytanie „KTÓRY tryb i ile wierszy" — jak to zrealizować (kierunki
+    // przewijania, wysokość, licznik przepełnienia) jest sprawą widoku. To ta sama granica, którą trzyma
+    // `FormatterStyle`: preferencja jest faktem, jej skutek jest mechanizmem.
+    //
+    // ⚠ Czytane PER WYWOŁANIE, nigdy zapamiętane — apply-on-change znaczy, że użytkownik może przełączyć
+    // tryb przy otwartych zakładkach. Zmianę ogłasza `RaiseTabStripPreferencesChanged`, wywoływane
+    // z jednego miejsca, w którym aplikacja reaguje na `PreferencesService.Changed`.
+
+    /// <summary>Czy pasek zakładek układa zakładki w wielu wierszach (domyślnie) — §8.2.</summary>
+    public bool IsTabStripMultiRow => string.Equals(
+        _preferences.Current.TabStripMode,
+        PreferenceOptions.TabStripModeMultiRow,
+        StringComparison.Ordinal);
+
+    /// <summary>Dopełnienie <see cref="IsTabStripMultiRow"/>. Istnieje, bo XAML nie ma negacji w wiązaniu
+    /// kompilowanym tak czytelnej jak nazwana właściwość, a obie strony bramkują realne elementy.</summary>
+    public bool IsTabStripSingleRow => !IsTabStripMultiRow;
+
+    /// <summary>Ile wierszy może urosnąć pasek, zanim zacznie się przewijać (§8.2). Czytane tylko
+    /// w trybie wielowierszowym; wartość przeżywa przełączenie trybu tam i z powrotem.</summary>
+    public int TabStripMaxRows => _preferences.Current.TabStripMaxRows;
+
+    /// <summary>Ogłasza, że preferencje paska zakładek mogły się zmienić.</summary>
+    internal void RaiseTabStripPreferencesChanged()
+    {
+        OnPropertyChanged(nameof(IsTabStripMultiRow));
+        OnPropertyChanged(nameof(IsTabStripSingleRow));
+        OnPropertyChanged(nameof(TabStripMaxRows));
+    }
 
     /// <summary>The SQL Editor's own Performance context (its captured run + panel). Procedure/
     /// Function detail tabs each own a separate <see cref="HostPerformanceContext"/> — nothing is

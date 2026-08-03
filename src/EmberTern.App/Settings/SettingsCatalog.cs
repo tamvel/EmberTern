@@ -173,6 +173,7 @@ public static class SettingsCatalog
     public const string CategoryGeneral = "general";
     public const string CategoryEditor = "editor";
     public const string CategoryGrid = "grid";
+    public const string CategoryTabs = "tabs";
     public const string CategoryDebugger = "debugger";
     public const string CategoryFormatter = "formatter";
 
@@ -188,6 +189,8 @@ public static class SettingsCatalog
     public const string SettingFullLoadPromptThreshold = "editor.fullLoadPromptThreshold";
     public const string SettingDataPageSize = "grid.dataPageSize";
     public const string SettingGridAutoFit = "grid.autoFitColumns";
+    public const string SettingTabStripMode = "tabs.stripMode";
+    public const string SettingTabStripMaxRows = "tabs.stripMaxRows";
     public const string SettingDebuggerIsolation = "debugger.isolation";
     public const string SettingFormatterKeywordCase = "formatter.keywordCase";
     public const string SettingFormatterIdentifierCase = "formatter.identifierCase";
@@ -199,6 +202,7 @@ public static class SettingsCatalog
             new SettingsCategoryDescriptor(CategoryGeneral, UiStrings.SettingsCategoryGeneral),
             new SettingsCategoryDescriptor(CategoryEditor, UiStrings.SettingsCategoryEditor),
             new SettingsCategoryDescriptor(CategoryGrid, UiStrings.SettingsCategoryGrid),
+            new SettingsCategoryDescriptor(CategoryTabs, UiStrings.SettingsCategoryTabs),
             new SettingsCategoryDescriptor(CategoryDebugger, UiStrings.SettingsCategoryDebugger),
             new SettingsCategoryDescriptor(CategoryFormatter, UiStrings.SettingsCategoryFormatter),
         ];
@@ -333,6 +337,39 @@ public static class SettingsCatalog
                 UiStrings.SettingsGridAutoFitDescription,
                 UiStrings.SettingsGridAutoFitKeywords,
                 valueKind: SettingValueKind.Toggle),
+
+            // ── Tabs ────────────────────────────────────────────────────────────────────────────────────
+            //
+            // §8.2, ratified D5–D8. ⭐ Own category rather than two more rows in General (user, 2026-08-03):
+            // the tab strip is one of the four PERSISTENT surfaces (§0.1), and this category is also where
+            // M3.3c's "Tab settings…" context-menu item will jump.
+            //
+            // ⚠ The row order is deliberate: the MODE decides whether the row limit means anything, so it
+            // comes first and the limit reads as its detail.
+            new SettingDescriptor(
+                SettingTabStripMode,
+                CategoryTabs,
+                UiStrings.SettingsTabStripModeLabel,
+                UiStrings.SettingsTabStripModeDescription,
+                UiStrings.SettingsTabStripModeKeywords,
+                PreferenceOptions.TabStripMode,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [PreferenceOptions.TabStripModeMultiRow] = UiStrings.SettingsTabStripModeMultiRow,
+                    [PreferenceOptions.TabStripModeSingleRow] = UiStrings.SettingsTabStripModeSingleRow,
+                }),
+
+            // ⚠ Stays VISIBLE and enabled in single-row mode, and that is a decision: the value is kept
+            // across a mode round trip (a mode is a view of the same workspace), so greying the row would
+            // suggest the number had been lost. Its description says which layout reads it.
+            new SettingDescriptor(
+                SettingTabStripMaxRows,
+                CategoryTabs,
+                UiStrings.SettingsTabStripMaxRowsLabel,
+                UiStrings.SettingsTabStripMaxRowsDescription,
+                UiStrings.SettingsTabStripMaxRowsKeywords,
+                valueKind: SettingValueKind.Number,
+                range: PreferenceOptions.TabStripMaxRows),
 
             // ── Debugger ────────────────────────────────────────────────────────────────────────────────
             //

@@ -293,14 +293,47 @@ public static class PreferenceOptions
     public static PreferenceRange DataPageSize { get; } =
         new(minimum: 1, maximum: 1000, @default: 200);
 
+    // ---- Workspace tab strip (M3.3b / product-polish §8.2) ---------------------------------------------
+    //
+    // ⭐ Both values are RATIFIED in the design (D5/D7): two modes, MultiRow by default; 1–10 rows, 3 by
+    // default. They are not open questions and this catalog is where the ratified numbers live once.
+    //
+    // ⚠ The KEYS are this catalog's own, spelled the way the design speaks — the same boundary rule as the
+    // casing and debugger-isolation keys: Core stores a string, and turning it into whatever the view layer
+    // needs is an App-side mapping. Core has no opinion about WrapPanel or ScrollViewer.
+    //
+    // ⚠ Additive: `UserSettings.CurrentSchemaVersion` STAYS 2 (R‑4). A bump trips downgrade protection and
+    // older builds would then refuse the whole settings file, not just these two rows.
+
+    public const string TabStripModeMultiRow = "MultiRow";
+    public const string TabStripModeSingleRow = "SingleRow";
+
+    public static PreferenceOptionSet TabStripMode { get; } =
+        new(new[] { TabStripModeMultiRow, TabStripModeSingleRow },
+            @default: TabStripModeMultiRow);
+
+    /// <summary>
+    /// Rows the multi-row tab strip may grow to before it scrolls (§8.2, ratified 1–10 default 3).
+    /// </summary>
+    /// <remarks>
+    /// ⚠ The minimum is <b>1</b>, not 2, and that is deliberate rather than a loose bound: one row of a
+    /// MULTI-row strip is not the same thing as <c>SingleRow</c> mode — it still wraps and scrolls
+    /// vertically and still hides nothing behind a menu, whereas SingleRow scrolls sideways and moves the
+    /// overflow into a list. A user who wants "one row, nothing hidden" has to be able to say so.
+    /// ⚠ The maximum is 10 because the strip is chrome: eleven rows of tabs is not a tab strip any more,
+    /// it is a document list, and §8.5 forbids the chrome growing without limit.
+    /// </remarks>
+    public static PreferenceRange TabStripMaxRows { get; } =
+        new(minimum: 1, maximum: 10, @default: 3);
+
     /// <summary>
     /// Every option set declared here, so a test can hold all of them to the same invariants without a
     /// hand-maintained list going stale beside them.
     /// </summary>
     public static IReadOnlyList<PreferenceOptionSet> All { get; } =
-        new[] { Theme, Language, Casing, DebuggerIsolation };
+        new[] { Theme, Language, Casing, DebuggerIsolation, TabStripMode };
 
     /// <summary>Every numeric range declared here, for the same reason as <see cref="All"/>.</summary>
     public static IReadOnlyList<PreferenceRange> AllRanges { get; } =
-        new[] { PreviewRowLimit, FullLoadPromptThreshold, DataPageSize };
+        new[] { PreviewRowLimit, FullLoadPromptThreshold, DataPageSize, TabStripMaxRows };
 }

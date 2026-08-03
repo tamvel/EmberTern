@@ -309,6 +309,59 @@
 
             </StackPanel>
 
+            <!-- Tabs (M3.3b / §8.2) — the workspace tab strip. ⭐ Own category, not two more rows in
+                 General: the tab strip is one of the four persistent surfaces (§0.1), and this is where
+                 M3.3c's "Tab settings…" context-menu item will jump.
+                 ⚠ Row order carries meaning — the MODE decides whether the row limit does anything, so the
+                 limit reads as its detail rather than as a peer. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsTabsPageVisible}">
+
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryTabs}" />
+
+              <Border Classes="settings-group" IsVisible="{Binding TabStripMode.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding TabStripMode.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding TabStripMode.Description}"
+                             TextWrapping="Wrap" />
+                  <ComboBox x:Name="TabStripModeBox"
+                            ItemsSource="{Binding TabStripMode.Options}"
+                            SelectedItem="{Binding TabStripMode.SelectedOption, Mode=TwoWay}"
+                            MinWidth="200"
+                            HorizontalAlignment="Left"
+                            Margin="0,6,0,0">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Border>
+
+              <!-- ⚠⚠ Kontrolka numeryczna niesie SWÓJ WIERSZ jako DataContext (settings-center §17.4).
+                   Na DataContexcie strony pole wpisuje się poprawnie, pokazuje liczbę i NIE ZAPISUJE NIC —
+                   wszystkie trzy hooki (blur / Enter / digits-only) identyfikują z niego podmiot. -->
+              <Border Classes="settings-group"
+                      DataContext="{Binding TabStripMaxRows}" x:DataType="vm:NumericSettingViewModel"
+                      IsVisible="{Binding IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Description}"
+                             TextWrapping="Wrap" />
+                  <TextBox x:Name="TabStripMaxRowsBox"
+                           Text="{Binding EditText, Mode=TwoWay}"
+                           LostFocus="OnNumericSettingLostFocus"
+                           KeyDown="OnNumericSettingKeyDown"
+                           MinWidth="140"
+                           HorizontalAlignment="Left"
+                           Margin="0,6,0,0" />
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+
             <!-- Debugger (etap 6 / §7.3) — closes a recorded D4 UX wish. ⚠ The launch panel's own Advanced
                  selector stays: this decides what a debug session OPENS with, not what it is limited to. -->
             <StackPanel Spacing="12" IsVisible="{Binding IsDebuggerPageVisible}">

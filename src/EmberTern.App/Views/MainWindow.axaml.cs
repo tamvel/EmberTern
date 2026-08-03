@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -254,6 +255,32 @@ public partial class MainWindow : Window
         };
 
         DataContextChanged += OnDataContextChanged;
+
+        // ── Pasek zakładek (M3.3b) ───────────────────────────────────────────────────────────────────
+        // Licznik przepełnienia jest faktem o UKŁADZIE, więc odświeża się wtedy, kiedy układ się zmienia:
+        // po przewinięciu paska i po każdym przeliczeniu rozmiarów (dodanie/zamknięcie zakładki, zmiana
+        // szerokości okna, zmiana nazwy dokumentu). ⚠ `LayoutUpdated` jest częste, ale `UpdateTabOverflow`
+        // wychodzi natychmiast w trybie wielowierszowym, a w jednowierszowym robi jeden przebieg po
+        // kontenerach bez alokacji — mierzone tanio.
+        if (this.FindControl<ScrollViewer>("TabStripScroll") is { } tabScroll)
+            tabScroll.ScrollChanged += (_, _) => UpdateTabOverflow();
+
+        LayoutUpdated += (_, _) => UpdateTabOverflow();
+
+        // Wybór z listy przepełnienia = aktywacja dokumentu. ⚠ Zaznaczenie jest natychmiast czyszczone:
+        // ta lista jest WYSZUKIWARKĄ, a nie stanem — „ostatnio wybrana" nic tu nie znaczy, a zostawione
+        // zaznaczenie uniemożliwiłoby ponowne wybranie tej samej zakładki.
+        if (this.FindControl<SearchableComboBox>("TabOverflowBox") is { } overflow)
+        {
+            overflow.PropertyChanged += (_, args) =>
+            {
+                if (args.Property != SearchableComboBox.SelectedItemProperty) return;
+                if (args.NewValue is not WorkspaceTabViewModel tab) return;
+
+                overflow.SelectedItem = null;
+                if (tab.ActivateCommand.CanExecute(null)) tab.ActivateCommand.Execute(null);
+            };
+        }
         PropertyChanged += OnWindowPropertyChanged;
         PositionChanged += OnWindowPositionChanged;
         Opened += OnWindowOpened;
@@ -625,6 +652,10 @@ public partial class MainWindow : Window
             _currentVm.EditorFocusRequested += OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
+
+            // Pasek zakładek — tryb czytany z preferencji przy starcie i po każdej zmianie
+            // (OnVmPropertyChanged). Jedno miejsce, w którym preferencja staje się układem.
+            ApplyTabStripMode();
 
             // D3 — wire the main SQL editor's language capabilities ONCE, now that the stable VM has
             // arrived, through the SAME shared path the object editors use (SqlEditorBehavior.Attach). The
@@ -1236,6 +1267,13 @@ public partial class MainWindow : Window
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MainWindowViewModel.IsTabStripMultiRow)
+            || e.PropertyName == nameof(MainWindowViewModel.TabStripMaxRows))
+        {
+            ApplyTabStripMode();
+            return;
+        }
+
         if (e.PropertyName == nameof(MainWindowViewModel.CurrentResultVersionTag)
             || e.PropertyName == nameof(MainWindowViewModel.ResultPageVersionTag))
         {
@@ -1590,6 +1628,91 @@ public partial class MainWindow : Window
         if (_sidebarCollapsed) ExpandSidebar();
         else CollapseSidebar();
         e.Handled = true;
+    }
+
+    // ── Pasek zakładek — dwa tryby (M3.3b / product-polish §8.2) ─────────────────────────────────────
+    //
+    // ⭐⭐ CAŁA RÓŻNICA MIĘDZY TRYBAMI TO KIERUNKI PRZEWIJANIA, i to nie jest sztuczka tylko własność
+    // `WrapPanela`: zawija się dokładnie wtedy, gdy dostanie SKOŃCZONĄ szerokość. Wyłączony poziomy pasek
+    // przewijania ją ogranicza (⇒ wiele wierszy), włączony daje nieskończoną (⇒ jeden wiersz, na zawsze).
+    // Dlatego jest tu JEDEN `ItemsControl` i JEDEN szablon zakładki, a nie dwa układy do utrzymania.
+    //
+    // ⚠ `MaxHeight` liczy się tutaj, a nie w XAML, bo jest ILOCZYNEM roli i preferencji
+    // (`Size.Row.Tab` × wiersze), a `{DynamicResource}` nie mnoży. ⛔ Nie zakładać trzeciej warstwy
+    // katalogu z gotowymi wysokościami — byłaby drugą reprezentacją tej samej liczby (§19.1.4).
+    private void ApplyTabStripMode()
+    {
+        if (_currentVm is null) return;
+
+        var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
+        if (scroll is null) return;
+
+        if (_currentVm.IsTabStripMultiRow)
+        {
+            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+
+            // ⚠ Rola, nie literał — i czytana z ŻYWEGO wariantu motywu, bo `FindResource(key)` bez wariantu
+            //   zwraca UnsetValue (gotcha #250). Gdyby roli zabrakło, pasek zostaje bez ograniczenia:
+            //   nieprzycięty pasek jest brzydki, przycięty do zera byłby awarią.
+            var rowHeight = this.TryFindResource("Size.Row.Tab", ActualThemeVariant, out var value)
+                            && value is double h
+                ? h
+                : double.NaN;
+
+            scroll.MaxHeight = double.IsNaN(rowHeight)
+                ? double.PositiveInfinity
+                : rowHeight * _currentVm.TabStripMaxRows;
+        }
+        else
+        {
+            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+            scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scroll.MaxHeight = double.PositiveInfinity;
+        }
+
+        UpdateTabOverflow();
+    }
+
+    // ⭐⭐ LICZNIK POKAZUJE ZAKŁADKI NIEWIDOCZNE, NIE WSZYSTKIE OTWARTE — ratyfikowane przez użytkownika:
+    // „to jest informacja, której użytkownik potrzebuje w danym momencie". Ile jest otwartych, widać po
+    // samym pasku; ile jest POZA nim — nie widać znikąd, i to jest jedyna liczba, której nie da się
+    // odczytać wzrokiem.
+    //
+    // ⚠ Dlatego liczy się ją z RZECZYWISTEGO UKŁADU, a nie z modelu: „nie mieści się" jest faktem o widoku.
+    // ⚠ `ItemsControl` nad `WrapPanelem` nie wirtualizuje, więc wszystkie kontenery istnieją i pomiar jest
+    //   zupełny — gdyby kiedyś zaczął wirtualizować, ta metoda zacznie liczyć tylko zrealizowane i trzeba
+    //   ją będzie oprzeć na czymś innym. Zapisane, bo objawem byłby licznik po cichu za niski.
+    private void UpdateTabOverflow()
+    {
+        var box = this.FindControl<SearchableComboBox>("TabOverflowBox");
+        var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
+        var items = this.FindControl<ItemsControl>("TabStripItems");
+        if (box is null || scroll is null || items is null || _currentVm is null) return;
+
+        if (_currentVm.IsTabStripMultiRow)
+        {
+            // ⭐ W trybie wielowierszowym przycisku NIE MA — i to jest istota decyzji D5/D7, nie oszczędność
+            //   miejsca: żadna zakładka nie chowa się za menu, więc licznik „ilu nie widać" nie ma podmiotu.
+            box.IsVisible = false;
+            return;
+        }
+
+        var viewport = scroll.Viewport.Width;
+        var hidden = 0;
+
+        foreach (var tab in _currentVm.WorkspaceTabs)
+        {
+            if (items.ContainerFromItem(tab) is not Control container) continue;
+            if (container.TranslatePoint(new Point(0, 0), scroll) is not { } origin) continue;
+
+            // Nie mieści się = wychodzi którąkolwiek krawędzią poza widoczny obszar. Zakładka przycięta
+            // w połowie jest tak samo nieczytelna jak zakładka całkiem poza ekranem.
+            if (origin.X < -0.5 || origin.X + container.Bounds.Width > viewport + 0.5) hidden++;
+        }
+
+        box.IsVisible = hidden > 0;
+        box.SelectionBoxText = hidden.ToString(CultureInfo.CurrentCulture);
     }
 
     // Sizes the results row for the active tab: saved height on the Query tab,

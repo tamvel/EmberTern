@@ -1053,6 +1053,40 @@ internal static class UiStrings
     public const string SettingsGridAutoFitKeywords =
         "grid columns auto fit width size layout default resize";
 
+    // ── Tabs (M3.3b / product-polish §8.2) ──────────────────────────────────────────────────────────
+    // ⭐ Zakładki dostały WŁASNĄ kategorię, a nie wiersze w General — decyzja użytkownika (2026-08-03):
+    // pasek zakładek jest osobną powierzchnią aplikacji (§0.1), a General i tak już nosi motyw, język,
+    // workspace i eksport. Kategoria jest też celem skoku dla przyszłej pozycji „Ustawienia zakładek…"
+    // z menu kontekstowego zakładki (D9 / M3.3c).
+    public const string SettingsCategoryTabs = "Tabs";
+
+    // ⚠ Opis mówi, co użytkownik ZOBACZY, a nie jak to jest zbudowane — i nazywa różnicę, która naprawdę
+    // dzieli te tryby: czy zakładka może zniknąć z widoku. To jest ratyfikowana istota decyzji D5/D7.
+    public const string SettingsTabStripModeLabel = "Tab strip layout";
+    public const string SettingsTabStripModeDescription =
+        "Multiple rows keeps every open tab visible — the strip grows and then scrolls. A single row scrolls "
+        + "sideways instead and moves the rest into a searchable list.";
+    public const string SettingsTabStripModeKeywords =
+        "tabs tab strip rows layout multi row single row overflow scroll workspace documents";
+
+    public const string SettingsTabStripModeMultiRow = "Multiple rows";
+    public const string SettingsTabStripModeSingleRow = "Single row";
+
+    // ⚠ Mówi wprost, że dotyczy tylko trybu wielowierszowego — wiersz widoczny w trybie B, w którym nic
+    // nie robi, byłby dokładnie tym „martwym zapisem wyglądającym na regułę", przed którym broni §18.R.
+    public const string SettingsTabStripMaxRowsLabel = "Maximum rows";
+    public const string SettingsTabStripMaxRowsDescription =
+        "How tall the tab strip may grow before it starts scrolling. Multiple-rows layout only. Between 1 "
+        + "and 10.";
+    public const string SettingsTabStripMaxRowsKeywords =
+        "tabs tab strip rows maximum height limit scroll workspace";
+
+    // Przycisk przepełnienia w trybie pojedynczego wiersza. ⭐ Licznik pokazuje zakładki NIEWIDOCZNE,
+    // nie wszystkie otwarte (§8.2 + decyzja użytkownika) — „ile mam poza ekranem" jest informacją, której
+    // użytkownik potrzebuje w tym momencie; „ile mam otwartych" widać po samym pasku.
+    public const string TabStripOverflowTooltip = "Tabs that do not fit — click to search all open tabs";
+    public const string TabStripOverflowFilterWatermark = "Filter tabs…";
+
     // ── Debugger (etap 6) ───────────────────────────────────────────────────────────────────────────
     public const string SettingsCategoryDebugger = "Debugger";
 

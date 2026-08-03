@@ -505,6 +505,7 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsGeneralPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsEditorPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsGridPageVisible))]
+    [NotifyPropertyChangedFor(nameof(IsTabsPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsDebuggerPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsFormatterPageVisible))]
     private SettingsCategoryViewModel? _selectedCategory;
@@ -543,6 +544,10 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     public NumericSettingViewModel DataPageSize => Number(SettingsCatalog.SettingDataPageSize);
 
     public BooleanSettingViewModel GridAutoFitColumns => Toggle(SettingsCatalog.SettingGridAutoFit);
+
+    public PreferenceSettingViewModel TabStripMode => Preference(SettingsCatalog.SettingTabStripMode);
+
+    public NumericSettingViewModel TabStripMaxRows => Number(SettingsCatalog.SettingTabStripMaxRows);
 
     public PreferenceSettingViewModel DebuggerIsolation
         => Preference(SettingsCatalog.SettingDebuggerIsolation);
@@ -601,6 +606,10 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryGrid, StringComparison.Ordinal);
 
     /// <inheritdoc cref="IsGeneralPageVisible"/>
+    public bool IsTabsPageVisible
+        => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryTabs, StringComparison.Ordinal);
+
+    /// <inheritdoc cref="IsGeneralPageVisible"/>
     public bool IsDebuggerPageVisible
         => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryDebugger, StringComparison.Ordinal);
 
@@ -649,6 +658,7 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     {
         SettingsCatalog.SettingTheme => preferences.Theme,
         SettingsCatalog.SettingLanguage => preferences.Language,
+        SettingsCatalog.SettingTabStripMode => preferences.TabStripMode,
         SettingsCatalog.SettingDebuggerIsolation => preferences.DebuggerIsolation,
         SettingsCatalog.SettingFormatterKeywordCase => preferences.FormatterKeywordCase,
         SettingsCatalog.SettingFormatterIdentifierCase => preferences.FormatterIdentifierCase,
@@ -678,6 +688,7 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         SettingsCatalog.SettingPreviewRowLimit => preferences.PreviewRowLimit,
         SettingsCatalog.SettingFullLoadPromptThreshold => preferences.FullLoadPromptThreshold,
         SettingsCatalog.SettingDataPageSize => preferences.DataPageSize,
+        SettingsCatalog.SettingTabStripMaxRows => preferences.TabStripMaxRows,
         _ => throw new ArgumentOutOfRangeException(nameof(settingId), settingId, "No such setting in the catalog."),
     };
 
@@ -708,6 +719,8 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         FullLoadPromptThreshold = FullLoadPromptThreshold.Value,
         DataPageSize = DataPageSize.Value,
         GridAutoFitColumns = GridAutoFitColumns.Value,
+        TabStripMode = TabStripMode.Value,
+        TabStripMaxRows = TabStripMaxRows.Value,
         DebuggerIsolation = DebuggerIsolation.Value,
         FormatterKeywordCase = FormatterKeywordCase.Value,
         FormatterIdentifierCase = FormatterIdentifierCase.Value,

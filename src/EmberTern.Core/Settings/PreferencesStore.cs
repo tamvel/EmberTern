@@ -166,6 +166,7 @@ public sealed class PreferencesStore
             FormatterKeywordCase = PreferenceOptions.Casing.Normalize(source.FormatterKeywordCase),
             FormatterIdentifierCase = PreferenceOptions.Casing.Normalize(source.FormatterIdentifierCase),
             DebuggerIsolation = PreferenceOptions.DebuggerIsolation.Normalize(source.DebuggerIsolation),
+            TabStripMode = PreferenceOptions.TabStripMode.Normalize(source.TabStripMode),
 
             // Numeric preferences are clamped, not reset (see PreferenceRange): a stored 50 000 000 means "as
             // many as possible", and answering it with the shipped 5 000 would be data loss with extra steps.
@@ -173,6 +174,7 @@ public sealed class PreferencesStore
             FullLoadPromptThreshold =
                 PreferenceOptions.FullLoadPromptThreshold.Normalize(source.FullLoadPromptThreshold),
             DataPageSize = PreferenceOptions.DataPageSize.Normalize(source.DataPageSize),
+            TabStripMaxRows = PreferenceOptions.TabStripMaxRows.Normalize(source.TabStripMaxRows),
 
             // ⚠ The booleans are absent on purpose, and it is a decision rather than an omission: a bool has no
             // illegal value to correct, so listing it here could only be a no-op — and `source with { … }` is

@@ -562,6 +562,7 @@ public class SettingsCenterVmTests
                 () => vm.IsGeneralPageVisible,
                 () => vm.IsEditorPageVisible,
                 () => vm.IsGridPageVisible,
+                () => vm.IsTabsPageVisible,
                 () => vm.IsDebuggerPageVisible,
                 () => vm.IsFormatterPageVisible,
             };

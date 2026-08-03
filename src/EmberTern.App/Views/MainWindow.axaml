@@ -788,7 +788,24 @@
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,0,0,1">
-            <ItemsControl ItemsSource="{Binding WorkspaceTabs}">
+            <!-- ⭐⭐ DWA TRYBY, JEDEN MECHANIZM (M3.3b / §8.2). Jest tu JEDEN `ItemsControl` i JEDEN
+                 `WrapPanel`; o trybie rozstrzygają wyłącznie kierunki przewijania `ScrollViewera`, bo
+                 `WrapPanel` zawija się dokładnie wtedy, gdy dostanie skończoną szerokość:
+                   · MultiRow  — poziome przewijanie WYŁĄCZONE ⇒ szerokość ograniczona ⇒ zawija;
+                                 pionowe AUTO + `MaxHeight` = wiersze × `Size.Row.Tab` ⇒ przewija się
+                                 SAM PASEK, a interfejs pod nim nie drgnie (§8.2, §13.3 specyfikacji).
+                   · SingleRow — poziome AUTO ⇒ szerokość nieskończona ⇒ NIE zawija nigdy ⇒ jeden wiersz.
+                 ⛔ Nie rozbijać tego na dwa `ItemsControl`e z osobnymi panelami: szablon zakładki
+                 zduplikowałby się i od tej chwili mógłby się rozjechać między trybami.
+                 ⚠ `MaxHeight` ustawia code-behind (`ApplyTabStripMode`), bo `MaxHeight` to liczba, a rytm
+                 niesie ROLA `Size.Row.Tab` — mnożenie roli przez preferencję nie jest wyrażalne
+                 w `{DynamicResource}` i nie ma po co zakładać trzeciej warstwy katalogu (§19.1.4). -->
+            <Grid ColumnDefinitions="*,Auto">
+            <ScrollViewer x:Name="TabStripScroll"
+                          Grid.Column="0"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="TabStripItems" ItemsSource="{Binding WorkspaceTabs}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                   <WrapPanel Orientation="Horizontal" />
@@ -898,6 +915,28 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+            </ScrollViewer>
+
+            <!-- ⭐ PRZYCISK PRZEPEŁNIENIA — wyłącznie w trybie pojedynczego wiersza, i wyłącznie gdy coś
+                 naprawdę nie mieści się na ekranie (R13: nie rezerwujemy miejsca na element, którego
+                 w danym kontekście nie będzie).
+                 ⭐⭐ LICZNIK POKAZUJE ZAKŁADKI NIEWIDOCZNE, nie wszystkie otwarte — ratyfikowane przez
+                 użytkownika: „to jest informacja, której użytkownik potrzebuje w danym momencie". Ile jest
+                 otwartych, widać po samym pasku; ile jest POZA nim, nie widać znikąd. Liczbę wylicza
+                 code-behind z rzeczywistego układu, bo to fakt o WIDOKU, nie o modelu.
+                 ⚠ Reuse before create: filtrowaną listę niesie istniejący `SearchableComboBox` (§8.2 wskazuje
+                 go wprost), a licznik jedzie w jego `SelectionBoxText`. Zero nowej chromy. -->
+            <controls:SearchableComboBox x:Name="TabOverflowBox"
+                                         Grid.Column="1"
+                                         IsVisible="False"
+                                         VerticalAlignment="Center"
+                                         Margin="4,0,6,0"
+                                         MinWidth="0"
+                                         ItemsSource="{Binding WorkspaceTabs}"
+                                         DisplayMemberPath="DisplayTitle"
+                                         FilterWatermark="{x:Static app:UiStrings.TabStripOverflowFilterWatermark}"
+                                         ToolTip.Tip="{x:Static app:UiStrings.TabStripOverflowTooltip}" />
+            </Grid>
           </Border>
 
           <!-- Unified editor toolbar — fixed 5-section model, identical for every object

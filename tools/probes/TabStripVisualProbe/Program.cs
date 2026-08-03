@@ -45,19 +45,106 @@ internal static class Program
 
         foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
         {
-            foreach (var rowHeight in new[] { 30d, 26d })
-            {
-                Application.Current!.RequestedThemeVariant = variant;
-                Application.Current!.Resources["Size.Row.Tab"] = rowHeight;
+            Application.Current!.RequestedThemeVariant = variant;
+            Application.Current!.Resources["Size.Row.Tab"] = 26d;
 
-                var strip = BuildStrip();
-                var file = System.IO.Path.Combine(outDir, $"tabstrip-{variant}-{rowHeight:0}px{(LocalTransparentOnIndicator ? "-LOCAL" : "-FIXED")}.png");
-                Render(strip, file);
-                Console.WriteLine($"{file}");
+            var strip = BuildStrip();
+            var file = System.IO.Path.Combine(outDir, $"tabstrip-{variant}-26px{(LocalTransparentOnIndicator ? "-LOCAL" : "-FIXED")}.png");
+            Render(strip, file);
+            Console.WriteLine($"{file}");
+
+            // ── M3.3b — dwa tryby paska (§8.2) ────────────────────────────────────────────────────────
+            // ⭐ To jest pytanie, które §19.1.5 PRZEWIDZIAŁO przy zakładaniu tej sondy („wróci w M3.3").
+            //   Pasek zakładek jest pusty bez połączenia z bazą, a sesja headless nie renderuje, więc bez
+            //   sondy oba tryby byłyby nieoglądalne aż do ręcznego QA na żywej bazie.
+            // ⚠ WIERNIE JAK W PRODUKCIE: tryb robią wyłącznie kierunki przewijania `ScrollViewera`, a
+            //   `MaxHeight` jest iloczynem roli i preferencji — dokładnie tak liczy je `ApplyTabStripMode`.
+            foreach (var (mode, maxRows) in new[] { ("MultiRow", 3), ("SingleRow", 0) })
+            {
+                var wide = BuildModeStrip(multiRow: mode == "MultiRow", maxRows: maxRows);
+                var modeFile = System.IO.Path.Combine(outDir, $"tabstrip-{variant}-{mode}.png");
+                Render(wide, modeFile);
+                Console.WriteLine($"{modeFile}");
             }
         }
 
         Console.WriteLine("OK");
+    }
+
+    // Pasek z liczbą zakładek, która NIE MIEŚCI SIĘ w jednym wierszu — bo dopiero wtedy oba tryby zaczynają
+    // się różnić i dopiero wtedy jest co oglądać.
+    private static readonly (string Name, string IconKey, string ColorKey, bool Active, bool Closable)[] ManyTabs =
+    [
+        ("ORDERS",                   "Icon.Table",     "IconColor_Table",     false, true),
+        ("SP_ADD_ORDER",             "Icon.Procedure", "IconColor_Procedure", true,  true),
+        ("XXX_GG_WYSTCECHKART_AU99", "Icon.Trigger",   "IconColor_Trigger",   false, true),
+        ("XXX_GG_WYSTCECHKART_BU99", "Icon.Trigger",   "IconColor_Trigger",   false, true),
+        ("V_ORDER_SUMMARY",          "Icon.View",      "IconColor_View",      false, true),
+        ("FN_ADD_TAX",               "Icon.Function",  "IconColor_Function",  false, true),
+        ("CUSTOMERS",                "Icon.Table",     "IconColor_Table",     false, true),
+        ("SP_RECALC_TOTALS",         "Icon.Procedure", "IconColor_Procedure", false, true),
+        ("V_STOCK_LEVELS",           "Icon.View",      "IconColor_View",      false, true),
+        ("FN_FULL_LABEL",            "Icon.Function",  "IconColor_Function",  false, true),
+        ("INVOICE_LINES",            "Icon.Table",     "IconColor_Table",     false, true),
+        ("SP_DBG_SUMMARY",           "Icon.Procedure", "IconColor_Procedure", false, true),
+    ];
+
+    private static Control BuildModeStrip(bool multiRow, int maxRows)
+    {
+        var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var (name, iconKey, colorKey, active, closable) in ManyTabs)
+            wrap.Children.Add(BuildTab(name, iconKey, colorKey, active, closable));
+
+        var items = new ItemsControl { ItemsSource = null };
+        var scroll = new ScrollViewer { Content = wrap };
+
+        if (multiRow)
+        {
+            // Szerokość ograniczona ⇒ WrapPanel zawija ⇒ wiele wierszy; pionowo przewija się SAM PASEK.
+            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            scroll.MaxHeight = (double)Application.Current!.Resources["Size.Row.Tab"]! * maxRows;
+        }
+        else
+        {
+            // Szerokość nieskończona ⇒ WrapPanel nie zawija nigdy ⇒ jeden wiersz.
+            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+            scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        }
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        Grid.SetColumn(scroll, 0);
+        grid.Children.Add(scroll);
+
+        if (!multiRow)
+        {
+            // Przycisk przepełnienia z licznikiem NIEWIDOCZNYCH zakładek. W sondzie liczba jest wpisana
+            // (sonda nie mierzy viewportu), w produkcie liczy ją `UpdateTabOverflow` z rzeczywistego układu.
+            var overflow = new EmberTern.App.Controls.SearchableComboBox
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 6, 0),
+                MinWidth = 0,
+                SelectionBoxText = "5",
+            };
+            Grid.SetColumn(overflow, 1);
+            grid.Children.Add(overflow);
+        }
+
+        var strip = new Border { Classes = { "tab-strip" }, Child = grid };
+        strip.Bind(Border.BackgroundProperty, new DynamicResourceExtension("PanelBrush"));
+        strip.Bind(Border.BorderBrushProperty, new DynamicResourceExtension("BorderBrush"));
+        strip.BorderThickness = new Thickness(0, 0, 0, 1);
+
+        var body = new Border { Height = 26 };
+        body.Bind(Border.BackgroundProperty, new DynamicResourceExtension("BackgroundBrush"));
+
+        var root = new StackPanel { Orientation = Orientation.Vertical, Width = 620 };
+        root.Children.Add(strip);
+        root.Children.Add(body);
+        return root;
     }
 
     private static Control BuildStrip()
@@ -219,6 +306,14 @@ internal sealed class ProbeApp : Application
                      "avares://EmberTern/Themes/FluentBridge.axaml",
                      "avares://EmberTern/Themes/IconGeometries.axaml",
                      "avares://EmberTern/Themes/ControlThemes.axaml",
+                     // ⚠ M3.3b — DOŁOŻONE PO POMIARZE, NIE Z OSTROŻNOŚCI. Przycisk przepełnienia jest
+                     //   `SearchableComboBox`em, a bez tego słownika kontrolka nie ma ControlTheme, więc
+                     //   nie ma szablonu i renderuje się jako NIC. Render wychodził „poprawny" — po prostu
+                     //   bez przycisku — czyli sonda znów pokazywałaby stan, którego nie ma (§19.2).
+                     //   ⭐ Reguła: sonda musi ładować te same słowniki co `App.axaml`; brakujący słownik
+                     //   nie zawodzi, tylko po cichu usuwa element z obrazu.
+                     "avares://EmberTern/Themes/SearchableComboBox.axaml",
+                     "avares://EmberTern/Themes/PickerTemplates.axaml",
                  })
         {
             Resources.MergedDictionaries.Add(new ResourceInclude((Uri?)null) { Source = new Uri(source) });

@@ -6421,6 +6421,124 @@ styl zadziałał — **R16**, test zielony przy złym wyglądzie jest gorszy ni�
 
 ---
 
+### §19.23 Iteracja 14 (M3.3b) — dwa tryby paska zakładek + dwie preferencje (2026-08-03)
+
+> ⭐ Pierwsza iteracja M3, która **dodaje funkcjonalność**, a nie tylko zmienia wygląd (§2.1). Jedna zamknięta
+> iteracja, zgodnie z **R15** — architektura była ustalona (§8.2, decyzje D5–D8), więc niepewności nie było.
+
+#### §19.23.1 ⭐⭐ Dwa tryby, JEDEN mechanizm — i to nie jest sztuczka, tylko własność `WrapPanela`
+
+Najważniejsza decyzja implementacyjna: w pasku jest **jeden `ItemsControl` i jeden szablon zakładki**, a o
+trybie rozstrzygają **wyłącznie kierunki przewijania `ScrollViewera`**. Działa, bo `WrapPanel` zawija się
+dokładnie wtedy, gdy dostanie **skończoną** szerokość:
+
+| Tryb | Poziomo | Pionowo | Skutek |
+|---|---|---|---|
+| **MultiRow** (domyślny) | `Disabled` | `Auto` + `MaxHeight` | szerokość ograniczona ⇒ **zawija**; przewija się SAM PASEK |
+| **SingleRow** | `Auto` | `Disabled` | szerokość nieskończona ⇒ **nie zawija nigdy** ⇒ jeden wiersz |
+
+⛔ **Nie rozbijać tego na dwa `ItemsControl`e z osobnymi panelami.** Szablon zakładki ma ~60 linii i niesie
+ikonę, etykietę, wskaźnik i przycisk zamykania; zduplikowany, od tej chwili mógłby się rozjechać między
+trybami — a rozjazd byłby widoczny dopiero po przełączeniu preferencji, czyli rzadko.
+
+⚠ **`MaxHeight` liczy code-behind, nie XAML**, bo jest **iloczynem roli i preferencji**
+(`Size.Row.Tab` × wiersze), a `{DynamicResource}` nie mnoży. ⛔ Nie zakładać trzeciej warstwy katalogu
+z gotowymi wysokościami — byłaby drugą reprezentacją tej samej liczby (§19.1.4 rozstrzygnęło to samo
+pytanie dla `GridLength`).
+
+#### §19.23.2 ⭐⭐ Licznik przepełnienia liczy ZAKŁADKI NIEWIDOCZNE — ratyfikowane
+
+> **Użytkownik (2026-08-03):** *„Licznik przepełnienia ma pokazywać liczbę zakładek niewidocznych, nie
+> całkowitą liczbę otwartych. To jest informacja, której użytkownik potrzebuje w danym momencie."*
+
+⭐ To jest różnica między liczbą, którą **widać wzrokiem**, a jedyną, której **nie widać znikąd**. Ile
+dokumentów jest otwartych, mówi sam pasek; ile ich zostało za prawą krawędzią — nic.
+
+⚠ **Dlatego liczy się ją z RZECZYWISTEGO UKŁADU, nie z modelu** (`UpdateTabOverflow`): dla każdego kontenera
+sprawdzane jest, czy mieści się w widocznym obszarze `ScrollViewera`. *„Nie mieści się"* jest faktem
+o widoku, nie o kolekcji — VM nie ma jak go znać i nie powinien.
+⚠ **Zakładka przycięta w połowie liczy się jako niewidoczna**, bo jest tak samo nieczytelna jak ta całkiem
+za krawędzią.
+⚠ **Zapisane ryzyko:** `ItemsControl` nad `WrapPanelem` **nie wirtualizuje**, więc wszystkie kontenery
+istnieją i pomiar jest zupełny. Gdyby kiedykolwiek zaczął wirtualizować, licznik po cichu zrobi się **za
+niski** — komentarz przy metodzie mówi to wprost, bo objaw byłby cichy.
+
+⭐ **Reuse before create:** filtrowaną listę niesie **istniejący `SearchableComboBox`** (§8.2 wskazuje go
+wprost), a licznik jedzie w jego `SelectionBoxText`. Zero nowej chromy, zero nowego stylu.
+⚠ Wybór z listy **natychmiast czyści zaznaczenie**: to jest **wyszukiwarka, nie stan** — zostawione
+zaznaczenie uniemożliwiłoby ponowne wybranie tej samej zakładki.
+
+#### §19.23.3 Preferencje — addytywnie, `CurrentSchemaVersion` bez zmian
+
+| Preferencja | Typ | Zakres / wartości | Domyślnie |
+|---|---|---|---|
+| `TabStripMode` | string | `MultiRow` \| `SingleRow` | **MultiRow** |
+| `TabStripMaxRows` | int | `PreferenceRange` **1–10** | **3** |
+
+⚠ **`UserSettings.CurrentSchemaVersion` ZOSTAJE 2** (R‑4) — dodanie właściwości jest addytywne; bump
+uruchomiłby downgrade protection i starsze buildy odrzuciłyby **cały** plik ustawień.
+⭐ Obie **jadą w eksporcie `.etsettings` za darmo**: są właściwościami `Preferences`, którą sekcja
+`Preferences` niesie w całości. Żadna wersja formatu się nie rusza.
+
+⚠ **Minimum to 1, a nie 2, i to jest decyzja.** Jeden wiersz trybu WIELOWIERSZOWEGO to **nie to samo** co
+tryb `SingleRow`: nadal zawija i przewija się pionowo, więc nadal **nic nie chowa się za menu** — a
+`SingleRow` przewija w bok i przenosi resztę do listy. Użytkownik, który chce *„jeden wiersz, nic ukrytego"*,
+musi móc to powiedzieć.
+⚠ **`TabStripMaxRows` przeżywa przełączenie trybu tam i z powrotem** — kuszące *„wyzeruj limit, gdy
+przestaje obowiązywać"* wyglądałoby na porządek, a użytkownikowi czytałoby się jako utrata ustawień.
+Zapięte testem.
+
+#### §19.23.4 ⭐ Własna kategoria „Tabs" w Settings Center — decyzja użytkownika
+
+> *„Zakładki to już osobna powierzchnia aplikacji, nie chcę dalej rozrastać kategorii General. Dodatkowo
+> dobrze współgra to z przyszłym skrótem «Ustawienia zakładek…» z D9."*
+
+Szósta kategoria, między Grid a Debugger. ⚠ Wiersz **Maximum rows** zostaje **widoczny i aktywny również
+w trybie jednowierszowym** — wartość jest zachowywana, więc wyszarzenie sugerowałoby, że liczba przepadła;
+opis wiersza mówi, którego układu dotyczy.
+
+#### §19.23.5 ⚠ Dwa strażniki zadziałały — i to jest ich cała wartość
+
+Iteracja **nie przeszła** za pierwszym razem, w dwóch miejscach, oba zaprojektowane właśnie na to:
+
+| Strażnik | Co powiedział |
+|---|---|
+| `SettingsCenterVmTests.EveryCategory_HasAPageVisibilityProperty` | 6 kategorii, 5 właściwości widoczności ⇒ wybranie „Tabs" zostawiłoby **pustą prawą stronę** |
+| `FormatterStylePreferenceTests.EveryPreference_IsRenderedOrRecordedAsHidden` | nowa preferencja **bez wiersza i bez zapisanego powodu** |
+
+⭐ Oba pochodzą z etapu Settings Center i **oba trafiły dokładnie w to, po co powstały**: *„adding a property
+to `Preferences` fails here until the author either gives it a row or records why it has none"*. To jest
+dowód, że tamten mechanizm nie był ceremonią.
+
+#### §19.23.6 ⚠ Sonda znowu pokazywała stan, którego nie było — trzeci raz ten sam kształt
+
+Pierwszy render trybu jednowierszowego wyszedł **poprawny, tylko bez przycisku przepełnienia**. Przyczyna:
+sonda ładowała sześć słowników zasobów, a `SearchableComboBox.axaml` **nie było wśród nich** — kontrolka bez
+`ControlTheme` nie ma szablonu i renderuje się jako **nic**.
+
+⭐ **Reguła, którą to ustanawia: sonda musi ładować te same słowniki co `App.axaml`.** Brakujący słownik
+**nie zawodzi** — po cichu usuwa element z obrazu, a obraz nadal wygląda sensownie.
+⚠ To trzecie wystąpienie tego samego kształtu w tym pasku: §19.2 (sonda wiązała tło wprost), §19.22.6 (sonda
+dodawała własny styl wskaźnika), teraz brakujący słownik. **Za każdym razem narzędzie zbudowane do oceny
+zmiany potwierdzało stan, którego nie było.**
+
+#### §19.23.7 Wynik
+
+| | |
+|---|---|
+| Nowe preferencje | 2 (`Preferences` 14 → 16); **`CurrentSchemaVersion` bez zmian** |
+| Nowa kategoria Settings Center | 1 („Tabs", dwa wiersze) |
+| Nowe tryby paska | 2, na **jednym** `ItemsControl` i jednym szablonie |
+| Build | 0 / 0 |
+| Testy | **7231** (7120 + 57 + 54), +2 |
+| Smoke | czysty |
+| Rendery sondy | MultiRow (limit 3 wierszy) i SingleRow (licznik `5 ⌄`) w **obu** motywach |
+
+⏸ **Do obejrzenia na żywej bazie:** przełączanie trybu przy otwartych zakładkach, przewijanie kółkiem
+w obu trybach, licznik przy zmianie szerokości okna. Sonda pokazuje układ, ale nie interakcję.
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:
