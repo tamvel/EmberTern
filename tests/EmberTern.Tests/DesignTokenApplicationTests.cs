@@ -1152,63 +1152,50 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
-    /// ⭐ Blok połączenia w pasku statusu — <b>kropka, tekst i badge stoją na JEDNEJ osi pionowej</b>.
+    /// ⭐ Kropka stanu połączenia siedzi w OSI swojego wiersza.
     ///
-    /// <para>⚠⚠ Zgłoszone przez użytkownika przy zamykaniu M3 („tekst sprawia wrażenie osadzonego kilka
-    /// pikseli niżej"). Zmierzone w wierszu 16 px: kropka <b>7,50</b> · tekst <b>8,00</b> · badge
-    /// <b>8,50</b> — trzy elementy, trzy osie, rozjazd całego piksela między skrajnymi.</para>
+    /// <para>⚠⚠ <b>Ten test celowo NIE sprawdza wyrównania tekstu ani badge'a, choć jego pierwsza
+    /// wersja to robiła — i była WPROST szkodliwa.</b> Porównywała środki PUDEŁEK trzech elementów,
+    /// przechodziła na zielono, a na ekranie tekst nadal siedział niżej od kropki (odbiór użytkownika,
+    /// 2026-08-03: <i>„użytkownik nie patrzy na środki geometryczne elementów — patrzy na efekt
+    /// optyczny"</i>). Test, który świeci na zielono przy złym ekranie, jest gorszy niż brak testu:
+    /// zamyka temat, zamiast go otworzyć.</para>
     ///
-    /// <para>⭐ Przyczyna nie jest typograficzna, tylko arytmetyczna: <c>VerticalAlignment="Center"</c>
-    /// liczy <c>(16 − h) / 2</c>, więc element o wysokości NIEPARZYSTEJ ląduje na połówce piksela,
-    /// a <c>UseLayoutRounding</c> przycina KAŻDY ELEMENT OSOBNO — kropka (7) w górę, badge (13) w dół.
-    /// Tekst ma 16, czyli pełną wysokość wiersza, i nie rusza się wcale.</para>
+    /// <para>⭐ Powód, dla którego pudełko kłamie: wysokość <c>TextBlocka</c> to INTERLINIA, a nie
+    /// wysokość farby — dolne ~4 px to obszar znaków schodzących, w tym napisie pusty. Farba leży więc
+    /// nisko w pudełku i wyrównanie pudełek zostawia widoczny rozjazd. To samo dotyczy badge'a, gdzie
+    /// wersaliki siedzą wysoko w swoim pudełku.</para>
     ///
-    /// <para>⛔ Dlatego test porównuje ŚRODKI TRZECH ELEMENTÓW ze sobą, a nie z liczbą. Wysokości wolno
-    /// zmieniać (font, padding, rozmiar kropki) — nie wolno dopuścić, żeby znów się rozjechały. Pin
-    /// upada, gdy ktoś zdejmie <c>UseLayoutRounding="False"</c> albo doda do wiersza czwarty element
-    /// o nieparzystej wysokości bez tego samego zabiegu.</para>
-    ///
-    /// <para>⚠ Nie myl tego z komentarzem przy <c>Run</c> w <c>MainWindow.axaml</c> (§19.8): tamten
-    /// dotyczy dwóch runów WEWNĄTRZ jednego <c>TextBlocka</c> i nadal obowiązuje. To są dwa różne
-    /// pytania na dwóch różnych poziomach.</para>
+    /// <para>⭐ <b>Kropka jest jedynym elementem tego wiersza, dla którego pudełko JEST farbą</b> —
+    /// i dlatego jest jedynym, o którym maszyna ma coś sensownego do powiedzenia. Reszta bloku niesie
+    /// świadomą korektę optyczną (<c>TranslateTransform</c> na tekście), której <b>kryterium odbioru
+    /// jest ekran, nie liczba</b> (R8). ⛔ Nie „wzmacniaj" tego testu z powrotem o tekst i badge.</para>
     /// </summary>
     [Fact]
-    public async Task StatusBarConnectionBlock_SharesOneVerticalAxis()
+    public async Task StatusBarConnectionDot_SitsOnTheRowAxis()
     {
         await _session.Dispatch(() =>
         {
-            // Odwzorowanie sekcji 1 paska statusu: te same wysokości, te same wyrównania.
             var dot = new Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center, UseLayoutRounding = false };
-            var text = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
-            text.Inlines!.Add(new Avalonia.Controls.Documents.Run { Text = "Szkoleniowa", FontSize = 11, FontWeight = FontWeight.SemiBold });
-            text.Inlines.Add(new Avalonia.Controls.Documents.Run { Text = " · localhost:3050", FontSize = 10 });
-            var badge = new Border
-            {
-                Padding = new Thickness(4, 1),
-                VerticalAlignment = VerticalAlignment.Center,
-                UseLayoutRounding = false,
-                Child = new TextBlock { Text = "DEV MODE", FontSize = 10, FontWeight = FontWeight.Bold },
-            };
+            var text = new TextBlock { Text = "Szkoleniowa", FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
 
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
             row.Children.Add(dot);
             row.Children.Add(text);
-            row.Children.Add(badge);
 
             var window = new Window { Content = new Border { Height = 24, Child = row }, Width = 400, Height = 60 };
             window.Show();
             Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
 
-            static double Mid(Control c) => c.Bounds.Top + c.Bounds.Height / 2;
-            var (d, t, b) = (Mid(dot), Mid(text), Mid(badge));
+            var dotMid = dot.Bounds.Top + dot.Bounds.Height / 2;
+            var rowMid = row.Bounds.Height / 2;
             window.Close();
 
-            // Ćwierć piksela — poniżej progu widoczności, a powyżej szumu zmiennoprzecinkowego.
-            Assert.True(System.Math.Abs(d - t) < 0.25 && System.Math.Abs(b - t) < 0.25,
-                $"Blok połączenia rozjechał się w pionie: kropka {d:0.00} · tekst {t:0.00} · badge {b:0.00}. "
-                + "Elementy o NIEPARZYSTEJ wysokości w wierszu o PARZYSTEJ lądują na połówce piksela, "
-                + "a UseLayoutRounding przycina każdy osobno — w przeciwne strony. Rozwiązaniem jest "
-                + "UseLayoutRounding=\"False\" na tym elemencie, nie margines (nudge trafia w jedno DPI).");
+            Assert.True(System.Math.Abs(dotMid - rowMid) < 0.25,
+                $"Kropka nie leży w osi wiersza: {dotMid:0.00} wobec {rowMid:0.00}. Element o wysokości "
+                + "NIEPARZYSTEJ (7) w wierszu o PARZYSTEJ ląduje na połówce piksela, a UseLayoutRounding "
+                + "przycina go w górę. Rozwiązaniem jest UseLayoutRounding=\"False\" — koło nie ma prostej "
+                + "krawędzi, której przyciąganie miałoby bronić (precedens: PART_MarkArea w RadioButton).");
         }, default);
     }
 

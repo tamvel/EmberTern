@@ -551,9 +551,27 @@ noted.
   **`UseLayoutRounding="False"` on the dot and the badge**, so **no size changes** (the report said the
   dot looked right — the defect was position, not size); ⛔ not by resizing (7→8, 13→14) and ⛔ not by a
   margin (a nudge fixes one DPI and breaks the rest). ⭐ Same precedent as `RadioButton`'s
-  `PART_MarkArea`: snapping helps a **straight edge** and has nothing to offer a **circle**. Pinned by
-  `StatusBarConnectionBlock_SharesOneVerticalAxis`, which compares the three centres **to each other**,
-  never to a number.
+  `PART_MarkArea`: snapping helps a **straight edge** and has nothing to offer a **circle**.
+  **⛔⛔ THAT FIX WAS NOT ENOUGH, AND THE SECOND ACCEPTANCE IS THE STAGE'S PUREST R8 — this time against
+  the TOOL, not a rule.** The user: *"użytkownik nie patrzy na środki geometryczne elementów — patrzy
+  na efekt optyczny… potraktuj pomiary jako narzędzie diagnostyczne, a nie kryterium zakończenia
+  zadania."* I had aligned **box** centres; the test was green and the screen was still wrong.
+  ⭐ **Why a box lies: a `TextBlock`'s height is the LINE HEIGHT, not the height of the ink.** The
+  baseline sits at 11.83 of 16, so the bottom ~4 px is descender space — **empty here, because
+  `Szkoleniowa · localhost:3050` has no descenders at all.** The ink therefore sits high in the ascent
+  and **low in the box**: its mass centre lands near **9.0** while the dot — whose ink *is* its box —
+  sits at **8.0**. Fixed with a `TranslateTransform Y="-1"` on the text (a `RenderTransform`, not a
+  margin: it does not touch layout, so it cannot interact with box rounding or move its neighbours).
+  ⚠⚠ **`UseLayoutRounding="False"` was REVERTED on the badge — it was making things worse, and the
+  reason generalises: the dot is the only element in that row whose INK IS ITS BOX**, so for it the
+  geometric fix is also the optical one; the badge holds caps with padding, so its ink sits *high* in
+  its box and the downward snap that "broke" the geometry was in fact compensating. ⭐ **That attribute
+  is a tool for an element that IS its own ink; for an element with text inside, look at the ink.**
+  ⭐ **The pin was NARROWED because it proved the wrong thing** — the three-box-centre version passed
+  while the screen was wrong, and ⛔ *a test that goes green on a bad screen is worse than no test: it
+  closes the question instead of opening it.* It is now `StatusBarConnectionDot_SitsOnTheRowAxis`,
+  covering only the dot; ⛔ do not "strengthen" it back to the text and badge, whose alignment is an
+  optical correction whose acceptance criterion is the screen.
   ⚠ **`product-polish.md` §7.5's "zmiany do wykonania" table NO LONGER APPLIES** — M3.2b executed it to
   the letter and was withdrawn; the six titlebar tools **stay coloured** (role R‑6, "wejście do
   narzędzia"), which that table did not know.

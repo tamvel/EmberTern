@@ -6079,14 +6079,44 @@ wielkość.
 KRAWĘDZI i nie ma nic do zaoferowania KOŁU*. Kropka jest kołem; badge jest wypełnieniem bez obrysu,
 więc pół piksela zbiera antyaliasing, a nie widoczna kreska.
 
-#### §19.19.4 Pin
+#### §19.19.4 ⛔⛔ DRUGI ODBIÓR — poprawka BYŁA NIEWYSTARCZAJĄCA, a test dowodził złej rzeczy
 
-`StatusBarConnectionBlock_SharesOneVerticalAxis` porównuje **środki trzech elementów ze sobą**, nigdy
-z liczbą — wysokości wolno zmieniać (font, padding), rozjechać się im nie wolno. Upada, gdy ktoś
-zdejmie `UseLayoutRounding="False"` albo doda do wiersza czwarty element o nieparzystej wysokości bez
-tego samego zabiegu. Próg 0,25 px: poniżej widoczności, powyżej szumu zmiennoprzecinkowego.
+> **Użytkownik:** *„Rozumiem Twoją analizę i pomiary, ale użytkownik nie patrzy na środki geometryczne
+> elementów — patrzy na efekt optyczny… potraktuj pomiary jako narzędzie diagnostyczne, a nie
+> kryterium zakończenia zadania. Kryterium odbioru jest wygląd na ekranie."*
 
-Build 0/0 · **7138** zielony w trzech partycjach (**7032 + 52 + 54**, +1) · smoke czysty.
+⭐⭐ **To jest R8 w najczystszej postaci, jaka wystąpiła w całym etapie — i tym razem po stronie
+narzędzia, nie reguły.** Wyrównałem środki **PUDEŁEK**, test świecił na zielono, a ekran był nadal zły.
+
+**Dlaczego pudełko kłamie:** wysokość `TextBlocka` to **INTERLINIA**, a nie wysokość farby. Linia
+bazowa leży na 11,83, więc dolne ~4 px to obszar znaków schodzących — w napisie
+`Szkoleniowa · localhost:3050` **pusty, bo nie ma tam ani jednego znaku schodzącego**. Farba siedzi
+więc wysoko w ascencie i **nisko w pudełku**: środek masy wypada ok. **9,0**, podczas gdy kropka —
+której farba **jest** jej pudełkiem — leży na **8,0**. Około piksela, dokładnie jak w zgłoszeniu.
+
+**Poprawka:** `TranslateTransform Y="-1"` na `TextBlocku`. ⚠ `RenderTransform`, nie margines: nie
+rusza układu, więc nie wchodzi w interakcję z zaokrąglaniem pudełek i nie przesuwa sąsiadów; wartość
+całkowita, więc tekst nie robi się rozmyty.
+
+⚠⚠ **Przy okazji COFNIĘTE `UseLayoutRounding="False"` NA BADGE'U — ono pogarszało wygląd.** Powód
+jest pouczający i uogólnia się: **kropka jest jedynym elementem tego wiersza, którego FARBA JEST JEGO
+PUDEŁKIEM**, więc dla niej wyrównanie geometryczne jest zarazem optycznym. Badge ma w środku wersaliki
+z paddingiem, więc jego farba leży **wysoko** w pudełku — a zaokrąglenie w dół, które „psuło"
+geometrię, w rzeczywistości tę różnicę nadrabiało. ⭐ **`UseLayoutRounding="False"` jest narzędziem dla
+elementu, który JEST swoją farbą; dla elementu z tekstem w środku trzeba patrzeć na farbę.**
+
+#### §19.19.5 ⭐ Pin został ZAWĘŻONY, bo dowodził złej rzeczy
+
+`StatusBarConnectionBlock_SharesOneVerticalAxis` porównywał środki pudełek trzech elementów —
+**przechodził na zielono przy zepsutym ekranie**. ⛔ Test, który świeci na zielono, gdy wygląd jest
+zły, jest **gorszy niż brak testu**: zamyka temat, zamiast go otworzyć.
+
+Zastąpiony przez `StatusBarConnectionDot_SitsOnTheRowAxis`, który pilnuje **wyłącznie kropki** — czyli
+jedynego elementu, o którym maszyna ma tu coś sensownego do powiedzenia. ⛔ Nie „wzmacniać" go
+z powrotem o tekst i badge: ich wyrównanie jest **korektą optyczną, której kryterium odbioru jest
+ekran, nie liczba**.
+
+Build 0/0 · **7138** zielony w trzech partycjach (**7032 + 52 + 54**) · smoke czysty.
 
 ---
 
