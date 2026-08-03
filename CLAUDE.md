@@ -431,7 +431,7 @@ noted.
   SESSION FROM
   [docs/design/product-polish-m3-handover.md](docs/design/product-polish-m3-handover.md) + the new
   [docs/design/color-language.md](docs/design/color-language.md) — the M2c handover below is CLOSED.**
-  Build 0/0; suite **7134** (7031 + 49 + 54); smoke clean. **⚠ Five commits await push on the user's
+  Build 0/0; suite **7135** (7032 + 49 + 54); smoke clean. **⚠ Six commits await push on the user's
   decision.**
   **M3.1 (Status Bar 2.0) is CLOSED and accepted** — four sections, rail, transaction chip with elapsed
   time, Debug/Trace chips, progress section + one reference operation (§19.0–§19.9).
@@ -466,8 +466,24 @@ noted.
   alias would mean *"Run IS the success colour"*, so retuning Commit's green would silently move
   Execute too. ⛔ **The pin does NOT assert the two are equal**, although today they are: that equality
   is temporary *by design* (§7.3), so pinning it would be a test forbidding the very change the token
-  exists for — *a value meant to diverge is a measurement with a date, not an assertion*. ⏸ **Next is
-  K2** (destruction 🟡 → 🔴), which IS visual and therefore subject to R14.
+  exists for — *a value meant to diverge is a measurement with a date, not an assertion*.
+  **⭐ K2 IS DELIVERED (2026-08-03, §19.16) and awaits the user's visual QA — the first VISUAL step.**
+  Three yellow deletes went red (Delete connection · Delete saved query · Clear all queries); the app
+  now has **no yellow delete button left**. ⭐ The decisive measurement was not the catalog: **each
+  button disagreed with its OWN context menu** (the tree's `Delete` and the query row's delete were
+  already red), and **the code already classified all three as destruction** (`IsDestructive = true`) —
+  only the colour dissented. ⚠ Yellow was a residue of an **abandoned** scheme, not a deliberate
+  exception: `Colors.axaml`'s legend said *"Warning=delete"* long after 8 editors and 131 menu items
+  had gone red — **gotcha #284's shape in a comment instead of a string**, so the legend was replaced
+  by a pointer to `color-language.md` as the one authority. Guarded by
+  `DestructiveIcon_AlwaysCarriesTheDangerToken` (scans view SOURCE; verified by planting a violation;
+  carries its own `scanned >= 8` backstop because a regex that stopped matching passes forever).
+  **⛔⛔ NEW OVERRIDING GATE, RATIFIED 2026-08-03 — `color-language.md` §0.5, and it outranks §6 AND
+  R14: before changing ANY colour, answer "will the user recognise the action FASTER because of this?"
+  — "no" or "don't know" means STOP and come back with a proposal.** Conformance to a role is
+  necessary, never sufficient; *"it now matches the language"* is **not an answer to that question** —
+  it was M3.2b's only justification. ⭐ And if a rule turns out to make the UX worse, **the rule in the
+  document gets fixed, not the implementation defended.** ⏸ Next after acceptance: **K3** (Edytuj → ⚪).
   ⚠ **`product-polish.md` §7.5's "zmiany do wykonania" table NO LONGER APPLIES** — M3.2b executed it to
   the letter and was withdrawn; the six titlebar tools **stay coloured** (role R‑6, "wejście do
   narzędzia"), which that table did not know.

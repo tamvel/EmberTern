@@ -486,6 +486,70 @@ public class DesignTokenComplianceTests
             "Dokładnie ta regresja zdarzyła się w M3.1a (product-polish.md §19.2).");
     }
 
+    /// <summary>
+    /// ⭐ Język kolorów, rola <b>R‑4 „Destrukcja"</b> — znak kosza w widoku ZAWSZE niesie
+    /// <c>DangerIconBrush</c> (<c>color-language.md</c> §3; krok K2, <c>product-polish.md</c> §19.16).
+    ///
+    /// <para>⚠⚠ To był najostrzejszy pojedynczy przypadek z pomiaru §20: ta sama operacja miała
+    /// <b>trzy</b> kolory, a w drzewie połączeń i w panelu zapytań <b>przycisk nie zgadzał się z własnym
+    /// menu kontekstowym</b> — dwie drogi do jednej operacji, dwa kolory obok siebie. Powodem nie był
+    /// świadomy wyjątek, tylko porzucona legenda w <c>Colors.axaml</c> („Warning=delete"), która
+    /// przeżyła zmianę, jaką opisywała.</para>
+    ///
+    /// <para>⭐ Dlatego dowodem nie jest liczba, tylko <b>warunek</b>: nowy kosz pomalowany „jakoś"
+    /// przechodzi build, przechodzi każdy inny test i wygląda źle dopiero na cudzym ekranie. Skan
+    /// czyta ŹRÓDŁO widoków, bo to tam rodzi się dryf.</para>
+    ///
+    /// <para>⚠ Gdy kiedyś pojawi się kosz, który celowo ma inny kolor — ten test ma <b>upaść</b>, a
+    /// odpowiedzią jest wpis w §5 języka („wyjątek nazwany") wraz z wyjątkiem tutaj. ⛔ Nie wyciszać go
+    /// przez rozluźnienie warunku: wyjątek bez zapisanego powodu jest dokładnie tym, co ten test łapie.</para>
+    /// </summary>
+    [Fact]
+    public void DestructiveIcon_AlwaysCarriesTheDangerToken()
+    {
+        var appRoot = AppRoot();
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var folder in new[] { "Views", "Controls" })
+        {
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(appRoot, folder), "*.axaml", SearchOption.AllDirectories))
+            {
+                var text = File.ReadAllText(file);
+
+                // Cały element SvgIcon (może być wielolinijkowy), niezależnie od prefiksu przestrzeni nazw.
+                foreach (Match icon in Regex.Matches(text, @"<[\w]*:?SvgIcon\b[^>]*?/>", RegexOptions.Singleline))
+                {
+                    var markup = icon.Value;
+                    if (!markup.Contains("Icon.Trash", StringComparison.Ordinal) &&
+                        !markup.Contains("Icon.ListX", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    scanned++;
+                    if (!markup.Contains("DangerIconBrush", StringComparison.Ordinal))
+                    {
+                        var brush = Regex.Match(markup, @"Foreground=""\{DynamicResource (?<key>[^}]+)\}""");
+                        offenders.Add(
+                            $"{Path.GetRelativePath(appRoot, file).Replace('\\', '/')} → "
+                            + (brush.Success ? brush.Groups["key"].Value : "brak Foreground (neutralny)"));
+                    }
+                }
+            }
+        }
+
+        // Sam skan nie może po cichu nic nie znaleźć — regex, który przestał pasować, „przechodzi" zawsze.
+        Assert.True(scanned >= 8, $"Skan znalazł tylko {scanned} znaków destrukcji — wzorzec przestał pasować do widoków.");
+
+        Assert.True(offenders.Count == 0,
+            "Znak destrukcji niesie token inny niż `DangerIconBrush`:\n  " +
+            string.Join("\n  ", offenders) +
+            "\n\nRola R‑4 języka kolorów mówi, że operacja nieodwracalna ma JEDEN kolor w całym produkcie "
+            + "(color-language.md §3). Jeśli ten przypadek ma być świadomym wyjątkiem — dopisz go najpierw "
+            + "do §5 z powodem, a dopiero potem tutaj. Wyjątek bez zapisanego powodu jest defektem (§5).");
+    }
+
     private static IEnumerable<string> ThemeFiles() =>
         Directory.EnumerateFiles(Path.Combine(AppRoot(), "Themes"), "*.axaml").OrderBy(f => f, StringComparer.Ordinal);
 

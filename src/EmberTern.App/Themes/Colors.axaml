@@ -111,10 +111,22 @@
       <Color x:Key="CloseButtonHoverColor">#E81123</Color>
 
       <!-- Semantic icon colors (dark theme). Subtle, professional tones — not the
-           loud primary green/red. Applied via Foreground on SvgIcon:
-           Accent=execute-class, Success=commit, Danger=rollback/abort,
-           Warning=delete, Info=refresh, Neutral=everything else. Disabled state is
-           conveyed by button Opacity, not a separate color. -->
+           loud primary green/red. Applied via Foreground on SvgIcon. Disabled state is
+           conveyed by button Opacity, not a separate color.
+
+           ⛔⛔ TU STAŁA LEGENDA „Accent=execute-class, Success=commit, Danger=rollback/abort,
+           Warning=delete, Info=refresh" — PIERWOTNY schemat, PORZUCONY i NIEAKTUALNY. To ona jest
+           źródłem dryfu opisanego w `product-polish.md` §20: „usuń trwale" miało trzy kolory, bo
+           osiem edytorów i 131 pozycji menu przeszło na czerwień, a legenda dalej mówiła „żółty".
+           ⚠ Komentarz przeżył zmianę, którą opisywał — dokładnie kształt gotchy #284, tylko że
+           w komentarzu zamiast w stringu.
+
+           ⭐ JEDYNYM ŹRÓDŁEM PRAWDY O ZNACZENIU KOLORU JEST `docs/design/color-language.md`
+           (role akcji R‑1…R‑7 + wyjątki nazwane §5). Tutaj są WARTOŚCI, nie znaczenia — i nie
+           dopisuj tu drugiej legendy, bo to ona rozjedzie się jako następna. -->
+      <!-- Odpowiedniki ról: R‑4 → Danger · R‑5 → Warning · R‑6 → Accent · R‑7 → Neutral ·
+           R‑1 → ActionRun (niżej). -->
+
       <Color x:Key="AccentIconColor">#5B9BD5</Color>
       <Color x:Key="SuccessIconColor">#6DBE7E</Color>
       <!-- ⭐ Język kolorów / rola R‑1 „Uruchom" (`color-language.md` §3, §7.3 — krok K1).

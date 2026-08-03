@@ -147,8 +147,15 @@
           <Button Classes="icon"
                   ToolTip.Tip="Delete Connection"
                   Command="{Binding Metadata.DeleteSelectedCommand}">
+            <!-- ⭐ Rola R‑4 „Destrukcja" (`color-language.md` §3, krok K2). Żółty był resztką
+                 PORZUCONEGO schematu („Warning=delete" z pierwotnej legendy Colors.axaml), a nie
+                 świadomym wyjątkiem: to samo usunięcie jest czerwone w 5 przyciskach paska narzędzi
+                 i w 13 pozycjach menu — w tym w menu kontekstowym TEGO SAMEGO drzewa (niżej,
+                 `Icon.Trash, Brush=DangerIconBrush`). Dwie drogi do jednej operacji miały dwa kolory
+                 obok siebie. ⚠ Kod już klasyfikował ją jako destrukcję (`IsDestructive = true`
+                 w `DeleteWithConfirmationAsync`) — nie zgadzał się wyłącznie kolor. -->
             <controls:SvgIcon Data="{StaticResource Icon.Trash}"
-                              Foreground="{DynamicResource WarningIconBrush}" />
+                              Foreground="{DynamicResource DangerIconBrush}" />
           </Button>
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
@@ -1382,14 +1389,26 @@
                       <Button Classes="icon"
                               ToolTip.Tip="{x:Static app:UiStrings.QueryDeleteTooltip}"
                               Command="{Binding DeleteSelectedQueryCommand}">
+                        <!-- Rola R‑4 (K2) — patrz komentarz przy „Delete Connection". Ten sam wzorzec:
+                             usunięcie zapytania z menu kontekstowego wiersza jest czerwone od zawsze,
+                             więc przycisk nagłówka panelu był jedynym miejscem, gdzie ta sama operacja
+                             miała inny kolor niż tuż obok. -->
                         <controls:SvgIcon Data="{StaticResource Icon.Trash}"
-                                          Foreground="{DynamicResource WarningIconBrush}" />
+                                          Foreground="{DynamicResource DangerIconBrush}" />
                       </Button>
                       <Button Classes="icon"
                               ToolTip.Tip="{x:Static app:UiStrings.QueryClearAllTooltip}"
                               Command="{Binding ClearAllQueriesCommand}">
+                        <!-- ⚠ Rola R‑4 (K2), i tu zmiana naprawia nie tylko spójność: „wyczyść
+                             wszystkie" jest z tej trójki NAJDALEJ idące (kasuje cały zbiór), a niosło
+                             kolor, który w języku EmberTerna znaczy „uwaga / pauza" (Pause, Break on
+                             exception). Sygnał był ZANIŻONY względem skutku.
+                             ⭐ Rozróżnienie „jedno" vs „wszystkie" niesie KSZTAŁT (`Icon.Trash` vs
+                             `Icon.ListX`) — wyraźnie różny, więc kolor może klasyfikować skutek. To
+                             odwrotność wyjątku W‑1, gdzie ikony Comment/Uncomment są zbyt podobne
+                             i to kolor musi je rozróżniać. -->
                         <controls:SvgIcon Data="{StaticResource Icon.ListX}"
-                                          Foreground="{DynamicResource WarningIconBrush}" />
+                                          Foreground="{DynamicResource DangerIconBrush}" />
                       </Button>
                     </StackPanel>
                   </Grid>

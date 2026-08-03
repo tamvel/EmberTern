@@ -67,6 +67,33 @@ bo ryzyko jest niezerowe, a zysk zerowy.
 **O‑3** — implementacja idzie **podetapami, posortowanymi od najbardziej oczywistego zysku**, a każdy
 kończy się obejrzeniem na żywo. Kolejność w §11.
 
+### §0.5 ⛔⛔ PYTANIE NADRZĘDNE — obowiązuje przed KAŻDĄ zmianą koloru (ratyfikowane 2026-08-03)
+
+> **Użytkownik:** *„Zanim zmienisz jakikolwiek kolor, zawsze odpowiedz sobie na pytanie: czy użytkownik
+> dzięki tej zmianie szybciej rozpozna akcję. Jeżeli odpowiedź brzmi «nie» albo «nie wiadomo»,
+> zatrzymaj się i wróć z propozycją zamiast implementować. To ma być nadrzędna zasada dla całego
+> wdrażania."*
+
+| Odpowiedź | Co robisz |
+|---|---|
+| **TAK**, i potrafisz powiedzieć **dlaczego** | implementujesz |
+| **NIE** | ⛔ nie zmieniasz — kolor już działa |
+| **NIE WIADOMO** | ⛔ **zatrzymujesz się i wracasz z propozycją.** „Nie wiadomo" jest odpowiedzią odmowną, nie zaproszeniem do spróbowania |
+
+⭐ **To jest bramka MOCNIEJSZA niż §6 i niż R14, i stoi przed nimi.** §6 mówi, *jaki* kolor przysługuje
+roli; R14 mówi, że krok ma być ewidentnym ulepszeniem. Ta zasada mówi, **czym mierzy się „ulepszenie":
+szybkością rozpoznania akcji przez człowieka**, a nie zgodnością z tabelą. Zgodność z rolą jest
+warunkiem koniecznym, nigdy wystarczającym.
+
+⚠ **Konsekwencja praktyczna:** zdanie *„teraz jest zgodne z językiem"* **nie jest odpowiedzią na to
+pytanie**. To właśnie ono uzasadniało M3.2b (§19.14) — i było jedynym uzasadnieniem, jakie tamta
+iteracja miała.
+
+⭐ Cztery zasady towarzyszące, ratyfikowane tym samym głosem: nie wdrażamy reguł mechanicznie · każda
+zmiana ma poprawiać **odbiór produktu** · po każdej iteracji **QA wizualne** · ⭐⭐ **jeśli podczas
+implementacji okaże się, że reguła pogarsza UX — wracamy do TEGO dokumentu i poprawiamy regułę, a nie
+bronimy implementacji.**
+
 ### §0.3 ⛔ Reguła metody — dlaczego ten dokument ma sekcję wyjątków
 
 Cztery poprzednie iteracje odrzucono, bo **regułę doprowadzano do logicznej konsekwencji zamiast
@@ -363,7 +390,7 @@ iteracja czytała się jako wyszarzenie.
 | # | Krok | Klasa | Miejsc | Dlaczego tutaj |
 |---|---|---|---|---|
 | ✅ **K1** | **`ActionRunBrush`** — nowy token o wartości identycznej z `SuccessIconColor`, podstawiony pod Execute procedury / funkcji / Start trace | **neutralny** | 3 | ⭐ **WYKONANY 2026-08-03** (`product-polish.md` §19.15). Zero zmiany wizualnej — pomiar potwierdził identyczność wartości w obu motywach; 3 konsumentów zgodnie z planem |
-| **K2** | **Destrukcja: 🟡 → 🔴** — Usuń połączenie · Usuń zapytanie · Wyczyść wszystkie zapytania | wizualny | 3 | ⭐⭐ **Najbardziej oczywisty zysk w całym planie: użytkownik zgłosił to SAM, patrząc na ekran.** Ta sama operacja przestaje mieć dwa kolory. Realizacja W5 |
+| ✅ **K2** | **Destrukcja: 🟡 → 🔴** — Usuń połączenie · Usuń zapytanie · Wyczyść wszystkie zapytania | wizualny | 3 | ⭐⭐ **WYKONANY 2026-08-03** (`product-polish.md` §19.16), czeka na QA wizualne. Zmierzone: przycisk nie zgadzał się z **własnym menu kontekstowym** w tym samym panelu; kod już klasyfikował operację jako destrukcję (`IsDestructive = true`). Realizacja W5 |
 | **K3** | **Edytuj → ⚪** — Procedure, Function (dziś 🟡), profil importu (dziś 🔵) | wizualny | 3 | żółty na „Edytuj" **ostrzega przed czymś, co nie jest groźne** — zdjęcie go jest czytelnym zyskiem, a nie tylko porządkiem |
 | **K4** | **Wskaż plik: `AccentIconBrush` → `AccentBrush`** (Data Import) | wizualny | 1 | dwa odcienie niebieskiego dla tej samej roli R‑6; różnica minimalna, ryzyko minimalne |
 | **K5** | **Dodaj → ⚪** (Procedure, Function) · **Szukaj w widoku → ⚪** (Trace) | wizualny | 3 | „Dodaj" na zielono myli się z R‑1 Uruchom — to jedyny zielony, który nie uruchamia |

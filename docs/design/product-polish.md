@@ -5799,6 +5799,70 @@ więc podlega R14 i wymaga obejrzenia na żywo.
 
 ---
 
+### §19.16 Iteracja 10 (K2) — destrukcja 🟡 → 🔴 (2026-08-03)
+
+> Pierwszy krok **WIZUALNY** wdrożenia języka, więc pierwszy podlegający **R14** — i pierwszy
+> przepuszczony przez nową bramkę **§0.5 języka** (*czy użytkownik szybciej rozpozna akcję?*).
+
+#### §19.16.1 Odpowiedź na pytanie nadrzędne — osobno dla każdego przycisku
+
+| Przycisk | Szybsze rozpoznanie? | Dowód |
+|---|---|---|
+| **Usuń połączenie** (drzewo) | ✅ **TAK** | ⭐⭐ **Przycisk nie zgadzał się z WŁASNYM menu kontekstowym**: `Delete` w menu tego samego drzewa jest czerwone (`MainWindow.axaml:475/525`), przycisk paska był żółty. Dwie drogi do jednej operacji, dwa kolory, w jednym oknie |
+| **Usuń zapytanie** (Saved Queries) | ✅ **TAK** | ten sam wzorzec — menu kontekstowe wiersza czerwone (`:1437`), przycisk nagłówka żółty |
+| **Wyczyść wszystkie** (`Icon.ListX`) | ✅ **TAK, najmocniej** | z całej trójki **najdalej idące** (kasuje cały zbiór), a niosło kolor, który w języku EmberTerna znaczy *„uwaga / pauza"* (Pause, Break on exception). **Sygnał był ZANIŻONY względem skutku** — to korekta poprawności, nie tylko spójności |
+
+⚠ **Kontrola pułapki 17 — czy to był świadomy wyjątek?** Nie, i da się to wskazać palcem: pierwotna
+legenda w `Colors.axaml` mówiła **„Warning=delete"** — spójny, ale **porzucony** schemat. Osiem
+edytorów i 131 pozycji menu przeszło na czerwień, legenda została. ⭐ To dryf z porzuconego systemu,
+a nie decyzja o tych trzech przyciskach — brak wpisu w §5 języka jest tu zgodny z historią.
+
+⚠ **Drugie potwierdzenie, z kodu, nie z estetyki: wszystkie trzy operacje już były sklasyfikowane jako
+destrukcja** — `IsDestructive = true` w `DeleteWithConfirmationAsync`, `DeleteSavedQueryAsync`
+i `ClearAllQueriesAsync`. **Model aplikacji i jej kolor mówiły co innego**; K2 usuwa rozjazd po
+stronie, która się myliła.
+
+#### §19.16.2 Co zrobiono
+
+Trzy `WarningIconBrush` → `DangerIconBrush` (`MainWindow.axaml`). Po zmianie **nie ma w produkcie ani
+jednego żółtego przycisku usuwania** — pozostałe `WarningIconBrush` to Break on exception (R‑5),
+Pause (R‑5) i licznik `UpdateChange` w podsumowaniu zmian (stan, nie akcja).
+
+⚠ **Poprawiona przy okazji legenda w `Colors.axaml`** — i to nie jest kosmetyka: to ona zrodziła dryf,
+więc zostawiona kazałaby następnej osobie pomalować kolejny kosz na żółto. ⭐ Kształt gotchy **#284,
+tylko w komentarzu zamiast w stringu**: komentarz przeżył zmianę, którą opisywał, i przez to nadal
+„uczył" nieprawdy przy zielonym buildzie. Zastąpiona wskazaniem na `color-language.md` jako **jedyne**
+źródło znaczeń — ⛔ z zakazem dopisywania tam drugiej legendy, bo to ona rozjedzie się jako następna.
+
+#### §19.16.3 ⭐ Strażnik — warunek, nie licznik
+
+`DestructiveIcon_AlwaysCarriesTheDangerToken` skanuje **źródło** widoków i wymaga, by każdy
+`Icon.Trash` / `Icon.ListX` w `SvgIcon` niósł `DangerIconBrush`. **Zweryfikowany przez zasadzenie
+naruszenia** — upada z nazwą pliku i nazwą złego tokenu.
+
+⭐ Dowodem nie może być liczba, bo nowy kosz pomalowany „jakoś" przechodzi build i każdy inny test,
+a wygląda źle dopiero na cudzym ekranie. ⚠ Skan ma własny bezpiecznik (`scanned >= 8`): regex, który
+przestał pasować do widoków, „przechodzi" zawsze — to ta sama klasa błędu co filtr partycji
+wskazujący nieistniejącą klasę (§18.1.6).
+
+⚠ **Gdy pojawi się kosz, który celowo ma inny kolor, ten test ma UPAŚĆ** — odpowiedzią jest wpis
+w §5 języka, a nie rozluźnienie warunku.
+
+#### §19.16.4 ⏸ Jedno miejsce do obejrzenia w QA
+
+W nagłówku panelu Saved Queries stoją teraz **dwie czerwone ikony obok siebie** (kosz + lista‑X) na
+trzy przyciski. Oba są R‑4, więc język jest po stronie tej zmiany, a rozróżnienie „jedno vs wszystkie"
+niesie **kształt** — dokładnie odwrotnie niż w wyjątku W‑1, gdzie ikony Comment/Uncomment są zbyt
+podobne i to kolor musi je rozróżniać. ⚠ Ale to jest sąd wizualny, nie dokumentowy: jeśli w oknie
+czyta się jako ściana czerwieni, poprawiamy **regułę w §5 języka**, nie bronimy implementacji (§0.5).
+
+#### §19.16.5 Stan
+
+Build 0/0 · **7135** zielony w trzech partycjach (**7032 + 49 + 54**, +1) · smoke czysty.
+⏸ **Czeka na QA wizualne użytkownika.** Następny krok po akceptacji: **K3** (Edytuj → ⚪).
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:
