@@ -784,6 +784,7 @@
                `Border.tab-strip Button` w ControlStyles.axaml zdejmuje z przycisków zakładki geometrię
                akcji dialogowej, którą dziedziczyły po `Button.flat`. Powód i pomiar stoją przy tej regule. -->
           <Border Grid.Row="0"
+                  x:Name="TabStripRoot"
                   Classes="tab-strip"
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
@@ -800,9 +801,9 @@
                  ⚠ `MaxHeight` ustawia code-behind (`ApplyTabStripMode`), bo `MaxHeight` to liczba, a rytm
                  niesie ROLA `Size.Row.Tab` — mnożenie roli przez preferencję nie jest wyrażalne
                  w `{DynamicResource}` i nie ma po co zakładać trzeciej warstwy katalogu (§19.1.4). -->
-            <Grid ColumnDefinitions="*,Auto">
+            <Grid RowDefinitions="*,Auto">
             <ScrollViewer x:Name="TabStripScroll"
-                          Grid.Column="0"
+                          Grid.Row="0"
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="TabStripItems" ItemsSource="{Binding WorkspaceTabs}">
@@ -917,25 +918,23 @@
             </ItemsControl>
             </ScrollViewer>
 
-            <!-- ⭐ PRZYCISK PRZEPEŁNIENIA — wyłącznie w trybie pojedynczego wiersza, i wyłącznie gdy coś
-                 naprawdę nie mieści się na ekranie (R13: nie rezerwujemy miejsca na element, którego
-                 w danym kontekście nie będzie).
-                 ⭐⭐ LICZNIK POKAZUJE ZAKŁADKI NIEWIDOCZNE, nie wszystkie otwarte — ratyfikowane przez
-                 użytkownika: „to jest informacja, której użytkownik potrzebuje w danym momencie". Ile jest
-                 otwartych, widać po samym pasku; ile jest POZA nim, nie widać znikąd. Liczbę wylicza
-                 code-behind z rzeczywistego układu, bo to fakt o WIDOKU, nie o modelu.
-                 ⚠ Reuse before create: filtrowaną listę niesie istniejący `SearchableComboBox` (§8.2 wskazuje
-                 go wprost), a licznik jedzie w jego `SelectionBoxText`. Zero nowej chromy. -->
-            <controls:SearchableComboBox x:Name="TabOverflowBox"
-                                         Grid.Column="1"
-                                         IsVisible="False"
-                                         VerticalAlignment="Center"
-                                         Margin="4,0,6,0"
-                                         MinWidth="0"
-                                         ItemsSource="{Binding WorkspaceTabs}"
-                                         DisplayMemberPath="DisplayTitle"
-                                         FilterWatermark="{x:Static app:UiStrings.TabStripOverflowFilterWatermark}"
-                                         ToolTip.Tip="{x:Static app:UiStrings.TabStripOverflowTooltip}" />
+            <!-- ⭐⭐ PASEK PRZEWIJANIA MA WŁASNY WIERSZ SIATKI — i to jest POPRAWKA UKŁADU, nie kosmetyka.
+                 Szablon `ScrollViewera` w FluentTheme rozciąga `ScrollContentPresenter` przez CAŁĄ swoją
+                 siatkę, więc jego własne paski ZAWSZE leżą na treści; nie ma tam czego ustawić. Próba
+                 zarezerwowania miejsca `Paddingiem` (pierwsza runda odbiorcza) tworzy SPRZĘŻENIE ZWROTNE —
+                 padding zmienia viewport, viewport zmienia widoczność paska, pasek zmienia padding — i nie
+                 ustala się. ⛔ Nie wracać do tamtego pomysłu.
+                 ⭐ Rozwiązaniem jest STRUKTURA: własny `ScrollBar` jako RODZEŃSTWO w osobnym wierszu.
+                 Rodzeństwo w siatce nie ma jak nachodzić na sąsiada — zakładki są widoczne w 100%
+                 z konstrukcji, a nie dzięki dobranej liczbie.
+                 ⚠ Widoczny tylko w trybie jednowierszowym i tylko gdy jest co przewijać (R13).
+                 ⚠ Tryb WIELOWIERSZOWY zostaje na własnym pasku `ScrollViewera` (pionowym, przy prawej
+                 krawędzi) — użytkownik go odebrał, więc go nie ruszamy. -->
+            <ScrollBar x:Name="TabStripHScroll"
+                       Grid.Row="1"
+                       Orientation="Horizontal"
+                       AllowAutoHide="False"
+                       IsVisible="False" />
             </Grid>
           </Border>
 

@@ -176,6 +176,9 @@ public sealed record Preferences
     /// ⚠ Read only in <c>MultiRow</c> mode; the value is kept across a switch to <c>SingleRow</c> and back,
     /// because a mode is a view of the same workspace and losing the row limit on a round trip would be a
     /// silent settings loss.
+    /// <para>⭐ This is also what makes the Settings Center safe to HIDE the row in single-row layout: the
+    /// row disappears, the number does not. Hiding a setting and discarding it are different things, and
+    /// only the first one happens.</para>
     /// </remarks>
     public int TabStripMaxRows { get; set; } = PreferenceOptions.TabStripMaxRows.Default;
 }

@@ -549,6 +549,27 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
 
     public NumericSettingViewModel TabStripMaxRows => Number(SettingsCatalog.SettingTabStripMaxRows);
 
+    /// <summary>
+    /// Whether <see cref="TabStripMaxRows"/> is shown at all — it is not, in single-row layout.
+    ///
+    /// <para>⭐ <b>Ratified by the user (2026-08-03), and it OVERTURNS this etap's first decision.</b> M3.3b
+    /// deliberately kept the row visible, reasoning that the value survives a mode round trip so hiding it
+    /// might suggest the number had been lost. The user's rule is better and simpler: <i>the interface does
+    /// not show settings that do nothing in the current mode.</i> The value is still kept — it is the ROW that
+    /// disappears, not the number.</para>
+    ///
+    /// <para>⚠ It is an AND with the row's own <c>IsVisible</c>, which is the search filter's property. Two
+    /// independent reasons to hide one row, so neither may overwrite the other: writing the mode's answer
+    /// into <c>IsVisible</c> would make a search for "rows" resurrect a row that does not apply, or a mode
+    /// switch resurrect a row the filter had excluded.</para>
+    /// </summary>
+    public bool ShowTabStripMaxRows
+        => TabStripMaxRows.IsVisible
+           && string.Equals(
+               TabStripMode.Value,
+               PreferenceOptions.TabStripModeMultiRow,
+               StringComparison.Ordinal);
+
     public PreferenceSettingViewModel DebuggerIsolation
         => Preference(SettingsCatalog.SettingDebuggerIsolation);
 
@@ -645,6 +666,10 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         SelectedCategory = visible.Contains(previous) ? previous : visible.FirstOrDefault();
 
         OnPropertyChanged(nameof(HasMatches));
+        // ⚠ Filtr jest DRUGIM powodem ukrycia wiersza „Maximum rows" (pierwszym jest tryb), więc obie strony
+        //   muszą ogłaszać zmianę — inaczej wpisanie frazy w wyszukiwarkę zostawiłoby wiersz w poprzednim
+        //   stanie widoczności.
+        OnPropertyChanged(nameof(ShowTabStripMaxRows));
     }
 
     /// <summary>
@@ -728,6 +753,12 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
 
     private void Commit()
     {
+        // ⚠ Wołane po KAŻDEJ ustalonej wartości, więc jest jedynym miejscem, w którym trzeba ogłosić, że
+        //   zmiana trybu paska zakładek mogła ukryć albo pokazać wiersz „Maximum rows". Stoi tutaj, a nie
+        //   przy samym wierszu trybu, bo `Wire` jest JEDNYM punktem subskrypcji dla wszystkich rodzajów
+        //   wierszy — dopisanie tego przy jednym z nich byłoby drugą ścieżką powiadomień.
+        OnPropertyChanged(nameof(ShowTabStripMaxRows));
+
         var persisted = _preferences.Apply(Compose());
 
         ShowSaveRefusal = !persisted;

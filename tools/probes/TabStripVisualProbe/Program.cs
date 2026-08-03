@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using Avalonia.VisualTree;
 
 internal static class Program
 {
@@ -25,6 +26,12 @@ internal static class Program
         ("V_ORDER_SUMMARY",          "Icon.View",      "IconColor_View",      false, true),
         ("FN_ADD_TAX",               "Icon.Function",  "IconColor_Function",  false, true),
     ];
+
+    // ⚠⚠ GRANICA TEGO NARZĘDZIA, zapisana po drugiej rundzie odbiorczej M3.3b (§19.23.9):
+    // SONDA LICZY UKŁAD RAZ, WIĘC NIE MOŻE ORZEC O ZBIEŻNOŚCI. Defekt, który ujawnia się dopiero
+    // w PĘTLI przeliczeń układu (rezerwacja miejsca `Paddingiem`: padding → viewport → widoczność paska →
+    // padding), wychodził tu poprawnie i render był przekonujący, a w aplikacji nie ustalał się nigdy.
+    // ⭐ Sonda odpowiada na pytanie „jak to WYGLĄDA", nigdy „czy to się USTALA".
 
     /// <summary>
     /// Przełącznik dowodowy §19.2: czy wskaźnik aktywnej zakładki niesie LOKALNE `Background="Transparent"`.
@@ -95,8 +102,12 @@ internal static class Program
         foreach (var (name, iconKey, colorKey, active, closable) in ManyTabs)
             wrap.Children.Add(BuildTab(name, iconKey, colorKey, active, closable));
 
-        var items = new ItemsControl { ItemsSource = null };
         var scroll = new ScrollViewer { Content = wrap };
+
+        // ⭐⭐ WIERNIE JAK W PRODUKCIE (poprawka odbiorcza M3.3b): `AllowAutoHide = false` + rezerwacja
+        //    rowka pod pasek. Bez tego sonda renderowałaby pasek, który ZASŁANIA zakładki — czyli stan
+        //    sprzed poprawki — i po raz czwarty potwierdzałaby coś, czego w produkcie nie ma.
+        scroll.AllowAutoHide = false;
 
         if (multiRow)
         {
@@ -107,30 +118,36 @@ internal static class Program
         }
         else
         {
-            // Szerokość nieskończona ⇒ WrapPanel nie zawija nigdy ⇒ jeden wiersz.
-            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+            // ⭐⭐ `Hidden`, nie `Auto` — szerokość nieskończona (⇒ WrapPanel nie zawija), ale WŁASNY pasek
+            //    `ScrollViewera` się nie pokazuje. Jedynym paskiem na ekranie jest ten w wierszu 1 siatki.
+            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
             scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         }
 
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        Grid.SetColumn(scroll, 0);
+        grid.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        Grid.SetRow(scroll, 0);
         grid.Children.Add(scroll);
 
         if (!multiRow)
         {
-            // Przycisk przepełnienia z licznikiem NIEWIDOCZNYCH zakładek. W sondzie liczba jest wpisana
-            // (sonda nie mierzy viewportu), w produkcie liczy ją `UpdateTabOverflow` z rzeczywistego układu.
-            var overflow = new EmberTern.App.Controls.SearchableComboBox
+            // ⭐ Pasek przewijania jako RODZEŃSTWO zakładek w osobnym wierszu — nie ma jak na nie nachodzić.
+            //   ⚠ W sondzie wartości są wpisane, bo sonda liczy układ RAZ i nie ma żywego `Extent`. To jest
+            //   też granica tego narzędzia: sprzężenia zwrotnego z poprzedniej rundy sonda NIE MOGŁA złapać,
+            //   bo ono ujawnia się dopiero w pętli przeliczeń. Dlatego poprawka jest STRUKTURALNA — poprawna
+            //   z konstrukcji, niezależnie od kolejności przeliczeń — a nie dobrana liczbowo.
+            var bar = new ScrollBar
             {
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 6, 0),
-                MinWidth = 0,
-                SelectionBoxText = "5",
+                Orientation = Orientation.Horizontal,
+                AllowAutoHide = false,
+                Minimum = 0,
+                Maximum = 400,
+                ViewportSize = 620,
+                Value = 0,
             };
-            Grid.SetColumn(overflow, 1);
-            grid.Children.Add(overflow);
+            Grid.SetRow(bar, 1);
+            grid.Children.Add(bar);
         }
 
         var strip = new Border { Classes = { "tab-strip" }, Child = grid };
@@ -144,6 +161,7 @@ internal static class Program
         var root = new StackPanel { Orientation = Orientation.Vertical, Width = 620 };
         root.Children.Add(strip);
         root.Children.Add(body);
+
         return root;
     }
 

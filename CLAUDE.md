@@ -430,7 +430,7 @@ noted.
 - **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
   FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
   (a ready-made startup prompt), then the handover it points at.**
-  Build 0/0; suite **7231** (7120 + 57 + 54); smoke clean. ⏸ **Next: M3.3c** (the tab context menu — 8 items,
+  Build 0/0; suite **7233** (7122 + 57 + 54); smoke clean. ⏸ **Next: M3.3c** (the tab context menu — 8 items,
   and ⚠⚠ the three bulk-close ones are the **fourth entry into the existing Save/Discard/Cancel gate**, rule
   #11), then M3.4 Metadata Explorer → M3b → ⛔ the §13.3 gate. ⭐ User directive (2026-08-03): **M3.3b/M3.3c
   run without stopping for acceptance** — the next stop is the finished tab strip.
@@ -461,6 +461,47 @@ noted.
   `SearchableComboBox.axaml` was not among them, so the overflow control had no `ControlTheme`, no template,
   and rendered as **nothing** — a plausible-looking image with the subject missing. ⭐ **The probe must load
   the same dictionaries as `App.axaml`**; a missing one does not fail, it silently removes an element.
+  ⭐⭐ **ACCEPTANCE ROUND ON M3.3b — three reports, and TWO OF THEM HAD ONE CAUSE** (§19.23.8). *"The scrollbar
+  covers the tabs"* (single-row) and *"the scrollbar practically disappears"* (multi-row) are the same fact
+  seen twice: Avalonia's `ScrollViewer` keeps its bar as a **thin line lying ON the content**, expanded only
+  under the pointer. `AllowAutoHide = false` removes both properties at once — constant thickness, so space
+  *can* be reserved, and visible without hovering. ⚠ **Reserving that space had to be code**: Fluent's
+  `ScrollViewer` template spans the `ScrollContentPresenter` across the whole grid, so the bars always overlay
+  and there is no "reserve space" property; the reservation is the `ScrollViewer`'s **`Padding`**, which the
+  template passes to the presenter. ⭐⭐ **The thickness is MEASURED off the bar itself, never typed** — our
+  themes declare no scrollbar width, and writing `12` would either be a dead literal or, worse, a reach for
+  `Space.Lg`, which happens to be 12 too (**trap 6: a number does not determine a role**). Reservation is
+  conditional (R13). ⛔ **The thumb colour was NOT touched even though the report named colour**:
+  `ScrollBarThumbColor` is an application token, so raising it for one strip is patching a single screen (R7)
+  and raising it globally leaves the etap — and it proved unnecessary, because the problem was the control's
+  **state**, not its colour. ⭐ Wheel scrolling is single-row only (multi-row's built-in vertical wheel is
+  already what one expects), handled on the **whole strip** and on the **tunnel**, stepping by a **quarter of
+  the viewport** — tab widths vary by design (D6/§8.1), so "one tab" is not a unit.
+  ⛔⛔ **AND THE FIRST FIX FOR THE OVERLAP WAS WRONG — the round that matters most** (§19.23.9). Reserving the
+  bar's space with the `ScrollViewer`'s `Padding` is a **feedback loop**: padding changes the viewport, the
+  viewport changes the bar's visibility, the bar changes the padding. In the **probe**, which lays out **once**,
+  it rendered correctly and convincingly; in the app, which lays out in a loop, it never settled. ⭐⭐ **That is
+  the FIFTH time this strip's probe showed a state that did not exist — and the first where the probe could not
+  have been right in principle**: the other three were bugs *in* the probe, this one is outside its reach by
+  construction. ⚠ **A tool that computes once cannot rule on convergence** — written on the probe, in place.
+  ⭐ **The fix is structural**: the horizontal bar is no longer the `ScrollViewer`'s (it runs `Hidden`) but a
+  **sibling of the tabs in its own grid row** — siblings cannot overlap, by construction rather than by a
+  tuned number. ⭐⭐ And that same structure is why the loop cannot return: the bar's visibility depends on the
+  **horizontal** span while its presence changes only the **vertical** dimension — orthogonal quantities.
+  ⛔ Never gate that bar's visibility on anything it affects itself.
+  ⏸ **The overflow button/counter is DEFERRED by the user, not abandoned** — the `SearchableComboBox` version
+  was visually wrong (mispositioned popup, rows rendered by `ToString()` because `DisplayMemberPath` does not
+  feed the popup list — it needs an `ItemTemplate`), but the deeper error was the one the user named: it mixed
+  the strip's LAYOUT with an extra element. `TabStripOverflow*` strings stay for its return.
+  ⭐ **Third round: "Maximum rows" now HIDES in single-row layout** (§19.23.10) — the user overruled this
+  etap's own decision to keep it visible, and the rule is better: *the interface does not show settings that do
+  nothing in the current mode.* My argument confused **hiding a row** with **discarding a value**; the number
+  is still kept. ⚠ The comment stating the opposite was corrected in the same step (trap 21 in its worst form —
+  it justified behaviour that no longer existed). ⭐ The condition is an **AND of two independent reasons**
+  (mode ∧ search filter) and lives on the page: writing the mode's answer into the row's `IsVisible` would let
+  a search resurrect a row that does not apply. ⚠⚠ **Asserting the property's VALUE was not enough** — read
+  directly it is correct even when nothing announces it, while the binding re-queries only on
+  `PropertyChanged`; the notification is therefore an assertion, **verified by planting the violation**.
   ✅ **M3.3a DONE (2026-08-03) — RE-SCOPED BY THE USER BEFORE IT STARTED, and that is its first lesson**
   (`product-polish.md` §19.22). The plan row read *"geometry, `Size.Row.Tab`, indicator"* — **all three were
   already delivered by M3.1a**, so the user refused to do the etap for the etap's sake: *"jeżeli M3.1a

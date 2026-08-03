@@ -6534,8 +6534,141 @@ zmiany potwierdzało stan, którego nie było.**
 | Smoke | czysty |
 | Rendery sondy | MultiRow (limit 3 wierszy) i SingleRow (licznik `5 ⌄`) w **obu** motywach |
 
+#### §19.23.8 ⚠ Runda odbiorcza — trzy uwagi z realnego użycia, jedna przyczyna dwóch z nich
+
+Użytkownik odebrał **MultiRow** („ten kierunek mi się podoba") i zgłosił trzy rzeczy:
+
+| # | Zgłoszenie | Rozstrzygnięcie |
+|---|---|---|
+| 1 | **SingleRow: pasek przewijania zasłania zakładki** | ⭐ realne i najpoważniejsze — poprawione strukturalnie |
+| 2 | **SingleRow: brak przewijania kółkiem** | nowy handler, tylko dla tego trybu |
+| 3 | MultiRow: pasek przy prawej krawędzi „praktycznie znika" | ⭐ **ta sama przyczyna co #1** |
+
+**⭐⭐ #1 i #3 miały JEDNĄ przyczynę: `AllowAutoHide`.** Domyślnie `ScrollViewer` trzyma pasek jako
+**cienką kreskę leżącą NA treści**, rozwijaną dopiero pod kursorem. Stąd jednocześnie *„zasłania zakładki"*
+(bo leży na nich) i *„praktycznie znika"* (bo jest kreską). `AllowAutoHide = false` odbiera obie własności
+naraz — pasek ma stałą grubość, więc **da się pod niego zarezerwować miejsce**, i jest widoczny bez
+najeżdżania.
+
+⭐ **Dlaczego rezerwacja musiała być kodem, a nie atrybutem:** szablon `ScrollViewera` w FluentTheme daje
+`ScrollContentPresenterowi` `RowSpan`/`ColumnSpan` przez **całą** siatkę, więc paski **zawsze** leżą na
+treści — nie istnieje właściwość „zarezerwuj miejsce". Rezerwacją jest `Padding` `ScrollViewera`, bo szablon
+przekazuje je prezenterowi: treść wsuwa się do środka, pasek zostaje na wysuniętym marginesie.
+
+⭐⭐ **Grubość jest MIERZONA Z SAMEGO PASKA, nie wpisana.** Nasze motywy nie deklarują szerokości paska (to
+liczba FluentTheme), a wpisanie `12` byłoby albo martwym literałem, albo — gorzej — sięgnięciem po
+`Space.Lg`, bo **akurat też wynosi 12**. To jest pułapka 6 (*liczba nie wyznacza roli*) w najczystszej
+postaci: rola odstępu i grubość cudzej kontrolki to dwie różne rzeczy, które dziś mają tę samą wartość.
+⚠ Rezerwacja jest **warunkowa** (R13): dopóki pasek się nie pojawia, marginesu nie ma.
+
+⛔ **Kontrastu kciuka NIE ruszono, choć zgłoszenie mówiło o kolorze.** `ScrollBarThumbColor` jest tokenem
+**aplikacji**; podniesienie go dla jednego paska byłoby łataniem pojedynczego ekranu (**R7**), a podniesienie
+globalne wyszłoby poza etap. ⭐ Okazało się zbędne: problemem nie był kolor, tylko **stan** kontrolki.
+To jest §19.14 od dobrej strony — zgłoszenie o objawie wiarygodne, wniosek o przyczynie zmierzony (pułapka 9).
+
+**#2 — kółko.** `ScrollViewer` przewija kółkiem **pionowo i tylko pionowo**, co w trybie wielowierszowym jest
+dokładnie oczekiwane — więc tam nie zmieniono **nic**. W jednowierszowym obrót zamienia się na ruch poziomy.
+⚠ Handler wisi na **całym pasku** i na **tunelu**: użytkownik kręci tam, gdzie ma kursor, a `ScrollViewer`
+w środku sam obsługuje to zdarzenie, więc bąbelkowy handler dostałby je już oznaczone.
+⭐ **Krok to ćwiartka widocznego obszaru, nie stała liczba pikseli ani szerokość zakładki** — zakładki mają
+różne szerokości (D6/§8.1 nie skraca nazw), więc „jedna zakładka" nie jest jednostką; ułamek widoku skaluje
+się sam i nie potrzebuje tokenu.
+
+⚠ **Sonda po raz czwarty musiała gonić produkt** — bez `AllowAutoHide` i bez rezerwacji renderowałaby stan
+**sprzed** poprawki. Odtwarza teraz oba kroki, łącznie z `Measure`/`Arrange` przed pomiarem paska (zerowe
+`Bounds` dałyby zerową rezerwację, czyli dokładnie defekt).
+
+#### §19.23.9 ⛔⛔ DRUGA RUNDA ODBIORCZA — poprawka #1 BYŁA BŁĘDNA. Najważniejszy wpis tej iteracji
+
+> **Użytkownik:** *„Pasek przewijania nadal zasłania zakładki — problem nie został rozwiązany. […] Mam
+> wrażenie, że próbujesz naprawić objaw zamiast układ. SingleRow powinien wyglądać jak normalny pasek kart
+> z przewijaniem, a nie jak osobny panel z dodatkowymi elementami."*
+
+**Diagnoza była trafna.** MultiRow odebrany; SingleRow miał trzy defekty i wszystkie wynikały z jednej
+decyzji: próbowałem **zmusić cudzą kontrolkę do czegoś, czego jej szablon nie przewiduje**, zamiast zmienić
+układ.
+
+**⚠⚠ DLACZEGO `Padding` NIE MÓGŁ ZADZIAŁAĆ — i dlaczego sonda tego nie złapała.** Rezerwacja `Paddingiem`
+tworzy **sprzężenie zwrotne**: padding zmienia viewport → viewport zmienia widoczność paska → pasek zmienia
+padding. W **sondzie**, gdzie układ liczy się **RAZ**, wychodziło poprawnie i render był przekonujący.
+W aplikacji, gdzie układ przelicza się w pętli, **nie ustalało się**.
+
+⭐⭐ **To jest PIĄTE wystąpienie tego samego kształtu w tym pasku — i pierwsze, w którym sonda nie mogła mieć
+racji z zasady, a nie przez pomyłkę w niej.** §19.2 (wiązała tło wprost), §19.22.6 (własny styl wskaźnika),
+§19.23.6 (brakujący słownik) były **błędami sondy**. Ten jest inny: sonda renderuje **jeden przebieg układu**,
+więc defekt, który ujawnia się dopiero w **pętli przeliczeń**, jest poza jej zasięgiem **z konstrukcji**.
+⚠ **Reguła: narzędzie, które liczy raz, nie może orzec o zbieżności.** Zapisane w sondzie, w miejscu.
+
+**⭐ POPRAWKA JEST STRUKTURALNA.** Pasek przewijania przestaje być paskiem `ScrollViewera` i staje się
+**rodzeństwem zakładek w osobnym wierszu siatki**:
+
+```
+Border.tab-strip
+  Grid RowDefinitions="*,Auto"
+    ScrollViewer  (wiersz 0)  HorizontalScrollBarVisibility = Hidden
+    ScrollBar     (wiersz 1)  Orientation = Horizontal
+```
+
+`Hidden`, a nie `Auto` — treść dalej dostaje nieskończoną szerokość (więc `WrapPanel` nie zawija), ale
+własny pasek `ScrollViewera` się nie pokazuje. **Rodzeństwo w siatce nie ma jak nachodzić na sąsiada — to
+własność konstrukcji, nie dobranej liczby.**
+
+⭐⭐ **I dokładnie ten warunek gwarantuje brak nawrotu pętli:** widoczność paska zależy od rozpiętości
+**POZIOMEJ**, a jego pojawienie się zmienia wyłącznie wymiar **PIONOWY** (zabiera wysokość wierszowi 0).
+Te dwie wielkości są **ortogonalne**, więc sprzężenie nie ma jak powstać. ⛔ Nie wiązać widoczności tego
+paska z niczym, na co on sam wpływa.
+
+**⏸ PRZYCISK/LICZNIK PRZEPEŁNIENIA — ODŁOŻONY PRZEZ UŻYTKOWNIKA, nie porzucony.** Wersja na
+`SearchableComboBox` była wizualnie wadliwa: rozwinięta lista źle wypozycjonowana, wiersze renderowane przez
+`ToString()` zamiast `DisplayTitle` (⚠ zmierzona przyczyna: ustawiłem `DisplayMemberPath`, ale lista popupu
+renderuje przez `ItemTemplate`, którego nie podałem), a całość „doklejona" do paska. ⭐ Głębszy błąd był
+jednak inny i to jego nazwał użytkownik: **mieszałem układ paska z dodatkowym elementem.** Najpierw SingleRow
+ma być normalnym paskiem kart, dopiero potem wraca przepełnienie. Stałe `TabStripOverflow*` w `UiStrings`
+zostają — wracają razem z nim (§8.2 nadal go wymaga).
+
+⛔ **Kontrastu kciuka nadal NIE ruszono** i nadal okazało się to zbędne: `AllowAutoHide = false` załatwiło
+uwagę o MultiRow, bo problemem był **stan** kontrolki, nie jej barwa (R7 — token jest aplikacji, nie tego
+paska).
+
 ⏸ **Do obejrzenia na żywej bazie:** przełączanie trybu przy otwartych zakładkach, przewijanie kółkiem
-w obu trybach, licznik przy zmianie szerokości okna. Sonda pokazuje układ, ale nie interakcję.
+w obu trybach. ⚠⚠ **Sonda pokazuje układ po jednym przebiegu — nie orzeka o zachowaniu w pętli i tej rundy
+by nie wychwyciła.** Ocena SingleRow musi zapaść w działającej aplikacji.
+
+✅ **ODEBRANE 2026-08-03:** *„Wygląda już dobrze, to jest kierunek, o jaki mi chodziło."*
+
+#### §19.23.10 ⭐ Trzecia runda — wiersz „Maximum rows" znika w trybie jednowierszowym
+
+> **Użytkownik:** *„Gdy wybrany jest tryb Single row, opcja Maximum rows nie ma żadnego zastosowania, więc
+> powinna być automatycznie ukrywana. Dzięki temu interfejs nie pokazuje ustawień, które w danym trybie nic
+> nie robią."*
+
+⭐⭐ **To UCHYLA decyzję §19.23.3 tej samej iteracji.** M3.3b świadomie zostawiło wiersz widoczny, argumentując,
+że wartość przeżywa przełączenie trybu, więc ukrycie sugerowałoby jej utratę. **Reguła użytkownika jest
+prostsza i lepsza:** interfejs nie pokazuje ustawień, które w danym trybie nic nie robią. ⚠ Mój argument
+mylił **ukrycie wiersza** z **porzuceniem wartości** — a to dwie różne rzeczy: znika wiersz, nie liczba.
+
+⚠ **Komentarz w `SettingsCatalog.cs` mówił dokładnie odwrotność i został poprawiony w tym samym kroku** —
+inaczej byłaby to pułapka 21 (nieaktualny komentarz uczy nieprawdy tak samo jak nieaktualny string), i to
+w wydaniu najgorszym z możliwych: uzasadniałby zachowanie, którego już nie ma.
+
+⭐ **Warunek jest KONIUNKCJĄ dwóch niezależnych przyczyn** (`ShowTabStripMaxRows` = tryb ∧ filtr) i mieszka
+na stronie, a nie w wierszu. ⛔ Wpisanie odpowiedzi trybu w `IsVisible` wiersza byłoby błędem: `IsVisible`
+należy do **wyszukiwarki**, więc szukanie frazy „rows" wskrzeszałoby wiersz, który nie ma zastosowania —
+albo przełączenie trybu wskrzeszałoby wiersz odfiltrowany. **Dwa powody ukrycia, żaden nie nadpisuje
+drugiego** — zapięte osobnym testem.
+
+⚠⚠ **Test na samą WARTOŚĆ właściwości nie wystarczał i to jest tu najważniejsza część.** Czytana wprost
+`ShowTabStripMaxRows` jest poprawna nawet wtedy, gdy nic o niej nie ogłasza, a wiązanie odpytuje ją
+**wyłącznie po `PropertyChanged`** — czyli test byłby zielony przy niedziałającym ekranie (**R16**). To ta
+sama luka, przez którą w §19.2 poprawny styl nigdy się nie namalował: mechanizm dobry, brakowało sygnału.
+⭐ Notyfikacja jest więc asercją, a nie założeniem — **zweryfikowaną podłożeniem naruszenia**: bez
+`OnPropertyChanged` w `Commit` test zawodzi z komunikatem *„Zmiana trybu nie ogłosiła ShowTabStripMaxRows —
+widok nie odpyta."*
+
+⭐ Drugi test przechodzi **pełny obieg** ustaw → przełącz → wróć i sprawdza wartość **na dysku**: bez tego
+„zachowana" znaczyłoby wyłącznie „do zamknięcia okna".
+
+**Stan po trzech rundach:** build 0/0 · **7233** (7122 + 57 + 54, +4) · smoke czysty.
 
 ---
 

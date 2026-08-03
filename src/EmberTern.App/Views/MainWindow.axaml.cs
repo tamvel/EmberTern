@@ -10,6 +10,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
@@ -263,24 +264,27 @@ public partial class MainWindow : Window
         // wychodzi natychmiast w trybie wielowierszowym, a w jednowierszowym robi jeden przebieg po
         // kontenerach bez alokacji — mierzone tanio.
         if (this.FindControl<ScrollViewer>("TabStripScroll") is { } tabScroll)
-            tabScroll.ScrollChanged += (_, _) => UpdateTabOverflow();
+            tabScroll.ScrollChanged += (_, _) => UpdateTabStripScroll();
 
-        LayoutUpdated += (_, _) => UpdateTabOverflow();
+        if (this.FindControl<ScrollBar>("TabStripHScroll") is { } tabBar)
+            tabBar.Scroll += OnTabStripScroll;
 
-        // Wybór z listy przepełnienia = aktywacja dokumentu. ⚠ Zaznaczenie jest natychmiast czyszczone:
-        // ta lista jest WYSZUKIWARKĄ, a nie stanem — „ostatnio wybrana" nic tu nie znaczy, a zostawione
-        // zaznaczenie uniemożliwiłoby ponowne wybranie tej samej zakładki.
-        if (this.FindControl<SearchableComboBox>("TabOverflowBox") is { } overflow)
-        {
-            overflow.PropertyChanged += (_, args) =>
-            {
-                if (args.Property != SearchableComboBox.SelectedItemProperty) return;
-                if (args.NewValue is not WorkspaceTabViewModel tab) return;
+        // ⚠ Kółko wpięte na CAŁYM pasku, nie na `ScrollViewerze`, i to jest różnica praktyczna: użytkownik
+        //   kręci kółkiem tam, gdzie ma kursor, a nie tam, gdzie akurat kończy się treść. Na TUNELU, bo
+        //   `ScrollViewer` w środku sam obsługuje `PointerWheelChanged` i bąbelkowy handler dostałby zdarzenie
+        //   już oznaczone jako obsłużone (albo wcale). ⭐ Handler sam wychodzi w trybie wielowierszowym —
+        //   tam wbudowane pionowe przewijanie jest dokładnie tym, czego się oczekuje.
+        if (this.FindControl<Border>("TabStripRoot") is { } stripRoot)
+            stripRoot.AddHandler(PointerWheelChangedEvent, OnTabStripPointerWheel, RoutingStrategies.Tunnel);
 
-                overflow.SelectedItem = null;
-                if (tab.ActivateCommand.CanExecute(null)) tab.ActivateCommand.Execute(null);
-            };
-        }
+        LayoutUpdated += (_, _) => UpdateTabStripScroll();
+
+        // ⏸ PRZYCISK/LICZNIK PRZEPEŁNIENIA — ODŁOŻONY PRZEZ UŻYTKOWNIKA (2026-08-03), nie porzucony.
+        // Wersja na `SearchableComboBox` była wizualnie wadliwa (zła pozycja rozwiniętej listy, wiersze
+        // renderowane przez `ToString()` zamiast `DisplayTitle`, całość „doklejona" do paska), a przede
+        // wszystkim mieszała dwie sprawy: układ paska i dodatkowy element. Decyzja użytkownika: najpierw
+        // SingleRow ma wyglądać jak NORMALNY pasek kart z przewijaniem, dopiero potem wraca przepełnienie.
+        // ⚠ Stałe `TabStripOverflow*` w `UiStrings` ZOSTAJĄ — wracają razem z nim (§8.2 nadal go wymaga).
         PropertyChanged += OnWindowPropertyChanged;
         PositionChanged += OnWindowPositionChanged;
         Opened += OnWindowOpened;
@@ -1647,6 +1651,14 @@ public partial class MainWindow : Window
         var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
         if (scroll is null) return;
 
+        // ⭐ `AllowAutoHide = false` — pasek przestaje być cienką kreską rozwijaną pod kursorem i staje się
+        // widocznym sygnałem „tu można przewijać". To odpowiedź na uwagę o trybie WIELOWIERSZOWYM (pionowy
+        // pasek przy prawej krawędzi „praktycznie znikał"), odebraną przez użytkownika.
+        // ⛔ Nie podnosić kontrastu kciuka: `ScrollBarThumbColor` jest tokenem APLIKACJI, a zmiana koloru
+        //    dla jednego paska byłaby łataniem pojedynczego ekranu (R7) i wyszłaby poza etap. Okazało się
+        //    zbędne — problemem był STAN kontrolki, nie jej barwa.
+        scroll.AllowAutoHide = false;
+
         if (_currentVm.IsTabStripMultiRow)
         {
             scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -1666,12 +1678,17 @@ public partial class MainWindow : Window
         }
         else
         {
-            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+            // ⭐⭐ `Hidden`, NIE `Auto` — i to jest sedno poprawki. `Hidden` znaczy „przewijaj, ale nie
+            //    pokazuj SWOJEGO paska": treść dostaje nieskończoną szerokość (więc `WrapPanel` nie zawija),
+            //    a jedynym paskiem na ekranie jest nasz własny, stojący w osobnym wierszu siatki. Przy `Auto`
+            //    pasek `ScrollViewera` leżał NA zakładkach i żadne ustawienie tego nie zmienia (jego szablon
+            //    rozciąga prezentera przez całą siatkę).
+            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
             scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
             scroll.MaxHeight = double.PositiveInfinity;
         }
 
-        UpdateTabOverflow();
+        UpdateTabStripScroll();
     }
 
     // ⭐⭐ LICZNIK POKAZUJE ZAKŁADKI NIEWIDOCZNE, NIE WSZYSTKIE OTWARTE — ratyfikowane przez użytkownika:
@@ -1683,36 +1700,86 @@ public partial class MainWindow : Window
     // ⚠ `ItemsControl` nad `WrapPanelem` nie wirtualizuje, więc wszystkie kontenery istnieją i pomiar jest
     //   zupełny — gdyby kiedyś zaczął wirtualizować, ta metoda zacznie liczyć tylko zrealizowane i trzeba
     //   ją będzie oprzeć na czymś innym. Zapisane, bo objawem byłby licznik po cichu za niski.
-    private void UpdateTabOverflow()
+    // ⭐⭐ SYNCHRONIZUJE WŁASNY POZIOMY PASEK PRZEWIJANIA ZE STANEM `ScrollViewera` (tryb jednowierszowy).
+    //
+    // ⚠⚠ POPRZEDNIE PODEJŚCIE BYŁO BŁĘDNE I ZOSTAŁO USUNIĘTE — zapisane, bo wygląda rozsądnie i wróci.
+    // Rezerwowanie miejsca `Paddingiem` `ScrollViewera` tworzy SPRZĘŻENIE ZWROTNE: padding zmienia viewport,
+    // viewport zmienia widoczność paska, widoczność paska zmienia padding. W sondzie, gdzie układ liczy się
+    // RAZ, wychodziło poprawnie; w aplikacji, gdzie układ przelicza się w pętli, nie ustalało się i pasek
+    // dalej leżał na zakładkach. ⛔ Nie wracać do `Paddingu`.
+    //
+    // ⭐ Rozwiązaniem jest STRUKTURA, nie liczba: pasek jest RODZEŃSTWEM zakładek w osobnym wierszu siatki,
+    // więc nie ma jak na nie nachodzić — z konstrukcji, niezależnie od kolejności przeliczeń układu.
+    //
+    // ⚠ Widoczny tylko wtedy, gdy naprawdę jest co przewijać (R13) — pusty pas pod trzema zakładkami
+    // czytałby się jako błąd układu.
+    //
+    // ⭐⭐ I TO JEST DOKŁADNIE TEN WARUNEK, KTÓREGO NIE SPEŁNIAŁA POPRZEDNIA WERSJA: widoczność paska zależy
+    // od rozpiętości POZIOMEJ, a pojawienie się paska zmienia wyłącznie wymiar PIONOWY (zabiera wysokość
+    // wierszowi 0 siatki). Te dwie wielkości są ortogonalne, więc sprzężenie zwrotne nie ma jak powstać —
+    // w odróżnieniu od `Paddingu`, gdzie rezerwacja zmieniała tę samą wielkość, od której zależała.
+    // ⛔ Nie wiązać widoczności tego paska z niczym, na co on sam wpływa.
+    private void UpdateTabStripScroll()
     {
-        var box = this.FindControl<SearchableComboBox>("TabOverflowBox");
         var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
-        var items = this.FindControl<ItemsControl>("TabStripItems");
-        if (box is null || scroll is null || items is null || _currentVm is null) return;
+        var bar = this.FindControl<ScrollBar>("TabStripHScroll");
+        if (scroll is null || bar is null || _currentVm is null) return;
 
         if (_currentVm.IsTabStripMultiRow)
         {
-            // ⭐ W trybie wielowierszowym przycisku NIE MA — i to jest istota decyzji D5/D7, nie oszczędność
-            //   miejsca: żadna zakładka nie chowa się za menu, więc licznik „ilu nie widać" nie ma podmiotu.
-            box.IsVisible = false;
+            // Tryb wielowierszowy przewija się PIONOWO własnym paskiem `ScrollViewera`, przy prawej
+            // krawędzi — odebrany przez użytkownika, więc nietknięty.
+            bar.IsVisible = false;
             return;
         }
 
-        var viewport = scroll.Viewport.Width;
-        var hidden = 0;
+        var span = scroll.Extent.Width - scroll.Viewport.Width;
 
-        foreach (var tab in _currentVm.WorkspaceTabs)
-        {
-            if (items.ContainerFromItem(tab) is not Control container) continue;
-            if (container.TranslatePoint(new Point(0, 0), scroll) is not { } origin) continue;
+        bar.IsVisible = span > 0.5;
+        bar.Minimum = 0;
+        bar.Maximum = Math.Max(0, span);
+        bar.ViewportSize = scroll.Viewport.Width;
+        bar.LargeChange = scroll.Viewport.Width;
+        bar.SmallChange = scroll.Viewport.Width * 0.25;
 
-            // Nie mieści się = wychodzi którąkolwiek krawędzią poza widoczny obszar. Zakładka przycięta
-            // w połowie jest tak samo nieczytelna jak zakładka całkiem poza ekranem.
-            if (origin.X < -0.5 || origin.X + container.Bounds.Width > viewport + 0.5) hidden++;
-        }
+        // ⚠ Wartość ustawiana bez pętli zwrotnej: `OnTabStripScroll` przepisuje ją w drugą stronę, więc
+        //   bez tego strażnika suwak i widok szarpałyby się nawzajem.
+        if (Math.Abs(bar.Value - scroll.Offset.X) > 0.5) bar.Value = scroll.Offset.X;
+    }
 
-        box.IsVisible = hidden > 0;
-        box.SelectionBoxText = hidden.ToString(CultureInfo.CurrentCulture);
+    private void OnTabStripScroll(object? sender, ScrollEventArgs e)
+    {
+        var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
+        if (scroll is null || sender is not ScrollBar bar) return;
+
+        if (Math.Abs(scroll.Offset.X - bar.Value) > 0.5)
+            scroll.Offset = scroll.Offset.WithX(bar.Value);
+    }
+
+    // ⭐⭐ PRZEWIJANIE KÓŁKIEM W TRYBIE JEDNOWIERSZOWYM (zgłoszenie odbiorcze).
+    //
+    // ⚠ `ScrollViewer` przewija kółkiem PIONOWO i tylko pionowo — w trybie wielowierszowym to jest dokładnie
+    // to, czego się oczekuje, więc tam nie robimy NIC i zostaje zachowanie wbudowane. W trybie jednowierszowym
+    // pionowe przewijanie jest wyłączone, więc kółko nie robiłoby nic; obrót zamieniamy na ruch poziomy.
+    //
+    // ⭐ Krok jest UŁAMKIEM WIDOCZNEGO OBSZARU, nie stałą liczbą pikseli ani szerokością zakładki: zakładki
+    //   mają różne szerokości (D6/§8.1 — nazw nie skracamy), więc „jedna zakładka" nie jest jednostką.
+    //   Ćwiartka widoku skaluje się sama z szerokością okna i nie wymaga żadnego tokenu.
+    private void OnTabStripPointerWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (_currentVm is null || _currentVm.IsTabStripMultiRow) return;
+
+        var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
+        if (scroll is null) return;
+
+        var span = scroll.Extent.Width - scroll.Viewport.Width;
+        if (span <= 0) return;
+
+        var step = scroll.Viewport.Width * 0.25;
+        var x = Math.Clamp(scroll.Offset.X - e.Delta.Y * step, 0, span);
+
+        scroll.Offset = scroll.Offset.WithX(x);
+        e.Handled = true;
     }
 
     // Sizes the results row for the active tab: saved height on the Query tab,

@@ -549,6 +549,70 @@ public class SettingsCenterVmTests
         });
     }
 
+    /// <summary>
+    /// ⭐ „Maximum rows" znika w trybie jednowierszowym — interfejs nie pokazuje ustawień, które w danym
+    /// trybie nic nie robią (decyzja użytkownika, 2026-08-03).
+    ///
+    /// <para>⚠⚠ Druga asercja jest ważniejsza od pierwszej: <b>ukrycie wiersza nie może skasować wartości.</b>
+    /// Ukrycie ustawienia i porzucenie go to dwie różne rzeczy, a mylą się bardzo łatwo — wystarczyłoby, żeby
+    /// `Compose` przestało czytać niewidoczny wiersz i liczba znikałaby z pliku po każdym przełączeniu trybu.
+    /// Test przechodzi przez PEŁNY obieg: ustaw → przełącz → wróć.</para>
+    /// </summary>
+    [Fact]
+    public void TabStripMaxRows_IsHiddenInSingleRow_ButItsValueSurvives()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+
+            vm.TabStripMode.Value = PreferenceOptions.TabStripModeMultiRow;
+            vm.TabStripMaxRows.EditText = "7";
+            vm.TabStripMaxRows.Commit();
+            Assert.True(vm.ShowTabStripMaxRows);
+
+            // ⚠⚠ Sama wartość właściwości NIE WYSTARCZY — czytana wprost jest poprawna nawet wtedy, gdy nic
+            //   o niej nie mówi, a wiązanie w widoku odpytuje ją WYŁĄCZNIE po `PropertyChanged`. To jest ta
+            //   sama luka, przez którą w §19.2 poprawny styl nigdy się nie namalował: mechanizm był dobry,
+            //   brakowało sygnału. Dlatego notyfikacja jest tu asercją, a nie założeniem.
+            var announced = false;
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(SettingsCenterViewModel.ShowTabStripMaxRows)) announced = true;
+            };
+
+            vm.TabStripMode.Value = PreferenceOptions.TabStripModeSingleRow;
+            Assert.False(vm.ShowTabStripMaxRows);
+            Assert.True(announced, "Zmiana trybu nie ogłosiła ShowTabStripMaxRows — widok nie odpyta.");
+
+            vm.TabStripMode.Value = PreferenceOptions.TabStripModeMultiRow;
+            Assert.True(vm.ShowTabStripMaxRows);
+            Assert.Equal(7, vm.TabStripMaxRows.Value);
+
+            // I to samo, co przetrwało w pamięci, musi być na dysku — inaczej „zachowana" znaczyłoby
+            // wyłącznie „do zamknięcia okna".
+            Assert.Equal(7, new PreferencesStore(dir).Load().TabStripMaxRows);
+        });
+    }
+
+    /// <summary>
+    /// ⚠ Tryb i filtr wyszukiwania to DWIE niezależne przyczyny ukrycia tego samego wiersza, więc żadna nie
+    /// może nadpisywać drugiej: fraza pasująca do wiersza nie ma go wskrzesić w trybie, w którym nic nie robi.
+    /// </summary>
+    [Fact]
+    public void TabStripMaxRows_StaysHiddenInSingleRow_EvenWhenTheSearchMatchesIt()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            vm.TabStripMode.Value = PreferenceOptions.TabStripModeSingleRow;
+
+            vm.SearchText = "maximum rows";
+
+            Assert.True(vm.TabStripMaxRows.IsVisible);   // filtr go przepuszcza…
+            Assert.False(vm.ShowTabStripMaxRows);        // …a tryb i tak go ukrywa
+        });
+    }
+
     /// <summary>Every category the catalog declares has a page the window can show — otherwise selecting it
     /// leaves the right pane blank, which is what a missing <c>IsVisible</c> property looks like.</summary>
     [Fact]

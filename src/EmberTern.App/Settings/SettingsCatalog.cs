@@ -359,9 +359,12 @@ public static class SettingsCatalog
                     [PreferenceOptions.TabStripModeSingleRow] = UiStrings.SettingsTabStripModeSingleRow,
                 }),
 
-            // ⚠ Stays VISIBLE and enabled in single-row mode, and that is a decision: the value is kept
-            // across a mode round trip (a mode is a view of the same workspace), so greying the row would
-            // suggest the number had been lost. Its description says which layout reads it.
+            // ⚠⚠ HIDDEN in single-row mode — ratified by the user (2026-08-03), and it OVERTURNS this etap's
+            // first decision, which kept the row visible on the grounds that the value survives a mode round
+            // trip. The user's rule is better: the interface does not show settings that do nothing in the
+            // current mode. ⭐ The VALUE is still kept — it is the ROW that disappears, not the number.
+            // The condition lives on the page (`SettingsCenterViewModel.ShowTabStripMaxRows`), because it is
+            // an AND with the search filter's own visibility and neither may overwrite the other.
             new SettingDescriptor(
                 SettingTabStripMaxRows,
                 CategoryTabs,

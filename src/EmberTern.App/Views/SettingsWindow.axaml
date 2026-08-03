@@ -339,13 +339,16 @@
                 </StackPanel>
               </Border>
 
-              <!-- ⚠⚠ Kontrolka numeryczna niesie SWÓJ WIERSZ jako DataContext (settings-center §17.4).
-                   Na DataContexcie strony pole wpisuje się poprawnie, pokazuje liczbę i NIE ZAPISUJE NIC —
-                   wszystkie trzy hooki (blur / Enter / digits-only) identyfikują z niego podmiot. -->
-              <Border Classes="settings-group"
-                      DataContext="{Binding TabStripMaxRows}" x:DataType="vm:NumericSettingViewModel"
-                      IsVisible="{Binding IsVisible}">
-                <StackPanel>
+              <!-- ⭐ Wiersz ZNIKA w trybie jednowierszowym — decyzja użytkownika (2026-08-03): interfejs nie
+                   pokazuje ustawień, które w danym trybie nic nie robią. ⚠ Sama LICZBA jest zachowywana;
+                   znika wiersz, nie wartość.
+                   ⚠⚠ `IsVisible` wisi na `Borderze`, który został na DataContexcie STRONY, bo warunek łączy
+                   dwie niezależne przyczyny (tryb + filtr wyszukiwania) i mieszka na stronie. DataContext
+                   wiersza schodzi poziom niżej — to wystarczy, bo znaczenie ma, żeby SWÓJ WIERSZ niósł
+                   `TextBox` (settings-center §17.4: na DataContexcie strony pole wpisuje się poprawnie,
+                   pokazuje liczbę i NIE ZAPISUJE NIC). -->
+              <Border Classes="settings-group" IsVisible="{Binding ShowTabStripMaxRows}">
+                <StackPanel DataContext="{Binding TabStripMaxRows}" x:DataType="vm:NumericSettingViewModel">
                   <TextBlock Classes="group-header" Text="{Binding Label}" />
                   <TextBlock Classes="field-label"
                              Text="{Binding Description}"

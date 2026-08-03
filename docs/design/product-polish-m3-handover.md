@@ -39,7 +39,7 @@
 | **Etap** | M0–M2c ✅ · **M3: iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ wycofana · 🔒 JĘZYK KOLORÓW WDROŻONY I ODEBRANY ✅** (K1–K7 + przegląd domykający + poprawka paska statusu, §19.15–§19.20). ⭐ **M3.1 ZAMKNIĘTE** · ⭐ **H‑3 ZAMKNIĘTE** · ⭐ **H‑5 ZAMKNIĘTE** (Commit/Rollback na własnych tokenach, K7) · ⭐ **§7.5 ZAMKNIĘTE** — zastąpione przez `color-language.md` |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7231**, zielony w trzech partycjach (**7120 + 57 + 54**). ⚠ Ten wiersz podawał kiedyś **7138 (7032 + 52 + 54)** — wartość sprzed rundy poprawek odbiorczych (`85c8747`, §21). **Mierz przed cytowaniem** |
+| **Suite** | **7233**, zielony w trzech partycjach (**7122 + 57 + 54**). ⚠ Ten wiersz podawał kiedyś **7138 (7032 + 52 + 54)** — wartość sprzed rundy poprawek odbiorczych (`85c8747`, §21). **Mierz przed cytowaniem** |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 | ⭐⭐ **NASTĘPNY KROK** | **M3.3c — menu kontekstowe zakładki** (pozycja 14 w planie §10): 8 pozycji wg §8.3. ⚠⚠ **Trzy pozycje zamykają wiele dokumentów naraz i KAŻDA musi przejść przez istniejącą bramkę Save / Discard / Cancel** — reguła #11, bramka ma dziś **trzy** wejścia (`RequestCloseTabAsync`, `ChoiceRequested`), menu jest czwartym. ⚠ Zero nowej chromy: style `ContextMenu`/`MenuItem` + `{app:MenuIcon}` + `{app:CommandGesture}` są gotowe (Keyboard Manager etap 5). ⭐ Pozycja *„Ustawienia zakładek…"* ma już cel — kategoria **Tabs** z M3.3b. Potem M3.4a → M3.4b → M3b → ⛔ brama §13.3 |
