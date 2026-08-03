@@ -259,7 +259,12 @@ odwołań.**
 
 | Token | Rola | Wartość |
 |---|---|---|
-| `ActionRunBrush` | **R‑1 Uruchom** | ⭐ **na razie równy `SuccessIconColor`** (`#6DBE7E` / `#2E8B4F`) — realizacja W4: osobny token, ten sam odcień, rozdzielenie możliwe później bez ruszania Commita |
+| ✅ `ActionRunBrush` | **R‑1 Uruchom** | ⭐ **na razie równy `SuccessIconColor`** (`#6DBE7E` / `#2E8B4F`) — realizacja W4: osobny token, ten sam odcień, rozdzielenie możliwe później bez ruszania Commita |
+
+⭐ **WDROŻONY w kroku K1 (2026-08-03)** — jako **własny `ActionRunColor`, nie alias** nad
+`SuccessIconColor`. Alias znaczyłby *„Uruchom to jest kolor sukcesu"*, więc przestrojenie zieleni
+Commita przesuwałoby po cichu także Execute — czyli to samo zlanie ról, które W4 kończy. Zapis
+i pomiar odbiorczy: `product-polish.md` **§19.15**.
 
 ### §7.4 ⚠ Duplikat do rozstrzygnięcia
 
@@ -357,7 +362,7 @@ iteracja czytała się jako wyszarzenie.
 
 | # | Krok | Klasa | Miejsc | Dlaczego tutaj |
 |---|---|---|---|---|
-| **K1** | **`ActionRunBrush`** — nowy token o wartości identycznej z `SuccessIconColor`, podstawiony pod Execute procedury / funkcji / Start trace | **neutralny** | 3 | ⭐ **Zero zmiany wizualnej** (ta sama wartość), a realizuje W4 i daje R‑1 własny token. Najbezpieczniejszy możliwy start; pomiar dowodzi zerowej różnicy |
+| ✅ **K1** | **`ActionRunBrush`** — nowy token o wartości identycznej z `SuccessIconColor`, podstawiony pod Execute procedury / funkcji / Start trace | **neutralny** | 3 | ⭐ **WYKONANY 2026-08-03** (`product-polish.md` §19.15). Zero zmiany wizualnej — pomiar potwierdził identyczność wartości w obu motywach; 3 konsumentów zgodnie z planem |
 | **K2** | **Destrukcja: 🟡 → 🔴** — Usuń połączenie · Usuń zapytanie · Wyczyść wszystkie zapytania | wizualny | 3 | ⭐⭐ **Najbardziej oczywisty zysk w całym planie: użytkownik zgłosił to SAM, patrząc na ekran.** Ta sama operacja przestaje mieć dwa kolory. Realizacja W5 |
 | **K3** | **Edytuj → ⚪** — Procedure, Function (dziś 🟡), profil importu (dziś 🔵) | wizualny | 3 | żółty na „Edytuj" **ostrzega przed czymś, co nie jest groźne** — zdjęcie go jest czytelnym zyskiem, a nie tylko porządkiem |
 | **K4** | **Wskaż plik: `AccentIconBrush` → `AccentBrush`** (Data Import) | wizualny | 1 | dwa odcienie niebieskiego dla tej samej roli R‑6; różnica minimalna, ryzyko minimalne |

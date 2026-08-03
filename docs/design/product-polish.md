@@ -5737,6 +5737,68 @@ Build 0/0 · **7133** zielony w trzech partycjach (**7031 + 48 + 54**) · smoke 
 
 ---
 
+### §19.15 Iteracja 9 (K1) — `ActionRunBrush`, rola R‑1 dostaje własny token (2026-08-03)
+
+> Pierwszy krok planu wdrożenia języka kolorów (`color-language.md` §11.2). ⭐ **Krok NEUTRALNY
+> wizualnie** (§11.1) — jedyna klasa kroków, która nie podlega R14, bo nie może pogorszyć UX: nic
+> na ekranie się nie zmienia. Odbiór to **pomiar zerowej różnicy**, nie ocena wyglądu.
+
+#### §19.15.1 Co zrobiono
+
+Nowy token roli **R‑1 „Uruchom"** — `ActionRunColor` + `ActionRunBrush` w **obu** słownikach
+`Colors.axaml` — podstawiony pod trzy ikonowe wystąpienia tej roli: **Execute procedury** i
+**Execute funkcji** (`MainWindow.axaml`) oraz **Start trace** (`TraceMonitorTabView.axaml`).
+
+⚠ **Execute SQL i Run script pozostają nietknięte i to nie jest przeoczenie** — oba są wariantem
+**głównym** (`Classes="primary"`, ikona `OnAccentBrush`), więc rolę niesie tam wypełnienie przycisku,
+nie ikona (§1.1 + §3.1 języka). Zmierzone: 5 przycisków „Uruchom", z czego 2 na `primary`.
+
+#### §19.15.2 ⭐ Jedno rozstrzygnięcie implementacyjne — własny `Color`, nie alias
+
+Token można było zapisać dwojako. Wybrano **własny klucz koloru z powtórzoną wartością**, nie
+`Color="{StaticResource SuccessIconColor}"`, i to jest istota decyzji **W4**:
+
+| Wariant | Skutek |
+|---|---|
+| alias nad `SuccessIconColor` | ⛔ „Uruchom **to jest** kolor sukcesu" — przestrojenie zieleni Commita **przesuwa po cichu także Execute**. Czyli dokładnie to zlanie ról, które W4 kończy |
+| ⭐ własny `ActionRunColor` | dwie role, dwie wartości, dziś celowo równe. Rozdzielenie odcieni w przyszłości to **jedna linijka** i nie dotyka drugiej roli |
+
+Koszt: jedna wartość zapisana dwa razy w katalogu — ⚠ **w katalogu, a nie w widoku**, więc reguła
+UI #1 („żadnych kolorów w widokach") nie jest naruszona. Powód jest zapisany komentarzem **w miejscu**,
+bo „ujednolicenie tych dwóch linijek przez alias" wygląda jak porządkowanie, a jest cofnięciem W4.
+
+#### §19.15.3 Pomiar odbiorczy — dowód zerowej różnicy wizualnej
+
+| Motyw | `SuccessIconColor` | `ActionRunColor` | Różnica |
+|---|---|---|---|
+| Dark | `#6DBE7E` | `#6DBE7E` | **brak** |
+| Light | `#2E8B4F` | `#2E8B4F` | **brak** |
+
+Konsumenci `ActionRunBrush`: **3** (dokładnie te z planu). Konsumenci `SuccessIconBrush`: **33 → 30**
+— pozostają Commit (toolbar, Script Executor, Data Import), Validate, chipy zdrowia sesji, wiersze
+INSERT w Trace, werdykt Performance. ⭐ Żadne z nich nie jest rolą R‑1, co jest właśnie tym, co K1
+rozdziela.
+
+#### §19.15.4 ⛔ Czego test świadomie NIE przypina
+
+`ActionRunBrush_IsItsOwnRoleToken_InBothThemes` pilnuje **dwóch trwałych** faktów: token rozwiązuje
+się w obu motywach (reguła 3 — token w jednym słowniku kompiluje się i nie maluje nic w drugim), oraz
+`ActionRunColor` jest **osobnym kluczem**, a nie aliasem (właściwość W4).
+
+⛔ **Nie przypina równości z `SuccessIconColor`, mimo że dziś zachodzi.** Ta równość jest chwilowa
+**z założenia** (§7.3 języka: *„na razie ten sam odcień"*), więc przypięta byłaby testem pilnującym,
+żeby projekt się nie wydarzył — zablokowałaby dokładnie tę zmianę, dla której token powstał. Zerowa
+różnica jest **jednorazowym pomiarem odbiorczym** (§19.15.3), nie inwariantem. ⭐ Reguła ogólna:
+*wartość, która ma się rozejść, nie jest asercją — jest pomiarem z datą.*
+
+#### §19.15.5 Stan
+
+Build 0/0 · **7134** zielony w trzech partycjach (**7031 + 49 + 54**, +1) · smoke czysty.
+⏸ Następny krok: **K2** — destrukcja 🟡 → 🔴 (`color-language.md` §11.2). ⚠ To już krok **wizualny**,
+więc podlega R14 i wymaga obejrzenia na żywo.
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:

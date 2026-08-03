@@ -1078,6 +1078,41 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// ⭐ Język kolorów, krok K1 — rola <b>R‑1 „Uruchom"</b> ma WŁASNY token w obu motywach
+    /// (<c>color-language.md</c> §3, §7.3, §11.2).
+    ///
+    /// <para>⭐ Test pilnuje dwóch rzeczy i obie są trwałe. Po pierwsze <c>ActionRunBrush</c> istnieje
+    /// w Dark i w Light — token obecny tylko w jednym słowniku kompiluje się, renderuje w palecie,
+    /// której akurat używa autor, i nie maluje nic w drugiej (reguła 3 UI; ta sama klasa błędu co
+    /// gotcha #250). Po drugie <c>ActionRunColor</c> jest <b>osobnym kluczem</b>, a nie aliasem
+    /// <c>{StaticResource SuccessIconColor}</c> — i to jest cała treść decyzji W4: alias znaczyłby
+    /// „Uruchom to kolor sukcesu", więc przyszłe przestrojenie zieleni Commita przesunęłoby po cichu
+    /// także Execute.</para>
+    ///
+    /// <para>⛔ Test świadomie NIE przypina równości <c>ActionRunColor == SuccessIconColor</c>, choć
+    /// dziś zachodzi. Ta równość jest <b>chwilowa z założenia</b> (§7.3: „na razie ten sam odcień") —
+    /// przypięta stałaby się blokadą dokładnie tej zmiany, dla której token powstał, czyli testem
+    /// pilnującym, żeby projekt się nie wydarzył. Zerowa różnica wizualna kroku K1 jest
+    /// <b>jednorazowym pomiarem odbiorczym</b> (<c>product-polish.md</c> §19.15), nie inwariantem.</para>
+    /// </summary>
+    [Fact]
+    public async Task ActionRunBrush_IsItsOwnRoleToken_InBothThemes()
+    {
+        await _session.Dispatch(() =>
+        {
+            foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                var brush = ThemeToken<SolidColorBrush>("ActionRunBrush", variant);
+                Assert.Equal(255, brush.Color.A);
+
+                // Własny klucz koloru — dowód, że rola nie jest aliasem koloru sukcesu (W4).
+                var own = ThemeToken<Color>("ActionRunColor", variant);
+                Assert.Equal(own, brush.Color);
+            }
+        }, default);
+    }
+
+    /// <summary>
     /// The same lookup for a THEME-SCOPED resource. ⚠ Measured, and worth knowing: the variant-less
     /// <see cref="Token{T}"/> above cannot see anything declared inside <c>ThemeDictionaries</c> — it reports the
     /// key as missing. That is precisely the line between the two colour-free dictionaries added in M2a

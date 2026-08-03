@@ -1170,7 +1170,9 @@
               <!-- Procedure: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
                       Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+                <!-- Rola R‑1 „Uruchom" (`color-language.md` §3). Ten sam odcień co dotąd — K1 podmienia
+                     wyłącznie token, żeby „Uruchom" i „Zatwierdź" przestały dzielić jeden (W4). -->
+                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource ActionRunBrush}" />
               </Button>
               <!-- Debugger entry point (Stage X / D5) — same launch as the sidebar "Debug procedure…". -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureDebugTooltip}"
@@ -1210,7 +1212,8 @@
               <!-- Function: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionExecuteTooltip}"
                       Command="{Binding ActiveFunctionDetail.ExecuteFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+                <!-- Rola R‑1 „Uruchom" — patrz Execute procedury wyżej. -->
+                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource ActionRunBrush}" />
               </Button>
               <!-- Debugger entry point (D-function) — same launch as the sidebar "Debug function…"; the
                    function runs as the debug root (Return group in Variables). -->

@@ -117,6 +117,15 @@
            conveyed by button Opacity, not a separate color. -->
       <Color x:Key="AccentIconColor">#5B9BD5</Color>
       <Color x:Key="SuccessIconColor">#6DBE7E</Color>
+      <!-- ⭐ Język kolorów / rola R‑1 „Uruchom" (`color-language.md` §3, §7.3 — krok K1).
+           „Uruchom" i „Zatwierdź transakcję" to DWIE role (decyzja W4), więc mają dwa tokeny.
+           ⚠ Wartość jest DZIŚ CELOWO IDENTYCZNA z `SuccessIconColor` — K1 jest krokiem neutralnym
+           wizualnie (§11.1) i nie wolno mu nic przesunąć na ekranie.
+           ⛔ To NIE jest alias przez `{StaticResource SuccessIconColor}`, i to jest istota W4: alias
+           znaczyłby „Uruchom to kolor sukcesu", więc przestrojenie zieleni Commita przesunęłoby
+           po cichu także Execute — czyli dokładnie to zlanie ról, które W4 kończy. Rozdzielenie
+           odcieni w przyszłości jest zmianą JEDNEJ linijki i nie dotyka drugiej roli. -->
+      <Color x:Key="ActionRunColor">#6DBE7E</Color>
       <Color x:Key="DangerIconColor">#D77373</Color>
       <Color x:Key="WarningIconColor">#DBA13C</Color>
       <Color x:Key="InfoIconColor">#5BA7D0</Color>
@@ -181,6 +190,7 @@
 
       <SolidColorBrush x:Key="AccentIconBrush" Color="{StaticResource AccentIconColor}" />
       <SolidColorBrush x:Key="SuccessIconBrush" Color="{StaticResource SuccessIconColor}" />
+      <SolidColorBrush x:Key="ActionRunBrush" Color="{StaticResource ActionRunColor}" />
       <SolidColorBrush x:Key="DangerIconBrush" Color="{StaticResource DangerIconColor}" />
       <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
       <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
@@ -403,6 +413,9 @@
            keys; see the Dark dictionary for the mapping. -->
       <Color x:Key="AccentIconColor">#2D6BBF</Color>
       <Color x:Key="SuccessIconColor">#2E8B4F</Color>
+      <!-- Rola R‑1 „Uruchom" — patrz komentarz w słowniku Dark. Wartość dziś celowo identyczna
+           z `SuccessIconColor` motywu jasnego (krok K1 nie zmienia niczego na ekranie). -->
+      <Color x:Key="ActionRunColor">#2E8B4F</Color>
       <Color x:Key="DangerIconColor">#C23B3B</Color>
       <Color x:Key="WarningIconColor">#B5790E</Color>
       <Color x:Key="InfoIconColor">#2A7AA8</Color>
@@ -460,6 +473,7 @@
 
       <SolidColorBrush x:Key="AccentIconBrush" Color="{StaticResource AccentIconColor}" />
       <SolidColorBrush x:Key="SuccessIconBrush" Color="{StaticResource SuccessIconColor}" />
+      <SolidColorBrush x:Key="ActionRunBrush" Color="{StaticResource ActionRunColor}" />
       <SolidColorBrush x:Key="DangerIconBrush" Color="{StaticResource DangerIconColor}" />
       <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
       <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />

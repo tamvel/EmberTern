@@ -39,10 +39,10 @@
 | **Etap** | M0 ✅ · M1 ✅ · M2a ✅ · M2b ✅ · M2c ✅ · **M3 — iteracja 0 ✅ · M3.1a–M3.1f ✅ · M3.2a ✅ · M3.2b ⛔ WYCOFANA** (M3.1 odebrane w całości; M3.2a odebrane **dwiema rundami wycofań**; M3.2b **cofnięta w całości** — §19.14). ⭐ **M3.1 ZAMKNIĘTE**. ⭐ **H‑3 ZAMKNIĘTE** — pasek tytułu nie ma ani jednej bramki przesuwającej cokolwiek |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7133**, zielony w trzech partycjach (**7031 + 48 + 54**) |
+| **Suite** | **7134**, zielony w trzech partycjach (**7031 + 49 + 54**) |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| **NASTĘPNY KROK** | ⭐⭐ **`color-language.md` §11 / KROK K1** — nowy token `ActionRunBrush` o wartości identycznej z `SuccessIconColor`, podstawiony pod Execute procedury/funkcji i Start trace. **Krok NEUTRALNY wizualnie** (zero zmiany na ekranie), więc najbezpieczniejszy możliwy start. ⛔ **Projekt języka jest ZAAKCEPTOWANY — nie projektuj go ponownie, wykonuj §11 krok po kroku.** ⛔ **R14: jeden krok = jedna iteracja = jedno obejrzenie na żywo** |
+| **NASTĘPNY KROK** | ⭐⭐ **`color-language.md` §11 / KROK K2** — destrukcja 🟡 → 🔴 (Usuń połączenie · Usuń zapytanie · Wyczyść wszystkie zapytania), realizacja W5. ⚠ **To już krok WIZUALNY**, więc podlega **R14** i wymaga obejrzenia na żywo w obu motywach. ⭐ **K1 wykonany 2026-08-03** (`product-polish.md` §19.15) — R‑1 ma własny token `ActionRunBrush`, zero zmiany na ekranie. ⛔ **Projekt języka jest ZAAKCEPTOWANY — nie projektuj go ponownie, wykonuj §11 krok po kroku.** ⛔ **R14: jeden krok = jedna iteracja = jedno obejrzenie na żywo** |
 | **⏸ ZAMKNIĘTE PRZEZ R13** | Dług „sekcja 3 toolbara drga przy przełączaniu pod-zakładek" (§19.10.3) **nie wymaga już decyzji** — R13 rozstrzyga go z góry: nie rezerwujemy miejsca na element, którego w danym kontekście nie będzie. Sekcja 3 zostaje jak jest |
 | **⏸ DROBIAZG DO WZIĘCIA PO DRODZE** | Wyłączone komórki Size/Scale/SubType/Charset dostały `Stretch`, ale **tło nadal maluje `FluentBridge`** (`TextControlBackgroundDisabled` → `BackgroundColor`), więc setter `Background="Transparent"` go nie zdejmuje. Jeśli po QA nadal widać pudełko — trasa jest przez **Bridge**, nie przez setter (reguła 8 §16). Zapis: §19.8.4 |
 

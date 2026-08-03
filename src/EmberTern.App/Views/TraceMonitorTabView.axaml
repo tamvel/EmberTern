@@ -62,7 +62,9 @@
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
       <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
         <Button Classes="icon" Command="{Binding StartCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStart}">
-          <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+          <!-- Rola R‑1 „Uruchom" (`color-language.md` §3): Start trace uruchamia operację, więc niesie
+               ten sam token co Execute procedury — nie kolor sukcesu. Odcień bez zmiany (krok K1). -->
+          <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource ActionRunBrush}" />
         </Button>
         <!-- Pause is enabled only while Running; once paused it disables and Start (which doubles
              as Resume) lights up. Two distinct buttons, never both usable at once. -->
