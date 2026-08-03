@@ -962,7 +962,8 @@
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
                     Command="{Binding RefreshDataPreviewCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Foreground="{DynamicResource InfoIconBrush}" Width="14" Height="14" />
+              <!-- Rola R‑7 (K6) — patrz komentarz przy odświeżaniu drzewa metadanych w MainWindow. -->
+              <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Width="14" Height="14" />
             </Button>
             <!-- Export the table data via the shared Export Framework (default = the whole table). -->
             <Button Classes="icon" Click="OnDataExportClick" IsEnabled="{Binding CanExportData}"

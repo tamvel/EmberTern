@@ -177,8 +177,15 @@
           <Button Classes="icon"
                   ToolTip.Tip="{Binding Metadata.RefreshTooltip}"
                   Command="{Binding Metadata.RefreshCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
-                              Foreground="{DynamicResource InfoIconBrush}" />
+            <!-- ⭐⭐ Rola R‑7 „Narzędzie" (krok K6) — i to jest krok, który WZMACNIA niebieski, a nie
+                 wygasza pasek. W tym samym pasku niebieski niesie rolę R‑6 „wejście do narzędzia"
+                 (Activity Monitor, Session Manager, Global Search, Script Executor, Data Import — pięć
+                 przycisków, wszystkie `AccentBrush`). Odświeżenie NIE otwiera modułu: działa na widoku,
+                 który już jest na ekranie. Dopóki było niebieskie, jeden kolor znaczył w jednym pasku
+                 dwie różne rzeczy.
+                 ⛔ To NIE jest odbarwianie narzędzi paska tytułu — sześć wejść do modułów ZOSTAJE
+                 kolorowych (`color-language.md` §11.3). Tamto zrobiło M3.2b i zostało wycofane. -->
+            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
           </Button>
           <!-- Security Manager — sits between the Connection/Database section and the
                Create-Object section, separated on both sides (it's a tool, not a
@@ -1107,11 +1114,16 @@
                    rodzaju zakładki jest tu ŚWIADOMIE ZAAKCEPTOWANYM kompromisem. -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
                       Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
-                <controls:SvgIcon Data="{StaticResource Icon.Check}" Foreground="{DynamicResource SuccessIconBrush}" />
+                <!-- ⭐ Role R‑2 / R‑3 na własnych tokenach (decyzja DD, krok K7). Wartości tokenów są
+                     równe dotychczasowym `Success`/`Danger`, więc wygląd się nie zmienia — zmienia się
+                     to, że przestrojenie zieleni „sukcesu" albo czerwieni „destrukcji" nie rusza już
+                     decyzji transakcyjnej. ⚠ Rollback NIE jest tym samym co Revert w edytorze (§3.2):
+                     ten wycofuje pracę ZATWIERDZALNĄ, tamten porzuca bufor i jest neutralny. -->
+                <controls:SvgIcon Data="{StaticResource Icon.Check}" Foreground="{DynamicResource CommitButtonBrush}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
                       Command="{Binding RollbackAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
-                <controls:SvgIcon Data="{StaticResource Icon.Undo}" Foreground="{DynamicResource DangerIconBrush}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" Foreground="{DynamicResource RollbackButtonBrush}" />
               </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep2Visible}" />

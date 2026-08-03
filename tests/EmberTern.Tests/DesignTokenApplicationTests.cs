@@ -1113,6 +1113,45 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// ⭐ Język kolorów, krok K7 — role <b>R‑2 „Zatwierdź"</b> i <b>R‑3 „Wycofaj transakcję"</b> mają
+    /// wartość <b>dostrojoną OSOBNO dla każdego motywu</b> (<c>color-language.md</c> §7.2).
+    ///
+    /// <para>⚠⚠ To jest dokładnie ten defekt, od którego §7.2 kazało zacząć K7, a nie od podmiany
+    /// odwołań: oba tokeny niosły surowy Material Design (<c>#4CAF50</c> / <c>#F44336</c>)
+    /// <b>identyczny w Dark i Light</b>, wstawiony na zapas i nigdy nieużyty. Ten sam odcień nie ma
+    /// poprawnego kontrastu na obu tłach, więc przyjęcie ich wprost dałoby regres kontrastu w motywie
+    /// jasnym — klasa problemu V‑1.</para>
+    ///
+    /// <para>⭐ Test pilnuje WARUNKU, nie wartości: „te dwa tokeny są dostrojone per motyw". Wartości
+    /// wolno przestrajać (po to K7 nadał rolom własne tokeny), ale powrót do jednej wartości w obu
+    /// słownikach jest powrotem defektu — i jest niewidoczny dla buildu, bo token istnieje w obu
+    /// motywach i poprawnie się rozwiązuje.</para>
+    ///
+    /// <para>⛔ Nie porównuje z <c>SuccessIconColor</c> / <c>DangerIconColor</c>, choć dziś są równe —
+    /// z tego samego powodu, dla którego nie robi tego pin dla <c>ActionRunBrush</c>: równość jest
+    /// stanem bieżącym, a rozdzielenie ról jest właśnie tym, po co te tokeny powstały.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("CommitButtonBrush")]
+    [InlineData("RollbackButtonBrush")]
+    public async Task TransactionRoleBrush_IsTunedPerTheme(string key)
+    {
+        await _session.Dispatch(() =>
+        {
+            var dark = ThemeToken<SolidColorBrush>(key, ThemeVariant.Dark).Color;
+            var light = ThemeToken<SolidColorBrush>(key, ThemeVariant.Light).Color;
+
+            Assert.Equal(255, dark.A);
+            Assert.Equal(255, light.A);
+            Assert.True(dark != light,
+                $"`{key}` niesie tę samą wartość ({dark}) w obu motywach. Token roli transakcyjnej stoi "
+                + "na chromie, która zmienia się z motywem, więc jedna wartość nie może mieć poprawnego "
+                + "kontrastu na obu tłach (color-language.md §7.2 — powód, dla którego K7 zaczął się od "
+                + "wartości, a nie od podmiany odwołań).");
+        }, default);
+    }
+
+    /// <summary>
     /// The same lookup for a THEME-SCOPED resource. ⚠ Measured, and worth knowing: the variant-less
     /// <see cref="Token{T}"/> above cannot see anything declared inside <c>ThemeDictionaries</c> — it reports the
     /// key as missing. That is precisely the line between the two colour-free dictionaries added in M2a

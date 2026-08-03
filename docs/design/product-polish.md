@@ -5863,6 +5863,105 @@ Build 0/0 · **7135** zielony w trzech partycjach (**7032 + 49 + 54**, +1) · sm
 
 ---
 
+### §19.17 Iteracja 11 (K3–K7) — dokończenie języka kolorów w jednym przebiegu (2026-08-03)
+
+> ⭐ **Zmiana trybu pracy, na polecenie użytkownika:** *„Mamy już zaakceptowany `color-language.md`
+> i nie chcę dalej pracować w tak drobnych iteracjach. Potraktuj K2–K7 jako jedną implementację…
+> Pełne QA zrobimy dopiero po zakończeniu całego etapu."* Powrót do użytkownika tylko w trzech
+> wypadkach: dokument nie rozstrzyga · realny konflikt projektowy · zmiana pogorszyłaby produkt mimo
+> zgodności z dokumentem. ⭐ **Dwa z tych trzech wypadków wystąpiły** i są niżej (§19.17.2, §19.17.5).
+
+#### §19.17.1 Wykonane
+
+| Krok | Miejsc | Co |
+|---|---|---|
+| **K3** Edytuj → ⚪ | **1** | zmiana nazwy profilu w Data Import |
+| **K4** Wskaż plik → `AccentBrush` | 1 | wybór pliku źródłowego (Data Import) |
+| **K6** Odśwież → ⚪ | 3 | drzewo metadanych · dane tabeli · Data Import |
+| **K7** Commit / Rollback → własne tokeny | 6 + 2 tokeny × 2 motywy | toolbar · Script Executor · Data Import |
+| **§7.4** Pause → `WarningIconBrush` | 1 | Trace (przewidziane w §11.3 jako „przy okazji") |
+
+#### §19.17.2 ⚠⚠ Pomiar obalił TRZY wiersze §8.2 — i to jest wynik, nie brak
+
+**K5 odpadł w całości, a K3 skurczył się z 3 miejsc do 1.** Przyczyna jest jedna i warto ją zapamiętać:
+
+> ⭐⭐ **Inwentarz §20 zliczał `SvgIcon` po TOKENIE, więc glif STANU trafił do tabeli AKCJI.**
+
+* „Edytuj / Dodaj (Procedure, Function)" to w rzeczywistości wiersze `UpdateChange` / `InsertChange`
+  w **karcie podsumowania zmian** („Tabela X: +3 wstawione, ~2 zmienione, −1 usunięty"). To
+  **komunikat o stanie**, który §2 języka wyklucza wprost.
+* „Szukaj w widoku (Trace)" to **glif wewnątrz pola tekstowego**, nie przycisk. Tu §0.5 odpowiada
+  wprost „nie": pociemnienie z `SubtleForegroundBrush` do `NeutralIconBrush` uczyniłoby **dekorację
+  głośniejszą od treści**, którą oznacza.
+* „Edit Connection" był **już neutralny** — pozycja istniała tylko w tabeli.
+
+⭐ **Lekcja ogólna:** *pomiar po nośniku (ikona + token) nie odróżnia roli od stanu; robi to dopiero
+kontekst, w którym element stoi.* §8.2 języka poprawione w miejscu, z tym zdaniem jako konsekwencją
+dla następnych prac.
+
+#### §19.17.3 ⭐ K6 okazał się odwrotnością swojej reputacji
+
+Plan oznaczył K6 jako **największe ryzyko** („dotyka paska tytułu, czyli powierzchni, na której M3.2b
+zostało odrzucone"). Zmierzone na miejscu — jest przeciwnie, i to jest krok, który **wzmacnia**
+niebieski zamiast wygaszać pasek:
+
+W tym samym pasku niebieski niesie rolę **R‑6 „wejście do narzędzia"**: Activity Monitor, Session
+Manager, Global Search, Script Executor, Data Import — **pięć przycisków, wszystkie `AccentBrush`**.
+Odświeżenie **nie otwiera modułu**; działa na widoku, który już jest na ekranie. Dopóki było
+niebieskie, **jeden kolor znaczył w jednym pasku dwie różne rzeczy**.
+
+⛔ **To nie jest to samo co M3.2b:** tamto **odbarwiło sześć wejść do modułów**; ten krok ich nie
+dotyka (§11.3 — zostają kolorowe) i zdejmuje kolor z jedynego elementu, który go **udawał**.
+
+#### §19.17.4 ⭐ K7 zaczęty od wartości — i dzięki temu wyszedł neutralny
+
+§7.2 kazało zacząć od nadania tokenom wartości per motyw, nie od podmiany odwołań. Zmierzone:
+`CommitButtonForeground` / `RollbackButtonForeground` niosły surowy Material (`#4CAF50` / `#F44336`),
+**identyczny w Dark i Light**, wstawiony na zapas i **bez ani jednego konsumenta**.
+
+Nadane wartości = **dostrojone pary `SuccessIconColor` / `DangerIconColor`**, czyli dokładnie to, czym
+Commit i Rollback malowały się dotąd. ⇒ **K7 jest krokiem NEUTRALNYM wizualnie** (klasa §11.1),
+a role dostają własne tokeny — ten sam zabieg co `ActionRunColor` w K1.
+
+⛔ **Nie wymyślono nowych odcieni**, i to jest decyzja: wymyślenie ich byłoby projektowaniem, którego
+dokument nie robi, i wnosiłoby ryzyko kontrastu w motywie jasnym — czyli dokładnie to, przed czym
+§7.2 ostrzega. Rozdzielenie odcieni jest teraz możliwe jako osobna, świadoma decyzja.
+
+⭐ Strażnik `TransactionRoleBrush_IsTunedPerTheme` pilnuje **warunku, nie wartości**: powrót do jednej
+wartości w obu słownikach jest powrotem defektu i jest niewidoczny dla buildu (token istnieje i
+poprawnie się rozwiązuje w obu motywach).
+
+#### §19.17.5 ⏸ Connect — jedyna pozycja §8.2, której świadomie NIE wykonano
+
+§8.2 mówi **Connect → R‑7 ⚪** („nie otwiera modułu, działa na zaznaczeniu") i formalnie ma rację.
+**Nie wykonane**, bo bramka §0.5 odpowiada **„nie wiadomo"**, a to jest odpowiedź odmowna:
+
+Connect jest **główną akcją tego paska**, a niebieski jest dziś jedyną rzeczą odróżniającą go od
+Edytuj / Kopiuj / Rozłącz / Połącz ponownie. Po zdjęciu koloru lewa część paska staje się jednolicie
+szara poza czerwonym koszem — **rozpoznanie może się spowolnić**, a to jest dokładnie mechanizm,
+przez który M3.2b zostało odrzucone. ⚠ Zauważalne: **§11 sam nie ponumerował tego wiersza**, choć
+ponumerował osiem pozostałych — prawdopodobnie z tego samego powodu.
+
+Zapisane jako **O‑4** w §9 języka, do rozstrzygnięcia w §13.3 **na całym pasku naraz**. Przy okazji
+odnotowane **O‑5**: Security Manager niesie `IconColor_Role` (kolor RODZAJU) mimo bycia przyciskiem
+R‑6 — możliwy świadomy wyjątek, jedyny taki wśród sześciu narzędzi.
+
+#### §19.17.6 Stan produktu po całym wdrożeniu K1–K7
+
+Zmierzone: **230 `SvgIcon` w widokach, 87 z kolorem.** Wszystkie przyciski akcji są w rolach języka
+poza **trzema świadomie otwartymi**: Connect (**O‑4**), Debugger Continue (**O‑1**),
+Comment/Uncomment ×4 (**O‑2**). Reszta koloru to `IconColor_*` (S1 — rodzaj), `OnAccentBrush`
+(wariant `primary`, S4), chipy stanu i wiersze podsumowań (§2).
+
+⭐ **Ani jednego żółtego przycisku usuwania · ani jednego „Odśwież" w kolorze · jedno „Uruchom" ·
+jeden token dla R‑5 · Commit i Rollback na własnych rolach.**
+
+Build 0/0 · **7137** zielony w trzech partycjach (**7032 + 51 + 54**, +2) · smoke czysty.
+⏸ **Cały etap czeka teraz na PEŁNE QA WIZUALNE** — zgodnie z ustaleniem oceniamy spójność
+kolorystyczną całej aplikacji naraz, w obu motywach, a nie krok po kroku.
+
+---
+
 ## §20 INWENTARZ AKCJI I KOLORÓW — pomiar całego produktu (2026-08-02)
 
 > ⭐⭐ **To jest POMIAR, nie projekt.** Powstał na wyraźne polecenie użytkownika po wycofaniu M3.2b:

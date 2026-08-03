@@ -70,8 +70,9 @@
         <Button Classes="flat" Command="{Binding CommitScriptCommand}"
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptCommitTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
+            <!-- Role R‑2 / R‑3 na własnych tokenach (K7) — patrz MainWindow. Wygląd bez zmiany. -->
             <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
-                              Foreground="{DynamicResource SuccessIconBrush}" />
+                              Foreground="{DynamicResource CommitButtonBrush}" />
             <TextBlock Text="{x:Static app:UiStrings.ScriptCommit}" />
           </StackPanel>
         </Button>
@@ -79,7 +80,7 @@
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptRollbackTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
-                              Foreground="{DynamicResource DangerIconBrush}" />
+                              Foreground="{DynamicResource RollbackButtonBrush}" />
             <TextBlock Text="{x:Static app:UiStrings.ScriptRollback}" />
           </StackPanel>
         </Button>

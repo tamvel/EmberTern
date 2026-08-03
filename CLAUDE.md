@@ -431,7 +431,7 @@ noted.
   SESSION FROM
   [docs/design/product-polish-m3-handover.md](docs/design/product-polish-m3-handover.md) + the new
   [docs/design/color-language.md](docs/design/color-language.md) — the M2c handover below is CLOSED.**
-  Build 0/0; suite **7135** (7032 + 49 + 54); smoke clean. **⚠ Six commits await push on the user's
+  Build 0/0; suite **7137** (7032 + 51 + 54); smoke clean. **⚠ Seven commits await push on the user's
   decision.**
   **M3.1 (Status Bar 2.0) is CLOSED and accepted** — four sections, rail, transaction chip with elapsed
   time, Debug/Trace chips, progress section + one reference operation (§19.0–§19.9).
@@ -483,7 +483,39 @@ noted.
   — "no" or "don't know" means STOP and come back with a proposal.** Conformance to a role is
   necessary, never sufficient; *"it now matches the language"* is **not an answer to that question** —
   it was M3.2b's only justification. ⭐ And if a rule turns out to make the UX worse, **the rule in the
-  document gets fixed, not the implementation defended.** ⏸ Next after acceptance: **K3** (Edytuj → ⚪).
+  document gets fixed, not the implementation defended.**
+  **⭐⭐ K3–K7 ARE DELIVERED TOO (2026-08-03, §19.17) — THE COLOUR LANGUAGE IS FULLY ROLLED OUT; the whole
+  stage now awaits ONE full visual QA.** The user changed the working mode on accepting K2: small
+  step-by-step iterations held *while the language was being built*; once accepted, K2–K7 ran as **one
+  implementation**, returning only when the document does not decide, a real design conflict appears, or
+  a change would worsen the product despite conforming. ⛔ R14 no longer governs **tempo**; its content
+  lives on in §0.5.
+  **⚠⚠ MEASUREMENT OVERTURNED THREE ROWS OF THE LANGUAGE'S OWN §8.2, and that is the iteration's most
+  transferable finding: the §20 inventory counted `SvgIcon` BY TOKEN, so a STATE glyph landed in the
+  ACTIONS table.** "Edytuj / Dodaj (Procedure, Function)" are `UpdateChange`/`InsertChange` rows in a
+  change-summary card — messages, which §2 excludes; "Szukaj w widoku" is a glyph **inside a TextBox**,
+  where darkening it would make a decoration louder than its content. ⇒ **K5 dropped to zero sites and
+  K3 shrank 3 → 1.** ⭐ The rule: *a measurement by CARRIER (icon + token) cannot tell a role from a
+  state — only the context the element sits in can.*
+  **⭐ K6 turned out to be the opposite of its reputation.** The plan called it the biggest risk
+  ("touches the titlebar"); measured, it **strengthens** blue instead of greying the bar — in that same
+  strip blue carries R‑6 "entry into a tool" (5 buttons), and Refresh opens nothing, so one colour meant
+  two things. ⛔ Unlike M3.2b it does **not** touch the six module entries, which stay coloured.
+  **⭐ K7 came out visually NEUTRAL because §7.2's order was obeyed** — values first, references second.
+  The two tokens carried raw Material (`#4CAF50`/`#F44336`) **identical in both themes** with zero
+  consumers; they were given the **tuned `Success`/`Danger` pairs**, i.e. exactly what Commit and
+  Rollback already rendered. ⛔ No new hues were invented — that would be designing what the document
+  does not, and would risk the Light-contrast regression §7.2 warns about. Guarded by
+  `TransactionRoleBrush_IsTunedPerTheme`, which pins the **condition** (tuned per theme), never a value.
+  **⏸ ONE §8.2 ROW WAS DELIBERATELY NOT DONE — `Connect` (new O‑4).** The rule says R‑7 and is formally
+  right, but §0.5 answers *"don't know"*, which is a refusal: Connect is that strip's **primary action**
+  and blue is the only thing distinguishing it from Edit/Copy/Disconnect/Reconnect — removing it may
+  *slow* recognition, which is M3.2b's mechanism. ⚠ Telling detail: **§11 never numbered that row**
+  either. Also newly recorded: **O‑5** (Security Manager carries `IconColor_Role`, a *kind* colour, on
+  an R‑6 button). Both go to the §13.3 review, judged on the whole strip at once.
+  ⭐ **State after the rollout: no yellow delete button · no coloured Refresh · one "Run" · one R‑5 token ·
+  Commit and Rollback on their own roles.** Every action button is in a language role except the three
+  open ones (O‑4 Connect, O‑1 Debugger Continue, O‑2 Comment/Uncomment).
   ⚠ **`product-polish.md` §7.5's "zmiany do wykonania" table NO LONGER APPLIES** — M3.2b executed it to
   the letter and was withdrawn; the six titlebar tools **stay coloured** (role R‑6, "wejście do
   narzędzia"), which that table did not know.

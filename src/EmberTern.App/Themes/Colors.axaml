@@ -99,8 +99,18 @@
       <!-- Buffered Table Designer pending-row washes (~20% alpha, alpha-first ARGB). -->
       <Color x:Key="RowAddedColor">#3327AE60</Color>
       <Color x:Key="RowDroppedColor">#33E53935</Color>
-      <Color x:Key="CommitButtonForeground">#4CAF50</Color>
-      <Color x:Key="RollbackButtonForeground">#F44336</Color>
+      <!-- ⭐ Role R‑2 „Zatwierdź" i R‑3 „Wycofaj transakcję" (`color-language.md` §3, krok K7).
+           ⚠⚠ TE WARTOŚCI ZOSTAŁY WYMIENIONE. Wcześniej stało tu `#4CAF50` / `#F44336` — surowy
+           Material Design, wstawiony na zapas, IDENTYCZNY w obu motywach i nigdy nieużyty (oba tokeny
+           nie miały ani jednego konsumenta). Każdy inny token semantyczny ma osobną wartość dla Light
+           i Dark, bo ten sam odcień nie ma poprawnego kontrastu na obu tłach — przyjęcie tamtych
+           wprost dałoby regres kontrastu w motywie jasnym (§7.2 języka, klasa problemu V‑1).
+           ⭐ Wartości = dostrojone pary `SuccessIconColor` / `DangerIconColor`, czyli DOKŁADNIE to, czym
+           Commit i Rollback malowały się dotąd. Dzięki temu K7 nie zmienia niczego na ekranie, a role
+           dostają własne tokeny (ten sam zabieg co `ActionRunColor` w K1).
+           ⛔ Nie jest to alias — patrz komentarz przy `ActionRunColor`; powód jest ten sam. -->
+      <Color x:Key="CommitButtonForeground">#6DBE7E</Color>
+      <Color x:Key="RollbackButtonForeground">#D77373</Color>
       <!-- Chrome-on-color tokens. These read identically in Dark + Light because
            they sit on theme-independent fills: OnAccent* over the blue AccentBrush /
            colored lane chips, CloseButtonHover is the Windows caption-close red.
@@ -412,8 +422,12 @@
       <!-- Buffered Table Designer pending-row washes (~20% alpha, alpha-first ARGB). -->
       <Color x:Key="RowAddedColor">#3327AE60</Color>
       <Color x:Key="RowDroppedColor">#33E53935</Color>
-      <Color x:Key="CommitButtonForeground">#4CAF50</Color>
-      <Color x:Key="RollbackButtonForeground">#F44336</Color>
+      <!-- Role R‑2 / R‑3 — patrz komentarz w słowniku Dark. Wartości = dostrojone pary
+           `SuccessIconColor` / `DangerIconColor` motywu JASNEGO, czyli dotychczasowy wygląd
+           Commita i Rollbacku. To one były powodem, dla którego §7.2 kazało zacząć K7 od wartości:
+           wspólne `#4CAF50` / `#F44336` były czytelne na ciemnym tle i za jasne na tym. -->
+      <Color x:Key="CommitButtonForeground">#2E8B4F</Color>
+      <Color x:Key="RollbackButtonForeground">#C23B3B</Color>
       <!-- Chrome-on-color tokens — identical to the Dark dictionary on purpose
            (they sit on theme-independent fills). See the Dark dictionary comment. -->
       <Color x:Key="OnAccentColor">#FFFFFF</Color>

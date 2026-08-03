@@ -112,8 +112,12 @@
                disable themselves when there is nothing selected — their CanExecute says so, not a binding here. -->
           <Button Classes="icon" Command="{Binding RenameProfileCommand}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportProfileRenameTooltip}">
-            <controls:SvgIcon Data="{StaticResource Icon.Pencil}"
-                              Foreground="{DynamicResource AccentIconBrush}" />
+            <!-- Rola R‑7 „Narzędzie" (`color-language.md` §3, krok K3): zmiana nazwy profilu działa na
+                 bieżącym zaznaczeniu i nie ma skutku z R‑1…R‑5, więc jest neutralna (brak `Foreground`
+                 ⇒ `NeutralIconBrush`). ⭐ Zysk jest po stronie SĄSIADA: w tej parze zostaje jeden kolor
+                 i jest nim czerwień „usuń profil" — dotąd oba przyciski były kolorowe, więc ten groźny
+                 nie wyróżniał się niczym poza odcieniem. -->
+            <controls:SvgIcon Data="{StaticResource Icon.Pencil}" />
           </Button>
           <Button Classes="icon" Command="{Binding DeleteProfileCommand}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportProfileDeleteTooltip}">
@@ -160,8 +164,9 @@
                refresh mark (used by the metadata tree, Session Manager and Table Data) already says what it does. -->
           <Button Classes="icon" Command="{Binding RefreshCommand}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportRefreshTooltip}">
-            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
-                              Foreground="{DynamicResource AccentIconBrush}" />
+            <!-- Rola R‑7 (K6) — trzecie „Odśwież" w produkcie; dotąd te trzy miały DWA kolory
+                 (`Info` w drzewie i danych tabeli, `AccentIcon` tutaj). -->
+            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
           </Button>
 
           <!-- Only visible while there is something to cancel: a permanently disabled Stop teaches nothing. -->
@@ -191,8 +196,11 @@
                   IsEnabled="{Binding !IsRunning}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportCommitTooltip}">
             <StackPanel Orientation="Horizontal" Spacing="6">
+              <!-- Role R‑2 / R‑3 na własnych tokenach (K7) — patrz MainWindow. Wygląd bez zmiany.
+                   ⚠ Nie mylić z „Waliduj" wyżej, które zostaje `SuccessIconBrush`: to nie jest decyzja
+                   transakcyjna, tylko wynik sprawdzenia. -->
               <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
-                                Foreground="{DynamicResource SuccessIconBrush}" />
+                                Foreground="{DynamicResource CommitButtonBrush}" />
               <TextBlock Text="{x:Static app:UiStrings.ImportCommit}" />
             </StackPanel>
           </Button>
@@ -202,7 +210,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.ImportRollbackTooltip}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
-                                Foreground="{DynamicResource DangerIconBrush}" />
+                                Foreground="{DynamicResource RollbackButtonBrush}" />
               <TextBlock Text="{x:Static app:UiStrings.ImportRollback}" />
             </StackPanel>
           </Button>
@@ -345,8 +353,15 @@
                   IsEnabled="{Binding UseFile}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportSourceBrowseTooltip}"
                   Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).BrowseCommand}">
+            <!-- Rola R‑6 „wymiana z zewnętrzem" (krok K4): wskazanie pliku to ta sama rola co Global
+                 Search / Script Executor / Data Import w pasku tytułu, a te niosą `AccentBrush`. Był to
+                 jedyny element R‑6 w innym odcieniu niebieskiego.
+                 ⚠ Zmierzone przed zmianą, bo wyglądało na ryzyko kontrastu: w motywie JASNYM oba tokeny
+                 mają tę samą wartość (`#2D6BBF`), a w CIEMNYM `AccentBrush` jest ciemniejszy niż
+                 `AccentIconBrush` — ale to dokładnie ten odcień, który pięć narzędzi R‑6 nosi w pasku
+                 tytułu od dawna i który został odebrany. Nie jest to więc nowa wartość na ciemnym tle. -->
             <controls:SvgIcon Data="{StaticResource Icon.Folder}"
-                              Foreground="{DynamicResource AccentIconBrush}" />
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Choosing the clipboard READS it: the command points the surface at the clipboard and runs the one
                recalculation chain with a Refresh trigger. The tooltip says so, because a control with a side

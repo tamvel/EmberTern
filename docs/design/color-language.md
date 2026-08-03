@@ -330,12 +330,19 @@ nie zmienia.
 | Usuń połączenie · Usuń zapytanie · Wyczyść zapytania | 🟡 `Warning` | **R‑4** 🔴 — realizacja W5 |
 | Execute procedury / funkcji / Start trace | 🟢 `Success` | **R‑1** `ActionRunBrush` (ten sam odcień ⇒ **bez zmiany wizualnej**) |
 | Odśwież (metadane, dane tabeli, import) | 🔵 `Info` / `AccentIcon` | **R‑7** ⚪ |
-| Edytuj (Procedure, Function, profil importu) | 🟡 `Warning` / 🔵 `AccentIcon` | **R‑7** ⚪ |
-| Dodaj (Procedure, Function) | 🟢 `Success` | **R‑7** ⚪ |
-| Szukaj w widoku (Trace) | `Subtle` | **R‑7** ⚪ |
+| ~~Edytuj (Procedure, Function)~~, profil importu | 🟡 `Warning` / 🔵 `AccentIcon` | **R‑7** ⚪ — ⚠⚠ **KOREKTA 2026-08-03: tylko profil importu.** Procedure/Function to wiersze `UpdateChange` w karcie podsumowania zmian — **stan, nie akcja** (§2) |
+| ~~Dodaj (Procedure, Function)~~ | 🟢 `Success` | ⛔ **WYCOFANE 2026-08-03** — to te same wiersze stanu (`InsertChange`), nie przyciski |
+| ~~Szukaj w widoku (Trace)~~ | `Subtle` | ⛔ **WYCOFANE 2026-08-03** — to **glif w polu tekstowym**, nie przycisk; pociemnienie zrobiłoby z dekoracji element głośniejszy od treści |
 | Wskaż plik (Data Import) | 🔵 `AccentIcon` | **R‑6** `AccentBrush` |
-| Connect (pasek tytułu) | 🔵 `AccentIcon` | **R‑7** ⚪ *(nie otwiera modułu, działa na zaznaczeniu)* |
+| Connect (pasek tytułu) | 🔵 `AccentIcon` | ⏸ **OTWARTE — NIE WYKONANE, patrz §9 / O‑4.** Reguła mówi R‑7, ale §0.5 odpowiada „nie wiadomo" |
 | Commit · Rollback | `Success` / `Danger` | **R‑2 / R‑3** — po dostrojeniu §7.2 |
+
+⚠⚠ **Trzy z dziewięciu wierszy tej tabeli nie przetrwały dokładniejszego pomiaru (2026-08-03), i to jest
+wynik, a nie brak.** Inwentarz §20 zliczał `SvgIcon` po tokenie, więc **glif STANU w karcie i glif
+w polu tekstowym trafiły do tabeli AKCJI**. ⭐ Lekcja ogólna: *pomiar po nośniku (ikona + token) nie
+odróżnia roli od stanu — to rozróżnienie robi dopiero kontekst, w którym element stoi.* Konsekwencja
+dla następnych prac: **§2 (kolory stanu poza językiem) jest filtrem, przez który trzeba przepuścić
+każdą pozycję inwentarza, zanim uzna się ją za akcję.**
 
 ⚠⚠ **Zwróć uwagę, co się NIE zmienia: sześć narzędzi w pasku tytułu zostaje kolorowych** (R‑6), bo
 otwierają moduły. To jest różnica względem M3.2b, które je odbarwiło — i powód, dla którego tamta
@@ -350,6 +357,8 @@ iteracja czytała się jako wyszarzenie.
 | **O‑1** | **Debugger Continue** — dziś `AccentIconBrush`, ratyfikowany w **D15.2 Seam A** jako „jedyna akcja pierwszorzędna debuggera". Wg R‑1 powinien być zielony. **Kolizja dwóch ratyfikacji** — nie rozstrzygam sam | zmiana dotknęłaby powierzchni odebranej wizualnie |
 | **O‑2** | **Comment / Uncomment — jakie dwa kolory?** Dziś `Info` + `Danger`. Rozróżnienie zostaje (W‑1), ale **`Danger` na Uncomment osłabia jednoznaczność czerwieni** („nieodwracalne"), a odkomentowanie cofa się jednym Ctrl+Z | opcje w §9.1 |
 | ~~**O‑3**~~ | ~~Zakres pierwszej implementacji~~ | ⭐ **ROZSTRZYGNIĘTE 2026-08-02 przez R14 (§0.4): podetapami, sortowane od najbardziej oczywistego zysku.** Plan w §11 |
+| **O‑4** | ⭐ **Connect w pasku tytułu — zdejmować niebieski czy nie?** §8.2 mówi **R‑7 ⚪** („nie otwiera modułu, działa na zaznaczeniu") i formalnie ma rację. ⛔ **Nie wykonane 2026-08-03, świadomie**, bo §0.5 odpowiada **„nie wiadomo"**: Connect jest **główną akcją tego paska**, a niebieski jest dziś jedyną rzeczą, która odróżnia go od Edytuj / Kopiuj / Rozłącz / Połącz ponownie. Po zdjęciu koloru cała lewa część paska staje się jednolicie szara poza czerwonym koszem — możliwe, że rozpoznanie **spowolni**, a to jest dokładnie mechanizm M3.2b. ⚠ Zauważ, że §11 sam nie ponumerował tego wiersza — prawdopodobnie z tego samego powodu. **Do rozstrzygnięcia w pełnym QA §13.3, na całym pasku naraz** |
+| **O‑5** | **Security Manager niesie `IconColor_Role`**, czyli kolor RODZAJU (S1), choć jest przyciskiem otwierającym moduł (R‑6). Jedyny taki przypadek wśród sześciu narzędzi paska. Możliwy świadomy wyjątek („to jest o rolach") albo pozostałość. Poza K2–K7; do §13.3 |
 
 ### §9.1 Opcje dla O‑2
 
@@ -391,11 +400,12 @@ iteracja czytała się jako wyszarzenie.
 |---|---|---|---|---|
 | ✅ **K1** | **`ActionRunBrush`** — nowy token o wartości identycznej z `SuccessIconColor`, podstawiony pod Execute procedury / funkcji / Start trace | **neutralny** | 3 | ⭐ **WYKONANY 2026-08-03** (`product-polish.md` §19.15). Zero zmiany wizualnej — pomiar potwierdził identyczność wartości w obu motywach; 3 konsumentów zgodnie z planem |
 | ✅ **K2** | **Destrukcja: 🟡 → 🔴** — Usuń połączenie · Usuń zapytanie · Wyczyść wszystkie zapytania | wizualny | 3 | ⭐⭐ **WYKONANY 2026-08-03** (`product-polish.md` §19.16), czeka na QA wizualne. Zmierzone: przycisk nie zgadzał się z **własnym menu kontekstowym** w tym samym panelu; kod już klasyfikował operację jako destrukcję (`IsDestructive = true`). Realizacja W5 |
-| **K3** | **Edytuj → ⚪** — Procedure, Function (dziś 🟡), profil importu (dziś 🔵) | wizualny | 3 | żółty na „Edytuj" **ostrzega przed czymś, co nie jest groźne** — zdjęcie go jest czytelnym zyskiem, a nie tylko porządkiem |
-| **K4** | **Wskaż plik: `AccentIconBrush` → `AccentBrush`** (Data Import) | wizualny | 1 | dwa odcienie niebieskiego dla tej samej roli R‑6; różnica minimalna, ryzyko minimalne |
-| **K5** | **Dodaj → ⚪** (Procedure, Function) · **Szukaj w widoku → ⚪** (Trace) | wizualny | 3 | „Dodaj" na zielono myli się z R‑1 Uruchom — to jedyny zielony, który nie uruchamia |
-| **K6** | **Odśwież → ⚪** — metadane, dane tabeli, Data Import | wizualny | 3 | ⚠⚠ **NAJWIĘKSZE RYZYKO W PLANIE, dlatego jest na końcu części wizualnej.** Dotyka paska tytułu, czyli powierzchni, na której M3.2b zostało odrzucone. ⛔ Obejrzeć osobno, nie w pakiecie |
-| **K7** | **Commit / Rollback → `CommitButtonBrush` / `RollbackButtonBrush`** (decyzja DD) | wizualny | 6 | ⛔ **Zaczyna się od nadania tokenom wartości per motyw** (§7.2), nie od podmiany odwołań. Do rozważenia dopiero po K1–K6 |
+| ✅ **K3** | **Edytuj → ⚪** | wizualny | ⚠ **1**, nie 3 | ⭐ **WYKONANY 2026-08-03.** ⚠⚠ **Pomiar poprawił §8.2: „Edytuj (Procedure, Function)" to NIE są przyciski**, tylko wiersze `UpdateChange` w karcie podsumowania zmian — **stan, nie akcja**, więc §2 wyklucza je z języka. „Edit Connection" był już neutralny. Realne miejsce: **zmiana nazwy profilu w Data Import** |
+| ✅ **K4** | **Wskaż plik: `AccentIconBrush` → `AccentBrush`** (Data Import) | wizualny | 1 | ⭐ **WYKONANY 2026-08-03.** ⚠ Zmierzone przed zmianą, bo wyglądało na ryzyko kontrastu w Dark: to **ten sam odcień, który pięć narzędzi R‑6 nosi w pasku tytułu** od dawna i który został odebrany. W Light oba tokeny mają identyczną wartość |
+| ⛔ **K5** | ~~**Dodaj → ⚪** · **Szukaj w widoku → ⚪**~~ | — | **0** | ⛔ **KROK ODPADA PO POMIARZE 2026-08-03.** „Dodaj (Procedure, Function)" to te same wiersze **stanu** co w K3 (`InsertChange`), a „Szukaj w widoku (Trace)" to **glif w polu tekstowym**, nie przycisk — pociemnienie go uczyniłoby dekorację głośniejszą od treści, więc §0.5 odpowiada „nie" |
+| ✅ **K6** | **Odśwież → ⚪** — metadane, dane tabeli, Data Import | wizualny | 3 | ⭐ **WYKONANY 2026-08-03.** ⭐⭐ Wbrew obawie z planu **wzmacnia** pasek, a nie wygasza: w tym samym pasku niebieski niesie R‑6 „wejście do modułu" (5 przycisków), a odświeżenie modułu nie otwiera — jeden kolor znaczył dwie rzeczy. ⛔ Sześć wejść do modułów **zostaje** kolorowych |
+| ✅ **K7** | **Commit / Rollback → `CommitButtonBrush` / `RollbackButtonBrush`** (decyzja DD) | ⭐ **neutralny** | 6 | ⭐ **WYKONANY 2026-08-03.** Zaczęty od wartości (§7.2): tokeny dostały **dostrojone pary** `Success`/`Danger` zamiast surowego Material identycznego w obu motywach. ⇒ wygląd bez zmiany, role z własnymi tokenami — ten sam zabieg co K1 |
+| ✅ **§7.4** | **Pause (Trace) → `WarningIconBrush`** | wizualny | 1 | wykonane przy okazji, jak przewidywał §11.3: `WarningBrush` zostaje dla **tekstu i komunikatów**, R‑5 ma jeden token ikonowy |
 
 ### §11.3 ⛔ Czego plan świadomie NIE obejmuje
 

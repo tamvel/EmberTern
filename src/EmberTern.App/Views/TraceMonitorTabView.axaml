@@ -69,7 +69,12 @@
         <!-- Pause is enabled only while Running; once paused it disables and Start (which doubles
              as Resume) lights up. Two distinct buttons, never both usable at once. -->
         <Button Classes="icon" Command="{Binding PauseCommand}" ToolTip.Tip="{x:Static app:UiStrings.TracePause}">
-          <controls:SvgIcon Data="{StaticResource Icon.Pause}" Foreground="{DynamicResource WarningBrush}" />
+          <!-- Rola R‑5 „Ostrzeżenie / Wstrzymanie" na tokenie IKONOWYM (`color-language.md` §7.4).
+               Dwa tokeny opisywały jedną rolę: `WarningBrush` i `WarningIconBrush`. Język przypisuje
+               R‑5 ten drugi, a `WarningBrush` zostaje dla TEKSTU i komunikatów (np. pasek uwagi nad
+               wynikami w MainWindow) — Pause był ostatnim PRZYCISKIEM po niewłaściwej stronie tego
+               podziału, obok Break on exception, które nosi już `WarningIconBrush`. -->
+          <controls:SvgIcon Data="{StaticResource Icon.Pause}" Foreground="{DynamicResource WarningIconBrush}" />
         </Button>
         <Button Classes="icon" Command="{Binding StopCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStop}">
           <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
