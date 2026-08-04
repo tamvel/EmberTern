@@ -460,3 +460,64 @@ Napisano go dokładnie pod ten objaw.
 Ten pomiar niczego w nich nie rozstrzyga. Warstwa 2 (pierwszorzędne „co się zmieniło" na wszystkich
 ścieżkach DDL + zachowanie przewijania i zaznaczenia), Warstwa 3 (higiena zapytań) i **niezmierzony koszt
 startu** czekają na własny etap wydajnościowy po M3. ⛔ M3.4 ich nie dotyka.
+
+---
+
+## 9. ⭐⭐ WARSTWA PANELU ZMIERZONA (krok 15b, 2026-08-04) — wirtualizacja też nie jest przyczyną
+
+> Sekcja 8 zamykała się zdaniem: *„wykluczone — koszt projekcji; nadal otwarte — kotwiczenie przewijania
+> i re-estymacja ekstentu przez VSP"*. **Ta sekcja zamyka tamten wiersz.**
+
+Nowa klasa `tests/EmberTern.Tests/MetadataTreeVirtualizationProbe.cs` wpina **prawdziwy
+`SidebarFlatController`** w **prawdziwy `ListBox` z `VirtualizingStackPanel`**, w oknie o skończonej
+wysokości (600 px = 25 wierszy `Size.Row.Tree`). ⛔ **Świadomie gołe `Window`, nigdy `MainWindow`** —
+patrz §9.2, to jest istota eksperymentu.
+
+| Scenariusz (2 400 liści + 3 000 rodzeństwa) | Czas z układem | Offset przed → po | Pierwszy zrealizowany |
+|---|---|---|---|
+| rozwinięcie przy górze listy | 52,9 ms | 0 → 0 | — |
+| rozwinięcie, kategoria **nad** viewportem | 42,8 ms | 1500 → **1500** | 50 → **50** |
+| **pełna re-projekcja** przy offsecie 40 000 px | 46,6 ms | 40000 → **40000** | 1333 → **1333** |
+| splice inkrementalny vs jedna re-projekcja | 56,5 vs 32,1 ms | — | — |
+
+**Zero zawieszeń. Pozycja przewijania nie ruszyła się sama ani razu** — także tam, gdzie 2 400 wierszy
+wchodzi NAD tym, na co użytkownik patrzy.
+
+### 9.1 ⭐ Wniosek dla Warstwy 1 i dla ewentualnego strażnika
+
+**Strażnik zbiorczy na ścieżce „rozwiń kliknięciem" nic by nie kupił.** Splice inkrementalny i pojedyncza
+re-projekcja są tego samego rzędu (dziesiątki ms, duża wariancja między przebiegami: 52,7 vs 50,8
+w jednym, 56,5 vs 32,1 w innym) — panel i tak realizuje kontenery od nowa, więc zamiana N wstawień na
+jeden `Reset` **nie jest oszczędnością**. ⭐ To potwierdza decyzję z M3.4a **od drugiej strony**: tam
+argumentem był koszt modelu (2,3 ms), tu — brak zysku po stronie panelu.
+
+### 9.2 ⭐⭐ Eksperyment rozdzielił dwie zmienne i to jest jego główny produkt
+
+| | Zmienna | Wynik |
+|---|---|---|
+| **A** | konstruowanie `MainWindow` w teście headless | ⚠ **jedyny stojący podejrzany** o zawieszanie suity (zgodny z pomiarem `BrandingPresentationTests`: zawieszenie z `MainWindow`, 476 ms na gołym `new Window()`) — **nieudowodniony** |
+| **B** | inkrementalny splice do wirtualizującej listy | ⛔ **wykluczony w izolacji** |
+
+⚠⚠ `ConnectionExpandBindingProbe` — klasa uruchamiana osobno, bo się zawiesza — **buduje `MainWindow`
+w wielu testach**, więc obie zmienne siedzą w niej naraz i żadnej nie da się z niej odczytać. Dlatego
+eksperyment **musiał** być osobną klasą; dopisanie go tam skleiłoby z powrotem to, co rozdziela.
+
+⭐ **Odpowiedź na pytanie „czy stary bug drzewa dzieli mechanizm z felernym testem": NIE — i to jest
+wynik, nie jego brak.** ⛔ Zawieszanie suity zostaje **osobnym zadaniem infrastrukturalnym**.
+
+### 9.3 ⚠ ROZBIEŻNOŚĆ Z §7 — odnotowana, świadomie nierozstrzygnięta
+
+§7 opisuje kompromis Warstwy 1 jako *„lista przewija się na górę"*. **Pomiar tego nie potwierdza:**
+`Rebuild` przy offsecie 40 000 px zostawia offset i pierwszy zrealizowany wiersz bez zmian.
+
+Możliwe wyjaśnienia, **żadne nierozstrzygnięte**: (a) przewinięcie na górę bierze się z innego elementu tej
+ścieżki niż sama re-projekcja (ponowne nałożenie filtra, zmiana zaznaczenia, przeniesienie fokusu);
+(b) dotyczy `ApplyFilterAsync`, nie `EndUpdate`; (c) zapis w §7 był wnioskiem, nie pomiarem.
+⛔ **Nie poprawiam §7 na podstawie domysłu** — mój pomiar dotyczy `Rebuild` w gołym oknie i użycie go
+jako odpowiedzi na pytanie o produkt byłoby wyjściem poza jego zakres.
+
+### 9.4 Co pozostaje otwarte
+
+⛔ Warstwa 2 i Warstwa 3 oraz **niezmierzony koszt startu** — bez zmian, czekają na własny etap
+wydajnościowy po M3. ⚠ Rozbieżność z §9.3 warto rozstrzygnąć **przy okazji Warstwy 2**, bo to dokładnie
+jej przedmiot (zachowanie przewijania i zaznaczenia przy zmianie zawartości drzewa).

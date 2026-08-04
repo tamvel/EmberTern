@@ -7108,3 +7108,106 @@ tysiące wierszy, wirtualizację i kotwiczenie przewijania — czyli dokładnie 
 | 6 | Smoke + aplikacja obejrzana w obu motywach | ✅ smoke · ⏸ **QA wizualne użytkownika** (zmiana jest neutralna z konstrukcji — te same liczby) |
 | 7 | Wpis w §19 | ✅ ten |
 | 8 | Commit z kodem i opisem | ✅ |
+
+---
+
+### §19.27 Krok 15b — eksperyment headless: wirtualizacja NIE jest mechanizmem zawieszenia (2026-08-04)
+
+> **Wynik: hipoteza obalona po raz drugi, tym razem w warstwie, której M3.4a nie mógł zmierzyć. Cztery
+> pomiary, zero zawieszeń, pozycja przewijania nie rusza się sama w żadnym scenariuszu. +4 testy
+> (7245 → 7249).**
+
+#### §19.27.1 ⭐⭐ Po co ten krok istniał — i dlaczego to była OSOBNA klasa
+
+M3.4a zmierzyło ścieżkę „rozwiń kliknięciem" w **warstwie modelu** i wyszło 2,3 ms. Ale §19.26.1 zapisało
+zakres tego pomiaru wprost: **sonda nie dotykała Avalonii**, a zgłoszony objaw — *„drzewo samo zaczyna
+przewijać się w dół"* — jest zachowaniem **panelu**, nie kolekcji. Krok 15b mierzy tę brakującą połowę.
+
+⭐⭐ **Klasa `MetadataTreeVirtualizationProbe` istnieje osobno po to, żeby ROZDZIELIĆ DWIE ZMIENNE, które
+dotąd zawsze występowały razem:**
+
+| | Zmienna | Stan przed eksperymentem |
+|---|---|---|
+| **A** | konstruowanie `MainWindow` w teście headless | zmierzony kształt podatny na zawieszenie — `BrandingPresentationTests` zawieszało się, dopóki budowało `MainWindow`, i schodzi do 476 ms na gołym `new Window()` |
+| **B** | inkrementalny splice do wirtualizującej listy | hipoteza §3.7a(a) |
+
+⚠⚠ **`ConnectionExpandBindingProbe` — klasa, którą użytkownik kazał uruchamiać SAMĄ — buduje `MainWindow`
+w wielu testach.** Czyli obie zmienne siedzą w niej naraz i żadnej z nich nie da się z niej odczytać.
+⛔ **Dlatego dopisanie eksperymentu do tamtej klasy byłoby błędem metodologicznym** — skleiłoby z powrotem
+dokładnie to, co ma zostać rozdzielone. Nowa klasa buduje **gołe `Window` + `ListBox`**, więc jej wynik
+mówi o **B i tylko o B**.
+
+⚠ Kontener jest częścią mechanizmu (pułapka 14): okno ma skończoną wysokość (600 px = 25 wierszy),
+lista ma `VirtualizingStackPanel`, wiersz ma stałą wysokość `Size.Row.Tree`. Bez tego wirtualizacja
+w ogóle się nie włącza i test mierzyłby co innego, niż obiecuje nazwa. **Zweryfikowane w samym teście** —
+asercja wymaga, żeby `ScrollViewer` i `VirtualizingStackPanel` faktycznie istniały w drzewie wizualnym.
+
+#### §19.27.2 Wyniki — cztery scenariusze, 2 400 liści + 3 000 wierszy rodzeństwa
+
+| Scenariusz | Czas (z układem) | Offset przed → po | Pierwszy zrealizowany wiersz |
+|---|---|---|---|
+| rozwinięcie przy górze listy | **52,9 ms** | 0,0 → 0,0 | — |
+| rozwinięcie, gdy kategoria stoi **nad** viewportem | **42,8 ms** | 1500,0 → **1500,0** | 50 → **50** |
+| **pełna re-projekcja** przy przewinięciu w głąb | **46,6 ms** | 40000,0 → **40000,0** | 1333 → **1333** |
+| splice inkrementalny vs jedna re-projekcja | **56,5** vs **32,1 ms** | — | — |
+
+⭐ **Żadnego zawieszenia. Pozycja przewijania nie przesunęła się sama ANI RAZU** — także w scenariuszu
+najostrzejszym, gdzie 2 400 wierszy wchodzi **nad** tym, na co użytkownik patrzy.
+
+⭐⭐ **Wniosek uboczny, ale mocny: strażnik zbiorczy na tej ścieżce NIC by nie kupił.** Splice inkrementalny
+i pojedyncza re-projekcja są tego samego rzędu (dziesiątki ms, przy sporej wariancji między przebiegami —
+w jednym przebiegu 52,7 vs 50,8, w innym 56,5 vs 32,1). Panel i tak realizuje kontenery od nowa, więc
+zamiana N wstawień na jeden `Reset` **nie jest oszczędnością**. To **niezależnie potwierdza decyzję z M3.4a
+o niedokładaniu tam strażnika** — tym razem od strony panelu, a nie modelu.
+
+#### §19.27.3 ⚠ ROZBIEŻNOŚĆ Z ZAPISEM LAYER 1 — odnotowana, świadomie NIEROZSTRZYGNIĘTA
+
+`metadata-refresh-analysis.md` §7 opisuje kompromis Layer 1 jako *„obiekty `SidebarRow` są odtwarzane
+i lista przewija się na górę"*. **Pomiar tego nie potwierdza:** pełna `Rebuild` przy offsecie 40 000 px
+zostawia offset na 40 000 i pierwszy zrealizowany wiersz na 1333.
+
+⭐ Możliwych wyjaśnień jest kilka i **żadnego nie rozstrzygam bez pomiaru**: (a) „przewinięcie na górę"
+w produkcie bierze się z czegoś innego na tej ścieżce niż sama re-projekcja (ponowne nałożenie filtra,
+zmiana zaznaczenia, przeniesienie fokusu), (b) dotyczy `ApplyFilterAsync`, a nie `EndUpdate`, (c) opis
+w §7 był wnioskiem, nie pomiarem. ⛔ **Nie „poprawiam" żadnego z tych dokumentów na podstawie domysłu** —
+to jest **pułapka 20 w czystej postaci** (przeczytaj zakres wcześniejszego pomiaru, zanim użyjesz go jako
+odpowiedzi), tylko odwrócona: tym razem to mój pomiar mógłby zostać użyty poza swoim zakresem.
+
+#### §19.27.4 Co to znaczy dla hipotezy o „felernym teście"
+
+| | Stan po kroku 15b |
+|---|---|
+| **B — inkrementalny splice** | ⛔ **wykluczony w izolacji**: w gołym oknie z prawdziwą wirtualizacją nie zawiesza się, nie rusza przewijania i nie jest droższy od pełnej re-projekcji |
+| **A — konstruowanie `MainWindow`** | ⚠ **pozostaje jedynym stojącym podejrzanym** — zgodny z pomiarem `BrandingPresentationTests`, ale **nieudowodniony** |
+
+⭐ **Odpowiedź na pytanie użytkownika z §3.7a(b) brzmi więc: NIE, nie znalazłem wspólnej przyczyny — i to
+jest wynik, a nie jego brak.** Stary bug drzewa i zawieszanie się `ConnectionExpandBindingProbe` **nie
+dzielą mechanizmu, którego dotyczyła hipoteza**. ⛔ Nadal nie łączę tych dwóch obserwacji w raporcie
+i nadal nie twierdzę, że wiem, co zawiesza suitę — **to zostaje osobnym zadaniem infrastrukturalnym**,
+zgodnie ze stałą instrukcją użytkownika, żeby nie odciągać nim etapu.
+
+⚠ **Czego eksperyment NIE dowodzi, powiedziane wprost:** szablon wiersza jest uproszczony (sam tekst
+o właściwej wysokości), a węzły są syntetyczne. Dowodzi więc, że **mechanizm** jest stabilny — nie że
+**produktowe** drzewo jest stabilne. Własnością nośną, którą odtworzono wiernie, jest **jednolita wysokość
+wiersza**, bo od niej zależy ekstent i kotwiczenie.
+
+#### §19.27.5 ⭐ Te cztery testy ZOSTAJĄ — i stają się strażnikiem stabilności przewijania
+
+Użytkownik podniósł stabilność przewijania Metadata Explorera do rangi kryterium odbioru na całe M3.4
+(§19.26.6). Te testy dokładnie to obsługują: od teraz **każda większa zmiana w drzewie ma maszynową
+kontrolę, że rozwinięcie dużej kategorii kończy się w ograniczonym czasie i nie przesuwa pozycji
+przewijania samo z siebie**.
+
+⚠ **Granice czasowe są CELOWO hojne (5 s) i to nie jest słabość testu.** Przedmiotem nie jest wydajność —
+ta mieszka w sondzie (`MetadataPerfProbe` B4) — tylko *„czy to się kończy"*: zawieszenie objawia się
+sekundami albo brakiem powrotu, nie dziesiątkami milisekund. Granica zawężona do zmierzonych 50 ms byłaby
+testem migoczącym na CI, czyli **testem, który psuje się z powodów niezwiązanych z jego przedmiotem**.
+⭐ To jest **R16 zastosowane od strony konstrukcyjnej**: asercja obejmuje dokładnie tyle, ile maszyna ma
+tu sensownego do powiedzenia.
+
+⚠ Test czwarty (pełna re-projekcja) **niczego nie zabrania asercją** poza zakończeniem się — bo gdyby
+pozycja przewijania jednak się ruszała, byłby to **udokumentowany kompromis Layer 1**, a jego zmiana jest
+decyzją produktową, nie skutkiem ubocznym eksperymentu. Liczba idzie do logu jako **pomiar**.
+
+⚠⚠ Nowa klasa headless dołączyła do `HeadlessCollection` **i do filtra partycji** — filtr jest listą nazw
+i starzeje się cicho (§18.1.6). Partycje po kroku 15b: **7134 + 61 + 54 = 7249**.

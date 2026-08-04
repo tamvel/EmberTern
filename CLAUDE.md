@@ -506,7 +506,39 @@ noted.
   implementing.** ⭐ This is §19.23.9 generalised: that defect was a feedback loop, and a tool that computes
   one layout pass could not have caught it *by construction* — and the tree has thousands of rows,
   virtualization and scroll anchoring, i.e. exactly those conditions.
-  ⏸ **Next: step 15b** (the headless virtualization experiment), then M3.4b → M3b → ⛔ the §13.3 gate.
+  ✅ **STEP 15b DONE (2026-08-04) — the headless experiment; the hypothesis is refuted a SECOND time, now in
+  the layer M3.4a could not reach** (`product-polish.md` §19.27, `metadata-refresh-analysis.md` §9). New
+  `MetadataTreeVirtualizationProbe` wires the **real `SidebarFlatController`** into a **real `ListBox` with a
+  `VirtualizingStackPanel`** in a 600 px window. Four scenarios on 2 400 leaves + 3 000 siblings: **no hang
+  (43–57 ms each, layout included) and the scroll position never moved by itself** — 0→0, 1500→1500 (first
+  realized row 50→50) and, in the sharpest case, a **full re-projection at offset 40 000 px leaving both the
+  offset and the first realized row unchanged**.
+  ⭐⭐ **The experiment's main product is that it SEPARATED TWO VARIABLES that had always occurred together:**
+  **A** = constructing `MainWindow` in a headless test (the measured hang-prone shape — `BrandingPresentationTests`
+  hung until it stopped doing it, 476 ms on a bare `new Window()`), **B** = the incremental splice into a
+  virtualizing list. ⚠⚠ `ConnectionExpandBindingProbe` — the class the user runs alone because it hangs —
+  **builds `MainWindow` in several tests**, so both variables sit inside it and neither can be read off it.
+  ⛔ That is why the experiment **had to be its own class**; adding it there would have re-glued exactly what
+  it separates. **Result: B is exonerated in isolation; A stays the only standing suspect, unproven.**
+  ⭐ **So the answer to "does the old tree bug share a mechanism with the flaky test" is NO — and that is a
+  result, not the absence of one.** ⛔ The suite hang stays its own infrastructure task; the two observations
+  stay unjoined.
+  ⭐ **Side finding that confirms M3.4a from the other side: a bulk guard on that path would buy nothing** —
+  the incremental splice and a single re-projection are the same order (tens of ms, high run-to-run variance),
+  because the panel re-realizes its containers either way.
+  ⚠ **A discrepancy recorded and deliberately NOT resolved:** `metadata-refresh-analysis.md` §7 describes the
+  Layer-1 trade-off as *"the list scrolls to top"*; the measurement does not reproduce that. Candidate
+  explanations (filter re-application, selection, focus, or §7 being a conclusion rather than a measurement)
+  are listed in §9.3 — ⛔ no document was "corrected" on a guess, and it belongs to Layer 2, whose subject it is.
+  ⚠ **What the experiment does NOT prove:** the row template is simplified and the nodes synthetic, so it
+  shows the **mechanism** is stable, not that the **product's** tree is. Uniform row height — the property the
+  extent and anchoring depend on — is reproduced faithfully.
+  ⭐ **The four tests stay** and become the machine check behind the user's standing request: every larger
+  Metadata Explorer change now has a guard that a large expand finishes in bounded time and does not move the
+  scroll position. ⚠ Their 5 s bounds are **deliberately generous** — a hang shows up as seconds, and a bound
+  tightened to the measured ~50 ms would be a test that fails for reasons unrelated to its subject (R16 applied
+  to test construction).
+  ⏸ **Next: M3.4b** (context-menu review), then M3b → ⛔ the §13.3 gate.
   ✅ **M3.3c DONE (2026-08-03) — the tab context menu; the tab strip is complete** (`product-polish.md`
   §19.24). Nine items, **zero new chrome** (the Keyboard Manager's `ContextMenu`/`MenuItem` styles +
   `{app:MenuIcon}` already exist).
@@ -3462,8 +3494,8 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7245, MEASURED 2026-08-04**
-  (Product Polish through M3.4a). Green in the three documented partitions (**7134 + 57 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7249, MEASURED 2026-08-04**
+  (Product Polish through step 15b). Green in the three documented partitions (**7134 + 61 + 54**).
   ⚠ This line said **7228 (7118 + 56 + 54)** until that run — a figure that had gone stale across M3.3b/c
   and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy it forward.
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
@@ -3483,12 +3515,12 @@ noted.
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition holds **five** classes — measured, not listed from memory
+  four times its own count. ⚠ The headless partition holds **six** classes — measured, not listed from memory
   (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `BrandingPresentationTests` +
-  `DesignTokenApplicationTests` + `TabStripPresentationTests`), all in
+  `DesignTokenApplicationTests` + `TabStripPresentationTests` + `MetadataTreeVirtualizationProbe`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
   (#94/#226/#286). The partition filter is those class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests"`
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe"`
   and its inverse with `|`. ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
   criterion for adding a class: **does it construct Avalonia controls?**
