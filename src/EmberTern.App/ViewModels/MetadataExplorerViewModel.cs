@@ -201,6 +201,53 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     /// <summary>Raises <see cref="MetadataReady"/>. Called by the connection node once its prefetch
     /// loop completes.</summary>
     internal void NotifyMetadataReady() => MetadataReady?.Invoke();
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ POSTĘP PREFETCHU KATEGORII — sekcja postępu paska statusu (M3b.2, §19.34)
+    //
+    // ⚠⚠ Dlaczego NIE `MetadataReady` jako sygnał końca dla paska: to zdarzenie **nie nastąpi** przy
+    // nieudanym połączeniu (nie ma wtedy `ActiveConnectionChanged`, więc nie ma prefetchu), przy
+    // rozłączeniu w trakcie, ani gdy `LoadGroupAsync` rzuci coś poza dwoma wyjątkami, które łapie.
+    // Każda z tych ścieżek zostawiłaby zapalony pasek — pułapka §19.7.4. Flaga poniżej gaśnie we
+    // WŁASNYM `finally`, więc żadna ścieżka wyjścia nie jest w stanie jej pominąć.
+    // ⛔ `MetadataReady` zostaje bez zmian i nadal służy swojemu celowi (edytory przebudowują model);
+    // pasek statusu go nie używa.
+    //
+    // ⚠ Tylko PREFETCH PO POŁĄCZENIU. `RefreshAsync` wykonuje tę samą pracę i ma własne `try/finally`,
+    // więc raportowanie byłoby darmowe — ale użytkownik świadomie zawęził zakres do połączenia
+    // (2026-08-04). ⛔ Nie podłączać odświeżania bez jego decyzji.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Czy trwa prefetch kategorii po połączeniu.</summary>
+    [ObservableProperty]
+    private bool _isLoadingMetadata;
+
+    /// <summary>Ile kategorii jest już wczytanych, i ile ich jest — licznik postępu fazy 3.
+    /// ⭐ Suma jest ZNANA (<c>CategoryOrder.Length</c>), więc to jedyne źródło postępu w tej ścieżce,
+    /// które uczciwie wypełnia tryb procentowy.</summary>
+    [ObservableProperty]
+    private int _metadataCategoriesLoaded;
+
+    [ObservableProperty]
+    private int _metadataCategoriesTotal;
+
+    /// <summary>Otwiera fazę 3 dla paska statusu. Wołane przez węzeł połączenia, który jest jej właścicielem.
+    /// ⚠ Musi być sparowane z <see cref="EndMetadataPrefetch"/> w <c>finally</c>.</summary>
+    internal void BeginMetadataPrefetch(int total)
+    {
+        MetadataCategoriesTotal = total;
+        MetadataCategoriesLoaded = 0;
+        IsLoadingMetadata = true;
+    }
+
+    internal void ReportMetadataPrefetch(int loaded) => MetadataCategoriesLoaded = loaded;
+
+    internal void EndMetadataPrefetch()
+    {
+        IsLoadingMetadata = false;
+        MetadataCategoriesLoaded = 0;
+        MetadataCategoriesTotal = 0;
+    }
     // Tree object-lifecycle dispatch. The owner (MainWindowViewModel) REUSES its existing
     // New*/detail-editor/DROP/Execute flows — these are just the tree's entry points.
     public event Action<MetadataObjectKind>? NewObjectRequested;

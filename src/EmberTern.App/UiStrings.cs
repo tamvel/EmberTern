@@ -775,6 +775,14 @@ internal static class UiStrings
     public const string StatusProgressImportReadingFile = "Loading file…";
     public const string StatusProgressImportReadingClipboard = "Reading clipboard…";
 
+    // ⭐ Ładowanie połączenia (M3b.2). Dwie etykiety na trzy fazy, i to jest zmierzone, nie oszczędne:
+    // faza 2 (odtworzenie zakładek) jest SYNCHRONICZNA na wątku UI, a odmalowanie następuje PRZED nią —
+    // napis ustawiony na jej początku pojawiłby się dopiero po jej zakończeniu, czyli gdy jest już
+    // nieprawdziwy. Zamiast martwego UI zostaje etykieta fazy 1 (decyzja użytkownika 2026-08-04).
+    // ⭐ Faza 3 jest jedyną fazą ze ZNANĄ sumą (13 kategorii), więc jedyną, która uczciwie pokazuje procent.
+    public const string StatusProgressConnecting = "Connecting to database…";
+    public const string StatusProgressMetadataFormat = "Loading metadata… {0:N0} / {1:N0}";
+
     // ⭐ Chipy Trace i Debuggera (§8.4.3 sekcja 3) — M3.1e. Etykieta niesie sam FAKT („gdzieś żyje
     // sesja"), a szczegół idzie do tooltipa, który czyta `StatusText` z VM-a odpowiedniej zakładki.
     // ⚠ Rzeczownik, nie czasownik: chip mówi, CO jest prawdą, a nie co się dzieje — „co się dzieje"

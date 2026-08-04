@@ -142,15 +142,24 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         // itself as well; the guard is nesting-safe, so this only collapses the 13 re-projections into one.
         var sw = System.Diagnostics.Stopwatch.StartNew();
         metadata.BeginSidebarBulkUpdate();
+        // ⭐ Faza 3 dla sekcji postępu paska statusu (§19.34). Suma jest tu ZNANA, więc to jedyna faza
+        // ładowania połączenia, która uczciwie wypełnia tryb procentowy.
+        // ⚠⚠ `finally` obejmuje CAŁĄ pętlę, i to jest cały mechanizm bezpieczeństwa: pasek gaśnie także
+        // wtedy, gdy któraś kategoria rzuci wyjątek, którego `LoadGroupAsync` nie łapie. Bez tego pasek
+        // zostałby zapalony na zawsze — a `MetadataReady` niżej wtedy NIE padnie.
+        metadata.BeginMetadataPrefetch(categories.Count);
         try
         {
+            var loaded = 0;
             foreach (var cat in categories)
             {
                 await metadata.LoadGroupAsync(cat).ConfigureAwait(true);
+                metadata.ReportMetadataPrefetch(++loaded);
             }
         }
         finally
         {
+            metadata.EndMetadataPrefetch();
             metadata.EndSidebarBulkUpdate();
         }
         sw.Stop();

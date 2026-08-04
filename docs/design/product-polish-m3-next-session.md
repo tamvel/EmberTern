@@ -38,13 +38,13 @@ podsekcję) · handoverów M2a/M2b/M2c.
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | M3b.1d (postęp importu w jednym miejscu). ⚠ **Sprawdź `git log --oneline -1` i `git status`** zamiast wierzyć temu wierszowi |
+| **Ostatni commit** | M3b.2 (ładowanie połączenia w sekcji postępu). ⚠ **Sprawdź `git log --oneline -1` i `git status`** zamiast wierzyć temu wierszowi |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7301** zielony w trzech partycjach (**7184 + 63 + 54**). ⚠⚠ **Mierz przed cytowaniem** — ta liczba starzeje się najszybciej w całym dokumencie |
+| **Suite** | **7310** zielony w trzech partycjach (**7193 + 63 + 54**). ⚠⚠ **Mierz przed cytowaniem** — ta liczba starzeje się najszybciej w całym dokumencie |
 | **Smoke** | czysty |
-| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · 🔒 M3.4 ✅ · M3b.1 ✅ · M3b.1 A+B+C ✅ · M3b.1d ✅** |
-| ⭐⭐ **START** | **M3b.2 — połączenie z bazą i ładowanie metadanych jako NOWE źródło postępu** (pozycja 17b w planie §10 handovera) |
-| **Po M3b.2** | **M3b.3** (rail na żywym ekranie), potem ⛔ **brama §13.3**, potem podsumowanie zamykające M3 + handover M4 |
+| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · 🔒 M3.4 ✅ · M3b.1 ✅ · M3b.1 A+B+C ✅ · M3b.1d ✅ · M3b.2 ✅** |
+| ⭐⭐ **START** | **M3b.3 — rail na żywym ekranie** (pozycja 17c w planie §10 handovera). ⭐ Brak zmiany jest tam dopuszczalnym wynikiem |
+| **Po M3b.3** | ⛔ **brama §13.3**, potem podsumowanie zamykające M3 + handover M4 |
 
 ### 2.1 Co zamknęło M3.4 i M3b.1
 
@@ -228,7 +228,7 @@ analiza → (propozycja + AKCEPTACJA) → implementacja
 --filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe"
 ```
 
-oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno. Stan: **7184 + 63 + 54 = 7301**.
+oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno. Stan: **7193 + 63 + 54 = 7310**.
 ⚠⚠ **Filtr jest listą nazw i starzeje się cicho** — partycja headless ma **siedem** klas; kryterium
 dołączenia: *czy klasa konstruuje kontrolki Avalonii*.
 

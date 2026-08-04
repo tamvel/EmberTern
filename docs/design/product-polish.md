@@ -7922,3 +7922,111 @@ więc nie może wpaść do treści zakładki, i jest nakładką, więc nie może
 Trwający import: pasek poleceń mieści się (żadna etykieta nie chowa się pod listą), postęp i statystyki
 w prawym górnym narożniku dolnego panelu, czas trwania na górze, pasek statusu bez zmian. ⏸ Do sprawdzenia
 przy wąskim oknie, czy nakładka nie zasłania ostatniej zakładki (§19.33.4).
+
+---
+
+### §19.34 Iteracja 22 (M3b.2) — ładowanie połączenia w sekcji postępu (2026-08-04)
+
+> **Zakres:** połączenie z bazą + prefetch metadanych jako **NOWE** źródło postępu (nie przepięcie
+> istniejącego). Ratyfikowany najwyższy szczebel drabinki: dopóki nie skończy, nie działa nic innego.
+> Build 0/0; suita **7310** w trzech partycjach (7193 + 63 + 54, +9); smoke czysty.
+
+#### §19.34.1 ⭐ Lej startu istniał, lej końca NIE — i to przesądziło o całym projekcie
+
+Połączenie ma **dwa wejścia** (`ConnectionNodeViewModel.ConnectAsync` i `ReconnectAsync`), oba przez
+`MainWindowViewModel.ConnectAsync` — więc start ma jedno miejsce. Ale kandydat na sygnał końca,
+**`MetadataReady`, nie nastąpi** na trzech ścieżkach:
+
+| Ścieżka | Dlaczego `MetadataReady` nie padnie |
+|---|---|
+| `ConnectionFailedException` | nie ma `ActiveConnectionChanged`, więc nie ma prefetchu |
+| rozłączenie w trakcie ładowania | `_categoriesBuilt` wraca na `false`, prefetch nie biegnie |
+| prefetch rzuca wyjątek poza dwoma łapanymi | `NotifyMetadataReady()` stoi PO pętli i nie zostaje osiągnięte |
+
+⭐ Każda z nich zostawiłaby **zapalony pasek na zawsze** — pułapka §19.7.4 w najgorszej postaci, bo objaw
+byłby trwały i niezwiązany z niczym, co użytkownik akurat robi.
+
+⭐⭐ **Rozwiązanie omija pytanie „czy zdarzenie padło": każda faza gaśnie WŁASNYM `finally`.**
+`MetadataReady` zostaje nietknięte i nadal robi swoje (edytory przebudowują model semantyczny); pasek
+statusu **go nie używa**. ⛔ Nie podłączać do niego paska „bo już jest".
+
+⚠ Sprawdzone i **niebędące defektem**: `OnIsConnectedChanged` ustawia `IsExpanded = true`, co synchronicznie
+woła `LoadCategoriesAsync`, a potem woła je drugi raz. Podwójnego prefetchu nie ma, bo
+`_categoriesBuilt = true` pada **przed** pierwszym await — drugie wywołanie wraca natychmiast.
+
+#### §19.34.2 ⚠⚠ FAZY 2 NIE DA SIĘ OGŁOSIĆ — pomiar unieważnił część planu
+
+Plan (i wcześniejsza zgoda użytkownika) przewidywał dla fazy 2 komunikat „Loading workspace…".
+**Zmierzone: taki komunikat byłby martwym UI.** Kolejność jest taka:
+
+```
+faza 1 (poza wątkiem)  →  [Dispatcher wolny: KLATKA]  →  faza 2 BLOKUJE wątek UI  →  faza 3 (oddaje wątek)
+```
+
+`LoadWorkspaceFor` jest `private void`, w pełni synchroniczne, wołane przez `Dispatcher.Post`. Odmalowanie
+następuje **przed** nią, więc etykieta ustawiona na jej początku pojawiłaby się dopiero po jej zakończeniu —
+czyli wtedy, gdy jest już nieprawdziwa.
+
+⭐ **Ratyfikowane (użytkownik, 2026-08-04): utrzymać etykietę fazy 1.** Okno zamarza pokazując
+„Connecting to database…", zamiast zgasić pasek. To uczciwe maksimum, jakie ten mechanizm dopuszcza, i nic
+nie migocze — bo w trakcie blokady nic się nie odmalowuje. ⛔ Nie budować napisu, którego nikt nie zobaczy.
+
+#### §19.34.3 Jak to jest zbudowane — dwie flagi, jeden szczebel
+
+| Faza | Właściciel flagi | Gaszenie | Tryb |
+|---|---|---|---|
+| 1. otwarcie 3 dołączeń | `MainWindowViewModel.IsConnecting` | `catch` (nieudane) · `ApplyActiveConnectionChange(null)` (rozłączenie) · `finally` fazy 3 (sukces) | nieokreślony |
+| 2. odtworzenie zakładek | ⛔ brak — nieobserwowalne | — | — |
+| 3. prefetch 13 kategorii | `MetadataExplorerViewModel.IsLoadingMetadata` | **własne `finally`**, które już tam było (dla `EndSidebarBulkUpdate`) | **procent** |
+
+⚠⚠ **`IsConnecting` NIE jest gaszone w `finally` swojej własnej metody, i to jest wybór.** Gaszenie na
+wyjściu z fazy 1 zostawiłoby lukę na fazę 2 — pasek zgasłby i zapalił się ponownie w środku jednej
+operacji. Dlatego flaga żyje, dopóki faza 3 jej nie przejmie, a **trzy** wymienione drogi gwarantują, że
+każde zakończenie ją gasi. ⭐ Faza 3 nie potrzebowała nowego `try/finally` — istniejący blok został tylko
+poszerzony, więc mechanizm bezpieczeństwa jest ten sam, który już tam działał.
+
+⭐ Suma fazy 3 jest **znana** (`CategoryOrder.Length` = 13), więc to **druga** ścieżka w aplikacji, która
+uczciwie wypełnia tryb procentowy (pierwsza: Script Executor, §19.31.5).
+
+⚠ **Bez przycisku anulowania.** Połączenia nie da się dziś przerwać i wymyślenie komendy byłoby dodaniem
+funkcji pod pozorem podłączenia postępu.
+
+#### §19.34.4 ⭐ Test złapał brak powiadomienia — po raz drugi w tym etapie
+
+Pierwsze uruchomienie strażników: 4 z 9 czerwone. Przyczyna nie była w drabince, tylko w tym, że
+`IsConnecting` **nie miało hooka** — sekcja przeliczała się wyłącznie tam, gdzie wołałem
+`UpdateProgressSection()` ręcznie, a test ustawiał flagę wprost.
+
+⭐ Naprawa jest jednocześnie lepszym projektem: `partial void OnIsConnectingChanged` → `UpdateProgressSection()`,
+dokładnie jak `OnIsExecutingChanged` dla zapytania, i **trzy rozsypane wywołania zniknęły**.
+⚠ To §19.23.10 po raz drugi: *asercja na wartości właściwości nie jest asercją, że ekran działa* — wiązanie
+odpytuje ponownie tylko na `PropertyChanged`. Tutaj wartość była poprawna, a ekran by się nie odświeżył.
+
+#### §19.34.5 Strażnicy — 9 przypadków, dwa podłożone naruszenia
+
+| Naruszenie | Złapane przez |
+|---|---|
+| brak gaszenia na rozłączeniu | `DisconnectingMidLoad_DoesNotLeaveTheBarLit` |
+| koniec prefetchu nie gasi fazy 1 | `FinishingThePrefetch_AlsoClearsPhaseOne` + 3 dalsze |
+
+⭐ Osobny strażnik pinuje **świadome zawężenie zakresu**: `ManualRefresh_IsDeliberatelyNotWiredToTheStatusBar`
+czyta źródło `RefreshAsync`. Powód: odświeżenie wykonuje **tę samą pracę** i ma **własne `try/finally`**, więc
+podłączenie go „przy okazji" to jedna linia, której nikt by nie zauważył — a użytkownik zawęził zakres do
+połączenia świadomie.
+
+#### §19.34.6 ⛔ Czego iteracja NIE zrobiła
+
+* **Nie podłączyła ręcznego odświeżania metadanych** (decyzja użytkownika).
+* **Nie dodała etykiety fazy 2** — byłaby martwa (§19.34.2).
+* **Nie przeniosła odtwarzania zakładek poza wątek UI** — to „deterministyczny load", oznaczony w CLAUDE.md
+  jako ⛔ nie ruszać; buduje ViewModele zakładek, więc wymaga wątku UI. Osobne, duże zadanie.
+* **Nie tknęła `MetadataReady`** ani ścieżki prefetchu poza dodaniem licznika.
+* **Nie dodała anulowania połączenia.**
+
+#### §19.34.7 ⏸ Do QA użytkownika
+
+Połączenie z dużą bazą: pasek statusu od razu „Connecting to database…", potem „Loading metadata… N / 13"
+z rosnącym procentem, i gaśnie po zakończeniu. Nieudane połączenie: pasek gaśnie razem z komunikatem błędu.
+Rozłączenie w trakcie ładowania: pasek gaśnie. ⏸ Do obejrzenia, czy w trakcie zablokowanej fazy 2 okno
+faktycznie zostaje z etykietą „Connecting to database…", a nie z pustym paskiem — to jest jedyne miejsce,
+gdzie zachowanie zależy od kolejności zdarzeń, której nie da się rozstrzygnąć testem bez żywego serwera.

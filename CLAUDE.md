@@ -698,16 +698,38 @@ noted.
   ⚠ Recorded and deliberately unsolved: on a very narrow window the overlay could cover the last tab — QA,
   not a number tuned blind. ⚠ The command bar was NOT slimmed down: three 170/180 px combos are a **density**
   question, so they belong to the §13.3 gate and the UX sprint, not to a patch here (R7).
-  ⏸ **Next: M3b.2 — connect + metadata loading as a NEW progress source** (the user's explicit priority:
-  this is where they wait longest with no information today), then **M3b.3** (rail), then ⛔ the §13.3 gate.
-  ⚠⚠ Its anatomy is already measured and one phase is a hard limit: **`LoadWorkspaceFor` is `private void`
-  — fully synchronous on the UI thread — so no frame exists in which a bar could animate through it.** The
-  user accepted that explicitly: a plain *"Loading workspace…"* message there is fine, and the percentage
-  arrives with the 13-category prefetch (`LoadCategoriesAsync`, which does yield between categories and
-  knows its total). ⛔ Do not fake an animation there, and do not move the tab restore off the UI thread —
-  that is the deterministic load this file already marks ⛔ do-not-touch. ⚠⚠ The known risk: that prefetch
-  is invoked fire-and-forget (`_ = …`, two sites) and **never runs at all when the connection fails**, so
-  without a guard on every exit path the bar stays lit forever — §19.7.4's exact hazard.
+  ✅ **M3b.2 DONE (2026-08-04) — connecting to a database now reports in the status bar**
+  (`product-polish.md` §19.34). ⭐⭐ **The start had a funnel; the END did not, and that decided the design.**
+  Connect has two entry points, both through `MainWindowViewModel.ConnectAsync` — but `MetadataReady`, the
+  obvious end signal, **does not fire** on three paths: a failed connect (no `ActiveConnectionChanged`, so no
+  prefetch), a disconnect mid-load, and a prefetch throwing anything `LoadGroupAsync` does not catch (the
+  `NotifyMetadataReady()` call sits *after* the loop). Each would have left the bar lit forever — §19.7.4's
+  hazard at its worst, because the symptom would be permanent and unrelated to anything the user is doing.
+  ⭐ So **each phase clears itself in its own `finally`**, which removes the "did the event fire" question
+  entirely; `MetadataReady` is untouched and the status bar does not use it. ⚠ Verified and NOT a defect:
+  `OnIsConnectedChanged` sets `IsExpanded = true`, which calls `LoadCategoriesAsync` synchronously, and then
+  calls it again — no double prefetch, because `_categoriesBuilt = true` lands *before* the first await.
+  ⚠⚠ **Phase 2 (restoring the tabs) got NO label, because one would be dead UI** — measured: the repaint
+  happens *before* it, so a label set at its start only appears once it ends, i.e. when it is already false.
+  ⭐ Ratified instead: keep phase 1's label up, so the window freezes showing *"Connecting to database…"*
+  rather than going dark — and nothing flickers, because nothing repaints while it blocks.
+  ⚠ Consequently `IsConnecting` is **not** cleared in its own method's `finally`: that would leave a gap over
+  phase 2 and the bar would go off and on inside one operation. It lives until phase 3 takes over, and three
+  paths guarantee every ending clears it (catch · `ApplyActiveConnectionChange(null)` · the prefetch's
+  `finally`). ⭐ Phase 3 needed **no new `try/finally`** — the existing one (for `EndSidebarBulkUpdate`) was
+  widened, so the safety mechanism is the one already proven there. It is also the **second** path in the app
+  with an honest percentage (13 categories; the first was the Script Executor).
+  ⭐ **A test caught a missing notification for the second time this stage:** 4 of 9 guards were red not
+  because of the ladder but because `IsConnecting` had no change hook — the section only recomputed where I
+  called `UpdateProgressSection()` by hand. The fix is also the better design (`OnIsConnectingChanged`, exactly
+  like `OnIsExecutingChanged`) and deleted three scattered calls. §19.23.10 again: **a value being correct is
+  not the screen updating.**
+  ⚠ Manual metadata refresh is deliberately **not** wired (the user narrowed the scope) — pinned by a guard,
+  because `RefreshAsync` does the same work with its own `try/finally`, so wiring it "while we are here" would
+  be one line nobody would notice. ⛔ No cancel for connecting: there is no command for it, and inventing one
+  would be adding a feature under cover of wiring progress.
+  ⏸ **Next: M3b.3 — the rail on a live screen** (the user's call: *if the current colours turn out to be
+  enough, there is no need to complicate them*), then ⛔ the §13.3 gate.
   ⭐ **A ready startup prompt for the next session:**
   [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md).
 - **🔬 THE OLD TREE DEFECT IS NOW REPRODUCIBLE BY THE USER, AND AN INSTRUMENT IS SHIPPED FOR IT
@@ -3779,10 +3801,10 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7301, MEASURED 2026-08-04**
-  (Product Polish through M3b.1d). Green in the three documented partitions (**7184 + 63 + 54**).
-  ⚠ The four new classes (`StatusProgressSourcesTests`, `XlsxDimensionReadTests`,
-  `ImportFileSelectionResponsivenessTests`, `ImportProgressPlacementTests`) all live in the **main**
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7310, MEASURED 2026-08-04**
+  (Product Polish through M3b.2). Green in the three documented partitions (**7193 + 63 + 54**).
+  ⚠ The five new classes (`StatusProgressSourcesTests`, `XlsxDimensionReadTests`,
+  `ImportFileSelectionResponsivenessTests`, `ImportProgressPlacementTests`, `ConnectionLoadProgressTests`) all live in the **main**
   partition — none constructs an Avalonia control, so none joins the headless filter (handover §8's criterion).
   ⚠ This line said **7228 (7118 + 56 + 54)** and then **7271 (7154 + 63 + 54)** — a figure that had gone
   stale across M3.3b/c and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy

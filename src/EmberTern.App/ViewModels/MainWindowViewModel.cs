@@ -290,6 +290,10 @@ public partial class MainWindowViewModel : ViewModelBase
         ResultAggregationBar = new AggregationBarViewModel(ComputeResultAggregateAsync);
         _service.ActiveConnectionChanged += OnActiveConnectionChanged;
         _service.ActiveProfileUpdated += OnActiveProfileUpdated;
+        // ⭐ Faza 3 ładowania połączenia (prefetch kategorii) karmi sekcję postępu — a jej koniec jest
+        // jedynym miejscem, w którym gaśnie także faza 1 (§19.34). `Metadata` jest jedna na aplikację,
+        // więc nie ma tu czego agregować: jedna subskrypcja, zdejmowana nigdy, bo żyje tyle co okno.
+        Metadata.PropertyChanged += OnMetadataProgressChanged;
         _transactionService.TransactionStateChanged += OnTransactionStateChanged;
         // The console's transaction is a pending-work source like any other — registered once, here, so the
         // guards never name it again.
@@ -1370,6 +1374,24 @@ public partial class MainWindowViewModel : ViewModelBase
         RaiseActivityChanged();
     }
 
+    /// <summary>
+    /// Faza 3 ładowania połączenia. ⭐ Jej zakończenie gasi RÓWNIEŻ fazę 1 — i to jest to jedno miejsce,
+    /// które domyka cały odcinek udanego połączenia, bo prefetch ma swoje `finally` i nie da się go pominąć.
+    /// </summary>
+    private void OnMetadataProgressChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(MetadataExplorerViewModel.IsLoadingMetadata)
+                               or nameof(MetadataExplorerViewModel.MetadataCategoriesLoaded))) return;
+
+        if (e.PropertyName == nameof(MetadataExplorerViewModel.IsLoadingMetadata)
+            && !Metadata.IsLoadingMetadata)
+        {
+            IsConnecting = false;
+        }
+
+        UpdateProgressSection();
+    }
+
     private void OnActivitySourceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         // Tylko te właściwości zmieniają odpowiedź; reszta zdarzeń zakładki nas nie dotyczy.
@@ -1433,7 +1455,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // ══════════════════════════════════════════════════════════════════════════════════════════════
 
     /// <summary>Które źródło zajmuje sekcję postępu. `None` znaczy „sekcja zgaszona".</summary>
-    private enum ProgressOwner { None, Query, Script, Import, ImportReading }
+    private enum ProgressOwner { None, Connecting, ConnectionLoading, Query, Script, Import, ImportReading }
 
     private ProgressOwner _progressOwner = ProgressOwner.None;
 
@@ -1478,6 +1500,29 @@ public partial class MainWindowViewModel : ViewModelBase
     // dało się sprawdzić testem bez `StatusProgressViewModel` i bez żywego wykonania.
     private (ProgressOwner Owner, string Label, double? Percent, ICommand? Cancel) ResolveProgressSection()
     {
+        // Szczebel 3 — ładowanie połączenia (§19.34). Najwyżej, bo dopóki nie skończy, nie działa nic
+        // innego: nie ma drzewa, uzupełniania ani diagnostyki.
+        // ⭐ DWIE flagi, JEDEN szczebel. Faza 1 (otwarcie dołączeń) i faza 3 (prefetch kategorii) mają
+        // każda własne `finally`, więc żadna nie może zostać zapalona — a użytkownik widzi jeden ciągły
+        // pasek, bo pomiędzy nimi leży faza 2, która blokuje wątek UI i w której NIC się nie odmalowuje.
+        // ⚠ Faza 2 nie ma własnej etykiety świadomie: odmalowanie następuje PRZED nią, więc napis
+        // ustawiony na jej początku pojawiłby się dopiero po jej zakończeniu, czyli gdy jest już
+        // nieprawdziwy. Zamiast martwego UI zostaje etykieta fazy 1 (decyzja użytkownika 2026-08-04).
+        if (Metadata.IsLoadingMetadata)
+        {
+            var total = Metadata.MetadataCategoriesTotal;
+            var done = Metadata.MetadataCategoriesLoaded;
+            return (ProgressOwner.ConnectionLoading,
+                    string.Format(CultureInfo.CurrentCulture, UiStrings.StatusProgressMetadataFormat, done, total),
+                    total > 0 ? done * 100d / total : null,
+                    null);
+        }
+
+        if (IsConnecting)
+        {
+            return (ProgressOwner.Connecting, UiStrings.StatusProgressConnecting, null, null);
+        }
+
         // Szczebel 2 — operacja interaktywna. Zapytanie: tryb nieokreślony, bo strumieniowy odczyt nie
         // zna sumy wierszy, dopóki nie skończy (§19.7.2).
         if (IsExecuting)
@@ -2885,15 +2930,43 @@ public partial class MainWindowViewModel : ViewModelBase
         SqlEditorPerformance.Clear();
     }
 
+    /// <summary>
+    /// Czy trwa nawiązywanie połączenia — faza 1 ładowania (§19.34).
+    /// <para>
+    /// ⚠⚠ <b>Gaszone NIE w <c>finally</c> tej metody, i to jest wybór, nie przeoczenie.</b> Ładowanie
+    /// połączenia ma trzy fazy w dwóch klasach: (1) otwarcie dołączeń tutaj, (2) odtworzenie zakładek
+    /// w <see cref="ApplyActiveConnectionChange"/> — <b>synchronicznie na wątku UI</b>, (3) prefetch
+    /// kategorii w węźle połączenia. Gaszenie na wyjściu z fazy 1 zostawiłoby lukę na fazę 2, a w niej
+    /// pasek zgasłby i zapalił się ponownie — użytkownik ratyfikował utrzymanie etykiety fazy 1
+    /// (2026-08-04), więc flaga żyje aż faza 3 ją przejmie.
+    /// </para>
+    /// <para>
+    /// ⭐ Nie ma tu ryzyka wiecznie zapalonego paska, bo <b>każda</b> droga wyjścia gasi flagę:
+    /// nieudane połączenie — w <c>catch</c> poniżej (faza 2 ani 3 wtedy nie nastąpią);
+    /// rozłączenie i brak profilu — w <see cref="ApplyActiveConnectionChange"/>;
+    /// udane połączenie — w <c>finally</c> prefetchu, razem z fazą 3.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _isConnecting;
+
+    // ⭐ Jeden punkt przeliczenia sekcji, dokładnie jak `OnIsExecutingChanged` dla zapytania. Rozsypane
+    // wywołania `UpdateProgressSection()` przy każdym przypisaniu flagi byłyby czwartą rzeczą do
+    // pamiętania — i pierwszy test, który ustawił flagę wprost, natychmiast to pokazał.
+    partial void OnIsConnectingChanged(bool value) => UpdateProgressSection();
+
     public async Task ConnectAsync(ConnectionProfile profile)
     {
         try
         {
             ClearError();
+            IsConnecting = true;
             await _service.ConnectAsync(profile).ConfigureAwait(true);
         }
         catch (ConnectionFailedException ex)
         {
+            // Faza 2 ani 3 już nie nastąpią, więc to jedyne miejsce, które może tu zgasić pasek.
+            IsConnecting = false;
             SetError(ex.Message);
         }
     }
@@ -7970,6 +8043,10 @@ public partial class MainWindowViewModel : ViewModelBase
             // that produced them — disconnecting must drop them too so the next
             // connect doesn't surface stale rows or success/error toasts.
             ClearResultsAndMessages();
+
+            // ⚠ Rozłączenie w trakcie ładowania: faza 3 już nie nastąpi, więc pasek gaśnie tutaj.
+            // Bez tego rozłączenie w połowie prefetchu zostawiłoby zapalony pasek (§19.34).
+            IsConnecting = false;
         }
         else
         {
