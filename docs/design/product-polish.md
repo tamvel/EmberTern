@@ -7655,3 +7655,176 @@ import i skrypt, i czy przejęcie sekcji przez zapytanie w trakcie skryptu czyta
 ⏸ **Do sprawdzenia okiem: szerokość etykiety** — czy przy „Running script… 1 234 / 5 678" chipy stanu
 przesuwają się na tyle, żeby to przeszkadzało (§19.31.6). Jeśli tak, odpowiedzią jest skrócenie formatu,
 nie zmiana układu.
+
+---
+
+### §19.32 Iteracja 20 (M3b.1 A+B+C) — wybór dużego pliku do importu nie blokuje UX (2026-08-04)
+
+> **Zgłoszenie użytkownika:** *„Po wskazaniu dużego pliku `.xlsx` aplikacja na kilka sekund się zamraża, nie
+> odświeża UI, a nawet przez chwilę wygląda, jakby zmieniała zoom lub przeskakiwała podczas odmalowywania."*
+> **Zakres ratyfikowany jako JEDNA iteracja** — użytkownik odrzucił podział na etapy: *„nie chciałbym robić
+> tego w dwóch etapach, gdzie po pierwszym nadal UI będzie się zamrażał, tylko trochę krócej."*
+> Build 0/0; suita **7296** w trzech partycjach (7179 + 63 + 54, +12); smoke czysty.
+> **Wynik: 17 768 ms → 1 ms** odcinka synchronicznego.
+
+#### §19.32.1 ⚠⚠ PIERWSZY POMIAR ODPOWIEDZIAŁ NA INNE PYTANIE, I UŻYTKOWNIK TO WYCHWYCIŁ
+
+Pierwsza analiza wyceniła **providera** (`ListSheetsAsync`, `ReadSchemaAsync`, tablicę stringów) i była
+poprawna co do liczb — ale nie tłumaczyła objawu. Użytkownik odrzucił ją precyzyjnie: *„Mam wrażenie, że
+problem leży na granicy pomiędzy zakończeniem OpenFileDialog a pierwszym wyświetleniem podglądu, a nie
+w samym odczycie XLSX."*
+
+⭐⭐ **Miał rację, i różnica nie jest niuansem: koszt tłumaczy, dlaczego coś jest WOLNE; nie tłumaczy,
+dlaczego UI jest ZABLOKOWANY.** Drugi pomiar dotyczył wątku, nie milisekund — i to on nazwał mechanizm.
+⚠ Lekcja metodologiczna: **zmierzenie właściwej rzeczy w niewłaściwym miejscu daje liczby, które wyglądają
+na odpowiedź.** Objaw („nie odświeża UI", „przeskakuje przy odmalowywaniu") mówił o wątku UI od początku;
+to ja czytałem go jako „wolno".
+
+#### §19.32.2 ⭐⭐ MECHANIZM: CAŁY ŁAŃCUCH BIEGŁ WEWNĄTRZ SETTERA WŁAŚCIWOŚCI
+
+```
+BrowseAsync:  Source.FilePath = path          ← zwykłe przypisanie
+  └ OnFilePathChanged → RaiseChanged → QueueRecalculate → Recalculate
+      └ PendingRecalculation = RunGuardedChainAsync(...)   ← metoda async biegnie INLINE
+          ├ clipboard → return · tabele → return           ← oba wracają natychmiast dla pliku
+          ├ ReadSourceAsync: ListSheets + detekcja + ReadSchema + podgląd
+          └ InferNewTableColumns → Task.Run                ← PIERWSZE oddanie sterowania
+```
+
+Metoda `async` biegnie synchronicznie **do pierwszego NIEZAKOŃCZONEGO await**, a
+`FileImportSource.OpenStreamAsync`/`OpenTextAsync` zwracają `Task.FromResult(...)` — await na zadaniu już
+zakończonym kontynuuje **inline, niezależnie od `ConfigureAwait`**. Zmierzone (`ImportFileOpenProbe`,
+identyfikatory wątków przed i po każdym await): **żaden await providera nie zmienia wątku.**
+
+**Dowód na „zablokowany", a nie „wolny":** przed przypisaniem odkładane jest na Dispatcher zadanie
+o priorytecie **`Render`**. Nie wykonało się ani razu przez **17 768 ms**; wykonało się w 17 769 ms.
+⭐ Okno nie miało **ani jednej okazji na klatkę** — a „przeskakiwanie przy odmalowywaniu" to zachowanie DWM
+wobec okna, które przestało pompować komunikaty. ⚠ Tego ostatniego sonda nie mierzy (nie ma okna) i jest to
+podane wprost.
+
+#### §19.32.3 ⭐⭐ A — 8,5 s NA PRZECZYTANIE JEDNEGO ATRYBUTU, DWA RAZY NA KAŻDY WYBÓR PLIKU
+
+`RowsFromDimension` chciał wartość `<dimension>`, a robił to przez `worksheetPart.Worksheet` — **akcesor DOM,
+który materializuje CAŁY arkusz** do drzewa obiektów, i to **przed** sprawdzeniem, czy element istnieje.
+Wołany raz na arkusz w `ListSheetsAsync` i raz na końcu `ReadSchemaAsync`.
+
+| Operacja (300 000 wierszy, 9,2 MB) | Koszt |
+|---|---|
+| `SpreadsheetDocument.Open` + `Sheets` | 22 ms |
+| cała tablica stringów współdzielonych (305 005 pozycji) | 678 ms |
+| strumieniowy odczyt 100 wierszy (`OpenXmlReader`) | 22 ms |
+| ⛔ **dostęp do `worksheetPart.Worksheet`** | ⛔ **8 546 ms** |
+| ✅ **`OpenXmlReader` do `<dimension>`** | ✅ **15 ms** (ta sama wartość `A1:E300001`) |
+
+⭐ **To nie optymalizacja, a naprawa odstępstwa od reguły, którą ta klasa sama deklaruje:** jej doc wymienia
+*„SAX not DOM (1)"* jako pierwszą z siedmiu wiążących wytycznych REK‑6 z etapu I0. Jedno miejsce ją po cichu
+łamało.
+
+⚠ **Zatrzymanie na `<sheetData>` jest częścią naprawy, nie ozdobą:** bez niego czytelnik przeszedłby przez
+wszystkie wiersze pliku BEZ atrybutu, szukając czegoś, czego tam nie ma — zamienilibyśmy jeden drogi
+mechanizm na drugi. `<dimension>` poprzedza `<sheetData>` w schemacie, więc dojście do drugiego dowodzi
+braku pierwszego. Zmierzone: **13 ms** na pliku bez atrybutu.
+
+**Po samym A: 17 768 → 1 599 ms — i zero klatek nadal.** To jest dokładnie powód, dla którego użytkownik
+odrzucił podział na etapy: A bez B to wciąż zablokowany UX, tylko krócej.
+
+#### §19.32.4 ⭐ B — POZA WĄTEK IDZIE TYLKO ODCZYT; KOLEKCJE ZOSTAJĄ NA DISPATCHERZE
+
+Użytkownik postawił warunek: *„żadnego pozornego postępu ani sztucznego `Task.Run`. Przenosimy wyłącznie tę
+pracę, która rzeczywiście nie wymaga wątku UI."*
+
+Przeniesione **trzy wywołania providera**: `ListSheetsAsync`, `ReadSchemaAsync` oraz pętla odczytu podglądu.
+⛔ Na Dispatcherze zostało wszystko, co dotyka ViewModelu: `Source.ApplyCapabilities`, `_schema`,
+`PreviewFields`, `PreviewRows`, `SetStatus`, `PreviewSchemaChanged`.
+
+⭐⭐ **To nie jest nowy wzorzec — to wzorzec, który ten plik już stosuje.**
+`InferNewTableColumnsAsync` i `RefreshConvertedPreviewAsync` **od dawna** robią „czytaj poza wątkiem,
+publikuj na wątku"; `ReadSourceAsync` był jedynym drogim ogniwem, które zostało poza nim. Stąd
+`LoadPreviewAsync` zbiera ograniczoną głowę do zwykłej listy i **potem** publikuje: wcześniej `await foreach`
+przeplatał odczyt z `PreviewRows.Add`, więc **kolekcja przypinała odczyt do wątku UI**.
+
+⚠ **Detekcja kodowania i separatora NIE została przeniesiona, świadomie:** czyta ograniczoną próbkę (64 KB),
+zmierzone 1–3 ms, i dotyczy wyłącznie plików rozdzielanych, których cała ścieżka to ≤ 32 ms. Przenoszenie
+pracy, której koszt nie został zmierzony jako problem, byłoby dokładnie tym „sztucznym `Task.Run`".
+
+#### §19.32.5 C — JEDEN SYGNAŁ NA CAŁĄ DŁUGOŚĆ ŁAŃCUCHA
+
+⚠⚠ **Nie `IsBusy`, i to jest istotne.** `IsBusy` obejmuje wyłącznie `ReadSourceAsync`, a łańcuch ma jeszcze
+inferencję typów i podgląd po konwersji, **każde z własną flagą**. Pasek wiązany z `IsBusy` **gasłby
+i zapalał się w trakcie jednej operacji** — migotanie zamiast informacji. Nowe `IsRecalculating` podnosi się
+w `Recalculate` i gaśnie w **jednym** miejscu: `finally` osłony łańcucha, przez które przechodzi każde
+wyjście (sukces, błąd, anulowanie). To ten sam wybór, co `OnIsExecutingChanged` w §19.7.4.
+
+⚠⚠ **Gaszenie jest WARUNKOWE i bez tego byłby defekt:** wyprzedzony łańcuch kończy się **po** starcie
+następnego (anulowanie nie jest natychmiastowe), więc bezwarunkowe `false` zgasiłoby pasek dla operacji,
+która właśnie się rozpoczęła — objaw: przy szybkiej zmianie ustawień pasek znika, choć praca trwa.
+Porównanie po referencji CTS-a odpowiada na pytanie *„czy to nadal moja tura"*.
+
+⭐ **Dwie etykiety, nie jedna:** to samo ogniwo obsługuje schowek, więc „Loading file…" nad odczytem schowka
+byłoby nieprawdą — a kłamiąca etykieta jest nieodróżnialna od awarii (gotcha #311). Stąd
+`StatusProgressImportReadingFile` / `…ReadingClipboard`, jeden warunek.
+⚠ **Bez licznika i bez procentu** — ten odcinek nie zna żadnej sumy. ⚠ **Bez przycisku anulowania**: łańcuch
+ma własny CTS, ale użytkownik nie ma dla niego przycisku, a wymyślenie go byłoby dodaniem funkcji pod
+pozorem podłączenia postępu.
+
+#### §19.32.6 Wynik
+
+| | odcinek synchroniczny `Source.FilePath = path` | werdykt |
+|---|---|---|
+| przed | **17 768 ms** | ⛔ ani jednej klatki |
+| po A | 1 599 ms | ⛔ ani jednej klatki |
+| **po A+B+C** | ✅ **1 ms** | ✅ mieści się w budżecie klatki |
+
+CSV bez zmian i bez problemu: **27–32 ms** (schemat czyta próbkę 200 rekordów, `EstimatedRows` świadomie
+`null`). ⭐ Gdyby użytkownik zgłosił zamrożenie na CSV, przyczyna leżałaby gdzie indziej.
+
+#### §19.32.7 Strażnicy — i granica tego, co suita umie ocenić
+
+⚠⚠ **`XlsxImportProvider` NIE MIAŁ ANI JEDNEGO TESTU JEDNOSTKOWEGO** — był weryfikowany wyłącznie sondami
+na żywo. Dlatego poprawka A dostała pierwsze cztery (`XlsxDimensionReadTests`): zadeklarowany `<dimension>`
+raportowany jako szacunek, jego brak jako `null` (nigdy liczba zmyślona), zgodność `ListSheets` z `ReadSchema`.
+
+| Naruszenie | Złapane przez |
+|---|---|
+| powrót do `worksheetPart.Worksheet` | `RowsFromDimension_UsesTheSaxReader_NeverTheWorksheetDom` — i **tylko** on; trzy testy behawioralne pozostały zielone |
+| podgląd przestaje się ograniczać | `Preview_StopsAtItsBound_EvenWhenTheFileIsLonger` |
+| bezwarunkowe gaszenie sygnału | `Recalculating_SurvivesBeingSuperseded_ByANewerChange` |
+
+⭐⭐ **Pierwszy wiersz jest lekcją o granicach testów behawioralnych:** DOM i SAX zwracają **tę samą
+wartość**, więc żadna asercja na wyniku nie odróżni 15 ms od 8 546 ms. Jedyne, co je rozróżnia, to
+**mechanizm** — dlatego ten jeden strażnik czyta ŹRÓDŁO, i dlatego jest tu uzasadniony, a nie leniwy.
+
+⚠⚠ **Czego suita NIE dowodzi, podane wprost:** że praca zeszła z wątku UI. Nie ma tu okna ani pętli
+Dispatchera, a asercja na czasie byłaby testem psującym się z powodów niezwiązanych ze swoim przedmiotem
+(R16). Ten dowód daje **sonda**, i to jest jej trwała rola.
+
+#### §19.32.8 ⚠ Trzy potknięcia własne, warte zapisania
+
+1. **Pierwsza wersja sondy generowała plik z *inline strings***, czyli bez tablicy stringów współdzielonych —
+   mierzyłaby kształt pliku, którego użytkownik nie ma, i podałaby koszt tablicy jako zero.
+2. **Mój plik nie miał `<dimension>`**, więc pomiar mógł dotyczyć wyłącznie ścieżki awaryjnej. Sprawdzone na
+   drugim pliku, **z** atrybutem: koszt identyczny, bo dostęp do DOM wyprzedza sprawdzenie atrybutu.
+   ⭐ Bez tego kroku wniosek nie generalizowałby się na pliki z Excela.
+3. ⭐⭐ **Sonda zawisła na `await Task.Delay` po `SetupWithoutStarting()`** — bieżący wątek JEST wtedy wątkiem
+   UI Avalonii, więc kontynuacja poszła na Dispatcher, którego nikt nie pompuje. **To ta sama pułapka, którą
+   sonda mierzy, o poziom wyżej.** Zastąpione synchronicznym `Sleep`, z powodem w miejscu.
+4. ⚠ **Wypis sondy po naprawie kłamał:** „czy okno dostało klatkę w trakcie settera? NIE" jest prawdą
+   i zupełnie myląco przy odcinku 1 ms — klatka nie była potrzebna. Zamienione na **werdykt** z budżetem
+   klatki. **Log, który da się przeczytać jako porażkę, jest gorszy niż brak logu.**
+
+#### §19.32.9 ⛔ Czego iteracja NIE zrobiła
+
+* **Nie tknęła `.xls`** (`ExcelDataReader`) — z lektury jego ścieżka jest ograniczona próbką i bierze
+  `RowCount` z deklaracji BIFF, bez DOM, ale **nie zmierzyłem tego** (brak dużego pliku `.xls`).
+  ⛔ Nie zgaduję; zapisane jako niezmierzone.
+* **Nie przeniosła detekcji** (§19.32.4) ani niczego, czego koszt nie został zmierzony.
+* **Nie dodała przycisku anulowania** odczytu źródła.
+* **Nie tknęła `ImportPipeline`, mapowania, konwertera ani raportu** — architektura modułu (🔒 zamrożona)
+  jest nietknięta; zmiany są w providerze, w łańcuchu przeliczania i w resolverze paska statusu.
+* **Nie tknęła `StatusProgressViewModel`** ani XAML-a.
+
+#### §19.32.10 ⏸ Do QA użytkownika
+
+Wybór dużego `.xlsx`: okno pozostaje responsywne, w pasku statusu od razu **„Loading file…"**, podgląd
+dochodzi po chwili. ⏸ Do sprawdzenia okiem, czy przy szybkiej zmianie ustawień źródła (separator, kodowanie)
+etykieta nie migocze — mechanizm jest osłonięty i pinowany testem, ale ⭐ kryterium odbioru jest ekran.

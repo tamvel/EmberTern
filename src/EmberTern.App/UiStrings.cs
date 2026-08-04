@@ -767,6 +767,14 @@ internal static class UiStrings
     public const string StatusProgressScriptFormat = "Running script… {0:N0} / {1:N0}";
     public const string StatusProgressImportFormat = "Importing data… {0:N0} rows";
 
+    // ⭐ Odczyt źródła przed importem (M3b.1c). ⚠ DWIE etykiety, nie jedna z „file" na sztywno: to samo ogniwo
+    // obsługuje schowek, a napis „Loading file…" nad odczytem schowka byłby nieprawdą — a kłamiąca etykieta jest
+    // nieodróżnialna od awarii (gotcha #311). Jeden warunek, dwa uczciwe zdania.
+    // ⚠ Bez licznika: ten odcinek nie zna ani sumy, ani postępu (czyta próbkę schematu i ograniczony podgląd),
+    // więc jakakolwiek liczba tutaj byłaby zmyślona.
+    public const string StatusProgressImportReadingFile = "Loading file…";
+    public const string StatusProgressImportReadingClipboard = "Reading clipboard…";
+
     // ⭐ Chipy Trace i Debuggera (§8.4.3 sekcja 3) — M3.1e. Etykieta niesie sam FAKT („gdzieś żyje
     // sesja"), a szczegół idzie do tooltipa, który czyta `StatusText` z VM-a odpowiedniej zakładki.
     // ⚠ Rzeczownik, nie czasownik: chip mówi, CO jest prawdą, a nie co się dzieje — „co się dzieje"

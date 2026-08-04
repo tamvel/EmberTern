@@ -1379,6 +1379,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (e.PropertyName is nameof(DebuggerTabViewModel.Phase)
                            or nameof(TraceMonitorTabViewModel.State)
                            or nameof(DataImportTabViewModel.IsRunning)
+                           or nameof(DataImportTabViewModel.IsRecalculating)
                            or nameof(DataImportTabViewModel.ProgressRowsRead)
                            or nameof(DataImportTabViewModel.ProgressPercent)
                            or nameof(DataImportTabViewModel.IsProgressIndeterminate)
@@ -1432,7 +1433,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // ══════════════════════════════════════════════════════════════════════════════════════════════
 
     /// <summary>Które źródło zajmuje sekcję postępu. `None` znaczy „sekcja zgaszona".</summary>
-    private enum ProgressOwner { None, Query, Script, Import }
+    private enum ProgressOwner { None, Query, Script, Import, ImportReading }
 
     private ProgressOwner _progressOwner = ProgressOwner.None;
 
@@ -1508,6 +1509,22 @@ public partial class MainWindowViewModel : ViewModelBase
                     string.Format(CultureInfo.CurrentCulture, UiStrings.StatusProgressImportFormat, import.ProgressRowsRead),
                     import.IsProgressIndeterminate ? null : import.ProgressPercent,
                     import.CancelRunCommand);
+        }
+
+        // Szczebel 1 — odczyt źródła przed importem (M3b.1c). ⭐ Ten sam szczebel co import, bo to ta sama
+        // powierzchnia w innej fazie, i PONIŻEJ samego importu, bo trwający import jest ważniejszy niż
+        // przeliczanie konfiguracji.
+        // ⚠ Bez komendy anulowania: łańcuch ma własny CTS, ale użytkownik nie ma dla niego przycisku, a
+        // wymyślanie go tutaj byłoby dodaniem funkcji pod pozorem podłączenia postępu. `HasCancel` = false.
+        // ⚠ Tryb nieokreślony — ten odcinek nie zna żadnej sumy (§19.32).
+        if (WorkspaceTabs.Select(t => t.DataImport).FirstOrDefault(i => i is { IsRecalculating: true }) is { } reading)
+        {
+            return (ProgressOwner.ImportReading,
+                    reading.Source.UseFile
+                        ? UiStrings.StatusProgressImportReadingFile
+                        : UiStrings.StatusProgressImportReadingClipboard,
+                    null,
+                    null);
         }
 
         return (ProgressOwner.None, string.Empty, null, null);

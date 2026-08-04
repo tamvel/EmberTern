@@ -1546,8 +1546,26 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         _recalculation = cts;
 
         UpdateSourceFacts();
-        PendingRecalculation = RunGuardedChainAsync(trigger, cts.Token);
+        IsRecalculating = true;
+        PendingRecalculation = RunGuardedChainAsync(trigger, cts);
     }
+
+    /// <summary>
+    /// Czy łańcuch §4.7 pracuje — JEDEN sygnał na całą jego długość, dla sekcji postępu paska statusu (M3b.1c).
+    /// <para>
+    /// ⚠⚠ Celowo NIE <see cref="IsBusy"/>. `IsBusy` obejmuje wyłącznie <c>ReadSourceAsync</c>, a łańcuch ma
+    /// jeszcze inferencję typów i podgląd po konwersji, każde z własną flagą. Pasek statusu wiązany z `IsBusy`
+    /// gasłby i zapalał się w trakcie jednej operacji — migotanie zamiast informacji.
+    /// </para>
+    /// <para>
+    /// ⭐ Podniesione w <see cref="Recalculate"/>, gaszone w jednym miejscu: <c>finally</c> osłony łańcucha.
+    /// To ten sam wybór, co <c>OnIsExecutingChanged</c> w edytorze SQL (§19.7.4): jeden lej, przez który
+    /// przechodzi KAŻDE wyjście — sukces, błąd i anulowanie — więc nie da się dodać ścieżki, która zostawi
+    /// zapalony pasek.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _isRecalculating;
 
     /// <summary>
     /// The chain's own boundary. Every link already degrades in place, but the chain is started
@@ -1556,11 +1574,11 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     /// thread. Recalculating is background work the user did not ask for by name; it must never be able to
     /// close the window.
     /// </summary>
-    private async Task RunGuardedChainAsync(ImportChainTrigger trigger, CancellationToken cancellationToken)
+    private async Task RunGuardedChainAsync(ImportChainTrigger trigger, CancellationTokenSource cts)
     {
         try
         {
-            await RunChainAsync(trigger, cancellationToken).ConfigureAwait(true);
+            await RunChainAsync(trigger, cts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -1569,6 +1587,15 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         catch (Exception ex)
         {
             SetStatus(ex.Message, MessageSeverity.Error);
+        }
+        finally
+        {
+            // ⚠⚠ Gaszone TYLKO wtedy, gdy to nadal JEST bieżący łańcuch. Wyprzedzony łańcuch kończy się PO
+            // starcie następnego (anulowanie nie jest natychmiastowe), więc bezwarunkowe `false` zgasiłoby
+            // pasek dla operacji, która właśnie się rozpoczęła — objaw: przy szybkiej zmianie ustawień pasek
+            // znika, choć praca trwa. Porównanie po referencji CTS-a jest tu tożsame z pytaniem „czy to nadal
+            // moja tura".
+            if (ReferenceEquals(_recalculation, cts)) IsRecalculating = false;
         }
     }
 
@@ -2102,8 +2129,21 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
 
             // ⭐ The section shows whatever THIS provider declares it can be asked about (§3.3) — the surface
             // never switches on the source kind itself. Sheets are fetched only when there can be any.
+            //
+            // ⚠⚠ `Task.Run` HERE IS NOT CEREMONY, AND IT IS NOT A GUESS. `FileImportSource.OpenStreamAsync`
+            // returns `Task.FromResult(...)`, so an await on it continues INLINE — the provider's whole body runs
+            // on whatever thread called it. Measured (`tools/probes/ImportFileOpenProbe`): the entire chain used
+            // to run inside the `Source.FilePath = path` SETTER, and a Dispatcher job posted at `Render` priority
+            // before that assignment did not get a single chance to run for 17,8 s. So this is the ONE reason the
+            // window froze rather than merely loaded slowly.
+            // ⛔ Only the PROVIDER CALL moves. Everything that touches a ViewModel or an observable collection
+            // stays on the Dispatcher — which is why `ApplyCapabilities` is on this side of the await and not
+            // inside the lambda.
             var sheets = provider.Capabilities.SupportsSheets
-                ? await provider.ListSheetsAsync(source, cancellationToken).ConfigureAwait(true)
+                ? await Task.Run(
+                        () => provider.ListSheetsAsync(source, cancellationToken),
+                        cancellationToken)
+                    .ConfigureAwait(true)
                 : (IReadOnlyList<SourceSheet>)Array.Empty<SourceSheet>();
             if (cancellationToken.IsCancellationRequested) return;
             Source.ApplyCapabilities(provider.Capabilities, sheets);
@@ -2129,8 +2169,13 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             _configuration = BuildConfiguration();
             configuration = _configuration;
 
-            var schema = await ProviderFor(configuration)
-                .ReadSchemaAsync(source, configuration, cancellationToken)
+            // Off the Dispatcher for the same measured reason as the sheet list above; the schema is a plain
+            // value, so nothing about publishing it needs the UI thread.
+            var schemaProvider = ProviderFor(configuration);
+            var schemaConfiguration = configuration;
+            var schema = await Task.Run(
+                    () => schemaProvider.ReadSchemaAsync(source, schemaConfiguration, cancellationToken),
+                    cancellationToken)
                 .ConfigureAwait(true);
 
             if (cancellationToken.IsCancellationRequested) return;
@@ -2169,14 +2214,32 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         foreach (var field in schema.Fields) PreviewFields.Add(field);
         PreviewSchemaChanged?.Invoke(this, EventArgs.Empty);
 
-        var taken = 0;
-        await foreach (var record in ProviderFor(configuration)
-                           .ReadRecordsAsync(source, configuration, cancellationToken)
-                           .ConfigureAwait(true))
-        {
-            PreviewRows.Add(new ImportSourceRecordRowViewModel(record));
-            if (++taken >= SourcePreviewRows) break;
-        }
+        // ⭐ READ OFF THE DISPATCHER, PUBLISH ON IT — the shape `RefreshConvertedPreviewAsync` and
+        // `InferNewTableColumnsAsync` already use in this very file. Before this, the `await foreach` interleaved
+        // the provider's read with `PreviewRows.Add`, so the read was pinned to the UI thread by the collection
+        // it was feeding. Collecting the bounded head first separates the two concerns and needs no new mechanism.
+        // ⚠ The bound is unchanged (`SourcePreviewRows`), so the file is still read only as far as the preview
+        // needs — moving the loop must not turn a bounded head into a full read.
+        var previewProvider = ProviderFor(configuration);
+        var records = await Task.Run(
+                async () =>
+                {
+                    var collected = new List<RawRecord>(SourcePreviewRows);
+                    await foreach (var record in previewProvider
+                                       .ReadRecordsAsync(source, configuration, cancellationToken)
+                                       .ConfigureAwait(false))
+                    {
+                        collected.Add(record);
+                        if (collected.Count >= SourcePreviewRows) break;
+                    }
+                    return collected;
+                },
+                cancellationToken)
+            .ConfigureAwait(true);
+
+        if (cancellationToken.IsCancellationRequested) return;
+
+        foreach (var record in records) PreviewRows.Add(new ImportSourceRecordRowViewModel(record));
 
         MarkRaggedRows(PreviewRows);
     }

@@ -248,9 +248,47 @@ public sealed class XlsxImportProvider : IImportProvider
 
     /// <summary>Row count from the sheet's declared dimension (<c>A1:E8724</c> → 8724), or <c>null</c>. A hint —
     /// see <see cref="ListSheetsAsync"/>.</summary>
+    /// <summary>
+    /// The sheet's declared row count, from <c>&lt;dimension&gt;</c> — a HINT only (REK-6 (6)).
+    /// <para>
+    /// ⭐⭐ <b>Read with the SAX reader, never through <c>worksheetPart.Worksheet</c>.</b> That property is the DOM
+    /// accessor: touching it materializes the ENTIRE worksheet into an object tree, and it did so before even
+    /// checking whether the element exists. Measured on a 300 000-row / 9,2 MB workbook
+    /// (<c>tools/probes/ImportFileOpenProbe</c>): <b>8 546 ms through the DOM against 15 ms here</b>, for the same
+    /// value (<c>A1:E300001</c>). Since this method is called once per sheet in <see cref="ListSheetsAsync"/> AND
+    /// once at the end of <see cref="ReadSchemaAsync"/>, the workbook was being materialized twice per file
+    /// selection — ~17 s of pure waste, on the UI thread, to read one attribute.
+    /// </para>
+    /// <para>
+    /// ⚠ The stop at <c>&lt;sheetData&gt;</c> is what makes it cheap for a workbook that has NO dimension (some
+    /// generators omit it): without it the reader would walk every row looking for an element that is not there,
+    /// which would trade one expensive mechanism for another. <c>&lt;dimension&gt;</c> precedes
+    /// <c>&lt;sheetData&gt;</c> in the schema, so reaching the latter proves the former is absent.
+    /// Measured: 13 ms on the no-dimension file.
+    /// </para>
+    /// <para>
+    /// ⛔ Do not "simplify" this back to the DOM property. It reads as the obvious one-liner, it returns the same
+    /// answer, and it costs three orders of magnitude more — the class's own REK-6 (1) says SAX, not DOM, and this
+    /// is the one place that had quietly broken that rule.
+    /// </para>
+    /// </summary>
     private static long? RowsFromDimension(WorksheetPart worksheetPart)
     {
-        var reference = worksheetPart.Worksheet?.SheetDimension?.Reference?.Value;
+        string? reference = null;
+        using (var reader = OpenXmlReader.Create(worksheetPart))
+        {
+            while (reader.Read())
+            {
+                if (reader.ElementType == typeof(SheetDimension))
+                {
+                    reference = (reader.LoadCurrentElement() as SheetDimension)?.Reference?.Value;
+                    break;
+                }
+
+                if (reader.ElementType == typeof(SheetData)) break;
+            }
+        }
+
         if (string.IsNullOrEmpty(reference)) return null;
 
         var end = reference.AsSpan(reference.IndexOf(':') + 1);

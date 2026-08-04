@@ -632,6 +632,48 @@ noted.
   `ColumnDefinitions="Auto,*,Auto,Auto"`, so section 4 grows at the star column's expense and **pushes the
   state chips left** — which is why §8.4.6 fixed the bar itself at 120 px. ⛔ Do not add the operation's
   detail to it; the detail belongs to the surface running the operation (§19.5.1/§19.7.1's ownership split).
+  ✅ **M3b.1 A+B+C DONE (2026-08-04) — selecting a large `.xlsx` for import no longer blocks the UI:
+  17 768 ms → 1 ms** (`product-polish.md` §19.32). ⚠⚠ **My first measurement answered a different question and
+  the user caught it.** I priced the *provider* (`ListSheetsAsync`, `ReadSchemaAsync`, the shared-string table)
+  and the numbers were right, but they did not explain the symptom; the user's reply was exact — *"the problem
+  is at the boundary between OpenFileDialog closing and the first preview, not in reading the XLSX"*.
+  ⭐⭐ **Cost explains why something is SLOW; it does not explain why the UI is BLOCKED** — the second
+  measurement was about the thread, not milliseconds, and that is the one that named the mechanism.
+  **The mechanism:** `Recalculate` starts the chain synchronously (`PendingRecalculation =
+  RunGuardedChainAsync(...)`) and an `async` method runs inline until its first *incomplete* await — while
+  `FileImportSource.OpenStreamAsync`/`OpenTextAsync` return `Task.FromResult(...)`, so every provider await
+  continues **inline regardless of `ConfigureAwait`**. So the whole read ran **inside the `Source.FilePath =
+  path` setter**, and a Dispatcher job posted at **`Render`** priority beforehand did not run **once** in
+  17 768 ms. ⭐ That is what "the window looks frozen and repaints oddly" is: a window that stopped pumping.
+  **A —** `RowsFromDimension` fetched one attribute through `worksheetPart.Worksheet`, the **DOM accessor**,
+  which materializes the entire sheet *before* checking whether the element exists: **8 546 ms vs 15 ms** via
+  `OpenXmlReader` for the same value, paid **twice** per file selection. ⭐ Not an optimization — the class's own
+  doc lists *"SAX not DOM (1)"* as the first of I0's seven binding REK-6 guidelines, and this one place had
+  quietly broken it. ⚠ The stop at `<sheetData>` is part of the fix: without it a workbook with **no**
+  dimension would be walked row by row, trading one expensive mechanism for another (13 ms measured).
+  **B —** three provider calls moved off the Dispatcher; ⛔ **everything touching a ViewModel or an observable
+  collection stayed on it**. ⭐ Not a new pattern — `InferNewTableColumnsAsync` and
+  `RefreshConvertedPreviewAsync` **already** did "read off-thread, publish on-thread"; `ReadSourceAsync` was
+  the one expensive link left out, and its `await foreach` had the collection *pinning the read to the UI
+  thread*. ⚠ Encoding/delimiter detection was deliberately **not** moved (bounded 64 KB, 1–3 ms) — moving work
+  whose cost was never measured as a problem is exactly the "artificial `Task.Run`" the user forbade.
+  **C —** new `IsRecalculating` (⚠ **not** `IsBusy`, which covers only `ReadSourceAsync` while the chain has
+  two more flags — a bar bound to it would blink mid-operation) drives *"Loading file…"* / *"Reading
+  clipboard…"* through M3b.1's one writer. ⚠⚠ Clearing it is **conditional on still being the current chain**:
+  a superseded chain finishes *after* its successor starts, so an unconditional `false` would darken the bar
+  for an operation that just began.
+  ⭐⭐ **The most durable finding is in the frozen design doc: `data-import.md` §4.7 has said "the schema read
+  and the preview go on a background thread" since v2 — and the implementation never did it.** So B was not a
+  design change; it was the code finally catching up. ⚠ A sentence in a design document goes stale exactly as
+  silently as a comment or a string (#284): that one was *true as intent* and *false as description* for the
+  module's whole life, with a green build and green tests, because nothing checked it.
+  ⚠⚠ **`XlsxImportProvider` had NO unit tests at all** (live probes only) — the fix brought its first four.
+  ⭐ One guard reads the **source**, and that is justified rather than lazy: DOM and SAX return the **same
+  value**, so no assertion about the result can tell 15 ms from 8 546 ms; only the mechanism differs. Verified
+  by planting it — the source guard failed and all three behavioural tests stayed green. ⚠ **The suite does
+  not prove the work left the UI thread**; that is the probe's standing job
+  (`tools/probes/ImportFileOpenProbe`, which posts a `Render`-priority job and reports a verdict against a
+  frame budget). ⚠ `.xls` (`ExcelDataReader`) is **unmeasured** and left alone — no large `.xls` to hand.
   ⏸ **Next: M3b.2 — connect + metadata loading as a NEW progress source** (the user's explicit priority:
   this is where they wait longest with no information today), then **M3b.3** (rail), then ⛔ the §13.3 gate.
   ⚠⚠ Its anatomy is already measured and one phase is a hard limit: **`LoadWorkspaceFor` is `private void`
@@ -3713,10 +3755,11 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7284, MEASURED 2026-08-04**
-  (Product Polish through M3b.1). Green in the three documented partitions (**7167 + 63 + 54**).
-  ⚠ M3b.1 added 13 (`StatusProgressSourcesTests`), which lives in the **main** partition — it constructs no
-  Avalonia controls, so it does not join the headless filter (the handover §8 criterion).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7296, MEASURED 2026-08-04**
+  (Product Polish through M3b.1 A+B+C). Green in the three documented partitions (**7179 + 63 + 54**).
+  ⚠ The three new classes (`StatusProgressSourcesTests`, `XlsxDimensionReadTests`,
+  `ImportFileSelectionResponsivenessTests`) all live in the **main** partition — none constructs an Avalonia
+  control, so none joins the headless filter (the handover §8 criterion).
   ⚠ This line said **7228 (7118 + 56 + 54)** and then **7271 (7154 + 63 + 54)** — a figure that had gone
   stale across M3.3b/c and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy
   it forward.
