@@ -20,10 +20,11 @@ suite **7317** w trzech partycjach (7196 + 67 + 54) · smoke czysty.
 🔒 **M3.5 odebrane przez użytkownika w obu motywach 2026-08-04** — w tym ratyfikacja architektury
 `CreateIcon` (lepsza niż dziewięć wariantów `*Plus`) i proporcji badge'a. ⛔ Nie otwierać ponownie.
 
-⏸ **Otwarte i przypisane, ale ŻADNE nie blokuje M4:** Z‑3 (wiersz Table Data — najpierw przyczyna) ·
-Z‑4 (okno Settings ucina wiersz) · Z‑5 (edytor daty w dialogu) · temat **Settings Center jako powierzchnia
-UX** · **P‑1** (paleta za uboga na rozróżnianie aktywności railem, z P‑2 i P‑3) · **DC** (likwidacja
-`AccentIconBrush`/`InfoIconBrush`) · **R‑6** (DPI 150 % — częściowo nieweryfikowalne headlessowo).
+⏸ **Otwarte i przypisane, ale ŻADNE nie blokuje M4** (i ⭐ **decyzja D‑M4‑3 w §5 mówi, że nie wchodzą przed
+etapem**): Z‑3 (wiersz Table Data — najpierw przyczyna) · Z‑4 (okno Settings ucina wiersz) · Z‑5 (edytor daty
+w dialogu) · temat **Settings Center jako powierzchnia UX** · **P‑1** (paleta za uboga na rozróżnianie
+aktywności railem, z P‑2 i P‑3) · **DC** (likwidacja `AccentIconBrush`/`InfoIconBrush`) · **R‑6** (DPI 150 % —
+częściowo nieweryfikowalne headlessowo).
 
 ---
 
@@ -82,7 +83,7 @@ ponownie na „tęczy ikon". Przy każdym wniosku „to nie pasuje do reguły" n
 
 ---
 
-## 5. Co obejmuje M4 — do POTWIERDZENIA z użytkownikiem przed startem
+## 5. Co obejmuje M4 — ⭐ KIERUNEK RATYFIKOWANY (użytkownik, 2026-08-04)
 
 ⚠ **Zakres M4 czytaj z `product-polish.md` §13, nie z pamięci tego dokumentu.** Plan etapu opisuje M4 jako
 migrację ekranów na przyjętą ramę; rejestr **K1–K15** (§18.R) jest jego wejściem, a **M4.3** ma tam już
@@ -91,13 +92,47 @@ przypisane dwa sweepy app-wide:
 * **`Size.Icon`** — 64 literały `Width="14"`/`16"` (znalezisko M3.3a);
 * **ikona węzła drzewa 15 px + `Spacing` 5** — **112 wystąpień w 17 plikach** (K15, znalezisko M3.4a).
 
-⭐⭐ **Te dwie listy opisują TĘ SAMĄ app-wide decyzję o rozmiarze ikony i najprawdopodobniej trzeba je zadać
-użytkownikowi RAZEM** — tak jak K12–K14 poszły na bramę jako jedno pytanie o gęstość paska zakładek.
+⭐⭐ **Trzy decyzje, które NIE PODLEGAJĄ ponownemu zadaniu — sesja startuje od nich, nie od pytań o nie:**
 
-⛔ **Zanim napiszesz pierwszą linię M4, ustal z użytkownikiem:**
-1. Czy M4 zaczyna się od **rejestru K1–K15** (rozstrzygnięcie kolizji), czy od **migracji ekranów**?
-2. Czy sweepy `Size.Icon` + K15 idą **jednym pytaniem o gęstość**, czy osobno?
-3. Czy któryś z odłożonych tematów (Z‑3, Settings, P‑1) ma wejść **przed** M4, czy zostaje po nim?
+### D‑M4‑1 · M4 zaczyna się od rejestru kolizji K1–K15, nie od migracji ekranów
+
+> *„Chcę najpierw zamknąć decyzje projektowe o charakterze globalnym, a dopiero potem wykonywać migrację
+> ekranów. Dzięki temu nie będziemy wracać drugi raz do tych samych powierzchni."*
+
+⭐ To jest **R7 zastosowane do KOLEJNOŚCI etapu**: migracja ekranu na ramę, w której nierozstrzygnięta jest
+jeszcze globalna metryka, oznacza ruszenie tego ekranu dwa razy — a drugie ruszenie jest dokładnie tym
+„łataniem pojedynczego widoku", którego R7 zabrania. ⚠ Zgodne też z **Z‑6** (§13.0.1): migracja na ramę,
+która nie została zaakceptowana, to migracja do poprawki.
+
+### D‑M4‑2 · `Size.Icon` i K15 to JEDNO pytanie projektowe o gęstość wizualną
+
+> *„Oba opisują tę samą decyzję dotyczącą gęstości wizualnej aplikacji, więc chcę ją podjąć raz, oglądając
+> efekt całościowo, a nie w dwóch niezależnych iteracjach."*
+
+⛔ **Nie rozstrzygać ich osobno.** Dwie niezależne iteracje znaczyłyby **dwie zmiany gęstości bez ani jednego
+spojrzenia na całość** — czyli R17 złamane w ten sam sposób, w jaki K12–K14 poszły na bramę **jako jedno**
+pytanie o gęstość paska zakładek, a K15 jako jedno pytanie o gęstość drzewa.
+⭐ Praktycznie: przed decyzją zrób render **wszystkich** powierzchni, których to dotyczy (drzewo · pasek
+narzędzi · menu · siatki), w obu motywach — `tools/probes/VisualCandidateProbe` jest do tego gotowy i taką
+właśnie rolę odegrał w Z‑6.
+
+### D‑M4‑3 · Żaden z odłożonych tematów nie wchodzi PRZED M4
+
+Z‑3 · Z‑4 · Z‑5 · Settings Center · P‑1 (z P‑2/P‑3) · DC · R‑6 **zostają na swoich miejscach.**
+
+⚠⚠ **Ale to NIE znaczy „nie dotykać":**
+
+> *„Jeżeli podczas M4 okaże się, że któryś z nich naturalnie wiąże się z wykonywaną pracą, wtedy podejmiemy
+> decyzję w kontekście konkretnej zmiany, a nie z góry."*
+
+⭐ Czyli zakaz dotyczy **wyciągania ich przed etap**, nie spotkania z nimi w trakcie. Gdy praca M4 naturalnie
+dotknie któregoś (np. sweep `Size.Icon` wejdzie w ikony, które i tak siedzą w temacie DC), **zatrzymaj się
+i zapytaj w kontekście tej konkretnej zmiany** — zamiast rozstrzygać z góry albo omijać temat sztucznie.
+
+---
+
+⛔⛔ **M4 NADAL NIE ZACZYNA SIĘ BEZ WYRAŹNEJ ZGODY UŻYTKOWNIKA.** Powyższe trzy decyzje ustalają
+**kierunek**, nie są zgodą na start.
 
 ---
 
