@@ -7211,3 +7211,111 @@ decyzją produktową, nie skutkiem ubocznym eksperymentu. Liczba idzie do logu j
 
 ⚠⚠ Nowa klasa headless dołączyła do `HeadlessCollection` **i do filtra partycji** — filtr jest listą nazw
 i starzeje się cicho (§18.1.6). Partycje po kroku 15b: **7134 + 61 + 54 = 7249**.
+
+---
+
+### §19.28 Iteracja 17 (M3.4b, część 1) — menu kontekstowe paska bocznego przestają być mnożone przez wirtualizację (2026-08-04)
+
+> **Wynik: ~74% czasu przewijania najgęstszego widoku aplikacji, 440 → 22 żywych `MenuItem`,
+> trzy bloki XAML zmieniają miejsce. Zero nowego mechanizmu. +5 testów (7249 → 7254).**
+
+#### §19.28.1 ⭐⭐ Znalezisko przyszło z INWENTARYZACJI, nie z planu — i dlatego zatrzymałem etap
+
+M3.4b miał być przeglądem 32 menu. Pierwsza komenda inwentaryzacyjna pokazała, że szablon wiersza
+`MetadataNodeViewModel` niesie **inline `ContextMenu` z 22 pozycjami**, a ten szablon dostaje **każdy
+zrealizowany wiersz** wirtualizowanej listy paska bocznego.
+
+⭐ **Zgodnie ze stałą prośbą użytkownika (§19.26.6) zatrzymałem się i pokazałem to przed implementacją** —
+bo to jest mechanizm leżący dokładnie na ścieżce przewijania, czyli w tej samej operacji, w której
+zgłoszono stary bug. ⚠ **Nie twierdziłem i nadal nie twierdzę, że to jest przyczyna zawieszenia.**
+
+#### §19.28.2 Pomiar — i decyzja użytkownika, żeby nie mierzyć dalej
+
+Pomiar wstępny (5 000 wierszy, 40 skoków, menu 22 pozycji) pokazał trzy rzeczy:
+
+* ⚠⚠ **wirtualizacja NIE odzyskuje kontenerów w pełni** — szablon budowany jest **1 640 razy** na jedno
+  przewinięcie, więc menu jest tworzone i wyrzucane 1 640 razy;
+* menu dokłada ~0,23 ms na wiersz, czyli **~40% narzutu** przy gołych pozycjach;
+* w każdej chwili żyje **440 obiektów `MenuItem`** (20 wierszy × 22), które przy przewijaniu się wymieniają.
+
+Użytkownik zdecydował: **zmierzyć wyłącznie wariant A** (jedno współdzielone menu), bez rozbudowywania
+rozwiązania „tylko dlatego, że znaleźliśmy koszt". Powstał `SharedContextMenuFeasibilityProbe`
+odpowiadający na dwa pytania:
+
+| Pytanie | Odpowiedź |
+|---|---|
+| Czy współdzielone menu działa **bez obchodzenia bindowania**? | ✅ **TAK.** Jedna instancja przypina się do 20/20 wierszy; po otwarciu przejmuje `DataContext` **tego** wiersza (`OBJ_3` → `OBJ_7` → `OBJ_1`), a zwykły `{Binding}` rozwiązuje się poprawnie i **podąża** |
+| Jaki jest realny zysk? | menu na wiersz **1237–2619 ms** vs współdzielone **324–504 ms** → **74% czasu przewijania**; żywych `MenuItem` **440 → 22** |
+
+⭐ **Wariancja jest drugą informacją, nie szumem:** wariant per-wiersz waha się 2,1×, współdzielony
+mieści się na dużo niższym poziomie. To sygnatura presji alokacyjnej — a ta objawia się **szarpaniem**,
+nie równym spowolnieniem.
+
+⚠ **Nośnikiem kontekstu jest dziedziczenie `DataContext`, NIE `PlacementTarget`** (ten przy programowym
+`Open` odczytał się jako `null`). ⛔ Nie opierać tu niczego na `PlacementTarget` bez własnego pomiaru.
+
+⭐ **Decyzja użytkownika co do ryzyka `IsVisible`:** *„nie ma sensu budować kolejnej infrastruktury
+pomiarowej dla czegoś, co można zweryfikować bezpośrednio na działającej aplikacji"* — więc zmiana weszła,
+a przeliczanie widoczności pozycji sprawdzamy w normalnym QA. **To jest R16 zastosowane do samego procesu:
+pomiar jest narzędziem, a nie obowiązkowym etapem przed każdą zmianą.**
+
+#### §19.28.3 Co zrobiono
+
+Trzy bloki `<ContextMenu>` przeniesione z `DataTemplate` do `<ListBox.Resources>` z `x:Key`, a szablony
+odwołują się do nich przez `ContextMenu="{StaticResource …}"`. **Żadnego kodu w code-behind, żadnego
+zachowania, żadnej zmiany w bindingach pozycji.**
+
+| Szablon | Pozycji | Zasób |
+|---|---|---|
+| `FolderNodeViewModel` | 3 | `SidebarFolderMenu` |
+| `ConnectionNodeViewModel` | 11 | `SidebarConnectionMenu` |
+| `MetadataNodeViewModel` | **22** | `SidebarMetadataMenu` |
+
+#### §19.28.4 ⭐⭐ KOMPILATOR ZŁAPAŁ RZECZ, KTÓRA JEST ULEPSZENIEM, NIE PRZESZKODĄ
+
+Po przeniesieniu build zgłosił **~30 błędów AVLN2000**: w `DataTemplate` typ kontekstu brał się z jego
+`DataType` — **niejawnie i za darmo** — a w zasobach tego rodzica nie ma, więc bindingi kompilowane były
+rozwiązywane względem `MetadataExplorerViewModel`.
+
+⭐ **Odpowiedzią jest `x:DataType` na każdym menu, i to jest LEPSZY stan niż wyjściowy:** kontrakt, który
+wcześniej wynikał z położenia w drzewie XAML, jest teraz **zadeklarowany wprost i sprawdzany przy
+kompilacji**. ⚠⚠ Gdyby bindingi były refleksyjne, ten sam defekt byłby **CISZĄ** — puste menu przy prawym
+kliknięciu i zielony build. ⛔ Nie usuwać `x:DataType` „bo się kompiluje".
+
+#### §19.28.5 ⚠⚠ TRZY STRAŻNIKI, KAŻDY ZWERYFIKOWANY PODŁOŻENIEM NARUSZENIA — I JEDEN Z NICH JEST JEDYNĄ SIATKĄ
+
+`SidebarMenuInstancingTests` (partycja główna, czyta źródło):
+
+| Test | Co łapie | Czy build też by to złapał? |
+|---|---|---|
+| `SidebarRowTemplates_DeclareNoInlineContextMenu` | powrót menu inline do szablonu | ⛔ **NIE** — kompiluje się, działa funkcjonalnie, widać dopiero jako szarpanie u użytkownika z dużą bazą |
+| `EverySharedMenuReference_HasItsResource` | odwołanie do nieistniejącego zasobu | ⛔ **NIE — zmierzone**: podłożone `{StaticResource NieMaTakiegoZasobu}` **przeszło build**; nierozwiązany `StaticResource` rzuca dopiero **przy realizacji wiersza**, czyli po połączeniu i rozwinięciu kategorii |
+| `EverySharedMenu_DeclaresItsDataType` | brak `x:DataType` | ✅ tak, **dziś** — usunięcie go wywala build; test jest siatką na wypadek bindingów refleksyjnych i mówi to w swoim komentarzu |
+
+⭐ **Środkowy wiersz jest najważniejszy i to jest zmierzony fakt, nie ostrożność:** smoke NIE złapie
+literówki w kluczu, bo pusty pasek boczny **nie realizuje ani jednego wiersza metadanych**. Aplikacja
+wstaje, wygląda dobrze i wywala się dopiero, gdy użytkownik rozwinie kategorię.
+
+#### §19.28.6 ⚠ Zakres weryfikacji — powiedziany wprost
+
+* ✅ **`SidebarFolderMenu` i `SidebarConnectionMenu` są zweryfikowane maszynowo** — `ConnectionExpandBindingProbe`
+  buduje prawdziwy `MainWindow` i realizuje wiersze folderu i połączenia, więc ich `StaticResource` musiał
+  się rozwiązać.
+* ⏸ **`SidebarMetadataMenu` weryfikuje QA użytkownika** — jego wiersze wymagają połączenia z bazą
+  i rozwiniętej kategorii, czego żaden test w tym repo nie robi.
+* ⏸ **Przeliczanie `IsVisible` pozycji przy zmianie `DataContext`** — decyzją użytkownika sprawdzane
+  na działającej aplikacji, nie kolejnym eksperymentem.
+
+#### §19.28.7 ⏸ Czego ta iteracja NIE zrobiła
+
+⛔ **Właściwy przegląd M3.4b nie został wykonany.** Inwentaryzacja zdążyła zmierzyć stan wejściowy —
+**32 `ContextMenu`, 154 `MenuItem`, 140 z ikoną (czyli 14 bez), 27 z gestem z katalogu** — i na tym się
+zatrzymała, bo znalezisko wydajnościowe miało pierwszeństwo z mocy stałej prośby użytkownika.
+Przegląd (czy 32 menu trzymają poziom menu zakładki z M3.3c: ikona, gest, własne `CanExecute`) jest
+**następnym krokiem**.
+
+⚠ **Ten sam wzorzec „menu inline w szablonie wiersza" występuje jeszcze w dwóch miejscach** i **świadomie
+ich nie ruszałem**: `SavedQueryViewModel` (lista zapytań zapisanych) i `WorkspaceTabViewModel` (pasek
+zakładek). ⭐ Powód jest merytoryczny, nie zakresowy: **żadna z tych list nie jest wirtualizowana ani nie
+osiąga tysięcy wierszy**, więc mnożnik, który tu decydował, tam nie istnieje. ⛔ Nie przenosić ich „dla
+spójności" bez pomiaru — to byłaby pułapka 17 (reguła opisuje to, co jest dobre; nie jest mandatem).

@@ -192,7 +192,7 @@ analiza → (propozycja + AKCEPTACJA, jeśli krok niesie decyzję) → implement
 **Trzy partycje** (⚠ `ConnectionExpandBindingProbe` biegnie **sam**):
 
 ```
---filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe"
+--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe"
 ```
 
 oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno. Stan: **7132 + 57 + 54 = 7243**.

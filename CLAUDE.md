@@ -538,7 +538,43 @@ noted.
   scroll position. ⚠ Their 5 s bounds are **deliberately generous** — a hang shows up as seconds, and a bound
   tightened to the measured ~50 ms would be a test that fails for reasons unrelated to its subject (R16 applied
   to test construction).
-  ⏸ **Next: M3.4b** (context-menu review), then M3b → ⛔ the §13.3 gate.
+  ✅ **M3.4b PART 1 DONE (2026-08-04) — the sidebar's context menus stop being multiplied by
+  virtualization** (`product-polish.md` §19.28). ⭐⭐ **The finding came from the INVENTORY, not the plan**:
+  the `MetadataNodeViewModel` row template carried an **inline `ContextMenu` with 22 items**, and that
+  template is applied to **every realized row** of the virtualized sidebar. Per the standing request I
+  stopped and showed it before implementing.
+  **Measured** (`SharedContextMenuFeasibilityProbe`, 5 000 rows, 40 scroll jumps): virtualization does **not**
+  fully recycle containers — the template is built **1 640 times per scroll**, so the menu was created and
+  discarded 1 640 times. Per-row **1237–2619 ms** vs shared **324–504 ms** → **~74 % of scroll time**, and
+  live `MenuItem`s **440 → 22**. ⭐ The *variance* is the second datum: the per-row variant swings 2.1×,
+  which is the allocation-pressure signature — and that shows up as **stutter**, not as uniform slowness.
+  ⭐ **Feasibility answered before any change: a shared `ContextMenu` needs no binding workaround.** One
+  instance attaches to all rows and, on open, adopts the **DataContext of the row it was opened on**
+  (`OBJ_3` → `OBJ_7` → `OBJ_1`), so ordinary `{Binding}` resolves correctly and follows. ⚠ The carrier is
+  **DataContext inheritance, not `PlacementTarget`** (which read `null` under a programmatic `Open`) — ⛔ do
+  not build on `PlacementTarget` here without your own measurement.
+  **As built:** three `<ContextMenu>` blocks moved into `<ListBox.Resources>` with `x:Key`, referenced as
+  `ContextMenu="{StaticResource …}"`. **No code-behind, no behaviour, no change to any item's bindings.**
+  ⭐⭐ **The compiler caught something that is an IMPROVEMENT, not an obstacle:** inside a `DataTemplate` the
+  context type came from its `DataType` — implicitly and for free — so in resources ~30 `AVLN2000` errors
+  appeared. The answer is **`x:DataType` on each menu**, which makes the binding contract **explicit and
+  compile-checked** where it used to be positional. ⚠⚠ With reflection bindings the same defect would have
+  been **silence**: an empty menu on right-click and a green build. ⛔ Do not remove `x:DataType`.
+  ⚠⚠ **Three guards, each verified by planting the violation — and one of them is the ONLY net.**
+  `EverySharedMenuReference_HasItsResource`: a planted bad key **passed the build**, because an unresolved
+  `StaticResource` throws only **when a row is realized** — i.e. after connecting and expanding a category.
+  ⭐ **Smoke cannot catch it**: an empty sidebar realizes no metadata row at all, so the app starts, looks
+  right, and fails later in the user's hands.
+  ⏸ **Verification scope, stated plainly:** the folder and connection menus are machine-verified (the
+  existing probe realizes those rows); **`SidebarMetadataMenu` and the `IsVisible` re-evaluation are the
+  user's QA** — the latter by explicit decision (*"no point building more measuring infrastructure for
+  something verifiable in the running app"*).
+  ⚠ **The same "inline menu in a row template" shape exists in two more places and was deliberately left
+  alone**: Saved Queries and the tab strip — **neither is virtualized nor reaches thousands of rows**, so the
+  multiplier that decided here does not exist there (trap 17).
+  ⏸ **Next: M3.4b part 2** — the review proper. Entry state measured: **32 `ContextMenu`, 154 `MenuItem`,
+  140 with an icon (14 without), 27 with a catalog gesture**; the yardstick is M3.3c's tab menu (icon,
+  gesture, own `CanExecute` per item). Then M3b → ⛔ the §13.3 gate.
   ✅ **M3.3c DONE (2026-08-03) — the tab context menu; the tab strip is complete** (`product-polish.md`
   §19.24). Nine items, **zero new chrome** (the Keyboard Manager's `ContextMenu`/`MenuItem` styles +
   `{app:MenuIcon}` already exist).
@@ -3494,8 +3530,8 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7249, MEASURED 2026-08-04**
-  (Product Polish through step 15b). Green in the three documented partitions (**7134 + 61 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7254, MEASURED 2026-08-04**
+  (Product Polish through M3.4b part 1). Green in the three documented partitions (**7137 + 63 + 54**).
   ⚠ This line said **7228 (7118 + 56 + 54)** until that run — a figure that had gone stale across M3.3b/c
   and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy it forward.
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
@@ -3515,12 +3551,12 @@ noted.
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition holds **six** classes — measured, not listed from memory
+  four times its own count. ⚠ The headless partition holds **seven** classes — measured, not listed from memory
   (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `BrandingPresentationTests` +
-  `DesignTokenApplicationTests` + `TabStripPresentationTests` + `MetadataTreeVirtualizationProbe`), all in
+  `DesignTokenApplicationTests` + `TabStripPresentationTests` + `MetadataTreeVirtualizationProbe` + `SharedContextMenuFeasibilityProbe`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
   (#94/#226/#286). The partition filter is those class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe"`
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe"`
   and its inverse with `|`. ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
   criterion for adding a class: **does it construct Avalonia controls?**

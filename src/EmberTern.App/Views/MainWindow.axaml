@@ -472,6 +472,198 @@
               </Style>
             </ListBox.Styles>
 
+            <!-- ══════════════════════════════════════════════════════════════════════════════════
+                 ⭐⭐ MENU KONTEKSTOWE PASKA BOCZNEGO — JEDNA INSTANCJA NA RODZAJ WĘZŁA,
+                 a nie jedna na każdy zrealizowany wiersz (M3.4b, product-polish.md §19.28).
+
+                 POWÓD JEST ZMIERZONY, nie estetyczny. Do tej zmiany każdy z tych trzech bloków stał
+                 INLINE w swoim `DataTemplate`, a szablon dostaje KAŻDY zrealizowany wiersz. Zmierzone
+                 na 5 000 wierszy i 40 skokach przewijania (`SharedContextMenuFeasibilityProbe`):
+
+                     menu na wiersz     : 1237–2619 ms przewijania, 440 żywych `MenuItem`
+                     menu współdzielone :  324– 504 ms przewijania,  22 żywe `MenuItem`
+                     różnica: ~74% czasu przewijania
+
+                 ⚠ Wirtualizacja NIE odzyskuje kontenerów w pełni — przy przewijaniu 5 000 wierszy
+                 szablon budowany jest 1 640 razy, więc menu było tworzone i wyrzucane 1 640 razy.
+                 To jest ten sam mechanizm, który daje dużą WARIANCJĘ czasu (presja alokacyjna), a ta
+                 w działającej aplikacji objawia się szarpaniem, nie równym spowolnieniem.
+
+                 ⭐ DLACZEGO TO JEST POPRAWNE, A NIE OBEJŚCIE. Zmierzone: jedna instancja `ContextMenu`
+                 przypina się do wielu kontrolek, a po otwarciu przejmuje `DataContext` TEGO wiersza,
+                 na którym ją otwarto — więc zwykłe `{Binding}` w pozycjach rozwiązuje się do właściwego
+                 obiektu i podąża przy kolejnych otwarciach. Żadnych sztuczek w bindowaniu.
+                 ⚠ Nośnikiem kontekstu jest DZIEDZICZENIE `DataContext`, nie `PlacementTarget`
+                 (ten przy programowym `Open` odczytał się jako `null`). ⛔ Nie opieraj tu niczego
+                 na `PlacementTarget` bez własnego pomiaru.
+
+                 ⭐⭐ `x:DataType` NA KAŻDYM MENU JEST TU OBOWIĄZKOWE — I TO JEST ZYSK, NIE KOSZT.
+                 W `DataTemplate` typ kontekstu brał się z jego `DataType`, więc bindingi kompilowane
+                 miały go za darmo i NIEJAWNIE. W zasobach tego rodzica nie ma, więc kompilator próbował
+                 rozwiązać je względem `MetadataExplorerViewModel` i zgłosił ~30 błędów AVLN2000 — czyli
+                 defekt, który przy bindingach refleksyjnych byłby CICHY (puste menu przy prawym
+                 kliknięciu, zielony build). Po zadeklarowaniu `x:DataType` kontrakt jest JAWNY
+                 i sprawdzany przy kompilacji. ⛔ Nie usuwaj go „bo się kompiluje" — bez niego pierwszy
+                 błędnie wpisany binding przestanie być błędem kompilacji.
+
+                 ⛔ NIE WRACAĆ DO MENU INLINE W SZABLONIE. Wygląda niewinnie i jest wygodne w edycji,
+                 a kosztuje trzy czwarte czasu przewijania najgęstszego widoku aplikacji.
+                 ══════════════════════════════════════════════════════════════════════════════════ -->
+            <ListBox.Resources>
+              <ContextMenu x:Key="SidebarFolderMenu" x:DataType="vm:FolderNodeViewModel">
+                <MenuItem Header="{x:Static app:UiStrings.FolderContextAddConnection}"
+                          Icon="{app:MenuIcon Icon.Plus}"
+                          Command="{Binding AddConnectionCommand}" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.FolderContextRename}"
+                          Icon="{app:MenuIcon Icon.Pencil}"
+                          Command="{Binding BeginRenameCommand}" />
+                <MenuItem Header="{x:Static app:UiStrings.FolderContextDelete}"
+                          Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                          Command="{Binding DeleteCommand}" />
+              </ContextMenu>
+
+              <ContextMenu x:Key="SidebarConnectionMenu" x:DataType="vm:ConnectionNodeViewModel">
+                <MenuItem Header="Connect"
+                          Icon="{app:MenuIcon Icon.PlugZap}"
+                          Command="{Binding ConnectCommand}"
+                          IsVisible="{Binding !IsConnected}" />
+                <MenuItem Header="Disconnect"
+                          Icon="{app:MenuIcon Icon.Unplug}"
+                          Command="{Binding DisconnectCommand}"
+                          IsVisible="{Binding IsConnected}" />
+                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRefresh}"
+                          Icon="{app:MenuIcon Icon.RefreshCw}"
+                          InputGesture="{app:CommandGesture RefreshMetadata}"
+                          Command="{Binding RefreshMetadataCommand}"
+                          IsVisible="{Binding IsConnected}" />
+                <Separator />
+                <MenuItem Header="Edit" Icon="{app:MenuIcon Icon.Pencil}" Command="{Binding EditCommand}" />
+                <MenuItem Header="Copy" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
+                <MenuItem Header="Delete" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                          Command="{Binding DeleteCommand}" />
+                <Separator IsVisible="{Binding IsConnected}" />
+                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecomputeStats}"
+                          Icon="{app:MenuIcon Icon.Sigma}"
+                          Command="{Binding RecomputeAllStatisticsCommand}"
+                          IsVisible="{Binding IsConnected}" />
+                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecompile}"
+                          Icon="{app:MenuIcon Icon.Hammer}"
+                          Command="{Binding RecompileAllObjectsCommand}"
+                          IsVisible="{Binding IsConnected}" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}"
+                          Icon="{app:MenuIcon Icon.ListFilter}">
+                  <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"
+                            Icon="{app:MenuIcon Icon.ArrowUp}"
+                            Command="{Binding SortAscendingCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortDescending}"
+                            Icon="{app:MenuIcon Icon.ArrowDown}"
+                            Command="{Binding SortDescendingCommand}" />
+                </MenuItem>
+              </ContextMenu>
+
+              <ContextMenu x:Key="SidebarMetadataMenu" x:DataType="vm:MetadataNodeViewModel">
+                <!-- Icons come from the existing geometry dictionary through {app:MenuIcon}; gestures
+                     from CommandCatalog through {app:CommandGesture}, so a re-bind reaches this menu
+                     without anyone editing it. New / Delete / Refresh are the Tree-scope gestures —
+                     this is where they were always meant to be surfaced (etap 4 §14.4 deliberately
+                     kept them off the toolbar, where they do not fire). -->
+                <MenuItem Header="{Binding ContextNewLabel}"
+                          Icon="{app:MenuIcon Icon.Plus}"
+                          InputGesture="{app:CommandGesture NewObject}"
+                          Command="{Binding NewCommand}"
+                          IsVisible="{Binding SupportsNew}" />
+                <MenuItem Header="{Binding ContextRecompileAllLabel}"
+                          Icon="{app:MenuIcon Icon.Hammer}"
+                          Command="{Binding RecompileAllCommand}"
+                          IsVisible="{Binding IsRecompilableGroup}" />
+                <Separator IsVisible="{Binding IsTriggerGroup}" />
+                <!-- Trigger-GROUP bulk ops: Visible (current filter set) or All. The "Selected"
+                     scope moved onto the selected trigger leaves (see below) so the user doesn't
+                     scroll back to this header to act on a multi-selection. -->
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                          Icon="{app:MenuIcon Icon.Check}"
+                          IsVisible="{Binding IsTriggerGroup}">
+                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
+                            Command="{Binding ActivateVisibleCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
+                            Command="{Binding ActivateAllCommand}" />
+                </MenuItem>
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                          Icon="{app:MenuIcon Icon.Pause}"
+                          IsVisible="{Binding IsTriggerGroup}">
+                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
+                            Command="{Binding DeactivateVisibleCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
+                            Command="{Binding DeactivateAllCommand}" />
+                </MenuItem>
+                <!-- Trigger-LEAF multi-select bulk ops — visible only when >1 trigger is
+                     selected (Ctrl/Shift-click). Commands are forwarded from the explorer VM
+                     (which owns the selection) via the node VM so they resolve inside the
+                     ContextMenu's popup namescope (gotcha #180). -->
+                <MenuItem Header="{Binding ActivateSelectedTriggersLabel}"
+                          Icon="{app:MenuIcon Icon.Check}"
+                          Command="{Binding ActivateSelectedTriggersCommand}"
+                          IsVisible="{Binding ShowSelectedTriggerOps}" />
+                <MenuItem Header="{Binding DeactivateSelectedTriggersLabel}"
+                          Icon="{app:MenuIcon Icon.Pause}"
+                          Command="{Binding DeactivateSelectedTriggersCommand}"
+                          IsVisible="{Binding ShowSelectedTriggerOps}" />
+                <MenuItem Header="{Binding ContextEditLabel}"
+                          Icon="{app:MenuIcon Icon.Pencil}"
+                          Command="{Binding OpenDdlCommand}"
+                          IsVisible="{Binding CanEditLeaf}" />
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
+                          Icon="{app:MenuIcon Icon.Play}"
+                          Command="{Binding ExecuteProcedureCommand}"
+                          IsVisible="{Binding IsProcedureLeaf}" />
+                <!-- The debugger's identity mark is a two-colour composite control, not a single
+                     stroked geometry, so it cannot come through {app:MenuIcon}. Set inline — reusing
+                     the one existing mark rather than drawing a second, flatter debugger icon. -->
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
+                          Command="{Binding DebugProcedureCommand}"
+                          IsVisible="{Binding IsProcedureLeaf}">
+                  <MenuItem.Icon>
+                    <controls:DebuggerIcon Width="14" Height="14" />
+                  </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
+                          Command="{Binding DebugTriggerCommand}"
+                          IsVisible="{Binding IsTriggerLeaf}">
+                  <MenuItem.Icon>
+                    <controls:DebuggerIcon Width="14" Height="14" />
+                  </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
+                          Command="{Binding DebugFunctionCommand}"
+                          IsVisible="{Binding IsFunctionLeaf}">
+                  <MenuItem.Icon>
+                    <controls:DebuggerIcon Width="14" Height="14" />
+                  </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                          Icon="{app:MenuIcon Icon.Check}"
+                          Command="{Binding ActivateCommand}"
+                          IsVisible="{Binding ShowActivate}" />
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                          Icon="{app:MenuIcon Icon.Pause}"
+                          Command="{Binding DeactivateCommand}"
+                          IsVisible="{Binding ShowDeactivate}" />
+                <Separator IsVisible="{Binding CanDeleteLeaf}" />
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
+                          Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                          InputGesture="{app:CommandGesture DeleteObject}"
+                          Command="{Binding DeleteCommand}"
+                          IsVisible="{Binding CanDeleteLeaf}" />
+                <Separator IsVisible="{Binding ShowCopyNameLeaf}" />
+                <MenuItem Header="{Binding ContextCopyNameLabel}"
+                          Icon="{app:MenuIcon Icon.Copy}"
+                          Command="{Binding CopyNameCommand}"
+                          IsVisible="{Binding ShowCopyNameLeaf}" />
+              </ContextMenu>
+            </ListBox.Resources>
+
             <ListBox.DataTemplates>
               <!-- The flattened row: indentation spacer + chevron + the per-type node
                    content (hosted via ContentControl, which resolves the DataTemplates
@@ -511,23 +703,12 @@
               </DataTemplate>
 
               <DataTemplate DataType="vm:FolderNodeViewModel">
+                <!-- ⭐ Menu z zasobów listy — JEDNA instancja na wszystkie wiersze folderów.
+                     Powód i pomiar: komentarz przy `ListBox.Resources` wyżej. -->
                 <Border HorizontalAlignment="Stretch"
                         Classes="row-target"
-                        Classes.drop-target="{Binding IsDropTarget}">
-                  <Border.ContextMenu>
-                    <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.FolderContextAddConnection}"
-                                Icon="{app:MenuIcon Icon.Plus}"
-                                Command="{Binding AddConnectionCommand}" />
-                      <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.FolderContextRename}"
-                                Icon="{app:MenuIcon Icon.Pencil}"
-                                Command="{Binding BeginRenameCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.FolderContextDelete}"
-                                Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
-                                Command="{Binding DeleteCommand}" />
-                    </ContextMenu>
-                  </Border.ContextMenu>
+                        Classes.drop-target="{Binding IsDropTarget}"
+                        ContextMenu="{StaticResource SidebarFolderMenu}">
                   <Panel>
                     <!-- ⚠⚠ KOLIZJA K15 — ŚWIADOMA, ZOSTAJE DO PRZEGLĄDU §13.3 (M3.4a, §19.26).
                          Ikona 15 px i `Spacing` 5 px pasują ROLĄ, ale nie LICZBĄ: `Size.Icon` to 14
@@ -567,51 +748,12 @@
               </DataTemplate>
 
               <DataTemplate DataType="vm:ConnectionNodeViewModel">
+                <!-- ⭐ Menu z zasobów listy — JEDNA instancja na wszystkie wiersze połączeń. -->
                 <Border HorizontalAlignment="Stretch"
                         Classes="row-target"
                         Classes.drop-target="{Binding IsDropTarget}"
-                        DoubleTapped="OnConnectionNodeDoubleTapped">
-                  <Border.ContextMenu>
-                    <ContextMenu>
-                      <MenuItem Header="Connect"
-                                Icon="{app:MenuIcon Icon.PlugZap}"
-                                Command="{Binding ConnectCommand}"
-                                IsVisible="{Binding !IsConnected}" />
-                      <MenuItem Header="Disconnect"
-                                Icon="{app:MenuIcon Icon.Unplug}"
-                                Command="{Binding DisconnectCommand}"
-                                IsVisible="{Binding IsConnected}" />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRefresh}"
-                                Icon="{app:MenuIcon Icon.RefreshCw}"
-                                InputGesture="{app:CommandGesture RefreshMetadata}"
-                                Command="{Binding RefreshMetadataCommand}"
-                                IsVisible="{Binding IsConnected}" />
-                      <Separator />
-                      <MenuItem Header="Edit" Icon="{app:MenuIcon Icon.Pencil}" Command="{Binding EditCommand}" />
-                      <MenuItem Header="Copy" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
-                      <MenuItem Header="Delete" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
-                                Command="{Binding DeleteCommand}" />
-                      <Separator IsVisible="{Binding IsConnected}" />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecomputeStats}"
-                                Icon="{app:MenuIcon Icon.Sigma}"
-                                Command="{Binding RecomputeAllStatisticsCommand}"
-                                IsVisible="{Binding IsConnected}" />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecompile}"
-                                Icon="{app:MenuIcon Icon.Hammer}"
-                                Command="{Binding RecompileAllObjectsCommand}"
-                                IsVisible="{Binding IsConnected}" />
-                      <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}"
-                                Icon="{app:MenuIcon Icon.ListFilter}">
-                        <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"
-                                  Icon="{app:MenuIcon Icon.ArrowUp}"
-                                  Command="{Binding SortAscendingCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortDescending}"
-                                  Icon="{app:MenuIcon Icon.ArrowDown}"
-                                  Command="{Binding SortDescendingCommand}" />
-                      </MenuItem>
-                    </ContextMenu>
-                  </Border.ContextMenu>
+                        DoubleTapped="OnConnectionNodeDoubleTapped"
+                        ContextMenu="{StaticResource SidebarConnectionMenu}">
                   <!-- ⚠ Ikona 15 / `Spacing` 5 — kolizja K15, patrz pełny komentarz przy węźle folderu. -->
                   <StackPanel Orientation="Horizontal" Spacing="5">
                     <controls:SvgIcon Data="{StaticResource Icon.Connection}"
@@ -635,110 +777,13 @@
               </DataTemplate>
 
               <DataTemplate DataType="vm:MetadataNodeViewModel">
+                <!-- ⭐⭐ Menu z zasobów listy — JEDNA instancja zamiast jednej NA KAŻDY wiersz drzewa.
+                     To jest wystąpienie, dla którego cała zmiana powstała: 22 pozycje × każdy
+                     zrealizowany wiersz. Pomiar i powód: komentarz przy `ListBox.Resources` wyżej. -->
                 <Border HorizontalAlignment="Stretch"
                         Background="Transparent"
-                        DoubleTapped="OnMetadataNodeDoubleTapped">
-                  <Border.ContextMenu>
-                    <ContextMenu>
-                      <!-- Icons come from the existing geometry dictionary through {app:MenuIcon}; gestures
-                           from CommandCatalog through {app:CommandGesture}, so a re-bind reaches this menu
-                           without anyone editing it. New / Delete / Refresh are the Tree-scope gestures —
-                           this is where they were always meant to be surfaced (etap 4 §14.4 deliberately
-                           kept them off the toolbar, where they do not fire). -->
-                      <MenuItem Header="{Binding ContextNewLabel}"
-                                Icon="{app:MenuIcon Icon.Plus}"
-                                InputGesture="{app:CommandGesture NewObject}"
-                                Command="{Binding NewCommand}"
-                                IsVisible="{Binding SupportsNew}" />
-                      <MenuItem Header="{Binding ContextRecompileAllLabel}"
-                                Icon="{app:MenuIcon Icon.Hammer}"
-                                Command="{Binding RecompileAllCommand}"
-                                IsVisible="{Binding IsRecompilableGroup}" />
-                      <Separator IsVisible="{Binding IsTriggerGroup}" />
-                      <!-- Trigger-GROUP bulk ops: Visible (current filter set) or All. The "Selected"
-                           scope moved onto the selected trigger leaves (see below) so the user doesn't
-                           scroll back to this header to act on a multi-selection. -->
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
-                                Icon="{app:MenuIcon Icon.Check}"
-                                IsVisible="{Binding IsTriggerGroup}">
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
-                                  Command="{Binding ActivateVisibleCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
-                                  Command="{Binding ActivateAllCommand}" />
-                      </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
-                                Icon="{app:MenuIcon Icon.Pause}"
-                                IsVisible="{Binding IsTriggerGroup}">
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
-                                  Command="{Binding DeactivateVisibleCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
-                                  Command="{Binding DeactivateAllCommand}" />
-                      </MenuItem>
-                      <!-- Trigger-LEAF multi-select bulk ops — visible only when >1 trigger is
-                           selected (Ctrl/Shift-click). Commands are forwarded from the explorer VM
-                           (which owns the selection) via the node VM so they resolve inside the
-                           ContextMenu's popup namescope (gotcha #180). -->
-                      <MenuItem Header="{Binding ActivateSelectedTriggersLabel}"
-                                Icon="{app:MenuIcon Icon.Check}"
-                                Command="{Binding ActivateSelectedTriggersCommand}"
-                                IsVisible="{Binding ShowSelectedTriggerOps}" />
-                      <MenuItem Header="{Binding DeactivateSelectedTriggersLabel}"
-                                Icon="{app:MenuIcon Icon.Pause}"
-                                Command="{Binding DeactivateSelectedTriggersCommand}"
-                                IsVisible="{Binding ShowSelectedTriggerOps}" />
-                      <MenuItem Header="{Binding ContextEditLabel}"
-                                Icon="{app:MenuIcon Icon.Pencil}"
-                                Command="{Binding OpenDdlCommand}"
-                                IsVisible="{Binding CanEditLeaf}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
-                                Icon="{app:MenuIcon Icon.Play}"
-                                Command="{Binding ExecuteProcedureCommand}"
-                                IsVisible="{Binding IsProcedureLeaf}" />
-                      <!-- The debugger's identity mark is a two-colour composite control, not a single
-                           stroked geometry, so it cannot come through {app:MenuIcon}. Set inline — reusing
-                           the one existing mark rather than drawing a second, flatter debugger icon. -->
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
-                                Command="{Binding DebugProcedureCommand}"
-                                IsVisible="{Binding IsProcedureLeaf}">
-                        <MenuItem.Icon>
-                          <controls:DebuggerIcon Width="14" Height="14" />
-                        </MenuItem.Icon>
-                      </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
-                                Command="{Binding DebugTriggerCommand}"
-                                IsVisible="{Binding IsTriggerLeaf}">
-                        <MenuItem.Icon>
-                          <controls:DebuggerIcon Width="14" Height="14" />
-                        </MenuItem.Icon>
-                      </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
-                                Command="{Binding DebugFunctionCommand}"
-                                IsVisible="{Binding IsFunctionLeaf}">
-                        <MenuItem.Icon>
-                          <controls:DebuggerIcon Width="14" Height="14" />
-                        </MenuItem.Icon>
-                      </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
-                                Icon="{app:MenuIcon Icon.Check}"
-                                Command="{Binding ActivateCommand}"
-                                IsVisible="{Binding ShowActivate}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
-                                Icon="{app:MenuIcon Icon.Pause}"
-                                Command="{Binding DeactivateCommand}"
-                                IsVisible="{Binding ShowDeactivate}" />
-                      <Separator IsVisible="{Binding CanDeleteLeaf}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
-                                Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
-                                InputGesture="{app:CommandGesture DeleteObject}"
-                                Command="{Binding DeleteCommand}"
-                                IsVisible="{Binding CanDeleteLeaf}" />
-                      <Separator IsVisible="{Binding ShowCopyNameLeaf}" />
-                      <MenuItem Header="{Binding ContextCopyNameLabel}"
-                                Icon="{app:MenuIcon Icon.Copy}"
-                                Command="{Binding CopyNameCommand}"
-                                IsVisible="{Binding ShowCopyNameLeaf}" />
-                    </ContextMenu>
-                  </Border.ContextMenu>
+                        DoubleTapped="OnMetadataNodeDoubleTapped"
+                        ContextMenu="{StaticResource SidebarMetadataMenu}">
                   <!-- ⚠ Ikona 15 / `Spacing` 5 — kolizja K15, patrz pełny komentarz przy węźle folderu.
                        ⭐ To jest jej najważniejsze wystąpienie: ten szablon niesie KAŻDY wiersz kategorii
                        i każdy wiersz liścia, więc to on decyduje o gęstości całego drzewa. -->
