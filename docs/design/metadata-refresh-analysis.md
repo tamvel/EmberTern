@@ -594,3 +594,37 @@ Visual Studio, bo **różnica między tymi dwoma logami jest samą hipotezą**.
 
 ⛔ **Instrument niczego nie naprawia i nie zmienia zachowania aplikacji.** Bez flagi nie robi nic:
 żadnego pliku, żadnych subskrypcji, zero kosztu.
+
+### 10.6 ⛔⛔ PIERWSZE URUCHOMIENIE INSTRUMENTU ZABIŁO APLIKACJĘ — i to jest najważniejszy wpis tej sekcji
+
+`TreeDiagnostics.Scroll` składał wiersz przez `string.Format` z wyrównaniem **`{4,+8:0.0}`**. Wyrównanie
+w formacie złożonym przyjmuje **wyłącznie liczbę całkowitą**, więc `+` jest błędem składni; `FormatException`
+poleciał w górę przez handler `PropertyChanged` ScrollViewera prosto do Avalonii i **zakończył proces przy
+pierwszym rozwinięciu kategorii**. Build był zielony i **pozostałby zielony**, bo format złożony to
+mini-język parsowany dopiero w czasie wykonania.
+
+⭐ Użytkownik zdiagnozował to ze stosu w `EmberTern-debug.log`: *„Failure to parse near offset 77. Expected
+an ASCII digit"* — offset 77 to dokładnie ten `+`.
+
+⭐⭐ **Najgorsze jest to, CO ta awaria zniszczyła: narzędzie mające złapać cudzy defekt SAMO stało się
+defektem**, a log użytkownika opisywał wyłącznie błąd instrumentacji. Dlatego naprawa nie jest poprawką
+jednego znaku:
+
+1. **Zero formatów złożonych w klasie.** Wiersz powstaje ze składników sformatowanych osobno przez
+   `ToString(...)` i sklejonych — taki kod **nie ma czego sparsować**, więc nie ma jak rzucić.
+2. **Jedna brama `Safe`** na każdym wejściu publicznym: łapie `Exception`, **pomija wpis** i pracuje dalej
+   (wymaganie użytkownika postawione wprost). ⚠ Porzucone wpisy są **liczone i raportowane na wyjściu** —
+   cicha strata byłaby gorsza od braku instrumentu.
+3. **Strażnik reentrancji `[ThreadStatic]`** — bez niego wyjątek rzucony wewnątrz logowania trafia w hak
+   `FirstChanceException`, ten loguje, znowu rzuca, i instrument zapętla sam siebie.
+
+⭐ **Strażnik napisany przeciw PRZYCZYNIE znalazł drugie wystąpienie tej samej rodziny przy pierwszym
+uruchomieniu** — `$"{DateTime.Now:yyyy-MM-dd…}"` w nagłówku. `TreeDiagnosticsFormattingTests` karmi czyste
+funkcje formatujące wrogim wejściem (`NaN`, nieskończoności, `int.MinValue`, `null`, tekst z `{`, `}`,
+`{4,+8:0.0}`) **oraz skanuje źródło**, żeby klasa nie mogła wrócić do formatu parsowanego w czasie wykonania.
+
+⚠ **Reguła szersza niż ten plik: narzędzie, którego jedynym zadaniem jest NIE wywalić aplikacji, nie może
+używać mini-języka wykonywanego dopiero w produkcji.**
+
+⭐ Zweryfikowane po naprawie na działającej aplikacji: proces żyje, `EXC FIRST-CHANCE` samotestu obecny,
+numeracja ciągła, **0 wpisów porzuconych przez błąd instrumentu**.

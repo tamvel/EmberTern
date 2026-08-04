@@ -82,6 +82,66 @@ internal static class TreeDiagnostics
 
     public static string? LogPath { get; private set; }
 
+    /// <summary>Ile wpisów instrument porzucił z powodu własnego błędu. Raportowane na wyjściu.</summary>
+    private static int _selfFailures;
+
+    /// <summary>
+    /// ⭐⭐ Strażnik reentrancji instrumentu. Bez niego wyjątek RZUCONY WEWNĄTRZ logowania trafia
+    /// w hak <see cref="AppDomain.FirstChanceException"/>, ten woła logowanie, które rzuca znowu — i tak
+    /// w kółko. ⚠ Pole jest <c>[ThreadStatic]</c>, bo cała rzecz dzieje się na wątku UI, a blokada
+    /// globalna zamieniłaby pętlę w zakleszczenie.
+    /// </summary>
+    [ThreadStatic]
+    private static bool _inside;
+
+    /// <summary>
+    /// ⭐⭐ JEDYNA BRAMA WEJŚCIOWA INSTRUMENTU — i to jest wymaganie użytkownika postawione wprost:
+    /// <i>„jeżeli zapis logu się nie powiedzie, ma po prostu pominąć wpis, a nie zatrzymywać aplikację"</i>.
+    ///
+    /// <para>⚠⚠ Łapie <c>Exception</c>, i to jest jeden z nielicznych przypadków, w których taki catch
+    /// jest POPRAWNY: nie ma żadnego błędu diagnostyki, który byłby wart przerwania pracy użytkownika,
+    /// a instrument z definicji biegnie w cudzych callbackach (<c>PropertyChanged</c> ScrollViewera),
+    /// skąd wyjątek idzie prosto do Avalonii i kończy proces. Dokładnie to się stało przy pierwszym
+    /// uruchomieniu u użytkownika.</para>
+    ///
+    /// <para>⛔ Porzucony wpis jest LICZONY i raportowany na wyjściu — cicha strata byłaby gorsza od
+    /// braku instrumentu, bo czytelnik logu nie wiedziałby, że czegoś w nim brakuje.</para>
+    /// </summary>
+    private static void Safe(Action body)
+    {
+        if (_inside) return;
+        _inside = true;
+        try
+        {
+            body();
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref _selfFailures);
+            // Próba zapisania własnej awarii — też pod ochroną, bo i ona może nie wyjść.
+            try
+            {
+                var w = _writer;
+                if (w is not null)
+                {
+                    lock (Gate)
+                    {
+                        w.WriteLine("!! BŁĄD INSTRUMENTU (wpis pominięty): "
+                            + ex.GetType().Name + ": " + Flatten(ex.Message));
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Koniec drogi. Instrument milknie; aplikacja pracuje dalej.
+            }
+        }
+        finally
+        {
+            _inside = false;
+        }
+    }
+
     /// <summary>
     /// Otwiera plik i instaluje haki procesowe. Idempotentne. ⚠ Wołane raz, z okna głównego.
     /// </summary>
@@ -129,7 +189,10 @@ internal static class TreeDiagnostics
         Raw("════════════════════════════════════════════════════════════════════════════════");
         Raw("EmberTern — diagnostyka drzewa metadanych (EMBERTERN_TREE_DIAG)");
         Raw("════════════════════════════════════════════════════════════════════════════════");
-        Raw($"start        : {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+        // ⚠ `ToString` z jawnym formatem, NIE interpolacja `{DateTime.Now:…}` — ta druga jest parsowana
+        // w czasie wykonania i należy do tej samej rodziny co `{4,+8:0.0}`, które zabiło proces.
+        // Znalezione przez `TreeDiagnosticsFormattingTests` przy pierwszym uruchomieniu strażnika.
+        Raw("start        : " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture));
         Raw($"kontekst     : {context}");
         Raw($"proces       : PID {Environment.ProcessId}, .NET {Environment.Version}");
         Raw($"debugger     : {(Debugger.IsAttached ? "PODPIĘTY (uruchomienie spod IDE)" : "brak (uruchomienie z EXE)")}");
@@ -165,34 +228,38 @@ internal static class TreeDiagnostics
         //     przechwycony, a bez debuggera kończy proces.
         // ⚠ Jest z natury hałaśliwy (łapie też wyjątki oczekiwane). To cena za to, że nie przegapi tego
         //   jednego, o który chodzi — a log i tak czyta się od końca.
-        AppDomain.CurrentDomain.FirstChanceException += (_, e) =>
+        // ⚠⚠ Każdy hak przez `Safe` — łącznie ze strażnikiem reentrancji. Bez niego wyjątek rzucony
+        // WEWNĄTRZ logowania trafia tutaj, hak loguje, znowu rzuca, i instrument zapętla sam siebie.
+        AppDomain.CurrentDomain.FirstChanceException += (_, e) => Safe(() =>
         {
             // Odfiltrowane: rzuty z samego zapisu logu — inaczej instrument potrafi napędzać sam siebie.
             if (e.Exception is IOException) return;
-            Log("EXC", $"FIRST-CHANCE {e.Exception.GetType().Name}: {Flatten(e.Exception.Message)}");
+            Log("EXC", "FIRST-CHANCE " + e.Exception.GetType().Name + ": " + Flatten(e.Exception.Message));
             WriteStack(e.Exception.StackTrace, "  ");
-        };
+        });
 
-        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Safe(() =>
         {
             var ex = e.ExceptionObject as Exception;
-            Log("EXC", $"⛔ UNHANDLED (terminating={e.IsTerminating}) "
-                + $"{ex?.GetType().Name ?? "?"}: {Flatten(ex?.Message ?? e.ExceptionObject?.ToString())}");
+            Log("EXC", "⛔ UNHANDLED (terminating=" + e.IsTerminating + ") "
+                + (ex?.GetType().Name ?? "?") + ": " + Flatten(ex?.Message ?? e.ExceptionObject?.ToString()));
             WriteStack(ex?.StackTrace, "  ");
             Raw("── KONIEC: proces kończy się przez nieobsłużony wyjątek ──");
-        };
+        });
 
-        TaskScheduler.UnobservedTaskException += (_, e) =>
+        TaskScheduler.UnobservedTaskException += (_, e) => Safe(() =>
         {
-            Log("EXC", $"TASK (nieobserwowany) {Flatten(e.Exception.Message)}");
+            Log("EXC", "TASK (nieobserwowany) " + Flatten(e.Exception.Message));
             WriteStack(e.Exception.StackTrace, "  ");
-        };
+        });
 
-        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Safe(() =>
         {
-            Raw($"── ProcessExit, linii: {_lines}{(_truncated ? " (LOG UCIĘTY)" : string.Empty)} ──");
+            Raw("── ProcessExit, linii: " + Int(_lines)
+                + (_truncated ? " (LOG UCIĘTY)" : string.Empty)
+                + ", wpisów porzuconych przez błąd instrumentu: " + Int(_selfFailures) + " ──");
             try { _writer?.Flush(); } catch (IOException) { }
-        };
+        });
 
         SelfTestExceptionChannel();
     }
@@ -224,27 +291,75 @@ internal static class TreeDiagnostics
 
     // ── (1) Przewijanie ──────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Jedna zmiana geometrii przewijania. <paramref name="withStack"/> wymusza zrzut stosu.</summary>
+    /// <summary>Jedna zmiana geometrii przewijania.</summary>
     public static void Scroll(
         double offsetY, double extentH, double viewportH,
         double dOffset, double dExtent, int realized, string source)
     {
         if (!Enabled) return;
-
-        var moved = Math.Abs(dOffset) > 0.01;
-        Log("SCROLL", string.Format(CultureInfo.InvariantCulture,
-            "{0,-18} offsetY={1,10:0.0} extentH={2,11:0.0} viewportH={3,7:0.0} "
-            + "dOffset={4,+8:0.0} dExtent={5,+9:0.0} realized={6}{7}",
-            source, offsetY, extentH, viewportH, dOffset, dExtent, realized,
-            Math.Abs(dExtent) > 0.5 ? "  <-- EKSTENT PRZELICZONY" : string.Empty));
-
-        // ⭐ (1) „kto go zmienia i z jakiego miejsca" — odpowiada wyłącznie stos wywołań.
-        //    Budżetowany, żeby log nie utonął: pierwsze N zawsze, potem z throttlem, zawsze w burzy.
-        if (moved && ShouldTakeStack())
+        Safe(() =>
         {
-            Log("SCROLL", "  ↑ stos zmiany offsetu:");
-            WriteStack(new StackTrace(1, fNeedFileInfo: true).ToString(), "     ");
-        }
+            Log("SCROLL", FormatScrollLine(offsetY, extentH, viewportH, dOffset, dExtent, realized, source));
+
+            // ⭐ (1) „kto go zmienia i z jakiego miejsca" — odpowiada wyłącznie stos wywołań.
+            //    Budżetowany, żeby log nie utonął: pierwsze N zawsze, potem z throttlem, zawsze w burzy.
+            if (Math.Abs(dOffset) > 0.01 && ShouldTakeStack())
+            {
+                Log("SCROLL", "  ↑ stos zmiany offsetu:");
+                WriteStack(new StackTrace(2, fNeedFileInfo: true).ToString(), "     ");
+            }
+        });
+    }
+
+    /// <summary>
+    /// ⭐⭐ Czysta funkcja budująca wiersz SCROLL — WYDZIELONA, ŻEBY DAŁO SIĘ JĄ PRZETESTOWAĆ.
+    ///
+    /// <para>⚠⚠ Poprzednia wersja składała ten wiersz przez <c>string.Format</c> z wyrównaniem
+    /// <c>{4,+8:0.0}</c>. <b>Wyrównanie w formacie złożonym przyjmuje wyłącznie liczbę całkowitą</b>,
+    /// więc <c>+</c> jest błędem składni — i <c>FormatException</c> leciał w górę przez handler
+    /// <c>PropertyChanged</c> ScrollViewera prosto do Avalonii, zabijając proces przy pierwszym
+    /// rozwinięciu kategorii. Build był zielony, bo format złożony to język interpretowany dopiero
+    /// w czasie wykonania.</para>
+    ///
+    /// <para>⛔ <b>DLATEGO W TEJ KLASIE NIE MA JUŻ ANI JEDNEGO FORMATU ZŁOŻONEGO</b> z wyrównaniem lub
+    /// specyfikatorem. Wiersz powstaje ze <b>składników sformatowanych osobno</b> przez
+    /// <c>ToString(...)</c> i sklejonych — taki kod nie ma czego sparsować w czasie wykonania, więc nie
+    /// ma jak rzucić. ⭐ Narzędzie, którego jedynym zadaniem jest nie wywalić aplikacji, nie może
+    /// używać mini-języka wykonywanego dopiero w produkcji.</para>
+    /// </summary>
+    internal static string FormatScrollLine(
+        double offsetY, double extentH, double viewportH,
+        double dOffset, double dExtent, int realized, string? source)
+    {
+        var sb = new StringBuilder(160);
+        sb.Append(Pad(source ?? "?", 18));
+        sb.Append(" offsetY=").Append(Num(offsetY, 10));
+        sb.Append(" extentH=").Append(Num(extentH, 11));
+        sb.Append(" viewportH=").Append(Num(viewportH, 7));
+        sb.Append(" dOffset=").Append(Signed(dOffset, 8));
+        sb.Append(" dExtent=").Append(Signed(dExtent, 9));
+        sb.Append(" realized=").Append(realized.ToString(CultureInfo.InvariantCulture));
+        if (Math.Abs(dExtent) > 0.5) sb.Append("  <-- EKSTENT PRZELICZONY");
+        return sb.ToString();
+    }
+
+    // ⚠ `double.ToString` nie rzuca dla NaN ani nieskończoności — zwraca „NaN"/„∞", co w logu
+    // diagnostycznym jest informacją, a nie awarią. To jest celowe: instrument ma pokazać dziwną
+    // wartość, a nie się na niej wyłożyć.
+    private static string Num(double v, int width)
+        => Pad(v.ToString("0.0", CultureInfo.InvariantCulture), width, right: true);
+
+    private static string Signed(double v, int width)
+    {
+        var s = v.ToString("0.0", CultureInfo.InvariantCulture);
+        if (v > 0) s = "+" + s;
+        return Pad(s, width, right: true);
+    }
+
+    private static string Pad(string s, int width, bool right = false)
+    {
+        if (s.Length >= width) return s;
+        return right ? s.PadLeft(width) : s.PadRight(width);
     }
 
     // ── (2) Zdarzenia mogące tworzyć pętlę ───────────────────────────────────────────────────────
@@ -252,13 +367,16 @@ internal static class TreeDiagnostics
     public static void Event(string name, string detail)
     {
         if (!Enabled) return;
-        NoteEvent();
-        Log("EVENT", $"{name,-24} {detail}");
-        if (_inStorm && ShouldTakeStack())
+        Safe(() =>
         {
-            Log("EVENT", "  ↑ stos (burza):");
-            WriteStack(new StackTrace(1, fNeedFileInfo: true).ToString(), "     ");
-        }
+            NoteEvent();
+            Log("EVENT", Pad(name ?? "?", 24) + " " + (detail ?? string.Empty));
+            if (_inStorm && ShouldTakeStack())
+            {
+                Log("EVENT", "  ↑ stos (burza):");
+                WriteStack(new StackTrace(2, fNeedFileInfo: true).ToString(), "     ");
+            }
+        });
     }
 
     // ── (3) Przebudowy listy ─────────────────────────────────────────────────────────────────────
@@ -266,22 +384,43 @@ internal static class TreeDiagnostics
     public static void Collection(NotifyCollectionChangedEventArgs e, int total)
     {
         if (!Enabled) return;
-        NoteEvent();
-        Log("COLL", string.Format(CultureInfo.InvariantCulture,
-            "{0,-8} newIndex={1,6} newCount={2,5} oldIndex={3,6} oldCount={4,5} razem={5}",
-            e.Action, e.NewStartingIndex, e.NewItems?.Count ?? 0,
-            e.OldStartingIndex, e.OldItems?.Count ?? 0, total));
+        Safe(() =>
+        {
+            NoteEvent();
+            Log("COLL", FormatCollectionLine(
+                e.Action.ToString(), e.NewStartingIndex, e.NewItems?.Count ?? 0,
+                e.OldStartingIndex, e.OldItems?.Count ?? 0, total));
+        });
     }
+
+    /// <summary>Czysta funkcja budująca wiersz COLL — testowalna, bez formatu złożonego.</summary>
+    internal static string FormatCollectionLine(
+        string? action, int newIndex, int newCount, int oldIndex, int oldCount, int total)
+    {
+        var sb = new StringBuilder(120);
+        sb.Append(Pad(action ?? "?", 8));
+        sb.Append(" newIndex=").Append(Pad(Int(newIndex), 6, right: true));
+        sb.Append(" newCount=").Append(Pad(Int(newCount), 5, right: true));
+        sb.Append(" oldIndex=").Append(Pad(Int(oldIndex), 6, right: true));
+        sb.Append(" oldCount=").Append(Pad(Int(oldCount), 5, right: true));
+        sb.Append(" razem=").Append(Int(total));
+        return sb.ToString();
+    }
+
+    private static string Int(int v) => v.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>Jawna przebudowa (LoadGroup, ApplyFilter, ReloadConnections, Rebuild).</summary>
     public static void Rebuild(string what)
     {
         if (!Enabled) return;
-        Log("REBUILD", what);
-        if (ShouldTakeStack())
+        Safe(() =>
         {
-            WriteStack(new StackTrace(1, fNeedFileInfo: true).ToString(), "     ");
-        }
+            Log("REBUILD", what ?? "?");
+            if (ShouldTakeStack())
+            {
+                WriteStack(new StackTrace(2, fNeedFileInfo: true).ToString(), "     ");
+            }
+        });
     }
 
     // ── (4) Reentrancy, Dispatcher, głębokość stosu ──────────────────────────────────────────────
@@ -293,21 +432,29 @@ internal static class TreeDiagnostics
     public static IDisposable? Scope(string name)
     {
         if (!Enabled) return null;
-        int depth;
-        lock (Gate)
+        var key = name ?? "?";
+        IDisposable? exit = null;
+        Safe(() =>
         {
-            Depth.TryGetValue(name, out depth);
-            depth++;
-            Depth[name] = depth;
-        }
+            int depth;
+            lock (Gate)
+            {
+                Depth.TryGetValue(key, out depth);
+                depth++;
+                Depth[key] = depth;
+            }
 
-        Log("SCOPE", $"→ {name} depth={depth}{(depth > 1 ? "  <-- REENTRANCY" : string.Empty)}");
-        if (depth > 1)
-        {
-            WriteStack(new StackTrace(1, fNeedFileInfo: true).ToString(), "     ");
-        }
+            Log("SCOPE", "→ " + key + " depth=" + Int(depth) + (depth > 1 ? "  <-- REENTRANCY" : string.Empty));
+            if (depth > 1)
+            {
+                WriteStack(new StackTrace(2, fNeedFileInfo: true).ToString(), "     ");
+            }
 
-        return new ScopeExit(name);
+            exit = new ScopeExit(key);
+        });
+        // ⚠ Gdy licznik nie wszedł (błąd instrumentu), nie zwracamy „wyjścia", bo zmniejszyłoby
+        // głębokość, której nikt nie zwiększył — a `using` na `null` jest legalny.
+        return exit;
     }
 
     private sealed class ScopeExit : IDisposable
@@ -320,14 +467,17 @@ internal static class TreeDiagnostics
         {
             if (_done) return;
             _done = true;
-            int depth;
-            lock (Gate)
+            Safe(() =>
             {
-                Depth.TryGetValue(_name, out depth);
-                depth = Math.Max(0, depth - 1);
-                Depth[_name] = depth;
-            }
-            Log("SCOPE", $"← {_name} depth={depth}");
+                int depth;
+                lock (Gate)
+                {
+                    Depth.TryGetValue(_name, out depth);
+                    depth = Math.Max(0, depth - 1);
+                    Depth[_name] = depth;
+                }
+                Log("SCOPE", "← " + _name + " depth=" + Int(depth));
+            });
         }
     }
 
@@ -335,21 +485,28 @@ internal static class TreeDiagnostics
     public static void Posted(string name)
     {
         if (!Enabled) return;
-        int count;
-        lock (Gate)
+        Safe(() =>
         {
-            PostCounts.TryGetValue(name, out count);
-            count++;
-            PostCounts[name] = count;
-        }
-        Log("POST", $"post  {name,-34} razem={count}");
+            var key = name ?? "?";
+            int count;
+            lock (Gate)
+            {
+                PostCounts.TryGetValue(key, out count);
+                count++;
+                PostCounts[key] = count;
+            }
+            Log("POST", "post  " + Pad(key, 34) + " razem=" + Int(count));
+        });
     }
 
     public static void Executing(string name)
     {
         if (!Enabled) return;
-        NoteEvent();
-        Log("POST", $"exec  {name}");
+        Safe(() =>
+        {
+            NoteEvent();
+            Log("POST", "exec  " + (name ?? "?"));
+        });
     }
 
     /// <summary>
@@ -360,8 +517,12 @@ internal static class TreeDiagnostics
     public static void StackDepth(string where)
     {
         if (!Enabled) return;
-        var frames = new StackTrace(1, fNeedFileInfo: false).FrameCount;
-        Log("DEPTH", $"{where,-28} ramek={frames}{(frames > 400 ? "  <-- GŁĘBOKO" : string.Empty)}");
+        Safe(() =>
+        {
+            var frames = new StackTrace(2, fNeedFileInfo: false).FrameCount;
+            Log("DEPTH", Pad(where ?? "?", 28) + " ramek=" + Int(frames)
+                + (frames > 400 ? "  <-- GŁĘBOKO" : string.Empty));
+        });
     }
 
     // ── Wykrywanie burzy ─────────────────────────────────────────────────────────────────────────
@@ -419,9 +580,11 @@ internal static class TreeDiagnostics
         // się od dziury w sekwencji. Czytelnik logu ma prawo zakładać, że numeracja jest ciągła.
         if (!Enabled || _writer is null) return;
         var seq = Interlocked.Increment(ref _seq);
-        Raw(string.Format(CultureInfo.InvariantCulture,
-            "#{0,-7} t={1,-9} [{2,3}] {3,-8} {4}",
-            seq, Clock.ElapsedMilliseconds, Environment.CurrentManagedThreadId, category, message));
+        // ⛔ Bez formatu złożonego — patrz `FormatScrollLine`. Sklejanie nie ma czego sparsować.
+        Raw("#" + Pad(seq.ToString(CultureInfo.InvariantCulture), 7)
+            + " t=" + Pad(Clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture), 9)
+            + " [" + Pad(Int(Environment.CurrentManagedThreadId), 3, right: true) + "] "
+            + Pad(category ?? "?", 8) + " " + (message ?? string.Empty));
     }
 
     private static void WriteStack(string? stack, string indent)

@@ -603,6 +603,28 @@ noted.
   startup so the log proves the hook is live. ⚠⚠ Without that, **an absence of `EXC` lines is
   undecidable**: it would mean either "nothing was thrown" or "the hook is dead", which are opposite
   conclusions leading to opposite searches (a negative measurement is the dangerous kind, #285).
+  ⛔⛔ **THE INSTRUMENT'S FIRST RUN KILLED THE APP, AND THAT IS THE ENTRY WORTH READING (fixed 2026-08-04).**
+  `TreeDiagnostics.Scroll` built its line with `string.Format` using the alignment `{4,+8:0.0}` —
+  **alignment takes only an integer, so `+` is a syntax error** — and the `FormatException` travelled up
+  through the ScrollViewer's `PropertyChanged` handler into Avalonia and **ended the process on the first
+  category expand**. The build was green and would have stayed green: a composite format string is a
+  mini-language parsed **at run time**. The user diagnosed it from the stack in `EmberTern-debug.log`
+  (*"Failure to parse near offset 77. Expected an ASCII digit"* — offset 77 is that `+`).
+  ⭐⭐ **The worst part is what it destroyed: a tool meant to catch someone else's defect BECAME the defect**,
+  and the user's log described only the instrumentation. So the fix is not one character:
+  **(1)** every line is now built from **separately formatted pieces** (`ToString`) — ⛔ **not one composite
+  format string is left in the class**, because concatenation has nothing to parse and therefore nothing to
+  throw; **(2)** every public entry goes through **one `Safe` gate** that swallows `Exception` and drops the
+  entry (the user's requirement stated plainly: *a failed log write must skip the entry, never stop the
+  app*), with dropped entries **counted and reported at exit** — a silent loss would be worse than no
+  instrument; **(3)** a **`[ThreadStatic]` reentrancy guard**, because a throw inside logging reaches the
+  `FirstChanceException` hook, which logs, which throws again.
+  ⭐ **And the guard written against the CAUSE found a second instance on its first run** —
+  `$"{DateTime.Now:yyyy-MM-dd…}"` in the header, the same family. `TreeDiagnosticsFormattingTests` feeds the
+  pure formatters hostile input (`NaN`, infinities, `int.MinValue`, `null`, and text containing `{`, `}`,
+  `{4,+8:0.0}`) and scans the source so the class cannot go back to a run-time-parsed format.
+  ⚠ **The general lesson, wider than this file: a tool whose only job is to not crash the app must not use
+  a mini-language evaluated in production.**
   ⏸ **Awaiting the user's log from a real reproduction** — analysis starts from it, not from a guess.
 - **📋 OBSERVATION PARKED, NOT TO BE ACTED ON (user, 2026-08-04):** startup is still noticeably slower with
   a large number of open tabs. ⚠ This is the **known cost of the deliberate deterministic load** — chosen so
@@ -3563,8 +3585,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7254, MEASURED 2026-08-04**
-  (Product Polish through M3.4b part 1). Green in the three documented partitions (**7137 + 63 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7270, MEASURED 2026-08-04**
+  (Product Polish through M3.4b part 1 + the tree instrument). Green in the three documented partitions
+  (**7153 + 63 + 54**).
   ⚠ This line said **7228 (7118 + 56 + 54)** until that run — a figure that had gone stale across M3.3b/c
   and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy it forward.
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a

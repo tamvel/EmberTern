@@ -39,7 +39,7 @@
 | **Etap** | M0–M2c ✅ · **M3: iteracja 0 ✅ · M3.1 ✅ · M3.2 ✅ · 🔒 JĘZYK KOLORÓW ✅ · 🔒 M3.3 PASEK ZAKŁADEK ✅ ODEBRANY 2026-08-03** (§19.22–§19.25). ⭐ **M3.1 ZAMKNIĘTE** · ⭐ **H‑3 ZAMKNIĘTE** · ⭐ **H‑5 ZAMKNIĘTE** (K7) · ⭐ **§7.5 ZAMKNIĘTE** — zastąpione przez `color-language.md` · ⭐ **M‑1 ZAMKNIĘTE wewnątrz M3** (zostały 2 literały, oba w M4.3) |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7254**, zielony w trzech partycjach (**7137 + 63 + 54**). ⚠ Partycja headless ma teraz **siedem** klas — doszły `MetadataTreeVirtualizationProbe` (15b) i `SharedContextMenuFeasibilityProbe` (M3.4b), obie **w filtrze**. **Mierz przed cytowaniem** |
+| **Suite** | **7270**, zielony w trzech partycjach (**7153 + 63 + 54**). ⚠ Partycja headless ma teraz **siedem** klas — doszły `MetadataTreeVirtualizationProbe` (15b) i `SharedContextMenuFeasibilityProbe` (M3.4b), obie **w filtrze**. **Mierz przed cytowaniem** |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
 | ⭐⭐ **NASTĘPNY KROK** | **M3.4b część 2 — właściwy przegląd menu** (pozycja 16b w planie §10; część 1 zrobiona, §19.28). Potem M3b → ⛔ brama §13.3 |
