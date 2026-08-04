@@ -715,3 +715,54 @@ zaznaczony element w widoku.
 
 ⛔ **Gdyby nie utrzymywały, odpowiedzią jest rozwiązanie DLA NAWIGACJI KLAWIATURĄ, a nie powrót globalnego
 auto-scrolla** (ratyfikowane przez użytkownika, 2026-08-04).
+
+### 11.6 ✅ POTWIERDZONE NA ŻYWYM PRZEBIEGU PO NAPRAWIE (2026-08-04)
+
+Ten sam scenariusz, log `EmberTern-tree-diag-9224-20260804-101317.log`:
+
+| Sygnatura pętli | Przed naprawą | Po naprawie |
+|---|---|---|
+| `AutoScrollToSelectedItemIfNecessary` w stosach | **93** | **0** |
+| `dOffset=+24.0` (krok jednego wiersza) | **93** | **0** |
+| `heartbeat` (`DispatcherPriority.Background`) | **umiera** o t=123 041 i nie wraca | **żyje do końca** (t=112 408) |
+| `SelectionChanged` | 3 | **19** |
+| rozmiar drzewa | 13 217 wierszy | **15 980** |
+
+⭐⭐ **To jest silniejszy dowód niż zwykłe „nie powtórzyło się": drzewo było WIĘKSZE, a zaznaczeń
+SZEŚĆ RAZY WIĘCEJ** — czyli warunek wyzwalający występował częściej niż w przebiegu, który defekt
+pokazał. Ostatnie wpisy `SCROLL` mają `offsetY=0.0` przy rosnącym ekstencie: lista stoi na górze,
+kategorie się rozwijają, nic nie ucieka.
+⚠ `RequestBringIntoView` nadal występuje **84 razy** i to jest poprawne — normalne przewijanie do
+elementu przy interakcji użytkownika. Zniknął **mechanizm automatyczny**, nie zdarzenie.
+
+---
+
+## 12. ⏸ HIPOTEZA DO OBSERWACJI — czy to była też przyczyna zawieszającego się testu?
+
+> ⚠⚠ **To jest HIPOTEZA, nie fakt.** Zapisana na wyraźną prośbę użytkownika i **świadomie nie
+> podniesiona do rangi ustalenia**, bo twardego dowodu nie ma.
+
+`ConnectionExpandBindingProbe` zawiesza się sporadycznie od dawna (#94/#226/#261) i jest z tego powodu
+uruchamiany **osobno**. Przesłanka: **test wykonuje operacje na drzewie w prawdziwym `MainWindow`**,
+a jeżeli w którymś momencie miał zaznaczony wiersz, mógł nieświadomie uruchomić dokładnie ten sam
+mechanizm `AutoScrollToSelectedItem` — czyli wpaść w pętlę, która **zagładza priorytet tła**, co w teście
+headless objawia się jako **zawieszenie przebiegu**, a nie jako nieudana asercja.
+
+⭐ **To pasuje do wcześniejszej, zmierzonej obserwacji lepiej niż cokolwiek dotąd:** przy zawieszeniu
+całej suity raportowana jest nazwa **ostatniego testu headless**, a podejrzanym był „teardown sesji /
+zamykanie pętli dispatchera". Zagłodzony Dispatcher **wygląda dokładnie tak samo**.
+
+⚠ **Co przemawia PRZECIW, i trzeba to trzymać razem:** krok 15b wykluczył splice jako mechanizm
+w izolacji, a zawieszenia suity zdarzały się także w przebiegach, o których nie wiadomo, czy dotykały
+drzewa z zaznaczeniem.
+
+### 12.1 Jak to rozstrzygnąć — obserwacją, nie eksperymentem
+
+⭐ **Kryterium jest proste i nie wymaga żadnej nowej infrastruktury: jeżeli od 2026-08-04
+`ConnectionExpandBindingProbe` PRZESTANIE się sporadycznie zawieszać, będzie to bardzo mocna przesłanka,
+że oba problemy miały wspólną przyczynę.**
+
+⛔ Nie wolno tego uznać za rozstrzygnięte na podstawie kilku zielonych przebiegów — zawieszenie było
+rzadkie z definicji. **Obserwować przez dłuższy czas i zapisać wynik w OBIE strony.**
+⚠ Do tego czasu **procedura się nie zmienia**: probe nadal biegnie w osobnej partycji, a instrukcja
+użytkownika z 2026-08-01 pozostaje w mocy.

@@ -7319,3 +7319,63 @@ ich nie ruszałem**: `SavedQueryViewModel` (lista zapytań zapisanych) i `Worksp
 zakładek). ⭐ Powód jest merytoryczny, nie zakresowy: **żadna z tych list nie jest wirtualizowana ani nie
 osiąga tysięcy wierszy**, więc mnożnik, który tu decydował, tam nie istnieje. ⛔ Nie przenosić ich „dla
 spójności" bez pomiaru — to byłaby pułapka 17 (reguła opisuje to, co jest dobre; nie jest mandatem).
+
+---
+
+### §19.29 🐞 Przerwa w M3.4b — stary defekt drzewa ma przyczynę i jest naprawiony (2026-08-04)
+
+> **To nie jest iteracja Product Polish**, tylko przerwa w M3.4b wymuszona przez znalezisko. Pełna
+> diagnoza, log i pomiary: `metadata-refresh-analysis.md` **§10–§12**. Tutaj wyłącznie to, co dotyczy
+> etapu i co musi przeżyć w pamięci projektu.
+
+#### §19.29.1 Przyczyna, w jednym zdaniu
+
+Gdy jakiś wiersz jest zaznaczony, a użytkownik rozwinie dużą kategorię, Avalonia odkłada na Dispatcher
+`SelectingItemsControl.AutoScrollToSelectedItemIfNecessary`; zaznaczony wiersz leży poza oknem realizacji,
+a `VirtualizingStackPanel.ScrollIntoView` **nie potrafi skoczyć do nierealizowanego indeksu**, więc pełznie
+do celu **po jednym wierszu (24 px) na cykl Dispatchera** — zagładzając priorytet tła, przez co aplikacja
+przestaje reagować.
+
+**Naprawa: `AutoScrollToSelectedItem="False"` wyłącznie na `SidebarList`.** Nic więcej, świadomie bez
+żadnych warunków ani własnego algorytmu przewijania (decyzja użytkownika). Ta lista ma własne, jawne
+„pokaż mi ten obiekt", więc drugi automatyczny mechanizm był tu zbędny.
+
+#### §19.29.2 ⭐⭐ TRZY LEKCJE, KTÓRE PRZEŻYWAJĄ TEN DEFEKT
+
+**(1) Pomiar syntetyczny odtwarza MECHANIZM, ale nie odtwarza STANU.** M3.4a (§19.26) i krok 15b (§19.27)
+**oba wykluczyły swoją hipotezę poprawnie** — i oba były ślepe, bo **w żadnym nic nie było zaznaczone**.
+Zmienna decydująca o całym zjawisku nie występowała w eksperymencie. ⚠ Praktycznie: zanim uznasz, że
+pomiar wyklucza hipotezę, **wypisz stany, w których defekt występuje u użytkownika, i sprawdź, które
+z nich twój eksperyment odtwarza.**
+
+**(2) Instrument, który ma nie wywalić aplikacji, nie może używać mini-języka wykonywanego w produkcji.**
+Pierwsze uruchomienie `TreeDiagnostics` **zabiło aplikację** przez `{4,+8:0.0}` — wyrównanie w formacie
+złożonym przyjmuje tylko liczbę całkowitą (§10.6). Build był zielony i pozostałby zielony.
+⭐ Najgorsze było to, **co ta awaria zniszczyła**: narzędzie mające złapać cudzy defekt samo stało się
+defektem, a log użytkownika opisywał wyłącznie błąd instrumentacji.
+
+**(3) ⭐⭐ POMIAR NEGATYWNY MUSI SIĘ PRZEDSTAWIĆ.** Samotest kanału wyjątków (§10.3) rzuca i łapie
+nieszkodliwy wyjątek na starcie. Dzięki temu **cisza w kategorii `EXC` była DOWODEM**, że nic nie
+poleciało — a nie dwuznacznością „albo nic nie poleciało, albo hak nie działa". To była jedna z pięciu
+rzeczy, o które prosił użytkownik, i jedyna, którą dało się zepsuć **przez samo nierobienie niczego**.
+
+#### §19.29.3 ⛔ Co z tego zostaje na stałe
+
+* **`AutoScrollToSelectedItem="False"` + strażnik** `SidebarList_DisablesAvaloniaAutoScrollToSelectedItem`
+  — ⚠ ta właściwość wygląda dokładnie jak coś, co ktoś kiedyś „posprząta": domyślnie `true`, usunięcie nie
+  psuje **żadnego innego testu**, nie rusza piksela, a defekt wraca dopiero u użytkownika z dużą bazą.
+* **`EMBERTERN_TREE_DIAG` zostaje jako ukryte narzędzie deweloperskie** (decyzja użytkownika). ⭐ To ono
+  znalazło przyczynę po dwóch latach istnienia objawu; bez flagi nie kosztuje nic. ⛔ Nie usuwać i nie
+  wystawiać w UI. ⭐ Sięgać po nie przy **każdym** defekcie o kształcie „przewijanie / zaznaczenie /
+  Dispatcher", nie tylko w drzewie.
+* ⏸ **Hipoteza o zawieszającym się teście** (`metadata-refresh-analysis.md` §12) — do obserwacji, nie do
+  ogłoszenia.
+
+#### §19.29.4 Wpływ na M3.4
+
+⛔ **Żaden na zakres.** M3.4a i krok 15b zostają jak były — ich wnioski o koszcie splice'u i wirtualizacji
+**nadal obowiązują**; ten defekt miał inną przyczynę, której one nie badały. M3.4b część 1 (współdzielone
+menu) też zostaje. **Wracamy do M3.4b część 2 — przeglądu 32 menu — bez zmiany planu.**
+⭐ Jedno domknięcie po drodze: checklista §3.7a handovera jest **zamknięta w całości** — (a) rzadkie
+zawieszenie: **przyczyna znaleziona i naprawiona**; (b) skojarzenie z testem: **hipoteza zapisana do
+obserwacji**; (c) przegląd wydajności rozwijania: **wykonany, bez znaleziska wymagającego zmiany**.

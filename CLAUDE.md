@@ -661,9 +661,30 @@ noted.
   ratified call. ⛔ Guarded by `SidebarList_DisablesAvaloniaAutoScrollToSelectedItem`, because the property
   looks exactly like something that will one day be "tidied up": it defaults to `true`, removing it breaks
   **no other test**, changes no pixel, and the defect only returns for a user with a very large database.
+  ✅ **CONFIRMED ON A LIVE RUN AFTER THE FIX, and the evidence is stronger than "it did not recur":**
+  `AutoScrollToSelectedItemIfNecessary` in stacks **93 → 0**, `dOffset=+24.0` **93 → 0**, and the
+  `heartbeat` **alive to the end** instead of dying — on a **bigger** tree (15 980 rows vs 13 217) with
+  **six times more selections** (19 vs 3), i.e. the triggering condition occurred *more* often than in the
+  run that produced the defect. ⚠ `RequestBringIntoView` still fires 84 times and that is correct — normal
+  scroll-to-item on user interaction; what disappeared is the **automatic mechanism**, not the event.
   ⏸ **One open item for QA: keyboard navigation** (arrows, PageUp/PageDown, Home/End) keeping the selected
   row in view. ⛔ If it does not, the answer is a fix **for keyboard navigation**, never the return of the
   global auto-scroll (ratified 2026-08-04).
+  ⏸⏸ **HYPOTHESIS TO OBSERVE, recorded at the user's request and deliberately NOT raised to a finding —
+  there is no hard proof:** this may also have been the cause of the long-standing **flaky
+  `ConnectionExpandBindingProbe` hang** (#94/#226/#261). The probe drives tree operations inside a real
+  `MainWindow`; if a row happened to be selected it could have entered the same `AutoScrollToSelectedItem`
+  loop, and a **starved Dispatcher looks exactly like** the previously-measured "teardown / dispatcher-loop
+  shutdown" suspicion — a hung run rather than a failed assertion. ⭐ **The decisive criterion needs no new
+  infrastructure: if that probe stops hanging from 2026-08-04 on, it is strong evidence the two problems
+  shared one cause.** ⛔ Not to be declared resolved on a few green runs — the hang was rare by definition;
+  observe over time and **record the outcome either way**. ⚠ Until then nothing changes: the probe still
+  runs in its own partition and the user's 2026-08-01 instruction stands. Full record:
+  `metadata-refresh-analysis.md` **§12**.
+  🔧 **`EMBERTERN_TREE_DIAG` STAYS as a hidden developer tool** (user's decision) — it is what found this
+  cause after two years of the symptom, and it costs nothing when the flag is unset: no file, no
+  subscriptions. ⛔ Do not remove it and do not surface it in the UI; reach for it whenever a
+  scroll/selection/Dispatcher-shaped defect appears anywhere in the app, not only in the tree.
 - **📋 OBSERVATION PARKED, NOT TO BE ACTED ON (user, 2026-08-04):** startup is still noticeably slower with
   a large number of open tabs. ⚠ This is the **known cost of the deliberate deterministic load** — chosen so
   diagnostics always has the full metadata context and never flags valid symbols as errors. ⛔ Do not touch
