@@ -7379,3 +7379,107 @@ menu) też zostaje. **Wracamy do M3.4b część 2 — przeglądu 32 menu — bez
 ⭐ Jedno domknięcie po drodze: checklista §3.7a handovera jest **zamknięta w całości** — (a) rzadkie
 zawieszenie: **przyczyna znaleziona i naprawiona**; (b) skojarzenie z testem: **hipoteza zapisana do
 obserwacji**; (c) przegląd wydajności rozwijania: **wykonany, bez znaleziska wymagającego zmiany**.
+
+#### §19.29.5 ⭐ RATYFIKOWANE — cztery warianty „Close" ZOSTAJĄ BEZ IKON (użytkownik, 2026-08-04)
+
+Menu zakładki z M3.3c ma 4 z 9 pozycji bez ikony: *Close others*, *Close to the right*,
+*Close unmodified*, *Close all*. Formalnie nie spełnia to miary postawionej dla tego przeglądu
+(140 ze 154 pozycji niesie ikonę).
+
+⛔ **Decyzja: nie dodawać ich na siłę.** Słowa użytkownika: *„Wszystkie cztery pozycje należą do jednej
+rodziny operacji i nie widzę dobrych, jednoznacznych ikon, które niosłyby realną wartość. To byłaby raczej
+dodatkowa chroma niż poprawa UX."*
+
+⭐ To jest **pułapka 17 rozstrzygnięta na korzyść produktu**: reguła „pozycja menu niesie ikonę" opisuje to,
+co jest dobre, i nie jest mandatem do wymyślenia czterech podobnych glifów „zamknij coś", których jedyną
+funkcją byłoby zaspokojenie licznika. ⚠ Cztery pozycje jednej rodziny **pod** pozycją `Close` (która ikonę
+ma) czytają się jako jej warianty — a cztery pozorne różnice zaciemniłyby to, co dziś jest czytelne.
+⏸ Wraca do rozważenia **tylko** jeśli pojawi się naprawdę czytelny zestaw znaków.
+
+#### §19.29.6 ⏸ OBSERWACJA WZMOCNIONA — nadal hipoteza, nie fakt (użytkownik, 2026-08-04)
+
+Po wyłączeniu `AutoScrollToSelectedItem`, na przebiegu **większym** niż ten, który defekt pokazał:
+
+* zniknęła pętla `AutoScrollToSelectedItemIfNecessary` (93 → 0 wystąpień w stosach),
+* zniknęły cykliczne przesunięcia **+24 px** (93 → 0),
+* **heartbeat Dispatchera przestał zanikać**,
+* mimo **większego drzewa** (15 980 vs 13 217 wierszy) i **sześciokrotnie większej liczby zaznaczeń**
+  (19 vs 3) problem nie wystąpił.
+
+⚠⚠ **To NADAL nie jest dowód, że sporadycznie zawieszający się `ConnectionExpandBindingProbe` miał tę samą
+przyczynę** — i celowo nie jest tak zapisane. To obserwacja do historii projektu.
+
+⭐ **Kryterium rozstrzygające pozostaje bez zmian i nie wymaga żadnej nowej infrastruktury: jeżeli od
+2026-08-04 ten test również przestanie się sporadycznie zawieszać, będzie to bardzo mocna przesłanka, że oba
+problemy miały wspólną przyczynę.** ⛔ Nie ogłaszać na podstawie kilku zielonych przebiegów — zawieszenie
+było rzadkie z definicji. **Obserwować zachowanie całej suity przez dłuższy czas i zapisać wynik w OBIE
+strony.** Pełny zapis hipotezy z argumentami za i przeciw: `metadata-refresh-analysis.md` §12.
+
+---
+
+### §19.30 Iteracja 18 (M3.4b część 2) — przegląd 32 menu kontekstowych (2026-08-04)
+
+> **Wynik: BRAK ZNALEZISKA WYMAGAJĄCEGO ZMIANY. Dwie rzeczy, które wyglądały na niespójność, okazały się
+> regułami działającymi poprawnie.** Zero zmian w kodzie.
+
+#### §19.30.1 Stan zmierzony
+
+| | Liczba |
+|---|---|
+| `ContextMenu` | **32** |
+| `MenuItem` | **154** |
+| bez ikony | **6** |
+| komend wiązanych z menu | **71** |
+
+⚠ **Korekta pierwszego pomiaru: „14 bez ikony" było błędne.** Osiem pozycji niesie ikonę **składnią
+elementową** `<MenuItem.Icon>` (złożona kontrolka `DebuggerIcon`), której nie łapał skan atrybutu `Icon=`.
+⭐ To ta sama pułapka co #285: **pomiar po nośniku nie odróżnia roli od zapisu** — liczyłem atrybut, a nie
+„czy pozycja ma ikonę".
+
+Realne 6 bez ikony: **2 kwalifikatory zakresu triggerów** (ikonę niesie pozycja nadrzędna — świadomy wyjątek
+odnotowany już przez Keyboard Manager) i **4 warianty „Close"** — ratyfikowane, że zostają (§19.29.5).
+
+#### §19.30.2 ⭐⭐ Pomiar 1 — gesty. Pozorna niespójność okazała się regułą
+
+`DeleteCommand` występuje w czterech menu; **tylko jedno pokazuje gest** (`F8`). Wyglądało to na dryf.
+
+**Sprawdzone w `MetadataExplorerViewModel.ResolveCommand`:** `CommandId.DeleteObject` rozwiązuje się
+**wyłącznie** dla `MetadataNodeViewModel { CanDeleteLeaf: true }`. Dla folderu, połączenia i zapisanego
+zapytania zwraca `null` — czyli **`F8` tam nie działa**.
+
+⭐ **Więc stan obecny jest POPRAWNY i jest zastosowaniem ratyfikowanej reguły:** *gest pokazuje się TYLKO
+tam, gdzie działa* (`keyboard-manager.md` §14). Dopisanie go do menu folderu uczyłoby nieprawdy. To samo
+dotyczy `NewObject` (tylko grupa z `SupportsNew`) i `RefreshMetadata` (tylko przez połączenie).
+
+⚠⚠ **Metodologiczne, warte zapamiętania: automatyczne skrzyżowanie po NAZWIE nie odpowiada na to pytanie.**
+Menu wiąże komendy ViewModelu (`AddFieldCommand`), a katalog trzyma identyfikatory (`CollectionAdd`);
+mapowanie żyje w `ResolveCommand`, nie w nazwach. Ze 154 pozycji nazwa pokryła się **raz**
+(`RefreshMetadata`) i to był przypadek. ⛔ Nie budować strażnika na tym skojarzeniu — dawałby fałszywy
+spokój.
+
+#### §19.30.3 ⭐ Pomiar 2 — `CanExecute`. Trzy pozycje bez niego, wszystkie poprawnie
+
+`Connect`, `Disconnect` i `Delete` z menu połączenia nie mają `CanExecute`. **I nie powinny go mieć:**
+pierwsze dwa są bramkowane `IsVisible="{Binding !IsConnected}"` / `{Binding IsConnected}` — pozycja ukryta
+nie da się kliknąć — a usunięcie profilu połączenia jest zawsze dozwolone.
+
+⭐ **`IsVisible` i `CanExecute` to dwa poprawne narzędzia do dwóch różnych sytuacji**, nie gorszy i lepszy
+wariant: **ukryj**, gdy pozycja w tym stanie nie ma sensu w ogóle (nie można rozłączyć czegoś, co nie jest
+połączone); **wyszarz**, gdy operacja istnieje, ale chwilowo nie jest dostępna — bo znikająca pozycja psuje
+pamięć mięśniową użytkownika. Menu zakładki z M3.3c używa `CanExecute` właśnie dlatego, że jego pozycje mają
+zostać widoczne.
+
+⚠ **Ograniczenie metody, podane wprost:** wykrywanie `CanExecute` to heurystyka na źródle (okno wokół
+deklaracji `[RelayCommand]`), nie analiza semantyczna. Kontrola pozytywna wypadła dobrze — cztery pozycje
+menu zakładki, o których z M3.3c wiadomo, że mają `CanExecute`, zostały jako mające je rozpoznane.
+
+#### §19.30.4 ⛔ Czego przegląd świadomie NIE zrobił
+
+* **Nie ujednolicał zestawów pozycji między menu** — Keyboard Manager ratyfikował *„to samo menu oferuje te
+  same operacje"*, a nie *„każde menu ma te same pozycje"*.
+* **Nie dodawał ikon do wariantów „Close"** (§19.29.5).
+* **Nie budował strażnika na skojarzeniu nazw** komend z identyfikatorami katalogu (§19.30.2).
+
+⭐ **Brak znaleziska jest tu wynikiem, nie porażką przeglądu.** Menu przeszły przez etap Keyboard Managera
+(32 menu, jeden zestaw stylów, ikony i gesty z jednego źródła) i M3.4b część 1 (współdzielenie instancji);
+poziom postawiony przez M3.3c **jest utrzymany**.

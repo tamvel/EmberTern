@@ -41,7 +41,7 @@ podsekcję) · handoverów M2a/M2b/M2c.
 | **Suite** | **7271**, zielony w trzech partycjach (**7154 + 63 + 54**). ⚠ Partycja headless ma **siedem** klas — doszły `MetadataTreeVirtualizationProbe` i `SharedContextMenuFeasibilityProbe`, obie **w filtrze**. **Mierz przed cytowaniem** |
 | **Smoke** | czysty |
 | **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · M3.4a ✅ · krok 15b ✅ · M3.4b cz.1 ✅** |
-| ⭐⭐ **START** | **M3.4b część 2 — właściwy przegląd 32 menu kontekstowych** (pozycja 16b w planie §10 handovera). Stan wejściowy zmierzony: **32 `ContextMenu`, 154 `MenuItem`, 140 z ikoną (14 bez), 27 z gestem** |
+| ⭐⭐ **START** | **M3b — podłączenie pozostałych operacji do paska postępu** (pozycja 17 w planie §10 handovera). ⭐ **M3.4 ZAMKNIĘTE W CAŁOŚCI.** Potem ⛔ brama §13.3 |
 | ✅ **CHECKLISTA M3.4 — ZAMKNIĘTA W CAŁOŚCI (2026-08-04)** | (a) 🐞 rzadkie zawieszenie drzewa: **przyczyna znaleziona i naprawiona** — `AutoScrollToSelectedItem="False"` na `SidebarList` (`product-polish.md` §19.29, `metadata-refresh-analysis.md` §10–§12) · (b) skojarzenie z zawieszającym się testem: **hipoteza zapisana do OBSERWACJI**, nie ogłoszona jako fakt (§12) · (c) przegląd wydajności rozwijania: **wykonany, bez znaleziska wymagającego zmiany** |
 
 ### 2.1 Co jest zamknięte i nie wraca

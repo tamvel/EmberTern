@@ -572,9 +572,23 @@ noted.
   ⚠ **The same "inline menu in a row template" shape exists in two more places and was deliberately left
   alone**: Saved Queries and the tab strip — **neither is virtualized nor reaches thousands of rows**, so the
   multiplier that decided here does not exist there (trap 17).
-  ⏸ **PAUSED — M3.4b part 2 waits.** Entry state measured: **32 `ContextMenu`, 154 `MenuItem`, 140 with an
-  icon (14 without), 27 with a catalog gesture**; the yardstick is M3.3c's tab menu (icon, gesture, own
-  `CanExecute` per item). Then M3b → ⛔ the §13.3 gate.
+  ✅ **M3.4b PART 2 DONE (2026-08-04) — the review of all 32 context menus, and it found NOTHING to fix**
+  (`product-polish.md` §19.30). ⚠ **The entry measurement was wrong and is corrected: 6 items lack an icon,
+  not 14** — eight carry one through the ELEMENT syntax `<MenuItem.Icon>`, which a scan for the `Icon=`
+  attribute cannot see (#285 again: a measurement by carrier does not answer the question about the role).
+  ⭐⭐ **Two apparent inconsistencies both turned out to be rules working correctly.** `DeleteCommand`
+  appears in four menus and only one shows `F8` — because `ResolveCommand` resolves `DeleteObject` **only**
+  for a metadata leaf, so the gesture genuinely does not work on a folder or a connection and showing it
+  would teach something false. `Connect`/`Disconnect` have no `CanExecute` — they are gated by `IsVisible`,
+  and ⭐ **hiding and disabling are two correct tools for two different situations**: hide when the item
+  makes no sense in that state at all, disable when the operation exists but is momentarily unavailable
+  (a vanishing item destroys muscle memory — which is why M3.3c chose `CanExecute`).
+  ⚠⚠ **Method note worth keeping: an automated cross-check BY NAME cannot answer the gesture question.**
+  Menus bind ViewModel commands (`AddFieldCommand`) while the catalog holds ids (`CollectionAdd`); the
+  mapping lives in `ResolveCommand`, not in names. Across 154 items the names coincided **once**, by
+  accident. ⛔ Do not build a guard on that association — it would give false comfort.
+  ⭐ **M3.4 IS CLOSED IN FULL** (M3.4a §19.26 · step 15b §19.27 · M3.4b part 1 §19.28 · part 2 §19.30).
+  ⏸ **Next: M3b** (wiring the remaining operations to the progress bar), then ⛔ the §13.3 gate.
 - **🔬 THE OLD TREE DEFECT IS NOW REPRODUCIBLE BY THE USER, AND AN INSTRUMENT IS SHIPPED FOR IT
   (2026-08-04) — `EMBERTERN_TREE_DIAG`.** Full record: `metadata-refresh-analysis.md` **§10**.
   Reported scenario: expand several large categories (~tens of thousands of rows) → the list **starts
