@@ -7483,3 +7483,175 @@ menu zakładki, o których z M3.3c wiadomo, że mają `CanExecute`, zostały jak
 ⭐ **Brak znaleziska jest tu wynikiem, nie porażką przeglądu.** Menu przeszły przez etap Keyboard Managera
 (32 menu, jeden zestaw stylów, ikony i gesty z jednego źródła) i M3.4b część 1 (współdzielenie instancji);
 poziom postawiony przez M3.3c **jest utrzymany**.
+
+---
+
+### §19.31 Iteracja 19 (M3b.1) — import i Script Executor w sekcji postępu (2026-08-04)
+
+> **Zakres:** podłączenie dwóch źródeł postępu z zakładek do sekcji 4 paska statusu (§8.4.6) plus arbitraż,
+> którego M3.1f nie potrzebowała, bo miała jedno źródło. ⛔ **Bez dotykania połączenia z bazą** — to jest
+> M3b.2, świadomie oddzielone decyzją użytkownika jako mniejszy, łatwiejszy do zweryfikowania krok.
+> Build 0/0; suita **7284** w trzech partycjach (7167 + 63 + 54, +13); smoke czysty.
+
+#### §19.31.1 ⚠⚠ POMIAR WEJŚCIOWY OBALIŁ INWENTARZ ETAPU W TRZECH PUNKTACH
+
+Plan (handover §3.9, prompt startowy §4.2) mówił „trzy ścieżki `IProgress`", potem „cztery". **Zmierzone:
+jest ich PIĘĆ.**
+
+| # | Ścieżka | Gdzie tworzona | Zna sumę? |
+|---|---|---|---|
+| 1 | zapytanie SQL | `MainWindowViewModel.cs:6827` | ⛔ nie — już podłączone (operacja referencyjna) |
+| 2 | import | `DataImportTabViewModel.cs:957` | ⚠ `EstimatedRows`, **bywa nieznana** |
+| 3 | **Script Executor** | `ScriptExecutorTabViewModel.cs:188` | ✅ **ściśle** (`_lastStatements.Count`) |
+| 4 | eksport | `ExportDialogViewModel.cs:197` | ⛔ nie |
+| 5 | batch | `MainWindowViewModel.cs:5804` | ✅ |
+
+⭐ **`IProgress<ScriptStatementResult>` nie występowało w ŻADNYM inwentarzu** — ani w handoverze, ani
+w §19.7.2, ani w prompcie startowym — a jest **jedyną ścieżką w aplikacji ze ścisłą sumą**. To trzeci raz
+w M3, gdy plan etapu okazał się nieaktualny wobec kodu (§19.22.1, §3.7a, teraz to): **plan starzeje się tak
+samo cicho jak string i jak komentarz** (#284, pułapki 20/21).
+
+⭐⭐ **DRUGIE ZNALEZISKO ZMNIEJSZYŁO ZAKRES O POŁOWĘ: eksport i batch biegną MODALNIE.**
+`ExportDialog.ShowAsync` → `dlg.ShowDialog(owner)`, `BatchResultsDialog` → `dialog.ShowDialog(this)`.
+Modal blokuje okno główne, więc **cała wartość sekcji postępu tam nie istnieje**: §19.7.3 uzasadniło ją tym,
+że operacja przeżywa przełączenie zakładki — a przełączyć się nie można. Gorzej: `HasCancel` dałoby przycisk
+**niemożliwy do kliknięcia**, bo leżący w zablokowanym oknie. ⛔ **Nie podłączać ich**; decyzja użytkownika
+potwierdziła pomiar.
+
+⚠ **Trzecie: „16 ViewModeli ze stanem zajętości" to nie lista rzeczy do podłączenia.** Czternaście z nich to
+`IsLoading` typu „ładuję zawartość tej zakładki", a **każde ma już własny nośnik w miejscu** — jedenaście
+stałych `*LoadingHint` w `UiStrings`. Pytanie z pułapki 13 (*„czy ten fakt ma już właściciela?"*) odpowiada
+tu samo sobie: ma, i właścicielem jest **to, na co użytkownik patrzy**. ⛔ `PerformancePanelViewModel`
+odrzucony osobno — `BuildCallback(CancellationToken.None)`, czyli operacja bez anulowania.
+
+#### §19.31.2 ⭐ Dwie operacje MOGĄ biec naraz — więc arbitraż nie jest hipotetyczny
+
+`DataImportEnvironment.cs:40`: *„Since I7.5 the module owns its own transaction, so the SQL Editor's state is
+none of its business"*. Import nie dotyka linii Data, więc **biegnie równolegle z zapytaniem albo skryptem**.
+Pytanie, które komentarz `StatusProgressViewModel` odłożył do M3b (*„co pokazać, gdy biegną dwie"*), miało
+zatem realny przedmiot.
+
+**Ratyfikowana odpowiedź: jedna operacja naraz, drabinka priorytetów** (użytkownik: *„przeskakiwanie między
+zadaniami byłoby mylące, a licznik ukrytych operacji tylko niepotrzebnie komplikowałby UI"*):
+
+| | Stan | Uzasadnienie |
+|---|---|---|
+| 3 | połączenie / metadane (M3b.2) | dopóki nie skończy, nie działa nic innego |
+| 2 | zapytanie **i** skrypt | operacja interaktywna, dopiero co uruchomiona — to jest to, na co użytkownik czeka, i kończy się szybko, oddając sekcję |
+| 1 | import | długie tło; ma własną transakcję, własny pasek i własny Cancel w swojej zakładce |
+
+⚠ **Zapytanie i skrypt są JEDNYM szczeblem celowo:** konkurują o linię Data (`RunAsync` odmawia przy otwartej
+transakcji), więc nie nakładają się w sposób, dla którego warto wymyślać regułę. ⛔ Reguła dla nieosiągalnego
+przypadku byłaby bezczynną gałęzią udającą decyzję projektową — to §15.7 w wydaniu arbitrażowym.
+
+#### §19.31.3 ⭐⭐ JEDEN PISARZ SEKCJI — i to jest cała architektura tej iteracji
+
+M3.1f wołało `Progress.Begin/End` wprost z `OnIsExecutingChanged`, bo źródło było jedno. Przy trzech to
+przestaje wystarczać: potrzebny jest punkt, który rozstrzyga, **która** operacja jest widoczna. Od tej
+iteracji każde źródło mówi tylko *„przelicz"*, a odpowiedź składa wyłącznie `UpdateProgressSection`.
+⛔ `Progress.Begin`/`Report`/`End` nie jest wołane z żadnego innego miejsca — drugi pisarz to drugi właściciel
+stanu sekcji.
+
+⭐ **Zakładki NIE dostały referencji do `StatusProgressViewModel`.** Pisarzem został `MainWindowViewModel`,
+dokładnie jak przy railu — inaczej dwa VM pisałyby do jednego modelu i arbitraż nie miałby gdzie mieszkać.
+
+⭐⭐ **Seam agregacji nie wymagał budowy, tylko poszerzenia — i przy tym POSZŁA ZA NIM NAZWA.**
+`WireRailSource`/`UnwireRailSource`/`_railSources`/`OnRailSourceChanged` → `…ActivitySource`/
+`_activitySources`. Powód nie jest kosmetyczny: `RaiseActivityChanged` **od M3.1e nosiło nazwę „aktywność"
+właśnie dlatego**, że karmi dwóch konsumentów o różnych rolach; sekcja postępu jest **trzecim**, a resztę
+mechanizmu zostawiono przy „rail", czyli przy historii, nie przy odpowiedzialności.
+⭐ Ten jeden zbiór subskrypcji jest też tym, co gwarantuje, że **żadne źródło nie przeżyje swojej zakładki**:
+zamknięcie zakładki z trwającym importem i rozłączenie (`Reset`, bez `OldItems`) przechodzą tą samą drogą.
+
+⚠ **`RailBrushKey` NIE został tknięty.** Semantyka kolorów railu to M3b.3 — decyzja użytkownika: najpierw
+podłączyć wszystkie źródła i zobaczyć rail w realnych scenariuszach, *„jeżeli okaże się, że obecne kolory są
+wystarczające, nie ma potrzeby komplikować ich semantyki"*.
+
+#### §19.31.4 ⚠⚠ ROZRÓŻNIENIE „ZMIANA WŁAŚCICIELA" vs „RAPORT TEGO SAMEGO" — i test, który go NIE badał
+
+`Begin` resetuje tryb, procent i komendę; `Report` bez procentu nie rusza ani jednego. Applier musi je
+rozróżniać, inaczej zapytanie przejmujące sekcję po skrypcie odziedziczyłoby **pasek stojący na procencie
+TAMTEJ operacji**.
+
+⭐⭐ **Pierwsza wersja strażnika przechodziła przy podłożonym naruszeniu — i to jest najważniejsza lekcja
+metodologiczna iteracji.** Test gasił skrypt PRZED startem zapytania, więc sekcja przechodziła przez stan
+„nic nie trwa", a `End()` resetuje tryb **sam**. Test był zielony z powodu, którego jego nazwa nie opisywała.
+Ujawniło to **wyłącznie podłożenie naruszenia** (zapal sekcję bez `Begin`) — bez tego kroku iteracja
+zamknęłaby się z pinem, który nie pinuje niczego. To R16 od strony konstrukcji testu: **test zielony przy
+złym mechanizmie jest gorszy niż brak testu.**
+
+⭐ Poprawny kształt to **przejście właściciela BEZ PRZERWY**: skrypt biegnie, użytkownik daje F5. Osiągalne
+dokładnie dlatego, że drabinka stawia zapytanie nad skryptem. Dopisano też kierunek odwrotny (zapytanie się
+kończy, skrypt wciąż trwa → sekcja **nie gaśnie** i wraca do swojego trybu procentowego).
+
+⚠ **Pierwszy plant był ZBYT SZEROKI** i to też warto zapisać: usunięcie `Begin` zabrało razem z trybem
+`IsRunning`, więc położyło 7 z 13 testów i nie izolowało tezy. Plant musi kłamać w **jednym** wymiarze —
+inaczej nie mówi, który strażnik działa.
+
+#### §19.31.5 Co dostały źródła — trzy właściwości, wszystkie jako LICZBY
+
+`ScriptExecutorTabViewModel`: `CompletedStatementCount` (= sukcesy + porażki) i `RunStatementTotal`,
+ustawiane **razem z `_lastStatements`** — rozdzielone mogłyby się rozjechać i mianownik pokazywałby sumę
+poprzedniego przebiegu. `DataImportTabViewModel`: `ProgressRowsRead`.
+
+⚠ **Celowo liczby, nie gotowe napisy:** etykietę składa jeden resolver dla wszystkich źródeł, więc format nie
+może mieszkać w źródle. Arytmetyka („ile zrobionych") została **przy danych**, żeby pasek statusu nie musiał
+wiedzieć, że wykonana instrukcja to „sukces albo porażka, i nic trzeciego".
+
+⭐ **Skrypt jest pierwszym ŻYWYM konsumentem ścieżki procentowej**, która od M3.1f nie miała żadnego — §19.7.2
+ostrzegało wprost: *„nie zakładać, że jest sprawdzona"*. Import zostaje trybem nieokreślonym, gdy
+`EstimatedRows` nie istnieje; `ProgressRowsRead` liczy się **najbardziej właśnie wtedy**, bo rosnący licznik
+jest jedynym dowodem, że coś się posuwa.
+
+#### §19.31.6 ⭐ ETYKIETA NAZYWA OPERACJĘ — i jest krótka Z POMIARU, nie z estetyki
+
+Wymóg użytkownika: przy trzech źródłach etykieta musi jednoznacznie mówić, co jest wykonywane. Trzy nowe
+formaty: `StatusProgressQueryRowsFormat`, `StatusProgressScriptFormat`, `StatusProgressImportFormat`
+(`ExecutingStatus` = „Executing query…" **już** nazywało operację).
+
+⚠⚠ **Dlaczego każda jest krótka:** pasek statusu ma `ColumnDefinitions="Auto,*,Auto,Auto"`
+(`MainWindow.axaml:2095`), więc sekcja 4 rośnie kosztem kolumny gwiazdkowej i **przesuwa chipy stanu w lewo**.
+§8.4.6 nadało samemu paskowi stałe 120 px dokładnie z tego powodu; etykieta takiego ograniczenia **nie ma**,
+więc ogranicza ją treść. ⛔ Nie dopisywać do niej szczegółu operacji („N read · M written · K failed") —
+szczegół należy do powierzchni, która operację prowadzi. To ten sam podział własności, który ratyfikowały
+§19.5.1 i §19.7.1: pasek niesie **fakt globalny**, właściciel operacji **szczegół lokalny**.
+
+#### §19.31.7 Strażnicy — 13 przypadków, dwa podłożone naruszenia
+
+`StatusProgressSourcesTests` (partycja **główna** — klasa nie konstruuje kontrolek Avalonii, kryterium
+handovera §8). Asercje idą przez **`vm.Progress`, czyli model, który czyta wiązanie**, nie przez wewnętrzny
+resolver: przy zmianie właściciela „wybór" i „co sekcja pokazuje" to dwie różne rzeczy (§19.31.4).
+
+| Naruszenie | Złapane przez |
+|---|---|
+| zapal sekcję bez `Begin` (brak resetu trybu) | `QueryTakingOverFromARunningScript…` + `WhenTheQueryEnds…` — i **tylko** te dwa (11 pozostałych zielonych) |
+| odwrócona drabinka (import przed skryptem) | `Script_OutranksImport` + `CancelInTheSection_IsTheOwnersOwnCommand` |
+
+⭐ Drugie naruszenie złapał także strażnik tożsamości komendy — i to jest sensowne: **przy złym właścicielu
+sekcja podaje cudzą komendę anulowania.** Ten strażnik asertuje `Assert.Same`, nie „jest jakaś komenda":
+§19.7.3 ratyfikowało *„dwa zasięgi tej samej komendy, a nie dwie implementacje"*, a kopia o identycznym
+zachowaniu przeszłaby test na równość (pułapka 7).
+
+⚠ **Zdarzył się też fałszywy pomiar warty zapisania:** jeden build z podłożonym naruszeniem zwrócił 1 błąd
+(nieosiągalny kod → `TreatWarningsAsErrors`), a testy pobiegły na **starym binarium** i pokazały czerwień
+z *poprzedniego* naruszenia. ⭐ Po każdym podłożeniu trzeba sprawdzić `Liczba błędów: 0` **przed** odczytaniem
+wyniku testów — inaczej mierzy się artefakt.
+
+#### §19.31.8 ⛔ Czego iteracja świadomie NIE zrobiła
+
+* **Nie tknęła połączenia z bazą** — M3b.2 (osobny krok, decyzja użytkownika).
+* **Nie tknęła `RailBrushKey`** — M3b.3.
+* **Nie podłączyła eksportu ani batcha** (§19.31.1) i **nie usunęła** ich pasków — precedens §19.7.3:
+  pasek statusu **uzupełnia**, nie zastępuje.
+* **Nie zmieniła `StatusProgressViewModel`** — jego kontrakt jest ratyfikowany i pinowany 12 testami;
+  cała iteracja zmieściła się w warstwie wywołań.
+* **Nie zmieniła ani jednej linii XAML** — sekcja 4 wiąże model, więc chroma jest nietknięta.
+
+#### §19.31.9 ⏸ Do QA użytkownika
+
+⚠ Smoke potwierdza wyłącznie, że aplikacja startuje. **Zachowanie wymaga żywej bazy:** czy etykieta nazywa
+operację, czy import trwający w tle jest widoczny po przełączeniu zakładki, czy Cancel z paska zatrzymuje
+import i skrypt, i czy przejęcie sekcji przez zapytanie w trakcie skryptu czyta się naturalnie.
+⏸ **Do sprawdzenia okiem: szerokość etykiety** — czy przy „Running script… 1 234 / 5 678" chipy stanu
+przesuwają się na tyle, żeby to przeszkadzało (§19.31.6). Jeśli tak, odpowiedzią jest skrócenie formatu,
+nie zmiana układu.

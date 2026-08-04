@@ -39,10 +39,12 @@
 | **Etap** | M0–M2c ✅ · **M3: iteracja 0 ✅ · M3.1 ✅ · M3.2 ✅ · 🔒 JĘZYK KOLORÓW ✅ · 🔒 M3.3 PASEK ZAKŁADEK ✅ ODEBRANY 2026-08-03** (§19.22–§19.25). ⭐ **M3.1 ZAMKNIĘTE** · ⭐ **H‑3 ZAMKNIĘTE** · ⭐ **H‑5 ZAMKNIĘTE** (K7) · ⭐ **§7.5 ZAMKNIĘTE** — zastąpione przez `color-language.md` · ⭐ **M‑1 ZAMKNIĘTE wewnątrz M3** (zostały 2 literały, oba w M4.3) |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7271**, zielony w trzech partycjach (**7154 + 63 + 54**). ⚠ Partycja headless ma teraz **siedem** klas — doszły `MetadataTreeVirtualizationProbe` (15b) i `SharedContextMenuFeasibilityProbe` (M3.4b), obie **w filtrze**. **Mierz przed cytowaniem** |
+| **Suite** | **7284**, zielony w trzech partycjach (**7167 + 63 + 54**). ⚠ Partycja headless ma **siedem** klas — `MetadataTreeVirtualizationProbe` (15b) i `SharedContextMenuFeasibilityProbe` (M3.4b) też są **w filtrze**; `StatusProgressSourcesTests` (M3b.1) **NIE** — nie konstruuje kontrolek Avalonii. **Mierz przed cytowaniem** |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| ⭐⭐ **NASTĘPNY KROK** | **M3b — podłączenie pozostałych operacji do paska postępu** (pozycja 17 w planie §10; 16 VM, 3 ścieżki `IProgress`). ⭐ **M3.4 ZAMKNIĘTE W CAŁOŚCI** (M3.4a §19.26 · krok 15b §19.27 · M3.4b cz.1 §19.28 · cz.2 §19.30). Potem ⛔ brama §13.3 |
+| ⭐⭐ **NASTĘPNY KROK** | **M3b.2 — połączenie z bazą i ładowanie metadanych jako NOWE źródło postępu.** ✅ **M3b.1 ZROBIONE** (§19.31): import + Script Executor podłączone, etykieta nazywa operację, drabinka priorytetów. Potem **M3b.3** (rail na żywym ekranie), potem ⛔ brama §13.3 |
+| ✅ **M3b.1 ZROBIONE** | **2026-08-04** (§19.31). ⭐⭐ **Pomiar wejściowy obalił inwentarz etapu w trzech punktach:** ścieżek `IProgress` jest **PIĘĆ**, nie trzy/cztery (brakowało Script Executora — **jedynej ze ścisłą sumą**); **eksport i batch biegną MODALNIE**, więc podłączenie nic tam nie kupuje, a Cancel w pasku byłby nieklikalny → zakres zmalał o połowę; „16 ViewModeli" to lista stanów zajętości, a nie rzeczy do podłączenia (14 to „ładuję zawartość zakładki", każde z własnym `*LoadingHint`). ⭐ **Jeden pisarz sekcji** (`UpdateProgressSection`) — źródła mówią tylko „przelicz". Seam agregacji tylko poszerzony, **z nazwą idącą za odpowiedzialnością** (`WireRailSource` → `WireActivitySource`, trzeci konsument). ⚠ `RailBrushKey` **nietknięty** — to M3b.3 |
+| ⚠⚠ **LEKCJA M3b.1, WAŻNIEJSZA NIŻ ITERACJA** | **Pierwsza wersja strażnika PRZESZŁA przy podłożonym naruszeniu**, bo scenariusz gasił jedno źródło przed startem drugiego — a wtedy `End()` resetuje tryb **sam**, więc test był zielony z powodu, którego jego nazwa nie opisywała. Ujawniło to **wyłącznie podłożenie naruszenia**. ⭐ Poprawny kształt to **przejście właściciela BEZ PRZERWY**. ⚠ Drugie dno: **pierwszy plant był ZBYT SZEROKI** (położył 7 z 13 testów), a plant musi kłamać w **jednym** wymiarze. ⚠⚠ Trzecie: jeden plant nie skompilował się i testy pobiegły na **starym binarium** — po każdym podłożeniu sprawdź `Liczba błędów: 0` **przed** odczytaniem czerwieni |
 | ✅ **KROK 15b ZROBIONY** | **2026-08-04** (§19.27). Eksperyment headless **obalił hipotezę po raz drugi** — tym razem w warstwie panelu: zero zawieszeń, **pozycja przewijania nie ruszyła się ani razu** w czterech scenariuszach. ⭐⭐ Rozdzielił zmienne **A** (`MainWindow` w teście headless) i **B** (splice): **B wykluczone**, A jedynym stojącym podejrzanym o zawieszanie suity. ⭐ **Nie ma wspólnego mechanizmu ze starym bugiem drzewa** — obie obserwacje pozostają **niepołączone**, a zawieszanie suity **osobnym zadaniem infrastrukturalnym** |
 | ✅ **M3.4a ZROBIONE** | **2026-08-04** (§19.26). Katalog poszedł za produktem: `Size.Row.Tree` **20 → 24** (decyzja **DB**), `MinHeight` przeszło na rolę — **token dostał pierwszego konsumenta** — chevron na `Size.Icon.Sm`, kolizja 1 px do rejestru jako **K15**. Zero zmian wizualnych, +2 strażników. ⭐⭐ **Najważniejszy wynik iteracji jest negatywny: pomiar OBALIŁ hipotezę o mechanizmie zawieszenia** — rozwinięcie kliknięciem 2 400 liści kosztuje **2,3 ms** wobec 916,9 ms naprawionego defektu Layer 1, więc **nie dokładamy tam strażnika** |
 | ✅🐞 **STARY DEFEKT DRZEWA — PRZYCZYNA ZNALEZIONA I NAPRAWIONA (2026-08-04)** | **`AutoScrollToSelectedItem="False"` na `SidebarList`** (§19.29; diagnoza `metadata-refresh-analysis.md` §10–§12). Gdy wiersz jest zaznaczony, a użytkownik rozwinie dużą kategorię, `VirtualizingStackPanel.ScrollIntoView` **nie potrafi skoczyć do nierealizowanego indeksu** i pełznie do celu **po jednym wierszu (24 px) na cykl Dispatchera**, zagładzając priorytet tła. ✅ Potwierdzone po naprawie na **większym** drzewie i **6× większej liczbie zaznaczeń**: sygnatura pętli **93 → 0**, `heartbeat` żyje do końca. ⭐⭐ **Lekcja: pomiar syntetyczny odtwarza MECHANIZM, ale nie odtwarza STANU** — M3.4a i 15b wykluczyły swoje hipotezy poprawnie i **oba były ślepe, bo w żadnym nic nie było zaznaczone**. ⏸ QA: nawigacja klawiaturą. ⏸ Hipoteza o zawieszającym się teście — **do obserwacji, nie do ogłoszenia** |
@@ -344,19 +346,49 @@ po M3, a to jest przegląd przy okazji.
 
 ### 3.9 M3b — inwentarz operacji
 
-**16 ViewModeli** ma własny stan „trwa operacja" (`IsRunning`/`IsBusy`/`IsExecuting`/`IsLoading`).
-⚠⚠ **KOREKTA, ZMIERZONA 2026-08-04: ścieżek `IProgress` są CZTERY, nie trzy, a `ProgressBar` cztery.**
-Eksport (`Export/ExportService.cs` + eksportery w Core, `IProgress<long>`) · wykonanie zapytania
-(`MainWindowViewModel.MakeLoadProgress`, `IProgress<long>` — **już podłączone**, operacja referencyjna) ·
-batch (`IProgress<(int Index, string? Error)>`, zna sumę) · **import (`Core/Import/ImportPipeline.cs`,
-`IProgress<ImportProgress>`) — czwarta, nieujęta w pierwotnym zapisie**. `ProgressBar` w widokach:
-`BatchResultsDialog`, `DataImportTabView`, `ExportDialog` **oraz `MainWindow`** (sekcja z M3.1f).
-⚠ „16 ViewModeli" to lista miejsc ze stanem zajętości, **nie lista rzeczy do podłączenia** — część to
-zwykłe „ładuję zawartość zakładki", które w pasku statusu byłoby szumem. Rozstrzygnięcie, które są warte
-pokazania, jest **pierwszym zadaniem M3b**.
+⚠⚠ **TA SEKCJA BYŁA NIEAKTUALNA DWA RAZY Z RZĘDU. Stan po pomiarze z M3b.1 (2026-08-04) — ścieżek
+`IProgress` jest PIĘĆ, nie trzy i nie cztery:**
 
-⚠ M3.1 dostarcza **sekcję i JEDNĄ operację referencyjną** (wykonanie zapytania SQL — najlepiej
-oprzyrządowana). M3b podłącza resztę. Powód rozdzielenia (D4) pozostaje aktualny.
+| # | Ścieżka | Zna sumę? | Decyzja |
+|---|---|---|---|
+| 1 | zapytanie SQL (`MainWindowViewModel.cs:6827`) | ⛔ nie | ✅ podłączone w M3.1f (operacja referencyjna) |
+| 2 | import (`DataImportTabViewModel.cs:957`) | ⚠ `EstimatedRows`, bywa nieznana | ✅ podłączone w **M3b.1** |
+| 3 | **Script Executor** (`ScriptExecutorTabViewModel.cs:188`) | ✅ **ściśle** | ✅ podłączone w **M3b.1** |
+| 4 | eksport (`ExportDialogViewModel.cs:197`) | ⛔ nie | ⛔ **NIE podłączamy — modal** |
+| 5 | batch (`MainWindowViewModel.cs:5804`) | ✅ | ⛔ **NIE podłączamy — modal** |
+| 6 | połączenie / metadane | ✅ `CategoryOrder.Length` = 13 | ⏸ **M3b.2 — źródło NOWE, nie przepięcie** |
+
+⛔⛔ **Eksport i batch są poza zakresem NA STAŁE, i to jest pomiar, nie preferencja:** oba biegną
+w `ShowDialog(owner)`, czyli modalnie. Wartość sekcji (§19.7.3: *operacja przeżywa przełączenie zakładki*)
+tam nie istnieje, a `HasCancel` dałoby przycisk **nieklikalny**, bo leżący w zablokowanym oknie.
+⛔ Ich własne `ProgressBar`y **zostają** — precedens §19.7.3: pasek statusu **uzupełnia**, nie zastępuje.
+
+⚠ **„16 ViewModeli" to lista miejsc ze stanem zajętości, NIE lista rzeczy do podłączenia** — 14 z nich to
+`IsLoading` typu „ładuję zawartość tej zakładki", a **każde ma już własny nośnik w miejscu** (11 stałych
+`*LoadingHint`). ⛔ `PerformancePanelViewModel` odrzucony osobno: `BuildCallback(CancellationToken.None)`,
+czyli operacja bez anulowania.
+
+**⏸ M3b.2 — anatomia połączenia, ZMIERZONA. Trzy fazy, trzy różne możliwości raportowania:**
+
+| Faza | Wątek | Co da się pokazać |
+|---|---|---|
+| otwarcie 3 dołączeń (`_service.ConnectAsync`) | poza UI | tryb nieokreślony |
+| odtworzenie zakładek (`LoadWorkspaceFor`, `private void`) | ⛔⛔ **SYNCHRONICZNIE NA UI** | **wyłącznie komunikat**, np. „Loading workspace…" — nie ma klatki na animację |
+| prefetch 13 kategorii (`ConnectionNodeViewModel.LoadCategoriesAsync`) | ⭐ UI oddaje sterowanie między kategoriami | **procent** — pierwszy uczciwy konsument tej ścieżki |
+
+⭐ **Użytkownik zaakceptował to ograniczenie wprost** (2026-08-04): *„Jeżeli dla tej fazy będzie można pokazać
+jedynie komunikat typu «Loading workspace...», a procenty pojawią się dopiero podczas ładowania kategorii
+metadanych, to jest to dla mnie całkowicie akceptowalne. Najważniejsze jest, żeby użytkownik miał informację,
+że aplikacja pracuje."* ⛔ Nie animować sztucznie fazy 2 i **nie przenosić odtwarzania zakładek poza wątek UI**
+— to „deterministyczny load", oznaczony w CLAUDE.md jako ⛔ nie ruszać.
+
+⚠⚠ **Największe ryzyko M3b.2 jest znane z góry: `LoadCategoriesAsync` jest wołane jako `_ = …`
+(fire-and-forget, dwa miejsca), a przy nieudanym połączeniu NIE nastąpi wcale** — więc bez osłony na każdej
+ścieżce wyjścia pasek zostanie zapalony na zawsze. To dokładnie ta pułapka, przed którą broni §19.7.4.
+⭐ Instrument do pomiaru podziału czasu **już stoi na miejscu**: `PerfTrace.LogCategoryLoad` +
+`EMBERTERN_PERF_DIAG=1`.
+
+⚠ M3.1 dostarczyła **sekcję i JEDNĄ operację referencyjną**. Powód rozdzielenia (D4) pozostaje aktualny.
 
 ---
 
@@ -706,7 +738,9 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ **15b** | **eksperyment headless** | **ZROBIONE** (§19.27). `MetadataTreeVirtualizationProbe` — prawdziwy `SidebarFlatController` w prawdziwym `ListBox`ie z `VirtualizingStackPanel`, gołe `Window`. **Zero zawieszeń (43–57 ms), pozycja przewijania nie ruszyła się ani razu** — także przy pełnej re-projekcji na offsecie 40 000 px. ⭐⭐ Główny produkt: **rozdzielenie zmiennych A (`MainWindow`) i B (splice)** — B **wykluczone**, A jedynym podejrzanym. ⭐ Odpowiedź na §3.7a(b): **NIE ma wspólnego mechanizmu** — i to jest wynik. ⭐ Wniosek uboczny: strażnik zbiorczy na tej ścieżce **nic by nie kupił** (potwierdza M3.4a od strony panelu). ⚠ Rozbieżność z §7 `metadata-refresh-analysis.md` odnotowana, **świadomie nierozstrzygnięta** → Warstwa 2 | — |
 | 🟡 **16a** | **M3.4b cz. 1** | **ZROBIONE** (§19.28). Inwentaryzacja natrafiła na menu **inline w szablonie wiersza** paska bocznego — 22 pozycje × każdy zrealizowany wiersz. ⭐ Zatrzymanie przed implementacją (stała prośba §19.26.6), pomiar wariantu A, decyzja użytkownika, wykonanie. **74% czasu przewijania, 440 → 22 żywych `MenuItem`, trzy bloki XAML zmieniają miejsce, zero nowego mechanizmu.** ⭐⭐ `x:DataType` w zasobach czyni kontrakt bindingów **jawnym i sprawdzanym przy kompilacji** — lepszy stan niż wyjściowy. ⚠⚠ Strażnik `EverySharedMenuReference_HasItsResource` jest **jedyną siatką**: podłożony błędny klucz **przechodzi build i smoke** (pusty pasek nie realizuje wiersza metadanych) | — |
 | ✅ **16b** | **M3.4b cz. 2** | **ZROBIONE** (§19.30). Przegląd 32 menu / 154 pozycji / 71 komend — **bez znaleziska wymagającego zmiany**. ⚠ Korekta pomiaru wejściowego: bez ikony jest **6**, nie 14 (osiem pozycji niesie ikonę składnią elementową `<MenuItem.Icon>`; skan liczył atrybut, nie „czy pozycja ma ikonę" — #285). ⭐⭐ Dwie pozorne niespójności okazały się **regułami działającymi poprawnie**: `Delete` pokazuje gest tylko tam, gdzie `ResolveCommand` go rozwiązuje, a `Connect`/`Disconnect` bramkuje `IsVisible`, nie `CanExecute`. ⛔ Nie budować strażnika na skojarzeniu nazw komend z identyfikatorami katalogu — ze 154 pozycji nazwa pokryła się RAZ i to przypadkiem | — |
-| 17 | **M3b** | Podłączenie pozostałych operacji do paska postępu (16 VM, 3 ścieżki `IProgress`)<br>⏸ **+ pełna semantyka kolorów railu** — odłożona tu świadomie przez użytkownika, z pomiarem (§19.4.4) | — |
+| ✅ **17** | **M3b.1** | **ZROBIONE** (§19.31). Import + Script Executor w sekcji postępu · etykieta **nazywa operację** · **drabinka priorytetów** (połączenie › zapytanie/skrypt › import), jedna operacja naraz. ⭐⭐ Pomiar obalił inwentarz w trzech punktach: **pięć** ścieżek `IProgress`, eksport i batch **modalne** (poza zakresem na stałe), „16 VM" to nie lista do podłączenia. ⭐ Jeden pisarz sekcji; seam agregacji tylko poszerzony (`WireRailSource` → `WireActivitySource`). ⚠⚠ **Strażnik w pierwszej wersji przechodził przy podłożonym naruszeniu** — złapał go dopiero scenariusz z **przejściem właściciela bez przerwy** | — |
+| ⏸ **17b** | **M3b.2** | **Połączenie z bazą + ładowanie metadanych jako NOWE źródło.** Trzy fazy, trzy tryby raportowania (§3.9) · ⚠⚠ osłona na każdej ścieżce wyjścia, bo `LoadCategoriesAsync` jest fire-and-forget i przy błędzie nie nastąpi · ⭐ zaczyna od pomiaru istniejącym `EMBERTERN_PERF_DIAG` | — |
+| ⏸ **17c** | **M3b.3** | **Rail na żywym ekranie** (§19.4.4). ⭐ Decyzja użytkownika: *„jeżeli okaże się, że obecne kolory są wystarczające, nie ma potrzeby komplikować ich semantyki"* — czyli brak zmiany jest tu dopuszczalnym wynikiem | — |
 | 18 | ⛔ **brama** | **§13.3** — cztery powierzchnie **jednocześnie**, żywa baza, oba motywy | — |
 | 19 | — | Podsumowanie zamykające §19.x + CLAUDE.md + handover M4 + prompt startowy | — |
 

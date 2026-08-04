@@ -588,14 +588,60 @@ noted.
   mapping lives in `ResolveCommand`, not in names. Across 154 items the names coincided **once**, by
   accident. ⛔ Do not build a guard on that association — it would give false comfort.
   ⭐ **M3.4 IS CLOSED IN FULL** (M3.4a §19.26 · step 15b §19.27 · M3.4b part 1 §19.28 · part 2 §19.30).
-  ⏸ **Next: M3b** — wiring the remaining operations to the status-bar progress section, then ⛔ the §13.3
-  gate. ⚠⚠ **The stage plan's inventory was stale and is corrected (measured 2026-08-04): there are FOUR
-  `IProgress` paths, not three** — export, query execution (already wired, the reference operation), batch,
-  and **`ImportPipeline`**, which the original note missed; and four `ProgressBar`s in views, the fourth
-  being M3.1f's own status-bar section. ⚠ The "16 ViewModels" figure is a list of places holding a busy
-  state, **not a list of things to wire** — several are ordinary "loading this tab's content", which in the
-  status bar would be noise. ⭐ Deciding which ones are worth showing is M3b's FIRST task, and
-  ⛔ "all 16 have a busy state, so all 16 should report" is exactly the reasoning that withdrew M3.2b.
+  ✅ **M3b.1 DONE (2026-08-04) — import and the Script Executor now report to the status-bar progress
+  section** (`product-polish.md` §19.31). ⭐⭐ **The entry measurement refuted the stage inventory on three
+  points, and one of them halved the scope.** (1) There are **FIVE** `IProgress` paths, not three and not
+  four — the missing one is the **Script Executor** (`IProgress<ScriptStatementResult>`), which is also the
+  **only path in the app with an exact total** (`_lastStatements.Count`), so it became the first live
+  consumer of the percentage path §19.7.2 warned was untested. (2) ⛔⛔ **Export and batch run MODALLY**
+  (`ShowDialog(owner)`), so the section's whole value — §19.7.3's *"the operation survives switching tabs"* —
+  cannot exist there, and `HasCancel` would render a button **that cannot be clicked** behind a blocked
+  window; they are out of scope **permanently**, and their own `ProgressBar`s stay (the status bar
+  *complements*, never replaces). (3) ⚠ The **"16 ViewModels" figure is not a list of things to wire** —
+  14 are `IsLoading` for "loading this tab's content" and **each already has its own in-place carrier**
+  (11 `*LoadingHint` constants); trap 13's question answers itself, because the owner of that fact is *what
+  you are looking at*. `PerformancePanelViewModel` was declined separately: `CancellationToken.None`, i.e.
+  an operation with no cancel.
+  ⭐ **Two operations genuinely CAN run at once** — import owns its own transaction since I7.5 — so the
+  arbitration `StatusProgressViewModel`'s comment deferred to M3b had a real subject. **Ratified: one
+  operation at a time, on a priority ladder** (connect/metadata › query **and** script › import), with the
+  label always naming its operation. ⚠ Query and script are **one rung on purpose**: they contend for the
+  Data lane (`RunAsync` refuses over an open transaction), so they cannot meaningfully overlap — ⛔ a rule
+  for an unreachable case would be an inert branch posing as a design decision.
+  ⭐⭐ **The architecture is one sentence: ONE writer of the section.** Every source now only says
+  *"recompute"*; `UpdateProgressSection` alone calls `Begin`/`Report`/`End`. The tab VMs deliberately got
+  **no reference** to `StatusProgressViewModel` — two writers would be two owners of one state, and the
+  arbitration would have nowhere to live. The aggregation seam needed **widening, not building**, and the
+  name followed the responsibility: `WireRailSource` → `WireActivitySource` (`RaiseActivityChanged` has been
+  named for "activity" since M3.1e precisely because it feeds consumers with different roles; progress is
+  the **third**). ⭐ That one subscription set is also what guarantees **no source outlives its tab** —
+  closing a tab mid-import and disconnecting (`Reset`, which carries no `OldItems`) both go the same way.
+  ⚠ **`RailBrushKey` was NOT touched** — rail colour semantics are M3b.3, after every source is wired
+  (the user's call: *if the current colours turn out to be enough, there is no need to complicate them*).
+  ⚠⚠ **THE ITERATION'S MOST IMPORTANT RESULT IS A LESSON ABOUT TESTS, AND IT GENERALISES: the first
+  version of the guard PASSED with the violation planted.** Its scenario ended the script *before* starting
+  the query, so the section passed through "nothing running" — and `End()` resets the mode **by itself**.
+  The test was green for a reason its own name did not describe, and **only planting the violation revealed
+  it**; without that step the iteration would have closed with a pin that pinned nothing. ⭐ The correct
+  shape is an **owner handover with no gap** (script running, user hits F5) — reachable exactly because the
+  ladder puts the query above the script. ⚠ Two more measured notes: the **first plant was too broad**
+  (removing `Begin` took `IsRunning` with it, so 7 of 13 tests fell and nothing was isolated — a plant must
+  lie in **one** dimension), and one plant **failed to compile** while the tests ran against the **stale
+  binary** and showed the *previous* plant's red — ⭐ check `0 errors` **before** reading the failure list.
+  ⚠ The label is short **from a measurement, not for taste**: the status bar is
+  `ColumnDefinitions="Auto,*,Auto,Auto"`, so section 4 grows at the star column's expense and **pushes the
+  state chips left** — which is why §8.4.6 fixed the bar itself at 120 px. ⛔ Do not add the operation's
+  detail to it; the detail belongs to the surface running the operation (§19.5.1/§19.7.1's ownership split).
+  ⏸ **Next: M3b.2 — connect + metadata loading as a NEW progress source** (the user's explicit priority:
+  this is where they wait longest with no information today), then **M3b.3** (rail), then ⛔ the §13.3 gate.
+  ⚠⚠ Its anatomy is already measured and one phase is a hard limit: **`LoadWorkspaceFor` is `private void`
+  — fully synchronous on the UI thread — so no frame exists in which a bar could animate through it.** The
+  user accepted that explicitly: a plain *"Loading workspace…"* message there is fine, and the percentage
+  arrives with the 13-category prefetch (`LoadCategoriesAsync`, which does yield between categories and
+  knows its total). ⛔ Do not fake an animation there, and do not move the tab restore off the UI thread —
+  that is the deterministic load this file already marks ⛔ do-not-touch. ⚠⚠ The known risk: that prefetch
+  is invoked fire-and-forget (`_ = …`, two sites) and **never runs at all when the connection fails**, so
+  without a guard on every exit path the bar stays lit forever — §19.7.4's exact hazard.
   ⭐ **A ready startup prompt for the next session:**
   [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md).
 - **🔬 THE OLD TREE DEFECT IS NOW REPRODUCIBLE BY THE USER, AND AN INSTRUMENT IS SHIPPED FOR IT
@@ -3667,11 +3713,13 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7271, MEASURED 2026-08-04**
-  (Product Polish through M3.4b part 1, plus the tree instrument and the AutoScroll fix). Green in the
-  three documented partitions (**7154 + 63 + 54**).
-  ⚠ This line said **7228 (7118 + 56 + 54)** until that run — a figure that had gone stale across M3.3b/c
-  and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy it forward.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7284, MEASURED 2026-08-04**
+  (Product Polish through M3b.1). Green in the three documented partitions (**7167 + 63 + 54**).
+  ⚠ M3b.1 added 13 (`StatusProgressSourcesTests`), which lives in the **main** partition — it constructs no
+  Avalonia controls, so it does not join the headless filter (the handover §8 criterion).
+  ⚠ This line said **7228 (7118 + 56 + 54)** and then **7271 (7154 + 63 + 54)** — a figure that had gone
+  stale across M3.3b/c and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy
+  it forward.
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
   partition filter named a class that no longer existed (so the total read one too high, `product-polish.md`
   §18.1.6), and once because the sub-stage's own numbers moved under it. **Re-measure before quoting it.**

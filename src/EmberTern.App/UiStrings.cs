@@ -752,6 +752,21 @@ internal static class UiStrings
     // klawisz uczyłby nieprawdy (reguła z etapu Keyboard Manager, gotcha #284).
     public const string StatusBarCancelOperationTooltip = "Cancel the running operation";
 
+    // ⭐⭐ ETYKIETY SEKCJI POSTĘPU — M3b.1. Wymóg użytkownika: „etykieta zawsze jednoznacznie określa,
+    // co jest wykonywane", bo od tej iteracji sekcja ma TRZY źródła i sam napis „Loading… 12 345 rows"
+    // nie mówi, czy to zapytanie, skrypt, czy import. Stąd nazwa operacji w każdym formacie.
+    //
+    // ⚠⚠ KAŻDA JEST KRÓTKA I OGRANICZONA, I TO NIE JEST ESTETYKA — POMIAR. Pasek statusu ma
+    // `ColumnDefinitions="Auto,*,Auto,Auto"` (MainWindow.axaml:2095), więc sekcja 4 rośnie kosztem
+    // kolumny gwiazdkowej i PRZESUWA chipy stanu w lewo. §8.4.6 nadało samemu paskowi stałe 120 px
+    // dokładnie z tego powodu; etykieta takiego ograniczenia nie ma, więc ogranicza ją treść.
+    // ⛔ Nie dopisywać tu szczegółu operacji (np. „N read · M written · K failed"). Szczegół należy do
+    // powierzchni, która operację prowadzi — to ten sam podział własności, który §19.5.1 i §19.7.1 już
+    // ratyfikowały: pasek statusu niesie FAKT globalny, właściciel operacji niesie SZCZEGÓŁ lokalny.
+    public const string StatusProgressQueryRowsFormat = "Executing query… {0:N0} rows";
+    public const string StatusProgressScriptFormat = "Running script… {0:N0} / {1:N0}";
+    public const string StatusProgressImportFormat = "Importing data… {0:N0} rows";
+
     // ⭐ Chipy Trace i Debuggera (§8.4.3 sekcja 3) — M3.1e. Etykieta niesie sam FAKT („gdzieś żyje
     // sesja"), a szczegół idzie do tooltipa, który czyta `StatusText` z VM-a odpowiedniej zakładki.
     // ⚠ Rzeczownik, nie czasownik: chip mówi, CO jest prawdą, a nie co się dzieje — „co się dzieje"

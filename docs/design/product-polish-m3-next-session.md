@@ -1,4 +1,4 @@
-# EmberTern — PROMPT STARTOWY: M3b (pasek postępu) i domknięcie M3
+# EmberTern — PROMPT STARTOWY: M3b.2 (postęp połączenia z bazą) i domknięcie M3
 
 > Wklej to jako pierwszą wiadomość nowej sesji. Dokument jest **samowystarczalny w zakresie stanu,
 > decyzji, zakresu i planu** — do implementacji sięgniesz jeszcze po dokumenty wskazane w §1.
@@ -7,10 +7,12 @@
 
 ## 0. Jednozdaniowe streszczenie poprzedniej sesji
 
-**M3.4 zamknięte w całości** — wiersz drzewa poszedł na role (M3.4a), eksperyment headless wykluczył
-wirtualizację (15b), menu kontekstowe paska bocznego przestały być mnożone przez wirtualizację (M3.4b cz. 1),
-a przegląd 32 menu nie znalazł nic do naprawy (cz. 2). **Przy okazji znaleziono i naprawiono kilkuletni
-defekt drzewa** — samoczynne przewijanie i zawieszanie aplikacji.
+**M3b.1 zamknięte** — import i Script Executor raportują do sekcji postępu paska statusu, etykieta nazywa
+operację, a przy dwóch operacjach naraz rozstrzyga ratyfikowana drabinka priorytetów. ⭐⭐ **Pomiar wejściowy
+obalił inwentarz etapu w trzech punktach**: ścieżek `IProgress` jest **pięć** (brakowało Script Executora —
+jedynej ze ścisłą sumą), **eksport i batch biegną modalnie** i wypadają z zakresu na stałe, a „16 ViewModeli"
+to lista stanów zajętości, nie lista rzeczy do podłączenia. ⚠⚠ Najważniejszy wynik jest metodologiczny:
+**pierwsza wersja strażnika przechodziła przy podłożonym naruszeniu.**
 
 ---
 
@@ -36,15 +38,15 @@ podsekcję) · handoverów M2a/M2b/M2c.
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | `abb1d9f` (dokumentacja M3.4b cz. 2). ⚠ **Sprawdź `git log --oneline -1` i `git status`** zamiast wierzyć temu wierszowi |
+| **Ostatni commit** | M3b.1 (import + Script Executor w sekcji postępu). ⚠ **Sprawdź `git log --oneline -1` i `git status`** zamiast wierzyć temu wierszowi |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7271** zielony w trzech partycjach (**7154 + 63 + 54**). ⚠⚠ **Mierz przed cytowaniem** — ta liczba starzeje się najszybciej w całym dokumencie |
+| **Suite** | **7284** zielony w trzech partycjach (**7167 + 63 + 54**). ⚠⚠ **Mierz przed cytowaniem** — ta liczba starzeje się najszybciej w całym dokumencie |
 | **Smoke** | czysty |
-| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · 🔒 M3.4 ✅** |
-| ⭐⭐ **START** | **M3b — podłączenie pozostałych operacji do paska postępu** (pozycja 17 w planie §10 handovera) |
-| **Po M3b** | ⛔ **brama §13.3**, potem podsumowanie zamykające M3 + handover M4 |
+| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · 🔒 M3.4 ✅ · M3b.1 ✅** |
+| ⭐⭐ **START** | **M3b.2 — połączenie z bazą i ładowanie metadanych jako NOWE źródło postępu** (pozycja 17b w planie §10 handovera) |
+| **Po M3b.2** | **M3b.3** (rail na żywym ekranie), potem ⛔ **brama §13.3**, potem podsumowanie zamykające M3 + handover M4 |
 
-### 2.1 Co zamknęło M3.4 — cztery iteracje
+### 2.1 Co zamknęło M3.4 i M3b.1
 
 | Podetap | Wynik | Zapis |
 |---|---|---|
@@ -52,6 +54,7 @@ podsekcję) · handoverów M2a/M2b/M2c.
 | **krok 15b** | eksperyment headless: prawdziwy `SidebarFlatController` w prawdziwym wirtualizującym `ListBox`ie. **Zero zawieszeń, pozycja przewijania nie ruszyła się ani razu.** Rozdzielił zmienne **A** (`MainWindow` w teście) i **B** (splice) — **B wykluczone** | §19.27 |
 | **M3.4b cz. 1** | menu kontekstowe paska bocznego: **jedna instancja na rodzaj węzła** zamiast jednej na wiersz. **~74 % czasu przewijania, 440 → 22 żywych `MenuItem`** | §19.28 |
 | **M3.4b cz. 2** | przegląd 32 menu / 154 pozycji / 71 komend — **bez znaleziska wymagającego zmiany** | §19.30 |
+| **M3b.1** | import + Script Executor w sekcji postępu · etykieta **nazywa operację** · **drabinka priorytetów**, jedna operacja naraz. ⭐⭐ Pomiar obalił inwentarz w trzech punktach; **jeden pisarz sekcji**; seam agregacji tylko poszerzony (`WireRailSource` → `WireActivitySource`). ⚠⚠ **Strażnik w pierwszej wersji przechodził przy podłożonym naruszeniu** | §19.31 |
 
 ---
 
@@ -114,95 +117,92 @@ wspólnej przyczyny.** ⛔ Nie ogłaszać po kilku zielonych przebiegach — zaw
 
 ---
 
-## 4. ⭐⭐ Zakres M3b — zmierzony 2026-08-04, nie przepisany z planu
+## 4. ⭐⭐ Zakres M3b.2 — anatomia połączenia, ZMIERZONA (nie przepisana z planu)
 
-> ⚠⚠ **Handover §3.9 mówi „trzy realne ścieżki `IProgress`". To jest NIEAKTUALNE — są CZTERY.**
-> Pomiar niżej jest świeży; plan etapu starzeje się tak samo cicho jak string (pułapka 20).
+> ⚠⚠ **M3b.1 pokazało, że inwentarz w tym dokumencie był nieaktualny dwa razy z rzędu. Poniższe liczby są
+> zmierzone 2026-08-04 na kodzie — ale i tak sprawdź je w kodzie, zanim na nich zbudujesz decyzję.**
 
-### 4.1 Co już istnieje — infrastruktura z M3.1f
+### 4.1 Zakres ratyfikowany przez użytkownika
 
-`StatusProgressViewModel` (101 linii, **przeczytaj cały**):
+✅ zapytanie SQL (M3.1f) · ✅ Script Executor (M3b.1) · ✅ import (M3b.1) · ⏸ **połączenie + ładowanie
+metadanych (M3b.2 — TO JEST ZADANIE)** · ⛔ eksport · ⛔ batch · ⛔ Performance Panel.
 
-| Element | Znaczenie |
-|---|---|
-| `Begin(label, cancelCommand = null)` | start operacji; `IsRunning` steruje widocznością sekcji |
-| `Report(label)` | tryb **nieokreślony** |
-| `Report(label, percent)` | tryb **procentowy** |
-| `End()` | koniec; brak operacji to stan domyślny, **nie komunikat** |
-| `HasCancel` | czy pokazać przycisk anulowania |
+⛔⛔ **Eksport i batch są poza zakresem NA STAŁE**, bo biegną w `ShowDialog(owner)`: wartość sekcji (operacja
+przeżywa przełączenie zakładki) tam nie istnieje, a `HasCancel` dałoby przycisk nieklikalny w zablokowanym
+oknie. Ich własne paski **zostają**. ⛔ Nie wracać do tej decyzji bez nowego pomiaru.
 
-⚠ **Jedyny konsument dzisiaj: `MainWindowViewModel.Progress`** — operacja referencyjna, czyli wykonanie
-zapytania SQL. **M3b podłącza resztę.**
+### 4.2 Trzy fazy połączenia i co każda umie raportować
 
-### 4.2 Inwentarz źródeł — stan faktyczny
-
-**Cztery ścieżki `IProgress`:**
-
-| # | Ścieżka | Typ | Uwaga |
+| Faza | Gdzie | Wątek | Co da się pokazać |
 |---|---|---|---|
-| 1 | eksport (`Export/ExportService.cs` + eksportery w Core) | `IProgress<long>` | licznik wierszy |
-| 2 | wykonanie zapytania (`MainWindowViewModel.MakeLoadProgress`) | `IProgress<long>` | ✅ **już podłączone** (operacja referencyjna) |
-| 3 | batch (`MainWindowViewModel`) | `IProgress<(int Index, string? Error)>` | ma **znaną sumę** → tryb procentowy |
-| 4 | ⚠ **import (`Core/Import/ImportPipeline.cs`)** | `IProgress<ImportProgress>` | **czwarta, nieujęta w §3.9** |
+| 1. otwarcie 3 dołączeń | `MainWindowViewModel.ConnectAsync` (`:2735` → `_service.ConnectAsync`) | poza UI (`await`) | tryb **nieokreślony** |
+| 2. odtworzenie zakładek | `MainWindowViewModel.LoadWorkspaceFor` (`:2430`) | ⛔⛔ **`private void` — SYNCHRONICZNIE NA UI** | **wyłącznie komunikat** |
+| 3. prefetch 13 kategorii | `ConnectionNodeViewModel.LoadCategoriesAsync` (`:147–150`) | ⭐ UI oddaje sterowanie **między kategoriami** | **procent** — `CategoryOrder.Length` |
+| 4. `NotifyMetadataReady` | `ConnectionNodeViewModel:163` | modele semantyczne edytorów w `Task.Run` | własny cykl życia każdego edytora |
 
-**Cztery `ProgressBar` w widokach:** `BatchResultsDialog`, `DataImportTabView`, `ExportDialog`,
-`MainWindow` (ten ostatni to sekcja z M3.1f).
+⭐⭐ **UŻYTKOWNIK ZAAKCEPTOWAŁ OGRANICZENIE FAZY 2 WPROST** (2026-08-04): *„Rozumiem ograniczenie fazy 2
+(synchroniczne odtwarzanie zakładek na UI), więc nie oczekuję sztucznie animowanego postępu. Jeżeli dla tej
+fazy będzie można pokazać jedynie komunikat typu «Loading workspace...», a procenty pojawią się dopiero
+podczas ładowania kategorii metadanych, to jest to dla mnie całkowicie akceptowalne. Najważniejsze jest, żeby
+użytkownik miał informację, że aplikacja pracuje."*
 
-**16 ViewModeli** ma własny stan „trwa operacja" (`IsRunning`/`IsBusy`/`IsExecuting`/`IsLoading`):
-`BatchResults`, `DataImportTab`, `DomainDetailTab`, `ExceptionDetailTab`, `GeneratorDetailTab`,
-`IndexDetailTab`, `MainWindow`, `MetadataExplorer`, `MetadataNode`, `PackageDetailTab`,
-`ScriptExecutorTab`, `SecurityManagerTab`, `SourceObjectDetailTab`, `StatusProgress`, `TableDetailTab`,
-`ViewDetailTab`.
+⛔ **Nie animować fazy 2 sztucznie** i ⛔ **nie przenosić `LoadWorkspaceFor` poza wątek UI** — to
+„deterministyczny load", oznaczony w CLAUDE.md jako ⛔ nie ruszać (diagnostyka musi mieć pełny kontekst
+metadanych, inaczej zgłasza poprawne symbole jako błędy).
 
-⚠⚠ **„16 ViewModeli" to NIE jest lista rzeczy do podłączenia.** To lista miejsc, które **mają jakiś stan
-zajętości** — a część z nich to zwykłe „ładuję zawartość zakładki", które w pasku statusu byłoby szumem.
-⭐ **Pierwszym zadaniem M3b jest ROZSTRZYGNIĘCIE, które z nich to operacja warta pokazania**, a nie
-podłączenie wszystkich.
+### 4.3 ⚠⚠ NAJWIĘKSZE RYZYKO, ZNANE Z GÓRY: pasek zapalony na zawsze
 
-### 4.3 ⭐ Kontrakt, który komentarz `StatusProgressViewModel` już ustala
+`LoadCategoriesAsync` jest wołane jako **`_ = …` (fire-and-forget), z DWÓCH miejsc**
+(`ConnectionNodeViewModel:244` i `:263`), a przy nieudanym połączeniu (`ConnectionFailedException` →
+`SetError`) **nie nastąpi wcale**. Faza 1 i faza 3 są w **dwóch niezależnych subskrybentach**
+`ActiveConnectionChanged` (`MainWindowViewModel:291` i węzeł połączenia), oba przez `Dispatcher.UIThread.Post`
+— **nie ma dziś jednego leja obejmującego cały ciąg**.
 
-* ⛔ **Anulowanie: model NIE ma własnej komendy.** Przyjmuje `ICommand` właściciela operacji, więc pasek
-  statusu i toolbar naciskają **ten sam obiekt komendy**. ⛔ Nie dodawać drugiej komendy Cancel — powstałby
-  drugi właściciel stanu anulowania.
-* ⚠ **Ścieżka procentowa NIE MA dziś konsumenta na żywo** — nie zakładać, że jest sprawdzona. Jej
-  przewidziani konsumenci są wymienieni po nazwie: `BatchResultsDialog` (`PreparationTotal`) i
-  `DataImportTabView` (`ProgressPercent`).
-* ⚠⚠ **Model niesie JEDNĄ operację naraz**, i to jest zapisane jako **decyzja projektowa dla M3b**:
-  *„co pokazać, gdy biegną dwie"* rozstrzyga się **na komplecie źródeł**, nie zgadywaniem. ⭐ To jest
-  najważniejsze pytanie projektowe tego podetapu.
+⭐ To jest dokładnie pułapka §19.7.4: *„nie da się dodać ścieżki wyjścia, która zostawi zapalony pasek"* była
+prawdą dla `IsExecuting`, bo tam lej JEST jeden. Tutaj trzeba go **zaprojektować**, nie odziedziczyć.
+⚠ Przy okazji: sekcję zapisuje od M3b.1 wyłącznie `UpdateProgressSection` — nowe źródło **musi** wejść tą
+samą drogą, ⛔ nie przez `Progress.Begin` z gałęzi połączenia.
 
----
+### 4.4 Co jest gotowe
 
-## 5. Co ZMIERZYĆ przed implementacją
-
-1. **Które z 16 stanów zajętości to operacja warta pokazania w pasku statusu**, a które to ładowanie
-   zawartości zakładki. Kryterium proponowane: *czy użytkownik może w tym czasie robić coś innego i czy
-   chce wiedzieć, że to trwa*. ⛔ Nie podłączać wszystkiego dlatego, że się da.
-2. **Czy któreś dwie operacje mogą realnie biec jednocześnie** — i które. Od tego zależy odpowiedź na
-   pytanie z §4.3. ⚠ SQL Editor blokuje równoległe wykonanie przez `IsExecuting`, ale import, eksport
-   i batch **mają własne wątki i własne zakładki**.
-3. **Które źródła znają SUMĘ** (→ tryb procentowy), a które nie (→ nieokreślony). Batch i import znają;
-   eksport i wykonanie zapytania nie.
-4. **Które operacje mają komendę anulowania** i jaki jest jej `CanExecute` — bo to decyduje o `HasCancel`.
-5. ⚠ **Czy trzy istniejące `ProgressBar` mają zostać.** Pasek statusu **nie zastępuje** paska w oknie
-   dialogowym eksportu ani w zakładce importu — to jest pytanie produktowe, nie porządkowe.
+| Potrzeba | Stan |
+|---|---|
+| Resolver + drabinka priorytetów | ✅ `MainWindowViewModel.ResolveProgressSection` — połączenie ma już **najwyższy szczebel** przewidziany w komentarzu; wystarczy dopisać jego gałąź |
+| Instrument do pomiaru podziału czasu | ✅ `Diagnostics.PerfTrace.LogCategoryLoad` + `EMBERTERN_PERF_DIAG=1` — stoi dokładnie w fazie 3 |
+| Suma dla trybu procentowego | ✅ `CategoryOrder.Length` (13) |
+| Zdarzenie końca | ✅ `MetadataExplorerViewModel.MetadataReady` (`:203`) — `MainWindowViewModel` posiada `Metadata`, więc może je subskrybować |
 
 ---
 
-## 6. Kolejność prac (propozycja — potwierdź z użytkownikiem)
+## 5. Co ZMIERZYĆ przed implementacją M3b.2
+
+1. **Realny podział czasu między fazy 1 / 2 / 3** istniejącym `EMBERTERN_PERF_DIAG=1` na dużej bazie.
+   ⭐ Bez tego nie wiadomo, która faza jest tą, na którą użytkownik faktycznie czeka — a to decyduje, gdzie
+   warto pokazać procent, a gdzie wystarczy komunikat.
+2. **Kolejność faktycznego przeplotu faz 2 i 3** (dwóch subskrybentów, oba `Dispatcher.Post`) — od tego
+   zależy sekwencja etykiet, a nie da się jej wydedukować z kolejności deklaracji.
+3. **Wszystkie ścieżki wyjścia z połączenia**: sukces · `ConnectionFailedException` · rozłączenie w trakcie ·
+   przełączenie profilu w trakcie. ⚠ Każda musi gasić sekcję; wypisz je **przed** implementacją.
+4. **Czy `MetadataReady` wystarcza jako sygnał końca**, czy trzeba też ostatniej kategorii — pamiętając, że
+   po `MetadataReady` biegną jeszcze modele semantyczne edytorów w `Task.Run` z własnym cyklem życia.
+   ⛔ Nie obiecywać w pasku, że tamto też jest objęte.
+
+---
+
+## 6. Kolejność prac M3b.2 (propozycja — potwierdź z użytkownikiem)
 
 ```
 pomiar §5 (bez zmian w kodzie)
-  → propozycja: które źródła, jaki tryb, co przy dwóch naraz
+  → propozycja: sekwencja etykiet + gdzie procent + jak osłonić wyjścia
     → AKCEPTACJA UŻYTKOWNIKA
-      → podłączenie źródeł, po jednym na iterację
-        → QA w obu motywach po każdej iteracji
+      → implementacja
+        → QA na żywej bazie w obu motywach
           → dokumentacja §19 + commit
 ```
 
-⭐ **R15: wielkość iteracji idzie za niepewnością.** Dopóki nie ma odpowiedzi na „co przy dwóch naraz",
-idź drobno; po jej ratyfikacji podłączanie kolejnych źródeł to praca powtarzalna i może iść większymi
-krokami.
+⭐ **R15: wielkość iteracji idzie za niepewnością.** Tutaj niepewność jest **wysoka** (nowe źródło, brak leja,
+faza nieanimowalna), więc drobne kroki są uzasadnione — odwrotnie niż w M3b.1, gdzie mechanizm był ratyfikowany
+i jeden przebieg był właściwy.
 
 ---
 
@@ -228,13 +228,13 @@ analiza → (propozycja + AKCEPTACJA) → implementacja
 --filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe"
 ```
 
-oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno. Stan: **7154 + 63 + 54 = 7271**.
+oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno. Stan: **7167 + 63 + 54 = 7284**.
 ⚠⚠ **Filtr jest listą nazw i starzeje się cicho** — partycja headless ma **siedem** klas; kryterium
 dołączenia: *czy klasa konstruuje kontrolki Avalonii*.
 
 ---
 
-## 8. ⚠ Pułapki najgroźniejsze dla M3b (pełna lista: handover §9)
+## 8. ⚠ Pułapki najgroźniejsze dla M3b.2 (pełna lista: handover §9)
 
 1. ⚠⚠ **`{DynamicResource}` NIE rzuca przy brakującym kluczu** — literówka jest niewidoczna przy zielonym
    buildzie. Nazwy ról bierz z `Tokens.axaml`, nie z pamięci.
@@ -254,23 +254,33 @@ dołączenia: *czy klasa konstruuje kontrolki Avalonii*.
    niewidoczna, gdy nic nie trwa — ⛔ to jest stan domyślny, nie komunikat „brak operacji".
 7. ⛔ **Pułapka 17: reguła opisuje to, co jest dobre.** *„Wszystkie 16 ViewModeli mają stan zajętości, więc
    wszystkie powinny raportować"* jest dokładnie tym błędem, który wycofał M3.2b w całości.
+8. ⭐⭐ **NOWA (M3b.1, §19.31.4) — STRAŻNIK MOŻE BYĆ ZIELONY Z POWODU, KTÓREGO JEGO NAZWA NIE OPISUJE.**
+   Test *„zapytanie po skrypcie nie dziedziczy procentu"* gasił skrypt PRZED startem zapytania, więc sekcja
+   przechodziła przez stan „nic nie trwa", a `End()` resetuje tryb **sam** — test przechodził niezależnie od
+   badanego mechanizmu i **przeszedł też z podłożonym naruszeniem**. ⭐ Ujawniło to wyłącznie podłożenie
+   naruszenia; poprawny kształt to **przejście właściciela BEZ PRZERWY**. ⚠ Dwa dalsze wnioski: **plant musi
+   kłamać w JEDNYM wymiarze** (zbyt szeroki położył 7 z 13 testów i nic nie izolował), oraz **po każdym
+   podłożeniu sprawdź `Liczba błędów: 0` przed odczytaniem czerwieni** — jeden plant się nie skompilował,
+   testy pobiegły na starym binarium i pokazały czerwień *poprzedniego* naruszenia.
 
 ---
 
-## 9. ⛔ Czego M3b NIE robi
+## 9. ⛔ Czego M3b.2 NIE robi
 
-1. ⛔ **Nie zmienia `StatusProgressViewModel` w model wielu operacji naraz** bez ratyfikowanej odpowiedzi na
-   pytanie z §4.3.
-2. ⛔ **Nie dodaje drugiej komendy Cancel** — model przyjmuje komendę właściciela (§4.3).
-3. ⛔ **Nie usuwa istniejących `ProgressBar`** z eksportu/importu/batcha bez decyzji produktowej (§5.5).
+1. ⛔ **Nie zmienia `StatusProgressViewModel` w model wielu operacji naraz** — ratyfikowano **jedną operację
+   naraz na drabince priorytetów**, bez licznika ukrytych operacji.
+2. ⛔ **Nie dodaje drugiej komendy Cancel** — model przyjmuje komendę właściciela.
+3. ⛔ **Nie podłącza eksportu ani batcha** (modalne, §4.1) i **nie usuwa** żadnego istniejącego `ProgressBar`.
+3b. ⛔ **Nie zapisuje sekcji poza `UpdateProgressSection`** — od M3b.1 pisarz sekcji jest jeden.
 4. ⛔ **Nie zwiększa wysokości paska statusu** — §8.5 specyfikacji zabrania wprost.
 5. ⛔ **Nie rozszerza katalogu, żeby domknąć kolizję** — **K1–K15** czekają na §13.3 (R3).
 6. ⛔ **Nie wraca do paska zakładek, drzewa ani menu** bez realnego defektu funkcjonalnego — M3.3 i M3.4
    zamknięte.
 7. ⛔ **Nie rusza `AutoScrollToSelectedItem`** (§3.1) ani `TreeDiagnostics` (§3.2).
 8. ⛔ **Nie naprawia przy okazji rzeczy spoza zakresu** — zmierz, opisz, zapisz, nie rozwiązuj bez decyzji.
-9. ⏸ **Nie zaczyna pełnej semantyki kolorów railu** bez decyzji — odłożona tu świadomie przez użytkownika,
-   z pomiarem (§19.4.4); rozstrzygnąć **razem z** sekcją postępu, bo oba mówią „coś się dzieje".
+9. ⏸ **Nie zaczyna pełnej semantyki kolorów railu** — to **M3b.3**, po podłączeniu wszystkich źródeł.
+   ⭐ Decyzja użytkownika: *„jeżeli okaże się, że obecne kolory są wystarczające, nie ma potrzeby komplikować
+   ich semantyki"* — brak zmiany jest tam dopuszczalnym wynikiem, nie porażką.
 
 ---
 
@@ -286,7 +296,8 @@ dołączenia: *czy klasa konstruuje kontrolki Avalonii*.
 | ⏸ | hipoteza o zawieszającym się teście (§3.3) | obserwacja suity |
 | ⏸ | przycisk/licznik przepełnienia paska zakładek (§8.2) | do zaplanowania |
 | ⏸ | 6 sierocych stałych `UiStrings` · role `Pad.Tab`, `Size.Icon.Lg` bez konsumentów · 64 literały `Size.Icon` + 112 literałów ikona/odstęp | §13.3 / M4.3 |
-| ⏸ | pełna semantyka kolorów railu | **M3b** |
+| ⏸ | pełna semantyka kolorów railu | **M3b.3** — po podłączeniu wszystkich źródeł |
+| ⏸ | szerokość etykiety sekcji postępu (czy przesuwa chipy na tyle, żeby przeszkadzało) | QA użytkownika, §19.31.6 |
 
 ---
 

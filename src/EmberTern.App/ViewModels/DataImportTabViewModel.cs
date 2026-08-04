@@ -801,6 +801,17 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
     [ObservableProperty] private bool _isProgressIndeterminate = true;
 
     /// <summary>
+    /// Liczba przeczytanych wierszy — surowa liczba dla sekcji postępu paska statusu (M3b.1).
+    /// <para>⚠ Celowo LICZBA, nie gotowy napis: etykietę paska składa jeden resolver dla wszystkich
+    /// źródeł, więc format nie może mieszkać w źródle (<c>ProgressText</c> niesie pełny szczegół
+    /// „read · written · failed" i zostaje przy TEJ powierzchni — pasek statusu niesie fakt globalny).</para>
+    /// <para>⭐ Liczy się najbardziej wtedy, gdy procentu NIE MA: suma jest tu tylko szacunkiem
+    /// (<c>SourceSchema.EstimatedRows</c>) i bywa nieznana, a wtedy rosnący licznik jest jedynym
+    /// dowodem, że import się posuwa.</para>
+    /// </summary>
+    [ObservableProperty] private long _progressRowsRead;
+
+    /// <summary>
     /// ComboBox index ⇄ <see cref="ImportTransactionMode"/>. The index is presentation; the mode is the
     /// decision, and it lives in the ONE record (§4.8.6). Mirrors the Script Executor's mode picker.
     /// </summary>
@@ -886,6 +897,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         IsRunning = false;
         ProgressText = string.Empty;
         ProgressPercent = 0;
+        ProgressRowsRead = 0;
         IsProgressIndeterminate = true;
 
         SetStatus(ex.Message, MessageSeverity.Error);
@@ -1006,6 +1018,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             IsRunning = false;
             ProgressText = string.Empty;
             ProgressPercent = 0;
+            ProgressRowsRead = 0;
             IsProgressIndeterminate = true;
             PublishReadiness();
         }
@@ -1220,6 +1233,8 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             CultureInfo.CurrentCulture,
             UiStrings.ImportProgressFormat,
             progress.RowsRead, progress.RowsWritten, progress.RowsFailed);
+
+        ProgressRowsRead = progress.RowsRead;
 
         var total = _schema?.EstimatedRows;
         IsProgressIndeterminate = total is not > 0;

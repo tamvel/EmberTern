@@ -1183,10 +1183,18 @@ public partial class MainWindowViewModel : ViewModelBase
         else ExecutionTimer.Stop();
         if (!value) IsCancelling = false;   // every exit path resets the cancel latch
 
-        // ⚠ Komenda jest PRZEKAZYWANA, nie odtwarzana: pasek statusu i przycisk w toolbarze naciskają
-        // ten sam obiekt `CancelQueryCommand`, więc zatrzask `IsCancelling` gasi oba naraz.
-        if (value) Progress.Begin(UiStrings.ExecutingStatus, CancelQueryCommand);
-        else Progress.End();
+        // ⚠ Od M3b.1 ten punkt nie zapala sekcji SAM — mówi „przelicz", a rozstrzyga
+        // `UpdateProgressSection` (drabinka priorytetów, trzy źródła). Rola `IsExecuting` jako
+        // jedynego leja wejścia/wyjścia zostaje bez zmian: wyjście z wykonania nadal gasi sekcję tą
+        // jedną drogą, o ile żadne inne źródło nie jest w toku.
+        // ⚠ Szczegół etykiety czyszczony w OBIE strony: przy wejściu, żeby nowe zapytanie nie startowało
+        // z licznikiem poprzedniego, i przy wyjściu, żeby zakończone nie zostawiło tekstu następnemu.
+        _queryProgressDetail = null;
+
+        // ⚠ Komenda anulowania jest PRZEKAZYWANA, nie odtwarzana (patrz `ResolveProgressSection`): pasek
+        // statusu i przycisk w toolbarze naciskają ten sam obiekt `CancelQueryCommand`, więc zatrzask
+        // `IsCancelling` gasi oba naraz.
+        UpdateProgressSection();
 
         OnPropertyChanged(nameof(CanCancelQuery));
     }
@@ -1325,35 +1333,57 @@ public partial class MainWindowViewModel : ViewModelBase
         .Any(t => t.TraceMonitor is { State: TraceSessionState.Starting or TraceSessionState.Running
                                           or TraceSessionState.Paused or TraceSessionState.Stopping });
 
-    // ⚠⚠ Subskrypcje MUSZĄ być zdejmowane. Rail czyta stan zakładek, więc zakładka zamknięta, ale wciąż
-    // podpięta, trzymałaby rail zapalony po czymś, czego już nie ma. `Reset` (czyli `Clear()` przy
-    // rozłączeniu) NIE niesie `OldItems`, dlatego trzymamy własny zbiór podpiętych zakładek — bez niego
-    // odpięcie przy rozłączeniu byłoby niewykonalne.
-    private readonly HashSet<WorkspaceTabViewModel> _railSources = [];
+    // ⚠⚠ Subskrypcje MUSZĄ być zdejmowane. Agregacja czyta stan zakładek, więc zakładka zamknięta, ale
+    // wciąż podpięta, trzymałaby rail zapalony (a od M3b.1 także pasek postępu) po czymś, czego już nie
+    // ma. `Reset` (czyli `Clear()` przy rozłączeniu) NIE niesie `OldItems`, dlatego trzymamy własny zbiór
+    // podpiętych zakładek — bez niego odpięcie przy rozłączeniu byłoby niewykonalne.
+    //
+    // ⭐ NAZWA MÓWI „AKTYWNOŚĆ", NIE „RAIL", I OD M3b.1 JEST TO JUŻ TRZECI KONSUMENT tej jednej
+    // agregacji: rail (jeden stan o najwyższym priorytecie), chipy (współistniejące fakty) i sekcja
+    // postępu (jedna operacja, drabinka priorytetów). `RaiseActivityChanged` nosiło tę nazwę od M3.1e
+    // właśnie z tego powodu; reszta mechanizmu została przy „rail" i była już historią, nie
+    // odpowiedzialnością. ⛔ Nie zakładać drugiego zbioru subskrypcji dla postępu — jeden zbiór, jeden
+    // punkt odpinania, więc nie da się dodać źródła, które przeżyje swoją zakładkę.
+    private readonly HashSet<WorkspaceTabViewModel> _activitySources = [];
 
-    private void WireRailSource(WorkspaceTabViewModel tab)
+    private void WireActivitySource(WorkspaceTabViewModel tab)
     {
-        if (tab.Debugger is null && tab.TraceMonitor is null) return;
-        if (!_railSources.Add(tab)) return;
+        if (tab.Debugger is null && tab.TraceMonitor is null
+            && tab.DataImport is null && tab.ScriptExecutor is null) return;
+        if (!_activitySources.Add(tab)) return;
 
-        if (tab.Debugger is { } dbg) dbg.PropertyChanged += OnRailSourceChanged;
-        if (tab.TraceMonitor is { } trace) trace.PropertyChanged += OnRailSourceChanged;
+        if (tab.Debugger is { } dbg) dbg.PropertyChanged += OnActivitySourceChanged;
+        if (tab.TraceMonitor is { } trace) trace.PropertyChanged += OnActivitySourceChanged;
+        if (tab.DataImport is { } import) import.PropertyChanged += OnActivitySourceChanged;
+        if (tab.ScriptExecutor is { } script) script.PropertyChanged += OnActivitySourceChanged;
         RaiseActivityChanged();
     }
 
-    private void UnwireRailSource(WorkspaceTabViewModel tab)
+    private void UnwireActivitySource(WorkspaceTabViewModel tab)
     {
-        if (!_railSources.Remove(tab)) return;
+        if (!_activitySources.Remove(tab)) return;
 
-        if (tab.Debugger is { } dbg) dbg.PropertyChanged -= OnRailSourceChanged;
-        if (tab.TraceMonitor is { } trace) trace.PropertyChanged -= OnRailSourceChanged;
+        if (tab.Debugger is { } dbg) dbg.PropertyChanged -= OnActivitySourceChanged;
+        if (tab.TraceMonitor is { } trace) trace.PropertyChanged -= OnActivitySourceChanged;
+        if (tab.DataImport is { } import) import.PropertyChanged -= OnActivitySourceChanged;
+        if (tab.ScriptExecutor is { } script) script.PropertyChanged -= OnActivitySourceChanged;
         RaiseActivityChanged();
     }
 
-    private void OnRailSourceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private void OnActivitySourceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        // Tylko te dwie właściwości zmieniają odpowiedź; reszta zdarzeń zakładki nas nie dotyczy.
-        if (e.PropertyName is nameof(DebuggerTabViewModel.Phase) or nameof(TraceMonitorTabViewModel.State))
+        // Tylko te właściwości zmieniają odpowiedź; reszta zdarzeń zakładki nas nie dotyczy.
+        // ⚠ Rail i chipy czytają dwie pierwsze; sekcja postępu pozostałe. Filtr jest wspólny, bo
+        // `RaiseActivityChanged` przelicza całość — rozdzielenie go dałoby dwa filtry do utrzymania
+        // przy jednym zdarzeniu.
+        if (e.PropertyName is nameof(DebuggerTabViewModel.Phase)
+                           or nameof(TraceMonitorTabViewModel.State)
+                           or nameof(DataImportTabViewModel.IsRunning)
+                           or nameof(DataImportTabViewModel.ProgressRowsRead)
+                           or nameof(DataImportTabViewModel.ProgressPercent)
+                           or nameof(DataImportTabViewModel.IsProgressIndeterminate)
+                           or nameof(ScriptExecutorTabViewModel.IsRunning)
+                           or nameof(ScriptExecutorTabViewModel.CompletedStatementCount))
         {
             RaiseActivityChanged();
         }
@@ -1361,8 +1391,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // ⚠ Nazwa mówi „aktywność", nie „rail", i to jest celowe: od M3.1e ta sama agregacja karmi DWÓCH
     // konsumentów o różnych rolach — rail (jeden stan, ten o najwyższym priorytecie) i chipy
-    // (współistniejące fakty). Nazwa `RaiseRailChanged` byłaby od tej iteracji historią, nie
-    // odpowiedzialnością.
+    // (współistniejące fakty). Od M3b.1 jest TRZECI: sekcja postępu. Nazwa `RaiseRailChanged` byłaby
+    // od tej iteracji historią, nie odpowiedzialnością.
     private void RaiseActivityChanged()
     {
         OnPropertyChanged(nameof(IsDebugSessionLive));
@@ -1370,6 +1400,117 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RailBrushKey));
         OnPropertyChanged(nameof(DebugChipTooltip));
         OnPropertyChanged(nameof(TraceChipTooltip));
+        UpdateProgressSection();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ SEKCJA POSTĘPU — ARBITRAŻ ŹRÓDEŁ (§8.4.6, M3b.1)
+    //
+    // M3.1f dostarczyło infrastrukturę i JEDNO źródło, więc `OnIsExecutingChanged` wołało
+    // `Progress.Begin/End` wprost. Przy trzech źródłach to przestaje wystarczać: potrzebny jest jeden
+    // punkt, który rozstrzyga, KTÓRA operacja jest w sekcji widoczna. Dlatego od tej iteracji każde
+    // źródło mówi tylko „przelicz", a odpowiedź składa wyłącznie `UpdateProgressSection`.
+    // ⛔ Nie wołać `Progress.Begin`/`Report`/`End` z żadnego innego miejsca — drugi pisarz to drugi
+    // właściciel stanu sekcji, a stan sekcji jest jeden.
+    //
+    // ⭐ DRABINKA PRIORYTETÓW (ratyfikowana przez użytkownika 2026-08-04). Sekcja odpowiada na pytanie
+    // „NA CO CZEKAM TERAZ", i to jest całe uzasadnienie kolejności:
+    //   3. połączenie / ładowanie metadanych — dopóki nie skończy, nie działa nic innego (M3b.2);
+    //   2. zapytanie i skrypt — operacja interaktywna, dopiero co uruchomiona: to jest to, na co
+    //      użytkownik faktycznie czeka, i kończy się szybko, oddając sekcję;
+    //   1. import — długie tło; ma WŁASNĄ transakcję (I7.5), własny pasek i własny Cancel w swojej
+    //      zakładce, więc pozostaje w pełni sterowalny bez paska statusu.
+    // ⚠ Zapytanie i skrypt są JEDNYM szczeblem celowo, nie przez niedopatrzenie: konkurują o linię
+    // Data (`FirebirdScriptExecutor.RunAsync` odmawia przy otwartej transakcji), więc nie nakładają się
+    // w sposób, dla którego warto wymyślać regułę. ⛔ Nie pisać reguły dla przypadku, którego nie da
+    // się osiągnąć — byłaby to bezczynna gałąź udająca decyzję projektową.
+    //
+    // ⚠⚠ Model niesie JEDNĄ operację, więc druga trwająca jest w sekcji niewidoczna — i to jest wybór,
+    // nie ubytek: przeskakiwanie sekcji między zadaniami byłoby myląca, a licznik ukrytych operacji
+    // dokładałby element, którego §8.4.6 nie przewiduje (decyzja użytkownika). Operacja niewidoczna
+    // pozostaje widoczna i anulowalna na SWOJEJ powierzchni.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Które źródło zajmuje sekcję postępu. `None` znaczy „sekcja zgaszona".</summary>
+    private enum ProgressOwner { None, Query, Script, Import }
+
+    private ProgressOwner _progressOwner = ProgressOwner.None;
+
+    // Szczegół etykiety zapytania (liczba wczytanych wierszy / „Cancelling…"), zapamiętany TUTAJ, bo
+    // producenci postępu wołają się częściej niż zmienia się właściciel sekcji, a `Report` nie umie
+    // odtworzyć tekstu, którego nie dostał. ⚠ Czyszczone przy każdym wejściu w wykonanie — inaczej
+    // następne zapytanie startowałoby z licznikiem poprzedniego.
+    private string? _queryProgressDetail;
+
+    /// <summary>
+    /// JEDYNY punkt, który zapala, aktualizuje i gasi sekcję postępu. Wywoływany przez
+    /// <see cref="RaiseActivityChanged"/>, więc każde źródło trafia tu tą samą drogą.
+    /// <para>⭐ Rozróżnienie „zmiana właściciela" vs „raport tego samego właściciela" jest konieczne:
+    /// <c>Begin</c> resetuje tryb, procent i komendę anulowania, więc wołany przy każdym raporcie
+    /// zgasiłby tryb procentowy w połowie operacji, która go właśnie ustawiła.</para>
+    /// </summary>
+    private void UpdateProgressSection()
+    {
+        var (owner, label, percent, cancel) = ResolveProgressSection();
+
+        if (owner == ProgressOwner.None)
+        {
+            if (_progressOwner != ProgressOwner.None)
+            {
+                _progressOwner = ProgressOwner.None;
+                Progress.End();
+            }
+            return;
+        }
+
+        if (owner != _progressOwner)
+        {
+            _progressOwner = owner;
+            Progress.Begin(label, cancel);
+        }
+
+        if (percent is { } value) Progress.Report(label, value);
+        else Progress.Report(label);
+    }
+
+    // Czysty wybór: kto zajmuje sekcję i co mówi. Rozdzielony od stosowania, żeby drabinkę priorytetów
+    // dało się sprawdzić testem bez `StatusProgressViewModel` i bez żywego wykonania.
+    private (ProgressOwner Owner, string Label, double? Percent, ICommand? Cancel) ResolveProgressSection()
+    {
+        // Szczebel 2 — operacja interaktywna. Zapytanie: tryb nieokreślony, bo strumieniowy odczyt nie
+        // zna sumy wierszy, dopóki nie skończy (§19.7.2).
+        if (IsExecuting)
+        {
+            return (ProgressOwner.Query,
+                    _queryProgressDetail ?? UiStrings.ExecutingStatus,
+                    null,
+                    CancelQueryCommand);
+        }
+
+        // Szczebel 2 — skrypt. ⭐ Jedyne źródło ze ŚCISŁĄ sumą, więc pierwszy żywy konsument ścieżki
+        // procentowej, która od M3.1f nie miała żadnego (§19.7.2).
+        if (WorkspaceTabs.Select(t => t.ScriptExecutor).FirstOrDefault(s => s is { IsRunning: true }) is { } script)
+        {
+            var total = script.RunStatementTotal;
+            var done = script.CompletedStatementCount;
+            return (ProgressOwner.Script,
+                    string.Format(CultureInfo.CurrentCulture, UiStrings.StatusProgressScriptFormat, done, total),
+                    total > 0 ? done * 100d / total : null,
+                    script.StopCommand);
+        }
+
+        // Szczebel 1 — import. ⚠ Suma jest tylko SZACUNKIEM (`SourceSchema.EstimatedRows`) i bywa
+        // nieznana; wtedy `IsProgressIndeterminate` jest prawdą i procentu nie podajemy, bo pasek
+        // stojący na zerze udawałby „0% zrobione".
+        if (WorkspaceTabs.Select(t => t.DataImport).FirstOrDefault(i => i is { IsRunning: true }) is { } import)
+        {
+            return (ProgressOwner.Import,
+                    string.Format(CultureInfo.CurrentCulture, UiStrings.StatusProgressImportFormat, import.ProgressRowsRead),
+                    import.IsProgressIndeterminate ? null : import.ProgressPercent,
+                    import.CancelRunCommand);
+        }
+
+        return (ProgressOwner.None, string.Empty, null, null);
     }
 
     // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -6214,16 +6355,19 @@ public partial class MainWindowViewModel : ViewModelBase
 
         // ⚠ `Reset` (czyli `Clear()`, m.in. przy rozłączeniu) nie niesie ANI `NewItems`, ANI `OldItems`.
         // Dlatego odpinamy po własnym zbiorze — inaczej zamknięte zakładki dalej zapalałyby rail.
+        // ⭐ Od M3b.1 ta sama droga gasi sekcję postępu: zamknięcie zakładki z trwającym importem (albo
+        // rozłączenie, które czyści wszystkie) przelicza sekcję i nie zostawia zapalonego paska po
+        // operacji, której nośnik już nie istnieje.
         if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
         {
-            foreach (var tab in _railSources.ToList()) UnwireRailSource(tab);
+            foreach (var tab in _activitySources.ToList()) UnwireActivitySource(tab);
         }
 
         if (e.OldItems is not null)
         {
             foreach (var item in e.OldItems)
             {
-                if (item is WorkspaceTabViewModel tab) UnwireRailSource(tab);
+                if (item is WorkspaceTabViewModel tab) UnwireActivitySource(tab);
             }
         }
 
@@ -6238,7 +6382,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             if (item is not WorkspaceTabViewModel tab) continue;
             WireObjectCompiled(tab);
-            WireRailSource(tab);
+            WireActivitySource(tab);
         }
     }
 
@@ -6802,7 +6946,9 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (_executionCts is not { IsCancellationRequested: false } cts) return;
         IsCancelling = true;
-        Progress.Report(UiStrings.CancellingStatus);
+        // ⚠ Nie `Progress.Report` wprost — od M3b.1 sekcję zapisuje wyłącznie `UpdateProgressSection`.
+        _queryProgressDetail = UiStrings.CancellingStatus;
+        UpdateProgressSection();
         cts.Cancel();
     }
 
@@ -6823,9 +6969,18 @@ public partial class MainWindowViewModel : ViewModelBase
     // powierzchni globalnej; „143 rows in 46 ms" to WYNIK i zostaje przy edytorze SQL.
     // ⚠ Tryb pozostaje NIEOKREŚLONY, bo strumieniowy odczyt nie zna sumy wierszy — nie ma z czego
     // policzyć procentu i udawanie go byłoby zmyślaniem (§19.7.2).
+    //
+    // ⚠ Od M3b.1 licznik NAZYWA swoją operację (`StatusProgressQueryRowsFormat`, nie
+    // `ResultsLoadingFormat`): sekcja ma trzy źródła, więc samo „Loading… 12 345 rows" nie mówi, czy to
+    // zapytanie, skrypt, czy import. ⚠ I nie zapisuje sekcji wprost — odkłada szczegół i prosi
+    // `UpdateProgressSection` o przeliczenie, żeby pisarz sekcji pozostał jeden.
     private IProgress<long> MakeLoadProgress()
-        => new Progress<long>(n => Progress.Report(
-            string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, n)));
+        => new Progress<long>(n =>
+        {
+            _queryProgressDetail = string.Format(
+                CultureInfo.CurrentCulture, UiStrings.StatusProgressQueryRowsFormat, n);
+            UpdateProgressSection();
+        });
 
     // Soft-threshold choice ids (returned by the "keep loading?" dialog; wording can change freely).
     internal const string LoadAllKeepChoiceId = "keep";
