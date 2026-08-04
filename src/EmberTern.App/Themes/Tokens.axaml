@@ -216,9 +216,20 @@
   <x:Double x:Key="Size.Row.Grid">22</x:Double>
   <!-- Nagłówek kolumny — o stopień wyższy niż wiersz, żeby czytał się jako nagłówek bez ramki. -->
   <x:Double x:Key="Size.Row.Header">24</x:Double>
-  <!-- Wiersz Metadata Explorera i wiersz drzewa zależności. Najniższy w aplikacji, bo to widok
-       o największej liczbie wierszy na ekran. -->
-  <x:Double x:Key="Size.Row.Tree">20</x:Double>
+  <!-- Wiersz Metadata Explorera i wiersz drzewa zależności. Najgęstszy widok w aplikacji — to on ma
+       najwięcej wierszy na ekran.
+       ⚠⚠ 24, nie 20 — KOREKTA KATALOGU wykonana w M3.4a (§19.26), decyzja użytkownika **DB**. Do tego
+       momentu token deklarował 20, rzeczywistość była 24 (`ListBoxItem.MinHeight` w `MainWindow.axaml`),
+       a token nie miał ANI JEDNEGO konsumenta — czyli nikt nigdy nie sprawdził, czy 20 jest dobre.
+       ⭐ Kierunek poprawki wynika z reguły prowadzącej: *dokument ma prowadzić produkt, nie produkt
+       dokument* — ale prowadzi go tam, gdzie produkt jest DOBRY. Zejście do 20 nie byłoby porządkowaniem,
+       tylko realną zmianą gęstości najgęstszego widoku, a to jest decyzja produktowa wymagająca oka
+       użytkownika. Produkt był dobry; kłamał token (pułapka 3 — katalog bywa zamiarem, nie opisem).
+       ⚠ Wartość dzieli z `Size.Row.Header`, `Size.StatusBar` i `Size.Control`, i to jest poprawne (§3.3):
+       cztery niezależne decyzje, które chwilowo się pokrywają i mogą się rozejść.
+       ⏸ Drugi konsument — 18 drzew „Zależności" — dołącza dopiero w M4.2b; dziś stoją na własnych
+       wartościach, więc ta korekta ich nie rusza. -->
+  <x:Double x:Key="Size.Row.Tree">24</x:Double>
   <!-- Wiersz menu kontekstowego (stan faktyczny po etapie Keyboard Manager — token go formalizuje,
        niczego nie zmienia). -->
   <x:Double x:Key="Size.Row.Menu">22</x:Double>

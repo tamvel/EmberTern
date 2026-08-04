@@ -550,6 +550,82 @@ public class DesignTokenComplianceTests
             + "do §5 z powodem, a dopiero potem tutaj. Wyjątek bez zapisanego powodu jest defektem (§5).");
     }
 
+    /// <summary>
+    /// ⭐ Wysokość wiersza Metadata Explorera pochodzi z roli <c>Size.Row.Tree</c>, nie z literału
+    /// (M3.4a, <c>product-polish.md</c> §19.26).
+    ///
+    /// <para>⚠⚠ Dlaczego to jest test CZYTAJĄCY ŹRÓDŁO, a nie headless na kontrolce. Styl
+    /// <c>ListBox.sidebar-list ListBoxItem</c> mieszka w lokalnym bloku <c>&lt;ListBox.Styles&gt;</c>
+    /// w <c>MainWindow.axaml</c>, więc gołe <c>new ListBox { Classes = { "sidebar-list" } }</c> go NIE
+    /// zobaczy, a jedyną kontrolką, która go widzi, jest <c>MainWindow</c> — a headless test konstruujący
+    /// <c>MainWindow</c> zawiesza suite (#94/#226/#286, pułapka 4 handovera M3).</para>
+    ///
+    /// <para>⛔ Przeniesienie tego stylu do <c>ControlStyles.axaml</c> „żeby dało się go przetestować" jest
+    /// dokładnie tym ruchem, który w M3.3a odtworzył regresję §19.2: <b>zmiana MIEJSCA reguły jest zmianą
+    /// jej PRIORYTETU</b>. Ten styl jest celowo zawężony do jednej listy, żeby nie dotknąć listy zapytań
+    /// zapisanych.</para>
+    ///
+    /// <para>⭐ Co ten test realnie chroni — dwie rzeczy, obie ciche przy zielonym buildzie: powrót
+    /// literału (#284) oraz literówkę w kluczu, bo <c>{DynamicResource}</c> na brakującym kluczu NIE rzuca
+    /// wyjątku, tylko zostawia właściwość przy wartości odziedziczonej (pułapka 1) — a tutaj oznaczałoby
+    /// to wiersz zapadnięty do wysokości treści, czyli 15 px zamiast 24.</para>
+    ///
+    /// <para>⚠ Czego ten test NIE mówi: jak drzewo WYGLĄDA. Kryterium odbioru jest ekran (R16) — to jest
+    /// wyłącznie strażnik dryfu.</para>
+    /// </summary>
+    [Fact]
+    public void SidebarRowHeight_ComesFromTheTreeRowRole()
+    {
+        var view = Path.Combine(AppRoot(), "Views", "MainWindow.axaml");
+        Assert.True(File.Exists(view), $"MainWindow.axaml is missing at {view}");
+
+        var text = Regex.Replace(File.ReadAllText(view), "<!--.*?-->", " ", RegexOptions.Singleline);
+
+        // Blok stylu wiersza paska bocznego — od selektora do jego zamknięcia.
+        var style = Regex.Match(
+            text,
+            @"<Style\s+Selector=""ListBox\.sidebar-list\s+ListBoxItem"">(?<body>.*?)</Style>",
+            RegexOptions.Singleline);
+
+        Assert.True(style.Success,
+            "Nie znaleziono stylu `ListBox.sidebar-list ListBoxItem` w MainWindow.axaml. Jeśli wiersz paska "
+            + "bocznego został przeniesiony gdzie indziej, ten strażnik musi pójść za nim — a nie zniknąć.");
+
+        var minHeight = Regex.Match(
+            style.Groups["body"].Value,
+            @"<Setter\s+Property=""MinHeight""\s+Value=""(?<value>[^""]*)""");
+
+        Assert.True(minHeight.Success,
+            "Wiersz paska bocznego nie deklaruje już `MinHeight`. Wysokość wiersza ma dokładnie jednego "
+            + "właściciela (padding pionowy jest zerowy właśnie po to) — jeśli właściciel się zmienił, "
+            + "zmień ten test razem z nim i zapisz powód.");
+
+        Assert.Equal("{DynamicResource Size.Row.Tree}", minHeight.Groups["value"].Value);
+    }
+
+    /// <summary>
+    /// ⭐ Rola <c>Size.Row.Tree</c> ma wartość, którą PRODUKT faktycznie pokazuje (24), a nie tę, którą
+    /// katalog kiedyś zadeklarował (20). Decyzja użytkownika <b>DB</b>, M3.4a.
+    ///
+    /// <para>⚠⚠ Ten test nie jest powtórzeniem poprzedniego. Tamten pilnuje, że widok CZYTA rolę; ten —
+    /// że rola niesie liczbę, która przeszła przez oko użytkownika. Bez niego „migracja na rolę" byłaby
+    /// zmianą wysokości wiersza z 24 na 20 przebraną za porządkowanie: zielony build, zielone testy,
+    /// gęstość najgęstszego widoku zmieniona bez decyzji.</para>
+    ///
+    /// <para>⛔ Jeśli ta liczba ma się zmienić — to jest decyzja produktowa użytkownika (gęstość drzewa,
+    /// pytanie K15 na przeglądzie §13.3), a nie skutek uboczny innej pracy.</para>
+    /// </summary>
+    [Fact]
+    public void TreeRowRole_CarriesTheHeightTheProductActuallyShows()
+    {
+        var tokens = Path.Combine(AppRoot(), "Themes", "Tokens.axaml");
+        var text = File.ReadAllText(tokens);
+
+        var declared = Regex.Match(text, @"x:Key=""Size\.Row\.Tree""\s*>(?<value>[^<]+)<");
+        Assert.True(declared.Success, "Brak roli `Size.Row.Tree` w Tokens.axaml.");
+        Assert.Equal("24", declared.Groups["value"].Value.Trim());
+    }
+
     private static IEnumerable<string> ThemeFiles() =>
         Directory.EnumerateFiles(Path.Combine(AppRoot(), "Themes"), "*.axaml").OrderBy(f => f, StringComparer.Ordinal);
 

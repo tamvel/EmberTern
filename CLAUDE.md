@@ -466,8 +466,47 @@ noted.
   check in the code that a sub-etap's subject still exists before starting it; (4) **a test on a property's
   VALUE is not a test that the screen works** — the binding re-queries only on `PropertyChanged`, so the
   notification must be an assertion, verified by planting the violation (R16).
-  Build 0/0; suite **7243** (7132 + 57 + 54); smoke clean. ⏸ **Next: M3.4a** (Metadata Explorer tree row;
-  decision **DB** already settled — **the row STAYS 24**), then M3.4b → M3b → ⛔ the §13.3 gate.
+  Build 0/0; suite **7245** (7134 + 57 + 54); smoke clean.
+  ✅ **M3.4a DONE (2026-08-04) — the Metadata Explorer tree row; the CATALOG followed the PRODUCT**
+  (`product-polish.md` §19.26). `Size.Row.Tree` **20 → 24** (ratified decision **DB**), `MinHeight` moved
+  onto the role — **the token gained its first consumer, having had zero** — the two chevron glyphs onto
+  `Size.Icon.Sm`, and the remaining local values got a reason in place. Zero visual change, +2 guards.
+  ⭐⭐ **The iteration's most important result is NEGATIVE, and that is the point: the measurement REFUTED
+  the hang hypothesis this file recorded above.** New probe case **B4** (`MetadataPerfProbe`, out of
+  solution) drives the real `SidebarFlatController`: a click-expand of **2 400 leaves with a 6 000-row
+  tail costs 2,3 ms** (collapse 2,7 ms; 5 000 + 6 000 → 4,8 / 7,4 ms). The predicted **shape** held —
+  Θ(N) notifications, Θ(N × tail) shifts, visible in the tail column — but the constant is small enough to
+  fit in one frame, against **916,9 ms** for the defect Layer 1 fixed on the same 2 400 leaves. ⛔ **No
+  guard was added there**: 2 ms does not justify changing a working mechanism, and §3.7a(c) explicitly
+  allows "found nothing" as a result.
+  ⚠⚠ **THE MEASUREMENT'S SCOPE, STATED BECAUSE WITHOUT IT THE NUMBER MISLEADS: the probe measures the
+  MODEL, not the PANEL.** Those 2 400 `CollectionChanged` notifications reach a **virtualizing `ListBox`**
+  in the real app and that half is **unmeasured** — while the reported symptom (*the tree scrolls down on
+  its own*) is a **panel** behaviour, not a collection one. So the measurement **moved the boundary of
+  ignorance; it did not close the question**. ⭐ Consequently the hypothesis in (b) **weakens but does not
+  fall**, and the two observations stay **unjoined**; the decisive headless experiment is now its own step
+  (**15b**, user's call — do not mix it with catalog housekeeping). ⭐ The live-app instrument already
+  exists and needed no work: `App/Diagnostics/ScrollTrace.cs` (`EMBERTERN_SCROLL_DIAG=1`) distinguishes
+  *VSP re-estimating the extent* from *we rebuilt the tree*.
+  ⛔⛔ **A tempting move was refused and is worth knowing: "move the style into `ControlStyles.axaml` so it
+  can be tested".** The sidebar row style lives in a local `<ListBox.Styles>` block, so only `MainWindow`
+  sees it — and a headless test constructing `MainWindow` hangs the suite. Moving it is **exactly what
+  re-created the §19.2 regression in M3.3a** (*moving a rule changes its PRIORITY*) and the narrowing is
+  deliberate, so the Saved-Queries list is untouched. ⭐ **We do not move the product to fit the tool** —
+  both guards read the SOURCE instead, and both were verified by planting the violation.
+  ⚠ **K15 joins the collision register** — the node icon (15 vs `Size.Icon` 14) **and** the icon↔label gap
+  (`Spacing` 5 vs `Space.Xs` 4), as **ONE question about tree density** for §13.3, exactly as K12–K14 went
+  as one question about tab-strip density. ⛔ Not fixed here: those two literals have **112 occurrences
+  across 17 files**, so changing them in the tree alone would patch one screen (R7) *and* drift the tree
+  away from the rest of the app; the sweep belongs with `Size.Icon`'s 64 literals in **M4.3**.
+  ⛔⛔ **STANDING USER DIRECTIVE FOR ALL OF M3.4 (2026-08-04): scroll stability is an acceptance criterion
+  alongside correctness and performance, and it outranks a few milliseconds.** Judge every larger Metadata
+  Explorer change by it too, and **if you meet a mechanism that could cause a reentrant layout, a
+  notification loop, or a fight over the `ScrollViewer`'s position — stop and show the user BEFORE
+  implementing.** ⭐ This is §19.23.9 generalised: that defect was a feedback loop, and a tool that computes
+  one layout pass could not have caught it *by construction* — and the tree has thousands of rows,
+  virtualization and scroll anchoring, i.e. exactly those conditions.
+  ⏸ **Next: step 15b** (the headless virtualization experiment), then M3.4b → M3b → ⛔ the §13.3 gate.
   ✅ **M3.3c DONE (2026-08-03) — the tab context menu; the tab strip is complete** (`product-polish.md`
   §19.24). Nine items, **zero new chrome** (the Keyboard Manager's `ContextMenu`/`MenuItem` styles +
   `{app:MenuIcon}` already exist).
@@ -3423,9 +3462,10 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7228 as of 2026-08-03**
-  (Product Polish M3 through the colour-language rollout, plus the acceptance fix round). Green in the three
-  documented partitions (**7118 + 56 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7245, MEASURED 2026-08-04**
+  (Product Polish through M3.4a). Green in the three documented partitions (**7134 + 57 + 54**).
+  ⚠ This line said **7228 (7118 + 56 + 54)** until that run — a figure that had gone stale across M3.3b/c
+  and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy it forward.
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
   partition filter named a class that no longer existed (so the total read one too high, `product-polish.md`
   §18.1.6), and once because the sub-stage's own numbers moved under it. **Re-measure before quoting it.**

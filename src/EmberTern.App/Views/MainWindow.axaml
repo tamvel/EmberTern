@@ -423,14 +423,27 @@
             </ListBox.ItemsPanel>
             <ListBox.Styles>
               <!-- Dense, uniform sidebar rows (scoped to this ListBox so the Saved-Queries
-                   ListBox is unaffected). Uniform height keeps the single VSP's extent exact. -->
+                   ListBox is unaffected).
+                   ⭐⭐ WYSOKOŚĆ WIERSZA JEST TU I JEST JEDNA. Treść mierzy 15 px (ikona 15,
+                   `Text.Compact.LineHeight` 15) przy zerowym padding'u pionowym, więc to `MinHeight`
+                   rozstrzyga — zmierzone w M3.4a, nie założone. Uniform height keeps the single VSP's
+                   extent exact, co jest warunkiem stabilnego przewijania przy tysiącach wierszy.
+                   ⚠ `Padding` pionowy MUSI zostać zerowy: gdyby rósł, walczyłby z `MinHeight` o tę samą
+                   wielkość i wygrywałby większy z nich — ta sama reguła „jedna wielkość, jeden
+                   właściciel", co przy `Pad.Control` (Tokens.axaml §4.1). Poziome 2 px to wcięcie
+                   zaznaczenia od krawędzi panelu, nie odstęp treści; katalog nie ma dla niego roli. -->
               <Style Selector="ListBox.sidebar-list ListBoxItem">
                 <Setter Property="Padding" Value="2,0" />
-                <Setter Property="MinHeight" Value="24" />
+                <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Tree}" />
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
               </Style>
               <!-- Expander chevron: subtle, borderless, generous 20px hit area (modern
-                   explorer feel) with a 12px glyph. -->
+                   explorer feel) with a 12px glyph.
+                   ⚠ 20×20 to POLE TRAFIENIA MYSZY, nie kontrolka — dlatego świadomie nie bierze
+                   `Size.Control` (24, wysokość pola formularza) ani `Size.ControlToolbar` (22, akcja
+                   w chromie). Musi zmieścić się w wierszu 24 px i zostawić chevron optycznie lekkim;
+                   ⛔ podniesienie go do którejkolwiek z tych ról rozepchnęłoby wiersz. Rozstrzyga
+                   przegląd §13.3 razem z pozostałą gęstością drzewa (K15). -->
               <Style Selector="Button.sidebar-chevron">
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
@@ -466,16 +479,26 @@
               <DataTemplate DataType="vm:SidebarRow">
                 <Grid ColumnDefinitions="Auto,Auto,*">
                   <Border Grid.Column="0" Width="{Binding IndentWidth}" />
+                  <!-- ⚠ Kolumna chevronu ma stałą szerokość równą polu trafienia przycisku (20 px, styl
+                       `Button.sidebar-chevron` wyżej) i to jest celowe: liść nie ma chevronu, a mimo to
+                       jego etykieta musi stać w tej samej kolumnie co etykieta kategorii — inaczej wcięcie
+                       przestaje czytać się jako poziom drzewa. Rezerwacja jest tu uzasadniona i NIE łamie
+                       R13: element pojawia się w tym kontekście regularnie (każda kategoria), a pusty slot
+                       niesie informację o strukturze. ⛔ Zmieniając 20 w stylu, zmień je i tutaj. -->
                   <Panel Grid.Column="1" Width="20" VerticalAlignment="Center">
                     <Button Classes="sidebar-chevron"
                             IsVisible="{Binding IsExpandable}"
                             Click="OnSidebarChevronClick">
                       <Panel>
+                        <!-- `Size.Icon.Sm` (12) — rola „ikona inline w tekście 11 px". Chevron stoi obok
+                             etykiety `Text.Compact` (11), więc to jest jego rola, nie `Size.Icon` (14). -->
                         <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}"
-                                          Width="12" Height="12"
+                                          Width="{DynamicResource Size.Icon.Sm}"
+                                          Height="{DynamicResource Size.Icon.Sm}"
                                           IsVisible="{Binding !IsExpanded}" />
                         <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}"
-                                          Width="12" Height="12"
+                                          Width="{DynamicResource Size.Icon.Sm}"
+                                          Height="{DynamicResource Size.Icon.Sm}"
                                           IsVisible="{Binding IsExpanded}" />
                       </Panel>
                     </Button>
@@ -506,6 +529,21 @@
                     </ContextMenu>
                   </Border.ContextMenu>
                   <Panel>
+                    <!-- ⚠⚠ KOLIZJA K15 — ŚWIADOMA, ZOSTAJE DO PRZEGLĄDU §13.3 (M3.4a, §19.26).
+                         Ikona 15 px i `Spacing` 5 px pasują ROLĄ, ale nie LICZBĄ: `Size.Icon` to 14
+                         (a jej komentarz wymienia wprost „drzewo"), `Space.Xs` to 4 („ikona ↔ tekst").
+                         ⛔ Nie brać tych ról tutaj z trzech powodów:
+                         (a) różnica 1+1 px na wiersz zmienia GĘSTOŚĆ najgęstszego widoku aplikacji, a to
+                             jest decyzja produktowa użytkownika — nie porządkowanie (ta sama granica, co
+                             przy decyzji DB o wysokości wiersza);
+                         (b) to nie jest problem tego ekranu: `Width="15"` i `Spacing="5"` mają w aplikacji
+                             112 wystąpień w 17 plikach, więc zmiana tutaj byłaby łataniem pojedynczego
+                             widoku (R7) i rozjechałaby drzewo z resztą aplikacji;
+                         (c) R12 — błędna rola jest gorsza od wartości lokalnej; wartość z powodem widać
+                             jako dług, rola udaje, że długu nie ma.
+                         ⭐ K15 idzie na §13.3 jako JEDNO pytanie o gęstość drzewa (ikona + odstęp razem),
+                         dokładnie jak K12–K14 poszły jako jedno pytanie o gęstość paska zakładek.
+                         Te same dwie liczby stoją jeszcze przy węźle połączenia i przy węźle metadanych. -->
                     <StackPanel Orientation="Horizontal" Spacing="5"
                                 IsVisible="{Binding IsNotRenaming}">
                       <controls:SvgIcon Data="{StaticResource Icon.Folder}"
@@ -574,6 +612,7 @@
                       </MenuItem>
                     </ContextMenu>
                   </Border.ContextMenu>
+                  <!-- ⚠ Ikona 15 / `Spacing` 5 — kolizja K15, patrz pełny komentarz przy węźle folderu. -->
                   <StackPanel Orientation="Horizontal" Spacing="5">
                     <controls:SvgIcon Data="{StaticResource Icon.Connection}"
                                       Width="15" Height="15"
@@ -700,6 +739,9 @@
                                 IsVisible="{Binding ShowCopyNameLeaf}" />
                     </ContextMenu>
                   </Border.ContextMenu>
+                  <!-- ⚠ Ikona 15 / `Spacing` 5 — kolizja K15, patrz pełny komentarz przy węźle folderu.
+                       ⭐ To jest jej najważniejsze wystąpienie: ten szablon niesie KAŻDY wiersz kategorii
+                       i każdy wiersz liścia, więc to on decyduje o gęstości całego drzewa. -->
                   <StackPanel Orientation="Horizontal" Spacing="5">
                     <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
                                       Width="15" Height="15"

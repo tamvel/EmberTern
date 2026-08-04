@@ -3475,6 +3475,7 @@ idzie dalej. Rejestr jest wejściem do przeglądu §13.3.
 | **K12** | **M3.3a** | przycisk aktywujący zakładkę roboczą — `Padding` | 8,4 | `Pad.Tab` = **10,4** | ⛔ lokalnie z powodem → **§13.3** |
 | **K13** | **M3.3a** | przycisk zamykania zakładki — `Padding` | 4,2 | `Pad.ButtonIcon` = **6,0** | ⛔ lokalnie z powodem → **§13.3** |
 | **K14** | **M3.3a** | przycisk zamykania zakładki — `Margin` prawy | 3 | brak roli (`Space` daje 2/4/6) | ⛔ lokalnie z powodem → **§13.3** |
+| **K15** | **M3.4a** | wiersz drzewa — ikona węzła **i** odstęp ikona ↔ etykieta (`MainWindow.axaml`, ×3 szablony) | 15 px · `Spacing` 5 | `Size.Icon` = **14** · `Space.Xs` = **4** | ⛔ lokalnie z powodem → **§13.3** |
 
 ⭐⭐ **K12–K14 są pierwszą trójką, którą łączy JEDEN skutek produktowy, a nie jeden rodzaj wielkości:**
 wszystkie trzy zmieniają **szerokość zakładki**, czyli **ile zakładek mieści się w wierszu**. To już nie jest
@@ -3484,6 +3485,22 @@ pełną czytelność nazw, a M3.1a osiągnęło swoje, właśnie **zdejmując** 
 ⚠ **Dlatego idą na §13.3 RAZEM i jako jedno pytanie**, nie trzy — dokładnie tak, jak K11 idzie tam w parze
 z paddingiem badge'a DEV MODE. Rozstrzygać je pojedynczo znaczyłoby trzy razy zmienić gęstość paska, nie
 oglądając jej ani razu jako całości (**R17**).
+⭐⭐ **K15 (M3.4a) POWTARZA TEN SAM KSZTAŁT O JEDNĄ POWIERZCHNIĘ DALEJ — i to jest potwierdzenie, że
+K12–K14 nie były przypadkiem.** Ikona 15 px i `Spacing` 5 px w wierszu drzewa to znowu **dwie wielkości
+różnych rodzajów** (rozmiar i odstęp) o **jednym skutku produktowym**: razem wyznaczają **gęstość
+najgęstszego widoku aplikacji**. Wzięcie obu ról naraz zwęża treść wiersza o 2 px.
+⚠ **Trzy powody, dla których nie wolno tego wziąć „przy okazji" M3.4a** — ten sam próg, który zatrzymał
+decyzję **DB** przy wysokości wiersza:
+1. **to decyzja produktowa, nie porządkowa** — gęstość drzewa użytkownik ogląda cały dzień;
+2. ⚠⚠ **to nie jest problem TEGO ekranu**: `Width="15"` i `Spacing="5"` mają w aplikacji **112 wystąpień
+   w 17 plikach**, więc zmiana wyłącznie w drzewie byłaby łataniem pojedynczego widoku (**R7**) i **rozjechałaby
+   drzewo z resztą aplikacji** — czyli pogorszyła spójność w imię zgodności z katalogiem (**R17**);
+3. **R12** — błędna rola jest gorsza od wartości lokalnej: wartość z powodem widać jako dług, rola udaje,
+   że długu nie ma.
+⭐ Dlatego K15 idzie na §13.3 **jako jedno pytanie o gęstość drzewa**, a sweep tych 112 literałów — jeśli
+w ogóle — jest robotą **M4.3**, razem z `Size.Icon` (64 literały, znalezisko M3.3a). Obie listy opisują
+**tę samą** app-wide decyzję o rozmiarze ikony i najprawdopodobniej trzeba je zadać razem.
+
 ⚠⚠ **K12 ISTNIAŁO PRZEZ JEDNĄ ITERACJĘ I ZOSTAŁO WYCOFANE — wpis zachowany jako zapis, nie jako dług.**
 M3.2a dało parze Execute/Cancel wspólną podłogę `MinWidth="156"` i odnotowało kolizję z
 `Size.ActionMinWidth` (100). ⛔ **Użytkownik wycofał samą podłogę po obejrzeniu w działającej aplikacji**
@@ -6952,3 +6969,142 @@ edytor 12 px; teraz nieaktywna ikona). ⛔ **Host ustawia `Data`, rozmiar i wyr�
 ⚠ Poza zakresem, decyzją użytkownika: lokalne `DataGridRow Height` (22/28/30/34) w ośmiu widokach **zostają** —
 część ma pisany powód (CheckBox w wierszu), a pułapka 17 mówi, że reguła opisuje to, co jest dobre, i nie jest
 mandatem na zmianę wszystkiego, co do niej nie pasuje.
+
+---
+
+### §19.26 Iteracja 16 (M3.4a) — wiersz Metadata Explorera: katalog idzie za produktem (2026-08-04)
+
+> **Wynik: zero zmian wizualnych, +2 testy (7243 → 7245), jedna korekta katalogu, jeden wpis do rejestru
+> — i jedna obalona hipoteza wydajnościowa, która była najważniejszą częścią tej iteracji.**
+
+#### §19.26.1 ⭐⭐ NAJPIERW POMIAR — I OBALIŁ HIPOTEZĘ, KTÓRĄ SAM WCZEŚNIEJ ZAPISAŁEM
+
+Handover §3.7a niósł zmierzonego *kandydata na mechanizm* rzadkiego zawieszenia drzewa:
+`SidebarFlatController.OnExpandedChanged` wstawia dzieci **pojedynczo**, a strażnik zbiorczy tej ścieżki
+**nie obejmuje — pomija ją** (`if (_suspendDepth > 0) return;`). Fakt jest prawdziwy. Instrukcja brzmiała
+jednak: **zmierzyć przed jakąkolwiek zmianą**, i to okazało się decydujące.
+
+Nowa sekcja **B4** w `tools/probes/MetadataPerfProbe` (poza solucją, więc bez wpływu na build i testy)
+uruchamia **prawdziwy `SidebarFlatController`** i klika chevron kategorii, której liście już są w pamięci:
+
+| liście | ogon (wiersze pod kategorią) | expand | collapse | powiadomienia | jedna `Rebuild` |
+|---|---|---|---|---|---|
+| 2400 | 0 | **1,0 ms** | 1,1 ms | 2400 | 0,1 ms |
+| 2400 | 3000 | 1,3 ms | 1,5 ms | 2400 | 0,4 ms |
+| 2400 | 6000 | **2,3 ms** | 2,7 ms | 2400 | 0,6 ms |
+| 5000 | 6000 | 4,8 ms | 7,4 ms | 5000 | 1,3 ms |
+
+⭐ **Dla porównania defekt naprawiony przez Layer 1, na TYCH SAMYCH 2400 liściach: 916,9 ms** (sekcja B tej
+samej sondy, przebieg z 2026-08-04 — liczba się nie zmieniła). Czyli ścieżka click-expand jest **Θ(N × ogon)
+ze stałą tak małą, że mieści się w jednej klatce**. ⛔ **Nie dołożono tu strażnika**: zysk 2 ms nie
+uzasadnia zmiany w mechanizmie, który działa, a §3.7a(c) wprost dopuszcza „brak znaleziska" jako wynik.
+
+⚠⚠ **ZAKRES POMIARU, PODANY WPROST, BO BEZ NIEGO TA TABELA KŁAMIE.** Sonda mierzy **warstwę modelu** —
+`ObservableCollection` i algorytm projekcji — **bez Avalonii**. Te 2400 powiadomień `CollectionChanged`
+trafia w działającej aplikacji do **wirtualizującego `ListBox`a**, i ta część pozostaje **niezmierzona**.
+⭐ A objaw zgłoszony przez użytkownika — *„drzewo samo przewija się w dół"* — jest zachowaniem **panelu**,
+nie kolekcji. Pomiar więc **przesunął granicę niewiedzy, nie zamknął tematu**: wykluczył koszt modelu jako
+przyczynę zamarcia, a nie wykluczył wirtualizacji ani kotwiczenia przewijania.
+
+⭐ **Reuse before create — instrument już istnieje i nikt go nie musiał budować.**
+`App/Diagnostics/ScrollTrace.cs` (`EMBERTERN_SCROLL_DIAG=1`) został napisany dokładnie pod ten objaw
+i rozróżnia dwie możliwe przyczyny: *ekstent re-estymowany przez VSP* vs *my przebudowaliśmy drzewo*.
+Przy następnym wystąpieniu u użytkownika daje odpowiedź bez zgadywania.
+
+#### §19.26.2 ⚠ Skojarzenie z zawieszającym się testem — hipoteza SŁABNIE, ale nie upada
+
+Użytkownik prosił, żeby sprawdzić, czy zawieszenie drzewa i zawieszenie `ConnectionExpandBindingProbe`
+mają wspólny mechanizm — **i wprost, żeby tego nie zakładać**. Po pomiarze:
+
+* **słabnie przesłanka główna** — skoro splice modelu kosztuje 2 ms, „drogi splice" nie tłumaczy zawieszenia;
+* **zostaje wcześniejszy, zmierzony trop** (Keyboard Manager etap 5): nazwa testu raportowanego przy
+  zawieszeniu **całej suity jest POZYCYJNA**, a podejrzanym jest teardown sesji / zamykanie pętli dispatchera.
+
+⛔ **Nie łączę tych dwóch obserwacji w raporcie.** Eksperyment rozstrzygający — headless `ListBox`
+z prawdziwą wirtualizacją i wymuszonym rozwinięciem dużej kategorii — **użytkownik zaakceptował jako
+OSOBNY krok po M3.4a**, żeby nie mieszać porządkowania katalogu z eksperymentem, który może nic nie odtworzyć.
+
+#### §19.26.3 Stan zastany wiersza drzewa
+
+| Fakt | Wartość |
+|---|---|
+| `Size.Row.Tree` w katalogu | **20**, **zero konsumentów** |
+| Rzeczywista wysokość | **24** — `MinHeight` w stylu `ListBox.sidebar-list ListBoxItem` |
+| Czy 24 naprawdę rządzi? | ✅ **zmierzone, nie założone**: treść mierzy 15 px (ikona 15, `Text.Compact.LineHeight` 15) przy zerowym paddingu pionowym, więc `MinHeight` wygrywa |
+| Wartości lokalne w szablonie wiersza | **11** |
+
+⭐ **Decyzja DB była już rozstrzygnięta i to ona wyznaczyła kierunek: wiersz ZOSTAJE 24, poprawiamy KATALOG.**
+To jest reguła prowadząca §11 zastosowana dosłownie — *dokument prowadzi produkt, ale prowadzi go tam, gdzie
+produkt jest dobry*. Zejście do 20 nie byłoby porządkowaniem, tylko zmianą gęstości najgęstszego widoku
+aplikacji. **Pułapka 3 po raz czwarty w tym etapie: katalog bywa zamiarem, nie opisem** (`Size.StatusBar`,
+`Size.Row.Tab`, `Pad.Tab`/`Size.Icon`, teraz `Size.Row.Tree`).
+
+#### §19.26.4 Co zrobiono
+
+| # | Zmiana | Skutek wizualny |
+|---|---|---|
+| 1 | `Size.Row.Tree` **20 → 24**, z zapisanym powodem i wskazaniem decyzji DB | — |
+| 2 | `MinHeight="24"` → `{DynamicResource Size.Row.Tree}` — **rola dostaje pierwszego konsumenta** | żaden (ta sama liczba) |
+| 3 | Dwie ikony chevronu `12` → `Size.Icon.Sm` (trafienie dokładne; chevron stoi przy tekście 11 px) | żaden |
+| 4 | `Padding="2,0"`, pole trafienia chevronu 20×20, szerokość kolumny chevronu — **komentarz z powodem w miejscu** | żaden |
+| 5 | Ikona 15 / `Spacing` 5 (×3 szablony) — **komentarz + rejestr K15** | żaden (celowo) |
+
+⚠ **Dlaczego kolumna chevronu 20 px NIE łamie R13** (i dlaczego to jest napisane w kodzie, a nie tylko tutaj):
+liść nie ma chevronu, ale jego etykieta musi stać w tej samej kolumnie co etykieta kategorii — inaczej
+wcięcie przestaje czytać się jako poziom drzewa. R13 zabrania rezerwować miejsce na element, który
+**w danym kontekście nigdy się nie pojawi**; tutaj pojawia się przy każdej kategorii, a pusty slot **niesie
+informację o strukturze**. To jest różnica między pustą dziurą a kolumną.
+
+#### §19.26.5 ⚠⚠ DWA STRAŻNIKI I POWÓD, DLA KTÓREGO ŻADEN NIE JEST HEADLESS
+
+`SidebarRowHeight_ComesFromTheTreeRowRole` + `TreeRowRole_CarriesTheHeightTheProductActuallyShows`
+(oba w `DesignTokenComplianceTests`, oba **zweryfikowane podłożeniem naruszenia** — upadły z komunikatami
+`"24"` vs `"{DynamicResource Size.Row.Tree}"` oraz `"20"` vs `"24"`).
+
+⭐ **Dlaczego czytają ŹRÓDŁO, a nie kontrolkę.** Styl `ListBox.sidebar-list ListBoxItem` mieszka w lokalnym
+bloku `<ListBox.Styles>` w `MainWindow.axaml`, więc gołe `new ListBox { Classes = { "sidebar-list" } }` go
+**nie zobaczy** — jedyną kontrolką, która go widzi, jest `MainWindow`, a headless test konstruujący
+`MainWindow` **zawiesza suite** (pułapka 4).
+
+⛔⛔ **I tu była pokusa warta zapisania: „przenieś ten styl do `ControlStyles.axaml`, żeby dało się go
+przetestować".** To jest **dokładnie ruch, który w M3.3a odtworzył regresję §19.2** — *zmiana MIEJSCA reguły
+jest zmianą jej PRIORYTETU* — a dodatkowo styl jest **celowo** zawężony do jednej listy, żeby nie dotknąć
+listy zapytań zapisanych. ⭐ Odrzucone: **nie przenosimy produktu po to, żeby pasował do narzędzia** (R16 —
+pomiar jest narzędziem, nie celem).
+
+⚠ **Co te testy chronią, a czego nie mówią.** Chronią przed dwiema cichymi awariami przy zielonym buildzie:
+powrotem literału (#284) i literówką w kluczu — bo `{DynamicResource}` na brakującym kluczu **nie rzuca
+wyjątku**, tylko zostawia właściwość przy wartości odziedziczonej (pułapka 1), co tutaj znaczyłoby wiersz
+zapadnięty do 15 px. ⛔ **Nie mówią, jak drzewo wygląda.** Kryterium odbioru jest ekran (R8/R16).
+
+⚠ Drugi test nie jest powtórzeniem pierwszego: pierwszy pilnuje, że widok **czyta rolę**, drugi — że rola
+niesie **liczbę, która przeszła przez oko użytkownika**. Bez niego „migracja na rolę" byłaby zmianą wysokości
+wiersza 24 → 20 przebraną za porządkowanie: zielony build, zielone testy, gęstość zmieniona bez decyzji.
+
+#### §19.26.6 ⭐ STAŁA PROŚBA UŻYTKOWNIKA NA CAŁE M3.4 (2026-08-04)
+
+> *„Podczas M3.4 cały czas miej z tyłu głowy ten stary bug z samoczynnym przewijaniem i zawieszeniem drzewa.
+> […] Jeżeli gdziekolwiek trafisz na mechanizm mogący prowadzić do reentrant layoutów, zapętleń powiadomień
+> albo walki o pozycję `ScrollViewera`, zatrzymaj się i pokaż mi to przed implementacją. To jest dla mnie
+> ważniejsze niż zysk kilku milisekund."*
+
+⭐ **To podnosi stabilność przewijania do rangi kryterium odbioru, na równi z poprawnością i wydajnością** —
+i ustawia priorytet między nimi jednoznacznie. ⚠ Praktycznie, dla każdej większej zmiany w Metadata
+Explorerze: zapytaj nie tylko *„czy to działa i ile kosztuje"*, ale też *„czy to może zapętlić układ,
+powiadomienia albo pozycję `ScrollViewera`"* — i jeśli tak, **zatrzymaj się przed implementacją**.
+⭐ To jest §19.23.9 w wydaniu ogólnym: tamten defekt (pasek przewijania paska zakładek) był **sprzężeniem
+zwrotnym**, którego sonda licząca jeden przebieg układu **nie mogła wykryć z konstrukcji**. Drzewo ma
+tysiące wierszy, wirtualizację i kotwiczenie przewijania — czyli dokładnie te warunki.
+
+#### §19.26.7 Kryteria zakończenia iteracji
+
+| # | Warunek | Stan |
+|---|---|---|
+| 1 | Zakres zamknięty, nic „do dokończenia w następnej" | ✅ |
+| 2 | Każda pozostawiona wartość lokalna ma powód w miejscu | ✅ (padding 2,0 · pole trafienia 20 · K15 ×3) |
+| 3 | Baza strażnika odzwierciedla stan faktyczny | ✅ — licznik `DesignTokenComplianceTests` mierzy `FontSize`/`CornerRadius`/`FontFamily`; **wysokości i rozmiary ikon nigdy nie były w żadnym liczniku**, więc baza się nie zmienia (to samo znalezisko, co §19.0/§3.1) |
+| 4 | Build 0/0 | ✅ |
+| 5 | Testy w trzech partycjach | ✅ **7134 + 57 + 54 = 7245** (+2) |
+| 6 | Smoke + aplikacja obejrzana w obu motywach | ✅ smoke · ⏸ **QA wizualne użytkownika** (zmiana jest neutralna z konstrukcji — te same liczby) |
+| 7 | Wpis w §19 | ✅ ten |
+| 8 | Commit z kodem i opisem | ✅ |

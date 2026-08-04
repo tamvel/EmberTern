@@ -39,10 +39,12 @@
 | **Etap** | M0–M2c ✅ · **M3: iteracja 0 ✅ · M3.1 ✅ · M3.2 ✅ · 🔒 JĘZYK KOLORÓW ✅ · 🔒 M3.3 PASEK ZAKŁADEK ✅ ODEBRANY 2026-08-03** (§19.22–§19.25). ⭐ **M3.1 ZAMKNIĘTE** · ⭐ **H‑3 ZAMKNIĘTE** · ⭐ **H‑5 ZAMKNIĘTE** (K7) · ⭐ **§7.5 ZAMKNIĘTE** — zastąpione przez `color-language.md` · ⭐ **M‑1 ZAMKNIĘTE wewnątrz M3** (zostały 2 literały, oba w M4.3) |
 | **Decyzje DA–DD** | ⭐ **rozstrzygnięte 2026-08-02** — DA: katalog (28 → 24) · **DB: wiersz drzewa ZOSTAJE 24** · DC: likwidacja `AccentIconBrush`/`InfoIconBrush` **odłożona do M4.3/M5** · DD: Commit/Rollback **przechodzą** na `CommitButtonBrush`/`RollbackButtonBrush` |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7243**, zielony w trzech partycjach (**7132 + 57 + 54**). ⚠ Ten wiersz podawał kiedyś **7138 (7032 + 52 + 54)** — wartość sprzed rundy poprawek odbiorczych (`85c8747`, §21). **Mierz przed cytowaniem** |
+| **Suite** | **7245**, zielony w trzech partycjach (**7134 + 57 + 54**). ⚠ Ten wiersz podawał kiedyś **7138 (7032 + 52 + 54)** — wartość sprzed rundy poprawek odbiorczych (`85c8747`, §21). **Mierz przed cytowaniem** |
 | **Smoke** | czysty |
 | **Drzewo** | czyste |
-| ⭐⭐ **NASTĘPNY KROK** | **M3.4a — Metadata Explorer, wiersz drzewa** (pozycja 15 w planie §10). ⚠ Niesie decyzję **DB**, już rozstrzygniętą: **wiersz ZOSTAJE 24** (`Size.Row.Tree` = 20 to zamiar katalogu, nie opis; zejście do 20 zmieniałoby gęstość najgęstszego widoku aplikacji i wymaga oka użytkownika). ⭐ **§0.1 stawia tę powierzchnię wysoko** — użytkownik patrzy na nią cały dzień. Potem M3.4b → M3b → ⛔ brama §13.3 |
+| ⭐⭐ **NASTĘPNY KROK** | **Eksperyment headless: wirtualizacja vs zawieszenie drzewa** (§3.7a(b), zaakceptowany przez użytkownika jako **osobny krok po M3.4a**), a po nim **M3.4b — przegląd menu kontekstowych** (pozycja 16 w planie §10). Potem M3b → ⛔ brama §13.3 |
+| ✅ **M3.4a ZROBIONE** | **2026-08-04** (§19.26). Katalog poszedł za produktem: `Size.Row.Tree` **20 → 24** (decyzja **DB**), `MinHeight` przeszło na rolę — **token dostał pierwszego konsumenta** — chevron na `Size.Icon.Sm`, kolizja 1 px do rejestru jako **K15**. Zero zmian wizualnych, +2 strażników. ⭐⭐ **Najważniejszy wynik iteracji jest negatywny: pomiar OBALIŁ hipotezę o mechanizmie zawieszenia** — rozwinięcie kliknięciem 2 400 liści kosztuje **2,3 ms** wobec 916,9 ms naprawionego defektu Layer 1, więc **nie dokładamy tam strażnika** |
+| ⛔⛔ **STAŁA PROŚBA UŻYTKOWNIKA NA CAŁE M3.4** (2026-08-04) | **Stabilność przewijania drzewa jest kryterium odbioru na równi z poprawnością i wydajnością — i stoi WYŻEJ niż zysk kilku milisekund.** Każdą większą zmianę w Metadata Explorerze oceniaj również pod tym kątem. ⚠ Jeżeli trafisz na mechanizm mogący dać **reentrant layout**, **zapętlenie powiadomień** albo **walkę o pozycję `ScrollViewera`** — ⛔ **zatrzymaj się i pokaż to użytkownikowi PRZED implementacją**. ⭐ To jest §19.23.9 uogólnione: tamten defekt był sprzężeniem zwrotnym, którego sonda licząca jeden przebieg układu **nie mogła wykryć z konstrukcji**, a drzewo ma tysiące wierszy, wirtualizację i kotwiczenie przewijania |
 | 🔒 **PASEK ZAKŁADEK ZAMKNIĘTY** | M3.3a + M3.3b + M3.3c **dostarczone i odebrane** (§19.25). ⛔ Nie wracać do niego bez realnego defektu funkcjonalnego |
 | **⚠ TRYB PRACY** | ⭐ **R15** (§5): wielkość iteracji idzie za **niepewnością**. ⭐⭐ **Wzorzec z M3.3, potwierdzony przez użytkownika:** podetapy o ustalonej architekturze **idą bez przerwy na odbiór**, a przystanek jest **po całej powierzchni**. Powrót do użytkownika wcześniej: dokument nie rozstrzyga · realny konflikt projektowy · zmiana pogorszyłaby produkt mimo zgodności · decyzja produktowa (np. gęstość, widoczność opcji) |
 | ⭐ **PRZED KAŻDYM PODETAPEM** | ⚠⚠ **Sprawdź w KODZIE, czy przedmiot podetapu jeszcze istnieje.** M3.3a wszedł z zakresem, który M3.1a już dostarczyła — **plan etapu starzeje się tak samo cicho jak string i jak komentarz** (#284, pułapki 20/21). Kosztowało to jedną iterację; drugi raz nie musi (§19.22.1) |
@@ -266,6 +268,19 @@ zanim cokolwiek zostanie zmienione. ⛔ Nie „naprawiać" jej wcześniej — mo
 pomijalny, a prawdziwa przyczyna leży gdzie indziej (np. w kotwiczeniu przewijania albo w `Dispatcher.Post`
 z `OnIsExpandedChanged`).
 
+> ✅ **ZMIERZONE W M3.4a (2026-08-04) — HIPOTEZA UPADŁA, I ZAKAZ POWYŻEJ OKAZAŁ SIĘ SŁUSZNY.**
+> Przypadek **B4** sondy: rozwinięcie kliknięciem 2 400 liści przy 6 000 wierszy ogona = **2,3 ms**
+> (zwinięcie 2,7 ms); 5 000 liści + 6 000 ogona = 4,8 / 7,4 ms. **Kształt szacunku się potwierdził**
+> (Θ(N) powiadomień, Θ(N × ogon) przesunięć — widać to w kolumnie ogona), ale **stała jest tak mała, że
+> całość mieści się w jednej klatce**. Dla porównania defekt naprawiony przez Layer 1 na tych samych
+> 2 400 liściach: **916,9 ms**. ⛔ **Nie dokładamy tam strażnika** — zysk 2 ms nie uzasadnia zmiany
+> w działającym mechanizmie.
+> ⚠⚠ **ALE ZAKRES: sonda mierzy MODEL, nie PANEL.** 2 400 powiadomień `CollectionChanged` trafia
+> w aplikacji do **wirtualizującego `ListBox`a** i ta część **pozostaje niezmierzona** — a zgłoszony objaw
+> („drzewo samo przewija się w dół") jest zachowaniem **panelu**, nie kolekcji. Pomiar **przesunął granicę
+> niewiedzy, nie zamknął tematu**. Pełny zapis: `metadata-refresh-analysis.md` **§8**, `product-polish.md`
+> **§19.26.1**.
+
 #### (b) ⚠ Skojarzenie użytkownika: czy to ten sam mechanizm, co zawieszający się test?
 
 > *„Nie zakładaj, że tak jest — może to być zwykły przypadek. Ale jeżeli oba zjawiska prowadzą do tego
@@ -285,6 +300,12 @@ zamykanie pętli dispatchera**, a nie asercja.
 ⭐ **Uczciwy wniosek: to DWIE różne obserwacje, nie jedna.** Hipoteza użytkownika jest sensowna
 i **warto ją przetestować**, ale nie jest ustalona. ⛔ Nie łączyć ich w raporcie, dopóki pomiar tego
 nie pokaże.
+
+> ⚠ **STAN PO M3.4a: hipoteza SŁABNIE, ale nie upada.** Skoro splice modelu kosztuje 2 ms (wyżej),
+> „drogi splice" **przestaje tłumaczyć zawieszenie** — czyli znika przesłanka główna. Zostaje zmierzony
+> wcześniej trop **teardownu sesji** i pozycyjność raportowanej nazwy. ⛔ Nadal **nie łączę tych dwóch
+> obserwacji**. Eksperyment rozstrzygający **przeniesiony na osobny krok 15b** decyzją użytkownika, żeby
+> nie mieszać porządkowania katalogu z eksperymentem, który może nic nie odtworzyć.
 
 ⭐⭐ **Test rozstrzygający, tani i możliwy w M3.4:** jeżeli mechanizmem jest inkrementalny splice, to
 **wymuszenie rozwinięcia dużej kategorii w teście headless powinno odtworzyć zawieszenie
@@ -664,7 +685,8 @@ poza filtrem psuje podział po cichu, a klasa niepotrzebnie **w** filtrze zaciem
 | ✅ **12** | **M3.3a** | **ZROBIONE, PRZESKALOWANE PRZEZ UŻYTKOWNIKA** (§19.22). ⭐⭐ Zakres z planu (geometria, `Size.Row.Tab`, wskaźnik) **był już dostarczony przez M3.1a** — pułapka 20 na własnym planie. Iteracja domknęła zamiast tego **dług techniczny paska**: 12 → 5 wartości lokalnych, komplet reguł zakładki aktywnej w `ControlStyles.axaml`, ostatni literał M‑1. ⚠⚠ **Przeniesienie stylu ODTWORZYŁO regresję §19.2** — lokalne `Background` biło setter; złapał to nowy test, recepta: oba stany jako setter + kotwica `workspace-tab`. ⚠ **K9/K10 dotyczą `TabItem`, nie tego paska.** Nowe **K12–K14** (paddingi/margines = gęstość paska) → §13.3 | — |
 | ✅ **13** | **M3.3b** | **ZROBIONE** (§19.23). Dwa tryby na JEDNYM `ItemsControl` — tryb robią kierunki przewijania `ScrollViewera` · licznik przepełnienia liczy zakładki **niewidoczne**, z rzeczywistego układu · własna kategoria **Tabs** w Settings Center (decyzja użytkownika) · `CurrentSchemaVersion` bez zmian. ⚠ Dwa strażniki Settings Center zadziałały za pierwszym razem | ✅ |
 | ✅ **14** | **M3.3c** | **ZROBIONE** (§19.24). Menu 9 pozycji, zero nowej chromy. ⭐⭐ Bramka reguły #11 dostała ZASIĘG (3 → 4 wejścia) — `scope == null` znaczy „wszystkie", więc trzy stare wejścia nietknięte. ⭐ Każda pozycja ma własne `CanExecute`, przeliczane w jednym punkcie przy zmianie kolekcji. ⭐ Reveal ZAZNACZA I PRZEWIJA, a rozwinięcie kategorii jest poczekane (inaczej działałoby dopiero za drugim razem) | — |
-| ⭐⭐ **15** | **M3.4a** | **← TU ZACZYNASZ.** Metadata Explorer — wiersz drzewa | **DB** (wiersz **zostaje 24**) |
+| ✅ **15** | **M3.4a** | **ZROBIONE** (§19.26). Katalog za produktem: `Size.Row.Tree` **20 → 24**, `MinHeight` + chevron na role (**pierwszy konsument roli**), **K15** do rejestru, zero zmian wizualnych. ⭐⭐ Główny wynik jest **negatywny i to jest sukces**: pomiar B4 obalił hipotezę o mechanizmie zawieszenia (**2,3 ms** vs 916,9 ms defektu Layer 1) → ⛔ nie dokładamy strażnika. ⚠⚠ Zakres pomiaru podany wprost — mierzy **model**, nie panel; wirtualizacja pozostaje niezmierzona. ⛔⛔ Odrzucono przeniesienie stylu do `ControlStyles.axaml` „żeby dało się go przetestować" — to ruch, który w M3.3a odtworzył regresję §19.2 | **DB** ✅ |
+| ⭐⭐ **15b** | **eksperyment headless** | **← TU ZACZYNASZ.** `ListBox` z prawdziwą wirtualizacją + wymuszone rozwinięcie dużej kategorii — czy zawieszenie odtwarza się **deterministycznie**. ⭐ Jeśli tak: `ConnectionExpandBindingProbe` przestaje być „felerny" i staje się **testem regresyjnym prawdziwego defektu**. Jeśli nie: hipoteza upada i **ten wynik też się zapisuje**. ⚠ Pułapka 4 — asercje na najtańszej kontrolce, dołączenie do `HeadlessCollection` **i do filtra partycji** | — |
 | 16 | **M3.4b** | Przegląd menu kontekstowych | — |
 | 17 | **M3b** | Podłączenie pozostałych operacji do paska postępu (16 VM, 3 ścieżki `IProgress`)<br>⏸ **+ pełna semantyka kolorów railu** — odłożona tu świadomie przez użytkownika, z pomiarem (§19.4.4) | — |
 | 18 | ⛔ **brama** | **§13.3** — cztery powierzchnie **jednocześnie**, żywa baza, oba motywy | — |

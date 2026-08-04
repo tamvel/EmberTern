@@ -397,3 +397,66 @@ bo przy operacjach zbiorczych projekcję i tak domyka `EndUpdate → Rebuild`.
 zgłoszonego zawieszenia jest co innego — kotwiczenie przewijania w wirtualizującym `ListBox`ie albo
 `Dispatcher.Post` w `MetadataNodeViewModel.OnIsExpandedChanged`. **Instrument istnieje**
 (`tools/probes/MetadataPerfProbe`, schemat 2 400 tabel); brakuje przypadku „rozwiń kliknięciem".
+
+---
+
+## 8. ⭐⭐ POMIAR WYKONANY (M3.4a, 2026-08-04) — ścieżka „rozwiń kliknięciem" NIE jest mechanizmem zawieszenia
+
+> Sekcja 7 kończyła się zapisem: *„brakuje przypadku «rozwiń kliknięciem»"* i wprost zakazywała
+> naprawiania go przed pomiarem. Pomiar wykonano. **Zakaz okazał się słuszny — hipoteza upadła.**
+
+Przypadek **B4** dopisany do `tools/probes/MetadataPerfProbe` uruchamia **prawdziwy
+`SidebarFlatController`** i przełącza `IsExpanded` kategorii, której liście **już są w pamięci** (czyli
+ścieżka omijająca strażnika zbiorczego, bo `Children` się nie zmienia). Kolumna `ogon` to liczba wierszy
+stojących **pod** kategorią — każdy `Insert`/`RemoveAt` je przesuwa.
+
+| liście | ogon | expand | collapse | powiadomienia | jedna `Rebuild` (dla skali) |
+|---|---|---|---|---|---|
+| 2400 | 0 | **1,0 ms** | 1,1 ms | 2400 | 0,1 ms |
+| 2400 | 3000 | 1,3 ms | 1,5 ms | 2400 | 0,4 ms |
+| 2400 | 6000 | **2,3 ms** | 2,7 ms | 2400 | 0,6 ms |
+| 5000 | 6000 | 4,8 ms | 7,4 ms | 5000 | 1,3 ms |
+
+**Szacunek z sekcji 7 potwierdził się co do KSZTAŁTU** — Θ(N) powiadomień, Θ(N × ogon) przesunięć,
+widoczne w kolumnie `ogon`: 0 → 6000 podnosi koszt z 1,0 do 2,3 ms. **Ale stała jest tak mała, że całość
+mieści się w jednej klatce.** Dla porównania defekt naprawiony przez Warstwę 1, na tych samych 2 400
+liściach: **916,9 ms** (sekcja 2, przebieg powtórzony 2026-08-04 — liczba niezmieniona).
+
+### 8.1 ⛔ Decyzja: nie dokładamy tu strażnika
+
+Zysk 2 ms nie uzasadnia zmiany w mechanizmie, który działa. Zapis w sekcji 7 przewidywał ten wynik
+(*„może się okazać, że koszt jest pomijalny"*) i to jest **poprawny rezultat analizy**, nie jej brak.
+
+### 8.2 ⚠⚠ Zakres pomiaru — bez tego akapitu tabela wyżej wprowadza w błąd
+
+Sonda mierzy **warstwę modelu**: `ObservableCollection` i algorytm projekcji, **bez Avalonii**.
+W działającej aplikacji te **2 400 powiadomień `CollectionChanged`** trafia do **wirtualizującego
+`ListBox`a**, i **ta część pozostaje niezmierzona**.
+
+⭐ A zgłoszony objaw — *„drzewo samo zaczyna przewijać się w dół"* — jest zachowaniem **panelu**, nie
+kolekcji. Pomiar więc **przesunął granicę niewiedzy, nie zamknął tematu**:
+
+| Wykluczone | Nadal otwarte |
+|---|---|
+| koszt projekcji jako przyczyna zamarcia UI | kotwiczenie przewijania w wirtualizującym `ListBox`ie |
+| | re-estymacja ekstentu przez `VirtualizingStackPanel` przy N pojedynczych wstawieniach |
+| | `Dispatcher.Post` w `MetadataNodeViewModel.OnIsExpandedChanged` |
+
+### 8.3 ⭐ Następny krok jest zaplanowany i ma instrument
+
+**Zaakceptowany przez użytkownika jako osobny krok po M3.4a:** eksperyment headless z prawdziwym
+`ListBox`em i wirtualizacją, wymuszający rozwinięcie dużej kategorii. Jeżeli odtworzy zawieszenie
+**deterministycznie**, długoletni „felerny test" `ConnectionExpandBindingProbe` staje się **testem
+regresyjnym prawdziwego defektu**. Jeżeli nie odtworzy — hipoteza upada i **ten wynik też należy zapisać**.
+⚠ Ryzyko: klasa headless konstruująca `MainWindow` zawiesza suite (#94/#226/#286) — asercje na najtańszej
+kontrolce, dołączenie do `HeadlessCollection` **i do filtra partycji**.
+
+⭐ **Instrument na żywą aplikację istnieje i nie trzeba nic budować:** `App/Diagnostics/ScrollTrace.cs`
+(`EMBERTERN_SCROLL_DIAG=1`) rozróżnia *ekstent re-estymowany przez VSP* od *my przebudowaliśmy drzewo*.
+Napisano go dokładnie pod ten objaw.
+
+### 8.4 ⚠ Warstwy 2 i 3 pozostają otwarte, bez zmian
+
+Ten pomiar niczego w nich nie rozstrzyga. Warstwa 2 (pierwszorzędne „co się zmieniło" na wszystkich
+ścieżkach DDL + zachowanie przewijania i zaznaczenia), Warstwa 3 (higiena zapytań) i **niezmierzony koszt
+startu** czekają na własny etap wydajnościowy po M3. ⛔ M3.4 ich nie dotyka.
