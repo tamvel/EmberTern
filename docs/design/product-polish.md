@@ -8030,3 +8030,95 @@ z rosnącym procentem, i gaśnie po zakończeniu. Nieudane połączenie: pasek g
 Rozłączenie w trakcie ładowania: pasek gaśnie. ⏸ Do obejrzenia, czy w trakcie zablokowanej fazy 2 okno
 faktycznie zostaje z etykietą „Connecting to database…", a nie z pustym paskiem — to jest jedyne miejsce,
 gdzie zachowanie zależy od kolejności zdarzeń, której nie da się rozstrzygnąć testem bez żywego serwera.
+
+---
+
+### §19.35 Iteracja 23 (M3b.3) — rail: ZAŁOŻENIE POTWIERDZONE, REALIZACJA ZABLOKOWANA PALETĄ (2026-08-04)
+
+> **Zakres:** ocena railu na komplecie źródeł (§19.4.4 odłożyło ją tu właśnie dlatego, że *„decyzja podjęta
+> teraz opierałaby się na dwóch przypadkach z pięciu"*). Wynik: **zero zmian w kodzie** — i to jest wynik,
+> nie brak wyniku. Suita i build bez zmian.
+
+#### §19.35.1 ⭐⭐ Pomiar pokazał, że railowi brakuje nie decyzji, a PALETY
+
+Po podłączeniu wszystkich źródeł (M3b.1, M3b.2) sekcja postępu raportuje **pięć** aktywności, a
+`RailBrushKey` zna **trzy**. Czyli powstał stan, w którym pasek statusu mówi „Importing data… 110 200 rows",
+a rail pokazuje **spoczynek**. To była realna niespójność do rozstrzygnięcia — i użytkownik potwierdził
+kierunek: *„różne typy aktywności mają być rozróżniane kolorem raila… użytkownik może kątem oka rozpoznać,
+z czym ma do czynienia, a pasek statusu dostarcza już szczegółowego opisu operacji"*.
+
+**Ale zestawu nie da się dziś zbudować, i to jest zmierzone, nie oszacowane.**
+
+`Border.Rail` = `0,2,0,0` — **dwupikselowa** linia. Severity zajmuje odcień **0°** (czerwień) i **~36°**
+(amber). A **wszystkie** istniejące barwy tożsamości mieszczą się w pasmie **149–215°**:
+
+| kandydat | Dark: kontrast / odcień | Light |
+|---|---|---|
+| `ConnectedColor` | 7,37:1 / **154°** | 4,56:1 / 149° |
+| `DebugLoopIconColor` | 7,02:1 / **174°** | 4,38:1 / 174° |
+| `IconColor_Query` | 8,03:1 / **200°** | 6,58:1 / 199° |
+| `AccentIconColor` | 5,17:1 / **209°** | 4,81:1 / 215° |
+
+⛔ **Każda para koliduje:** zapytanie↔trace **9°**, połączenie↔debugger **20°**, debugger↔trace **26°**,
+zapytanie↔debugger **35°**. W dwupikselowej linii to są te same kolory. Pięć rozróżnialnych barw wymagałoby
+odcieni, których aplikacja **nigdy nie używała** (fiolet ~280°, magenta ~320°) — czyli poszerzenia palety
+produktu, nie zaprojektowania railu.
+
+#### §19.35.2 ⭐ Decyzja użytkownika — i dlaczego jest lepsza od mojej rekomendacji
+
+Rekomendowałem **mniej kategorii** (severity · „praca biegnie" · debugger), bo to mieści się w istniejącej
+palecie. Użytkownik to **odrzucił**, i argument jest mocniejszy:
+
+> *„Nie zmieniałbym teraz założeń raila… Jeśli obecna paleta nie pozwala uzyskać wystarczająco
+> rozróżnialnych kolorów, to potraktowałbym to jako osobny temat dotyczący systemu kolorów aplikacji,
+> a nie samego raila. Nie chciałbym rezygnować z rozróżniania aktywności tylko dlatego, że obecna paleta
+> okazała się zbyt uboga."*
+
+⭐⭐ **To jest reguła metodologiczna, nie preferencja: ograniczenie NARZĘDZIA nie jest argumentem za
+zmniejszeniem WYMAGANIA.** Moja rekomendacja brała ubóstwo palety za daną i cięła cel pod nią — czyli
+robiła dokładnie to, co pułapka 17 opisuje z drugiej strony: dopasowywała produkt do stanu, w jakim
+zastała narzędzia. Poprawna kolejność jest odwrotna: wymaganie zostaje, a niewystarczające narzędzie staje
+się **własnym tematem**.
+
+#### §19.35.3 ⛔ Dlaczego NIE zaimplementowałem niczego
+
+`color-language.md` **§0.5** jest bramką nadrzędną: *czy użytkownik rozpozna akcję SZYBCIEJ?* Przy pięciu
+barwach w 2 px, z których trzy trzeba by wymyślić, a dwie i tak są nierozróżnialne, uczciwa odpowiedź to
+**„nie wiadomo"** — a §0.5 mówi wtedy: zatrzymaj się i wróć z propozycją. Zatrzymanie **jest** poprawnym
+wykonaniem tej reguły.
+
+⚠ Analogia do Visual Studio, na którą powołuje się kierunek, rozróżnia tryby **kolorem całego paska** — a to
+użytkownik odrzucił wcześniej wprost (zapis ⛔ stoi w `MainWindow.axaml`). Analogia obowiązuje więc dla
+*„rozróżniaj kolorem"*, nie dla **nośnika**.
+
+#### §19.35.4 ⚠ Dwa defekty znalezione po drodze — jadą razem z tematem palety
+
+1. ⛔ **`AccentBrush` na railu w Dark to 2,89:1**, poniżej progu §10 (3:1 dla elementu UI). §19.4.4 zapisało
+   barwy, ale **nie policzyło kontrastu** — to nowe znalezisko. ⚠ `AccentColor` jest tokenem
+   współdzielonym (przyciski, fokus), więc to nie jest korekta lokalna.
+2. ⛔⛔ **Debugger ma DWIE barwy na jeden fakt w tym samym pasku statusu:** chip maluje `AccentIconBrush`,
+   rail maluje `DebugCurrentLineBarBrush` — token **paska bieżącej linii z edytora**. Żadna z nich nie jest
+   barwą tożsamości debuggera, a `AccentIconBrush` jest jednym z dwóch tokenów przewidzianych do likwidacji
+   (decyzja **DC**).
+
+⭐ Obu **nie naprawiam pojedynczo**, i to jest zgodne z tym, co użytkownik powiedział iterację wcześniej:
+*„lepiej rozstrzygnąć to teraz, zamiast później korygować pojedyncze kolory"*. Wchodzą do tematu palety.
+
+#### §19.35.5 ⚠ Korekta zapisu w §19.4.4
+
+Notatka *„trace: w Light ciemny szaroniebieski — jako sygnał słaby"* **nie dotyczy kontrastu**: `trace` ma
+**najlepszy kontrast z całego zestawu** (8,03:1 Dark / 6,58:1 Light). Jeśli „słaby", to w sensie skojarzenia
+barwy, nie widoczności. ⭐ To pułapka 20 w miniaturze — zapis bez podanego zakresu pomiaru czyta się jako
+szerszy, niż jest.
+
+#### §19.35.6 Co zostaje otwarte i gdzie
+
+| # | Temat | Dom |
+|---|---|---|
+| **P‑1** | ⭐⭐ **Paleta aplikacji jest za uboga na rozróżnianie aktywności** — 66° pasma na pięć kategorii. Wymaga decyzji o poszerzeniu (fiolet/magenta) albo o innym nośniku niż 2 px | **nowy temat systemu kolorów**, poza M3 |
+| **P‑2** | `AccentBrush` na railu 2,89:1 w Dark | z **P‑1** |
+| **P‑3** | debugger: dwie barwy na jeden fakt (chip vs rail) | z **P‑1** |
+| ⏸ | rail nie zna skryptu/importu/połączenia — pasek statusu mówi „trwa", rail „spoczynek" | rozwiązuje **P‑1** |
+
+⛔ **M3b.3 jest ZAMKNIĘTE jako przeanalizowane i odłożone.** Założenie (rail rozróżnia aktywności kolorem)
+**zostaje ratyfikowane jako cel**; blokadą jest paleta, nie decyzja.

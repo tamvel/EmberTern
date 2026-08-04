@@ -377,6 +377,53 @@ iteracja czytała się jako wyszarzenie.
 | **O‑4** | ⭐ **Connect w pasku tytułu — zdejmować niebieski czy nie?** §8.2 mówi **R‑7 ⚪** („nie otwiera modułu, działa na zaznaczeniu") i formalnie ma rację. ⛔ **Nie wykonane 2026-08-03, świadomie**, bo §0.5 odpowiada **„nie wiadomo"**: Connect jest **główną akcją tego paska**, a niebieski jest dziś jedyną rzeczą, która odróżnia go od Edytuj / Kopiuj / Rozłącz / Połącz ponownie. Po zdjęciu koloru cała lewa część paska staje się jednolicie szara poza czerwonym koszem — możliwe, że rozpoznanie **spowolni**, a to jest dokładnie mechanizm M3.2b. ⚠ Zauważ, że §11 sam nie ponumerował tego wiersza — prawdopodobnie z tego samego powodu. **Do rozstrzygnięcia w pełnym QA §13.3, na całym pasku naraz** |
 | **O‑5** | **Security Manager niesie `IconColor_Role`**, czyli kolor RODZAJU (S1), choć jest przyciskiem otwierającym moduł (R‑6). Jedyny taki przypadek wśród sześciu narzędzi paska. Możliwy świadomy wyjątek („to jest o rolach") albo pozostałość. Poza K2–K7; do §13.3 |
 
+### §9.2 ⭐⭐ P‑1 — PALETA APLIKACJI JEST ZA UBOGA NA ROZRÓŻNIANIE AKTYWNOŚCI (zmierzone 2026-08-04)
+
+> **Nowy, osobny temat systemu kolorów** — otwarty w M3b.3 (`product-polish.md` §19.35) i **świadomie NIE
+> rozwiązywany tam**. Decyzja użytkownika: *„Jeśli obecna paleta nie pozwala uzyskać wystarczająco
+> rozróżnialnych kolorów, to potraktowałbym to jako osobny temat dotyczący systemu kolorów aplikacji, a nie
+> samego raila. Nie chciałbym rezygnować z rozróżniania aktywności tylko dlatego, że obecna paleta okazała
+> się zbyt uboga."*
+
+**Ratyfikowany cel:** rail paska statusu rozróżnia **typ aktywności** kolorem, żeby użytkownik rozpoznawał
+kątem oka, co robi aplikacja; szczegół niesie tekst sekcji 2/4. Dotyczy pięciu aktywności: połączenie ·
+zapytanie SQL · Script Executor · import · debugger (+ trace jako tło pracy), obok severity.
+
+**Blokada, zmierzona:** `Border.Rail` = **2 px**. Severity zajmuje odcień **0°** i **~36°**. A wszystkie
+istniejące barwy tożsamości mieszczą się w pasmie **149–215°**:
+
+| kandydat | Dark: kontrast / odcień | Light |
+|---|---|---|
+| `ConnectedColor` | 7,37:1 / **154°** | 4,56:1 / 149° |
+| `DebugLoopIconColor` | 7,02:1 / **174°** | 4,38:1 / 174° |
+| `IconColor_Query` | 8,03:1 / **200°** | 6,58:1 / 199° |
+| `AccentIconColor` | 5,17:1 / **209°** | 4,81:1 / 215° |
+
+⛔ Odległości: zapytanie↔trace **9°**, połączenie↔debugger **20°**, debugger↔trace **26°**,
+zapytanie↔debugger **35°** — w 2‑pikselowej linii to te same kolory.
+
+**Dwie drogi, obie do decyzji użytkownika, żadna nie mieści się w podetapie railu:**
+1. **poszerzyć paletę** o odcienie, których produkt nie używa (fiolet ~280°, magenta ~320°);
+2. **zmienić nośnik** — 2 px nie unosi rozróżniania odcieni. ⚠ Ale ⛔ §8.5 specyfikacji zabrania wzrostu
+   paska statusu, a stała grubość railu jest dziś gwarancją, że zmiana stanu nie przesuwa układu.
+
+**Jadą razem z P‑1, bo korygowanie ich pojedynczo użytkownik odrzucił:**
+* **P‑2** — `AccentBrush` na railu daje w Dark **2,89:1**, poniżej progu §10 (3:1 dla elementu UI).
+  ⚠ `AccentColor` jest współdzielony (przyciski, fokus), więc to nie jest korekta lokalna.
+* **P‑3** — ⛔⛔ **debugger ma DWIE barwy na jeden fakt w tym samym pasku statusu:** chip maluje
+  `AccentIconBrush`, rail maluje `DebugCurrentLineBarBrush`, czyli token **paska bieżącej linii z edytora**.
+  Żadna nie jest barwą tożsamości debuggera, a `AccentIconBrush` jest przewidziany do likwidacji (**DC**).
+
+⚠ **Korekta zapisu z `product-polish.md` §19.4.4:** notatka *„trace w Light — jako sygnał słaby"* **nie
+dotyczy kontrastu**; `trace` ma najlepszy kontrast z całego zestawu. Jeśli „słaby", to w sensie skojarzenia
+barwy.
+
+⭐⭐ **Lekcja metodologiczna, szersza niż kolor: ograniczenie NARZĘDZIA nie jest argumentem za zmniejszeniem
+WYMAGANIA.** Rekomendowałem cięcie liczby kategorii pod obecną paletę; użytkownik to odrzucił i miał rację —
+poprawna kolejność jest odwrotna: wymaganie zostaje, a niewystarczające narzędzie staje się własnym tematem.
+
+---
+
 ### §9.1 Opcje dla O‑2
 
 | Wariant | Comment | Uncomment | Koszt |

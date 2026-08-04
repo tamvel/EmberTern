@@ -728,8 +728,31 @@ noted.
   because `RefreshAsync` does the same work with its own `try/finally`, so wiring it "while we are here" would
   be one line nobody would notice. ⛔ No cancel for connecting: there is no command for it, and inventing one
   would be adding a feature under cover of wiring progress.
-  ⏸ **Next: M3b.3 — the rail on a live screen** (the user's call: *if the current colours turn out to be
-  enough, there is no need to complicate them*), then ⛔ the §13.3 gate.
+  ✅ **M3b.3 CLOSED AS ANALYSED + DEFERRED (2026-08-04) — zero code changes, and that is the result**
+  (`product-polish.md` §19.35). With every source wired the progress section reports **five** activities while
+  `RailBrushKey` knows **three**, so the status bar could say *"Importing data… 110 200 rows"* while the rail
+  showed **rest**. The user reconfirmed the direction — the rail distinguishes activity types by colour — but
+  ⛔ **the set cannot be built today, and that is measured, not estimated:** the rail is **2 px**, severity owns
+  hue **0°** and **~36°**, and **every** existing identity colour sits in the **149–215°** band
+  (`ConnectedColor` 154° · `DebugLoopIconColor` 174° · `IconColor_Query` 200° · `AccentIconColor` 209°), so
+  every pair collides (9–35° apart). Five distinguishable hues would need colours the product has never used.
+  ⭐⭐ **The lesson is bigger than colour: a limitation of the TOOL is not an argument for shrinking the
+  REQUIREMENT.** I recommended cutting the number of categories to fit the current palette; the user rejected
+  that — *"I would not give up distinguishing activities just because the palette turned out too poor"* — and
+  was right. The correct order is the reverse: the requirement stands and the insufficient tool becomes its own
+  topic. ⭐ Stopping was also the correct execution of `color-language.md` **§0.5**: with three of five hues
+  needing to be invented, the honest answer to *"will the user recognise it faster?"* is **"don't know"**.
+  ⏸ **New topic P‑1 in `color-language.md` §9.2** (the palette's own question), carrying two defects found on
+  the way, deliberately **not** fixed one at a time: **P‑2** `AccentBrush` on the rail is **2,89:1 in Dark**,
+  below §10's 3:1 (⚠ `AccentColor` is shared, so it is not a local correction), and **P‑3** ⛔⛔ **the debugger
+  has TWO colours for ONE fact in the same status bar** — the chip paints `AccentIconBrush`, the rail paints
+  `DebugCurrentLineBarBrush`, i.e. the **editor's** current-line token; neither is a debugger identity colour
+  and `AccentIconBrush` is already slated for retirement (DC).
+  ⚠ Correction to §19.4.4 in passing: its note *"trace reads weak in Light"* is **not about contrast** — trace
+  has the **best** contrast of the set (8,03:1 / 6,58:1).
+  ⭐ **M3b IS NOW CLOSED IN FULL** (§19.31 · §19.32 · §19.33 · §19.34 · §19.35).
+  ⏸⏸ **Next: ⛔ the §13.3 GATE** — the four persistent surfaces reviewed *together*, on a real database, in
+  both themes, for **visual reception, not document compliance**. It blocks M4.
   ⭐ **A ready startup prompt for the next session:**
   [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md).
 - **🔬 THE OLD TREE DEFECT IS NOW REPRODUCIBLE BY THE USER, AND AN INSTRUMENT IS SHIPPED FOR IT

@@ -38,13 +38,13 @@ podsekcję) · handoverów M2a/M2b/M2c.
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | M3b.2 (ładowanie połączenia w sekcji postępu). ⚠ **Sprawdź `git log --oneline -1` i `git status`** zamiast wierzyć temu wierszowi |
+| **Ostatni commit** | M3b.3 — analiza railu, zero zmian w kodzie. ⚠ **Sprawdź `git log --oneline -1` i `git status`** zamiast wierzyć temu wierszowi |
 | **Build** | 0 błędów / 0 ostrzeżeń |
 | **Suite** | **7310** zielony w trzech partycjach (**7193 + 63 + 54**). ⚠⚠ **Mierz przed cytowaniem** — ta liczba starzeje się najszybciej w całym dokumencie |
 | **Smoke** | czysty |
-| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · 🔒 M3.4 ✅ · M3b.1 ✅ · M3b.1 A+B+C ✅ · M3b.1d ✅ · M3b.2 ✅** |
-| ⭐⭐ **START** | **M3b.3 — rail na żywym ekranie** (pozycja 17c w planie §10 handovera). ⭐ Brak zmiany jest tam dopuszczalnym wynikiem |
-| **Po M3b.3** | ⛔ **brama §13.3**, potem podsumowanie zamykające M3 + handover M4 |
+| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · 🔒 M3.4 ✅ · 🔒 M3b ✅ (M3b.1 · A+B+C · M3b.1d · M3b.2 · M3b.3 odłożone)** |
+| ⭐⭐ **START** | ⛔ **BRAMA §13.3** — cztery powierzchnie trwałe JEDNOCZEŚNIE, żywa baza, oba motywy. ✅ M3b zamknięte w całości |
+| **Po bramie** | Podsumowanie zamykające M3 + CLAUDE.md + handover M4 + prompt startowy |
 
 ### 2.1 Co zamknęło M3.4 i M3b.1
 
