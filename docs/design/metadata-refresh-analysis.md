@@ -628,3 +628,90 @@ używać mini-języka wykonywanego dopiero w produkcji.**
 
 ⭐ Zweryfikowane po naprawie na działającej aplikacji: proces żyje, `EXC FIRST-CHANCE` samotestu obecny,
 numeracja ciągła, **0 wpisów porzuconych przez błąd instrumentu**.
+
+---
+
+## 11. 🐞 PRZYCZYNA ZNALEZIONA I NAPRAWIONA (2026-08-04) — `AutoScrollToSelectedItem`
+
+> Sekcja 10 dostarczyła instrument. Użytkownik odtworzył defekt i przysłał log. **Ta sekcja jest
+> odpowiedzią, po dwóch latach istnienia objawu.**
+
+### 11.1 Mechanizm — z dokładnymi znacznikami czasu z logu
+
+| t (ms) | Zdarzenie |
+|---|---|
+| 122 502 | `SelectionChanged added=1 removed=1` — **użytkownik kliknął wiersz** |
+| 123 041 | **ostatni `heartbeat`** |
+| 123 422 | koniec `ChevronClick` — kategoria rozwinięta, wstawienia na indeksach 1231…1234, lista urosła do **13 217 wierszy** (`extentH = 317 208 = 13 217 × 24`) |
+| 123 499 → 133 077 | offset **26 → 50 → 74 → … → 2 210**, zawsze **+24,0 px**, co ~98 ms, bez końca |
+
+**Pętla, identyczna w każdym z 93 zrzutów stosu:**
+
+```
+SelectingItemsControl.AutoScrollToSelectedItemIfNecessary   (odłożone na Dispatcher)
+  → ItemsControl.ScrollIntoView(index)
+    → ItemsPresenter.ScrollIntoView → VirtualizingStackPanel.ScrollIntoView
+      → ControlExtensions.BringIntoView → RaiseEvent(RequestBringIntoView)
+        → ScrollContentPresenter.BringDescendantIntoView → SetCurrentValue(Offset)  [+24 px]
+```
+
+⭐⭐ **Dlaczego dokładnie jeden wiersz i dlaczego bez końca.** Zaznaczony wiersz leży tysiące pozycji poza
+oknem realizacji (widocznych ~39 z 13 217). `VirtualizingStackPanel.ScrollIntoView(index)` **nie potrafi
+skoczyć** do nierealizowanego indeksu — zna geometrię wyłącznie zrealizowanych elementów. Przewija więc
+o jeden wiersz, realizuje następny, znów podnosi `RequestBringIntoView` i **pełznie do celu po jednym
+wierszu na cykl Dispatchera**. Przy 10,5 wiersza/s dotarcie do wiersza ~6 000 to ~9 minut.
+
+⭐⭐ **Dlaczego „nie da się tego zatrzymać" — to jest ZMIERZONE, nie wydedukowane: `heartbeat` UMIERA
+w chwili startu pętli i już nie wraca.** Bije na `DispatcherPriority.Background`; pętla zapycha kolejkę
+i zagładza priorytet tła, więc kliknięcia i kółko myszy trafiają do kolejki, która nie ma kiedy ich obsłużyć.
+
+### 11.2 ⭐ Co log WYKLUCZYŁ — i dlaczego to było równie ważne
+
+| Hipoteza | Werdykt z logu |
+|---|---|
+| wyjątek kończący proces | ⛔ **zero wyjątków** w całym przebiegu; jedyna linia `EXC` to samotest instrumentu |
+| reentrancy | ⛔ `ChevronClick` **nigdy** nie osiąga `depth>1` |
+| pętla zaznaczenia (`SelectionChanged` ↔ `BringIntoView`) | ⛔ **trzy** `SelectionChanged` w całym 133-sekundowym logu, **żaden w trakcie pętli** |
+| kwadratowy splice przy rozwijaniu | ⛔ rozwinięcia są **liniowe**: 218 liści → 220 wpisów, 8 178 → 8 180 |
+| nasz kod ustawia zaznaczenie lub woła `ScrollIntoView` | ⛔ jedyne nasze `ScrollIntoView` (`OnRevealSidebarRow`) **nie występuje w żadnym stosie tej pętli** |
+
+⭐ **Cisza w kategorii `EXC` była rozstrzygalna wyłącznie dzięki samotestowi kanału wyjątków** (§10.3):
+bez niego znaczyłaby albo „nic nie poleciało", albo „hak nie działa".
+
+### 11.3 ⚠⚠ DLACZEGO DWA WCZEŚNIEJSZE POMIARY TEGO NIE ZOBACZYŁY
+
+Ani sonda z M3.4a (§8), ani eksperyment headless z kroku 15b (§9) **nie miały nic zaznaczonego**.
+`AutoScrollToSelectedItem` nie miał czego gonić. **Zmienna decydująca o całym zjawisku nie występowała
+w żadnym eksperymencie** — i żaden z nich nie był przez to błędny, tylko ślepy na ten warunek.
+
+⭐ **Lekcja szersza niż ten defekt: pomiar syntetyczny odtwarza mechanizm, ale nie odtwarza STANU.**
+Obie sonde wiernie modelowały wstawianie wierszy do wirtualizowanej listy i obie poprawnie odpowiedziały
+na postawione im pytanie. Pytanie było niepełne, bo nie zawierało zaznaczenia — rzeczy, o której nikt nie
+pomyślał, dopóki nie zobaczył stosu z żywego przebiegu.
+⚠ Praktycznie: zanim uznasz, że pomiar syntetyczny wyklucza hipotezę, **wypisz stany, w których defekt
+występuje u użytkownika, i sprawdź, które z nich twój eksperyment odtwarza.**
+
+### 11.4 Naprawa — jedna właściwość, świadomie bez żadnych warunków
+
+`AutoScrollToSelectedItem="False"` **wyłącznie na `SidebarList`** (`MainWindow.axaml`).
+
+⭐ **To jest naprawa przyczyny, nie obejście objawu, i to z dwóch powodów:** (a) usuwa mechanizm, który
+w logu widać jako sprawcę — przewijanie jest SKUTKIEM ciągłych `BringIntoView`, nie ich przyczyną;
+(b) ta lista ma **własne, świadome** „pokaż mi ten obiekt" (`OnRevealSidebarRow` → jawne `ScrollIntoView`),
+więc drugi, automatyczny mechanizm próbujący tego samego jest tu zbędny.
+
+⛔ **Świadomie NIE zrobione** (decyzja użytkownika): żadnych warunków typu „przewijaj, jeżeli cel jest
+blisko viewportu", żadnego własnego algorytmu przewijania, żadnej zmiany poza tą jedną właściwością.
+
+⛔ **Strażnik `SidebarList_DisablesAvaloniaAutoScrollToSelectedItem`** — bo ta właściwość wygląda dokładnie
+jak coś, co ktoś kiedyś „posprząta": jest domyślnie `true`, jej usunięcie **nie psuje żadnego innego testu**,
+nie rusza wyglądu i nie zmienia niczego w codziennej pracy. Defekt wraca dopiero u użytkownika z bardzo
+dużą bazą. Zweryfikowany podłożeniem naruszenia.
+
+### 11.5 ⏸ Do sprawdzenia w QA — jedyna otwarta pozycja
+
+Nawigacja klawiaturą po drzewie: **strzałki góra/dół, PageUp/PageDown, Home/End** — czy nadal utrzymują
+zaznaczony element w widoku.
+
+⛔ **Gdyby nie utrzymywały, odpowiedzią jest rozwiązanie DLA NAWIGACJI KLAWIATURĄ, a nie powrót globalnego
+auto-scrolla** (ratyfikowane przez użytkownika, 2026-08-04).

@@ -409,12 +409,39 @@
                chevron + the SAME per-type node template as before (icons, colours, context
                menus, double-click handlers — verbatim), so it looks identical to the tree
                but scrolls on one stable-extent VSP. -->
+          <!-- ⛔⛔ `AutoScrollToSelectedItem="False"` — NAPRAWA PRZYCZYNY DEFEKTU „drzewo samo przewija
+               się w dół i zawiesza aplikację". ⛔ NIE USUWAĆ. Diagnoza z żywego logu:
+               `metadata-refresh-analysis.md` §11.
+
+               MECHANIZM (zmierzony, nie wydedukowany). Gdy jakiś wiersz jest zaznaczony, a użytkownik
+               rozwinie dużą kategorię, indeks zaznaczonego wiersza przesuwa się i Avalonia odkłada na
+               Dispatcher `SelectingItemsControl.AutoScrollToSelectedItemIfNecessary`. Zaznaczony wiersz
+               leży wtedy tysiące pozycji poza oknem realizacji, a `VirtualizingStackPanel.ScrollIntoView`
+               NIE POTRAFI skoczyć do nierealizowanego indeksu — zna geometrię wyłącznie zrealizowanych
+               elementów. Więc przewija o JEDEN wiersz, realizuje następny, znów podnosi
+               `RequestBringIntoView` — i pełznie do celu po jednym wierszu na cykl Dispatchera.
+               W logu: offset rośnie dokładnie o 24 px (jeden wiersz) co ~98 ms, bez końca, przy
+               13 217 wierszach.
+
+               ⭐ Dlaczego „nie da się tego zatrzymać": pętla zapycha kolejkę Dispatchera i zagładza
+               priorytet tła — w logu `heartbeat` (Background) UMIERA w chwili jej startu i już nie wraca,
+               więc kliknięcia i kółko myszy trafiają do kolejki, która nie ma kiedy ich obsłużyć.
+               ⚠ Zero wyjątków, zero reentrancji, zero `SelectionChanged` w trakcie pętli — przewijanie
+               jest SKUTKIEM ciągłych `BringIntoView`, nie ich przyczyną.
+
+               ⭐ Dlaczego akurat ta lista może się bez tego obejść, a nie jest to obejście objawu:
+               drzewo jest ogromne i wirtualizowane, a „pokaż mi ten obiekt" mamy WŁASNE i świadome —
+               `OnRevealSidebarRow` robi jawne `ScrollIntoView`. Drugi, automatyczny mechanizm próbujący
+               tego samego jest tu zbędny i szkodliwy.
+               ⛔ Świadomie BEZ warunków typu „przewijaj, jeżeli cel jest blisko" i bez własnego
+               algorytmu przewijania (decyzja użytkownika) — najmniejsza zmiana, która usuwa przyczynę. -->
           <ListBox ItemsSource="{Binding SidebarRows}"
                    x:Name="SidebarList"
                    Classes="sidebar-list"
                    Background="Transparent"
                    BorderThickness="0"
                    SelectionMode="Multiple"
+                   AutoScrollToSelectedItem="False"
                    SelectionChanged="OnSidebarListSelectionChanged">
             <ListBox.ItemsPanel>
               <ItemsPanelTemplate>

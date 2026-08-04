@@ -625,7 +625,45 @@ noted.
   `{4,+8:0.0}`) and scans the source so the class cannot go back to a run-time-parsed format.
   ⚠ **The general lesson, wider than this file: a tool whose only job is to not crash the app must not use
   a mini-language evaluated in production.**
-  ⏸ **Awaiting the user's log from a real reproduction** — analysis starts from it, not from a guess.
+  🐞🔧 **CAUSE FOUND AND FIXED FROM THE USER'S LIVE LOG (2026-08-04) — `AutoScrollToSelectedItem`.**
+  Full record: `metadata-refresh-analysis.md` **§11**. **The loop, identical in all 93 stack captures:**
+  `SelectingItemsControl.AutoScrollToSelectedItemIfNecessary` (posted to the Dispatcher) →
+  `ItemsControl.ScrollIntoView(index)` → `VirtualizingStackPanel.ScrollIntoView` →
+  `RequestBringIntoView` → `ScrollContentPresenter.BringDescendantIntoView` → **Offset +24 px**.
+  **Timeline:** t=122 502 the user clicks a row (`SelectionChanged`) · t=123 422 a category expands, the
+  list reaches **13 217 rows** · t=123 499 onward the offset walks **26 → 50 → 74 → … → 2 210, always
+  exactly +24,0 px, every ~98 ms, without end**.
+  ⭐⭐ **Why one row and why never-ending:** the selected row sits thousands of positions outside the
+  realized window (~39 of 13 217 visible), and `VirtualizingStackPanel.ScrollIntoView` **cannot jump** to
+  an unrealized index — it knows the geometry of realized elements only. So it scrolls one row, realizes
+  the next, raises `RequestBringIntoView` again, and **crawls toward the target one row per dispatcher
+  cycle** (~9 minutes to reach row 6 000).
+  ⭐⭐ **Why it cannot be stopped — measured, not deduced: the `heartbeat` DIES the moment the loop starts
+  and never returns.** It runs at `DispatcherPriority.Background`; the loop floods the queue and starves
+  that priority, so clicks and wheel events queue behind work that never yields.
+  ⭐ **What the log RULED OUT, which mattered as much:** **zero exceptions** in the whole run (the only
+  `EXC` line is the instrument's self-test — the silence was decidable *only* because of it) · **no
+  reentrancy** (`ChevronClick` never exceeds `depth=1`) · **no selection loop** (three `SelectionChanged`
+  in 133 s, none inside the loop) · expansion is **linear**, not quadratic (218 leaves → 220 entries) ·
+  **our own `ScrollIntoView` appears in no stack of the loop**. ⭐ So the scrolling is a **CONSEQUENCE** of
+  continuous `BringIntoView`, not its cause — the user's reading of the log, confirmed.
+  ⚠⚠ **WHY BOTH EARLIER MEASUREMENTS MISSED IT, and the lesson is bigger than this defect: neither had
+  anything SELECTED**, so `AutoScrollToSelectedItem` had nothing to chase. The variable that decides the
+  whole phenomenon was absent from both experiments — neither was wrong, both were blind to that
+  condition. ⭐ **A synthetic measurement reproduces the MECHANISM but not the STATE.** Before accepting
+  that one rules a hypothesis out, list the states in which the defect occurs for the user and check which
+  of them the experiment actually reproduces.
+  **The fix is one property — `AutoScrollToSelectedItem="False"` on `SidebarList` only.** ⭐ It is a fix of
+  the cause, not a workaround: it removes the mechanism the log names, and this list already has its **own,
+  deliberate** "show me this object" (`OnRevealSidebarRow` → explicit `ScrollIntoView`), so a second
+  automatic mechanism doing the same job is redundant here. ⛔ **Deliberately no conditions** ("scroll only
+  if the target is near the viewport"), no custom scrolling algorithm, nothing else changed — the user's
+  ratified call. ⛔ Guarded by `SidebarList_DisablesAvaloniaAutoScrollToSelectedItem`, because the property
+  looks exactly like something that will one day be "tidied up": it defaults to `true`, removing it breaks
+  **no other test**, changes no pixel, and the defect only returns for a user with a very large database.
+  ⏸ **One open item for QA: keyboard navigation** (arrows, PageUp/PageDown, Home/End) keeping the selected
+  row in view. ⛔ If it does not, the answer is a fix **for keyboard navigation**, never the return of the
+  global auto-scroll (ratified 2026-08-04).
 - **📋 OBSERVATION PARKED, NOT TO BE ACTED ON (user, 2026-08-04):** startup is still noticeably slower with
   a large number of open tabs. ⚠ This is the **known cost of the deliberate deterministic load** — chosen so
   diagnostics always has the full metadata context and never flags valid symbols as errors. ⛔ Do not touch
@@ -3585,9 +3623,9 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7270, MEASURED 2026-08-04**
-  (Product Polish through M3.4b part 1 + the tree instrument). Green in the three documented partitions
-  (**7153 + 63 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7271, MEASURED 2026-08-04**
+  (Product Polish through M3.4b part 1, plus the tree instrument and the AutoScroll fix). Green in the
+  three documented partitions (**7154 + 63 + 54**).
   ⚠ This line said **7228 (7118 + 56 + 54)** until that run — a figure that had gone stale across M3.3b/c
   and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy it forward.
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
