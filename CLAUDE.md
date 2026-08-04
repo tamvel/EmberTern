@@ -572,9 +572,42 @@ noted.
   ⚠ **The same "inline menu in a row template" shape exists in two more places and was deliberately left
   alone**: Saved Queries and the tab strip — **neither is virtualized nor reaches thousands of rows**, so the
   multiplier that decided here does not exist there (trap 17).
-  ⏸ **Next: M3.4b part 2** — the review proper. Entry state measured: **32 `ContextMenu`, 154 `MenuItem`,
-  140 with an icon (14 without), 27 with a catalog gesture**; the yardstick is M3.3c's tab menu (icon,
-  gesture, own `CanExecute` per item). Then M3b → ⛔ the §13.3 gate.
+  ⏸ **PAUSED — M3.4b part 2 waits.** Entry state measured: **32 `ContextMenu`, 154 `MenuItem`, 140 with an
+  icon (14 without), 27 with a catalog gesture**; the yardstick is M3.3c's tab menu (icon, gesture, own
+  `CanExecute` per item). Then M3b → ⛔ the §13.3 gate.
+- **🔬 THE OLD TREE DEFECT IS NOW REPRODUCIBLE BY THE USER, AND AN INSTRUMENT IS SHIPPED FOR IT
+  (2026-08-04) — `EMBERTERN_TREE_DIAG`.** Full record: `metadata-refresh-analysis.md` **§10**.
+  Reported scenario: expand several large categories (~tens of thousands of rows) → the list **starts
+  scrolling down on its own** → cannot be stopped → any click hangs and closes the process.
+  ⚠⚠ **The observation that shapes everything: from the EXE the process DIES, under Visual Studio it
+  scrolls to a point, STOPS, and the app carries on.** A "debugger present / absent" difference points at
+  an **exception**, not at cost — under a debugger an exception in a Dispatcher callback can be caught,
+  without one it ends the process. ⭐ That is why the exception channel is a first-class part of the
+  instrument, not an extra.
+  **What the log answers** (five questions, set by the user): (1) does the offset change, **who** changes
+  it and **from where** — `Offset`/`Extent` watched by two routes plus a **stack trace** on movement;
+  (2) loop-forming events — `ScrollChanged`, `SelectionChanged`, **`RequestBringIntoView`** (tunnel +
+  bubble), `EffectiveViewportChanged`; (3) rebuilds — row `CollectionChanged` plus the three existing
+  rebuild points; (4) a cyclic Dispatcher callback — **scope nesting depth**, post counters by name, a
+  500 ms heartbeat and **call-stack depth**; (5) exceptions — **`FirstChanceException`** plus unhandled
+  and unobserved-task.
+  ⭐ **Design decisions worth keeping:** own flag and **own file** (`%TEMP%\EmberTern-tree-diag-<pid>-<stamp>.log`)
+  because a storm writes tens of thousands of lines and would drown the shared debug log · **`AutoFlush`
+  on**, a real observer effect accepted on purpose because **the last lines before the process dies are
+  the whole point** · **stack captures are budgeted** (first 25, then ≤1 per 250 ms, always during a
+  detected storm) so the log does not drown in its own noise · ⛔ **not one diagnostic line inside a
+  ViewModel or `SidebarFlatController`** — everything is subscribed from outside in one code-behind
+  method, because the instrument must *observe* the mechanism, not join it (the three existing
+  `ScrollTrace.Rebuild` calls were **re-routed**, not duplicated).
+  ⭐⭐ **The instrument SELF-TESTS its exception channel** — it throws and catches a benign exception at
+  startup so the log proves the hook is live. ⚠⚠ Without that, **an absence of `EXC` lines is
+  undecidable**: it would mean either "nothing was thrown" or "the hook is dead", which are opposite
+  conclusions leading to opposite searches (a negative measurement is the dangerous kind, #285).
+  ⏸ **Awaiting the user's log from a real reproduction** — analysis starts from it, not from a guess.
+- **📋 OBSERVATION PARKED, NOT TO BE ACTED ON (user, 2026-08-04):** startup is still noticeably slower with
+  a large number of open tabs. ⚠ This is the **known cost of the deliberate deterministic load** — chosen so
+  diagnostics always has the full metadata context and never flags valid symbols as errors. ⛔ Do not touch
+  it; recorded for the future only.
   ✅ **M3.3c DONE (2026-08-03) — the tab context menu; the tab strip is complete** (`product-polish.md`
   §19.24). Nine items, **zero new chrome** (the Keyboard Manager's `ContextMenu`/`MenuItem` styles +
   `{app:MenuIcon}` already exist).

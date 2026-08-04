@@ -521,3 +521,76 @@ jako odpowiedzi na pytanie o produkt byłoby wyjściem poza jego zakres.
 ⛔ Warstwa 2 i Warstwa 3 oraz **niezmierzony koszt startu** — bez zmian, czekają na własny etap
 wydajnościowy po M3. ⚠ Rozbieżność z §9.3 warto rozstrzygnąć **przy okazji Warstwy 2**, bo to dokładnie
 jej przedmiot (zachowanie przewijania i zaznaczenia przy zmianie zawartości drzewa).
+
+---
+
+## 10. ⭐⭐ INSTRUMENT NA ŻYWY PRZEBIEG (2026-08-04) — `EMBERTERN_TREE_DIAG`
+
+> Sekcje 8 i 9 wykluczyły dwie hipotezy **pomiarami syntetycznymi**. Użytkownik odtworzył defekt u siebie
+> i zgłosił obserwację, która ustawia całą konstrukcję tego instrumentu.
+
+### 10.1 Zgłoszenie i obserwacja rozstrzygająca kierunek
+
+Scenariusz: rozwinięcie **kilku dużych kategorii** (łącznie kilkanaście tysięcy pozycji) → lista **sama
+zaczyna przewijać się w dół** → nie da się tego zatrzymać → kliknięcie w dowolne miejsce **zawiesza
+i zamyka proces**.
+
+⚠⚠ **Kluczowe: z EXE proces GINIE, spod Visual Studio przewija się do pewnego miejsca, ZATRZYMUJE się
+i aplikacja działa dalej.** Różnica „jest debugger / nie ma debuggera" wskazuje na **wyjątek**, nie na
+koszt: pod debuggerem wyjątek w callbacku Dispatchera bywa przechwycony, a bez niego kończy proces.
+⭐ Dlatego pytanie o wyjątki jest w tym instrumencie równorzędne z pytaniami o przewijanie, a nie dodatkiem.
+
+### 10.2 Pięć pytań, na które log ma odpowiedzieć (zadane przez użytkownika)
+
+| # | Pytanie | Kategoria w logu | Jak jest realizowane |
+|---|---|---|---|
+| 1 | Czy zmienia się offset, **kto** go zmienia i **z jakiego miejsca** | `SCROLL` | `Offset`/`Extent` obserwowane **dwiema drogami** + **zrzut stosu** przy zmianie offsetu |
+| 2 | Czy pojawiają się zdarzenia tworzące pętlę | `EVENT` | `ScrollChanged`, `SelectionChanged`, **`RequestBringIntoView`** (tunel + bąbel), `EffectiveViewportChanged` |
+| 3 | Czy podczas przewijania dochodzi do przebudów listy | `COLL`, `REBUILD` | `CollectionChanged` wierszy + trzy istniejące punkty „przebudowa" |
+| 4 | Czy Dispatcher kręci cyklicznie ten sam callback | `SCOPE`, `POST`, `DEPTH` | **głębokość zagnieżdżenia** naszych zakresów, licznik postów po nazwie, heartbeat 500 ms, **głębokość stosu** |
+| 5 | Czy leci nieobsłużony wyjątek | `EXC` | **`FirstChanceException`** + `UnhandledException` + `UnobservedTaskException` |
+
+### 10.3 ⭐ Decyzje konstrukcyjne, każda z powodem
+
+* **Własna flaga `EMBERTERN_TREE_DIAG` i własny plik** `%TEMP%\EmberTern-tree-diag-<pid>-<stamp>.log`.
+  ⚠ Nie wspólny `EmberTern-debug.log`: burza produkuje dziesiątki tysięcy linii i wymieszana z logiem
+  połączeń czyni oba bezużytecznymi. Plik na przebieg, więc dwa uruchomienia się nie nakładają.
+* **`AutoFlush = true`.** ⚠ To jeden syscall na linię i **realny efekt obserwatora** — przyjęty świadomie:
+  ⭐ **ostatnie linie przed śmiercią procesu są całym sensem tego pliku**, a bufor nigdy by ich nie oddał.
+* **Zrzuty stosu są BUDŻETOWANE** — pierwsze 25 zawsze, potem co najwyżej raz na 250 ms, zawsze podczas
+  burzy. ⚠ Bez budżetu log tonie we własnym szumie i zmienia timing tego, co mierzy.
+* **Wykrywacz burzy** (>200 zdarzeń / 100 ms) przełącza log w tryb eskalacji i sam się wyłącza, gdy
+  ruch opadnie. To on decyduje, kiedy warto płacić za stos.
+* ⛔ **Ani jednej linii diagnostyki w ViewModelach ani w `SidebarFlatControllerze`.** Wszystko przez
+  subskrypcje z zewnątrz, w jednym miejscu w code-behind. ⭐ Instrument ma **obserwować** mechanizm,
+  a nie stać się jego częścią. Wyjątkiem są trzy istniejące wywołania `ScrollTrace.Rebuild` — te
+  **przekierowano**, zamiast dopisywać obok drugi zestaw wywołań tego samego faktu.
+* ⭐⭐ **SAMOTEST KANAŁU WYJĄTKÓW.** Na starcie instrument rzuca i łapie nieszkodliwy wyjątek, żeby w logu
+  stanął dowód, że hak żyje. ⚠⚠ Bez tego **brak wpisów `EXC` na końcu logu jest nierozstrzygalny**:
+  znaczyłby albo „żaden wyjątek nie poleciał", albo „hak nie działa" — a to są **przeciwne wnioski
+  prowadzące do przeciwnych poszukiwań**. Pomiar negatywny jest tym niebezpiecznym (#285).
+* **Twardy limit 400 000 linii** z jawnym znacznikiem ucięcia — instrument nie ma prawa zapełnić dysku.
+
+### 10.4 Jak odtworzyć i co przysłać
+
+```
+set EMBERTERN_TREE_DIAG=1
+EmberTern.exe
+```
+
+Następnie: połączyć się z dużą bazą, rozwinąć kilka dużych kategorii, doprowadzić do objawu.
+Plik: `%TEMP%\EmberTern-tree-diag-<pid>-<stamp>.log` (ścieżka jest też w `TreeDiagnostics.LogPath`).
+⭐ **Wartościowy jest przebieg z EXE** (proces ginie) — i osobno, jeśli się da, ten sam scenariusz spod
+Visual Studio, bo **różnica między tymi dwoma logami jest samą hipotezą**.
+
+### 10.5 Czego szukać w logu
+
+* `SCROLL` z rosnącym offsetem **bez** poprzedzającego gestu użytkownika → przewijanie samoczynne;
+* **ten sam stos powtarzający się cyklicznie** → pętla, a jej sprawcą jest szczyt tego stosu;
+* `SCOPE ... depth>1` → **reentrancy**;
+* `DEPTH ramek=` rosnące monotonicznie → rekurencja; jej końcem jest `StackOverflowException`, którego
+  **nie da się przechwycić** i który tłumaczyłby natychmiastową śmierć EXE;
+* `EXC FIRST-CHANCE` tuż przed końcem logu → najpewniejszy kandydat na przyczynę.
+
+⛔ **Instrument niczego nie naprawia i nie zmienia zachowania aplikacji.** Bez flagi nie robi nic:
+żadnego pliku, żadnych subskrypcji, zero kosztu.

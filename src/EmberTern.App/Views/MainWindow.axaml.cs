@@ -97,6 +97,7 @@ public partial class MainWindow : Window
     private bool _vmRestored;
     private bool _boundsRestored;
     private bool _scrollDiagHooked;
+    private bool _treeDiagHooked;
 
     // Resizable / collapsible layout (Part 2 + 3). Definitions are reached through
     // their parent grids (a ColumnDefinition isn't a Control). Width/height + the
@@ -314,6 +315,15 @@ public partial class MainWindow : Window
             Dispatcher.UIThread.Post(HookSidebarScrollDiagnostics, DispatcherPriority.Background);
         }
 
+        // Pełna diagnostyka drzewa (EMBERTERN_TREE_DIAG) — osobna, bogatsza i z własnym plikiem.
+        // ⚠ Ten sam wzorzec „poczekaj na szablon": ScrollViewer paska bocznego jest częścią szablonu
+        // SidebarList i istnieje dopiero po jego zastosowaniu.
+        if (EmberTern.App.Diagnostics.TreeDiagnostics.IsEnabled)
+        {
+            EmberTern.App.Diagnostics.TreeDiagnostics.Start("MainWindow.Opened");
+            Dispatcher.UIThread.Post(HookTreeDiagnostics, DispatcherPriority.Background);
+        }
+
         if (_boundsRestored) return;
         _boundsRestored = true;
 
@@ -378,6 +388,82 @@ public partial class MainWindow : Window
             lastExtent = v.Extent.Height;
         };
         EmberTern.App.Diagnostics.ScrollTrace.Rebuild($"scroll diagnostics hooked (name={sv.Name ?? "?"})");
+    }
+
+    // ⭐⭐ Podpięcie pełnej diagnostyki drzewa (EMBERTERN_TREE_DIAG). Wszystko w JEDNYM miejscu i przez
+    // subskrypcje z zewnątrz — ⛔ świadomie ani jednej linii diagnostyki w ViewModelach ani w
+    // SidebarFlatControllerze, bo instrument ma obserwować mechanizm, a nie stać się jego częścią.
+    private void HookTreeDiagnostics()
+    {
+        if (_treeDiagHooked) return;
+        var list = this.FindControl<ListBox>("SidebarList");
+        if (list is null) return;
+
+        var descendants = list.GetVisualDescendants().OfType<ScrollViewer>().ToList();
+        var sv = descendants.FirstOrDefault(s => s.Name == "PART_ScrollViewer") ?? descendants.FirstOrDefault();
+        if (sv is null) return;
+        _treeDiagHooked = true;
+
+        int Realized() => list.GetVisualDescendants().OfType<ListBoxItem>().Count();
+
+        // (1) Offset — obserwowany DWOMA drogami, bo żadna sama nie wystarcza: przeciągnięcie kciuka,
+        // które nie „commituje", nie podnosi ScrollChanged, a zmiana programowa nie zawsze przechodzi
+        // przez zdarzenie. To jest lekcja z pierwszego podejścia do ScrollTrace.
+        var lastOffset = sv.Offset.Y;
+        var lastExtent = sv.Extent.Height;
+        sv.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != ScrollViewer.OffsetProperty && e.Property != ScrollViewer.ExtentProperty) return;
+            EmberTern.App.Diagnostics.TreeDiagnostics.Scroll(
+                sv.Offset.Y, sv.Extent.Height, sv.Viewport.Height,
+                sv.Offset.Y - lastOffset, sv.Extent.Height - lastExtent, Realized(), "Offset/Extent");
+            lastOffset = sv.Offset.Y;
+            lastExtent = sv.Extent.Height;
+        };
+
+        // (2) Zdarzenia mogące zamknąć pętlę.
+        sv.ScrollChanged += (_, e) => EmberTern.App.Diagnostics.TreeDiagnostics.Event(
+            "ScrollChanged",
+            string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"dOffset={e.OffsetDelta.Y:0.0} dExtent={e.ExtentDelta.Y:0.0} dViewport={e.ViewportDelta.Y:0.0}"));
+
+        list.SelectionChanged += (_, e) => EmberTern.App.Diagnostics.TreeDiagnostics.Event(
+            "SelectionChanged", $"added={e.AddedItems.Count} removed={e.RemovedItems.Count}");
+
+        // ⭐ RequestBringIntoView jest najsilniejszym kandydatem na domykacz pętli: przewinięcie zmienia
+        // realizację kontenerów, realizacja może zażądać pokazania elementu, a to przewija dalej.
+        list.AddHandler(
+            Control.RequestBringIntoViewEvent,
+            (object? _, RequestBringIntoViewEventArgs e) => EmberTern.App.Diagnostics.TreeDiagnostics.Event(
+                "RequestBringIntoView",
+                string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"target={e.TargetObject?.GetType().Name ?? "?"} rect={e.TargetRect}")),
+            RoutingStrategies.Tunnel | RoutingStrategies.Bubble);
+
+        sv.EffectiveViewportChanged += (_, e) => EmberTern.App.Diagnostics.TreeDiagnostics.Event(
+            "EffectiveViewport",
+            string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{e.EffectiveViewport}"));
+
+        // (3) Przebudowy listy — z zewnątrz, przez kolekcję wierszy, żeby kontroler został nietknięty.
+        if (_currentVm?.Metadata.SidebarRows is System.Collections.Specialized.INotifyCollectionChanged rows)
+        {
+            rows.CollectionChanged += (_, e) => EmberTern.App.Diagnostics.TreeDiagnostics.Collection(
+                e, _currentVm?.Metadata.SidebarRows.Count ?? -1);
+        }
+
+        // (4) Czy Dispatcher kręci ten sam callback — heartbeat na priorytecie tła. Jeśli kolejka jest
+        // zapchana pętlą, ten wpis przestaje się pojawiać, a to samo w sobie jest odpowiedzią.
+        var beat = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) =>
+        {
+            EmberTern.App.Diagnostics.TreeDiagnostics.Log(
+                "POST",
+                string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"heartbeat  offsetY={sv.Offset.Y:0.0} extentH={sv.Extent.Height:0.0} realized={Realized()}"));
+        });
+        beat.Start();
+
+        EmberTern.App.Diagnostics.TreeDiagnostics.Log(
+            "REBUILD", $"diagnostyka podpięta (ScrollViewer={sv.Name ?? "?"}, wierszy={_currentVm?.Metadata.SidebarRows.Count ?? -1})");
     }
 
     private bool AreBoundsSane(WindowBounds b)
@@ -886,6 +972,11 @@ public partial class MainWindow : Window
         if (_currentVm is null) return;
         if (sender is Button { DataContext: SidebarRow row })
         {
+            // Diagnostyka drzewa (EMBERTERN_TREE_DIAG): to jest GEST UŻYTKOWNIKA, czyli punkt
+            // odniesienia dla pytania „czy przewijanie było samoczynne". Każdy SCROLL bez
+            // poprzedzającego wpisu z tej linii nie pochodzi od kliknięcia w chevron.
+            using var scope = EmberTern.App.Diagnostics.TreeDiagnostics.Scope("ChevronClick");
+            EmberTern.App.Diagnostics.TreeDiagnostics.StackDepth("ChevronClick");
             _currentVm.Metadata.ToggleSidebarRow(row);
         }
     }
