@@ -345,9 +345,15 @@ po M3, a to jest przegląd przy okazji.
 ### 3.9 M3b — inwentarz operacji
 
 **16 ViewModeli** ma własny stan „trwa operacja" (`IsRunning`/`IsBusy`/`IsExecuting`/`IsLoading`).
-**Trzy realne ścieżki `IProgress`**: eksport (`Export/ExportService.cs`), wykonanie zapytania
-(`MainWindowViewModel:3456`), batch (`:5395`). **Trzy `ProgressBar`** w widokach: `BatchResultsDialog`,
-`DataImportTabView`, `ExportDialog`.
+⚠⚠ **KOREKTA, ZMIERZONA 2026-08-04: ścieżek `IProgress` są CZTERY, nie trzy, a `ProgressBar` cztery.**
+Eksport (`Export/ExportService.cs` + eksportery w Core, `IProgress<long>`) · wykonanie zapytania
+(`MainWindowViewModel.MakeLoadProgress`, `IProgress<long>` — **już podłączone**, operacja referencyjna) ·
+batch (`IProgress<(int Index, string? Error)>`, zna sumę) · **import (`Core/Import/ImportPipeline.cs`,
+`IProgress<ImportProgress>`) — czwarta, nieujęta w pierwotnym zapisie**. `ProgressBar` w widokach:
+`BatchResultsDialog`, `DataImportTabView`, `ExportDialog` **oraz `MainWindow`** (sekcja z M3.1f).
+⚠ „16 ViewModeli" to lista miejsc ze stanem zajętości, **nie lista rzeczy do podłączenia** — część to
+zwykłe „ładuję zawartość zakładki", które w pasku statusu byłoby szumem. Rozstrzygnięcie, które są warte
+pokazania, jest **pierwszym zadaniem M3b**.
 
 ⚠ M3.1 dostarcza **sekcję i JEDNĄ operację referencyjną** (wykonanie zapytania SQL — najlepiej
 oprzyrządowana). M3b podłącza resztę. Powód rozdzielenia (D4) pozostaje aktualny.

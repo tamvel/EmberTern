@@ -588,7 +588,16 @@ noted.
   mapping lives in `ResolveCommand`, not in names. Across 154 items the names coincided **once**, by
   accident. ⛔ Do not build a guard on that association — it would give false comfort.
   ⭐ **M3.4 IS CLOSED IN FULL** (M3.4a §19.26 · step 15b §19.27 · M3.4b part 1 §19.28 · part 2 §19.30).
-  ⏸ **Next: M3b** (wiring the remaining operations to the progress bar), then ⛔ the §13.3 gate.
+  ⏸ **Next: M3b** — wiring the remaining operations to the status-bar progress section, then ⛔ the §13.3
+  gate. ⚠⚠ **The stage plan's inventory was stale and is corrected (measured 2026-08-04): there are FOUR
+  `IProgress` paths, not three** — export, query execution (already wired, the reference operation), batch,
+  and **`ImportPipeline`**, which the original note missed; and four `ProgressBar`s in views, the fourth
+  being M3.1f's own status-bar section. ⚠ The "16 ViewModels" figure is a list of places holding a busy
+  state, **not a list of things to wire** — several are ordinary "loading this tab's content", which in the
+  status bar would be noise. ⭐ Deciding which ones are worth showing is M3b's FIRST task, and
+  ⛔ "all 16 have a busy state, so all 16 should report" is exactly the reasoning that withdrew M3.2b.
+  ⭐ **A ready startup prompt for the next session:**
+  [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md).
 - **🔬 THE OLD TREE DEFECT IS NOW REPRODUCIBLE BY THE USER, AND AN INSTRUMENT IS SHIPPED FOR IT
   (2026-08-04) — `EMBERTERN_TREE_DIAG`.** Full record: `metadata-refresh-analysis.md` **§10**.
   Reported scenario: expand several large categories (~tens of thousands of rows) → the list **starts

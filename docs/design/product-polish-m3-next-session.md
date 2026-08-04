@@ -1,17 +1,16 @@
-# EmberTern — PROMPT STARTOWY: M3.4 (Metadata Explorer) i domknięcie M3
+# EmberTern — PROMPT STARTOWY: M3b (pasek postępu) i domknięcie M3
 
 > Wklej to jako pierwszą wiadomość nowej sesji. Dokument jest **samowystarczalny w zakresie stanu,
-> decyzji i planu** — do implementacji sięgniesz jeszcze po dokumenty wskazane w §1.
+> decyzji, zakresu i planu** — do implementacji sięgniesz jeszcze po dokumenty wskazane w §1.
 
 ---
 
 ## 0. Jednozdaniowe streszczenie poprzedniej sesji
 
-**M3.3 (pasek zakładek) zamknięte i odebrane** — trzy podetapy: M3.3a domknął dług techniczny paska
-(12 → 5 wartości lokalnych), M3.3b dał **dwa tryby + dwie preferencje + kategorię Tabs** w Settings
-Center, M3.3c dołożył **menu kontekstowe** i rozszerzył bramkę reguły #11 z trzech wejść do czterech.
-Wcześniej w tej samej sesji: **M3.2d** domknęło M‑1 (literały tooltipów). Suite **7243**, drzewo czyste,
-oba remote'y zsynchronizowane.
+**M3.4 zamknięte w całości** — wiersz drzewa poszedł na role (M3.4a), eksperyment headless wykluczył
+wirtualizację (15b), menu kontekstowe paska bocznego przestały być mnożone przez wirtualizację (M3.4b cz. 1),
+a przegląd 32 menu nie znalazł nic do naprawy (cz. 2). **Przy okazji znaleziono i naprawiono kilkuletni
+defekt drzewa** — samoczynne przewijanie i zawieszanie aplikacji.
 
 ---
 
@@ -21,12 +20,13 @@ oba remote'y zsynchronizowane.
 |---|---|---|
 | 1 | **ten plik** | w całości |
 | 2 | ⭐⭐ **`docs/design/product-polish-m3-handover.md`** | **w całości** — stan · reguły **R1–R17** · procedura iteracji · **21 pułapek** · plan §10 |
-| 3 | `product-polish.md` **§0.1** i **§13.3** | dlaczego Metadata Explorer bije ekrany otwierane raz dziennie + brama, która czeka za M3.4 |
-| 4 | `product-polish.md` **§19.25** | podsumowanie zamykające M3.3 — cztery ustalenia, które przeżywają ten podetap |
-| 5 | `docs/design/metadata-refresh-analysis.md` **§7** | ⚠ **as-built drzewa** — co już zoptymalizowano (Layer 1) i co ZOSTAJE otwarte |
-| 6 | `docs/design/color-language.md` | **tylko gdy dotykasz koloru** — §6 i ⛔ **§0.5** (bramka nadrzędna) |
+| 3 | `product-polish.md` **§8.4.6** | model sekcji postępu Status Bara — **wiążący** |
+| 4 | `product-polish.md` **§19.7** | as-built M3.1f: co dokładnie dostarczyła infrastruktura i **dlaczego oba tryby** |
+| 5 | `src/EmberTern.App/ViewModels/StatusProgressViewModel.cs` | ⭐ **101 linii, przeczytaj CAŁY** — komentarz klasy jest kontraktem M3b i wymienia jego konsumentów po nazwie |
+| 6 | `product-polish.md` **§13.3** | ⛔ brama jakości, która czeka **za** M3b |
+| 7 | `color-language.md` | **tylko gdy dotykasz koloru** — §6 i ⛔ **§0.5** |
 
-⛔ **Nie czytaj na starcie:** `product-polish.md` §15, §18.x, §19.0–§19.24 (sięgaj po konkretną
+⛔ **Nie czytaj na starcie:** `product-polish.md` §15, §18.x, §19.0–§19.30 (sięgaj po konkretną
 podsekcję) · handoverów M2a/M2b/M2c.
 
 ---
@@ -36,147 +36,180 @@ podsekcję) · handoverów M2a/M2b/M2c.
 | | |
 |---|---|
 | **Branch** | `feat/product-polish` |
-| **Ostatni commit** | domknięcie dokumentacyjne M3.3. ⚠ **Sprawdź `git log --oneline -1` i `git status`** zamiast wierzyć temu wierszowi |
+| **Ostatni commit** | `abb1d9f` (dokumentacja M3.4b cz. 2). ⚠ **Sprawdź `git log --oneline -1` i `git status`** zamiast wierzyć temu wierszowi |
 | **Build** | 0 błędów / 0 ostrzeżeń |
-| **Suite** | **7271**, zielony w trzech partycjach (**7154 + 63 + 54**). ⚠ Partycja headless ma **siedem** klas — doszły `MetadataTreeVirtualizationProbe` i `SharedContextMenuFeasibilityProbe`, obie **w filtrze**. **Mierz przed cytowaniem** |
+| **Suite** | **7271** zielony w trzech partycjach (**7154 + 63 + 54**). ⚠⚠ **Mierz przed cytowaniem** — ta liczba starzeje się najszybciej w całym dokumencie |
 | **Smoke** | czysty |
-| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · M3.4a ✅ · krok 15b ✅ · M3.4b cz.1 ✅** |
-| ⭐⭐ **START** | **M3b — podłączenie pozostałych operacji do paska postępu** (pozycja 17 w planie §10 handovera). ⭐ **M3.4 ZAMKNIĘTE W CAŁOŚCI.** Potem ⛔ brama §13.3 |
-| ✅ **CHECKLISTA M3.4 — ZAMKNIĘTA W CAŁOŚCI (2026-08-04)** | (a) 🐞 rzadkie zawieszenie drzewa: **przyczyna znaleziona i naprawiona** — `AutoScrollToSelectedItem="False"` na `SidebarList` (`product-polish.md` §19.29, `metadata-refresh-analysis.md` §10–§12) · (b) skojarzenie z zawieszającym się testem: **hipoteza zapisana do OBSERWACJI**, nie ogłoszona jako fakt (§12) · (c) przegląd wydajności rozwijania: **wykonany, bez znaleziska wymagającego zmiany** |
+| **Etap** | M0–M2c ✅ · M3: iteracja 0 ✅ · **M3.1 ✅ · M3.2 ✅ · 🔒 język kolorów ✅ · 🔒 M3.3 ✅ · 🔒 M3.4 ✅** |
+| ⭐⭐ **START** | **M3b — podłączenie pozostałych operacji do paska postępu** (pozycja 17 w planie §10 handovera) |
+| **Po M3b** | ⛔ **brama §13.3**, potem podsumowanie zamykające M3 + handover M4 |
 
-### 2.1 Co jest zamknięte i nie wraca
+### 2.1 Co zamknęło M3.4 — cztery iteracje
 
-**M3.1** (Status Bar 2.0) · **M3.2** (toolbar, H‑3, H‑5) · **🔒 język kolorów** (wdrożony w całym
-produkcie) · **🔒 M3.3** (pasek zakładek — trzy podetapy) · **M‑1** (zostały 2 literały, oba w M4.3) ·
-wszystkie pytania **O‑1…O‑5** · decyzje **DA–DD**.
-
----
-
-## 3. ⭐⭐ Zadanie: M3.4a — wiersz drzewa Metadata Explorera
-
-> ⭐ **§0.1 stawia tę powierzchnię bardzo wysoko** — użytkownik patrzy na nią cały dzień pracy.
-> ⚠ To iteracja **zmieniająca wygląd**, więc krok 5 procedury (uruchom aplikację i obejrzyj w obu
-> motywach) jest **bramką odbioru, nie formalnością** (pułapka 15).
-
-### 3.1 ⛔ Decyzja DB jest już rozstrzygnięta: **wiersz ZOSTAJE 24**
-
-`Size.Row.Tree` deklaruje **20**, rzeczywistość to **24** (`ListBoxItem.MinHeight`). Katalog jest tu
-**zamiarem, nie opisem** (pułapka 3 — trzeci raz w tym etapie). Zejście do 20 zmieniłoby gęstość
-**najgęstszego widoku aplikacji**, a to jest zmiana produktowa wymagająca oka użytkownika, nie
-porządkowanie.
-
-⭐ **Konsekwencja: to token idzie za produktem, nie produkt za tokenem** — dokładnie tak, jak R12
-i reguła prowadząca (§11) każą. Zaproponuj poprawienie **katalogu** (20 → 24) z zapisem powodu,
-a nie ściśnięcie drzewa.
-
-### 3.2 Co zmierzyć PRZED propozycją
-
-⚠⚠ **Sprawdź w KODZIE, czy przedmiot podetapu jeszcze istnieje** — M3.3a wszedł z zakresem, który
-M3.1a już dostarczyła (§19.22.1). Konkretnie zmierz:
-
-* ile realnie mierzy wiersz drzewa i **skąd** bierze wysokość (styl? wartość lokalna? szablon?),
-* czy `Size.Row.Tree` ma **jakiegokolwiek konsumenta** (w M3.1a nie miał ani jednego),
-* jakie wartości lokalne niesie szablon wiersza (ikona, etykieta, chevron, odstępy),
-* czy `Size.Icon` (14) jest tam literałem — od M3.3a ta rola ma **jednego** konsumenta przy **64**
-  literałach w aplikacji; drzewo jest naturalnym drugim, ale ⛔ **sweep app‑wide to nie ten etap**.
-
-### 3.3 ⚠⚠ TRZY DODATKOWE POZYCJE CHECKLISTY — zgłoszone przez użytkownika przed startem
-
-> Pełny zapis: **handover §3.7a**. ⭐ To **nie jest nowe wymaganie funkcjonalne**, tylko checklista do
-> przejścia **przy okazji**. ⛔ Nie zamieniać w osobny etap, nie naprawiać „w ciemno".
-
-**(a) 🐞 Rzadkie zawieszenie drzewa.** Rozwinięcie **dużej** kategorii → drzewo **samo przewija się
-w dół** → aplikacja zawiesza się i zamyka. Zaobserwowane **2–3 razy przez cały okres używania**, więc
-**nie** z Product Polish i bardzo trudne do odtworzenia.
-
-⭐⭐ **Jest zmierzony kandydat na mechanizm, znaleziony przy zamykaniu M3.3:**
-`SidebarFlatController.OnExpandedChanged` wstawia dzieci **pojedynczo** (`Rows.Insert` w pętli),
-a strażnik zbiorczy tej ścieżki **nie obejmuje — pomija ją** (`if (_suspendDepth > 0) return;`). Czyli
-rozwinięcie *z kodu* idzie pod strażnikiem (to naprawiła Layer 1), ale rozwinięcie **kliknięciem** na
-już załadowanej kategorii robi **N pojedynczych `Insert`ów** do kolekcji związanej z wirtualizującym
-`ListBox`em.
-
-⚠⚠ **Uwaga na skalę — to NIE jest to samo Θ(N²), co defekt z Layer 1.** Tutaj jest **Θ(N) powiadomień**
-(po jednym na liść) plus **Θ(N × ogon)** przesunięć w `List<T>` pod spodem. Czyli **taniej niż przed
-Layer 1, ale nieporównanie drożej niż jedna `Rebuild`** pod strażnikiem. ⭐ **Tej ścieżki nikt jeszcze nie
-zmierzył** — Layer 1 mierzył *odświeżanie*, nie *rozwijanie kliknięciem*.
-⭐ **Pierwszy krok: ZMIERZ ją** (`tools/probes/MetadataPerfProbe` ma schemat 2 400 tabel) — przed
-jakąkolwiek zmianą. ⛔ Nie „naprawiaj" wcześniej: może się okazać, że koszt jest pomijalny, a przyczyna
-leży gdzie indziej (kotwiczenie przewijania, `Dispatcher.Post` w `OnIsExpandedChanged`).
-
-**(b) ⚠ Skojarzenie: czy to ten sam mechanizm, co zawieszający się test?** Użytkownik prosi wprost,
-żeby **nie zakładać**, że tak, ale sprawdzić. **ZA:** klasa nazywa się `ConnectionExpandBindingProbe`,
-a jej `AutoExpandOnConnect_ReflectedInFlatList` ćwiczy dokładnie tę ścieżkę. **PRZECIW:** zmierzono
-(Keyboard Manager etap 5), że nazwa testu raportowanego przy zawieszeniu **całej suity jest
-POZYCYJNA**, a podejrzanym jest **teardown sesji**. ⭐ **To dwie różne obserwacje.**
-⭐⭐ **Test rozstrzygający:** jeśli mechanizmem jest inkrementalny splice, to wymuszenie rozwinięcia
-dużej kategorii w teście headless powinno odtworzyć zawieszenie **deterministycznie** — wtedy test
-przestaje być „feleryczny" i staje się **regresyjnym testem prawdziwego defektu**. Jeśli nie odtworzy,
-hipoteza upada i **też to zapisz**.
-
-**(c) ⚠ Krótki przegląd wydajności rozwijania.** Czy przy ładowaniu kategorii nie ma zbędnej pracy albo
-taniego usprawnienia architektonicznego. ⛔ **Nic na siłę** — brak znaleziska jest poprawnym wynikiem.
-⚠ Nie mylić z **Layer 2/3** (`metadata-refresh-analysis.md`) — to osobny etap po M3.
-
-### 3.4 Po M3.4a
-
-**M3.4b** — przegląd menu kontekstowych. ⭐ Menu zakładki z M3.3c jest świeżym punktem odniesienia:
-ikony przez `{app:MenuIcon}`, gesty przez `{app:CommandGesture}`, **każda pozycja z własnym
-`CanExecute`**. Sprawdź, czy 32 istniejące menu trzymają ten sam poziom.
+| Podetap | Wynik | Zapis |
+|---|---|---|
+| **M3.4a** | katalog poszedł za produktem: `Size.Row.Tree` **20 → 24** (decyzja **DB**), `MinHeight` i chevron na role — **token dostał pierwszego konsumenta**; kolizja 1 px → **K15**. Zero zmian wizualnych | §19.26 |
+| **krok 15b** | eksperyment headless: prawdziwy `SidebarFlatController` w prawdziwym wirtualizującym `ListBox`ie. **Zero zawieszeń, pozycja przewijania nie ruszyła się ani razu.** Rozdzielił zmienne **A** (`MainWindow` w teście) i **B** (splice) — **B wykluczone** | §19.27 |
+| **M3.4b cz. 1** | menu kontekstowe paska bocznego: **jedna instancja na rodzaj węzła** zamiast jednej na wiersz. **~74 % czasu przewijania, 440 → 22 żywych `MenuItem`** | §19.28 |
+| **M3.4b cz. 2** | przegląd 32 menu / 154 pozycji / 71 komend — **bez znaleziska wymagającego zmiany** | §19.30 |
 
 ---
 
-## 4. Plan po M3.4
+## 3. ⭐⭐ USTALENIA, KTÓRYCH NIE WOLNO ZGUBIĆ
 
-| # | Podetap | Zakres | Decyzja |
-|---|---|---|---|
-| ✅ 11–14 | **M3.2d, M3.3a–c** | **ZROBIONE** (§19.21–§19.25) | ✅ |
-| ⭐⭐ 15 | **M3.4a** | **← TU ZACZYNASZ.** Metadata Explorer — wiersz drzewa | **DB** ✅ (zostaje 24) |
-| 16 | **M3.4b** | Przegląd menu kontekstowych | — |
-| 17 | **M3b** | Podłączenie pozostałych operacji do paska postępu (16 VM, 3 ścieżki `IProgress`) + ⏸ pełna semantyka kolorów railu | — |
-| 18 | ⛔ **brama §13.3** | **Cztery powierzchnie JEDNOCZEŚNIE**, żywa baza, oba motywy | — |
-| 19 | — | Podsumowanie zamykające M3 + handover M4 + prompt startowy | — |
+### 3.1 🐞 Defekt drzewa — przyczyna znaleziona i naprawiona (2026-08-04)
 
-⛔ **§13.3 blokuje M4** i po M3.3 waży jeszcze więcej: rejestr kolizji urósł do **K1–K14**, a **K12–K14**
-idą tam **jako jedno pytanie o gęstość paska zakładek**, nie jako trzy osobne.
+Objaw zgłaszany od lat: rozwinięcie kilku dużych kategorii → **lista sama przewija się w dół** → nie da się
+zatrzymać → kliknięcie zawiesza i zamyka proces.
+
+**Przyczyna:** gdy jakiś wiersz jest zaznaczony, Avalonia odkłada na Dispatcher
+`SelectingItemsControl.AutoScrollToSelectedItemIfNecessary`; zaznaczony wiersz leży poza oknem realizacji,
+a `VirtualizingStackPanel.ScrollIntoView` **nie potrafi skoczyć do nierealizowanego indeksu** — pełznie do
+celu **po jednym wierszu (24 px) na cykl Dispatchera**, zagładzając priorytet tła.
+
+**Naprawa:** `AutoScrollToSelectedItem="False"` **wyłącznie na `SidebarList`**, bez żadnych warunków.
+⛔ **NIE USUWAĆ** — chroni ją strażnik `SidebarList_DisablesAvaloniaAutoScrollToSelectedItem`, bo ta
+właściwość wygląda dokładnie jak coś, co ktoś kiedyś „posprząta": domyślnie `true`, usunięcie **nie psuje
+żadnego innego testu**, nie rusza piksela, a defekt wraca dopiero u użytkownika z dużą bazą.
+⏸ Jedyna otwarta pozycja: **nawigacja klawiaturą** (strzałki, PageUp/PageDown, Home/End). Gdyby nie
+utrzymywała zaznaczenia w widoku — odpowiedzią jest rozwiązanie **dla nawigacji klawiaturą**, ⛔ nigdy powrót
+globalnego auto-scrolla (ratyfikowane).
+Pełny zapis: `metadata-refresh-analysis.md` **§10–§12**, `product-polish.md` **§19.29**.
+
+### 3.2 🔧 `EMBERTERN_TREE_DIAG` — ukryte narzędzie deweloperskie, ZOSTAJE
+
+Flaga środowiskowa włącza `App/Diagnostics/TreeDiagnostics.cs`: przewijanie + zdarzenia pętlotwórcze +
+przebudowy listy + zagnieżdżenie zakresów + głębokość stosu + wyjątki, z własnym plikiem w `%TEMP%`.
+⭐ **To ono znalazło przyczynę po latach objawu.** Bez flagi kosztuje **zero** — żadnego pliku, żadnych
+subskrypcji. ⛔ Nie usuwać i nie wystawiać w UI. ⭐ Sięgać po nie przy **każdym** defekcie o kształcie
+„przewijanie / zaznaczenie / Dispatcher", nie tylko w drzewie.
+
+⚠⚠ **Instrument przy pierwszym uruchomieniu ZABIŁ APLIKACJĘ** — `string.Format` z wyrównaniem `{4,+8:0.0}`
+(wyrównanie przyjmuje tylko liczbę całkowitą). Dlatego dziś: **zero formatów złożonych w tej klasie**, jedna
+brama `Safe` pomijająca wpis zamiast zatrzymywać aplikację, strażnik reentrancji i **samotest kanału
+wyjątków**. ⛔ Nie cofać żadnej z tych trzech rzeczy.
+
+### 3.3 ⏸ HIPOTEZA DO OBSERWACJI — nie ogłaszać jako faktu
+
+Możliwe, że ten sam mechanizm powodował **sporadycznie zawieszający się `ConnectionExpandBindingProbe`**
+(#94/#226/#261). Probe wykonuje operacje na drzewie w prawdziwym `MainWindow`; z zaznaczonym wierszem mógł
+wpaść w tę samą pętlę, a **zagłodzony Dispatcher wygląda dokładnie tak samo** jak wcześniej podejrzewany
+„teardown sesji".
+
+⭐ **Kryterium: jeżeli od 2026-08-04 ten test przestanie się zawieszać, będzie to bardzo mocna przesłanka
+wspólnej przyczyny.** ⛔ Nie ogłaszać po kilku zielonych przebiegach — zawieszenie było rzadkie z definicji.
+**Obserwować całą suitę i zapisać wynik w OBIE strony.** ⚠ Do tego czasu procedura bez zmian: probe biegnie
+**w osobnej partycji**.
+
+### 3.4 ⭐⭐ Trzy lekcje metodologiczne z M3.4
+
+1. **Pomiar syntetyczny odtwarza MECHANIZM, ale nie odtwarza STANU.** M3.4a i 15b **wykluczyły swoje
+   hipotezy poprawnie** i oba były ślepe — w żadnym **nic nie było zaznaczone**. ⚠ Zanim uznasz, że pomiar
+   wyklucza hipotezę, **wypisz stany, w których defekt występuje u użytkownika, i sprawdź, które z nich twój
+   eksperyment odtwarza.**
+2. **Pomiar negatywny musi się przedstawić.** Cisza w kategorii `EXC` była **dowodem** tylko dzięki
+   samotestowi; bez niego znaczyłaby „albo nic nie poleciało, albo hak nie działa".
+3. **Pomiar po nośniku nie odpowiada na pytanie o rolę.** „14 pozycji bez ikony" było błędne — osiem niesie
+   ikonę składnią elementową `<MenuItem.Icon>`, a skan liczył atrybut `Icon=`.
 
 ---
 
-## 5. ⭐ Reguły, które wyniosło M3.3
+## 4. ⭐⭐ Zakres M3b — zmierzony 2026-08-04, nie przepisany z planu
 
-> Pełna lista R1–R17 jest w handoverze §5. Tu cztery ustalenia z ostatniej sesji — świeże i wszystkie
-> szersze niż pasek zakładek.
+> ⚠⚠ **Handover §3.9 mówi „trzy realne ścieżki `IProgress`". To jest NIEAKTUALNE — są CZTERY.**
+> Pomiar niżej jest świeży; plan etapu starzeje się tak samo cicho jak string (pułapka 20).
 
-| # | Ustalenie |
+### 4.1 Co już istnieje — infrastruktura z M3.1f
+
+`StatusProgressViewModel` (101 linii, **przeczytaj cały**):
+
+| Element | Znaczenie |
 |---|---|
-| 1 | ⭐⭐ **Zmiana MIEJSCA reguły jest zmianą jej PRIORYTETU.** Ten sam styl w `Border.Styles` i w arkuszu globalnym zachowuje się inaczej wobec wartości lokalnej. ⛔ *„Przeniosłem styl bez zmian"* — zdanie zakazane bez pomiaru |
-| 2 | ⭐⭐ **Narzędzie, które liczy RAZ, nie może orzec o ZBIEŻNOŚCI.** Sonda wizualna renderuje jeden przebieg układu; defekt ze sprzężenia zwrotnego jest poza jej zasięgiem **z konstrukcji**, nie przez pomyłkę |
-| 3 | ⭐⭐ **Plan etapu starzeje się tak cicho jak string i jak komentarz.** Przed każdym podetapem sprawdź w kodzie, czy jego przedmiot jeszcze istnieje |
-| 4 | ⭐⭐ **Test na WARTOŚĆ właściwości nie jest testem na DZIAŁANIE ekranu.** Wiązanie odpytuje ją wyłącznie po `PropertyChanged` — notyfikacja musi być **asercją**, zweryfikowaną podłożeniem naruszenia (**R16**) |
+| `Begin(label, cancelCommand = null)` | start operacji; `IsRunning` steruje widocznością sekcji |
+| `Report(label)` | tryb **nieokreślony** |
+| `Report(label, percent)` | tryb **procentowy** |
+| `End()` | koniec; brak operacji to stan domyślny, **nie komunikat** |
+| `HasCancel` | czy pokazać przycisk anulowania |
+
+⚠ **Jedyny konsument dzisiaj: `MainWindowViewModel.Progress`** — operacja referencyjna, czyli wykonanie
+zapytania SQL. **M3b podłącza resztę.**
+
+### 4.2 Inwentarz źródeł — stan faktyczny
+
+**Cztery ścieżki `IProgress`:**
+
+| # | Ścieżka | Typ | Uwaga |
+|---|---|---|---|
+| 1 | eksport (`Export/ExportService.cs` + eksportery w Core) | `IProgress<long>` | licznik wierszy |
+| 2 | wykonanie zapytania (`MainWindowViewModel.MakeLoadProgress`) | `IProgress<long>` | ✅ **już podłączone** (operacja referencyjna) |
+| 3 | batch (`MainWindowViewModel`) | `IProgress<(int Index, string? Error)>` | ma **znaną sumę** → tryb procentowy |
+| 4 | ⚠ **import (`Core/Import/ImportPipeline.cs`)** | `IProgress<ImportProgress>` | **czwarta, nieujęta w §3.9** |
+
+**Cztery `ProgressBar` w widokach:** `BatchResultsDialog`, `DataImportTabView`, `ExportDialog`,
+`MainWindow` (ten ostatni to sekcja z M3.1f).
+
+**16 ViewModeli** ma własny stan „trwa operacja" (`IsRunning`/`IsBusy`/`IsExecuting`/`IsLoading`):
+`BatchResults`, `DataImportTab`, `DomainDetailTab`, `ExceptionDetailTab`, `GeneratorDetailTab`,
+`IndexDetailTab`, `MainWindow`, `MetadataExplorer`, `MetadataNode`, `PackageDetailTab`,
+`ScriptExecutorTab`, `SecurityManagerTab`, `SourceObjectDetailTab`, `StatusProgress`, `TableDetailTab`,
+`ViewDetailTab`.
+
+⚠⚠ **„16 ViewModeli" to NIE jest lista rzeczy do podłączenia.** To lista miejsc, które **mają jakiś stan
+zajętości** — a część z nich to zwykłe „ładuję zawartość zakładki", które w pasku statusu byłoby szumem.
+⭐ **Pierwszym zadaniem M3b jest ROZSTRZYGNIĘCIE, które z nich to operacja warta pokazania**, a nie
+podłączenie wszystkich.
+
+### 4.3 ⭐ Kontrakt, który komentarz `StatusProgressViewModel` już ustala
+
+* ⛔ **Anulowanie: model NIE ma własnej komendy.** Przyjmuje `ICommand` właściciela operacji, więc pasek
+  statusu i toolbar naciskają **ten sam obiekt komendy**. ⛔ Nie dodawać drugiej komendy Cancel — powstałby
+  drugi właściciel stanu anulowania.
+* ⚠ **Ścieżka procentowa NIE MA dziś konsumenta na żywo** — nie zakładać, że jest sprawdzona. Jej
+  przewidziani konsumenci są wymienieni po nazwie: `BatchResultsDialog` (`PreparationTotal`) i
+  `DataImportTabView` (`ProgressPercent`).
+* ⚠⚠ **Model niesie JEDNĄ operację naraz**, i to jest zapisane jako **decyzja projektowa dla M3b**:
+  *„co pokazać, gdy biegną dwie"* rozstrzyga się **na komplecie źródeł**, nie zgadywaniem. ⭐ To jest
+  najważniejsze pytanie projektowe tego podetapu.
 
 ---
 
-## 6. ⚠ Pułapki najgroźniejsze dla M3.4 (pełna lista: handover §9)
+## 5. Co ZMIERZYĆ przed implementacją
 
-1. ⚠⚠ **`{DynamicResource}` NIE rzuca przy brakującym kluczu** — literówka jest niewidoczna przy zielonym
-   buildzie. Nazwy ról bierz z `Tokens.axaml`, nie z pamięci.
-2. ⚠⚠ **Wartość lokalna bije setter stylu.** Po jej usunięciu kontrolka zaczyna słuchać systemu i może
-   wyglądać inaczej — to **ujawniony dług**, nie regresja. Zgłoś, nie maskuj.
-3. ⚠⚠ **Katalog bywa zamiarem, nie opisem** — w M3 obalony **trzy razy** (`Size.StatusBar`, `Size.Row.Tab`,
-   `Pad.Tab`/`Size.Icon`). `Size.Row.Tree` jest czwartym przypadkiem i **wiadomo o tym z góry**.
-4. ⚠⚠ **Test headless konstruujący `MainWindow` ZAWIESZA suite.** Asercje rób na najtańszej kontrolce
-   (`new Window()`); nowa klasa headless **dołącza do `HeadlessCollection`** i **do filtra partycji**.
-5. ⚠ **Drzewo jest najgęstszym widokiem aplikacji** — każda zmiana odstępu mnoży się przez tysiące wierszy.
-   ⛔ To sprawia, że „drobna korekta" tutaj nie jest drobna.
-6. ⭐ **Pomiar po nośniku nie odróżnia roli od stanu** (pułapka 19) — i rejestr K9/K10 dał się na to nabrać,
-   bo „zakładka" znaczyła dwie różne rzeczy. W drzewie tym słowem jest **„wiersz"**.
+1. **Które z 16 stanów zajętości to operacja warta pokazania w pasku statusu**, a które to ładowanie
+   zawartości zakładki. Kryterium proponowane: *czy użytkownik może w tym czasie robić coś innego i czy
+   chce wiedzieć, że to trwa*. ⛔ Nie podłączać wszystkiego dlatego, że się da.
+2. **Czy któreś dwie operacje mogą realnie biec jednocześnie** — i które. Od tego zależy odpowiedź na
+   pytanie z §4.3. ⚠ SQL Editor blokuje równoległe wykonanie przez `IsExecuting`, ale import, eksport
+   i batch **mają własne wątki i własne zakładki**.
+3. **Które źródła znają SUMĘ** (→ tryb procentowy), a które nie (→ nieokreślony). Batch i import znają;
+   eksport i wykonanie zapytania nie.
+4. **Które operacje mają komendę anulowania** i jaki jest jej `CanExecute` — bo to decyduje o `HasCancel`.
+5. ⚠ **Czy trzy istniejące `ProgressBar` mają zostać.** Pasek statusu **nie zastępuje** paska w oknie
+   dialogowym eksportu ani w zakładce importu — to jest pytanie produktowe, nie porządkowe.
 
 ---
 
-## 7. Obowiązkowa kolejność
+## 6. Kolejność prac (propozycja — potwierdź z użytkownikiem)
 
 ```
-analiza → (propozycja + AKCEPTACJA, jeśli krok niesie decyzję) → implementacja
+pomiar §5 (bez zmian w kodzie)
+  → propozycja: które źródła, jaki tryb, co przy dwóch naraz
+    → AKCEPTACJA UŻYTKOWNIKA
+      → podłączenie źródeł, po jednym na iterację
+        → QA w obu motywach po każdej iteracji
+          → dokumentacja §19 + commit
+```
+
+⭐ **R15: wielkość iteracji idzie za niepewnością.** Dopóki nie ma odpowiedzi na „co przy dwóch naraz",
+idź drobno; po jej ratyfikacji podłączanie kolejnych źródeł to praca powtarzalna i może iść większymi
+krokami.
+
+---
+
+## 7. Obowiązkowa kolejność techniczna
+
+```
+analiza → (propozycja + AKCEPTACJA) → implementacja
   → uruchomienie aplikacji + QA w obu motywach
     → dotnet build (0/0)
       → dotnet test (TRZY partycje, OSOBNO)
@@ -195,42 +228,69 @@ analiza → (propozycja + AKCEPTACJA, jeśli krok niesie decyzję) → implement
 --filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe"
 ```
 
-oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno. Stan: **7132 + 57 + 54 = 7243**.
-⚠⚠ **Filtr jest listą nazw i starzeje się cicho** — kryterium: *czy klasa konstruuje kontrolki Avalonii*.
+oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno. Stan: **7154 + 63 + 54 = 7271**.
+⚠⚠ **Filtr jest listą nazw i starzeje się cicho** — partycja headless ma **siedem** klas; kryterium
+dołączenia: *czy klasa konstruuje kontrolki Avalonii*.
 
 ---
 
-## 8. ⛔ Czego nie wolno
+## 8. ⚠ Pułapki najgroźniejsze dla M3b (pełna lista: handover §9)
 
-1. ⛔ **Nie wracaj do paska zakładek** bez realnego defektu funkcjonalnego — M3.3 zamknięte i odebrane.
-2. ⛔ **Nie projektuj języka kolorów ponownie**; przy każdej zmianie koloru przejdź bramkę `color-language.md` **§0.5**.
-3. ⛔ **Nie rozszerzaj katalogu, żeby domknąć kolizję** — **K1–K14** czekają na §13.3 (R3).
-4. ⛔ **Nie rób sweepu `Size.Icon` app‑wide** (64 literały) — to §13.3/M4.3, nie ten etap.
-5. ⛔ **Nie migruj 18 drzew „Zależności"** — M4.2b, i **nigdy na `SidebarFlatController`**.
-6. ⛔ **Nie zmieniaj Metadata Explorera na inny komponent** — D10, płaski kontroler jest docelowy.
-7. ⛔ **Nie ruszaj Layer 2/3 z `metadata-refresh-analysis.md`** — to osobny etap wydajnościowy po M3.
-8. ⛔ **Nie rezerwuj miejsca na element, którego w danym kontekście nie będzie** (**R13**).
-9. ⛔ **Nie doprowadzaj reguły do logicznej konsekwencji** (**pułapka 17**) — element niezgodny bywa
-   wyjątkiem, który **działa**.
-10. ⛔ **Nie naprawiaj przy okazji rzeczy spoza zakresu** — zmierz, opisz, zapisz, nie rozwiązuj bez decyzji.
+1. ⚠⚠ **`{DynamicResource}` NIE rzuca przy brakującym kluczu** — literówka jest niewidoczna przy zielonym
+   buildzie. Nazwy ról bierz z `Tokens.axaml`, nie z pamięci.
+2. ⚠⚠ **Wartość lokalna bije setter stylu.** Po jej usunięciu kontrolka zaczyna słuchać systemu — to
+   **ujawniony dług**, nie regresja. Zgłoś, nie maskuj.
+3. ⚠⚠ **Test headless konstruujący `MainWindow` ZAWIESZA suite.** Asercje rób na najtańszej kontrolce;
+   nowa klasa headless **dołącza do `HeadlessCollection`** i **do filtra partycji**.
+4. ⭐⭐ **Przeniesienie faktu zostawia po sobie „regresję", która nią nie jest** (pułapka 13). M3.1d odebrało
+   paskowi edytora SQL kropkę stanu, bo fakt przeszedł do chipa — i *„pasek transakcji zgubił kropkę"* jest
+   bardzo wiarygodnym zgłoszeniem. ⚠ **M3b jest tego pełen**: każde źródło, które zacznie raportować do
+   paska statusu, może stracić coś u siebie. **Komentarz idzie w OBA miejsca** — do tego, które fakt oddało,
+   i do tego, które go przejęło.
+5. ⭐⭐ **Zapytaj przy każdym źródle: czy ten fakt ma już właściciela gdzie indziej i czy tamten właściciel
+   nie jest bramkowany zakładką?** Bramka `IsXxxTabActive` na nośniku stanu **globalnego** to defekt §0.1.2,
+   nawet gdy wygląda jak porządek.
+6. ⚠ **R13: nie rezerwuj miejsca na element, którego w danym kontekście nie będzie.** Sekcja postępu jest
+   niewidoczna, gdy nic nie trwa — ⛔ to jest stan domyślny, nie komunikat „brak operacji".
+7. ⛔ **Pułapka 17: reguła opisuje to, co jest dobre.** *„Wszystkie 16 ViewModeli mają stan zajętości, więc
+   wszystkie powinny raportować"* jest dokładnie tym błędem, który wycofał M3.2b w całości.
 
 ---
 
-## 9. ⏸ Otwarte pozycje całego etapu
+## 9. ⛔ Czego M3b NIE robi
+
+1. ⛔ **Nie zmienia `StatusProgressViewModel` w model wielu operacji naraz** bez ratyfikowanej odpowiedzi na
+   pytanie z §4.3.
+2. ⛔ **Nie dodaje drugiej komendy Cancel** — model przyjmuje komendę właściciela (§4.3).
+3. ⛔ **Nie usuwa istniejących `ProgressBar`** z eksportu/importu/batcha bez decyzji produktowej (§5.5).
+4. ⛔ **Nie zwiększa wysokości paska statusu** — §8.5 specyfikacji zabrania wprost.
+5. ⛔ **Nie rozszerza katalogu, żeby domknąć kolizję** — **K1–K15** czekają na §13.3 (R3).
+6. ⛔ **Nie wraca do paska zakładek, drzewa ani menu** bez realnego defektu funkcjonalnego — M3.3 i M3.4
+   zamknięte.
+7. ⛔ **Nie rusza `AutoScrollToSelectedItem`** (§3.1) ani `TreeDiagnostics` (§3.2).
+8. ⛔ **Nie naprawia przy okazji rzeczy spoza zakresu** — zmierz, opisz, zapisz, nie rozwiązuj bez decyzji.
+9. ⏸ **Nie zaczyna pełnej semantyki kolorów railu** bez decyzji — odłożona tu świadomie przez użytkownika,
+   z pomiarem (§19.4.4); rozstrzygnąć **razem z** sekcją postępu, bo oba mówią „coś się dzieje".
+
+---
+
+## 10. ⏸ Otwarte pozycje całego etapu
 
 | # | Co | Gdzie rozstrzygane |
 |---|---|---|
 | **DC** | likwidacja `AccentIconBrush` / `InfoIconBrush` (24 wystąpienia / 14 plików) | M4.3 / M5 |
-| **K1–K14** | rejestr kolizji (§18.R); ⭐ **K12–K14 jako JEDNO pytanie o gęstość** | brama **§13.3** |
+| **K1–K15** | rejestr kolizji (§18.R); ⭐ **K12–K14 jako JEDNO pytanie o gęstość paska**, **K15 jako JEDNO o gęstość drzewa** | brama **§13.3** |
 | **V‑1** | kontrast koloru komentarzy SQL (4,14:1) — ratyfikowany, że zostaje | rewizja w użyciu |
 | **R‑6 (DPI)** | ⚠ częściowo **nieweryfikowalne headlessowo** — sprawdzić **150 % okiem** | brama §13.3 |
+| ⏸ | nawigacja klawiaturą w drzewie po §3.1 | QA użytkownika |
+| ⏸ | hipoteza o zawieszającym się teście (§3.3) | obserwacja suity |
 | ⏸ | przycisk/licznik przepełnienia paska zakładek (§8.2) | do zaplanowania |
-| ⏸ | 6 sierocych stałych `UiStrings` · role `Pad.Tab` i `Size.Icon.Lg` bez konsumentów | §13.3 / M4.3 |
+| ⏸ | 6 sierocych stałych `UiStrings` · role `Pad.Tab`, `Size.Icon.Lg` bez konsumentów · 64 literały `Size.Icon` + 112 literałów ikona/odstęp | §13.3 / M4.3 |
 | ⏸ | pełna semantyka kolorów railu | **M3b** |
 
 ---
 
-## 10. ⭐⭐ Reguła prowadząca
+## 11. ⭐⭐ Reguła prowadząca
 
 > **Użytkownik:** *„Dokument ma prowadzić produkt. Nie produkt dokument."*
 > **Użytkownik (R16):** *„Potraktuj pomiary jako narzędzie diagnostyczne, a nie kryterium zakończenia
@@ -238,10 +298,9 @@ oraz odwrotność z `|`, oraz `ConnectionExpandBindingProbe` osobno. Stan: **713
 
 Jeżeli znajdziesz rozwiązanie wyraźnie lepsze od zapisanego:
 **propozycja → akceptacja → aktualizacja dokumentu → implementacja.**
-⛔ Ani ciche odstępstwo, ani ślepa zgodność. ⛔ Decyzje D1–D12 i reguły R1–R17 zmienia wyłącznie
-użytkownik.
+⛔ Ani ciche odstępstwo, ani ślepa zgodność. ⛔ Decyzje D1–D12 i reguły R1–R17 zmienia wyłącznie użytkownik.
 
-⭐ **M3.3 dało trzy dowody, że to działa w praktyce:** przeskalowanie M3.3a (plan był nieaktualny),
-ukrycie „Maximum rows" (moja decyzja była gorsza) i strukturalna poprawka paska przewijania
-(*„naprawiasz objaw zamiast układu"*). **Za każdym razem wygrała korekta użytkownika, nie obrona
-implementacji.**
+⭐ **M3.4 dało trzy dowody, że to działa w praktyce:** przeskalowanie M3.4a (plan był nieaktualny),
+zatrzymanie się przed naprawą kosztu menu i pokazanie pomiaru zamiast implementacji, oraz **cofnięcie
+własnej hipotezy o mechanizmie zawieszenia po pomiarze, który ją obalił**. Za każdym razem wygrał pomiar,
+nie przekonanie.
