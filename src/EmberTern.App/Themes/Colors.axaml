@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="https://github.com/avaloniaui"
+﻿<ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <ResourceDictionary.ThemeDictionaries>
 
@@ -12,6 +12,19 @@
            są PRZECIWNE i tam te dwie role się rozchodzą — patrz komentarz w słowniku Light. -->
       <Color x:Key="SurfaceRaisedColor">#2D2D2D</Color>
       <Color x:Key="BorderColor">#3F3F46</Color>
+      <!-- ⭐⭐ M3.5 / Z-2 — KONTUR KONTROLKI INTERAKTYWNEJ W SPOCZYNKU. Rola inna niż `BorderColor`
+           (separator konstrukcyjny) i to rozróżnienie jest przyczyną defektu, nie jego ozdobą: dopóki
+           obie dzieliły jeden token, niezaznaczony `CheckBox` miał 1,60:1 w Dark i 1,35:1 w Light,
+           czyli PONIŻEJ progu 3:1 z §10 — kontrolka, którą trzeba kliknąć, była niewidoczna w swoim
+           stanie DOMYŚLNYM (zaznaczona jest jaskrawo niebieska, więc krzyczała włączona i nie
+           istniała wyłączona).
+           ⭐ Wartość policzona NA PRÓG (~3,1:1 wobec `BackgroundColor`), nie wyżej — ta sama droga,
+           którą ratyfikowała gotcha #308 dla pól filtra. Wariant na `SubtleForegroundColor` (6,31:1)
+           był renderowany i ODRZUCONY: kontur przyciągał więcej uwagi niż własna etykieta.
+           ⛔ Nie zamieniać na alias `BorderColor` ani `SubtleForegroundColor` — rola ma mieć WŁASNĄ
+           wartość (K1: wspólna wartość dziś nie jest zależnością architektoniczną).
+           Konsumenci: `CheckBox` i `RadioButton` (oba nasze własne szablony w `ControlThemes.axaml`). -->
+      <Color x:Key="ControlOutlineColor">#6A6A70</Color>
       <Color x:Key="ForegroundColor">#D4D4D4</Color>
       <!-- ⭐ H‑7 / §7.4 — tekst drugorzędny. Poprzednia wartość #858585 dawała 4,52:1, czyli
            DOKŁADNIE na granicy AA, przy FontSize 11 i dla głównego elementu nawigacyjnego narzędzia
@@ -214,6 +227,8 @@
       <SolidColorBrush x:Key="ChromeStrongBrush" Color="{StaticResource ChromeStrongColor}" />
       <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}" />
       <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+      <!-- M3.5 / Z-2 — kontur kontrolki interaktywnej; rola i powód przy `ControlOutlineColor`. -->
+      <SolidColorBrush x:Key="ControlOutlineBrush" Color="{StaticResource ControlOutlineColor}" />
       <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
       <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
@@ -381,6 +396,9 @@
            tło od czystej bieli. Krawędź niesie `BorderBrush`, bo różnica wobec tła jest niewielka. -->
       <Color x:Key="SurfaceRaisedColor">#FFFFFF</Color>
       <Color x:Key="BorderColor">#D8DBE0</Color>
+      <!-- M3.5 / Z-2 — patrz pełne uzasadnienie w słowniku Dark. Tu defekt był GORSZY (1,35:1),
+           bo `BorderColor` #D8DBE0 na tle #FCFCFD to niemal ta sama jasność. ~3,1:1 na progu. -->
+      <Color x:Key="ControlOutlineColor">#90939A</Color>
       <Color x:Key="ForegroundColor">#1B1D1F</Color>
       <!-- ⭐ H‑7 / §7.4 — tekst drugorzędny; na nowej chromie #F3F4F6 daje 5,33:1 zamiast
            granicznych 3,86:1, jakie #6E6E6E dawało na #E0E0E0. To jest kolor nieaktywnych zakładek
@@ -521,6 +539,8 @@
       <SolidColorBrush x:Key="ChromeStrongBrush" Color="{StaticResource ChromeStrongColor}" />
       <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}" />
       <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+      <!-- M3.5 / Z-2 — kontur kontrolki interaktywnej; rola i powód przy `ControlOutlineColor`. -->
+      <SolidColorBrush x:Key="ControlOutlineBrush" Color="{StaticResource ControlOutlineColor}" />
       <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
       <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />

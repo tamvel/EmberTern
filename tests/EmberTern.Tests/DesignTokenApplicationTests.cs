@@ -1390,6 +1390,146 @@ public sealed class DesignTokenApplicationTests
     }
 
     /// <summary>
+    /// M3.5 / Z-1 — a DISABLED <c>Button.icon</c> paints no background and no border.
+    ///
+    /// <para>⭐ Why this cannot be read off the stylesheet. <c>Button.icon</c> sets
+    /// <c>Background</c>/<c>BorderBrush</c> to Transparent <b>on the control</b>, while FluentTheme's
+    /// <c>:disabled</c> style paints <c>/template/ ContentPresenter</c> with <c>ButtonBackgroundDisabled</c> —
+    /// and a style targeting the template child BEATS a setter on the control. Both facts are visible in the
+    /// source and their <i>interaction</i> is not; only the applied value on the element that actually paints
+    /// answers the question. Measured in the §13.3 gate: the four disabled pagination buttons rendered as
+    /// filled chips while the three enabled ones were bare.</para>
+    ///
+    /// <para>⚠ Asserted on the presenter, not on the Button — same reasoning as the FluentBridge tests:
+    /// the assertion has to read the brush from the element that paints it.</para>
+    /// </summary>
+    [Fact]
+    public async Task DisabledIconButton_PaintsNoChrome()
+    {
+        await _session.Dispatch(() =>
+        {
+            var enabled = new Button { Classes = { "icon" }, Content = "A" };
+            var disabled = new Button { Classes = { "icon" }, Content = "B", IsEnabled = false };
+            var window = new Window { Content = new StackPanel { Children = { enabled, disabled } } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            var presenter = disabled.GetVisualDescendants().OfType<ContentPresenter>().First();
+            var background = presenter.Background;
+            var border = presenter.BorderBrush;
+            window.Close();
+
+            Assert.True(IsTransparent(background),
+                "Wyłączony `Button.icon` maluje TŁO: " + Describe(background) + ".\n"
+                + "To `:disabled` Fluenta celujące w `/template/ ContentPresenter` (Bridge przypina tam "
+                + "`ButtonBackgroundDisabled` → `PanelColor`); setter na kontrolce z bloku `Button.icon` "
+                + "przegrywa, a `Opacity 0.4` tylko przygasza pastylkę. Potrzebny jest setter na TYM elemencie.\n"
+                + "⛔ Nie naprawiać w Bridge'u — `Button.flat`/`Button.primary` MAJĄ w tym stanie wyglądać "
+                + "jak przyciski.");
+
+            Assert.True(IsTransparent(border),
+                "Wyłączony `Button.icon` maluje KRAWĘDŹ: " + Describe(border) + ". Powód i lekarstwo jak wyżej.");
+        }, default);
+    }
+
+    /// <summary>
+    /// M3.5 / Z-2 — an unchecked CheckBox's outline clears §10's 3:1 floor against its own background,
+    /// in BOTH themes.
+    ///
+    /// <para>⭐⭐ Pins the THRESHOLD, not the value. The hex may move (§4.2.4 — role before value); what may
+    /// never move is the reason the token exists. Before M3.5 the outline took <c>BorderBrush</c> and measured
+    /// 1.60:1 in Dark and 1.35:1 in Light — a control the user must click, invisible in its DEFAULT state.
+    /// Asserting <c>#6A6A70</c> would duplicate the catalog and go green on a value that had drifted below the
+    /// floor; asserting the ratio cannot.</para>
+    ///
+    /// <para>⚠ Both themes, because the two are independent values and the Light one was the worse of the pair
+    /// — and because a brush looked up without a <see cref="ThemeVariant"/> returns UNSET (gotcha #250).</para>
+    /// </summary>
+    [Theory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task UncheckedControlOutline_ClearsTheContrastFloor(string variantName)
+    {
+        // ⚠ `Application.Current` istnieje wyłącznie na wątku sesji headless, więc KAŻDE odczytanie
+        //    zasobu motywu musi być w `Dispatch` — poza nim `ThemeToken` widzi null i test zawodzi
+        //    z powodu, który nie ma nic wspólnego z jego przedmiotem.
+        var variant = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        var ratio = await _session.Dispatch(() =>
+        {
+            // ⚠⚠ ODCZYT Z ELEMENTU, KTÓRY MALUJE, nie z tokenu — i to jest warunek poprawności testu,
+            //    nie jego staranność. Pierwsza wersja czytała `ControlOutlineBrush` z zasobów i liczyła
+            //    jego kontrast: taki test przechodzi na ZIELONO, gdy ktoś cofnie `CheckBox` na
+            //    `BorderBrush`, bo token nadal ma dobrą wartość, tylko nikt go nie używa. Pinuje więc
+            //    dwie rzeczy naraz: że kontrolka bierze właściwą rolę I że ta rola spełnia próg.
+            var box = new CheckBox { Content = "x", IsChecked = false };
+            var window = new Window { Content = box, RequestedThemeVariant = variant };
+            window.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            var outline = box.GetVisualDescendants()
+                .OfType<Border>()
+                .First(b => b.Name == "NormalRectangle");
+            var painted = Assert.IsAssignableFrom<ISolidColorBrush>(outline.BorderBrush);
+            var surface = ThemeToken<SolidColorBrush>("BackgroundBrush", variant);
+            window.Close();
+
+            return ContrastRatio(painted.Color, surface.Color);
+        }, default);
+
+        Assert.True(ratio >= 3.0,
+            $"Kontur kontrolki w motywie {variantName} ma {ratio:0.00}:1 wobec własnego tła, "
+            + "a §10 wymaga 3:1 dla znaczącego elementu nietekstowego.\n"
+            + "To NIE jest test wartości — hex może się zmieniać (§4.2.4). Testem jest powód istnienia roli: "
+            + "niezaznaczony `CheckBox` musi być widoczny w swoim stanie DOMYŚLNYM. Na `BorderBrush` "
+            + "(stan przed M3.5) było 1,60:1 w Dark i 1,35:1 w Light.");
+    }
+
+    /// <summary>
+    /// M3.5 / Z-6 — the composite create icon is reachable and both of its badge brushes resolve, in both
+    /// themes. ⚠ A ControlTheme keyed by type is exactly the kind of thing that compiles, builds and then
+    /// renders NOTHING when its dictionary is not merged (the M3.3b lesson: a missing dictionary does not
+    /// fail, it silently removes the element).
+    /// </summary>
+    [Fact]
+    public async Task CreateIcon_AppliesItsTemplate_AndBadgeBrushesResolve()
+    {
+        await _session.Dispatch(() =>
+        {
+            // Oba pędzle badge'a, w OBU motywach — pędzel odczytany bez `ThemeVariant` zwraca UNSET
+            // i `SvgIcon`/`CreateIcon` nie malują wtedy nic, przy zdrowo wyglądającym stanie (#250).
+            foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
+            {
+                ThemeToken<SolidColorBrush>("AccentBrush", variant);
+                ThemeToken<SolidColorBrush>("OnAccentBrush", variant);
+            }
+
+            var icon = new EmberTern.App.Controls.CreateIcon
+            {
+                Data = Geometry.Parse("M5 3 H19 A2 2 0 0 1 21 5 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V5 A2 2 0 0 1 5 3 Z"),
+            };
+            var window = new Window { Content = icon };
+            window.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            var paths = icon.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Count();
+            var discs = icon.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Count();
+            window.Close();
+
+            Assert.True(paths == 2 && discs == 1,
+                $"`CreateIcon` nie złożyło się: ścieżek {paths} (oczekiwano 2 — glif + plus), "
+                + $"dysków {discs} (oczekiwano 1). Najczęstsza przyczyna: ControlTheme nieosiągalny, "
+                + "bo `IconGeometries.axaml` nie jest scalony — wtedy kontrolka nie zawodzi, tylko "
+                + "renderuje NIC.");
+        }, default);
+    }
+
+    private static bool IsTransparent(IBrush? brush)
+        => brush is null || (brush is ISolidColorBrush s && s.Color.A == 0);
+
+    private static string Describe(IBrush? brush)
+        => brush is ISolidColorBrush s ? s.Color.ToString() : brush?.ToString() ?? "null";
+
+    /// <summary>
     /// The same lookup for a THEME-SCOPED resource. ⚠ Measured, and worth knowing: the variant-less
     /// <see cref="Token{T}"/> above cannot see anything declared inside <c>ThemeDictionaries</c> — it reports the
     /// key as missing. That is precisely the line between the two colour-free dictionaries added in M2a
@@ -1405,3 +1545,4 @@ public sealed class DesignTokenApplicationTests
         return Assert.IsType<T>(value);
     }
 }
+

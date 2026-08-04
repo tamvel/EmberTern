@@ -1092,3 +1092,62 @@ every emit path to be individually perfect.**
 295. **A `SizeToContent` window that grows AFTER it opens grows DOWNWARDS from where it already is — the top-left stays put — so a dialog centred on its owner can push its own footer, and its primary button, off the bottom of the screen.** `WindowStartupLocation="CenterOwner"` centres the window ONCE, at the size it had when it opened; nothing re-evaluates that when the content changes. EmberTern's settings import dialog reveals its section list after a file is opened, and on a 1080-tall screen the *Import* button ended up under the desktop edge with no way back except dragging the window. Nothing throws and nothing is clipped — the window is simply partly off-screen, which no layout test can see. **The fix needs TWO rules and neither works alone:** a **ceiling** (`MaxHeight` from the screen's working area) so the window can never exceed the desktop, and a **ScrollViewer around the body with the footer outside it** so the ceiling scrolls the content instead of clipping the buttons away; plus a **nudge** that pushes the window back inside the working area after a size change — ⚠ *only* when it has actually fallen outside, because re-centring on every size change moves a dialog the user is reading and is more disorienting than the defect. ⚠⚠ **The units are the real trap:** `Window.Position` and `Screen.WorkingArea` are PHYSICAL pixels while `MaxHeight`, `ClientSize` and `FrameSize` are DIPs, so on a 150% display a mixed calculation gives a ceiling a third too tall and a clamp a third too eager — convert through the screen's own `Scaling`, every time. And clamp against the **working area's own origin**, never `0,0`: a top-docked taskbar or a monitor to the left of the primary gives it a non-zero (possibly negative) origin, and the `0,0` version passes every single-monitor test. *(Settings Center — etap 5b QA, 2026-07-31; `GrowingDialogBehavior`)*
 
 296. **A disabled control's REASON needs the same change notifications as the control's enabled state — notify one and not the other and the button greys out while the explanation still describes the previous state.** EmberTern's export dialog computes `CanExport` and a separate "why not" property from the same seven checkboxes. Five of the seven declared `[NotifyPropertyChangedFor(nameof(CanExport))]` and nothing else, so unticking every section correctly disabled Export and the *"select at least one thing to include"* line **never appeared at all** — the exact confusion the line exists to prevent, with a green build and a property that returns the right answer whenever anyone reads it. ⚠ **That last part is what makes it hard to test by accident:** a test that reads the property passes, because the value was never wrong; only a test that listens to `PropertyChanged` can tell whether the UI was ever told. Two rules. **(a) Whenever a gate and its explanation are separate members, every input notifies BOTH** — they are two halves of one answer, and a declarative `[NotifyPropertyChangedFor]` next to the field is better than a hand-written `OnPropertyChanged` in a changed-handler, because the next field added is far more likely to copy the attributes than to remember the handler. **(b) When pinning it, end the test on an input that was previously silent** — the export's `Connections` flag already announced (it had a handler for an unrelated rule), so a test that unticked it last would have passed against the defect. ⚠ Generalises to any derived "why is this unavailable" text: a tooltip on a disabled button, a readiness strip, a validation summary. *(Settings Center — etap 5b QA, 2026-07-31; verified by planting the violation)*
+
+313. **A control variant that cancels its own chrome loses that cancellation in exactly one state —
+     `:disabled` — because FluentTheme paints the template child while the variant sets the control.**
+     `Button.icon` sets `Background`/`BorderBrush` to `Transparent` **on the Button**; Fluent's `:disabled`
+     style sets them on `/template/ ContentPresenter` from `ButtonBackgroundDisabled` /
+     `ButtonBorderBrushDisabled` (which `FluentBridge.axaml` repins to `PanelColor` / `BorderColor` — correctly,
+     for `Button.flat` and `Button.primary`). A style targeting the template child **beats** a setter on the
+     control, so a disabled icon button was the only icon button in the application that looked like a button.
+     ⚠ **`Opacity` makes it worse, not better, and hides the cause**: `Button.icon:disabled` set `Opacity 0.4`,
+     which *dimmed* the chip instead of removing it — and the dimmed value is what everyone measured. The
+     arithmetic gives the tell: 0.4 × `#252526` + 0.6 × `#2D2D2D` = `#2A2A2A`, i.e. a blend, not a token.
+     An earlier investigation (`docs/history/23`) attributed a disabled toolbar button's wrong look to
+     `Opacity` alone and stopped there; `Opacity` was real but secondary.
+     ⭐ **Fix at the same level as the offender** — `Button.icon:disabled /template/ ContentPresenter` →
+     Transparent, declared AFTER `:pointerover` so a pointer over a disabled button lights nothing.
+     ⛔ **Not in the Bridge**: those keys serve variants that are *supposed* to look like buttons when disabled.
+     ⭐⭐ **The second half is why it mattered for reception, and it generalises:** in the results pagination
+     strip the four *disabled* buttons were the only bordered elements while the three *enabled* ones were bare
+     — the strip said visually the opposite of the truth — and in Table Data the same rounded chip meant
+     **both** "unavailable" (`:disabled` background) and "engaged" (`ToggleButton.icon:checked`). **When one
+     visual device carries two opposite meanings, fixing the wrong one restores the other for free.**
+     Found by the §13.3 gate; a build, the full suite and a smoke test were all green throughout.
+     (Product Polish M3.5 / Z-1 — `product-polish.md` §19.36.1.)
+
+314. **In a fixed 24-unit icon box you cannot have both a full-size glyph and a large corner badge that do not
+     touch — and a stroked single-geometry icon cannot render a badge at all.** Two independent limits, both
+     measured, both worth knowing before designing an overlay mark.
+     (a) **Geometry:** a Lucide-style glyph occupies 18 of 24 units (3..21). A 6–7 unit badge in the corner
+     needs 15..22. The maximum non-overlapping split is glyph ~13 + badge 6, i.e. **+18 %** over a
+     glyph squeezed to 11 — not worth the work. So "grow the glyph and keep the badge beside it" is arithmetic,
+     not taste, and it is the wall a hand-authored `*Plus` family hits.
+     (b) ⚠⚠ **Rendering:** `SvgIcon` draws ONE `Path` with one `Stroke` and one `StrokeThickness` for the whole
+     geometry. A badge is by definition a *smaller, denser* mark; from there you can only get "smaller but
+     equally thick", which at 16 px is a blob. **A badge needs its own stroke/fill, therefore its own render
+     path** — a composite control (`DebuggerIcon`, `CreateIcon`), not a cleverer path string.
+     ⭐ **The escape that keeps one colour** is to put the badge where the glyph has **no ink** (Lucide's own
+     `folder-plus` does exactly this — full-size folder, plus inside the empty body), or to notch the glyph's
+     stroke around it. That works, and its cost is that the badge shrinks to whatever the interior allows.
+     ⚠ **When checking clearance, measure against the STROKED OUTLINE, not the path centreline.** With a 2-unit
+     stroke, "clear by 1 unit" means the outlines touch — which is how a candidate that computed clean rendered
+     as a smudge. (The ink-vs-path cousin of #288.)
+     ⭐ **And a solid badge needs no knockout**, which matters more than it sounds: the surface behind a toolbar
+     icon is not constant (`ChromeStrongBrush` at rest, `IconHoverBrush` on hover), so a knockout filled with
+     the chrome colour flashes a wrong-coloured patch the moment the pointer enters.
+     (Product Polish M3.5 / Z-6 — `product-polish.md` §19.36.3, `Assets/Icons/ICONS.md`.)
+
+315. **A guard that reads a token instead of the element that paints it is green while the product is broken.**
+     The first version of the M3.5 CheckBox guard looked `ControlOutlineBrush` up in the resources and asserted
+     its contrast ratio. That passes **unchanged** if someone points `CheckBox` back at `BorderBrush`: the token
+     still holds a good value, nobody uses it. ⭐ The correct shape constructs the control, finds the element
+     that actually paints (`Border#NormalRectangle`), and measures **that** brush — pinning two facts at once,
+     "the control takes the right role" and "the role clears the threshold".
+     ⚠ **Pin the THRESHOLD, not the value.** Asserting `#6A6A70` duplicates the catalog and goes green on a
+     value that has since drifted below the floor; asserting `>= 3:1` cannot. The hex is expected to move
+     (role before value); the reason the token exists is not.
+     ⭐⭐ **I only caught it because a planted violation was already scheduled** — the test was green, the code
+     was correct, and nothing about reading it suggested the gap. This is the operational argument for planting:
+     it does not merely confirm a guard works, it is the only step that reveals a guard measuring the wrong
+     thing. (Product Polish M3.5 / Z-2 — `product-polish.md` §19.36.2; same family as #308.)

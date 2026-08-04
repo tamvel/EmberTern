@@ -251,55 +251,55 @@
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTableTooltip}"
                   Command="{Binding NewTableCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.TablePlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.Table}"
                               Foreground="{DynamicResource IconColor_Table}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewViewTooltip}"
                   Command="{Binding NewViewCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.ViewPlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.View}"
                               Foreground="{DynamicResource IconColor_View}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewProcedureTooltip}"
                   Command="{Binding NewProcedureCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.ProcedurePlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.Procedure}"
                               Foreground="{DynamicResource IconColor_Procedure}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTriggerTooltip}"
                   Command="{Binding NewTriggerCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.TriggerPlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.Trigger}"
                               Foreground="{DynamicResource IconColor_Trigger}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewFunctionTooltip}"
                   Command="{Binding NewFunctionCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.FunctionPlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.Function}"
                               Foreground="{DynamicResource IconColor_Function}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewGeneratorTooltip}"
                   Command="{Binding NewGeneratorCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.GeneratorPlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.Generator}"
                               Foreground="{DynamicResource IconColor_Generator}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewDomainTooltip}"
                   Command="{Binding NewDomainCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.DomainPlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.Domain}"
                               Foreground="{DynamicResource IconColor_Domain}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewPackageTooltip}"
                   Command="{Binding NewPackageCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.PackagePlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.Package}"
                               Foreground="{DynamicResource IconColor_Package}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewExceptionTooltip}"
                   Command="{Binding NewExceptionCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.ExceptionPlus}"
+            <controls:CreateIcon Data="{StaticResource Icon.Exception}"
                               Foreground="{DynamicResource IconColor_Exception}" />
           </Button>
 

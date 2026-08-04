@@ -1,3 +1,10 @@
+> 🔒 **DOKUMENT HISTORYCZNY (od 2026-08-04).** Opisuje pracę ZAMKNIĘTĄ: M3, M3b, bramę §13.3 i M3.5.
+> ⛔ **Nie planuj z niego.** Prompt startowy na następną sesję to
+> [product-polish-m4-next-session.md](product-polish-m4-next-session.md).
+> Ten plik zostaje jako zapis „dlaczego", nie „co dalej".
+
+---
+
 # EmberTern — PROMPT STARTOWY: M3b.2 (postęp połączenia z bazą) i domknięcie M3
 
 > Wklej to jako pierwszą wiadomość nowej sesji. Dokument jest **samowystarczalny w zakresie stanu,

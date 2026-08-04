@@ -1,5 +1,5 @@
 <!-- Composed (not a stock Lucide icon): an arrow descending INTO a Lucide-style table grid = "import data
      into a table". Deliberately NOT Icon.Download, whose tray means "fetch a file to disk" — this module puts
-     rows into a TABLE, so the glyph rhymes with Icon.Table / Icon.TablePlus, exactly as the new-table button
+     rows into a TABLE, so the glyph rhymes with Icon.Table, exactly as the new-table button
      rhymes with the sidebar it feeds. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="m8.5 5.5 3.5 3.5 3.5-3.5"/><rect width="18" height="9" x="3" y="12" rx="2"/><path d="M3 16.5h18"/><path d="M12 12v9"/></svg>

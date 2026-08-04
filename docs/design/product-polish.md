@@ -8122,3 +8122,213 @@ szerszy, niż jest.
 
 ⛔ **M3b.3 jest ZAMKNIĘTE jako przeanalizowane i odłożone.** Założenie (rail rozróżnia aktywności kolorem)
 **zostaje ratyfikowane jako cel**; blokadą jest paleta, nie decyzja.
+
+---
+
+## §13.3a ✅ BRAMA §13.3 — WYNIK (2026-08-04)
+
+> **Materiał:** 8 stanów × 2 motywy, okno zmaksymalizowane 1915×1017, PNG bez kompresji, na
+> `SZKOLENIE_SQL` (2218 tabel / 1075 procedur) i `POG`. Punkt odniesienia: `be4dcc5`.
+> Zrzuty wykonał użytkownik; każde podejrzenie weryfikowane pomiarem pikseli i kodem.
+
+### §13.3a.1 Odpowiedzi na sześć pytań kontrolnych
+
+| # | Pytanie | Odpowiedź |
+|---|---|---|
+| 1 | Jedna rama czy cztery komponenty? | **Prawie.** Pasek statusu, pasek zakładek i drzewo czytają się jako jedna rama. **Toolbar nie** (§13.3a.3 / Z‑6) |
+| 2 | Rytm 36 / 26 / 24 jako hierarchia? | **Trzyma w chromie** (36 titlebar · 26 wiersz zakładek · 24 pasek statusu i wiersz drzewa — zmierzone). **Pęka w siatkach:** 27 px (wyniki SQL) i 40 px (Table Data), żadna nie jest katalogowymi 22 |
+| 3 | Krawędzie i separatory pod jedną regułą? | **Tak.** `#3F3F46` / `#D8DBE0` konsekwentnie: dolna krawędź paska zakładek, linie siatki, rail w spoczynku — jeden token, jedna robota |
+| 4 | Sygnały stanu to jeden zestaw? | **Nie, i częściowo z założenia.** Dodatkowo „obramowane" znaczyło **i** *wyłączone* **i** *włączone* — usunięte w M3.5 / Z‑1 |
+| 5 | Marketing Test bez logo? | **Tak** dla kadru na edytorze / drzewie / pasku statusu. **Nie** dla kadru z toolbarem |
+| 6 | Coś wygląda przeciętnie mimo spełnienia założeń? | **Tak — ikony „Create …" w toolbarze** (Z‑6). Reszta okazała się albo defektem z jedną przyczyną, albo artefaktem metody przechwytywania |
+
+### §13.3a.2 Znaleziska — i ich losy
+
+| # | Znalezisko | Decyzja użytkownika |
+|---|---|---|
+| **Z‑1** | Wyłączony `Button.icon` maluje tło i krawędź — jedyny przycisk ikonowy, który wygląda jak przycisk | ✅ **M3.5** |
+| **Z‑2** | Niezaznaczony `CheckBox`: 1,60:1 (Dark) / 1,35:1 (Light), pod progiem 3:1 z §10 | ✅ **M3.5** |
+| **Z‑6** | Ikony „Create …": glif ściśnięty do ~11 z 24 j. przez plus obok niego | ✅ **M3.5** |
+| **Z‑3** | Wiersz Table Data 40 px wobec katalogowych 22 i 27 w bliźniaczej siatce | ⏸ **poza M3.5 — najpierw USTALIĆ PRZYCZYNĘ.** ⭐ Ratyfikowane: *„nie poprawiaj pod katalog tylko dlatego, że liczby się nie zgadzają; jeśli większy wiersz jest świadomą decyzją poprawiającą czytelność, zostawiamy go"* |
+| **Z‑4** | Okno Settings przycina wiersz w połowie opisu | ⏸ późniejszy polish |
+| **Z‑5** | Edytor daty w dialogu Execute wygląda na wyłączony, wypada z rytmu wiersza | ⏸ późniejszy polish dialogów |
+| **O‑2** | `AccentBrush` na `PanelBrush` = 2,89:1 ma DWA konsumenty w chromie, nie jeden | → dopisane do **P‑1** (`color-language.md` §9.2) |
+
+### §13.3a.3 ⛔ „TĘCZA IKON" WYCOFANA — nie jest defektem
+
+Brama zgłosiła, że dziewięć różnobarwnych ikon tworzenia obok sześciu jednolicie niebieskich narzędzi
+„nie czyta się jak jedna rama". **Użytkownik to odrzucił i miał rację:**
+
+> *„Kolory ikon są świadomą częścią języka wizualnego EmberTerna i odpowiadają kolorom używanym w drzewie
+> metadanych. Dzięki temu użytkownik bardzo szybko zaczyna kojarzyć typ obiektu po kolorze, niezależnie od
+> miejsca w aplikacji."*
+
+⭐⭐ **To była pułapka 17 w wykonaniu bramy: zobaczyłem system (S1 — tożsamość rodzaju) i doprowadziłem
+obserwację do logicznej konsekwencji, zamiast zapytać, CZY TO DZIAŁA.** Działa — i jest wprost realizacją
+**W1**. ⛔ Zapisane jako **odrzucone z uzasadnieniem**, nie jako otwarty temat, żeby żadna przyszła sesja nie
+„naprawiła" tęczy drugi raz.
+
+⚠ **Prawdziwe znalezisko w toolbarze wskazał użytkownik, nie brama:** problemem nie jest kolor, tylko
+**rozmiar optyczny glifu** — patrz Z‑6.
+
+### §13.3a.4 Problemy odrzucone po pomiarze
+
+| Podejrzenie | Dlaczego odrzucone |
+|---|---|
+| Brak paska statusu | **Artefakt metody przechwytywania**, potwierdzony przez użytkownika. Pasek poprawny w obu motywach |
+| Rail niewidoczny w spoczynku | 1,47:1 / 1,26:1 to **włos z założenia** (`Stroke.Rail`); spoczynek to brak sygnału, a ten sam token obsługuje linie siatki |
+| `BEGIN`/`END` bez ramek w Light | Różnica **pozycji karetki** między zrzutami; s2 pokazuje ramki w obu motywach |
+| Zebra słabsza w Dark | **Zmierzone: 1,15:1 vs 1,12:1** — symetryczne. Wrażenie brało się z lepiej widocznych *linii siatki* w Light |
+| Dwa wskaźniki postępu przy zapytaniu | **Ratyfikowany** podział §19.33 — elapsed na górze, pasek gdzie indziej |
+| Aktywna zakładka nie do znalezienia | **Pomiar chybił wskaźnika o jeden piksel.** Jest: `#2D6BBF` w y=111–113 |
+| Długie nazwy zakładek | Ratyfikowane **D6** z pomiarowym uzasadnieniem. Nie otwierane |
+
+⭐⭐ **Metodologicznie najważniejszy wynik bramy: z siedmiu podejrzeń SZEŚĆ padło po pomiarze, a dwa
+z nich były błędami samego pomiaru** (skan pikseli chybił 2‑pikselowego wskaźnika; przechwytywanie ekranu
+zgubiło pasek statusu). ⚠ **Wrażenie z obejrzenia zrzutu jest hipotezą, nie znaleziskiem** — i w tej bramie
+sprawdzało się rzadziej niż zawodziło.
+
+### §13.3a.5 ⏸ TEMAT ODŁOŻONY — Settings Center jako powierzchnia UX
+
+> **Zgłoszone przez użytkownika w bramie §13.3 (2026-08-04), ratyfikowane jako OSOBNY temat UX polish
+> na późniejszy etap. ⛔ NIE jest to defekt i NIE należy do M3.5.**
+
+> *„To jest element, który moim zdaniem najbardziej odstaje od reszty aplikacji. […] Obecnie nasze Settings
+> wygląda trochę jak zwykły ListBox z tekstem. Funkcjonalnie jest w porządku, ale wizualnie można z niego
+> wyciągnąć znacznie więcej niewielkim nakładem pracy."*
+
+Kierunek wskazany na przykładzie okna Settings aplikacji Claude — ⛔ **nie kopiowanie wyglądu, tylko
+hierarchia informacji.** Trzy rzeczy, na których użytkownikowi zależy: **ikony przy kategoriach** ·
+**wyraźniejsze oddzielenie panelu nawigacji od zawartości** · **bardziej „produktowy" wygląd lewej nawigacji**.
+
+⭐ **Zmierzona delta — temat jest mniejszy, niż wygląda:**
+
+| Element | Stan |
+|---|---|
+| Odrębne tło panelu nawigacji | ⛔ **BRAK — panel i zawartość mają IDENTYCZNE tło** `#1E1E1E` / `#FCFCFD` (`BackgroundBrush`). Separacji powierzchniowej nie ma żadnej. Największa część punktu to przypisanie panelowi `PanelBrush` — ta sama para chroma-vs-dokument, którą stosuje pasek zakładek |
+| Ikony przy kategoriach | brak — pole w `SettingsCategory` + geometria, **nie przebudowa** |
+| Nagłówki sekcji w nawigacji | brak — mamy płaską listę 6 pozycji |
+| Search na górze panelu | ✅ jest |
+| Akcentowa belka zaznaczenia | ✅ jest, spójna z drzewem |
+| Stopka „Changes apply immediately." | ✅ jest |
+
+⚠ Razem z tym tematem idą **Z‑4** (okno przycina wiersz w połowie opisu) i obserwacja z bramy: **cztery
+wiersze Easy mode powtarzają dosłownie ten sam dwuwierszowy opis**, co czyta się jak wata i wymusza
+porównywanie, czy opisy się różnią.
+
+---
+
+## §19.36 Iteracja 24 (M3.5) — trzy defekty z bramy §13.3 (2026-08-04)
+
+> **Zakres ratyfikowany przez użytkownika: Z‑1 + Z‑2 + Z‑6.** Build 0/0 · suite **7317** zielony
+> w trzech partycjach (7196 + 67 + 54, +7) · smoke czysty. Wszystkie cztery nowe strażniki
+> **zweryfikowane podsadzeniem naruszenia**.
+
+### §19.36.1 Z‑1 — wyłączony `Button.icon` przestaje wyglądać jak przycisk
+
+**Mechanizm, zmierzony w bramie:** `:disabled` Fluenta maluje `/template/ ContentPresenter`, przypinając
+`ButtonBackgroundDisabled` (Bridge → `PanelColor`) i `ButtonBorderBrushDisabled` (→ `BorderColor`). Settery
+`Background`/`BorderBrush` z bloku `Button.icon` stoją **na kontrolce**, więc przegrywają ze stylem celującym
+w element szablonu — a `Opacity 0.4` tylko **przygaszała** pastylkę. Arytmetyka zgadzała się do bitu:
+0,4 × `#252526` + 0,6 × `#2D2D2D` = `#2A2A2A`, dokładnie tyle, ile zmierzono na pasku paginacji.
+
+**Widoczne na czterech powierzchniach:** toolbar (wyłączony Connect), pasek paginacji wyników SQL (4 z 7
+przycisków), pasek paginacji Table Data, toolbar edytora tabeli (wyłączony Compile). **169 `Classes="icon"`
+w 15 plikach** to zasięg strukturalny.
+
+⭐⭐ **Druga połowa znaleziska, i to ona czyni z tego defekt ODBIORU:** w pasku wyników jedyne obramowane
+elementy były te **niedostępne**, a dostępne były nagie — pasek mówił wizualnie odwrotnie, niż jest. A w Table
+Data ta sama pastylka oznaczała **jednocześnie** „wyłączone" (tło `:disabled`) i „włączone"
+(`ToggleButton.icon:checked`). Naprawa jednej rzeczy odzyskuje pastylkę jako jednoznaczny sygnał.
+
+⛔ **Nie naprawione w Bridge'u, i to jest decyzja:** `ButtonBackgroundDisabled` obsługuje też `Button.flat`
+i `Button.primary`, które w tym stanie **mają** wyglądać jak przyciski. Przezroczystość jest wyjątkiem
+wariantu ikonowego, nie regułą Bridge'a.
+
+⚠ **Korekta wcześniejszej diagnozy:** `docs/history/23` przypisywała wygląd wyłączonego młotka `Opacity`.
+`Opacity` jest realne, ale **drugorzędne** — pastylka to tło `:disabled`, które przeżyło przezroczyste settery.
+
+### §19.36.2 Z‑2 — kontur kontrolki dostaje własną rolę
+
+Nowy token **`ControlOutlineBrush`** (`#6A6A70` Dark / `#90939A` Light), konsumenci: `CheckBox`
+i `RadioButton`. ⭐ Wartość policzona **na próg** (~3,1:1), nie wyżej — ta sama droga, którą ratyfikowała
+gotcha **#308**. Wariant na `SubtleForegroundBrush` (6,31:1 / 5,71:1) był **wyrenderowany i odrzucony**:
+kontur przyciągał więcej uwagi niż własna etykieta, w Light rażąco.
+
+⭐ **Rola jest inna niż `BorderBrush` i to rozróżnienie JEST przyczyną defektu, nie jego ozdobą:** dopóki
+„separator konstrukcyjny" i „kontur kontrolki interaktywnej" dzieliły jeden token, kontrolka, którą trzeba
+kliknąć, była niewidoczna w swoim stanie **domyślnym**. ⛔ Nie zamieniać na alias (K1).
+
+⚠⚠ **LEKCJA O TEŚCIE, ważniejsza od samej poprawki: pierwsza wersja strażnika była BEZWARTOŚCIOWA i sam to
+złapałem tylko dlatego, że planowałem podsadzenie.** Czytała `ControlOutlineBrush` z zasobów i liczyła jego
+kontrast — taki test przechodzi **na zielono**, gdy ktoś cofnie `CheckBox` na `BorderBrush`, bo token nadal ma
+dobrą wartość, tylko nikt go nie używa. ⭐ Poprawny kształt czyta pędzel **z elementu, który maluje**
+(`Border#NormalRectangle`), więc pinuje dwie rzeczy naraz. Podsadzenie odtworzyło dokładnie wartości z bramy
+(1,60:1 / 1,35:1) — co niezależnie potwierdziło i pomiar, i test.
+
+### §19.36.3 Z‑6 — `CreateIcon`: glif to RODZAJ, badge to AKCJA
+
+**Pomiar wejściowy:** wszystkie dziewięć geometrii `*Plus` miało identyczny segment plusa
+`M18.5 15 V22 M15 18.5 H22`, czyli plus zajmował **cały prawy dolny kwadrant** i **nie nachodził na glif**.
+Glif był za to ściśnięty do **11–12 j.** tam, gdzie jego odpowiednik w drzewie ma **18** — ~62 % rozmiaru
+liniowego, ~40 % powierzchni, przy **identycznym pudełku** (`SvgIcon` renderuje w stałym Viewboxie 24×24).
+⭐ Czyli gotcha **#288 na opak: ink box zaczął dyktować rozmiar optyczny, zamiast go diagnozować.**
+
+**Trzy drogi sprawdzone sondą, w tej kolejności:**
+
+1. **Plus we wnętrzu glifu** (czysta geometria, wzór `Icon.FolderPlus`) — glif wygrał bezdyskusyjnie,
+   **badge przegrał**: działało dla 5 z 9, w `View`/`Trigger`/`Generator` plus zlewał się z konturem.
+   ⚠ Mój błąd projektowy wart zapisania: liczyłem odstępy względem **linii środkowych ścieżek**, nie względem
+   **obrysu kreski** — przy kresce 2 j. prześwit „1 j." to stykające się obrysy. Kuzyn #288: liczy się tusz.
+2. ⭐⭐ **Arytmetyka, która zamknęła tę drogę na zawsze:** w pudełku 24 j. **nie da się mieć pełnowymiarowego
+   glifu i dużego plusa w narożniku bez nachodzenia**. Maksimum bez kolizji to glif ~13 + plus 6, czyli
+   **+18 %** wobec dzisiejszych 11 — nie warto. **Dzisiejszy podział 11+7 jest bliski optimum dla wariantu
+   „bez nachodzenia"**, i to prawdopodobnie ten mur zatrzymał wcześniejszą próbę użytkownika.
+3. **Badge zamiast drugiego glifu** — kierunek wskazany przez użytkownika, i **potwierdzony technicznie**:
+   ⚠⚠ `SvgIcon` to jeden `Path`, jeden `Stroke`, **jedna `StrokeThickness=2` dla całej geometrii**. Badge jest
+   z definicji znakiem **mniejszym i gęstszym**, a stamtąd da się dostać tylko „mniejszy i równie grubo" —
+   co przy 16 px daje kleks. **Droga geometryczna zawiodła STRUKTURALNIE, nie przez dobór kształtów.**
+
+**Wybrany wariant (użytkownik, na renderze): chip akcentowy** — solidny dysk `AccentBrush` + plus
+`OnAccentBrush`. Odrzucone: chip neutralny (⚠ **odwraca charakter między motywami** — jasnoszary w Dark,
+czarny i dominujący w Light) i grubszy plus w barwie rodzaju (zlewa się z glifem).
+
+⭐⭐ **I to nie jest wyjątek od języka kolorów — to on w działaniu.** Composite pozwala ikonie wyrazić
+**dwa fakty dwoma systemami, które §1 już definiuje**: glif = **S1** (rodzaj, `IconColor_*`, ta sama barwa
+co w drzewie), badge = **S2** (akcja „utwórz", jedna barwa dla wszystkich dziewięciu = **W1**). Wcześniej obie
+informacje walczyły o te same 24 jednostki i przegrywały obie.
+
+⭐⭐ **Zysk większy od wyglądu: dziewięć ręcznie utrzymywanych kopii ZNIKA.** `Icon.TablePlus … ExceptionPlus`
+były przybliżeniami swoich odpowiedników bez plusa; `CreateIcon.Data` bierze geometrię **plain przez
+referencję**, więc pasek narzędzi i drzewo mają jedną geometrię na rodzaj i nie mogą się rozjechać.
+⭐ Dokładnie ten defekt i to lekarstwo `DebuggerIcon` opisał u siebie („⛔ nie zamieniać referencji na wpisaną
+ścieżkę, nawet identyczną") — **dziewięć ikon Create było dziewięcioma nienaprawionymi instancjami tego wzorca.**
+
+⚠ **Badge jest SOLIDNY, więc zasłania — bez knockoutu, a zatem bez zależności od barwy tła.** To warunek
+poprawności, nie oszczędność: tło paska to `ChromeStrongBrush` w spoczynku, ale `IconHoverBrush` pod kursorem,
+więc knockout w barwie chromy pokazałby łatę złego koloru przy najechaniu. Ten sam zabieg, którym kropka
+breakpointu siedzi na trójkącie.
+
+⚠ **Proporcje zmierzone, nie dobrane na oko** (runda 3 sondy, na dwóch najgęstszych glifach): **dysk Ø10
+odsunięty 0,5 j.** Ø11 przy krawędzi zasłaniał róg siatki `Table` i narożnik `Package`; Ø9,5 odsłaniał
+najwięcej glifu, ale plus tracił ostrość. ⚠ Przy 16 px sam plus jest na granicy rozdzielczości **przy każdej
+średnicy** (kreska 1,33 px) — i tak ma być: badge rozpoznaje się po **pozycji i barwie**, jak w VS/JetBrains,
+a od ~20 px i przy 150 % DPI plus jest ostry.
+
+### §19.36.4 Nowe narzędzie — `tools/probes/VisualCandidateProbe`
+
+⭐⭐ **Istnieje wprost dlatego, że `color-language.md` §0.5 wymaga odpowiedzi na „czy użytkownik rozpozna
+akcję szybciej", a „nie wiadomo" jest odpowiedzią odmowną.** Bez narzędzia pokazującego kandydata jedyną
+dostępną odpowiedzią na pytanie o odbiór jest domysł. Sonda zamienia domysł w obrazek — i w tej iteracji
+zrobiła to trzy razy (warianty geometryczne → warianty badge'a → proporcje).
+
+⚠ Kandydaci są zdefiniowani **w sondzie, nie w produkcie**, więc uruchomienie nic nie wdraża.
+⭐ Osobny render **`z6-SHIPPED-*`** używa **prawdziwej kontrolki i jej ControlTheme**, a geometrię pobiera
+**z zasobów aplikacji po kluczu** — bo „wariant dobrze wygląda" i „tak wygląda to, co weszło" to dwie różne
+asercje, a M3.3b zapłaciło za pomylenie ich.
+
+### §19.36.5 Czego M3.5 NIE zrobiło
+
+⛔ Z‑3 (najpierw przyczyna) · Z‑4 · Z‑5 · **temat Settings** (§13.3a.5) · „tęcza ikon" (wycofana) ·
+żadnej zmiany w `Icon.Import`, `Icon.FolderPlus`, `Icon.Plus` ani w pozostałych ikonach · żadnej zmiany
+pozycji badge'a (prawy dolny — dzisiejsze miejsce, spójne z `DebuggerIcon`).

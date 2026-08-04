@@ -56,7 +56,10 @@
        ================================================================================================ -->
   <ControlTheme x:Key="{x:Type CheckBox}" TargetType="CheckBox">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <!-- ⭐ M3.5 / Z-2 — kontur bierze `ControlOutlineBrush`, nie `BorderBrush`. Zmierzone w bramie
+         §13.3: na `BorderBrush` niezaznaczona kontrolka miała 1,60:1 w Dark i 1,35:1 w Light, czyli
+         była praktycznie niewidoczna w stanie DOMYŚLNYM. Pełne uzasadnienie roli: `Colors.axaml`. -->
+    <Setter Property="BorderBrush" Value="{DynamicResource ControlOutlineBrush}" />
     <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
@@ -173,7 +176,10 @@
        ================================================================================================ -->
   <ControlTheme x:Key="{x:Type RadioButton}" TargetType="RadioButton">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <!-- ⭐ M3.5 / Z-2 — kontur bierze `ControlOutlineBrush`, nie `BorderBrush`. Zmierzone w bramie
+         §13.3: na `BorderBrush` niezaznaczona kontrolka miała 1,60:1 w Dark i 1,35:1 w Light, czyli
+         była praktycznie niewidoczna w stanie DOMYŚLNYM. Pełne uzasadnienie roli: `Colors.axaml`. -->
+    <Setter Property="BorderBrush" Value="{DynamicResource ControlOutlineBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />

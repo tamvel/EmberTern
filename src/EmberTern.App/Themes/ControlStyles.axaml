@@ -704,6 +704,32 @@
     <Setter Property="Opacity" Value="0.4" />
   </Style>
 
+  <!-- ⭐⭐ M3.5 / Z-1 — WYŁĄCZONY PRZYCISK IKONOWY NIE MALUJE TŁA ANI KRAWĘDZI. Bez tych dwóch setterów
+       `Button.icon` łamał swój własny kontrakt („ikona ma być samą ikoną") DOKŁADNIE w jednym stanie:
+       wyłączonym — i był to jedyny przycisk ikonowy w aplikacji, który wyglądał jak przycisk.
+
+       MECHANIZM (zmierzony w bramie §13.3, nie wywnioskowany): `:disabled` Fluenta maluje
+       `/template/ ContentPresenter`, przypinając `ButtonBackgroundDisabled` (Bridge → `PanelColor`)
+       i `ButtonBorderBrushDisabled` (→ `BorderColor`). Settery `Background`/`BorderBrush` z bloku
+       `Button.icon` stoją na KONTROLCE, więc przegrywają ze stylem celującym w element szablonu —
+       a `Opacity 0.4` tylko PRZYGASZAŁA tę pastylkę, zamiast ją usunąć. Arytmetyka się zgadzała:
+       0,4 × #252526 + 0,6 × #2D2D2D = #2A2A2A, dokładnie tyle, ile zmierzono na pasku paginacji.
+
+       ⛔ NIE naprawiać tego w `FluentBridge.axaml`. `ButtonBackgroundDisabled` obsługuje też
+       `Button.flat` i `Button.primary`, które w stanie wyłączonym MAJĄ wyglądać jak przyciski;
+       przezroczystość jest wyjątkiem wariantu ikonowego, nie regułą Bridge'a.
+
+       ⚠ Kolejność ma znaczenie: blok stoi PO `:pointerover`, więc przy równej trafności wygrywa i kursor
+       nad wyłączonym przyciskiem nie zapala pastylki najechania.
+
+       ⭐ Skutek uboczny, który był drugą połową znaleziska: pastylka odzyskuje jednoznaczność. Wcześniej
+       ten sam kształt oznaczał JEDNOCZEŚNIE „niedostępne" (tło :disabled) i „włączone"
+       (`ToggleButton.icon:checked`) — w pasku paginacji Table Data widać było oba naraz. -->
+  <Style Selector="Button.icon:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
   <!-- ToggleButton.icon mirrors Button.icon's defaults, but the FluentTheme's
        default :checked state paints the SystemAccent (orange/brown on Windows).
        Override with our blue SelectionBrush so it matches the rest of the
@@ -723,6 +749,13 @@
   </Style>
   <Style Selector="ToggleButton.icon:disabled">
     <Setter Property="Opacity" Value="0.4" />
+  </Style>
+  <!-- M3.5 / Z-1 — ten sam powód i ten sam mechanizm co przy `Button.icon:disabled` powyżej
+       (`ToggleButtonBackgroundDisabled` też jest przypięty do `PanelColor` w Bridge'u). ⚠ Blok MUSI stać
+       przed `:checked`, żeby wyłączony-ale-zaznaczony `ToggleButton` nadal pokazywał swój stan włączenia. -->
+  <Style Selector="ToggleButton.icon:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="ToggleButton.icon:checked /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />

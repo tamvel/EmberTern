@@ -36,11 +36,12 @@ verbatim, in the archive below.
 | **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
 | **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0–M2c COMPLETE and user-accepted; M3 in progress (M3.1 ✅ · M3.2 ✅ · colour language 🔒 rolled out).** ⭐⭐ **§19 is M3's as-built — and §19.20 is its closing summary for the colour language: what shipped, rules R15–R17, traps 18–21, the four architectural decisions, and what stays open.** §17 (M2b closing summary) and §18 (M2c) are **historical** — read a specific subsection, never the whole thing. The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
 | **`docs/design/color-language.md`** | **⭐⭐ THE COLOUR LANGUAGE — a PRODUCT document. 🔒 Accepted 2026-08-02, ROLLED OUT IN FULL and visually accepted 2026-08-03; zero open questions.** From now on it is a **reference, not a plan** — it outlives Product Polish and governs every new feature. Four independent systems (rodzaj · akcja · tożsamość modułu · hierarchia przycisku), seven action roles R‑1…R‑7, **named exceptions** (an exception with a written reason is the target state, not debt), and **§6**, the decision tree for colouring a NEW action. ⛔⛔ **§0.5 is an overriding gate — before changing ANY colour: "will the user recognise the action FASTER?"; "no"/"don't know" ⇒ stop and propose.** ⚠ Supersedes `product-polish.md` §7.5 entirely. ⚠ §0.4 (R14 tempo) is closed and historical — superseded by R15. | **Whenever you add an action or touch a colour** (§6 + §0.5). |
-| **`docs/design/product-polish-m3-next-session.md`** | ⭐⭐ **THE STARTUP PROMPT for the next Product Polish session — paste it and go, no context reconstruction needed.** State · the exact next task (M3.2d) · the plan after it · rules R15–R17 · traps 18–21 · the mandatory order + the three test partitions · what is forbidden · what stays open. | **First, at the start of every M3 session.** |
+| **`docs/design/product-polish-m4-next-session.md`** | ⭐⭐ **THE STARTUP PROMPT for the next Product Polish session — paste it and go.** State after the §13.3 gate + M3.5 · what to read and in what order · the eight rules that decided most often · ⭐ three lessons from the gate that are not in the rules · what M4 covers and the **three questions to settle with the user before the first line** · what is forbidden · the mandatory closing order. | **First, at the start of every M4 session.** |
+| **`docs/design/product-polish-m3-next-session.md`** | 🔒 **HISTORICAL (since 2026-08-04)** — was the M3 startup prompt. Describes closed work (M3 · M3b · the §13.3 gate · M3.5). ⛔ Do not plan from it; the live prompt is the M4 one above. Kept as the record of "why", not "what next". | Historical only. |
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (301 entries, #1–#312), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (304 entries, #1–#315), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -427,9 +428,81 @@ noted.
 
 ## Current state
 
-- **🎨 PRODUCT POLISH — ACTIVE STAGE, IN M3. Branch `feat/product-polish`. ⭐⭐ START THE NEXT SESSION
-  FROM [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md)
-  (a ready-made startup prompt for **M3.4**), then the handover it points at.**
+- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M3 · M3b · ⛔ the §13.3 GATE · M3.5 are all
+  CLOSED. ⏸ NEXT IS M4, and it needs the user's explicit go-ahead — do not start it.**
+  ✅ **⛔ BRAMA §13.3 PRZESZŁA (2026-08-04) — zapis: `product-polish.md` §13.3a.** Reviewed on the user's own
+  16 screenshots (8 states × 2 themes, maximized, PNG, `SZKOLENIE_SQL` 2218 tabel / 1075 procedur). Verdict per
+  question: the **status bar, tab strip and metadata tree read as one designed frame**; the **toolbar did not**,
+  and the reason turned out to be **optical glyph size, not colour**. Six findings, three taken into **M3.5**
+  (Z‑1/Z‑2/Z‑6), three deferred with reasons (Z‑3/Z‑4/Z‑5), one folded into `color-language.md` P‑1.
+  ⭐⭐ **THE GATE'S MOST DURABLE RESULT IS METHODOLOGICAL: of seven suspicions SIX fell to measurement, and two
+  of those were errors of the measurement itself** — a pixel scan missed the 2 px active-tab indicator by one
+  row (it *is* there: `#2D6BBF` at y=111–113), and screen capture lost the status bar entirely (the user
+  confirmed it renders correctly). ⚠ **An impression from looking at a screenshot is a HYPOTHESIS, not a
+  finding** — in this gate it was wrong more often than right.
+  ⛔⛔ **„TĘCZA IKON" WYCOFANA I ZAMKNIĘTA — nie wolno jej „naprawić" drugi raz** (§13.3a.3). The gate reported
+  nine differently-coloured create icons beside six uniformly blue tools as incoherent; **the user rejected it
+  and was right**: those colours are S1 (kind identity) and match the metadata tree, so the user learns a kind
+  once and recognises it everywhere. ⭐ That was **trap 17 committed by the gate itself** — seeing a system and
+  following the observation to its logical conclusion instead of asking whether it WORKS.
+  ✅ **M3.5 DONE (2026-08-04) — three defects from the gate** (`product-polish.md` §19.36). Build 0/0; suite
+  **7317** (7196 + 67 + 54, +7); smoke clean. **All four new guards verified by planting the violation.**
+  ⏸ **Awaits the user's visual QA in the running app (both themes).**
+  **Z‑1 — a disabled `Button.icon` no longer paints a chip.** Mechanism measured, not inferred: Fluent's
+  `:disabled` paints `/template/ ContentPresenter` from `ButtonBackgroundDisabled` (Bridge → `PanelColor`),
+  and `Button.icon`'s transparent setters sit **on the control**, so they lose; `Opacity 0.4` merely *dimmed*
+  the chip (0,4 × `#252526` + 0,6 × `#2D2D2D` = `#2A2A2A`, the measured value). Visible on four chrome
+  surfaces; **169 `Classes="icon"` in 15 files** is the structural reach. ⛔ **Deliberately NOT fixed in the
+  Bridge** — those keys serve `Button.flat`/`Button.primary`, which are *supposed* to look like buttons when
+  disabled. ⭐⭐ **Second half, and it is why this was a reception defect:** in the results strip the four
+  *disabled* buttons were the only bordered elements while the three *enabled* ones were bare, and in Table
+  Data the same chip meant **both** „unavailable" and „engaged" (`ToggleButton.icon:checked`) — fixing one
+  restored the other for free. ⚠ Corrects an earlier diagnosis: `docs/history/23` blamed `Opacity` alone.
+  **Z‑2 — the interactive-control outline gets its own role.** New token **`ControlOutlineBrush`**
+  (`#6A6A70` / `#90939A`), consumers `CheckBox` + `RadioButton`. On `BorderBrush` an unchecked box measured
+  **1,60:1 (Dark) / 1,35:1 (Light)**, i.e. the control you must click was invisible in its **default** state.
+  ⭐ Value computed **at the threshold** (~3,1:1), the road gotcha **#308** ratified; the
+  `SubtleForegroundBrush` variant (6,31:1) was rendered and **rejected** as heavier than its own label.
+  ⛔ Never alias it to `BorderBrush` or `SubtleForegroundColor` (K1).
+  **Z‑6 — `CreateIcon`: the glyph is the KIND, the badge is the ACTION.** All nine `*Plus` geometries carried
+  the identical plus segment in the whole lower-right quadrant while the glyph was squeezed to **11–12 of 24
+  units** where its own counterpart in the tree has **18** — ~62 % linear, ~40 % area, in an **identical box**
+  (gotcha #288 inverted: the ink box started dictating optical size). Replaced by a composite on the proven
+  `DebuggerIcon` pattern: full-size plain glyph (`IconColor_*`, **by reference**) + a solid `AccentBrush`
+  disc Ø10 inset 0,5 with an `OnAccentBrush` plus. ⭐⭐ **Nine hand-maintained copies are GONE** — the toolbar
+  and the tree now share one geometry per kind, so improving a glyph reaches both; this was nine unfixed
+  instances of the very defect `DebuggerIcon` documents for itself. ⚠ **`AccentBrush` here does NOT re-open
+  P‑2**: a solid 10-unit disc with a white plus works by area and internal contrast, not by a 2 px difference
+  against the surface.
+  ⚠⚠ **THE ROUTE MATTERS AS MUCH AS THE RESULT — two dead ends closed by measurement, so nobody re-walks
+  them.** (1) *Plus inside the glyph* (pure geometry, `Icon.FolderPlus`'s own model) won decisively on the
+  glyph and **lost the badge**: 5 of 9 worked, and in `View`/`Trigger`/`Generator` the plus merged with the
+  outline. ⚠ My design error there is worth keeping: I measured clearance against **path centrelines, not the
+  stroked outline** — with a 2-unit stroke a „1-unit gap" is touching outlines. (2) ⭐⭐ *Full glyph + big
+  corner plus is ARITHMETICALLY IMPOSSIBLE* in 24 units: the maximum non-overlapping split is glyph ~13 +
+  plus 6, i.e. **+18 %** over the old 11. **So today's 11+7 was near the optimum for „no overlap"** — very
+  likely the wall the user's earlier attempt hit. (3) The badge route is **structurally** required, not a
+  taste call: `SvgIcon` is one `Path`, one `Stroke`, **one `StrokeThickness=2` for the whole geometry**, and a
+  badge is by definition *smaller and denser* — from there you only get „smaller but equally thick", which at
+  16 px is a blob.
+  ⭐ **New tool: `tools/probes/VisualCandidateProbe`** — renders candidates beside the current state, both
+  themes. It exists because §0.5 demands an answer about *reception* and „don't know" is a refusal; without it
+  the only answer is a guess. ⚠ Candidates live **in the probe, not the product**, and a separate
+  `z6-SHIPPED-*` render uses the **real control + resources by key**, because „the variant looks good" and
+  „this is what shipped" are different assertions.
+  ⏸ **Open from the gate, each with a home:** **Z‑3** (Table Data row 40 px vs the catalog's 22 and the
+  sibling grid's 27) — ⛔ **find the CAUSE first; the user ratified that a taller row may be a deliberate
+  readability decision and then it stays** · **Z‑4** (Settings window clips a row mid-description) · **Z‑5**
+  (the Execute dialog's date editor looks disabled and breaks the row rhythm) · ⏸⏸ **Settings Center as a UX
+  surface** (§13.3a.5 — icons per category, a distinct nav-pane surface, a more „product" left nav; ⭐ measured
+  delta: **the nav pane and content have IDENTICAL backgrounds today**, so the largest part is giving the pane
+  `PanelBrush`). ⛔ None of these is M4 and none is a defect blocking it.
+  ⚠ **Execute dialog semantics confirmed intended by the user:** a ticked NULL passes `NULL` and the Value
+  field is ignored. Not a functional defect; whether the field should *look* excluded belongs to the later
+  dialog polish.
+  **Historical pointer for M3/M3b detail:**
+  [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md) and the
+  handover it points at — ⚠ both now describe CLOSED work; read them for the why, not for what to do next.
   🔒 **M3.3 (TAB STRIP) IS CLOSED AND ACCEPTED (2026-08-03)** — `product-polish.md` **§19.25** is its closing
   summary. Three sub-etaps: **M3.3a** paid off the strip's technical debt (12 → 5 local values), **M3.3b**
   delivered **two modes + two preferences + a Tabs category** in Settings Center, **M3.3c** added the
@@ -3824,14 +3897,14 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7310, MEASURED 2026-08-04**
-  (Product Polish through M3b.2). Green in the three documented partitions (**7193 + 63 + 54**).
-  ⚠ The five new classes (`StatusProgressSourcesTests`, `XlsxDimensionReadTests`,
-  `ImportFileSelectionResponsivenessTests`, `ImportProgressPlacementTests`, `ConnectionLoadProgressTests`) all live in the **main**
-  partition — none constructs an Avalonia control, so none joins the headless filter (handover §8's criterion).
-  ⚠ This line said **7228 (7118 + 56 + 54)** and then **7271 (7154 + 63 + 54)** — a figure that had gone
-  stale across M3.3b/c and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy
-  it forward.
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7317, MEASURED 2026-08-04**
+  (Product Polish through M3.5). Green in the three documented partitions (**7196 + 67 + 54**).
+  ⚠ M3.5's +7 splits across BOTH partitions and the split follows one criterion: `CreateIconContractTests` (3)
+  reads **source files** so it is main-partition; the four new `DesignTokenApplicationTests` cases construct
+  Avalonia controls, so they went into a class **already inside** the headless filter — deliberately, to avoid
+  growing that fragile list of names by one more entry.
+  ⚠ This line said **7228 (7118 + 56 + 54)**, then **7271 (7154 + 63 + 54)**, then **7310 (7193 + 63 + 54)** —
+  i.e. **it has now drifted four times**. Re-measure; do not copy it forward.
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
   partition filter named a class that no longer existed (so the total read one too high, `product-polish.md`
   §18.1.6), and once because the sub-stage's own numbers moved under it. **Re-measure before quoting it.**
@@ -4691,7 +4764,10 @@ The app has **one** central theming system. Every new window, dialog, UserContro
 10. ⭐⭐ **A control's size comes from its CONTEXT, never from its variant** (M2b §17.2). A chrome strip (`Border.chrome`), a `DataGridCell`, an `Expander` header and a dialog footer each declare what their children may be; the variant (`.primary`) carries **colour**. ⛔ **Never put `MinHeight`/`MinWidth` on the base `Button` style** — that exact setter silently grew the metadata tree's expander arrow from 20 to 100 px, because Avalonia clamps `Width` by `MinWidth`.
 11. ⭐ **Write the rule POSITIVELY.** *"Everything is X unless…"* leaks: in M2b it leaked twice, the second time as a layout regression. State what a thing IS (a class, a container), never what it is not.
 
-**Token cheat-sheet** (semantic name → use): `BackgroundBrush` (window/editor), `PanelBrush` (sidebar/header panels), `ChromeStrongBrush` (titlebar/column headers — chrome one step further from the document), `SurfaceRaisedBrush` (⭐ anything that FLOATS above its container: popups, menus, tooltips, dropdown lists, the selected tab — **not** the same job as chrome, and in Light the two are opposites), `BorderBrush`, `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`). If none fit, add a new token (both dictionaries) — don't reach for a literal.
+**Token cheat-sheet** (semantic name → use): `BackgroundBrush` (window/editor), `PanelBrush` (sidebar/header panels), `ChromeStrongBrush` (titlebar/column headers — chrome one step further from the document), `SurfaceRaisedBrush` (⭐ anything that FLOATS above its container: popups, menus, tooltips, dropdown lists, the selected tab — **not** the same job as chrome, and in Light the two are opposites), `BorderBrush` (structural separators, gridlines, the rest rail), ⭐ `ControlOutlineBrush` (**the visible
+outline of an interactive control at rest** — a different role from `BorderBrush`, and that distinction is
+what makes an unchecked `CheckBox` findable: sharing one token measured 1.35:1 in Light. Consumers: CheckBox,
+RadioButton), `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`). If none fit, add a new token (both dictionaries) — don't reach for a literal.
 
 ### Reuse before create
 

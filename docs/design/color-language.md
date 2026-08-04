@@ -410,6 +410,24 @@ zapytanie↔debugger **35°** — w 2‑pikselowej linii to te same kolory.
 **Jadą razem z P‑1, bo korygowanie ich pojedynczo użytkownik odrzucił:**
 * **P‑2** — `AccentBrush` na railu daje w Dark **2,89:1**, poniżej progu §10 (3:1 dla elementu UI).
   ⚠ `AccentColor` jest współdzielony (przyciski, fokus), więc to nie jest korekta lokalna.
+
+  ⭐⭐ **UZUPEŁNIONE PRZEZ BRAMĘ §13.3 (2026-08-04): para (`AccentBrush`, `PanelBrush`) ma w trwałej
+  chromie DWA konsumenty, nie jednego — drugim jest WSKAŹNIK AKTYWNEJ ZAKŁADKI** (`Border.tab-indicator`,
+  2 px, `#2D6BBF` na `#252526`, zmierzone niezależnie: te same 2,89:1 w Dark i 4,81:1 w Light).
+  ⚠⚠ **Ale werdykt jest INNY dla obu, i ta różnica jest ważniejsza od samej liczby:**
+  * **wskaźnik zakładki — AKCEPTOWALNY.** W skali 1:1 czyta się jednoznacznie w obu motywach, bo ma
+    **trzy nadmiarowe współsygnały**: 2 px akcentu + podmiana tła kafelka + etykieta na SemiBold.
+  * **rail — NIEAKCEPTOWALNY.** Jest **jedynym** nośnikiem: 2 px na dolnej krawędzi okna, bez
+    współsygnału, przechodzące między spoczynkiem i pracą z 1,47:1 na 2,89:1.
+
+  ⭐ Stąd wyostrzenie sformułowania P‑2: problem nie brzmi *„kolor railu jest zły"*, ale *„rail każe jednej
+  2‑pikselowej linii nieść sygnał, którego ta para tokenów w Dark nie unosi"*. Przy zmianie palety trzeba
+  znać **oba** miejsca — poprawa railu przez podniesienie `AccentColor` ruszy też wskaźnik zakładki,
+  który dziś działa.
+
+  ⛔ **NIE dotyczy badge'a `CreateIcon`** (M3.5 / Z‑6), choć też stoi na `AccentBrush` w chromie: tam
+  pracuje **solidny dysk 10 j. z białym plusem w środku**, czyli powierzchnia i kontrast wewnętrzny,
+  a nie różnica 2 px wobec tła. Zapisane, bo to wygląda na trzeci konsument tej pary i nim nie jest.
 * **P‑3** — ⛔⛔ **debugger ma DWIE barwy na jeden fakt w tym samym pasku statusu:** chip maluje
   `AccentIconBrush`, rail maluje `DebugCurrentLineBarBrush`, czyli token **paska bieżącej linii z edytora**.
   Żadna nie jest barwą tożsamości debuggera, a `AccentIconBrush` jest przewidziany do likwidacji (**DC**).

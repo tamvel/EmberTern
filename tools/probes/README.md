@@ -58,3 +58,24 @@ database built to production size) and the PROJECTION (real `SidebarFlatControll
 Part B needs no server at all. Part A creates and reuses `C:\Temp\embertern_metaperf.fdb`; the lab database
 is never touched. Findings and the recommendation:
 [docs/design/metadata-refresh-analysis.md](../../docs/design/metadata-refresh-analysis.md).
+
+## `VisualCandidateProbe` — renders visual CANDIDATES for a §0.5 judgement
+
+Product Polish M3.5. Renders a proposed visual change **beside the current state**, in both themes, to PNG.
+
+⭐⭐ It exists because `color-language.md` §0.5 requires an answer to *"will the user recognise the action
+FASTER?"* before any colour changes, and *"don't know"* is a refusal. Without a tool that shows the candidate,
+the only available answer about reception is a guess — which is exactly what §0.5 forbids. This turns the guess
+into a picture. In M3.5 it did so three times: geometric variants → badge variants → badge proportions.
+
+⚠ **Candidates are defined IN THE PROBE, not in the product**, so running it deploys nothing.
+⭐ A separate `z6-SHIPPED-*` render uses the **real control and its ControlTheme** and pulls the geometry
+**from the application's resources by key** — because *"the variant looks good"* and *"this is what shipped"*
+are two different assertions, and M3.3b paid for conflating them.
+
+⚠⚠ Inherited limit (`TabStripVisualProbe`, §19.23.9): **it lays out ONCE, so it cannot rule on convergence.**
+It answers "how does this LOOK", never "does this SETTLE".
+⚠ It must merge the same dictionaries as `App.axaml` — a missing one does not fail, it silently removes an
+element from the image.
+
+Run: `dotnet run --project tools/probes/VisualCandidateProbe` → `tools/probes/VisualCandidateProbe/out/*.png`
