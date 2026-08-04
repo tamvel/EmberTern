@@ -8220,9 +8220,27 @@ porównywanie, czy opisy się różnią.
 
 ## §19.36 Iteracja 24 (M3.5) — trzy defekty z bramy §13.3 (2026-08-04)
 
+> **Status: 🔒 ZAMKNIĘTE — dostarczone i ODEBRANE PRZEZ UŻYTKOWNIKA W OBU MOTYWACH (2026-08-04),
+> wypchnięte na oba remote'y (`cb76c0b`).**
 > **Zakres ratyfikowany przez użytkownika: Z‑1 + Z‑2 + Z‑6.** Build 0/0 · suite **7317** zielony
 > w trzech partycjach (7196 + 67 + 54, +7) · smoke czysty. Wszystkie cztery nowe strażniki
 > **zweryfikowane podsadzeniem naruszenia**.
+>
+> **Werdykt QA:** wyłączony `Button.icon` nie udaje aktywnego · niezaznaczone `CheckBox`y są wreszcie
+> dobrze widoczne, **ale nie dominują interfejsu** — czyli trafiony był wariant *progowy*, nie *subtelny* ·
+> ikony „Create …" znacznie czytelniejsze.
+> ⭐⭐ **Użytkownik ratyfikował też ARCHITEKTURĘ, nie tylko wygląd:** `CreateIcon` jest *„lepszym
+> rozwiązaniem architektonicznym niż utrzymywanie dziewięciu osobnych wariantów `*Plus`"*, a badge
+> *„dobrze odcina się od glifu, nie konkuruje z kolorem rodzaju obiektu i czyta się bardzo naturalnie jako
+> akcja «utwórz»"*. ⛔ Żadnej z tych dwóch decyzji nie otwieramy ponownie.
+>
+> ⭐ **Proporcje badge'a (Ø10, odsunięcie 0,5) przeszły QA bez uwag** — czyli pomiar na dwóch najgęstszych
+> glifach dał wynik, który obronił się na żywej aplikacji. Zostają.
+>
+> ⭐⭐ **Użytkownik nazwał metodę prowadzenia tej iteracji jej mocną stroną:** *„zamykałeś kolejne kierunki
+> na podstawie pomiarów i renderów, a nie opinii"*. To jest **R16 w praktyce** i wzorzec do powtórzenia
+> w M4: kierunek zamyka się liczbą albo obrazem, nigdy zdaniem — a dwie drogi w Z‑6 zostały zamknięte
+> właśnie tak (arytmetyką 24 jednostek i strukturą `SvgIcon`), więc nikt nie pójdzie tam po raz trzeci.
 
 ### §19.36.1 Z‑1 — wyłączony `Button.icon` przestaje wyglądać jak przycisk
 

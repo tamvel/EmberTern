@@ -15,8 +15,10 @@ katalog zablokował), **M3** (Status Bar 2.0 · język kolorów · pasek zakład
 **M3b** (podłączenie operacji do sekcji postępu), ⛔ **bramę §13.3** (przegląd czterech powierzchni trwałych
 na żywej bazie, w obu motywach — **przeszła**) oraz **M3.5** (trzy defekty, które brama znalazła).
 
-Punkt odniesienia: gałąź `feat/product-polish`. Build 0/0 · suite **7317** w trzech partycjach
-(7196 + 67 + 54) · smoke czysty.
+Punkt odniesienia: gałąź `feat/product-polish`, commit **`cb76c0b`** (na obu remote'ach). Build 0/0 ·
+suite **7317** w trzech partycjach (7196 + 67 + 54) · smoke czysty.
+🔒 **M3.5 odebrane przez użytkownika w obu motywach 2026-08-04** — w tym ratyfikacja architektury
+`CreateIcon` (lepsza niż dziewięć wariantów `*Plus`) i proporcji badge'a. ⛔ Nie otwierać ponownie.
 
 ⏸ **Otwarte i przypisane, ale ŻADNE nie blokuje M4:** Z‑3 (wiersz Table Data — najpierw przyczyna) ·
 Z‑4 (okno Settings ucina wiersz) · Z‑5 (edytor daty w dialogu) · temat **Settings Center jako powierzchnia

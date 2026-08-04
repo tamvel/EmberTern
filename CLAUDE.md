@@ -445,9 +445,14 @@ noted.
   and was right**: those colours are S1 (kind identity) and match the metadata tree, so the user learns a kind
   once and recognises it everywhere. ⭐ That was **trap 17 committed by the gate itself** — seeing a system and
   following the observation to its logical conclusion instead of asking whether it WORKS.
-  ✅ **M3.5 DONE (2026-08-04) — three defects from the gate** (`product-polish.md` §19.36). Build 0/0; suite
-  **7317** (7196 + 67 + 54, +7); smoke clean. **All four new guards verified by planting the violation.**
-  ⏸ **Awaits the user's visual QA in the running app (both themes).**
+  ✅🔒 **M3.5 DONE, USER-QA-CONFIRMED AND CLOSED (2026-08-04) — three defects from the gate**
+  (`product-polish.md` §19.36). Build 0/0; suite **7317** (7196 + 67 + 54, +7); smoke clean.
+  **All four new guards verified by planting the violation.** Pushed to both remotes (`cb76c0b`).
+  **QA verdict (both themes):** a disabled `Button.icon` no longer pretends to be active · unchecked
+  `CheckBox`es are finally visible **without dominating** · the create icons are markedly more legible.
+  ⭐ On the architecture the user was explicit: **`CreateIcon` is a better answer than maintaining nine
+  separate `*Plus` variants**, and the accent badge *„dobrze odcina się od glifu, nie konkuruje z kolorem
+  rodzaju obiektu i czyta się bardzo naturalnie jako akcja «utwórz»"*. ⛔ Do not revisit either decision.
   **Z‑1 — a disabled `Button.icon` no longer paints a chip.** Mechanism measured, not inferred: Fluent's
   `:disabled` paints `/template/ ContentPresenter` from `ButtonBackgroundDisabled` (Bridge → `PanelColor`),
   and `Button.icon`'s transparent setters sit **on the control**, so they lose; `Opacity 0.4` merely *dimmed*
