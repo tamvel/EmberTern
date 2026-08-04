@@ -7828,3 +7828,97 @@ Dispatchera, a asercja na czasie byłaby testem psującym się z powodów niezwi
 Wybór dużego `.xlsx`: okno pozostaje responsywne, w pasku statusu od razu **„Loading file…"**, podgląd
 dochodzi po chwili. ⏸ Do sprawdzenia okiem, czy przy szybkiej zmianie ustawień źródła (separator, kodowanie)
 etykieta nie migocze — mechanizm jest osłonięty i pinowany testem, ale ⭐ kryterium odbioru jest ekran.
+
+---
+
+### §19.33 Iteracja 21 (M3b.1d) — postęp importu w jednym miejscu; pasek poleceń przestaje się przycinać (2026-08-04)
+
+> **Zgłoszenie po QA §19.32:** *„Informacja o trwającym imporcie jest wyświetlana w dwóch miejscach
+> jednocześnie… górny pasek nie mieści się poprawnie i częściowo chowa pod zawartością okna."*
+> Build 0/0; suita **7301** w trzech partycjach (7184 + 63 + 54, +5); smoke czysty.
+
+#### §19.33.1 ⚠ KOREKTA FAKTU, KTÓRA ZMIENIŁA ZAKRES NAPRAWY
+
+Zgłoszenie nazywało duplikat *„dodatkowym paskiem «Loading file…» w górnej części okna"*. **„Loading file…"
+nigdy nie było w górnym pasku** — jest wyłącznie w sekcji postępu paska statusu (§19.32/C). Elementy w band B
+(`ProgressText`, `ProgressBar`, `Timer`) są bramkowane `IsRunning`, więc pojawiają się **tylko podczas
+importu**, nie podczas odczytu pliku.
+
+⭐ **Dublowanie dotyczyło zatem TRWAJĄCEGO IMPORTU, nie fazy odczytu** — a jedna jego połowa (pasek w band B)
+stoi tam od etapu I5. Bez tej korekty naprawa usunęłaby zły element: to nie nowa etykieta była nadmiarowa,
+tylko stary pasek postępu w toolbarze przestał być potrzebny, gdy pasek statusu przejął fakt „operacja trwa".
+⚠ To jest pułapka 9 w wydaniu odwrotnym: obserwacja użytkownika o **objawie** była trafna, jego opis
+**którego elementu** dotyczy — nie; i akurat tutaj przesądzało to o zakresie zmiany.
+
+#### §19.33.2 ⭐⭐ MECHANIZM PRZYCIĘCIA — `DockPanel` + `StackPanel`, i to nie jest kwestia „za dużo rzeczy"
+
+Band B to `DockPanel` z `LastChildFill="True"`. Elementy postępu były **dokowane z prawej**, więc brały swój
+rozmiar **pierwsze**, a przyciski są **ostatnim dzieckiem** — poziomym `StackPanel`em, który **się nie zwęża,
+tylko PRZYCINA**.
+
+Zmierzone z XAML-a: sam `StackPanel` niesie **520 px minimów list** (profil 170 + Transaction 170 + Errors 180)
+plus 7 przycisków, 3 separatory, 3 etykiety i ~18 odstępów po 8 px. Elementy postępu odbierały mu przy starcie
+importu jeszcze ~**400 px** (`ProgressBar` 140 + liczniki ~200 + czas ~60).
+
+⭐ **Dlatego objaw pojawiał się dopiero w trakcie importu i wyglądał na defekt renderowania**: pasek jest
+przesubskrybowany już w spoczynku, a przebieg dokłada mu 400 px, których nie ma skąd wziąć.
+⚠ Komentarz przy band B mówił, że licznik czasu jest dokowany z prawej *„so a running import never shifts the
+buttons under the pointer"*. To była prawda i **niewystarczająca**: przyciski się nie PRZESUWAJĄ, tylko
+ZNIKAJĄ. ⛔ Nie dokładać tam niczego dokowanego z prawej bez policzenia, ile zostaje ostatniemu dziecku.
+
+#### §19.33.3 Rozstrzygnięcie użytkownika
+
+> *„Na górze zostawiłbym jedynie czas trwania operacji, natomiast pasek postępu oraz wszystkie statystyki
+> (read / written / failed) przeniósłbym do dolnego panelu, gdzie i tak prezentowany jest status importu."*
+
+⭐ Wariant ostrzejszy niż którakolwiek z czterech przedstawionych opcji i **zgodny z ratyfikowanym podziałem
+powierzchni modułu** (2026-07-27): *góra to miejsce, w którym import się PROJEKTUJE, dolny panel to miejsce,
+w którym lądują WYNIKI*. Postęp jest wynikiem w toku, więc należy do dołu.
+⭐ **Czas trwania ZOSTAJE na górze** i to nie jest wyjątek bez powodu: pasek statusu go **nie niesie**,
+a edytor SQL i Script Executor trzymają swój licznik w toolbarze — usunięcie byłoby niespójnością rodziny,
+nie uproszczeniem (pułapka 7).
+
+#### §19.33.4 ⭐ NAKŁADKA, NIE WŁASNY WIERSZ — i to jest wybór, nie skrót
+
+Postęp wstawiony jako **nakładka (`ZIndex`) na pasek zakładek dolnego panelu**, po lewej stronie chevronu
+zwijania — czyli **dokładnie ten wzorzec, którego chevron już używa**. Powody, w kolejności wagi:
+
+1. **Własny wiersz przesuwałby zakładki w dół w chwili startu importu** — §13.3 („Zero Layout Shift")
+   rozłożony w czasie, dokładnie ten defekt, który ta iteracja naprawia, tylko o jeden panel niżej.
+   Nakładka nie zajmuje **ani piksela**, gdy nic nie trwa.
+2. **Widoczne niezależnie od wybranej zakładki.** Schowane w treści zakładki Raport pokazywałoby się tylko
+   temu, kto akurat tam patrzy — a Raport w trakcie przebiegu jest **jeszcze pusty**.
+3. ⛔ Nie dokłada wiersza do powierzchni, o której CLAUDE.md mówi wprost: *„do not answer the height problem
+   by adding another vertical section"*.
+
+⚠ **Ryzyko zapisane, świadomie nierozwiązane:** na bardzo wąskim oknie nakładka może zasłonić ostatnią
+zakładkę. Pasek zakładek zajmuje ułamek szerokości panelu, więc to pozycja do QA, a nie do strojenia liczbą
+w ciemno.
+
+#### §19.33.5 Strażnicy — 5 przypadków, jedno podłożone naruszenie
+
+⚠⚠ **Dlaczego czytają XAML, a nie ekran:** przedmiotem jest DOPASOWANIE paska, a to ocenia oko (R16) — test
+na szerokości byłby zielony przy brzydkim ekranie. Maszyna ma tu sensowne zdanie o dwóch rzeczach: **ile razy
+ten sam fakt jest wiązany** (wymóg *„nie dublujemy informacji"* jest policzalny) i **czy band B znów zaczął
+dokować element pojawiający się dopiero w trakcie przebiegu**.
+
+| Naruszenie | Złapane przez |
+|---|---|
+| pasek postępu wraca do band B | `EachProgressFact_IsBoundExactlyOnce(ProgressPercent)` + `TheCommandBar_DocksNothingThatAppearsOnlyWhileRunning…` |
+
+⭐ Trzeci strażnik pinuje **umiejscowienie**: postęp jest rodzeństwem `TabControl`-a i stoi **przed** nim,
+więc nie może wpaść do treści zakładki, i jest nakładką, więc nie może zamienić się we własny wiersz.
+
+#### §19.33.6 ⛔ Czego iteracja NIE zrobiła
+
+* **Nie odchudziła paska poleceń** — trzy listy po 170/170/180 px zostają. To pytanie o **gęstość**, czyli
+  materiał na bramę §13.3 i sprint UX, nie na doklejkę tutaj (R7).
+* **Nie dodała szczegółu do etykiety paska statusu** — §19.31.6 stoi: rosnąca etykieta przesuwa chipy stanu.
+* **Nie tknęła logiki importu** — zmiana jest wyłącznie w XAML widoku; `ProgressText`, `ProgressPercent`
+  i `IsProgressIndeterminate` są te same właściwości, tylko wiązane w innym miejscu.
+
+#### §19.33.7 ⏸ Do QA użytkownika
+
+Trwający import: pasek poleceń mieści się (żadna etykieta nie chowa się pod listą), postęp i statystyki
+w prawym górnym narożniku dolnego panelu, czas trwania na górze, pasek statusu bez zmian. ⏸ Do sprawdzenia
+przy wąskim oknie, czy nakładka nie zasłania ostatniej zakładki (§19.33.4).

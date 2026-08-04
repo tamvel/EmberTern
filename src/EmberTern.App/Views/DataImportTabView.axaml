@@ -62,22 +62,20 @@
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
       <DockPanel LastChildFill="True">
 
+        <!-- ⭐⭐ TYLKO CZAS TRWANIA — pasek postępu i liczniki przeniesione do dolnego panelu (§19.33,
+             decyzja użytkownika 2026-08-04). Powód nie jest kosmetyczny: ten `DockPanel` ma
+             `LastChildFill`, więc elementy dokowane z prawej biorą swój rozmiar PIERWSZE, a przyciski są
+             ostatnim dzieckiem — poziomy `StackPanel`, który **się nie zwęża, tylko PRZYCINA**. Trzy
+             elementy postępu odbierały mu ~400 px dokładnie w chwili startu importu, więc etykieta
+             „Errors" chowała się pod swoją listą. Zmierzone: same minima list to 520 px (170+170+180)
+             przy ~18 dzieciach paska.
+             ⛔ Nie dokładać tu niczego dokowanego z prawej bez policzenia, ile zostaje ostatniemu dziecku.
+             ⭐ Czas ZOSTAJE: pasek statusu go nie niesie, a edytor SQL i Script Executor trzymają swój
+             licznik czasu w toolbarze — usunięcie byłoby niespójnością, nie uproszczeniem. -->
         <TextBlock DockPanel.Dock="Right" Text="{Binding Timer.ElapsedDisplay}" FontSize="{DynamicResource Text.Compact.Size}"
                    FontFamily="Consolas,Menlo,monospace" Margin="8,0,4,0" VerticalAlignment="Center"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    IsVisible="{Binding Timer.IsRunning}" />
-
-        <!-- The live counters sit beside the timer, so "what is happening" reads as one thing. -->
-        <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressText}" FontSize="{DynamicResource Text.Application.Size}"
-                   Margin="8,0" VerticalAlignment="Center"
-                   Foreground="{DynamicResource SubtleForegroundBrush}"
-                   IsVisible="{Binding IsRunning}" />
-        <!-- Indeterminate when the row count is unknown: a streaming import cannot know it without reading
-             the file twice, and inventing a percentage would be a number that is not true. -->
-        <ProgressBar DockPanel.Dock="Right" Width="140" Height="6" VerticalAlignment="Center"
-                     Minimum="0" Maximum="100" Value="{Binding ProgressPercent}"
-                     IsIndeterminate="{Binding IsProgressIndeterminate}"
-                     IsVisible="{Binding IsRunning}" />
 
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
 
@@ -942,6 +940,34 @@
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
             DoubleTapped="OnBottomPanelDoubleTapped">
       <Grid>
+        <!-- ══ Postęp trwającego importu (§19.33) ═══════════════════════════════════════════════════
+             Przeniesione z band B decyzją użytkownika: *„na górze zostawiłbym jedynie czas trwania,
+             natomiast pasek postępu oraz wszystkie statystyki przeniósłbym do dolnego panelu, gdzie i tak
+             prezentowany jest status importu"*. Zgodne z ratyfikowanym podziałem powierzchni: **góra to
+             miejsce, w którym import się PROJEKTUJE, dolny panel to miejsce, w którym lądują WYNIKI**.
+
+             ⭐ NAKŁADKA na pasek zakładek, nie własny wiersz — i to jest wybór, nie skrót. Wiersz
+             przesuwałby zakładki w dół dokładnie w chwili startu importu (§13.3 „Zero Layout Shift"
+             rozłożony w czasie), a nakładka nie zajmuje ani piksela, gdy nic nie trwa. To dokładnie ten
+             sam wzorzec, którego używa chevron zwijania obok — reuse, nie nowy mechanizm.
+             ⭐ Widoczne niezależnie od wybranej zakładki: schowane w zakładce Raport pokazywałoby się
+             tylko temu, kto akurat tam patrzy, a Raport w trakcie przebiegu jest jeszcze pusty.
+             ⚠ Prawy margines mija chevron. ⚠ Nakładka MOŻE zasłonić ostatnią zakładkę na bardzo wąskim
+             oknie — świadomie nierozwiązane, bo pasek zakładek zajmuje ułamek szerokości panelu;
+             pozycja do QA, nie do strojenia liczbą w ciemno. -->
+        <StackPanel ZIndex="1" Orientation="Horizontal" Spacing="8"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,30,0"
+                    IsVisible="{Binding IsRunning}">
+          <TextBlock Text="{Binding ProgressText}" FontSize="{DynamicResource Text.Compact.Size}"
+                     VerticalAlignment="Center"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" />
+          <!-- Tryb nieokreślony, gdy liczba wierszy jest nieznana: import strumieniowy nie zna jej bez
+               dwukrotnego czytania pliku, a zmyślony procent byłby liczbą, która nie jest prawdziwa. -->
+          <ProgressBar Width="140" Height="6" VerticalAlignment="Center"
+                       Minimum="0" Maximum="100" Value="{Binding ProgressPercent}"
+                       IsIndeterminate="{Binding IsProgressIndeterminate}" />
+        </StackPanel>
+
         <Button Classes="icon" ZIndex="1"
                 HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0"
                 ToolTip.Tip="{x:Static app:UiStrings.ImportBottomPanelToggleTooltip}"

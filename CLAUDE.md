@@ -674,6 +674,30 @@ noted.
   not prove the work left the UI thread**; that is the probe's standing job
   (`tools/probes/ImportFileOpenProbe`, which posts a `Render`-priority job and reports a verdict against a
   frame budget). ⚠ `.xls` (`ExcelDataReader`) is **unmeasured** and left alone — no large `.xls` to hand.
+  ✅ **M3b.1d DONE (2026-08-04) — the import progress lives in ONE place, and the import command bar stops
+  clipping** (`product-polish.md` §19.33). QA on A+B+C found the run's progress in two places at once and the
+  top bar not fitting. ⚠ **A correction of fact changed what had to be removed: "Loading file…" was never in
+  the top bar** — the elements there (`ProgressText`/`ProgressBar`/`Timer`) are gated on `IsRunning`, so the
+  duplication was of the RUN, and one half of it (the toolbar bar) had been there since etap I5. Without that
+  correction the fix would have deleted the wrong element.
+  ⭐⭐ **The clipping mechanism is worth knowing generally: band B is a `DockPanel` with `LastChildFill`, so
+  right-docked children take their size FIRST and the buttons are the last child — a horizontal `StackPanel`,
+  which does not compress, it CLIPS.** Measured from the XAML: that panel already carries **520 px of combo
+  minimums** (170+170+180) plus 7 buttons, 3 dividers, 3 labels and ~18 gaps, and a run took another ~400 px
+  from it. ⚠ Band B's own comment said the timer is docked right *"so a running import never shifts the
+  buttons"* — true and insufficient: they do not shift, they **disappear**. ⛔ Do not dock anything else there
+  without counting what is left for the last child.
+  **The user's call:** only the elapsed time stays on top; the bar and all statistics move to the **bottom
+  panel** — which matches the module's ratified split (*top = where the import is DESIGNED, bottom = where
+  RESULTS land*). ⭐ The elapsed time stays for a reason: the status bar does not carry it, and the SQL Editor
+  and Script Executor both keep theirs in the toolbar, so removing it would break a family, not simplify.
+  ⭐ Placed as an **overlay on the bottom panel's tab strip** (the chevron's own pattern), never its own row:
+  a row would push the tabs down exactly when the run starts — §13.3 spread over time, the very defect this
+  iteration removes — and an overlay costs zero pixels at rest. It is also visible whichever tab is selected,
+  which a placement inside the Report tab would not be (and the Report is still empty during a run).
+  ⚠ Recorded and deliberately unsolved: on a very narrow window the overlay could cover the last tab — QA,
+  not a number tuned blind. ⚠ The command bar was NOT slimmed down: three 170/180 px combos are a **density**
+  question, so they belong to the §13.3 gate and the UX sprint, not to a patch here (R7).
   ⏸ **Next: M3b.2 — connect + metadata loading as a NEW progress source** (the user's explicit priority:
   this is where they wait longest with no information today), then **M3b.3** (rail), then ⛔ the §13.3 gate.
   ⚠⚠ Its anatomy is already measured and one phase is a hard limit: **`LoadWorkspaceFor` is `private void`
@@ -3755,11 +3779,11 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7296, MEASURED 2026-08-04**
-  (Product Polish through M3b.1 A+B+C). Green in the three documented partitions (**7179 + 63 + 54**).
-  ⚠ The three new classes (`StatusProgressSourcesTests`, `XlsxDimensionReadTests`,
-  `ImportFileSelectionResponsivenessTests`) all live in the **main** partition — none constructs an Avalonia
-  control, so none joins the headless filter (the handover §8 criterion).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7301, MEASURED 2026-08-04**
+  (Product Polish through M3b.1d). Green in the three documented partitions (**7184 + 63 + 54**).
+  ⚠ The four new classes (`StatusProgressSourcesTests`, `XlsxDimensionReadTests`,
+  `ImportFileSelectionResponsivenessTests`, `ImportProgressPlacementTests`) all live in the **main**
+  partition — none constructs an Avalonia control, so none joins the headless filter (handover §8's criterion).
   ⚠ This line said **7228 (7118 + 56 + 54)** and then **7271 (7154 + 63 + 54)** — a figure that had gone
   stale across M3.3b/c and M3.4a, i.e. **the third time this exact line drifted**. Re-measure; do not copy
   it forward.
