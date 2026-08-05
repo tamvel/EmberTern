@@ -1109,6 +1109,48 @@ try
     else Fail("PKG_DBG.PUB_FN depth", $"expected 2, got {pkgFn.MaxDepth}");
     if (pkgFn.Frames.Contains("PRIV_DOUBLE")) Pass("frame chain", string.Join(" → ", pkgFn.Frames));
     else Fail("PKG_DBG.PUB_FN frames", string.Join(" → ", pkgFn.Frames));
+
+    // ── 39. Singleton SELECT … INTO — the shape the S-6 binder fix narrowed ──────────────────────────
+    //
+    // ⚠⚠ ADDED BECAUSE "ALL PASS" DID NOT COVER IT, and that is the point worth keeping. The 2026-08-05
+    // stabilization sprint taught the binder to bind PSQL locals inside an embedded query (a ':param' in a
+    // WHERE clause and the INTO targets — previously bound by NOBODY). The debugger's read/write set falls
+    // back to "inject every in-scope local" precisely WHEN THE ANALYZER RETURNS NOTHING (gotcha #238), so
+    // restoring those references NARROWS the injection to the referenced set — a behaviour change to a
+    // live-fidelity-verified subsystem, arriving as a side effect of a tooltip fix.
+    //
+    // The 38 cases above could not rule on it: not one of the routines they drive contains a singleton
+    // SELECT … INTO (the shape lives in SP_ADD_ORDER and PKG_ORDERS.ORDER_TOTAL, which the probe does not
+    // step). A measurement can reproduce a mechanism without reproducing the state — so the state was added
+    // to the lab as SP_DBG_SELINTO and is stepped here.
+    //
+    // What would break if the narrowing were wrong: an under-injected read makes the COUNT(*) see a NULL
+    // parameter (wrong count), and a dropped write-back leaves V_COUNT unassigned (wrong branch). Both show
+    // up as a sim != real on the two output columns rather than hiding.
+    Head("39. SP_DBG_SELINTO(1) — singleton SELECT … INTO: param read in WHERE + INTO write-back (sim == real)");
+    var selInto = await SimulateAsync("SP_DBG_SELINTO",
+        new(StringComparer.OrdinalIgnoreCase) { ["P_CUSTOMER_ID"] = 1 });
+    await using (var realCmd = new FbCommand("SELECT ORDER_COUNT, LABEL FROM SP_DBG_SELINTO(1)", service.RequireOpenConnection()))
+    await using (var realRdr = await realCmd.ExecuteReaderAsync())
+    {
+        if (await realRdr.ReadAsync())
+        {
+            var realCount = Show(realRdr.GetValue(0));
+            var realLabel = Show(realRdr.GetValue(1));
+            var simCount = selInto.Rows.Count > 0 ? Show(selInto.Rows[0]["ORDER_COUNT"]) : "<no row>";
+            var simLabel = selInto.Rows.Count > 0 ? Show(selInto.Rows[0]["LABEL"]) : "<no row>";
+
+            if (simCount == realCount) Pass("ORDER_COUNT (the INTO write-back)", $"sim {simCount} == real {realCount}");
+            else Fail("ORDER_COUNT", $"sim {simCount} != real {realCount}");
+            if (simLabel == realLabel) Pass("LABEL (the branch that reads it)", $"sim '{simLabel}' == real '{realLabel}'");
+            else Fail("LABEL", $"sim '{simLabel}' != real '{realLabel}'");
+            // A non-zero count is what makes the assertion meaningful: if the parameter were injected as
+            // NULL the count would be 0 and 'NONE', which is also a valid-looking answer.
+            if (realCount != "0") Pass("the case is discriminating (real count is non-zero)", realCount);
+            else Fail("the case proves nothing", "real count is 0 — the lab data no longer discriminates");
+        }
+        else Fail("SP_DBG_SELINTO", "the real procedure returned no row");
+    }
 }
 catch (Exception ex)
 {

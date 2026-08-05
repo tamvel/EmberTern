@@ -230,6 +230,44 @@ BEGIN
   RETURN COALESCE(TRIM(P_CODE), 'NONE');
 END^
 
+/* ---------- Singleton SELECT … INTO as a debugger step unit ---------
+   Added by the 2026-08-05 stabilization sprint (S-6). The sprint taught
+   the semantic binder to bind PSQL locals inside an embedded query — a
+   ':param' in a WHERE clause and the INTO targets, which previously no
+   binder looked at. That has a CONSEQUENCE for the debugger: its
+   read/write set for a statement falls back to "inject every in-scope
+   local" precisely WHEN THE ANALYZER RETURNS NOTHING (gotcha #238), so
+   restoring the references narrows the injection to the referenced set.
+
+   ⚠⚠ A narrowing of a live-fidelity-verified subsystem must be PROVEN on
+   the engine, and the existing probe could not: it drives 22 routines and
+   NOT ONE of them contains a singleton SELECT … INTO (the shape lives in
+   SP_ADD_ORDER and PKG_ORDERS.ORDER_TOTAL, neither of which the probe
+   steps). "ALL PASS" therefore said nothing about this change — a
+   measurement can reproduce a mechanism without reproducing the state.
+
+   So this routine exists to BE that state: a parameter read inside the
+   query's WHERE, a local written by INTO, and a branch that depends on the
+   written value — i.e. an under-injected read or a dropped write-back
+   would change the result rather than hide.                             */
+
+CREATE PROCEDURE SP_DBG_SELINTO(P_CUSTOMER_ID INTEGER)
+RETURNS (ORDER_COUNT INTEGER, LABEL VARCHAR(20))
+AS
+  DECLARE VARIABLE V_COUNT INTEGER;
+BEGIN
+  SELECT COUNT(*) FROM ORDERS
+    WHERE CUSTOMER_ID = :P_CUSTOMER_ID
+    INTO :V_COUNT;
+
+  ORDER_COUNT = V_COUNT;
+  IF (V_COUNT = 0) THEN
+    LABEL = 'NONE';
+  ELSE
+    LABEL = 'SOME';
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Procedures (PSQL) --------------------------------------

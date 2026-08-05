@@ -525,7 +525,28 @@ internal sealed partial class SemanticBinder
         switch (dsql)
         {
             case SelectStatement s when s.Query is not null:
-                BindQueryNode(s.Query, scope, stmt); skip.Add(s.Query);
+                BindQueryNode(s.Query, scope, stmt);
+                // ⭐⭐ Skip the query's CLAUSES, not the query NODE — the two are not the same range, and
+                // the difference is a PSQL singleton select's INTO targets (S-6, 2026-08-05).
+                //
+                // ⚠ MEASURED, because the documented contract says otherwise: SqlParser.Query's IsCoreEnd
+                // does stop the query CORE at a top-level INTO, so no clause covers `into :r` — but the
+                // SelectQuery NODE's span still spans the whole range it was asked to parse. For
+                // `select f from t where g = :a into :r` the node measured [60,36], i.e. it swallows the
+                // INTO while its clauses end at WHERE. Skipping the node therefore hid `into :r` from this
+                // walk, and nothing else looks at it: the targets of an embedded singleton select were
+                // bound by NOBODY. Skipping the clauses instead leaves exactly the tokens the query binder
+                // did not touch — the INTO list, and a set-operation's connective keywords, which carry no
+                // references anyway.
+                //
+                // ⛔ Deliberately NOT fixed by tightening the parser's node span: the span feeds the
+                // formatter (which renders a query's tokens as well as its clauses), so shrinking it risks
+                // dropping the INTO from formatted output — where §0's lexeme net would catch it and revert
+                // the whole routine to verbatim. A binder-side skip cannot lose a lexeme.
+                //
+                // ⚠ Only this arm: an EMBEDDED subquery is still skipped whole, and must be — its interior
+                // is bound in its own scope and its parens/EXISTS carry nothing.
+                foreach (var clause in s.Query.Children) skip.Add(clause);
                 break;
             case InsertStatement i:
                 if (i.SourceQuery is { } isrc) { BindQueryNode(isrc, scope, stmt); skip.Add(isrc); }
