@@ -4102,12 +4102,27 @@ noted.
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
   (#94/#226/#286). The partition filter is those class names excluded / included:
   `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe&FullyQualifiedName!~EditableGridEnterTests"`
-  and its inverse with `|`. ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
+  and its inverse with `|` — ⚠ **except that `BrandingPresentationTests` now belongs to the ISOLATED partition,
+  so the grouped inverse must NOT include it** (grouped = the other six; isolated =
+  `ConnectionExpandBindingProbe|BrandingPresentationTests`).
+  ⛔⛔ **AND THE ACCEPTANCE CRITERION IS THE TOTAL, NOT „0 FAILURES" — measured 2026-08-05.** With
+  `--blame-hang`, a broken headless state reported **`Powodzenie!` — 0 niepowodzeń, łącznie 7232** while **128
+  tests silently never started**; the same state without the flag gave 94 failures, and on a retry it hung.
+  So a run is green only when it reports **`łącznie: 7360`** (or the partition's own 7232 / 73 / 55). A summary
+  line saying „0 niepowodzeń" is satisfiable by a run in which a whole partition failed to load.
+  ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
   criterion for adding a class: **does it construct Avalonia controls?**
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
-  with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,
-  ~9 s) and the rest together (**74 green** as of 2026-08-05, ~11 s). Both were clean that way on the same
+  with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** and the
+  rest together. ⭐ **CORRECTED 2026-08-05 (Avalonia 12.1.1 sprint): the isolated partition now holds TWO
+  classes — `ConnectionExpandBindingProbe` + `BrandingPresentationTests` — so the split is 7232 + 73 + 55.**
+  `BrandingPresentationTests` moved there because it failed ~1 in 3 in the grouped run with *"The calling
+  thread cannot access this object because a different thread owns it"* and is **green 6/6 alone**; it is the
+  only headless test that opens a real platform `Window` (`Show()`), which is why it is the one that needed
+  isolating. ⚠ Weakening its assertion was rejected — dropping `Show()` makes `Icon` read null, i.e. the test
+  would pass while proving nothing. Detail + the two rejected attempts: the class doc and
+  `docs/design/avalonia-12.1.1-update.md` §11. Both were clean that way on the same
   commit where a combined run had to be interrupted twice. ⚠ That "the other four" used to read four and then
   seven — the number moves with the class list above, so read the list, not this sentence.
   **⭐ A NEW DATUM ON THE CAUSE, and it is a better suspect than any assertion: a headless test that constructs

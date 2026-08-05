@@ -417,9 +417,177 @@ rozstrzygnięcie, jak sondy poza solucją mają być utrzymywane (skrypt budują
 na gnicie z zapisanym powodem). ⭐ Warto zapytać przy tym, **ile innych sond jest w tym stanie** — sprint
 zbudował tylko cztery.
 
+### 9.3 ⭐⭐ „Ponad 60 nieprzechodzących testów" — PRZYCZYNA USTALONA, NIE JEST TO REGRESJA STANU ODDANEGO
+
+**Zgłoszenie:** po aktualizacji ponad 60 testów jednostkowych nie przechodzi.
+
+**Pomiar w stanie oddanym: nie odtwarza się — trzynaście przebiegów zielonych.** Debug i Release,
+partycjonowane i pełne w jednym przebiegu, w tym **po pełnym `clean` z usunięciem `obj/` i `bin/`**
+i restore od zera. Za każdym razem **7360 / 7360**.
+
+**Przyczyna, odtworzona:** to **niezgodność wersji `Avalonia.Headless` z corem** — czyli dokładnie **stan
+pośredni Kroku 1**, jedyna konfiguracja tego sprintu, której świadomie nie testowałem (`cc9c0ee`: core 12.1.1,
+Headless 12.0.3). Zbudowana w osobnym `git worktree` daje:
+
+```
+System.TypeLoadException : Method 'SetFrameThemeVariant' in type 'Avalonia.Headless.HeadlessWindowImpl'
+from assembly 'Avalonia.Headless, Version=12.0.3.0, …' does not have an implementation.
+   at Avalonia.Headless.AvaloniaHeadlessPlatform.HeadlessWindowingPlatform.CreateWindow()
+   at Avalonia.Controls.Platform.PlatformManager.CreateWindow()
+   at Avalonia.Controls.Window..ctor()
+```
+
+Core 12.1.1 dodał `SetFrameThemeVariant` do kontraktu implementacji okna; `Avalonia.Headless` 12.0.3 go nie
+implementuje, więc **każdy test konstruujący `Window`** wybucha `TypeLoadException` w konstruktorze. To
+uderza wyłącznie w zestaw headless (128 testów) i **nie dotyka ani jednej asercji poza nim** — co zgadza się
+z rzędem wielkości zgłoszenia.
+
+⚠ **Build jest przy tym 0/0 i restore nie mówi ani słowa** — `Avalonia.Headless` 12.0.3 wymaga
+`Avalonia >= 12.0.3`, co core 12.1.1 spełnia. To gotcha **#321** w drugim wydaniu, tego samego dnia: zakres
+`>=` znów zamienił niezgodność w konfigurację wyglądającą na wspieraną.
+
+**⛔⛔ I TU JEST ZNALEZISKO WAŻNIEJSZE OD SAMEJ PRZYCZYNY: TEN SAM ZEPSUTY STAN RAPORTUJE TRZY RÓŻNE RZECZY,
+W TYM SUKCES.** Trzy przebiegi tej samej komendy na tym samym commicie:
+
+| Przebieg | Wynik |
+|---|---|
+| `dotnet test --blame-hang` | **`Powodzenie!` — 0 niepowodzeń, 7232 / łącznie 7232** ⚠ 128 testów **zniknęło z sumy**, a przebieg mówi „sukces" |
+| `dotnet test` (bez `--blame-hang`) | **`Niepowodzenie!` — 94 niepowodzenia / 7360** |
+| `dotnet test` (bez `--blame-hang`, powtórka) | **zawiesił się** — przerwany po 10 minutach |
+
+⭐ Niedeterminizm ma wyjaśnienie i jest nim… to, co 12.1.1 naprawia: `TypeLoadException` lecący przez
+`HeadlessUnitTestSession.DispatchCore` zostawia sesję w stanie nieokreślonym (#21781 — *„leaves current and
+future Dispatch calls waiting forever"*). Zepsuta sesja headless może więc dać ciszę, N awarii albo zawis.
+
+⭐⭐ **Wniosek metodologiczny, szerszy niż ten sprint: „0 niepowodzeń" NIE jest kryterium zielonej suite —
+kryterium jest SUMA.** Nasza własna, udokumentowana komenda QA (`--blame-hang`) potrafi zaraportować
+`Powodzenie!`, gdy **cała partycja headless nie wystartowała**. Liczba 7360 w CLAUDE.md przestaje być
+ciekawostką i staje się asercją: jeśli suma jest inna, przebieg nie jest zielony, choćby nic nie zawiodło.
+⚠ Moje własne QA tego sprintu przeszło tylko dlatego, że sprawdzałem liczby per partycja **i** sumę w pełnym
+przebiegu — nie dlatego, że komenda mnie ochroniła.
+
+**Jak użytkownik mógł to zobaczyć, a ja nie** (do rozstrzygnięcia jedną komendą, niżej): przebieg na commicie
+Kroku 1 w trakcie sprintu · albo `--no-build` / `--no-restore` na wyjściu, w którym `Avalonia.Headless.dll`
+został jeszcze w wersji 12.0.3 obok nowego core'a · albo `obj/project.assets.json` z przed Kroku 2.
+
+**Rozstrzygające sprawdzenie — jedna komenda:**
+
+```bash
+powershell -NoProfile -Command "(Get-Item tests/EmberTern.Tests/bin/Debug/net9.0/Avalonia.Headless.dll).VersionInfo.FileVersion"
+```
+
+`12.1.1.0` ⇒ stan poprawny, a zgłoszenie pochodziło z innego stanu. Cokolwiek innego ⇒ to ta przyczyna,
+i lekiem jest `dotnet clean` + usunięcie `obj/` i `bin/` + restore (dokładnie to, co zrobiłem przy weryfikacji
+i po czym suma wróciła do 7360).
+
+**Rekomendacja — NIE osobny sprint; jedno małe zadanie z dwoma guardami:**
+
+1. **Guard na sumę testów** — asercja, że `Avalonia.Headless` załadowany w procesie testowym ma **tę samą
+   wersję co `Avalonia.Base`**. Jeden test, kilka linii, zamienia całą tę klasę awarii w jedną czytelną
+   czerwoną asercję zamiast 94 `TypeLoadException` albo — gorzej — cichego sukcesu.
+2. **Poprawka komendy QA w CLAUDE.md** — dopisać, że kryterium jest `łącznie: 7360`, nie „0 niepowodzeń".
+   ⚠ To jest realna zmiana w dokumentacji procesu, bo obecny zapis daje się spełnić przez przebieg,
+   w którym 128 testów nie wystartowało.
+
+⛔ **Czego NIE rekomenduję:** naprawiania czegokolwiek w kodzie produkcyjnym ani w testach — nie ma tam
+defektu. Stan oddany jest zielony 13×, w tym po budowie od zera.
+
 ### 9.2 Numery gotchy 303 i 304 są zdublowane
 
 Zmierzone przy okazji Kroku 5 (§7). Odwołania w CLAUDE.md w postaci „gotchas #303/#304" są dziś
 **niejednoznaczne**. Naprawa = wybór, który wpis zachowa numer, plus aktualizacja odwołań — decyzja, nie
 sprzątanie.
+
+---
+
+## 10. Runda dodatkowa po odbiorze (2026-08-05) — dwa pakiety poza Avalonią
+
+QA wzrokowe użytkownika przeszło bez regresji; sprint odebrany. Dwa punkty domknięte po odbiorze.
+
+### 10.1 `AvaloniaUI.DiagnosticsSupport` 2.2.1 → **2.2.3** ✅ ZROBIONE
+
+Build **0/0 w Debug i Release**; suite **7360 / 7360**. ⭐ Zweryfikowane osobno, że warunkowe
+`IncludeAssets`/`PrivateAssets` nadal działa: `AvaloniaUI.DiagnosticsSupport.Avalonia.dll` **jest**
+w `bin/Debug`, a w `bin/Release` **go nie ma**. Bez tego sprawdzenia bump byłby zmianą tego, co ships,
+a nie tylko narzędzia deweloperskiego.
+
+### 10.2 `System.Security.Cryptography.*` — ⛔ **ZOSTAJE, decyzja uzasadniona**
+
+**Pytanie dotyczyło DWÓCH pakietów, nie jednego** — `--outdated` raportuje oba:
+
+| Pakiet | Projekt | Mamy | Najnowsze | Czy ships? |
+|---|---|---|---|---|
+| `System.Security.Cryptography.ProtectedData` | **EmberTern.App** | 9.0.0 | 10.0.10 | **tak** |
+| `System.Security.Cryptography.Xml` | EmberTern.Tests | 8.0.4 | 10.0.10 | nie (`IsPackable=false`) |
+
+**Czy któryś jest dostarczany przez framework? Nie — oba są genuinnie out-of-band.** `ProtectedData` opakowuje
+Windows DPAPI i nie ma go w shared framework na .NET Core+ (dlatego referencja istnieje); `Xml` również jest
+OOB i u nas jest **security-overridem** przechodniego pinu NPOI, świadomie ustawionym na **załataną** wersję
+8.0.x dla nazwanych advisory.
+
+**⚠ Przesłanka „przy .NET 10" nie zachodzi:** `Directory.Build.props` ustawia **`net9.0`**. (CLAUDE.md zapisuje,
+że ta linia raz błędnie twierdziła `net10.0` i została skorygowana 2026-07-27 — warto o tym pamiętać, bo
+pomyłka jest naturalna.) Pasmo pasujące do net9.0 to **9.0.x**, nie 10.0.x.
+
+**Zmierzone, nie założone:** `dotnet list package --vulnerable --include-transitive` → **zero podatnych
+pakietów we wszystkich pięciu projektach**. Więc przejście nie wnosi korzyści bezpieczeństwa — a jako
+referencja **bezpośrednia** `ProtectedData` jest dodatkowo pod `NU1902`/`NU1903` przy
+`TreatWarningsAsErrors=true`, czyli nowe advisory i tak zerwałoby build (gotcha #278).
+
+**⭐ Argument decydujący jest jednak projektowy, nie wersyjny: `ProtectedData` leży na ścieżce reguły #11.**
+Wykonuje `Protect`/`Unprotect` na `settings.dat` — profilach połączeń i hasłach. Podmiana biblioteki
+kryptograficznej **przez granicę pasma, bez zmierzonej korzyści**, na powierzchni klasy data-loss, jest
+dokładnie tym, czego reguła #11 zabrania.
+
+**⚠⚠ I TU JEST TRZECIA ODPOWIEDŹ, KTÓRĄ NARZĘDZIE UKRYŁO — a bez niej decyzja wygląda na „wszystko albo
+nic".** Istnieje **`ProtectedData` 9.0.18** (2026-07-14), czyli **servicing w naszym pasmie**; jesteśmy 18
+patchy za nim *wewnątrz własnego pasma*. `dotnet list package --outdated` pokazuje wyłącznie najnowszą wersję
+**ogólnie**, więc gdy istnieje nowsze pasmo (10.0.x), **aktualizacja w pasmie jest niewidoczna**. ⭐ Repo ma
+już w tym pasmie precedens: `System.IO.Packaging` w EmberTern.Office stoi na **9.0.18** — czyli 9.0.0 jest
+niespójne z naszym własnym wzorcem, i nikt tego nie widział, bo raport pokazywał tylko skok przez pasmo.
+
+**Decyzja:** ⛔ **nie przechodzimy do 10.0.10** (żadnej korzyści, TFM inny, reguła #11) · ⏸ **9.0.18 to osobny,
+mały krok z własną weryfikacją round-tripu `settings.dat`** (zapis, odczyt, `.bak`, profil z hasłem) — nie
+„przy okazji" sprintu Avalonii, dokładnie z tego samego powodu, dla którego AvaloniaEdit dostał własne
+zadanie. Powód zapisany **przy `PackageReference`**, nie tylko tutaj. `Xml` 8.0.4 zostaje bez zmian:
+test-only, nie ships, brak advisory, a 8.0.4 jest wersją *załataną* dla tych, dla których został podniesiony.
+
+### 10.3 Test dostosowany, nie tropiony dalej — `BrandingPresentationTests` do partycji izolowanej
+
+W trakcie tej rundy `BrandingPresentationTests.EveryWindow_TakesTheApplicationIcon_FromTheOneStyle` zaczął
+padać **~1 na 3** w przebiegu zgrupowanym z komunikatem *„The calling thread cannot access this object because
+a different thread owns it"* (rodzina gotchy #226). ⚠ To **nie** ta sama sprawa co §9.3 — tam był
+`TypeLoadException` z niezgodności wersji; tutaj wyścig w dzielonej sesji headless.
+
+⛔ **Dyrektywa użytkownika, która ustawiła sposób pracy (2026-08-05):** *„skoro aplikacja na nowej wersji nie
+wykazuje problemów to moim zdaniem trzeba testy dostosować, a nie w kółko skakać między wersjami"*. Słusznie —
+przerwał mi kolejny cykl pomiarów wersji, który nie prowadził do niczego.
+
+**Co zostało zmierzone i odrzucone, żeby nikt tego nie powtarzał:**
+
+| Próba | Wynik |
+|---|---|
+| `AvaloniaUI.DiagnosticsSupport` 2.2.3 jako podejrzany | ⭐ **oczyszczony** — po zejściu do 2.2.1 test padał dalej (3 z 6) |
+| usunięcie `Show()` (zostaje `ApplyTemplate()`) | ⛔ **styl się wtedy nie aplikuje, `Icon` = null** — test przechodziłby, nie dowodząc niczego |
+| try/finally + pompowanie dispatchera po `Close()` | ⚠ **nie naprawiło** (dalej 1 z 6); zostawione jako poprawny teardown, z komentarzem mówiącym wprost, że nie jest naprawą |
+| uruchomienie klasy **w izolacji** | ✅ **6/6 zielone** |
+
+**Zastosowane:** klasa przechodzi do **partycji izolowanej**, obok `ConnectionExpandBindingProbe` — czyli tam,
+gdzie stojąca dyrektywa użytkownika z 2026-08-01 już umieściła jedną fragilną klasę headless. Nowy podział:
+**7232 + 73 + 55 = 7360**, każda partycja zweryfikowana **3×**.
+
+⭐ Powód, dla którego to właśnie ta klasa wymaga izolacji, jest konkretny, a nie zabobonny: **jest jedynym
+testem headless otwierającym prawdziwe okno platformowe** (`Show()`), więc jedynym, którego obiekt żyje
+w `HeadlessWindowingPlatform` dotykanym potem przez sesje pozostałych klas.
+
+⛔ **Nie osłabiono asercji** do „setter istnieje w pliku" — to dokładnie ta wystarczalność, której ten test ma
+dowodzić, że jej nie ma (styl kompiluje się niezależnie od tego, czy `Window.Icon` jest styled property).
+
+⏸ **Poza zakresem pytania, odnotowane bez działania:** `--outdated` raportuje też `DocumentFormat.OpenXml`
+3.1.0 → 3.5.1, `ExcelDataReader` 3.7.0 → 3.9.0, `System.IO.Packaging` 9.0.18 → 10.0.10,
+`Microsoft.NET.Test.Sdk` 17.11.1 → 18.8.1, `NPOI` 2.7.2 → 2.8.0, `SixLabors.ImageSharp` 2.1.11 → **4.0.0**
+(dwa pasma major), `xunit` 2.9.2 → 2.9.3, `xunit.runner.visualstudio` 2.8.2 → **3.1.5**. Ta sama analiza
+należy się każdemu z osobna; ⭐ w szczególności `ImageSharp` i `xunit.runner.visualstudio` to skoki major
+w projekcie testowym, a `Test.Sdk` 18.x zmienia runner — czyli **dokładnie ta warstwa, która w §9.3 okazała
+się źródłem nieporozumienia o „ponad 60 testach"**. Nie ruszać bez własnego kroku.
 
