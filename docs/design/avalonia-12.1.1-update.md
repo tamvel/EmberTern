@@ -1,6 +1,8 @@
 # Aktualizacja Avalonia 12.0.3 → 12.1.1
 
-**Status: SPRINT W TOKU.** Osobny, zamknięty sprint techniczny wykonywany **przed rozpoczęciem M4**,
+**Status: KROKI 0–5 WYKONANE, QA MASZYNOWE ZIELONE (§8) — SPRINT OCZEKUJE NA QA WZROKOWE UŻYTKOWNIKA (§6).**
+⛔ Nie scalać do `feat/product-polish` i nie pushować przed odbiorem. Dwa znaleziska do decyzji: §9.
+Osobny, zamknięty sprint techniczny wykonywany **przed rozpoczęciem M4**,
 świadomie **nie mieszany z pracami Product Polish** (decyzja użytkownika, 2026-08-05). Gałąź
 `chore/avalonia-12.1.1`, odcięta od `feat/product-polish` i scalana **z powrotem do niej** — zgodnie ze
 skorygowaną 2026-08-05 regułą higieny gałęzi: *gałąź odcięta od gałęzi funkcji wraca do TEJ gałęzi, nigdy
@@ -296,3 +298,128 @@ MultiRow, 26px-FIXED w obu motywach), wygenerowane **na 12.0.3 z bieżącego HEA
 (sondy renderowały wtedy także stany kandydatów, których w produkcie nie ma). Zapisane wraz z sumami SHA-256
 poza repozytorium (`out/` jest gitignorowane):
 `…/scratchpad/before-12.0.3/{visual,tabstrip}/` + `hashes-before.txt`.
+
+### Krok 1 — core w App na 12.1.1 (`cc9c0ee`) ✅
+
+`Avalonia`, `Avalonia.Desktop`, `Avalonia.Themes.Fluent`, `Avalonia.Fonts.Inter` → 12.1.1. Nic więcej.
+Build **0/0 w Debug i Release**. Rozwiązane wersje sprawdzone jawnie (`dotnet list package`): core 12.1.1,
+AvaloniaEdit 12.0.0, DataGrid 12.0.0, Headless nadal 12.0.3.
+
+⚠ **Suite świadomie nie uruchamiana w tym kroku:** `Avalonia.Headless` 12.0.3 przy corze 12.1.1 to
+konfiguracja, której nie wdrażamy, więc wnioski z niej byłyby o stanie, który nie istnieje.
+
+### Krok 2 — `Avalonia.Headless` na 12.1.1 (`014d61c`) ✅
+
+Build 0/0. Suite **7360** zielona w trzech partycjach (7232 + 74 + 54), każda z `--blame-hang`. Zero zmian
+w kodzie produkcyjnym i w testach — te same 7360 asercji przechodzi na nowym runtimie.
+
+⭐ Powód wiązania wersji zapisany **w csproj obok referencji**: Headless twardo zależy od
+`Avalonia`/`Fonts.Inter`/`Avalonia.HarfBuzz` w swoim numerze, więc rozjazd albo podnosi core zależnością
+przechodnią, albo daje `NU1605`. *Bump core = bump tutaj.*
+
+### Krok 3 — `Avalonia.Controls.DataGrid` na 12.1.2 (`1a8b428`) ✅
+
+Build 0/0. Suite **7360** zielona w trzech partycjach — w tym `EditableGridEnterTests`, czyli asercje stojące
+na trzech zmierzonych faktach o implementacji `DataGrid`a (Enter na TUNNELU · bramka na FOCUSIE · komórka
+lokalizowana przez `SelectedItem` + `DisplayIndex`). Smoke: aplikacja startuje, 8 s życia procesu, zero
+nowych wpisów `FATAL`.
+
+⭐ Rozjazd numerów **i** deprecation pakietu zapisane w csproj obok referencji — razem z powodem, żeby nikt
+nie „naprawił" tego zejściem do 12.1.0, i z granicą: migracja na `TableView`/`TreeDataGrid` to osobna decyzja
+produktowa, nie temat aktualizacji frameworka i nie temat M4.
+
+### Krok 4 — trzy sondy wizualne na 12.1.1 (`fe54d6a`) ✅ **18/18 renderów bajtowo identycznych**
+
+Wszystkie 18 renderów ma **identyczną sumę SHA-256** z zapisanymi na 12.0.3 — plik po pliku, oba motywy.
+Zero ruchu w geometrii, układzie i rozwiązywaniu pędzli po stronie tego, co sondy renderują.
+
+⚠ **Identyczność zweryfikowana ZANIM została uznana za wynik**, bo „identyczne rendery" i „sonda się nie
+przebudowała" wyglądają tak samo: `dotnet list package` pokazuje 12.1.1, a `Avalonia.Base.dll` /
+`Avalonia.Controls.dll` w `bin/Release` sondy raportują **12.1.1.0**.
+
+⚠⚠ **ZAKRES TEGO WYNIKU, bo bez niego liczba wprowadza w błąd:** `RenderTargetBitmap` idzie ścieżką
+natychmiastowej rasteryzacji Skia, **a nie przez kompozytor GPU** — czyli tam, gdzie *nie* żyją zmienione
+w 12.1.0 domyślne (`dirty-rect clipping`, `stencil buffers`). Bajtowa identyczność dowodzi więc, że nie
+ruszyła się geometria ani warstwa zasobów; **nie dowodzi, że żywe okno maluje się tak samo.** R3 pozostaje
+otwarte i należy do QA wzrokowego.
+
+`ImportFileOpenProbe`: build 0/0 (uruchomienie wymaga dużego `.xlsx`, którego nie mamy — stan bez zmian
+względem M3b.1).
+
+### Krok 5 — powód przy AvaloniaEdit + gotcha #321 (`a26a382`) ✅
+
+Komentarz przy referencji `Avalonia.AvaloniaEdit` mówi, **czego nie ma**, co trzeba by ponownie sprawdzić
+i gdzie jest checklista. ⭐ Bo pinowana starsza wersja **bez** powodu czyta się jako zaniedbanie i zostaje
+„posprzątana" przy zielonym buildzie. Gotcha **#321** generalizuje to poza ten pakiet.
+
+⚠ **Sprostowanie zmierzone, nie inkrementowane:** CLAUDE.md deklarował liczbę wpisów gotchy w **dwóch**
+miejscach, które nie zgadzały się ze sobą („309, #1–#320" vs „301, #1–#312") i **oba były błędne**. Zmierzone:
+**308 wpisów, najwyższy numer 321** — a liczba **nie** jest max−1, bo **numery 303 i 304 są użyte po dwa
+razy**, w różnych sekcjach tematycznych. ⛔ Nie przenumerowano: na te numery są odwołania w CLAUDE.md, więc
+wybór, który wpis zachowa numer, to decyzja do przedstawienia, nie zmiana do zrobienia po cichu. Kształt #284
+o warstwę wyżej.
+
+---
+
+## 8. QA maszynowe — wynik
+
+| Sprawdzenie | Wynik |
+|---|---|
+| `dotnet build -c Debug` | **0 / 0** |
+| `dotnet build -c Release` | **0 / 0** |
+| Suite, 3 partycje × **3 przebiegi** | **7360** ✓ dziewięć razy (7232 + 74 + 54), `--blame-hang` za każdym razem bez pliku sekwencji |
+| Zawieszenie suite | **nie wystąpiło** w 9 przebiegach po zmianie (ani w 9 przed) |
+| `MetadataTreeVirtualizationProbe` | 4/4 — 93 ms / 106 ms / 148 ms / 823 ms, przy limitach 5 s |
+| `SharedContextMenuFeasibilityProbe` | 2/2 — 401 ms / 3 s |
+| `DebuggerFidelityProbe` (żywy FB5) | **39/39 ALL PASS**, w tym dyskryminująca sprawa 39 (`SP_DBG_SELINTO`) |
+| `ChangeSafetyProbe` (żywy FB5) | **ALL PASS**; koszt jednego sprawdzenia 3,0 ms / 1,6 ms |
+| `DataImportRunProbe` (żywy FB5) | **ALL PASS — 33 sprawdzenia** |
+| `DataImportProbe` | ⚠ **NIE KOMPILUJE SIĘ — i jest to defekt WCZEŚNIEJSZY** (§9) |
+| Smoke Debug + Release | aplikacja startuje, ~9 s życia procesu, **0 wpisów `FATAL`** w całym `EmberTern-debug.log` |
+
+⚠ **Czego to QA nie dowodzi, powiedziane wprost:** brak zawieszenia **nie jest** dowodem, że #21781 naprawiło
+nasz wieloletni objaw — patrz §2.1 (dwie niezależne kandydatki, a objaw jest rzadki z definicji). I żaden
+z powyższych pomiarów nie dotyka **R1**: 7360 asercji przeszłoby również wtedy, gdyby układ tekstu w edytorze
+przesunął się o wiersz.
+
+---
+
+## 9. Znalezione po drodze, NIE naprawione — do decyzji
+
+### 9.1 `DataImportProbe` nie kompiluje się (defekt wcześniejszy, nie regresja)
+
+```
+tools/probes/DataImportProbe/Program.cs(114,43): error CS1503:
+  nie można przekonwertować z „EmberTern.Firebird.TransactionService”
+  na „EmberTern.Firebird.ImportSessionConnection”
+```
+
+⭐ **Dowiedzione, nie założone:** ten sam błąd, ten sam plik i ta sama kolumna występują na commicie
+**`8d5c510`** — czubku `feat/product-polish` sprzed sprintu (zbudowane w osobnym `git worktree`). Sonda
+referencuje wyłącznie `EmberTern.Core` i `EmberTern.Firebird` — **ani jednego pakietu Avalonii** — więc
+aktualizacja nie mogła jej dotknąć.
+
+**Przyczyna:** etap I7.5 dał modułowi importu własną transakcję na własnym attachmencie
+(`ImportSessionConnection`), a `FirebirdImportWriter` przyjmuje odtąd ten typ zamiast `TransactionService`.
+Sonda jest **poza solucją**, więc `dotnet build EmberTern.slnx` nigdy jej nie kompiluje — i rozjazd przeszedł
+niezauważony przy zielonym buildzie i zielonej suite.
+
+⚠ **To ten sam kształt, co gotcha #321 i #284: narzędzie weryfikacyjne zgniło cicho, bo nic go nie
+kompilowało.** Różnica jest istotna: `DataImportProbe` to **20 sprawdzeń modułu zamkniętego jako
+„user-accepted"**, czyli dokładnie ten materiał, po który sięgnie się, gdy import kiedyś się zepsuje.
+
+⛔ **Nie naprawiono w tym sprincie z dwóch powodów:** (a) to nie jest defekt aktualizacji, a sprint ma być
+zamknięty i przypisywalny; (b) Data Import ma stojącą dyrektywę *„wracać tylko po rzeczywisty defekt
+funkcjonalny"*, więc dotknięcie go „przy okazji" byłoby dokładnie tym, czego zakazuje.
+
+**Rekomendacja:** własne, małe zadanie — naprawić wywołanie *oraz* dodać do `tools/probes/README.md`
+rozstrzygnięcie, jak sondy poza solucją mają być utrzymywane (skrypt budujący wszystkie, albo świadoma zgoda
+na gnicie z zapisanym powodem). ⭐ Warto zapytać przy tym, **ile innych sond jest w tym stanie** — sprint
+zbudował tylko cztery.
+
+### 9.2 Numery gotchy 303 i 304 są zdublowane
+
+Zmierzone przy okazji Kroku 5 (§7). Odwołania w CLAUDE.md w postaci „gotchas #303/#304" są dziś
+**niejednoznaczne**. Naprawa = wybór, który wpis zachowa numer, plus aktualizacja odwołań — decyzja, nie
+sprzątanie.
+

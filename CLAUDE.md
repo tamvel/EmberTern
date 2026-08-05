@@ -230,12 +230,14 @@ src/
                              # and, since I9, the streaming SAX reader XlsxImportProvider) plus, since I10,
                              # ExcelDataReader for legacy .xls (XlsImportProvider). Renamed from
                              # EmberTern.Export.Office in I9.
-  EmberTern.App/             # WinExe, Avalonia 12.0.3, CommunityToolkit.Mvvm 8.4.2
+  EmberTern.App/             # WinExe, Avalonia 12.1.1, CommunityToolkit.Mvvm 8.4.2
     Program.cs, App.axaml(.cs), UiStrings.cs, app.manifest
     ViewModels/ Views/ Themes/ (Colors.axaml + ControlStyles.axaml — the ONLY theme sources)
     Behaviors/ Completion/ Controls/ Converters/ Diagnostics/ Export/ Security/ Sql/
     Assets/ (FirebirdSql.xshd + .Light.xshd, Branding/, Icons/ — SvgIcon geometries)
-    (NuGet: Avalonia.AvaloniaEdit 12.0.0, Avalonia.Controls.DataGrid 12.0.0)
+    (NuGet: Avalonia.AvaloniaEdit 12.0.0 — ⚠ deliberately BEHIND the core, no 12.1 build exists;
+     Avalonia.Controls.DataGrid 12.1.2 — ⚠ deliberately AHEAD, no 12.1.1 build exists. Both mismatches carry
+     their reason at the `PackageReference`; see `docs/design/avalonia-12.1.1-update.md` + gotcha #321)
 tests/
   EmberTern.Tests/           # xunit; ONE shared HeadlessUnitTestSession for the whole
                              # ConnectionExpandBindingProbe class — see gotchas #94 / #226
@@ -449,6 +451,57 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **⬆ AVALONIA 12.0.3 → 12.1.1 — KROKI 0–5 WYKONANE, QA MASZYNOWE ZIELONE, ⏸ OCZEKUJE NA QA WZROKOWE
+  UŻYTKOWNIKA (2026-08-05).** Osobny, zamknięty sprint techniczny **przed M4**, świadomie nie mieszany
+  z Product Polish (decyzja użytkownika). Gałąź `chore/avalonia-12.1.1`, odcięta od `feat/product-polish`
+  i scalana **z powrotem do niej** — ⛔ **nie scalona i nie wypchnięta**, bo reguła mówi *push po ODBIORZE*.
+  Jeden dokument: **[docs/design/avalonia-12.1.1-update.md](docs/design/avalonia-12.1.1-update.md)** —
+  ratyfikowane decyzje D‑1…D‑5 (§0), ryzyka **R1–R8** (§3), wpływ na nasze komponenty (§4), checklista QA
+  (§6), dziennik wykonania (§7), wynik QA (§8), znaleziska do decyzji (§9).
+  **Wersje: core `Avalonia`/`Desktop`/`Themes.Fluent`/`Fonts.Inter` + `Avalonia.Headless` = 12.1.1 · ⚠ dwa
+  celowe rozjazdy, każdy z powodem zapisanym przy `PackageReference`:** `Avalonia.AvaloniaEdit` **12.0.0**
+  (buildu 12.1 nie ma) i `Avalonia.Controls.DataGrid` **12.1.2** (DataGrida 12.1.1 nie ma — pakiet ma własne
+  repo i własny cykl).
+  **QA maszynowe:** build **0/0 w Debug i Release** · suite **7360** zielona **dziewięć razy** (3 partycje
+  × 3 przebiegi, każdy `--blame-hang`) · `MetadataTreeVirtualizationProbe` 4/4 (93–823 ms przy limitach 5 s)
+  · `SharedContextMenuFeasibilityProbe` 2/2 · żywe FB5: `DebuggerFidelityProbe` **39/39**,
+  `ChangeSafetyProbe` ALL PASS, `DataImportRunProbe` **33 sprawdzenia** ALL PASS · smoke Debug + Release, **0
+  wpisów `FATAL`**.
+  ⭐⭐ **Najmocniejszy wynik: 18/18 renderów obu sond wizualnych jest BAJTOWO IDENTYCZNYCH** z zapisanymi na
+  12.0.3 (SHA‑256 plik po pliku, oba motywy) — zero ruchu w geometrii, układzie i rozwiązywaniu pędzli.
+  ⚠ Identyczność zweryfikowana **zanim** została uznana za wynik (`Avalonia.Base.dll` w `bin/Release` sondy
+  raportuje 12.1.1.0), bo „identyczne rendery" i „sonda się nie przebudowała" wyglądają tak samo.
+  ⚠⚠ **ZAKRES TEGO WYNIKU:** `RenderTargetBitmap` idzie ścieżką natychmiastowej rasteryzacji Skia, **nie przez
+  kompozytor GPU** — czyli tam, gdzie *nie* żyją zmienione w 12.1.0 domyślne (`dirty-rect clipping`,
+  `stencil buffers`). Dowodzi, że nie ruszyła się geometria; **nie dowodzi, że żywe okno maluje się tak samo.**
+  ⛔⛔ **RYZYKO R1 JEST NIETKNIĘTE PRZEZ CAŁE QA MASZYNOWE I TO ONO DECYDUJE O ODBIORZE: AvaloniaEdit nie ma
+  buildu pod 12.1**, jego zakres `>= 12.0.0` spełnia core 12.1.1 **bez ostrzeżenia, bez `NU1605`, bez
+  informacji o downgrade** — a 7360 asercji przeszłoby również wtedy, gdyby układ tekstu w edytorze przesunął
+  się o wiersz (testy asertują właściwości i pędzle, nie piksele). Na `TextView`/`GetRectsForSegment` wisi
+  sześć `IBackgroundRenderer`ów, hit-testowany `BreakpointMargin`, `InlineValuesRenderer` (rysuje **za** końcem
+  linii), cztery karty `OverlayLayer`, `SqlIndentationStrategy` i 11 preview DDL. **Punkt 1 checklisty
+  wzrokowej = edytor SQL, priorytet bezwzględny.** Nowa gotcha **#321** generalizuje to poza ten pakiet:
+  *brak błędu restore jest dowodem o metadanych, nigdy o zgodności.*
+  ⚠ **Kryterium wycofania (ratyfikowane D‑5): cokolwiek z R1 → cofnij do 12.0.5, nie do 12.0.3** — 12.0.5 daje
+  `TextRunCache`, Unicode v17, `ScrollViewer` NaN fix i headless `TestContext` fix przy **zerowej** zmianie
+  domyślnych renderowania, zerowym ruchu w compiled bindings i zerowej zmianie hit-testingu.
+  ⚠ **Czego QA NIE dowiodło, powiedziane wprost:** brak zawieszenia suite w 9 przebiegach po zmianie (i w 9
+  przed) **nie jest** dowodem, że 12.1.1's `Fix headless session hang when cleanup throws` (#21781) naprawiło
+  nasz wieloletni objaw (#94/#226/#261) — od 2026‑08‑04 mamy **dwie** niezależne kandydatki na tę przyczynę
+  (`AutoScrollToSelectedItem` i teraz #21781), a objaw jest rzadki z definicji. Obserwować, notować w obie
+  strony, nie przypisywać.
+  ⏸ **Dwa znaleziska do decyzji, żadne nie blokuje odbioru (§9):** (a) 🐞 **`DataImportProbe` NIE KOMPILUJE
+  SIĘ — i jest to defekt WCZEŚNIEJSZY, dowiedziony a nie założony**: identyczny błąd (`TransactionService` →
+  `ImportSessionConnection`, skutek I7.5) na commicie `8d5c510` zbudowanym w osobnym `git worktree`, a sonda
+  nie referencuje **ani jednego** pakietu Avalonii. ⭐ Jest **poza solucją**, więc `dotnet build EmberTern.slnx`
+  nigdy jej nie kompilował — 20 sprawdzeń modułu zamkniętego jako „user-accepted" zgniło cicho przy zielonym
+  buildzie; ⛔ nie naprawione, bo Data Import ma stojącą dyrektywę „wracać tylko po rzeczywisty defekt
+  funkcjonalny", a sprint ma zostać przypisywalny. (b) ⚠ **numery gotchy 303 i 304 są użyte po dwa razy**, więc
+  odwołania „gotchas #303/#304" są niejednoznaczne; przy okazji sprostowano **dwa** liczniki wpisów w CLAUDE.md,
+  które nie zgadzały się ze sobą i **oba** były błędne — zmierzone **308 wpisów, #1–#321** (#284 o warstwę wyżej).
+  ⛔ **M4 nadal wymaga własnego, osobnego pozwolenia** i startuje z
+  `product-polish-m4-next-session.md`; ten sprint niczego w Product Polish nie zmienił.
 
 - **🔧🔒 SPRINT STABILIZACYJNY (S-1 … S-6) — CLOSED, USER-QA'D AND ACCEPTED 2026-08-05.** All six confirmed in
   the running app (S-1a/S-1b · S-2 no flicker and correct after a metadata refresh · S-3 · S-4 · S-5 · S-6),
