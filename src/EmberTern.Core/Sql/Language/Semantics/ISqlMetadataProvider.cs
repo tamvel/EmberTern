@@ -26,6 +26,35 @@ public interface ISqlMetadataProvider
     /// empty list when the object is unknown or has no columns loaded yet.</summary>
     IReadOnlyList<ColumnMetadata> GetColumns(string tableOrView);
 
+    /// <summary>
+    /// Whether this snapshot <b>knows</b> the column set of <paramref name="tableOrView"/> — i.e. whether an
+    /// empty <see cref="GetColumns"/> result means "this object has no such column" rather than "its columns
+    /// have not been loaded yet".
+    /// <para>
+    /// ⭐⭐ IT EXISTS BECAUSE AN EMPTY RESULT IS NOT A DECIDABLE SIGNAL, and the doc comment above says so in
+    /// its own words: <em>"when the object is unknown OR has no columns loaded yet"</em>. Those are opposite
+    /// facts, and a consumer that must not guess needs to tell them apart. Columns are loaded lazily, so at
+    /// the moment a tab opens the snapshot typically knows the object and none of its columns — and
+    /// <c>DiagnosticsEngine</c> read that as "the column does not exist", squiggling practically every
+    /// qualified column in the document until the warm pass finished and the model was rebuilt. That is the
+    /// reported "everything is underlined for a moment, then the errors disappear" (S-2, 2026-08-05), and it
+    /// was a breach of the engine's own conservatism rule ("prefer silence over false positives") built into
+    /// the contract rather than into the engine.
+    /// </para>
+    /// <para>
+    /// ⚠ The default is <c>true</c> — "unless a provider says otherwise, assume it knows" — so every
+    /// implementation that cannot distinguish the two states keeps today's behaviour exactly, and a
+    /// provider must opt IN to reporting ignorance. A default of <c>false</c> would silence a real
+    /// UnknownColumn everywhere instead, which is the worse failure: a diagnostic that never fires is
+    /// indistinguishable from a diagnostic that does not exist.
+    /// </para>
+    /// <para>
+    /// ⚠ It answers about a <b>named object</b>, not about the snapshot as a whole: columns arrive
+    /// per object, so "am I ready" has no useful global answer.
+    /// </para>
+    /// </summary>
+    bool KnowsColumns(string tableOrView) => true;
+
     /// <summary>The parameters of the procedure or function named <paramref name="routine"/>
     /// (inputs and outputs; direction is on each row). Empty when unknown.</summary>
     IReadOnlyList<RoutineParameterMetadata> GetRoutineParameters(string routine);

@@ -196,6 +196,78 @@ BEGIN
   RETURN RESULT;
 END^
 
+/* ---------- Domain-typed routine signatures ------------------------
+   Added by the 2026-08-05 stabilization sprint (S-1b). These exist so
+   the DDL reconstruction can be verified to PRESERVE a domain used as a
+   parameter / argument / RETURNS type instead of resolving it to its
+   base type. Measured on FB5 before they were written:
+   RDB$PROCEDURE_PARAMETERS.RDB$FIELD_SOURCE holds 'D_CODE' for a
+   domain-typed parameter and an anonymous 'RDB$n' for a plain one, so
+   the two are distinguishable — exactly as they are for table columns.
+
+   Coverage on purpose: an INPUT domain param, an OUTPUT domain param, a
+   plain param beside them (so the anonymous case is exercised in the
+   same routine), a domain param carrying a DEFAULT (the shape gotcha
+   #175 destroyed), and a function with both a domain argument and a
+   domain RETURNS.                                                     */
+
+/* ⚠ The defaulted parameter is LAST because Firebird requires it: a
+   parameter list with 'P_QTY D_QTY = 5' in the middle is rejected with
+   -204 "defaults must be last". Measured while writing this file.      */
+CREATE PROCEDURE SP_DOM_PARAMS(P_CODE D_CODE, P_PLAIN INTEGER, P_QTY D_QTY = 5)
+RETURNS (R_CODE D_CODE, R_TOTAL NUMERIC(15,2))
+AS
+BEGIN
+  R_CODE  = P_CODE;
+  R_TOTAL = P_QTY * COALESCE(P_PLAIN, 0);
+  SUSPEND;
+END^
+
+CREATE FUNCTION FN_DOM_ARG(P_CODE D_CODE)
+RETURNS D_NAME
+AS
+BEGIN
+  RETURN COALESCE(TRIM(P_CODE), 'NONE');
+END^
+
+/* ---------- Singleton SELECT … INTO as a debugger step unit ---------
+   Added by the 2026-08-05 stabilization sprint (S-6). The sprint taught
+   the semantic binder to bind PSQL locals inside an embedded query — a
+   ':param' in a WHERE clause and the INTO targets, which previously no
+   binder looked at. That has a CONSEQUENCE for the debugger: its
+   read/write set for a statement falls back to "inject every in-scope
+   local" precisely WHEN THE ANALYZER RETURNS NOTHING (gotcha #238), so
+   restoring the references narrows the injection to the referenced set.
+
+   ⚠⚠ A narrowing of a live-fidelity-verified subsystem must be PROVEN on
+   the engine, and the existing probe could not: it drives 22 routines and
+   NOT ONE of them contains a singleton SELECT … INTO (the shape lives in
+   SP_ADD_ORDER and PKG_ORDERS.ORDER_TOTAL, neither of which the probe
+   steps). "ALL PASS" therefore said nothing about this change — a
+   measurement can reproduce a mechanism without reproducing the state.
+
+   So this routine exists to BE that state: a parameter read inside the
+   query's WHERE, a local written by INTO, and a branch that depends on the
+   written value — i.e. an under-injected read or a dropped write-back
+   would change the result rather than hide.                             */
+
+CREATE PROCEDURE SP_DBG_SELINTO(P_CUSTOMER_ID INTEGER)
+RETURNS (ORDER_COUNT INTEGER, LABEL VARCHAR(20))
+AS
+  DECLARE VARIABLE V_COUNT INTEGER;
+BEGIN
+  SELECT COUNT(*) FROM ORDERS
+    WHERE CUSTOMER_ID = :P_CUSTOMER_ID
+    INTO :V_COUNT;
+
+  ORDER_COUNT = V_COUNT;
+  IF (V_COUNT = 0) THEN
+    LABEL = 'NONE';
+  ELSE
+    LABEL = 'SOME';
+  SUSPEND;
+END^
+
 SET TERM ; ^
 
 /* ---------- Procedures (PSQL) --------------------------------------

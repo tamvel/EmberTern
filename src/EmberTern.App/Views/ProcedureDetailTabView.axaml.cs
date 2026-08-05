@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading.Tasks;
@@ -16,6 +16,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
@@ -78,9 +79,25 @@ public partial class ProcedureDetailTabView : UserControl
         // S5: the panel's activation gestures navigate the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("ProcDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
-        if (_inputGrid is not null) FieldGridColumns.Build(_inputGrid, includeDefault: true);
-        if (_outputGrid is not null) FieldGridColumns.Build(_outputGrid, includeDefault: false);
-        if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+        // ⭐ Every editable grid goes through EditableGridBehavior.Attach — the ONE seam carrying the Enter
+        // gesture and the cell-editor height role (S-1a + S-3). Explicit per grid on purpose: the previous
+        // arrangement hung the height role inside FieldGridColumns.Build, so the three grids that build their
+        // own columns silently missed it. An explicit call is the thing a guard can require.
+        if (_inputGrid is not null)
+        {
+            FieldGridColumns.Build(_inputGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_inputGrid, EditableGridKind.Definition);
+        }
+        if (_outputGrid is not null)
+        {
+            FieldGridColumns.Build(_outputGrid, includeDefault: false);
+            EditableGridBehavior.Attach(_outputGrid, EditableGridKind.Definition);
+        }
+        if (_variablesGrid is not null)
+        {
+            FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_variablesGrid, EditableGridKind.Definition);
+        }
 
         WireEditor(_sqlEditor, OnSqlEditorTextChanged);
         WireEditor(_bodyEditor, OnBodyEditorTextChanged);

@@ -13,7 +13,21 @@ public sealed class ConnectionProfile
     public string Password { get; set; } = string.Empty;
     public string Charset { get; set; } = "WIN1250";
     public int Dialect { get; set; } = 3;
-    public string ClientLibraryPath { get; set; } = string.Empty;
+
+    // ⛔⛔ THERE IS NO `ClientLibraryPath` HERE ANY MORE — removed 2026-08-05 (S-5), and it must not come back
+    // without the Embedded mode it belongs to.
+    //
+    // The user reported that pointing it at a completely invalid DLL changed nothing. It could not: EmberTern
+    // connects with `FbServerType.Default`, which is the pure MANAGED wire protocol — no `fbclient.dll` is
+    // loaded on that path at all — and the driver consults its `ClientLibrary` only in Embedded mode, which
+    // this application never selects (`FbServerType.Embedded` appeared nowhere in the codebase). So the field
+    // was not ignored by accident; it was a setting for a mode the product does not offer, and it invited the
+    // user to make a decision that could have no effect. A dead setting is worse than a missing one.
+    //
+    // ⚠ Old settings.dat files still contain the property. That is harmless: the JSON reader ignores members
+    // it does not know, so the value is simply dropped on the next read — which is the intended outcome, and
+    // why CurrentSchemaVersion did NOT move (a removed field is not a shape change, and a version bump trips
+    // the downgrade protection that makes older builds refuse the whole file).
 
     // Developer Mode (single user-facing switch, replaces the old TPB profile pickers).
     // A WAIT POLICY, not a transaction or a lane. DDL always runs WAIT + a bounded lock timeout;

@@ -934,6 +934,12 @@ public sealed class DesignTokenApplicationTests
 
             var grid = new DataGrid { AutoGenerateColumns = false, ItemsSource = new[] { row } };
             EmberTern.App.Views.FieldGridColumns.Build(grid, includeDefault: true);
+            // ⭐ The height role now comes from the ONE seam, not from Build (S-3, 2026-08-05). Build applied
+            // it, which made its scope "whoever calls Build" — and the three grids that declare their columns
+            // in XAML never did, which is why Table's editor stayed thin. Mirrored here so the test exercises
+            // the same path the views do.
+            EmberTern.App.Behaviors.EditableGridBehavior.Attach(
+                grid, EmberTern.App.Behaviors.EditableGridKind.Definition);
 
             var window = new Window { Content = grid, Width = 1200, Height = 200 };
             window.Show();
@@ -1103,13 +1109,17 @@ public sealed class DesignTokenApplicationTests
 
             var grid = new DataGrid { AutoGenerateColumns = false, ItemsSource = new[] { row } };
             EmberTern.App.Views.FieldGridColumns.Build(grid, includeDefault: true);
+            // ⭐ The height role comes from the ONE seam, not from Build (S-3, 2026-08-05) — mirrored here so
+            // the test exercises the same path the views do.
+            EmberTern.App.Behaviors.EditableGridBehavior.Attach(
+                grid, EmberTern.App.Behaviors.EditableGridKind.Definition);
 
             var window = new Window { Content = grid, Width = 1200, Height = 200 };
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            // The grid marks itself, which is what lets a style reach an editor it does not construct.
-            Assert.Contains(EmberTern.App.Views.FieldGridColumns.GridClass, grid.Classes);
+            // The seam marks the grid, which is what lets a style reach an editor it does not construct.
+            Assert.Contains(EmberTern.App.Behaviors.EditableGridBehavior.FieldGridClass, grid.Classes);
 
             var combo = grid.GetVisualDescendants().OfType<DataGridCell>()
                 .SelectMany(c => c.GetVisualDescendants().OfType<ComboBox>()).First();

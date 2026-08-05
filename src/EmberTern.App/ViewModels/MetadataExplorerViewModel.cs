@@ -190,6 +190,31 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         ObjectsChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Raised at the START of a manual metadata refresh: the SCHEMA may have changed, so every per-object
+    /// cache read from it (columns, routine parameters, object detail) is now suspect and must be dropped.
+    /// A distinct signal from <see cref="ObjectsChanged"/>, which says only that the loaded object LIST grew.
+    /// <para>
+    /// ⭐⭐ ITS ABSENCE WAS THE SECOND HALF OF THE REPORTED "diagnostics do not refresh after a metadata
+    /// refresh" (S-2, 2026-08-05). <see cref="RefreshAsync"/> dropped the object-NAME index
+    /// (<see cref="InvalidateNameCache"/>) and nothing else; the column / routine-parameter / object-detail
+    /// caches were cleared only when the user switched CONNECTION. So a refresh rebuilt every open editor's
+    /// semantic model — against the same stale columns. A column added to a table stayed "unknown" for the
+    /// rest of the session, on every open tab, no matter how often the user refreshed.
+    /// </para>
+    /// <para>
+    /// ⚠ Raised BEFORE the reload, not after: the per-category <see cref="ObjectsChanged"/> signals fire
+    /// during the reload and each schedules a model rebuild, so a cache cleared afterwards would be cleared
+    /// behind a rebuild that had already read it.
+    /// </para>
+    /// <para>
+    /// ⚠ Dropping the caches is only safe because the diagnostics engine can now tell "not loaded" from
+    /// "absent" (<c>ISqlMetadataProvider.KnowsColumns</c>). Without that, this event alone would turn every
+    /// refresh into the very false-positive storm the other half of S-2 removed — the two halves are one fix.
+    /// </para>
+    /// </summary>
+    public event Action? SchemaInvalidated;
+
     /// <summary>Raised ONCE when a connection's background prefetch has finished loading every metadata
     /// category — the definitive "metadata is complete" lifecycle event (Package 5 closure). Unlike the
     /// per-category <see cref="ObjectsChanged"/> (which the editor debounces for incremental updates),
@@ -433,6 +458,10 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     public async Task RefreshAsync()
     {
         Diagnostics.RefreshTrace.Log("RefreshTree", "begin");
+        // The schema may have changed under us, so every per-object cache read from it is suspect. Announced
+        // FIRST: the per-category ObjectsChanged signals below each schedule a model rebuild, and a cache
+        // cleared afterwards would be cleared behind a rebuild that already read it. See SchemaInvalidated.
+        SchemaInvalidated?.Invoke();
         // ⭐ ONE projection for the whole refresh. Each LoadGroupAsync guards itself too (so an expand or the
         // connect-time prefetch is covered wherever it is called from), but the guard is nesting-safe, so
         // wrapping the loop collapses 13 re-projections into one.

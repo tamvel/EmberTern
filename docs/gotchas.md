@@ -1151,3 +1151,101 @@ every emit path to be individually perfect.**
      was correct, and nothing about reading it suggested the gap. This is the operational argument for planting:
      it does not merely confirm a guard works, it is the only step that reveals a guard measuring the wrong
      thing. (Product Polish M3.5 / Z-2 — `product-polish.md` §19.36.2; same family as #308.)
+
+316. **A catalog read that resolves a domain to its base type DESTROYS the domain the next time the object is
+     compiled — and the editors compile from what the read returned.** `RDB$PROCEDURE_PARAMETERS.RDB$FIELD_SOURCE`
+     holds the DOMAIN name for a domain-typed parameter and an anonymous `RDB$n` for an inline type (measured on
+     FB5, 2026-08-05), and the same is true of `RDB$FUNCTION_ARGUMENTS` for arguments **and** for the
+     `RDB$RETURN_ARGUMENT` position. EmberTern's DDL reconstruction joined `RDB$FIELDS` and rebuilt the type from
+     its base attributes without ever selecting the field source, so the domain was discarded on READ — and
+     because the object editors reassemble the whole `CREATE OR ALTER` from what the read returned, opening a
+     procedure to edit its BODY and pressing Compile silently rewrote every domain-typed parameter as its base
+     type. Rule #11, gotcha #175's shape one object kind further along.
+     ⭐ **Demonstrated, not deduced:** with the pre-fix decision planted, the live probe reports
+     `the CATALOG still records D_CODE after the recompile — RDB$3` — an anonymous domain where `D_CODE` was.
+     ⚠⚠ **And byte-identity of the reconstruction PASSED under the plant**, because both reads were wrong the
+     same way. A round-trip assertion is necessary and not sufficient; the catalog is what has to be asked.
+     ⭐ **The nullability source must follow the TYPE source**, which is also measured: for `A D_NAME` (a domain
+     that is itself `NOT NULL`) the parameter's own `RDB$NULL_FLAG` is NULL and the domain's is 1; for
+     `C D_CODE NOT NULL` it is the other way round. So emitting the domain name means only the parameter's own
+     flag may add `NOT NULL` (else the reconstruction invents a clause), while emitting the base type means the
+     domain's flag MUST be materialised (else it loses one). A `COALESCE` in SQL makes that decision
+     unrepresentable. ⚠ The debugger needs the OPPOSITE answer (base type, spec R2 — an injected value must not
+     hit a domain's CHECK), so the two readers share only the "is this a user domain" predicate.
+     (Stabilization sprint S-1b — `docs/history/24-stabilization-sprint.md`.)
+
+317. **An empty result that means BOTH "absent" and "not loaded yet" will be read as "absent", and the contract
+     may say so in its own words.** `ISqlMetadataProvider.GetColumns` was documented to return an empty list
+     "when the object is unknown **or has no columns loaded yet**" — two opposite facts, indistinguishable by
+     contract. Columns are warmed lazily, so at the moment a tab opens the snapshot knows every object and none
+     of their columns, and `DiagnosticsEngine` flagged every qualified column as unknown until the warm pass
+     finished and the model was rebuilt. Symptom: "for a moment practically everything is underlined, then the
+     errors disappear" — a breach of the engine's own conservatism rule built into the contract rather than into
+     the engine.
+     ⭐ **The information existed one layer down**: the App's snapshot holds the cache DICTIONARY, which
+     distinguishes a missing key from a present-but-empty entry. It was being thrown away too early.
+     ⚠ **A readiness question needs `true` as its default**, so every provider that cannot distinguish the two
+     states keeps today's behaviour and must opt IN to reporting ignorance; a default of "not ready" silences a
+     real diagnostic everywhere, and a diagnostic that never fires is indistinguishable from one that does not
+     exist. ⚠ A present-but-EMPTY entry counts as KNOWN — the warm pass caches what it read, so an object with
+     no columns has been *answered*.
+     ⭐⭐ **The corollary that bites elsewhere:** a cache may only be dropped mid-session once its consumers can
+     tell "not loaded" from "absent". Invalidating the column cache on a metadata refresh — which had been
+     missing, so a newly added column stayed unknown for the rest of the session on every open tab — would
+     otherwise have turned every refresh into the same false-positive storm. The two halves are one fix.
+     (Stabilization sprint S-2; the same family as #285.)
+
+318. **Avalonia's `DataGrid` claims Enter itself, has no public "am I editing", and only a TUNNEL handler is
+     early enough to intervene.** Three measured framework facts (12.0.0, headless probe), each contradicting the
+     obvious approach. (a) `ProcessEnterKey` commits any edit and moves down one row — so "Enter does not start
+     editing" is the framework's design, not an application bug; `ProcessF2Key` is what begins an edit.
+     (b) A handler added at **tunnel** sees Enter first and unhandled, while at the **bubble** phase it is
+     already handled — a bubbling `KeyDown` therefore runs after the selection has moved (planting `Bubble`
+     instead of `Tunnel` fails 5 of 7 behavioural tests). (c) The only public editing-related member is
+     `CurrentColumn`; there is no `IsEditing`. So the usable gate is FOCUS: when nothing in a cell has focus the
+     focused element is the grid ITSELF, and once an edit begins it is the editing control — which also hands
+     Enter back to an embedded control the moment the user is inside one. `BeginEdit()` focuses the editing
+     element by itself. ⚠ `DataGridCell` exposes no public `Column`, so the current cell is located from
+     `SelectedItem` + the column's `DisplayIndex` (display order, because these grids allow reordering).
+     (Stabilization sprint S-1a.)
+
+319. **A setting for a mode the product never selects is not "harmless when unused" — it invites a decision that
+     cannot have an effect.** The connection dialog offered a client library (`fbclient.dll`) path; pointing it
+     at a completely invalid DLL changed nothing, because EmberTern connects with `FbServerType.Default` — the
+     pure managed wire protocol, where no `fbclient.dll` is loaded at all — and the driver consults its
+     `ClientLibrary` only in `Embedded` mode, which appeared nowhere in the codebase. It had been documented for
+     years as "kept in the UI but harmless when unused"; it was not harmless, it was a lie the UI told.
+     ⭐ Removing a persisted field is safe without a schema bump: `System.Text.Json` ignores members it does not
+     know, so an older file deserializes cleanly and the value is dropped — while a version bump would trip the
+     downgrade protection that makes older builds refuse the whole file.
+     ⚠ **Remove the disclosure control with it** — the "Advanced" expander's only content was that field, and a
+     disclosure that reveals nothing is worse than none. ⚠ Watch for orphans that
+     `TreatWarningsAsErrors` cannot see: the two view-model properties and two `UiStrings` constants left behind
+     were public members, so nothing failed.
+     ⭐ **A guard written against a NAME can be tripped by prose:** the "Embedded is selected nowhere" check
+     failed on its own explanatory comment naming the mode whose absence it documents. The predicate is the
+     ASSIGNMENT (`ServerType = FbServerType.Embedded`), not the mention — a scan for a type name measures the
+     text, not the meaning (#285 met from the test side).
+     (Stabilization sprint S-5.)
+
+320. **A reported correlation can be real while its variable is wrong.** "The tooltip works on `VariableName`
+     and not on `:VariableName`" was exactly reproducible, and there was no colon bug: `SqlLexer` emits `:a` as
+     ONE `Parameter` token, `BindParameterToken` resolves it through the same `scope.Resolve` as a bare name, and
+     Quick Info answers on every offset of `:a` — including the colon itself. What had no binding at all was a
+     colon-form reference inside a QUERY CLAUSE, because the query binder's token walk handled `AS`, dotted and
+     bare names and had no `TokenKind.Parameter` branch. The colon form is simply WHERE an embedded `SELECT` puts
+     a local, so the two looked connected; the actual variable was the STATEMENT KIND.
+     ⚠ A second, independent gap sat beside it: a `SelectQuery`'s NODE span swallows a PSQL singleton select's
+     `INTO` while none of its CLAUSES covers it (`IsCoreEnd` does stop the core at `INTO`), so skipping the node
+     hid the INTO targets from the PSQL walk and nobody bound them. Skip the CLAUSES, not the node — a
+     binder-side skip cannot lose a lexeme, whereas tightening the parser's span risks dropping the INTO from
+     formatted output, where §0's net would revert the whole routine to verbatim.
+     ⭐⭐ **And the fix changed the DEBUGGER as a side effect** — its read/write set falls back to "inject every
+     in-scope local" precisely WHEN THE ANALYZER RETURNS NOTHING (#238), so restoring the references NARROWED the
+     injection. An absence is not a decidable signal: it meant both "this statement has no locals" and "the
+     binder does not cover this shape". ⚠⚠ The debugger's own 38-case fidelity probe said nothing about it,
+     because **not one of the 22 routines it drives contains a singleton `SELECT … INTO`** — a measurement can
+     reproduce a MECHANISM without reproducing the STATE. Before accepting that an existing probe rules a change
+     out, list the states it actually exercises. (The state was added to the lab as `SP_DBG_SELINTO` and the probe
+     grew case 39.)
+     (Stabilization sprint S-6.)

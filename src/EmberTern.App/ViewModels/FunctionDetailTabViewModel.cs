@@ -763,20 +763,26 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         // Reads the source AND arms the change-safety gate with it — one act (see LoadDefinitionAsync).
         await SafeLoadAsync(() => LoadDefinitionAsync(cancellationToken));
 
-        await SafeLoadAsync(async () =>
-        {
-            var body = await DdlReader!.FetchFunctionBodyAsync(
-                new MetadataObject(FunctionName, MetadataObjectKind.Function), cancellationToken).ConfigureAwait(true);
-            SyncEasyModelFromBody(body);
-        });
-
+        // ⭐ ARGUMENTS BEFORE THE BODY — same reason as ProcedureDetailTabViewModel.LoadCoreAsync (S-2): in
+        // Easy mode the arguments reach the model as AMBIENT SYMBOLS, so setting the body text first opened
+        // the editor with an ET0003 squiggle under every argument use until the debounced rebuild caught up.
         await SafeLoadAsync(async () =>
         {
             var sig = await Reader!.GetFunctionSignatureAsync(FunctionName, cancellationToken).ConfigureAwait(true);
             Arguments.Clear();
             foreach (var a in sig.Arguments) Arguments.Add(ProcedureParamRowViewModel.From(a, this, isOutput: false));
-            SetResultType(sig.ReturnType);
+            // ⭐ A domain RETURNS keeps its domain (S-1b): SetResultType feeds LoadType, whose
+            // "unknown base token ⇒ domain" branch resolves it — the same one-line reuse as
+            // ProcedureParamRowViewModel.From. Otherwise `RETURNS D_NAME` recompiled as VARCHAR(60).
+            SetResultType(sig.ReturnDomain ?? sig.ReturnType);
             Deterministic = sig.Deterministic;
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            var body = await DdlReader!.FetchFunctionBodyAsync(
+                new MetadataObject(FunctionName, MetadataObjectKind.Function), cancellationToken).ConfigureAwait(true);
+            SyncEasyModelFromBody(body);
         });
 
         await SafeLoadAsync(async () =>

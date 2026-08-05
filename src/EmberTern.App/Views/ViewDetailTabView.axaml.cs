@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using Avalonia;
@@ -13,6 +13,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
@@ -55,6 +56,13 @@ public partial class ViewDetailTabView : UserControl
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("ViewDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         _dataPreviewGrid = this.FindControl<DataGrid>("DataPreviewGrid");
+        // The Easy-mode columns grid is editable (a single editable Name column) and declares that
+        // column in XAML, so it never went through FieldGridColumns.Build — the same silent miss as
+        // Table Detail and New Table. One explicit call to the ONE seam (S-1a + S-3).
+        if (this.FindControl<DataGrid>("ViewColumnsGrid") is { } columnsGrid)
+        {
+            EditableGridBehavior.Attach(columnsGrid, EditableGridKind.Definition);
+        }
         // Format is not wired here any more: it is CommandId.FormatSql (Ctrl+K), declared once in
         // Commands.CommandCatalog for this tab kind and routed to this VM's own FormatSqlCommand. The two
         // local Alt+F handlers this replaced existed only because the old window-level Alt+F binding

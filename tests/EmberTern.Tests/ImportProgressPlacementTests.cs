@@ -49,13 +49,38 @@ public class ImportProgressPlacementTests
 
     [Theory]
     [InlineData("{Binding ProgressText}")]
-    [InlineData("{Binding ProgressPercent}")]
-    [InlineData("{Binding IsProgressIndeterminate}")]
     public void EachProgressFact_IsBoundExactlyOnce(string binding)
     {
         // Wymóg użytkownika po QA M3b.1: pasek statusu już mówi, że import trwa, więc powierzchnia importu
         // nie pokazuje tego drugi raz. Dwa wiązania tego samego faktu = dwa miejsca do rozjechania się.
         Assert.Equal(1, Count(ViewSource(), binding));
+    }
+
+    /// <summary>
+    /// ⛔⛔ S-4 (2026-08-05): moduł NIE MA własnego paska postępu — jedyny jest ten w pasku statusu.
+    ///
+    /// <para>⚠⚠ <b>TO ODWRACA DECYZJĘ, KTÓRĄ TA KLASA PIERWOTNIE PINOWAŁA</b>, i dlatego zostaje jako asercja,
+    /// a nie jako komentarz. §19.33 zapisał regułę „pasek statusu UZUPEŁNIA, nigdy nie zastępuje" i na tej
+    /// podstawie moduł trzymał własny pasek w nakładce dolnego panelu. Po M3b.1 pasek statusu raportuje import
+    /// globalnie, więc w trakcie przebiegu na ekranie stały DWA paski jednocześnie — użytkownik zdecydował
+    /// odwrotnie: własny pasek modułu znika. Przywrócenie „dla wygody" wygląda niewinnie, stąd guard.</para>
+    ///
+    /// <para>⭐ Zostaje TEKST postępu (asercja wyżej, nadal dokładnie jeden raz): etykieta w pasku statusu jest
+    /// ustalona na 120 px (§8.4.6 — szersza sekcja wypycha chipy stanu w lewo), więc SZCZEGÓŁ przebiegu należy
+    /// do powierzchni, która go prowadzi. Ten sam podział własności co §19.5.1/§19.7.1.</para>
+    ///
+    /// <para>⚠ Właściwości <c>ProgressPercent</c> / <c>IsProgressIndeterminate</c> ZOSTAJĄ w VM — czyta je pasek
+    /// statusu. Dlatego asercja dotyczy WIDOKU, nie modelu widoku: usunięcie ich byłoby odebraniem wejścia
+    /// jedynemu konsumentowi.</para>
+    /// </summary>
+    [Fact]
+    public void TheModule_HasNoProgressBarOfItsOwn_TheStatusBarIsTheOnlyOne()
+    {
+        var source = ViewSource();
+
+        Assert.DoesNotContain("<ProgressBar", source, StringComparison.Ordinal);
+        Assert.Equal(0, Count(source, "{Binding ProgressPercent}"));
+        Assert.Equal(0, Count(source, "{Binding IsProgressIndeterminate}"));
     }
 
     /// <summary>

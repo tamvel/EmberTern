@@ -219,9 +219,15 @@
        obok poprawnie wymiarowanych sąsiadów, w PIERWSZEJ i najczęściej edytowanej kolumnie.
 
        ⭐ Jedna ROLA i jedna wartość, dwie drogi powstawania elementu — dlatego dwa selektory, a nie dwie
-       decyzje. ⚠ Zasięg daje klasa NA SIATCE (nadawana w jednym miejscu, w `FieldGridColumns.Build`), bo
-       globalny setter urósłby wiersze siatek DANYCH w momencie wejścia w edycję — zmierzona regresja z kroku 7
-       M2b i skok układu, którego zabrania §13.3. -->
+       decyzje. ⚠ Zasięg daje klasa NA SIATCE, bo globalny setter urósłby wiersze siatek DANYCH w momencie
+       wejścia w edycję — zmierzona regresja z kroku 7 M2b i skok układu, którego zabrania §13.3.
+
+       ⚠⚠ KOREKTA W MIEJSCU (S-3, 2026-08-05): ten komentarz mówił, że klasę nadaje
+       `FieldGridColumns.Build` — „w jednym miejscu". To była prawda i to był DEFEKT, bo jedno miejsce nie było
+       każdym miejscem: Table Detail Fields, New Table Fields i View Detail Columns deklarują kolumny w XAML,
+       nigdy nie wołały Build i nigdy nie dostawały roli. Stąd zgłoszenie „w Table TextBox nadal jest zbyt
+       niski". Klasę nadaje teraz `Behaviors.EditableGridBehavior.Attach`, przez które przechodzi KAŻDA
+       edytowalna siatka, a `EditableGridSeamTests` tego pilnuje. ⛔ Nie nadawać jej z dwóch miejsc. -->
   <Style Selector="DataGrid.field-grid DataGridCell TextBox">
     <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
   </Style>

@@ -132,7 +132,7 @@ public sealed class FirebirdDdlReader
                 else
                 {
                     // Use the domain name when it's user-defined (not the implicit RDB$xxx domain).
-                    if (domainName.Length > 0 && !domainName.StartsWith("RDB$", StringComparison.OrdinalIgnoreCase))
+                    if (IsUserDomain(domainName))
                     {
                         sb.Append(Quote(domainName));
                     }
@@ -845,35 +845,32 @@ public sealed class FirebirdDdlReader
         var returnType = string.Empty;
         await using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText =
-            "SELECT fa.RDB$ARGUMENT_POSITION, TRIM(fa.RDB$ARGUMENT_NAME), " +
-            "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
-            "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH, " +
-            "       fa.RDB$NULL_FLAG " +
-            "FROM RDB$FUNCTION_ARGUMENTS fa " +
-            "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = fa.RDB$FIELD_SOURCE " +
-            "WHERE fa.RDB$FUNCTION_NAME = @name " +
-            StandalonePackageFilter(serverMajor, "fa.") +
-            "ORDER BY fa.RDB$ARGUMENT_POSITION";
+        cmd.CommandText = InsertBeforeOrderBy(SqlForFunctionArgs, StandalonePackageFilter(serverMajor, "fa."));
         cmd.Parameters.AddWithValue("@name", funcName);
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             var pos = reader.IsDBNull(0) ? -1 : Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
             var argName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1).Trim();
-            var type = FormatType(
+            var baseType = FormatType(
                 SafeShort(reader, 2), SafeShort(reader, 3), SafeShort(reader, 4),
                 SafeShort(reader, 5), SafeShort(reader, 6), SafeShort(reader, 7));
-            var nf = SafeShort(reader, 8);
+            var ownNull = SafeShort(reader, 8);
+            var fieldSource = TrimOrEmpty(SafeString(reader, 9));
+            var domainNull = SafeShort(reader, 10);
+            var type = TypeTextForField(fieldSource, baseType);
             if (pos == returnArgPos)
             {
+                // ⚠ No NOT NULL on the RETURNS position: Firebird's function result carries the
+                // nullability of its own type (and a domain carries it itself), and `RETURNS X NOT NULL`
+                // is not the shape the header uses. Unchanged from before the domain fix.
                 returnType = type;
             }
             else
             {
                 var sb = new StringBuilder();
                 sb.Append(Quote(argName)).Append(' ').Append(type);
-                if (nf == 1) sb.Append(" NOT NULL");
+                if (EmitsNotNull(fieldSource, ownNull, domainNull)) sb.Append(" NOT NULL");
                 inputs.Add(sb.ToString());
             }
         }
@@ -969,6 +966,91 @@ public sealed class FirebirdDdlReader
         "                            AND co.RDB$CHARACTER_SET_ID = f.RDB$CHARACTER_SET_ID " +
         "WHERE rf.RDB$RELATION_NAME = @name " +
         "ORDER BY rf.RDB$FIELD_POSITION";
+
+    // Procedure parameters for the DDL reconstruction. Columns: 0=name, 1..6=base-type attributes,
+    // 7=the PARAMETER's own null flag, 8=default, 9=the field source (the domain, when a user domain
+    // governs the type), 10=the DOMAIN's null flag.
+    //
+    // ⚠⚠ The two null flags are selected SEPARATELY and are not COALESCEd in SQL any more. They answer
+    // two different questions — "did this parameter declare NOT NULL" vs "is its domain NOT NULL" — and
+    // which one applies depends on which TYPE is emitted (see EmitsNotNull). Collapsing them in the
+    // query, as this used to, makes that decision unrepresentable.
+    internal const string SqlForProcedureParams =
+        "SELECT TRIM(pp.RDB$PARAMETER_NAME), " +
+        "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
+        "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH, " +
+        "       pp.RDB$NULL_FLAG, pp.RDB$DEFAULT_SOURCE, " +
+        "       TRIM(pp.RDB$FIELD_SOURCE), f.RDB$NULL_FLAG " +
+        "FROM RDB$PROCEDURE_PARAMETERS pp " +
+        "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = pp.RDB$FIELD_SOURCE " +
+        "WHERE pp.RDB$PROCEDURE_NAME = @name AND pp.RDB$PARAMETER_TYPE = @pt " +
+        "ORDER BY pp.RDB$PARAMETER_NUMBER";
+
+    // Function arguments for the DDL reconstruction. Columns: 0=position, 1=name, 2..7=base-type
+    // attributes, 8=the ARGUMENT's own null flag, 9=field source, 10=the DOMAIN's null flag.
+    // The row at RDB$RETURN_ARGUMENT is the RETURNS type; every other row is an input argument — and
+    // BOTH carry a domain (measured on FB5: RDB$FUNCTION_ARGUMENTS holds 'D_CODE' on the argument and
+    // 'D_NAME' on the return position), so the domain had to be restored in both places.
+    internal const string SqlForFunctionArgs =
+        "SELECT fa.RDB$ARGUMENT_POSITION, TRIM(fa.RDB$ARGUMENT_NAME), " +
+        "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
+        "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH, " +
+        "       fa.RDB$NULL_FLAG, TRIM(fa.RDB$FIELD_SOURCE), f.RDB$NULL_FLAG " +
+        "FROM RDB$FUNCTION_ARGUMENTS fa " +
+        "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = fa.RDB$FIELD_SOURCE " +
+        "WHERE fa.RDB$FUNCTION_NAME = @name " +
+        "ORDER BY fa.RDB$ARGUMENT_POSITION";
+
+    /// <summary>
+    /// Whether <paramref name="fieldSource"/> (an <c>RDB$FIELD_SOURCE</c> value) names a <b>user</b>
+    /// domain rather than one of the anonymous backing domains Firebird creates for an inline type
+    /// (<c>RDB$134</c>). The ONE owner of that question — table columns, procedure parameters, function
+    /// arguments and the debugger's base-type resolution all read it.
+    /// <para>
+    /// ⚠ It was three copies of one expression before the 2026-08-05 stabilization sprint (here inline
+    /// in the table-column loop, and privately in <c>FirebirdDebugMetadata</c>), and the third copy was
+    /// about to be written for parameters — exactly the partial-copy-of-one-fact defect gotcha #302
+    /// records. Keep it here, beside <see cref="FormatType"/>: the two are the two halves of the same
+    /// question, "what names this field's type".
+    /// </para>
+    /// </summary>
+    internal static bool IsUserDomain(string? fieldSource)
+    {
+        var s = fieldSource?.Trim();
+        return !string.IsNullOrEmpty(s) && !s.StartsWith("RDB$", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The type text a reconstructed declaration must carry for a field: the <b>domain name</b> when a
+    /// user domain governs the type, else the resolved base type. <paramref name="baseType"/> is what
+    /// <see cref="FormatType"/> produced for the joined <c>RDB$FIELDS</c> row.
+    /// <para>
+    /// ⭐⭐ This is a rule #11 (never lose information) decision, not a presentation nicety. A parameter
+    /// declared <c>P_CODE D_CODE</c> stores <c>D_CODE</c> in <c>RDB$FIELD_SOURCE</c> (measured on FB5,
+    /// 2026-08-05); resolving it to <c>CHAR(8)</c> discards the domain link, and the object editors
+    /// reassemble the whole <c>CREATE OR ALTER</c> from what the read returned — so a user who opened a
+    /// procedure to edit its body and pressed Compile would silently rewrite every domain-typed
+    /// parameter as a base type. That is gotcha #175's shape, one object kind further along.
+    /// </para>
+    /// </summary>
+    internal static string TypeTextForField(string? fieldSource, string baseType)
+        => IsUserDomain(fieldSource) ? Quote(fieldSource!.Trim()) : baseType;
+
+    /// <summary>
+    /// Whether a reconstructed declaration must spell <c>NOT NULL</c> explicitly.
+    /// <para>
+    /// ⭐ <b>The nullability source follows the TYPE source, and that is measured, not chosen.</b> On FB5
+    /// (2026-08-05): for <c>A D_NAME</c> — a domain that is itself <c>NOT NULL</c> — the parameter's own
+    /// <c>RDB$NULL_FLAG</c> is <c>NULL</c> and the domain's is <c>1</c>; for <c>C D_CODE NOT NULL</c> it
+    /// is the other way round. So when the emitted type is the <b>domain name</b>, the domain already
+    /// carries its own <c>NOT NULL</c> and only the parameter's own flag may add one — otherwise
+    /// <c>A D_NAME</c> would come back as <c>A D_NAME NOT NULL</c>, a clause the original declaration
+    /// never had. When the emitted type is the <b>base type</b>, the domain's flag MUST be materialised
+    /// or the reconstruction would lose the constraint instead.
+    /// </para>
+    /// </summary>
+    internal static bool EmitsNotNull(string? fieldSource, short? ownNullFlag, short? domainNullFlag)
+        => IsUserDomain(fieldSource) ? ownNullFlag == 1 : (ownNullFlag ?? domainNullFlag) == 1;
 
     internal static string FormatType(short? fieldType, short? fieldSubType, short? fieldLength, short? precision, short? scale, short? charLength)
     {
@@ -1288,32 +1370,25 @@ public sealed class FirebirdDdlReader
         var rows = new System.Collections.Generic.List<string>();
         await using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText =
-            "SELECT TRIM(pp.RDB$PARAMETER_NAME), " +
-            "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
-            "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, f.RDB$CHARACTER_LENGTH, " +
-            "       COALESCE(pp.RDB$NULL_FLAG, f.RDB$NULL_FLAG), pp.RDB$DEFAULT_SOURCE " +
-            "FROM RDB$PROCEDURE_PARAMETERS pp " +
-            "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = pp.RDB$FIELD_SOURCE " +
-            "WHERE pp.RDB$PROCEDURE_NAME = @name AND pp.RDB$PARAMETER_TYPE = @pt " +
-            StandalonePackageFilter(serverMajor, "pp.") +
-            "ORDER BY pp.RDB$PARAMETER_NUMBER";
+        cmd.CommandText = InsertBeforeOrderBy(SqlForProcedureParams, StandalonePackageFilter(serverMajor, "pp."));
         cmd.Parameters.AddWithValue("@name", procName);
         cmd.Parameters.AddWithValue("@pt", paramType);
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             var pn = TrimOrEmpty(reader.GetString(0));
-            var type = FormatType(
+            var baseType = FormatType(
                 SafeShort(reader, 1), SafeShort(reader, 2), SafeShort(reader, 3),
                 SafeShort(reader, 4), SafeShort(reader, 5), SafeShort(reader, 6));
-            var nf = SafeShort(reader, 7);
+            var ownNull = SafeShort(reader, 7);
             // RDB$DEFAULT_SOURCE keeps the leading token as written ("= 1" or "DEFAULT 1");
             // strip it so we re-emit exactly one "= value" (only valid on input params).
             var def = FirebirdTableDetailReader.StripDefaultPrefix(SafeString(reader, 8));
+            var fieldSource = TrimOrEmpty(SafeString(reader, 9));
+            var domainNull = SafeShort(reader, 10);
             var sb = new StringBuilder();
-            sb.Append(Quote(pn)).Append(' ').Append(type);
-            if (nf == 1) sb.Append(" NOT NULL");
+            sb.Append(Quote(pn)).Append(' ').Append(TypeTextForField(fieldSource, baseType));
+            if (EmitsNotNull(fieldSource, ownNull, domainNull)) sb.Append(" NOT NULL");
             if (paramType == 0 && !string.IsNullOrWhiteSpace(def)) sb.Append(" = ").Append(def.Trim());
             rows.Add(sb.ToString());
         }

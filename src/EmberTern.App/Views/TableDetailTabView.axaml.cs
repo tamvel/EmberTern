@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -19,6 +19,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Converters;
 using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
@@ -77,6 +78,13 @@ public partial class TableDetailTabView : UserControl
                 }
             }
 
+            // ⭐⭐ THE SEAM THIS GRID USED TO MISS (S-1a + S-3, 2026-08-05). Its columns are declared in XAML
+            // and only the picker column is inserted here, so it never called FieldGridColumns.Build — which is
+            // where the cell-editor height role used to be granted. Result: the reported "the TextBox in Table
+            // is still too low", a DataGridTextColumn editor at MinHeight 0 inside a 34 px row. The role (and
+            // the Enter gesture) now come from one explicit call that a guard can require.
+            EditableGridBehavior.Attach(_fieldsGrid, EditableGridKind.Definition);
+
             // Inline structure-edit on the Pola grid: every row-commit (Tab/Enter
             // out of the editing element, or focus moves off the row) inspects
             // edited values vs. original and queues ALTER statements via the VM.
@@ -100,6 +108,12 @@ public partial class TableDetailTabView : UserControl
                 grid.LoadingRow += OnCorePendingRowLoading;
             }
         }
+        // ⚠ The DATA grid gets the Enter gesture but NOT the height role — its rows have no ComboBox holding
+        // them open, so a 24 px minimum on the in-cell editor would grow every row on entering edit mode (the
+        // layout shift M2b step 7 measured). One UX rule for Enter, two answers about height — see
+        // EditableGridKind.
+        if (_dataPreviewGrid is not null) EditableGridBehavior.Attach(_dataPreviewGrid, EditableGridKind.Data);
+
         if (_dataPreviewGrid is not null)
         {
             // Avalonia paints the column-header arrow itself when (a) the

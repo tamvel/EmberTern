@@ -829,15 +829,20 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         // Reads the source AND arms the change-safety gate with it — one act (see LoadDefinitionAsync).
         await SafeLoadAsync(() => LoadDefinitionAsync(cancellationToken));
 
-        await SafeLoadAsync(async () =>
-        {
-            var body = await DdlReader!.FetchProcedureBodyAsync(
-                new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
-            // Split the body into the editable structured model (Variables / Cursors /
-            // Subprograms + executable body).
-            SyncEasyModelFromBody(body);
-        });
-
+        // ⭐⭐ PARAMETERS BEFORE THE BODY, and the order is the fix — not tidiness (S-2, 2026-08-05).
+        //
+        // In Easy mode the body editor holds only the BODY; the routine's parameters live in these grids and
+        // reach the semantic model as AMBIENT SYMBOLS. Setting the body text first therefore built a model
+        // whose ':param' references could not resolve, so the editor opened with an ET0003 squiggle under
+        // every parameter use — clearing ~200 ms later, once the grids raised AmbientSymbolsChanged and the
+        // debounced rebuild ran. Together with the unwarmed-column storm that is the reported "for a moment
+        // practically everything is underlined, then the errors disappear".
+        //
+        // ⚠ Loading the inputs first does not merely reorder the flicker: the FIRST model is now built with
+        // its ambient symbols already present, so there is nothing to correct afterwards.
+        //
+        // ⚠ Source mode is unaffected either way — its text is the whole CREATE OR ALTER, so the parameter
+        // declarations are IN the document and the model binds them itself, with no ambient set involved.
         await SafeLoadAsync(async () =>
         {
             var inputs = await Reader!.GetProcedureParametersAsync(ProcedureName, InputParamType, cancellationToken).ConfigureAwait(true);
@@ -850,6 +855,15 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
             var outputs = await Reader!.GetProcedureParametersAsync(ProcedureName, OutputParamType, cancellationToken).ConfigureAwait(true);
             OutputParams.Clear();
             foreach (var p in outputs) OutputParams.Add(ProcedureParamRowViewModel.From(p, this, isOutput: true));
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            var body = await DdlReader!.FetchProcedureBodyAsync(
+                new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
+            // Split the body into the editable structured model (Variables / Cursors /
+            // Subprograms + executable body).
+            SyncEasyModelFromBody(body);
         });
 
         await SafeLoadAsync(async () =>

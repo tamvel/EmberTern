@@ -944,6 +944,103 @@ public class SemanticModelTests
         Assert.Null(RefAt(m, sql, "grant_obj_notfound"));
     }
 
+    // ══ PSQL locals inside an EMBEDDED DSQL statement (S-6, 2026-08-05) ══════════════════════════
+    //
+    // ⭐⭐ THE REPORTED SYMPTOM WAS "no tooltip on :VariableName, but one on VariableName", AND THAT
+    // CORRELATION IS REAL WHILE ITS VARIABLE IS WRONG. Measured before writing these tests: the colon
+    // form resolves IDENTICALLY to the bare form — SqlLexer emits ':a' as one Parameter token and
+    // BindParameterToken calls the same scope.Resolve, so QuickInfo answers on every offset of ':a',
+    // including the colon itself. There is no colon bug and there must be no colon special case.
+    //
+    // What genuinely has no local binding is a STANDALONE EMBEDDED DSQL STATEMENT in a PSQL body.
+    // Since Etap 6.9 / B5 those are the reused top-level DML nodes, so the QUERY binder owns their
+    // tokens and never binds the routine's variables/parameters inside them. The colon form is simply
+    // WHERE embedded DSQL puts a local, which is why the two looked connected.
+    //
+    // ⚠ The payoff is wider than a tooltip: highlighting, Ctrl+Click, find-references and diagnostics
+    // are all blind in that range today.
+    [Fact]
+    public void EmbeddedSelect_BindsPsqlLocals_InWhereAndInto()
+    {
+        var meta = new FakeMetadata().Col("T", "F", "INTEGER").Col("T", "G", "INTEGER");
+        const string sql =
+            "create procedure p (a integer) returns (r integer) as "
+            + "begin select f from t where g = :a into :r; end";
+        var m = Build(sql, meta);
+
+        var input = RefAt(m, sql, ":a");
+        Assert.NotNull(input);
+        Assert.Equal(ReferenceRole.Parameter, input!.Role);
+        Assert.True(input.IsResolved);
+
+        var output = RefAt(m, sql, ":r");
+        Assert.NotNull(output);
+        Assert.Equal(ReferenceRole.Parameter, output!.Role);
+        Assert.True(output.IsResolved);
+    }
+
+    [Fact]
+    public void EmbeddedDml_BindsPsqlLocals()
+    {
+        // The same gap on the write side: an UPDATE/DELETE embedded in a body is also a reused
+        // top-level node, so its WHERE and SET operands were unbound too.
+        var meta = new FakeMetadata().Col("T", "C", "INTEGER").Col("T", "ID", "INTEGER");
+        const string sql =
+            "create procedure p (a integer) as begin update t set c = :a where id = :a; end";
+        var m = Build(sql, meta);
+
+        var setOperand = RefAt(m, sql, ":a");
+        Assert.NotNull(setOperand);
+        Assert.True(setOperand!.IsResolved);
+
+        var whereOperand = RefAt(m, sql, ":a", sql.IndexOf("where", StringComparison.Ordinal));
+        Assert.NotNull(whereOperand);
+        Assert.True(whereOperand!.IsResolved);
+    }
+
+    [Fact]
+    public void EmbeddedSelect_BareColumn_StillResolvesAsAColumn()
+    {
+        // ⛔ The colon fix must not disturb bare-name resolution inside a query range. Pinned on a name
+        // that is NOT a local, because that is the half the fix could plausibly break (a new branch in
+        // BindExpressionReferences sits right beside the bare-name branch).
+        //
+        // ⚠⚠ MEASURED WHILE WRITING THIS, AND IT CORRECTED THE SPRINT'S OWN ANALYSIS: a bare name that
+        // IS a local resolves to the LOCAL, not to the same-named column — BindBareReference tries the
+        // scope chain first, by construction and on purpose. So "bare names inside an embedded query are
+        // column candidates" is only true for names that are not in scope as locals. That ordering is
+        // pre-existing, deliberate, and deliberately NOT touched here (Firebird itself resolves a bare
+        // name in an embedded query as the column, so it is worth revisiting one day — but on its own,
+        // with its own measurement, not as a side effect of a tooltip fix).
+        var meta = new FakeMetadata().Col("T", "F", "INTEGER").Col("T", "G", "INTEGER");
+        const string sql =
+            "create procedure p (a integer) returns (r integer) as "
+            + "begin select f from t where g = 1 into :r; end";
+        var m = Build(sql, meta);
+
+        var bare = RefAt(m, sql, "g = 1");
+        Assert.NotNull(bare);
+        Assert.Equal(ReferenceRole.Column, bare!.Role);
+        Assert.True(bare.IsResolved);
+    }
+
+    [Fact]
+    public void TopLevelQuery_ColonName_IsNotBoundAsALocal()
+    {
+        // ⛔⛔ THE SCOPE GATE, pinned: at top level ':id' is a SQL-Editor smart parameter, NOT a PSQL
+        // local. It must stay unresolved (and therefore unflagged — DiagnosticsEngine.IsInRoutineBody
+        // already draws that line), or the editor would squiggle every parameterised query the user runs.
+        var meta = new FakeMetadata().Col("T", "ID", "INTEGER");
+        const string sql = "select * from t where id = :id";
+        var m = Build(sql, meta);
+
+        var r = RefAt(m, sql, ":id");
+        // Either no reference at all, or an unresolved one — never bound to a local symbol.
+        Assert.True(r is null || !r.IsResolved);
+        Assert.DoesNotContain(DiagnosticsEngine.Analyze(m), d =>
+            d.Category is DiagnosticCategory.UnresolvedParameter or DiagnosticCategory.UnresolvedVariable);
+    }
+
     [Fact]
     public void HandlerBody_BindsAgainstEnclosingScope()
     {

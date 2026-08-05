@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading.Tasks;
@@ -14,6 +14,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
@@ -72,10 +73,24 @@ public partial class FunctionDetailTabView : UserControl
         // S5: the panel's activation gestures navigate the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("FuncDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
-        if (_argumentsGrid is not null) FieldGridColumns.Build(_argumentsGrid, includeDefault: true);
+        // ⭐ Each editable grid also goes through the ONE seam (Enter gesture + cell-editor height role) —
+        // see EditableGridBehavior and ProcedureDetailTabView for why the call is explicit per grid.
+        if (_argumentsGrid is not null)
+        {
+            FieldGridColumns.Build(_argumentsGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_argumentsGrid, EditableGridKind.Definition);
+        }
         // The return value is a single, unnamed row — omit the Name + Default columns.
-        if (_resultTypeGrid is not null) FieldGridColumns.Build(_resultTypeGrid, includeDefault: false, includeName: false);
-        if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+        if (_resultTypeGrid is not null)
+        {
+            FieldGridColumns.Build(_resultTypeGrid, includeDefault: false, includeName: false);
+            EditableGridBehavior.Attach(_resultTypeGrid, EditableGridKind.Definition);
+        }
+        if (_variablesGrid is not null)
+        {
+            FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_variablesGrid, EditableGridKind.Definition);
+        }
 
         WireEditor(_sqlEditor, OnSqlEditorTextChanged);
         WireEditor(_bodyEditor, OnBodyEditorTextChanged);

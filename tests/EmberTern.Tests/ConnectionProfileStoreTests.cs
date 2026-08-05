@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using EmberTern.App.Security;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Security;
@@ -35,7 +36,6 @@ public class ConnectionProfileStoreTests
                 Password = "secret",
                 Charset = "WIN1250",
                 Dialect = 3,
-                ClientLibraryPath = @"C:\Program Files\Firebird\Firebird_3_0\fbclient.dll",
             };
 
             store.Upsert(profile);
@@ -46,7 +46,6 @@ public class ConnectionProfileStoreTests
             Assert.Equal(4050, reloaded[0].Port);
             Assert.Equal("WIN1250", reloaded[0].Charset);
             Assert.Equal(3, reloaded[0].Dialect);
-            Assert.Equal(profile.ClientLibraryPath, reloaded[0].ClientLibraryPath);
             Assert.Equal(profile.Id, reloaded[0].Id);
         }
         finally
@@ -331,5 +330,51 @@ public class ConnectionProfileStoreTests
         {
             if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         }
+    }
+
+    // ══ S-5: the dead client-library setting stays dead (2026-08-05) ═══════════════════════════════
+    //
+    // ⭐⭐ The user reported that pointing "Client library (fbclient.dll)" at a completely invalid DLL changed
+    // nothing. It could not: EmberTern connects with FbServerType.Default — the pure MANAGED wire protocol,
+    // where no fbclient.dll is loaded at all — and the driver consults its ClientLibrary only in Embedded mode,
+    // which this application never selects. The setting was not ignored by accident; it offered the user a
+    // decision that could have no effect, which is worse than offering nothing.
+    //
+    // ⚠ Guarded because the field is easy to re-add "for completeness": it looks like an obvious connection
+    // property, its removal breaks nothing visible, and the next person to see a Firebird version mismatch will
+    // reach for it. It comes back only WITH the Embedded mode that would make it work.
+
+    [Fact]
+    public void NoConnectionProperty_OffersAClientLibrary_WhileTheDriverPathCannotUseOne()
+    {
+        var names = typeof(ConnectionProfile).GetProperties().Select(p => p.Name).ToList();
+        Assert.DoesNotContain("ClientLibraryPath", names);
+        Assert.DoesNotContain(names, n => n.Contains("ClientLibrary", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void TheConnectionPath_IsTheManagedWireProtocol_WhichIsWhyThereIsNoClientLibrarySetting()
+    {
+        // The premise the removal rests on, asserted rather than assumed: Embedded mode — the only mode in
+        // which the driver would read a client library — is selected NOWHERE in the product.
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "EmberTern.slnx"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+
+        // ⚠ The predicate is the ASSIGNMENT, not the mere mention — and that correction came from this guard's
+        // own first run, which failed on the explanatory COMMENT in ConnectionProfile.cs that names the mode
+        // it is documenting the absence of. "Selected" means assigned; a scan for the type name measures the
+        // text rather than the meaning (#285's shape, met in a test).
+        var sources = Directory.GetFiles(Path.Combine(dir!.FullName, "src"), "*.cs", SearchOption.AllDirectories);
+        var offenders = sources
+            .Where(f => Regex.IsMatch(
+                File.ReadAllText(f), @"ServerType\s*=\s*FbServerType\.Embedded"))
+            .Select(f => Path.GetFileName(f))
+            .ToList();
+
+        Assert.True(
+            offenders.Count == 0,
+            "Embedded mode is now selected somewhere, so a client-library setting would finally MEAN something "
+            + "— re-open S-5 rather than leaving these two guards in place: " + string.Join(", ", offenders));
     }
 }

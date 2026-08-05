@@ -182,6 +182,113 @@ public class DdlReaderTests
         Assert.Equal(expected, FirebirdDdlReader.ParseServerMajor(version));
     }
 
+    // ══ Domain-typed routine signatures (S-1b, 2026-08-05) ═══════════════════════════════════════
+    //
+    // ⭐⭐ These pin a rule #11 (never lose information) decision. A parameter declared `P_CODE D_CODE`
+    // stores 'D_CODE' in RDB$FIELD_SOURCE while a plain one stores an anonymous 'RDB$n' (measured on
+    // live FB5); the reconstruction used to resolve BOTH to the base type, so the domain was discarded
+    // on READ — and the object editors reassemble the whole CREATE OR ALTER from what the read returned,
+    // which turned "open a procedure, edit the body, Compile" into a silent rewrite of every
+    // domain-typed parameter as its base type. That is gotcha #175's shape.
+
+    [Theory]
+    [InlineData("D_CODE", true)]
+    [InlineData("d_code", true)]
+    [InlineData("  D_CODE  ", true)]
+    [InlineData("RDB$134", false)]
+    [InlineData("rdb$134", false)]   // Firebird folds, so the predicate must be case-insensitive
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsUserDomain_TellsANamedDomainFromAnAnonymousBackingOne(string? fieldSource, bool expected)
+    {
+        Assert.Equal(expected, FirebirdDdlReader.IsUserDomain(fieldSource));
+    }
+
+    [Fact]
+    public void TypeTextForField_PrefersTheDomainOverTheResolvedBaseType()
+    {
+        Assert.Equal("D_CODE", FirebirdDdlReader.TypeTextForField("D_CODE", "CHAR(8)"));
+        Assert.Equal("CHAR(8)", FirebirdDdlReader.TypeTextForField("RDB$134", "CHAR(8)"));
+        Assert.Equal("CHAR(8)", FirebirdDdlReader.TypeTextForField(null, "CHAR(8)"));
+    }
+
+    [Fact]
+    public void TypeTextForField_QuotesADomainThatNeedsIt_AndLeavesShoutyCaseBare()
+    {
+        // Quote's lighter convention: a SHOUTY_CASE name stays bare (matching the catalog and isql -x),
+        // a case-sensitive one is preserved verbatim and quoted — never uppercased, so its identity is
+        // never changed (§0).
+        Assert.Equal("D_CODE", FirebirdDdlReader.TypeTextForField("D_CODE", "CHAR(8)"));
+        Assert.Equal("\"mixedCase\"", FirebirdDdlReader.TypeTextForField("mixedCase", "CHAR(8)"));
+    }
+
+    // ⭐⭐ THE NULLABILITY SOURCE FOLLOWS THE TYPE SOURCE, and the table below is MEASURED on FB5
+    // (2026-08-05), not chosen:
+    //
+    //   A D_NAME            (domain is NOT NULL)  → own flag NULL, domain flag 1
+    //   B D_CODE            (nullable domain)     → own flag NULL, domain flag NULL
+    //   C D_CODE NOT NULL   (explicit)            → own flag 1,    domain flag NULL
+    //   D INTEGER NOT NULL  (inline type)         → own flag 1,    domain flag NULL
+    //
+    // So when the emitted type is the DOMAIN NAME the domain already carries its own NOT NULL and only
+    // the parameter's own flag may add one — otherwise `A D_NAME` would be reconstructed as
+    // `A D_NAME NOT NULL`, a clause the original declaration never had. When the emitted type is the
+    // BASE type the domain's flag MUST be materialised, or the reconstruction loses the constraint.
+    [Theory]
+    // domain-typed: only the parameter's OWN flag counts
+    [InlineData("D_NAME", null, (short)1, false)]   // domain is NOT NULL → it says so itself
+    [InlineData("D_CODE", (short)1, null, true)]    // parameter declared NOT NULL explicitly
+    [InlineData("D_CODE", null, null, false)]
+    // inline type: the domain flag is the type's own, so it must be emitted
+    [InlineData("RDB$134", (short)1, null, true)]
+    [InlineData("RDB$134", null, (short)1, true)]
+    [InlineData("RDB$134", null, null, false)]
+    public void EmitsNotNull_FollowsTheTypeSource(string fieldSource, short? own, short? domain, bool expected)
+    {
+        Assert.Equal(expected, FirebirdDdlReader.EmitsNotNull(fieldSource, own, domain));
+    }
+
+    [Fact]
+    public void SqlForProcedureParams_CarriesTheFieldSourceAndBothNullFlagsSeparately()
+    {
+        var sql = FirebirdDdlReader.SqlForProcedureParams;
+        var selectList = sql[..sql.IndexOf("FROM RDB$PROCEDURE_PARAMETERS", StringComparison.Ordinal)];
+        // ⚠ Asserted on the SELECT LIST, not the whole query: the JOIN predicate already names
+        // pp.RDB$FIELD_SOURCE (that join is what reaches the base type, i.e. what loses the domain), so
+        // a Contains over the whole string passes with the defect present. It did, in the first draft.
+        Assert.Contains("pp.RDB$FIELD_SOURCE", selectList);
+        // Both flags, separately — EmitsNotNull cannot make its decision from a COALESCE.
+        Assert.Contains("pp.RDB$NULL_FLAG", selectList);
+        Assert.Contains("f.RDB$NULL_FLAG", selectList);
+        Assert.DoesNotContain("COALESCE(pp.RDB$NULL_FLAG", selectList);
+    }
+
+    [Fact]
+    public void SqlForFunctionArgs_CarriesTheFieldSourceAndBothNullFlagsSeparately()
+    {
+        var sql = FirebirdDdlReader.SqlForFunctionArgs;
+        var selectList = sql[..sql.IndexOf("FROM RDB$FUNCTION_ARGUMENTS", StringComparison.Ordinal)];
+        Assert.Contains("fa.RDB$FIELD_SOURCE", selectList);
+        Assert.Contains("fa.RDB$NULL_FLAG", selectList);
+        Assert.Contains("f.RDB$NULL_FLAG", selectList);
+        Assert.DoesNotContain("COALESCE(fa.RDB$NULL_FLAG", selectList);
+    }
+
+    [Fact]
+    public void SqlForProcedureParams_KeepsThePackageFilterInsertable()
+    {
+        // The standalone-vs-packaged filter is spliced in before ORDER BY (a packaged namesake would
+        // otherwise double the parameter list → -901 "duplicate specification"). Extracting the query
+        // into a const must not have broken that splice point.
+        var filtered = FirebirdDdlReader.InsertBeforeOrderBy(
+            FirebirdDdlReader.SqlForProcedureParams, FirebirdDdlReader.StandalonePackageFilter(5, "pp."));
+        Assert.Contains("RDB$PACKAGE_NAME IS NULL", filtered);
+        Assert.True(
+            filtered.IndexOf("RDB$PACKAGE_NAME IS NULL", StringComparison.Ordinal)
+            < filtered.IndexOf("ORDER BY", StringComparison.Ordinal),
+            "the package filter must be spliced BEFORE ORDER BY or the WHERE clause is left invalid");
+    }
+
     [Fact]
     public void SqlForTableColumns_ReferencesRequiredTables()
     {

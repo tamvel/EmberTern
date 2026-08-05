@@ -27,27 +27,22 @@ namespace EmberTern.App.Views;
 /// </summary>
 internal static class FieldGridColumns
 {
-    /// <summary>The class every grid built here carries, so a style can reach the editors this builder does NOT
-    /// construct. See the note in <see cref="Build"/>.</summary>
-    internal const string GridClass = "field-grid";
-
     public static void Build(DataGrid grid, bool includeDefault, bool includeName = true)
     {
-        // ⭐⭐ THE GRID ITSELF IS MARKED, and that is the other half of the editor-height fix (user report
-        // 2026-08-03: "the TextBoxes are still too low, e.g. procedure parameters in Easy mode").
+        // ⭐⭐ THE `field-grid` CLASS IS NO LONGER APPLIED HERE — it moved to
+        // Behaviors.EditableGridBehavior.Attach (stabilization sprint S-3, 2026-08-05), and the move IS the
+        // fix rather than tidying.
         //
-        // §19.9 gave the always-visible cell editors the `field-editor` role — but only the ones THIS builder
-        // constructs (TextEditCol). Name / Collate / Default / Description are plain DataGridTextColumns, whose
-        // editing TextBox the DataGrid creates itself when the user enters the cell, and there is nowhere to put
-        // a class on it. So those four kept `DataGridCell TextBox`'s MinHeight of 0 and read as a thin strip
-        // beside the correctly-sized ones — in the FIRST and most-used column of the grid.
+        // The class carries the in-cell editor height role, and applying it here made its scope "whoever
+        // calls this builder". Table Detail Fields, New Table Fields and View Detail Columns build their
+        // columns in XAML and only INSERT the shared picker column, so they never called it and never got the
+        // role — their DataGridTextColumn editing TextBox stayed at MinHeight 0 inside a 34 px row. That is
+        // the reported "the TextBox in Table is still too low", and the old comment here even described the
+        // scope as "a class on the grid, applied in one place" — which was true, and was the problem: the one
+        // place was not every place.
         //
-        // ⚠ A class on the GRID, not a global style, and the reason is the measured one from M2b step 7: a
-        // 24 px minimum in a DATA grid (Table Data, query results — 22 px rows, no ComboBox) would grow every
-        // row the moment the user enters edit mode, which is the layout shift §13.3 forbids. Definition grids
-        // already measure 30 px because of the ComboBox, so nothing moves there.
-        if (!grid.Classes.Contains(GridClass)) grid.Classes.Add(GridClass);
-
+        // ⛔ Do not re-add it here. Two owners of one class means the grids that go through only one of them
+        // are silently different again, which is exactly the defect that took two rounds to find.
         grid.Columns.Clear();
         // The function Result is a single, unnamed return value — its grid omits Name.
         if (includeName)
