@@ -369,6 +369,33 @@ public class ProcedureDetailTests
         Assert.Contains("@name", FirebirdTableDetailReader.ProcedureParametersSql);
     }
 
+    // ⭐⭐ A DOMAIN USED AS A PARAMETER TYPE IS PART OF THE ROUTINE'S DEFINITION, so the read must carry
+    // it — this query is what populates the Easy-mode Input/Output grids (S-1b, 2026-08-05).
+    //
+    // ⚠⚠ It is a rule #11 (never lose information) guard, not cosmetics. Every reader here joins
+    // RDB$FIELDS and rebuilds the type from its base attributes; without RDB$FIELD_SOURCE the domain is
+    // discarded on READ, and the next Compile — which reassembles the whole CREATE OR ALTER from these
+    // rows — writes the base type back, destroying the domain link in the database. Silently, and for a
+    // procedure the user only opened to edit its body. That is gotcha #175's exact shape.
+    //
+    // ⭐ Measured on live FB5 before this was written: RDB$FIELD_SOURCE holds 'D_CODE' for a
+    // domain-typed parameter and an anonymous 'RDB$n' for a plain one, so the two ARE distinguishable —
+    // exactly as they already are for table columns (SqlForTableColumns has read it since day one).
+    // ⚠⚠ THE ASSERTION IS ABOUT THE **SELECT LIST**, AND THE FIRST DRAFT OF THIS TEST TAUGHT WHY: it
+    // asserted only Contains("pp.RDB$FIELD_SOURCE") and PASSED WITH THE DEFECT PRESENT, because the
+    // query already names that column — in its JOIN predicate
+    // ("JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = pp.RDB$FIELD_SOURCE"). The join is precisely the step
+    // that reaches the BASE type, i.e. the step that loses the domain. So "the query mentions the
+    // column" and "the read carries the column" are different claims, and only the second one is the
+    // subject here.
+    [Fact]
+    public void ProcedureParametersSql_SelectsFieldSource_SoADomainSurvivesTheRead()
+    {
+        var sql = FirebirdTableDetailReader.ProcedureParametersSql;
+        var selectList = sql[..sql.IndexOf("FROM RDB$PROCEDURE_PARAMETERS", StringComparison.Ordinal)];
+        Assert.Contains("pp.RDB$FIELD_SOURCE", selectList);
+    }
+
     [Fact]
     public void ProcedureDependencySql_UsesProcedureType5_NotRelations()
     {

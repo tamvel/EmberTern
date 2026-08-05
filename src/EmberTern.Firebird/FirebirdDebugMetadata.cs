@@ -478,8 +478,15 @@ internal static class FirebirdDebugMetadata
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
 
-    private static bool IsUserDomain(string fieldSource)
-        => fieldSource.Length > 0 && !fieldSource.StartsWith("RDB$", StringComparison.OrdinalIgnoreCase);
+    // ⭐ One owner: FirebirdDdlReader.IsUserDomain. This was a private copy of the same expression, and
+    // a THIRD copy was about to be written for procedure parameters (S-1b) — so the predicate moved
+    // beside FormatType, which answers the other half of the same question. Behaviour-identical.
+    // ⚠ The debugger's use is the OPPOSITE of the DDL reader's and must stay that way: here the domain
+    // is what the frame variable is DECLARED with (R3, verbatim), while the value injected into the
+    // harness is typed with the BASE type (R2) — a domain-constrained parameter cannot take an injected
+    // NULL. The shared predicate answers "is this a user domain"; what each caller does with the answer
+    // is its own business.
+    private static bool IsUserDomain(string fieldSource) => FirebirdDdlReader.IsUserDomain(fieldSource);
 
     private static bool IsBareIdentifier(string s)
     {

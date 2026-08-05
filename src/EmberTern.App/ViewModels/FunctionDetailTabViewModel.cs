@@ -775,7 +775,10 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
             var sig = await Reader!.GetFunctionSignatureAsync(FunctionName, cancellationToken).ConfigureAwait(true);
             Arguments.Clear();
             foreach (var a in sig.Arguments) Arguments.Add(ProcedureParamRowViewModel.From(a, this, isOutput: false));
-            SetResultType(sig.ReturnType);
+            // ⭐ A domain RETURNS keeps its domain (S-1b): SetResultType feeds LoadType, whose
+            // "unknown base token ⇒ domain" branch resolves it — the same one-line reuse as
+            // ProcedureParamRowViewModel.From. Otherwise `RETURNS D_NAME` recompiled as VARCHAR(60).
+            SetResultType(sig.ReturnDomain ?? sig.ReturnType);
             Deterministic = sig.Deterministic;
         });
 
