@@ -84,12 +84,34 @@ git push origin <branch>
 git push private <branch>
 ```
 
-**Branch hygiene — ⭐ the repo is now at `master` ONLY (swept 2026-08-01, on the user's instruction).**
-Every feature branch has been merged and retired; there is **one local branch (`master`)** and, apart from the
-one residue below, **one branch on each remote**. So the working assumption for a new session is: *start from
-`master`, branch for the work, merge back `--no-ff`, delete the branch.*
+**Branch hygiene — ⚠⚠ CORRECTED 2026-08-05: the repo is NOT at `master` only any more, and that is deliberate.**
+There are **two branches** (`master` + **`feat/product-polish`**), and the working assumption for a new session
+is therefore: **start from `feat/product-polish`, not from `master`.**
 
-The final sweep merged the last outstanding branch — **`feat/branding-ux`** (the branding UX sprint plus the
+⭐ **`feat/product-polish` is the ACTIVE PRODUCT BRANCH and is deliberately NOT merged to `master`** — the
+user's ratified decision (2026-08-05): *„to jest aktywna gałąź produktu i właśnie na niej będziemy kontynuować
+M4 oraz kolejne sprinty Product Polish. Nie chcę jej teraz scalać z `master`, ponieważ czekają nas jeszcze
+większe prace w tym obszarze."* ⛔ Do not merge it to `master` without an explicit instruction.
+
+⚠⚠ **AND THIS IS THE TRAP THE STABILIZATION SPRINT WALKED INTO, worth reading before the next cleanup:** a fix
+branch cut FROM a long-running feature branch **cannot be merged "alongside" it.** The sprint branched off
+`feat/product-polish`, so merging it to `master` would have carried **104 commits, only 8 of them the sprint's**
+— i.e. it would have merged Product Polish as a side effect, the one thing the same instruction forbade. ⭐ And
+separating it was measured impossible, not merely risky: 12 of its files do not exist on `master`, and the S-3
+fix hangs on a style with **0 occurrences on `master`** plus a token from a `Tokens.axaml` that `master` does
+not have. **The sprint's work is technically inseparable from Product Polish, because it fixed things Product
+Polish introduced.** So it was merged into `feat/product-polish` (`45ff01f`, `--no-ff`) and the technical branch
+was retired everywhere.
+
+**The general rule this yields: a short branch cut from a feature branch merges back into THAT branch, never
+into `master`.** For work cut from `master`, the old assumption still holds: *branch, merge back `--no-ff`,
+delete the branch.*
+
+Retired so far, each verified merged first (`git branch -d`, the safe variant that refuses unmerged work):
+`feat/stabilization-sprint` (2026-08-05, into `feat/product-polish`).
+
+The 2026-08-01 sweep (historical, and the reason the paragraph above had to be corrected rather than deleted —
+it describes a state that was true then) merged the last outstanding branch — **`feat/branding-ux`** (the branding UX sprint plus the
 two ET0003 diagnostics bugfixes) — into `master` as `93d640f`, `--no-ff` so the arc stays readable, then
 deleted **locally and from BOTH remotes**: `feat/branding-ux`, `feat/data-import`, `feat/hamburger-navigation`,
 `feat/keyboard-manager`, `feat/settings-center`. Each was verified merged first (`git branch -d`, the safe
