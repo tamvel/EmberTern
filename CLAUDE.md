@@ -108,7 +108,10 @@ into `master`.** For work cut from `master`, the old assumption still holds: *br
 delete the branch.*
 
 Retired so far, each verified merged first (`git branch -d`, the safe variant that refuses unmerged work):
-`feat/stabilization-sprint` (2026-08-05, into `feat/product-polish`).
+`feat/stabilization-sprint` (2026-08-05, into `feat/product-polish`) · `chore/avalonia-12.1.1` (2026-08-05,
+into `feat/product-polish`). ⭐ The second one never reached either remote — it was not pushed before the
+user's acceptance, which is the rule working as intended: *push after ACCEPTED*, so a short technical branch
+can be retired locally with nothing to clean up remotely.
 
 The 2026-08-01 sweep (historical, and the reason the paragraph above had to be corrected rather than deleted —
 it describes a state that was true then) merged the last outstanding branch — **`feat/branding-ux`** (the branding UX sprint plus the
@@ -118,15 +121,17 @@ deleted **locally and from BOTH remotes**: `feat/branding-ux`, `feat/data-import
 variant, which refuses unmerged work). Earlier retirements, same rule: `feat/completion-matching`,
 `feat/firebird-debugger`, `feat/save-and-close`, `feat/sql-data-export`.
 
-⚠ **One residue, unchanged and still the user's to clear: `private`'s default branch (HEAD) points at
-`feat/completion-matching`**, so GitHub refuses to delete it (`refusing to delete the current branch`) even
-though it is provably merged. It stays until the default is switched to `master` in the **GitHub repo
-settings** — a repo-settings change deliberately left to the user, not something to work around. Once switched,
-one command finishes it:
+✅ **RESOLVED — verified 2026-08-05, and this paragraph used to say the opposite.** The residue was: `private`'s
+default branch (HEAD) pointed at `feat/completion-matching`, so GitHub refused to delete it
+(`refusing to delete the current branch`) even though it was provably merged, and switching the default was a
+repo-settings change deliberately left to the user. Measured on closing the Avalonia sprint:
+`git ls-remote --symref private HEAD` → **`ref: refs/heads/master`**, and `feat/completion-matching` exists on
+**neither** remote. So the default was switched and the branch is gone.
 
-```bash
-git push private --delete feat/completion-matching
-```
+⭐ **Both remotes now hold exactly two branches — `master` and `feat/product-polish` — and nothing else.**
+⚠ Worth the line it costs: this was found by *verifying the state while closing an unrelated sprint*, not by
+anyone revisiting the note. A "still open, user's to clear" item goes stale in the direction nobody checks,
+because its own wording tells the next reader not to look.
 
 **⛔ Never change the remote configuration without the user's explicit decision** — not the URLs, not a
 `pushurl`, not a rename. A dual-`pushurl` "one push reaches both" variant was considered and **rejected on
