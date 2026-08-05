@@ -41,7 +41,7 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (309 entries, #1–#320), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (**308 entries, #1–#321** — measured 2026-08-05, not incremented; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~24 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`24-stabilization-sprint.md` is the newest** — read it for the method as much as the fixes: two of six reports were not what they described, and it records the three shared causes plus the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -230,12 +230,14 @@ src/
                              # and, since I9, the streaming SAX reader XlsxImportProvider) plus, since I10,
                              # ExcelDataReader for legacy .xls (XlsImportProvider). Renamed from
                              # EmberTern.Export.Office in I9.
-  EmberTern.App/             # WinExe, Avalonia 12.0.3, CommunityToolkit.Mvvm 8.4.2
+  EmberTern.App/             # WinExe, Avalonia 12.1.1, CommunityToolkit.Mvvm 8.4.2
     Program.cs, App.axaml(.cs), UiStrings.cs, app.manifest
     ViewModels/ Views/ Themes/ (Colors.axaml + ControlStyles.axaml — the ONLY theme sources)
     Behaviors/ Completion/ Controls/ Converters/ Diagnostics/ Export/ Security/ Sql/
     Assets/ (FirebirdSql.xshd + .Light.xshd, Branding/, Icons/ — SvgIcon geometries)
-    (NuGet: Avalonia.AvaloniaEdit 12.0.0, Avalonia.Controls.DataGrid 12.0.0)
+    (NuGet: Avalonia.AvaloniaEdit 12.0.0 — ⚠ deliberately BEHIND the core, no 12.1 build exists;
+     Avalonia.Controls.DataGrid 12.1.2 — ⚠ deliberately AHEAD, no 12.1.1 build exists. Both mismatches carry
+     their reason at the `PackageReference`; see `docs/design/avalonia-12.1.1-update.md` + gotcha #321)
 tests/
   EmberTern.Tests/           # xunit; ONE shared HeadlessUnitTestSession for the whole
                              # ConnectionExpandBindingProbe class — see gotchas #94 / #226
@@ -449,6 +451,57 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **⬆ AVALONIA 12.0.3 → 12.1.1 — KROKI 0–5 WYKONANE, QA MASZYNOWE ZIELONE, ⏸ OCZEKUJE NA QA WZROKOWE
+  UŻYTKOWNIKA (2026-08-05).** Osobny, zamknięty sprint techniczny **przed M4**, świadomie nie mieszany
+  z Product Polish (decyzja użytkownika). Gałąź `chore/avalonia-12.1.1`, odcięta od `feat/product-polish`
+  i scalana **z powrotem do niej** — ⛔ **nie scalona i nie wypchnięta**, bo reguła mówi *push po ODBIORZE*.
+  Jeden dokument: **[docs/design/avalonia-12.1.1-update.md](docs/design/avalonia-12.1.1-update.md)** —
+  ratyfikowane decyzje D‑1…D‑5 (§0), ryzyka **R1–R8** (§3), wpływ na nasze komponenty (§4), checklista QA
+  (§6), dziennik wykonania (§7), wynik QA (§8), znaleziska do decyzji (§9).
+  **Wersje: core `Avalonia`/`Desktop`/`Themes.Fluent`/`Fonts.Inter` + `Avalonia.Headless` = 12.1.1 · ⚠ dwa
+  celowe rozjazdy, każdy z powodem zapisanym przy `PackageReference`:** `Avalonia.AvaloniaEdit` **12.0.0**
+  (buildu 12.1 nie ma) i `Avalonia.Controls.DataGrid` **12.1.2** (DataGrida 12.1.1 nie ma — pakiet ma własne
+  repo i własny cykl).
+  **QA maszynowe:** build **0/0 w Debug i Release** · suite **7360** zielona **dziewięć razy** (3 partycje
+  × 3 przebiegi, każdy `--blame-hang`) · `MetadataTreeVirtualizationProbe` 4/4 (93–823 ms przy limitach 5 s)
+  · `SharedContextMenuFeasibilityProbe` 2/2 · żywe FB5: `DebuggerFidelityProbe` **39/39**,
+  `ChangeSafetyProbe` ALL PASS, `DataImportRunProbe` **33 sprawdzenia** ALL PASS · smoke Debug + Release, **0
+  wpisów `FATAL`**.
+  ⭐⭐ **Najmocniejszy wynik: 18/18 renderów obu sond wizualnych jest BAJTOWO IDENTYCZNYCH** z zapisanymi na
+  12.0.3 (SHA‑256 plik po pliku, oba motywy) — zero ruchu w geometrii, układzie i rozwiązywaniu pędzli.
+  ⚠ Identyczność zweryfikowana **zanim** została uznana za wynik (`Avalonia.Base.dll` w `bin/Release` sondy
+  raportuje 12.1.1.0), bo „identyczne rendery" i „sonda się nie przebudowała" wyglądają tak samo.
+  ⚠⚠ **ZAKRES TEGO WYNIKU:** `RenderTargetBitmap` idzie ścieżką natychmiastowej rasteryzacji Skia, **nie przez
+  kompozytor GPU** — czyli tam, gdzie *nie* żyją zmienione w 12.1.0 domyślne (`dirty-rect clipping`,
+  `stencil buffers`). Dowodzi, że nie ruszyła się geometria; **nie dowodzi, że żywe okno maluje się tak samo.**
+  ⛔⛔ **RYZYKO R1 JEST NIETKNIĘTE PRZEZ CAŁE QA MASZYNOWE I TO ONO DECYDUJE O ODBIORZE: AvaloniaEdit nie ma
+  buildu pod 12.1**, jego zakres `>= 12.0.0` spełnia core 12.1.1 **bez ostrzeżenia, bez `NU1605`, bez
+  informacji o downgrade** — a 7360 asercji przeszłoby również wtedy, gdyby układ tekstu w edytorze przesunął
+  się o wiersz (testy asertują właściwości i pędzle, nie piksele). Na `TextView`/`GetRectsForSegment` wisi
+  sześć `IBackgroundRenderer`ów, hit-testowany `BreakpointMargin`, `InlineValuesRenderer` (rysuje **za** końcem
+  linii), cztery karty `OverlayLayer`, `SqlIndentationStrategy` i 11 preview DDL. **Punkt 1 checklisty
+  wzrokowej = edytor SQL, priorytet bezwzględny.** Nowa gotcha **#321** generalizuje to poza ten pakiet:
+  *brak błędu restore jest dowodem o metadanych, nigdy o zgodności.*
+  ⚠ **Kryterium wycofania (ratyfikowane D‑5): cokolwiek z R1 → cofnij do 12.0.5, nie do 12.0.3** — 12.0.5 daje
+  `TextRunCache`, Unicode v17, `ScrollViewer` NaN fix i headless `TestContext` fix przy **zerowej** zmianie
+  domyślnych renderowania, zerowym ruchu w compiled bindings i zerowej zmianie hit-testingu.
+  ⚠ **Czego QA NIE dowiodło, powiedziane wprost:** brak zawieszenia suite w 9 przebiegach po zmianie (i w 9
+  przed) **nie jest** dowodem, że 12.1.1's `Fix headless session hang when cleanup throws` (#21781) naprawiło
+  nasz wieloletni objaw (#94/#226/#261) — od 2026‑08‑04 mamy **dwie** niezależne kandydatki na tę przyczynę
+  (`AutoScrollToSelectedItem` i teraz #21781), a objaw jest rzadki z definicji. Obserwować, notować w obie
+  strony, nie przypisywać.
+  ⏸ **Dwa znaleziska do decyzji, żadne nie blokuje odbioru (§9):** (a) 🐞 **`DataImportProbe` NIE KOMPILUJE
+  SIĘ — i jest to defekt WCZEŚNIEJSZY, dowiedziony a nie założony**: identyczny błąd (`TransactionService` →
+  `ImportSessionConnection`, skutek I7.5) na commicie `8d5c510` zbudowanym w osobnym `git worktree`, a sonda
+  nie referencuje **ani jednego** pakietu Avalonii. ⭐ Jest **poza solucją**, więc `dotnet build EmberTern.slnx`
+  nigdy jej nie kompilował — 20 sprawdzeń modułu zamkniętego jako „user-accepted" zgniło cicho przy zielonym
+  buildzie; ⛔ nie naprawione, bo Data Import ma stojącą dyrektywę „wracać tylko po rzeczywisty defekt
+  funkcjonalny", a sprint ma zostać przypisywalny. (b) ⚠ **numery gotchy 303 i 304 są użyte po dwa razy**, więc
+  odwołania „gotchas #303/#304" są niejednoznaczne; przy okazji sprostowano **dwa** liczniki wpisów w CLAUDE.md,
+  które nie zgadzały się ze sobą i **oba** były błędne — zmierzone **308 wpisów, #1–#321** (#284 o warstwę wyżej).
+  ⛔ **M4 nadal wymaga własnego, osobnego pozwolenia** i startuje z
+  `product-polish-m4-next-session.md`; ten sprint niczego w Product Polish nie zmienił.
 
 - **🔧🔒 SPRINT STABILIZACYJNY (S-1 … S-6) — CLOSED, USER-QA'D AND ACCEPTED 2026-08-05.** All six confirmed in
   the running app (S-1a/S-1b · S-2 no flicker and correct after a metadata refresh · S-3 · S-4 · S-5 · S-6),
@@ -4049,12 +4102,27 @@ noted.
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
   (#94/#226/#286). The partition filter is those class names excluded / included:
   `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe&FullyQualifiedName!~EditableGridEnterTests"`
-  and its inverse with `|`. ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
+  and its inverse with `|` — ⚠ **except that `BrandingPresentationTests` now belongs to the ISOLATED partition,
+  so the grouped inverse must NOT include it** (grouped = the other six; isolated =
+  `ConnectionExpandBindingProbe|BrandingPresentationTests`).
+  ⛔⛔ **AND THE ACCEPTANCE CRITERION IS THE TOTAL, NOT „0 FAILURES" — measured 2026-08-05.** With
+  `--blame-hang`, a broken headless state reported **`Powodzenie!` — 0 niepowodzeń, łącznie 7232** while **128
+  tests silently never started**; the same state without the flag gave 94 failures, and on a retry it hung.
+  So a run is green only when it reports **`łącznie: 7360`** (or the partition's own 7232 / 73 / 55). A summary
+  line saying „0 niepowodzeń" is satisfiable by a run in which a whole partition failed to load.
+  ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
   criterion for adding a class: **does it construct Avalonia controls?**
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
-  with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,
-  ~9 s) and the rest together (**74 green** as of 2026-08-05, ~11 s). Both were clean that way on the same
+  with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** and the
+  rest together. ⭐ **CORRECTED 2026-08-05 (Avalonia 12.1.1 sprint): the isolated partition now holds TWO
+  classes — `ConnectionExpandBindingProbe` + `BrandingPresentationTests` — so the split is 7232 + 73 + 55.**
+  `BrandingPresentationTests` moved there because it failed ~1 in 3 in the grouped run with *"The calling
+  thread cannot access this object because a different thread owns it"* and is **green 6/6 alone**; it is the
+  only headless test that opens a real platform `Window` (`Show()`), which is why it is the one that needed
+  isolating. ⚠ Weakening its assertion was rejected — dropping `Show()` makes `Icon` read null, i.e. the test
+  would pass while proving nothing. Detail + the two rejected attempts: the class doc and
+  `docs/design/avalonia-12.1.1-update.md` §11. Both were clean that way on the same
   commit where a combined run had to be interrupted twice. ⚠ That "the other four" used to read four and then
   seven — the number moves with the class list above, so read the list, not this sentence.
   **⭐ A NEW DATUM ON THE CAUSE, and it is a better suspect than any assertion: a headless test that constructs
@@ -5130,8 +5198,11 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (301 entries, #1–#312), organized thematically.
-  Search it whenever a bug looks familiar.
+- **`docs/gotchas.md`** — the complete gotcha catalog (**308 entries, #1–#321**; see the Documentation map for
+  the duplicate-number caveat). Search it whenever a bug looks familiar. ⚠ **This line said "301 entries,
+  #1–#312" while the map said "309, #1–#320" — two prose counters for one file, disagreeing with each other
+  AND both wrong.** Measure (`grep -oE "^[0-9]+\. \*\*"` → unique numbers) before quoting either; #284's shape,
+  one layer out.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a
   specific feature or fix; nothing here is loaded automatically.
