@@ -1249,3 +1249,25 @@ every emit path to be individually perfect.**
      out, list the states it actually exercises. (The state was added to the lab as `SP_DBG_SELINTO` and the probe
      grew case 39.)
      (Stabilization sprint S-6.)
+
+321. **A `>=` dependency range makes a genuinely untested combination look like a supported one — and the build,
+     the restore and the test suite all stay silent about it.** `Avalonia.AvaloniaEdit` 12.0.0 declares
+     `Avalonia (>= 12.0.0)`, so raising the core to 12.1.1 satisfies it **without a warning, without NU1605, and
+     without a downgrade notice**: the package was compiled against 12.0 and is now running against a minor it
+     has never seen. ⭐ The asymmetry is the whole trap — a package that pinned `[12.0.0]` would have failed the
+     restore and forced a decision, so **the looser the range, the quieter the risk**. And the suite cannot fill
+     the gap: EmberTern's headless tests assert properties and brushes, not pixels, so an editor whose text
+     layout shifted by a line would pass all 7360 of them.
+     ⚠ The exposure is specific, not theoretical. 12.1 changed exactly the stack AvaloniaEdit is built on —
+     `Rework text fallback itemization`, `TextRunCache`, `Preserve lines at rounded fractional heights`,
+     `line break enumerator`, `Padding` in `ScrollContentPresenter` — while six `IBackgroundRenderer`s, a
+     hit-tested `BreakpointMargin`, `InlineValuesRenderer` (which draws in the empty space PAST the end of a
+     line, i.e. reads line geometry), four `OverlayLayer` cards and eleven read-only DDL previews all hang off
+     `TextView` and `GetRectsForSegment`.
+     ⭐⭐ **So the countermeasure is not a version number, it is a WRITTEN REASON at the reference.** A pinned
+     older version with no note reads as neglect and gets "tidied up" by the next author, whose build will be
+     green. The comment must say what does not exist yet, what would have to be re-verified, and where the
+     checklist lives — because the only instrument that can answer this question is a human looking at the
+     editor. ⚠ Generalises to any UI-adjacent package whose range is `>=`: **the absence of a restore error is
+     evidence about the metadata, never about compatibility.**
+     (Avalonia 12.1.1 update sprint, 2026-08-05; `docs/design/avalonia-12.1.1-update.md` §3 R1, decision D-3.)

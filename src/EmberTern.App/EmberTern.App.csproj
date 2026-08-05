@@ -61,6 +61,19 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- ⚠⚠ ZOSTAJE NA 12.0.0 SPECJALNIE, przy corze 12.1.1 — i ten komentarz jest JEDYNYM sygnałem, jaki
+         dostaniesz. Wersji 12.1.x AvaloniaEdit po prostu nie ma; jego zależność to `Avalonia (>= 12.0.0)`,
+         więc NuGet spełnia ją corem 12.1.1 BEZ SŁOWA OSTRZEŻENIA: build wychodzi 0/0, a suite jest zielona,
+         bo nasze testy headless asertują właściwości i pędzle, nie piksele.
+         ⭐ A 12.1 rusza dokładnie ten stos, na którym AvaloniaEdit stoi: `Rework text fallback itemization`,
+         `TextRunCache`, `Preserve lines at rounded fractional heights` (#21834), `line break enumerator`,
+         `Padding` w `ScrollContentPresenter` (#21872). Na `TextView` i `GetRectsForSegment` wisi u nas sześć
+         `IBackgroundRenderer`ów, `BreakpointMargin` z własnym hit-testem, `InlineValuesRenderer` (rysuje
+         w pustym miejscu ZA końcem linii, czyli czyta geometrię linii), cztery karty w `OverlayLayer`,
+         `SqlIndentationStrategy` i jedenaście read-only preview DDL.
+         ⛔ Podniesienie tego pakietu jest zadaniem z WŁASNYM QA WZROKOWYM edytora — nie „przy okazji".
+         Decyzja ratyfikowana 2026-08-05 (D-3); zakres, ryzyko R1 i checklista:
+         docs/design/avalonia-12.1.1-update.md. Gotcha #321. -->
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
     <!-- ⚠ NUMER NIE ZGADZA SIĘ Z COREM CELOWO. DataGrid został wyprowadzony z głównego repo Avalonii do
          własnego i ma własny cykl wydań: przy corze 12.1.1 najnowszy DataGrid to 12.1.2, a DataGrida
