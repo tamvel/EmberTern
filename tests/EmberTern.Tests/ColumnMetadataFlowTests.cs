@@ -209,4 +209,49 @@ public class ColumnMetadataFlowTests
         Assert.Equal("KONTRAHENT", qi.Facts.First(f => f.Label == "Table").Value);
         Assert.Equal("AFTER INSERT OR UPDATE OR DELETE", qi.Facts.First(f => f.Label == "Fires").Value);
     }
+
+    // ══ Column readiness (S-2, 2026-08-05) ═══════════════════════════════════════════════════════
+    //
+    // ⭐ The snapshot is the ONE place the App can answer "not loaded yet" honestly, because the cache
+    // DICTIONARY distinguishes a missing key from a present-but-empty entry while GetColumns collapses both
+    // to an empty list. The information existed all along and was thrown away one layer too early — which is
+    // what let DiagnosticsEngine report every unwarmed column as unknown.
+
+    [Fact]
+    public void KnowsColumns_False_WhenTheObjectHasNotBeenWarmed()
+    {
+        // The object is known (it came from a loaded category); its columns have not been read yet — the
+        // state EVERY object is in at the moment a tab opens.
+        var snap = AppMetadataSnapshot.Build(
+            new[] { new MetadataObject("ORDERS", MetadataObjectKind.Table) },
+            new Dictionary<string, IReadOnlyList<ColumnSpec>>(StringComparer.OrdinalIgnoreCase));
+
+        Assert.NotNull(snap.FindObject("ORDERS"));
+        Assert.Empty(snap.GetColumns("ORDERS"));
+        Assert.False(snap.KnowsColumns("ORDERS"));
+    }
+
+    [Fact]
+    public void KnowsColumns_True_OnceWarmed_EvenWhenTheAnswerIsNoColumns()
+    {
+        // ⚠ A present-but-EMPTY entry counts as KNOWN. The warm pass caches what it read, so an object whose
+        // read legitimately returned nothing has been ANSWERED — treating it as pending would silence a
+        // genuine typo on that object for the rest of the session.
+        var warmedEmpty = new Dictionary<string, IReadOnlyList<ColumnSpec>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ORDERS"] = Array.Empty<ColumnSpec>(),
+        };
+        var snap = AppMetadataSnapshot.Build(
+            new[] { new MetadataObject("ORDERS", MetadataObjectKind.Table) }, warmedEmpty);
+
+        Assert.True(snap.KnowsColumns("ORDERS"));
+        Assert.True(BuildSnapshot("KONTRAHENT", new ColumnSpec("NAZWA", "VARCHAR(60)")).KnowsColumns("KONTRAHENT"));
+    }
+
+    [Fact]
+    public void KnowsColumns_IsCaseInsensitive_LikeEveryOtherLookupHere()
+    {
+        var snap = BuildSnapshot("KONTRAHENT", new ColumnSpec("NAZWA", "VARCHAR(60)"));
+        Assert.True(snap.KnowsColumns("kontrahent"));
+    }
 }

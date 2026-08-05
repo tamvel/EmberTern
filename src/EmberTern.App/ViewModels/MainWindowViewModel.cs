@@ -269,6 +269,11 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.RecompileGroupRequested += OnRecompileGroupRequested;
         Metadata.SetObjectActiveRequested += OnSetObjectActiveRequested;
         Metadata.BulkSetActiveRequested += OnBulkSetActiveRequested;
+        // A manual metadata refresh means the SCHEMA may have moved, so the per-object caches every open
+        // editor's semantic model is built from must go. Without this a refresh rebuilt those models against
+        // the same stale columns, and a newly added column stayed "unknown" for the rest of the session on
+        // every open tab (S-2). See MetadataExplorerViewModel.SchemaInvalidated for the ordering.
+        Metadata.SchemaInvalidated += InvalidateObjectCaches;
         Messages = new ObservableCollection<QueryMessageViewModel>();
         // Workspace tabs start empty — no Query tab until a connection becomes active.
         // Each ConnectionProfile owns its own Query+DDL tab list via _workspacesByConnection.
@@ -4270,6 +4275,29 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly Dictionary<string, IReadOnlyList<RoutineParameterMetadata>> _routineParameterCache =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Drops every per-object cache that was read from the current schema — columns, routine parameters and
+    /// the warmed Quick Info detail. The ONE place those three are dropped together, so a caller cannot
+    /// forget one of them (and a fourth such cache, added later, has one obvious home).
+    /// <para>
+    /// Two callers, one meaning: switching CONNECTION (the caches describe a different database) and a manual
+    /// METADATA REFRESH (the schema may have moved under them — S-2, 2026-08-05). The refresh case is the one
+    /// that was missing: a refresh rebuilt every open editor's semantic model against the same stale columns,
+    /// so a column added to a table stayed "unknown" for the rest of the session on every open tab.
+    /// </para>
+    /// <para>
+    /// ⚠ Safe to drop mid-session only because <c>ISqlMetadataProvider.KnowsColumns</c> now lets diagnostics
+    /// tell "not loaded yet" from "absent". An empty cache used to read as "this table has no such column",
+    /// so clearing it would have squiggled every qualified column until the warm pass refilled it.
+    /// </para>
+    /// </summary>
+    private void InvalidateObjectCaches()
+    {
+        _columnCache.Clear();
+        _routineParameterCache.Clear();
+        _objectDetailCache.Clear();
+    }
+
     /// <summary>Synchronous cache read for the signature-help snapshot (M6). Null when not loaded.</summary>
     internal IReadOnlyList<RoutineParameterMetadata>? TryGetCachedRoutineParameters(string routineName)
         => _routineParameterCache.TryGetValue(routineName, out var ps) ? ps : null;
@@ -8056,9 +8084,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // Column + routine-parameter caches belong to the previous schema — drop
         // them on any switch so that "X.column" / a routine signature against a
         // same-named object in another DB doesn't surface stale metadata.
-        _columnCache.Clear();
-        _routineParameterCache.Clear();
-        _objectDetailCache.Clear();
+        InvalidateObjectCaches();
 
         UpdateStatusFromConnection();
         OnPropertyChanged(nameof(IsConnected));

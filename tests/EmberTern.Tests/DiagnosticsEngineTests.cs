@@ -40,6 +40,20 @@ public class DiagnosticsEngineTests
             return this;
         }
 
+        /// <summary>Declares a table whose COLUMNS ARE NOT LOADED YET — the real snapshot's state for every
+        /// object at the moment a tab opens, since columns are warmed lazily (S-2). Distinct from a table
+        /// with an empty column list, which has been answered.</summary>
+        public FakeMetadata ObjectWithColumnsPending(string name)
+        {
+            Object(name, SymbolKind.Table);
+            _columnsPending.Add(name);
+            return this;
+        }
+
+        private readonly HashSet<string> _columnsPending = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool KnowsColumns(string tableOrView) => !_columnsPending.Contains(tableOrView);
+
         public ObjectMetadata? FindObject(string name)
             => _objects.TryGetValue(name, out var o) ? o : null;
 
@@ -126,6 +140,59 @@ public class DiagnosticsEngineTests
     {
         var meta = new FakeMetadata().Object("KONTRAHENT", SymbolKind.Table); // no columns for NOSUCH
         Assert.Empty(Analyze("select n.qty from nosuch n", meta));
+    }
+
+    // ══ Column readiness — "not loaded yet" is not "absent" (S-2, 2026-08-05) ════════════════
+    //
+    // ⭐⭐ THE REPORTED SYMPTOM: opening a procedure underlined practically everything as an error for a
+    // moment, then the errors disappeared. Cause: columns are warmed LAZILY, so at the moment a tab opens the
+    // snapshot knows every object and NONE of their columns — and the engine read an empty column set as
+    // "this table has no such column", flagging every qualified column until the warm pass finished and the
+    // model was rebuilt. The provider contract said as much in its own words ("unknown OR has no columns
+    // loaded yet"), so the two facts were indistinguishable BY CONTRACT rather than by oversight.
+    //
+    // ⚠ Both directions are pinned, because the dangerous half of this fix is over-silencing: a diagnostic
+    // that never fires is indistinguishable from one that does not exist.
+
+    [Fact]
+    public void UnknownColumn_ColumnsNotLoadedYet_IsNotFlagged()
+    {
+        var meta = new FakeMetadata().ObjectWithColumnsPending("KONTRAHENT");
+        Assert.Empty(Analyze("select k.nosuchcolumn from kontrahent k", meta));
+    }
+
+    [Fact]
+    public void UnknownColumn_OnceColumnsAreLoaded_IsFlaggedAgain()
+    {
+        // The SAME query, the same unknown column — the only difference is that the snapshot has now
+        // answered about this table. Silence must be temporary, not permanent.
+        var meta = new FakeMetadata().Col("KONTRAHENT", "NAZWA", "VARCHAR(60)");
+        var d = Assert.Single(Analyze("select k.nosuchcolumn from kontrahent k", meta));
+        Assert.Equal(DiagnosticCategory.UnknownColumn, d.Category);
+    }
+
+    [Fact]
+    public void UnknownColumn_TriggerContextColumn_RespectsReadiness()
+    {
+        // NEW/OLD resolve against the TARGET TABLE's columns, so a trigger body is the surface where the
+        // storm was most visible — every NEW.x in the body at once.
+        const string sql =
+            "create trigger t_bu for kontrahent before update as begin new.nosuchcolumn = 1; end";
+        Assert.Empty(Analyze(sql, new FakeMetadata().ObjectWithColumnsPending("KONTRAHENT")));
+        Assert.Single(Analyze(sql, new FakeMetadata().Col("KONTRAHENT", "NAZWA", "VARCHAR(60)")));
+    }
+
+    [Fact]
+    public void UnknownColumn_CteProjection_IsNotGatedOnTheSnapshot()
+    {
+        // ⚠ A CTE's columns come from its own projection IN THE TEXT, never from the catalog, so its
+        // readiness answer is CteSymbol.ColumnsComplete — already handled. Asking the snapshot about a name
+        // that is not a catalog object would silence every CTE typo forever, so the CTE arm is exempt.
+        var meta = new FakeMetadata().Col("ORDERS", "ID", "INTEGER").Col("ORDERS", "AMOUNT", "NUMERIC(15,2)");
+        const string sql = "with c as (select id, amount from orders) select c.nosuch from c";
+
+        var d = Assert.Single(Analyze(sql, meta));
+        Assert.Equal(DiagnosticCategory.UnknownColumn, d.Category);
     }
 
     // ══ Unresolved variable / parameter (local scope, no connection needed) ═══════════════════
