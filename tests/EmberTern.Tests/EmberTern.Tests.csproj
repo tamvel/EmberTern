@@ -12,7 +12,10 @@
     <PackageReference Include="NPOI" Version="2.7.2" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
-    <PackageReference Include="Avalonia.Headless" Version="12.0.3" />
+    <!-- ⚠ MUSI iść w tej samej wersji co core w EmberTern.App — Avalonia.Headless twardo zależy od
+         Avalonia / Avalonia.Fonts.Inter / Avalonia.HarfBuzz w SWOIM numerze (>= 12.1.1), więc rozjazd
+         albo podnosi core przez zależność przechodnią, albo daje NU1605. Bump core = bump tutaj. -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.1" />
     <!-- SECURITY OVERRIDES for NPOI's transitive pins. Neither ships (this project is
          IsPackable=false and nothing in src/ references NPOI), so the product is not exposed
          either way; they are raised so the vulnerable-transitive scan is GREEN across the whole
