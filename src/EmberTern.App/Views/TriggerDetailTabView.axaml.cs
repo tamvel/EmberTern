@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
@@ -10,6 +10,7 @@ using Avalonia.Styling;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
@@ -52,7 +53,11 @@ public partial class TriggerDetailTabView : UserControl
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("TriggerDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         _variablesGrid = this.FindControl<DataGrid>("VariablesGrid");
-        if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+        if (_variablesGrid is not null)
+        {
+            FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_variablesGrid, EditableGridKind.Definition);
+        }
 
         WireEditor(_sqlEditor, OnSqlEditorTextChanged);
         WireEditor(_bodyEditor, OnBodyEditorTextChanged);

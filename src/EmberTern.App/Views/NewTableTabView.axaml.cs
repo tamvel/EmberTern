@@ -1,8 +1,10 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
+
+using EmberTern.App.Behaviors;
 
 namespace EmberTern.App.Views;
 
@@ -26,6 +28,11 @@ public partial class NewTableTabView : UserControl
                     break;
                 }
             }
+
+            // The ONE seam (Enter gesture + cell-editor height role). This grid declares its columns in XAML,
+            // so it never went through FieldGridColumns.Build and never received the height role — the same
+            // silent miss as Table Detail's fields grid (S-1a + S-3).
+            EditableGridBehavior.Attach(grid, EditableGridKind.Definition);
         }
     }
 
