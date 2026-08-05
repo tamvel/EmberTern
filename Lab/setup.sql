@@ -196,6 +196,40 @@ BEGIN
   RETURN RESULT;
 END^
 
+/* ---------- Domain-typed routine signatures ------------------------
+   Added by the 2026-08-05 stabilization sprint (S-1b). These exist so
+   the DDL reconstruction can be verified to PRESERVE a domain used as a
+   parameter / argument / RETURNS type instead of resolving it to its
+   base type. Measured on FB5 before they were written:
+   RDB$PROCEDURE_PARAMETERS.RDB$FIELD_SOURCE holds 'D_CODE' for a
+   domain-typed parameter and an anonymous 'RDB$n' for a plain one, so
+   the two are distinguishable — exactly as they are for table columns.
+
+   Coverage on purpose: an INPUT domain param, an OUTPUT domain param, a
+   plain param beside them (so the anonymous case is exercised in the
+   same routine), a domain param carrying a DEFAULT (the shape gotcha
+   #175 destroyed), and a function with both a domain argument and a
+   domain RETURNS.                                                     */
+
+/* ⚠ The defaulted parameter is LAST because Firebird requires it: a
+   parameter list with 'P_QTY D_QTY = 5' in the middle is rejected with
+   -204 "defaults must be last". Measured while writing this file.      */
+CREATE PROCEDURE SP_DOM_PARAMS(P_CODE D_CODE, P_PLAIN INTEGER, P_QTY D_QTY = 5)
+RETURNS (R_CODE D_CODE, R_TOTAL NUMERIC(15,2))
+AS
+BEGIN
+  R_CODE  = P_CODE;
+  R_TOTAL = P_QTY * COALESCE(P_PLAIN, 0);
+  SUSPEND;
+END^
+
+CREATE FUNCTION FN_DOM_ARG(P_CODE D_CODE)
+RETURNS D_NAME
+AS
+BEGIN
+  RETURN COALESCE(TRIM(P_CODE), 'NONE');
+END^
+
 SET TERM ; ^
 
 /* ---------- Procedures (PSQL) --------------------------------------
