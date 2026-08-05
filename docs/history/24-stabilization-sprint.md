@@ -209,6 +209,23 @@ komentarzu**, który nazywa tryb, którego nieobecność dokumentuje. Predykatem
 
 ---
 
+## 🔒 Odbiór (2026-08-05)
+
+**Sprint odebrany przez użytkownika po QA w działającej aplikacji.** Potwierdzone punkt po punkcie:
+S-1a/S-1b działają · S-2 — *„nie ma już migotania ani problemów po odświeżeniu metadanych"* · S-3 — wysokość
+edytorów poprawiona tam, gdzie było zgłoszenie · S-4 — *„usunięcie dodatkowego paska postępu jest zdecydowanie
+lepszym rozwiązaniem"* · S-5 — *„usunięcie martwej konfiguracji było właściwą decyzją"* · S-6 — tooltipy i
+rozpoznawanie zmiennych działają. **Regresji nie znaleziono.**
+
+⭐⭐ **Zamykająca uwaga użytkownika, i to jest dyrektywa o metodzie, nie komplement:** *„szczególnie cieszę się,
+że kilka zgłoszeń okazało się prowadzić do głębszych przyczyn niż same objawy — dzięki temu udało się naprawić
+fundamenty, a nie tylko zamaskować problemy."*
+
+⛔ Konsekwencja na przyszłość, warta zapisania właśnie tutaj: **przy kolejnym zgłoszeniu tego rodzaju szukaj
+PRZYCZYNY, zanim naprawisz OBJAW — nawet gdy objaw wskazuje miejsce, które wygląda wiarygodnie.** W tym
+sprincie wiarygodne miejsce okazało się złe dwa razy na sześć, i w obu wypadkach czytanie kodu tam, gdzie
+wskazywał objaw, potwierdziłoby błędną hipotezę. Rozstrzygał pomiar.
+
 ## Stan na koniec sprintu
 
 Build 0/0. Partycje **7232 + 74 + 54**. Smoke czysty. Probe'y: `DomainSignatureProbe` 21/21,

@@ -428,9 +428,17 @@ noted.
 
 ## Current state
 
-- **🔧 SPRINT STABILIZACYJNY (S-1 … S-6) — DONE 2026-08-05, awaits the user's QA in the running app. Branch
-  `feat/stabilization-sprint` (off `feat/product-polish`). ⏸ M4 Product Polish still needs its own explicit
-  go-ahead.** Narrative: **[docs/history/24-stabilization-sprint.md](docs/history/24-stabilization-sprint.md)**.
+- **🔧🔒 SPRINT STABILIZACYJNY (S-1 … S-6) — CLOSED, USER-QA'D AND ACCEPTED 2026-08-05.** All six confirmed in
+  the running app (S-1a/S-1b · S-2 no flicker and correct after a metadata refresh · S-3 · S-4 · S-5 · S-6),
+  **no regressions found**. Branch `feat/stabilization-sprint` (off `feat/product-polish`), pushed to both
+  remotes. ⏸ **M4 Product Polish still needs its own explicit go-ahead — and the user deferred it to the next
+  session, to be started from `product-polish-m4-next-session.md`.**
+  ⭐ The user's own closing note, worth keeping because it is a directive about method, not praise: *„kilka
+  zgłoszeń okazało się prowadzić do głębszych przyczyn niż same objawy — dzięki temu udało się naprawić
+  fundamenty, a nie tylko zamaskować problemy."* ⛔ So on the next report of this kind: **find the cause before
+  fixing the symptom, even when the symptom points somewhere plausible** — twice in this sprint the plausible
+  place was the wrong one.
+  Narrative: **[docs/history/24-stabilization-sprint.md](docs/history/24-stabilization-sprint.md)**.
   Six defects from ordinary use, closed in etaps E0–E6, one commit each; build 0/0, suite **7360**
   (7232 + 74 + 54), smoke clean. New gotchas **#316–#320**.
   ⭐⭐ **THE SPRINT'S DURABLE RESULT IS METHODOLOGICAL, AND IT IS THE §13.3 GATE'S LESSON FROM THE OTHER SIDE:
