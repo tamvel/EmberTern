@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -69,32 +69,4 @@ public partial class NewConnectionDialog : Window
         }
     }
 
-    private async void OnBrowseClientLibraryClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is not NewConnectionDialogViewModel vm)
-        {
-            return;
-        }
-
-        var picker = StorageProvider;
-        var result = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Select fbclient.dll",
-            AllowMultiple = false,
-            FileTypeFilter = new[]
-            {
-                new FilePickerFileType("Firebird client library")
-                {
-                    Patterns = new[] { "fbclient.dll", "*.dll" },
-                },
-                FilePickerFileTypes.All,
-            },
-        });
-
-        var file = result.FirstOrDefault();
-        if (file is not null)
-        {
-            vm.ClientLibraryPath = file.Path.LocalPath;
-        }
-    }
 }

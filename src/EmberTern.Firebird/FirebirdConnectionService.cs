@@ -658,13 +658,12 @@ public sealed class FirebirdConnectionService : IDisposable
             Charset = string.IsNullOrWhiteSpace(profile.Charset) ? CharsetCatalog.Default : profile.Charset,
             Dialect = profile.Dialect is 1 or 3 ? profile.Dialect : 3,
             Pooling = false,
+            // ⛔ `Default` is the pure MANAGED wire protocol: fbclient.dll is not loaded on this path, and the
+            // driver's `ClientLibrary` is consulted only for `Embedded`. That is why there is no client-library
+            // setting to thread in here — see the note in ConnectionProfile (S-5, 2026-08-05). Setting one had
+            // no effect whatsoever, which the user found by pointing it at an invalid DLL.
             ServerType = FbServerType.Default,
         };
-
-        if (!string.IsNullOrWhiteSpace(profile.ClientLibraryPath))
-        {
-            builder.ClientLibrary = profile.ClientLibraryPath;
-        }
 
         return builder.ToString();
     }

@@ -955,17 +955,25 @@
              ⚠ Prawy margines mija chevron. ⚠ Nakładka MOŻE zasłonić ostatnią zakładkę na bardzo wąskim
              oknie — świadomie nierozwiązane, bo pasek zakładek zajmuje ułamek szerokości panelu;
              pozycja do QA, nie do strojenia liczbą w ciemno. -->
+        <!-- ⛔⛔ PASKA POSTĘPU TU JUŻ NIE MA — decyzja użytkownika po używaniu (S-4, 2026-08-05).
+             §19.33 zapisał regułę „pasek statusu UZUPEŁNIA, nigdy nie zastępuje" i na tej podstawie moduł
+             trzymał własny pasek. Po M3b.1 pasek statusu raportuje import globalnie, więc na ekranie stały
+             DWA paski jednocześnie — i użytkownik zdecydował odwrotnie niż §19.33: własny pasek modułu
+             znika, zostaje ten w pasku statusu. Nie wolno go „przywrócić dla wygody".
+
+             ⚠ Zostaje TEKST postępu, i to jest zakres zgłoszenia („usuń górny pasek postępu", „pozostałe
+             elementy pozostają bez zmian"), a nie przeoczenie: pasek statusu niesie krótką etykietę
+             operacji ustaloną na 120 px (§8.4.6 — sekcja 4 rośnie kosztem kolumny gwiazdkowej i wypycha
+             chipy stanu w lewo), więc SZCZEGÓŁ przebiegu nadal należy do powierzchni, która go prowadzi.
+             To ten sam podział własności co §19.5.1/§19.7.1.
+             ⚠ Licznik czasu w band B też zostaje — pasek statusu go nie niesie, a SQL Editor i Script
+             Executor trzymają swój w toolbarze (§19.33). -->
         <StackPanel ZIndex="1" Orientation="Horizontal" Spacing="8"
                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,30,0"
                     IsVisible="{Binding IsRunning}">
           <TextBlock Text="{Binding ProgressText}" FontSize="{DynamicResource Text.Compact.Size}"
                      VerticalAlignment="Center"
                      Foreground="{DynamicResource SubtleForegroundBrush}" />
-          <!-- Tryb nieokreślony, gdy liczba wierszy jest nieznana: import strumieniowy nie zna jej bez
-               dwukrotnego czytania pliku, a zmyślony procent byłby liczbą, która nie jest prawdziwa. -->
-          <ProgressBar Width="140" Height="6" VerticalAlignment="Center"
-                       Minimum="0" Maximum="100" Value="{Binding ProgressPercent}"
-                       IsIndeterminate="{Binding IsProgressIndeterminate}" />
         </StackPanel>
 
         <Button Classes="icon" ZIndex="1"

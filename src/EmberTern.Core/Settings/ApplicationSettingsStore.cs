@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -779,7 +779,9 @@ public sealed class ApplicationSettingsStore
             : UnprotectSafe(d.ProtectedPassword),
         Charset = d.Charset,
         Dialect = d.Dialect,
-        ClientLibraryPath = d.ClientLibraryPath,
+        // ⛔ No ClientLibraryPath: the setting was removed in 2026-08-05 (S-5) because it could not have any
+        // effect — see ConnectionProfile. An older file still carries the property and the reader simply
+        // ignores it, which is the intended outcome and why CurrentSchemaVersion did not move.
         // Variant A: the pre-split single profile maps to Data; Metadata defaults safe.
         DataTransactionProfile = d.TransactionProfile,
         MetadataTransactionProfile = TransactionProfile.ReadCommitted,
@@ -999,7 +1001,9 @@ public sealed class ApplicationSettingsStore
         public string? ProtectedPassword { get; set; }
         public string Charset { get; set; } = "WIN1250";
         public int Dialect { get; set; } = 3;
-        public string ClientLibraryPath { get; set; } = string.Empty;
+        // ⛔ ClientLibraryPath is deliberately absent (S-5, 2026-08-05). System.Text.Json ignores members it
+        // does not know, so an older settings.dat that still has it deserializes cleanly and the value is
+        // dropped — exactly what should happen to a setting that never did anything.
         public TransactionProfile TransactionProfile { get; set; } = TransactionProfile.ReadCommitted;
     }
 }

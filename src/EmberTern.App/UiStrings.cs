@@ -1,4 +1,4 @@
-using EmberTern.App.Commands;
+﻿using EmberTern.App.Commands;
 
 namespace EmberTern.App;
 
@@ -1342,7 +1342,6 @@ internal static class UiStrings
     public const string DialogEditConnectionTitle = "Edit Connection";
     public const string ConnectionEdit = "Edit";
     public const string DialogSectionGeneral = "Connection";
-    public const string DialogSectionAdvanced = "Advanced";
     public const string DialogFieldName = "Name";
     public const string DialogFieldHost = "Host";
     public const string DialogFieldPort = "Port";
@@ -1351,8 +1350,6 @@ internal static class UiStrings
     public const string DialogFieldPassword = "Password";
     public const string DialogFieldCharset = "Charset";
     public const string DialogFieldDialect = "Dialect";
-    public const string DialogFieldClientLibrary = "Client library (fbclient.dll)";
-    public const string DialogFieldClientLibraryHint = "Leave empty to use the default. Set when connecting to a Firebird version different from the default client (e.g. Firebird 3 server while Firebird 5 client is on PATH).";
     // (Removed 2026-07-27, audit A-09: DialogFieldTransactionProfile + its Data/Metadata pair were three
     // captions for a connection-dialog field that no longer exists. The TPB profile is not user-configurable —
     // TransactionService.EnforcedProfile is a constant, deliberately — so a label offering to configure it

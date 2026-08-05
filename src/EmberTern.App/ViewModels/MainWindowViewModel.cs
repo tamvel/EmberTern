@@ -3038,7 +3038,6 @@ public partial class MainWindowViewModel : ViewModelBase
             Password = profile.Password,
             Charset = profile.Charset,
             Dialect = profile.Dialect,
-            ClientLibraryPath = profile.ClientLibraryPath,
             DataTransactionProfile = profile.DataTransactionProfile,
             MetadataTransactionProfile = profile.MetadataTransactionProfile,
         };
