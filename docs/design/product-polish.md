@@ -7833,6 +7833,17 @@ etykieta nie migocze — mechanizm jest osłonięty i pinowany testem, ale ⭐ k
 
 ### §19.33 Iteracja 21 (M3b.1d) — postęp importu w jednym miejscu; pasek poleceń przestaje się przycinać (2026-08-04)
 
+> ⛔⛔ **CZĘŚCIOWO ODWRÓCONE 2026-08-05 (sprint stabilizacyjny, S-4) — czytaj razem z tą adnotacją.**
+> Ta iteracja zapisała regułę *„pasek statusu UZUPEŁNIA, nigdy nie zastępuje"* i na tej podstawie moduł
+> zachował WŁASNY pasek postępu (nakładka na pasku zakładek dolnego panelu). Po M3b.1 pasek statusu raportuje
+> import globalnie, więc w trakcie przebiegu na ekranie stały **dwa paski jednocześnie** — i użytkownik po
+> używaniu zdecydował odwrotnie: **własny pasek modułu został usunięty, zostaje ten w pasku statusu.**
+> ⭐ Wszystko inne z tej iteracji ZOSTAJE bez zmian i jest nadal aktualne: tekst postępu, licznik czasu w band B,
+> mechanizm przycięcia (`DockPanel` + `LastChildFill` + `StackPanel`, który nie zwęża się, tylko PRZYCINA) i
+> wybór nakładki zamiast własnego wiersza. ⚠ Reguła „uzupełnia, nie zastępuje" nie jest unieważniona ogólnie —
+> została **odwołana dla tego jednego przypadku**, w którym oba paski mówiły dokładnie to samo.
+> Zapis: `docs/history/24-stabilization-sprint.md` (E5).
+
 > **Zgłoszenie po QA §19.32:** *„Informacja o trwającym imporcie jest wyświetlana w dwóch miejscach
 > jednocześnie… górny pasek nie mieści się poprawnie i częściowo chowa pod zawartością okna."*
 > Build 0/0; suita **7301** w trzech partycjach (7184 + 63 + 54, +5); smoke czysty.

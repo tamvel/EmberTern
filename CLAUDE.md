@@ -41,8 +41,8 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (304 entries, #1–#315), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
-| **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (309 entries, #1–#320), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~24 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`24-stabilization-sprint.md` is the newest** — read it for the method as much as the fixes: two of six reports were not what they described, and it records the three shared causes plus the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
 
@@ -157,7 +157,7 @@ A single, persistent Firebird lab database for hand-verifying EmberTern behaviou
 - **Location**: `Lab/EmberTern_Lab.fdb` — committed to Git (intentionally, for now; if it grows significantly we revisit and may switch to a `setup.sql`-only model). Canonical recreate script: `Lab/setup.sql`.
 - **Reference engine**: the local **Firebird 5.0** `DefaultInstance` on **localhost:3050** (FB3 is on 4050 and is **not** used for the lab — we keep ONE lab DB, not an FB3/FB5 matrix). `isql.exe` lives at `C:\Program Files\Firebird\Firebird_5_0\isql.exe`. SYSDBA password is the local dev password.
 - **DB settings**: dialect 3, **default charset WIN1250** (matches the user's real environment). Identifiers in `setup.sql` are ASCII so the script runs under any client charset.
-- **Purpose**: a development aid, not a test framework and not a compatibility matrix. It carries a small, representative object zoo: 8 domains, 5 tables, 3 views, 2 standalone procedures + 2 standalone functions, 3 triggers, 3 generators, 3 exceptions, 3 roles, 1 package (with body, containing 1 function + 1 procedure), plus a little sample data. Covers PK / FK / composite PK / unique / computed columns / identity (BY DEFAULT and ALWAYS) / domain-typed columns / SUSPEND / CASE / nested BEGIN-END / before-insert / before-update / after-update / COMMENT ON, etc.
+- **Purpose**: a development aid, not a test framework and not a compatibility matrix. It carries a small, representative object zoo: 8 domains, 5 tables, 3 views, 2 standalone procedures + 2 standalone functions, 3 triggers, 3 generators, 3 exceptions, 3 roles, 1 package (with body, containing 1 function + 1 procedure), plus a little sample data, plus the debugger zoo and — since the 2026-08-05 stabilization sprint — `SP_DOM_PARAMS` / `FN_DOM_ARG` (domain-typed parameters, arguments and RETURNS) and `SP_DBG_SELINTO` (a singleton `SELECT … INTO`, the state no fidelity case reproduced). Covers PK / FK / composite PK / unique / computed columns / identity (BY DEFAULT and ALWAYS) / domain-typed columns / SUSPEND / CASE / nested BEGIN-END / before-insert / before-update / after-update / COMMENT ON, etc.
 - **Use it from EmberTern**: add a connection profile → host `localhost`, port `3050`, database `C:\Dane\C#\Źródła\EmberTern\Lab\EmberTern_Lab.fdb`, SYSDBA, charset WIN1250, dialect 3.
 
 **The rule (enforce on yourself):** before implementing or fixing anything touching Firebird **metadata, DDL, dependencies, or SQL semantics**, prefer verifying the actual engine behaviour against `Lab/EmberTern_Lab.fdb` (via EmberTern or via `isql` at an ASCII path — see the gotcha below) rather than assuming how Firebird behaves. Several past milestones were corrected only after checking a live DB (e.g. gotchas #46, #147, #148).
@@ -427,6 +427,74 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **🔧 SPRINT STABILIZACYJNY (S-1 … S-6) — DONE 2026-08-05, awaits the user's QA in the running app. Branch
+  `feat/stabilization-sprint` (off `feat/product-polish`). ⏸ M4 Product Polish still needs its own explicit
+  go-ahead.** Narrative: **[docs/history/24-stabilization-sprint.md](docs/history/24-stabilization-sprint.md)**.
+  Six defects from ordinary use, closed in etaps E0–E6, one commit each; build 0/0, suite **7360**
+  (7232 + 74 + 54), smoke clean. New gotchas **#316–#320**.
+  ⭐⭐ **THE SPRINT'S DURABLE RESULT IS METHODOLOGICAL, AND IT IS THE §13.3 GATE'S LESSON FROM THE OTHER SIDE:
+  TWO of the six reports were not what they described.** The gate taught that *an impression from a screenshot
+  is a hypothesis*; this sprint adds that **a precisely reproducible report can be a real CORRELATION with the
+  wrong VARIABLE**. Operationally: *a report says WHERE the user saw it, not WHAT is broken* — and in both
+  cases reading the code would have **confirmed** the wrong hypothesis, because it sends you where the symptom
+  points. Only measurement separated them.
+  ⭐ **THREE SHARED CAUSES, so it was not six independent fixes** (the user asked for exactly this assessment):
+  **S-1a + S-3** — the set of editable definition grids was IMPLICIT (*whoever calls `FieldGridColumns.Build`*,
+  which is where the height-role class lived), so the three grids that declare columns in XAML silently missed
+  it · **S-2** — both halves are one fact: the snapshot could not say "not yet", AND nothing invalidated the
+  caches on refresh; ⚠ the second **cannot** be fixed without the first, or every refresh becomes the same
+  false-positive storm · **S-1b + S-6** — the same SHAPE, not the same code: a layer discarding information it
+  had, fixed at the PRODUCER both times.
+  🐞 **S-1b was the serious one: a rule #11 data-loss path, worse than reported.** "Changing a parameter's
+  domain does not save" was really *the domain died on READ* — `RDB$FIELD_SOURCE` was never selected, so
+  opening a procedure to edit its BODY and pressing Compile rewrote every domain-typed parameter as its base
+  type, destroying the domain link in the database. Gotcha #175's shape, one object kind further along.
+  ⭐ Demonstrated live, not deduced: with the pre-fix decision planted, the probe reports
+  `the CATALOG still records D_CODE after the recompile — RDB$3`. ⚠⚠ **And byte-identity of the reconstruction
+  PASSED under that plant** — both reads were wrong the same way, so a round-trip assertion is necessary and
+  insufficient; the catalog is what must be asked. ⭐ Nullability follows the TYPE source (measured: a domain's
+  own `NOT NULL` lives on the domain's flag, an explicit one on the parameter's), so a `COALESCE` in SQL made
+  that decision unrepresentable. ⚠ The debugger needs the OPPOSITE answer (base type, R2) and still gets it —
+  the two readers share only the "is this a user domain" predicate; `DebuggerFidelityProbe` 39/39.
+  ⚠ **This changes the visible DDL text** for every routine with domain-typed parameters (preview, `.sql`
+  export, Source mode). In QA it looks like a behaviour change; it is a return to the truth.
+  ⭐ **S-6 had no colon bug at all.** Measured: `:a` is ONE `Parameter` token and resolves through the same
+  `scope.Resolve` as a bare name, with Quick Info answering on every offset including the colon. What had no
+  binding was a colon-form reference **inside a query clause** (the query binder's walk had no
+  `TokenKind.Parameter` branch) plus the `INTO` targets of a singleton `SELECT` (the `SelectQuery` NODE span
+  swallows them while no CLAUSE covers them → skip the clauses, not the node). The colon form is simply where
+  an embedded `SELECT` puts a local.
+  ⚠⚠ **AND THAT FIX CHANGED THE DEBUGGER AS A SIDE EFFECT — the most transferable warning here.** Its
+  read/write set falls back to "inject every in-scope local" **precisely when the analyzer returns nothing**
+  (#238), so restoring the references NARROWED the injection. ⭐⭐ Its own 38-case fidelity probe said nothing
+  about it, because **not one of the 22 routines it drives contains a singleton `SELECT … INTO`** — *a
+  measurement can reproduce a MECHANISM without reproducing the STATE.* The state was added to the lab
+  (`SP_DBG_SELINTO`) and the probe grew case 39, with an assertion that the case is **discriminating**.
+  ⭐ **S-2: `ISqlMetadataProvider.KnowsColumns`** (default `true`, so a provider must opt IN to admitting
+  ignorance — a default of `false` would silence real ET0002 everywhere) + parameters loaded BEFORE the body in
+  the routine editors + `SchemaInvalidated` raised BEFORE the reload. ⚠ CTE is exempt: its columns come from
+  its own projection in the text.
+  ⭐ **S-1a/S-3: `Behaviors/EditableGridBehavior`** carries the Enter gesture and the height role; nine explicit
+  `Attach` calls, no automatic path to forget. Measured framework facts: `DataGrid` claims Enter itself, a
+  **TUNNEL** handler is required (at bubble it is already handled), there is **no public "am I editing"** so
+  the gate is FOCUS, and `DataGridCell` has no public `Column` (locate the cell by `SelectedItem` +
+  `DisplayIndex`). ⚠ The data grid gets Enter but NOT the height role (M2b step 7's measured row growth).
+  ⚠⚠ The guard **cannot** key on `IsReadOnly="False"` — Table Detail's fields grid binds it, so a scan by that
+  attribute misses the very grid that was reported (#285).
+  ⛔ **S-4: the import module has no progress bar of its own** — this REVERSES §19.33's "the status bar
+  complements, never replaces", on the user's call after living with two bars on screen. The progress TEXT and
+  the elapsed timer stay. ⛔ **S-5: `ClientLibraryPath` is removed** — see the driver-gotcha section; it could
+  never have an effect, and the "Advanced" expander went with it because that field was its only content.
+  ⏸ **Left open, each with a reason** (full list in the history file): the `BindBareReference` ordering (a bare
+  name in a query resolves to a LOCAL before a column; Firebird prefers the column — worth its own
+  measurement) · the row-HEIGHT divergence across definition grids (34/32/30/22 — a **density** question, so
+  M4/§13.3 by the user's decision; only the in-cell EDITOR height was fixed) · ET0001 during a partial catalog
+  load (same shape as #317 if it ever surfaces) · the import command bar's three 170/180 px combos (density).
+  ⚠ **Two one-off reds, not reproduced and claimed neither fixed nor unrelated:**
+  `DataImportNewTableTests.ANewTable_NeverCarriesEmptyTheTableFirst…` (once, during E3) and
+  `SettingsLoadHealthTests.ConcurrentSaves_NeverLeaveSettingsUnreadable` (once, during E4 — a `Parallel.For`
+  test). Each passed alone and in two subsequent full runs; no mechanism links them to those etaps.
 
 - **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M3 · M3b · ⛔ the §13.3 GATE · M3.5 are all
   CLOSED. ⏸ NEXT IS M4, and it needs the user's explicit go-ahead — do not start it.**
@@ -3914,14 +3982,19 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7317, MEASURED 2026-08-04**
-  (Product Polish through M3.5). Green in the three documented partitions (**7196 + 67 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7360, MEASURED 2026-08-05**
+  (Product Polish through M3.5 + the stabilization sprint S-1…S-6). Green in the three documented partitions
+  (**7232 + 74 + 54**).
+  ⚠ The stabilization sprint's +43 split both ways on the same criterion: the source-reading guards
+  (`EditableGridSeamTests`, `MetadataCacheInvalidationTests`) are main-partition, while the behavioural Enter
+  tests construct a real `DataGrid` and therefore became the **eighth** headless class (see the list below —
+  the filter grew by one name, deliberately, because there was nothing existing for it to join).
   ⚠ M3.5's +7 splits across BOTH partitions and the split follows one criterion: `CreateIconContractTests` (3)
   reads **source files** so it is main-partition; the four new `DesignTokenApplicationTests` cases construct
   Avalonia controls, so they went into a class **already inside** the headless filter — deliberately, to avoid
   growing that fragile list of names by one more entry.
-  ⚠ This line said **7228 (7118 + 56 + 54)**, then **7271 (7154 + 63 + 54)**, then **7310 (7193 + 63 + 54)** —
-  i.e. **it has now drifted four times**. Re-measure; do not copy it forward.
+  ⚠ This line said **7228 (7118 + 56 + 54)**, then **7271 (7154 + 63 + 54)**, then **7310 (7193 + 63 + 54)**,
+  then **7317 (7196 + 67 + 54)** — i.e. **it has now drifted five times**. Re-measure; do not copy it forward.
   ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
   partition filter named a class that no longer existed (so the total read one too high, `product-polish.md`
   §18.1.6), and once because the sub-stage's own numbers moved under it. **Re-measure before quoting it.**
@@ -3939,19 +4012,21 @@ noted.
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition holds **seven** classes — measured, not listed from memory
+  four times its own count. ⚠ The headless partition holds **eight** classes — measured, not listed from memory
   (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `BrandingPresentationTests` +
-  `DesignTokenApplicationTests` + `TabStripPresentationTests` + `MetadataTreeVirtualizationProbe` + `SharedContextMenuFeasibilityProbe`), all in
+  `DesignTokenApplicationTests` + `TabStripPresentationTests` + `MetadataTreeVirtualizationProbe` +
+  `SharedContextMenuFeasibilityProbe` + `EditableGridEnterTests`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
   (#94/#226/#286). The partition filter is those class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe"`
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe&FullyQualifiedName!~EditableGridEnterTests"`
   and its inverse with `|`. ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
   criterion for adding a class: **does it construct Avalonia controls?**
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
   with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,
-  ~9 s) and the other four together (21 green, ~2 s). Both were clean that way on the same commit where a
-  combined run had to be interrupted twice.
+  ~9 s) and the rest together (**74 green** as of 2026-08-05, ~11 s). Both were clean that way on the same
+  commit where a combined run had to be interrupted twice. ⚠ That "the other four" used to read four and then
+  seven — the number moves with the class list above, so read the list, not this sentence.
   **⭐ A NEW DATUM ON THE CAUSE, and it is a better suspect than any assertion: a headless test that constructs
   a `MainWindow` is the hang-prone shape.** The first draft of `BrandingPresentationTests` built one to check
   the titlebar and hung; rewritten around a bare `new Window()` the same class runs in **476 ms**. Constructing
@@ -4941,7 +5016,7 @@ for the full explanation, code, and the failure it prevents.
 ## Known driver gotchas (Firebird + managed .NET driver)
 
 - **`FirebirdSql.Data.FirebirdClient` 10.3.4 implements only Srp / Srp256.** No `Legacy_Auth` code path in the managed assembly. `FbConnectionStringBuilder.AuthPlugins` does **not exist** as a typed property; setting it via the dictionary indexer is silently ignored.
-- **`FbServerType` is `Default` or `Embedded`.** `Default` is pure managed wire — `fbclient.dll` is **not loaded** on this code path. `ClientLibraryPath` only matters in Embedded mode (kept in the UI but harmless when unused).
+- **`FbServerType` is `Default` or `Embedded`.** `Default` is pure managed wire — `fbclient.dll` is **not loaded** on this code path, and the driver consults its `ClientLibrary` only in Embedded mode, which EmberTern never selects. ⚠⚠ **This line used to end "`ClientLibraryPath` only matters in Embedded mode (kept in the UI but harmless when unused)" — and that parenthesis was wrong, which is why the field is GONE (S-5, 2026-08-05).** It was not harmless: it offered the user a decision that could have no effect, and the user found it by pointing it at a completely invalid DLL and connecting successfully. ⛔ Do not re-add a client-library setting without the Embedded mode that would make it work; two guards in `ConnectionProfileStoreTests` say so, and the second keys on the **assignment** `ServerType = FbServerType.Embedded`, not on a mention.
 - **Firebird 3 "Install incomplete... CREATE USER" error**: caused by SYSDBA living only in the legacy password file. Fix is **server-side**, not client-side: `CREATE USER SYSDBA PASSWORD '…' USING PLUGIN Srp;` against any database on the instance (security3.fdb is instance-wide). IBExpert works because it uses native fbclient with Legacy_Auth support; managed .NET driver can't. See `memory/feedback_firebird_multiversion.md`.
 - **WIN1250 / WIN1252 / ISO8859_2**: register `CodePagesEncodingProvider.Instance` before any `OpenAsync` (done in `FirebirdConnectionService` static ctor). See `memory/feedback_firebird_codepages.md`.
 - **Connection errors show the raw server message.** `MapErrorMessage` always returns `"Could not connect to {endpoint}: {ex.Message}"` — nothing else. Do not add hints or interpret error causes (wrong password, missing user, plugin mismatch, host down, …); the server message is authoritative and the user or admin can read it directly. Earlier builds tried to categorize errors and surface a `CREATE USER … USING PLUGIN Srp` hint for Legacy_Auth; that was removed because it misfired on unrelated failures (the driver concatenates the whole GDS error vector, so wrong-password / missing-user errors often carried `"plugin"`/`"Legacy_Auth"` text and got mis-hinted).

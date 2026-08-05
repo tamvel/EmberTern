@@ -15,8 +15,26 @@ katalog zablokował), **M3** (Status Bar 2.0 · język kolorów · pasek zakład
 **M3b** (podłączenie operacji do sekcji postępu), ⛔ **bramę §13.3** (przegląd czterech powierzchni trwałych
 na żywej bazie, w obu motywach — **przeszła**) oraz **M3.5** (trzy defekty, które brama znalazła).
 
-Punkt odniesienia: gałąź `feat/product-polish`, commit **`cb76c0b`** (na obu remote'ach). Build 0/0 ·
-suite **7317** w trzech partycjach (7196 + 67 + 54) · smoke czysty.
+⚠⚠ **A POMIĘDZY M3.5 I M4 WSZEDŁ SPRINT STABILIZACYJNY (S-1…S-6, 2026-08-05) — to NIE Product Polish, ale
+zmienia punkt odniesienia i dwie rzeczy, które ten dokument planuje.** Zapis:
+[docs/history/24-stabilization-sprint.md](../history/24-stabilization-sprint.md). Co z niego wynika dla M4:
+
+* ⭐ **Rozjazd wysokości WIERSZY siatek definicji (Table Fields 34 · Table Data 32 ·
+  Procedure/Function/Trigger 30 · Indeksy/Ograniczenia 22) został ZMIERZONY i świadomie ODDANY DO M4** —
+  decyzja użytkownika: to pytanie o GĘSTOŚĆ, więc należy tu, a nie do sprintu naprawczego. Sprint naprawił
+  wyłącznie wysokość EDYTORA w komórce (rola nie dosięgała trzech siatek). Dołóż to do puli pytań o gęstość
+  obok `Size.Icon` i K15 — te trzy to jedna decyzja o gęstości, nie trzy iteracje (D‑M4‑2 stosuje się wprost).
+* ⚠ **Szerokość pasków komend importu** (trzy listy po 170/180 px) też została odłożona jako gęstość.
+* ⚠ **Nowa ósma klasa headless** (`EditableGridEnterTests`) weszła do filtra partycji — sprawdź listę klas w
+  CLAUDE.md, nie kopiuj filtra z pamięci.
+* ⭐ **`Behaviors/EditableGridBehavior` jest nowym JEDNYM seamem każdej edytowalnej siatki** (gest Enter +
+  rola wysokości edytora), pilnowanym przez `EditableGridSeamTests`. Jeżeli M4 dotyka siatek, to jest miejsce,
+  w którym się to robi — nie `FieldGridColumns`.
+
+Punkt odniesienia: gałąź `feat/stabilization-sprint` (odgałęziona od `feat/product-polish`), sprint zamknięty
+2026-08-05. Build 0/0 · suite **7360** w trzech partycjach (7232 + 74 + 54) · smoke czysty.
+⚠ Poprzedni punkt odniesienia — `feat/product-polish` @ `cb76c0b`, suite 7317 (7196 + 67 + 54) — jest już
+historyczny; nie cytuj go jako aktualnego.
 🔒 **M3.5 odebrane przez użytkownika w obu motywach 2026-08-04** — w tym ratyfikacja architektury
 `CreateIcon` (lepsza niż dziewięć wariantów `*Plus`) i proporcji badge'a. ⛔ Nie otwierać ponownie.
 
