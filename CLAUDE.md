@@ -452,10 +452,14 @@ noted.
 
 ## Current state
 
-- **⬆ AVALONIA 12.0.3 → 12.1.1 — KROKI 0–5 WYKONANE, QA MASZYNOWE ZIELONE, ⏸ OCZEKUJE NA QA WZROKOWE
-  UŻYTKOWNIKA (2026-08-05).** Osobny, zamknięty sprint techniczny **przed M4**, świadomie nie mieszany
-  z Product Polish (decyzja użytkownika). Gałąź `chore/avalonia-12.1.1`, odcięta od `feat/product-polish`
-  i scalana **z powrotem do niej** — ⛔ **nie scalona i nie wypchnięta**, bo reguła mówi *push po ODBIORZE*.
+- **⬆🔒 AVALONIA 12.0.3 → 12.1.1 — SPRINT ZAMKNIĘTY, ODEBRANY PO QA UŻYTKOWNIKA I SCALONY (2026-08-05).**
+  Osobny sprint techniczny **przed M4**, świadomie nie mieszany z Product Polish. QA wzrokowe: **brak regresji
+  w aplikacji i w edytorze**. Scalony `--no-ff` do **`feat/product-polish`** (`42a6b98`) i wypchnięty na **oba**
+  remote'y; **`master` nietknięty**. Gałąź `chore/avalonia-12.1.1` wycofana lokalnie — ⭐ na remote'ach jej
+  **nigdy nie było**, bo nie pushowałem przed odbiorem, więc nie było czego usuwać (sprawdzone
+  `git ls-remote`). Weryfikacja **po scaleniu**: build 0/0 Debug + Release, **7232 + 73 + 55 = 7360**, smoke
+  Release z zerem `FATAL`. Siedem commitów sprintu zostaje osobno, żeby `git bisect` trafiał w pojedynczą
+  zmianę wersji.
   Jeden dokument: **[docs/design/avalonia-12.1.1-update.md](docs/design/avalonia-12.1.1-update.md)** —
   ratyfikowane decyzje D‑1…D‑5 (§0), ryzyka **R1–R8** (§3), wpływ na nasze komponenty (§4), checklista QA
   (§6), dziennik wykonania (§7), wynik QA (§8), znaleziska do decyzji (§9).
@@ -1102,6 +1106,14 @@ noted.
   observe over time and **record the outcome either way**. ⚠ Until then nothing changes: the probe still
   runs in its own partition and the user's 2026-08-01 instruction stands. Full record:
   `metadata-refresh-analysis.md` **§12**.
+  ⏸ **DATA POINT, recorded because the note above says to record the outcome either way (2026-08-05, Avalonia
+  12.1.1 sprint): the probe did NOT hang once in ~25 runs** across the sprint (nine baseline, nine post-change,
+  plus the partition verifications). ⚠⚠ **This is NOT evidence for the hypothesis and must not be read as
+  such** — three reasons: the observation window is days, not the months over which the hang was rare; the
+  probe now shares its partition with `BrandingPresentationTests`, so it is not the same experiment any more;
+  and Avalonia 12.1.1 itself brings **`Fix headless session hang when cleanup throws` (#21781)**, which is a
+  *third* candidate cause. ⭐ So the sprint **added a candidate rather than eliminating one**, and the
+  hypothesis is now less decidable than before, not more. ⛔ Do not close it on this.
   🔧 **`EMBERTERN_TREE_DIAG` STAYS as a hidden developer tool** (user's decision) — it is what found this
   cause after two years of the symptom, and it costs nothing when the flag is unset: no file, no
   subscriptions. ⛔ Do not remove it and do not surface it in the UI; reach for it whenever a

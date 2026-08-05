@@ -1,7 +1,11 @@
 # Aktualizacja Avalonia 12.0.3 → 12.1.1
 
-**Status: KROKI 0–5 WYKONANE, QA MASZYNOWE ZIELONE (§8) — SPRINT OCZEKUJE NA QA WZROKOWE UŻYTKOWNIKA (§6).**
-⛔ Nie scalać do `feat/product-polish` i nie pushować przed odbiorem. Dwa znaleziska do decyzji: §9.
+**Status: 🔒 SPRINT ZAMKNIĘTY, ODEBRANY I SCALONY (2026-08-05).** QA wzrokowe użytkownika przeszło bez regresji
+w aplikacji i w edytorze; scalony do `feat/product-polish` (`--no-ff`, `42a6b98`) i wypchnięty na oba remote'y.
+`master` **nietknięty**. Gałąź techniczna `chore/avalonia-12.1.1` wycofana. Stan po scaleniu: **§12**.
+⏸ Trzy rzeczy zostają otwarte, każda z własnym powodem i żadna nie blokuje M4: §9.1 (`DataImportProbe`),
+§9.2 (zdublowane numery gotchy), §10.2 (`ProtectedData` 9.0.18). Od tego dokumentu **nie planuje się M4** —
+robi to `product-polish-m4-next-session.md`.
 Osobny, zamknięty sprint techniczny wykonywany **przed rozpoczęciem M4**,
 świadomie **nie mieszany z pracami Product Polish** (decyzja użytkownika, 2026-08-05). Gałąź
 `chore/avalonia-12.1.1`, odcięta od `feat/product-polish` i scalana **z powrotem do niej** — zgodnie ze
@@ -590,4 +594,48 @@ dowodzić, że jej nie ma (styl kompiluje się niezależnie od tego, czy `Window
 należy się każdemu z osobna; ⭐ w szczególności `ImageSharp` i `xunit.runner.visualstudio` to skoki major
 w projekcie testowym, a `Test.Sdk` 18.x zmienia runner — czyli **dokładnie ta warstwa, która w §9.3 okazała
 się źródłem nieporozumienia o „ponad 60 testach"**. Nie ruszać bez własnego kroku.
+
+---
+
+## 11. Partycjonowanie suite — stan po sprincie
+
+| Partycja | Filtr | Liczba |
+|---|---|---|
+| główna | wyklucza wszystkie **osiem** nazw klas headless | **7232** |
+| grupa headless | `SettingsCenterViewTests` · `DesignTokenApplicationTests` · `TabStripPresentationTests` · `MetadataTreeVirtualizationProbe` · `SharedContextMenuFeasibilityProbe` · `EditableGridEnterTests` | **73** |
+| **izolowana** | `ConnectionExpandBindingProbe` · **`BrandingPresentationTests`** | **55** |
+| | **razem** | **7360** |
+
+⚠ **Filtr partycji głównej nadal wyklucza wszystkie osiem nazw** — przeniesienie klasy między partycjami 2 i 3
+nie zmienia listy wykluczeń, tylko podział reszty. ⛔ **Grupowy filtr nie może już zawierać
+`BrandingPresentationTests`** (dlaczego: §10.3).
+
+⛔⛔ **Kryterium zielonego przebiegu to SUMA, nie „0 niepowodzeń"** — zmierzone w §9.3 i wpisane do CLAUDE.md.
+
+---
+
+## 12. Stan po scaleniu (2026-08-05)
+
+| | |
+|---|---|
+| Merge | `42a6b98` — `--no-ff` do **`feat/product-polish`**, zgodnie z regułą *„gałąź odcięta od gałęzi funkcji wraca do TEJ gałęzi"* |
+| `master` | **nietknięty** — bez zmian, zgodnie z decyzją użytkownika |
+| Gałąź techniczna | `chore/avalonia-12.1.1` **wycofana lokalnie** (`git branch -d`, wariant bezpieczny) |
+| Remote'y | ⭐ **gałęzi tam nigdy nie było** — nie została wypchnięta przed odbiorem, więc krok „usuń na obu remote'ach" nie miał czego usuwać; sprawdzone `git ls-remote --heads` na `origin` i `private` |
+| Weryfikacja **po** scaleniu | build **0/0 w Debug i Release** · **7232 + 73 + 55 = 7360** · smoke Release: proces żyje, **0 wpisów `FATAL`** |
+| Push | `feat/product-polish` na **oba** remote'y |
+
+⭐ **Siedem commitów sprintu zostaje osobno** (Krok 0 → dokument + baseline, Kroki 1–5 po jednym, runda
+dodatkowa po odbiorze), dlatego merge jest `--no-ff`: łuk sprintu ma pozostać czytelny, a `git bisect` ma
+trafiać w pojedynczą zmianę wersji, nie w jeden wielki commit.
+
+**Co ten sprint zostawia po sobie poza numerami wersji** — trzy rzeczy, każda ważniejsza od samej aktualizacji:
+
+1. ⛔⛔ **Kryterium zielonej suite to suma.** Nasza własna komenda QA potrafiła zaraportować `Powodzenie!`,
+   gdy 128 testów nie wystartowało (§9.3).
+2. ⭐ **Gotcha #321** — zakres zależności `>=` zamienia nietestowaną kombinację w konfigurację wyglądającą na
+   wspieraną, a restore i build milczą. Wystąpiła w tym sprincie **dwukrotnie**: jako świadoma decyzja
+   (AvaloniaEdit, §3 R1) i jako realna awaria (Headless, §9.3).
+3. ⭐ **Raport „outdated" ukrywa aktualizację w pasmie**, gdy istnieje nowsze pasmo — co zamienia decyzję
+   o pakiecie w fałszywe „wszystko albo nic" (§10.2).
 
