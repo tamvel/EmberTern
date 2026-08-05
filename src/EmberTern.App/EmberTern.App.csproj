@@ -62,7 +62,16 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
-    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
+    <!-- ⚠ NUMER NIE ZGADZA SIĘ Z COREM CELOWO. DataGrid został wyprowadzony z głównego repo Avalonii do
+         własnego i ma własny cykl wydań: przy corze 12.1.1 najnowszy DataGrid to 12.1.2, a DataGrida
+         12.1.1 po prostu NIE MA. Zależność pakietu to `Avalonia (>= 12.1.0)`, więc kombinacja jest
+         legalna. ⛔ Nie „naprawiać" tego przez zejście do 12.1.0 — to kupuje wygląd spójności zamiast
+         spójności, oddając dwa patche.
+         ⚠⚠ Pakiet jest OFICJALNIE DEPRECATED („DataGrid is deprecated and only receives bug fixes",
+         rekomendacja: TableView dla read-only, TreeDataGrid dla edycji). U nas to 53 pliki / 559
+         wystąpień w AXAML, więc migracja jest osobną decyzją produktową — NIE tematem aktualizacji
+         frameworka i NIE tematem M4. Zapis: docs/design/avalonia-12.1.1-update.md §3 R4. -->
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <!-- DPAPI (ProtectedData) for encrypting connection passwords at rest. Not part
          of the BCL on .NET Core+; this Microsoft-owned package supplies it. -->
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
