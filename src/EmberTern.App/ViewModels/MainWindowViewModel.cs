@@ -3064,6 +3064,19 @@ public partial class MainWindowViewModel : ViewModelBase
         return ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
     }
 
+    /// <summary>
+    /// Tells the user something they must not miss and waits for them to acknowledge it. The shared confirm
+    /// dialog with no Cancel — a report of what already happened, where there is nothing left to decline.
+    /// </summary>
+    private Task RequestAcknowledgeAsync(string title, string message)
+        => RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = title,
+            Message = message,
+            ConfirmLabel = UiStrings.DialogOk,
+            CancelLabel = string.Empty,
+        });
+
     // Multi-outcome (N-button) sibling of ConfirmationRequested — Commit / Roll back /
     // Cancel (disconnect) and Cancel / Discard-and-exit (app close). Returns the chosen
     // ChoiceOption.Id or null when dismissed; with no handler (tests) → null = cancel,
@@ -3738,7 +3751,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadProcedureListsAsync(detail);
         detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Procedure);
-        detail.ObjectCreated += name => OnProcedureCreated(detail, name);
+        detail.ObjectCreated += outcome => _ = OnProcedureCreated(detail, outcome);
         // Start in Easy mode (approved target design): the template SourceText is parsed
         // into the editable name + Input/Output params + Variables/Cursors/Subprograms +
         // body. The user can flip to Source at any time.
@@ -3753,29 +3766,71 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(tab);
     }
 
-    private async void OnProcedureCreated(ProcedureDetailTabViewModel detail, string? procedureName)
+    private Task OnProcedureCreated(ProcedureDetailTabViewModel detail, SourceObjectDetailTabViewModel.ObjectCompileOutcome outcome)
+        => OnObjectMaterializedAsync(detail, MetadataObjectKind.Procedure, UiStrings.NewProcedureExecutedFormat, outcome);
+
+    /// <summary>
+    /// An object now exists under a name the tab that compiled it is NOT bound to — a New-tab create, or a
+    /// rename. ⭐ ONE handler for both and for all three object kinds, because the work is identical (refresh
+    /// the tree, close the originating tab, open what now exists) and only the WORDING differs. Three copies
+    /// of it existed before this; adding the rename disclosure to each would have made three copies of the one
+    /// message the user must not miss.
+    /// </summary>
+    private async Task OnObjectMaterializedAsync(
+        object detail,
+        MetadataObjectKind kind,
+        string createdFormat,
+        SourceObjectDetailTabViewModel.ObjectCompileOutcome outcome)
     {
-        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewProcedureExecutedFormat, procedureName ?? string.Empty));
+        if (outcome.IsRename)
+        {
+            var notice = string.Format(
+                CultureInfo.CurrentCulture,
+                UiStrings.ObjectRenameNotSupportedFormat,
+                outcome.Name ?? string.Empty,
+                outcome.PreviousName ?? string.Empty);
+
+            // Both surfaces on purpose. The MODAL is what guarantees the user learns that a second object is
+            // now in their database — they did not ask for one, and the tab is about to switch out from under
+            // them, so a message they might scroll past later is not enough. The Messages entry is the
+            // durable record of the same fact, copyable, after the dialog is gone.
+            AddMessage(MessageSeverity.Warning, notice);
+            await RequestAcknowledgeAsync(UiStrings.ObjectRenameNotSupportedTitle, notice).ConfigureAwait(true);
+        }
+        else
+        {
+            AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, createdFormat, outcome.Name ?? string.Empty));
+        }
+
         await Metadata.RefreshAsync().ConfigureAwait(true);
 
-        // Close the New Procedure tab.
-        WorkspaceTabViewModel? newTab = null;
+        // Close the tab that compiled it. ⚠ CloseTab, not RequestCloseTabAsync: on a rename the buffer is
+        // still "dirty" against the ORIGINAL object (nothing reloaded it), so the confirming close would ask
+        // the user to save work that has just been saved — under the old name, which is the one thing that
+        // must not happen.
+        if (FindTabForDetail(detail) is { } originating) CloseTab(originating);
+
+        // Open what now exists, so the user is never left looking at a tab bound to the old name — the
+        // "Compile did nothing" symptom. Falls back to the tree when the name could not be parsed.
+        if (!string.IsNullOrEmpty(outcome.Name))
+        {
+            OnOpenDdlRequested(new MetadataObject(outcome.Name, kind));
+        }
+    }
+
+    /// <summary>The workspace tab hosting this detail view model, whichever of the three kinds it is.</summary>
+    private WorkspaceTabViewModel? FindTabForDetail(object detail)
+    {
         foreach (var t in WorkspaceTabs)
         {
-            if (t.Kind == WorkspaceTabKind.ProcedureDetail && ReferenceEquals(t.ProcedureDetail, detail))
+            if (ReferenceEquals(t.ProcedureDetail, detail)
+                || ReferenceEquals(t.TriggerDetail, detail)
+                || ReferenceEquals(t.FunctionDetail, detail))
             {
-                newTab = t;
-                break;
+                return t;
             }
         }
-        if (newTab is not null) CloseTab(newTab);
-
-        // Reopen the freshly-created procedure as a normal (existing) tab when we
-        // could parse its name; otherwise the user finds it in the tree.
-        if (!string.IsNullOrEmpty(procedureName))
-        {
-            OnOpenDdlRequested(new MetadataObject(procedureName, MetadataObjectKind.Procedure));
-        }
+        return null;
     }
 
     public bool CanCreateTrigger => _service.IsConnected;
@@ -3800,7 +3855,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ExecutableBody = "BEGIN\nEND";
         detail.EasyMode = true;
         detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Trigger);
-        detail.ObjectCreated += name => OnTriggerCreated(detail, name);
+        detail.ObjectCreated += outcome => _ = OnTriggerCreated(detail, outcome);
         // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
         detail.ClearDirty();
 
@@ -3810,27 +3865,8 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(tab);
     }
 
-    private async void OnTriggerCreated(TriggerDetailTabViewModel detail, string? triggerName)
-    {
-        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewTriggerExecutedFormat, triggerName ?? string.Empty));
-        await Metadata.RefreshAsync().ConfigureAwait(true);
-
-        WorkspaceTabViewModel? newTab = null;
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.TriggerDetail && ReferenceEquals(t.TriggerDetail, detail))
-            {
-                newTab = t;
-                break;
-            }
-        }
-        if (newTab is not null) CloseTab(newTab);
-
-        if (!string.IsNullOrEmpty(triggerName))
-        {
-            OnOpenDdlRequested(new MetadataObject(triggerName, MetadataObjectKind.Trigger));
-        }
-    }
+    private Task OnTriggerCreated(TriggerDetailTabViewModel detail, SourceObjectDetailTabViewModel.ObjectCompileOutcome outcome)
+        => OnObjectMaterializedAsync(detail, MetadataObjectKind.Trigger, UiStrings.NewTriggerExecutedFormat, outcome);
 
     public bool CanCreateFunction => _service.IsConnected;
 
@@ -3851,7 +3887,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadFunctionListsAsync(detail);
         detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Function);
-        detail.ObjectCreated += name => OnFunctionCreated(detail, name);
+        detail.ObjectCreated += outcome => _ = OnFunctionCreated(detail, outcome);
         detail.EasyMode = true;
         // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
         detail.ClearDirty();
@@ -3862,27 +3898,8 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(tab);
     }
 
-    private async void OnFunctionCreated(FunctionDetailTabViewModel detail, string? functionName)
-    {
-        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewFunctionExecutedFormat, functionName ?? string.Empty));
-        await Metadata.RefreshAsync().ConfigureAwait(true);
-
-        WorkspaceTabViewModel? newTab = null;
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.FunctionDetail && ReferenceEquals(t.FunctionDetail, detail))
-            {
-                newTab = t;
-                break;
-            }
-        }
-        if (newTab is not null) CloseTab(newTab);
-
-        if (!string.IsNullOrEmpty(functionName))
-        {
-            OnOpenDdlRequested(new MetadataObject(functionName, MetadataObjectKind.Function));
-        }
-    }
+    private Task OnFunctionCreated(FunctionDetailTabViewModel detail, SourceObjectDetailTabViewModel.ObjectCompileOutcome outcome)
+        => OnObjectMaterializedAsync(detail, MetadataObjectKind.Function, UiStrings.NewFunctionExecutedFormat, outcome);
 
     // Persist a freshly-added connection into a folder. Called by the view after
     // the dialog returns with a profile; isolated here so tests can drive the

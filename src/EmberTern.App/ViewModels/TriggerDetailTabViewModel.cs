@@ -281,6 +281,11 @@ public partial class TriggerDetailTabViewModel : SourceObjectDetailTabViewModel
 
     // ─── Object-specific hooks (SourceObjectDetailTabViewModel) ───────────
 
+    /// <summary>The name this tab was opened with — its IDENTITY, fixed for the tab's life. ⚠ Deliberately NOT
+    /// the editable field: that follows what the user typed, so on a rename it already holds the NEW name and
+    /// could never tell the two apart.</summary>
+    protected override string LoadedObjectName => TriggerName;
+
     protected override string ObjectDisplayName =>
         string.IsNullOrWhiteSpace(EditableTriggerName) ? TriggerName : EditableTriggerName.Trim();
 

@@ -40,8 +40,12 @@
       <StackPanel Orientation="Horizontal"
                   HorizontalAlignment="Right"
                   Spacing="8">
+        <!-- ⭐ An ACKNOWLEDGEMENT has nothing to cancel. Hiding the button on an empty CancelLabel turns the
+             one shared dialog into an info dialog too, instead of adding a second dialog that would then be
+             free to drift from this one's chrome. -->
         <Button Classes="flat"
                 Content="{Binding CancelLabel}"
+                IsVisible="{Binding HasCancel}"
                 Command="{Binding CancelCommand}" />
         <Button Classes="primary"
                 Content="{Binding ConfirmLabel}"

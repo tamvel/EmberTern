@@ -71,7 +71,18 @@ internal sealed class NavigationController
     // Plain hover fires on every pointer move, where Ctrl+hover was self-limiting — the dwell is the
     // whole noise budget. Long enough not to flash while the pointer crosses the text on its way
     // somewhere, short enough to feel like an answer rather than a wait.
-    private static readonly TimeSpan HoverDwell = TimeSpan.FromMilliseconds(350);
+    //
+    // ⚠⚠ 350 → 250 ms (user report "Quick Info appears too late", 2026-08-07). The number was IN the normal
+    // IDE band (VS Code's editor.hover.delay is 300 ms, Visual Studio ≈ 400, Rider ≈ 500) — so the report
+    // looked like it contradicted the measurement, and the reason it does not is UpdateHoverInfo below:
+    // the dwell RESTARTS on every offset change outside the open card's span. That is deliberate and must
+    // stay (it is what stops cards strobing along the pointer's path), but it means the wait is 350 ms after
+    // the pointer STOPS, not 350 ms after it reaches the symbol — and a pointer settling onto a name is
+    // exactly the slow-moving case. The perceived delay is therefore strictly longer than the constant, which
+    // is why a value at the fast end of the band is the right correction rather than a value below it.
+    // ⛔ Do not go under ~200 ms: below that the card starts appearing during the pointer's final approach,
+    // which is the flashing this budget exists to prevent.
+    private static readonly TimeSpan HoverDwell = TimeSpan.FromMilliseconds(250);
     // Gap between the pointer and the card, so the card never sits under the cursor itself.
     private const double HoverGap = 16;
 

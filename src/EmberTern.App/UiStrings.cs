@@ -2152,6 +2152,23 @@ internal static class UiStrings
     public const string NewTriggerTabDefaultTitle = "New Trigger";
     public const string NewTriggerExecutedFormat = "Trigger \"{0}\" created.";
 
+    /// <summary>
+    /// The three facts a user must be told after compiling a renamed object, because Firebird has no rename
+    /// for procedures / functions / triggers (measured on FB 5.0: <c>ALTER PROCEDURE … TO …</c> is
+    /// <c>-104 Token unknown</c>). ⚠ The third sentence is the one that matters: an object they did not expect
+    /// is now in their database, and nothing else will tell them.
+    /// </summary>
+    public const string ObjectRenameNotSupportedTitle = "Renaming created a new object";
+
+    /// <summary>The acknowledge button of a dialog that reports rather than asks.</summary>
+    public const string DialogOk = "OK";
+
+    public const string ObjectRenameNotSupportedFormat =
+        "Firebird cannot rename this kind of object, so the compile created a new one.\n\n"
+        + "• \"{0}\" has been created with the definition from this tab.\n"
+        + "• \"{1}\" still exists in the database and was NOT removed.\n\n"
+        + "Delete \"{1}\" yourself once you have checked that nothing depends on it.";
+
     public const string FieldEditCompileIcon = "⚡";
     public static readonly string FieldEditCompileTooltip = CommandTip.For(
         CommandId.Compile, "Compile pending changes (apply DDL + auto-commit)");
