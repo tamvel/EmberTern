@@ -203,9 +203,18 @@
        swojego stylu. To ta sama ROLA, nie dobrana liczba.
 
        ⚠⚠ KLASA, a nie styl na wszystkich `DataGridCell TextBox` — i to jest warunek bezpieczeństwa.
-       Siatki definicji pól mają w wierszu `ComboBox`, więc już dziś mierzą 30 px i minimum 24 niczego
-       nie podniesie. Siatki DANYCH (Table Data, wyniki) `ComboBoxa` nie mają — tam ten sam setter
-       urósłby każdy wiersz, czyli odtworzyłby regresję z kroku 7 M2b. -->
+       Klasę dostaje każda EDYTOWALNA siatka (przez `EditableGridBehavior.Attach`), a nie każda siatka:
+       gridy WYNIKÓW są `IsReadOnly` i nie mają ani edytora w komórce, ani zarezerwowanej na niego wysokości
+       wiersza, więc setter globalny sięgnąłby tam, gdzie nie ma czego wymiarować.
+
+       ⚠⚠ KOREKTA W MIEJSCU (2026-08-07): ten akapit mówił, że siatki DANYCH klasy dostać NIE MOGĄ, bo
+       „`ComboBoxa` nie mają — tam ten sam setter urósłby każdy wiersz". Rozumowanie poprawne o siatce danych
+       w ogóle i NIGDY niesprawdzone na tej jednej, której dotyczyło: `TableDetailTabView` przypina wierszowi
+       `data-edit` STAŁĄ wysokość 32 (`Height`, nie `MinHeight` — wiersz nie ma jak urosnąć od zawartości),
+       a po paddingu komórki `6 2` zostaje 28 px na edytor o minimum 24. Wstrzymanie roli nie chroniło więc
+       przed niczym, a dawało zgłoszony defekt „TextBox w edycji nadal jest zbyt niski". ⚠ Warunek, który to
+       zastępuje: siatka przechodząca przez seam ma mieć wiersz zdolny UNIEŚĆ edytor `Size.Control` — pilnuje
+       tego `EditableGridSeamTests` na podstawie znaczników, nie na podstawie tego komentarza. -->
   <Style Selector="DataGridCell TextBox.field-editor">
     <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
   </Style>
@@ -219,8 +228,9 @@
        obok poprawnie wymiarowanych sąsiadów, w PIERWSZEJ i najczęściej edytowanej kolumnie.
 
        ⭐ Jedna ROLA i jedna wartość, dwie drogi powstawania elementu — dlatego dwa selektory, a nie dwie
-       decyzje. ⚠ Zasięg daje klasa NA SIATCE, bo globalny setter urósłby wiersze siatek DANYCH w momencie
-       wejścia w edycję — zmierzona regresja z kroku 7 M2b i skok układu, którego zabrania §13.3.
+       decyzje. ⚠ Zasięg daje klasa NA SIATCE, bo globalny setter sięgnąłby także gridów WYNIKÓW, gdzie nie
+       ma edytora w komórce ani wysokości wiersza na niego zarezerwowanej (patrz korekta przy regule wyżej —
+       „siatka danych" nie jest tu granicą; granicą jest „siatka edytowalna").
 
        ⚠⚠ KOREKTA W MIEJSCU (S-3, 2026-08-05): ten komentarz mówił, że klasę nadaje
        `FieldGridColumns.Build` — „w jednym miejscu". To była prawda i to był DEFEKT, bo jedno miejsce nie było

@@ -360,13 +360,21 @@
                     Background="{DynamicResource BackgroundBrush}"
                     IsVisible="{Binding HasDataResult}">
             <DataGrid.ContextMenu>
+              <!-- ⭐ The SQL Editor results grid's menu, item for item and in the same order (user request,
+                   2026-08-07). ⚠ Copy as INSERT / UPDATE is absent by design, not omission: a view's rows have
+                   no single table behind them, so there is no provenance to build a runnable statement from. -->
               <ContextMenu>
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyCellClick" />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyRowClick" />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyRowWithHeadersClick" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyAllWithHeadersClick" />
+                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnViewDataExportClick" />
+                <Separator />
                 <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnViewDataFilterByValueClick" />
                 <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnViewDataExcludeValueClick" />
                 <MenuItem x:Name="ViewDataFilterContainsItem"
                           Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnViewDataFilterContainsClick" />
-                <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnViewDataExportClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

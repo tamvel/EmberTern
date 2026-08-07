@@ -1036,10 +1036,13 @@
                           Click="OnSetCellNullClick"
                           IsVisible="{Binding CanEditData}" />
                 <Separator IsVisible="{Binding CanEditData}" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnDataFilterByValueClick" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnDataExcludeValueClick" />
-                <MenuItem x:Name="DataFilterContainsItem"
-                          Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnDataFilterContainsClick" />
+                <!-- ⭐ From here down this menu is the SQL Editor results grid's menu, item for item and in the
+                     same order (user request, 2026-08-07): the same operations reached the same way in every
+                     data grid, with only the module's own actions differing — those are the edit group above,
+                     which is why they sit at the top rather than interleaved. -->
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyCellClick" />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyRowClick" />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyRowWithHeadersClick" />
                 <Separator />
                 <!-- Copy the right-clicked row as runnable DML. Disabled-with-a-reason: the tooltip is
                      bound unconditionally and is empty when the action is available, so a greyed item
@@ -1053,7 +1056,13 @@
                           IsEnabled="{Binding SqlCopy.CanCopyAsUpdate}"
                           ToolTip.Tip="{Binding SqlCopy.CopyAsUpdateTooltip}" />
                 <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyAllWithHeadersClick" />
                 <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnDataExportClick" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnDataFilterByValueClick" />
+                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnDataExcludeValueClick" />
+                <MenuItem x:Name="DataFilterContainsItem"
+                          Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnDataFilterContainsClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

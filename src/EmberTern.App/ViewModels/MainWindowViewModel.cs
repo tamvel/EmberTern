@@ -7535,47 +7535,18 @@ public partial class MainWindowViewModel : ViewModelBase
         TabMenuRevealInExplorerCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// The SQL Editor grid's clipboard text. ⭐ The FORMAT is <see cref="GridCopyText"/>'s — the one builder
+    /// the four other data grids use — so this grid cannot drift from them. What stays here is only the
+    /// index-based signature its own call site and tests use.
+    /// </summary>
     public string? BuildCopyText(CopyGridMode mode, int rowIndex, int columnIndex)
     {
         if (CurrentResult is not { HasResultSet: true } r) return null;
-        var rows = r.Rows;
-        var cols = r.Columns;
-        if (cols.Count == 0) return null;
-
-        switch (mode)
-        {
-            case CopyGridMode.Cell:
-            {
-                if (rowIndex < 0 || rowIndex >= rows.Count) return null;
-                if (columnIndex < 0 || columnIndex >= cols.Count) return null;
-                return FormatCell(rows[rowIndex][columnIndex]);
-            }
-            case CopyGridMode.Row:
-            {
-                if (rowIndex < 0 || rowIndex >= rows.Count) return null;
-                return FormatRow(rows[rowIndex]);
-            }
-            case CopyGridMode.RowWithHeaders:
-            {
-                if (rowIndex < 0 || rowIndex >= rows.Count) return null;
-                var headers = string.Join('\t', cols.Select(c => EscapeCell(c.Name)));
-                return headers + Environment.NewLine + FormatRow(rows[rowIndex]);
-            }
-            case CopyGridMode.AllWithHeaders:
-            {
-                var headers = string.Join('\t', cols.Select(c => EscapeCell(c.Name)));
-                var sb = new System.Text.StringBuilder();
-                sb.Append(headers);
-                foreach (var row in rows)
-                {
-                    sb.Append(Environment.NewLine);
-                    sb.Append(FormatRow(row));
-                }
-                return sb.ToString();
-            }
-            default:
-                return null;
-        }
+        // ⚠ AllWithHeaders is reached with rowIndex -1 (there is no target row), so an out-of-range index
+        // resolves to "no row" rather than to a null result — the mode decides whether that matters.
+        var row = rowIndex >= 0 && rowIndex < r.Rows.Count ? r.Rows[rowIndex] : null;
+        return GridCopyText.Build(mode, r.Columns, r.Rows, row, columnIndex);
     }
 
     // ── Copy as INSERT / UPDATE ───────────────────────────────────────────────
@@ -7668,26 +7639,6 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.GridCopiedToClipboardFormat, label));
         return true;
-    }
-
-    private static string FormatRow(object?[] row)
-        => string.Join('\t', row.Select(FormatCell).Select(EscapeCell));
-
-    private static string FormatCell(object? value) => value switch
-    {
-        null => string.Empty,
-        System.DBNull => string.Empty,
-        _ => value.ToString() ?? string.Empty,
-    };
-
-    // TSV cells with embedded tab or newline would break the column alignment when
-    // pasted into Excel/IBExpert. Match the IBExpert convention: replace them with
-    // spaces. Quoting/escaping isn't standard for TSV consumers.
-    private static string EscapeCell(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return value;
-        if (value.IndexOfAny(new[] { '\t', '\r', '\n' }) < 0) return value;
-        return value.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
     }
 
     partial void OnQueryTextChanged(string value)

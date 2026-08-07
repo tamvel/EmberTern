@@ -428,13 +428,21 @@
                     Background="{DynamicResource BackgroundBrush}"
                     IsVisible="{Binding HasExecResult}">
             <DataGrid.ContextMenu>
+              <!-- ⭐ The SQL Editor results grid's menu, item for item and in the same order (user request,
+                   2026-08-07). ⚠ Copy as INSERT / UPDATE is absent by design, not omission: a function's
+                   result set is not a table, so there is no provenance to build a runnable statement from. -->
               <ContextMenu>
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnFuncCopyCellClick" />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnFuncCopyRowClick" />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnFuncCopyRowWithHeadersClick" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnFuncCopyAllWithHeadersClick" />
+                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnFuncExportClick" />
+                <Separator />
                 <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnFuncFilterByValueClick" />
                 <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnFuncExcludeValueClick" />
                 <MenuItem x:Name="FuncFilterContainsItem"
                           Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnFuncFilterContainsClick" />
-                <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnFuncExportClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>

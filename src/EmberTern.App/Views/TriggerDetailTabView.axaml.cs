@@ -56,7 +56,7 @@ public partial class TriggerDetailTabView : UserControl
         if (_variablesGrid is not null)
         {
             FieldGridColumns.Build(_variablesGrid, includeDefault: true);
-            EditableGridBehavior.Attach(_variablesGrid, EditableGridKind.Definition);
+            EditableGridBehavior.Attach(_variablesGrid);
         }
 
         WireEditor(_sqlEditor, OnSqlEditorTextChanged);

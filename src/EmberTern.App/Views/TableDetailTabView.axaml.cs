@@ -83,7 +83,7 @@ public partial class TableDetailTabView : UserControl
             // where the cell-editor height role used to be granted. Result: the reported "the TextBox in Table
             // is still too low", a DataGridTextColumn editor at MinHeight 0 inside a 34 px row. The role (and
             // the Enter gesture) now come from one explicit call that a guard can require.
-            EditableGridBehavior.Attach(_fieldsGrid, EditableGridKind.Definition);
+            EditableGridBehavior.Attach(_fieldsGrid);
 
             // Inline structure-edit on the Pola grid: every row-commit (Tab/Enter
             // out of the editing element, or focus moves off the row) inspects
@@ -108,11 +108,14 @@ public partial class TableDetailTabView : UserControl
                 grid.LoadingRow += OnCorePendingRowLoading;
             }
         }
-        // ⚠ The DATA grid gets the Enter gesture but NOT the height role — its rows have no ComboBox holding
-        // them open, so a 24 px minimum on the in-cell editor would grow every row on entering edit mode (the
-        // layout shift M2b step 7 measured). One UX rule for Enter, two answers about height — see
-        // EditableGridKind.
-        if (_dataPreviewGrid is not null) EditableGridBehavior.Attach(_dataPreviewGrid, EditableGridKind.Data);
+        // ⚠⚠ CORRECTED 2026-08-07: this comment said the DATA grid gets the Enter gesture "but NOT the height
+        // role", because "its rows have no ComboBox holding them open, so a 24 px minimum would grow every row
+        // on entering edit mode". True of a data grid in the abstract — and false of THIS one, which was never
+        // measured: the `data-edit` row style a few lines into this view's XAML pins a fixed Height of 32, so
+        // the row cannot grow from its content, and after the view's `6 2` cell padding it offers 28 px to a
+        // 24 px editor. Withholding the role only produced the reported "the TextBox while editing is still
+        // too low". One UX rule for Enter and ONE answer about height — see EditableGridBehavior.
+        if (_dataPreviewGrid is not null) EditableGridBehavior.Attach(_dataPreviewGrid);
 
         if (_dataPreviewGrid is not null)
         {
@@ -526,9 +529,33 @@ public partial class TableDetailTabView : UserControl
         // its edit status); the clipboard write stays here in the view.
         if (_currentVm is null || _dataNullRow is null) return;
         var sql = await _currentVm.CopyRowAsSqlAsync(format, _dataNullRow);
-        if (sql is null) return;
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is not null) await clipboard.SetTextAsync(sql);
+        await GridClipboard.WriteAsync(this, sql);
+    }
+
+    // ── Copy cell / row / row with headers / all with headers ────────────────────────────────────────────
+    //
+    // ⭐ The four plain-text copy actions the SQL Editor grid has always had, now on this grid too so a user
+    // learns one set of copying gestures for every data grid (user request, 2026-08-07). They reuse the very
+    // things this grid already had: the right-clicked cell captured in OnDataCellPointerPressed, and the one
+    // GridCopyText builder behind the VM.
+    //
+    // ⚠ The target is the RIGHT-CLICKED cell, never the grid's selection — a context menu can open over a row
+    // that is not the selected one, and copying the selection then copies something the user did not point at
+    // (gotcha #16/#99's shape, one level up).
+    private void OnDataCopyCellClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Cell);
+
+    private void OnDataCopyRowClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Row);
+
+    private void OnDataCopyRowWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.RowWithHeaders);
+
+    private void OnDataCopyAllWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.AllWithHeaders);
+
+    private Task CopyGridAsync(CopyGridMode mode)
+    {
+        if (_currentVm is null) return Task.CompletedTask;
+        return GridClipboard.WriteAsync(this, _currentVm.BuildCopyText(mode, _dataNullRow, _dataNullColumnIndex));
     }
 
     private void OnDataExcludeValueClick(object? sender, RoutedEventArgs e)

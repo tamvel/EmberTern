@@ -1,11 +1,15 @@
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EmberTern.App.Behaviors;
@@ -45,7 +49,7 @@ public sealed class EditableGridEnterTests
     /// Domain/Column picker and the Size/Scale boxes are built — a DataGridTextColumn supports IsReadOnly only
     /// per COLUMN while their enable gate is per ROW, gotcha #83/#124).</summary>
     private static (Window Window, DataGrid Grid, ObservableCollection<Row> Items) BuildGrid(
-        EditableGridKind kind, bool embeddedEnabled = true)
+        bool embeddedEnabled = true, double? fixedRowHeight = null)
     {
         var items = new ObservableCollection<Row> { new(), new() };
         var grid = new DataGrid { ItemsSource = items, AutoGenerateColumns = false, IsReadOnly = false };
@@ -66,10 +70,26 @@ public sealed class EditableGridEnterTests
             }),
         });
 
+        // ⚠ Mirrors what TableDetailTabView declares for its DATA grid — a FIXED row Height plus that view's
+        // `6 2` cell padding — because the height half of the seam is only meaningful against a row that
+        // reserves space for the editor. The relation between those numbers and Size.Control is pinned
+        // against the real markup in EditableGridSeamTests; here they only set the scene.
+        if (fixedRowHeight is { } h)
+        {
+            grid.Styles.Add(new Style(x => x.OfType<DataGridRow>())
+            {
+                Setters = { new Setter(Layoutable.HeightProperty, h) },
+            });
+            grid.Styles.Add(new Style(x => x.OfType<DataGridCell>())
+            {
+                Setters = { new Setter(TemplatedControl.PaddingProperty, new Thickness(6, 2)) },
+            });
+        }
+
         var window = new Window { Content = grid, Width = 600, Height = 300 };
         window.Show();
         Dispatcher.UIThread.RunJobs();
-        EditableGridBehavior.Attach(grid, kind);
+        EditableGridBehavior.Attach(grid);
         return (window, grid, items);
     }
 
@@ -94,7 +114,7 @@ public sealed class EditableGridEnterTests
     {
         await _session.Dispatch(() =>
         {
-            var (window, grid, _) = BuildGrid(EditableGridKind.Definition);
+            var (window, grid, _) = BuildGrid();
             FocusCell(window, grid, row: 0, column: 0);
 
             PressEnter(window);
@@ -117,7 +137,7 @@ public sealed class EditableGridEnterTests
     {
         await _session.Dispatch(() =>
         {
-            var (window, grid, _) = BuildGrid(EditableGridKind.Definition);
+            var (window, grid, _) = BuildGrid();
             FocusCell(window, grid, row: 0, column: 1);
 
             PressEnter(window);
@@ -136,7 +156,7 @@ public sealed class EditableGridEnterTests
     {
         await _session.Dispatch(() =>
         {
-            var (window, grid, _) = BuildGrid(EditableGridKind.Definition);
+            var (window, grid, _) = BuildGrid();
             FocusCell(window, grid, row: 0, column: 1);
             PressEnter(window);                       // focus moves into the embedded control
             Assert.Equal("Embedded", (Focused(window) as TextBox)?.Name);
@@ -163,7 +183,7 @@ public sealed class EditableGridEnterTests
     {
         await _session.Dispatch(() =>
         {
-            var (window, grid, _) = BuildGrid(EditableGridKind.Definition, embeddedEnabled: false);
+            var (window, grid, _) = BuildGrid(embeddedEnabled: false);
             FocusCell(window, grid, row: 0, column: 1);
 
             PressEnter(window);
@@ -184,7 +204,7 @@ public sealed class EditableGridEnterTests
         {
             // ⭐ The ratified rule is ONE rule: the user rejected two behaviours for two kinds of editable
             // grid. Only the HEIGHT role differs between the kinds — see the next test.
-            var (window, grid, _) = BuildGrid(EditableGridKind.Data);
+            var (window, grid, _) = BuildGrid();
             FocusCell(window, grid, row: 0, column: 0);
 
             PressEnter(window);
@@ -196,26 +216,44 @@ public sealed class EditableGridEnterTests
         }, default);
     }
 
+    /// <summary>
+    /// ⭐⭐ THE HEIGHT ROLE REACHES EVERY EDITABLE GRID — measured on the element that paints, not on the class
+    /// list. Replaces <c>TheHeightRole_ReachesADefinitionGridOnly</c> (2026-08-07), which pinned the opposite
+    /// and was the reported defect: "the TextBox while editing is still too low" in Table Data.
+    ///
+    /// <para>⚠ Asserting <c>Classes.Contains("field-grid")</c> alone would be gotcha #315's shape — green while
+    /// the product is broken, because a class proves the marker was added, not that the style resolved and
+    /// arrived at the editor the grid creates on entering edit mode. So this measures the editor itself.</para>
+    /// </summary>
     [Fact]
-    public async Task TheHeightRole_ReachesADefinitionGridOnly()
+    public async Task TheHeightRole_ReachesTheInCellEditor_OfADataShapedGrid()
     {
         await _session.Dispatch(() =>
         {
-            var (definitionWindow, definitionGrid, _) = BuildGrid(EditableGridKind.Definition);
-            var (dataWindow, dataGrid, _) = BuildGrid(EditableGridKind.Data);
+            // A row shaped like Table Data's: a FIXED 32 px height, so it cannot grow from its content.
+            var (window, grid, _) = BuildGrid(fixedRowHeight: 32);
+            FocusCell(window, grid, row: 0, column: 0);
+            var rowControl = grid.GetVisualDescendants().OfType<DataGridRow>().First();
+            var heightBeforeEditing = rowControl.Bounds.Height;
 
-            // ⚠⚠ MEASURED, not cautious: a 24 px minimum on a data grid's in-cell editor grows every row the
-            // moment editing starts, because those rows have no ComboBox holding them open (M2b step 7's
-            // regression, and the layout shift §13.3 forbids). A definition grid already measures ≥30 px.
-            Assert.Contains(EditableGridBehavior.FieldGridClass, definitionGrid.Classes);
-            Assert.DoesNotContain(EditableGridBehavior.FieldGridClass, dataGrid.Classes);
+            PressEnter(window);
 
-            // Both went through the seam, so both have the Enter gesture.
-            Assert.Contains(EditableGridBehavior.AttachedClass, definitionGrid.Classes);
-            Assert.Contains(EditableGridBehavior.AttachedClass, dataGrid.Classes);
+            var editor = Focused(window) as TextBox;
+            Assert.NotNull(editor);
+            Assert.NotEqual("Embedded", editor!.Name);
 
-            definitionWindow.Close();
-            dataWindow.Close();
+            // The role arrived: the editor asks for the same height as an ordinary control, instead of the
+            // MinHeight 0 that made it read as a thin strip inside a much taller row.
+            var expected = (double)grid.FindResource("Size.Control")!;
+            Assert.Equal(expected, editor.MinHeight);
+            Assert.True(editor.Bounds.Height >= expected,
+                $"The editor measured {editor.Bounds.Height} px against a role of {expected} px.");
+
+            // …and it cost nothing: §13.3's Zero Layout Shift. This is the half the old comment claimed was
+            // impossible, and it holds because the ROW owns the height and 32 − (2 × 2) ≥ 24.
+            Assert.Equal(heightBeforeEditing, rowControl.Bounds.Height);
+
+            window.Close();
         }, default);
     }
 
@@ -224,9 +262,9 @@ public sealed class EditableGridEnterTests
     {
         await _session.Dispatch(() =>
         {
-            var (window, grid, _) = BuildGrid(EditableGridKind.Definition);
-            EditableGridBehavior.Attach(grid, EditableGridKind.Definition);
-            EditableGridBehavior.Attach(grid, EditableGridKind.Definition);
+            var (window, grid, _) = BuildGrid();
+            EditableGridBehavior.Attach(grid);
+            EditableGridBehavior.Attach(grid);
 
             Assert.Equal(1, grid.Classes.Count(c => c == EditableGridBehavior.AttachedClass));
 

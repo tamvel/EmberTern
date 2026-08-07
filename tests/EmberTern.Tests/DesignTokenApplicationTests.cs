@@ -938,8 +938,7 @@ public sealed class DesignTokenApplicationTests
             // it, which made its scope "whoever calls Build" — and the three grids that declare their columns
             // in XAML never did, which is why Table's editor stayed thin. Mirrored here so the test exercises
             // the same path the views do.
-            EmberTern.App.Behaviors.EditableGridBehavior.Attach(
-                grid, EmberTern.App.Behaviors.EditableGridKind.Definition);
+            EmberTern.App.Behaviors.EditableGridBehavior.Attach(grid);
 
             var window = new Window { Content = grid, Width = 1200, Height = 200 };
             window.Show();
@@ -1111,8 +1110,7 @@ public sealed class DesignTokenApplicationTests
             EmberTern.App.Views.FieldGridColumns.Build(grid, includeDefault: true);
             // ⭐ The height role comes from the ONE seam, not from Build (S-3, 2026-08-05) — mirrored here so
             // the test exercises the same path the views do.
-            EmberTern.App.Behaviors.EditableGridBehavior.Attach(
-                grid, EmberTern.App.Behaviors.EditableGridKind.Definition);
+            EmberTern.App.Behaviors.EditableGridBehavior.Attach(grid);
 
             var window = new Window { Content = grid, Width = 1200, Height = 200 };
             window.Show();

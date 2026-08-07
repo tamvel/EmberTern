@@ -96,19 +96,30 @@ public class EditableGridSeamTests
             + "them to NotAttached WITH A REASON: " + string.Join(", ", unattached));
     }
 
-    // A grid reaches Attach either directly by its x:Name (FindControl inline) or through the field the
-    // constructor assigned it to. Both shapes exist in these views, so the check accepts either — what it
-    // must not accept is a grid the code-behind never mentions at all.
+    // A grid reaches Attach through whatever identifier the code-behind bound it to. Three shapes exist in
+    // these views — a field (`_x = this.FindControl<DataGrid>("Name")`), a pattern variable
+    // (`if (this.FindControl<DataGrid>("Name") is { } x)`), and the x:Name used directly — so the check
+    // resolves the identifier and then requires an Attach call on THAT identifier.
+    //
+    // ⚠⚠ It deliberately no longer accepts "some Attach call exists somewhere in this file", which is what an
+    // earlier fallback did (it keyed on the two-argument call shape and matched any grid in the file). That
+    // fallback would answer "yes" for a grid nobody attached, as long as a sibling was attached — a guard
+    // whose green means less than it looks.
     private static bool MentionsGrid(string codeBehind, string name)
     {
         if (!codeBehind.Contains($"\"{name}\"", StringComparison.Ordinal)) return false;
 
-        // Find the field (if any) that this x:Name was assigned to: `_x = this.FindControl<DataGrid>("Name")`.
-        var assign = Regex.Match(codeBehind, @"(?<field>_[A-Za-z0-9_]+)\s*=\s*this\.FindControl<DataGrid>\(""" + Regex.Escape(name) + @"""\)");
-        var token = assign.Success ? assign.Groups["field"].Value : name;
-        return Regex.IsMatch(codeBehind, @"EditableGridBehavior\.Attach\(\s*" + Regex.Escape(token) + @"\b")
-               || Regex.IsMatch(codeBehind, @"EditableGridBehavior\.Attach\(\s*[A-Za-z0-9_]+\s*,")
-                  && Regex.IsMatch(codeBehind, @"FindControl<DataGrid>\(""" + Regex.Escape(name) + @"""\)\s*is\s*\{");
+        var find = @"this\.FindControl<DataGrid>\(""" + Regex.Escape(name) + @"""\)";
+        var identifiers = new List<string> { name };
+
+        if (Regex.Match(codeBehind, @"(?<field>_[A-Za-z0-9_]+)\s*=\s*" + find) is { Success: true } assigned)
+            identifiers.Add(assigned.Groups["field"].Value);
+
+        if (Regex.Match(codeBehind, find + @"\s+is\s*\{\s*\}\s*(?<local>[A-Za-z0-9_]+)") is { Success: true } pattern)
+            identifiers.Add(pattern.Groups["local"].Value);
+
+        return identifiers.Any(id =>
+            Regex.IsMatch(codeBehind, @"EditableGridBehavior\.Attach\(\s*" + Regex.Escape(id) + @"\s*[,)]"));
     }
 
     /// <summary>
@@ -127,18 +138,68 @@ public class EditableGridSeamTests
     }
 
     /// <summary>
-    /// ⚠ The DATA grid must keep the Enter gesture WITHOUT the height role. Pinned because the tempting
-    /// simplification — "attach everything the same way" — reintroduces a measured layout shift: a 24 px
-    /// minimum on a data grid's in-cell editor grows every row the moment editing starts (M2b step 7).
+    /// ⚠⚠ REPLACES <c>TableData_IsAttachedAsAData_Grid_NotAsADefinitionOne</c> (2026-08-07), which pinned the
+    /// OPPOSITE and called this change "the tempting simplification". It was not a simplification, it was the
+    /// reported defect: that test rested on "a 24 px minimum on a data grid's in-cell editor grows every row",
+    /// a statement about a data grid in general that nobody checked against the one grid it governed. The next
+    /// test measures the premise instead of asserting it.
     /// </summary>
     [Fact]
-    public void TableData_IsAttachedAsAData_Grid_NotAsADefinitionOne()
+    public void TableData_GoesThroughTheSameSeam_AsTheDefinitionGrids()
     {
         var source = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "EmberTern.App", "Views", "TableDetailTabView.axaml.cs"));
 
-        Assert.Matches(@"EditableGridBehavior\.Attach\(\s*_dataPreviewGrid\s*,\s*EditableGridKind\.Data\s*\)", source);
-        Assert.Matches(@"EditableGridBehavior\.Attach\(\s*_fieldsGrid\s*,\s*EditableGridKind\.Definition\s*\)", source);
+        Assert.Matches(@"EditableGridBehavior\.Attach\(\s*_dataPreviewGrid\s*\)", source);
+        Assert.Matches(@"EditableGridBehavior\.Attach\(\s*_fieldsGrid\s*\)", source);
+
+        // ⛔ No second answer about height may come back through a parameter. The seam carries ONE rule now,
+        // so a re-introduced "kind" is the shape of the defect returning.
+        Assert.DoesNotContain("EditableGridKind", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⭐⭐ THE PREMISE THE SEAM RESTS ON, MEASURED AGAINST THE MARKUP RATHER THAN ASSERTED IN PROSE: the Table
+    /// Data row must be able to CARRY a <c>Size.Control</c> in-cell editor. That is what makes granting the
+    /// height role there free of layout shift — the row declares a fixed <c>Height</c>, so it cannot grow from
+    /// its content, and what is left after the cell padding still exceeds the editor's minimum.
+    ///
+    /// <para>⚠ This is deliberately a guard over the three numbers that must stay in relation to each other
+    /// (row height, cell padding, <c>Size.Control</c>), each read from where it actually lives — not a copy of
+    /// today's values. Lower the row to 26 or raise <c>Size.Control</c> to 30 and this fails, which is exactly
+    /// when the seam's assumption stops holding.</para>
+    /// </summary>
+    [Fact]
+    public void TheTableDataRow_DeclaresAHeightThatCanCarryTheCellEditor()
+    {
+        var view = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "Views", "TableDetailTabView.axaml"));
+        var tokens = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "Themes", "Tokens.axaml"));
+
+        // A FIXED Height, not a MinHeight — that distinction is the whole safety argument, so it is asserted
+        // by the pattern rather than left to the number.
+        var row = Regex.Match(
+            view,
+            @"Selector=""DataGrid\.data-edit\s+DataGridRow""\s*>\s*<Setter\s+Property=""Height""\s+Value=""(?<h>\d+)""");
+        Assert.True(row.Success,
+            "The Table Data row no longer declares a fixed Height. EditableGridBehavior grants every editable "
+            + "grid the Size.Control cell-editor role on the ground that this row cannot grow from its "
+            + "content — re-measure before changing it.");
+
+        var padding = Regex.Match(view, @"Selector=""DataGridCell""\s*>\s*<Setter\s+Property=""Padding""\s+Value=""\d+\s+(?<v>\d+)""");
+        Assert.True(padding.Success, "The view's DataGridCell padding is what the row height must pay for first.");
+
+        var control = Regex.Match(tokens, @"x:Key=""Size\.Control""\s*>\s*(?<v>[\d.]+)\s*<");
+        Assert.True(control.Success, "Size.Control — the role the in-cell editor asks for.");
+
+        var available = int.Parse(row.Groups["h"].Value) - (2 * int.Parse(padding.Groups["v"].Value));
+        var required = double.Parse(control.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.True(available >= required,
+            $"The Table Data row leaves {available} px for an editor whose role asks for {required} px, so "
+            + "granting the height role there WOULD grow the row on entering edit mode — the layout shift "
+            + "§13.3 forbids. Either raise the row or stop granting the role to this grid.");
     }
 
     private static string RepositoryRoot()

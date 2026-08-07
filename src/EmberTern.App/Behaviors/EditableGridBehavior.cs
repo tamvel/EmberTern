@@ -7,29 +7,6 @@ using EmberTern.App.Controls;
 
 namespace EmberTern.App.Behaviors;
 
-/// <summary>What kind of editable grid this is — which decides how much of the seam applies.</summary>
-internal enum EditableGridKind
-{
-    /// <summary>
-    /// A field/parameter/variable DEFINITION grid (Procedure params + Variables, Function arguments +
-    /// Result, Trigger Variables, Table Detail Fields, New Table Fields, View Detail Columns). Gets the
-    /// Enter gesture AND the cell-editor height role.
-    /// </summary>
-    Definition,
-
-    /// <summary>
-    /// A DATA grid whose rows are records, not definitions (Table Data). Gets the Enter gesture ONLY.
-    /// <para>
-    /// ⚠⚠ The height role is deliberately withheld, and that is MEASURED, not cautious: a 24 px minimum on
-    /// the in-cell editor of a data grid grows every row the moment the user enters edit mode, because those
-    /// grids have no ComboBox holding the row open (22–32 px rows). That is the layout shift M2b step 7
-    /// measured and §13.3 forbids. A definition grid already measures ≥30 px because of its Type combo, so
-    /// nothing moves there.
-    /// </para>
-    /// </summary>
-    Data,
-}
-
 /// <summary>
 /// The ONE seam every editable <see cref="DataGrid"/> in EmberTern goes through, carrying two things that
 /// used to have no single owner: the <b>Enter gesture</b> and the <b>cell-editor height role</b>.
@@ -46,6 +23,23 @@ internal enum EditableGridKind
 /// for definition grids and data grids alike — the user rejected two behaviours for two kinds of editable
 /// grid — and it applies only to cells that are actually editable; where a cell is not editable, Enter keeps
 /// its existing meaning.</para>
+///
+/// <para>⭐⭐ AND SINCE 2026-08-07 THE HEIGHT ROLE IS ONE RULE TOO — the seam no longer has a "kind". It used
+/// to carry an <c>EditableGridKind</c> whose only job was to withhold the height role from Table Data, on the
+/// stated ground that <em>"a 24 px minimum grows every row the moment editing starts, because those grids have
+/// no ComboBox holding the row open (22–32 px rows)"</em>. ⚠⚠ <b>That reasoning is sound about a grid in
+/// general and was never checked against the one grid it governed.</b> <c>TableDetailTabView.axaml</c> pins
+/// <c>DataGrid.data-edit DataGridRow</c> to a fixed <c>Height="32"</c> — an exact height, not a minimum, so it
+/// cannot grow from its content at all — and with that view's <c>DataGridCell</c> padding of <c>6 2</c> the
+/// cell offers 28 px to a 24 px editor. The distinction therefore protected nothing and cost the reported
+/// defect: <em>"the TextBox while editing is still too low"</em>.</para>
+///
+/// <para>⚠ THE CONDITION THAT REPLACES IT, so the next author does not have to re-derive it: a grid that goes
+/// through this seam must let its ROW carry a <c>Size.Control</c> editor — i.e. declare a row height of at
+/// least <c>Size.Control</c> + its cell padding. Every editable grid in the app does today (definition rows
+/// measure ≥30 px because of their Type combo; Table Data pins 32). <c>EditableGridSeamTests</c> pins that
+/// premise against the markup rather than trusting this paragraph. The read-only result grids never reach
+/// here at all — they have no in-cell editor to size.</para>
 ///
 /// <para>⚠⚠ MEASURED FRAMEWORK FACTS this rests on (headless probe, Avalonia 12.0.0 — none of them are
 /// guesses, and two contradict the obvious approach):</para>
@@ -72,14 +66,15 @@ internal static class EditableGridBehavior
     /// Attaches the seam. Idempotent per grid — a second call is a no-op, so a view that re-runs its
     /// column setup cannot double-handle Enter.
     /// </summary>
-    public static void Attach(DataGrid grid, EditableGridKind kind)
+    public static void Attach(DataGrid grid)
     {
         if (grid is null || grid.Classes.Contains(AttachedClass)) return;
         grid.Classes.Add(AttachedClass);
 
         // The cell-editor height role. Scope is the CLASS ON THE GRID, which is why it can be granted here
-        // and only here — see EditableGridKind.Data for why a data grid must not get it.
-        if (kind == EditableGridKind.Definition && !grid.Classes.Contains(FieldGridClass))
+        // and only here — a global setter would reach the READ-ONLY result grids too, which have no in-cell
+        // editor and no row height reserved for one.
+        if (!grid.Classes.Contains(FieldGridClass))
         {
             grid.Classes.Add(FieldGridClass);
         }

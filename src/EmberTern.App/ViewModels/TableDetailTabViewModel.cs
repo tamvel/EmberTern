@@ -1712,6 +1712,25 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         return built.Text;
     }
 
+    /// <summary>
+    /// Clipboard text for the grid's Copy cell / row / row with headers / all with headers actions, through
+    /// the one shared <see cref="GridCopyText"/> builder every data grid uses. Returns null when there is
+    /// nothing to copy; the view writes the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ "All" reads <see cref="EditableRows"/>, NOT <c>DataResult.Rows</c>, and that is the one place this
+    /// grid genuinely differs from the read-only ones: rows added or deleted in this session live only in the
+    /// writable mirror. Copying the result would emit rows the user has deleted and omit ones they added —
+    /// silently, since the text would look perfectly well-formed.
+    /// </remarks>
+    public string? BuildCopyText(CopyGridMode mode, object?[]? row, int columnIndex)
+        => GridCopyText.Build(
+            mode,
+            DataResult?.Columns ?? Array.Empty<QueryColumn>(),
+            EditableRows,
+            row,
+            columnIndex);
+
     // ─── Pagination commands ──────────────────────────────────────────────
     //
     // CanExecute for these is computed against the current HasPrev/Next state.

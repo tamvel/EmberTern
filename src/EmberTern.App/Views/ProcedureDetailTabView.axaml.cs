@@ -86,17 +86,17 @@ public partial class ProcedureDetailTabView : UserControl
         if (_inputGrid is not null)
         {
             FieldGridColumns.Build(_inputGrid, includeDefault: true);
-            EditableGridBehavior.Attach(_inputGrid, EditableGridKind.Definition);
+            EditableGridBehavior.Attach(_inputGrid);
         }
         if (_outputGrid is not null)
         {
             FieldGridColumns.Build(_outputGrid, includeDefault: false);
-            EditableGridBehavior.Attach(_outputGrid, EditableGridKind.Definition);
+            EditableGridBehavior.Attach(_outputGrid);
         }
         if (_variablesGrid is not null)
         {
             FieldGridColumns.Build(_variablesGrid, includeDefault: true);
-            EditableGridBehavior.Attach(_variablesGrid, EditableGridKind.Definition);
+            EditableGridBehavior.Attach(_variablesGrid);
         }
 
         WireEditor(_sqlEditor, OnSqlEditorTextChanged);
@@ -495,11 +495,44 @@ public partial class ProcedureDetailTabView : UserControl
     // ── Filter-from-cell (Execute Result) ────────────────────────────────────
     private GridCellFilterContext? _execCellCtx;
 
+    /// <summary>The right-clicked row, for the copy actions. See <c>OnProcResultCellPointerPressed</c>.</summary>
+    private object?[]? _copyRow;
+
+    // ── Copy cell / row / row with headers / all with headers ────────────────────────────────────────────
+    //
+    // ⭐ The same four plain-text copy actions the SQL Editor grid has, so a user learns one set of copying
+    // gestures for every data grid (user request, 2026-08-07). The text comes from the one shared
+    // GridCopyText builder behind the VM; the target is the RIGHT-CLICKED cell, never the grid's selection.
+    // ⚠ Copy as INSERT / UPDATE is deliberately absent here: a procedure's result set is not a table, so
+    // there is no provenance to build a statement from (the SqlCopy path reports NotATable for it).
+    private void OnProcCopyCellClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Cell);
+
+    private void OnProcCopyRowClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Row);
+
+    private void OnProcCopyRowWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.RowWithHeaders);
+
+    private void OnProcCopyAllWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.AllWithHeaders);
+
+    private Task CopyGridAsync(CopyGridMode mode)
+    {
+        if (_currentVm is null) return Task.CompletedTask;
+        return GridClipboard.WriteAsync(this, _currentVm.BuildCopyText(mode, _copyRow, _execCellCtx?.ColumnIndex ?? -1));
+    }
+
     private void OnProcResultCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
     {
         if (_resultGrid is null || _currentVm is null) return;
         if (!e.PointerPressedEventArgs.GetCurrentPoint(_resultGrid).Properties.IsRightButtonPressed) return;
-        if (e.Row?.DataContext is object?[] row) _resultGrid.SelectedItem = row;
+        _copyRow = null;
+        if (e.Row?.DataContext is object?[] row)
+        {
+            _resultGrid.SelectedItem = row;
+            // ⚠ Kept explicitly rather than re-read from SelectedItem at click time: the copy actions must act
+            // on the cell the menu was opened over, and a selection is a separate thing that can move.
+            _copyRow = row;
+        }
         _execCellCtx = GridCellFilter.Resolve(_resultGrid, e, _currentVm.ExecFilterPanel.Columns);
         if (ProcFilterContainsItem is not null)
             ProcFilterContainsItem.IsEnabled = _execCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);

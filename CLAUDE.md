@@ -41,7 +41,7 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (**308 entries, #1–#321** — measured 2026-08-05, not incremented; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (**310 entries, #1–#323** — measured 2026-08-07; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~24 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`24-stabilization-sprint.md` is the newest** — read it for the method as much as the fixes: two of six reports were not what they described, and it records the three shared causes plus the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -292,7 +292,13 @@ noted.
 - **Data grids** — shared filter panel + aggregation bar + Record-N-of-M indicator across all 5
   data-bearing grids (SQL Results, Procedure/Function Results, Table Data, View Data); client-side
   for materialized grids, SQL push-down for server-paged ones. Export to CSV/TXT/Clipboard/XLSX
-  via one shared `EmberTern.Core.Export` framework. *(history: 10, 12)*
+  via one shared `EmberTern.Core.Export` framework. ⭐ **All five also offer the same context-menu set**
+  (Copy cell / row / row with headers / all with headers · Filter by / Exclude / Contains · Export), through
+  the ONE text builder `App/ViewModels/GridCopyText.cs` and the ONE clipboard writer
+  `App/Views/GridClipboard.cs` — **only module-specific operations differ** (Table Data's edit group; Copy as
+  INSERT/UPDATE where a table backs the rows). ⛔ A new data grid gets that set or fails
+  `DataGridCopyMenuTests`; ⚠ each host supplies its OWN row list, because "all" means *the rows this grid is
+  showing* (Table Data must pass `EditableRows`). *(history: 10, 12, 25)*
 - **SQL Data Export — Copy as INSERT / UPDATE** — right-click a result row → runnable, provably-correct
   DML (de-aliased via the server's own provenance; UPDATE only on a catalog-verified complete PK, never a
   partial key → multi-row bug; `OVERRIDING SYSTEM VALUE` for `GENERATED ALWAYS`; InvariantCulture literals;
@@ -456,6 +462,42 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **🔲🔒 SPRINT SPÓJNOŚCI GRIDÓW DANYCH — ZAMKNIĘTY, ODEBRANY PO QA UŻYTKOWNIKA (2026-08-07).** Mały sprint
+  domykający stan produktu **przed M4**, świadomie nie będący M4. Build 0/0; suite **7378** (7250 + 73 + 55,
+  +18); smoke czysty. Narracja:
+  **[docs/history/25-grid-consistency-sprint.md](docs/history/25-grid-consistency-sprint.md)**. Nowe gotchy
+  **#322–#323**.
+  ⭐ **Co jest w produkcie:** wysokość edytora w komórce Table Data zgodna z pozostałymi edytowalnymi siatkami,
+  oraz **komplet operacji kopiowania (Copy cell / row / row with headers / all with headers) we wszystkich
+  pięciu gridach danych** — od pozycji kopiowania w dół menu wszystkich pięciu są identyczne co do pozycji i
+  kolejności, a różnią się wyłącznie operacjami specyficznymi dla modułu (grupa edycyjna Table Data na górze;
+  Copy as INSERT/UPDATE tylko tam, gdzie za wierszami stoi jedna tabela).
+  ⭐⭐ **Najtrwalszy wynik jest metodologiczny i dotyczy strażników — gotcha #322: reguła bezpieczeństwa
+  wypowiedziana o KLASIE rzeczy („siatka danych") może być fałszywa o każdym jej rzeczywistym elemencie, a test,
+  który jej pilnuje, wygląda rygorystycznie i nie chroni przed niczym.** `EditableGridKind` wstrzymywał rolę
+  wysokości Table Data z uzasadnieniem brzmiącym jak pomiar (*„24 px urosłoby każdy wiersz, bo te siatki nie
+  mają ComboBoxa"*) — prawdziwym o siatce danych w ogóle i **nigdy niesprawdzonym na tej jednej, której
+  dotyczyło**: `TableDetailTabView` przypina jej wierszowi **stałą** `Height="32"` (nie `MinHeight`), więc
+  wiersz nie ma jak urosnąć. ⚠ Wzmacnia to fakt, że **istniejący test pilnował złego zachowania i nazywał
+  poprawkę „the tempting simplification"**. ⭐ Lekarstwo: **pilnować PRZESŁANKI, nie POLITYKI** — nowy strażnik
+  czyta wysokość wiersza z widoku, padding komórki z tego samego widoku i `Size.Control` z `Tokens.axaml`, i
+  wymaga, by relacja między nimi się utrzymała. `EditableGridKind` usunięty; jedno `Attach(grid)`, jedna reguła.
+  ⭐ **Jeden formater dla wszystkich gridów** — `App/ViewModels/GridCopyText.cs` (czysty, statyczny);
+  `MainWindowViewModel.BuildCopyText` tylko deleguje, a **wszystkie 12 istniejących `CopyGridTests` przeszło bez
+  edycji ani jednego oczekiwanego ciągu** — to jest dowód bajtowej niezmienności wyjścia gridu SQL.
+  ⚠ **Trzy ratyfikowane decyzje (2026-08-07), do nierewidowania:** (a) **„Copy all" w Table Data czyta
+  `EditableRows`, nie `DataResult.Rows`** — wiersz dodany/usunięty w sesji istnieje tylko w mirrorze, więc
+  kopia wyniku emitowałaby wiersze już niewidoczne i pomijała dodane, cicho i z poprawnie wyglądającym tekstem;
+  (b) **pojedyncza KOMÓRKA kopiuje się dosłownie** — spłaszczanie tabulatorów/nowych linii do spacji zostaje
+  tylko przy kopiowaniu WIERSZY, gdzie służy strukturze TSV; (c) **brak danych ⇒ schowek nietknięty** —
+  `Views/GridClipboard.cs` jest jedynym miejscem zapisu i odmawia, bo przepuszczenie pustego ciągu zniszczyłoby
+  zawartość schowka użytkownika.
+  ⚠ **Cel to prawoklikniętą KOMÓRKA, nigdy zaznaczenie gridu** (kształt #16/#99 o poziom wyżej).
+  ⛔ **Czego sprint NIE ruszył:** wysokości WIERSZY żadnej siatki — rozjazd 34/32/30/22 i **Z‑3** to pytania o
+  **gęstość**, przypisane do M4/§13.3; naprawiona wyłącznie wysokość EDYTORA w komórce.
+  ⛔ **M4 nadal wymaga własnego, osobnego pozwolenia** i jest pierwszym tematem następnej sesji, startującym z
+  `product-polish-m4-next-session.md`.
 
 - **⬆🔒 AVALONIA 12.0.3 → 12.1.1 — SPRINT ZAMKNIĘTY, ODEBRANY PO QA UŻYTKOWNIKA I SCALONY (2026-08-05).**
   Osobny sprint techniczny **przed M4**, świadomie nie mieszany z Product Polish. QA wzrokowe: **brak regresji
@@ -4082,9 +4124,13 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7360, MEASURED 2026-08-05**
-  (Product Polish through M3.5 + the stabilization sprint S-1…S-6). Green in the three documented partitions
-  (**7232 + 74 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7378, MEASURED 2026-08-07**
+  (Product Polish through M3.5 + the stabilization sprint S-1…S-6 + the grid consistency sprint). Green in the
+  three documented partitions (**7250 + 73 + 55**).
+  ⚠ The grid consistency sprint's +18 is all main-partition (`GridCopyTextTests` 14 + `DataGridCopyMenuTests` 3
+  + one premise guard in `EditableGridSeamTests`): every one of them reads source or calls a pure static, and
+  the behavioural half it replaced was a swap inside `EditableGridEnterTests`, which is why the headless
+  partitions did not move.
   ⚠ The stabilization sprint's +43 split both ways on the same criterion: the source-reading guards
   (`EditableGridSeamTests`, `MetadataCacheInvalidationTests`) are main-partition, while the behavioural Enter
   tests construct a real `DataGrid` and therefore became the **eighth** headless class (see the list below —
@@ -4125,7 +4171,7 @@ noted.
   ⛔⛔ **AND THE ACCEPTANCE CRITERION IS THE TOTAL, NOT „0 FAILURES" — measured 2026-08-05.** With
   `--blame-hang`, a broken headless state reported **`Powodzenie!` — 0 niepowodzeń, łącznie 7232** while **128
   tests silently never started**; the same state without the flag gave 94 failures, and on a retry it hung.
-  So a run is green only when it reports **`łącznie: 7360`** (or the partition's own 7232 / 73 / 55). A summary
+  So a run is green only when it reports **`łącznie: 7378`** (or the partition's own 7250 / 73 / 55). A summary
   line saying „0 niepowodzeń" is satisfiable by a run in which a whole partition failed to load.
   ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
@@ -4133,7 +4179,7 @@ noted.
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
   with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** and the
   rest together. ⭐ **CORRECTED 2026-08-05 (Avalonia 12.1.1 sprint): the isolated partition now holds TWO
-  classes — `ConnectionExpandBindingProbe` + `BrandingPresentationTests` — so the split is 7232 + 73 + 55.**
+  classes — `ConnectionExpandBindingProbe` + `BrandingPresentationTests` — so the split is 7250 + 73 + 55 (7232 at the time; the main partition has since grown).**
   `BrandingPresentationTests` moved there because it failed ~1 in 3 in the grouped run with *"The calling
   thread cannot access this object because a different thread owns it"* and is **green 6/6 alone**; it is the
   only headless test that opens a real platform `Window` (`Show()`), which is why it is the one that needed
@@ -5215,7 +5261,7 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (**308 entries, #1–#321**; see the Documentation map for
+- **`docs/gotchas.md`** — the complete gotcha catalog (**310 entries, #1–#323**; see the Documentation map for
   the duplicate-number caveat). Search it whenever a bug looks familiar. ⚠ **This line said "301 entries,
   #1–#312" while the map said "309, #1–#320" — two prose counters for one file, disagreeing with each other
   AND both wrong.** Measure (`grep -oE "^[0-9]+\. \*\*"` → unique numbers) before quoting either; #284's shape,

@@ -424,6 +424,23 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
 
     public bool CanExportExecResult => HasExecResult;
 
+    /// <summary>
+    /// Clipboard text for the result grid's Copy cell / row / row with headers / all with headers actions,
+    /// through the one shared <see cref="GridCopyText"/> builder every data grid uses. Returns null when there
+    /// is nothing to copy; the view writes the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ "All" is the whole materialised result, not the visible page — the same meaning it has on the SQL
+    /// Editor grid, which pages client-side over its result in exactly this way.
+    /// </remarks>
+    public string? BuildCopyText(CopyGridMode mode, object?[]? row, int columnIndex)
+        => GridCopyText.Build(
+            mode,
+            ExecResult?.Columns ?? Array.Empty<QueryColumn>(),
+            ExecResult?.Rows ?? Array.Empty<object?[]>(),
+            row,
+            columnIndex);
+
     /// <summary>Export source for the Execute-Function result grid — the SAME materialized model as
     /// the SQL Editor results (CurrentView = filtered/displayed; AllRows = the full result). No
     /// re-fetch (re-running the function could repeat side effects).</summary>

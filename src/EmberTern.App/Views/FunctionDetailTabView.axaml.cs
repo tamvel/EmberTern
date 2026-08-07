@@ -78,18 +78,18 @@ public partial class FunctionDetailTabView : UserControl
         if (_argumentsGrid is not null)
         {
             FieldGridColumns.Build(_argumentsGrid, includeDefault: true);
-            EditableGridBehavior.Attach(_argumentsGrid, EditableGridKind.Definition);
+            EditableGridBehavior.Attach(_argumentsGrid);
         }
         // The return value is a single, unnamed row — omit the Name + Default columns.
         if (_resultTypeGrid is not null)
         {
             FieldGridColumns.Build(_resultTypeGrid, includeDefault: false, includeName: false);
-            EditableGridBehavior.Attach(_resultTypeGrid, EditableGridKind.Definition);
+            EditableGridBehavior.Attach(_resultTypeGrid);
         }
         if (_variablesGrid is not null)
         {
             FieldGridColumns.Build(_variablesGrid, includeDefault: true);
-            EditableGridBehavior.Attach(_variablesGrid, EditableGridKind.Definition);
+            EditableGridBehavior.Attach(_variablesGrid);
         }
 
         WireEditor(_sqlEditor, OnSqlEditorTextChanged);
@@ -423,11 +423,44 @@ public partial class FunctionDetailTabView : UserControl
     // ── Filter-from-cell (Execute Result) ────────────────────────────────────
     private GridCellFilterContext? _execCellCtx;
 
+    /// <summary>The right-clicked row, for the copy actions. See <c>OnFuncExecCellPointerPressed</c>.</summary>
+    private object?[]? _copyRow;
+
+    // ── Copy cell / row / row with headers / all with headers ────────────────────────────────────────────
+    //
+    // ⭐ The same four plain-text copy actions the SQL Editor grid has, so a user learns one set of copying
+    // gestures for every data grid (user request, 2026-08-07). The text comes from the one shared
+    // GridCopyText builder behind the VM; the target is the RIGHT-CLICKED cell, never the grid's selection.
+    // ⚠ Copy as INSERT / UPDATE is deliberately absent here: a function's result set is not a table, so
+    // there is no provenance to build a statement from (the SqlCopy path reports NotATable for it).
+    private void OnFuncCopyCellClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Cell);
+
+    private void OnFuncCopyRowClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Row);
+
+    private void OnFuncCopyRowWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.RowWithHeaders);
+
+    private void OnFuncCopyAllWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.AllWithHeaders);
+
+    private Task CopyGridAsync(CopyGridMode mode)
+    {
+        if (_currentVm is null) return Task.CompletedTask;
+        return GridClipboard.WriteAsync(this, _currentVm.BuildCopyText(mode, _copyRow, _execCellCtx?.ColumnIndex ?? -1));
+    }
+
     private void OnFuncExecCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
     {
         if (_execResultGrid is null || _currentVm is null) return;
         if (!e.PointerPressedEventArgs.GetCurrentPoint(_execResultGrid).Properties.IsRightButtonPressed) return;
-        if (e.Row?.DataContext is object?[] row) _execResultGrid.SelectedItem = row;
+        _copyRow = null;
+        if (e.Row?.DataContext is object?[] row)
+        {
+            _execResultGrid.SelectedItem = row;
+            // ⚠ Kept explicitly rather than re-read from SelectedItem at click time: the copy actions must act
+            // on the cell the menu was opened over, and a selection is a separate thing that can move.
+            _copyRow = row;
+        }
         _execCellCtx = GridCellFilter.Resolve(_execResultGrid, e, _currentVm.ExecFilterPanel.Columns);
         if (FuncFilterContainsItem is not null)
             FuncFilterContainsItem.IsEnabled = _execCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
