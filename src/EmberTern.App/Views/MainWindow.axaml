@@ -2287,16 +2287,20 @@
                i od jak dawna", niezależnie od aktywnej zakładki.
                ⚠⚠ TO NIE JEST PRZYCISK i nigdy nim nie będzie. Commit/Rollback zostają w toolbarze pod
                F6 / Shift+F6 — operacja nieodwracalna nie może stać w miejscu czytanym kątem oka. -->
-          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+          <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}" VerticalAlignment="Center"
                       IsVisible="{Binding ShowTransactionChip}"
                       ToolTip.Tip="{Binding TransactionChipTooltip}">
             <!-- ⚠ 7×7 i Spacing 5 to WARTOŚCI LOKALNE ze świadomego wyboru.
                  Kropka jest GEOMETRIĄ (§18.0.5 ratyfikowało, że geometrii wychodzącej z arytmetyki
                  nie tokenizujemy) — katalog nie ma dla niej roli i mieć nie powinien.
-                 ⚠ `Spacing="5"` to KOLIZJA, nie brak roli: `Space.Sm` niesie 6, czyli pasuje funkcją
-                 i różni się o 1 px. Zamiana zmieniłaby wygląd chipa odebranego już przez użytkownika,
-                 więc zgodnie z regułą etapu wartość zostaje z powodem, a kolizja idzie do rejestru
-                 §18.R (K11). Rozstrzyga ją przegląd §13.3 — na komplecie chipów, nie na tym jednym. -->
+                 ⭐ K11 ZAMKNIĘTA (M4, decyzja użytkownika D): odstęp bierze `Space.Xs` (4), nie `Space.Sm`
+                 (6), na który wskazywał rejestr. ⚠ Powód jest rolą, nie zaokrągleniem w dół: `Space.Xs` to
+                 „ikona ↔ tekst; elementy wewnątrz JEDNEGO WIERSZA", a kropka i etykieta chipa są dokładnie
+                 tym — `Space.Sm` opisuje odstęp kontrolka ↔ kontrolka. Przy równej czytelności wygrywa
+                 wariant gęstszy (R18), a różnica 5 → 4 jest przy 1:1 podprogowa (sprawdzone na renderze).
+                 ⭐ Zbiega się z paddingiem badge'a DEV MODE, który poziomo niesie 4 od QA M3.1b — czyli
+                 wnętrza obu chipów paska tytułu mają teraz jedną miarę. -->
+
             <Ellipse Width="7" Height="7" VerticalAlignment="Center">
               <Ellipse.Fill>
                 <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">

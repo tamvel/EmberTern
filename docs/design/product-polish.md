@@ -8461,3 +8461,87 @@ binarium i pokazały poprzednie czerwone.** Czytać `Liczba błędów: 0` **prze
 (**K1 · K3 · K4 · K6 · K8** — „ile mierzy pasek narzędzi i ile nagłówek sekcji"), **K5/K10** (promień),
 **K7** (`ExpanderMinHeight`), **K9** (`TabItem` 13 px), **K11** (odstęp chipa, w parze z paddingiem badge'a
 DEV MODE) oraz **K2** (rola bez konsumenta). ⭐ Żadne z nich nie jest już pytaniem o gęstość.
+
+---
+
+## §19.38 Iteracja 26 (M4 · blok typografii) — rejestr kolizji zamknięty (2026-08-08)
+
+> **Status: dostarczone, oczekuje na QA wizualne użytkownika.**
+> Decyzje ratyfikowane: **A‑2 · B‑1 · C (K9 → 11, K4 zostaje 13) · D w całości · K5 skreślone.**
+> Materiał + pomiar: [product-polish-m4-typography-decision.md](product-polish-m4-typography-decision.md).
+> Build 0/0 · suite **8304** (8158 + 91 + 55, +3) · smoke czysty. **Trzy nowe strażniki zweryfikowane
+> podsadzeniem naruszenia.**
+
+### §19.38.1 ⭐⭐ Znalezisko główne: nagłówek był mniejszy od tekstu, który nazywa
+
+`Text.SectionHeader` niosła **11 SemiBold**, a jej kanoniczny konsument `TextBlock.group-header` stoi
+w **każdym z 19 użyć** bezpośrednio nad `TextBlock.field-label`, który niesie `Text.Application` = **12**.
+Komentarz roli mówił wprost: *„mocniejszy od podpisu pola celowo"* — i był to prawdziwe wyłącznie o WADZE.
+
+⭐ **Dowodem nie był pomiar jednego ekranu, tylko ROZKŁAD: pięć widoków niezależnie od siebie odmówiło tej
+roli** i zostało przy 12 SemiBold (Performance ×3 · bliźniaki ×2 · `TextBlock.section` Session + Trace, dwa
+style / 12 użyć). Populacje: **19 nagłówków przy 11 i 17 przy 12, w identycznym kontekście.** To nie było
+pięć przeoczeń wobec reguły, tylko jedna sytuacja rozstrzygnięta w produkcie dwa razy — a rejestr zapisał
+jako „kolizję" wyłącznie jedną z tych odpowiedzi.
+
+⚠ Interlinia poszła za rozmiarem (15 → 17), bo katalog wiąże je REGUŁĄ („×1,4 dla treści"), a nie parami
+liczb; zostawienie 15 dałoby nagłówek ciaśniejszy od tekstu pod nim.
+
+### §19.38.2 `Text.Toolbar` wycofana — duplikowała rolę, nie tylko wartość
+
+Zero konsumentów, przy trzech paskach na `Text.Compact` (11) i jednym na `Text.Application` (12).
+⭐ Powodem wycofania nie jest brak konsumentów, tylko to, że `Text.Compact` **opisuje tę samą robotę** —
+jej własny komentarz mówi *„chroma — panele, zakładki, **paski**"*. Pasmo poleceń importu zeszło 12 → 11.
+⚠ Trzy podpisy w tym pasmie zachowały `Classes="field-label"` (barwa + margines) i dostały **jawny** rozmiar
+chromy: `field-label` opisuje podpis pola FORMULARZA i jego 164 użyć ten blok nie rusza.
+
+### §19.38.3 ⚠⚠ K9 wskazywał zły element — trzecia „zakładka" w rejestrze
+
+`.bottom-tab` i `.sub-tab` były na `Text.Compact` już od M2c/M3. Trzynastka siedziała na **bazowym**
+`TabItem`, obsługującym **10 zakładek** w `AddFieldDialog` (8) i `NewTableTabView` (2). §18.R sam ostrzegał,
+że rejestr indeksuje po NAZWIE; po korekcie z M3.3a okazuje się, że „zakładka" jest nośnikiem **trzech**
+różnych rzeczy.
+
+### §19.38.4 🔒 K4 zostaje 13 — decyzja użytkownika, nie dług
+
+> *„To pojedynczy element pełniący rolę nagłówka planu i nie widzę potrzeby sztucznego sprowadzania go do 12
+> tylko po to, żeby zniknął literał."*
+
+⭐ **R12 w czystej postaci**: celem katalogu jest usunięcie wartości NIEUZASADNIONYCH, nie wyzerowanie
+licznika. Render sondy pokazał, że zejście do 12 jest możliwe (hierarchia utrzymuje się na kolorze
+i pozycji) — i właśnie dlatego odrzucenie jest decyzją, a nie ograniczeniem. ⛔ Nie „dokańczać" tego bloku.
+
+### §19.38.5 D — trzy metryki, wszystkie podprogowe przy 1:1
+
+**K7** lokalne `MinHeight="26"` USUNIĘTE w obu bliźniakach — nagłówek bierze `Size.Control` (24) z mostu,
+czyli rolę, którą i tak miał. **K11** `Spacing` 5 → **`Space.Xs` (4)**, nie `Space.Sm` (6), na który wskazywał
+rejestr: `Space.Xs` to „elementy wewnątrz jednego wiersza", czyli dokładnie kropka i etykieta chipa — a przy
+równej czytelności wygrywa gęstszy (**R18**). Zbiega się z paddingiem badge'a DEV MODE (poziomo 4).
+**K10** nowa rola **`Radius.Tab` = 4**: sporna była NAZWA, nie liczba, a §3.3 pozwala dwóm rolom dzielić
+wartość. ⚠ Kolumny **×3** w renderze były częścią pytania, nie ozdobą — przy 1:1 wszystkie trzy pary
+wyglądają identycznie, a *„nie widać różnicy"* i *„render nie pokazuje różnicy"* wyglądają tak samo.
+
+### §19.38.6 ⭐ REJESTR KOLIZJI K1–K15 JEST ZAMKNIĘTY W CAŁOŚCI
+
+| wpis | rozstrzygnięcie |
+|---|---|
+| K1 · K2 | `Text.Compact` dla wszystkich pasków; `Text.Toolbar` wycofana |
+| K3 · K6 · K8 | rola `Text.SectionHeader` = 12 SemiBold; 17 wyjątków znika |
+| K4 | 🔒 zostaje 13 — wartość lokalna z ratyfikowanym powodem |
+| **K5** | ⛔ **skreślone — brak przedmiotu** (rozwiązane w chwili zapisu, jak wycofane K12) |
+| K7 | lokalne 26 usunięte → `Size.Control` z mostu |
+| K9 | bazowy `TabItem` → `Text.Compact` |
+| K10 | nowa rola `Radius.Tab` |
+| K11 | `Space.Xs` |
+| K12 | wycofane wraz z mechanizmem (M3.2a) |
+| K13 · K14 · K15 | zamknięte w bloku gęstości (§19.37) |
+
+### §19.38.7 ⏸ Czego ten blok NIE zrobił
+
+⛔ **Poszerzenia okna licznika `FontSize`** o `Completion/`, `Sql/` i `Themes/` — **zmierzone: 29 deklaracji
+leży poza jego zasięgiem**, a mimo to wycofałem tę zmianę po zbudowaniu, bo ten sam `Measure` obsługuje także
+`FontFamily`, czyli temat czcionki monospace ratyfikowany jako backlog sprintu UX. ⭐ To jest nowa informacja
+wobec rekomendacji z materiału — wymaga osobnej decyzji, a nie wsunięcia przy okazji. Pomiar i uzasadnienie
+stoją w komentarzu klasy `DesignTokenComplianceTests`.
+⛔ Sweep 69 literałów `FontSize` i 95 rozmiaru ikony (M4.3) · ⛔ **Z‑3** · ⛔ 9 px i 12 px w edytorach
+w wierszu siatki (decyzje KONTENERA, ratyfikowane osobno w §18.0.5/3) · ⛔ migracja ekranów (**D‑M4‑1**).

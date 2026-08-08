@@ -42,7 +42,7 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (**320 entries, #1–#333** — measured 2026-08-08; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#332–#333 came out of M4's density decision and both are about a value that lives OUTSIDE the place that claims to govern it** — a `ControlTheme` default is what 191 of 355 icons actually render at while the catalog's role describes two of them, and an unmeasured property is not "clean" but unmeasured (seven icon sizes, green build throughout); #333 is its mirror in the test suite — a guard that TRANSCRIBES a premise breaks when that premise moves onto a role, and reports something its own name does not describe. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (**321 entries, #1–#334** — measured 2026-08-08; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#334 came out of M4's typography block and is the one to read before migrating exceptions onto a role** — when several independent authors refuse the same role, that is a MEASUREMENT of the role, not several oversights: the tell is the DISTRIBUTION (19 headers at one size against 17 at another, in an identical context), and a register that records only the deviating side makes a symmetrical disagreement look like one-sided drift. ⭐⭐ **#332–#333 came out of M4's density decision and both are about a value that lives OUTSIDE the place that claims to govern it** — a `ControlTheme` default is what 191 of 355 icons actually render at while the catalog's role describes two of them, and an unmeasured property is not "clean" but unmeasured (seven icon sizes, green build throughout); #333 is its mirror in the test suite — a guard that TRANSCRIBES a premise breaks when that premise moves onto a role, and reports something its own name does not describe. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~24 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`24-stabilization-sprint.md` is the newest** — read it for the method as much as the fixes: two of six reports were not what they described, and it records the three shared causes plus the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -463,6 +463,44 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **🔤 M4 · BLOK TYPOGRAFII — DOSTARCZONY (2026-08-08), ⏸ czeka na QA wizualne użytkownika.**
+  Zgodnie z **D‑M4‑1** to druga i ostatnia pozycja rejestru; po niej **rejestr kolizji K1–K15 jest ZAMKNIĘTY
+  W CAŁOŚCI** i nie zostaje ani jedna otwarta kolizja. Build 0/0; suite **8304** (8158 + 91 + 55); smoke
+  czysty; trzy nowe strażniki **zweryfikowane podsadzeniem**. Materiał + pomiar:
+  **[docs/design/product-polish-m4-typography-decision.md](docs/design/product-polish-m4-typography-decision.md)**;
+  as-built: `product-polish.md` **§19.38**. Nowa gotcha **#334**.
+  ⭐⭐ **ZNALEZISKO GŁÓWNE — nagłówek sekcji był MNIEJSZY od tekstu, który nazywa.** `Text.SectionHeader`
+  niosła 11 SemiBold, a jej kanoniczny konsument stoi w **każdym z 19 użyć** nad `field-label`, który niesie
+  12 — więc obietnica roli („mocniejszy od podpisu pola") była prawdziwa wyłącznie o WADZE. ⭐ Dowodem był
+  **ROZKŁAD, nie pojedynczy ekran**: pięć widoków niezależnie odmówiło tej roli, a populacje wyszły **19
+  nagłówków przy 11 i 17 przy 12, w identycznym kontekście**. Rola idzie na **12 SemiBold** (interlinia za
+  rozmiarem, 15 → 17), 17 wyjątków znika. Kształt `Size.Row.Tree` z M3.4a.
+  ⭐ **`Text.Toolbar` wycofana — duplikowała `Text.Compact` ROLĄ, nie tylko liczbą** (tamta mówi wprost
+  „chroma — panele, zakładki, **paski**"). Zero konsumentów, przy trzech paskach na 11 i jednym na 12;
+  pasmo importu zeszło 12 → 11. ⚠ Trzy podpisy w tym pasmie zachowały `field-label` (barwa + margines)
+  i dostały **jawny** rozmiar chromy — 164 użyć tej klasy blok nie rusza.
+  ⚠⚠ **K9 wskazywał ZŁY ELEMENT:** `.bottom-tab`/`.sub-tab` były na roli od M2c/M3, a trzynastka siedziała
+  na **bazowym** `TabItem` obsługującym 10 zakładek dialogowych — „zakładka" okazała się nośnikiem **trzech**
+  różnych rzeczy. ⛔ **K5 SKREŚLONE — nie miało przedmiotu** (rozwiązane w chwili zapisu, jak wycofane K12).
+  🔒 **K4 ZOSTAJE 13 — ratyfikowana decyzja użytkownika, nie dług:** *„to pojedynczy element pełniący rolę
+  nagłówka planu i nie widzę potrzeby sztucznego sprowadzania go do 12 tylko po to, żeby zniknął literał"*.
+  ⭐ To **R12** wypowiedziane wprost; render pokazał, że zejście do 12 jest możliwe — i właśnie dlatego
+  odmowa jest decyzją, a nie ograniczeniem. ⛔ Nie „dokańczać" tego bloku.
+  ⭐ **D w całości:** lokalne `MinHeight="26"` usunięte (nagłówek `Expandera` bierze `Size.Control` z mostu) ·
+  chip transakcji na **`Space.Xs`** (4), nie `Space.Sm` (6) — bo to „elementy wewnątrz jednego wiersza",
+  a przy równej czytelności wygrywa gęstszy (**R18**); zbiega się z paddingiem badge'a DEV MODE · nowa rola
+  **`Radius.Tab`** = 4, bo sporna była NAZWA, nie liczba (§3.3 pozwala dwóm rolom dzielić wartość).
+  ⚠ Kolumny **×3** w renderze były częścią pytania: przy 1:1 wszystkie trzy pary wyglądają identycznie,
+  a *„nie widać różnicy"* i *„render nie pokazuje różnicy"* wyglądają tak samo.
+  ⏸ **Wycofane po zbudowaniu i wymaga OSOBNEJ decyzji:** poszerzenie okna licznika `FontSize` o `Completion/`,
+  `Sql/` i `Themes/`. ⭐ Zmierzone: **29 deklaracji leży poza jego zasięgiem** (karty hover, Quick Info,
+  Parameter Helper — powierzchnie oglądane przy pisaniu każdego zapytania). Ten sam `Measure` obsługuje jednak
+  **`FontFamily`**, czyli temat czcionki monospace ratyfikowany jako backlog sprintu UX — to nowa informacja
+  wobec rekomendacji, więc nie wsuwam jej przy okazji. Pomiar w komentarzu `DesignTokenComplianceTests`.
+  ⚠ **Jeden czerwony test w pierwszym przebiegu:** `SettingsLoadHealthTests.ConcurrentSaves_…` — znany
+  jednorazowy flake ze sprintu stabilizacyjnego; **3 przebiegi solo zielone i partycja zielona przy
+  powtórzeniu**. Nie ma związku z typografią i nie jest ogłaszany naprawionym.
 
 - **📐🔒 M4 · GRUPA GĘSTOŚCI — ZAMKNIĘTA, ODEBRANA PO QA UŻYTKOWNIKA W OBU MOTYWACH (2026-08-08).**
   QA objęło siedem powierzchni: pasek narzędzi · Metadata Explorer · menu kontekstowe · zakładki · siatki
@@ -4275,8 +4313,8 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **8301, MEASURED 2026-08-08**
-  (Product Polish through **M4's density decision** + the stabilization sprint S-1…S-6 + the grid consistency
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **8304, MEASURED 2026-08-08**
+  (Product Polish through **M4's density decision + typography block** + the stabilization sprint S-1…S-6 + the grid consistency
   sprint + the Firebird language completeness sprint incl. its QA round). Green in the three documented
   partitions (**8155 + 91 + 55**).
   ⚠ M4's +10 is all main-partition and all source-reading: four new guards over icon-size roles, the tree-row
@@ -4338,7 +4376,7 @@ noted.
   ⛔⛔ **AND THE ACCEPTANCE CRITERION IS THE TOTAL, NOT „0 FAILURES" — measured 2026-08-05.** With
   `--blame-hang`, a broken headless state reported **`Powodzenie!` — 0 niepowodzeń, łącznie 7232** while **128
   tests silently never started**; the same state without the flag gave 94 failures, and on a retry it hung.
-  So a run is green only when it reports **`łącznie: 8301`** (or the partition's own 8155 / 91 / 55). A summary
+  So a run is green only when it reports **`łącznie: 8304`** (or the partition's own 8158 / 91 / 55). A summary
   line saying „0 niepowodzeń" is satisfiable by a run in which a whole partition failed to load.
   ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The

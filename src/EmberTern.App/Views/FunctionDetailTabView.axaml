@@ -484,11 +484,12 @@
                same MON$ delta. Default expanded; the user can collapse it. MinHeight + the
                header/content padding resources shrink the Fluent Expander's chunky 48px chrome
                so the COLLAPSED state stays compact. -->
-          <!-- ⚠ `MinHeight` 26 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4) — i to jest KOREKTA zapisu,
-               który nazywał tę wartość „redundantnym obejściem po M2b". ZMIERZONE: most `FluentBridge` mapuje
-               `ExpanderMinHeight` na `Size.Control` = 24, więc usunięcie tej linii obniżyłoby nagłówek o 2 px.
-               M2c nie zmienia wyglądu, więc wartość zostaje; „26 czy 24" rozstrzyga przegląd §13.3. -->
-          <Expander IsExpanded="True" IsVisible="{Binding !ExecInfoIsError}" Padding="0" MinHeight="26">
+          <!-- ⭐ K7 ZAMKNIĘTA (M4, decyzja użytkownika D): lokalne `MinHeight` 26 USUNIĘTE — nagłówek bierze
+               `Size.Control` (24) z mostu `FluentBridge` (`ExpanderMinHeight`), czyli rolę, którą i tak miał.
+               ⛔ Nie przywracać liczby: element ma przyjmować wielkość od kontenera, a nie deklarować własną
+               (decyzja architektoniczna 2 z M2b). Różnica 2 px jest przy 1:1 podprogowa — sprawdzona na
+               renderze sondy, widoczna dopiero przy ×3. -->
+          <Expander IsExpanded="True" IsVisible="{Binding !ExecInfoIsError}" Padding="0">
             <Expander.Resources>
               <Thickness x:Key="ExpanderHeaderPadding">8,0,0,0</Thickness>
               <Thickness x:Key="ExpanderContentPadding">0</Thickness>
@@ -514,10 +515,9 @@
                           <controls:SvgIcon Data="{StaticResource Icon.Table}"
                                             Foreground="{DynamicResource AccentBrush}"
                                             Width="14" Height="14" VerticalAlignment="Center" />
-                          <!-- ⚠ 12 px + SemiBold lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4) — rejestr kolizji §18.R.
-                               To nagłówek karty, a rola nagłówka `Text.SectionHeader` niesie 11. Zachowanie wyglądu wygrywa
-                               z uzupełnieniem licznika (R12); całą listę takich kolizji rozstrzyga przegląd §13.3. -->
-                          <TextBlock Text="{Binding Table}" FontSize="12" FontWeight="SemiBold"
+                          <!-- ⭐ K6 ZAMKNIĘTA (M4, decyzja użytkownika A-2): rola `Text.SectionHeader` niesie teraz 12 SemiBold,
+                               czyli tyle, ile ten nagłówek karty deklarował lokalnie od M2c. Wartość bez zmian. -->
+                          <TextBlock Text="{Binding Table}" FontSize="{DynamicResource Text.SectionHeader.Size}" FontWeight="{DynamicResource Text.SectionHeader.Weight}"
                                      VerticalAlignment="Center" />
                         </StackPanel>
                         <ItemsControl ItemsSource="{Binding Changes}" Margin="2,0,0,0">

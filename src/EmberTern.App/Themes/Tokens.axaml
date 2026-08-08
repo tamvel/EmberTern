@@ -330,6 +330,14 @@
   <CornerRadius x:Key="Radius.Surface">3</CornerRadius>
   <!-- Odznaka i chip — element o kształcie pigułki. -->
   <CornerRadius x:Key="Radius.Chip">4</CornerRadius>
+  <!-- ⭐ ZAKŁADKA — dolny panel i pod‑zakładki edytorów. Dopisane w M4 (K10, decyzja użytkownika D).
+       ⚠ Ta sama liczba co `Radius.Chip` i to jest POPRAWNE, nie duplikat do zwinięcia: §3.3 tego pliku
+       mówi wprost, że dwie role o tej samej wartości są dwiema niezależnymi decyzjami, które mogą się
+       rozejść. Sporna była wyłącznie NAZWA — zakładka nie jest chipem, a R12 zabrania wpisywać rolę,
+       która do elementu nie pasuje, tylko po to, żeby licznik wartości lokalnych spadł.
+       ⚠ Zaokrąglane są wyłącznie GÓRNE narożniki (szablon zakładki) — token niesie promień, nie to,
+       których rogów dotyczy. -->
+  <CornerRadius x:Key="Radius.Tab">4</CornerRadius>
 
   <!-- ══════════════════════════════════════════════════════════════════════════════════════════
        KRAWĘDZIE (§4.2.3)

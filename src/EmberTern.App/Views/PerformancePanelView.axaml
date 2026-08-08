@@ -44,8 +44,18 @@
           </StackPanel>
 
           <!-- plain-language plan lead: which table is full-scanned, in words -->
-          <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 3, §18.3). To TREŚĆ, a katalog ma przy 13 wyłącznie
-               `Text.Code`. Grupa „TextBlock 13 px” z §18.0.5/3 — czy 13 zasługuje na własną rolę, rozstrzyga §13.3. -->
+          <!-- 🔒 K4 ZAMKNIĘTA JAKO WARTOŚĆ LOKALNA Z POWODEM — ratyfikowana decyzja użytkownika (M4, 2026‑08‑08),
+               a nie dług do spłacenia. Zapis decyzji, żeby nikt nie „dokończył" bloku typografii:
+
+                   „To pojedynczy element pełniący rolę nagłówka planu i nie widzę potrzeby sztucznego
+                    sprowadzania go do 12 tylko po to, żeby zniknął literał."
+
+               ⭐ To jest R12 w czystej postaci: celem katalogu jest usunięcie wartości NIEUZASADNIONYCH, nie
+               wyzerowanie licznika — a wyjątek nazwany i uzasadniony jest poprawnym stanem docelowym.
+               ⚠ 13 px niesie tu HIERARCHIĘ: ta linia stoi nad metrykami przy 12 i jest wiodącym zdaniem planu.
+               ⛔ Nowa rola przy 13 wymagałaby kilku konsumentów (R3), a ten jest jeden — dlatego wartość
+               lokalna, a nie rola. Sprawdzone na renderze sondy: po zejściu do 12 hierarchia utrzymuje się
+               na kolorze i pozycji, więc zmiana byłaby możliwa — i została ODRZUCONA, bo nic nie wnosi. -->
           <TextBlock Text="{Binding PlanLead}" FontSize="13" TextWrapping="Wrap"
                      Foreground="{DynamicResource ForegroundBrush}"
                      IsVisible="{Binding HasPlanLead}" />
@@ -107,11 +117,11 @@
 
         <!-- FINDINGS (measured reads) -->
         <StackPanel Spacing="6" Margin="0,0,0,10" IsVisible="{Binding HasReport}">
-          <!-- ⚠ 12 px + SemiBold lokalnie, ŚWIADOMIE (M2c iteracja 3, §18.3). To NAGŁÓWEK, ale rola
-               `Text.SectionHeader` niesie 11 (tyle ma kanoniczny `group-header`), a `Text.Application` opisałaby
-               nagłówek jako treść. Ten panel nigdy nie używał wspólnej roli nagłówka — rozstrzyga §13.3. -->
+          <!-- ⭐ K3 ZAMKNIĘTA (M4, decyzja użytkownika A-2). Ten nagłówek trzymał 12 SemiBold lokalnie od M2c,
+               bo rola `Text.SectionHeader` niosła 11 — a 11 SemiBold stało nad tekstem 12 i nie czytało się
+               jako nadrzędne. Rola niesie teraz 12: wartość bez zmian, wyjątek znika. -->
           <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsHeader}"
-                     FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ForegroundBrush}" />
+                     FontWeight="{DynamicResource Text.SectionHeader.Weight}" FontSize="{DynamicResource Text.SectionHeader.Size}" Foreground="{DynamicResource ForegroundBrush}" />
 
           <ItemsControl ItemsSource="{Binding Findings}" IsVisible="{Binding HasFindings}">
             <ItemsControl.ItemTemplate>
@@ -136,10 +146,10 @@
                       <TextBlock DockPanel.Dock="Right" Text="{Binding ConfidenceText}" FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
                                  Margin="6,0,0,0" />
-                      <!-- ⚠ 12 px + SemiBold lokalnie, ŚWIADOMIE (M2c iteracja 3, §18.3). To NAGŁÓWEK, ale rola
-                           `Text.SectionHeader` niesie 11 (tyle ma kanoniczny `group-header`), a `Text.Application` opisałaby
-                           nagłówek jako treść. Ten panel nigdy nie używał wspólnej roli nagłówka — rozstrzyga §13.3. -->
-                      <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                      <!-- ⭐ K3 ZAMKNIĘTA (M4, decyzja użytkownika A-2). Ten nagłówek trzymał 12 SemiBold lokalnie od M2c,
+               bo rola `Text.SectionHeader` niosła 11 — a 11 SemiBold stało nad tekstem 12 i nie czytało się
+               jako nadrzędne. Rola niesie teraz 12: wartość bez zmian, wyjątek znika. -->
+                      <TextBlock Text="{Binding Title}" FontSize="{DynamicResource Text.SectionHeader.Size}" FontWeight="{DynamicResource Text.SectionHeader.Weight}" TextWrapping="Wrap"
                                  Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
                     </DockPanel>
                     <TextBlock Text="{Binding Explanation}" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
@@ -198,11 +208,11 @@
 
         <!-- TABLE ACCESS (red = sequential, blue = index) -->
         <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding HasTableAccess}">
-          <!-- ⚠ 12 px + SemiBold lokalnie, ŚWIADOMIE (M2c iteracja 3, §18.3). To NAGŁÓWEK, ale rola
-               `Text.SectionHeader` niesie 11 (tyle ma kanoniczny `group-header`), a `Text.Application` opisałaby
-               nagłówek jako treść. Ten panel nigdy nie używał wspólnej roli nagłówka — rozstrzyga §13.3. -->
+          <!-- ⭐ K3 ZAMKNIĘTA (M4, decyzja użytkownika A-2). Ten nagłówek trzymał 12 SemiBold lokalnie od M2c,
+               bo rola `Text.SectionHeader` niosła 11 — a 11 SemiBold stało nad tekstem 12 i nie czytało się
+               jako nadrzędne. Rola niesie teraz 12: wartość bez zmian, wyjątek znika. -->
           <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessHeader}"
-                     FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ForegroundBrush}" />
+                     FontWeight="{DynamicResource Text.SectionHeader.Weight}" FontSize="{DynamicResource Text.SectionHeader.Size}" Foreground="{DynamicResource ForegroundBrush}" />
           <ItemsControl ItemsSource="{Binding TableAccess}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:TableAccessBarViewModel">

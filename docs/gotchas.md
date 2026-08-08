@@ -1324,3 +1324,24 @@ every emit path to be individually perfect.**
      ⭐⭐ **And the repair is the moment to widen the guard**, because the same edit usually reveals that it only
      ever covered one member of a class (#322): the first of the two checked Table Data alone and now runs over
      all six editable definition grids. (Product Polish M4 / C-1 — `product-polish.md` §19.37.6.)
+
+334. **When several independent authors refuse the same catalog role, that is a MEASUREMENT of the role — not
+     several oversights to be swept up.** EmberTern's `Text.SectionHeader` carried 11 SemiBold, and its
+     canonical consumer (`TextBlock.group-header`, 19 uses) sits in **every one of them** directly above
+     `TextBlock.field-label`, which carries 12 Regular — so the section header was one step SMALLER than the
+     text it names, and "stronger than the field label", which the role's own comment claimed, was true of the
+     weight alone. Five views had quietly declined the role and kept their own 12 SemiBold, each with a written
+     "collision" note pointing at a future review.
+     ⭐ **The tell is the DISTRIBUTION, not any single screen**: 19 headers at 11 against 17 at 12, in an
+     identical context. A role the product contests roughly half the time is not being violated — it is being
+     corrected. Same shape as `Size.Row.Tree` (catalog said 20, product showed 24, the catalog was wrong).
+     ⚠ **Practically: before migrating exceptions onto a role, count the two populations and check whether they
+     share a context.** If they do, ask which side is right instead of assuming the catalog is; if they do not,
+     the "exception" is a different role that has not been named yet.
+     ⚠ A second thing this hid: the collision register recorded only ONE of the two answers as a collision
+     (the deviating views), which made a symmetrical disagreement look like one-sided drift.
+     ⭐⭐ **A related smell in the same catalog**: a role can duplicate another by ROLE and not merely by value.
+     `Text.Toolbar` (12) and `Text.Compact` (11) named the same job — the latter's comment already said
+     "chrome: panels, tabs, BARS" — so the catalog offered two answers to one question and the product used a
+     third. A role with no consumers is the visible symptom (#233); the duplicated *description* is the cause.
+     (Product Polish M4 / A-2 + B-1 — `product-polish.md` §19.38.)

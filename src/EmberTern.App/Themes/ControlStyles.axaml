@@ -1140,10 +1140,14 @@
   </Style>
 
   <Style Selector="TabItem">
-    <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 9, §18.9) — rejestr kolizji §18.R/K9. Katalog ma
-             przy 13 wyłącznie rolę kodu, a to jest etykieta zakładki roboczej. Pasek zakładek to M3.3,
-             więc pytanie „ile mierzy zakładka" rozstrzyga tamten etap albo przegląd §13.3. -->
-    <Setter Property="FontSize" Value="13" />
+    <!-- ⭐ K9 ZAMKNIĘTA (M4, decyzja użytkownika C): `Text.Compact` (11), jak każda inna zakładka.
+         ⚠⚠ Pierwotny wpis rejestru wskazywał ZŁY ELEMENT — mówił o „etykiecie dolnego panelu
+         i pod‑zakładek", a te przeszły na `Text.Compact` już w M2c/M3. Trzynastka została na stylu
+         BAZOWYM, który obsługuje **10 zakładek**: osiem w `AddFieldDialog` i dwie w `NewTableTabView`.
+         ⭐ To trzecia populacja „zakładek" w produkcie — po pasku dokumentów i po dolnym panelu.
+         §18.R sam ostrzegał, że rejestr indeksuje po NAZWIE, a „zakładka" jest nośnikiem kilku rzeczy;
+         okazało się, że trzech. -->
+    <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     <Setter Property="Padding" Value="14,8" />
     <Setter Property="MinHeight" Value="0" />
   </Style>
@@ -1165,10 +1169,12 @@
   </Style>
 
   <Style Selector="TabItem.bottom-tab /template/ Border#PART_LayoutRoot">
-    <!-- ⚠ Promień 4 zostaje, ŚWIADOMIE (M2c iteracja 9, §18.9) — §18.R/K10: kształt zakładki.
-             `Radius.Chip` niesie tę samą liczbę, ale zakładka chipem nie jest, a `Radius.Surface` (3)
-             zmieniłaby wygląd. -->
-    <Setter Property="CornerRadius" Value="4" />
+    <!-- ⭐ K10 ZAMKNIĘTA (M4, decyzja użytkownika D): własna rola `Radius.Tab`, nie `Radius.Chip`.
+         ⚠ Obie niosą 4 i to jest poprawne — §3.3 katalogu mówi wprost, że dwie role o tej samej
+         wartości to dwie niezależne decyzje, które mogą się rozejść. Sporna była NAZWA, nie liczba:
+         zakładka chipem nie jest, a R12 zabrania wpisywać rolę, która do elementu nie pasuje, tylko
+         po to, żeby zniknęła wartość lokalna. Zmiana jest wizualnie zerowa. -->
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Tab}" />
   </Style>
 
   <Style Selector="TabItem.bottom-tab:pointerover /template/ Border#PART_LayoutRoot">
@@ -1201,8 +1207,8 @@
   </Style>
 
   <Style Selector="TabItem.sub-tab /template/ Border#PART_LayoutRoot">
-    <!-- ⚠ Jak wyżej — kształt zakładki, §18.R/K10. -->
-    <Setter Property="CornerRadius" Value="4" />
+    <!-- ⭐ Jak wyżej — `Radius.Tab`, drugi konsument tej roli (K10 zamknięta w M4). -->
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Tab}" />
   </Style>
 
   <Style Selector="TabItem.sub-tab.empty">

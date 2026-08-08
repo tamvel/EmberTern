@@ -119,11 +119,17 @@
   <FontWeight x:Key="Text.Status.Weight">Normal</FontWeight>
   <x:Double x:Key="Text.Status.LineHeight">15</x:Double>
 
-  <!-- TEKST W PASKACH NARZĘDZI. Rodzina: Font.Ui. Dziś mieszany — to jedna z pozycji, dla których
-       ta rola w ogóle powstała. -->
-  <x:Double x:Key="Text.Toolbar.Size">12</x:Double>
-  <FontWeight x:Key="Text.Toolbar.Weight">Normal</FontWeight>
-  <x:Double x:Key="Text.Toolbar.LineHeight">17</x:Double>
+  <!-- ⛔ `Text.Toolbar` (12) ZOSTAŁA WYCOFANA W M4 — decyzja użytkownika **B‑1** (2026‑08‑08).
+       Powstała, żeby ujednolicić paski narzędzi (jej komentarz brzmiał *„dziś mieszany — to jedna
+       z pozycji, dla których ta rola w ogóle powstała"*), i do końca **nie miała ani jednego
+       konsumenta**, a token bez konsumenta jest nieodróżnialny od regresji (#233).
+
+       ⭐⭐ Ale prawdziwym powodem wycofania nie jest brak konsumentów, tylko to, że rola DUPLIKOWAŁA
+       `Text.Compact`: tamta opisuje *„chroma — panele, zakładki, **paski**"*, czyli tę samą robotę,
+       i różniły się wyłącznie liczbą. Zmierzone przed decyzją: pasek poleceń debuggera (12 przycisków),
+       pasek edytora SQL i Script Executor stały na `Text.Compact` (11), a pasmo poleceń Data Import
+       na `Text.Application` (12) — dwie odpowiedzi na jedno pytanie, żadna z nich nie ta.
+       ⛔ Nie przywracać. Tekst paska narzędzi to `Text.Compact`. -->
 
   <!-- PODPIS POMOCNICZY, chip skrótu klawiszowego. Rodzina: Font.Ui.
        ⚠ Najmniejszy stopień pisma w aplikacji.
@@ -140,10 +146,28 @@
   <x:Double x:Key="Text.Caption.LineHeight">14</x:Double>
 
   <!-- NAGŁÓWEK SEKCJI (`group-header`). Rodzina: Font.Ui. Mocniejszy od podpisu pola celowo:
-       podpis nazywa jedną wartość, nagłówek nazywa temat — przy tej samej wadze konkurują. -->
-  <x:Double x:Key="Text.SectionHeader.Size">11</x:Double>
+       podpis nazywa jedną wartość, nagłówek nazywa temat — przy tej samej wadze konkurują.
+
+       ⚠⚠ 12, NIE 11 — KOREKTA KATALOGU wykonana w M4, decyzja użytkownika **A‑2** (2026‑08‑08).
+       Do tego momentu rola niosła 11 SemiBold i w KAŻDYM z 19 kanonicznych użyć stała bezpośrednio
+       NAD `TextBlock.field-label`, który niesie `Text.Application` = 12. Czyli nagłówek był o stopień
+       MNIEJSZY od tekstu, który nazywa, a zdanie wyżej („mocniejszy od podpisu pola") było prawdziwe
+       wyłącznie o wadze — i nieprawdziwe o rozmiarze.
+
+       ⭐⭐ Dowodem nie był pomiar jednego ekranu, tylko rozkład: **pięć widoków niezależnie od siebie
+       odmówiło tej roli** i zostało przy 12 SemiBold (Performance ×3, bliźniaki Procedure/Function ×2,
+       `TextBlock.section` Session + Trace — dwa style, 12 użyć). Populacje były niemal równe: 19
+       nagłówków przy 11 i 17 przy 12, w IDENTYCZNYM kontekście. To nie było pięć przeoczeń wobec
+       reguły, tylko jedna sytuacja rozstrzygnięta w produkcie dwa razy.
+
+       ⭐ Kierunek poprawki jak przy `Size.Row.Tree` w M3.4a: *dokument prowadzi produkt, ale prowadzi
+       go tam, gdzie produkt jest DOBRY*. Tu produkt miał rację po stronie 12; kłamał token. -->
+  <x:Double x:Key="Text.SectionHeader.Size">12</x:Double>
   <FontWeight x:Key="Text.SectionHeader.Weight">SemiBold</FontWeight>
-  <x:Double x:Key="Text.SectionHeader.LineHeight">15</x:Double>
+  <!-- ⚠ Interlinia idzie ZA rozmiarem, bo katalog wiąże je regułą, a nie parami liczb: „×1,4 dla treści,
+       ×1,36 dla ról 11 px" (nagłówek sekcji). 12 × 1,4 = 17 — ta sama wartość co `Text.Application`,
+       nad którym ten nagłówek stoi. Zostawienie 15 dałoby nagłówek ciaśniejszy od tekstu pod nim. -->
+  <x:Double x:Key="Text.SectionHeader.LineHeight">17</x:Double>
 
   <!-- TYTUŁ — nazwa połączenia, tytuł panelu. Rodzina: Font.Ui. -->
   <x:Double x:Key="Text.Title.Size">14</x:Double>

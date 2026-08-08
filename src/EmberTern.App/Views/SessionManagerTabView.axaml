@@ -32,10 +32,11 @@
     </Style>
     <!-- Detail-panel section header (matches the trace detail) -->
     <Style Selector="TextBlock.section">
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <!-- ⚠ 12 px + SemiBold lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6) — rejestr kolizji §18.R/K8.
-           Nagłówek sekcji panelu szczegółów, a rola `Text.SectionHeader` niesie 11. Rozstrzyga §13.3. -->
-      <Setter Property="FontSize" Value="12" />
+      <!-- ⭐ K8 ZAMKNIĘTA (M4, decyzja użytkownika A-2): rola `Text.SectionHeader` niesie teraz 12 SemiBold,
+           czyli dokładnie to, co ten nagłówek deklarował lokalnie od M2c. Wartość się nie zmienia — zmienia
+           się to, że przestaje być wyjątkiem. Powód korekty katalogu stoi przy roli w `Typography.axaml`. -->
+      <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
       <Setter Property="Margin" Value="0,0,0,3" />
     </Style>
     <!-- Compact, uncramped column headers for these grids only (matches the trace) -->

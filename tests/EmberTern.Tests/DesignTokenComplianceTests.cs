@@ -40,6 +40,23 @@ namespace EmberTern.Tests;
 /// <b>Scope.</b> <c>Views/</c> and <c>Controls/</c> only. <c>Themes/</c> is excluded on purpose: that is where
 /// the system lives, and a style setter declaring <c>FontSize</c> there is the catalog doing its job.
 /// </para>
+/// <para>
+/// ⚠⚠ <b>ZMIERZONE W M4 I ŚWIADOMIE NIEZAŁATANE — okno licznika NIE WIDZI 29 deklaracji.</b>
+/// <c>Themes/PickerTemplates.axaml</c> ma 12 literałów, <c>Completion/*.cs</c> — 16 (karta hover, Quick Info,
+/// Parameter Helper, czyli powierzchnie oglądane przy pisaniu każdego zapytania), <c>Sql/</c> — 1.
+/// ⭐ Argument o <c>Themes/</c> powyżej był słuszny, gdy go pisano, i przestał być słuszny w M2c iteracji 6:
+/// odkąd regex pomija setter czytający katalog, „katalog robiący swoje" i tak jest dla licznika niewidoczny,
+/// więc wyłączenie folderu chroni już tylko LITERAŁY w nim. <c>Completion/</c> i <c>Sql/</c> nigdy nie były
+/// przedmiotem żadnego argumentu — po prostu leżały poza oknem.
+/// </para>
+/// <para>
+/// ⛔ <b>Poszerzenie okna NIE zostało wykonane w bloku typografii M4 i wymaga osobnej decyzji użytkownika</b>,
+/// bo pociąga za sobą także <c>FontFamily</c> (ten sam <c>Measure</c> obsługuje obie własności), a to jest
+/// temat czcionki monospace — ratyfikowany jako backlog sprintu UX, nie robota tego bloku.
+/// ⭐ Rzecz warta zapamiętania niezależnie od decyzji: <b>wartość ustawiona tam, gdzie licznik nie zagląda,
+/// nie jest „czysta" — jest niezmierzona</b>, a liczba, którą etap raportuje, jest wtedy nie tyle duża,
+/// co nieprawdziwa. Ten sam kształt co gotcha #332, o jedną własność dalej.
+/// </para>
 /// </summary>
 public class DesignTokenComplianceTests
 {
@@ -91,9 +108,9 @@ public class DesignTokenComplianceTests
         // rolę kodu) i podgląd Global Search — edytor w wierszu siatki przy 12 px. 24 wpisy zdjęte
         // w całości. ⭐ `AggregationBarView` oddał swój promień na **`Radius.Chip`** — jedyny prawdziwy
         // chip w aplikacji (§18.0.5/2), wartość i funkcja zgodne, więc bez wyjątku.
-        ["Views/SessionManagerTabView.axaml"] = 4,
+        ["Views/SessionManagerTabView.axaml"] = 3,
         ["Views/SecurityManagerTabView.axaml"] = 9,
-        ["Views/TraceMonitorTabView.axaml"] = 3,
+        ["Views/TraceMonitorTabView.axaml"] = 2,
         // ⭐ POWIERZCHNIA TRWAŁA (§0.1) — `MainWindow` 26 → 0 + 1 promień, `BreadcrumbBar` 2 → 0,
         // `MessageBanner` 2 → 0, `TableColumnPicker` 3 → 0 (M2c iteracja 7). Zero wyjątków mimo
         // największej różnorodności ról w jednym pliku: pasek statusu dostał `Text.Status` (cztery
@@ -106,14 +123,14 @@ public class DesignTokenComplianceTests
         // reszta na role. Cztery wyjątki w każdym, identyczne co do rodzaju: dwa edytory w WIERSZU SIATKI
         // przy 12 px (§18.0.5/3 — gęstość kontenera, nie dryf), znak rodzaju przy 9 px (brak roli)
         // i nagłówek karty 12 px + SemiBold przy roli nagłówka niosącej 11 (rejestr kolizji §18.R).
-        ["Views/FunctionDetailTabView.axaml"] = 4,
-        ["Views/ProcedureDetailTabView.axaml"] = 4,
+        ["Views/FunctionDetailTabView.axaml"] = 3,
+        ["Views/ProcedureDetailTabView.axaml"] = 3,
         // ⭐ 42 → 6 (M2c iteracja 3). Ten widok wnosi TRZECIĄ postać tego samego konfliktu: rola,
         // która pasuje FUNKCJĄ, niesie inną LICZBĘ. Trzy nagłówki sekcji mają 12 px + SemiBold, a kanoniczna
         // rola nagłówka (`Text.SectionHeader`, tyle co `group-header`) niesie 11 — więc zostają lokalne
         // z powodem, zamiast zostać opisane jako treść. Reszta wyjątków: dwa znaki przy 13 i 9 px oraz
         // jedna linia treści przy 13, gdzie katalog ma wyłącznie rolę kodu.
-        ["Views/PerformancePanelView.axaml"] = 6,
+        ["Views/PerformancePanelView.axaml"] = 3,
         // ⭐ 82 → 4 (M2c iteracja 2). Odwrotność iteracji 1: tu koszyk A był największy w całym etapie —
         // **35 wartości po prostu usunięto**, bo `ComboBox`/`TextBox`/`CheckBox`/`NumericUpDown`/
         // `RadioButton`/`Button` już dostają dokładnie te 12 px ze stylu M2b. 41 przeszło na rolę,
@@ -363,6 +380,16 @@ public class DesignTokenComplianceTests
         // The role lost its only consumer (Button.primary's MinHeight), and a token with no consumer is
         // indistinguishable from a regression (#233) — so it leaves the catalog with it.
         ["Size.ControlPrimary"] = "nothing — a primary action is marked by the accent, not by height",
+
+        // M4 / A-3: the density block gave the toolbar icon its own role, and that role took the name and the
+        // value (16) of `Size.Icon.Lg`, which had ZERO consumers and a description ("header, empty state,
+        // primary action") that described nothing in the product.
+        ["Size.Icon.Lg"] = "Size.Icon.Toolbar — the icon as a standalone ACTION (toolbar, window button)",
+
+        // ⭐ M4 / B-1: retired because it DUPLICATED `Text.Compact` by ROLE, not merely by value — that role
+        // already says "chrome: panels, tabs, BARS". It never had a consumer, while three of the four toolbars
+        // sat on `Text.Compact` (11) and the fourth on `Text.Application` (12).
+        ["Text.Toolbar"] = "Text.Compact — toolbar text is chrome, and that is what Text.Compact names",
     };
 
     [Fact]
@@ -615,6 +642,82 @@ public class DesignTokenComplianceTests
     /// <para>⛔ Jeśli ta liczba ma się zmienić — to jest decyzja produktowa użytkownika (gęstość drzewa,
     /// pytanie K15 na przeglądzie §13.3), a nie skutek uboczny innej pracy.</para>
     /// </summary>
+    /// <summary>
+    /// ⭐ M4 / A‑2: rola nagłówka sekcji niesie **12**, czyli liczbę, którą produkt pokazywał w 17 z 36
+    /// przypadków, zanim katalog ją przyjął.
+    ///
+    /// <para>⚠⚠ Ten test nie pilnuje „ładnej liczby", tylko RELACJI, która była złamana: nagłówek sekcji
+    /// stoi nad `TextBlock.field-label` (rola <c>Text.Application</c>) i musi być co najmniej tak duży.
+    /// Przy 11 nad 12 był MNIEJSZY od tekstu, który nazywa, a jego własny komentarz twierdził, że jest
+    /// mocniejszy — i właśnie dlatego pięć widoków niezależnie odmówiło tej roli.</para>
+    ///
+    /// <para>⛔ Gdyby nagłówek miał kiedyś zejść poniżej treści, to jest decyzja produktowa użytkownika
+    /// (jak A‑3, wariant „obniż `Text.Application` do 11"), a nie skutek uboczny innej pracy.</para>
+    /// </summary>
+    [Fact]
+    public void SectionHeaderRole_IsNotSmallerThanTheLabelItHeads()
+    {
+        var text = File.ReadAllText(Path.Combine(AppRoot(), "Themes", "Typography.axaml"));
+
+        var header = Regex.Match(text, @"x:Key=""Text\.SectionHeader\.Size""\s*>\s*(?<v>[\d.]+)\s*<");
+        var label = Regex.Match(text, @"x:Key=""Text\.Application\.Size""\s*>\s*(?<v>[\d.]+)\s*<");
+        Assert.True(header.Success && label.Success, "Brak roli `Text.SectionHeader` albo `Text.Application`.");
+
+        var headerSize = double.Parse(header.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var labelSize = double.Parse(label.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.True(headerSize >= labelSize,
+            $"Nagłówek sekcji mierzy {headerSize}, a podpis pola, nad którym stoi — {labelSize}. Nagłówek "
+            + "mniejszy od treści, którą nazywa, jest dokładnie stanem, który M4 naprawiło (A‑2): pięć widoków "
+            + "odmówiło wtedy tej roli i trzymało własne 12 SemiBold. Jeżeli ta relacja ma się odwrócić, to "
+            + "jest decyzja użytkownika, a nie skutek uboczny.");
+
+        // Waga jest drugą połową rozróżnienia „nazywa temat" vs „nazywa wartość" i bez niej sam rozmiar
+        // nie wystarcza — przy równych rozmiarach zostaje ona jedyną różnicą.
+        Assert.Contains("x:Key=\"Text.SectionHeader.Weight\">SemiBold", text);
+    }
+
+    /// <summary>
+    /// ⭐ M4 / D (K10): zakładka ma WŁASNĄ rolę promienia, choć niesie tę samą liczbę co
+    /// <c>Radius.Chip</c>. §3.3 katalogu pozwala na to wprost, a R12 zabrania podpięcia zakładki pod chip
+    /// tylko po to, żeby zniknęła wartość lokalna.
+    /// <para>⚠ Test pilnuje KONSUMENTÓW, nie wartości: rola z zerem konsumentów jest nieodróżnialna od
+    /// regresji (#233), a to właśnie zabiło `Text.Toolbar` i `Size.Icon.Lg`.</para>
+    /// </summary>
+    [Fact]
+    public void TabRadiusRole_ExistsAndIsReadByBothTabVariants()
+    {
+        var tokens = File.ReadAllText(Path.Combine(AppRoot(), "Themes", "Tokens.axaml"));
+        Assert.Matches(@"x:Key=""Radius\.Tab""\s*>\s*[\d.]+\s*<", tokens);
+
+        var styles = File.ReadAllText(Path.Combine(AppRoot(), "Themes", "ControlStyles.axaml"));
+        foreach (var variant in new[] { "bottom-tab", "sub-tab" })
+        {
+            var block = Regex.Match(
+                styles,
+                @"Selector=""TabItem\." + variant + @" /template/ Border#PART_LayoutRoot""\s*>(?<body>[\s\S]*?)</Style>");
+            Assert.True(block.Success, $"Nie znaleziono stylu kształtu zakładki `{variant}`.");
+            Assert.Contains("{DynamicResource Radius.Tab}", block.Groups["body"].Value);
+        }
+    }
+
+    /// <summary>
+    /// ⭐ M4 / C (K9): bazowy styl <c>TabItem</c> czyta rolę, a nie literał 13. ⚠⚠ Wpis rejestru wskazywał
+    /// tu ZŁY ELEMENT — mówił o dolnym panelu i pod‑zakładkach, a te były na roli już od M2c/M3; trzynastka
+    /// siedziała na stylu bazowym, obsługującym zakładki dialogów.
+    /// </summary>
+    [Fact]
+    public void BaseTabItem_ReadsItsFontSizeFromARole()
+    {
+        var styles = File.ReadAllText(Path.Combine(AppRoot(), "Themes", "ControlStyles.axaml"));
+        var block = Regex.Match(styles, @"<Style Selector=""TabItem"">(?<body>[\s\S]*?)</Style>");
+        Assert.True(block.Success, "Nie znaleziono bazowego stylu `TabItem`.");
+
+        var setter = Regex.Match(block.Groups["body"].Value, @"<Setter Property=""FontSize"" Value=""(?<v>[^""]+)""");
+        Assert.True(setter.Success, "Bazowy `TabItem` nie deklaruje już `FontSize`.");
+        Assert.StartsWith("{DynamicResource", setter.Groups["v"].Value);
+    }
+
     [Fact]
     public void TreeRowRole_CarriesTheHeightTheProductActuallyShows()
     {

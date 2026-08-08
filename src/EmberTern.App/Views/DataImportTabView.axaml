@@ -87,7 +87,14 @@
                The selector carries its own scope sentence as a tooltip, because the list deliberately does NOT
                show profiles saved on other connections and a restriction the user cannot see is
                indistinguishable from a profile that has gone missing. -->
-          <TextBlock Text="{x:Static app:UiStrings.ImportProfileLabel}" Classes="field-label"
+          <!-- ⭐ K1/K2 ZAMKNIĘTE (M4, decyzja użytkownika B‑1): tekst PASKA NARZĘDZI to `Text.Compact` (11),
+               a nie `Text.Application` (12) — pasek poleceń debuggera, pasek edytora SQL i Script Executor
+               stały tam od dawna, to pasmo było jedynym, które nie. Wycofana wraz z tym rola `Text.Toolbar`
+               (12) nie miała ani jednego konsumenta i duplikowała `Text.Compact` ROLĄ, nie tylko liczbą.
+               ⚠ Rozmiar stoi JAWNIE obok klasy, i to jest celowe: `field-label` opisuje podpis pola
+               FORMULARZA (`Text.Application`, 164 użycia w aplikacji) i tego nie zmieniamy — tutaj potrzebna
+               jest jego barwa i margines, ale rozmiar chromy. ⛔ Nie „uprościć" przez zdjęcie tego atrybutu. -->
+          <TextBlock Text="{x:Static app:UiStrings.ImportProfileLabel}" Classes="field-label" FontSize="{DynamicResource Text.Compact.Size}"
                      VerticalAlignment="Center" Margin="0" />
           <!-- ⭐ PODŁOGA 140, ZMIERZONA, i JEDYNA, która w tym paśmie zostaje (M4 / D, decyzja użytkownika).
                Naturalna szerokość tej listy to dziś 110 px, ale jej zbiór pozycji tworzy UŻYTKOWNIK (nazwy
@@ -105,7 +112,7 @@
                     ToolTip.Tip="{Binding ProfileScopeNote}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="vm:ImportProfileRowViewModel">
-                <TextBlock Text="{Binding Display}" FontSize="{DynamicResource Text.Application.Size}" />
+                <TextBlock Text="{Binding Display}" FontSize="{DynamicResource Text.Compact.Size}" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
@@ -198,7 +205,7 @@
                   IsVisible="{Binding Report.TransactionLeftOpen}" />
 
           <TextBlock Text="{x:Static app:UiStrings.ImportTransactionOpenMarker}"
-                     VerticalAlignment="Center" FontSize="{DynamicResource Text.Application.Size}"
+                     VerticalAlignment="Center" FontSize="{DynamicResource Text.Compact.Size}"
                      Foreground="{DynamicResource WarningBrush}"
                      ToolTip.Tip="{x:Static app:UiStrings.ImportTransactionOpenMarkerTooltip}"
                      IsVisible="{Binding Report.TransactionLeftOpen}" />
@@ -231,7 +238,7 @@
 
           <!-- The mode carries its consequence as a tooltip, where the decision is taken (§0.5) — the
                Script Executor's `Sequenced` precedent. -->
-          <TextBlock Text="{x:Static app:UiStrings.ImportTransactionLabel}" Classes="field-label"
+          <TextBlock Text="{x:Static app:UiStrings.ImportTransactionLabel}" Classes="field-label" FontSize="{DynamicResource Text.Compact.Size}"
                      VerticalAlignment="Center" Margin="0" />
           <!-- ⭐ Bez podłogi (M4 / D): zbiór pozycji jest zamknięty i trzyelementowy, naturalna szerokość
                wynosi 90 px, a podłoga 170 zabierała 80 px przyciskom po prawej, nie chroniąc niczego. -->
@@ -244,7 +251,7 @@
             <ComboBoxItem Content="{x:Static app:UiStrings.ImportTransactionBatched}" />
           </ComboBox>
 
-          <TextBlock Text="{x:Static app:UiStrings.ImportErrorPolicyLabel}" Classes="field-label"
+          <TextBlock Text="{x:Static app:UiStrings.ImportErrorPolicyLabel}" Classes="field-label" FontSize="{DynamicResource Text.Compact.Size}"
                      VerticalAlignment="Center" Margin="0" />
           <!-- ⭐ Bez podłogi (M4 / D): naturalna szerokość 137 px wynika z najdłuższej pozycji
                („Skip the row and continue"), więc podłoga 180 była o 43 px za szeroka i nic nie chroniła. -->
