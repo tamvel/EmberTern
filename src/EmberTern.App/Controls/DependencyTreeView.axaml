@@ -1,0 +1,157 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="clr-namespace:EmberTern.App"
+             xmlns:controls="clr-namespace:EmberTern.App.Controls"
+             xmlns:vm="clr-namespace:EmberTern.App.ViewModels"
+             x:Class="EmberTern.App.Controls.DependencyTreeView"
+             x:Name="RootControl">
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════════
+       DRZEWO „ZALEŻNOŚCI" — JEDNA kontrolka zamiast 17 kopii (M4.2b, D11), na TYM SAMYM mechanizmie
+       co drzewo połączenia w Metadata Explorerze: płaska `ListBox` nad `SidebarFlatController`.
+
+       ⭐⭐ DECYZJA UŻYTKOWNIKA (2026-08-08), podjęta PO OBEJRZENIU obu wariantów w działającej
+       aplikacji: ten mechanizm wygląda lepiej, zachowuje się lepiej i jest w produkcie SPRAWDZONY —
+       a przy okazji omija problemy natywnego `TreeView` Avalonii, które ujawniły się w pierwszym
+       podejściu (podklasa `TreeView` nie dostaje `ControlTheme`, bo Avalonia szuka go po typie
+       KONKRETNYM; efektem był pusty ekran przy całkowicie poprawnych danych).
+
+       ⭐⭐ ZNALEZISKO, KTÓRE TO ODBLOKOWAŁO: `SidebarFlatController` NIE jest sprzężony z połączeniem
+       ani metadanymi — jego konstruktor bierze WYŁĄCZNIE delegaty (`roots`, `childrenSelector`,
+       `isContainer`, `hasChildren`, `isExpanded`, `setExpanded`, `isVisible`). To czysty spłaszczacz
+       drzewa do listy. ⚠ `product-polish.md` §13.2 odrzuciło tę drogę argumentem, że kontroler „jest
+       sprzężony z połączeniem, metadanymi, filtrowaniem, licznikami i indeksem nazw" — zmierzone:
+       to sprzężenie siedzi w `MetadataExplorerViewModel`, nie w kontrolerze. Zapis §13.2 skorygowany.
+
+       ⚠ ZAKRES: wyłącznie drzewa ZALEŻNOŚCI. `MemberGroups` (Members pakietu), `PlanRoots`
+       (Performance) i `Groups` (Global Search) mają własne typy węzłów i zadania — świadomie POZA.
+       ══════════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <ListBox x:Name="RowsList"
+           ItemsSource="{Binding Rows, ElementName=RootControl}"
+           Classes="dependency-list"
+           Background="{DynamicResource BackgroundBrush}"
+           BorderThickness="0"
+           AutoScrollToSelectedItem="False"
+           DoubleTapped="OnRowDoubleTapped">
+    <ListBox.ItemsPanel>
+      <ItemsPanelTemplate>
+        <VirtualizingStackPanel />
+      </ItemsPanelTemplate>
+    </ListBox.ItemsPanel>
+
+    <ListBox.Styles>
+      <!-- ⭐ Ten sam język wiersza co pasek boczny: `Size.Row.Tree` (24) i zerowy padding pionowy.
+           ⚠⚠ Styl jest CELOWO lokalny, a nie przeniesiony do `ControlStyles.axaml` i współdzielony
+           z paskiem bocznym. M3.4a odrzuciło dokładnie takie przeniesienie z zapisanym powodem:
+           przeniesienie reguły ZMIENIA JEJ PRIORYTET wobec wartości lokalnych i właśnie tak
+           odtworzono regresję §19.2. Zawężona kopia jest tańsza niż ruszanie działającego paska.
+           ⚠ Poziome 2 px to wcięcie ZAZNACZENIA od krawędzi panelu, nie odstęp treści — katalog nie
+           ma dla niego roli (ten sam zapis stoi przy pasku bocznym). -->
+      <Style Selector="ListBox.dependency-list ListBoxItem">
+        <Setter Property="Padding" Value="2,0" />
+        <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Tree}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      </Style>
+
+      <!-- Chevron: subtelny, bezramkowy, 20 px pola trafienia przy glifie `Size.Icon.Sm`.
+           ⚠ 20 to POLE TRAFIENIA MYSZY, nie kontrolka — świadomie nie bierze `Size.Control` (24,
+           wysokość pola formularza). Ta sama liczba i ten sam powód co w pasku bocznym. -->
+      <Style Selector="ListBox.dependency-list Button.dependency-chevron">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+      </Style>
+    </ListBox.Styles>
+
+    <ListBox.ItemTemplate>
+      <DataTemplate x:DataType="vm:SidebarRow">
+        <Grid ColumnDefinitions="Auto,Auto,*">
+          <!-- Wcięcie wg głębokości — ta sama własność `SidebarRow.IndentWidth`, którą liczy pasek boczny. -->
+          <Border Grid.Column="0" Width="{Binding IndentWidth}" />
+
+          <!-- ⚠ Kolumna chevronu ma stałą szerokość równą polu trafienia (20 px) i to jest celowe:
+               liść nie ma chevronu, a jego etykieta musi stać w tej samej kolumnie co etykieta
+               kategorii — inaczej wcięcie przestaje czytać się jako poziom drzewa. Rezerwacja NIE
+               łamie R13: element pojawia się tu regularnie (każda kategoria), a pusty slot niesie
+               informację o strukturze. ⛔ Zmieniając 20 w stylu, zmień je i tutaj. -->
+          <Panel Grid.Column="1" Width="20" VerticalAlignment="Center">
+            <Button Classes="dependency-chevron"
+                    IsVisible="{Binding IsExpandable}"
+                    Click="OnChevronClick">
+              <Panel>
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}"
+                                  Width="{DynamicResource Size.Icon.Sm}"
+                                  Height="{DynamicResource Size.Icon.Sm}"
+                                  IsVisible="{Binding !IsExpanded}" />
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}"
+                                  Width="{DynamicResource Size.Icon.Sm}"
+                                  Height="{DynamicResource Size.Icon.Sm}"
+                                  IsVisible="{Binding IsExpanded}" />
+              </Panel>
+            </Button>
+          </Panel>
+
+          <ContentControl Grid.Column="2"
+                          Content="{Binding Node}"
+                          HorizontalContentAlignment="Stretch"
+                          VerticalAlignment="Center">
+            <ContentControl.DataTemplates>
+
+              <!-- Węzeł GRUPY — kategoria z licznikiem. -->
+              <DataTemplate DataType="vm:DependencyGroupNode">
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
+                  <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                    Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
+                                    VerticalAlignment="Center">
+                    <controls:SvgIcon.Foreground>
+                      <!-- ⚠ Wariant motywu z TEJ kontrolki. W 17 zmigrowanych kopiach stało tu
+                           `ElementName="RootControl"` wskazujące korzeń WIDOKU — nazwa elementu
+                           rozwiązuje się w zasięgu nazw widoku, którego wspólna kontrolka nie zna.
+                           Tutaj `RootControl` to ta kontrolka i jest stabilnym przodkiem. -->
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="IconResourceKey" />
+                        <Binding Path="ActualThemeVariant" ElementName="RootControl" />
+                      </MultiBinding>
+                    </controls:SvgIcon.Foreground>
+                  </controls:SvgIcon>
+                  <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}"
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+
+              <!-- Węzeł LIŚCIA — konkretny obiekt; dwuklik otwiera go w nowej zakładce. -->
+              <DataTemplate DataType="vm:DependencyLeafNode">
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
+                  <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                    Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
+                                    VerticalAlignment="Center">
+                    <controls:SvgIcon.Foreground>
+                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                        <Binding Path="IconResourceKey" />
+                        <Binding Path="ActualThemeVariant" ElementName="RootControl" />
+                      </MultiBinding>
+                    </controls:SvgIcon.Foreground>
+                  </controls:SvgIcon>
+                  <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}"
+                             VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding FieldName}"
+                             FontSize="{DynamicResource Text.Caption.Size}"
+                             Foreground="{DynamicResource SubtleForegroundBrush}"
+                             VerticalAlignment="Center"
+                             IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+              </DataTemplate>
+
+            </ContentControl.DataTemplates>
+          </ContentControl>
+        </Grid>
+      </DataTemplate>
+    </ListBox.ItemTemplate>
+  </ListBox>
+</UserControl>

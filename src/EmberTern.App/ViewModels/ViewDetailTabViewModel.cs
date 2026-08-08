@@ -26,7 +26,7 @@ namespace EmberTern.App.ViewModels;
 /// (same <see cref="FirebirdTableDetailReader"/> read methods, same
 /// <see cref="TableDetailTabViewModel.BuildDependencyTree"/>), not via inheritance.
 /// </summary>
-public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
+public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IDependencyNavigator
 {
     // Mirrors TableDetail's data-preview knobs — a view's Data tab uses the
     // exact same paged SELECT * infrastructure.

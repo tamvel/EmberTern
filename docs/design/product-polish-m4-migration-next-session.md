@@ -8,7 +8,20 @@
 > ⛔ **Nie otwieraj sesji od raportowania stanu ani od pytań, czy coś zostało domknięte** — jeżeli
 > `git status` jest czysty, to jest cała odpowiedź.
 >
-> ⏭ **Następny krok: MIGRACJA EKRANÓW — M4.1.**
+> ⏭ **Następny krok: M4.3 — Debugger · Trace · Session Manager · Security Manager · Performance.**
+>
+> ✅ **ZROBIONE I ODEBRANE (2026-08-08):** **M4.1** (SQL Editor · Script Executor · Data Import, §19.39) ·
+> **M4.2** (edytory obiektów, §19.40) · **M4.2b** (drzewa „Zależności", §19.41).
+>
+> ⚠⚠ **PRZECZYTAJ TO PRZED M4.3 — trzy defekty M4.2b przeszły przez ZIELONY suite i wyłapało je dopiero QA
+> użytkownika.** M4.3 rusza Debugger i monitory, czyli powierzchnie z własnymi kontrolkami, więc ten sam
+> kształt jest tam bardzo prawdopodobny:
+> * **strażnik czytający ŹRÓDŁO nie wie, czy rzecz DZIAŁA** — pięć zielonych strażników przy pustym ekranie;
+> * **„reguła poprawna" + „wpięcie istnieje" ≠ „działa"** — zdarzenie może nie docierać do handlera (#339);
+> * **podklasa kontrolki nie dziedziczy `ControlTheme`** — pusty ekran zamiast wyjątku (#338).
+> ⭐ **Wniosek operacyjny: każda iteracja M4.3 ruszająca KONTROLKĘ (a nie samą wartość tokenu) potrzebuje
+> co najmniej jednego testu BEHAWIORALNEGO** — asercja na zrealizowanym elemencie, a przy klawiaturze
+> **realny klawisz naciśnięty DWA razy** (jeden przechodzi mimo utraty stanu).
 
 ---
 
@@ -95,10 +108,10 @@ Zakres z §13:
 
 | etap | zakres |
 |---|---|
-| **M4.1** | SQL Editor · Script Executor · Data Import |
-| **M4.2** | edytory obiektów (10) |
-| **M4.2b** | migracja **18 drzew „Zależności"** na wspólny `TreeListView` (D11) |
-| **M4.3** | Debugger · Trace · Session Manager · Security Manager · Performance |
+| ~~M4.1~~ ✅ | SQL Editor · Script Executor · Data Import — as-built §19.39 |
+| ~~M4.2~~ ✅ | edytory obiektów (10) — as-built §19.40 |
+| ~~M4.2b~~ ✅ | drzewa „Zależności" — as-built §19.41. ⚠ **17, nie 18** (18. to `MemberGroups`, inne drzewo), i **nie na `TreeListView`, tylko na `SidebarFlatController`** — §13.2 odrzucało tę drogę przesłanką, którą pomiar obalił |
+| **M4.3** ⏭ | **Debugger · Trace · Session Manager · Security Manager · Performance** ← TU ZACZYNASZ |
 | **M4.4** | 16 dialogów + okna + `GrowingDialogBehavior` (M‑5) |
 
 ### 5.1 ⭐ Co migracja ekranów realnie oznacza po zamknięciu rejestru

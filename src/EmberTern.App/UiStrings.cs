@@ -1632,7 +1632,6 @@ internal static class UiStrings
     public const string TableDetailTabDependencies = "Dependencies";
     public const string TableDetailDependsOnHeader = "Depends on";
     public const string TableDetailDependedOnByHeader = "Used by";
-    public const string DependencyCategoryUdfs = "UDFs";
     public const string TableDetailDependencyType = "Type";
     public const string TableDetailDependencyName = "Name";
     public const string TableDetailDependencyField = "Field";

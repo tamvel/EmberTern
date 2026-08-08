@@ -313,6 +313,15 @@ public class DesignTokenComplianceTests
     private static readonly Dictionary<string, int> PaddingBaseline = new(StringComparer.Ordinal)
     {
         // Padding — wnętrze kontrolki lub panelu. Zmierzone 2026-08-08: 185 deklaracji lokalnych w 49 plikach.
+        //
+        // ⭐ M4.2b: `Controls/DependencyTreeView.axaml` = 2 — wpis NOWY i podniesiony ŚWIADOMIE, drogą, którą
+        // ten strażnik sam wskazuje („zmiana jest decyzją projektową ⇒ podnieś sufit I zapisz powód").
+        // Obie wartości ODWZOROWUJĄ pasek boczny, bo drzewo zależności stoi teraz na tym samym mechanizmie:
+        //   • `Padding="2,0"` na wierszu — wcięcie ZAZNACZENIA od krawędzi panelu, nie odstęp treści;
+        //     katalog nie ma dla niego roli i ten sam zapis stoi przy pasku bocznym w `MainWindow`.
+        //   • `Padding="0"` na przycisku chevronu — RESET, a nie odstęp; rola dałaby tu wartość dodatnią.
+        // ⛔ Nie „naprawiać" ich rolą: obie są celowe i obie mają powód zapisany w miejscu.
+        ["Controls/DependencyTreeView.axaml"] = 2,
         ["Views/MainWindow.axaml"] = 21,
         ["Views/DebuggerTabView.axaml"] = 14,
         ["Views/DataImportTabView.axaml"] = 10,
@@ -371,25 +380,25 @@ public class DesignTokenComplianceTests
         ["Views/DataImportTabView.axaml"] = 40,
         ["Views/MainWindow.axaml"] = 29,
         ["Views/DomainDetailTabView.axaml"] = 21,
-        ["Views/FunctionDetailTabView.axaml"] = 21,
+        ["Views/FunctionDetailTabView.axaml"] = 19,
         ["Views/IndexDetailTabView.axaml"] = 20,
-        ["Views/ProcedureDetailTabView.axaml"] = 20,
+        ["Views/ProcedureDetailTabView.axaml"] = 18,
         ["Views/SessionManagerTabView.axaml"] = 19,
         ["Views/TraceMonitorTabView.axaml"] = 19,
         ["Views/AddFieldDialog.axaml"] = 16,
         ["Views/PerformancePanelView.axaml"] = 16,
         ["Views/SecurityManagerTabView.axaml"] = 16,
-        ["Views/TableDetailTabView.axaml"] = 16,
-        ["Views/ViewDetailTabView.axaml"] = 14,
-        ["Views/GeneratorDetailTabView.axaml"] = 13,
+        ["Views/TableDetailTabView.axaml"] = 14,
+        ["Views/ViewDetailTabView.axaml"] = 12,
+        ["Views/GeneratorDetailTabView.axaml"] = 11,
         ["Views/SettingsWindow.axaml"] = 11,
         ["Views/ScriptExecutorTabView.axaml"] = 10,
-        ["Views/ExceptionDetailTabView.axaml"] = 9,
+        ["Views/ExceptionDetailTabView.axaml"] = 7,
         ["Views/SettingsImportDialog.axaml"] = 9,
-        ["Views/TriggerDetailTabView.axaml"] = 8,
+        ["Views/TriggerDetailTabView.axaml"] = 6,
         ["Views/AboutWindow.axaml"] = 7,
         ["Views/ExecuteProcedureDialog.axaml"] = 7,
-        ["Views/PackageDetailTabView.axaml"] = 6,
+        ["Views/PackageDetailTabView.axaml"] = 4,
         ["Views/TableDetailTabView.axaml.cs"] = 6,
         ["Views/UserEditDialog.axaml"] = 6,
         ["Controls/TableColumnPicker.cs"] = 5,

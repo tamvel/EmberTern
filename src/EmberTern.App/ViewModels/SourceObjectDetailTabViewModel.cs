@@ -34,7 +34,7 @@ namespace EmberTern.App.ViewModels;
 /// param/header collections. View Detail is deliberately NOT on this base — a view has no
 /// PSQL body / variables / params, so it is a different family.
 /// </summary>
-public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IFieldRowOwner
+public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IFieldRowOwner, IDependencyNavigator
 {
     protected readonly FirebirdTableDetailReader? Reader;
     protected readonly FirebirdDdlReader? DdlReader;

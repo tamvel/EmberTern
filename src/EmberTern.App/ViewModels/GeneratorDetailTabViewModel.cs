@@ -22,7 +22,7 @@ namespace EmberTern.App.ViewModels;
 /// (no Source/Easy mode, no data preview, no fields). Reuse happens at the
 /// reader / DDL-generator / dependency-tree level, not via inheritance.
 /// </summary>
-public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
+public partial class GeneratorDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IDependencyNavigator
 {
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlReader? _ddlReader;

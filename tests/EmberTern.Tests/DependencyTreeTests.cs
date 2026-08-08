@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Linq;
 using EmberTern.App;
@@ -34,27 +37,84 @@ public class DependencyTreeTests
         Assert.Equal(0, node.Count);
     }
 
+    /// <summary>
+    /// ⭐⭐ <b>PRZEMIANOWANY W M4.2b, i to nie kosmetyka.</b> Test nazywał się
+    /// <c>…InIbExpertOrder</c> i przepisywał jedenaście nazw z tablicy, którą pilnował — czyli
+    /// potwierdzał, że kod jest taki, jaki jest. Po decyzji użytkownika kolejność kategorii jest
+    /// WSPÓLNA z drzewem połączenia, więc nazwa zaczęłaby kłamać, a asercja przez przepisanie i tak
+    /// nie umiałaby złapać defektu, który się zdarzył: <b>dwie osobne tablice, które się rozjechały</b>
+    /// (#315 — strażnik zielony albo czerwony z powodu, którego jego nazwa nie opisuje).
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Dlatego asercja jest RELACYJNA: wspólne kategorie muszą stać w tej samej KOLEJNOŚCI WZGLĘDNEJ
+    /// co w drzewie połączenia. Taki test przeżywa zmianę kolejności kanonicznej (jest wtedy nadal
+    /// prawdziwy) i pada dokładnie wtedy, gdy któreś z drzew zacznie mieć własną listę.
+    /// </remarks>
     [Fact]
-    public void BuildDependencyTree_AlwaysReturnsAllCategoriesInIbExpertOrder()
+    public void BuildDependencyTree_OrdersSharedCategories_LikeTheConnectionTree()
     {
-        var tree = TableDetailTabViewModel.BuildDependencyTree(System.Array.Empty<DependencyInfo>());
+        var categories = TableDetailTabViewModel.CategoryOrder;
+        var canonical = MetadataCategoryOrder.All.ToList();
 
-        var expected = new[]
-        {
-            UiStrings.MetadataGroupDomains,
-            UiStrings.MetadataGroupTables,
-            UiStrings.MetadataGroupViews,
-            UiStrings.MetadataGroupProcedures,
-            UiStrings.MetadataGroupFunctions,
-            UiStrings.MetadataGroupPackages,
-            UiStrings.MetadataGroupTriggers,
-            UiStrings.MetadataGroupExceptions,
-            UiStrings.DependencyCategoryUdfs,
-            UiStrings.MetadataGroupGenerators,
-            UiStrings.MetadataGroupIndexes,
-        };
-        Assert.Equal(expected, tree.Select(g => g.ObjectType));
+        // ⚠ Porównanie idzie po `Kind`, a nie po `ObjectType`: ten drugi niesie ETYKIETĘ WYŚWIETLANĄ
+        //   („Tables"), więc zestawianie go z nazwą enuma odpowiadałoby na inne pytanie (#285).
+        //   Po usunięciu „UDF" każda kategoria ma `Kind` — sprawdzane niżej.
+        var positions = categories
+            .Where(c => c.Kind is not null)
+            .Select(c => canonical.IndexOf(c.Kind!.Value))
+            .ToList();
+
+        Assert.NotEmpty(positions);
+        Assert.DoesNotContain(-1, positions);
+        Assert.Equal(positions.OrderBy(p => p), positions);
+
+        // ⛔ Po usunięciu „UDF" (decyzja użytkownika) KAŻDA kategoria ma swój `Kind`, więc lista jest
+        // wyłącznie zawężeniem kolejności kanonicznej — zero pozycji wstawianych lokalnie.
+        Assert.All(categories, c => Assert.NotNull(c.Kind));
+
+        // Każda kategoria pojawia się nawet pusta — to jest niezależne od kolejności i nadal obowiązuje.
+        var tree = TableDetailTabViewModel.BuildDependencyTree(System.Array.Empty<DependencyInfo>());
         Assert.All(tree, g => Assert.Empty(g.Children));
+    }
+
+    /// <summary>
+    /// ⭐ Właściwa anty-regresja dla defektu, który zgłosił użytkownik: <b>dwa drzewa nie mogą mieć dwóch
+    /// list</b>. Test czyta ŹRÓDŁO, bo pytanie brzmi „czy istnieje druga tablica", a nie „czy dziś dają
+    /// ten sam wynik" — dwie listy, które dziś się zgadzają, przechodzą każdą asercję o wyniku.
+    /// </summary>
+    [Fact]
+    public void NeitherTree_DeclaresItsOwnCategoryOrder()
+    {
+        var appRoot = Path.Combine(RepositoryRoot(), "src", "EmberTern.App", "ViewModels");
+
+        var offenders = Directory
+            .EnumerateFiles(appRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(f => Path.GetFileName(f) != "MetadataCategoryOrder.cs")
+            .Where(f => Regex.IsMatch(
+                File.ReadAllText(f),
+                @"CategoryOrder\s*=\s*new\[\]|MetadataObjectKind\[\]\s*CategoryOrder"))
+            .Select(f => Path.GetFileName(f))
+            .OrderBy(f => f, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "Drzewo deklaruje własną tablicę kolejności kategorii:\n  " + string.Join("\n  ", offenders)
+            + "\n\n⭐ Kanoniczna kolejność jest JEDNA (`MetadataCategoryOrder.All`); drzewo deklaruje CO "
+            + "pokazuje, nigdy W JAKIEJ KOLEJNOŚCI.\n⚠ Dokładnie ten defekt zgłosił użytkownik przy odbiorze "
+            + "M4.2b: Trigger, Function, Generator, Domain i Package stały w innym miejscu w każdym z drzew, "
+            + "wyłącznie dlatego, że każdy mechanizm miał własną listę.");
+    }
+
+    private static string RepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "EmberTern.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 
     [Fact]
@@ -70,8 +130,8 @@ public class DependencyTreeTests
 
         var tree = TableDetailTabViewModel.BuildDependencyTree(deps);
 
-        // 11 categories always — non-matching ones come back with empty Children.
-        Assert.Equal(11, tree.Count);
+        // 10 kategorii zawsze — niepasujące wracają z pustymi dziećmi.
+        Assert.Equal(10, tree.Count);
 
         var tables = tree.Single(g => g.ObjectType == UiStrings.MetadataGroupTables);
         Assert.Equal(2, tables.Count);
@@ -109,17 +169,6 @@ public class DependencyTreeTests
     }
 
     [Fact]
-    public void BuildDependencyTree_UdfCategory_HasNoIconAndStaysEmpty()
-    {
-        var tree = TableDetailTabViewModel.BuildDependencyTree(System.Array.Empty<DependencyInfo>());
-        var udf = tree.Single(g => g.ObjectType == UiStrings.DependencyCategoryUdfs);
-
-        Assert.Empty(udf.Children);
-        Assert.Equal(string.Empty, udf.Icon);
-        Assert.Equal(string.Empty, udf.IconResourceKey);
-    }
-
-    [Fact]
     public void BuildDependencyTree_UnknownObjectTypesAreDropped()
     {
         // "Field" / "Object (42)" don't match any canonical category and aren't
@@ -133,7 +182,7 @@ public class DependencyTreeTests
 
         var tree = TableDetailTabViewModel.BuildDependencyTree(deps);
 
-        Assert.Equal(11, tree.Count);
+        Assert.Equal(10, tree.Count);
         Assert.All(tree, g => Assert.Empty(g.Children));
     }
 
@@ -159,7 +208,6 @@ public class DependencyTreeTests
     [InlineData("Object (3)")]
     [InlineData("Object (99)")]
     [InlineData("Unknown")]
-    [InlineData("UDF")]
     [InlineData("")]
     [InlineData(null)]
     public void MapObjectTypeToKind_NonOpenableTypes_ReturnsNull(string? objectType)

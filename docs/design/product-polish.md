@@ -8958,3 +8958,140 @@ otwarta**) · ⛔ **B3 `GridSplitter Height="4"` ×5** — 🔒 decyzja użytkow
 z ekranami M4.3/M4.4, więc rozstrzyga się raz, na komplecie wystąpień (**R7**) · ⛔ migracja
 `Spacing`/`Padding`/`Margin` (osobny etap po M4.4, §19.39.4) · ⛔ ogon literałów ikon 10/11/13/15
 · ⛔ **M4.2b** (18 drzew „Zależności") · ⛔ **Z‑3** · ⛔ M4.3–M4.4.
+
+---
+
+## §19.41 Iteracja 29 (M4.2b) — drzewa „Zależności" na wspólnym mechanizmie (2026-08-08)
+
+> **🔒 Status: ZAMKNIĘTE — ODEBRANE PO QA WIZUALNYM UŻYTKOWNIKA.** Build 0/0 w Debug i Release; suite
+> **8329** (8179 + 95 + 55); smoke czysty. Nowe gotchy **#338–#339**. Zakres z §13: migracja drzew
+> „Zależności" na wspólny komponent (**D11**).
+>
+> ⚠⚠ **Etap przeszedł TRZY rundy QA i wszystkie trzy odrzucenia były trafne.** To jest jego główny wynik
+> i powód, dla którego ta sekcja jest długa: żaden z trzech defektów nie był widoczny w zielonym buildzie
+> ani w zielonym suite.
+
+### §19.41.1 ⭐⭐ Zakres: 17 drzew, nie 18 — i szablon był JEDEN powtórzony 17 razy
+
+Pomiar wejściowy: `DependsOnTree` 8 + `DependedOnByTree` 8 + `UsedByTree` 1 = **17** drzew w dziewięciu
+edytorach. Osiemnaste (`MemberGroups` w pakiecie) to zakładka Members — inne typy węzłów, własne menu;
+razem z `PlanRoots` (Performance) i `Groups` (Global Search) **świadomie poza zakresem**.
+
+Bloki `<TreeView>` okazały się **bajtowo identyczne** poza nazwą bindowanej właściwości i jednym `Grid.Row`,
+a `OnDependencyNodeDoubleTapped` miało **dziewięć kopii o tym samym MD5**. Model był już wspólny
+(`DependencyGroupNode`/`LeafNode`, `BuildDependencyTree`), role tokenów już zmigrowane — **duplikacja
+siedziała wyłącznie w warstwie widoku**.
+
+### §19.41.2 ⛔⛔ §13.2 odrzuciło właściwą drogę PRZESŁANKĄ, KTÓRA JEST NIEPRAWDZIWA
+
+§13.2 zakazywało migracji na `SidebarFlatController`, bo *„jest sprzężony z połączeniem, metadanymi,
+filtrowaniem, licznikami i indeksem nazw"*. **Zmierzone: jego konstruktor bierze WYŁĄCZNIE delegaty**
+(`roots`, `childrenSelector`, `isContainer`, `hasChildren`, `isExpanded`, `setExpanded`, `isVisible`) — to
+czysty spłaszczacz drzewa do listy, a całe wymienione sprzężenie żyje w `MetadataExplorerViewModel`.
+
+⭐⭐ **Zapis mówił prawdę o SĄSIEDZTWIE klasy, nie o klasie** — i to jest czwarta przesłanka tego etapu,
+która nie przeżyła zderzenia z kodem (po trzech z bloku gęstości). ⚠ Kosztowała realnie: pierwsze podejście
+zbudowało własną kontrolkę na `TreeView`, żeby ten zakaz uszanować.
+⭐ **Wykrył to użytkownik z DZIAŁAJĄCEJ APLIKACJI**, nie ja z dokumentu: *„wygląda lepiej, zachowuje się
+lepiej, jest sprawdzonym mechanizmem"*. §13.2 skorygowane w komentarzu kontrolki.
+
+### §19.41.3 Co jest w produkcie
+
+`Controls/DependencyTreeView` — płaska `ListBox` nad **tym samym** `SidebarFlatController`, którego używa
+drzewo połączenia. 17 bloków → 17 jednolinijkowców; 9 kopii handlera → jeden, na bąbelkowaniu.
+
+* **`IDependencyNavigator`** na siedmiu ViewModelach — ⭐ **żadne ciało metody się nie zmieniło**, wszystkie
+  już miały tę sygnaturę; abstrakcja opisuje istniejący wzorzec, a nie narzuca nowy.
+* **Wysokość wiersza `Size.Row.Tree` (24)** — ratyfikowane: wiersz drzewa zależności i wiersz Metadata
+  Explorera to ten sam rodzaj elementu. ⚠ Reguła **zawężona do tej kontrolki**; globalny `TreeViewItem`
+  z `MinHeight="0"` celowo nietknięty, bo obsługuje Performance i Global Search (R7 czytane w drugą stronę).
+* **`Margin.PanelCaption` = `8,4`** dla 16 nagłówków „Used by"/„Depends on" — ⭐ nazwana kompozycja
+  **istniejących** stopni (`Space.Md` + `Space.Xs`), bez nowej wartości. ⚠ Świadomie NIE użyto `Pad.Tab`
+  (10,4), choć pionowo pasuje: jego rola opisuje zakładkę, więc dałby wartość dobrą i regułę kłamiącą (R12).
+* ⛔ **Styl wiersza jest lokalną kopią, nie przeniesieniem stylu paska bocznego do `ControlStyles.axaml`** —
+  M3.4a odrzuciło takie przeniesienie, bo **zmienia priorytet reguły** wobec wartości lokalnych i tak
+  odtworzono regresję §19.2.
+
+### §19.41.4 ⭐ Wspólna kolejność kategorii — jedna lista, nie dwie zgodne
+
+Użytkownik zobaczył w aplikacji, że **Trigger, Function, Generator, Domain i Package** stoją w innym miejscu
+w każdym z drzew. Przyczyna: dwie osobne tablice `CategoryOrder`.
+
+Nowa **`MetadataCategoryOrder.All`** jest kanoniczna; każde drzewo **filtruje z niej swoje kategorie**.
+⭐ Rozwiązaniem nie było skopiowanie listy — dwie tablice, które dziś się zgadzają, jutro się rozjadą.
+⚠ Odniesieniem jest drzewo połączenia (§0.1 — powierzchnia oglądana cały dzień, już odebrana), więc
+**nie zmieniła się w nim ani jedna pozycja**.
+
+⛔ **„UDF" USUNIĘTE W CAŁOŚCI** (decyzja użytkownika): kategoria historyczna, produkt wspiera Firebird 5,
+a wiersz był **zawsze pusty** — żaden kod typu zależności go nie zwracał. ⭐ Skutek uboczny jest lepszy niż
+sama poprawka: **każda kategoria ma teraz swój `MetadataObjectKind`**, więc lista drzewa zależności jest
+wyłącznie zawężeniem kolejności kanonicznej — **zero pozycji wstawianych lokalnie**.
+⚠ Sprostowanie do polecenia: „UDF" **nigdy nie było w `MetadataCategoryOrder.All`** i być nie mogło (brak
+`Kind`) — właśnie dlatego wymagało wcześniej osobnej wstawki.
+
+⭐ Test `…AlwaysReturnsAllCategoriesInIbExpertOrder` **przemianowany na
+`…OrdersSharedCategories_LikeTheConnectionTree`**: przepisywał jedenaście nazw z tablicy, którą pilnował,
+więc potwierdzał, że kod jest taki, jaki jest. Nowa asercja jest **relacyjna** i przeżywa zmianę kolejności
+kanonicznej. Towarzyszy jej `NeitherTree_DeclaresItsOwnCategoryOrder`, pilnujący **przyczyny**, nie objawu.
+
+### §19.41.5 ⭐ Nawigacja ←/→ — jedna reguła, jedno wpięcie
+
+`SidebarFlatController.Navigate(row, forward)` + `Behaviors/SidebarKeyboardNavigation.Attach` — oba drzewa
+wpinają się jedną linią. Reguła: `←` zwija rozwinięty / skacze do rodzica, `→` rozwija zwinięty / skacze do
+pierwszego dziecka.
+
+⭐ **Kontroler decyduje, widok wykonuje** — dzięki temu **7 testów reguły jest CZYSTYCH**, bez sesji headless,
+i nie powiększa kruchej listy klas z #94/#226/#286. To argument za trzymaniem decyzji w kontrolerze
+niezależny od współdzielenia.
+⚠ Rodzic i pierwsze dziecko liczone są **z głębokości w płaskiej projekcji** — kontroler celowo nie wie,
+czym są jego węzły.
+
+### §19.41.6 ⛔⛔ TRZY DEFEKTY, KTÓRYCH ZIELONY SUITE NIE WIDZIAŁ
+
+To jest część warta czytania niezależnie od drzew.
+
+| # | defekt | dlaczego suite był zielony |
+|---|---|---|
+| 1 | **pusty ekran** — kontrolka nie renderowała ani jednego wiersza | pięciu strażników czytało ŹRÓDŁO („szablon jest jeden", „handler nie wrócił", „interfejs wpięty") i wszyscy mieli rację |
+| 2 | **←/→ nie działało** | siedem testów REGUŁY było poprawnych, strażnik WPIĘCIA też — brakowało pytania „czy zdarzenie DOCIERA" |
+| 3 | **zaznaczenie ginęło po rozwinięciu** | pojedynczy klawisz przechodził; ujawniły to dopiero DWA po sobie |
+
+⭐ Przyczyny: (1) podklasa `TreeView` nie dostaje `ControlTheme`, bo Avalonia szuka go po typie KONKRETNYM
+(**#338**, naprawa: `StyleKeyOverride`); (2) `ListBox` obsługuje strzałki w class handlerze i oznacza je jako
+obsłużone, więc handler instancyjny nie jest wołany (**#339a**, naprawa: tunel — #224 o rodzinę kontrolek
+dalej); (3) odwzorowywanie wierszy przez `Clear()` kasuje `SelectedItem` (**#339b**, naprawa: lista wiąże się
+wprost z kolekcją kontrolera, który rozwija splice'em).
+
+⭐⭐ **Lekarstwem systemowym są testy BEHAWIORALNE, których ten etap nie miał na starcie**
+(`DependencyTreeRenderTests`, 4 przypadki): realizacja wierszy, ujawnienie dzieci po rozwinięciu,
+przebarwienie ikon po zmianie motywu i **realny klawisz przez pełny pipeline zdarzeń**. ⚠ Asercją jest
+**zrealizowany kontener**, nie `ItemCount` — w chwili awarii `ItemCount` wynosił 1, a wierszy było 0.
+
+### §19.41.7 ⚠⚠ Trzy razy pomiar wykazał błąd w MOICH WŁASNYCH testach
+
+Każdy z nich przeszedłby przegląd kodu i każdy byłby zielony i bezwartościowy:
+
+1. **Test „nie kradnij sąsiada" przechodził z zepsutą implementacją** — pusta kategoria stała w fiksturze
+   ostatnia, więc „nie ma dokąd pójść" wynikało z KOŃCA LISTY, a nie z reguły. Podsadzenie `>` → `>=` go
+   nie zapaliło.
+2. **Strażnik wpięcia uznawał ZAKOMENTOWANE wpięcie za obecne** — czytał surowy tekst; ten sam kwirk
+   naprawiłem u sąsiada i nie zastosowałem konsekwentnie.
+3. **Test klawiatury wysyłał klawisz DONIKĄD** — zmierzone `listFocused=False`, brak elementu z fokusem;
+   `list.Focus()` w sesji headless nie ustawia fokusu. „Nie działa" znaczyłoby „nie dostarczono".
+
+⭐ Wszystkie trzy wykryło **podsadzenie naruszenia albo pomiar**, nigdy czytanie kodu.
+
+### §19.41.8 ⛔ Błąd, który zniszczył cudzą pracę — zgłoszony, nie przemilczany
+
+W trakcie M4.2 (poprzednia iteracja, ta sama sesja) **nadpisałem istniejący `DependencyTreeTests.cs`,
+kasując 30 działających testów**. Narzędzie odpowiedziało *„updated"*, nie *„created"* — sygnał przeoczony.
+⭐ **Wykrył to wyłącznie rachunek liczby testów** (partycja 8167 → 8142 przy +5 dodanych); samo „0
+niepowodzeń" przepuściłoby to bez śladu. To jest operacyjne uzasadnienie reguły, że **kryterium odbioru jest
+SUMA, nie brak błędów**. Oryginał odtworzony z HEAD, strażniki przeniesione do osobnej klasy.
+
+### §19.41.9 Czego ta iteracja NIE zrobiła
+
+⛔ `MemberGroups`, `PlanRoots`, `Groups` (decyzja użytkownika) · ⛔ przeniesienie stylu wiersza paska bocznego
+do `ControlStyles.axaml` (M3.4a) · ⛔ zmiana kolejności w drzewie połączenia · ⛔ migracja odstępów ·
+⛔ **B1** z M4.2 (prywatne ikony `TableDetailTabView` — nadal czeka na decyzję wizualną) · ⛔ **Z‑3** ·
+⛔ M4.3–M4.4.

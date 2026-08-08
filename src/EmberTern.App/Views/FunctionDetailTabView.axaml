@@ -256,46 +256,8 @@
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
-                       FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
-            <TreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}"
-                      Background="{DynamicResource BackgroundBrush}">
-              <TreeView.DataTemplates>
-                <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
-                      <controls:SvgIcon.Foreground>
-                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                          <Binding Path="IconResourceKey" />
-                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                        </MultiBinding>
-                      </controls:SvgIcon.Foreground>
-                    </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                  </StackPanel>
-                </TreeDataTemplate>
-                <DataTemplate DataType="vm:DependencyLeafNode">
-                  <Border HorizontalAlignment="Stretch" Background="Transparent"
-                          DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
-                        <controls:SvgIcon.Foreground>
-                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                            <Binding Path="IconResourceKey" />
-                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                          </MultiBinding>
-                        </controls:SvgIcon.Foreground>
-                      </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding FieldName}" FontSize="{DynamicResource Text.Caption.Size}"
-                                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
-                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </TreeView.DataTemplates>
-            </TreeView>
+                       FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="{DynamicResource Margin.PanelCaption}" />
+            <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}" />
           </Grid>
 
           <GridSplitter Grid.Column="1" Width="4" Background="{DynamicResource BorderBrush}"
@@ -303,46 +265,8 @@
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
-                       FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
-            <TreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}"
-                      Background="{DynamicResource BackgroundBrush}">
-              <TreeView.DataTemplates>
-                <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
-                      <controls:SvgIcon.Foreground>
-                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                          <Binding Path="IconResourceKey" />
-                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                        </MultiBinding>
-                      </controls:SvgIcon.Foreground>
-                    </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                  </StackPanel>
-                </TreeDataTemplate>
-                <DataTemplate DataType="vm:DependencyLeafNode">
-                  <Border HorizontalAlignment="Stretch" Background="Transparent"
-                          DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
-                        <controls:SvgIcon.Foreground>
-                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                            <Binding Path="IconResourceKey" />
-                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                          </MultiBinding>
-                        </controls:SvgIcon.Foreground>
-                      </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding FieldName}" FontSize="{DynamicResource Text.Caption.Size}"
-                                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
-                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </TreeView.DataTemplates>
-            </TreeView>
+                       FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="{DynamicResource Margin.PanelCaption}" />
+            <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}" />
           </Grid>
         </Grid>
       </TabItem>

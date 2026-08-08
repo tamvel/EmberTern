@@ -219,6 +219,16 @@ public partial class MainWindow : Window
         var sidebar = this.FindControl<ListBox>("SidebarList");
         if (sidebar is not null)
         {
+            // ⭐ Nawigacja ←/→ (M4.2b) — TO SAMO wpięcie, którego używa drzewo „Zależności". Reguła
+            // (zwiń / skocz do rodzica / rozwiń / skocz do pierwszego dziecka) żyje w JEDNYM miejscu,
+            // `SidebarFlatController.Navigate`, więc oba drzewa nie mogą się rozjechać — wymóg
+            // użytkownika postawiony wprost przy odbiorze M4.2b.
+            // ⚠ Delegat, nie kontroler: ten jest kapsułkowany przez `MetadataExplorerViewModel`, a VM
+            // podmienia się razem z połączeniem, więc instancja przechwycona tutaj byłaby nieaktualna.
+            Behaviors.SidebarKeyboardNavigation.Attach(
+                sidebar,
+                (row, forward) => _currentVm?.Metadata.NavigateSidebarRow(row, forward));
+
             // Tunnel PointerPressed so we see it before the ListBox's own selection handling
             // (otherwise selection moves before we record the drag candidate). Moved/Released
             // bubble up — defaults are fine for those.

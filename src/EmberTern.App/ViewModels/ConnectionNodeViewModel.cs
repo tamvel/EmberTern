@@ -12,22 +12,11 @@ namespace EmberTern.App.ViewModels;
 
 public partial class ConnectionNodeViewModel : ViewModelBase
 {
-    private static readonly MetadataObjectKind[] CategoryOrder =
-    {
-        MetadataObjectKind.Table,
-        MetadataObjectKind.View,
-        MetadataObjectKind.Procedure,
-        MetadataObjectKind.Trigger,
-        MetadataObjectKind.Function,
-        MetadataObjectKind.Generator,
-        MetadataObjectKind.Domain,
-        MetadataObjectKind.Package,
-        MetadataObjectKind.Exception,
-        MetadataObjectKind.Role,
-        MetadataObjectKind.User,
-        MetadataObjectKind.Index,
-        MetadataObjectKind.SystemTable,
-    };
+    // ⭐ M4.2b: kolejność przeniesiona do WSPÓLNEJ `MetadataCategoryOrder`, którą czyta też drzewo
+    // zależności. ⚠ Ta lista BYŁA kolejnością kanoniczną i nią pozostaje — migracja nie zmienia tu ani
+    // jednej pozycji; zmienia się wyłącznie drzewo zależności, które miało własną, rozjechaną tablicę.
+    // ⛔ Nie przywracać lokalnej kopii: dwie tablice, które dziś się zgadzają, jutro się rozjadą.
+    private static IReadOnlyList<MetadataObjectKind> CategoryOrder => MetadataCategoryOrder.All;
 
     private readonly MainWindowViewModel? _owner;
     private readonly FirebirdConnectionService? _service;
@@ -121,7 +110,7 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         }
 
         Children.Clear();
-        var categories = new System.Collections.Generic.List<MetadataNodeViewModel>(CategoryOrder.Length);
+        var categories = new System.Collections.Generic.List<MetadataNodeViewModel>(CategoryOrder.Count);
         foreach (var kind in CategoryOrder)
         {
             var cat = MetadataNodeViewModel.CreateGroup(metadata, kind);

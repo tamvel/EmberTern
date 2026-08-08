@@ -562,14 +562,6 @@ public partial class FunctionDetailTabView : UserControl
             return tb;
         });
 
-    private void OnDependencyNodeDoubleTapped(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Control { DataContext: DependencyLeafNode leaf } && _currentVm is not null)
-        {
-            _currentVm.RequestOpen(leaf);
-            e.Handled = true;
-        }
-    }
 
     private void ApplyEditorTheme()
     {

@@ -27,7 +27,7 @@ namespace EmberTern.App.ViewModels;
 /// CREATE / ALTER EXCEPTION (message) + COMMENT ON EXCEPTION (description); Firebird
 /// has no ALTER EXCEPTION … TO, so the name is read-only on an existing exception.
 /// </summary>
-public partial class ExceptionDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
+public partial class ExceptionDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IDependencyNavigator
 {
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlExecutor? _ddlExecutor;

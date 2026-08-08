@@ -1430,3 +1430,44 @@ every emit path to be individually perfect.**
      ceiling because a measurement improved is a **correction of the measurement, not a regression**, and
      "fixing" it by lowering the number again would re-hide exactly what was just found.
      (Product Polish M4.2 — `product-polish.md` §19.40.)
+
+338. **A subclass of a templated control does NOT inherit its base class's `ControlTheme` — Avalonia looks the
+     theme up by the CONCRETE type, so the control renders NOTHING while every observable state looks
+     healthy.** M4.2b's first shared dependency tree was `class DependencyTreeView : TreeView` with its own
+     XAML. It compiled, bound correctly and had its data — measured in the failing test: `ItemCount = 1`,
+     `DataTemplates = 2`, **realized rows = 0**, against a plain `TreeView` realizing 1 from the *same*
+     collection. No theme ⇒ no template ⇒ no `ItemsPresenter` ⇒ no containers. The fix is one line —
+     `protected override Type StyleKeyOverride => typeof(TreeView);`.
+     ⭐ **What identified it was the CONTROL EXPERIMENT, not reading the code**: the same collection in a bare
+     `TreeView`. Without that comparison "0 rows" is ambiguous between "our control is broken" and "the test
+     harness never laid anything out" — #336's lesson (validate the instrument against a known-good case)
+     applied to a control instead of a measurement.
+     ⚠⚠ **The failure mode is the dangerous one: an empty surface, not an exception.** Nothing logs, nothing
+     throws, the build is green, and a screen that shows no rows is indistinguishable from a screen whose
+     query returned none. ⛔ Never delete `StyleKeyOverride` as "redundant" — it looks like ceremony and its
+     removal costs an entire feature.
+     ⭐ The general rule beyond Avalonia: **when you subclass a control to share markup, check what the
+     framework resolves by concrete type** (themes, templates, implicit styles, resource lookup). Inheriting
+     the C# type does not inherit those. (Product Polish M4.2b — `product-polish.md` §19.41.)
+
+339. **"The rule is correct" and "the wiring exists" do not add up to "it works" — between them sits a third
+     question no source guard asks: does the event ever REACH the handler, and is there still state for it to
+     act on?** M4.2b shipped ←/→ tree navigation with seven green unit tests of the rule
+     (`SidebarFlatController.Navigate`) and a green source guard proving both trees wire it. In the app the
+     keys did nothing, and there were **two independent causes**:
+     ⭐ (a) `ListBox` handles the arrow keys in its own CLASS handler and marks them handled, so an instance
+     handler added with `list.KeyDown +=` **is never invoked at all** — #224 one control-family further along;
+     the fix is registering on the TUNNEL, which is exactly the case #224 says a tunnel is for.
+     ⭐⭐ (b) far worse and invisible to (a)'s fix: the control MIRRORED the controller's rows into its own
+     collection with `Clear()` + re-add, and **`Clear()` drops the `ListBox`'s `SelectedItem`**. Expanding a
+     node therefore erased the selection, so the *next* key had nothing to act on. ⚠ The tell is subtle —
+     **one keypress worked, two in a row did not** — so a test pressing a single key would have "proved" the
+     fix. The cure is to bind the list directly to the controller's collection, which splices on expand and
+     keeps row instances (and with them, selection).
+     ⚠⚠ **And the test that found this first sent the key NOWHERE**: measured `listFocused=False`,
+     `focusWithin=False`, no focused element — `list.Focus()` does not take focus in a headless session.
+     Until that was fixed, "the key does nothing" meant "the key was never delivered", and acting on it would
+     have fixed the wrong thing. ⭐ **Focus the ROW CONTAINER, as a real click does.**
+     ⭐ Practical rule: for anything keyboard-driven, one test must send a REAL key through the full event
+     pipeline and press **at least twice**, because single-shot input hides every state-loss defect.
+     (Product Polish M4.2b — `product-polish.md` §19.41.)

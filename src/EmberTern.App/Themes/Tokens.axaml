@@ -98,6 +98,21 @@
   <!-- Odstęp między kontrolkami w poziomie — ta sama reguła jednego właściciela, oś pozioma. -->
   <Thickness x:Key="Margin.InlineGap">0,0,8,0</Thickness>
 
+  <!-- ⭐ DOPISANE W M4.2b (QA użytkownika): PODPIS NAD PANELEM — nagłówek „Used by" / „Depends on"
+       stojący bezpośrednio nad listą, wewnątrz tej samej kolumny.
+
+       Rola powstała, bo nie dało się jej złożyć z istniejących (procedura z §4.1): potrzebny jest
+       lewy wcięcie + mały odstęp pionowy, a XAML nie liczy — `Thickness` nie da się złożyć z dwóch
+       `x:Double` (§3.2), więc „użyj `Space.Md` po bokach i `Space.Xs` w pionie" nie jest zapisywalne
+       bez roli złożonej.
+       ⭐ NIE WNOSI NOWEJ WARTOŚCI: 8 to `Space.Md`, 4 to `Space.Xs` — to nazwana kompozycja
+       istniejących stopni skali, a nie nowa liczba w katalogu.
+       ⚠⚠ Świadomie NIE reużyto `Pad.Tab` (10,4), mimo że pionowo pasuje co do joty: jego rola opisuje
+       ZAKŁADKĘ. Wzięcie jej tutaj dałoby wartość, która wygląda dobrze, i regułę, która kłamie —
+       dokładnie to, przed czym broni R12 („błędna rola jest gorsza od wartości lokalnej”).
+       16 konsumentów w 8 widokach. -->
+  <Thickness x:Key="Margin.PanelCaption">8,4</Thickness>
+
   <!-- ⭐ DOPISANE W M2b, kroku 1 (CheckBox) — pierwsze rozszerzenie „zamkniętej" listy §4.1,
        wykonane procedurą, którą ta sekcja sama przewiduje: nową rolę wolno dodać wtedy, gdy nie da
        się jej złożyć z istniejących.

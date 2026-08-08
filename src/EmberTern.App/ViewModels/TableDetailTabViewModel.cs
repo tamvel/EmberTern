@@ -18,7 +18,7 @@ using EmberTern.Firebird;
 
 namespace EmberTern.App.ViewModels;
 
-public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
+public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IDependencyNavigator
 {
     // Data preview is capped — we never want to pull a whole table into the
     // grid from a metadata-browsing tab.
@@ -475,25 +475,45 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         _ => null,
     };
 
-    // IBExpert-style fixed category order for the dependency tree. Every entry
-    // appears as a root node even when empty. ObjectTypeKey matches the singular
-    // value MapObjectType returns; DisplayLabel is the plural shown in headers.
-    // "UDF" has no matching dependency type code today — it stays as a fixed
-    // empty placeholder so the category list mirrors IBExpert exactly.
-    internal static readonly IReadOnlyList<DependencyCategory> CategoryOrder = new[]
+    // ⭐⭐ M4.2b: kolejność NIE jest już własną tablicą — jest KANONICZNĄ kolejnością
+    // (`MetadataCategoryOrder.All`) zawężoną do kategorii, które mogą być zależnością. Powód jest
+    // odbiorczy, nie porządkowy: użytkownik zobaczył, że Trigger, Function, Generator, Domain i Package
+    // stoją w innym miejscu niż w drzewie połączenia — wyłącznie dlatego, że każdy mechanizm miał
+    // własną listę. ⛔ Nie wracać do literalnej tablicy: dwie listy, które dziś się zgadzają, jutro
+    // się rozjadą, i to jest ten sam defekt jeszcze raz.
+    //
+    // ⚠ Każda kategoria pojawia się jako korzeń również wtedy, gdy jest pusta. `ObjectTypeKey` odpowiada
+    // liczbie pojedynczej zwracanej przez `MapObjectType`; `DisplayLabel` to liczba mnoga w nagłówku.
+    //
+    // ⛔ „UDF" USUNIĘTE (decyzja użytkownika, 2026-08-08): to kategoria HISTORYCZNA, a produkt wspiera
+    // Firebird 5, więc nie ma jej w nowym UI. Była pozycją-parytetem z IBExpertem i ZAWSZE PUSTĄ — żaden
+    // kod typu zależności jej nie zwracał — czyli wierszem, który nigdy niczego nie pokazał.
+    // ⛔ Nie zastępować jej inną kategorią i nie przywracać „dla kompletności listy".
+    internal static readonly IReadOnlyList<DependencyCategory> CategoryOrder = BuildCategoryOrder();
+
+    private static IReadOnlyList<DependencyCategory> BuildCategoryOrder()
     {
-        new DependencyCategory("Domain",    MetadataObjectKind.Domain,    UiStrings.MetadataGroupDomains),
-        new DependencyCategory("Table",     MetadataObjectKind.Table,     UiStrings.MetadataGroupTables),
-        new DependencyCategory("View",      MetadataObjectKind.View,      UiStrings.MetadataGroupViews),
-        new DependencyCategory("Procedure", MetadataObjectKind.Procedure, UiStrings.MetadataGroupProcedures),
-        new DependencyCategory("Function",  MetadataObjectKind.Function,  UiStrings.MetadataGroupFunctions),
-        new DependencyCategory("Package",   MetadataObjectKind.Package,   UiStrings.MetadataGroupPackages),
-        new DependencyCategory("Trigger",   MetadataObjectKind.Trigger,   UiStrings.MetadataGroupTriggers),
-        new DependencyCategory("Exception", MetadataObjectKind.Exception, UiStrings.MetadataGroupExceptions),
-        new DependencyCategory("UDF",       null,                         UiStrings.DependencyCategoryUdfs),
-        new DependencyCategory("Generator", MetadataObjectKind.Generator, UiStrings.MetadataGroupGenerators),
-        new DependencyCategory("Index",     MetadataObjectKind.Index,     UiStrings.MetadataGroupIndexes),
-    };
+        var labels = new Dictionary<MetadataObjectKind, (string Key, string Label)>
+        {
+            [MetadataObjectKind.Table]     = ("Table",     UiStrings.MetadataGroupTables),
+            [MetadataObjectKind.View]      = ("View",      UiStrings.MetadataGroupViews),
+            [MetadataObjectKind.Procedure] = ("Procedure", UiStrings.MetadataGroupProcedures),
+            [MetadataObjectKind.Trigger]   = ("Trigger",   UiStrings.MetadataGroupTriggers),
+            [MetadataObjectKind.Function]  = ("Function",  UiStrings.MetadataGroupFunctions),
+            [MetadataObjectKind.Generator] = ("Generator", UiStrings.MetadataGroupGenerators),
+            [MetadataObjectKind.Domain]    = ("Domain",    UiStrings.MetadataGroupDomains),
+            [MetadataObjectKind.Package]   = ("Package",   UiStrings.MetadataGroupPackages),
+            [MetadataObjectKind.Exception] = ("Exception", UiStrings.MetadataGroupExceptions),
+            [MetadataObjectKind.Index]     = ("Index",     UiStrings.MetadataGroupIndexes),
+        };
+
+        // ⭐ Po usunięciu „UDF" KAŻDA kategoria drzewa zależności ma swój `MetadataObjectKind`, więc lista
+        // jest już wyłącznie zawężeniem kolejności kanonicznej — bez ani jednej pozycji wstawianej lokalnie.
+        return MetadataCategoryOrder
+            .Only(labels.Keys.ToArray())
+            .Select(kind => new DependencyCategory(labels[kind].Key, kind, labels[kind].Label))
+            .ToList();
+    }
 
     internal sealed record DependencyCategory(string ObjectTypeKey, MetadataObjectKind? Kind, string DisplayLabel);
 

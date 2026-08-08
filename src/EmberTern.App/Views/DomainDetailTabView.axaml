@@ -112,47 +112,7 @@
            grouped by object type. Reuses BuildDependencyTree + the dep-tree
            templates; double-click navigates via the shared OpenObjectRequested. -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DomainDetailTabUsedBy}">
-        <TreeView ItemsSource="{Binding UsedByTree}"
-                  Background="{DynamicResource BackgroundBrush}">
-          <TreeView.DataTemplates>
-            <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
-              <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-                <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                  Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
-                  <controls:SvgIcon.Foreground>
-                    <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                      <Binding Path="IconResourceKey" />
-                      <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                    </MultiBinding>
-                  </controls:SvgIcon.Foreground>
-                </controls:SvgIcon>
-                <TextBlock Text="{Binding Header}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-              </StackPanel>
-            </TreeDataTemplate>
-            <DataTemplate DataType="vm:DependencyLeafNode">
-              <Border HorizontalAlignment="Stretch" Background="Transparent"
-                      DoubleTapped="OnDependencyNodeDoubleTapped">
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-                  <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                    Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
-                    <controls:SvgIcon.Foreground>
-                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                        <Binding Path="IconResourceKey" />
-                        <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                      </MultiBinding>
-                    </controls:SvgIcon.Foreground>
-                  </controls:SvgIcon>
-                  <TextBlock Text="{Binding ObjectName}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding FieldName}"
-                             FontSize="{DynamicResource Text.Caption.Size}"
-                             Foreground="{DynamicResource SubtleForegroundBrush}"
-                             VerticalAlignment="Center"
-                             IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                </StackPanel>
-              </Border>
-            </DataTemplate>
-          </TreeView.DataTemplates>
-        </TreeView>
+        <controls:DependencyTreeView ItemsSource="{Binding UsedByTree}" />
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE DOMAIN. -->

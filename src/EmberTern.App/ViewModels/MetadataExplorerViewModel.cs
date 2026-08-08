@@ -64,6 +64,13 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     // Chevron click → flip the underlying node's expansion (drives the projection).
     public void ToggleSidebarRow(SidebarRow? row) => _sidebar.Toggle(row);
 
+    /// <summary>
+    /// Nawigacja pozioma klawiaturą — bliźniak <see cref="ToggleSidebarRow"/>. ⭐ Reguła żyje w JEDNYM
+    /// miejscu (<see cref="SidebarFlatController.Navigate"/>) i obsługuje zarówno drzewo połączenia, jak
+    /// i drzewa „Zależności", więc oba nie mogą się rozjechać.
+    /// </summary>
+    public SidebarRow? NavigateSidebarRow(SidebarRow row, bool forward) => _sidebar.Navigate(row, forward);
+
     // Node-access delegates for the flat controller (kept here so the node-type knowledge
     // stays with the explorer that owns the hierarchy).
     private static IEnumerable<object>? SidebarChildren(object node) => node switch
