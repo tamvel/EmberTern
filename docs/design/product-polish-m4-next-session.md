@@ -5,6 +5,11 @@
 >
 > ⛔⛔ **M4 NIE ZACZYNA SIĘ BEZ WYRAŹNEJ ZGODY UŻYTKOWNIKA.** Ten dokument przygotowuje wejście, nie jest
 > zgodą na wejście.
+>
+> ✅ **NIC NIE JEST OTWARTE PRZED M4 (stan na 2026-08-08).** Wszystkie sprinty sprzed M4 są zamknięte,
+> odebrane, zacommitowane i wypchnięte na oba remote'y; repo jest czyste. ⛔ **Nie otwieraj sesji od
+> raportowania stanu ani od pytań, czy coś zostało domknięte** — jeżeli `git status` jest czysty, a HEAD zgadza
+> się z §1, to jest cała odpowiedź. Jedyne, na co czekasz, to zgoda na start M4.
 
 ---
 
@@ -15,26 +20,39 @@ katalog zablokował), **M3** (Status Bar 2.0 · język kolorów · pasek zakład
 **M3b** (podłączenie operacji do sekcji postępu), ⛔ **bramę §13.3** (przegląd czterech powierzchni trwałych
 na żywej bazie, w obu motywach — **przeszła**) oraz **M3.5** (trzy defekty, które brama znalazła).
 
-⚠⚠ **A POMIĘDZY M3.5 I M4 WSZEDŁ SPRINT STABILIZACYJNY (S-1…S-6, 2026-08-05) — to NIE Product Polish, ale
-zmienia punkt odniesienia i dwie rzeczy, które ten dokument planuje.** Zapis:
-[docs/history/24-stabilization-sprint.md](../history/24-stabilization-sprint.md). Co z niego wynika dla M4:
+⚠⚠ **A POMIĘDZY M3.5 I M4 WESZŁY TRZY SPRINTY SPOZA Product Polish — wszystkie ZAMKNIĘTE I ODEBRANE. Nie ma
+nic do domknięcia przed M4; czytaj tę listę jako stan wejściowy, nie jako zaległości.**
+
+| sprint | data odbioru | co z niego zostaje dla M4 |
+|---|---|---|
+| **stabilizacyjny S‑1…S‑6** ([24](../history/24-stabilization-sprint.md)) | 2026-08-05 | rozjazd wysokości **wierszy** siatek definicji + szerokości pasków importu → **do puli gęstości** |
+| **spójności gridów** ([25](../history/25-grid-consistency-sprint.md)) | 2026-08-07 | wysokości wierszy **nietknięte** (to samo pytanie o gęstość); jeden formater kopiowania |
+| **zgodności z gramatyką Firebirda + QA** ([26](../history/26-firebird-language-completeness-sprint.md)) | 2026-08-08 | nic do M4; zamknięty w całości, łącznie z rundą QA |
 
 * ⭐ **Rozjazd wysokości WIERSZY siatek definicji (Table Fields 34 · Table Data 32 ·
   Procedure/Function/Trigger 30 · Indeksy/Ograniczenia 22) został ZMIERZONY i świadomie ODDANY DO M4** —
-  decyzja użytkownika: to pytanie o GĘSTOŚĆ, więc należy tu, a nie do sprintu naprawczego. Sprint naprawił
-  wyłącznie wysokość EDYTORA w komórce (rola nie dosięgała trzech siatek). Dołóż to do puli pytań o gęstość
-  obok `Size.Icon` i K15 — te trzy to jedna decyzja o gęstości, nie trzy iteracje (D‑M4‑2 stosuje się wprost).
+  decyzja użytkownika: to pytanie o GĘSTOŚĆ, więc należy tu, a nie do sprintu naprawczego. Sprinty naprawiły
+  wyłącznie wysokość EDYTORA w komórce. Dołóż to do puli pytań o gęstość obok `Size.Icon` i K15 — **te trzy to
+  jedna decyzja o gęstości, nie trzy iteracje** (D‑M4‑2 stosuje się wprost).
 * ⚠ **Szerokość pasków komend importu** (trzy listy po 170/180 px) też została odłożona jako gęstość.
-* ⚠ **Nowa ósma klasa headless** (`EditableGridEnterTests`) weszła do filtra partycji — sprawdź listę klas w
-  CLAUDE.md, nie kopiuj filtra z pamięci.
-* ⭐ **`Behaviors/EditableGridBehavior` jest nowym JEDNYM seamem każdej edytowalnej siatki** (gest Enter +
-  rola wysokości edytora), pilnowanym przez `EditableGridSeamTests`. Jeżeli M4 dotyka siatek, to jest miejsce,
+* ⚠ **Partycji headless jest DZIEWIĘĆ klas** (doszły `EditableGridEnterTests` i `GridDateEditorTests`) —
+  ⛔ czytaj listę i filtr z `CLAUDE.md` („Tests"), nigdy z pamięci: ten filtr **dwa razy zgnił po cichu**, raz
+  przez nazwę, która nic nie łapała, raz przez klasę headless brakującą w wykluczeniu.
+* ⭐ **`Behaviors/EditableGridBehavior` jest JEDNYM seamem każdej edytowalnej siatki** (gest Enter + rola
+  wysokości edytora), pilnowanym przez `EditableGridSeamTests`. Jeżeli M4 dotyka siatek, to jest miejsce,
   w którym się to robi — nie `FieldGridColumns`.
+* ⭐ **Prezentacja daty ma jednego właściciela** — `EmberTern.Core.Formatting.DateTimeDisplay`, a w siatce
+  danych format wynika z **typu metadanych Firebirda, nie z typu CLR**. Gdyby M4 dotknął komórek dat, to jest
+  ta jedna klasa; ⛔ nie wprowadzać heurystyk po wartości (`TimeOfDay == 0`) — poprzednia taka została usunięta
+  wraz z defektem, który powodowała (gotcha #330).
 
-Punkt odniesienia: gałąź `feat/stabilization-sprint` (odgałęziona od `feat/product-polish`), sprint zamknięty
-2026-08-05. Build 0/0 · suite **7360** w trzech partycjach (7232 + 74 + 54) · smoke czysty.
-⚠ Poprzedni punkt odniesienia — `feat/product-polish` @ `cb76c0b`, suite 7317 (7196 + 67 + 54) — jest już
-historyczny; nie cytuj go jako aktualnego.
+**Punkt odniesienia: `feat/product-polish` @ `995025e` (2026-08-08).** Build 0/0 w Debug i Release ·
+suite **8291** w trzech partycjach (**8145 + 91 + 55**) · smoke Debug + Release czysty ·
+`DebuggerFidelityProbe` 40/40 i `ChangeSafetyProbe` ALL PASS na żywym FB5 · **repo czyste, oba remote'y na tym
+samym commicie**.
+⚠ Wcześniejsze punkty odniesienia (`feat/stabilization-sprint` / suite 7360, `cb76c0b` / 7317) są historyczne —
+nie cytuj ich jako aktualnych. ⚠ **Liczbę testów zmierz, nie przepisuj stąd** — ta linia dryfowała już
+wielokrotnie i jest w tym dokumencie tylko po to, żeby rozpoznać stan „nic się nie zmieniło od zamknięcia".
 🔒 **M3.5 odebrane przez użytkownika w obu motywach 2026-08-04** — w tym ratyfikacja architektury
 `CreateIcon` (lepsza niż dziewięć wariantów `*Plus`) i proporcji badge'a. ⛔ Nie otwierać ponownie.
 
