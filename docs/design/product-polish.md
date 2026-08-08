@@ -8466,7 +8466,8 @@ DEV MODE) oraz **K2** (rola bez konsumenta). ⭐ Żadne z nich nie jest już pyt
 
 ## §19.38 Iteracja 26 (M4 · blok typografii) — rejestr kolizji zamknięty (2026-08-08)
 
-> **Status: dostarczone, oczekuje na QA wizualne użytkownika.**
+> **🔒 Status: ZAMKNIĘTE — dostarczone i ODEBRANE PO QA WIZUALNYM UŻYTKOWNIKA (2026-08-08), bez uwag.**
+> ⭐⭐ **Tym samym decyzje projektowe M4 są KOMPLETNE**; zostaje migracja ekranów M4.1–M4.4 i **Z‑3**.
 > Decyzje ratyfikowane: **A‑2 · B‑1 · C (K9 → 11, K4 zostaje 13) · D w całości · K5 skreślone.**
 > Materiał + pomiar: [product-polish-m4-typography-decision.md](product-polish-m4-typography-decision.md).
 > Build 0/0 · suite **8304** (8158 + 91 + 55, +3) · smoke czysty. **Trzy nowe strażniki zweryfikowane
