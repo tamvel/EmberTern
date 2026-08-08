@@ -93,14 +93,14 @@
                                 Click="OnMemberDebugClick"
                                 IsVisible="{Binding IsProcedure}">
                         <MenuItem.Icon>
-                          <controls:DebuggerIcon Width="14" Height="14" />
+                          <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                         </MenuItem.Icon>
                       </MenuItem>
                       <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
                                 Click="OnMemberDebugClick"
                                 IsVisible="{Binding IsFunction}">
                         <MenuItem.Icon>
-                          <controls:DebuggerIcon Width="14" Height="14" />
+                          <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                         </MenuItem.Icon>
                       </MenuItem>
                     </ContextMenu>

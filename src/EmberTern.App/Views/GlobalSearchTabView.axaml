@@ -51,7 +51,7 @@
             <StackPanel Orientation="Horizontal" Spacing="6" Background="Transparent"
                         DoubleTapped="OnLeafDoubleTapped">
               <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                Width="14" Height="14" VerticalAlignment="Center">
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
                 <controls:SvgIcon.Foreground>
                   <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                     <Binding Path="IconResourceKey" />

@@ -8584,11 +8584,11 @@ sporny, bo **identyczny kształt renderuje się 16 w 135 miejscach i 14 w 34**.
 
 Rozstrzygające było zejście o poziom niżej — do konkretnej grupy kontrolek, a nie do pliku:
 
-| grupa kontrolek | 14 | 16 (brak deklaracji) | rola |
-|---|---|---|---|
-| pasek paginacji (`ChevronFirst/Left/Right/Last`) | MainWindow · Table Data · Data Import | Function · Procedure · View | debugger: `Size.Icon.Toolbar` |
-| filtr / agregacja / eksport | MainWindow · Table Data · Function · Procedure · View | Trace Monitor | — |
-| chevron zwijania panelu (`ChevronsUp/Down`) | MainWindow · Data Import · Debugger · MessageBanner | Session Manager · Trace Monitor | — |
+| grupa kontrolek | 14 | 16 (brak deklaracji) |
+|---|---|---|
+| pasek paginacji (komplet `ChevronFirst/Left/Right/Last`) | MainWindow · Table Data | Function · Procedure · View |
+| filtr / agregacja / eksport | MainWindow · Table Data · Function · Procedure · View | Trace Monitor |
+| chevron zwijania panelu (`ChevronsUp/Down`) | MainWindow · Data Import · Debugger · MessageBanner | Session Manager · Trace Monitor |
 
 ⭐⭐ **REGUŁA ISTNIEJE I JEST WIDOCZNA — łamią ją trzy grupy z tabeli, a nie „wszystko".** Dowodzi tego
 kontrolka, która stoi po OBU stronach linii i za każdym razem trafia dobrze: `Icon.RefreshCw` niesie **16**
@@ -8601,22 +8601,66 @@ hosta pokazał, że jest odwrotnie, i to jest pułapka 17 w czystej postaci: wid
 ⭐⭐ **Reszta nie jest więc podziałem wg powierzchni ani rolą czekającą na nazwę — to jest rozjazd.** Pasek
 paginacji jest JEDNĄ kontrolką, reużywaną przez te same stringi `TableDetailPagination*Tooltip` (komentarz
 w `MainWindow` mówi to wprost: *„reuses the same first/prev/next/last icon strings as the Table Data View"*),
-a mimo to ma **trzy różne rozmiary w pięciu ekranach**. Obie populacje żyją **w tych samych plikach**, więc nie
-da się tego opisać ani regułą per plik, ani regułą per powierzchnia.
+a mimo to ma **dwa rozmiary w pięciu ekranach**. Obie populacje żyją **w tych samych plikach**, więc nie da
+się tego opisać ani regułą per plik, ani regułą per powierzchnia.
 
-⚠ **Blok gęstości pogłębił ten rozjazd o jeden krok i nikt tego nie zobaczył** — i to nie jest zarzut wobec
-A‑3, tylko ilustracja mechanizmu: sweep 16 literałów `16` objął chevron paginacji w debuggerze (bo był
-literałem `16`), a jego bliźniak w `MainWindow` został przy 14 (bo był literałem `14`). **Sweep po WARTOŚCI
-nie widzi kontrolki.** Pasek paginacji miał wtedy dwa rozmiary, a po sweepie ma trzy.
+### §19.39.2a ⛔ SPROSTOWANIE WŁASNEGO POMIARU — grupowanie po GEOMETRII to nie grupowanie po KONTROLCE
 
-### §19.39.3 Dlaczego to NIE zostało rozstrzygnięte w tej iteracji
+Pierwsza redakcja §19.39.2 zawierała **dwa nieprawdziwe zapisy** i oba zostały wycofane, zanim cokolwiek
+zmieniono w kodzie:
 
-Wpisanie tu którejkolwiek z ról jest **rozstrzygnięciem pytania o gęstość chromy**, a nie porządkowaniem:
-`Size.Icon` (14) opisuje element, który *„nie jest celem myszy"* — a przycisk paginacji nim jest; `Size.Icon.Toolbar`
-(16) zmienia wygląd pasków w Table Data, wynikach SQL, Data Import, debuggerze i `MessageBanner`, czyli na
-powierzchniach **już odebranych**. ⛔ **D‑M4‑2 zabrania rozstrzygać taką sprawę ekran po ekranie**, a §0.5 nie
-pozwala zmienić postrzeganego rozmiaru na domysł. Pytanie idzie więc do użytkownika jako JEDNO, z pomiarem —
-i dopiero po odpowiedzi ruszają pozostałe **34 deklaracje w 8 plikach**.
+1. *„pasek paginacji ma TRZY rozmiary — w tym `Size.Icon.Toolbar` w debuggerze"*. **Debugger nie ma paska
+   paginacji.** Grupa była zbudowana z nazw geometrii, a `Icon.ChevronRight` pełni w aplikacji DWIE różne
+   funkcje: jest jedną z czterech ikon paska paginacji **i** chevronem ujawnienia sekcji. Do „paginacji"
+   wpadł więc chevron „Zaawansowane" panelu startowego debuggera oraz chevron opcji formatu w Data Import.
+   Jednoznacznym znacznikiem paska jest `Icon.ChevronFirst` — i ma go **dokładnie pięć plików**.
+2. *„blok gęstości pogłębił ten rozjazd"*. **Nieprawda i zarzut wycofany w całości**: sweep A‑3 przeniósł
+   ten chevron z literału `16` na rolę o wartości 16, czyli **nie zmienił ani jednej wartości** w żadnej
+   z trzech grup z tabeli.
+
+⭐⭐ **Wartość tego sprostowania jest większa niż jego koszt, bo popełniłem tu dokładnie ten błąd, który
+opisywałem w tej samej iteracji jako gotchę #335** — „grupowanie po wartości nie widzi kontrolki" ma bliźniaka
+o jeden krok dalej: **grupowanie po NAZWIE GEOMETRII też jej nie widzi**, bo jedna ikona bywa dwiema
+kontrolkami. Wykryło to dopiero wypisanie HOSTA (tooltipa i komendy przycisku) obok każdej ikony — czyli
+pytanie *„czym ta rzecz jest dla użytkownika"*, a nie *„jak się nazywa jej ścieżka"*.
+⚠ Osobne, prawdziwe znalezisko, które przy okazji z tego wyszło: **chevron ujawnienia sam ma dwa rozmiary** —
+14 w Data Import i 16 w debuggerze, przy identycznym idiomie (Data Import skopiował go z panelu startowego
+debuggera, co mówi komentarz w miejscu). To jest przypadek reguły z §19.39.1 („ikona przy etykiecie"),
+a nie paska siatki; ⛔ świadomie NIE ruszony tutaj, bo leży w pliku debuggera (M4.3) i nie był przedmiotem
+pytania rozstrzygniętego przez użytkownika.
+
+### §19.39.3 🔒 Rozstrzygnięcie użytkownika: „dokończyć regułę, którą produkt już ma" (2026-08-08)
+
+Sprawy nie dało się rozstrzygnąć w trakcie migracji, bo wpisanie którejkolwiek roli **jest decyzją o gęstości
+chromy**, a nie porządkowaniem: `Size.Icon` opisywał element, który *„nie jest celem myszy"* — a przycisk
+paginacji nim jest; `Size.Icon.Toolbar` (16) urósłby paski w Table Data, wynikach SQL, Data Import
+i `MessageBanner`, czyli na powierzchniach **już odebranych**. ⛔ D‑M4‑2 zabrania rozstrzygać to ekran po
+ekranie, §0.5 — na domysł. Pytanie poszło więc jako JEDNO, z pomiarem.
+
+**Ratyfikowany wariant: wszystkie trzy grupy na `Size.Icon` (14).**
+
+⭐ Uzasadnienie nie brzmi „ujednolićmy liczby", tylko **kryterium A‑3 przeczytane dosłownie**: ratyfikowaną
+drabiną jest *stoi w SERII vs stoi SAMOTNIE*, a nie *czy jest klikalne*. Przycisk paginacji stoi w serii
+czterech identycznych, trio filtr/agregacja/eksport w serii trzech — czytają się jako pasek, nie jako
+pojedyncza akcja. **R18** rozstrzyga remis na rzecz gęstszego.
+⭐⭐ Własność, która czyni ten wariant bezpiecznym: **wyłącznie ZMNIEJSZA**. Nie rusza ani jednego piksela na
+powierzchniach, które przeszły QA M4 — zmienia się to, co dotąd było o stopień za duże.
+
+**Wykonanie — dwie drogi, tylko druga zmienia wygląd:**
+
+| | co | efekt |
+|---|---|---|
+| 75 ikon niosących literał `14` | → `Size.Icon` | **wygląd bez zmiany** (obie populacje trafiają w tę samą rolę) |
+| 18 ikon pasków siatki bez deklaracji (brały 16 z `ControlTheme`) | → jawne `Size.Icon` | **16 → 14**: paginacja w edytorach funkcji / procedury / widoku, chevrony zwijania panelu w Session Managerze i Trace Monitorze, filtr + eksport w Trace Monitorze |
+
+**Sufit literałów rozmiaru ikony: 95 → 20**, i po tej iteracji **nie ma już ani jednego literału `14` ani `16`** —
+zostaje wyłącznie ogon 10/11/12/13/15, czyli pytanie o ROLE, sparkowane osobno w §19.37.7. Reguła jest teraz
+zapisana w komentarzu `Size.Icon` w `Tokens.axaml`, razem z dowodem (`RefreshCw`) i odrzuconym wariantem.
+
+⚠ **Zakres wyszedł poza trzy ekrany M4.1 i to jest świadome:** rozjazd jest z natury app‑wide (jedna kontrolka
+w pięciu ekranach), więc migracja per ekran zostawiłaby pasek paginacji niezgodny sam ze sobą do M4.3 — czyli
+dokładnie to, przed czym ostrzega R7. Dla plików M4.2/M4.3 oznacza to, że zastaną tam mniej literałów, niż
+zakładał ich sufit; nowe liczby stoją w `IconSizeLiteralBaseline`.
 
 ### §19.39.4 ⚠⚠ Drugie znalezisko: `Spacing`/`Padding`/`Margin` nie były NIGDY liczone
 
@@ -8638,8 +8682,44 @@ i `CornerRadius`. Skala całej aplikacji nie jest jeszcze zmierzona; audyt M0 m�
 marginesach i 40 paddingach. ⛔ Nie ruszone — to jest decyzja o ZAKRESIE M4, nie robota do wsunięcia przy
 okazji.
 
+**🔒 Rozstrzygnięcie użytkownika (2026-08-08): SAM STRAŻNIK, ZERO MIGRACJI.** Pełny pomiar app‑wide dał
+**985 wartości lokalnych w 150 wpisach plikowych** (`Spacing` 309 / `Padding` 185 / `Margin` 491), przy odczycie
+roli **zero razy** dla `Padding` i `Margin`. Decyzja: *„949 literałów to zdecydowanie osobny etap i nie chcę
+rozszerzać obecnej migracji z ikon i FontSize do kolejnego dużego obszaru. […] Strażnik ma wykrywać przyrost
+względem obecnego stanu, ale nie wymuszać jeszcze migracji ani konkretnych ról. […] Nie zmieniaj teraz żadnych
+wartości odstępów tylko po to, żeby zadowolić nowego strażnika."*
+
+Zrobione dokładnie tyle: trzy własności **dołączyły do ISTNIEJĄCEGO mechanizmu** (`GuardedProperties` +
+`BaselineFor`), więc nie powstał drugi licznik obok pierwszego — reuse‑before‑create. ⭐ Baseline jest **per
+plik, nie sumą per własność**, i to jest różnica merytoryczna: suma przepuściłaby dodanie pięciu marginesów
+w jednym widoku, gdyby w innym pięć zniknęło. ⚠ Liczby policzył **ten sam `Measure`, który egzekwuje regułę**
+(skanuje `.axaml` *i* `.cs`, nie pomija komentarzy) — gdyby baseline liczył cokolwiek innego, strażnik byłby
+czerwony od pierwszego przebiegu albo, gorzej, zielony przy złej liczbie. **Zweryfikowany podsadzeniem
+naruszenia**: dodany `Margin="3,3"` zgłosił się po nazwie pliku i delcie (`10 → 11`).
+⛔ **Ani jedna wartość odstępu nie została zmieniona.** Migracja odstępów to osobny etap, po M4.4.
+
+**Rozkład `Spacing` (dla przyszłego etapu, nie do działania teraz):** 6 × 89 · 4 × 64 · 8 × 61 — czyli
+**214 z 320 pokrywa się 1:1 z `Space.Sm`/`Space.Xs`/`Space.Md`** i będzie mechaniczne; ogon (5 × 27, 2 × 18,
+1 × 13, 10 × 11, 3 × 9…) to pytania o role, i to on jest prawdziwą treścią tamtego etapu.
+
 ### §19.39.5 Czego ta iteracja NIE zrobiła
 
-⛔ 34 samotne ikony w paskach siatek (pytanie wyżej) · ⛔ ogon 10/11/12/13/15 px, w tym `Icon.Pencil` 13
-w liście zapisanych zapytań i dwie ikony 13 px paska gotowości Data Import (**pytanie o ROLE**, parkowane już
-przez §19.37.7) · ⛔ `Spacing`/`Padding`/`Margin` (§19.39.4) · ⛔ **Z‑3** · ⛔ M4.2–M4.4.
+⛔ Ogon 10/11/12/13/15 px (20 literałów w 8 plikach), w tym `Icon.Pencil` 13 w liście zapisanych zapytań, dwie
+ikony 13 px paska gotowości Data Import i trzy ikony 15 px z powodem zapisanym w §19.37.3 — **pytanie o ROLE**,
+parkowane już przez §19.37.7 · ⛔ **migracja** `Spacing`/`Padding`/`Margin` — wszedł wyłącznie strażnik
+(§19.39.4) · ⛔ **chevron ujawnienia w debuggerze** (16 wobec 14 w Data Import, §19.39.2a) — leży w pliku M4.3
+i nie był przedmiotem pytania · ⛔ **Z‑3** · ⛔ M4.2–M4.4.
+
+### §19.39.6 ⏸ Co czeka na QA wizualne użytkownika
+
+Część zmian **nie jest neutralna wizualnie** i to ona jest przedmiotem odbioru — 18 ikon zeszło 16 → 14:
+
+* **paski paginacji** pod siatkami wyników w edytorach **funkcji, procedury i widoku** (po 4 ikony),
+* **chevrony zwijania panelu szczegółów** w **Session Managerze** i **Trace Monitorze** (po 2),
+* **filtr i eksport** w pasku **Trace Monitora** (2).
+
+⭐ Wszystkie trzy powierzchnie po zmianie zgadzają się z paskiem paginacji w wynikach SQL i Table Data, który
+wygląda tak od zawsze — pytanie odbiorcze brzmi więc *„czy te paski czytają się teraz jak jedna kontrolka"*,
+a nie *„czy 14 jest lepsze od 16"*. ⚠ Reszta iteracji (75 ikon) jest wizualnie zerowa **z konstrukcji** —
+literał 14 zastąpiony rolą niosącą 14.
+⚠ Poza QA i nadal otwarte: **150 % DPI** (R‑6), które przy zmianie metryk sprawdza się okiem.

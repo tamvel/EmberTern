@@ -16,7 +16,7 @@
     <!-- Grantee option (user/role) row for the Membership / Privileges pickers. -->
     <DataTemplate x:Key="GranteeOptionTemplate" x:DataType="vm:GranteeOptionViewModel">
       <StackPanel Orientation="Horizontal" Spacing="6">
-        <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+        <controls:SvgIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center"
                           Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
           <controls:SvgIcon.Foreground>
             <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -191,7 +191,7 @@
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:MembershipRowViewModel">
                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                      <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                      <controls:SvgIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center"
                                         Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
                         <controls:SvgIcon.Foreground>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -324,7 +324,7 @@
                         </Button>
                       </StackPanel>
                       <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+                        <controls:SvgIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center"
                                           Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
                           <controls:SvgIcon.Foreground>
                             <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">

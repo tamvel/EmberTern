@@ -286,22 +286,22 @@
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
                     Command="{Binding GoToFirstPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
                     Command="{Binding GoToPreviousPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
                     Command="{Binding GoToNextPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
                     Command="{Binding GoToLastPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <TextBlock Text="{Binding DataPreviewHint}"
                        Classes="subtle"
@@ -317,19 +317,19 @@
                     ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
                     IsChecked="{Binding DataFilterPanel.IsPanelOpen, Mode=TwoWay}">
               <Panel>
-                <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                 <Border Classes="filter-active-dot" IsVisible="{Binding DataFilterPanel.IsFilterActive}" />
               </Panel>
             </ToggleButton>
             <ToggleButton Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
                     IsChecked="{Binding DataAggregationBar.IsBarOpen, Mode=TwoWay}">
-              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </ToggleButton>
             <!-- Export the view data via the shared Export Framework (default = all rows). -->
             <Button Classes="icon" Click="OnViewDataExportClick" IsEnabled="{Binding CanExportData}"
                     ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
-              <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
           </StackPanel>
 

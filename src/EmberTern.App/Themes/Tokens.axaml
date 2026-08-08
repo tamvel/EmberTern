@@ -292,11 +292,20 @@
        które wymieniała, i nie opisywała własnej wartości domyślnej (pułapka 3 w wydaniu metrycznym).
        ══════════════════════════════════════════════════════════════════════════════════════════ -->
 
-  <!-- ⭐ IKONA W WIERSZU: zakładka dokumentu, wiersz drzewa, wiersz menu kontekstowego, ikona przy
-       etykiecie na powierzchni roboczej. Stoi w SERII, obok tekstu `Text.Compact` (11), i jej zadaniem
-       jest dać się przeczytać razem z nim — nie być celem myszy.
+  <!-- ⭐ IKONA STOJĄCA W SERII: zakładka dokumentu, wiersz drzewa, wiersz menu kontekstowego, ikona przy
+       etykiecie na powierzchni roboczej oraz PRZYCISK IKONOWY W PASKU DOKLEJONYM DO SIATKI LUB PANELU
+       (paginacja, filtr / agregacja / eksport, chevron zwijania panelu, przyciski `MessageBanner`).
+       ⚠ Rozstrzygające jest „stoi w SERII", a nie „czy jest klikalne": przycisk paginacji JEST celem
+       myszy, a mimo to bierze tę rolę, bo stoi w serii czterech identycznych i czyta się jako pasek,
+       nie jako pojedyncza akcja. Samotna akcja paska narzędzi bierze `Size.Icon.Toolbar` (16).
        ⚠ Wiersz drzewa dołączył w M4 (B‑1, decyzja użytkownika): miał 15 px literałem w 13 plikach.
-       Wysokość wiersza się przez to nie zmienia — `Size.Row.Tree` to `MinHeight` 24. -->
+       Wysokość wiersza się przez to nie zmienia — `Size.Row.Tree` to `MinHeight` 24.
+       ⭐⭐ Paski siatek dołączyły w M4.1 (decyzja użytkownika 2026‑08‑08 — „dokończyć regułę, którą
+       produkt już ma"). Zmierzone przed decyzją: identyczny kształt `Button.icon` renderował się 16
+       w 135 miejscach i 14 w 34, a pasek paginacji — JEDNA kontrolka, te same stringi tooltipów — miał
+       14 w wynikach SQL i Table Data, a 16 w edytorach funkcji / procedury / widoku.
+       ⭐ Że reguła istnieje, dowodziła `Icon.RefreshCw`, jedyna ikona stojąca po OBU stronach linii
+       i za każdym razem trafiająca dobrze: 16 jako przycisk paska narzędzi, 14 gdy odświeża siatkę. -->
   <x:Double x:Key="Size.Icon">14</x:Double>
   <!-- ⭐ IKONA JAKO SAMODZIELNA AKCJA: pasek narzędzi (tytułowy i edytora), przycisk okna, chevron
        panelu. Stoi SAMOTNIE i jest CELEM MYSZY.

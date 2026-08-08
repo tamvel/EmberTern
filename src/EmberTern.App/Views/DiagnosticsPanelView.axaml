@@ -47,7 +47,7 @@
 
             <controls:SvgIcon Grid.Column="0"
                               Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                              Width="14" Height="14"
+                              Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               VerticalAlignment="Top"
                               Margin="0,2,8,0"
                               ToolTip.Tip="{Binding SeverityText}">

@@ -926,22 +926,22 @@
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
                     Command="{Binding GoToFirstPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
                     Command="{Binding GoToPreviousPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
                     Command="{Binding GoToNextPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
                     Command="{Binding GoToLastPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <TextBlock Text="{Binding DataPreviewHint}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
@@ -951,14 +951,14 @@
                           ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
                           IsChecked="{Binding DataFilterPanel.IsPanelOpen, Mode=TwoWay}">
               <Panel>
-                <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                 <Border Classes="filter-active-dot" IsVisible="{Binding DataFilterPanel.IsFilterActive}" />
               </Panel>
             </ToggleButton>
             <ToggleButton Classes="icon"
                           ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
                           IsChecked="{Binding DataAggregationBar.IsBarOpen, Mode=TwoWay}">
-              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </ToggleButton>
             <!-- Refresh is a data-reload action, not navigation → at the end of the row,
                  flush with the filter/aggregation toggles (same icon group). -->
@@ -966,12 +966,12 @@
                     ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
                     Command="{Binding RefreshDataPreviewCommand}">
               <!-- Rola R‑7 (K6) — patrz komentarz przy odświeżaniu drzewa metadanych w MainWindow. -->
-              <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <!-- Export the table data via the shared Export Framework (default = the whole table). -->
             <Button Classes="icon" Click="OnDataExportClick" IsEnabled="{Binding CanExportData}"
                     ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
-              <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
           </StackPanel>
           <TextBlock Grid.Row="1"

@@ -367,19 +367,19 @@
                       IsVisible="{Binding HasExecResult}">
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
                     Command="{Binding ExecFirstPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
                     Command="{Binding ExecPreviousPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
                     Command="{Binding ExecNextPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
                     Command="{Binding ExecLastPageCommand}">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" />
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <TextBlock Text="{Binding ExecPaginationHint}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
@@ -389,19 +389,19 @@
                     ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
                     IsChecked="{Binding ExecFilterPanel.IsPanelOpen, Mode=TwoWay}">
               <Panel>
-                <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                 <Border Classes="filter-active-dot" IsVisible="{Binding ExecFilterPanel.IsFilterActive}" />
               </Panel>
             </ToggleButton>
             <ToggleButton Classes="icon"
                     ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
                     IsChecked="{Binding ExecAggregationBar.IsBarOpen, Mode=TwoWay}">
-              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </ToggleButton>
             <!-- Export the function result via the shared Export Framework (default = all rows). -->
             <Button Classes="icon" Click="OnFuncExportClick" IsEnabled="{Binding CanExportExecResult}"
                     ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
-              <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
           </StackPanel>
 
@@ -514,7 +514,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <controls:SvgIcon Data="{StaticResource Icon.Table}"
                                             Foreground="{DynamicResource AccentBrush}"
-                                            Width="14" Height="14" VerticalAlignment="Center" />
+                                            Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center" />
                           <!-- ⭐ K6 ZAMKNIĘTA (M4, decyzja użytkownika A-2): rola `Text.SectionHeader` niesie teraz 12 SemiBold,
                                czyli tyle, ile ten nagłówek karty deklarował lokalnie od M2c. Wartość bez zmian. -->
                           <TextBlock Text="{Binding Table}" FontSize="{DynamicResource Text.SectionHeader.Size}" FontWeight="{DynamicResource Text.SectionHeader.Weight}"

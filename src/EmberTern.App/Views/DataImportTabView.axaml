@@ -1011,10 +1011,10 @@
                 ToolTip.Tip="{x:Static app:UiStrings.ImportBottomPanelToggleTooltip}"
                 Command="{Binding ToggleBottomPanelCommand}">
           <Panel>
-            <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14"
+            <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource SubtleForegroundBrush}"
                               IsVisible="{Binding !IsBottomPanelCollapsed}" />
-            <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14"
+            <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource SubtleForegroundBrush}"
                               IsVisible="{Binding IsBottomPanelCollapsed}" />
           </Panel>

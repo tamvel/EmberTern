@@ -141,7 +141,7 @@
                    produktu, a wznowienie wykonania jest dokładnie tym samym rodzajem akcji.
                    ⚠ Dodatkowo: niebieski jest tu kolorem TOŻSAMOŚCI debuggera (chip stanu w pasku
                    statusu), a §4/W6 zabrania malować nim PRZYCISK AKCJI. -->
-              <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource ActionRunBrush}" />
               <TextBlock Text="Continue" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
@@ -150,7 +150,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepIntoTooltip}"
                   Command="{Binding StepIntoCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.StepInto}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.StepInto}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
               <TextBlock Text="Into" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
@@ -158,7 +158,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepOverTooltip}"
                   Command="{Binding StepOverCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.StepOver}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.StepOver}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
               <TextBlock Text="Over" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
@@ -166,7 +166,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepOutTooltip}"
                   Command="{Binding StepOutCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.StepOut}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.StepOut}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
               <TextBlock Text="Out" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
@@ -175,7 +175,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToCursorTooltip}"
                   Click="OnRunToCursorClick">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.RunToCursor}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.RunToCursor}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
               <TextBlock Text="To cursor" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
@@ -185,7 +185,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToSuspendTooltip}"
                   Command="{Binding RunToSuspendCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.RunToSuspend}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.RunToSuspend}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
               <TextBlock Text="Suspend" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
@@ -196,7 +196,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToNextIterationTooltip}"
                   Command="{Binding RunToNextIterationCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.NextIteration}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.NextIteration}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource DebugLoopIconBrush}" />
               <TextBlock Text="Next iter" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
@@ -205,7 +205,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToLoopExitTooltip}"
                   Command="{Binding RunToLoopExitCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.LoopExit}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.LoopExit}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource DebugLoopIconBrush}" />
               <TextBlock Text="Loop exit" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
@@ -215,7 +215,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerStopTooltip}"
                   Command="{Binding StopCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.Stop}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.Stop}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource DangerIconBrush}" />
               <TextBlock Text="Stop" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
@@ -224,7 +224,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerRestartTooltip}"
                   Command="{Binding RestartCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.Restart}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Restart}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
               <TextBlock Text="Restart" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
@@ -235,7 +235,7 @@
                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerSaveTooltip}"
                   Command="{Binding SaveSourceCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.Save}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Save}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
               <TextBlock Text="{x:Static app:UiStrings.DebuggerSave}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
@@ -246,7 +246,7 @@
                     ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakOnExceptionTooltip}"
                     VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal" Spacing="5">
-              <controls:SvgIcon Data="{StaticResource Icon.BreakException}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.BreakException}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource WarningIconBrush}" />
               <TextBlock Text="{x:Static app:UiStrings.DebuggerBreakOnException}" FontSize="{DynamicResource Text.Compact.Size}"
                          VerticalAlignment="Center" />
@@ -608,9 +608,9 @@
                     ToolTip.Tip="{x:Static app:UiStrings.DebuggerBottomPanelCollapseTooltip}"
                     Command="{Binding ToggleBottomPanelCommand}">
               <Panel>
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14"
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                   IsVisible="{Binding !IsBottomPanelCollapsed}" />
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14"
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                   IsVisible="{Binding IsBottomPanelCollapsed}" />
               </Panel>
             </Button>

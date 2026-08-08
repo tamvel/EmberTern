@@ -122,7 +122,7 @@
              DISPLAY-level — distinct from the source-level "Include function calls" capture toggle. -->
         <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TraceFilterEventsTip}">
           <Panel>
-            <controls:SvgIcon Data="{StaticResource Icon.Filter}" />
+            <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             <Border Classes="filter-active-dot" IsVisible="{Binding IsEventFilterActive}" />
           </Panel>
           <Button.Flyout>
@@ -159,7 +159,7 @@
         <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1" CornerRadius="4" Height="26" Padding="7,0,6,0" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-            <controls:SvgIcon Data="{StaticResource Icon.Search}" Width="14" Height="14"
+            <controls:SvgIcon Data="{StaticResource Icon.Search}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
             <TextBox Width="200" Classes="frameless" Padding="0" MinHeight="0"
                      VerticalAlignment="Center" VerticalContentAlignment="Center"
@@ -199,7 +199,7 @@
         <!-- Export the trace grid via the shared Export Framework (default = the filtered view). -->
         <Button Classes="icon" Click="OnExportClick" IsEnabled="{Binding CanExport}"
                 ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
-          <controls:SvgIcon Data="{StaticResource Icon.Download}" />
+          <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
         </Button>
 
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
@@ -405,8 +405,8 @@
               <Button Grid.Column="6" Classes="icon" Click="OnToggleDetailMaximizeClick"
                       ToolTip.Tip="{x:Static app:UiStrings.TraceDetailMaximizeTip}">
                 <Panel>
-                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" IsVisible="{Binding !IsDetailMaximized}" />
-                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" IsVisible="{Binding IsDetailMaximized}" />
+                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding !IsDetailMaximized}" />
+                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding IsDetailMaximized}" />
                 </Panel>
               </Button>
             </Grid>

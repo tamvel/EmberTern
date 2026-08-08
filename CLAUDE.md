@@ -44,7 +44,7 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (**322 entries, #1–#335** — measured 2026-08-08; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#335 came out of M4.1 and is the one to read before any value-keyed cleanup** — a sweep that selects by VALUE cannot see the CONTROL, so it can deepen the divergence it is cleaning up while every counter reports progress (one pagination bar went from two sizes to three); its practical half is *group the same control across screens and check it agrees with itself*, and its sibling half is that `Spacing`/`Padding`/`Margin` had no counter at all, so files reporting zero debt held ~147 local values. ⭐⭐ **#334 came out of M4's typography block and is the one to read before migrating exceptions onto a role** — when several independent authors refuse the same role, that is a MEASUREMENT of the role, not several oversights: the tell is the DISTRIBUTION (19 headers at one size against 17 at another, in an identical context), and a register that records only the deviating side makes a symmetrical disagreement look like one-sided drift. ⭐⭐ **#332–#333 came out of M4's density decision and both are about a value that lives OUTSIDE the place that claims to govern it** — a `ControlTheme` default is what 191 of 355 icons actually render at while the catalog's role describes two of them, and an unmeasured property is not "clean" but unmeasured (seven icon sizes, green build throughout); #333 is its mirror in the test suite — a guard that TRANSCRIBES a premise breaks when that premise moves onto a role, and reports something its own name does not describe. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (**322 entries, #1–#335** — measured 2026-08-08; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#335 came out of M4.1 and is the one to read before any value-keyed cleanup** — neither the VALUE nor the GEOMETRY NAME identifies a control, so a sweep keyed to either reports progress while the thing a user looks at stays inconsistent (one pagination bar carried two sizes across five screens through two prior sweeps); its practical half is *group the same control across screens and check it agrees with itself*, its second half was paid for by committing the error inside the entry itself (one geometry name serving two controls produced a false claim, retracted before any code changed), and its sibling finding is that `Spacing`/`Padding`/`Margin` had no counter at all, so files reporting zero debt held 985 local values app-wide. ⭐⭐ **#334 came out of M4's typography block and is the one to read before migrating exceptions onto a role** — when several independent authors refuse the same role, that is a MEASUREMENT of the role, not several oversights: the tell is the DISTRIBUTION (19 headers at one size against 17 at another, in an identical context), and a register that records only the deviating side makes a symmetrical disagreement look like one-sided drift. ⭐⭐ **#332–#333 came out of M4's density decision and both are about a value that lives OUTSIDE the place that claims to govern it** — a `ControlTheme` default is what 191 of 355 icons actually render at while the catalog's role describes two of them, and an unmeasured property is not "clean" but unmeasured (seven icon sizes, green build throughout); #333 is its mirror in the test suite — a guard that TRANSCRIBES a premise breaks when that premise moves onto a role, and reports something its own name does not describe. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~24 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`24-stabilization-sprint.md` is the newest** — read it for the method as much as the fixes: two of six reports were not what they described, and it records the three shared causes plus the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -466,40 +466,47 @@ noted.
 
 ## Current state
 
-- **🖼 M4.1 · CZĘŚĆ 1 DOSTARCZONA, CZĘŚĆ 2 CZEKA NA DECYZJĘ UŻYTKOWNIKA (2026-08-08).** Build 0/0; suite
-  **8304** bez zmiany (8158 + 91 + 55 — zmieniły się dane sufitu, nie asercje); smoke czysty. As-built:
-  `product-polish.md` **§19.39**.
-  ⭐ **Co weszło:** 14 ikon stojących **przy etykiecie** przeszło na `Size.Icon` — sufit literałów rozmiaru
-  ikony **95 → 81**, `ScriptExecutorTabView` czysty (3 → 0), `MainWindow` 16 → 11, `DataImportTabView` 10 → 4.
-  **Wartość nie drgnęła w żadnym przypadku**; migracja zapisuje granicę, którą produkt już konsekwentnie
-  rysuje — w jednym pasku samotna ikona bierze 16 z `ControlTheme`, a ikona obok etykiety niesie 14.
-  ⭐⭐ **ZNALEZISKO, PRZEZ KTÓRE RESZTA STOI: ten sam pasek paginacji ma TRZY rozmiary.** Populacja `14` to
-  **75 z 95 literałów**, a jej druga połowa — samotna ikona w `Button.icon` — jest sporna, bo **identyczny
-  kształt renderuje się 16 w 135 miejscach i 14 w 34**. Zejście do konkretnej kontrolki rozstrzygnęło, że to
-  **rozjazd, nie rola bez nazwy**: pasek paginacji (te same stringi `TableDetailPagination*Tooltip`, komentarz
-  w `MainWindow` mówi wprost „reuses the same … strings") ma **14** w wynikach SQL / Table Data / Data Import,
-  **16** w edytorach funkcji / procedury / widoku i **`Size.Icon.Toolbar`** w debuggerze. Tak samo trio
-  filtr/agregacja/eksport (14 w pięciu plikach, 16 w Trace) i chevron zwijania panelu (14 w czterech, 16
-  w dwóch). ⚠ Obie populacje żyją **w tych samych plikach**, więc nie opisuje tego reguła ani per plik, ani
-  per powierzchnia.
-  ⭐⭐ **REGUŁA JEDNAK ISTNIEJE — łamią ją te trzy grupy, a nie „wszystko", i dowodzi tego `Icon.RefreshCw`**,
-  która stoi po OBU stronach linii i za każdym razem trafia dobrze: **16** jako przycisk paska narzędzi
-  (drzewo metadanych, statystyki indeksu, pasek Data Import, pasek Session Managera), **14** gdy odświeża
-  SIATKĘ (Table Data). ⚠ Pierwsza wersja pomiaru miała ją jako czwarty rozjazd — sprawdzenie hosta pokazało
-  odwrotnie (pułapka 17: widać system i wyciąga się wniosek, że jest niespójny, zamiast sprawdzić, czy działa).
-  ⚠⚠ **Blok gęstości pogłębił ten rozjazd i nikt tego nie zobaczył** — nie zarzut wobec A‑3, tylko mechanizm:
-  sweep 16 literałów `16` objął chevron paginacji w debuggerze, bo był literałem `16`, a jego bliźniaka
-  w `MainWindow` nie, bo był `14`. ⭐ **Sweep po WARTOŚCI nie widzi kontrolki.**
-  ⛔ **Nie rozstrzygnięte świadomie:** `Size.Icon` (14) opisuje element, który „nie jest celem myszy", a
-  przycisk paginacji nim jest; `Size.Icon.Toolbar` (16) zmienia wygląd pasków na powierzchniach **już
-  odebranych**. D‑M4‑2 zabrania rozstrzygać to ekran po ekranie, §0.5 — na domysł. Po odpowiedzi ruszają
-  **34 deklaracje w 8 plikach**.
-  ⚠⚠ **DRUGIE ZNALEZISKO — `Spacing`/`Padding`/`Margin` nie były NIGDY liczone.** Prompt M4 opisuje pozostałą
-  pracę dwiema liczbami (95 ikon, 36 `FontSize`) i **to niedoszacowanie**, bo tylko te dwie własności ktoś
-  policzył. Na samych trzech ekranach M4.1 jest **~147 wartości lokalnych przy ZEROWYM odczycie roli dla
-  `Padding` i `Margin`**, przy katalogu, który ma dla nich siedem stopni skali od M2a. ⭐ Gotcha #332 o jedną
-  własność dalej: **wartość poza zasięgiem licznika nie jest czysta, tylko niezmierzona.** ⛔ Nie ruszone —
-  to decyzja o ZAKRESIE M4.
+- **🖼 M4.1 · DOSTARCZONE, CZEKA NA QA WIZUALNE UŻYTKOWNIKA (2026-08-08).** Build 0/0; suite **8310**
+  (8164 + 91 + 55, +6 — sześć nowych przypadków teorii strażnika odstępów); smoke czysty. As-built:
+  `product-polish.md` **§19.39**. Nowa gotcha **#335**.
+  ⭐⭐ **SUFIT LITERAŁÓW ROZMIARU IKONY 95 → 20, I NIE MA JUŻ ANI JEDNEGO LITERAŁU `14` ANI `16`** — zostaje
+  wyłącznie ogon 10/11/12/13/15, czyli pytanie o ROLE, sparkowane osobno w §19.37.7.
+  ⭐ **Znalezisko, które ukształtowało iterację: pasek paginacji nie zgadzał się sam ze sobą.** Populacja `14`
+  to **75 z 95 literałów**, a jej druga połowa — samotna ikona w `Button.icon` — była sporna, bo **identyczny
+  kształt renderował się 16 w 135 miejscach i 14 w 34**. Zejście do konkretnej KONTROLKI pokazało rozjazd, nie
+  rolę bez nazwy: ten sam pasek paginacji (te same stringi `TableDetailPagination*Tooltip`) miał **14**
+  w wynikach SQL i Table Data, a **16** w edytorach funkcji / procedury / widoku; tak samo trio
+  filtr/agregacja/eksport i chevron zwijania panelu. ⚠ Obie populacje żyją **w tych samych plikach**, więc nie
+  opisuje tego reguła ani per plik, ani per powierzchnia.
+  ⭐⭐ **Reguła jednak ISTNIEJE — łamały ją trzy grupy, a nie „wszystko", i dowodzi tego `Icon.RefreshCw`**,
+  jedyna ikona stojąca po OBU stronach linii i za każdym razem trafiająca dobrze: **16** jako przycisk paska
+  narzędzi, **14** gdy odświeża SIATKĘ (Table Data).
+  🔒 **Decyzja użytkownika: „dokończyć regułę, którą produkt już ma" — wszystkie trzy grupy na `Size.Icon`.**
+  Kryterium A‑3 to drabina *stoi w SERII vs stoi SAMOTNIE*, a nie *czy jest klikalne*: przycisk paginacji stoi
+  w serii czterech. ⭐ Wariant „wszędzie 16" odrzucony, bo rósłby powierzchnie już odebrane — wybrany
+  **wyłącznie ZMNIEJSZA**. Wykonanie: 75 ikon literał → rola (**wygląd bez zmiany**) + **18 ikon 16 → 14**
+  (paginacja w edytorach funkcji/procedury/widoku, chevrony panelu w Session i Trace, filtr+eksport w Trace) —
+  ⏸ **to te 18 jest przedmiotem QA**, reszta jest wizualnie zerowa z konstrukcji. Reguła zapisana w komentarzu
+  `Size.Icon` w `Tokens.axaml`, razem z dowodem i odrzuconym wariantem.
+  ⚠ **Zakres świadomie wyszedł poza trzy ekrany M4.1** — rozjazd jest z natury app-wide (jedna kontrolka
+  w pięciu ekranach), więc migracja per ekran zostawiłaby pasek niezgodny ze sobą do M4.3 (R7). M4.2/M4.3
+  zastaną mniej literałów, niż zakładał ich sufit.
+  ⛔⛔ **DRUGIE ZNALEZISKO — `Spacing`/`Padding`/`Margin` NIE BYŁY NIGDY LICZONE, i to nadal NIE jest migracja.**
+  Zmierzone app-wide: **985 wartości lokalnych w 150 wpisach plikowych**, przy odczycie roli **zero razy** dla
+  `Padding` i `Margin` — mimo że katalog ma dla nich siedem stopni skali od M2a. 🔒 Decyzja użytkownika:
+  **sam strażnik, zero migracji, odstępy jako osobny etap po M4.4**; ⛔ *„nie zmieniaj teraz żadnych wartości
+  odstępów tylko po to, żeby zadowolić nowego strażnika"* — i ani jedna nie została zmieniona. Trzy własności
+  **dołączyły do ISTNIEJĄCEGO mechanizmu** (`GuardedProperties`), baseline **per plik, nie sumą** (suma
+  przepuściłaby +5 w jednym widoku przy −5 w innym), policzony **tym samym `Measure`, który egzekwuje regułę**.
+  Zweryfikowany podsadzeniem naruszenia. ⭐ Dla przyszłego etapu: **214 z 320 `Spacing` pokrywa się 1:1** ze
+  `Space.Sm`/`Space.Xs`/`Space.Md` i będzie mechaniczne — treścią tamtego etapu jest ogon (5, 2, 1, 10, 3 px).
+  ⚠⚠ **Dwa moje własne zapisy z tej iteracji były NIEPRAWDZIWE i zostały wycofane przed zmianą kodu**
+  (§19.39.2a): „pasek paginacji ma TRZY rozmiary, w tym w debuggerze" — **debugger nie ma paska paginacji**,
+  a `Icon.ChevronRight` pełni dwie funkcje (paginacja i chevron ujawnienia); oraz wynikające z tego oskarżenie,
+  że **blok gęstości pogłębił rozjazd** — sweep A‑3 nie zmienił tam ani jednej wartości. ⭐ Grupowałem po NAZWIE
+  GEOMETRII, czyli popełniłem dokładnie ten błąd, który w tej samej iteracji opisywałem jako #335; wykryło to
+  dopiero wypisanie HOSTA (tooltipa i komendy) obok każdej ikony — pytanie *„czym ta rzecz jest dla
+  użytkownika"*, a nie *„jak nazywa się jej ścieżka"*.
 
 - **🔤🔒 M4 · BLOK TYPOGRAFII — ZAMKNIĘTY, ODEBRANY PO QA WIZUALNYM UŻYTKOWNIKA (2026-08-08).**
   ⭐⭐ **TYM SAMYM DECYZJE PROJEKTOWE M4 SĄ KOMPLETNE** — zostaje migracja ekranów **M4.1–M4.4** i odłożone
@@ -4353,14 +4360,19 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **8304, MEASURED 2026-08-08**
-  (Product Polish through **M4's density decision + typography block** + the stabilization sprint S-1…S-6 + the grid consistency
-  sprint + the Firebird language completeness sprint incl. its QA round). Green in the three documented
-  partitions (**8155 + 91 + 55**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **8310, MEASURED 2026-08-08**
+  (Product Polish through **M4.1** + M4's density decision + typography block + the stabilization sprint
+  S-1…S-6 + the grid consistency sprint + the Firebird language completeness sprint incl. its QA round).
+  Green in the three documented partitions (**8164 + 91 + 55**).
+  ⚠⚠ **This line was internally inconsistent until 2026-08-08 — it declared 8304 while its own partitions
+  summed to 8301** (the density block's numbers, left behind when the typography block moved the total). ⭐ The
+  warning below is therefore not hypothetical: **re-measure BOTH numbers, and check that they add up.**
+  ⚠ M4.1's +6 is the spacing ratchet: `Spacing`/`Padding`/`Margin` joined the existing `GuardedProperties`
+  theory (3 properties × 2 tests), so no new mechanism was built beside the old one.
   ⚠ M4's +10 is all main-partition and all source-reading: four new guards over icon-size roles, the tree-row
-  pair and the editable-grid row height. ⭐ Two of them are a **ceiling with a number** (95 literal icon sizes
-  in 19 files), so „how much of the sweep is left" stops being an opinion — the same mechanism the `FontSize`
-  baseline uses.
+  pair and the editable-grid row height. ⭐ Two of them are a **ceiling with a number** (now 20 literal icon
+  sizes in 8 files, down from 95), so „how much of the sweep is left" stops being an opinion — the same
+  mechanism the `FontSize` baseline uses.
   ⚠ The language sprint's jump (7378 → 8263) is mostly **not** hand-written assertions: 80 Language-Reference
   corpus entries joined `SqlTestCorpus.All`, which feeds the formatter theories (§0 round-trip, idempotency,
   casing) and the AST differential harness — ~11 runs per entry. Its QA round added the remaining 28

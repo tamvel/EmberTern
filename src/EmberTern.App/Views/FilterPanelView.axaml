@@ -77,7 +77,7 @@
       <!-- Add condition -->
       <Button Classes="flat" HorizontalAlignment="Left" Command="{Binding AddConditionCommand}">
         <StackPanel Orientation="Horizontal" Spacing="4">
-          <controls:SvgIcon Data="{StaticResource Icon.Plus}" Width="14" Height="14" />
+          <controls:SvgIcon Data="{StaticResource Icon.Plus}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
           <TextBlock Text="{x:Static app:UiStrings.FilterAddCondition}" />
         </StackPanel>
       </Button>

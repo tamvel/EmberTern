@@ -27,7 +27,7 @@
       </Border.Background>
     </Border>
 
-    <controls:SvgIcon Grid.Column="1" Width="14" Height="14" Margin="8,0,6,0"
+    <controls:SvgIcon Grid.Column="1" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" Margin="8,0,6,0"
                       VerticalAlignment="Center"
                       Data="{Binding #Root.SeverityGeometryKey,
                                      Converter={x:Static app:IconGeometryConverter.Instance}}">
@@ -74,24 +74,24 @@
       <Button Classes="icon" Padding="4" Click="OnCopyClick"
               IsVisible="{Binding #Root.ShowCopy}"
               ToolTip.Tip="{x:Static app:UiStrings.MessageBannerCopyTooltip}">
-        <controls:SvgIcon Data="{StaticResource Icon.Copy}" Width="14" Height="14" />
+        <controls:SvgIcon Data="{StaticResource Icon.Copy}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
       </Button>
       <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding #Root.ShowExpand}">
         <Button Classes="icon" Padding="4" Click="OnToggleExpandClick"
                 IsVisible="{Binding !#Root.IsExpanded}"
                 ToolTip.Tip="{x:Static app:UiStrings.MessageBannerExpandTooltip}">
-          <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14" />
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
         </Button>
         <Button Classes="icon" Padding="4" Click="OnToggleExpandClick"
                 IsVisible="{Binding #Root.IsExpanded}"
                 ToolTip.Tip="{x:Static app:UiStrings.MessageBannerCollapseTooltip}">
-          <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14" />
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
         </Button>
       </StackPanel>
       <Button Classes="icon" Padding="4" Command="{Binding #Root.DismissCommand}"
               IsVisible="{Binding #Root.ShowDismiss}"
               ToolTip.Tip="{x:Static app:UiStrings.MessageBannerDismissTooltip}">
-        <controls:SvgIcon Data="{StaticResource Icon.X}" Width="14" Height="14" />
+        <controls:SvgIcon Data="{StaticResource Icon.X}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
       </Button>
     </StackPanel>
   </Grid>

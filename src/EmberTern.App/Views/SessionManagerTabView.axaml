@@ -64,7 +64,7 @@
               BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
         <StackPanel Spacing="4">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+            <controls:SvgIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center"
                               Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
               <controls:SvgIcon.Foreground>
                 <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -559,8 +559,8 @@
       <Button Classes="icon" Click="OnToggleBottomMaximizeClick" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerMaximizeTip}"
               HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0">
         <Panel>
-          <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" IsVisible="{Binding !IsDetailMaximized}" />
-          <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" IsVisible="{Binding IsDetailMaximized}" />
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding !IsDetailMaximized}" />
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding IsDetailMaximized}" />
         </Panel>
       </Button>
     </Panel>

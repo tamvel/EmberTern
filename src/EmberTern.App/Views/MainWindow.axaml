@@ -1808,9 +1808,9 @@
                   ToolTip.Tip="{x:Static app:UiStrings.ResultsPanelMaximizeTooltip}"
                   Click="OnToggleResultsMaximizeClick">
             <Panel>
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 IsVisible="{Binding !IsResultsMaximized}" />
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 IsVisible="{Binding IsResultsMaximized}" />
             </Panel>
           </Button>
@@ -1864,22 +1864,22 @@
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
                             Command="{Binding ResultFirstPageCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
                             Command="{Binding ResultPreviousPageCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
                             Command="{Binding ResultNextPageCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
                             Command="{Binding ResultLastPageCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <TextBlock Text="{Binding ResultPaginationHint}"
                                Classes="subtle"
@@ -1897,20 +1897,20 @@
                             ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
                             IsChecked="{Binding ResultFilterPanel.IsPanelOpen, Mode=TwoWay}">
                       <Panel>
-                        <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                        <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                         <Border Classes="filter-active-dot" IsVisible="{Binding ResultFilterPanel.IsFilterActive}" />
                       </Panel>
                     </ToggleButton>
                     <ToggleButton Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
                             IsChecked="{Binding ResultAggregationBar.IsBarOpen, Mode=TwoWay}">
-                      <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </ToggleButton>
                     <!-- Export the results (opens the shared Export dialog, default Scope = All rows). -->
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}"
                             Command="{Binding ExportResultsCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                   </StackPanel>
                 </Border>

@@ -228,15 +228,210 @@ public class DesignTokenComplianceTests
         ["Views/ProcedureDetailTabView.axaml"] = 1,
     };
 
+    /// <summary>
+    /// ⭐⭐ <b>ODSTĘPY — STRAŻNIK BEZ MIGRACJI (decyzja użytkownika, 2026-08-08).</b> Te trzy własności nie były
+    /// liczone przez NIKOGO do M4.1: liczniki M2c mierzyły <c>FontSize</c>, <c>FontFamily</c> i <c>CornerRadius</c>,
+    /// a rozmiar ikony doczekał się licznika dopiero w M4. Zmierzone przy pierwszym spojrzeniu: <b>985 wartości
+    /// lokalnych</b>, przy czym <c>Padding</c> i <c>Margin</c> czytają rolę z katalogu <b>dokładnie zero razy</b> —
+    /// mimo że katalog ma dla nich siedem stopni skali odstępów i dwanaście ról złożonych od M2a.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>To jest WYŁĄCZNIE zapadka przeciw przyrostowi — nie zobowiązanie do migracji i nie wymuszenie ról.</b>
+    /// Odstępy dostaną własny etap, z własnym pomiarem, decyzją projektową i QA; ratyfikowane 2026-08-08 wraz
+    /// z jawnym zastrzeżeniem, żeby <b>nie zmieniać żadnej wartości tylko po to, by zadowolić tego strażnika</b>.
+    /// Migracja M4.1–M4.4 zostaje przy swoim zakresie (ikony + <c>FontSize</c>).
+    /// </para>
+    /// <para>
+    /// ⭐ Baseline jest PER PLIK, a nie sumą per własność, i to jest różnica merytoryczna: suma przepuściłaby
+    /// dodanie pięciu marginesów w jednym widoku, gdyby w innym pięć zniknęło. Zapadka ma pilnować kierunku
+    /// w każdym pliku z osobna.
+    /// </para>
+    /// <para>
+    /// ⚠ Liczby pochodzą z tego samego <c>Measure</c>, który egzekwuje regułę — czyli skanują <c>.axaml</c>
+    /// <b>i</b> <c>.cs</c> w <c>Views/</c> + <c>Controls/</c> i <b>nie</b> pomijają komentarzy. Wzmianka
+    /// o atrybucie w prozie komentarza się liczy; ten sam kwirk jest udokumentowany przy <c>FontSize</c>.
+    /// Odczyt roli (<c>Margin="{DynamicResource Margin.FieldGap}"</c>) NIE jest liczony — mierzymy dług,
+    /// nie użycie własności.
+    /// </para>
+    /// </remarks>
+    private static readonly Dictionary<string, int> SpacingBaseline = new(StringComparer.Ordinal)
+    {
+        // Spacing — odstęp między dziećmi `StackPanel`. Zmierzone 2026-08-08: 309 deklaracji lokalnych w 46 plikach.
+        ["Views/DebuggerTabView.axaml"] = 35,
+        ["Views/DataImportTabView.axaml"] = 29,
+        ["Views/SecurityManagerTabView.axaml"] = 27,
+        ["Views/SessionManagerTabView.axaml"] = 25,
+        ["Views/AddFieldDialog.axaml"] = 18,
+        ["Views/MainWindow.axaml"] = 16,
+        ["Views/PerformancePanelView.axaml"] = 14,
+        ["Views/TraceMonitorTabView.axaml"] = 10,
+        ["Views/UserEditDialog.axaml"] = 10,
+        ["Views/FunctionDetailTabView.axaml"] = 9,
+        ["Views/ExportDialog.axaml"] = 8,
+        ["Views/ProcedureDetailTabView.axaml"] = 8,
+        ["Views/ForeignKeyDialog.axaml"] = 7,
+        ["Views/SettingsWindow.axaml"] = 7,
+        ["Views/TriggerDetailTabView.axaml"] = 6,
+        ["Views/ConstraintFieldDialog.axaml"] = 5,
+        ["Views/IndexDialog.axaml"] = 5,
+        ["Views/NewConnectionDialog.axaml"] = 5,
+        ["Views/SettingsExportDialog.axaml"] = 5,
+        ["Views/SettingsImportDialog.axaml"] = 5,
+        ["Views/CheckConstraintDialog.axaml"] = 4,
+        ["Views/GlobalSearchDialog.axaml"] = 4,
+        ["Views/RecompileDependentsDialog.axaml"] = 4,
+        ["Views/ScriptExecutorTabView.axaml"] = 4,
+        ["Views/AggregationBarView.axaml"] = 3,
+        ["Views/ExecuteProcedureDialog.axaml"] = 3,
+        ["Views/FilterPanelView.axaml"] = 3,
+        ["Controls/MessageBanner.axaml"] = 2,
+        ["Views/AboutWindow.axaml"] = 2,
+        ["Views/BatchResultsDialog.axaml"] = 2,
+        ["Views/DataImportTabView.axaml.cs"] = 2,
+        ["Views/DebuggerTabView.axaml.cs"] = 2,
+        ["Views/NewFolderDialog.axaml"] = 2,
+        ["Views/NewRoleDialog.axaml"] = 2,
+        ["Views/NewTableTabView.axaml"] = 2,
+        ["Views/TableDetailTabView.axaml"] = 2,
+        ["Views/TextPromptDialog.axaml"] = 2,
+        ["Views/ViewDetailTabView.axaml"] = 2,
+        ["Views/BlobEditorWindow.axaml"] = 1,
+        ["Views/ConfirmDialog.axaml"] = 1,
+        ["Views/DomainDetailTabView.axaml"] = 1,
+        ["Views/GeneratorDetailTabView.axaml"] = 1,
+        ["Views/GlobalSearchTabView.axaml"] = 1,
+        ["Views/IndexDetailTabView.axaml"] = 1,
+        ["Views/PackageDetailTabView.axaml"] = 1,
+        ["Views/SubprogramKindDialog.axaml"] = 1,
+    };
+
+    private static readonly Dictionary<string, int> PaddingBaseline = new(StringComparer.Ordinal)
+    {
+        // Padding — wnętrze kontrolki lub panelu. Zmierzone 2026-08-08: 185 deklaracji lokalnych w 49 plikach.
+        ["Views/MainWindow.axaml"] = 21,
+        ["Views/DebuggerTabView.axaml"] = 14,
+        ["Views/DataImportTabView.axaml"] = 10,
+        ["Views/FunctionDetailTabView.axaml"] = 9,
+        ["Views/ProcedureDetailTabView.axaml"] = 9,
+        ["Views/SessionManagerTabView.axaml"] = 8,
+        ["Views/ForeignKeyDialog.axaml"] = 7,
+        ["Views/TraceMonitorTabView.axaml"] = 7,
+        ["Views/TableDetailTabView.axaml"] = 6,
+        ["Views/AddFieldDialog.axaml"] = 5,
+        ["Views/ConstraintFieldDialog.axaml"] = 5,
+        ["Views/IndexDialog.axaml"] = 5,
+        ["Views/NewTableTabView.axaml"] = 5,
+        ["Views/PerformancePanelView.axaml"] = 5,
+        ["Controls/MessageBanner.axaml"] = 4,
+        ["Views/BatchResultsDialog.axaml"] = 4,
+        ["Views/CheckConstraintDialog.axaml"] = 4,
+        ["Views/AggregationBarView.axaml"] = 3,
+        ["Views/NewConnectionDialog.axaml"] = 3,
+        ["Views/SecurityManagerTabView.axaml"] = 3,
+        ["Views/TriggerDetailTabView.axaml"] = 3,
+        ["Views/ViewDetailTabView.axaml"] = 3,
+        ["Views/BlobEditorWindow.axaml"] = 2,
+        ["Views/ChoiceDialog.axaml"] = 2,
+        ["Views/ConfirmDialog.axaml"] = 2,
+        ["Views/ExecuteProcedureDialog.axaml"] = 2,
+        ["Views/ExportDialog.axaml"] = 2,
+        ["Views/GlobalSearchDialog.axaml"] = 2,
+        ["Views/NewFolderDialog.axaml"] = 2,
+        ["Views/NewRoleDialog.axaml"] = 2,
+        ["Views/PackageDetailTabView.axaml"] = 2,
+        ["Views/RecompileDependentsDialog.axaml"] = 2,
+        ["Views/ScriptExecutorTabView.axaml"] = 2,
+        ["Views/SubprogramKindDialog.axaml"] = 2,
+        ["Views/TextPromptDialog.axaml"] = 2,
+        ["Views/ThirdPartyNoticesWindow.axaml"] = 2,
+        ["Views/UserEditDialog.axaml"] = 2,
+        ["Controls/BreadcrumbBar.axaml"] = 1,
+        ["Controls/SearchableComboBox.cs"] = 1,
+        ["Views/DebuggerTabView.axaml.cs"] = 1,
+        ["Views/DomainDetailTabView.axaml"] = 1,
+        ["Views/ExceptionDetailTabView.axaml"] = 1,
+        ["Views/FilterPanelView.axaml"] = 1,
+        ["Views/GeneratorDetailTabView.axaml"] = 1,
+        ["Views/GlobalSearchTabView.axaml"] = 1,
+        ["Views/IndexDetailTabView.axaml"] = 1,
+        ["Views/SettingsExportDialog.axaml"] = 1,
+        ["Views/SettingsImportDialog.axaml"] = 1,
+        ["Views/TableDetailTabView.axaml.cs"] = 1,
+    };
+
+    private static readonly Dictionary<string, int> MarginBaseline = new(StringComparer.Ordinal)
+    {
+        // Margin — odstęp wokół elementu. Zmierzone 2026-08-08: 491 deklaracji lokalnych w 55 plikach.
+        ["Views/DebuggerTabView.axaml"] = 49,
+        ["Views/DataImportTabView.axaml"] = 40,
+        ["Views/MainWindow.axaml"] = 29,
+        ["Views/DomainDetailTabView.axaml"] = 21,
+        ["Views/FunctionDetailTabView.axaml"] = 21,
+        ["Views/IndexDetailTabView.axaml"] = 20,
+        ["Views/ProcedureDetailTabView.axaml"] = 20,
+        ["Views/SessionManagerTabView.axaml"] = 19,
+        ["Views/TraceMonitorTabView.axaml"] = 19,
+        ["Views/AddFieldDialog.axaml"] = 16,
+        ["Views/PerformancePanelView.axaml"] = 16,
+        ["Views/SecurityManagerTabView.axaml"] = 16,
+        ["Views/TableDetailTabView.axaml"] = 16,
+        ["Views/ViewDetailTabView.axaml"] = 14,
+        ["Views/GeneratorDetailTabView.axaml"] = 13,
+        ["Views/SettingsWindow.axaml"] = 11,
+        ["Views/ScriptExecutorTabView.axaml"] = 10,
+        ["Views/ExceptionDetailTabView.axaml"] = 9,
+        ["Views/SettingsImportDialog.axaml"] = 9,
+        ["Views/TriggerDetailTabView.axaml"] = 8,
+        ["Views/AboutWindow.axaml"] = 7,
+        ["Views/ExecuteProcedureDialog.axaml"] = 7,
+        ["Views/PackageDetailTabView.axaml"] = 6,
+        ["Views/TableDetailTabView.axaml.cs"] = 6,
+        ["Views/UserEditDialog.axaml"] = 6,
+        ["Controls/TableColumnPicker.cs"] = 5,
+        ["Views/BatchResultsDialog.axaml"] = 5,
+        ["Views/DiagnosticsPanelView.axaml"] = 5,
+        ["Views/FilterPanelView.axaml"] = 5,
+        ["Views/ForeignKeyDialog.axaml"] = 5,
+        ["Views/IndexDialog.axaml"] = 5,
+        ["Views/SettingsExportDialog.axaml"] = 5,
+        ["Controls/MessageBanner.axaml"] = 4,
+        ["Views/DebuggerTabView.axaml.cs"] = 4,
+        ["Views/KeyboardShortcutsWindow.axaml"] = 4,
+        ["Views/RecompileDependentsDialog.axaml"] = 4,
+        ["Views/CheckConstraintDialog.axaml"] = 3,
+        ["Views/ConstraintFieldDialog.axaml"] = 3,
+        ["Views/ExportDialog.axaml"] = 3,
+        ["Views/NewTableTabView.axaml"] = 3,
+        ["Views/AggregationBarView.axaml"] = 2,
+        ["Views/BlobEditorWindow.axaml"] = 2,
+        ["Views/ChoiceDialog.axaml"] = 2,
+        ["Views/NewConnectionDialog.axaml"] = 2,
+        ["Views/TextPromptDialog.axaml"] = 2,
+        ["Controls/BreadcrumbBar.axaml"] = 1,
+        ["Controls/SearchableComboBox.cs"] = 1,
+        ["Views/ConfirmDialog.axaml"] = 1,
+        ["Views/FunctionDetailTabView.axaml.cs"] = 1,
+        ["Views/GlobalSearchDialog.axaml"] = 1,
+        ["Views/NewFolderDialog.axaml"] = 1,
+        ["Views/NewRoleDialog.axaml"] = 1,
+        ["Views/ProcedureDetailTabView.axaml.cs"] = 1,
+        ["Views/SubprogramKindDialog.axaml"] = 1,
+        ["Views/ViewDetailTabView.axaml.cs"] = 1,
+    };
+
     private static Dictionary<string, int> BaselineFor(string property) => property switch
     {
         "FontSize" => FontSizeBaseline,
         "FontFamily" => FontFamilyBaseline,
         "CornerRadius" => CornerRadiusBaseline,
+        "Spacing" => SpacingBaseline,
+        "Padding" => PaddingBaseline,
+        "Margin" => MarginBaseline,
         _ => throw new ArgumentOutOfRangeException(nameof(property), property, "No baseline is declared for this property."),
     };
 
-    public static TheoryData<string> GuardedProperties => new() { "FontSize", "FontFamily", "CornerRadius" };
+    public static TheoryData<string> GuardedProperties => new() { "FontSize", "FontFamily", "CornerRadius", "Spacing", "Padding", "Margin" };
 
     [Theory]
     [MemberData(nameof(GuardedProperties))]
@@ -790,34 +985,30 @@ public class DesignTokenComplianceTests
     {
         // M4 / A‑3 + B‑1: 152 → 95. Zeszło 16 literałów `16` (pasek narzędzi i okno → `Size.Icon.Toolbar`)
         // oraz 41 par 15+5 wiersza drzewa (→ `Size.Icon` + `Space.Xs`).
-        // ⭐ M4.1: 95 → 81. Zeszło 14 ikon stojących PRZY ETYKIECIE (`Button.primary`/`.flat` z tekstem,
-        // chevron ujawnienia przy tytule sekcji, wiersz menu kontekstowego) → `Size.Icon`. Wartość bez
-        // zmiany — te ikony już niosły 14; migracja nazywa rolę, której `Size.Icon` komentarz wprost je
-        // uczy („ikona przy etykiecie", „nie być celem myszy"). `ScriptExecutorTabView` wpis USUNIĘTY.
-        // ⚠⚠ RESZTA LITERAŁÓW `14` W TYCH PLIKACH JEST ŚWIADOMIE NIETKNIĘTA I CZEKA NA DECYZJĘ, nie na
-        // czyjąś rękę: to samotne ikony w `Button.icon` pasków siatki (paginacja, filtr/agregacja/eksport,
-        // chevron zwijania panelu), gdzie IDENTYCZNY kształt renderuje się 16 w 135 innych miejscach.
-        // Pomiar: ten sam pasek paginacji ma 14 w Table Data i wynikach SQL, 16 w edytorach funkcji /
-        // procedury / widoku i `Size.Icon.Toolbar` w debuggerze — TRZY odpowiedzi na jedną kontrolkę.
-        // Wpisanie tu którejkolwiek roli byłoby rozstrzygnięciem pytania o gęstość chromy ekran po
-        // ekranie, czyli dokładnie tym, czego zabrania D‑M4‑2.
-        ["Views/DebuggerTabView.axaml"] = 18,
-        ["Views/MainWindow.axaml"] = 11,
-        ["Views/DataImportTabView.axaml"] = 4,
-        ["Views/TableDetailTabView.axaml"] = 8,
-        ["Views/ProcedureDetailTabView.axaml"] = 7,
-        ["Views/FunctionDetailTabView.axaml"] = 7,
-        ["Controls/MessageBanner.axaml"] = 5,
-        ["Views/TraceMonitorTabView.axaml"] = 4,
-        ["Views/ViewDetailTabView.axaml"] = 3,
-        ["Views/SessionManagerTabView.axaml"] = 3,
-        ["Views/SecurityManagerTabView.axaml"] = 3,
-        ["Views/PackageDetailTabView.axaml"] = 2,
-        ["Views/SettingsImportDialog.axaml"] = 1,
-        ["Views/SettingsExportDialog.axaml"] = 1,
-        ["Views/GlobalSearchTabView.axaml"] = 1,
-        ["Views/FilterPanelView.axaml"] = 1,
-        ["Views/DiagnosticsPanelView.axaml"] = 1,
+        //
+        // ⭐⭐ M4.1: 95 → 20, i po tej iteracji NIE MA JUŻ ANI JEDNEGO LITERAŁU `14` ANI `16` — zostaje
+        // wyłącznie ogon 10/11/12/13/15, czyli pytanie o ROLE, sparkowane osobno w §19.37.7.
+        // Zeszło dwiema drogami, z których TYLKO DRUGA zmienia wygląd:
+        //   • 75 ikon niosących 14 → `Size.Icon`. Wartość bez zmiany. Obie populacje trafiają w tę samą
+        //     rolę: ikona PRZY ETYKIECIE (`Button.primary`/`.flat` z tekstem, chevron ujawnienia przy
+        //     tytule, wiersz menu) oraz samotna ikona w PASKU SIATKI.
+        //   • 18 ikon pasków siatki, które nie deklarowały nic i brały 16 z `ControlTheme`, dostało jawne
+        //     `Size.Icon` (16 → 14): paski paginacji w edytorach funkcji / procedury / widoku, chevrony
+        //     zwijania panelu w Session Managerze i Trace Monitorze, filtr + eksport w Trace Monitorze.
+        //
+        // ⭐ Decyzja użytkownika (2026‑08‑08) brzmiała „dokończyć regułę, którą produkt już ma", a nie
+        // „ujednolicić liczby": kryterium A‑3 to drabina *stoi w SERII vs stoi SAMOTNIE*, a przycisk
+        // paginacji stoi w serii czterech, trio filtr/agregacja/eksport w serii trzech. Regułę widać było
+        // w produkcie — `Icon.RefreshCw` niesie 16 jako przycisk paska narzędzi i 14, gdy odświeża SIATKĘ.
+        // ⚠ Wariant „wszędzie 16" odrzucony: rósłby wygląd powierzchni już odebranych. Ten wybrany
+        // wyłącznie ZMNIEJSZA, więc nie rusza ani jednego piksela tam, gdzie M4 już przeszło QA.
+        ["Views/DebuggerTabView.axaml"] = 4,
+        ["Views/FunctionDetailTabView.axaml"] = 3,
+        ["Views/ProcedureDetailTabView.axaml"] = 3,
+        ["Views/TraceMonitorTabView.axaml"] = 3,
+        ["Views/DataImportTabView.axaml"] = 2,
+        ["Views/MainWindow.axaml"] = 2,
+        ["Views/SessionManagerTabView.axaml"] = 2,
         ["Views/AggregationBarView.axaml"] = 1,
     };
 
