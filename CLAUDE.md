@@ -466,9 +466,16 @@ noted.
 
 ## Current state
 
-- **🧱 M4.2 · EDYTORY OBIEKTÓW — DOSTARCZONE, CZEKA NA QA WIZUALNE UŻYTKOWNIKA (2026-08-08).** Build 0/0
-  w Debug i Release; suite **8313** (8167 + 91 + 55, +2); smoke czysty. As-built: `product-polish.md`
-  **§19.40**. Nowa gotcha **#337**.
+- **🧱🔒 M4.2 · EDYTORY OBIEKTÓW — ZAMKNIĘTY, ODEBRANY PO QA WIZUALNYM UŻYTKOWNIKA W OBU MOTYWACH
+  (2026-08-08).** Build 0/0 w Debug i Release; suite **8313** (8167 + 91 + 55, +2); smoke czysty. As-built:
+  `product-polish.md` **§19.40**. Nowa gotcha **#337**.
+  🔒 **B2 ROZSTRZYGNIĘTE NA RENDERZE: karta aktywności bierze `Radius.Surface` (4 → 3), wariant `Radius.Card`
+  = 4 ODRZUCONY.** ⭐ Uzasadnienie jest merytoryczne, nie estetyczne: komentarz roli w `Tokens.axaml` zaczyna
+  się od słowa **„Karta"**, więc rola opisywała ten element od zawsze, a element jej odmawiał. ⭐⭐ To **R12
+  przeczytane w drugą stronę** — reguła chroni wartość lokalną, która ma powód, ale nie legalizuje takiej,
+  której powodem było *„czeka na decyzję"*. ⚠ Różnica wobec **K10** (gdzie nowa rola `Radius.Tab` = 4 była
+  właśnie właściwa) jest rzeczowa: tam sporna była **NAZWA przy zgodnej liczbie**, tu **LICZBA przy zgodnej
+  nazwie**; §3.3 pozwala dwóm rolom dzielić wartość, nie pozwala dwóm wartościom dzielić roli.
   ⭐⭐ **ZNALEZISKO GŁÓWNE: M4.2 w rozumieniu „policzone literały → role" BYŁO JUŻ WYKONANE.** Pomiar
   (regeksy strażników odtworzone 1:1) dał **zero** dla `FontSize`, `CornerRadius`, literałów ikon **i kolorów
   zaszytych** w ośmiu z dziesięciu edytorów; w bliźniakach zostały wyłącznie pozycje **ratyfikowane, żeby
@@ -497,10 +504,11 @@ noted.
   nieaktualnych wyjątków (#333). ⚠⚠ **Sufit rośnie 20 → 25 i to KOREKTA POMIARU, nie regresja** — ⛔ nie wolno
   „naprawiać" tego obniżeniem wpisu. **Wszystkie trzy gałęzie zweryfikowane podsadzeniem** (podsadzenie `5 → 4`
   jest jedynym dowodem, że regeks naprawdę liczy pięć `<Path>`, a nie że wpisałem pasującą liczbę).
-  ⏸ **B2 — promień karty (4 wobec `Radius.Surface` 3) WYPADŁ MIĘDZY ETAPAMI:** §18.4.5 oddał go bramie §13.3,
-  **a §13.3a nigdy go nie rozstrzygnęło** i nie dostał numeru K, więc nie było go w rejestrze zamkniętym „w
-  całości". Render decyzyjny gotowy (`VisualCandidateProbe -- radius`, oba motywy, 1:1 **i ×4**, karta
-  w otoczeniu `Radius.Surface`/`Radius.Chip`) — czeka na decyzję użytkownika.
+  ⚠⚠ **B2 WYPADŁ MIĘDZY ETAPAMI i to jest lekcja o rejestrze, nie o promieniu:** §18.4.5 oddał decyzję bramie
+  §13.3, **a §13.3a nigdy jej nie podjęła** (Z‑1…Z‑6 tego nie dotyczą) i pozycja **nie dostała numeru K**, więc
+  przeżyła zamknięcie rejestru kolizji „w całości". ⭐ **Odesłanie do etapu NIE JEST wpisem do rejestru** —
+  widać to dopiero, gdy ktoś idzie po plikach, a nie po rejestrze. Materiał: `VisualCandidateProbe -- radius`
+  (oba motywy, 1:1 **i ×4**, karta w otoczeniu `Radius.Surface`/`Radius.Chip`).
   ⭐ **Dwie hipotezy o wspólnym wzorcu OBALONE pomiarem** (wynik negatywny wart zapisania): `MinHeight` 60 vs 80
   to dwa różne pola, a `EditableDescription` (2 × 80 przy 8 bez deklaracji) to **reguła #10 działająca
   poprawnie** — 8 bierze rozmiar od kontenera, 2 stoją w wierszu formularza. Pułapka 17.

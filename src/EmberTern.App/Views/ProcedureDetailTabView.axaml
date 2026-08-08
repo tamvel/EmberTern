@@ -513,10 +513,13 @@
               <ItemsControl ItemsSource="{Binding ExecTableActivity}" IsVisible="{Binding HasExecTableActivity}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="core:TableActivityLine">
-                    <!-- ⚠ Promień 4 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 4, §18.4). To KARTA (tło + padding),
-                         a `Radius.Surface` niesie 3 — krok 0 oddał decyzję „karta: 3 czy 4" przeglądowi §13.3
-                         (§18.0.5/2). -->
-                    <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="4"
+                    <!-- ⭐ B2 ZAMKNIĘTE (M4.2, decyzja użytkownika na renderze): karta bierze `Radius.Surface` (3).
+                         M2c iteracja 4 zostawiła tu literał 4 i oddała decyzję „karta: 3 czy 4" bramie §13.3 —
+                         ⚠ która NIGDY jej nie podjęła (Z‑1…Z‑6 tego nie dotyczą), więc pozycja wypadła między
+                         etapami i nie miała nawet numeru K. ⭐ Rola opisywała ten element od zawsze: jej własny
+                         komentarz w `Tokens.axaml` zaczyna się od słowa „Karta". Wariant `Radius.Card` = 4
+                         rozważony i ODRZUCONY — nie tworzymy roli po to, żeby zalegalizować wartość. -->
+                    <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="{DynamicResource Radius.Surface}"
                             Padding="8,6" Margin="0,0,0,8">
                       <StackPanel Spacing="5">
                         <StackPanel Orientation="Horizontal" Spacing="6">

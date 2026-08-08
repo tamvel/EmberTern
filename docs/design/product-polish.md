@@ -8794,9 +8794,14 @@ listy klas headless. Obie gałęzie (naruszenie i nieaktualny wyjątek) **zweryf
 
 ## §19.40 Iteracja 28 (M4.2) — edytory obiektów: etap, którego głównym produktem jest POMIAR (2026-08-08)
 
-> **Status: DOSTARCZONE, CZEKA NA QA WIZUALNE UŻYTKOWNIKA.** Build 0/0 w Debug i Release; suite **8313**
-> (8167 + 91 + 55, +2); smoke czysty. Nowa gotcha **#337**. Zakres z §13: **edytory obiektów (10)** —
-> Table · View · Procedure · Function · Trigger · Package · Domain · Generator · Exception · Index.
+> **🔒 Status: ZAMKNIĘTE — ODEBRANE PO QA WIZUALNYM UŻYTKOWNIKA W OBU MOTYWACH (2026-08-08).** Build 0/0
+> w Debug i Release; suite **8313** (8167 + 91 + 55, +2); smoke czysty. Nowa gotcha **#337**. Zakres z §13:
+> **edytory obiektów (10)** — Table · View · Procedure · Function · Trigger · Package · Domain · Generator ·
+> Exception · Index.
+>
+> **QA:** karta aktywności poprawna w obu motywach, sześć ikon bez zmian wizualnych (zgodnie z konstrukcją).
+> **B2 rozstrzygnięte na renderze: `Radius.Surface` (3), bez nowej roli** — §19.40.5.
+> ⏸ **B1 zostaje OTWARTE z decyzji użytkownika** (przygotowane, wygląd nierozstrzygany) — §19.40.3.
 
 ### §19.40.1 ⭐⭐ Znalezisko główne: M4.2 w rozumieniu „literały → role" było już WYKONANE
 
@@ -8880,7 +8885,7 @@ to, że **dopisanie się do niej zmusza autora do zadeklarowania strony granicy*
 sufitu `5 → 4` jest jedynym dowodem, że rozszerzony regeks **naprawdę liczy pięć `<Path>`**, a nie że wpisałem
 liczbę, która akurat pasuje.
 
-### §19.40.5 ⏸ B2 — promień karty: pytanie, które WYPADŁO MIĘDZY ETAPAMI
+### §19.40.5 🔒 B2 — promień karty: pytanie, które WYPADŁO MIĘDZY ETAPAMI (ROZSTRZYGNIĘTE)
 
 `CornerRadius="4"` karty aktywności w bliźniakach wobec `Radius.Surface` = 3. §18.4.5 zostawił wartość
 lokalną z powodem i oddał decyzję *„karta: 3 czy 4"* przeglądowi **§13.3**.
@@ -8896,6 +8901,20 @@ Materiał decyzyjny: nowy moduł sondy `tools/probes/VisualCandidateProbe/Radius
 różnicy 1 px pytanie „3 czy 4" ma sens wyłącznie jako pytanie o zgodność z sąsiadami.
 ⚠⚠ **Kolumna ×4 jest częścią pytania, nie ozdobą** (§19.38.5): przy 1:1 różnica jest podprogowa, a wtedy
 *„nie widzę różnicy"* i *„render nie pokazuje różnicy"* wyglądają identycznie.
+
+**🔒 Rozstrzygnięcie użytkownika (2026-08-08), na renderze: karta bierze `Radius.Surface` (4 → 3); wariant
+`Radius.Card` = 4 ODRZUCONY.** Oba bliźniaki znikają z bazy `CornerRadius` (1 + 1 → 0).
+
+⭐ **Uzasadnienie, które czyni tę decyzję czymś więcej niż wyborem liczby: rola opisywała ten element od
+zawsze.** Komentarz `Radius.Surface` w `Tokens.axaml` zaczyna się od słowa **„Karta"** — więc przez cały
+czas istniała rola, która wprost wymienia tego konsumenta, a element jej odmawiał. ⭐⭐ To jest **R12
+przeczytane w drugą stronę**: reguła chroni wartość lokalną, która ma powód, ale nie legalizuje wartości,
+dla której powodem było *„czeka na decyzję"*. Nowa rola `Radius.Card` = 4 zalegalizowałaby liczbę zamiast
+opisać element — i byłaby dokładnie tym „katalogiem rosnącym pod produkt", przed którym broni §18.R.
+⚠ Różnica wobec **K10** (gdzie nowa rola `Radius.Tab` = 4 BYŁA właściwa) jest merytoryczna, nie
+uznaniowa: tam sporna była **NAZWA przy zgodnej liczbie** (zakładka nie jest chipem), tutaj sporna jest
+**LICZBA przy zgodnej nazwie** (karta jest kartą). §3.3 pozwala dwóm rolom dzielić wartość; nie pozwala
+dwóm wartościom dzielić roli.
 
 ### §19.40.6 Wspólne wzorce — dwie hipotezy, obie OBALONE pomiarem
 
@@ -8934,8 +8953,8 @@ blokadą plików przez proces smoke'a (MSB3021), nie kompilacją, ale **kolejno�
 
 ### §19.40.7 Czego ta iteracja NIE zrobiła
 
-⛔ **B1 — wygląd** (decyzja użytkownika: przygotować, nie rozstrzygać) · ⛔ **B2 — wybór 3/4** (czeka na render)
-· ⛔ **B3 `GridSplitter Height="4"` ×5** — 🔒 decyzja użytkownika: **poza M4.2**, bo to element chromy dzielony
+⛔ **B1 — wygląd** (decyzja użytkownika: przygotować, nie rozstrzygać; **jedyna pozycja M4.2, która zostaje
+otwarta**) · ⛔ **B3 `GridSplitter Height="4"` ×5** — 🔒 decyzja użytkownika: **poza M4.2**, bo to element chromy dzielony
 z ekranami M4.3/M4.4, więc rozstrzyga się raz, na komplecie wystąpień (**R7**) · ⛔ migracja
 `Spacing`/`Padding`/`Margin` (osobny etap po M4.4, §19.39.4) · ⛔ ogon literałów ikon 10/11/13/15
 · ⛔ **M4.2b** (18 drzew „Zależności") · ⛔ **Z‑3** · ⛔ M4.3–M4.4.

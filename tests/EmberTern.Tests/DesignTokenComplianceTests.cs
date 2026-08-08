@@ -223,10 +223,13 @@ public class DesignTokenComplianceTests
         // (`Radius.Surface` niesie 3 — decyzja produktowa oddana §13.3) i KAPSUŁA przy 6, gdzie promień
         // jest połową wysokości, czyli arytmetyką, a nie rolą (§18.0.5/2).
         ["Views/PerformancePanelView.axaml"] = 2,
-        // M2c iteracja 4: bez zmian. W obu bliźniakach to KARTA przy promieniu 4, a `Radius.Surface`
-        // niesie 3 — decyzja „karta: 3 czy 4” należy do przeglądu §13.3 (§18.0.5/2). Powody stoją w miejscu.
-        ["Views/FunctionDetailTabView.axaml"] = 1,
-        ["Views/ProcedureDetailTabView.axaml"] = 1,
+        // ⭐ M4.2 / B2: bliźniaki ZDJĘTE (1 + 1 → 0). Karta aktywności wzięła `Radius.Surface` (4 → 3) po
+        // decyzji użytkownika podjętej NA RENDERZE (`VisualCandidateProbe -- radius`, oba motywy, 1:1 i ×4).
+        // ⚠ Wpis stał tu od M2c iteracji 4 z adnotacją „decyzja należy do przeglądu §13.3" — a przegląd
+        // §13.3a NIGDY jej nie podjął i pozycja nie dostała numeru K, więc wypadła między etapami i przeżyła
+        // zamknięcie rejestru kolizji „w całości". ⭐ Wariant `Radius.Card` = 4 rozważony i ODRZUCONY:
+        // rola `Radius.Surface` wymienia „Kartę" jako pierwszego konsumenta we własnym komentarzu, więc
+        // nowa rola legalizowałaby wartość zamiast opisywać element (R12 czytane w drugą stronę).
     };
 
     /// <summary>
