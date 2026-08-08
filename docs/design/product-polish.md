@@ -8723,3 +8723,69 @@ wygląda tak od zawsze — pytanie odbiorcze brzmi więc *„czy te paski czytaj
 a nie *„czy 14 jest lepsze od 16"*. ⚠ Reszta iteracji (75 ikon) jest wizualnie zerowa **z konstrukcji** —
 literał 14 zastąpiony rolą niosącą 14.
 ⚠ Poza QA i nadal otwarte: **150 % DPI** (R‑6), które przy zmianie metryk sprawdza się okiem.
+
+### §19.39.7 Runda QA — wyśrodkowanie `Icon.Undo` / `Icon.Redo` (2026-08-08)
+
+Zgłoszenie: *„ikony Undo/Redo w pasku narzędzi wyglądają optycznie na nierówno ustawione względem
+pozostałych"*, z jawnym poleceniem, żeby nie poprawiać w ciemno — sprawdzić bounds kontenera, pozycję środka
+ikony, rozmiar, padding i różnice wobec sąsiadów, a jeśli wszystko jest geometrycznie poprawne, zostawić
+i wyjaśnić.
+
+**Zgłoszenie było trafne, a przyczyną jest GEOMETRIA, nie pozycjonowanie.** Przycisk, kontener, padding
+i rozmiar są identyczne jak u sąsiadów (`Button.icon`, brak deklaracji rozmiaru ⇒ `Size.Icon.Toolbar` z
+`ControlTheme`). Rozstrzygające jest to, że szablon `SvgIcon` to `Viewbox Uniform` nad **stałym** `Canvas
+24×24`: ścieżka leży na nim we współrzędnych bezwzględnych, więc **jej położenie w siatce przenosi się 1:1 na
+render i nic go nie normalizuje**.
+
+Zmierzone (`GetRenderBounds`, pióro 2 px, zaokrąglone końce):
+
+| ikona | środek tuszu | odchylenie | przy renderze 16 px |
+|---|---|---|---|
+| `Icon.Undo` / `Icon.Redo` | **14,75** | **+2,75** | **+1,83 px** |
+| `Icon.Check`, `Play`, `X`, `Plus`, `Braces`, `Unplug` | 12,00 | 0,00 | 0,00 |
+| `Icon.Hammer` | 12,50 | +0,50 | +0,33 px |
+
+⭐ Strzałka sama w sobie jest wyśrodkowana — w dół ciągnie ją **łuk powrotu**, który zwisa pod nią. Dlatego
+objaw jest realny, a przyczyny nie widać w markupie.
+
+⭐⭐ **Audyt całego zestawu (86 geometrii) zamienił wrażenie w rozkład: 73 mieszczą się w 0,25 jednostki od
+środka, 82 w 0,5, 83 w 1,0.** `Icon.Undo` i `Icon.Redo` były **dwoma z trzech** największych odchyleń
+pionowych w całej aplikacji — czyli to nie był styl rodziny, tylko odstępstwo od niej. (Trzecie, `Icon.StepOver`
++1,62, opisane niżej.)
+
+**Poprawka: czyste przesunięcie o 2,5 jednostki w górę** — kształt, rozmiar i grubość kreski bez zmian.
+⚠ 2,5, a nie 2,75 (które wyzerowałoby odchylenie co do joty): 2,5 zostawia współrzędne na siatce 0,5 jak
+reszta zestawu, a resztkowe 0,25 jednostki (**0,17 px**) leży w paśmie, w którym mieszczą się 73 z 86 ikon.
+Zaktualizowane także kanoniczne `Assets/Icons/Actions/undo.svg` i `redo.svg`, żeby źródło nie rozjechało się
+z runtime'em. Decyzja podjęta **na renderze** (przed/po, z osią paska), nie na samej liczbie.
+
+⛔ **`Icon.StepOver` (+1,62 / 1,08 px) świadomie NIE ruszony** i wpisany jako wyjątek z powodem: „przeskok"
+nie ma ani podłogi, ani sufitu, w odróżnieniu od rodzeństwa (`Icon.StepInto` ma kreskę podłogi na y=19,
+`Icon.StepOut` sufit na y=5), więc jego tusz z natury leży niżej. To pasek debuggera (**M4.3**), odchylenie
+jest o połowę mniejsze od zgłoszonego, a wyrównanie tej **trójki** trzeba oceniać razem i na renderze.
+
+⛔ **Oś pozioma celowo nie jest pilnowana:** `Icon.Play` jest przesunięty w prawo o 1,5 jednostki i to jest
+**poprawna korekta optyczna trójkąta**, a nie defekt (#288 — pudełko tuszu DIAGNOZUJE wielkość optyczną,
+nigdy jej nie DYKTUJE).
+
+#### §19.39.7a ⛔⛔ Pierwsza wersja strażnika mierzyła INNYM SILNIKIEM niż ten, którym produkt rysuje
+
+Nowy strażnik `EveryIconGeometry_IsVerticallyCentredInIts24Grid` w pierwszej wersji liczył
+`StreamGeometry.GetRenderBounds` **w sesji headless testów** — i zgłosił **sześć fałszywych znalezisk**:
+`Icon.Search`, `Moon`, `RotateCw`, `User`, `Index`, `Cut`. Wszystkie sześć zawierają **łuk**.
+
+Eksperyment porównawczy (ta sama geometria, dwa silniki) rozstrzygnął to jednoznacznie:
+
+| | headless (`UseHeadlessDrawing`, czyli testy) | Skia (czyli render) |
+|---|---|---|
+| `Icon.Search` | Y 10,00..22,00 → środek **16,00** | Y 2,00..22,00 → środek **12,00** |
+| `Icon.RotateCw` | Y 2,00..13,00 → środek **7,50** | Y 2,00..22,00 → środek **12,00** |
+
+**Platforma headless ignoruje wybrzuszenie łuku i liczy pudełko z punktów końcowych.** Strażnik byłby więc
+czerwony z powodu, którego jego własna nazwa nie opisuje (#315), i kazałby „poprawić" sześć **poprawnych**
+ikon — a wcześniejszy audyt na Skii, który tych sześciu nie zgłaszał, był cały czas prawidłowy.
+
+⭐ Naprawione przez pomiar **wprost SkiaSharpem** (`SKPath.ParseSvgPathData` + `GetFillPath` +
+`TightBounds`), czyli tym samym silnikiem, którym rysuje produkt. ⭐ Efekt uboczny, który akurat jest zyskiem:
+pomiar nie potrzebuje platformy Avalonii, więc test **zostaje w partycji GŁÓWNEJ** i nie powiększa kruchej
+listy klas headless. Obie gałęzie (naruszenie i nieaktualny wyjątek) **zweryfikowane podsadzeniem**.

@@ -1378,3 +1378,26 @@ every emit path to be individually perfect.**
      read exactly **zero** times for two of those properties. **A stage's reported number is bounded by what
      anyone thought to measure**, and a clean report over an unmeasured property is not evidence of a clean
      product. (Product Polish M4.1 — `product-polish.md` §19.39.)
+
+336. **A guard that COMPUTES something must compute it with the engine the product uses; the headless test
+     platform is not that engine, and the difference is silent.** A new guard asserting that every icon
+     geometry is vertically centred in its 24×24 grid used `StreamGeometry.GetRenderBounds` inside the test
+     suite's headless session and reported **six offenders that render perfectly** — every one of them
+     containing an arc. Measured side by side on the same path data: the headless platform
+     (`UseHeadlessDrawing`, i.e. how the tests run) **ignores an arc's bulge and takes the box from the
+     endpoints**, so `Icon.Search` reads Y 10..22 (centre 16, "4 units low"), while Skia — what actually
+     draws — reads Y 2..22 (centre 12, perfectly centred).
+     ⭐ **The failure mode is the dangerous one: the guard was RED, with a precise number, naming real files.**
+     Acting on it would have "fixed" six correct icons and shipped six new defects, and every step would have
+     looked rigorous. #315's shape (green or red for a reason its own name does not describe), one layer down:
+     here the wrong thing was not the assertion but the **measuring instrument**.
+     ⚠ **Practically: when a test computes geometry, text metrics, layout or colour blending, ask which
+     implementation answers — and validate it against a known-good case before trusting a finding.** What
+     exposed it here was that an earlier Skia-based audit of the same 86 geometries had reported only three
+     outliers; two measurements disagreeing is a fact about the tools, and the one that matches the renderer
+     wins.
+     ⭐ The fix also improved the test's placement: measuring with **SkiaSharp directly**
+     (`SKPath.ParseSvgPathData` → `GetFillPath` → `TightBounds`) needs no Avalonia platform at all, so the
+     guard lives in the MAIN partition instead of growing the fragile headless class list (#94/#226/#286).
+     ⚠ Use `TightBounds`, not `Bounds` — the latter is the control-point box, which for an arc answers a
+     different question again. (Product Polish M4.1 QA — `product-polish.md` §19.39.7a.)

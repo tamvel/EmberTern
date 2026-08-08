@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using SkiaSharp;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -419,6 +420,132 @@ public class DesignTokenComplianceTests
         ["Views/SubprogramKindDialog.axaml"] = 1,
         ["Views/ViewDetailTabView.axaml.cs"] = 1,
     };
+
+    /// <summary>
+    /// ⭐⭐ <b>Każda geometria ikony jest WYŚRODKOWANA W PIONIE w swojej siatce 24×24.</b> Powstało ze zgłoszenia
+    /// QA (M4.1): strzałki Undo/Redo w pasku narzędzi „wyglądają na nierówno ustawione względem pozostałych
+    /// ikon". Zgłoszenie było trafne, a przyczyną okazała się <b>geometria, nie pozycjonowanie</b> — przycisk,
+    /// kontener, padding i rozmiar były identyczne jak u sąsiadów, a ikona i tak siedziała 1,83 px niżej.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⭐ <b>Dlaczego to musi być strażnik, a nie jednorazowa poprawka.</b> Szablon <c>SvgIcon</c> to
+    /// <c>Viewbox Uniform</c> nad <b>stałym</b> <c>Canvas 24×24</c>, więc położenie ścieżki w tej siatce
+    /// przenosi się 1:1 na render i <b>nic go nie normalizuje</b>. Ikona narysowana nisko renderuje się nisko
+    /// obok sąsiadów — przy zielonym buildzie i bez żadnego licznika, który by to widział.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>Próg 1,0 jednostki jest ZMIERZONY, nie dobrany.</b> Rozkład w chwili napisania: <b>73 z 86 geometrii
+    /// mieszczą się w 0,25</b> jednostki od środka, 82 w 0,5, 83 w 1,0. Próg leży więc powyżej naturalnego
+    /// rozrzutu rodziny i poniżej odstępstwa — czyli tam, gdzie jedno odróżnia od drugiego.
+    /// </para>
+    /// <para>
+    /// ⛔⛔ <b>DLACZEGO SKIA, A NIE Avalonia.Media.Geometry — i to jest najważniejsza rzecz w tym teście.</b>
+    /// Pierwsza wersja liczyła <c>StreamGeometry.GetRenderBounds</c> w sesji headless testów i zgłosiła
+    /// <b>sześć fałszywych znalezisk</b> (<c>Icon.Search</c>, <c>Moon</c>, <c>RotateCw</c>, <c>User</c>,
+    /// <c>Index</c>, <c>Cut</c>) — wszystkie zawierające ŁUK. Zmierzone porównawczo: platforma headless
+    /// (<c>UseHeadlessDrawing</c>, czyli ta, w której biegną testy) <b>ignoruje wybrzuszenie łuku</b> i liczy
+    /// pudełko z punktów końcowych. Dla <c>Icon.Search</c> daje Y 10..22 (środek 16), a Skia — czyli to, co
+    /// NAPRAWDĘ się rysuje — Y 2..22 (środek 12, ikona idealnie wyśrodkowana).
+    /// ⭐ Strażnik byłby więc czerwony z powodu, którego jego własna nazwa nie opisuje (#315), i kazałby
+    /// „poprawić" sześć poprawnych ikon. <b>Narzędzie liczące geometrię musi używać silnika, którym produkt
+    /// rysuje</b>; platforma headless nim nie jest.
+    /// ⭐ Pomiar Skią wprost ma jeszcze jedną zaletę: nie potrzebuje platformy Avalonii, więc ten test zostaje
+    /// w partycji GŁÓWNEJ i nie powiększa kruchej listy klas headless (#94/#226/#286).
+    /// </para>
+    /// <para>
+    /// ⛔ Oś POZIOMA celowo NIE jest pilnowana: <c>Icon.Play</c> jest przesunięty w prawo o 1,5 jednostki i to
+    /// jest <b>poprawna korekta optyczna</b> trójkąta, a nie defekt (#288 — pudełko tuszu DIAGNOZUJE wielkość
+    /// optyczną, nigdy jej nie DYKTUJE).
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EveryIconGeometry_IsVerticallyCentredInIts24Grid()
+    {
+        // Wyjątek z zapisanym POWODEM — reguła R12: celem jest usunięcie odstępstw NIEUZASADNIONYCH, nie
+        // wyzerowanie licznika. Wpis tutaj zmusza autora do zadeklarowania, po której stronie stoi.
+        var exempt = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            // Zmierzone +1,62 (1,08 px @16). „Przeskok" nie ma ani podłogi, ani sufitu, w odróżnieniu od
+            // rodzeństwa (`Icon.StepInto` ma kreskę podłogi na y=19, `Icon.StepOut` sufit na y=5), więc jego
+            // tusz z natury leży niżej. ⛔ Świadomie NIE ruszone w M4.1: to pasek debuggera (M4.3), odchylenie
+            // jest o połowę mniejsze od zgłoszonego, a wyrównanie tej TRÓJKI trzeba oceniać razem i na
+            // renderze, nie po jednej liczbie.
+            ["Icon.StepOver"] = "przeskok bez podlogi/sufitu - do oceny razem z rodzenstwem Step* w M4.3",
+        };
+
+        var source = File.ReadAllText(Path.Combine(AppRoot(), "Themes", "IconGeometries.axaml"));
+        var matches = Regex.Matches(
+            Regex.Replace(source, @"<!--[\s\S]*?-->", string.Empty),
+            @"<StreamGeometry x:Key=""(?<key>[^""]+)"">(?<data>[^<]+)</StreamGeometry>");
+
+        // Test, który przechodzi, bo NICZEGO nie dopasował, jest gorszy niż brak testu (R16).
+        Assert.True(matches.Count > 50,
+            $"W IconGeometries.axaml znaleziono tylko {matches.Count} geometrii — jeżeli zmienił się ich zapis, "
+            + "ten strażnik musi pójść za nim, a nie zniknąć.");
+
+        var offenders = new List<string>();
+        var stale = new List<string>();
+
+        foreach (Match m in matches)
+        {
+            var key = m.Groups["key"].Value;
+            var deviation = InkCentreY(m.Groups["data"].Value, key) - 12d;
+
+            if (exempt.ContainsKey(key))
+            {
+                // Wyjątek, który przestał być potrzebny, wprowadza w błąd tak samo jak brakujący.
+                if (Math.Abs(deviation) <= 1d) stale.Add($"{key} (odchylenie {deviation:+0.00;-0.00})");
+                continue;
+            }
+
+            if (Math.Abs(deviation) > 1d)
+            {
+                offenders.Add($"{key}: środek tuszu {deviation + 12:F2} zamiast 12,00 — odchylenie "
+                    + $"{deviation:+0.00;-0.00} jednostki, czyli {deviation * 16 / 24:+0.00;-0.00} px przy renderze 16 px");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Geometria ikony nie jest wyśrodkowana w pionie w siatce 24×24:\n  "
+            + string.Join("\n  ", offenders)
+            + "\n\n`SvgIcon` to Viewbox nad STAŁYM Canvas 24×24, więc ikona narysowana nisko renderuje się\n"
+            + "nisko obok sąsiadów i nic tego nie normalizuje. Dwa wyjścia, i sens tego testu polega na tym,\n"
+            + "że musisz powiedzieć, które:\n"
+            + "  • przesuń geometrię tak, żeby tusz stanął w pionie na środku — CZYSTE przesunięcie, kształt,\n"
+            + "    rozmiar i grubość kreski bez zmian — ORAZ zaktualizuj kanoniczny plik w Assets/Icons/,\n"
+            + "    żeby źródło i runtime się nie rozjechały;\n"
+            + "  • albo dopisz wyjątek WRAZ Z POWODEM do listy `exempt` powyżej.");
+
+        Assert.True(stale.Count == 0,
+            "Wyjątek od wyśrodkowania przestał być potrzebny — usuń wpis, bo opisuje stan, którego już nie ma:\n  "
+            + string.Join("\n  ", stale));
+    }
+
+    /// <summary>
+    /// Pionowy środek POKRYTEGO TUSZEM pudełka — ścieżka obrysowana piórem 2 px z zaokrąglonymi końcami, czyli
+    /// dokładnie tak, jak rysuje ją <c>SvgIcon</c>. ⚠ <c>TightBounds</c>, nie <c>Bounds</c>: to drugie zwraca
+    /// pudełko punktów kontrolnych krzywej, więc dla łuku odpowiadałoby na inne pytanie niż zadane.
+    /// </summary>
+    private static double InkCentreY(string pathData, string key)
+    {
+        var path = SKPath.ParseSvgPathData(pathData);
+        Assert.True(path is not null, $"Skia nie potrafi sparsować danych ścieżki `{key}`.");
+
+        using (path!)
+        using (var stroke = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 2,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round,
+        })
+        using (var stroked = new SKPath())
+        {
+            stroke.GetFillPath(path, stroked);
+            return stroked.TightBounds.MidY;
+        }
+    }
 
     private static Dictionary<string, int> BaselineFor(string property) => property switch
     {

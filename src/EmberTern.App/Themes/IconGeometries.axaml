@@ -22,11 +22,28 @@
   <StreamGeometry x:Key="Icon.Pause">M10 4 V20 M14 4 V20</StreamGeometry>
   <StreamGeometry x:Key="Icon.Activity">M22 12 H18 L15 21 L9 3 L6 12 H2</StreamGeometry>
   <StreamGeometry x:Key="Icon.Check">M5 12.5 L10 17.5 L19 6.5</StreamGeometry>
-  <StreamGeometry x:Key="Icon.Undo">M10 8 L5 12.5 L10 17 M5 12.5 H15 A4.5 4.5 0 0 1 15 21.5</StreamGeometry>
+  <!-- ⭐⭐ WYŚRODKOWANE W PIONIE W M4.1 (zgłoszenie QA: „strzałki wyglądają na nierówno ustawione względem
+       pozostałych ikon w pasku"). Zgłoszenie było trafne i przyczyną jest GEOMETRIA, nie pozycjonowanie:
+       przycisk, kontener, padding i rozmiar są identyczne jak u sąsiadów, a ikona i tak siedziała niżej.
+
+       Zmierzone przed poprawką (`GetRenderBounds` z piórem 2 px, siatka 24): środek tuszu **14,75**
+       zamiast 12, czyli **1,83 px za nisko przy renderze 16 px** — bo strzałka jest wyśrodkowana, a łuk
+       powrotu zwisa pod nią i ściąga całe pudełko w dół. Audyt wszystkich 86 geometrii: **73 mieszczą się
+       w 0,25 jednostki od środka, 83 w 1,0**, a `Icon.Undo`/`Icon.Redo` były DWOMA Z TRZECH największych
+       odchyleń pionowych w całym zestawie. To nie był więc styl rodziny, tylko odstępstwo od niej.
+
+       ⚠ Przesunięcie o **2,5**, nie o 2,75 (które wyzerowałoby odchylenie co do joty): 2,5 zostawia
+       współrzędne na siatce 0,5 jak reszta zestawu, a resztkowe 0,25 jednostki (0,17 px) leży w paśmie,
+       w którym mieszczą się 73 z 86 ikon. ⛔ To jest CZYSTE PRZESUNIĘCIE — ani kształt, ani rozmiar, ani
+       grubość kreski się nie zmieniły; ikona ma wyglądać tak samo, tylko stać równo.
+       ⚠ Ta sama zmiana musi trafić do `Assets/Icons/Actions/undo.svg` i `redo.svg` (źródło kanoniczne). -->
+  <StreamGeometry x:Key="Icon.Undo">M10 5.5 L5 10 L10 14.5 M5 10 H15 A4.5 4.5 0 0 1 15 19</StreamGeometry>
   <!-- Keyboard Manager etap 5 — the three marks the editor's context menu needed and the app did not have.
        Redo is Undo mirrored, so the pair reads as a pair; Cut / Paste are the Lucide scissors and clipboard.
-       Authored in the same 24×24, 2px-stroke, round-cap idiom as every other geometry here. -->
-  <StreamGeometry x:Key="Icon.Redo">M14 8 L19 12.5 L14 17 M19 12.5 H9 A4.5 4.5 0 0 0 9 21.5</StreamGeometry>
+       Authored in the same 24×24, 2px-stroke, round-cap idiom as every other geometry here.
+       ⚠ Wyśrodkowana w M4.1 razem z `Icon.Undo` — lustro musi zostać lustrem, więc idzie tym samym
+       przesunięciem, choć ma dziś jednego konsumenta (menu kontekstowe edytora). -->
+  <StreamGeometry x:Key="Icon.Redo">M14 5.5 L19 10 L14 14.5 M19 10 H9 A4.5 4.5 0 0 0 9 19</StreamGeometry>
   <StreamGeometry x:Key="Icon.Cut">M6 3 L18 15 M18 3 L10.5 10.5 M8.5 15.5 A3 3 0 1 1 6 18 M15.5 15.5 A3 3 0 1 0 18 18</StreamGeometry>
   <StreamGeometry x:Key="Icon.Paste">M9 4 H6 A2 2 0 0 0 4 6 V20 A2 2 0 0 0 6 22 H18 A2 2 0 0 0 20 20 V6 A2 2 0 0 0 18 4 H15 M9 4 A1 1 0 0 1 10 3 H14 A1 1 0 0 1 15 4 A1 1 0 0 1 14 5 H10 A1 1 0 0 1 9 4 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Plus">M12 5 V19 M5 12 H19</StreamGeometry>
