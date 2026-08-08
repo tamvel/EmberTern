@@ -8789,3 +8789,153 @@ ikon — a wcześniejszy audyt na Skii, który tych sześciu nie zgłaszał, by�
 `TightBounds`), czyli tym samym silnikiem, którym rysuje produkt. ⭐ Efekt uboczny, który akurat jest zyskiem:
 pomiar nie potrzebuje platformy Avalonii, więc test **zostaje w partycji GŁÓWNEJ** i nie powiększa kruchej
 listy klas headless. Obie gałęzie (naruszenie i nieaktualny wyjątek) **zweryfikowane podsadzeniem**.
+
+---
+
+## §19.40 Iteracja 28 (M4.2) — edytory obiektów: etap, którego głównym produktem jest POMIAR (2026-08-08)
+
+> **Status: DOSTARCZONE, CZEKA NA QA WIZUALNE UŻYTKOWNIKA.** Build 0/0 w Debug i Release; suite **8313**
+> (8167 + 91 + 55, +2); smoke czysty. Nowa gotcha **#337**. Zakres z §13: **edytory obiektów (10)** —
+> Table · View · Procedure · Function · Trigger · Package · Domain · Generator · Exception · Index.
+
+### §19.40.1 ⭐⭐ Znalezisko główne: M4.2 w rozumieniu „literały → role" było już WYKONANE
+
+Pomiar wejściowy odtworzył regeksy strażników 1:1 (nie własne przybliżenia) i dał wynik, którego plan etapu
+nie przewidywał:
+
+| własność | 8 edytorów | bliźniaki (Proc/Func) |
+|---|---|---|
+| `FontSize` | **0** | 3 + 3 |
+| `CornerRadius` | **0** | 1 + 1 |
+| literały rozmiaru ikony | **0** | 3 + 3 |
+| kolory zaszyte (reguła 1) | **0** | **0** |
+| `Size.Row.GridEdit` (C‑1) | zastosowane | zastosowane |
+
+Robotę wykonały **M2c iteracja 5** (141 → 0, §18.5 — „pierwsza iteracja bez ani jednego wyjątku") oraz oba
+bloki decyzyjne M4. A to, co zostało w bliźniakach, jest **ratyfikowane, żeby zostać**: dwa `TextEditor`
+12 px w wierszu siatki i znak rodzaju 9 px to decyzje KONTENERA z §18.0.5/3, wprost wyłączone w §19.38.7.
+
+⭐ **Powód, dla którego akurat te dziesięć widoków wyszło czysto, zapisało już §18.5.2 i on się potwierdził:**
+wyjątki nie biorą się z wielkości ani wieku pliku, tylko z tego, **ile RÓŻNYCH decyzji projektowych w nim
+zapadło**. Edytory obiektów są zbudowane z jednego wzorca (formularz + drzewa zależności + podgląd DDL)
+i nie mają nic własnego.
+
+### §19.40.2 Co weszło — sześć ikon, wygląd bez zmiany
+
+Trzy ikony karty aktywności w każdym z bliźniaków (`Icon.Plus` / `Icon.Pencil` / `Icon.Trash`) niosły literał
+`12` i przeszły na **`Size.Icon.Sm`**. ⭐ Rola trafia **własnym opisem** — *„ikona inline w tekście 11 px
+(chip, wiersz siatki)"* — a każda z tych ikon stoi w jednym wierszu obok tekstu `Text.Compact.Size` (11).
+Wartość 12 → 12, **wygląd bez zmiany**; migracja nazywa decyzję, którą autor już podjął (**R12**).
+
+⚠ To jest część ogona 10/11/12/13/15 sparkowanego w §19.37.7 jako „pytanie o ROLE" — ale **tylko dla 12 rola
+już istnieje i pasuje opisem**, więc tu nie było pytania, tylko odpowiedź. Ogon 10/11/13/15 zostaje
+sparkowany bez zmian.
+
+**Sufit ikon: bliźniaki 3 + 3 → 0, wpisy zdjęte z bazy.**
+
+### §19.40.3 ⛔⛔ B1 — `TableDetailTabView` ma WŁASNY, PRYWATNY SYSTEM IKON, niewidoczny dla trzech mechanizmów
+
+Plik deklaruje lokalnie trzy `StreamGeometry` (`PkIconGeometry`, `FkIconGeometry`, `UnqIconGeometry`)
+i rysuje je **surowym `<Path Fill=…>`**, pięć razy, na **siatce 14 jednostek** zamiast kanonicznych 24.
+
+⭐⭐ **Konsekwencja jest większa niż pięć literałów: ten sam obchód ukrył plik przed TRZEMA mechanizmami naraz.**
+
+| mechanizm | dlaczego nie widzi |
+|---|---|
+| domyślny rozmiar z `ControlTheme` (A‑3) | `<Path>` nie jest `SvgIcon`, więc nie ma `ControlTheme` |
+| audyt wyśrodkowania w siatce 24 (runda QA M4.1) | czyta `IconGeometries.axaml`, a tych geometrii tam nie ma |
+| licznik literałów rozmiaru ikony | wymagał `<controls:SvgIcon`, więc **plik raportował 0 przy pięciu literałach** |
+
+Każdy z nich jest poprawny osobno; wszystkie trzy dzielą założenie *„ikona to `SvgIcon`"*, więc jeden plik
+wypisał się z całego systemu projektowego **w ciszy**. Zapisane jako gotcha **#337** — #285 o jeden obrót
+dalej: pomiar po NAZWIE KONTROLKI zawodzi w najbardziej przyjazny sposób, bo daje nie złą liczbę, tylko
+**nieobecny wiersz**, a nieobecny wiersz czyta się jak zgodność.
+
+⚠ **Zmierzone, nie założone: to NIE jest duplikat.** `IconGeometries.axaml` nie ma ikony klucza głównego,
+obcego ani unikalności — te trzy glify są realnie potrzebną treścią. Dlatego przeniesienie ich do systemu
+oznacza **przerysowanie na siatkę 24, czyli ZMIANĘ WYGLĄDU** pięciu ikon w siatkach pól i indeksów.
+
+🔒 **Decyzja użytkownika (2026-08-08): B1 zostaje PRZYGOTOWANE jako osobny przypadek; wyglądu nie
+rozstrzygamy w M4.2.** Zrobione dokładnie tyle: dług jest teraz **widoczny i zmierzony**, a nie ukryty.
+
+### §19.40.4 Strażnik — rozszerzony, nie dobudowany obok
+
+⭐ **Reuse before create:** `MeasureIconSizeLiterals` dostał `|Path` w istniejącym regeksie, więc nie powstał
+drugi licznik obok pierwszego. ⚠ **Rozszerzenie nie potrzebowało ani jednego wyjątku**, i to jest wynik
+pomiaru, a nie szczęścia: w całym `src/` jest **9** elementów `<Path>` — 5 to te ikony, 4 to wnętrza
+`ControlTemplate` w `IconGeometries.axaml` i **żaden z tych czterech nie deklaruje literału**.
+⛔ Świadomie NIE wyłączyłem `IconGeometries.axaml` z reguły: wyjątek nieosiągalny czyta się jak realna
+siatka bezpieczeństwa (§15.7).
+
+⚠⚠ **Sufit rośnie 20 → 25 i to jest KOREKTA POMIARU, nie regresja.** Te pięć literałów istniało od zawsze.
+⛔ Nie wolno „naprawić" tego obniżeniem wpisu — to schowałoby dokładnie to, co właśnie zostało znalezione.
+
+Druga połowa jest **strukturalna, nie liczbowa**: nowy `EveryIconGeometry_LivesInTheIconSystem_OrCarriesAReason`
+wymaga, żeby geometria zadeklarowana poza `IconGeometries.axaml` **niosła zapisany powód**
+(`IconGeometryOutsideTheSystem`) — wzorzec `DatePresentationTests`, gdzie wartością listy nie są nazwy, tylko
+to, że **dopisanie się do niej zmusza autora do zadeklarowania strony granicy**. Towarzyszy mu
+`TheIconGeometryExemptions_HaveNoStaleEntries`, bo wyjątek bez przedmiotu czyta się jak obowiązująca reguła (#333).
+
+⭐ **Wszystkie trzy gałęzie zweryfikowane PODSADZENIEM NARUSZENIA** — i to nie była formalność: podsadzenie
+sufitu `5 → 4` jest jedynym dowodem, że rozszerzony regeks **naprawdę liczy pięć `<Path>`**, a nie że wpisałem
+liczbę, która akurat pasuje.
+
+### §19.40.5 ⏸ B2 — promień karty: pytanie, które WYPADŁO MIĘDZY ETAPAMI
+
+`CornerRadius="4"` karty aktywności w bliźniakach wobec `Radius.Surface` = 3. §18.4.5 zostawił wartość
+lokalną z powodem i oddał decyzję *„karta: 3 czy 4"* przeglądowi **§13.3**.
+
+⚠⚠ **§13.3a nigdy tego nie rozstrzygnęło.** Brama wyprodukowała sześć znalezisk (Z‑1…Z‑6) i żadne nie dotyczy
+promienia karty; pozycja nie dostała też numeru K, więc nie weszła do rejestru, który blok typografii zamknął
+„w całości". ⭐ **To nie jest decyzja, tylko jej brak** — i widać go dopiero, gdy ktoś idzie po pliku, a nie po
+rejestrze.
+
+Materiał decyzyjny: nowy moduł sondy `tools/probes/VisualCandidateProbe/Radius.cs`
+(`dotnet run --project tools/probes/VisualCandidateProbe -- radius`) → `out/m4r-b2-promien-karty-{Dark,Light}.png`.
+⚠ Render pokazuje kartę **w otoczeniu** (kontener na `Radius.Surface` 3 + chip na `Radius.Chip` 4), bo przy
+różnicy 1 px pytanie „3 czy 4" ma sens wyłącznie jako pytanie o zgodność z sąsiadami.
+⚠⚠ **Kolumna ×4 jest częścią pytania, nie ozdobą** (§19.38.5): przy 1:1 różnica jest podprogowa, a wtedy
+*„nie widzę różnicy"* i *„render nie pokazuje różnicy"* wyglądają identycznie.
+
+### §19.40.6 Wspólne wzorce — dwie hipotezy, obie OBALONE pomiarem
+
+Zanim zgłosiłem cokolwiek jako rozjazd, sprawdziłem HOSTA, nie samą liczbę (lekcja §19.39.2a):
+
+1. **`MinHeight` 60 vs 80** — to nie ten sam element. Domain 60 to `CheckConstraint` (wyrażenie, zwykle jedna
+   linia), 80 to pole opisu. Różne zadania, więc różne liczby są poprawne.
+2. **`EditableDescription` w 10 miejscach: 2 deklarują 80, 8 nie deklaruje nic.** Wygląda na klasyczny #335,
+   **nie jest**: te 8 stoi we WŁASNEJ zakładce i bierze rozmiar od kontenera (`VerticalAlignment="Stretch"` /
+   `Grid.Row="1"`), a te 2 stoją w wierszu formularza, gdzie bez podłogi zapadłyby się do jednej linii.
+   ⭐ To **reguła #10 działająca poprawnie** („kontener rozstrzyga wielkość"), a nie dryf — **pułapka 17**.
+
+⭐ Warto to zapisać właśnie dlatego, że wynik jest NEGATYWNY: obie hipotezy brzmiały wiarygodnie i obie
+zniknęły po jednym pytaniu *„czym ta rzecz jest dla użytkownika"*.
+
+### §19.40.6a ⚠ Jednorazowe czerwone, NIEZŁAPANE — ogłaszam to jako nierozstrzygnięte
+
+Partycja główna poszła **11 razy**: **9 zielonych (8167), 2 przebiegi z JEDNYM niepowodzeniem, którego nazwy
+nie udało mi się przechwycić** (raport zniknął w filtrze, a przy powtórzeniu było zielono).
+
+⛔ **Nie przypisuję tego znanemu flake'owi** (`SettingsLoadHealthTests.ConcurrentSaves_…`), mimo że prompt
+startowy wprost go zapowiada: uruchomiony solo przeszedł **3/3**, a bez nazwy z czerwonego przebiegu byłby to
+domysł podparty oczekiwaniem — dokładnie kształt #320 („zgłoszona korelacja o złej zmiennej").
+⭐ Hipoteza, która nasunęła się po drodze — *„oba czerwone padły pod `--blame-hang`"* — **została sprawdzona
+i OBALONA**: dwa kolejne przebiegi pod tą samą flagą wyszły zielone. Zostaje więc obserwacja bez wyjaśnienia,
+i tak jest zapisana.
+
+⚠ Co natomiast **jest** ustalone: zmiana tej iteracji to sześć podmian atrybutu i kod testowy, nic
+współbieżnego; `DesignTokenComplianceTests` przeszły **32/32 w każdym** z kilkunastu przebiegów, a obie
+partycje headless są zielone bez wyjątku. ⛔ Nie ogłaszam tego ani naprawionym, ani niezwiązanym.
+
+⚠⚠ **Przy okazji potwierdziła się pułapka z §19.31, i to na mnie:** jeden przebieg raportował „8167 zielonych"
+przy buildzie, który **skończył się 2 błędami** — czyli testy biegły na starym binarium. Błędy okazały się
+blokadą plików przez proces smoke'a (MSB3021), nie kompilacją, ale **kolejność czytania jest regułą**:
+`Liczba błędów: 0` PRZED listą wyników, zawsze.
+
+### §19.40.7 Czego ta iteracja NIE zrobiła
+
+⛔ **B1 — wygląd** (decyzja użytkownika: przygotować, nie rozstrzygać) · ⛔ **B2 — wybór 3/4** (czeka na render)
+· ⛔ **B3 `GridSplitter Height="4"` ×5** — 🔒 decyzja użytkownika: **poza M4.2**, bo to element chromy dzielony
+z ekranami M4.3/M4.4, więc rozstrzyga się raz, na komplecie wystąpień (**R7**) · ⛔ migracja
+`Spacing`/`Padding`/`Margin` (osobny etap po M4.4, §19.39.4) · ⛔ ogon literałów ikon 10/11/13/15
+· ⛔ **M4.2b** (18 drzew „Zależności") · ⛔ **Z‑3** · ⛔ M4.3–M4.4.

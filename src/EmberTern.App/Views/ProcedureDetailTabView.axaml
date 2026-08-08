@@ -528,13 +528,17 @@
                           <TextBlock Text="{Binding Table}" FontSize="{DynamicResource Text.SectionHeader.Size}" FontWeight="{DynamicResource Text.SectionHeader.Weight}"
                                      VerticalAlignment="Center" />
                         </StackPanel>
+                        <!-- ⭐ M4.2: trzy ikony karty aktywności na `Size.Icon.Sm` (12). Rola trafia własnym
+                             opisem — „ikona inline w tekście 11 px" — a każda z nich stoi obok tekstu
+                             `Text.Compact.Size` (11) w tym samym wierszu. Wartość 12 → 12, wygląd bez zmiany;
+                             migracja nazywa decyzję, którą autor już podjął (R12). -->
                         <ItemsControl ItemsSource="{Binding Changes}" Margin="2,0,0,0">
                           <ItemsControl.DataTemplates>
                             <DataTemplate x:DataType="core:InsertChange">
                               <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
                                 <controls:SvgIcon Data="{StaticResource Icon.Plus}"
                                                   Foreground="{DynamicResource SuccessIconBrush}"
-                                                  Width="12" Height="12" VerticalAlignment="Center" />
+                                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Count}" Foreground="{DynamicResource SuccessIconBrush}"
                                            FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
@@ -544,7 +548,7 @@
                               <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
                                 <controls:SvgIcon Data="{StaticResource Icon.Pencil}"
                                                   Foreground="{DynamicResource WarningIconBrush}"
-                                                  Width="12" Height="12" VerticalAlignment="Center" />
+                                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Count}" Foreground="{DynamicResource WarningIconBrush}"
                                            FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
@@ -554,7 +558,7 @@
                               <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
                                 <controls:SvgIcon Data="{StaticResource Icon.Trash}"
                                                   Foreground="{DynamicResource DangerIconBrush}"
-                                                  Width="12" Height="12" VerticalAlignment="Center" />
+                                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Count}" Foreground="{DynamicResource DangerIconBrush}"
                                            FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />

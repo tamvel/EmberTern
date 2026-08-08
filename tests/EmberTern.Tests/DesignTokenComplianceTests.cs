@@ -1129,9 +1129,20 @@ public class DesignTokenComplianceTests
         // w produkcie — `Icon.RefreshCw` niesie 16 jako przycisk paska narzędzi i 14, gdy odświeża SIATKĘ.
         // ⚠ Wariant „wszędzie 16" odrzucony: rósłby wygląd powierzchni już odebranych. Ten wybrany
         // wyłącznie ZMNIEJSZA, więc nie rusza ani jednego piksela tam, gdzie M4 już przeszło QA.
+        // ⭐⭐ M4.2: bliźniaki ZDJĘTE (3 + 3 → 0). Trzy ikony karty aktywności w każdym z nich niosły literał
+        // 12 i przeszły na `Size.Icon.Sm`, którego własny opis brzmi „ikona inline w tekście 11 px" — a stoją
+        // dokładnie obok tekstu `Text.Compact.Size` (11). Wartość 12 → 12, wygląd bez zmiany.
+        //
+        // ⛔⛔ M4.2 · B1 — `TableDetailTabView` = 5 to WPIS NOWY, ale NIE NOWY DŁUG: te pięć literałów istniało
+        // od zawsze i było NIEWIDOCZNE dla licznika, bo plik rysuje PK / FK / Unique surowym `<Path>` po trzech
+        // lokalnych `StreamGeometry`, zamiast przez `controls:SvgIcon`. Licznik pytał o nazwę kontrolki, więc
+        // odpowiadał „0". ⚠ Wzrost sufitu 20 → 25 jest więc KOREKTĄ POMIARU, nie regresją — i nie wolno go
+        // „naprawić" obniżeniem: te trzy glify leżą na siatce 14 jednostek, a nie na kanonicznych 24, więc
+        // przeniesienie ich do `IconGeometries.axaml` ZMIENIA WYGLĄD i wymaga QA wizualnego użytkownika.
+        // ⛔ Decyzja użytkownika (2026-08-08): B1 zostaje przygotowane jako osobny przypadek, wygląd NIE jest
+        // rozstrzygany w M4.2. Do tego czasu wpis stoi tu po to, żeby dług był widoczny (R12), a nie zerowany.
+        ["Views/TableDetailTabView.axaml"] = 5,
         ["Views/DebuggerTabView.axaml"] = 4,
-        ["Views/FunctionDetailTabView.axaml"] = 3,
-        ["Views/ProcedureDetailTabView.axaml"] = 3,
         ["Views/TraceMonitorTabView.axaml"] = 3,
         ["Views/DataImportTabView.axaml"] = 2,
         ["Views/MainWindow.axaml"] = 2,
@@ -1182,10 +1193,110 @@ public class DesignTokenComplianceTests
     }
 
     /// <summary>
+    /// Pliki deklarujące własną geometrię ikony poza <c>Themes/IconGeometries.axaml</c> — plik → powód.
+    /// <para>
+    /// ⭐⭐ <b>Wartością tej listy nie są nazwy, tylko to, że dopisanie się do niej zmusza autora do
+    /// zadeklarowania, po której stronie granicy stoi</b> (wzorzec <c>DatePresentationTests</c>). Geometria
+    /// poza systemem ikon nie jest sama w sobie błędem — jest decyzją, która musi mieć powód, bo omija
+    /// <c>ControlTheme</c> (czyli A‑3 i domyślny rozmiar), audyt wyśrodkowania z rundy QA M4.1 oraz licznik
+    /// literałów rozmiaru.
+    /// </para>
+    /// </summary>
+    private static readonly Dictionary<string, string> IconGeometryOutsideTheSystem = new(StringComparer.Ordinal)
+    {
+        // ⛔ M4.2 · B1 — ZAREJESTROWANE, NIE ZAAKCEPTOWANE. Trzy glify (PK / FK / Unique) rysowane surowym
+        // `<Path Fill=…>`, na siatce 14 jednostek zamiast kanonicznych 24. ⚠ To NIE jest duplikat: zmierzone
+        // — `IconGeometries.axaml` nie ma ikony klucza głównego, obcego ani unikalności, więc te trzy glify są
+        // realnie potrzebną treścią, a nie kopią. Przeniesienie ich do systemu = przerysowanie na siatkę 24
+        // = ZMIANA WYGLĄDU pięciu ikon w siatkach pól i indeksów, czyli decyzja produktowa z własnym QA.
+        // Decyzja użytkownika (2026-08-08): przygotować jako osobny przypadek, wyglądu nie rozstrzygać w M4.2.
+        ["Views/TableDetailTabView.axaml"] =
+            "M4.2 · B1 — PK/FK/Unique na siatce 14, czekają na decyzję wizualną użytkownika",
+    };
+
+    /// <summary>
+    /// ⭐⭐ Ikona rysowana poza systemem ikon jest niewidoczna dla trzech mechanizmów naraz: domyślnego rozmiaru
+    /// z <c>ControlTheme</c> (A‑3), audytu wyśrodkowania w siatce 24 i licznika literałów rozmiaru. Ten strażnik
+    /// nie zabrania takiej geometrii — wymaga, żeby była ZADEKLAROWANA z powodem, zamiast istnieć w ciszy.
+    /// </summary>
+    [Fact]
+    public void EveryIconGeometry_LivesInTheIconSystem_OrCarriesAReason()
+    {
+        var appRoot = AppRoot();
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(appRoot, "*.axaml", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(appRoot, file).Replace('\\', '/');
+            if (relative == "Themes/IconGeometries.axaml") continue;
+
+            var text = WithoutComments(File.ReadAllText(file), file);
+            var count = Regex.Matches(text, @"<(?:StreamGeometry|PathGeometry)\b[^>]*x:Key=").Count;
+            if (count == 0) continue;
+
+            if (!IconGeometryOutsideTheSystem.ContainsKey(relative))
+                offenders.Add($"{relative}: {count} geometrii bez zapisanego powodu");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Geometria ikony zadeklarowana poza `Themes/IconGeometries.axaml`:\n  "
+            + string.Join("\n  ", offenders)
+            + "\n\nTaka ikona omija TRZY mechanizmy naraz: domyślny rozmiar z `ControlTheme` (czyli A‑3), "
+            + "audyt wyśrodkowania w siatce 24 jednostek i licznik literałów rozmiaru — czyli wygląda na "
+            + "czystą dlatego, że nikt jej nie mierzy (#332/#285).\n"
+            + "⭐ Właściwa droga to `Themes/IconGeometries.axaml` + `controls:SvgIcon`. Jeżeli geometria musi "
+            + "zostać na miejscu, dopisz plik do `IconGeometryOutsideTheSystem` RAZEM Z POWODEM — wartością tej "
+            + "listy nie są nazwy, tylko wymuszenie świadomej decyzji.");
+    }
+
+    /// <summary>
+    /// Strażnik powyżej pilnuje też SIEBIE: wpis, którego przedmiot zniknął, przestaje być zapisem decyzji
+    /// i staje się nieaktualnym wyjątkiem, który następny czytelnik weźmie za obowiązującą regułę (#333).
+    /// </summary>
+    [Fact]
+    public void TheIconGeometryExemptions_HaveNoStaleEntries()
+    {
+        var appRoot = AppRoot();
+
+        var stale = IconGeometryOutsideTheSystem.Keys
+            .Where(relative =>
+            {
+                var full = Path.Combine(appRoot, relative.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(full)) return true;
+                var text = WithoutComments(File.ReadAllText(full), full);
+                return !Regex.IsMatch(text, @"<(?:StreamGeometry|PathGeometry)\b[^>]*x:Key=");
+            })
+            .OrderBy(k => k, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(stale.Count == 0,
+            "Wyjątek na geometrię poza systemem ikon nie ma już przedmiotu — usuń wpis:\n  "
+            + string.Join("\n  ", stale)
+            + "\n\nTo jest postęp, którego nikt nie zapisał: geometria wróciła do systemu ikon, "
+            + "a lista nadal twierdzi, że stoi poza nim.");
+    }
+
+    /// <summary>
     /// Liczy deklaracje ikon z rozmiarem podanym LICZBĄ. ⚠ Liczy element ikony, nie atrybut <c>Width</c>:
     /// <c>Width</c> nosi w tych plikach także szerokości kolumn, ramek i separatorów, więc pomiar po samym
     /// atrybucie odpowiadałby na inne pytanie (#285 — pomiar po nośniku nie rozstrzyga o roli).
     /// </summary>
+    /// <remarks>
+    /// ⭐⭐ <b>M4.2: dopisany surowy <c>&lt;Path&gt;</c>, i to jest ZNALEZISKO, nie kosmetyka pomiaru.</b>
+    /// Pierwsza wersja pytała o element o NAZWIE <c>SvgIcon</c>/<c>DebuggerIcon</c>/<c>CreateIcon</c> — czyli
+    /// o wejście do systemu ikon, a nie o ikonę. <c>TableDetailTabView</c> rysuje PK / FK / Unique surowym
+    /// <c>&lt;Path Fill=…&gt;</c> po lokalnej <c>StreamGeometry</c>, więc <b>plik raportował 0 przy pięciu
+    /// literałach</b>, a strażnik wyśrodkowania z rundy QA M4.1 nigdy tych trzech geometrii nie widział.
+    /// <para>
+    /// ⭐ To gotcha #332 o jedną własność dalej: <b>wartość ustawiona tam, gdzie licznik nie zagląda, nie jest
+    /// „czysta" — jest niezmierzona</b>; a licznik nie zaglądał, bo pytał o nazwę kontrolki zamiast o rolę
+    /// (#285). ⚠ Zmierzone przy dopisywaniu: w całym <c>src/</c> jest <b>9</b> elementów <c>&lt;Path&gt;</c> —
+    /// 5 to te ikony, 4 to wnętrza <c>ControlTemplate</c> w <c>IconGeometries.axaml</c> i <b>żaden z tych
+    /// czterech nie deklaruje literału</b>, więc rozszerzenie nie potrzebuje ani jednego wyjątku. ⛔ Świadomie
+    /// NIE wyłączam <c>IconGeometries.axaml</c> z reguły: wyjątek nieosiągalny czyta się jak realna siatka
+    /// bezpieczeństwa (§15.7), a gdyby szablon systemu ikon kiedyś dostał literał, to też jest warte spojrzenia.
+    /// </para>
+    /// </remarks>
     private static Dictionary<string, int> MeasureIconSizeLiterals()
     {
         var appRoot = AppRoot();
@@ -1196,7 +1307,7 @@ public class DesignTokenComplianceTests
             var text = WithoutComments(File.ReadAllText(file), file);
             var count = Regex.Matches(
                 text,
-                @"<controls:(?:SvgIcon|DebuggerIcon|CreateIcon)\b(?:(?!/?>)[\s\S])*?Width=""[0-9]").Count;
+                @"<(?:controls:(?:SvgIcon|DebuggerIcon|CreateIcon)|Path)\b(?:(?!/?>)[\s\S])*?Width=""[0-9]").Count;
             if (count == 0) continue;
 
             result[Path.GetRelativePath(appRoot, file).Replace('\\', '/')] = count;

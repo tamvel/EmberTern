@@ -1401,3 +1401,32 @@ every emit path to be individually perfect.**
      guard lives in the MAIN partition instead of growing the fragile headless class list (#94/#226/#286).
      ⚠ Use `TightBounds`, not `Bounds` — the latter is the control-point box, which for an arc answers a
      different question again. (Product Polish M4.1 QA — `product-polish.md` §19.39.7a.)
+
+337. **A counter keyed to the NAME OF A CONTROL cannot see the same thing built a different way — so its
+     "zero" means "not built like that here", never "clean".** The icon-size ceiling
+     (`MeasureIconSizeLiterals`) matched `<controls:SvgIcon|DebuggerIcon|CreateIcon … Width="[0-9]`, i.e. it
+     asked *"is this an entry point into the icon system?"* while its name and its failure message both claim
+     to answer *"does an icon declare its size as a number?"*. `TableDetailTabView` draws primary-key, foreign-key
+     and unique markers with a raw `<Path Fill=…>` over three **locally declared** `StreamGeometry` resources —
+     so the file **reported 0 while carrying 5 size literals**, and had done so through every M2c/M4 sweep.
+     ⭐⭐ **The blind spot was not one guard's, it was structural: the same bypass hid the file from THREE
+     mechanisms at once** — the `ControlTheme` default size (so A‑3's "an icon with no attribute is correct"
+     never applied), the M4.1 centring audit (which reads `IconGeometries.axaml`, where these geometries are
+     not), and the size counter. Each is sound in isolation; all three share the assumption *"an icon is an
+     `SvgIcon`"*, so one file opted out of the entire design system in silence.
+     ⚠ **This is #285 one turn further.** #285 says a measurement keyed to the CARRIER cannot answer a question
+     about the ROLE. Here the carrier is the element name itself, which makes the failure invisible in the
+     friendliest possible way: **not a wrong number, but an absent row** — and an absent row reads as
+     compliance. A number you can see is debt; a file that never appears is nothing at all.
+     ⭐ **Practical rule: before trusting "this file is clean", check that the file is even IN the population
+     the counter can match.** The cheap test is a census of the alternative mechanism — here, one `grep` for
+     `<Path` across `src/` returned **9** hits: 5 the offenders, 4 legitimate `ControlTemplate` internals with
+     no literal size, so extending the regex needed **no exemption at all**. Two minutes of counting turned a
+     suspicion into a bounded fact.
+     ⚠ The complementary guard is structural, not numeric: *a geometry declared outside the icon system must
+     carry a written reason* (`IconGeometryOutsideTheSystem`) — because the value of such a list is never the
+     names in it, but that **adding yourself to it forces you to state which side of the boundary you are on**
+     (the `DatePresentationTests` pattern). ⛔ And note what the extended counter must NOT do: raising a
+     ceiling because a measurement improved is a **correction of the measurement, not a regression**, and
+     "fixing" it by lowering the number again would re-hide exactly what was just found.
+     (Product Polish M4.2 — `product-polish.md` §19.40.)
