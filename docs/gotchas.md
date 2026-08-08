@@ -1291,3 +1291,36 @@ every emit path to be individually perfect.**
 330. **A display rule written against the CLR type cannot express the DECLARED type's semantics, and the obvious repair is wrong in the other direction.** Firebird's `DATE` and `TIMESTAMP` both reach the app as a `DateTime`, so a cell renderer that interrogates the VALUE printed `00:00:00` on a column that stores no time at all — an invented component the user cannot edit away. ⛔ The tempting fix — *"hide the time when it is midnight"* — is worse: it then hides a **real** `00:00:00` on a TIMESTAMP, i.e. it trades a visible defect for an invisible one. Only the declared column type answers both, so the renderer takes it as an input and returns "not mine" for everything else. ⚠⚠ The trap had already been laid: a general `Cell(object?)` helper written months earlier switched on `TimeOfDay == TimeSpan.Zero` and **had no production consumer at all** — it was deleted with the fix, because a dead helper embodying exactly the wrong heuristic is a defect waiting for its first caller. ⭐ Same shape as the debugger's own version of this question, one surface over: there, too, the declared type is what separates a DATE from a TIMESTAMP standing at midnight. *(QA of the language completeness sprint, 2026-08-08)*
 
 331. **A seed that deliberately shows LESS than the value holds turns a mere focus change into a write.** `DataGrid` commits a cell because focus left it, not because anything was typed — so once the TIMESTAMP editor was (correctly, on the user's call) seeded to second precision, **tabbing across a row would have written the rounded value back over a sub-second timestamp nobody touched**. ⚠ The rounding itself was the right product decision; what it created was a *second* decision nobody had made. The fix is "nothing typed ⇒ nothing written": the commit path compares the editor's text with the seed for the current value and returns without an UPDATE when they are equal. ⭐ **The load-bearing detail is that the seed has ONE owner** — the same function feeds the editing template and the untouched-edit check, because two copies of "what does this box start with" would eventually disagree about whether the user typed anything, and that disagreement is exactly the data loss the check exists to prevent. *(QA of the language completeness sprint, 2026-08-08)*
+
+332. **A `ControlTheme`'s default value is outside the design catalog, so the size most elements actually
+     render at can be a number nobody named.** Measured in EmberTern M4: of **355 icon declarations, 191 give
+     no size at all** and therefore take `Width="16"` written as a literal in `IconGeometries.axaml`'s
+     `ControlTheme` — while the catalog's `Size.Icon` role declared **14** and had **two** consumers. The role's
+     comment named four surfaces ("toolbar, tab, tree, context-menu row"); the measured sizes were **16 / 14 /
+     15 / 14**, so it described one of the four and did not describe its own stated default.
+     ⭐ **Why it drifted invisibly for so long:** the M2c compliance guards count `FontSize`, `FontFamily` and
+     `CornerRadius` — nobody ever counted icon size. An unmeasured property is not "clean", it is unmeasured,
+     and this one reached **seven** rendered sizes (10, 11, 12, 13, 14, 15, 16) with a green build throughout.
+     ⚠ **A measurement that counts only explicit declarations answers a different question than "what does the
+     product render".** The M2a inventory did exactly that and reported "14×64, 16×15, …", i.e. 164 of 355.
+     ⭐ The cure is not to delete the default — it is to give it a ROLE, at the same value, so the catalog can
+     see it: pointing the setter at a token changes nothing on screen and makes visible what would move those
+     191 icons at once. (Product Polish M4 / A-3 — `product-polish.md` §19.37.2.)
+
+333. **A guard that pins a premise by TRANSCRIBING the number fails the moment that number moves into a role —
+     and it fails for a reason its own name does not describe.** Two of five guards over "an editable grid row
+     must be able to carry a `Size.Control` editor" broke when four grids were unified onto a
+     `Size.Row.GridEdit` role: one asserted `Value="(\d+)"` against the markup and reported *"the row no longer
+     declares a fixed Height"*; the other kept `private const double DataRowHeight = 32;` and reported that the
+     view had stopped spelling 32. **Neither said what was true** — the rows were still fixed, still tall
+     enough, and the editor still fitted.
+     ⭐ **The cure is to RESOLVE the role, not to relax the assertion**: read the setter's value, and when it is
+     `{DynamicResource X}`, look X up in `Tokens.axaml`. That keeps the relation checked (height − padding ≥
+     `Size.Control`) across a representation change, and it fails loudly on a key the catalog does not
+     define — which XAML itself never would, since a missing `{DynamicResource}` silently leaves the property
+     at its inherited value.
+     ⚠ **The transcribed constant is #284 inside a guard**: a derived value written by hand goes stale exactly
+     as silently as a string, and a test file is not exempt because it is a test.
+     ⭐⭐ **And the repair is the moment to widen the guard**, because the same edit usually reveals that it only
+     ever covered one member of a class (#322): the first of the two checked Table Data alone and now runs over
+     all six editable definition grids. (Product Polish M4 / C-1 — `product-polish.md` §19.37.6.)

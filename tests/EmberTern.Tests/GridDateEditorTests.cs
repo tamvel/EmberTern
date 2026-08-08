@@ -32,12 +32,16 @@ namespace EmberTern.Tests;
 [Collection(HeadlessCollection.Name)]
 public sealed class GridDateEditorTests
 {
-    // The geometry TableDetailTabView pins for an editable data row, transcribed from its XAML. ⚠ If either
-    // moves, DateEditor_FitsTheDataRow starts failing — which is the point: the editor's size is a
-    // consequence of the row's, and the two must be decided together.
-    private const double DataRowHeight = 32;
+    // ⚠⚠ READ from TableDetailTabView.axaml, no longer TRANSCRIBED into a constant — corrected in M4 / C‑1.
+    // The old shape (`private const double DataRowHeight = 32;`) was a copy of a number that lived somewhere
+    // else, so the day those four grids were unified onto the `Size.Row.GridEdit` role this class failed for
+    // a reason that had nothing to do with date editors: not "the editor no longer fits" but "the view stopped
+    // spelling 32". ⭐ That is gotcha #284 inside a guard — a derived value written by hand goes stale exactly
+    // as silently as a string — and the cure is the one the class's own doc already prescribes for the picker:
+    // measure the thing, do not restate it.
+    private static double DataRowHeight => RowHeightFromView();
     private const double CellVerticalPadding = 2 + 2;
-    private const double Available = DataRowHeight - CellVerticalPadding;
+    private static double Available => DataRowHeight - CellVerticalPadding;
 
     private readonly HeadlessUnitTestSession _session;
 
@@ -104,11 +108,46 @@ public sealed class GridDateEditorTests
 
         int rowStyle = xaml.IndexOf("\"DataGrid.data-edit DataGridRow\"", StringComparison.Ordinal);
         Assert.True(rowStyle > 0, "the data grid's own row style must still exist");
+
+        // ⭐ The row must declare a FIXED Height — that is the whole safety argument (a row that can grow from
+        // its content re-opens the clipping this fix closed). Whether it spells the number or reads the role
+        // is not this guard's business; whether it stays fixed is.
         Assert.Contains(
-            $"Value=\"{DataRowHeight.ToString(CultureInfo.InvariantCulture)}\"",
+            "<Setter Property=\"Height\"",
             xaml.Substring(rowStyle, Math.Min(160, xaml.Length - rowStyle)));
 
         Assert.Contains("<Setter Property=\"Padding\" Value=\"6 2\" />", xaml);
+
+        // The premise the picker rule rests on, stated as the relation rather than as today's numbers.
+        Assert.True(Available >= 24,
+            $"The data row leaves {Available} px for the in-cell editor, and CalendarDatePicker's content asks "
+            + "for 24 (PART_TextBox 22, PART_Button 24). Below that the editor is clipped again — the exact "
+            + "defect this class was written for.");
+    }
+
+    /// <summary>
+    /// The data row's declared height, resolved through the role when the view reads one. ⚠ Fails loudly on a
+    /// key the catalog does not define: XAML would not (a missing <c>{DynamicResource}</c> leaves the property
+    /// at its inherited value), and a guard that quietly resolved such a row to zero would go green.
+    /// </summary>
+    private static double RowHeightFromView()
+    {
+        var xaml = System.IO.File.ReadAllText(RepoFile("src/EmberTern.App/Views/TableDetailTabView.axaml"));
+        var declared = System.Text.RegularExpressions.Regex.Match(
+            xaml,
+            "Selector=\"DataGrid\\.data-edit\\s+DataGridRow\"\\s*>\\s*<Setter\\s+Property=\"Height\"\\s+Value=\"(?<v>[^\"]+)\"");
+        Assert.True(declared.Success, "the data grid's row must still declare a fixed Height");
+
+        var value = declared.Groups["v"].Value;
+        var role = System.Text.RegularExpressions.Regex.Match(value, @"^\{DynamicResource\s+(?<key>[^}]+)\}$");
+        if (!role.Success) return double.Parse(value, CultureInfo.InvariantCulture);
+
+        var tokens = System.IO.File.ReadAllText(RepoFile("src/EmberTern.App/Themes/Tokens.axaml"));
+        var key = role.Groups["key"].Value.Trim();
+        var token = System.Text.RegularExpressions.Regex.Match(
+            tokens, "x:Key=\"" + System.Text.RegularExpressions.Regex.Escape(key) + "\"\\s*>\\s*(?<v>[\\d.]+)\\s*<");
+        Assert.True(token.Success, $"`{key}` is read by the data row but not declared in Tokens.axaml.");
+        return double.Parse(token.Groups["v"].Value, CultureInfo.InvariantCulture);
     }
 
     // ⛔ The horizontal half. The data grid PERSISTS pixel column widths, so an editor with a MinWidth of

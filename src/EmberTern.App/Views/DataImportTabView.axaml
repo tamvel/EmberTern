@@ -89,7 +89,16 @@
                indistinguishable from a profile that has gone missing. -->
           <TextBlock Text="{x:Static app:UiStrings.ImportProfileLabel}" Classes="field-label"
                      VerticalAlignment="Center" Margin="0" />
-          <ComboBox x:Name="ProfilePicker" MinWidth="170" VerticalAlignment="Center"
+          <!-- ⭐ PODŁOGA 140, ZMIERZONA, i JEDYNA, która w tym paśmie zostaje (M4 / D, decyzja użytkownika).
+               Naturalna szerokość tej listy to dziś 110 px, ale jej zbiór pozycji tworzy UŻYTKOWNIK (nazwy
+               profili), więc bez podłogi szerokość zmieniałaby się przy każdym zapisaniu profilu — czyli
+               dokładnie ten ruch układu, który H‑3 zwalczał w pasku narzędzi. Dwie sąsiednie listy mają zbiór
+               ZAMKNIĘTY i podłogi nie potrzebują: `ComboBox` mierzy się do najszerszej pozycji, nie do
+               zaznaczonej, więc ich szerokość jest stała sama z siebie.
+               ⚠ Pasmo jest `DockPanel` z `LastChildFill`, a ostatnim dzieckiem jest poziomy `StackPanel`
+               przycisków, który się nie ściska, tylko OBCINA (§19.33) — każdy piksel podłogi to piksel
+               zabrany przyciskom. Zdjęcie dwóch pozostałych podłóg oddało im ~154 px. -->
+          <ComboBox x:Name="ProfilePicker" MinWidth="140" VerticalAlignment="Center"
                     ItemsSource="{Binding Profiles}"
                     SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
                     IsEnabled="{Binding IsConfigurationEnabled}"
@@ -224,7 +233,9 @@
                Script Executor's `Sequenced` precedent. -->
           <TextBlock Text="{x:Static app:UiStrings.ImportTransactionLabel}" Classes="field-label"
                      VerticalAlignment="Center" Margin="0" />
-          <ComboBox x:Name="TransactionModePicker" SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="170"
+          <!-- ⭐ Bez podłogi (M4 / D): zbiór pozycji jest zamknięty i trzyelementowy, naturalna szerokość
+               wynosi 90 px, a podłoga 170 zabierała 80 px przyciskom po prawej, nie chroniąc niczego. -->
+          <ComboBox x:Name="TransactionModePicker" SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}"
                     VerticalAlignment="Center"
                     IsEnabled="{Binding IsConfigurationEnabled}"
                     ToolTip.Tip="{Binding TransactionModeDescription}">
@@ -235,7 +246,9 @@
 
           <TextBlock Text="{x:Static app:UiStrings.ImportErrorPolicyLabel}" Classes="field-label"
                      VerticalAlignment="Center" Margin="0" />
-          <ComboBox SelectedIndex="{Binding ErrorPolicyIndex, Mode=TwoWay}" MinWidth="180"
+          <!-- ⭐ Bez podłogi (M4 / D): naturalna szerokość 137 px wynika z najdłuższej pozycji
+               („Skip the row and continue"), więc podłoga 180 była o 43 px za szeroka i nic nie chroniła. -->
+          <ComboBox SelectedIndex="{Binding ErrorPolicyIndex, Mode=TwoWay}"
                     VerticalAlignment="Center"
                     IsEnabled="{Binding IsConfigurationEnabled}">
             <ComboBoxItem Content="{x:Static app:UiStrings.ImportErrorPolicyStop}" />

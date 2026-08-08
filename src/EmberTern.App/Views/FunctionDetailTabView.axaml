@@ -18,7 +18,7 @@
 
   <UserControl.Styles>
     <Style Selector="DataGridRow">
-      <Setter Property="Height" Value="30" />
+      <Setter Property="Height" Value="{DynamicResource Size.Row.GridEdit}" />
     </Style>
     <Style Selector="DataGridCell">
       <Setter Property="Padding" Value="6 2" />
@@ -261,9 +261,9 @@
                       Background="{DynamicResource BackgroundBrush}">
               <TreeView.DataTemplates>
                 <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="5">
+                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                     <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15" VerticalAlignment="Center">
+                                      Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
                       <controls:SvgIcon.Foreground>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                           <Binding Path="IconResourceKey" />
@@ -277,9 +277,9 @@
                 <DataTemplate DataType="vm:DependencyLeafNode">
                   <Border HorizontalAlignment="Stretch" Background="Transparent"
                           DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                       <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="15" Height="15" VerticalAlignment="Center">
+                                        Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
                         <controls:SvgIcon.Foreground>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                             <Binding Path="IconResourceKey" />
@@ -308,9 +308,9 @@
                       Background="{DynamicResource BackgroundBrush}">
               <TreeView.DataTemplates>
                 <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="5">
+                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                     <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15" VerticalAlignment="Center">
+                                      Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
                       <controls:SvgIcon.Foreground>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                           <Binding Path="IconResourceKey" />
@@ -324,9 +324,9 @@
                 <DataTemplate DataType="vm:DependencyLeafNode">
                   <Border HorizontalAlignment="Stretch" Background="Transparent"
                           DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                       <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="15" Height="15" VerticalAlignment="Center">
+                                        Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
                         <controls:SvgIcon.Foreground>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                             <Binding Path="IconResourceKey" />

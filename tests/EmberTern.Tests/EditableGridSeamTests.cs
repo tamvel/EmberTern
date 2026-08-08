@@ -159,47 +159,78 @@ public class EditableGridSeamTests
     }
 
     /// <summary>
-    /// ⭐⭐ THE PREMISE THE SEAM RESTS ON, MEASURED AGAINST THE MARKUP RATHER THAN ASSERTED IN PROSE: the Table
-    /// Data row must be able to CARRY a <c>Size.Control</c> in-cell editor. That is what makes granting the
-    /// height role there free of layout shift — the row declares a fixed <c>Height</c>, so it cannot grow from
-    /// its content, and what is left after the cell padding still exceeds the editor's minimum.
+    /// ⭐⭐ THE PREMISE THE SEAM RESTS ON, MEASURED AGAINST THE MARKUP RATHER THAN ASSERTED IN PROSE: an
+    /// editable grid's row must be able to CARRY a <c>Size.Control</c> in-cell editor. That is what makes
+    /// granting the height role free of layout shift — the row declares a fixed <c>Height</c>, so it cannot
+    /// grow from its content, and what is left after the cell padding still exceeds the editor's minimum.
     ///
     /// <para>⚠ This is deliberately a guard over the three numbers that must stay in relation to each other
     /// (row height, cell padding, <c>Size.Control</c>), each read from where it actually lives — not a copy of
     /// today's values. Lower the row to 26 or raise <c>Size.Control</c> to 30 and this fails, which is exactly
     /// when the seam's assumption stops holding.</para>
+    ///
+    /// <para>⚠⚠ WIDENED IN M4 / C‑1, AND THE WIDENING IS THE POINT. The earlier version checked exactly one
+    /// grid (Table Data) and read its height as a LITERAL — so the moment those four grids were unified onto
+    /// the <c>Size.Row.GridEdit</c> role, a guard written to protect them stopped being able to read them at
+    /// all. ⭐ Two lessons, both already paid for elsewhere in this project: a guard that keys on the CARRIER
+    /// (a literal) cannot answer a question about the ROLE (#285), and a guard stated about one member of a
+    /// class silently says nothing about its siblings (#322). It now resolves <c>{DynamicResource}</c> against
+    /// the catalog and runs over EVERY editable definition grid.</para>
     /// </summary>
-    [Fact]
-    public void TheTableDataRow_DeclaresAHeightThatCanCarryTheCellEditor()
+    [Theory]
+    [InlineData("TableDetailTabView", @"DataGrid\.data-edit\s+DataGridRow")]
+    [InlineData("TableDetailTabView", @"DataGrid#FieldsGrid\s+DataGridRow")]
+    [InlineData("NewTableTabView", "DataGridRow")]
+    [InlineData("ProcedureDetailTabView", "DataGridRow")]
+    [InlineData("FunctionDetailTabView", "DataGridRow")]
+    [InlineData("TriggerDetailTabView", "DataGridRow")]
+    public void EveryEditableGridRow_DeclaresAHeightThatCanCarryTheCellEditor(string view, string selector)
     {
-        var view = File.ReadAllText(Path.Combine(
-            RepositoryRoot(), "src", "EmberTern.App", "Views", "TableDetailTabView.axaml"));
+        var markup = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "Views", view + ".axaml"));
         var tokens = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "EmberTern.App", "Themes", "Tokens.axaml"));
 
         // A FIXED Height, not a MinHeight — that distinction is the whole safety argument, so it is asserted
         // by the pattern rather than left to the number.
         var row = Regex.Match(
-            view,
-            @"Selector=""DataGrid\.data-edit\s+DataGridRow""\s*>\s*<Setter\s+Property=""Height""\s+Value=""(?<h>\d+)""");
+            markup,
+            @"Selector=""" + selector + @"""\s*>\s*<Setter\s+Property=""Height""\s+Value=""(?<h>[^""]+)""");
         Assert.True(row.Success,
-            "The Table Data row no longer declares a fixed Height. EditableGridBehavior grants every editable "
-            + "grid the Size.Control cell-editor role on the ground that this row cannot grow from its "
-            + "content — re-measure before changing it.");
+            $"{view} / {selector} no longer declares a fixed Height. EditableGridBehavior grants every "
+            + "editable grid the Size.Control cell-editor role on the ground that its row cannot grow from "
+            + "its content — re-measure before changing it.");
 
-        var padding = Regex.Match(view, @"Selector=""DataGridCell""\s*>\s*<Setter\s+Property=""Padding""\s+Value=""\d+\s+(?<v>\d+)""");
+        var padding = Regex.Match(markup, @"Selector=""DataGridCell""\s*>\s*<Setter\s+Property=""Padding""\s+Value=""\d+\s+(?<v>\d+)""");
         Assert.True(padding.Success, "The view's DataGridCell padding is what the row height must pay for first.");
 
-        var control = Regex.Match(tokens, @"x:Key=""Size\.Control""\s*>\s*(?<v>[\d.]+)\s*<");
-        Assert.True(control.Success, "Size.Control — the role the in-cell editor asks for.");
-
-        var available = int.Parse(row.Groups["h"].Value) - (2 * int.Parse(padding.Groups["v"].Value));
-        var required = double.Parse(control.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var available = Resolve(row.Groups["h"].Value, tokens) - (2 * int.Parse(padding.Groups["v"].Value));
+        var required = Resolve("{DynamicResource Size.Control}", tokens);
 
         Assert.True(available >= required,
-            $"The Table Data row leaves {available} px for an editor whose role asks for {required} px, so "
+            $"{view} / {selector} leaves {available} px for an editor whose role asks for {required} px, so "
             + "granting the height role there WOULD grow the row on entering edit mode — the layout shift "
             + "§13.3 forbids. Either raise the row or stop granting the role to this grid.");
+    }
+
+    /// <summary>
+    /// A declared size is either a literal or a role. ⭐ Resolving the role here rather than accepting only a
+    /// literal is what lets the guard survive the migration it exists to protect — and it fails loudly on a
+    /// key the catalog does not define, which XAML itself would not (a missing <c>{DynamicResource}</c>
+    /// silently leaves the property at its inherited value — trap 1).
+    /// </summary>
+    private static double Resolve(string value, string tokens)
+    {
+        var role = Regex.Match(value, @"^\{DynamicResource\s+(?<key>[^}]+)\}$");
+        if (!role.Success)
+        {
+            return double.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        var key = role.Groups["key"].Value.Trim();
+        var declared = Regex.Match(tokens, @"x:Key=""" + Regex.Escape(key) + @"""\s*>\s*(?<v>[\d.]+)\s*<");
+        Assert.True(declared.Success, $"`{key}` is read by a view but not declared in Tokens.axaml.");
+        return double.Parse(declared.Groups["v"].Value, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static string RepositoryRoot()

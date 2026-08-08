@@ -214,6 +214,25 @@
 
   <!-- Wiersz siatki danych i edytor w komórce. -->
   <x:Double x:Key="Size.Row.Grid">22</x:Double>
+  <!-- ⭐ WIERSZ SIATKI, KTÓRA MA EDYTOR W KOMÓRCE — pola tabeli, dane tabeli, nowa tabela, parametry
+       i zmienne procedury/funkcji/wyzwalacza. Dopisane w M4 (C‑1, decyzja użytkownika).
+
+       ⭐⭐ Powstało z pomiaru, nie z uśrednienia trzech liczb. Produkt używał 34 (Pola, Nowa tabela),
+       32 (Dane) i 30 (parametry) — czyli TRZECH liczb na JEDNO wymaganie, przy identycznym
+       `DataGridCell` `Padding="6 2"` w każdej z tych siatek. Wymaganie brzmi:
+
+           padding pionowy 2+2 = 4   +   edytor `Size.Control` 24   =   28  (minimum arytmetyczne)
+
+       więc żadna z trzech nie wynikała z pomiaru, a różnica między nimi nie niosła informacji.
+       ⚠ 30, nie 28: dwa piksele zapasu nad minimum, żeby edytor o parę pikseli wyższy od `Size.Control`
+       nie wymuszał natychmiastowego powrotu do tego tematu. ⛔ Zapasu nie zwiększać „na wszelki wypadek" —
+       zmierzona reguła gęstości M4 mówi, że przy równej czytelności wygrywa wariant gęstszy.
+       ⚠ Siatka BEZ edytora zostaje na `Size.Row.Grid` (22) — indeksy, ograniczenia, kolumny widoku,
+       wyniki zapytania. To nie jest ta sama rola i nie ma powodu, żeby rosła.
+       ⚠ Security Manager (28 / `.checkbox-grid` 34) świadomie NIE bierze tej roli: jego edytorem jest
+       `CheckBox`, a nie pole `Size.Control`, więc przesłanka arytmetyczna jest tam inna i wymaga
+       własnego pomiaru (#322 — reguła o KLASIE bywa fałszywa o każdym jej elemencie). -->
+  <x:Double x:Key="Size.Row.GridEdit">30</x:Double>
   <!-- Nagłówek kolumny — o stopień wyższy niż wiersz, żeby czytał się jako nagłówek bez ramki. -->
   <x:Double x:Key="Size.Row.Header">24</x:Double>
   <!-- Wiersz Metadata Explorera i wiersz drzewa zależności. Najgęstszy widok w aplikacji — to on ma
@@ -259,14 +278,42 @@
   <!-- ══════════════════════════════════════════════════════════════════════════════════════════
        ROZMIARY IKON (§4.2.1)
 
-       Zmierzone: 14×64, 16×15, 11×5, 13×4, 12×3, 15×2, 10×1 — dwa realne skupienia i ogon
-       czterech wartości użytych łącznie 15 razy. Ogon jest dryfem, nie decyzją.
+       ⚠⚠ POMIAR WEJŚCIOWY M2a BYŁ NIEPEŁNY I MÓWIŁ COŚ INNEGO, NIŻ SIĘ WYDAWAŁO. Brzmiał
+       „14×64, 16×15, 11×5, 13×4, 12×3, 15×2, 10×1" i liczył wyłącznie ikony z JAWNYM rozmiarem —
+       czyli 164 z 355 deklaracji. Pozostałych **191 nie deklaruje nic i renderuje się 16**, bo taką
+       liczbę wpisuje `ControlTheme` w `IconGeometries.axaml`. Rozkład zmierzony ponownie w M4:
+
+           brak (→16)  191   ·   14 → 75   ·   15 → 44   ·   16 → 16
+           Size.Icon.Sm 10   ·   12 →  7   ·   13 →  5   ·   11 →  4   ·   10 → 1   ·  Size.Icon → 2
+
+       ⭐⭐ I stąd rozstrzygnięcie A‑3 (użytkownik, 2026‑08‑08): chroma ma DWA poziomy, nie jeden.
+       Poprzedni komentarz `Size.Icon` obiecywał „toolbar, zakładka, drzewo, wiersz menu" i jedną
+       liczbę 14, a zmierzone było 16 / 14 / 15 / 14 — rola opisywała jedną z czterech powierzchni,
+       które wymieniała, i nie opisywała własnej wartości domyślnej (pułapka 3 w wydaniu metrycznym).
        ══════════════════════════════════════════════════════════════════════════════════════════ -->
 
-  <!-- Ikona chromy: toolbar, zakładka, drzewo, wiersz menu. Wartość domyślna dla nowej ikony. -->
+  <!-- ⭐ IKONA W WIERSZU: zakładka dokumentu, wiersz drzewa, wiersz menu kontekstowego, ikona przy
+       etykiecie na powierzchni roboczej. Stoi w SERII, obok tekstu `Text.Compact` (11), i jej zadaniem
+       jest dać się przeczytać razem z nim — nie być celem myszy.
+       ⚠ Wiersz drzewa dołączył w M4 (B‑1, decyzja użytkownika): miał 15 px literałem w 13 plikach.
+       Wysokość wiersza się przez to nie zmienia — `Size.Row.Tree` to `MinHeight` 24. -->
   <x:Double x:Key="Size.Icon">14</x:Double>
-  <!-- Ikona o własnej wadze wizualnej: nagłówek, pusty stan, akcja główna. -->
-  <x:Double x:Key="Size.Icon.Lg">16</x:Double>
+  <!-- ⭐ IKONA JAKO SAMODZIELNA AKCJA: pasek narzędzi (tytułowy i edytora), przycisk okna, chevron
+       panelu. Stoi SAMOTNIE i jest CELEM MYSZY.
+
+       ⭐⭐ To NIE jest nowa zasada — to ta sama drabina, którą katalog ma już dla KONTROLEK i którą
+       użytkownik ratyfikował w M2b, przeniesiona o poziom niżej:
+
+           POLA / WIERSZE (seria, wyrównanie)  →  Size.Control 24   ·  Size.Icon 14
+           AKCJE (cel myszy, hierarchia)       →  Size.ControlToolbar 22  ·  Size.Icon.Toolbar 16
+
+       ⚠ Ta rola PRZEJĘŁA nazwę i wartość po `Size.Icon.Lg`, która niosła to samo 16 i **nie miała ani
+       jednego konsumenta** — czyli nikt nigdy nie sprawdził, czy jej opis („nagłówek, pusty stan,
+       akcja główna") cokolwiek opisuje. Wartość nie drgnęła, więc migracja jest wizualnie zerowa.
+       ⚠⚠ Tę rolę czyta DOMYŚLNA wartość `Width`/`Height` w `ControlTheme` ikony, więc każda ikona bez
+       jawnego rozmiaru ją bierze. To jest stan faktyczny sprzed M4 — zmiana polega wyłącznie na tym,
+       że domyślna ma teraz NAZWĘ i widać, co ją zmieni. -->
+  <x:Double x:Key="Size.Icon.Toolbar">16</x:Double>
   <!-- Ikona inline w tekście 11 px (chip, wiersz siatki). Jedyna pozycja z ogona z własnym
        uzasadnieniem: ikona 14 px obok tekstu 11 px optycznie go przerasta. -->
   <x:Double x:Key="Size.Icon.Sm">12</x:Double>

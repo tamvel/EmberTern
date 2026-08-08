@@ -71,9 +71,9 @@
               <TreeView.DataTemplates>
                 <TreeDataTemplate DataType="vm:DependencyGroupNode"
                                   ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="5">
+                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                     <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15"
+                                      Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                       VerticalAlignment="Center">
                       <controls:SvgIcon.Foreground>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -89,9 +89,9 @@
                   <Border HorizontalAlignment="Stretch"
                           Background="Transparent"
                           DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                       <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="15" Height="15"
+                                        Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                         VerticalAlignment="Center">
                         <controls:SvgIcon.Foreground>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -131,9 +131,9 @@
               <TreeView.DataTemplates>
                 <TreeDataTemplate DataType="vm:DependencyGroupNode"
                                   ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="5">
+                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                     <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15"
+                                      Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                       VerticalAlignment="Center">
                       <controls:SvgIcon.Foreground>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -149,9 +149,9 @@
                   <Border HorizontalAlignment="Stretch"
                           Background="Transparent"
                           DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                       <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="15" Height="15"
+                                        Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                         VerticalAlignment="Center">
                         <controls:SvgIcon.Foreground>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">

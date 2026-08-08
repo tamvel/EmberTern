@@ -29,17 +29,19 @@ namespace EmberTern.App.Behaviors;
 /// stated ground that <em>"a 24 px minimum grows every row the moment editing starts, because those grids have
 /// no ComboBox holding the row open (22–32 px rows)"</em>. ⚠⚠ <b>That reasoning is sound about a grid in
 /// general and was never checked against the one grid it governed.</b> <c>TableDetailTabView.axaml</c> pins
-/// <c>DataGrid.data-edit DataGridRow</c> to a fixed <c>Height="32"</c> — an exact height, not a minimum, so it
+/// <c>DataGrid.data-edit DataGridRow</c> to a fixed <c>Height</c> — an exact height, not a minimum, so it
 /// cannot grow from its content at all — and with that view's <c>DataGridCell</c> padding of <c>6 2</c> the
-/// cell offers 28 px to a 24 px editor. The distinction therefore protected nothing and cost the reported
-/// defect: <em>"the TextBox while editing is still too low"</em>.</para>
+/// cell offers the row height minus 4 to a 24 px editor. The distinction therefore protected nothing and cost
+/// the reported defect: <em>"the TextBox while editing is still too low"</em>.</para>
 ///
 /// <para>⚠ THE CONDITION THAT REPLACES IT, so the next author does not have to re-derive it: a grid that goes
 /// through this seam must let its ROW carry a <c>Size.Control</c> editor — i.e. declare a row height of at
-/// least <c>Size.Control</c> + its cell padding. Every editable grid in the app does today (definition rows
-/// measure ≥30 px because of their Type combo; Table Data pins 32). <c>EditableGridSeamTests</c> pins that
-/// premise against the markup rather than trusting this paragraph. The read-only result grids never reach
-/// here at all — they have no in-cell editor to size.</para>
+/// least <c>Size.Control</c> + its cell padding. ⭐ Since M4 / C‑1 that is no longer four separate numbers
+/// hoping to satisfy it: every editable grid declares the ONE role <c>Size.Row.GridEdit</c> (30), which was
+/// chosen from that very arithmetic — 4 px of padding + a 24 px editor = 28, plus 2 px of slack.
+/// <c>EditableGridSeamTests</c> pins the premise against the markup rather than trusting this paragraph, and
+/// resolves the role rather than reading a literal. The read-only result grids never reach here at all —
+/// they have no in-cell editor to size.</para>
 ///
 /// <para>⚠⚠ MEASURED FRAMEWORK FACTS this rests on (headless probe, Avalonia 12.0.0 — none of them are
 /// guesses, and two contradict the obvious approach):</para>

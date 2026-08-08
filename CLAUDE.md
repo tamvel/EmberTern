@@ -41,7 +41,7 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (**318 entries, #1–#331** — measured 2026-08-08; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (**320 entries, #1–#333** — measured 2026-08-08; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#332–#333 came out of M4's density decision and both are about a value that lives OUTSIDE the place that claims to govern it** — a `ControlTheme` default is what 191 of 355 icons actually render at while the catalog's role describes two of them, and an unmeasured property is not "clean" but unmeasured (seven icon sizes, green build throughout); #333 is its mirror in the test suite — a guard that TRANSCRIBES a premise breaks when that premise moves onto a role, and reports something its own name does not describe. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~24 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`24-stabilization-sprint.md` is the newest** — read it for the method as much as the fixes: two of six reports were not what they described, and it records the three shared causes plus the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -462,6 +462,54 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **📐 M4 WYSTARTOWAŁ — GRUPA GĘSTOŚCI ROZSTRZYGNIĘTA I WDROŻONA (2026-08-08). ⏸ Czeka na QA wizualne
+  użytkownika w obu motywach.** Zgodnie z **D‑M4‑1** etap otworzył **rejestr kolizji**, nie migracja ekranów,
+  a zgodnie z **D‑M4‑2** cała gęstość poszła jako **jedno pytanie**. Build 0/0; suite **8301** (8155 + 91 + 55);
+  smoke czysty; cztery nowe strażniki **zweryfikowane podsadzeniem**. Materiał decyzyjny + pełny pomiar:
+  **[docs/design/product-polish-m4-density-decision.md](docs/design/product-polish-m4-density-decision.md)**;
+  as-built: `product-polish.md` **§19.37**. Nowe gotchy **#332–#333**.
+  ⭐⭐ **NOWA REGUŁA OBOWIĄZUJĄCA W CAŁYM M4 — R18 (ratyfikowana z decyzjami):** *„jeżeli dwa warianty są
+  równie czytelne, wybieramy ten gęstszy; EmberTern jest narzędziem dla deweloperów baz danych, więc
+  priorytetem jest ilość informacji widocznych na ekranie bez pogarszania czytelności"*. ⚠ To reguła
+  ROZSTRZYGAJĄCA REMIS — warunek „bez pogarszania czytelności" jest pierwszy, a jego kryterium jest ekran
+  (R16), nie arytmetyka.
+  ⭐⭐ **TRZY ZAPISY NIE PRZETRWAŁY POMIARU, I KAŻDY ZMIENIAŁ KSZTAŁT PYTANIA.** (1) „`Size.Icon` — 64
+  literały" opisywało 164 z **355 deklaracji ikon**: **191 nie deklaruje nic** i bierze **16** z
+  `ControlTheme`, a rola miała **dwóch** konsumentów — komentarz obiecywał „toolbar, zakładka, drzewo, menu"
+  i 14, zmierzone **16 / 14 / 15 / 14** (gotcha #332). (2) „K15 — 112 wystąpień w 17 plikach, zmiana
+  rozjechałaby drzewo z resztą aplikacji (R7)" — naprawdę **44 ikony w 13 plikach, 41 z nich to WIERSZ
+  DRZEWA**, więc ⭐ **R7 przemawiał ZA zmianą całej roli naraz, nie przeciw niej**. (3) ⛔ **Z‑3: liczby
+  40 px NIE MA w `src/`** — `data-edit` ma stałe `Height="32"` od commita sprzed bramy, a siatka wyników nie
+  ma własnego stylu wiersza; **Z‑3 zostaje otwarte do pomiaru na żywej aplikacji** i świadomie NIE weszło do
+  tej iteracji.
+  **Co weszło:** ⭐ **A‑3** — chroma ma dwa nazwane poziomy: `Size.Icon.Toolbar` (16; przejęła nazwę po
+  `Size.Icon.Lg`, która miała **zero** konsumentów, więc migracja jest wizualnie zerowa) czyta ją domyślna
+  `ControlTheme` ikon i 16 literałów paska narzędzi/okna, a `Size.Icon` (14) obsługuje **wiersz** — zakładka,
+  drzewo, menu (`MenuMarkup.cs` czyta rolę, nie literał). ⭐⭐ To **nie nowa zasada, tylko drabina z M2b
+  przeniesiona o poziom niżej**: *„pole stoi w SERII, przycisk stoi SAMOTNIE i jest CELEM MYSZY"*
+  (`Size.Control` 24 / `Size.ControlToolbar` 22 → `Size.Icon` 14 / `Size.Icon.Toolbar` 16). ⭐ **B‑1** — 41 par
+  `15 + Spacing 5` → `Size.Icon` + `Space.Xs`; **wysokość wiersza drzewa się nie zmienia** (`Size.Row.Tree` to
+  `MinHeight` 24), zmiana jest wyłącznie pozioma. ⭐⭐ **C‑1** — nowa rola **`Size.Row.GridEdit` = 30**
+  zastąpiła 34/32/30: **wszystkie** siatki definicji mają `Padding="6 2"` (pion 4), edytor ma `Size.Control`
+  24, więc minimum to **28** — trzy liczby na jedno wymaganie, żadna z niego nie wynikała. ⭐ **D** — podłogi
+  `Transaction` (170) i `Errors` (180) zdjęte, `Profile` 170 → **140**; zmierzone naturalne szerokości
+  110 / 90 / 137, a `ComboBox` mierzy się do **najszerszej pozycji**, nie do zaznaczonej, więc lista
+  o zamkniętym zbiorze jest stabilna sama z siebie. **~154 px wróciło przyciskom.**
+  ⚠ **Świadome wyłączenia z powodem:** Security Manager (28 / `.checkbox-grid` 34) — jego komórką
+  interaktywną jest `CheckBox`, nie pole `Size.Control`, więc przesłanka roli jest tam inna (#322) · trzy
+  ikony 15 px, które nie są wierszem drzewa · pole trafienia chevronu 20×20 (cel myszy, nie rozmiar rysunku).
+  ⚠⚠ **DWA ISTNIEJĄCE STRAŻNIKI ZAWIODŁY NA TEJ ZMIANIE I ŻADEN DLATEGO, ŻE PRODUKT JEST ZŁY** — oba
+  pilnowały przesłanki „wiersz musi unieść edytor 24", **czytając ją jako LITERAŁ**, więc migracja na rolę
+  odebrała im zdolność czytania; jeden miał wysokość **przepisaną do stałej `= 32`**. ⭐ Naprawione przez
+  **rozwiązywanie roli**, nie przez osłabienie asercji, i przy okazji jeden z nich objął **wszystkie** siatki
+  edytowalne zamiast jednej (gotcha #333). ⚠ Pierwsza wersja nowego strażnika drzewa **skanowała cały plik**
+  i zgłaszała poprawne ikony o roli `Size.Icon.Sm`; zawężona do trzech szablonów po `DataType`.
+  ⏸ **Otwarte po tej iteracji:** sweep **95 pozostałych literałów** rozmiaru ikony (**M4.3** — sufit
+  `IconSizeLiteralBaseline` pilnuje, żeby nie przybyło, więc „ile zostało" jest liczbą) · ogon 10/11/13 px
+  (pytanie o ROLE) · **Z‑3** · Security Manager · reszta rejestru **K1–K11**, w którym po zamknięciu K15
+  ⭐ **nie ma już ani jednego pytania o gęstość** — zostały pytania typograficzne, promień i odstęp chipa.
+  ⛔ Migracja ekranów dopiero po rejestrze (**D‑M4‑1**).
 
 - **🔤🔒 SPRINT ZGODNOŚCI Z GRAMATYKĄ FIREBIRDA + POLISH (P1…P6 + runda QA) — ZAMKNIĘTY, ODEBRANY PO QA
   UŻYTKOWNIKA (2026-08-08).** Sześć zgłoszeń z normalnego użycia, świadomie **przed M4**, plus cztery poprawki
@@ -4223,10 +4271,14 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **8291, MEASURED 2026-08-08**
-  (Product Polish through M3.5 + the stabilization sprint S-1…S-6 + the grid consistency sprint + the Firebird
-  language completeness sprint incl. its QA round). Green in the three documented partitions
-  (**8145 + 91 + 55**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **8301, MEASURED 2026-08-08**
+  (Product Polish through **M4's density decision** + the stabilization sprint S-1…S-6 + the grid consistency
+  sprint + the Firebird language completeness sprint incl. its QA round). Green in the three documented
+  partitions (**8155 + 91 + 55**).
+  ⚠ M4's +10 is all main-partition and all source-reading: four new guards over icon-size roles, the tree-row
+  pair and the editable-grid row height. ⭐ Two of them are a **ceiling with a number** (95 literal icon sizes
+  in 19 files), so „how much of the sweep is left" stops being an opinion — the same mechanism the `FontSize`
+  baseline uses.
   ⚠ The language sprint's jump (7378 → 8263) is mostly **not** hand-written assertions: 80 Language-Reference
   corpus entries joined `SqlTestCorpus.All`, which feeds the formatter theories (§0 round-trip, idempotency,
   casing) and the AST differential harness — ~11 runs per entry. Its QA round added the remaining 28
@@ -4282,7 +4334,7 @@ noted.
   ⛔⛔ **AND THE ACCEPTANCE CRITERION IS THE TOTAL, NOT „0 FAILURES" — measured 2026-08-05.** With
   `--blame-hang`, a broken headless state reported **`Powodzenie!` — 0 niepowodzeń, łącznie 7232** while **128
   tests silently never started**; the same state without the flag gave 94 failures, and on a retry it hung.
-  So a run is green only when it reports **`łącznie: 8291`** (or the partition's own 8145 / 91 / 55). A summary
+  So a run is green only when it reports **`łącznie: 8301`** (or the partition's own 8155 / 91 / 55). A summary
   line saying „0 niepowodzeń" is satisfiable by a run in which a whole partition failed to load.
   ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The

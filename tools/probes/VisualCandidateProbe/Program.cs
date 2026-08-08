@@ -122,7 +122,7 @@ internal static class Program
         ("subtelny SubtleForeground",  Color.Parse("#9AA0A6"), Color.Parse("#5F6570")),
     ];
 
-    public static void Main()
+    public static void Main(string[] args)
     {
         AppBuilder.Configure<ProbeApp>()
             .UsePlatformDetect()
@@ -132,6 +132,26 @@ internal static class Program
         var outDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "out");
         Directory.CreateDirectory(outDir);
 
+        // ⚠ M3.5 jest ZAMKNIĘTE i odebrane, więc jego rendery nie odtwarzają się przy każdym uruchomieniu —
+        //   trzeba o nie poprosić jawnie (`-- m35`). Domyślnie sonda renderuje aktualne pytanie: M4 / gęstość.
+        if (args.Length > 0 && args[0] == "m35")
+        {
+            RenderStage35(outDir);
+            Console.WriteLine("OK");
+            return;
+        }
+
+        Density.Run(outDir);
+        foreach (var file in Directory.GetFiles(outDir, "m4-*.png").OrderBy(f => f))
+        {
+            Console.WriteLine(file);
+        }
+
+        Console.WriteLine("OK");
+    }
+
+    private static void RenderStage35(string outDir)
+    {
         foreach (var variant in new[] { ThemeVariant.Dark, ThemeVariant.Light })
         {
             Application.Current!.RequestedThemeVariant = variant;
@@ -161,8 +181,6 @@ internal static class Program
             Render(boxes, boxFile, scale: 3.0);
             Console.WriteLine(boxFile);
         }
-
-        Console.WriteLine("OK");
     }
 
     // Wiersz na rodzaj: nazwa | obecnie 16px | kandydat 16px | obecnie ×5 | kandydat ×5 | nota.
@@ -512,7 +530,7 @@ internal static class Program
         return icon;
     }
 
-    private static void Render(Control root, string path, double scale)
+    internal static void Render(Control root, string path, double scale)
     {
         // ⚠ Kontrolka musi wisieć na TopLevelu, inaczej style aplikacji do niej nie dojdą i render pokaże
         //   gołego Fluenta. Okno nie jest pokazywane — wystarczy, że istnieje jako korzeń drzewa.
@@ -529,7 +547,10 @@ internal static class Program
         window.Position = new PixelPoint(-4000, -4000);
 
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        root.Measure(new Size(1400, 2000));
+        // ⚠ Podniesione w M4 z 1400×2000: matryce gęstości mają cztery kolumny wariantów obok siebie,
+        //   a zbyt ciasny limit MIERZENIA obcina ostatnią kolumnę — render wygląda wtedy poprawnie
+        //   i odpowiada na inne pytanie, niż zadano.
+        root.Measure(new Size(3000, 2400));
         root.Arrange(new Rect(root.DesiredSize));
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
@@ -568,6 +589,11 @@ internal sealed class ProbeApp : Application
         }
 
         Styles.Add(new FluentTheme());
+        // ⚠ DOPISANE W M4: bez motywu `DataGrid` siatka nie ma szablonu i renderuje się jako NIC — a to
+        //   jest dokładnie ta cicha awaria, którą opisuje reguła wyżej. Kolejność jak w `App.axaml`:
+        //   Fluent → DataGrid → nasze style, żeby `ControlStyles.axaml` mogło nadpisać oba.
+        //   `AvaloniaEdit` świadomie pominięty — żaden render tej sondy nie zawiera edytora tekstu.
+        Styles.Add(new StyleInclude((Uri?)null) { Source = new Uri("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml") });
         Styles.Add(new StyleInclude((Uri?)null) { Source = new Uri("avares://EmberTern/Themes/ControlStyles.axaml") });
     }
 }

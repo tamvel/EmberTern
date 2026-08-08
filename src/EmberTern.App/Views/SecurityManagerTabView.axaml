@@ -33,6 +33,12 @@
   </UserControl.Resources>
 
   <UserControl.Styles>
+    <!-- ⛔ ŚWIADOMIE POZA rolą `Size.Row.GridEdit` (30), wprowadzoną w M4 / C‑1 — i to jest wykluczenie
+         z powodem, nie przeoczenie. Ta rola stoi na arytmetyce „padding 4 + edytor `Size.Control` 24",
+         a Security Manager NIE MA edytora `Size.Control`: jego komórką interaktywną jest `CheckBox`
+         albo `Button.priv-cell`, więc przesłanka roli jest tu po prostu inna. Podciągnięcie tych dwóch
+         siatek pod rolę byłoby zastosowaniem reguły o KLASIE do elementu, którego nikt nie zmierzył —
+         dokładnie gotcha #322. ⏸ Wysokości Security Managera wymagają własnego pomiaru. -->
     <Style Selector="DataGridRow"><Setter Property="Height" Value="28" /></Style>
     <Style Selector="DataGridCell"><Setter Property="Padding" Value="6 2" /></Style>
     <Style Selector="DataGrid"><Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" /></Style>

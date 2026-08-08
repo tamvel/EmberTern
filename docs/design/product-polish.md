@@ -8361,3 +8361,100 @@ asercje, a M3.3b zapłaciło za pomylenie ich.
 ⛔ Z‑3 (najpierw przyczyna) · Z‑4 · Z‑5 · **temat Settings** (§13.3a.5) · „tęcza ikon" (wycofana) ·
 żadnej zmiany w `Icon.Import`, `Icon.FolderPlus`, `Icon.Plus` ani w pozostałych ikonach · żadnej zmiany
 pozycji badge'a (prawy dolny — dzisiejsze miejsce, spójne z `DebuggerIcon`).
+
+---
+
+## §19.37 Iteracja 25 (M4 · D‑M4‑1/D‑M4‑2) — grupa gęstości (2026-08-08)
+
+> **Status: dostarczone, oczekuje na QA wizualne użytkownika w obu motywach.**
+> Decyzje ratyfikowane: **A‑3 · B‑1 · C‑1 (30 px) · D wg rekomendacji.** Materiał decyzyjny i pełny pomiar:
+> [product-polish-m4-density-decision.md](product-polish-m4-density-decision.md).
+> Build 0/0 · suite **8301** w trzech partycjach (8155 + 91 + 55, +10) · smoke czysty.
+> **Wszystkie cztery nowe strażniki zweryfikowane podsadzeniem naruszenia.**
+
+### §19.37.1 ⭐⭐ Trzy zapisy, które nie przetrwały pomiaru
+
+Iteracja zaczęła się od pomiaru z kodu, nie z dokumentu (pułapka 3), i trzy rzeczy okazały się inne, niż
+zapisano — a każda zmieniała kształt pytania, więc żadna nie jest korektą kosmetyczną.
+
+| zapis | pomiar |
+|---|---|
+| „`Size.Icon` — 64 literały do zamiany" | **355 deklaracji ikon, siedem renderowanych rozmiarów** (10–16). **191 nie deklaruje nic** i bierze 16 z `ControlTheme`; `Size.Icon` miał **2 konsumentów**. Komentarz roli obiecywał „toolbar, zakładka, drzewo, wiersz menu" i 14 — zmierzone **16 / 14 / 15 / 14** |
+| „K15 — 112 wystąpień w 17 plikach, zmiana rozjechałaby drzewo z resztą aplikacji (R7)" | **44 ikony 15 px w 13 plikach, 41 z nich to WIERSZ DRZEWA** (3 szablony Metadata Explorera + wiersz każdego drzewa „Zależności" + drzewo Global Search). ⭐ **R7 przemawiał więc ZA zmianą całej roli naraz, nie przeciw niej** |
+| „Z‑3 — wiersz Table Data 40 px" | **W `src/` nie ma deklaracji 40 ani 27.** `data-edit` ma stałe `Height="32"` od commita sprzed bramy. ⛔ Z‑3 zostaje otwarte do pomiaru na żywej aplikacji |
+
+### §19.37.2 ⭐ A‑3 — chroma ma dwa nazwane poziomy
+
+`Size.Icon.Lg` (16, **zero konsumentów**) przejęła nazwę i zadanie jako **`Size.Icon.Toolbar`**; wartość
+nie drgnęła, więc migracja jest wizualnie zerowa. Konsumenci: domyślna `Width`/`Height` w `ControlTheme`
+`SvgIcon`/`DebuggerIcon`/`CreateIcon` (czyli te 191 ikon bez rozmiaru) + 16 literałów `16` z paska narzędzi,
+przycisków okna i chevronów debuggera. `Size.Icon` (14) obsługuje wiersz: zakładka, drzewo, menu
+(`MenuMarkup.cs` czyta ją teraz `DynamicResource`, a nie literałem).
+
+⭐⭐ **To nie jest nowa zasada — to drabina, którą katalog ma od M2b dla KONTROLEK, przeniesiona o poziom
+niżej:** *„pole stoi w SERII i ma się wyrównywać, przycisk stoi SAMOTNIE i jest CELEM MYSZY"*
+(`Size.Control` 24 / `Size.ControlToolbar` 22 → `Size.Icon` 14 / `Size.Icon.Toolbar` 16).
+
+⚠ Warianty „wszędzie 14" i „wszędzie 16" odrzucono z tego samego powodu: **oba zmieniały powierzchnię już
+odebraną** — pierwszy odchudzał pasek narzędzi, którego `CreateIcon` narysowano i przyjęto przy 16 px
+(§19.36.3), drugi pogrubiał pasek zakładek i menu z M3.3 i Keyboard Managera. Pułapka 17 w obie strony.
+
+### §19.37.3 B‑1 — wiersz drzewa
+
+41 par `15 + Spacing 5` → `Size.Icon` + `Space.Xs`. **Wysokość wiersza się nie zmienia** (`Size.Row.Tree`
+to `MinHeight` 24), więc zmiana jest wyłącznie pozioma. Trzy ikony 15 px zostają i mają powód: pasek
+powiadomienia nad siatką wyników, ptaszek w komórce Session Managera, ikona wiersza Trace Monitora — żadna
+nie jest wierszem drzewa. ⚠ Pole trafienia chevronu (20×20) **nie było przedmiotem B‑1** i zostaje: to cel
+myszy, nie rozmiar rysunku, więc osobne pytanie o ergonomię.
+
+### §19.37.4 ⭐⭐ C‑1 — trzy liczby na jedno wymaganie
+
+Nowa rola **`Size.Row.GridEdit` = 30** zastąpiła 34 (Pola, Nowa tabela), 32 (Dane) i 30 (parametry
+procedury/funkcji/wyzwalacza). Powstała z arytmetyki, nie z uśrednienia: **wszystkie** te siatki mają
+`DataGridCell` `Padding="6 2"` (pion 4), a edytor w komórce ma `Size.Control` 24 ⇒ minimum **28**. Żadna
+z trzech liczb z niego nie wynikała, a różnica między nimi nie niosła informacji. **30, a nie 28** — dwa
+piksele zapasu; ⛔ zapasu nie zwiększać, bo R18 mówi, że przy równej czytelności wygrywa gęstszy wariant.
+
+⚠ Siatki BEZ edytora (indeksy, ograniczenia, kolumny widoku) przeszły na `Size.Row.Grid` (22) — inna rola,
+zero zmiany wartości. ⛔ **Security Manager (28 / `.checkbox-grid` 34) świadomie poza rolą**: jego komórką
+interaktywną jest `CheckBox`/`Button.priv-cell`, a nie pole `Size.Control`, więc przesłanka roli jest tam
+inna i wymaga własnego pomiaru (#322).
+
+### §19.37.5 D — podłogi w pasku importu
+
+`Transaction` (170 → brak) i `Errors` (180 → brak) straciły podłogi, `Profile` zeszła 170 → **140**. Zmierzone
+naturalne szerokości: **110 / 90 / 137**. ⭐ `ComboBox` mierzy się do **najszerszej pozycji**, nie do
+zaznaczonej, więc lista o zamkniętym zbiorze jest stabilna sama z siebie — podłoga zostaje wyłącznie tam,
+gdzie zbiór pozycji tworzy użytkownik (nazwy profili), bo tylko tam brak podłogi znaczyłby ruch układu przy
+zapisaniu profilu. **Pasmo 695 → ~541 px; ~154 px wróciło przyciskom**, których `StackPanel` się nie ściska,
+tylko obcina (§19.33).
+
+### §19.37.6 ⚠⚠ Strażniki — i lekcja, którą zapłaciły DWA z pięciu
+
+Nowe: `SidebarRowIcon_AndItsGap_ComeFromTheirRoles` (3 przypadki) · `NoFileDeclaresMoreIconSizeLiteralsThanItsBaseline`
+· `TheIconSizeLiteralBaselineHasNoStaleEntries` (sufit 95 literałów w 19 plikach — reszta sweepu to M4.3,
+i teraz jest liczbą) · `EveryEditableGridRow_DeclaresAHeightThatCanCarryTheCellEditor` (6 przypadków).
+
+⭐⭐ **Dwa ISTNIEJĄCE strażniki zawiodły na tej zmianie — i żaden dlatego, że produkt jest zły.** Oba
+pilnowały przesłanki („wiersz musi unieść edytor 24") **czytając ją jako LITERAŁ**, więc migracja na rolę
+odebrała im zdolność czytania: `EditableGridSeamTests.TheTableDataRow_…` zgłosił *„wiersz nie deklaruje już
+stałej wysokości"*, a `GridDateEditorTests` miał wysokość **przepisaną do stałej `= 32`** i zgłosił, że widok
+przestał tę liczbę wypisywać. ⭐ Oba naprawiono przez **rozwiązywanie roli**, nie przez osłabienie asercji —
+i przy okazji pierwszy z nich objął **wszystkie** siatki edytowalne zamiast jednej (#322: zdanie o jednym
+elemencie klasy milczy o jej rodzeństwie).
+
+⚠ Pierwsza wersja strażnika wiersza drzewa **skanowała cały plik** i zgłosiła cztery wiersze na roli
+`Size.Icon.Sm` — element o innej roli, całkowicie poprawny. Zawężony do trzech szablonów po `DataType`.
+⚠⚠ **I raz jeszcze zadziałała pułapka §19.31: build miał 18 błędów składni, a testy pobiegły na STARYM
+binarium i pokazały poprzednie czerwone.** Czytać `Liczba błędów: 0` **przed** listą niepowodzeń.
+
+### §19.37.7 Czego ta iteracja NIE zrobiła
+
+⛔ Sweep pozostałych **95 literałów** rozmiaru ikony (M4.3 — sufit pilnuje, żeby nie przybyło) · ⛔ ogon
+10 / 11 / 13 px (pytanie o ROLE, nie o gęstość) · ⛔ **Z‑3** (najpierw przyczyna, pomiar na żywej aplikacji) ·
+⛔ Security Manager · ⛔ pole trafienia chevronu · ⛔ migracja ekranów (**D‑M4‑1**: najpierw rejestr).
+
+**Rejestr K1–K15 po tej iteracji:** zamknięte **K15**; otwarte zostają wyłącznie pytania typograficzne
+(**K1 · K3 · K4 · K6 · K8** — „ile mierzy pasek narzędzi i ile nagłówek sekcji"), **K5/K10** (promień),
+**K7** (`ExpanderMinHeight`), **K9** (`TabItem` 13 px), **K11** (odstęp chipa, w parze z paddingiem badge'a
+DEV MODE) oraz **K2** (rola bez konsumenta). ⭐ Żadne z nich nie jest już pytaniem o gęstość.

@@ -357,9 +357,9 @@
             <Button Classes="flat" Padding="6,6" HorizontalAlignment="Left"
                     Command="{Binding ToggleAdvancedCommand}">
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="16" Height="16"
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}"
                                   VerticalAlignment="Center" IsVisible="{Binding !IsAdvancedExpanded}" />
-                <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="16" Height="16"
+                <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}"
                                   VerticalAlignment="Center" IsVisible="{Binding IsAdvancedExpanded}" />
                 <TextBlock Text="{x:Static app:UiStrings.DebuggerAdvancedSection}" FontSize="{DynamicResource Text.Application.Size}"
                            Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />

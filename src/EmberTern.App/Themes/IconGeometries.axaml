@@ -253,12 +253,18 @@
        A fixed 24×24 Canvas inside a Uniform Viewbox guarantees a consistent
        coordinate space (and therefore consistent stroke weight) regardless of each
        icon's actual bounds. Stroke = Foreground so a theme token colors the icon
-       and theme toggle re-evaluates live. Default size 16; override Width/Height
-       per use (e.g. 14 for workspace tabs, 12 for the tab-strip close button).
+       and theme toggle re-evaluates live.
+
+       ⭐⭐ ROZMIAR DOMYŚLNY MA OD M4 ROLĘ (A‑3): `Size.Icon.Toolbar` = 16, czyli DOKŁADNIE ta liczba,
+       która stała tu literałem — zmiana jest wizualnie zerowa. Powód, dla którego mimo to jest ważna:
+       191 z 355 deklaracji ikon w aplikacji nie podaje rozmiaru, więc to ten setter decydował o ich
+       wielkości, a katalog o tym nie wiedział (`Size.Icon` obiecywał 14 i miał DWÓCH konsumentów).
+       Teraz widać, co zmieni te 191 ikon naraz.
+       ⚠ Ikona stojąca W WIERSZU nadpisuje to na `Size.Icon` (14) — zakładka, drzewo, menu kontekstowe.
        ============================================================================ -->
   <ControlTheme x:Key="{x:Type controls:SvgIcon}" TargetType="controls:SvgIcon">
-    <Setter Property="Width" Value="16" />
-    <Setter Property="Height" Value="16" />
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
     <Setter Property="Foreground" Value="{DynamicResource NeutralIconBrush}" />
     <Setter Property="Template">
       <ControlTemplate>
@@ -288,8 +294,9 @@
        overrides to 14. Canonical source: Assets/Icons/Debugger/debugger.svg.
        ============================================================================ -->
   <ControlTheme x:Key="{x:Type controls:DebuggerIcon}" TargetType="controls:DebuggerIcon">
-    <Setter Property="Width" Value="16" />
-    <Setter Property="Height" Value="16" />
+    <!-- Domyślna z roli `Size.Icon.Toolbar` (16) — jak `SvgIcon`; zakładka nadpisuje na `Size.Icon`. -->
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
     <Setter Property="Template">
       <ControlTemplate>
         <Viewbox Stretch="Uniform">
@@ -379,8 +386,11 @@
        dokładnie tę możliwość rozjazdu, którą `DebuggerIcon` opisuje u siebie.
        ============================================================================ -->
   <ControlTheme x:Key="{x:Type controls:CreateIcon}" TargetType="controls:CreateIcon">
-    <Setter Property="Width" Value="16" />
-    <Setter Property="Height" Value="16" />
+    <!-- ⚠ Domyślna z roli `Size.Icon.Toolbar` (16), i to jest jedyne miejsce, w którym ta ikona żyje:
+         dziewięć przycisków „utwórz…" w pasku narzędzi nie podaje rozmiaru. ⛔ Proporcje badge'a
+         (Ø10, inset 0,5) dobrano i odebrano PRZY 16 px — zmiana tej roli je unieważnia (M3.5 / Z‑6). -->
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
     <Setter Property="Template">
       <ControlTemplate>
         <Viewbox Stretch="Uniform">

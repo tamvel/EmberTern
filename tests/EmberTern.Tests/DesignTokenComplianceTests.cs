@@ -626,6 +626,154 @@ public class DesignTokenComplianceTests
         Assert.Equal("24", declared.Groups["value"].Value.Trim());
     }
 
+    /// <summary>
+    /// ⭐ M4 / B‑1: wiersz drzewa czyta ikonę i odstęp Z RÓL, nie z literałów. Pilnowane na trzech szablonach
+    /// paska bocznego, bo to one niosą KAŻDY wiersz najgęstszego widoku aplikacji.
+    ///
+    /// <para>⚠ Czego ten test broni: powrotu literału (#284) — a to jest tu bardziej prawdopodobne niż zwykle,
+    /// bo poprzednie wartości (15 i 5) stały w tych szablonach latami i mają w historii projektu obszerne
+    /// uzasadnienie odroczenia. ⛔ Uzasadnienie wygasło razem z decyzją użytkownika; jeżeli waga optyczna ikony
+    /// w wierszu ma się zmienić, zmienia się ROLA, i wtedy razem z zakładką i menu kontekstowym.</para>
+    ///
+    /// <para>⚠ Czego NIE mówi: jak drzewo wygląda. Kryterium odbioru jest ekran (R16).</para>
+    /// </summary>
+    [Theory]
+    [InlineData("FolderNodeViewModel")]
+    [InlineData("ConnectionNodeViewModel")]
+    [InlineData("MetadataNodeViewModel")]
+    public void SidebarRowIcon_AndItsGap_ComeFromTheirRoles(string template)
+    {
+        var text = File.ReadAllText(Path.Combine(AppRoot(), "Views", "MainWindow.axaml"));
+
+        // ⚠ ZAKRES JEST CZĘŚCIĄ TEGO TESTU, nie jego szczegółem. Pierwsza wersja skanowała CAŁY plik
+        // i zgłosiła cztery wiersze na roli `Size.Icon.Sm` (chip, ikona inline przy tekście 11 px) — czyli
+        // element o INNEJ roli, całkowicie poprawny. Strażnik pytał wtedy „czy każdy `StackPanel` z ikoną
+        // wygląda jak wiersz drzewa", a miał pytać o trzy konkretne szablony (#315: strażnik bywa zielony
+        // albo czerwony z powodu, którego jego nazwa nie opisuje).
+        var block = Regex.Match(
+            text,
+            @"<DataTemplate DataType=""vm:" + template + @"""\s*>(?<body>[\s\S]*?)</DataTemplate>");
+        Assert.True(block.Success,
+            $"Nie znaleziono szablonu wiersza `vm:{template}` w MainWindow.axaml. Jeżeli wiersz paska "
+            + "bocznego przeniósł się gdzie indziej, ten strażnik musi pójść za nim — a nie zniknąć.");
+
+        var row = Regex.Match(
+            block.Groups["body"].Value,
+            @"<StackPanel[^>]*?Spacing=""(?<gap>[^""]+)""[^>]*>\s*(?:<!--[\s\S]*?-->\s*)?"
+            + @"<controls:SvgIcon\b(?:(?!/?>)[\s\S])*?Width=""(?<size>[^""]+)""");
+
+        // Test, który przechodzi, bo NICZEGO nie dopasował, jest gorszy niż brak testu (R16).
+        Assert.True(row.Success,
+            $"W szablonie `vm:{template}` nie ma już pary odstęp + ikona, o którą pytała kolizja K15.");
+
+        Assert.Equal("{DynamicResource Size.Icon}", row.Groups["size"].Value);
+        Assert.Equal("{DynamicResource Space.Xs}", row.Groups["gap"].Value);
+    }
+
+    /// <summary>
+    /// Ikony, które nadal deklarują rozmiar LICZBĄ zamiast roli — plik → liczba. Ta sama mechanika, co przy
+    /// `FontSize`: sufit, który schodzi w dół razem z pracą, więc „ile jeszcze zostało" jest liczbą, a nie
+    /// opinią.
+    /// </summary>
+    /// <remarks>
+    /// ⭐⭐ POWÓD, DLA KTÓREGO TEN STRAŻNIK POWSTAŁ DOPIERO W M4, jest sam w sobie znaleziskiem: liczniki M2c
+    /// mierzyły `FontSize`, `FontFamily` i `CornerRadius` — rozmiaru ikony nie mierzył NIKT. Dlatego aplikacja
+    /// doszła do <b>siedmiu</b> renderowanych rozmiarów ikon (10, 11, 12, 13, 14, 15, 16) przy zielonym
+    /// buildzie, a rola `Size.Icon` miała DWÓCH konsumentów na 355 deklaracji.
+    /// <para>⚠ Sweep pozostałych literałów należy do M4.3 — ten sufit istnieje po to, żeby ich nie przybyło,
+    /// a nie żeby udawać, że ich nie ma.</para>
+    /// </remarks>
+    private static readonly Dictionary<string, int> IconSizeLiteralBaseline = new(StringComparer.Ordinal)
+    {
+        // M4 / A‑3 + B‑1: 152 → 95. Zeszło 16 literałów `16` (pasek narzędzi i okno → `Size.Icon.Toolbar`)
+        // oraz 41 par 15+5 wiersza drzewa (→ `Size.Icon` + `Space.Xs`).
+        ["Views/DebuggerTabView.axaml"] = 18,
+        ["Views/MainWindow.axaml"] = 16,
+        ["Views/DataImportTabView.axaml"] = 10,
+        ["Views/TableDetailTabView.axaml"] = 8,
+        ["Views/ProcedureDetailTabView.axaml"] = 7,
+        ["Views/FunctionDetailTabView.axaml"] = 7,
+        ["Controls/MessageBanner.axaml"] = 5,
+        ["Views/TraceMonitorTabView.axaml"] = 4,
+        ["Views/ViewDetailTabView.axaml"] = 3,
+        ["Views/SessionManagerTabView.axaml"] = 3,
+        ["Views/SecurityManagerTabView.axaml"] = 3,
+        ["Views/ScriptExecutorTabView.axaml"] = 3,
+        ["Views/PackageDetailTabView.axaml"] = 2,
+        ["Views/SettingsImportDialog.axaml"] = 1,
+        ["Views/SettingsExportDialog.axaml"] = 1,
+        ["Views/GlobalSearchTabView.axaml"] = 1,
+        ["Views/FilterPanelView.axaml"] = 1,
+        ["Views/DiagnosticsPanelView.axaml"] = 1,
+        ["Views/AggregationBarView.axaml"] = 1,
+    };
+
+    [Fact]
+    public void NoFileDeclaresMoreIconSizeLiteralsThanItsBaseline()
+    {
+        var actual = MeasureIconSizeLiterals();
+
+        var over = actual
+            .Where(kv => kv.Value > IconSizeLiteralBaseline.GetValueOrDefault(kv.Key))
+            .OrderByDescending(kv => kv.Value - IconSizeLiteralBaseline.GetValueOrDefault(kv.Key))
+            .Select(kv => $"{kv.Key}: {IconSizeLiteralBaseline.GetValueOrDefault(kv.Key)} → {kv.Value}")
+            .ToList();
+
+        Assert.True(over.Count == 0,
+            "Nowa ikona deklaruje rozmiar liczbą zamiast roli:\n  " + string.Join("\n  ", over) +
+            "\n\nRole są w Themes/Tokens.axaml i po M4 są trzy, każda o innym zadaniu:\n" +
+            "  • `Size.Icon.Toolbar` (16) — ikona jako samodzielna AKCJA: pasek narzędzi, przycisk okna.\n" +
+            "  • `Size.Icon` (14) — ikona w WIERSZU: zakładka, drzewo, menu, etykieta na powierzchni roboczej.\n" +
+            "  • `Size.Icon.Sm` (12) — ikona inline przy tekście 11 px.\n" +
+            "⭐ Jeżeli ikona nie podaje rozmiaru w ogóle, bierze `Size.Icon.Toolbar` z `ControlTheme` — i to " +
+            "jest poprawna droga dla ikony paska narzędzi, nie brak decyzji.");
+    }
+
+    [Fact]
+    public void TheIconSizeLiteralBaselineHasNoStaleEntries()
+    {
+        var actual = MeasureIconSizeLiterals();
+
+        var stale = IconSizeLiteralBaseline
+            .Where(kv => actual.GetValueOrDefault(kv.Key) < kv.Value)
+            .OrderBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => actual.ContainsKey(kv.Key)
+                ? $"{kv.Key}: sufit {kv.Value}, faktycznie {actual[kv.Key]} — obniż go"
+                : $"{kv.Key}: sufit {kv.Value}, plik czysty albo zniknął — usuń wpis")
+            .ToList();
+
+        Assert.True(stale.Count == 0,
+            "Sufit literałów rozmiaru ikony jest wyższy od rzeczywistości — to postęp, którego nikt nie " +
+            "zapisał:\n  " + string.Join("\n  ", stale) +
+            $"\n\nRazem: {actual.Values.Sum()} w {actual.Count} plikach; sufit mówi " +
+            $"{IconSizeLiteralBaseline.Values.Sum()} w {IconSizeLiteralBaseline.Count}. Zaktualizuj liczby, " +
+            "żeby następny czytelnik widział, ile naprawdę zostało do M4.3.");
+    }
+
+    /// <summary>
+    /// Liczy deklaracje ikon z rozmiarem podanym LICZBĄ. ⚠ Liczy element ikony, nie atrybut <c>Width</c>:
+    /// <c>Width</c> nosi w tych plikach także szerokości kolumn, ramek i separatorów, więc pomiar po samym
+    /// atrybucie odpowiadałby na inne pytanie (#285 — pomiar po nośniku nie rozstrzyga o roli).
+    /// </summary>
+    private static Dictionary<string, int> MeasureIconSizeLiterals()
+    {
+        var appRoot = AppRoot();
+        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var file in Directory.EnumerateFiles(appRoot, "*.axaml", SearchOption.AllDirectories))
+        {
+            var text = WithoutComments(File.ReadAllText(file), file);
+            var count = Regex.Matches(
+                text,
+                @"<controls:(?:SvgIcon|DebuggerIcon|CreateIcon)\b(?:(?!/?>)[\s\S])*?Width=""[0-9]").Count;
+            if (count == 0) continue;
+
+            result[Path.GetRelativePath(appRoot, file).Replace('\\', '/')] = count;
+        }
+
+        return result;
+    }
+
     private static IEnumerable<string> ThemeFiles() =>
         Directory.EnumerateFiles(Path.Combine(AppRoot(), "Themes"), "*.axaml").OrderBy(f => f, StringComparer.Ordinal);
 

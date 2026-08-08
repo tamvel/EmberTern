@@ -225,8 +225,13 @@
        (za wąska kolumna albo za niski wiersz) i mają różne przyczyny. Pomiar drzewa wizualnego
        (`GridDateEditorTests`): `CalendarDatePicker` z motywu Fluent ma WŁASNE `MinHeight` = 32, podczas
        gdy jego zawartość prosi o 24 (`PART_TextBox` 22, `PART_Button` 24). Wiersz `data-edit` ma
-       STAŁE `Height` 32 (nie `MinHeight` — nie ma jak urosnąć, gotcha #322), a `Pad.Cell` zabiera 2+2,
-       więc na edytor zostaje 28. 32 > 28 ⇒ obcięcie, bez błędu i bez skoku układu, który by je pokazał.
+       STAŁE `Height` (nie `MinHeight` — nie ma jak urosnąć, gotcha #322), a `Pad.Cell` zabiera 2+2,
+       więc na edytor zostaje wysokość wiersza minus 4. W chwili zgłoszenia było to 32 − 4 = 28, a więc
+       32 > 28 ⇒ obcięcie, bez błędu i bez skoku układu, który by je pokazał.
+       ⚠ AKTUALIZACJA M4 / C‑1: wiersz stoi teraz na roli `Size.Row.GridEdit` (30), czyli na edytor
+       zostaje 26 — nadal powyżej 24, więc reguła poniżej trzyma się z tego samego powodu, tylko z innym
+       zapasem. ⛔ Nie zapisywać tu liczby wiersza na sztywno: pilnuje jej `EditableGridSeamTests`,
+       czytając wysokość, padding i `Size.Control` z miejsc, w których naprawdę stoją.
 
        ⭐ Dlatego poprawką jest ROLA, a nie dobrana liczba: ten sam `Size.Control`, który bierze `TextBox`
        w sąsiedniej komórce (§19.9). Zawartość mieści się w 24 z zapasem, więc nic nie zostaje ściśnięte
