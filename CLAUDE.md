@@ -41,7 +41,7 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (**310 entries, #1–#323** — measured 2026-08-07; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (**318 entries, #1–#331** — measured 2026-08-08; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~24 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`24-stabilization-sprint.md` is the newest** — read it for the method as much as the fixes: two of six reports were not what they described, and it records the three shared causes plus the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -462,6 +462,105 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **🔤🔒 SPRINT ZGODNOŚCI Z GRAMATYKĄ FIREBIRDA + POLISH (P1…P6 + runda QA) — ZAMKNIĘTY, ODEBRANY PO QA
+  UŻYTKOWNIKA (2026-08-08).** Sześć zgłoszeń z normalnego użycia, świadomie **przed M4**, plus cztery poprawki
+  z QA. Build 0/0 w Debug i Release; suite **8291** (8145 + 91 + 55); smoke Debug + Release czysty;
+  `DebuggerFidelityProbe` **40/40 ALL PASS** i `ChangeSafetyProbe` ALL PASS na żywym FB5. Narracja:
+  **[docs/history/26-firebird-language-completeness-sprint.md](docs/history/26-firebird-language-completeness-sprint.md)**.
+  Nowe gotchy **#324–#331**.
+  ⚠ Skok 7378 → 8263 to **nie** ~900 ręcznie napisanych asercji: 80 pozycji korpusu weszło do
+  `SqlTestCorpus.All`, które zasila teorie formatera (§0 round-trip, idempotencja, casing) i harness różnicowy
+  AST — ~11 przebiegów na pozycję. ⚠ `GridDateEditorTests` dołącza do partycji headless **zbiorczej** — a jej
+  brak w filtrze partycji był defektem samego dokumentu, naprawionym przy zamykaniu (patrz „Tests").
+  ⭐⭐ **RUNDA QA (2026-08-08) — cztery poprawki, wszystkie o TEJ SAMEJ granicy: o formacie i o wyborze
+  kontrolki decydował dotąd typ CLR, a nie typ kolumny Firebirda.** Nowe gotchy **#329–#331**.
+  🐞 **`CalendarDatePicker` obsługiwał też kolumny TIMESTAMP, i defekt był groźniejszy niż zgłoszenie:** widoczna
+  połowa to „nie da się edytować czasu", prawdziwa — `SelectedDate` sprawiał, że **zatwierdzenie wybranej daty
+  zapisywało północ na miejsce godziny, którą wiersz już miał** (reguła #11). ⭐ Zamiennik wybrany z **pomiaru
+  frameworka**: Avalonia 12.1.1 nie ma kontrolki łączącej datę z czasem (`CalendarDatePicker`/`DatePicker`/
+  `TimePicker`/`Calendar`), więc TIMESTAMP edytuje się **jako tekst**. ⭐ Zatwierdzenie **parsuje na typowany
+  `DateTime`**, bo Firebird czyta literał po SEPARATORZE (`07/08/2026` = 8 lipca), a siatka pokazuje pisownię
+  kultury czytelnika; kolejność: forma silnika → kultura czytelnika → invariant → tekst dosłownie.
+  ⛔⛔ **Prezentacja w siatce danych idzie z typu METADANYCH Firebirda, nigdy z typu CLR** (dyrektywa
+  użytkownika): `DATE` → sama data · `TIME` → sam czas · `TIMESTAMP` → data i czas · `… WITH TIME ZONE` → pełna
+  wartość ze strefą. ⚠ Kusząca naprawa „ukryj czas, gdy północ" jest **gorsza** — ukrywa prawdziwe `00:00:00`
+  na TIMESTAMP. Nowe `DateTimeDisplay.CellForType(value, firebirdType)`; **martwy `Cell(object?)`**, który
+  rozstrzygał dokładnie tą heurystyką i nie miał konsumenta, **usunięty**. ⚠ Siatka wyników SQL świadomie poza
+  zakresem: `QueryColumn` niesie `ClrType`, nie typ Firebirda.
+  ⭐ **W debuggerze formą czytelną jest forma SILNIKA** (`yyyy-MM-dd [HH:mm:ss]`) — Variables/Context, Watche,
+  wartości inline i zasiew pola edycji; ⛔ liczby zostają invariantne (konwencja literałów harnessu).
+  ⚠⚠ **Edytor siatki pracuje do SEKUNDY (decyzja użytkownika), a to samo w sobie tworzyło drugi defekt:**
+  `DataGrid` zatwierdza komórkę dlatego, że wyszedł z niej fokus, więc przejście Tabem zapisywałoby zaokrągloną
+  wartość na miejsce ułamkowej. Stąd **„nic nie wpisano ⇒ nic nie zapisano"** i **jeden właściciel zasiewu**
+  (`EditorSeedText`, czytany przez szablon i przez to sprawdzenie). ⚠ Debugger zachowuje pełną precyzję —
+  tam wartość się OGLĄDA, a nie przepisuje.
+  ⭐⭐ **TRZY Z CZTERECH PUNKTÓW PO POMIARZE OKAZAŁY SIĘ CZYMŚ INNYM, NIŻ OPISYWAŁO ZGŁOSZENIE — a w P5
+  pomiar ODWRÓCIŁ DIAGNOZĘ:** siatki danych nigdy nie były przywiązane do `InvariantCulture`, tylko wiernie
+  odtwarzały **nadpisanie krótkiej daty w Windows samego zgłaszającego** (`pl-PL` z `yyyy-MM-dd`; kultura bez
+  nadpisania daje `d.MM.yyyy`, prawdziwy invariant `08/07/2026` — trzy rozróżnialne wyniki, więc pomiar jest
+  rozstrzygający). **Na wskazanej powierzchni nie było defektu, i powiedzenie tego wprost jest wynikiem**
+  (gotcha #328). Zaszyte było to, czego zgłoszenie nie wymieniało: data wydania w About pod
+  `InvariantCulture`'s `d MMMM yyyy`, czyli **angielska nazwa miesiąca na każdej maszynie**, oraz etykieta
+  historii parametrów.
+  ⭐⭐ **P2 — audyt gramatyki. Reguła, która się ZBIEGA, bo jest ograniczona JĘZYKIEM, a nie zgłoszeniami
+  (gotcha #324).** Cztery poprzednie poprawki dodały po jednym predykacie POZYCYJNYM (`NEXT VALUE FOR`, potem
+  `GEN_ID`, potem `EXTRACT`) — czyli listę wyjątków, której kompletność wyznaczają zgłoszenia, które ją
+  zbudowały. Nowy **korpus `SqlTestCorpus.LanguageReference`** (80 konstrukcji, przejście rozdział po rozdziale
+  przez Language Reference) zmierzył stan wyjściowy: **26 z 80 pozycji produkowało fałszywe znaleziska albo
+  błędne wiązania**, a zgłoszone konstrukcje były podzbiorem. Rozwiązanie to **dwa uzupełniające się
+  mechanizmy**: nowa klasa Core **`FirebirdGrammar`** (wiedza POZYCYJNA — gniazda słów w built-inach, ramka
+  okna, pozycja typu `CAST`, tablica fraz; przejęła oba stare predykaty, jeden właściciel) i
+  **`FirebirdSyntax.IsNonReservedWord`** (SŁOWNIK, którego jedyną dozwoloną konsekwencją jest MILCZENIE —
+  nigdy nie tłumi wiązania). ⚠ **Słownik sam był za tępy i dowiódł tego ISTNIEJĄCY strażnik**
+  (`TheSameWord_OutsideExtract_IsStillFlagged`: *„the word is not exempt — only the position is"*), więc
+  regułą jest **SĄSIEDZTWO SŁÓW** — `YEAR` samotny między `=` a `;` to operand, `USING SHA256` / `AT LOCAL` /
+  `UNBOUNDED PRECEDING` to frazy. ⚠ Trzecie rozróżnienie, też merytoryczne: **zmienna kontekstowa
+  (`ROW_COUNT`, `SQLCODE`, `USER`, `INSERTING`) JEST kompletnym wyrażeniem**, więc milczy bezwarunkowo;
+  sklejenie zbiorów czyni jeden z tych przypadków błędnym.
+  ⭐ **Druga połowa defektu nigdy nie trafiła do zgłoszenia (gotcha #325): spacer ZAPYTANIOWY nie miał żadnej
+  bramki gramatycznej** — jego objaw jest cichszy (ciche BŁĘDNE wiązanie słowa Firebirda z kolumną o tej
+  nazwie: zły kolor, złe Quick Info, złe find-references; ET0005 dopiero przy dwóch tabelach). ⛔ Tam **nie
+  wolno** użyć reguły słownikowej — `SELECT MONTH FROM SALES` musi dalej wiązać kolumnę — więc dostał wyłącznie
+  regułę pozycyjną.
+  🐞 **Znalezisko strukturalne spoza zgłoszenia (gotcha #326):** `ParsePsqlUnit` rozgałęział się po PIERWSZYM
+  tokenie, więc instrukcja z PREFIKSEM (etykieta pętli `retry: while …`, `IN AUTONOMOUS TRANSACTION DO`)
+  spadała do liścia kończącego się na **pierwszym średniku** → liść zawierał `=` → klasyfikacja jako
+  przypisanie → etykieta zgłaszana jako nieznana zmienna, **a ciało pętli w ogóle niezamodelowane**. Kształt
+  #301 o konstrukcję dalej. ⚠⚠ **Naprawa samego parsera zostawia squiggle** — po niej etykieta jest w tokenach
+  węzła, a `BindControlHeader` chodzi po nich z włączonym zgłaszaniem; dlatego
+  `FirebirdGrammar.StatementPrefixLength` jest **wspólne**: parser go używa, żeby DOJŚĆ do instrukcji, binder —
+  żeby nie zaczynać nagłówka od etykiety.
+  ⭐ **P6 — ograniczenie debuggera zniesione, i to bez nowego mechanizmu (gotcha #327).** Odmowa D10 („a FOR
+  SELECT cursor that references NEW/OLD is not supported") stała na **prawdziwej przesłance i niewynikającym
+  wniosku**: to prawda, że syntetyczne `ET_CTX_i` nie istnieją w osobno otwartym kursorze DSQL — ale kursor
+  ich nigdy nie potrzebował, bo **`NEW.ID` w zapytaniu kursora jest WARTOŚCIĄ, a ramka już ją ma**. Referencja
+  jest więc przepisywana na pozycyjne `?` i wiązana z ramki, dokładnie jak `:zmienna` od D6.
+  `ContextSubstitution.ReferencesIn` wyciągnięte i upublicznione (**jedna** definicja parowania
+  `RecordAlias`+`Column`, dwa konsumenty). ⚠ **Wiązanie przy OPEN to jest to, co robi sam Firebird** —
+  skompilowany wyzwalacz oblicza parametry kursora raz, więc przypisanie `NEW.col` w trakcie pętli nie zmienia
+  wierszy otwartego kursora; odczyt przy każdym FETCH byłby wyborem NIEwiernym. Lab +`TRIG_CURSOR_LAB` /
+  `TR_CURSOR_BU`, probe **przypadek 40** sim `'L=2/3'` == real `'L=2/3'` + asercja, że przypadek jest
+  **rozróżniający** (`L=0/0` to wynik kursora z `NULL`-owym `NEW.ID` — wyglądałby sensownie i przeszedłby samo
+  porównanie). ⛔ Martwy `QueryReferencesContext` usunięty.
+  ⭐ **P3 — edytor daty: przyczyna ZMIERZONA, nie zgadnięta.** `CalendarDatePicker` z Fluenta ma własne
+  `MinHeight` **32**, jego zawartość prosi o **24**, a wiersz `data-edit` (stałe `Height="32"`, #322) po
+  paddingu `6 2` zostawia **28**. Poprawką jest **ROLA** (`Size.Control`, ta sama co `TextBox` obok), nie
+  dobrana liczba. Druga połowa, pozioma: lokalne `MinWidth = 120` usunięte — siatka danych **pamięta
+  szerokości kolumn**, więc zwężona kolumna wraca po restarcie i edytor nie mieści się w komórce; **rozmiar
+  nadaje pojemnik** (decyzja 2 z M2b).
+  ⭐ **P5 — jeden właściciel prezentacji daty:** `EmberTern.Core.Formatting.DateTimeDisplay`. Nie „na
+  przyszłość" — użytkownik zapowiedział wybór formatu w Settings Center, a preferencja potrzebuje jednego
+  miejsca, w którym zadziała. ⚠ Jeden świadomy wyjątek: **`LogTime` zostaje 24-godzinny i stałej szerokości**
+  (kolumny logu czyta się w dół i porównuje). ⛔ Strona maszynowa nietknięta i **przypilnowana**:
+  `DatePresentationTests` trzyma listę plików wolno formatujących invariantnie **wraz z powodem** — wartością
+  listy nie są nazwy, tylko to, że dopisanie się do niej zmusza autora do zadeklarowania strony granicy.
+  Strażnik zweryfikowany podsadzeniem naruszenia.
+  ⏸ **Otwarte, każde z powodem:** wybór formatu daty w Settings Center (zapowiedziany, nie zbudowany) ·
+  etykieta pętli zapisana bez spacji (`retry:while` → lekser daje jeden token `Parameter` `:WHILE`; rozdzielenie
+  = przeniesienie gramatyki do tokenizacji za pisownię, której nikt nie używa) · `BindBareReference`
+  rozwiązujące gołą nazwę do LOKALNEJ przed kolumną (otwarte od sprintu stabilizacyjnego).
+  ⛔ **M4 nadal wymaga własnego, osobnego pozwolenia** i startuje z `product-polish-m4-next-session.md`.
 
 - **🔲🔒 SPRINT SPÓJNOŚCI GRIDÓW DANYCH — ZAMKNIĘTY, ODEBRANY PO QA UŻYTKOWNIKA (2026-08-07).** Mały sprint
   domykający stan produktu **przed M4**, świadomie nie będący M4. Build 0/0; suite **7378** (7250 + 73 + 55,
@@ -4124,9 +4223,14 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7378, MEASURED 2026-08-07**
-  (Product Polish through M3.5 + the stabilization sprint S-1…S-6 + the grid consistency sprint). Green in the
-  three documented partitions (**7250 + 73 + 55**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **8291, MEASURED 2026-08-08**
+  (Product Polish through M3.5 + the stabilization sprint S-1…S-6 + the grid consistency sprint + the Firebird
+  language completeness sprint incl. its QA round). Green in the three documented partitions
+  (**8145 + 91 + 55**).
+  ⚠ The language sprint's jump (7378 → 8263) is mostly **not** hand-written assertions: 80 Language-Reference
+  corpus entries joined `SqlTestCorpus.All`, which feeds the formatter theories (§0 round-trip, idempotency,
+  casing) and the AST differential harness — ~11 runs per entry. Its QA round added the remaining 28
+  (`DebuggerValueFormatTests` + the grid date-editor and cell-rendering guards).
   ⚠ The grid consistency sprint's +18 is all main-partition (`GridCopyTextTests` 14 + `DataGridCopyMenuTests` 3
   + one premise guard in `EditableGridSeamTests`): every one of them reads source or calls a pure static, and
   the behavioural half it replaced was a swap inside `EditableGridEnterTests`, which is why the headless
@@ -4158,20 +4262,27 @@ noted.
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition holds **eight** classes — measured, not listed from memory
+  four times its own count. ⚠ The headless partition holds **nine** classes — measured, not listed from memory
   (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `BrandingPresentationTests` +
   `DesignTokenApplicationTests` + `TabStripPresentationTests` + `MetadataTreeVirtualizationProbe` +
-  `SharedContextMenuFeasibilityProbe` + `EditableGridEnterTests`), all in
+  `SharedContextMenuFeasibilityProbe` + `EditableGridEnterTests` + `GridDateEditorTests`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
   (#94/#226/#286). The partition filter is those class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe&FullyQualifiedName!~EditableGridEnterTests"`
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe&FullyQualifiedName!~EditableGridEnterTests&FullyQualifiedName!~GridDateEditorTests"`
   and its inverse with `|` — ⚠ **except that `BrandingPresentationTests` now belongs to the ISOLATED partition,
-  so the grouped inverse must NOT include it** (grouped = the other six; isolated =
+  so the grouped inverse must NOT include it** (grouped = the other seven; isolated =
   `ConnectionExpandBindingProbe|BrandingPresentationTests`).
+  ⚠⚠ **`GridDateEditorTests` was MISSING from this filter until 2026-08-08, and that is the mirror image of the
+  `ContextMenuPresentationTests` defect two paragraphs up.** There, an excluded name matched nothing — harmless
+  as a filter, which is why nobody noticed. Here, a headless class was simply **absent from the exclusion**, so
+  it ran inside the main partition, quietly creating a headless session there. ⭐ Both are the same failure:
+  **the split is enforced by a hand-maintained list of names, and a list is exactly as stale-prone as a
+  count.** Check the list against the classes that carry `[Collection(HeadlessCollection.Name)]`, not against
+  memory.
   ⛔⛔ **AND THE ACCEPTANCE CRITERION IS THE TOTAL, NOT „0 FAILURES" — measured 2026-08-05.** With
   `--blame-hang`, a broken headless state reported **`Powodzenie!` — 0 niepowodzeń, łącznie 7232** while **128
   tests silently never started**; the same state without the flag gave 94 failures, and on a retry it hung.
-  So a run is green only when it reports **`łącznie: 7378`** (or the partition's own 7250 / 73 / 55). A summary
+  So a run is green only when it reports **`łącznie: 8291`** (or the partition's own 8145 / 91 / 55). A summary
   line saying „0 niepowodzeń" is satisfiable by a run in which a whole partition failed to load.
   ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
   that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
@@ -5055,7 +5166,8 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (280 entries, organized thematically) lives in
+The **complete** catalog (organized thematically; ⚠ its entry count is kept in ONE place — the Documentation
+map's row — never repeated here) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -5261,11 +5373,12 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (**310 entries, #1–#323**; see the Documentation map for
-  the duplicate-number caveat). Search it whenever a bug looks familiar. ⚠ **This line said "301 entries,
-  #1–#312" while the map said "309, #1–#320" — two prose counters for one file, disagreeing with each other
-  AND both wrong.** Measure (`grep -oE "^[0-9]+\. \*\*"` → unique numbers) before quoting either; #284's shape,
-  one layer out.
+- **`docs/gotchas.md`** — the complete gotcha catalog. Search it whenever a bug looks familiar.
+  ⚠⚠ **The entry count is deliberately NOT repeated here.** This line and the one above "Live gotchas" used to
+  carry their own numbers, and all three disagreed while every one of them was wrong — a prose counter drifts
+  the moment the file it counts grows, and three counters drift three ways (#284's shape, one layer out).
+  **The count lives in exactly one place: the Documentation map's `docs/gotchas.md` row.** Re-measure before
+  quoting it (`grep -oE "^[0-9]+\. \*\*"` → unique numbers), and note the duplicate-number caveat recorded there.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a
   specific feature or fix; nothing here is loaded automatically.

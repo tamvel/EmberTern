@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.Core.Formatting;
 using EmberTern.Core.Settings;
 
 namespace EmberTern.App.ViewModels;
@@ -403,7 +404,9 @@ public sealed class ParameterHistorySnapshotViewModel
     public ParameterHistorySnapshotViewModel(ParameterSet set)
     {
         Set = set;
-        TimestampText = set.ExecutedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+        // ⚠ The reader's own date/time format, not a hard-coded ISO shape (P5, 2026-08-07). This label is
+        // pure presentation — it says WHEN a parameter set was last used, and nothing parses it back.
+        TimestampText = DateTimeDisplay.DateAndTime(set.ExecutedAt);
         PreviewText = BuildPreview(set.Values);
     }
 

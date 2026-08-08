@@ -1,5 +1,6 @@
 using System;
 using EmberTern.App.Controls;
+using EmberTern.Core.Formatting;
 
 namespace EmberTern.App.ViewModels;
 
@@ -26,7 +27,7 @@ public sealed class QueryMessageViewModel
 
     public string Text { get; }
 
-    public string TimestampLabel => Timestamp.LocalDateTime.ToString("HH:mm:ss");
+    public string TimestampLabel => DateTimeDisplay.LogTime(Timestamp.LocalDateTime);
 
     public bool IsError => Severity == MessageSeverity.Error;
     public bool IsWarning => Severity == MessageSeverity.Warning;

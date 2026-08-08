@@ -428,8 +428,12 @@ internal sealed partial class SemanticBinder
         var skip = new List<SqlNode>();
         BindEmbedded(conditionExprs, scope, stmt, skip);
         // An IF/WHILE condition is a pure value expression over locals — an unresolved bare identifier
-        // there is an unknown variable (flag it), never a column (no FROM).
-        BindPsqlExpression(toks, 0, HeaderEnd(toks, firstChild), scope, stmt, skip, flagUnresolvedLocals: true);
+        // there is an unknown variable (flag it), never a column (no FROM). ⚠ Which makes the statement
+        // PREFIX the one thing that must not be walked here: a loop label (`retry: while …`) is part of
+        // this node's tokens but is a declaration, not an operand, and flagging is on in this range.
+        BindPsqlExpression(
+            toks, FirebirdGrammar.StatementPrefixLength(toks, 0), HeaderEnd(toks, firstChild),
+            scope, stmt, skip, flagUnresolvedLocals: true);
     }
 
     // FOR <cursor query> [INTO <vars>] DO — the cursor query is its own child scope; the header's INTO
@@ -438,7 +442,9 @@ internal sealed partial class SemanticBinder
     {
         var skip = new List<SqlNode>();
         if (s.Query is not null) { BindQueryNode(s.Query, scope, stmt); skip.Add(s.Query); }
-        BindPsqlExpression(s.Tokens, 0, HeaderEnd(s.Tokens, s.Body), scope, stmt, skip);
+        BindPsqlExpression(
+            s.Tokens, FirebirdGrammar.StatementPrefixLength(s.Tokens, 0), HeaderEnd(s.Tokens, s.Body),
+            scope, stmt, skip);
     }
 
     // A PSQL-only leaf (assignment / RETURN / EXCEPTION / SUSPEND / cursor op / …): its embedded
@@ -704,7 +710,11 @@ internal sealed partial class SemanticBinder
                 // VARIABLE (ET0003). See IsGrammarPinnedNonLocal for why the two stay separate predicates.
                 if (IsGrammarPinnedNonLocal(t, k)) { k++; continue; }
 
-                BindBareLocal(tok, scope, flagUnresolvedLocals);
+                // ⚠ The occurrence is still BOUND (a variable really named MONTH resolves and keeps its
+                // reference) — only the "and if it resolves to nothing, say so" half is dropped, and only
+                // for a Firebird word standing inside a phrase. See FirebirdGrammar.IsVocabularyInsidePhrase.
+                BindBareLocal(tok, scope,
+                    flagUnresolvedLocals && !FirebirdGrammar.IsVocabularyInsidePhrase(t, k));
                 k++;
                 continue;
             }
@@ -727,26 +737,19 @@ internal sealed partial class SemanticBinder
         AddReference(tok, sym, role);
     }
 
-    // Firebird's bare (non-keyword, non-parenthesised) context variables — legal identifiers in a PSQL
-    // value expression that are NOT user variables, so an unresolved one must never be flagged as an
-    // unknown variable. The CURRENT_* family are lexer keywords (excluded by IsNameToken already); these
-    // are the ones the keyword catalog does not carry. INSERTING/UPDATING/DELETING/RESETTING also resolve
-    // to a TriggerPredicateSymbol inside a trigger — listed here so a stray use elsewhere still stays quiet.
-    private static readonly HashSet<string> BareContextVariables = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "ROW_COUNT", "SQLCODE", "GDSCODE", "SQLSTATE",
-        "INSERTING", "UPDATING", "DELETING", "RESETTING",
-        "USER",
-    };
-
     // Records a reference for a bare identifier that resolves to a local (variable / parameter / cursor /
     // record alias / trigger predicate). When <paramref name="flagUnresolved"/> is set — only in an
     // unambiguous PSQL value position (an assignment / RETURN operand or an IF/WHILE condition, never a
-    // query/DML range) — an identifier that resolves to nothing and is not a bare context variable is
-    // recorded as an UNRESOLVED variable reference, so DiagnosticsEngine flags it (ET0003) exactly as it
-    // already flags an undeclared :name. Otherwise an unresolved bare name is left alone (it may be an
-    // unqualified column, an exception name, a loop label, a sequence, …): column resolution happens
-    // inside the body's Query scopes.
+    // query/DML range) — an identifier that resolves to nothing and is not part of Firebird's own
+    // vocabulary is recorded as an UNRESOLVED variable reference, so DiagnosticsEngine flags it (ET0003)
+    // exactly as it already flags an undeclared :name. Otherwise an unresolved bare name is left alone (it
+    // may be an unqualified column, an exception name, a loop label, a sequence, …): column resolution
+    // happens inside the body's Query scopes.
+    //
+    // ⚠ <paramref name="flagUnresolved"/> now arrives already narrowed by the caller: besides the position
+    // being a flagging one, a Firebird vocabulary word standing inside a phrase turns it off (the
+    // completeness half of the 2026-08-07 grammar audit — see FirebirdGrammar.IsVocabularyInsidePhrase).
+    // The decision is made there because it needs the neighbouring TOKENS, which this method does not have.
     private void BindBareLocal(SqlToken tok, Scope scope, bool flagUnresolved = false)
     {
         var name = FoldedName(tok);
@@ -768,7 +771,7 @@ internal sealed partial class SemanticBinder
             case TriggerPredicateSymbol:
                 AddReference(tok, sym, ReferenceRole.ContextVariable);
                 break;
-            case null when flagUnresolved && name is not null && !BareContextVariables.Contains(name):
+            case null when flagUnresolved && name is not null && !FirebirdSyntax.IsContextVariable(name):
                 AddReference(tok, null, ReferenceRole.Variable);
                 break;
         }

@@ -485,14 +485,15 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
                 "Debug (D6): a FOR EXECUTE STATEMENT (dynamic) cursor cannot be stepped — step over the loop.");
 
         var ctx = Ctx(frame);
-        // D10 §F boundary (decision 2): a FOR SELECT cursor that references NEW/OLD cannot be stepped — the
-        // cursor is a separately-opened DSQL statement where the harness's synthetic context variables do not
-        // exist. Refuse clearly rather than open a partially-faithful cursor.
-        if (ctx.Trigger is not null && QueryReferencesContext(ctx.Model, loop.Query))
-            throw new NotSupportedException(
-                "Debug (D10): a FOR SELECT cursor that references NEW/OLD is not supported in a trigger — step over the loop.");
 
-        var plan = CursorBridge.Build(ctx.Source, loop);
+        // ⭐⭐ A trigger's NEW/OLD references inside the cursor query are bridged like any other frame value
+        // (P6, 2026-08-07) — this used to REFUSE here. The old boundary's premise was right (the harness's
+        // synthetic context variables do not exist inside a separately-opened DSQL cursor) and its conclusion
+        // was wrong: the cursor does not need them, because NEW.col there is a VALUE the frame already holds,
+        // so it binds as a `?` parameter exactly like :variable. Passing the model + trigger context is the
+        // whole change; the parameter binding below is untouched and resolves the synthetic name from the
+        // frame like every other name.
+        var plan = CursorBridge.Build(ctx.Source, loop, ctx.Model, ctx.Trigger);
         var values = new object?[plan.ParameterNames.Count];
         for (int i = 0; i < values.Length; i++)
         {
@@ -1247,21 +1248,6 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         foreach (var x in a) if (seen.Add(x)) result.Add(x);
         foreach (var x in b) if (seen.Add(x)) result.Add(x);
         return result;
-    }
-
-    // True when a cursor query references a NEW/OLD record alias (a RecordAlias reference within the query span).
-    // Reference-driven, so a 'NEW.' inside a string literal in the query never trips it (D10 §F boundary guard).
-    private static bool QueryReferencesContext(SemanticModel model, SqlNode query)
-    {
-        foreach (var r in model.References)
-        {
-            if (r.Role == ReferenceRole.RecordAlias
-                && r.Span.Start >= query.Start && r.Span.End <= query.End)
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     // The operand of a RETURN leaf (D9 seam c) — everything after the RETURN keyword, up to the trailing ';'

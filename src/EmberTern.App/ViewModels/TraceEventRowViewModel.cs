@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EmberTern.Core.Formatting;
 using EmberTern.Core.Trace;
 
 namespace EmberTern.App.ViewModels;
@@ -24,7 +25,7 @@ public sealed partial class TraceEventRowViewModel : ObservableObject
     public TraceEvent Event { get; }
 
     public long Sequence => Event.Sequence;
-    public string TimeText => Event.StartTime.ToString("HH:mm:ss.fff");
+    public string TimeText => DateTimeDisplay.LogTime(Event.StartTime.LocalDateTime, withMilliseconds: true);
     public string DeltaText => Event.DeltaMs is { } d ? d.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
 
     private TraceSqlOperation? _operation;

@@ -127,6 +127,17 @@ CREATE TABLE TRIG_SUBQ_LAB (
   CONSTRAINT PK_TRIG_SUBQ_LAB PRIMARY KEY (ID)
 );
 
+/* A third isolated table for the debugger's trigger zoo (Stage X / P6, 2026-08-07). Its BEFORE UPDATE
+   trigger's body is a FOR SELECT CURSOR whose WHERE references NEW — the shape D10 refused to step, now
+   bridged by binding NEW.col as an ordinary cursor parameter. Its own table for the reason the comment on
+   TR_CURSOR_BU gives: two BEFORE UPDATE triggers writing NEW.NOTE on one table would let execution order
+   decide the value another fidelity case asserts.                                                          */
+CREATE TABLE TRIG_CURSOR_LAB (
+  ID   INTEGER NOT NULL,
+  NOTE VARCHAR(20),
+  CONSTRAINT PK_TRIG_CURSOR_LAB PRIMARY KEY (ID)
+);
+
 /* ---------- Standalone indexes --------------------------------------
    Exercise the Index Detail surface: a plain index, a DESCENDING index,
    a composite index, a standalone UNIQUE index, an expression index, and
@@ -788,6 +799,35 @@ DECLARE VARIABLE CNT INTEGER = 0;
 BEGIN
   CNT = COALESCE((SELECT COUNT(*) FROM ORDER_ITEMS oi WHERE oi.ORDER_ID = NEW.ID), 0);
   NEW.NOTE = 'CNT=' || CAST(CNT AS VARCHAR(10));
+END^
+
+/* BEFORE UPDATE whose body is a FOR SELECT CURSOR that references NEW in its WHERE (Stage X / P6,
+   2026-08-07). This is the shape D10 REFUSED to step ("a FOR SELECT cursor that references NEW/OLD is not
+   supported — step over the loop"), on the true premise that the harness's synthetic context variables do
+   not exist inside a separately-opened DSQL cursor — and the wrong conclusion, because the cursor never
+   needed them: NEW.ID there is a VALUE the frame already holds, so the Cursor Bridge binds it as an
+   ordinary `?` parameter, exactly like a :variable.
+
+   NEW.ID = 1000 walks the two ORDER_ITEMS rows of order 1000 (QTY 2 and 1, so CNT = 2 and SUMQ = 3)
+   ⇒ NEW.NOTE = 'L=2/3'. The cursor reads a table OTHER than its own, so the trigger cannot see rows it is in
+   the middle of changing and the expected value stays independent of execution order.
+
+   ⚠ Its OWN table, not TRIG_SUBQ_LAB — a second BEFORE UPDATE trigger there would also write NEW.NOTE, and
+   whichever ran second would decide the value, silently invalidating the existing gotcha-#248 fidelity case
+   that reads it. The lab's isolation convention exists for exactly this.                                   */
+CREATE TRIGGER TR_CURSOR_BU FOR TRIG_CURSOR_LAB
+ACTIVE BEFORE UPDATE POSITION 0
+AS
+DECLARE VARIABLE Q INTEGER;
+DECLARE VARIABLE SUMQ INTEGER = 0;
+DECLARE VARIABLE CNT INTEGER = 0;
+BEGIN
+  FOR SELECT oi.QTY FROM ORDER_ITEMS oi WHERE oi.ORDER_ID = NEW.ID INTO :Q DO
+  BEGIN
+    SUMQ = SUMQ + Q;
+    CNT = CNT + 1;
+  END
+  NEW.NOTE = 'L=' || CAST(CNT AS VARCHAR(10)) || '/' || CAST(SUMQ AS VARCHAR(10));
 END^
 
 SET TERM ; ^

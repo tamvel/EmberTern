@@ -1151,6 +1151,37 @@ try
         }
         else Fail("SP_DBG_SELINTO", "the real procedure returned no row");
     }
+
+    // ── 40. FOR SELECT cursor whose WHERE references NEW (P6, 2026-08-07) ──
+    // ⭐⭐ THE CASE THAT LIFTS D10's REFUSAL, and it must be run to be believed: until this change the
+    // executor threw NotSupportedException here rather than opening the cursor. The Cursor Bridge now
+    // rewrites NEW.ID to a positional `?` and binds it from the frame — the same treatment a :variable
+    // already got — so the simulated loop walks the same rows Firebird's own compiled cursor walks.
+    // ⚠ Bound at OPEN, deliberately: a compiled trigger evaluates its cursor parameters once, so a body
+    // that assigns NEW.col mid-loop does not change the open cursor's rows. Re-reading per fetch would be
+    // the unfaithful choice, and it would pass a weaker test than this one.
+    Head("40. TR_CURSOR_BU — BEFORE UPDATE whose body is a FOR SELECT cursor referencing NEW (sim == real)");
+    var curTrig = await SimulateTriggerAsync("TR_CURSOR_BU", "TRIG_CURSOR_LAB", TriggerEvent.Update, TriggerTiming.Before,
+        new() { [(TriggerRecord.New, "ID")] = 1000, [(TriggerRecord.New, "NOTE")] = null });
+    string simCurNote = Show(curTrig.Final.TryGetValue((TriggerRecord.New, "NOTE"), out var vcu) ? vcu : null);
+    object? realCurNote = await RealInTxAsync(
+        new[]
+        {
+            "INSERT INTO TRIG_CURSOR_LAB (ID, NOTE) VALUES (1000, 'x')",
+            "UPDATE TRIG_CURSOR_LAB SET NOTE = 'y' WHERE ID = 1000",
+        },
+        "SELECT NOTE FROM TRIG_CURSOR_LAB WHERE ID = 1000");
+
+    if (curTrig.State == DebugState.Completed && simCurNote == Show(realCurNote))
+        Pass("cursor-over-NEW ⇒ NEW.NOTE (sim == real)", $"sim '{simCurNote}' == real '{Show(realCurNote)}'");
+    else Fail("cursor-over-NEW", $"{curTrig.State} / {curTrig.Error} / sim '{simCurNote}' vs real '{Show(realCurNote)}'");
+
+    // ⚠ The case has to be DISCRIMINATING, not merely equal. 'L=0/0' is what a cursor bound with a NULL
+    // NEW.ID returns — a perfectly valid-looking answer that would pass an equality check while proving the
+    // opposite of what this case is for (the same trap case 39 records).
+    if (Show(realCurNote) == "L=2/3")
+        Pass("the case is discriminating (the cursor really matched NEW.ID's rows)", Show(realCurNote));
+    else Fail("the case proves nothing", $"expected 'L=2/3' from the lab data, got '{Show(realCurNote)}'");
 }
 catch (Exception ex)
 {

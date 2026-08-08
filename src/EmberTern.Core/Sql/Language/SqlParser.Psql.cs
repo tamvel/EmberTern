@@ -48,9 +48,10 @@ public static partial class SqlParser
     // declarations precede its BEGIN), then a BEGIN … END whose inner units become the block's statements.
     // At the top level, anything before/after is folded in leniently so no token is orphaned. A nested
     // call (from ParsePsqlUnit) is entered only on a BEGIN and carries no declarations.
-    private static BlockStatement ParsePsqlBlockBody(IReadOnlyList<SqlToken> sig, ref int i, bool isTopLevel)
+    private static BlockStatement ParsePsqlBlockBody(
+        IReadOnlyList<SqlToken> sig, ref int i, bool isTopLevel, int nodeStart = -1)
     {
-        int lo = i;
+        int lo = nodeStart >= 0 ? nodeStart : i;
         var declarations = new List<PsqlStatement>();
         var localRoutines = new List<SubroutineDeclaration>();
         if (isTopLevel)
@@ -215,17 +216,42 @@ public static partial class SqlParser
     // PSQL-only leaf). Advances i by ≥1 token. Returns SqlNode because an embedded DSQL leaf resolves to a
     // reused top-level statement node (SqlStatement), not a PsqlStatement (B5).
     private static SqlNode ParsePsqlUnit(IReadOnlyList<SqlToken> sig, ref int i)
+        => ParsePsqlUnit(sig, ref i, nodeStart: -1);
+
+    // ⭐⭐ <paramref name="nodeStart"/> exists for STATEMENT PREFIXES — a loop LABEL (`retry: while …`) and
+    // the autonomous-transaction wrapper (`IN AUTONOMOUS TRANSACTION DO …`). Both precede an ordinary
+    // statement without changing WHAT statement it is, so the prefix is consumed here and its start index is
+    // handed to the chosen parser, which then covers the prefix in the node's own span and tokens.
+    //
+    // ⚠ Keeping the prefix inside the node is not cosmetic. The binder's contract is that every body token
+    // belongs to exactly ONE node; returning a node that starts after the prefix would orphan those tokens
+    // and (through PsqlLeafStatement's §0 valve) is exactly the shape that lost them before.
+    //
+    // ⛔ THE BUG THIS FIXES IS STRUCTURAL, NOT COSMETIC, and it is gotcha #301's shape one construct further
+    // along. Dispatching on the first token alone meant a prefixed statement fell through to ParsePsqlLeaf,
+    // which ends at the FIRST semicolon — so `retry: while (i < 10) do begin i = i + 1; leave retry; end`
+    // was cut in half at the assignment's `;`. The leaf then contained a top-level `=`, so ClassifyLeaf
+    // called it an Assignment, which is a position where an unresolved bare name IS flagged: the label was
+    // reported as an unknown variable (ET0003) and the loop body was never modelled at all.
+    private static SqlNode ParsePsqlUnit(IReadOnlyList<SqlToken> sig, ref int i, int nodeStart)
     {
+        int prefixed = nodeStart;
+        if (prefixed < 0 && TryConsumeStatementPrefix(sig, ref i, out int prefixStart))
+        {
+            prefixed = prefixStart;
+            if (i >= sig.Count) return ParsePsqlLeaf(sig, ref i, prefixed); // prefix with nothing after it
+        }
+
         var t = sig[i];
         if (t.Kind is TokenKind.Keyword or TokenKind.Identifier)
         {
             var up = t.Text.ToUpperInvariant();
             switch (up)
             {
-                case "BEGIN": return ParsePsqlBlockBody(sig, ref i, isTopLevel: false);
-                case "IF": return ParsePsqlIf(sig, ref i);
-                case "WHILE": return ParsePsqlWhile(sig, ref i);
-                case "FOR": return ParsePsqlFor(sig, ref i);
+                case "BEGIN": return ParsePsqlBlockBody(sig, ref i, isTopLevel: false, prefixed);
+                case "IF": return ParsePsqlIf(sig, ref i, prefixed);
+                case "WHILE": return ParsePsqlWhile(sig, ref i, prefixed);
+                case "FOR": return ParsePsqlFor(sig, ref i, prefixed);
             }
 
             // A local sub-routine (DECLARE PROCEDURE/FUNCTION …) appearing at a statement position — valid
@@ -240,16 +266,42 @@ public static partial class SqlParser
             }
         }
 
-        return ParsePsqlLeaf(sig, ref i);
+        return ParsePsqlLeaf(sig, ref i, prefixed);
     }
 
-    private static SqlNode ParsePsqlIf(IReadOnlyList<SqlToken> sig, ref int i)
+    // Consumes a statement PREFIX at i, reporting where it began. Two forms, both defined by the Language
+    // Reference as decorating a following statement:
+    //   • `<label> :`                      — a loop/block label (Firebird 2.5+), targeted by LEAVE <label>.
+    //   • `IN AUTONOMOUS TRANSACTION DO`   — runs the following statement in its own transaction.
+    // False (and i untouched) when there is no prefix, which is the overwhelmingly common case.
+    //
+    // ⚠⚠ BOTH FORMS REQUIRE A COMPOUND STATEMENT TO FOLLOW, and that is a deliberate narrowing rather than
+    // an omission. The defect being fixed is a leaf swallowing a semicolon that belongs to a nested
+    // statement, which can only happen when the following statement HAS nested statements. A prefixed
+    // single statement (`IN AUTONOMOUS TRANSACTION DO INSERT …;`) already ends at its own `;`, so the leaf
+    // covers it exactly — and leaving that case alone avoids the one shape this mechanism cannot express:
+    // an embedded DSQL statement is re-classified from its own first token (Classify), so a node covering
+    // the prefix would have to disagree with the tokens it was classified from.
+    private static bool TryConsumeStatementPrefix(IReadOnlyList<SqlToken> sig, ref int i, out int prefixStart)
     {
-        int lo = i;
-        int thenIdx = FindBodyWord(sig, i + 1, "THEN");
-        if (thenIdx < 0) return ParsePsqlLeaf(sig, ref i); // malformed IF — lossless leaf
-        var conditions = ParseEmbeddedExpressions(sig, lo + 1, thenIdx); // subquery / CASE in the condition
-        var conditionCall = TryReadConditionCall(sig, lo + 1, thenIdx); // whole-condition lone call (§6.4)
+        prefixStart = i;
+        int len = FirebirdGrammar.StatementPrefixLength(sig, i);
+        if (len == 0) return false;
+        i += len;
+        return true;
+    }
+
+    // ⚠ `kw` (the IF keyword) and `lo` (where the NODE starts) are separate because a statement prefix may
+    // precede the keyword: every scan is relative to the keyword, every span to the node. The same split
+    // applies to ParsePsqlWhile / ParsePsqlFor below.
+    private static SqlNode ParsePsqlIf(IReadOnlyList<SqlToken> sig, ref int i, int nodeStart = -1)
+    {
+        int kw = i;
+        int lo = nodeStart >= 0 ? nodeStart : kw;
+        int thenIdx = FindBodyWord(sig, kw + 1, "THEN");
+        if (thenIdx < 0) return ParsePsqlLeaf(sig, ref i, lo); // malformed IF — lossless leaf
+        var conditions = ParseEmbeddedExpressions(sig, kw + 1, thenIdx); // subquery / CASE in the condition
+        var conditionCall = TryReadConditionCall(sig, kw + 1, thenIdx); // whole-condition lone call (§6.4)
         i = thenIdx + 1;
         var thenBranch = ParsePsqlUnit(sig, ref i);
         SqlNode? elseBranch = null;
@@ -262,13 +314,14 @@ public static partial class SqlParser
         return new IfStatement(start, length, Sub(sig, lo, i), thenBranch, elseBranch, conditions, conditionCall);
     }
 
-    private static SqlNode ParsePsqlWhile(IReadOnlyList<SqlToken> sig, ref int i)
+    private static SqlNode ParsePsqlWhile(IReadOnlyList<SqlToken> sig, ref int i, int nodeStart = -1)
     {
-        int lo = i;
-        int doIdx = FindBodyWord(sig, i + 1, "DO");
-        if (doIdx < 0) return ParsePsqlLeaf(sig, ref i);
-        var conditions = ParseEmbeddedExpressions(sig, lo + 1, doIdx); // subquery / CASE in the condition
-        var conditionCall = TryReadConditionCall(sig, lo + 1, doIdx); // whole-condition lone call (§6.4)
+        int kw = i;
+        int lo = nodeStart >= 0 ? nodeStart : kw;
+        int doIdx = FindBodyWord(sig, kw + 1, "DO");
+        if (doIdx < 0) return ParsePsqlLeaf(sig, ref i, lo);
+        var conditions = ParseEmbeddedExpressions(sig, kw + 1, doIdx); // subquery / CASE in the condition
+        var conditionCall = TryReadConditionCall(sig, kw + 1, doIdx); // whole-condition lone call (§6.4)
         i = doIdx + 1;
         var body = ParsePsqlUnit(sig, ref i);
         var (start, length) = TokenSpan(sig, lo, i);
@@ -278,21 +331,22 @@ public static partial class SqlParser
     // FOR <select|execute statement> [INTO <vars>] [AS CURSOR c] DO <body> — the DO is located at paren
     // depth 0 so a subquery's inner clauses never leak out (same rule the formatter uses). The cursor
     // query becomes a real QueryNode (B3.1).
-    private static SqlNode ParsePsqlFor(IReadOnlyList<SqlToken> sig, ref int i)
+    private static SqlNode ParsePsqlFor(IReadOnlyList<SqlToken> sig, ref int i, int nodeStart = -1)
     {
-        int lo = i;
+        int kw = i;
+        int lo = nodeStart >= 0 ? nodeStart : kw;
         int depth = 0, doIdx = -1;
-        for (int k = i + 1; k < sig.Count; k++)
+        for (int k = kw + 1; k < sig.Count; k++)
         {
             var t = sig[k];
             if (t.Kind == TokenKind.LParen) depth++;
             else if (t.Kind == TokenKind.RParen) { if (depth > 0) depth--; }
             else if (depth == 0 && IsBodyWord(t, "DO")) { doIdx = k; break; }
         }
-        if (doIdx < 0) return ParsePsqlLeaf(sig, ref i);
+        if (doIdx < 0) return ParsePsqlLeaf(sig, ref i, lo);
 
-        var cursor = ParseForCursorQuery(sig, lo + 1, doIdx); // B3.1: FOR SELECT/WITH → real QueryNode
-        var (intoTargets, cursorName) = ParseForIntoAndCursor(sig, lo + 1, doIdx); // D6a
+        var cursor = ParseForCursorQuery(sig, kw + 1, doIdx); // B3.1: FOR SELECT/WITH → real QueryNode
+        var (intoTargets, cursorName) = ParseForIntoAndCursor(sig, kw + 1, doIdx); // D6a
         i = doIdx + 1;
         var body = ParsePsqlUnit(sig, ref i);
         var (start, length) = TokenSpan(sig, lo, i);
@@ -500,9 +554,10 @@ public static partial class SqlParser
     // header, an unrecognised fragment) stays a PsqlLeafStatement; its interior is scanned for embedded
     // structural expressions (a scalar/EXISTS subquery, a CASE — B3/B4) so a query or CASE inside an
     // assignment / RETURN stays reachable.
-    private static SqlNode ParsePsqlLeaf(IReadOnlyList<SqlToken> sig, ref int i)
+    private static SqlNode ParsePsqlLeaf(IReadOnlyList<SqlToken> sig, ref int i, int nodeStart = -1)
     {
-        int lo = i;
+        int scanFrom = i;
+        int lo = nodeStart >= 0 ? nodeStart : i;
         while (i < sig.Count)
         {
             var t = sig[i];
@@ -511,11 +566,14 @@ public static partial class SqlParser
         }
         var (start, length) = TokenSpan(sig, lo, i);
         var slice = Sub(sig, lo, i);
-        if (IsEmbeddedDsqlStart(sig, lo)) return Classify(slice, start, length);
-        var kind = ClassifyLeaf(sig, lo, i);
+        // ⚠ Classification reads from the STATEMENT, not from the node: with a prefix consumed
+        // (`IN AUTONOMOUS TRANSACTION DO INSERT …`) the node begins at the prefix while the thing being
+        // classified begins after it, and asking about the prefix would recognise nothing.
+        if (IsEmbeddedDsqlStart(sig, scanFrom)) return Classify(slice, start, length);
+        var kind = ClassifyLeaf(sig, scanFrom, i);
         int hi = i;
         if (hi > lo && sig[hi - 1].Kind == TokenKind.Semicolon) hi--; // exclude the ';' terminator from operand scans
-        var (rhsCall, assignTarget) = ReadLeafCall(sig, lo, hi, kind);
+        var (rhsCall, assignTarget) = ReadLeafCall(sig, scanFrom, hi, kind);
         return new PsqlLeafStatement(
             start, length, slice, kind, ParseEmbeddedExpressions(sig, lo, i), rhsCall, assignTarget);
     }

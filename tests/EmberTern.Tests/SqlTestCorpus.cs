@@ -138,13 +138,127 @@ public static class SqlTestCorpus
         "begin r = f(g(x)); r = f(x) + 1; if (f(x) and g(x)) then r = 1; end",
     };
 
-    /// <summary>Representative + structural-construct cases.</summary>
+    /// <summary>
+    /// ⭐ The <b>Firebird Language Reference conformance corpus</b> — the constructs whose grammar puts a
+    /// BARE WORD where an ordinary expression would otherwise be read, walked chapter by chapter rather
+    /// than collected from bug reports (2026-08-07).
+    /// <para>
+    /// It exists because the previous four fixes in this area were each a single reported syntax
+    /// (<c>NEXT VALUE FOR</c>, then <c>GEN_ID</c>, then <c>EXTRACT</c>, then …), and a list grown from
+    /// reports can only ever be as complete as the reporting. Every entry here is a shape the Language
+    /// Reference defines, whether or not anyone has hit it.
+    /// </para>
+    /// <para>
+    /// ⚠ Its <b>diagnostics</b> guard is <c>FirebirdGrammarCorpusTests</c> (zero false findings, against a
+    /// metadata snapshot deliberately seeded with colliding column names). Being part of
+    /// <see cref="All"/> also puts every entry through the formatter's §0 round-trip + idempotency
+    /// invariants and the structural-AST differential harness — one corpus, three guards.
+    /// </para>
+    /// <para>
+    /// The constructs named in the 2026-08-07 report — <c>DATEADD(… MONTH …)</c>, <c>DATEDIFF</c>,
+    /// <c>EXTRACT</c>, <c>IN AUTONOMOUS TRANSACTION</c>, <c>EXECUTE STATEMENT</c>,
+    /// <c>OVERLAY … PLACING</c> and the window functions — are all here, but they are a subset: 26 of the
+    /// 80 entries failed on the pre-fix binder, and most of those had never been reported.
+    /// </para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> LanguageReference = new[]
+    {
+        // ── Date/time part words: EXTRACT / DATEADD / DATEDIFF / FIRST_DAY / LAST_DAY ─────────────
+        // Not reserved in Firebird (a column may be called MONTH), so they lex as IDENTIFIERS.
+        "begin v = extract(year from current_date); end",
+        "begin v = extract(month from d) + extract(day from d) + extract(week from d); end",
+        "begin v = extract(hour from t) * extract(minute from t) * extract(second from t); end",
+        "begin v = extract(millisecond from t) + extract(weekday from d) + extract(yearday from d); end",
+        "begin v = extract(quarter from d) + extract(timezone_hour from t) + extract(timezone_minute from t); end",
+        "begin v = dateadd(month, 1, d); end",
+        "begin v = dateadd(1 month to d); end",
+        "begin v = dateadd(-2 year to current_timestamp); end",
+        "begin v = datediff(month, a, b); end",
+        "begin v = datediff(day from a to b); end",
+        "begin v = first_day(of month from d); end",
+        "begin v = last_day(of year from d); end",
+        "select extract(month from o.d) m, dateadd(day, 1, o.d) n from orders o",
+        "select datediff(week from a.d to b.d) from orders a join orders b on a.id = b.id",
+        // ── String functions with syntactic-word slots ────────────────────────────────────────────
+        "begin v = overlay(s placing r from 2 for 3); end",
+        "begin v = overlay(s placing r from 2); end",
+        "begin v = position(sub in s); end",
+        "begin v = substring(s from 2 for 3); end",
+        "begin v = substring(s similar p escape '#'); end",
+        "begin v = trim(leading '0' from s); end",
+        "begin v = trim(both from s); end",
+        // ── CAST / type context ───────────────────────────────────────────────────────────────────
+        "begin v = cast(x as varchar(10)); end",
+        "begin v = cast(x as type of column orders.amount); end",
+        "begin v = cast(x as d_amount); end",
+        // ── Cryptographic / hash functions: USING <algorithm>, MODE, KEY, IV, CTR_LENGTH ──────────
+        "begin v = hash(s using sha256); end",
+        "begin v = crypt_hash(s using md5); end",
+        "begin v = encrypt(s using aes mode ofb key k iv i); end",
+        "begin v = decrypt(s using sha256 key k); end",
+        // ── FB4 time zones: AT TIME ZONE / AT LOCAL ───────────────────────────────────────────────
+        "begin v = current_timestamp at time zone 'Europe/Warsaw'; end",
+        "begin v = t at local; end",
+        // ── Window functions and the frame grammar ────────────────────────────────────────────────
+        "select row_number() over (partition by k order by d) from orders",
+        "select sum(a) over (order by d rows between unbounded preceding and current row) from orders",
+        "select sum(a) over (order by d range between 1 preceding and 1 following) from orders",
+        "select sum(a) over (order by d groups between unbounded preceding and unbounded following) from orders",
+        "select sum(a) over (order by d rows between current row and unbounded following exclude no others) from orders",
+        "select sum(a) over w from orders window w as (partition by k order by d)",
+        "select count(*) filter (where a > 0) over (partition by k) from orders",
+        "select nth_value(a, 2) from first over (order by d) from orders",
+        "select lag(a, 1, 0) over (order by d), lead(a) over (order by d) from orders",
+        "select ntile(4) over (order by d), percent_rank() over (order by d), cume_dist() over (order by d) from orders",
+        // ── PSQL: autonomous transaction, EXECUTE STATEMENT and its option grammar ────────────────
+        "begin in autonomous transaction do insert into audit_log (msg) values ('x'); end",
+        "begin in autonomous transaction do begin v = 1; insert into audit_log (msg) values ('y'); end end",
+        "begin execute statement 'select 1 from rdb$database' into :v; end",
+        "begin execute statement ('select :a from rdb$database') (a := 1) into :v; end",
+        "begin execute statement s with autonomous transaction into :v; end",
+        "begin execute statement s with common transaction with caller privileges into :v; end",
+        "begin execute statement s as user 'SYSDBA' password 'x' role 'ADMIN' into :v; end",
+        "begin execute statement s on external data source 'srv:/db' as user 'SYSDBA' password 'p' into :v; end",
+        "begin for execute statement s on external 'srv:/db' into :v do suspend; end",
+        // ── PSQL: exception handling vocabulary (symbolic GDS codes lex as identifiers) ───────────
+        "begin x = 1; when gdscode lock_conflict do x = 2; end",
+        "begin x = 1; when gdscode deadlock, gdscode lock_timeout do x = 2; end",
+        "begin exception e_low using ('too low', v); end",
+        "begin x = 1; when any do begin x = gdscode; y = sqlcode; z = sqlstate; end end",
+        "begin insert into t values (1); v = row_count; end",
+        // ── PSQL: labelled loops, cursors, RETURN, SUSPEND ────────────────────────────────────────
+        "begin outer_loop: while (i < 10) do begin i = i + 1; leave outer_loop; end end",
+        "create procedure p as declare c cursor for (select id from orders); begin open c; fetch c into :i; close c; end",
+        "create procedure p as declare c scroll cursor for (select id from orders); begin open c; fetch last from c into :i; close c; end",
+        // ── Query clauses whose words are not reserved ────────────────────────────────────────────
+        "select a from orders order by a nulls first",
+        "select a from orders order by a desc nulls last",
+        "select a from orders rows 10 to 20",
+        "select a from orders offset 5 rows fetch next 10 rows only",
+        "select a from orders with lock",
+        "select a from orders o left join lateral (select 1 x from orders i where i.id = o.id) l on true",
+        "select a from orders where b is distinct from c",
+        "select a from orders where b similar to 'x%' escape '#'",
+        "merge into t using s on t.id = s.id when not matched by source then delete",
+        // ── DDL vocabulary that is not reserved ───────────────────────────────────────────────────
+        "create table t (id integer generated always as identity (start with 1 increment by 2), n computed by (id * 2))",
+        "create table t (c varchar(10) character set win1250 collate pxw_plk)",
+        "create or alter trigger tr for orders active before insert or update position 5 as begin new.id = 1; end",
+        "create trigger tr_db active on connect position 0 as begin post_event 'x'; end",
+        "alter table t add constraint fk1 foreign key (pid) references p (id) on delete cascade on update no action",
+    };
+
+    /// <summary>Representative + structural-construct + Language-Reference cases.</summary>
     public static readonly IReadOnlyList<string> All =
-        Representative.Concat(StructuralConstructs).ToArray();
+        Representative.Concat(StructuralConstructs).Concat(LanguageReference).ToArray();
 
     /// <summary><see cref="Representative"/> as xUnit <c>[MemberData]</c> rows.</summary>
     public static IEnumerable<object[]> RepresentativeData() => Representative.Select(s => new object[] { s });
 
     /// <summary><see cref="All"/> as xUnit <c>[MemberData]</c> rows.</summary>
     public static IEnumerable<object[]> AllData() => All.Select(s => new object[] { s });
+
+    /// <summary><see cref="LanguageReference"/> as xUnit <c>[MemberData]</c> rows.</summary>
+    public static IEnumerable<object[]> LanguageReferenceData() =>
+        LanguageReference.Select(s => new object[] { s });
 }

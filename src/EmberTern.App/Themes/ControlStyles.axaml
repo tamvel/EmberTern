@@ -219,6 +219,35 @@
     <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
   </Style>
 
+  <!-- ⭐⭐ EDYTOR DATY W KOMÓRCE (P3, zgłoszenie 2026-08-07: „kontrolka daty jest przycinana").
+
+       ⚠ PRZYCZYNA ZMIERZONA, NIE ZGADNIĘTA, bo zgłoszenie nie nazywa wymiaru, a kandydaci byli dwaj
+       (za wąska kolumna albo za niski wiersz) i mają różne przyczyny. Pomiar drzewa wizualnego
+       (`GridDateEditorTests`): `CalendarDatePicker` z motywu Fluent ma WŁASNE `MinHeight` = 32, podczas
+       gdy jego zawartość prosi o 24 (`PART_TextBox` 22, `PART_Button` 24). Wiersz `data-edit` ma
+       STAŁE `Height` 32 (nie `MinHeight` — nie ma jak urosnąć, gotcha #322), a `Pad.Cell` zabiera 2+2,
+       więc na edytor zostaje 28. 32 > 28 ⇒ obcięcie, bez błędu i bez skoku układu, który by je pokazał.
+
+       ⭐ Dlatego poprawką jest ROLA, a nie dobrana liczba: ten sam `Size.Control`, który bierze `TextBox`
+       w sąsiedniej komórce (§19.9). Zawartość mieści się w 24 z zapasem, więc nic nie zostaje ściśnięte
+       w środku — obniżamy tylko żądanie kontrolki do jej rzeczywistej potrzeby. Przy okazji znika drugi
+       objaw ze zgłoszenia: edytor daty przestaje być wyższy od pozostałych edytorów tej samej siatki.
+
+       ⚠ Selektor CELUJE W KOMÓRKĘ i nie potrzebuje klasy — inaczej niż `TextBox` powyżej. `TextBox`
+       mieszka w komórkach WSZYSTKICH siatek, także wyników (tylko do odczytu, bez zarezerwowanej
+       wysokości), więc tam globalny setter sięgnąłby za daleko; `CalendarDatePicker` trafia do komórki
+       wyłącznie z `BuildDateEditingTemplate` siatki danych. ⛔ Nie zawężać tego klasą „na wszelki
+       wypadek": klasa jest czymś, o czym następna siatka może zapomnieć, a selektor nie.
+
+       ⛔ NIE dotyczy `CalendarDatePicker` w formularzach (dialog Execute, panel startowy debuggera) —
+       tam kontrolka jest polem formularza i 32 jest poprawne. Gęstość kontrolek formularzowych to
+       osobne pytanie, przypisane do M4. -->
+  <Style Selector="DataGridCell CalendarDatePicker">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
   <!-- ⭐⭐ …I TO SAMO DLA EDYTORA, KTÓREGO NIE BUDUJEMY MY (zgłoszenie użytkownika 2026-08-03: „nadal są
        miejsca, gdzie TextBox jest zbyt niski, np. parametry procedury w Easy Mode").
 

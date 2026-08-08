@@ -405,6 +405,17 @@ internal sealed partial class SemanticBinder
 
             if (IsNameToken(tok) && At(t, k + 1).Kind != TokenKind.LParen)
             {
+                // ⭐⭐ The same grammar gate the PSQL walker applies — and this walker had NONE, which is the
+                // half of the defect class that never reached a bug report because its symptom is quieter
+                // (2026-08-07). Where PSQL reports ET0003 on `DATEADD(MONTH, …)`, a query silently BINDS
+                // MONTH to a column of that name if one in-scope table has it — wrong colour, wrong Quick
+                // Info, wrong find-references — and reports ET0005 "Ambiguous column" if two do.
+                //
+                // ⚠ Positional, never vocabulary alone: `SELECT MONTH FROM SALES` must keep binding its
+                // column. FirebirdGrammar decides from the construct the word sits in, so an ordinary
+                // identifier — and a Firebird word outside such a construct — is untouched here.
+                if (IsGrammarPinnedNonLocal(t, k)) { k++; continue; }
+
                 BindBareReference(tok, scope);
                 k++;
                 continue;

@@ -175,6 +175,106 @@ public static class FirebirdSyntax
         "IIF", "ABS", "MOD", "POWER", "SQRT", "ROUND", "CEILING", "FLOOR",
     };
 
+    // ── Non-reserved vocabulary — Firebird's own words that are NOT catalogued above ──────────
+    //
+    // ⭐⭐ THIS IS NOT A SECOND KEYWORD LIST, and the difference is the whole reason it exists.
+    //
+    // Firebird reserves very few words. Most of its vocabulary — MONTH, PLACING, UNBOUNDED, AUTONOMOUS,
+    // … — is NON-RESERVED, deliberately: a user may legitimately name a column or a variable MONTH. So
+    // these words must keep lexing as IDENTIFIERS (a word in the catalog above becomes
+    // TokenKind.Keyword, which would colour and re-case every column called MONTH in the application),
+    // and this set must never be fed to AddCategory.
+    //
+    // ⭐ Its ONE job is a NEGATIVE one: it answers "is this identifier a word Firebird itself uses?", and
+    // the only permitted consequence is to STAY SILENT about it. An identifier that spells one of these
+    // and resolves to nothing is not PROVABLY an unknown variable — it is far more likely a construct the
+    // binder does not model yet — so the conservatism rule (prefer silence over false positives) applies.
+    // It never suppresses a BINDING: a variable or column that really is called MONTH still resolves,
+    // still colours, still hovers, still finds its references.
+    //
+    // ⚠ WHY A VOCABULARY AND NOT MORE POSITIONAL PREDICATES. The four fixes before this one were each a
+    // positional predicate for the single construct reported (NEXT VALUE FOR, then GEN_ID's first
+    // argument, then EXTRACT's first argument). Positional is the right tool where the consequence is to
+    // RESOLVE a name — a generator must still be looked up, and an unknown one is a real ET0001 — and
+    // FirebirdGrammar keeps doing exactly that. But as a strategy for the whole language it is an
+    // allowlist of exceptions whose completeness is bounded by the bug reports that produced it. A
+    // vocabulary is bounded by the LANGUAGE instead, which is finite, documented and does not grow with
+    // usage.
+    //
+    // Transcribed from the Firebird 5 Language Reference appendix "Reserved words and keywords"
+    // (non-reserved section), limited to words that can appear as a BARE identifier in a value or
+    // statement position — a word only ever reachable as `NAME(` is skipped by both walkers already.
+    private static readonly string[] NonReservedWords =
+    {
+        // Date/time parts — EXTRACT / DATEADD / DATEDIFF / FIRST_DAY / LAST_DAY operands.
+        "YEAR", "MONTH", "DAY", "WEEK", "WEEKDAY", "YEARDAY", "QUARTER",
+        "HOUR", "MINUTE", "SECOND", "MILLISECOND",
+        "TIMEZONE_HOUR", "TIMEZONE_MINUTE", "ZONE", "LOCAL", "LOCALTIME", "LOCALTIMESTAMP",
+        // String / expression syntax words.
+        "PLACING", "OF", "AT", "NULLS", "LAST", "PRIOR", "SCROLL",
+        // Window frame + named windows.
+        "WINDOW", "RANGE", "GROUPS", "UNBOUNDED", "PRECEDING", "FOLLOWING",
+        "EXCLUDE", "TIES", "OTHERS", "FILTER", "LATERAL",
+        // Window / aggregate functions that may be written without parentheses in a frame clause context.
+        "NTILE", "PERCENT_RANK", "CUME_DIST", "NTH_VALUE",
+        // PSQL statement vocabulary.
+        "AUTONOMOUS", "COMMON", "CALLER", "PRIVILEGES", "PRIVILEGE", "PASSWORD",
+        "EXTERNAL", "SOURCE", "DATA", "ENGINE", "ENTRY_POINT", "MODULE_NAME",
+        "RESETTING", "MESSAGE",
+        // Cryptography — HASH / CRYPT_HASH / ENCRYPT / DECRYPT / RSA_* option words and algorithms.
+        "MODE", "IV", "CTR_LENGTH", "COUNTER", "SALT_LENGTH", "SIGNATURE", "HASH",
+        "CRC32", "MD5", "SHA1", "SHA256", "SHA512", "SHA3_224", "SHA3_256", "SHA3_384", "SHA3_512",
+        "AES", "ANUBIS", "BLOWFISH", "KHAZAD", "RC4", "CHACHA20", "SOBER128",
+        "CBC", "CFB", "CTR", "ECB", "OFB", "PKCS_1_5", "CTR_BIG_ENDIAN", "CTR_LITTLE_ENDIAN",
+        // DDL vocabulary that appears as a bare word.
+        "ACTIVE", "INACTIVE", "BEFORE", "AFTER", "ALWAYS", "GENERATED", "IDENTITY",
+        "START", "RESTART", "INCREMENT", "COMPUTED", "DESCENDING", "ASCENDING",
+        "OVERRIDING", "SYSTEM", "DATABASE", "SCHEMA", "COMMENT", "COLLATION", "TYPE",
+        "OPTION", "PLUGIN", "DEFINER", "INVOKER", "SECURITY", "GRANTED", "USAGE",
+        "TEMPORARY", "PRESERVE", "GLOBAL", "IDLE", "TIMEOUT", "LINGER",
+        // Transaction / session vocabulary.
+        "STABILITY", "CONSISTENCY", "COMMITTED", "UNCOMMITTED",
+        "RECORD_VERSION", "NO_RECORD_VERSION", "NOWAIT", "LOCK", "SHARED", "PROTECTED",
+        "RESERVING", "WORK", "RETAIN", "AUTO", "TWO_PHASE", "SESSION", "RESET", "BIND", "NATIVE",
+        "LEGACY", "EXTENDED", "TIME_ZONE", "DECFLOAT", "TRAPS",
+        // Miscellaneous non-reserved words that read as ordinary identifiers in a value position.
+        "NAMES", "PAGE", "PAGES", "PAGE_SIZE", "LENGTH", "NUMBER",
+        "STATISTICS", "SELECTIVE", "FORCE", "IGNORE", "INCLUDE", "MAXVALUE", "MINVALUE",
+        "MATCHES", "SINGULAR", "SORT", "SPACE", "SQL", "TAGS", "TOTALORDER", "TRUSTED",
+        "MANUAL", "MAPPING", "OLDEST", "REQUESTS", "SERVERWIDE", "UNDO", "VARBINARY", "CLEAR",
+        "DEBUG", "DESCRIPTOR", "DISABLE", "ENABLE", "EXCESS", "FILE", "FORMAT", "FREE_IT",
+        "INPUT_TYPE", "OUTPUT_TYPE", "OVERFLOW", "POOL", "SCALAR_ARRAY", "SHADOW", "SNAPSHOT_NUMBER",
+    };
+
+    // ── Context variables — a bare word that IS a complete value expression ───────────────────
+    //
+    // ⭐⭐ A SEPARATE SET FROM THE VOCABULARY ABOVE, AND THE DISTINCTION IS LOAD-BEARING. Every word above is
+    // a piece of SYNTAX: `YEAR` on its own means nothing, so `v = year;` is a genuine unknown variable and
+    // must keep reporting (a guard already pinned exactly that). These nine are the opposite — each is a
+    // VALUE in its own right, so `v = row_count;` is correct Firebird and must never report.
+    //
+    // ⚠ The consequence is that the two sets are suppressed under different conditions: a syntax word only
+    // when it stands inside a phrase (FirebirdGrammar.IsVocabularyInsidePhrase), a context variable always.
+    // Collapsing them into one set makes one of those two cases wrong whichever condition you pick.
+    //
+    // (INSERTING / UPDATING / DELETING / RESETTING also resolve to a TriggerPredicateSymbol inside a
+    // trigger; they are listed so a stray use elsewhere still stays quiet. The CURRENT_* family are
+    // catalogued keywords and never reach an identifier check at all.)
+    private static readonly string[] ContextVariableWords =
+    {
+        "ROW_COUNT", "SQLCODE", "GDSCODE", "SQLSTATE", "USER",
+        "INSERTING", "UPDATING", "DELETING", "RESETTING",
+    };
+
+    private static readonly HashSet<string> ContextVariables =
+        new(ContextVariableWords, StringComparer.OrdinalIgnoreCase);
+
+    // The whole vocabulary: syntax words plus context variables. Context variables belong here too because
+    // FirebirdGrammar's positional rules use this as their pre-filter, and a context variable is just as
+    // legitimate inside a construct as any other word.
+    private static readonly HashSet<string> NonReserved =
+        new(NonReservedWords.Concat(ContextVariableWords), StringComparer.OrdinalIgnoreCase);
+
     private static readonly Dictionary<string, SqlKeywordInfo> ByWord;
     private static readonly IReadOnlyList<string> KeywordCategoryWords;
 
@@ -210,6 +310,22 @@ public static class FirebirdSyntax
                 : new SqlKeywordInfo(w, SqlKeywordCategory.Keyword, InCompletion: true);
         }
 
+        // ⭐ A word lives in exactly ONE place. The two sets answer opposite questions — "does this lex as a
+        // keyword?" versus "is this an identifier Firebird itself uses?" — so a word in both is a
+        // contradiction, and the harmless-looking half of it (the catalogued word simply never reaching the
+        // non-reserved check) is exactly what would let the duplicate sit there teaching the next reader that
+        // membership means nothing. Same guard shape as AddCategory's.
+        foreach (var w in NonReservedWords.Concat(ContextVariableWords))
+        {
+            if (byWord.ContainsKey(w))
+            {
+                throw new InvalidOperationException(
+                    $"FirebirdSyntax: '{w}' is catalogued as a keyword AND listed as non-reserved. " +
+                    "A word is one or the other — a catalogued word lexes as TokenKind.Keyword and can " +
+                    "never reach IsNonReservedWord.");
+            }
+        }
+
         ByWord = byWord;
         KeywordCategoryWords = byWord.Values
             .Where(i => i.Category == SqlKeywordCategory.Keyword)
@@ -231,6 +347,33 @@ public static class FirebirdSyntax
 
     /// <summary>True when <paramref name="word"/> is a recognised Firebird keyword (case-insensitive).</summary>
     public static bool IsKeyword(string? word) => word is not null && ByWord.ContainsKey(word);
+
+    /// <summary>
+    /// True when <paramref name="word"/> is one of Firebird's <b>non-reserved</b> words — vocabulary the
+    /// language itself uses (<c>MONTH</c>, <c>PLACING</c>, <c>UNBOUNDED</c>, <c>AUTONOMOUS</c>, …) but does
+    /// NOT reserve, so it lexes as an ordinary identifier and may legally name a column or a variable.
+    /// <para>
+    /// ⭐ The only permitted use is to <b>stay silent</b>: an identifier that spells one of these and
+    /// resolves to nothing is not provably an unknown variable, so no diagnostic may be raised about it.
+    /// ⛔ It must never suppress a binding, never change lexing, and never gate completion — a variable
+    /// genuinely named <c>MONTH</c> resolves, colours and navigates exactly as before.
+    /// </para>
+    /// </summary>
+    public static bool IsNonReservedWord(string? word) => word is not null && NonReserved.Contains(word);
+
+    /// <summary>
+    /// True when <paramref name="word"/> is a Firebird <b>context variable</b> — a bare identifier that is a
+    /// complete value expression on its own (<c>ROW_COUNT</c>, <c>SQLCODE</c>, <c>USER</c>, <c>INSERTING</c>, …).
+    /// <para>
+    /// ⚠ Distinct from <see cref="IsNonReservedWord"/> and suppressed under a different condition: a context
+    /// variable is never an unknown variable ANYWHERE, whereas an ordinary vocabulary word standing alone
+    /// (<c>v = year;</c>) still is one. Every context variable is also part of the vocabulary, not the reverse.
+    /// </para>
+    /// </summary>
+    public static bool IsContextVariable(string? word) => word is not null && ContextVariables.Contains(word);
+
+    /// <summary>The non-reserved vocabulary, for tests and tooling. Disjoint from <see cref="Keywords"/>.</summary>
+    public static IReadOnlyCollection<string> NonReservedVocabulary => NonReserved;
 
     /// <summary>Looks up the catalog entry for <paramref name="word"/> (case-insensitive).</summary>
     public static bool TryGet(string? word, out SqlKeywordInfo info)

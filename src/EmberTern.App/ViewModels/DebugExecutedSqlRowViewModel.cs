@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using EmberTern.Core.Formatting;
 using EmberTern.Core.Sql.Debugging;
 
 namespace EmberTern.App.ViewModels;
@@ -27,7 +28,7 @@ public sealed class DebugExecutedSqlRowViewModel
         // The full Firebird message, kept alongside the friendly ResultText so it stays reachable on a friendly
         // error (D15.4 Seam B — "friendly + raw available"); null / empty when there is nothing extra to show.
         RawError = string.IsNullOrEmpty(rawError) || rawError == resultText ? null : rawError;
-        TimestampText = DateTime.Now.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+        TimestampText = DateTimeDisplay.LogTime(DateTime.Now);
     }
 
     /// <summary>The fragment the user evaluated / ran.</summary>

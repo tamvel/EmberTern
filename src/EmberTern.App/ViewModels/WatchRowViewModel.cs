@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EmberTern.Core.Formatting;
 using EmberTern.Core.Sql.Debugging;
 
 namespace EmberTern.App.ViewModels;
@@ -91,8 +92,12 @@ public sealed partial class WatchRowViewModel : ObservableObject
         {
             return UiStrings.DebuggerVariableNull;
         }
+        // ⭐ Same engine form as the Variables panel — a watch on `NEW.CZAS` and the row for the same value
+        // must not disagree about how a timestamp is spelled. ⚠ No declared type here (a watch is an arbitrary
+        // expression), so the value itself decides date vs timestamp; numbers stay invariant.
         return value switch
         {
+            _ when DateTimeDisplay.FirebirdValue(value) is { } engine => engine,
             IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
             _ => value.ToString() ?? UiStrings.DebuggerVariableNull,
         };
