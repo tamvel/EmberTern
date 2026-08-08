@@ -8366,7 +8366,10 @@ pozycji badge'a (prawy dolny — dzisiejsze miejsce, spójne z `DebuggerIcon`).
 
 ## §19.37 Iteracja 25 (M4 · D‑M4‑1/D‑M4‑2) — grupa gęstości (2026-08-08)
 
-> **Status: dostarczone, oczekuje na QA wizualne użytkownika w obu motywach.**
+> **🔒 Status: ZAMKNIĘTE — dostarczone i ODEBRANE PRZEZ UŻYTKOWNIKA W OBU MOTYWACH (2026-08-08).**
+> QA objęło siedem powierzchni (pasek narzędzi · Metadata Explorer · menu kontekstowe · zakładki · siatki
+> edytowalne · pasek importu · Security Manager) — **zero nieprawidłowości, zero regresji wizualnych**.
+> ⚠ Poza zakresem QA: **150 % DPI** (R‑6), które przy zmianie metryk pozostaje do sprawdzenia okiem.
 > Decyzje ratyfikowane: **A‑3 · B‑1 · C‑1 (30 px) · D wg rekomendacji.** Materiał decyzyjny i pełny pomiar:
 > [product-polish-m4-density-decision.md](product-polish-m4-density-decision.md).
 > Build 0/0 · suite **8301** w trzech partycjach (8155 + 91 + 55, +10) · smoke czysty.

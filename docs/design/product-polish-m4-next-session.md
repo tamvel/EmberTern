@@ -3,13 +3,25 @@
 > **Do wklejenia na początku następnej sesji.** Zastępuje `product-polish-m3-next-session.md`, który od
 > 2026-08-04 opisuje pracę ZAMKNIĘTĄ (M3 · M3b · brama §13.3 · M3.5) i służy już tylko za zapis „dlaczego".
 >
-> ⛔⛔ **M4 NIE ZACZYNA SIĘ BEZ WYRAŹNEJ ZGODY UŻYTKOWNIKA.** Ten dokument przygotowuje wejście, nie jest
-> zgodą na wejście.
+> ⭐⭐ **AKTUALIZACJA 2026-08-08 — M4 JEST ROZPOCZĘTY I MA ZA SOBĄ PIERWSZĄ POZYCJĘ.** Zgoda użytkownika
+> padła, **grupa gęstości jest zamknięta i odebrana** (A‑3 · B‑1 · C‑1 · D — `product-polish.md` §19.37,
+> materiał: [product-polish-m4-density-decision.md](product-polish-m4-density-decision.md)). ⛔ **§5 poniżej
+> czytaj jako ZAPIS ratyfikowanych decyzji kierunkowych, nie jako listę do wykonania** — D‑M4‑2 został
+> wykonany w całości, D‑M4‑1 wykonany w części (gęstość), D‑M4‑3 obowiązuje dalej.
 >
-> ✅ **NIC NIE JEST OTWARTE PRZED M4 (stan na 2026-08-08).** Wszystkie sprinty sprzed M4 są zamknięte,
-> odebrane, zacommitowane i wypchnięte na oba remote'y; repo jest czyste. ⛔ **Nie otwieraj sesji od
-> raportowania stanu ani od pytań, czy coś zostało domknięte** — jeżeli `git status` jest czysty, a HEAD zgadza
-> się z §1, to jest cała odpowiedź. Jedyne, na co czekasz, to zgoda na start M4.
+> ⭐ **CO JEST NASTĘPNE:** reszta **rejestru kolizji** — po zamknięciu K15 zostały wyłącznie pytania
+> **typograficzne** (K1 · K3 · K4 · K6 · K8 — „ile mierzy pasek narzędzi i ile nagłówek sekcji"), **promień**
+> (K5 · K10), **`ExpanderMinHeight`** (K7), **`TabItem` 13 px** (K9), **odstęp chipa w parze z paddingiem
+> badge'a DEV MODE** (K11) i **rola bez konsumenta** (K2). ⛔ Dopiero po rejestrze migracja ekranów
+> (**D‑M4‑1**). ⚠ Te pozycje układają się w **jedno pytanie o TYPOGRAFIĘ** dokładnie tak, jak K15 +
+> `Size.Icon` układały się w jedno pytanie o gęstość — patrz §18.R i uwaga o wzorcu K1/K2/K3/K6.
+>
+> ⭐ **Obowiązuje nowa reguła R18** (ratyfikowana 2026-08-08, handover §5): *przy równej czytelności wygrywa
+> wariant gęstszy*. ⚠ Rozstrzyga REMIS — warunek „bez pogarszania czytelności" jest pierwszy.
+>
+> ✅ **NIC NIE JEST OTWARTE POZA M4.** Wszystkie sprinty sprzed M4 są zamknięte, odebrane, zacommitowane
+> i wypchnięte na oba remote'y. ⛔ **Nie otwieraj sesji od raportowania stanu ani od pytań, czy coś zostało
+> domknięte** — jeżeli `git status` jest czysty, to jest cała odpowiedź.
 
 ---
 

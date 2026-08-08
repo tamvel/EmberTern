@@ -1,6 +1,7 @@
 # M4 · D‑M4‑1/D‑M4‑2 — GĘSTOŚĆ WIZUALNA: materiał decyzyjny
 
-> **🔒 STATUS: DECYZJE RATYFIKOWANE I WDROŻONE (2026‑08‑08). Dokument jest odtąd ZAPISEM, nie planem.**
+> **🔒 STATUS: DECYZJE RATYFIKOWANE, WDROŻONE I ODEBRANE PO QA UŻYTKOWNIKA (2026‑08‑08).**
+> Dokument jest odtąd ZAPISEM, nie planem.
 >
 > Użytkownik rozstrzygnął: **A → A‑3 · B → B‑1 · C → C‑1 (30 px) · D → zgodnie z rekomendacją.**
 > As‑built: `product-polish.md` **§19.37**. ⛔ Nie planować z tego dokumentu — jego §6 to rekomendacja
