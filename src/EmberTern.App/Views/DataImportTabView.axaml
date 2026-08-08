@@ -157,7 +157,11 @@
           <Button Classes="primary" Command="{Binding ImportCommand}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportRunTooltip}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <controls:SvgIcon Data="{StaticResource Icon.Import}" Width="14" Height="14"
+              <!-- ⭐ `Size.Icon` (14), nie `Size.Icon.Toolbar` (16): ikona stoi PRZY ETYKIECIE, więc celem
+                   myszy jest przycisk, a nie ona (A‑3, M4). Samotne ikony tego pasma — Odśwież, Przerwij,
+                   Przeglądaj — nie deklarują nic i biorą 16 z `ControlTheme`. Wartość bez zmiany. -->
+              <controls:SvgIcon Data="{StaticResource Icon.Import}"
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource OnAccentBrush}" />
               <TextBlock Text="{x:Static app:UiStrings.ImportRun}" />
             </StackPanel>
@@ -172,7 +176,8 @@
                    ani nie zatwierdza (przebiega pipeline w trybie sprawdzenia), więc nie ma skutku
                    z R‑1…R‑5; po zdjęciu koloru zieleń w tym pasku znaczy już tylko decyzję
                    transakcyjną, a znak „ptaszka" nadal mówi „sprawdź". -->
-              <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14" />
+              <controls:SvgIcon Data="{StaticResource Icon.Check}"
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
               <TextBlock Text="{x:Static app:UiStrings.ImportValidate}" />
             </StackPanel>
           </Button>
@@ -218,7 +223,8 @@
               <!-- Role R‑2 / R‑3 na własnych tokenach (K7) — patrz MainWindow. Wygląd bez zmiany.
                    ⚠ Nie mylić z „Waliduj" wyżej, które zostaje `SuccessIconBrush`: to nie jest decyzja
                    transakcyjna, tylko wynik sprawdzenia. -->
-              <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.Check}"
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource CommitButtonBrush}" />
               <TextBlock Text="{x:Static app:UiStrings.ImportCommit}" />
             </StackPanel>
@@ -228,7 +234,8 @@
                   IsEnabled="{Binding !IsRunning}"
                   ToolTip.Tip="{x:Static app:UiStrings.ImportRollbackTooltip}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.Undo}"
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource RollbackButtonBrush}" />
               <TextBlock Text="{x:Static app:UiStrings.ImportRollback}" />
             </StackPanel>
@@ -400,9 +407,12 @@
                   ToolTip.Tip="{x:Static app:UiStrings.ImportFormatOptionsTooltip}"
                   Command="{Binding $parent[UserControl].((vm:DataImportTabViewModel)DataContext).ToggleFormatOptionsCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="14" Height="14"
+              <!-- Chevron ujawnienia stoi PRZY TYTULE sekcji, więc bierze rolę wiersza, nie chromy. -->
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}"
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 VerticalAlignment="Center" IsVisible="{Binding !IsExpanded}" />
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}"
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 VerticalAlignment="Center" IsVisible="{Binding IsExpanded}" />
               <TextBlock Text="{x:Static app:UiStrings.ImportFormatOptionsHeader}"
                          FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center" />

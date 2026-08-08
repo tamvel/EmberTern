@@ -1345,3 +1345,24 @@ every emit path to be individually perfect.**
      "chrome: panels, tabs, BARS" — so the catalog offered two answers to one question and the product used a
      third. A role with no consumers is the visible symptom (#233); the duplicated *description* is the cause.
      (Product Polish M4 / A-2 + B-1 — `product-polish.md` §19.38.)
+
+335. **A sweep that selects by VALUE cannot see the CONTROL, so it can deepen the very divergence it is
+     cleaning up — and every counter will report progress.** EmberTern's icon-size sweep migrated the 16
+     literals reading `16` onto `Size.Icon.Toolbar`; one of them was the debugger's pagination chevron, while
+     the identical chevron in the main window read `14` and was therefore not in that pass. The shared
+     pagination bar — one control group, reused through the same `TableDetailPagination*Tooltip` strings —
+     went from **two** sizes to **three**, with the literal ceiling dropping and the build green.
+     ⭐ **The general shape: `grep`-shaped work groups by the number, and design coherence is a property of
+     the control.** A pass over "every `15`" or "every `#3C3C3C`" is a set that no user can perceive; the set
+     they *can* perceive is "the pagination bar", "the filter toggle", "the panel chevron" — and those cut
+     across values.
+     ⚠ **Practically: before a value-keyed sweep, group the SAME control across screens and check it agrees
+     with itself.** Here that one query answered a question three earlier passes could not: the same
+     `Button.icon` shape renders 16 in 135 places and 14 in 34, both populations living **in the same files**,
+     so neither a per-file nor a per-surface rule could describe it — which is what proved it a divergence
+     rather than an unnamed role, and stopped it from being "tidied" screen by screen.
+     ⚠⚠ Its sibling in the same iteration is #332 one property further out: `Spacing`, `Padding` and `Margin`
+     had **no counter at all**, so three files reporting zero design debt held ~147 local values with the role
+     read exactly **zero** times for two of those properties. **A stage's reported number is bounded by what
+     anyone thought to measure**, and a clean report over an unmeasured property is not evidence of a clean
+     product. (Product Polish M4.1 — `product-polish.md` §19.39.)

@@ -8546,3 +8546,100 @@ wobec rekomendacji z materiału — wymaga osobnej decyzji, a nie wsunięcia prz
 stoją w komentarzu klasy `DesignTokenComplianceTests`.
 ⛔ Sweep 69 literałów `FontSize` i 95 rozmiaru ikony (M4.3) · ⛔ **Z‑3** · ⛔ 9 px i 12 px w edytorach
 w wierszu siatki (decyzje KONTENERA, ratyfikowane osobno w §18.0.5/3) · ⛔ migracja ekranów (**D‑M4‑1**).
+
+---
+
+## §19.39 Iteracja 27 (M4.1 część 1) — ikony przy etykiecie; pasek paginacji nie zgadza się sam ze sobą (2026-08-08)
+
+> **Status: część 1 DOSTARCZONA (build 0/0 · suite 8304 w trzech partycjach: 8158 + 91 + 55 · smoke czysty),
+> część 2 ZABLOKOWANA PYTANIEM DO UŻYTKOWNIKA.** Migracja ekranów M4.1 (SQL Editor · Script Executor ·
+> Data Import) natrafiła na kolizję, której rejestr K1–K15 nie zawierał, bo **nikt jej nigdy nie zmierzył** —
+> licznik rozmiaru ikony powstał dopiero w §19.37, a jego pierwszy przebieg patrzył wyłącznie na literały `16`
+> i na wiersz drzewa.
+
+### §19.39.1 Co weszło — 14 ikon stojących PRZY ETYKIECIE
+
+Sufit literałów rozmiaru ikony **95 → 81**; `ScriptExecutorTabView` wypada z listy w całości (3 → 0),
+`MainWindow` 16 → 11, `DataImportTabView` 10 → 4.
+
+Migrowane są wyłącznie ikony, dla których `Size.Icon` pasuje **własnym opisem** — *„ikona przy etykiecie na
+powierzchni roboczej […] jej zadaniem jest dać się przeczytać razem z tekstem, nie być celem myszy"*:
+ikona w `Button.primary`/`Button.flat` z `TextBlock` obok (Play, Stop, Import, Waliduj, Zatwierdź, Wycofaj),
+chevron ujawnienia stojący przy tytule sekcji (Data Import), oraz trzy `DebuggerIcon` w wierszu menu
+kontekstowego, które nie mogły przejść przez `{app:MenuIcon}` i jako jedyne w menu zostały literałem.
+**Wartość nie drgnęła w żadnym z 14 przypadków** — wszystkie już niosły 14. Migracja nazywa rolę, nie zmienia
+wyglądu.
+
+⭐ Ta granica **jest już w produkcie i jest konsekwentna**: w tym samym pasku narzędzi samotna ikona
+(`Icon.Hammer`, `Icon.Undo`, Odśwież, Przerwij, Przeglądaj) nie deklaruje nic i bierze **16** z `ControlTheme`,
+a ikona obok etykiety deklaruje **14**. Migracja zapisuje decyzję, którą autorzy podjęli zgodnie — dokładnie
+ten kształt, o który prosi R12.
+
+### §19.39.2 ⭐⭐ Znalezisko: ten sam pasek paginacji ma trzy rozmiary
+
+Reszta literałów `14` na tych ekranach jest **świadomie nietknięta**, bo pomiar pokazał coś innego, niż
+zakładałem, gdy zaczynałem iterację. Populacja `14` liczy **75 z 95 literałów w 19 plikach** i dzieli się na
+dwie części o różnym uzasadnieniu. Druga z nich to **samotna ikona w `Button.icon`** — i tu kształt jest
+sporny, bo **identyczny kształt renderuje się 16 w 135 miejscach i 14 w 34**.
+
+Rozstrzygające było zejście o poziom niżej — do konkretnej grupy kontrolek, a nie do pliku:
+
+| grupa kontrolek | 14 | 16 (brak deklaracji) | rola |
+|---|---|---|---|
+| pasek paginacji (`ChevronFirst/Left/Right/Last`) | MainWindow · Table Data · Data Import | Function · Procedure · View | debugger: `Size.Icon.Toolbar` |
+| filtr / agregacja / eksport | MainWindow · Table Data · Function · Procedure · View | Trace Monitor | — |
+| chevron zwijania panelu (`ChevronsUp/Down`) | MainWindow · Data Import · Debugger · MessageBanner | Session Manager · Trace Monitor | — |
+
+⭐⭐ **REGUŁA ISTNIEJE I JEST WIDOCZNA — łamią ją trzy grupy z tabeli, a nie „wszystko".** Dowodzi tego
+kontrolka, która stoi po OBU stronach linii i za każdym razem trafia dobrze: `Icon.RefreshCw` niesie **16**
+tam, gdzie jest przyciskiem paska narzędzi (odświeżenie drzewa metadanych i statystyk indeksu w `MainWindow`,
+pasek Data Import, pasek Session Managera), i **14** tam, gdzie odświeża SIATKĘ (`ToolbarRefreshDataTooltip`
+w Table Data). ⚠ Pierwsza redakcja tej sekcji miała `RefreshCw` w tabeli jako czwarty rozjazd — pomiar
+hosta pokazał, że jest odwrotnie, i to jest pułapka 17 w czystej postaci: widać system i wyciąga się wniosek,
+że jest niespójny, zamiast sprawdzić, czy DZIAŁA.
+
+⭐⭐ **Reszta nie jest więc podziałem wg powierzchni ani rolą czekającą na nazwę — to jest rozjazd.** Pasek
+paginacji jest JEDNĄ kontrolką, reużywaną przez te same stringi `TableDetailPagination*Tooltip` (komentarz
+w `MainWindow` mówi to wprost: *„reuses the same first/prev/next/last icon strings as the Table Data View"*),
+a mimo to ma **trzy różne rozmiary w pięciu ekranach**. Obie populacje żyją **w tych samych plikach**, więc nie
+da się tego opisać ani regułą per plik, ani regułą per powierzchnia.
+
+⚠ **Blok gęstości pogłębił ten rozjazd o jeden krok i nikt tego nie zobaczył** — i to nie jest zarzut wobec
+A‑3, tylko ilustracja mechanizmu: sweep 16 literałów `16` objął chevron paginacji w debuggerze (bo był
+literałem `16`), a jego bliźniak w `MainWindow` został przy 14 (bo był literałem `14`). **Sweep po WARTOŚCI
+nie widzi kontrolki.** Pasek paginacji miał wtedy dwa rozmiary, a po sweepie ma trzy.
+
+### §19.39.3 Dlaczego to NIE zostało rozstrzygnięte w tej iteracji
+
+Wpisanie tu którejkolwiek z ról jest **rozstrzygnięciem pytania o gęstość chromy**, a nie porządkowaniem:
+`Size.Icon` (14) opisuje element, który *„nie jest celem myszy"* — a przycisk paginacji nim jest; `Size.Icon.Toolbar`
+(16) zmienia wygląd pasków w Table Data, wynikach SQL, Data Import, debuggerze i `MessageBanner`, czyli na
+powierzchniach **już odebranych**. ⛔ **D‑M4‑2 zabrania rozstrzygać taką sprawę ekran po ekranie**, a §0.5 nie
+pozwala zmienić postrzeganego rozmiaru na domysł. Pytanie idzie więc do użytkownika jako JEDNO, z pomiarem —
+i dopiero po odpowiedzi ruszają pozostałe **34 deklaracje w 8 plikach**.
+
+### §19.39.4 ⚠⚠ Drugie znalezisko: `Spacing`/`Padding`/`Margin` nie były NIGDY liczone
+
+Prompt startowy M4 opisuje pozostałą pracę ilościową dwiema liczbami — 95 literałów rozmiaru ikony i 36
+`FontSize`. **Pomiar mówi, że to niedoszacowanie, bo to są jedyne dwie własności, które ktokolwiek policzył.**
+Na samych trzech ekranach M4.1:
+
+| plik | `Spacing` | `Padding` | `Margin` |
+|---|---|---|---|
+| `MainWindow.axaml` | 16 lit / 5 rola | 15 / 0 | 28 / 0 |
+| `DataImportTabView.axaml` | 42 / 0 | 10 / 0 | 40 / 0 |
+| `ScriptExecutorTabView.axaml` | 4 / 0 | 2 / 0 | 10 / 0 |
+
+Czyli **~147 wartości lokalnych na trzech ekranach, przy zerowym odczycie roli dla `Padding` i `Margin`** —
+a katalog ma dla nich siedem stopni skali odstępów i dwanaście ról złożonych, od M2a. ⭐ To jest gotcha #332
+o jedną własność dalej: **wartość ustawiona tam, gdzie licznik nie zagląda, nie jest „czysta" — jest
+niezmierzona**, a M2c raportowało zerowy dług na tych plikach, bo mierzyło `FontSize`, `FontFamily`
+i `CornerRadius`. Skala całej aplikacji nie jest jeszcze zmierzona; audyt M0 mówił o 114 unikalnych
+marginesach i 40 paddingach. ⛔ Nie ruszone — to jest decyzja o ZAKRESIE M4, nie robota do wsunięcia przy
+okazji.
+
+### §19.39.5 Czego ta iteracja NIE zrobiła
+
+⛔ 34 samotne ikony w paskach siatek (pytanie wyżej) · ⛔ ogon 10/11/12/13/15 px, w tym `Icon.Pencil` 13
+w liście zapisanych zapytań i dwie ikony 13 px paska gotowości Data Import (**pytanie o ROLE**, parkowane już
+przez §19.37.7) · ⛔ `Spacing`/`Padding`/`Margin` (§19.39.4) · ⛔ **Z‑3** · ⛔ M4.2–M4.4.

@@ -655,21 +655,21 @@
                           Command="{Binding DebugProcedureCommand}"
                           IsVisible="{Binding IsProcedureLeaf}">
                   <MenuItem.Icon>
-                    <controls:DebuggerIcon Width="14" Height="14" />
+                    <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                   </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
                           Command="{Binding DebugTriggerCommand}"
                           IsVisible="{Binding IsTriggerLeaf}">
                   <MenuItem.Icon>
-                    <controls:DebuggerIcon Width="14" Height="14" />
+                    <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                   </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
                           Command="{Binding DebugFunctionCommand}"
                           IsVisible="{Binding IsFunctionLeaf}">
                   <MenuItem.Icon>
-                    <controls:DebuggerIcon Width="14" Height="14" />
+                    <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                   </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
@@ -1196,8 +1196,12 @@
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteTooltip}"
                       Command="{Binding ExecuteQueryCommand}" IsVisible="{Binding ShowExecuteButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
+                  <!-- ⭐ `Size.Icon` (14), nie `Size.Icon.Toolbar` (16): ikona stoi PRZY ETYKIECIE, więc
+                       celem myszy jest przycisk, a nie ona (A‑3, M4). Samotna ikona w tym samym pasku —
+                       np. `Icon.Hammer` niżej — bierze `Size.Icon.Toolbar`. Wartość bez zmiany. -->
                   <controls:SvgIcon Data="{StaticResource Icon.Play}"
-                                    Width="14" Height="14" VerticalAlignment="Center" />
+                                    Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
+                                    VerticalAlignment="Center" />
                   <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
                   <TextBlock Classes="shortcut-chip" Text="{Binding ExecuteHint}" />
                 </StackPanel>
@@ -1209,7 +1213,8 @@
                       Command="{Binding CancelQueryCommand}" IsVisible="{Binding ShowCancelButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}"
-                                    Width="14" Height="14" VerticalAlignment="Center" />
+                                    Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
+                                    VerticalAlignment="Center" />
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>

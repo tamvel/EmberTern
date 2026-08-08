@@ -33,7 +33,11 @@
         <Button Classes="primary" Command="{Binding RunCommand}"
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptRunTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="14" Height="14"
+            <!-- ⭐ `Size.Icon` (14), nie `Size.Icon.Toolbar` (16): ta ikona stoi PRZY ETYKIECIE, więc
+                 celem myszy jest przycisk, a nie ona. Dokładnie ta różnica, którą A‑3 nazwało w M4 —
+                 samotna ikona w `Button.icon` obok bierze 16 z `ControlTheme`. Wartość bez zmiany. -->
+            <controls:SvgIcon Data="{StaticResource Icon.Play}"
+                              Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource OnAccentBrush}" />
             <TextBlock Text="{x:Static app:UiStrings.ScriptRun}" VerticalAlignment="Center" />
             <!-- ⭐ TA SAMA AKCJA, TEN SAM SKRÓT, TO SAMO ŹRÓDŁO. Run w Script Executorze to `CommandId.Go`
@@ -71,7 +75,8 @@
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptCommitTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <!-- Role R‑2 / R‑3 na własnych tokenach (K7) — patrz MainWindow. Wygląd bez zmiany. -->
-            <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
+            <controls:SvgIcon Data="{StaticResource Icon.Check}"
+                              Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource CommitButtonBrush}" />
             <TextBlock Text="{x:Static app:UiStrings.ScriptCommit}" />
           </StackPanel>
@@ -79,7 +84,8 @@
         <Button Classes="flat" Command="{Binding RollbackScriptCommand}"
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptRollbackTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
+            <controls:SvgIcon Data="{StaticResource Icon.Undo}"
+                              Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource RollbackButtonBrush}" />
             <TextBlock Text="{x:Static app:UiStrings.ScriptRollback}" />
           </StackPanel>

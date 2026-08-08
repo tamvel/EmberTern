@@ -790,9 +790,20 @@ public class DesignTokenComplianceTests
     {
         // M4 / A‑3 + B‑1: 152 → 95. Zeszło 16 literałów `16` (pasek narzędzi i okno → `Size.Icon.Toolbar`)
         // oraz 41 par 15+5 wiersza drzewa (→ `Size.Icon` + `Space.Xs`).
+        // ⭐ M4.1: 95 → 81. Zeszło 14 ikon stojących PRZY ETYKIECIE (`Button.primary`/`.flat` z tekstem,
+        // chevron ujawnienia przy tytule sekcji, wiersz menu kontekstowego) → `Size.Icon`. Wartość bez
+        // zmiany — te ikony już niosły 14; migracja nazywa rolę, której `Size.Icon` komentarz wprost je
+        // uczy („ikona przy etykiecie", „nie być celem myszy"). `ScriptExecutorTabView` wpis USUNIĘTY.
+        // ⚠⚠ RESZTA LITERAŁÓW `14` W TYCH PLIKACH JEST ŚWIADOMIE NIETKNIĘTA I CZEKA NA DECYZJĘ, nie na
+        // czyjąś rękę: to samotne ikony w `Button.icon` pasków siatki (paginacja, filtr/agregacja/eksport,
+        // chevron zwijania panelu), gdzie IDENTYCZNY kształt renderuje się 16 w 135 innych miejscach.
+        // Pomiar: ten sam pasek paginacji ma 14 w Table Data i wynikach SQL, 16 w edytorach funkcji /
+        // procedury / widoku i `Size.Icon.Toolbar` w debuggerze — TRZY odpowiedzi na jedną kontrolkę.
+        // Wpisanie tu którejkolwiek roli byłoby rozstrzygnięciem pytania o gęstość chromy ekran po
+        // ekranie, czyli dokładnie tym, czego zabrania D‑M4‑2.
         ["Views/DebuggerTabView.axaml"] = 18,
-        ["Views/MainWindow.axaml"] = 16,
-        ["Views/DataImportTabView.axaml"] = 10,
+        ["Views/MainWindow.axaml"] = 11,
+        ["Views/DataImportTabView.axaml"] = 4,
         ["Views/TableDetailTabView.axaml"] = 8,
         ["Views/ProcedureDetailTabView.axaml"] = 7,
         ["Views/FunctionDetailTabView.axaml"] = 7,
@@ -801,7 +812,6 @@ public class DesignTokenComplianceTests
         ["Views/ViewDetailTabView.axaml"] = 3,
         ["Views/SessionManagerTabView.axaml"] = 3,
         ["Views/SecurityManagerTabView.axaml"] = 3,
-        ["Views/ScriptExecutorTabView.axaml"] = 3,
         ["Views/PackageDetailTabView.axaml"] = 2,
         ["Views/SettingsImportDialog.axaml"] = 1,
         ["Views/SettingsExportDialog.axaml"] = 1,
