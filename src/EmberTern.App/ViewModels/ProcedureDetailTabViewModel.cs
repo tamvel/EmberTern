@@ -470,6 +470,23 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
 
     public bool CanExportExecResult => HasExecResult;
 
+    /// <summary>
+    /// Clipboard text for the result grid's Copy cell / row / row with headers / all with headers actions,
+    /// through the one shared <see cref="GridCopyText"/> builder every data grid uses. Returns null when there
+    /// is nothing to copy; the view writes the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ "All" is the whole materialised result, not the visible page — the same meaning it has on the SQL
+    /// Editor grid, which pages client-side over its result in exactly this way.
+    /// </remarks>
+    public string? BuildCopyText(CopyGridMode mode, object?[]? row, int columnIndex)
+        => GridCopyText.Build(
+            mode,
+            ExecResult?.Columns ?? Array.Empty<QueryColumn>(),
+            ExecResult?.Rows ?? Array.Empty<object?[]>(),
+            row,
+            columnIndex);
+
     /// <summary>Export source for the Execute-Procedure result grid — the SAME materialized model as
     /// the SQL Editor results (CurrentView = the filtered/displayed rows; AllRows = the full result).
     /// No re-fetch: re-running a procedure would repeat its side effects, so "All rows" is the
@@ -790,6 +807,11 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
 
     // ─── Object-specific hooks (SourceObjectDetailTabViewModel) ───────────
 
+    /// <summary>The name this tab was opened with — its IDENTITY, fixed for the tab's life. ⚠ Deliberately NOT
+    /// the editable field: that follows what the user typed, so on a rename it already holds the NEW name and
+    /// could never tell the two apart.</summary>
+    protected override string LoadedObjectName => ProcedureName;
+
     protected override string ObjectDisplayName =>
         string.IsNullOrWhiteSpace(EditableProcedureName) ? ProcedureName : EditableProcedureName.Trim();
 
@@ -829,15 +851,20 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         // Reads the source AND arms the change-safety gate with it — one act (see LoadDefinitionAsync).
         await SafeLoadAsync(() => LoadDefinitionAsync(cancellationToken));
 
-        await SafeLoadAsync(async () =>
-        {
-            var body = await DdlReader!.FetchProcedureBodyAsync(
-                new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
-            // Split the body into the editable structured model (Variables / Cursors /
-            // Subprograms + executable body).
-            SyncEasyModelFromBody(body);
-        });
-
+        // ⭐⭐ PARAMETERS BEFORE THE BODY, and the order is the fix — not tidiness (S-2, 2026-08-05).
+        //
+        // In Easy mode the body editor holds only the BODY; the routine's parameters live in these grids and
+        // reach the semantic model as AMBIENT SYMBOLS. Setting the body text first therefore built a model
+        // whose ':param' references could not resolve, so the editor opened with an ET0003 squiggle under
+        // every parameter use — clearing ~200 ms later, once the grids raised AmbientSymbolsChanged and the
+        // debounced rebuild ran. Together with the unwarmed-column storm that is the reported "for a moment
+        // practically everything is underlined, then the errors disappear".
+        //
+        // ⚠ Loading the inputs first does not merely reorder the flicker: the FIRST model is now built with
+        // its ambient symbols already present, so there is nothing to correct afterwards.
+        //
+        // ⚠ Source mode is unaffected either way — its text is the whole CREATE OR ALTER, so the parameter
+        // declarations are IN the document and the model binds them itself, with no ambient set involved.
         await SafeLoadAsync(async () =>
         {
             var inputs = await Reader!.GetProcedureParametersAsync(ProcedureName, InputParamType, cancellationToken).ConfigureAwait(true);
@@ -850,6 +877,15 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
             var outputs = await Reader!.GetProcedureParametersAsync(ProcedureName, OutputParamType, cancellationToken).ConfigureAwait(true);
             OutputParams.Clear();
             foreach (var p in outputs) OutputParams.Add(ProcedureParamRowViewModel.From(p, this, isOutput: true));
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            var body = await DdlReader!.FetchProcedureBodyAsync(
+                new MetadataObject(ProcedureName, MetadataObjectKind.Procedure), cancellationToken).ConfigureAwait(true);
+            // Split the body into the editable structured model (Variables / Cursors /
+            // Subprograms + executable body).
+            SyncEasyModelFromBody(body);
         });
 
         await SafeLoadAsync(async () =>

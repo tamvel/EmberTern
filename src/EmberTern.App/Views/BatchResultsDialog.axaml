@@ -58,7 +58,7 @@
                    HorizontalAlignment="Center"
                    TextAlignment="Center"
                    TextWrapping="Wrap"
-                   FontSize="14"
+                   FontSize="{DynamicResource Text.Title.Size}"
                    Classes.error="{Binding PreparationFailed}" />
         <!-- UX Polish Seam 4 — the local DangerIconBrush override is gone: an error message reads in
              ErrorBrush everywhere in the IDE (DangerIconBrush is for destructive-action ICONS), and the
@@ -132,7 +132,7 @@
             BorderThickness="0,1,0,0"
             Padding="20,12">
       <Grid ColumnDefinitions="*,Auto,Auto">
-        <TextBlock Grid.Column="0" Text="{Binding StatusSummary}" FontSize="12"
+        <TextBlock Grid.Column="0" Text="{Binding StatusSummary}" FontSize="{DynamicResource Text.Application.Size}"
                    VerticalAlignment="Center" IsVisible="{Binding !IsPreparing}" />
         <Button Grid.Column="1"
                 Classes="flat"

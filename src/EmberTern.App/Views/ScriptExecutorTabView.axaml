@@ -16,6 +16,7 @@
 
     <!-- Toolbar: Run / Stop · transaction mode + stop-on-error · Commit / Rollback -->
     <Border Grid.Row="0"
+            Classes="chrome"
             Background="{DynamicResource PanelBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
@@ -23,7 +24,7 @@
       <DockPanel LastChildFill="True">
         <!-- Live elapsed timer (shared ExecutionTimer) — RIGHT-ALIGNED status element (docked
              right, outside the button StackPanel) so it never shifts the toolbar buttons. -->
-        <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}" FontSize="11"
+        <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}" FontSize="{DynamicResource Text.Compact.Size}"
                    FontFamily="Consolas,Menlo,monospace" Margin="8,0,4,0" VerticalAlignment="Center"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    IsVisible="{Binding ExecutionTimer.IsRunning}" />
@@ -32,9 +33,19 @@
         <Button Classes="primary" Command="{Binding RunCommand}"
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptRunTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="14" Height="14"
+            <!-- ⭐ `Size.Icon` (14), nie `Size.Icon.Toolbar` (16): ta ikona stoi PRZY ETYKIECIE, więc
+                 celem myszy jest przycisk, a nie ona. Dokładnie ta różnica, którą A‑3 nazwało w M4 —
+                 samotna ikona w `Button.icon` obok bierze 16 z `ControlTheme`. Wartość bez zmiany. -->
+            <controls:SvgIcon Data="{StaticResource Icon.Play}"
+                              Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource OnAccentBrush}" />
-            <TextBlock Text="{x:Static app:UiStrings.ScriptRun}" />
+            <TextBlock Text="{x:Static app:UiStrings.ScriptRun}" VerticalAlignment="Center" />
+            <!-- ⭐ TA SAMA AKCJA, TEN SAM SKRÓT, TO SAMO ŹRÓDŁO. Run w Script Executorze to `CommandId.Go`
+                 — dokładnie ta, którą pasek SQL Editora pokazuje jako „Execute F5". Chip czyta ten sam
+                 `ToolbarExecuteHint` (czyli katalog komend), więc nie da się ich rozjechać: gest jest
+                 zapisany w JEDNYM miejscu (gotcha #284). Zgłoszenie QA: „jeżeli Execute pokazuje F5,
+                 Run również powinien — to jest ta sama akcja". -->
+            <TextBlock Classes="shortcut-chip" Text="{x:Static app:UiStrings.ToolbarExecuteHint}" />
           </StackPanel>
         </Button>
 
@@ -63,16 +74,19 @@
         <Button Classes="flat" Command="{Binding CommitScriptCommand}"
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptCommitTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <controls:SvgIcon Data="{StaticResource Icon.Check}" Width="14" Height="14"
-                              Foreground="{DynamicResource SuccessIconBrush}" />
+            <!-- Role R‑2 / R‑3 na własnych tokenach (K7) — patrz MainWindow. Wygląd bez zmiany. -->
+            <controls:SvgIcon Data="{StaticResource Icon.Check}"
+                              Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
+                              Foreground="{DynamicResource CommitButtonBrush}" />
             <TextBlock Text="{x:Static app:UiStrings.ScriptCommit}" />
           </StackPanel>
         </Button>
         <Button Classes="flat" Command="{Binding RollbackScriptCommand}"
                 ToolTip.Tip="{x:Static app:UiStrings.ScriptRollbackTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <controls:SvgIcon Data="{StaticResource Icon.Undo}" Width="14" Height="14"
-                              Foreground="{DynamicResource DangerIconBrush}" />
+            <controls:SvgIcon Data="{StaticResource Icon.Undo}"
+                              Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
+                              Foreground="{DynamicResource RollbackButtonBrush}" />
             <TextBlock Text="{x:Static app:UiStrings.ScriptRollback}" />
           </StackPanel>
         </Button>
@@ -100,7 +114,7 @@
     <ae:TextEditor Grid.Row="1" x:Name="ScriptEditor"
                    ShowLineNumbers="True"
                    FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                   FontSize="13"
+                   FontSize="{DynamicResource Text.Code.Size}"
                    HorizontalScrollBarVisibility="Auto"
                    VerticalScrollBarVisibility="Auto"
                    Background="{DynamicResource BackgroundBrush}"
@@ -144,7 +158,8 @@
         </Grid>
       </Border>
 
-      <DataGrid Grid.Row="1" x:Name="ResultsGrid"
+      <Panel Grid.Row="1">
+      <DataGrid x:Name="ResultsGrid"
                 ItemsSource="{Binding Rows}"
                 IsReadOnly="True"
                 CanUserSortColumns="False"
@@ -210,6 +225,31 @@
                               Binding="{Binding Error}" Width="2*" MinWidth="160" />
         </DataGrid.Columns>
       </DataGrid>
+
+        <!-- ══ STANY PUSTE SIATKI WYNIKÓW — M5 / M‑3, B6 ═══════════════════════════════════════════
+             ⭐⭐ DWA, I TO ROZRÓŻNIENIE NIE JEST NASZE — model niósł je na długo przed M‑3: `HasResults`
+             liczy się z `_allRows` (PRZED filtrem), a siatka wiąże się z `Rows` (PO filtrze). Jeden
+             komunikat mówiłby „uruchom skrypt" komuś, kto właśnie go uruchomił i tylko przełączył filtr
+             na „Failed".
+             ⚠ Druga treść świadomie powtarza język Session Managera i Trace Monitora — ta sama sytuacja
+             ma brzmieć tak samo niezależnie od ekranu. -->
+        <TextBlock Text="{x:Static app:UiStrings.ScriptResultsEmpty}"
+                   IsVisible="{Binding ShowNoResults}"
+                   IsHitTestVisible="False"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Margin="{DynamicResource Pad.Panel}"
+                   TextWrapping="Wrap" TextAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   FontSize="{DynamicResource Text.Application.Size}" />
+        <TextBlock Text="{x:Static app:UiStrings.ScriptResultsNoFilterMatch}"
+                   IsVisible="{Binding ShowNoFilterMatch}"
+                   IsHitTestVisible="False"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Margin="{DynamicResource Pad.Panel}"
+                   TextWrapping="Wrap" TextAlignment="Center"
+                   Foreground="{DynamicResource SubtleForegroundBrush}"
+                   FontSize="{DynamicResource Text.Application.Size}" />
+      </Panel>
     </Grid>
   </Grid>
 </UserControl>

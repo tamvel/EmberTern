@@ -251,6 +251,8 @@ public class PreferencesTests
         [nameof(Preferences.PreviewRowLimit)] = PreferenceOptions.PreviewRowLimit,
         [nameof(Preferences.FullLoadPromptThreshold)] = PreferenceOptions.FullLoadPromptThreshold,
         [nameof(Preferences.DataPageSize)] = PreferenceOptions.DataPageSize,
+        [nameof(Preferences.TabStripMode)] = PreferenceOptions.TabStripMode,
+        [nameof(Preferences.TabStripMaxRows)] = PreferenceOptions.TabStripMaxRows,
 
         // Booleans: no illegal value exists, so there is nothing for Validate to correct. Recorded as a
         // decision rather than omitted — that is what this table is for.
@@ -404,5 +406,53 @@ public class PreferencesTests
         Assert.False(fresh.FunctionEasyModeDefault);
         Assert.True(fresh.GridAutoFitColumns);
         Assert.Equal(PreferenceOptions.DebuggerIsolationReadCommitted, fresh.DebuggerIsolation);
+    }
+
+    /// <summary>
+    /// ⭐ The tab strip's two RATIFIED numbers (product-polish §8.2, decisions D5/D7), pinned explicitly.
+    ///
+    /// <para>⚠ The generic theories above already prove that <c>TabStripMode</c> normalizes and
+    /// <c>TabStripMaxRows</c> clamps — but they are indifferent to WHICH values those are, so neither would
+    /// notice the default quietly becoming single-row or five. These are user decisions, and a user decision
+    /// that lives only in a comment is one refactor away from being someone's opinion.</para>
+    ///
+    /// <para>⭐ The default matters more than it looks: <c>MultiRow</c> is the mode in which <b>no tab is ever
+    /// hidden behind a menu</b>, which is the ratified difference from Visual Studio. Shipping
+    /// <c>SingleRow</c> by default would silently reverse that.</para>
+    /// </summary>
+    [Fact]
+    public void TabStripDefaults_AreTheRatifiedOnes()
+    {
+        var fresh = new Preferences();
+
+        Assert.Equal(PreferenceOptions.TabStripModeMultiRow, fresh.TabStripMode);
+        Assert.Equal(3, fresh.TabStripMaxRows);
+
+        Assert.Equal(1, PreferenceOptions.TabStripMaxRows.Minimum);
+        Assert.Equal(10, PreferenceOptions.TabStripMaxRows.Maximum);
+
+        // ⚠ Exactly two modes. A third would need a third layout in the view, and the guard is here rather
+        // than in the view because that is where it can be stated as a fact rather than as a hope.
+        Assert.Equal(
+            new[] { PreferenceOptions.TabStripModeMultiRow, PreferenceOptions.TabStripModeSingleRow },
+            PreferenceOptions.TabStripMode.Values);
+    }
+
+    /// <summary>
+    /// ⚠ The row limit SURVIVES a round trip through single-row mode — a mode is a view of the same workspace,
+    /// so switching away and back must not quietly reset the number the user chose.
+    /// <para>Cheap to state and easy to break: the tempting "reset the limit when it stops applying" would look
+    /// like tidiness and read to the user as lost settings.</para>
+    /// </summary>
+    [Fact]
+    public void TabStripMaxRows_SurvivesASwitchToSingleRowAndBack()
+    {
+        var chosen = new Preferences { TabStripMaxRows = 7 };
+
+        var single = PreferencesStore.Validate(chosen with { TabStripMode = PreferenceOptions.TabStripModeSingleRow });
+        Assert.Equal(7, single.TabStripMaxRows);
+
+        var back = PreferencesStore.Validate(single with { TabStripMode = PreferenceOptions.TabStripModeMultiRow });
+        Assert.Equal(7, back.TabStripMaxRows);
     }
 }

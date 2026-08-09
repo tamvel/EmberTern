@@ -2176,7 +2176,10 @@ public sealed partial class DebuggerTabViewModel
     // literal convention). Prefers the current value's CLR type; otherwise classifies by the type name. An
     // empty box (or "<null>") clears to null. Returns false when the text does not parse for the type — the
     // caller keeps the box open and flags the error rather than injecting a guessed value (§F).
-    private static bool TryParseEditedValue(string? text, object? current, string typeText, out object? value)
+    // ⚠ `internal` so the round trip can be pinned against the REAL parser: the inline-edit box is seeded with
+    // the engine's date form (DebugVariableRowViewModel.RawEditString), and a test that re-implemented the
+    // parse would prove nothing about whether this method still accepts it.
+    internal static bool TryParseEditedValue(string? text, object? current, string typeText, out object? value)
     {
         value = null;
         text = text?.Trim() ?? string.Empty;

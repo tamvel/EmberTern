@@ -48,8 +48,17 @@ internal static class ScrollTrace
     }
 
     /// <summary>A tree-collection rebuild — if this appears mid-drag, it's our bug, not the control.</summary>
+    /// <remarks>
+    /// ⭐ Przekazuje też do <see cref="TreeDiagnostics"/> (flaga <c>EMBERTERN_TREE_DIAG</c>), która
+    /// odpowiada na pytanie 3 „czy podczas przewijania dochodzi do przebudów listy". ⚠ Zrobione TUTAJ,
+    /// a nie przez dopisanie wywołań w trzech ViewModelach, bo te trzy miejsca są już zadeklarowanymi
+    /// punktami „przebudowa" — drugi zestaw wywołań obok nich byłby drugim rejestrem tego samego faktu,
+    /// wolnym do rozjechania się z tym.
+    /// ⚠ Obie flagi są niezależne: każda działa sama, obie naraz też.
+    /// </remarks>
     public static void Rebuild(string what)
     {
+        TreeDiagnostics.Rebuild(what);
         if (!Enabled) return;
         FirebirdDiagnostics.AppendDebugLog("SCROLL [rebuild] " + what);
     }

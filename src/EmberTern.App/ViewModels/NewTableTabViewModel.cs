@@ -332,7 +332,7 @@ public partial class NewTableFieldRowViewModel : ObservableObject, ITypeSourceRo
 /// table progressively, switch to other tabs, and come back. Compile fires
 /// the DDL through <c>FirebirdDdlExecutor</c> via the owner.
 /// </summary>
-public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
+public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IDdlPreviewSource
 {
     public NewTableTabViewModel() : this(null)
     {

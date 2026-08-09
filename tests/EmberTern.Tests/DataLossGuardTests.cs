@@ -228,6 +228,210 @@ public class DataLossGuardTests
         Assert.Contains(tab, h.Main.WorkspaceTabs);
     }
 
+    // ─── Czwarte wejście do bramki: zamykanie masowe z menu zakładki (M3.3c / §8.3) ──────
+    //
+    // ⚠⚠ To jest dowód reguły #11 dla tego podetapu. „Zamknij wszystkie" zamyka wiele dokumentów
+    // jednym kliknięciem, więc pominięcie bramki byłoby utratą pracy w skali, jakiej nie ma żadna
+    // z trzech starszych ścieżek. Testy sprawdzają, że bramka jest wywołana, że jej ZASIĘG jest
+    // właściwy i że anulowanie nie zamyka NICZEGO.
+
+    [Fact]
+    public async Task CloseOthers_PromptsForTheOtherTabsWork_AndCancelKeepsThemAll()
+    {
+        using var h = new Harness();
+        var keep = ViewTab(h, "V_KEEP", dirty: false);
+        var dirty = ViewTab(h, "V_DIRTY", dirty: true);
+        h.Main.WorkspaceTabs.Add(keep);
+        h.Main.WorkspaceTabs.Add(dirty);
+
+        ChoiceRequest? seen = null;
+        h.Main.ChoiceRequested += req => { seen = req; return Task.FromResult<string?>("cancel"); };
+
+        await h.Main.TabMenuCloseOthersCommand.ExecuteAsync(keep);
+
+        Assert.NotNull(seen);
+        Assert.Contains("V_DIRTY", seen!.Message);
+        Assert.Contains(keep, h.Main.WorkspaceTabs);
+        Assert.Contains(dirty, h.Main.WorkspaceTabs);
+    }
+
+    /// <summary>
+    /// ⭐⭐ ZASIĘG BRAMKI — najważniejszy test tej grupy. „Zamknij po prawej" nie może pytać o pracę
+    /// w zakładce, której NIE ZAMYKA: pytanie o cudzą pracę jest fałszywe, a przemilczenie własnej
+    /// jest utratą danych. Tu brudna zakładka leży NA LEWO od kotwicy, więc bramka nie ma o co pytać.
+    /// </summary>
+    [Fact]
+    public async Task CloseToTheRight_DoesNotAskAboutWorkOutsideItsScope()
+    {
+        using var h = new Harness();
+        var dirtyLeft = ViewTab(h, "V_DIRTY_LEFT", dirty: true);
+        var anchor = ViewTab(h, "V_ANCHOR", dirty: false);
+        var cleanRight = ViewTab(h, "V_RIGHT", dirty: false);
+        h.Main.WorkspaceTabs.Add(dirtyLeft);
+        h.Main.WorkspaceTabs.Add(anchor);
+        h.Main.WorkspaceTabs.Add(cleanRight);
+
+        bool prompted = false;
+        h.Main.ChoiceRequested += _ => { prompted = true; return Task.FromResult<string?>("cancel"); };
+
+        await h.Main.TabMenuCloseToTheRightCommand.ExecuteAsync(anchor);
+
+        Assert.False(prompted, "Bramka zapytała o pracę w zakładce, której ta operacja nie zamyka.");
+        Assert.DoesNotContain(cleanRight, h.Main.WorkspaceTabs);
+        Assert.Contains(dirtyLeft, h.Main.WorkspaceTabs);
+        Assert.Contains(anchor, h.Main.WorkspaceTabs);
+    }
+
+    /// <summary>
+    /// ⚠ Nieudany zapis NIE zamyka niczego. Częściowe zamknięcie po nieudanym zapisie byłoby
+    /// najgorszym możliwym wynikiem: część pracy przepadła, a użytkownik dostał komunikat o sukcesie
+    /// operacji, która się nie udała. (Bez `DdlExecutor` nic się nie kompiluje, więc praca zostaje.)
+    /// </summary>
+    [Fact]
+    public async Task CloseAll_SaveThatDoesNotClearTheWork_ClosesNothing()
+    {
+        using var h = new Harness();
+        var clean = ViewTab(h, "V_CLEAN", dirty: false);
+        var dirty = ViewTab(h, "V_DIRTY", dirty: true);
+        h.Main.WorkspaceTabs.Add(clean);
+        h.Main.WorkspaceTabs.Add(dirty);
+
+        h.Main.ChoiceRequested += _ => Task.FromResult<string?>("save");
+
+        await h.Main.TabMenuCloseAllCommand.ExecuteAsync(null);
+
+        Assert.Contains(clean, h.Main.WorkspaceTabs);
+        Assert.Contains(dirty, h.Main.WorkspaceTabs);
+    }
+
+    /// <summary>
+    /// ⭐ „Zamknij niezmodyfikowane" z definicji nie ma czego stracić, więc NIE pyta — i to jest cała
+    /// jego wartość jako pozycji menu: sposób na uprzątnięcie paska bez odpowiadania na cokolwiek.
+    /// </summary>
+    [Fact]
+    public async Task CloseUnmodified_ClosesCleanTabsSilently_AndLeavesDirtyOnesAlone()
+    {
+        using var h = new Harness();
+        var clean = ViewTab(h, "V_CLEAN", dirty: false);
+        var dirty = ViewTab(h, "V_DIRTY", dirty: true);
+        h.Main.WorkspaceTabs.Add(clean);
+        h.Main.WorkspaceTabs.Add(dirty);
+
+        bool prompted = false;
+        h.Main.ChoiceRequested += _ => { prompted = true; return Task.FromResult<string?>("cancel"); };
+
+        await h.Main.TabMenuCloseUnmodifiedCommand.ExecuteAsync(null);
+
+        Assert.False(prompted);
+        Assert.DoesNotContain(clean, h.Main.WorkspaceTabs);
+        Assert.Contains(dirty, h.Main.WorkspaceTabs);
+    }
+
+    /// <summary>
+    /// ⚠ Odświeżenie przeładowuje źródło i czyści dirty, więc brudna zakładka NIE jest odświeżana —
+    /// to samo wykluczenie, które Seam 6d zastosował przy odświeżaniu rodzeństwa po kompilacji.
+    /// </summary>
+    [Fact]
+    public async Task TabMenuRefresh_LeavesADirtyTabAlone()
+    {
+        using var h = new Harness();
+        var dirty = ViewTab(h, "V_DIRTY", dirty: true);
+        h.Main.WorkspaceTabs.Add(dirty);
+
+        await h.Main.TabMenuRefreshCommand.ExecuteAsync(dirty);
+
+        Assert.NotNull(dirty.UnsavedWork);
+    }
+
+    // ─── Bramkowanie pozycji menu (M3.3c) ─────────────────────────────────
+    //
+    // ⚠⚠ Zgłoszenie użytkownika przed implementacją: „sprawdź, czy wszystkie pozycje poprawnie włączają
+    // się i wyłączają zależnie od kontekstu, żeby nie zostawić martwych lub zawsze aktywnych poleceń".
+    // Polecenie klikalne, które nic nie robi, uczy, że polecenie nie działa — i uczy tego trwale.
+
+    [Fact]
+    public void CloseToTheRight_IsDisabledOnTheLastTab_AndEnabledElsewhere()
+    {
+        using var h = new Harness();
+        var first = ViewTab(h, "V_FIRST", dirty: false);
+        var last = ViewTab(h, "V_LAST", dirty: false);
+        h.Main.WorkspaceTabs.Add(first);
+        h.Main.WorkspaceTabs.Add(last);
+
+        Assert.True(h.Main.TabMenuCloseToTheRightCommand.CanExecute(first));
+        Assert.False(h.Main.TabMenuCloseToTheRightCommand.CanExecute(last));
+    }
+
+    [Fact]
+    public void CloseOthers_IsDisabledWhenItIsTheOnlyTab()
+    {
+        using var h = new Harness();
+        var only = ViewTab(h, "V_ONLY", dirty: false);
+        h.Main.WorkspaceTabs.Add(only);
+
+        Assert.False(h.Main.TabMenuCloseOthersCommand.CanExecute(only));
+    }
+
+    [Fact]
+    public void CloseUnmodified_IsDisabledWhenEveryTabIsDirty()
+    {
+        using var h = new Harness();
+        h.Main.WorkspaceTabs.Add(ViewTab(h, "V_A", dirty: true));
+        h.Main.WorkspaceTabs.Add(ViewTab(h, "V_B", dirty: true));
+
+        Assert.False(h.Main.TabMenuCloseUnmodifiedCommand.CanExecute(null));
+
+        h.Main.WorkspaceTabs.Add(ViewTab(h, "V_CLEAN", dirty: false));
+        Assert.True(h.Main.TabMenuCloseUnmodifiedCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// ⭐⭐ Bramkowanie zależy od SKŁADU kolekcji, a `[RelayCommand]` sam z siebie o jej zmianie nic nie
+    /// wie. Bez przeliczenia „Zamknij po prawej" zostałoby aktywne po zamknięciu ostatniej zakładki —
+    /// czyli dokładnie martwe polecenie. To jest ta sama luka co przy `ShowTabStripMaxRows`: wartość
+    /// czytana wprost byłaby poprawna, a menu i tak pokazywałoby stan sprzed zmiany.
+    /// </summary>
+    [Fact]
+    public void ClosingATab_RecomputesTheMenuGating()
+    {
+        using var h = new Harness();
+        var first = ViewTab(h, "V_FIRST", dirty: false);
+        var second = ViewTab(h, "V_SECOND", dirty: false);
+        h.Main.WorkspaceTabs.Add(first);
+        h.Main.WorkspaceTabs.Add(second);
+
+        var announced = false;
+        h.Main.TabMenuCloseToTheRightCommand.CanExecuteChanged += (_, _) => announced = true;
+
+        h.Main.WorkspaceTabs.Remove(second);
+
+        Assert.True(announced, "Zmiana kolekcji nie przeliczyła bramkowania — menu pokaże stan sprzed.");
+        Assert.False(h.Main.TabMenuCloseToTheRightCommand.CanExecute(first));
+    }
+
+    /// <summary>⚠ „Odśwież" jest aktywne tylko dla rodzajów, które NAPRAWDĘ się odświeżają, i tylko gdy
+    /// nie ma niezapisanej pracy — inaczej byłoby albo martwe, albo niszczyłoby edycję.</summary>
+    [Fact]
+    public void Refresh_IsDisabledForADirtyTab_AndForAKindThatDoesNotRefresh()
+    {
+        using var h = new Harness();
+        var dirty = ViewTab(h, "V_DIRTY", dirty: true);
+        var clean = ViewTab(h, "V_CLEAN", dirty: false);
+        h.Main.WorkspaceTabs.Add(dirty);
+        h.Main.WorkspaceTabs.Add(clean);
+
+        Assert.True(h.Main.TabMenuRefreshCommand.CanExecute(clean));
+        Assert.False(h.Main.TabMenuRefreshCommand.CanExecute(dirty));
+
+        // Zakładka narzędziowa (SQL Editor) nie ma czego przeładować — i nie ma nazwy obiektu.
+        var editor = h.Main.WorkspaceTabs.FirstOrDefault(t => t.Kind == WorkspaceTabKind.Query);
+        if (editor is not null)
+        {
+            Assert.False(h.Main.TabMenuRefreshCommand.CanExecute(editor));
+            Assert.False(h.Main.TabMenuCopyObjectNameCommand.CanExecute(editor));
+        }
+    }
+
     // ─── App-close guard ──────────────────────────────────────────────────
 
     [Fact]

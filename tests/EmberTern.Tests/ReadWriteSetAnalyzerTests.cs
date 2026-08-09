@@ -219,8 +219,27 @@ public class ReadWriteSetAnalyzerTests
         Assert.Equal(withNull.Reads.OrderBy(x => x), withEmpty.Reads.OrderBy(x => x));
     }
 
+    // ⚠⚠ THIS TEST USED TO ASSERT THE OPPOSITE, AND THE CHANGE IS THE POINT (S-6, 2026-08-05).
+    //
+    // It was `SelectInto_SurfacesNoLocalRefs_SoTheFallbackIsInScopeLocals`: a reused SELECT … INTO in a PSQL
+    // body surfaced NO local references, so ReadWriteSetAnalyzer returned an empty set and the executor fell
+    // back to §3.5's "inject every in-scope local" (gotcha #238). That emptiness was not a property of the
+    // statement — it was a HOLE IN THE BINDER: the query binder walked the clauses but had no branch for a
+    // ':name' token, and the INTO targets sat inside the query NODE's span while belonging to none of its
+    // clauses, so the PSQL walk skipped them. Both are now bound.
+    //
+    // ⭐ So the executor's fallback still exists and is still correct — but it no longer fires for THIS
+    // shape, because the precise set is now genuinely precise. That is a NARROWING of what the debugger
+    // injects, i.e. a behaviour change to a live-fidelity-verified subsystem, so it was proven on the engine
+    // rather than reasoned about: DebuggerFidelityProbe case 39 (SP_DBG_SELINTO) steps exactly this shape
+    // and reports sim == real for both the INTO write-back and the branch that reads it.
+    //
+    // ⚠⚠ Worth keeping for whoever touches the fallback next: it keys on an ABSENCE (`Reads.Count == 0 &&
+    // Writes.Count == 0`), and an absence is not a decidable signal — it meant BOTH "this statement has no
+    // locals" and "the binder does not cover this shape". Restoring one of those meanings silently changed
+    // the injection strategy, and no existing probe case covered the difference.
     [Fact]
-    public void SelectInto_SurfacesNoLocalRefs_SoTheFallbackIsInScopeLocals()
+    public void SelectInto_SurfacesItsWhereReadAndItsIntoWrite()
     {
         var model = SemanticModel.Build(SqlParser.Parse(SelectIntoSql).Root);
         var body = model.Syntax.Statements.OfType<DdlStatement>().First().Body!;
@@ -228,12 +247,15 @@ public class ReadWriteSetAnalyzerTests
             SelectIntoSql.Substring(s.Start, s.Length).StartsWith("select", System.StringComparison.OrdinalIgnoreCase));
 
         var precise = ReadWriteSetAnalyzer.Analyze(selectInto, model);
-        var fallback = ReadWriteSetAnalyzer.InScopeLocals(model, selectInto.Start);
 
-        // The precise set is empty (the gap the executor's fallback exists for) …
-        Assert.Empty(precise.Reads);
-        Assert.Empty(precise.Writes);
-        // … while the fallback carries the WHERE read AND the INTO write target.
+        // The ':pid' read in the WHERE clause — bound by the query binder's Parameter branch.
+        Assert.Contains("PID", precise.Reads);
+        // The ':v_exists' INTO target — bound by the PSQL walk, which now skips the query's CLAUSES rather
+        // than its whole node and therefore reaches the INTO list.
+        Assert.Contains("V_EXISTS", precise.Writes);
+
+        // And the in-scope fallback still answers correctly — it is unchanged, just no longer needed here.
+        var fallback = ReadWriteSetAnalyzer.InScopeLocals(model, selectInto.Start);
         Assert.Contains("PID", fallback);
         Assert.Contains("V_EXISTS", fallback);
     }

@@ -154,7 +154,7 @@ public abstract class FromItem : SqlNode
 }
 
 /// <summary>A named table reference — <c>[schema.]table [[AS] alias]</c>.</summary>
-public sealed class TableReference : FromItem
+public class TableReference : FromItem
 {
     public TableReference(
         int start, int length, IReadOnlyList<SqlToken> tokens, SqlToken? nameToken, SqlToken? aliasToken)
@@ -169,6 +169,55 @@ public sealed class TableReference : FromItem
 
     /// <summary>The alias token (<c>[AS] alias</c>), or null when the entry has no alias.</summary>
     public SqlToken? AliasToken { get; }
+}
+
+/// <summary>
+/// A <b>selectable procedure invoked where a table would stand</b> — <c>… FROM MY_PROC(a, b) [[AS] alias]</c>.
+///
+/// <para>⭐⭐ <b>This node is the fix for a defect that was patched twice at the wrong layer.</b> The parser used
+/// to read the routine's name, then go straight to the alias — so the argument list was not merely unmodelled,
+/// it was <i>dropped</i>: a <see cref="TableReference"/> for <c>rap(:a, :b) r</c> carried the single token
+/// <c>rap</c> and neither the arguments nor the alias. Consumers that needed the arguments therefore re-scanned
+/// the SQL text, once per syntax, and each syntax not yet re-scanned silently did nothing (user report
+/// 2026-08-03: parameter types read "Unknown" for every selectable procedure, then for <c>FOR SELECT</c>, then
+/// for <c>INSERT … SELECT</c>). ⛔ The lesson is Contract #1: when a consumer starts token-scanning for
+/// structure, the structure belongs in the parser.</para>
+///
+/// <para>⚠ A SUBCLASS of <see cref="TableReference"/>, deliberately: every existing consumer matches
+/// <c>is TableReference</c> to resolve the name against the catalog (a selectable procedure in <c>FROM</c> is
+/// how the binder colours and navigates it today), and those must keep working untouched. The new capability is
+/// purely additive — exactly the additive-AST-deepening rule Etap 6.9 follows.</para>
+///
+/// <para>⚠ Firebird admits <c>FROM MY_PROC</c> with no parentheses for a no-argument selectable procedure, which
+/// is indistinguishable from a table at parse time. That stays a plain <see cref="TableReference"/> — a name
+/// alone is not evidence of an invocation, and guessing would make every table look like a call.</para>
+/// </summary>
+public sealed class RoutineTableReference : TableReference, IRoutineInvocation
+{
+    public RoutineTableReference(
+        int start,
+        int length,
+        IReadOnlyList<SqlToken> tokens,
+        SqlToken? nameToken,
+        SqlToken? aliasToken,
+        string? routineName,
+        string? packageName,
+        IReadOnlyList<CallArgument> arguments)
+        : base(start, length, tokens, nameToken, aliasToken)
+    {
+        RoutineName = routineName;
+        PackageName = packageName;
+        Arguments = arguments;
+    }
+
+    /// <inheritdoc />
+    public string? RoutineName { get; }
+
+    /// <inheritdoc />
+    public string? PackageName { get; }
+
+    /// <inheritdoc />
+    public IReadOnlyList<CallArgument> Arguments { get; }
 }
 
 /// <summary>A derived table — <c>( &lt;subquery&gt; ) [[AS] alias]</c>. B3 recurses: the subquery is a real

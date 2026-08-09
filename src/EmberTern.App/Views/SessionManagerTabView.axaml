@@ -11,27 +11,18 @@
              Foreground="{DynamicResource ForegroundBrush}">
 
   <UserControl.Styles>
-    <!-- Health-Bar filter chips: same segmented language as the Activity Monitor toolbar -->
-    <Style Selector="Button.seg">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="Padding" Value="8,3" />
-      <Setter Property="FontSize" Value="12" />
-    </Style>
-    <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
-    </Style>
-    <Style Selector="Button.seg.active">
-      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
+    <!-- ⭐ M4.3c: styl `Button.seg` przeniesiony do `Themes/ControlStyles.axaml` — JEDEN styl na dziewięć
+         segmentów w dwóch ekranach. Ten widok deklarował go lokalnie razem z Trace Monitorem, a kopie
+         RÓŻNIŁY SIĘ jedną wartością (`Padding` 8,3 vs 10,3) — mimo że komentarz stojący tutaj deklarował
+         wprost „same segmented language as the Activity Monitor toolbar". ⚠ Powód przeniesienia i powód
+         wyboru poziomu 8 stoją przy stylu; ⛔ nie przywracać kopii lokalnej. -->
     <!-- Detail-panel section header (matches the trace detail) -->
     <Style Selector="TextBlock.section">
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="FontSize" Value="12" />
+      <!-- ⭐ K8 ZAMKNIĘTA (M4, decyzja użytkownika A-2): rola `Text.SectionHeader` niesie teraz 12 SemiBold,
+           czyli dokładnie to, co ten nagłówek deklarował lokalnie od M2c. Wartość się nie zmienia — zmienia
+           się to, że przestaje być wyjątkiem. Powód korekty katalogu stoi przy roli w `Typography.axaml`. -->
+      <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
       <Setter Property="Margin" Value="0,0,0,3" />
     </Style>
     <!-- Compact, uncramped column headers for these grids only (matches the trace) -->
@@ -41,10 +32,10 @@
     <!-- Session Details key/value label -->
     <Style Selector="TextBlock.kv">
       <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     </Style>
     <Style Selector="TextBlock.kvv">
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     </Style>
   </UserControl.Styles>
 
@@ -52,11 +43,17 @@
     <!-- Shared warning card (Performance-findings shape) — ONE definition, used by the Warnings
          tab AND the scoped warnings in Session Details. -->
     <DataTemplate x:Key="SessionWarningCard" x:DataType="vm:SessionWarningViewModel">
+      <!-- ⭐ Q1 ZAMKNIĘTE (M4.3, decyzja użytkownika na renderze): karta bierze `Radius.Surface` (4 → 3).
+           M2c iteracja 6 zostawiła tu literał i oddała decyzję „karta: 3 czy 4" bramie §13.3 — ⚠ która
+           NIGDY jej nie podjęła (Z‑1…Z‑6 tego nie dotyczą) i pozycja nie dostała numeru K, więc przeżyła
+           zamknięcie rejestru kolizji „w całości". To ten sam mechanizm co przy B2 w M4.2, tylko że B2
+           nie było wyjątkiem — w M4.3 takich sierot po §13.3 było dziewiętnaście.
+           ⭐ Rola opisywała ten element od zawsze: jej komentarz w `Tokens.axaml` zaczyna się od „Karta". -->
       <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-              BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+              BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}" Padding="10,8" Margin="0,0,0,8">
         <StackPanel Spacing="4">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+            <controls:SvgIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center"
                               Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
               <controls:SvgIcon.Foreground>
                 <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -67,24 +64,24 @@
             </controls:SvgIcon>
             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
           </StackPanel>
-          <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" FontSize="12" />
-          <TextBlock Text="{Binding Impact}" TextWrapping="Wrap" FontSize="11"
+          <TextBlock Text="{Binding Explanation}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Application.Size}" />
+          <TextBlock Text="{Binding Impact}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}"
                      Foreground="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding HasImpact}" />
           <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <TextBlock Text="{Binding}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                <TextBlock Text="{Binding}" FontFamily="Cascadia Code,Consolas,monospace" FontSize="{DynamicResource Text.Compact.Size}"
                            Foreground="{DynamicResource SubtleForegroundBrush}" />
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <StackPanel IsVisible="{Binding HasWhatToCheck}" Margin="0,3,0,0" Spacing="1">
             <TextBlock Text="{x:Static app:UiStrings.SessionManagerWarningWhatToCheck}"
-                       FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                       FontSize="{DynamicResource Text.SectionHeader.Size}" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
             <ItemsControl ItemsSource="{Binding WhatToCheck}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Margin="0,1,0,0" />
+                  <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}" Margin="0,1,0,0" />
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -97,7 +94,7 @@
   <Grid x:Name="RootGrid" RowDefinitions="Auto,Auto,*,4,240">
 
     <!-- ① Toolbar (same density / spacing as the Activity Monitor session bar) -->
-    <Border Grid.Row="0" Background="{DynamicResource ElevatedPanelBrush}"
+    <Border Classes="chrome" Grid.Row="0" Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
       <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
         <Button Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerRefreshTip}">
@@ -146,6 +143,11 @@
       <StackPanel Spacing="4">
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <!-- verdict dot (theme brush resolved from the grade key) -->
+          <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+               (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+               ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
           <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center">
             <Border.Background>
               <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -173,7 +175,13 @@
           <Border Width="1" Margin="6,1" Background="{DynamicResource BorderBrush}" />
 
           <!-- filter chips (segmented) -->
-          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+          <!-- ⭐ Q1 ZAMKNIĘTE (M4.3): ramka przełącznika bierze `Radius.Surface` (4 → 3). ⚠ Argument jest tu
+               INNY niż przy karcie i mocniejszy: ten element UDAJE obramowaną kontrolkę, a `ControlCornerRadius`
+               Fluenta = 3 i jest świadomie NIENADPISANY w `FluentBridge` (pokrywa się z `Radius.Surface`) —
+               więc każda PRAWDZIWA obramowana kontrolka w aplikacji renderuje się przy 3. Render postawił
+               obok niej prawdziwy `TextBox` i to on rozstrzygnął. -->
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                  CornerRadius="{DynamicResource Radius.Surface}" ClipToBounds="True">
             <StackPanel Orientation="Horizontal">
               <Button Classes="seg" Classes.active="{Binding IsFilterAll}" Command="{Binding FilterAllCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="4">
@@ -205,7 +213,7 @@
         </StackPanel>
 
         <!-- privilege banner (only when we can see just our own sessions) -->
-        <TextBlock Text="{x:Static app:UiStrings.SessionManagerPrivilegeBanner}" FontSize="11"
+        <TextBlock Text="{x:Static app:UiStrings.SessionManagerPrivilegeBanner}" FontSize="{DynamicResource Text.Compact.Size}"
                    Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"
                    IsVisible="{Binding ShowPrivilegeBanner}" />
       </StackPanel>
@@ -219,7 +227,7 @@
                 ItemsSource="{Binding Sessions}" SelectedItem="{Binding SelectedSession}"
                 AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
                 CanUserSortColumns="True" CanUserReorderColumns="True"
-                ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="11">
+                ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="{DynamicResource Text.Grid.Size}">
         <DataGrid.ContextMenu>
           <ContextMenu>
             <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuDisconnect}" Icon="{app:MenuIcon Icon.Unplug, Brush=DangerIconBrush}" Command="{Binding DisconnectCommand}" />
@@ -239,6 +247,11 @@
                                   CanUserResize="False" CanUserReorder="False" CanUserSort="False">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:SessionRowViewModel">
+                <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+                     (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+                     ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
                 <Border Width="10" Height="10" CornerRadius="5" HorizontalAlignment="Center" VerticalAlignment="Center"
                         ToolTip.Tip="{Binding HealthTooltip}">
                   <Border.Background>
@@ -272,9 +285,16 @@
         </DataGrid.Columns>
       </DataGrid>
 
+      <!-- ⭐ Q3/A ZAMKNIĘTE (M4.3): komunikat pustego stanu bierze `Text.Application` (13 → 12). Dawny
+           komentarz był trafny w diagnozie („katalog ma przy 13 wyłącznie rolę kodu, a to jest tekst")
+           i tylko oddawał wniosek bramie, która go nie podjęła.
+           ⚠ Ten sam element żyje w Trace Monitorze i jest tam KONSTRUKCYJNIE IDENTYCZNY (ten sam pędzel,
+           ten sam `Margin`, to samo centrowanie), więc to była JEDNA decyzja na dwa ekrany, nie dwie —
+           i pilnuje tego test relacyjny `BothEmptyStates_ShareOneTextRole` (#335: ta sama kontrolka na
+           dwóch ekranach musi zgadzać się sama ze sobą). -->
       <TextBlock IsVisible="{Binding ShowSessionsEmpty}" Text="{x:Static app:UiStrings.SessionsEmpty}"
                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
-                 Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="13" />
+                 Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Application.Size}" />
     </Panel>
 
     <!-- splitter: double-tap to maximize/restore (identical to the Activity Monitor bottom panel) -->
@@ -295,9 +315,9 @@
                     ToolTip.Tip="{x:Static app:UiStrings.SessionManagerGapExplain}">
               <StackPanel Spacing="3">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapCaption}" FontWeight="SemiBold" FontSize="11" />
+                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapCaption}" FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" />
                   <!-- value coloured by severity (grey when healthy — no permanent orange) -->
-                  <TextBlock Text="{Binding GapValueText}" FontSize="11" FontWeight="SemiBold">
+                  <TextBlock Text="{Binding GapValueText}" FontSize="{DynamicResource Text.Compact.Size}" FontWeight="SemiBold">
                     <TextBlock.Foreground>
                       <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                         <Binding Path="GapSeverityBrushKey" />
@@ -305,10 +325,15 @@
                       </MultiBinding>
                     </TextBlock.Foreground>
                   </TextBlock>
-                  <TextBlock Text="{Binding GapStatusText}" FontSize="10"
+                  <TextBlock Text="{Binding GapStatusText}" FontSize="{DynamicResource Text.Caption.Size}"
                              Foreground="{DynamicResource SubtleForegroundBrush}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the fill -->
+                <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+                     (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+                     ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
                 <Border Width="280" Height="10" HorizontalAlignment="Left" CornerRadius="5" ClipToBounds="True"
                         Background="{DynamicResource RowAlternateBrush}">
                   <Border Width="{Binding GapFillWidth}" HorizontalAlignment="Left">
@@ -321,22 +346,35 @@
                   </Border>
                 </Border>
                 <Grid Width="280" HorizontalAlignment="Left">
-                  <TextBlock HorizontalAlignment="Left" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
+                  <!-- ⭐ Q3/B ZAMKNIĘTE (M4.3): podpis skali bierze `Text.Caption` (9 → 10). To jest TEKST,
+                       a nie znak strojony do kontenera — więc trafia na najbliższą rolę tekstową zamiast
+                       zostawać przy wartości, której katalog nie zna. -->
+                  <TextBlock HorizontalAlignment="Left" FontSize="{DynamicResource Text.Caption.Size}"
+                             Foreground="{DynamicResource SubtleForegroundBrush}"
                              Text="{x:Static app:UiStrings.SessionManagerGapScaleMin}" />
-                  <TextBlock HorizontalAlignment="Right" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
+                  <!-- ⭐ Q3/B ZAMKNIĘTE (M4.3): jak wyżej — `Text.Caption` (9 → 10). -->
+                  <TextBlock HorizontalAlignment="Right" FontSize="{DynamicResource Text.Caption.Size}"
+                             Foreground="{DynamicResource SubtleForegroundBrush}"
                              Text="{Binding GapScaleMaxText, StringFormat='GC risk near {0}'}" />
                 </Grid>
               </StackPanel>
             </Border>
 
             <!-- "Filtered by session N ✕" chip -->
-            <Border Grid.Row="1" Background="{DynamicResource SelectionBrush}" CornerRadius="4"
+            <!-- ⭐ M4.3: ten element NAZYWA SIĘ chipem we własnym komentarzu, a rola `Radius.Chip` nazywa się
+                 „Odznaka i chip" — więc migracja jest wyłącznie nazwaniem decyzji, którą autor już podjął
+                 (R12). Wartość 4 → 4, wygląd bez zmiany; to jedyna pozycja Q1 bez pytania. -->
+            <Border Grid.Row="1" Background="{DynamicResource SelectionBrush}" CornerRadius="{DynamicResource Radius.Chip}"
                     Padding="8,3" Margin="6,6,6,0" HorizontalAlignment="Left"
                     IsVisible="{Binding IsSessionFilterActive}">
               <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <TextBlock Text="{Binding SessionFilterText}" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding SessionFilterText}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                 <Button Classes="icon" Padding="2" Command="{Binding ClearSessionFilterCommand}">
-                  <controls:SvgIcon Width="11" Height="11" Data="{StaticResource Icon.X}" />
+                  <!-- ⭐ Q2 (M4.3): inline ✕ na `Size.Icon.Sm` (11 → 12). Rola opisuje wprost ten host —
+                       „ikona inline w tekście 11 px (chip, wiersz siatki)" — a obok stoi `Text.Compact` (11).
+                       Ten sam ✕ w debuggerze niósł 12 i 11 w jednym pliku; pięć wystąpień, jedna rola. -->
+                  <controls:SvgIcon Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
+                                    Data="{StaticResource Icon.X}" />
                 </Button>
               </StackPanel>
             </Border>
@@ -346,7 +384,7 @@
                       ItemsSource="{Binding Transactions}" SelectedItem="{Binding SelectedTransaction}"
                       AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
                       CanUserSortColumns="True" CanUserReorderColumns="True"
-                      ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="11">
+                      ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="{DynamicResource Text.Grid.Size}">
               <DataGrid.Columns>
                 <!-- Health: an always-on status dot (never blank), tooltip explains the state —
                      mirrors the Sessions grid so both grids read the same way -->
@@ -354,6 +392,11 @@
                                         CanUserResize="False" CanUserReorder="False" CanUserSort="False">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="vm:TransactionRowViewModel">
+                      <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+                           (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+                           ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
                       <Border Width="10" Height="10" CornerRadius="5" HorizontalAlignment="Center" VerticalAlignment="Center"
                               ToolTip.Tip="{Binding HealthTooltip}">
                         <Border.Background>
@@ -400,6 +443,11 @@
                 <StackPanel Spacing="4">
                   <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerGeneralHeader}" />
                   <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+                         (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+                         ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
                     <Border Width="9" Height="9" CornerRadius="4.5" VerticalAlignment="Center">
                       <Border.Background>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -408,7 +456,7 @@
                         </MultiBinding>
                       </Border.Background>
                     </Border>
-                    <TextBlock Text="{Binding SelectedSession.RiskText}" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding SelectedSession.RiskText}" FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                   <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
                     <TextBlock Grid.Row="0" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColId}" />
@@ -431,7 +479,7 @@
                 <!-- Why it matters (plain-language) -->
                 <StackPanel Spacing="3" IsVisible="{Binding HasSelectedSessionWhyItMatters}">
                   <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerWhyHeader}" />
-                  <TextBlock Text="{Binding SelectedSessionWhyItMatters}" TextWrapping="Wrap" FontSize="11" />
+                  <TextBlock Text="{Binding SelectedSessionWhyItMatters}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}" />
                 </StackPanel>
 
                 <!-- Current statement + integration bridges -->
@@ -449,7 +497,7 @@
                     </Button>
                   </Grid>
                   <TextBox Text="{Binding SelectedSession.CurrentStatement}" IsReadOnly="True" TextWrapping="Wrap"
-                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="11"
+                           FontFamily="Cascadia Code,Consolas,monospace" FontSize="{DynamicResource Text.Compact.Size}"
                            Background="{DynamicResource BackgroundBrush}" />
                 </StackPanel>
 
@@ -477,11 +525,11 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TransactionRowViewModel">
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,1">
-                          <TextBlock Text="{Binding TransactionIdText}" FontSize="11" FontWeight="SemiBold"
+                          <TextBlock Text="{Binding TransactionIdText}" FontSize="{DynamicResource Text.Compact.Size}" FontWeight="SemiBold"
                                      FontFamily="Cascadia Code,Consolas,monospace" />
-                          <TextBlock Text="{Binding IsolationText}" FontSize="11" />
-                          <TextBlock Text="{Binding AgeText}" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" />
-                          <TextBlock Text="{Binding GcImpactText, StringFormat='GC {0}'}" FontSize="11"
+                          <TextBlock Text="{Binding IsolationText}" FontSize="{DynamicResource Text.Compact.Size}" />
+                          <TextBlock Text="{Binding AgeText}" FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                          <TextBlock Text="{Binding GcImpactText, StringFormat='GC {0}'}" FontSize="{DynamicResource Text.Compact.Size}"
                                      Foreground="{DynamicResource SubtleForegroundBrush}" />
                         </StackPanel>
                       </DataTemplate>
@@ -526,8 +574,8 @@
       <Button Classes="icon" Click="OnToggleBottomMaximizeClick" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerMaximizeTip}"
               HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0">
         <Panel>
-          <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" IsVisible="{Binding !IsDetailMaximized}" />
-          <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" IsVisible="{Binding IsDetailMaximized}" />
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding !IsDetailMaximized}" />
+          <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding IsDetailMaximized}" />
         </Panel>
       </Button>
     </Panel>

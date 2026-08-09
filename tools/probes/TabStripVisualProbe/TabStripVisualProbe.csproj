@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER MEASUREMENT TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Product Polish M3.1a. Renderuje PASEK ZAKŁADEK do plików PNG, w obu motywach, przy dwóch wartościach
+    `Size.Row.Tab` (30 = stan sprzed M3.1a, 26 = katalog), żeby decyzja o wysokości zakładki zapadła
+    NA OBRAZIE, a nie na liczbie z katalogu.
+
+    ⭐ Powód istnienia tej sondy — decyzja użytkownika (2026-08-02): „Nie chcę jeszcze automatycznie
+    przechodzić z 30 → 26 tylko dlatego, że katalog tak mówi… Jeśli okaże się, że 26 wygląda zbyt ciasno,
+    to nie będziemy na siłę naginać produktu do katalogu — zaktualizujemy katalog zgodnie z rzeczywistym
+    projektem." To jest R8 w praktyce: pomiar jest narzędziem, nie argumentem końcowym.
+
+    ⚠ Dlaczego sonda, a nie zrzut z aplikacji: pasek zakładek jest pusty bez połączenia z bazą, a testowa
+    sesja headless działa z `UseHeadlessDrawing`, gdzie `CaptureRenderedFrame()` zwraca null (nota R‑6).
+    Sonda ładuje TE SAME słowniki zasobów i TEN SAM `ControlStyles.axaml`, których używa aplikacja, i
+    renderuje przez Skia — więc obraz jest wierny, mimo że kontekstem nie jest całe okno.
+
+    ⚠ Deliberately NOT in EmberTern.slnx.
+
+    Uruchomienie: patrz nagłówek Program.cs (komentarz XML nie zniesie podwójnego myślnika, którego
+    wymaga CLI). Wynik: tools/probes/TabStripVisualProbe/out/*.png
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.App\EmberTern.App.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+  </ItemGroup>
+
+</Project>

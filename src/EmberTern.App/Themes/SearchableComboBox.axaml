@@ -9,7 +9,12 @@
     <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="MinHeight" Value="24" />
+    <!-- ⚠⚠ Kontrolka WŁASNA, która odgrywa rolę kontrolki bazowej, MUSI czytać ten sam katalog —
+         inaczej stoi obok systemu i widać to natychmiast (zgłoszenie QA: „Domain, zwykły ComboBox
+         i CheckBox nie wyglądają jak elementy jednego systemu"). Ta liczba była tu wpisana na sztywno
+         od czasów, gdy katalogu nie było; wartość się nie zmienia, właściciel tak. -->
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="Template">
       <ControlTemplate>
         <Border x:Name="PART_Shell"
@@ -18,28 +23,35 @@
                 BorderThickness="{TemplateBinding BorderThickness}"
                 CornerRadius="3">
           <Grid ColumnDefinitions="*,Auto,Auto">
+            <!-- ⚠ SZEROKOŚĆ TYCH DWÓCH PRZYCISKÓW ZOSTAJE WĘŻSZA I TO JEST RATYFIKOWANE (użytkownik,
+                 krok 12): to nie jest zwykły `ComboBox` — ma DWA przyciski (Clear + DropDown), więc
+                 naturalne jest, że każdy z nich jest węższy niż pojedynczy przycisk `ComboBoxa`.
+                 ⛔ Nie ujednolicać szerokości „na siłę". Ujednolicone jest to, co ma być wspólne:
+                 WYSOKOŚĆ, IKONY i PADDING — czyli to, co decyduje, czy kontrolka należy do systemu. -->
             <TextBlock x:Name="PART_Display" Grid.Column="0"
                        VerticalAlignment="Center" Margin="6,0"
-                       FontSize="11" TextTrimming="CharacterEllipsis"
+                       FontSize="{DynamicResource Text.Grid.Size}" TextTrimming="CharacterEllipsis"
                        Foreground="{DynamicResource ForegroundBrush}" />
             <Button x:Name="PART_Clear" Grid.Column="1" Classes="icon"
-                    Width="18" Height="18" Padding="0" IsVisible="False"
+                    Width="20" Height="20" MinWidth="0" MinHeight="0" Padding="0" IsVisible="False"
                     VerticalAlignment="Center">
-              <controls:SvgIcon Data="{DynamicResource Icon.X}" Width="11" Height="11"
+              <controls:SvgIcon Data="{DynamicResource Icon.X}"
+                                Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
                                 Foreground="{DynamicResource SubtleForegroundBrush}" />
             </Button>
             <ToggleButton x:Name="PART_Toggle" Grid.Column="2"
-                          Width="22" Height="22" Padding="0"
+                          Width="20" Height="20" MinWidth="0" MinHeight="0" Padding="0"
                           Background="Transparent" BorderThickness="0"
                           VerticalAlignment="Center">
-              <controls:SvgIcon Data="{DynamicResource Icon.ChevronDown}" Width="12" Height="12"
+              <controls:SvgIcon Data="{DynamicResource Icon.ChevronDown}"
+                                Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
                                 Foreground="{DynamicResource SubtleForegroundBrush}" />
             </ToggleButton>
 
             <Popup x:Name="PART_Popup"
                    Placement="BottomEdgeAlignedLeft"
                    IsLightDismissEnabled="True">
-              <Border Background="{DynamicResource ElevatedPanelBrush}"
+              <Border Background="{DynamicResource SurfaceRaisedBrush}"
                       BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                       CornerRadius="3" MinWidth="480">
                 <ContentControl x:Name="PART_PopupHost" />

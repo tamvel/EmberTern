@@ -95,6 +95,20 @@ internal sealed class AppMetadataSnapshot : ISqlMetadataProvider
             ? c.Select(ToColumnMetadata).ToList()
             : NoColumns;
 
+    /// <summary>
+    /// ⭐ The one place the App can answer "not loaded yet" honestly: the cache DICTIONARY distinguishes a
+    /// missing key from a present-but-empty entry, while <see cref="GetColumns"/> collapses both to an empty
+    /// list. So the information existed all along and was being thrown away one layer too early — which is
+    /// what let <c>DiagnosticsEngine</c> report every unwarmed column as unknown (S-2, 2026-08-05).
+    /// <para>
+    /// ⚠ A present-but-EMPTY entry counts as KNOWN: the warm pass caches what it read, so an object with no
+    /// columns (or one whose read legitimately returned none) has been answered and must not silence a
+    /// genuine typo forever.
+    /// </para>
+    /// </summary>
+    public bool KnowsColumns(string tableOrView)
+        => tableOrView is not null && _columns.ContainsKey(tableOrView);
+
     // Maps the enriched ColumnSpec (Package 5, Stage A) onto the semantic ColumnMetadata
     // the language front-end already renders. Every field the Firebird reader now fills
     // (default/computed/description + PK/FK/FK-target/identity) flows straight through to

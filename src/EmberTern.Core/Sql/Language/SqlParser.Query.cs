@@ -454,12 +454,41 @@ public static partial class SqlParser
         }
 
         SqlToken? nameTok = j < hi && IsIdentifier(t[j]) ? t[j] : null;
+        SqlToken? qualifierTok = null;
         if (j < hi) j++;
         while (j + 1 < hi && t[j].Kind == TokenKind.Dot && IsIdentifier(t[j + 1]))
         {
+            qualifierTok = nameTok;
             nameTok = t[j + 1];
             j += 2;
         }
+
+        // ⭐⭐ A SELECTABLE PROCEDURE CALL — `FROM MY_PROC(a, b) [[AS] alias]`. This block used to be absent
+        // entirely: the name was read and the alias read next, so an argument list was not just unmodelled but
+        // DROPPED — the entry's own tokens ended at the name, and the alias after `)` was lost with it. Every
+        // consumer that needed the arguments re-scanned the SQL text instead, once per statement syntax, which is
+        // how parameter typing came to work for `EXECUTE PROCEDURE`, then for `SELECT … FROM P(…)`, and for
+        // nothing else (Contract #1: structure belongs in the parser, not in a consumer's token scan).
+        //
+        // ⚠ Only a name FOLLOWED BY '(' is an invocation. `FROM MY_PROC` (a legal no-argument selectable call)
+        // is indistinguishable from a table here, and guessing would make every table look like a call.
+        if (nameTok is not null && j < hi && t[j].Kind == TokenKind.LParen)
+        {
+            int close = MatchParenTok(t, j, hi);
+            if (close < hi)
+            {
+                var args = ReadCallArgumentList(t, j, close + 1);
+                j = close + 1;
+                var routineAlias = ReadAlias(t, ref j, hi);
+                var (rs, rl) = TokenSpan(t, lo, j);
+                return new RoutineTableReference(
+                    rs, rl, Sub(t, lo, j), nameTok, routineAlias,
+                    FoldNameToken(nameTok),
+                    qualifierTok is null ? null : FoldNameToken(qualifierTok),
+                    args);
+            }
+        }
+
         var alias = ReadAlias(t, ref j, hi);
         var (s, l) = TokenSpan(t, lo, j);
         return new TableReference(s, l, Sub(t, lo, j), nameTok, alias);

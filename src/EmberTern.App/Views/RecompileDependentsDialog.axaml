@@ -46,7 +46,7 @@
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding TypeLabel}" VerticalAlignment="Center"
-                           Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="11" />
+                           Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Compact.Size}" />
               </StackPanel>
             </CheckBox>
           </DataTemplate>

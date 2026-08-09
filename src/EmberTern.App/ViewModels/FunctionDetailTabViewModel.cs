@@ -424,6 +424,23 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
 
     public bool CanExportExecResult => HasExecResult;
 
+    /// <summary>
+    /// Clipboard text for the result grid's Copy cell / row / row with headers / all with headers actions,
+    /// through the one shared <see cref="GridCopyText"/> builder every data grid uses. Returns null when there
+    /// is nothing to copy; the view writes the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ "All" is the whole materialised result, not the visible page — the same meaning it has on the SQL
+    /// Editor grid, which pages client-side over its result in exactly this way.
+    /// </remarks>
+    public string? BuildCopyText(CopyGridMode mode, object?[]? row, int columnIndex)
+        => GridCopyText.Build(
+            mode,
+            ExecResult?.Columns ?? Array.Empty<QueryColumn>(),
+            ExecResult?.Rows ?? Array.Empty<object?[]>(),
+            row,
+            columnIndex);
+
     /// <summary>Export source for the Execute-Function result grid — the SAME materialized model as
     /// the SQL Editor results (CurrentView = filtered/displayed; AllRows = the full result). No
     /// re-fetch (re-running the function could repeat side effects).</summary>
@@ -714,6 +731,11 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
 
     // ─── Object-specific hooks (SourceObjectDetailTabViewModel) ───────────
 
+    /// <summary>The name this tab was opened with — its IDENTITY, fixed for the tab's life. ⚠ Deliberately NOT
+    /// the editable field: that follows what the user typed, so on a rename it already holds the NEW name and
+    /// could never tell the two apart.</summary>
+    protected override string LoadedObjectName => FunctionName;
+
     protected override string ObjectDisplayName =>
         string.IsNullOrWhiteSpace(EditableFunctionName) ? FunctionName : EditableFunctionName.Trim();
 
@@ -763,20 +785,26 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         // Reads the source AND arms the change-safety gate with it — one act (see LoadDefinitionAsync).
         await SafeLoadAsync(() => LoadDefinitionAsync(cancellationToken));
 
-        await SafeLoadAsync(async () =>
-        {
-            var body = await DdlReader!.FetchFunctionBodyAsync(
-                new MetadataObject(FunctionName, MetadataObjectKind.Function), cancellationToken).ConfigureAwait(true);
-            SyncEasyModelFromBody(body);
-        });
-
+        // ⭐ ARGUMENTS BEFORE THE BODY — same reason as ProcedureDetailTabViewModel.LoadCoreAsync (S-2): in
+        // Easy mode the arguments reach the model as AMBIENT SYMBOLS, so setting the body text first opened
+        // the editor with an ET0003 squiggle under every argument use until the debounced rebuild caught up.
         await SafeLoadAsync(async () =>
         {
             var sig = await Reader!.GetFunctionSignatureAsync(FunctionName, cancellationToken).ConfigureAwait(true);
             Arguments.Clear();
             foreach (var a in sig.Arguments) Arguments.Add(ProcedureParamRowViewModel.From(a, this, isOutput: false));
-            SetResultType(sig.ReturnType);
+            // ⭐ A domain RETURNS keeps its domain (S-1b): SetResultType feeds LoadType, whose
+            // "unknown base token ⇒ domain" branch resolves it — the same one-line reuse as
+            // ProcedureParamRowViewModel.From. Otherwise `RETURNS D_NAME` recompiled as VARCHAR(60).
+            SetResultType(sig.ReturnDomain ?? sig.ReturnType);
             Deterministic = sig.Deterministic;
+        });
+
+        await SafeLoadAsync(async () =>
+        {
+            var body = await DdlReader!.FetchFunctionBodyAsync(
+                new MetadataObject(FunctionName, MetadataObjectKind.Function), cancellationToken).ConfigureAwait(true);
+            SyncEasyModelFromBody(body);
         });
 
         await SafeLoadAsync(async () =>

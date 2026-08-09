@@ -22,10 +22,14 @@
     </Border>
 
     <StackPanel Grid.Row="1" Margin="20,18" Spacing="10">
-      <TextBlock Text="{x:Static app:UiStrings.GlobalSearchTermLabel}" Classes="field-label" />
-      <TextBox x:Name="TermBox" Text="{Binding Term}"
-               PlaceholderText="{x:Static app:UiStrings.GlobalSearchTermWatermark}"
-               KeyDown="OnTermKeyDown" />
+      <!-- ⚠ Podpis i jego pole są JEDNYM dzieckiem kontenera — inaczej `Spacing` rodzica wchodzi
+           MIĘDZY nie i odstęp podpis→pole staje się większy niż pole→pole (zgłoszenie QA). -->
+      <StackPanel>
+        <TextBlock Text="{x:Static app:UiStrings.GlobalSearchTermLabel}" Classes="field-label" />
+        <TextBox x:Name="TermBox" Classes="search" Text="{Binding Term}"
+                 PlaceholderText="{x:Static app:UiStrings.GlobalSearchTermWatermark}"
+                 KeyDown="OnTermKeyDown" />
+      </StackPanel>
 
       <StackPanel Orientation="Horizontal" Spacing="18">
         <CheckBox Content="{x:Static app:UiStrings.GlobalSearchMatchNames}" IsChecked="{Binding MatchNames}" />
@@ -38,7 +42,7 @@
 
       <TextBlock Text="{x:Static app:UiStrings.GlobalSearchScopeHint}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
-                 FontSize="11" TextWrapping="Wrap" />
+                 FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap" />
     </StackPanel>
 
     <Border Grid.Row="2"

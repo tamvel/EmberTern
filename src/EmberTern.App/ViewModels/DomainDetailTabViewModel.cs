@@ -32,7 +32,7 @@ namespace EmberTern.App.ViewModels;
 /// "Compile" button assembles the minimum-set of ALTER statements for what changed; a
 /// rename closes + reopens the tab under the new name.
 /// </summary>
-public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
+public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IDependencyNavigator
 {
     private readonly FirebirdTableDetailReader? _reader;
     private readonly FirebirdDdlExecutor? _ddlExecutor;

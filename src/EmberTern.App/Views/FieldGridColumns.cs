@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
@@ -29,6 +29,20 @@ internal static class FieldGridColumns
 {
     public static void Build(DataGrid grid, bool includeDefault, bool includeName = true)
     {
+        // ⭐⭐ THE `field-grid` CLASS IS NO LONGER APPLIED HERE — it moved to
+        // Behaviors.EditableGridBehavior.Attach (stabilization sprint S-3, 2026-08-05), and the move IS the
+        // fix rather than tidying.
+        //
+        // The class carries the in-cell editor height role, and applying it here made its scope "whoever
+        // calls this builder". Table Detail Fields, New Table Fields and View Detail Columns build their
+        // columns in XAML and only INSERT the shared picker column, so they never called it and never got the
+        // role — their DataGridTextColumn editing TextBox stayed at MinHeight 0 inside a 34 px row. That is
+        // the reported "the TextBox in Table is still too low", and the old comment here even described the
+        // scope as "a class on the grid, applied in one place" — which was true, and was the problem: the one
+        // place was not every place.
+        //
+        // ⛔ Do not re-add it here. Two owners of one class means the grids that go through only one of them
+        // are silently different again, which is exactly the defect that took two rounds to find.
         grid.Columns.Clear();
         // The function Result is a single, unnamed return value — its grid omits Name.
         if (includeName)
@@ -63,14 +77,16 @@ internal static class FieldGridColumns
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<ProcedureFieldRowBase>((_, _) =>
             {
-                var tb = new TextBox
-                {
-                    BorderThickness = new Thickness(0),
-                    Background = Brushes.Transparent,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    VerticalContentAlignment = VerticalAlignment.Center,
-                    Padding = new Thickness(4, 0),
-                };
+                // ⭐⭐ ŻADNEJ CHROMY TUTAJ — całość niesie styl `DataGridCell TextBox`.
+                // ⚠⚠ To nie jest porządkowanie, tylko NAPRAWA (§19.9). Ta metoda ustawiała
+                // `VerticalAlignment`, `VerticalContentAlignment`, `Padding`, `BorderThickness`
+                // i `Background` jako WARTOŚCI LOKALNE, a wartość lokalna BIJE SETTER STYLU — więc
+                // styl nie mógł ich dosięgnąć. Zmierzone: komórka 30 px, `TextBox` 12 px, `VA=Center`
+                // mimo `Stretch` w stylu. Pole czytało się jak cienki pasek wrzucony w wiersz, obok
+                // `ComboBoxa`, który wysokość bierze ze swojego stylu (`Size.Control`).
+                // ⛔ Nie przywracać tu ani jednej z tych właściwości — to dokładnie ten mechanizm,
+                // przez który `MessageBanner` dorobił się sześciu wariantów chromy per host.
+                var tb = new TextBox { Classes = { "field-editor" } };
                 tb.Bind(TextBox.TextProperty, new Binding(path) { Mode = BindingMode.TwoWay });
                 tb.Bind(InputElement.IsEnabledProperty, new Binding(enabledPath));
                 return tb;

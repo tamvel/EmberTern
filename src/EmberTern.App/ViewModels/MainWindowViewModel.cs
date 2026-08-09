@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -186,6 +186,11 @@ public partial class MainWindowViewModel : ViewModelBase
         // Settings Center). The service loads here and is handed to both.
         _preferences = new PreferencesService(new PreferencesStore(
             System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector));
+        // ⭐ Pasek zakładek reaguje na apply-on-change. Subskrypcja jest TUTAJ, a nie w widoku, bo widok
+        // dostaje `PropertyChanged` z tego VM i nie musi znać drugiego źródła zdarzeń — to ta sama zasada
+        // co przy motywie: jedno miejsce zamienia preferencję na skutek. ⚠ Serwis żyje tak długo jak ten
+        // VM (oba są własnością okna głównego), więc wypisanie się nie ma czego chronić.
+        _preferences.Changed += (_, _) => RaiseTabStripPreferencesChanged();
         // Settings export / import (etap 5b). Same settings.dat + protector again, and the app version comes from
         // AppInfo because Core cannot see it and must not be able to branch on it (§15.3a). AfterImport is this
         // view model's own refresh: the import rewrites the file several in-memory holders were loaded from.
@@ -264,6 +269,11 @@ public partial class MainWindowViewModel : ViewModelBase
         Metadata.RecompileGroupRequested += OnRecompileGroupRequested;
         Metadata.SetObjectActiveRequested += OnSetObjectActiveRequested;
         Metadata.BulkSetActiveRequested += OnBulkSetActiveRequested;
+        // A manual metadata refresh means the SCHEMA may have moved, so the per-object caches every open
+        // editor's semantic model is built from must go. Without this a refresh rebuilt those models against
+        // the same stale columns, and a newly added column stayed "unknown" for the rest of the session on
+        // every open tab (S-2). See MetadataExplorerViewModel.SchemaInvalidated for the ordering.
+        Metadata.SchemaInvalidated += InvalidateObjectCaches;
         Messages = new ObservableCollection<QueryMessageViewModel>();
         // Workspace tabs start empty — no Query tab until a connection becomes active.
         // Each ConnectionProfile owns its own Query+DDL tab list via _workspacesByConnection.
@@ -285,6 +295,10 @@ public partial class MainWindowViewModel : ViewModelBase
         ResultAggregationBar = new AggregationBarViewModel(ComputeResultAggregateAsync);
         _service.ActiveConnectionChanged += OnActiveConnectionChanged;
         _service.ActiveProfileUpdated += OnActiveProfileUpdated;
+        // ⭐ Faza 3 ładowania połączenia (prefetch kategorii) karmi sekcję postępu — a jej koniec jest
+        // jedynym miejscem, w którym gaśnie także faza 1 (§19.34). `Metadata` jest jedna na aplikację,
+        // więc nie ma tu czego agregować: jedna subskrypcja, zdejmowana nigdy, bo żyje tyle co okno.
+        Metadata.PropertyChanged += OnMetadataProgressChanged;
         _transactionService.TransactionStateChanged += OnTransactionStateChanged;
         // The console's transaction is a pending-work source like any other — registered once, here, so the
         // guards never name it again.
@@ -361,6 +375,38 @@ public partial class MainWindowViewModel : ViewModelBase
     /// the user's own text, whereas generated statements are EmberTern's output.</para>
     /// </summary>
     public FormatterStyle FormatterStyle => FormatterStylePreference.From(_preferences.Current);
+
+    // ── Pasek zakładek — dwa tryby (M3.3b / product-polish §8.2) ─────────────────────────────────────
+    //
+    // ⭐ VM odpowiada wyłącznie na pytanie „KTÓRY tryb i ile wierszy" — jak to zrealizować (kierunki
+    // przewijania, wysokość, licznik przepełnienia) jest sprawą widoku. To ta sama granica, którą trzyma
+    // `FormatterStyle`: preferencja jest faktem, jej skutek jest mechanizmem.
+    //
+    // ⚠ Czytane PER WYWOŁANIE, nigdy zapamiętane — apply-on-change znaczy, że użytkownik może przełączyć
+    // tryb przy otwartych zakładkach. Zmianę ogłasza `RaiseTabStripPreferencesChanged`, wywoływane
+    // z jednego miejsca, w którym aplikacja reaguje na `PreferencesService.Changed`.
+
+    /// <summary>Czy pasek zakładek układa zakładki w wielu wierszach (domyślnie) — §8.2.</summary>
+    public bool IsTabStripMultiRow => string.Equals(
+        _preferences.Current.TabStripMode,
+        PreferenceOptions.TabStripModeMultiRow,
+        StringComparison.Ordinal);
+
+    /// <summary>Dopełnienie <see cref="IsTabStripMultiRow"/>. Istnieje, bo XAML nie ma negacji w wiązaniu
+    /// kompilowanym tak czytelnej jak nazwana właściwość, a obie strony bramkują realne elementy.</summary>
+    public bool IsTabStripSingleRow => !IsTabStripMultiRow;
+
+    /// <summary>Ile wierszy może urosnąć pasek, zanim zacznie się przewijać (§8.2). Czytane tylko
+    /// w trybie wielowierszowym; wartość przeżywa przełączenie trybu tam i z powrotem.</summary>
+    public int TabStripMaxRows => _preferences.Current.TabStripMaxRows;
+
+    /// <summary>Ogłasza, że preferencje paska zakładek mogły się zmienić.</summary>
+    internal void RaiseTabStripPreferencesChanged()
+    {
+        OnPropertyChanged(nameof(IsTabStripMultiRow));
+        OnPropertyChanged(nameof(IsTabStripSingleRow));
+        OnPropertyChanged(nameof(TabStripMaxRows));
+    }
 
     /// <summary>The SQL Editor's own Performance context (its captured run + panel). Procedure/
     /// Function detail tabs each own a separate <see cref="HostPerformanceContext"/> — nothing is
@@ -610,6 +656,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // so the user needs the Commit/Rollback buttons there to finalize (#3).
     // IsTableDetailTabActive covers all sub-tabs (it's keyed on the workspace
     // tab kind, not the inner sub-tab).
+    // ⭐⭐ M3.2a ROZWAŻYŁO PRZENIESIENIE TEJ PARY na prawą krawędź paska (zasięg transakcyjny, a przy
+    // okazji największa pojedyncza różnica geometryczna między rodzajami zakładek — 68 px) i użytkownik
+    // ODRZUCIŁ to po obejrzeniu w działającej aplikacji: Commit, Rollback i Execute tworzą jedną grupę
+    // logiczną i szuka się ich razem (product-polish.md §19.11). ⛔ Nie przenosić — ani na prawo, ani do
+    // paska statusu (§8.4.5). ⭐ Reguła, która z tego została: GRUPA SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI.
     // ViewDetail joins this set: Compile opens the working (metadata) transaction,
     // so Commit/Rollback must be reachable from a View Detail tab too.
     // ProcedureDetail joins this set: Compile opens the working (metadata)
@@ -632,6 +683,26 @@ public partial class MainWindowViewModel : ViewModelBase
     // One toolbar, five sections in a fixed order for EVERY object editor:
     //   [ Mode ] | [ Main ] | [ Collection: + − | ↑ ↓ ] | [ Helper ] | [ Close ]
     // Each section + its leading separator collapse when empty for the active editor.
+    //
+    // ⭐⭐ M3.2a — MODEL SEKCJI GWARANTUJE KOLEJNOŚĆ, ALE NIE POZYCJĘ (product-polish.md §19.10/§19.11).
+    // Wszystkie sekcje leżą w jednym poziomym StackPanelu, więc szerokość każdej to suma jej widocznych
+    // dzieci i każda zmiana stanu przesuwa wszystko na prawo od siebie. Zmierzone Procedure vs Trigger:
+    // przy x=212 px jedna zakładka ma **Execute**, druga **Comment**.
+    //
+    // ⛔⛔ WSZYSTKIE TRZY RUCHY M3.2a PO STRONIE TOOLBARA ZOSTAŁY WYCOFANE PRZEZ UŻYTKOWNIKA po obejrzeniu
+    // w działającej aplikacji (§19.11 + §19.12) — mimo że każdy działał tak, jak zaprojektowano:
+    //   • wspólna podłoga Execute/Cancel  — rozdymała akcję główną ponad jej treść (R5 od drugiej strony),
+    //   • Commit/Rollback dokowane do prawej — rozbijały grupę, której szuka się razem (⭐ GRUPA
+    //     SEMANTYCZNA BIJE STABILNOŚĆ POZYCJI),
+    //   • rezerwacja slotu sekcji 1 — zostawiała pustą dziurę w SQL Editorze (⭐ R13: NIE REZERWUJEMY
+    //     MIEJSCA NA ELEMENT, KTÓRY W DANYM KONTEKŚCIE NIGDY SIĘ NIE POJAWI).
+    // ⛔ Nie przywracać żadnego z nich. Przesuwanie się paska przy zmianie rodzaju zakładki oraz przy
+    // F5 jest ŚWIADOMIE ZAAKCEPTOWANYM kompromisem: zwarty i naturalny układ wygrywa z nieruchomym.
+    //
+    // ⛔ Pikselowa tożsamość MIĘDZY rodzajami zakładek również nie jest celem — Procedure, Trigger
+    // i Table mają inną semantykę i mogą mieć inny zestaw narzędzi. Jedyny sposób na pełną zgodność to
+    // rezerwacja najgorszego przypadku każdej sekcji: zmierzone ~617 px stałej rezerwy, czyli ~500 px
+    // dziur na uboższych zakładkach — czyli R13 pomnożone przez pięć.
     // Section 3 routes Add/Remove/Move to the active editor's collection via the four
     // commands below; a future Trigger/Function/Package editor plugs a new case into
     // ActiveCollection() and gets the toolbar for free — no new layout pattern.
@@ -665,13 +736,23 @@ public partial class MainWindowViewModel : ViewModelBase
     /// such action — a grid whose rows are edited in place needs no Edit dialog, and an unordered collection
     /// no reorder. The toolbar hides what is null rather than greying it.</para>
     /// </summary>
+    /// <summary>
+    /// ⭐⭐ <b><c>RemoveVerb</c> stoi obok <c>Noun</c>, bo JEDNA etykieta nie może być poprawna dla wszystkich
+    /// kolekcji tego routera</b> — a to jest znalezisko M‑4, nie ozdoba. Ten sam przycisk obsługuje pole
+    /// tabeli (generuje <c>ALTER TABLE … DROP</c>, więc „Drop"), wiersz danych (<c>DELETE FROM</c>, więc
+    /// „Delete") i pozycję bufora edytora (żadnego DDL, więc „Remove"). Słownik
+    /// (<c>docs/design/terminology.md</c> §1) rozcina ten router w poprzek, więc czasownik musi być
+    /// własnością KOLEKCJI, nie wspólnego formatu.
+    /// ⚠ Wcześniej wszystkie mówiły „Delete {0}" — czyli o polu tabeli twierdziły coś, czego produkt nie robi.
+    /// </summary>
     private sealed record CollectionCommands(
         string Noun,
         System.Windows.Input.ICommand Add,
         System.Windows.Input.ICommand Remove,
         System.Windows.Input.ICommand? Edit = null,
         System.Windows.Input.ICommand? Up = null,
-        System.Windows.Input.ICommand? Down = null);
+        System.Windows.Input.ICommand? Down = null,
+        string RemoveVerb = "Remove");
 
     // Section 3 — collection-edit router. Resolves the active editor's New/Edit/Delete/Move commands and the
     // noun its items go by. null when no editable collection is active (SQL editor, read-only system table,
@@ -683,10 +764,12 @@ public partial class MainWindowViewModel : ViewModelBase
             case WorkspaceTabKind.TableDetail when SelectedWorkspaceTab.TableDetail is { } t:
                 if (ShowFieldEditTools)
                     return new(UiStrings.CollectionNounField, t.AddFieldCommand, t.DropFieldCommand,
-                        t.EditFieldCommand, t.MoveFieldUpCommand, t.MoveFieldDownCommand);
+                        t.EditFieldCommand, t.MoveFieldUpCommand, t.MoveFieldDownCommand,
+                        RemoveVerb: UiStrings.CollectionVerbDrop);
                 if (ShowDataEditTools)
                     // Rows are edited in the grid itself and have no natural order, so no Edit and no ↑↓.
-                    return new(UiStrings.CollectionNounRow, t.AddRowCommand, t.DeleteRowCommand);
+                    return new(UiStrings.CollectionNounRow, t.AddRowCommand, t.DeleteRowCommand,
+                        RemoveVerb: UiStrings.CollectionVerbDelete);
                 return null;
             case WorkspaceTabKind.NewTable when SelectedWorkspaceTab.NewTable is { } n:
                 return new(UiStrings.CollectionNounField, n.AddFieldCommand, n.DeleteFieldCommand,
@@ -724,9 +807,25 @@ public partial class MainWindowViewModel : ViewModelBase
     // noun AND carry the gesture from the catalog: "New field · F3" on the fields grid, "New parameter · F3"
     // on a procedure's arguments. Before this the toolbar said "Add item" while the menu beside it said
     // "New field" — the same command described two ways on one surface.
-    public string CollectionAddTooltip => CollectionTip(CommandId.CollectionAdd, UiStrings.CollectionNewFormat);
+    public string CollectionAddTooltip => CollectionTip(CommandId.CollectionAdd, UiStrings.CollectionAddFormat);
     public string CollectionEditTooltip => CollectionTip(CommandId.CollectionEdit, UiStrings.CollectionEditFormat);
-    public string CollectionRemoveTooltip => CollectionTip(CommandId.CollectionRemove, UiStrings.CollectionDeleteFormat);
+
+    /// <summary>
+    /// ⭐ Czasownik bierze się z KOLEKCJI, nie ze wspólnego formatu — patrz <see cref="CollectionCommands"/>.
+    /// „Drop field" na siatce pól tabeli, „Delete row" na danych, „Remove item" w buforze edytora.
+    /// </summary>
+    public string CollectionRemoveTooltip
+    {
+        get
+        {
+            var active = ActiveCollection();
+            var noun = active?.Noun ?? UiStrings.CollectionNounItem;
+            var verb = active?.RemoveVerb ?? UiStrings.CollectionVerbRemove;
+            return CommandTip.For(
+                CommandId.CollectionRemove,
+                string.Format(CultureInfo.CurrentCulture, UiStrings.CollectionRemoveFormat, verb, noun));
+        }
+    }
 
     private string CollectionTip(CommandId id, string format)
     {
@@ -1087,6 +1186,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ExecuteQueryFullCommand))]
     [NotifyCanExecuteChangedFor(nameof(LoadAllRowsCommand))]
     [NotifyCanExecuteChangedFor(nameof(CancelQueryCommand))]
+    [NotifyPropertyChangedFor(nameof(RailBrushKey))]
     private bool _isExecuting;
 
     /// <summary>Set the moment Cancel is clicked, cleared when the run unwinds. Without it the
@@ -1100,13 +1200,39 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>Cancel is clickable exactly once per run.</summary>
     public bool CanCancelQuery => IsExecuting && !IsCancelling;
 
+    /// <summary>
+    /// Sekcja postępu paska statusu (§8.4.6). ⭐ Jest GLOBALNA — operacja widoczna niezależnie od
+    /// aktywnej zakładki. Tu trafia stan „operacja TRWA"; wynik zakończonej operacji zostaje
+    /// w <see cref="QueryStatsText"/>, które jest lokalne dla edytora SQL (§19.7.1).
+    /// </summary>
+    public StatusProgressViewModel Progress { get; } = new();
+
     // Drive the live elapsed timer off IsExecuting so every SQL Editor exit path (success, error,
     // cancel, finally) starts/stops it with no scattering.
+    //
+    // ⭐ Od M3.1f ten sam punkt prowadzi sekcję postępu, i z tego samego powodu: `IsExecuting` jest
+    // JEDYNYM miejscem, przez które przechodzi każde wejście i wyjście z wykonania — sukces, błąd,
+    // anulowanie i `finally`. Podpięcie postępu tutaj oznacza, że nie da się dodać ścieżki wyjścia,
+    // która zostawi zapalony pasek. ⛔ Nie wołać `Progress.Begin/End` z gałęzi wykonania.
     partial void OnIsExecutingChanged(bool value)
     {
         if (value) ExecutionTimer.Start();
         else ExecutionTimer.Stop();
         if (!value) IsCancelling = false;   // every exit path resets the cancel latch
+
+        // ⚠ Od M3b.1 ten punkt nie zapala sekcji SAM — mówi „przelicz", a rozstrzyga
+        // `UpdateProgressSection` (drabinka priorytetów, trzy źródła). Rola `IsExecuting` jako
+        // jedynego leja wejścia/wyjścia zostaje bez zmian: wyjście z wykonania nadal gasi sekcję tą
+        // jedną drogą, o ile żadne inne źródło nie jest w toku.
+        // ⚠ Szczegół etykiety czyszczony w OBIE strony: przy wejściu, żeby nowe zapytanie nie startowało
+        // z licznikiem poprzedniego, i przy wyjściu, żeby zakończone nie zostawiło tekstu następnemu.
+        _queryProgressDetail = null;
+
+        // ⚠ Komenda anulowania jest PRZEKAZYWANA, nie odtwarzana (patrz `ResolveProgressSection`): pasek
+        // statusu i przycisk w toolbarze naciskają ten sam obiekt `CancelQueryCommand`, więc zatrzask
+        // `IsCancelling` gasi oba naraz.
+        UpdateProgressSection();
+
         OnPropertyChanged(nameof(CanCancelQuery));
     }
 
@@ -1121,11 +1247,33 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string _queryStatsText = string.Empty;
 
+    // ⭐⭐ SEKCJA 2 PASKA STATUSU — komunikat aplikacji (product-polish.md §8.4.3).
+    //
+    // ⚠⚠ To POWSTAŁO Z ROZDZIELENIA jednej właściwości i tam leżała prawdziwa treść defektu H‑4.
+    // Audyt opisał go jako „stan połączenia i komunikaty mają identyczną wagę wizualną" — w rzeczywistości
+    // były TĄ SAMĄ WŁAŚCIWOŚCIĄ (`StatusText`): `UpdateStatusFromConnection` pisało do niej „Connected to X",
+    // a `SetError` treść wyjątku, więc nadpisywały się nawzajem. Żadne stylowanie nie mogło tego naprawić,
+    // bo nie było czego stylować osobno. Sekcja 1 czyta dziś `ConnectionDisplayName`/`ConnectionEndpoint`.
+    //
+    // ⚠ Severity jest ENUMEM, nie boolem (`IsStatusError` zniknął): §8.4.4 wymaga ikony i barwy per severity,
+    // a mapowanie czytamy z `MessageBanner` — tego samego, którym maluje się log Messages w edytorze SQL.
+    // ⛔ Nie dopisywać tu drugiej definicji severity.
     [ObservableProperty]
-    private string _statusText = UiStrings.StatusBarReady;
+    [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
+    [NotifyPropertyChangedFor(nameof(RailBrushKey))]
+    private string _statusMessage = string.Empty;
 
     [ObservableProperty]
-    private bool _isStatusError;
+    [NotifyPropertyChangedFor(nameof(StatusMessageBrushKey))]
+    [NotifyPropertyChangedFor(nameof(StatusMessageGeometryKey))]
+    [NotifyPropertyChangedFor(nameof(RailBrushKey))]
+    private MessageSeverity _statusMessageSeverity = MessageSeverity.Info;
+
+    public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
+
+    public string StatusMessageBrushKey => MessageBanner.BrushKeyFor(StatusMessageSeverity);
+
+    public string StatusMessageGeometryKey => MessageBanner.GeometryKeyFor(StatusMessageSeverity);
 
     public string AppTitle => UiStrings.AppTitle;
     public string AppSubtitle => UiStrings.AppSubtitle;
@@ -1140,8 +1288,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// hand-typed copy fails (gotcha #284). <c>AppInfoTests</c> now fails on any version literal in this
     /// project.</para>
     /// </summary>
-    public string AppVersionChip => string.Format(
-        CultureInfo.CurrentCulture, UiStrings.StatusBarVersionFormat, AppInfo.Product, AppInfo.Version);
+    // ⛔ `AppVersionChip` USUNIĘTY w M3.1b — decyzja D3: nazwa aplikacji i numer wersji nie należą do paska
+    // statusu, tylko do okna About, gdzie są tematem. Pasek statusu odpowiada na pytanie „co się dzieje
+    // TERAZ", a wersja produktu nie zmienia się nigdy w trakcie sesji. `AppInfo` pozostaje jedynym źródłem
+    // wersji i czyta ją About; gwarancje `AppInfoTests` (żadnego literału wersji w kodzie) są nietknięte.
     public string CommitLabel => UiStrings.TransactionCommit;
     public string RollbackLabel => UiStrings.TransactionRollback;
     public string MessagesLabel => UiStrings.BottomTabMessages;
@@ -1157,6 +1307,444 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsConnected => _service.IsConnected;
     public string ActiveConnectionName => _service.ActiveProfile?.Name ?? string.Empty;
     public bool HasActiveConnection => _service.ActiveProfile is not null;
+
+    // ⭐⭐ SEKCJA 1 PASKA STATUSU — tożsamość połączenia (product-polish.md §8.4.3).
+    //
+    // ⚠ Od M3.1b to jest JEDYNE miejsce w aplikacji, które odpowiada na pytanie „gdzie jestem podłączony?".
+    // Nazwa połączenia i badge DEV MODE zostały USUNIĘTE z paska tytułu — decyzja użytkownika (2026-08-02):
+    // „jedna informacja powinna mieć jednego właściciela… pasek tytułu będzie odpowiadał wyłącznie za
+    // nawigację i polecenia". ⛔ Nie przywracać ich na górę; to nie jest brak, tylko rozstrzygnięcie (§19.3).
+    //
+    // Rozdział ról jest częścią wymagania (§8.4.4): nazwa niesie `Text.Status` SemiBold i pełny kontrast,
+    // endpoint `Text.Caption` w kolorze drugorzędnym. Kropka stanu odpowiada za „połączony / nie".
+    public string ConnectionDisplayName
+        => HasActiveConnection ? ActiveConnectionName : UiStrings.StatusBarDisconnected;
+
+    // ⚠ Etykieta niesie SEPARATOR, a nie sam endpoint, i to nie jest przemycanie prezentacji do VM:
+    // nazwa i endpoint renderują się jako DWA RUNY W JEDNYM `TextBlocku` (§19.3.1), więc nie ma między
+    // nimi `Spacing` kontenera, który mógłby je rozdzielić. Odstęp musi być częścią tekstu. Kropka
+    // środkowa odwzorowuje makietę z §8.4.3: `● Szkoleniowa · localhost:3050 · DEV`.
+    public string ConnectionEndpointLabel
+        => _service.ActiveProfile is { } p ? $" · {p.Host}:{p.Port}" : string.Empty;
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ RAIL STATUS BARA (§8.4.1–§8.4.2)
+    //
+    // Rail odpowiada na pytanie „co aplikacja ROBI teraz" i pokazuje DOKŁADNIE JEDEN stan — ten
+    // o najwyższym priorytecie spośród aktywnych. Chipy (§8.4.5, M3.1d–e) odpowiadają na inne pytanie
+    // („co jest PRAWDĄ teraz") i współistnieją dowolnie. ⛔ Nie mieszać tych dwóch ról.
+    //
+    // ⚠ Kolor NIGDY nie jest jedynym nośnikiem (§10): każdy stan ma też tekst albo ikonę w sekcji 2.
+    // Rail jest wzmocnieniem czytelnym kątem oka, a nie komunikatem.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Klucz pędzla railu — stan o najwyższym priorytecie spośród aktywnych (§8.4.2).
+    /// Kolejność jest uzasadniona, nie dowolna: błąd wygrywa ze wszystkim, bo wymaga reakcji;
+    /// debug wygrywa z wykonywaniem, bo krokowanie JEST wykonywaniem i „wykonuję" byłoby prawdziwe
+    /// i bezużyteczne; trace przegrywa z wykonywaniem, bo jest tłem pracy, a nie jej treścią.
+    /// </summary>
+    public string RailBrushKey =>
+        HasStatusMessage && StatusMessageSeverity == MessageSeverity.Error ? "ErrorBrush"        // 5
+        : HasStatusMessage && StatusMessageSeverity == MessageSeverity.Warning ? "WarningBrush"  // 4
+        : IsDebugSessionLive ? "DebugCurrentLineBarBrush"                                        // 3
+        : IsExecuting ? "AccentBrush"                                                            // 2
+        : IsTraceSessionLive ? "IconColor_Query"                                                 // 1
+        : "BorderBrush";                                                                         // 0 — separator
+
+    /// <summary>
+    /// Czy GDZIEKOLWIEK żyje sesja debuggera. ⚠ To NIE jest `IsDebuggerTabActive`, które znaczy
+    /// „ta zakładka jest wybrana" — rail i chip mają być prawdziwe także wtedy, gdy użytkownik patrzy
+    /// na inną zakładkę (§8.4: czas życia sygnału to „dopóki warunek jest prawdziwy"). Żywa sesja to
+    /// `Busy` albo `Paused`; `Completed`/`Faulted` są terminalne (stan zostaje widoczny do inspekcji,
+    /// ale sesji już nie ma), a `Preparing`/`ReadyToLaunch`/`Idle`/`Editing` jej jeszcze albo już nie mają.
+    /// </summary>
+    public bool IsDebugSessionLive => WorkspaceTabs
+        .Any(t => t.Debugger is { Phase: DebuggerPhase.Busy or DebuggerPhase.Paused });
+
+    /// <summary>
+    /// Czy GDZIEKOLWIEK żyje sesja Trace — czyli istnieje sesja na serwerze: wszystko poza
+    /// `Stopped` i `Faulted`.
+    /// </summary>
+    public bool IsTraceSessionLive => WorkspaceTabs
+        .Any(t => t.TraceMonitor is { State: TraceSessionState.Starting or TraceSessionState.Running
+                                          or TraceSessionState.Paused or TraceSessionState.Stopping });
+
+    // ⚠⚠ Subskrypcje MUSZĄ być zdejmowane. Agregacja czyta stan zakładek, więc zakładka zamknięta, ale
+    // wciąż podpięta, trzymałaby rail zapalony (a od M3b.1 także pasek postępu) po czymś, czego już nie
+    // ma. `Reset` (czyli `Clear()` przy rozłączeniu) NIE niesie `OldItems`, dlatego trzymamy własny zbiór
+    // podpiętych zakładek — bez niego odpięcie przy rozłączeniu byłoby niewykonalne.
+    //
+    // ⭐ NAZWA MÓWI „AKTYWNOŚĆ", NIE „RAIL", I OD M3b.1 JEST TO JUŻ TRZECI KONSUMENT tej jednej
+    // agregacji: rail (jeden stan o najwyższym priorytecie), chipy (współistniejące fakty) i sekcja
+    // postępu (jedna operacja, drabinka priorytetów). `RaiseActivityChanged` nosiło tę nazwę od M3.1e
+    // właśnie z tego powodu; reszta mechanizmu została przy „rail" i była już historią, nie
+    // odpowiedzialnością. ⛔ Nie zakładać drugiego zbioru subskrypcji dla postępu — jeden zbiór, jeden
+    // punkt odpinania, więc nie da się dodać źródła, które przeżyje swoją zakładkę.
+    private readonly HashSet<WorkspaceTabViewModel> _activitySources = [];
+
+    private void WireActivitySource(WorkspaceTabViewModel tab)
+    {
+        if (tab.Debugger is null && tab.TraceMonitor is null
+            && tab.DataImport is null && tab.ScriptExecutor is null) return;
+        if (!_activitySources.Add(tab)) return;
+
+        if (tab.Debugger is { } dbg) dbg.PropertyChanged += OnActivitySourceChanged;
+        if (tab.TraceMonitor is { } trace) trace.PropertyChanged += OnActivitySourceChanged;
+        if (tab.DataImport is { } import) import.PropertyChanged += OnActivitySourceChanged;
+        if (tab.ScriptExecutor is { } script) script.PropertyChanged += OnActivitySourceChanged;
+        RaiseActivityChanged();
+    }
+
+    private void UnwireActivitySource(WorkspaceTabViewModel tab)
+    {
+        if (!_activitySources.Remove(tab)) return;
+
+        if (tab.Debugger is { } dbg) dbg.PropertyChanged -= OnActivitySourceChanged;
+        if (tab.TraceMonitor is { } trace) trace.PropertyChanged -= OnActivitySourceChanged;
+        if (tab.DataImport is { } import) import.PropertyChanged -= OnActivitySourceChanged;
+        if (tab.ScriptExecutor is { } script) script.PropertyChanged -= OnActivitySourceChanged;
+        RaiseActivityChanged();
+    }
+
+    /// <summary>
+    /// Faza 3 ładowania połączenia. ⭐ Jej zakończenie gasi RÓWNIEŻ fazę 1 — i to jest to jedno miejsce,
+    /// które domyka cały odcinek udanego połączenia, bo prefetch ma swoje `finally` i nie da się go pominąć.
+    /// </summary>
+    private void OnMetadataProgressChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(MetadataExplorerViewModel.IsLoadingMetadata)
+                               or nameof(MetadataExplorerViewModel.MetadataCategoriesLoaded))) return;
+
+        if (e.PropertyName == nameof(MetadataExplorerViewModel.IsLoadingMetadata)
+            && !Metadata.IsLoadingMetadata)
+        {
+            IsConnecting = false;
+        }
+
+        UpdateProgressSection();
+    }
+
+    private void OnActivitySourceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // Tylko te właściwości zmieniają odpowiedź; reszta zdarzeń zakładki nas nie dotyczy.
+        // ⚠ Rail i chipy czytają dwie pierwsze; sekcja postępu pozostałe. Filtr jest wspólny, bo
+        // `RaiseActivityChanged` przelicza całość — rozdzielenie go dałoby dwa filtry do utrzymania
+        // przy jednym zdarzeniu.
+        if (e.PropertyName is nameof(DebuggerTabViewModel.Phase)
+                           or nameof(TraceMonitorTabViewModel.State)
+                           or nameof(DataImportTabViewModel.IsRunning)
+                           or nameof(DataImportTabViewModel.IsRecalculating)
+                           or nameof(DataImportTabViewModel.ProgressRowsRead)
+                           or nameof(DataImportTabViewModel.ProgressPercent)
+                           or nameof(DataImportTabViewModel.IsProgressIndeterminate)
+                           or nameof(ScriptExecutorTabViewModel.IsRunning)
+                           or nameof(ScriptExecutorTabViewModel.CompletedStatementCount))
+        {
+            RaiseActivityChanged();
+        }
+    }
+
+    // ⚠ Nazwa mówi „aktywność", nie „rail", i to jest celowe: od M3.1e ta sama agregacja karmi DWÓCH
+    // konsumentów o różnych rolach — rail (jeden stan, ten o najwyższym priorytecie) i chipy
+    // (współistniejące fakty). Od M3b.1 jest TRZECI: sekcja postępu. Nazwa `RaiseRailChanged` byłaby
+    // od tej iteracji historią, nie odpowiedzialnością.
+    private void RaiseActivityChanged()
+    {
+        OnPropertyChanged(nameof(IsDebugSessionLive));
+        OnPropertyChanged(nameof(IsTraceSessionLive));
+        OnPropertyChanged(nameof(RailBrushKey));
+        OnPropertyChanged(nameof(DebugChipTooltip));
+        OnPropertyChanged(nameof(TraceChipTooltip));
+        UpdateProgressSection();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ SEKCJA POSTĘPU — ARBITRAŻ ŹRÓDEŁ (§8.4.6, M3b.1)
+    //
+    // M3.1f dostarczyło infrastrukturę i JEDNO źródło, więc `OnIsExecutingChanged` wołało
+    // `Progress.Begin/End` wprost. Przy trzech źródłach to przestaje wystarczać: potrzebny jest jeden
+    // punkt, który rozstrzyga, KTÓRA operacja jest w sekcji widoczna. Dlatego od tej iteracji każde
+    // źródło mówi tylko „przelicz", a odpowiedź składa wyłącznie `UpdateProgressSection`.
+    // ⛔ Nie wołać `Progress.Begin`/`Report`/`End` z żadnego innego miejsca — drugi pisarz to drugi
+    // właściciel stanu sekcji, a stan sekcji jest jeden.
+    //
+    // ⭐ DRABINKA PRIORYTETÓW (ratyfikowana przez użytkownika 2026-08-04). Sekcja odpowiada na pytanie
+    // „NA CO CZEKAM TERAZ", i to jest całe uzasadnienie kolejności:
+    //   3. połączenie / ładowanie metadanych — dopóki nie skończy, nie działa nic innego (M3b.2);
+    //   2. zapytanie i skrypt — operacja interaktywna, dopiero co uruchomiona: to jest to, na co
+    //      użytkownik faktycznie czeka, i kończy się szybko, oddając sekcję;
+    //   1. import — długie tło; ma WŁASNĄ transakcję (I7.5), własny pasek i własny Cancel w swojej
+    //      zakładce, więc pozostaje w pełni sterowalny bez paska statusu.
+    // ⚠ Zapytanie i skrypt są JEDNYM szczeblem celowo, nie przez niedopatrzenie: konkurują o linię
+    // Data (`FirebirdScriptExecutor.RunAsync` odmawia przy otwartej transakcji), więc nie nakładają się
+    // w sposób, dla którego warto wymyślać regułę. ⛔ Nie pisać reguły dla przypadku, którego nie da
+    // się osiągnąć — byłaby to bezczynna gałąź udająca decyzję projektową.
+    //
+    // ⚠⚠ Model niesie JEDNĄ operację, więc druga trwająca jest w sekcji niewidoczna — i to jest wybór,
+    // nie ubytek: przeskakiwanie sekcji między zadaniami byłoby myląca, a licznik ukrytych operacji
+    // dokładałby element, którego §8.4.6 nie przewiduje (decyzja użytkownika). Operacja niewidoczna
+    // pozostaje widoczna i anulowalna na SWOJEJ powierzchni.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Które źródło zajmuje sekcję postępu. `None` znaczy „sekcja zgaszona".</summary>
+    private enum ProgressOwner { None, Connecting, ConnectionLoading, Query, Script, Import, ImportReading }
+
+    private ProgressOwner _progressOwner = ProgressOwner.None;
+
+    // Szczegół etykiety zapytania (liczba wczytanych wierszy / „Cancelling…"), zapamiętany TUTAJ, bo
+    // producenci postępu wołają się częściej niż zmienia się właściciel sekcji, a `Report` nie umie
+    // odtworzyć tekstu, którego nie dostał. ⚠ Czyszczone przy każdym wejściu w wykonanie — inaczej
+    // następne zapytanie startowałoby z licznikiem poprzedniego.
+    private string? _queryProgressDetail;
+
+    /// <summary>
+    /// JEDYNY punkt, który zapala, aktualizuje i gasi sekcję postępu. Wywoływany przez
+    /// <see cref="RaiseActivityChanged"/>, więc każde źródło trafia tu tą samą drogą.
+    /// <para>⭐ Rozróżnienie „zmiana właściciela" vs „raport tego samego właściciela" jest konieczne:
+    /// <c>Begin</c> resetuje tryb, procent i komendę anulowania, więc wołany przy każdym raporcie
+    /// zgasiłby tryb procentowy w połowie operacji, która go właśnie ustawiła.</para>
+    /// </summary>
+    private void UpdateProgressSection()
+    {
+        var (owner, label, percent, cancel) = ResolveProgressSection();
+
+        if (owner == ProgressOwner.None)
+        {
+            if (_progressOwner != ProgressOwner.None)
+            {
+                _progressOwner = ProgressOwner.None;
+                Progress.End();
+            }
+            return;
+        }
+
+        if (owner != _progressOwner)
+        {
+            _progressOwner = owner;
+            Progress.Begin(label, cancel);
+        }
+
+        if (percent is { } value) Progress.Report(label, value);
+        else Progress.Report(label);
+    }
+
+    // Czysty wybór: kto zajmuje sekcję i co mówi. Rozdzielony od stosowania, żeby drabinkę priorytetów
+    // dało się sprawdzić testem bez `StatusProgressViewModel` i bez żywego wykonania.
+    private (ProgressOwner Owner, string Label, double? Percent, ICommand? Cancel) ResolveProgressSection()
+    {
+        // Szczebel 3 — ładowanie połączenia (§19.34). Najwyżej, bo dopóki nie skończy, nie działa nic
+        // innego: nie ma drzewa, uzupełniania ani diagnostyki.
+        // ⭐ DWIE flagi, JEDEN szczebel. Faza 1 (otwarcie dołączeń) i faza 3 (prefetch kategorii) mają
+        // każda własne `finally`, więc żadna nie może zostać zapalona — a użytkownik widzi jeden ciągły
+        // pasek, bo pomiędzy nimi leży faza 2, która blokuje wątek UI i w której NIC się nie odmalowuje.
+        // ⚠ Faza 2 nie ma własnej etykiety świadomie: odmalowanie następuje PRZED nią, więc napis
+        // ustawiony na jej początku pojawiłby się dopiero po jej zakończeniu, czyli gdy jest już
+        // nieprawdziwy. Zamiast martwego UI zostaje etykieta fazy 1 (decyzja użytkownika 2026-08-04).
+        if (Metadata.IsLoadingMetadata)
+        {
+            var total = Metadata.MetadataCategoriesTotal;
+            var done = Metadata.MetadataCategoriesLoaded;
+            return (ProgressOwner.ConnectionLoading,
+                    string.Format(CultureInfo.CurrentCulture, UiStrings.StatusProgressMetadataFormat, done, total),
+                    total > 0 ? done * 100d / total : null,
+                    null);
+        }
+
+        if (IsConnecting)
+        {
+            return (ProgressOwner.Connecting, UiStrings.StatusProgressConnecting, null, null);
+        }
+
+        // Szczebel 2 — operacja interaktywna. Zapytanie: tryb nieokreślony, bo strumieniowy odczyt nie
+        // zna sumy wierszy, dopóki nie skończy (§19.7.2).
+        if (IsExecuting)
+        {
+            return (ProgressOwner.Query,
+                    _queryProgressDetail ?? UiStrings.ExecutingStatus,
+                    null,
+                    CancelQueryCommand);
+        }
+
+        // Szczebel 2 — skrypt. ⭐ Jedyne źródło ze ŚCISŁĄ sumą, więc pierwszy żywy konsument ścieżki
+        // procentowej, która od M3.1f nie miała żadnego (§19.7.2).
+        if (WorkspaceTabs.Select(t => t.ScriptExecutor).FirstOrDefault(s => s is { IsRunning: true }) is { } script)
+        {
+            var total = script.RunStatementTotal;
+            var done = script.CompletedStatementCount;
+            return (ProgressOwner.Script,
+                    string.Format(CultureInfo.CurrentCulture, UiStrings.StatusProgressScriptFormat, done, total),
+                    total > 0 ? done * 100d / total : null,
+                    script.StopCommand);
+        }
+
+        // Szczebel 1 — import. ⚠ Suma jest tylko SZACUNKIEM (`SourceSchema.EstimatedRows`) i bywa
+        // nieznana; wtedy `IsProgressIndeterminate` jest prawdą i procentu nie podajemy, bo pasek
+        // stojący na zerze udawałby „0% zrobione".
+        if (WorkspaceTabs.Select(t => t.DataImport).FirstOrDefault(i => i is { IsRunning: true }) is { } import)
+        {
+            return (ProgressOwner.Import,
+                    string.Format(CultureInfo.CurrentCulture, UiStrings.StatusProgressImportFormat, import.ProgressRowsRead),
+                    import.IsProgressIndeterminate ? null : import.ProgressPercent,
+                    import.CancelRunCommand);
+        }
+
+        // Szczebel 1 — odczyt źródła przed importem (M3b.1c). ⭐ Ten sam szczebel co import, bo to ta sama
+        // powierzchnia w innej fazie, i PONIŻEJ samego importu, bo trwający import jest ważniejszy niż
+        // przeliczanie konfiguracji.
+        // ⚠ Bez komendy anulowania: łańcuch ma własny CTS, ale użytkownik nie ma dla niego przycisku, a
+        // wymyślanie go tutaj byłoby dodaniem funkcji pod pozorem podłączenia postępu. `HasCancel` = false.
+        // ⚠ Tryb nieokreślony — ten odcinek nie zna żadnej sumy (§19.32).
+        if (WorkspaceTabs.Select(t => t.DataImport).FirstOrDefault(i => i is { IsRecalculating: true }) is { } reading)
+        {
+            return (ProgressOwner.ImportReading,
+                    reading.Source.UseFile
+                        ? UiStrings.StatusProgressImportReadingFile
+                        : UiStrings.StatusProgressImportReadingClipboard,
+                    null,
+                    null);
+        }
+
+        return (ProgressOwner.None, string.Empty, null, null);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐ CHIPY TRACE I DEBUGGERA (§8.4.3 sekcja 3, §8.4.5) — M3.1e
+    //
+    // Ten sam podział własności, który M3.1d wprowadziło dla transakcji, obowiązuje tu bez zmian:
+    //   • sekcja 2 pokazuje `ActiveDebugger.StatusText` — kontekst AKTYWNEJ zakładki („Paused, linia 14"),
+    //   • chip odpowiada GLOBALNIE: „gdzieś żyje sesja debuggera", także gdy patrzysz na inną zakładkę.
+    // ⛔ To nie jest redundancja — bramka `IsDebuggerTabActive` czyni tamten nośnik niewidocznym
+    // dokładnie tam, gdzie fakt globalny ma znaczenie (§0.1.2).
+    //
+    // ⚠⚠ CHIPY NIE DZIEDZICZĄ PĘDZLI RAILU, i to jest decyzja poparta pomiarem, nie estetyką.
+    // `DebugCurrentLineBarBrush` (rail debuggera, §19.4.1) jest PÓŁPRZEZROCZYSTY (α 0,90 / 0,80) i na
+    // tle `PanelBrush` daje 3,77:1 w Dark. Jako 2 px rail przechodzi (próg §10 dla elementu UI to 3:1);
+    // jako TEKST 10 px nie przechodzi (próg 4,5:1). Ten sam token, dwa progi, dwa werdykty.
+    // Chip debuggera bierze więc `AccentIconBrush` — 5,17:1 Dark / 4,81:1 Light — czyli dokładnie ten
+    // kolor, który trójkąt `DebuggerIcon` i tak nosi, dzięki czemu znak i napis czytają się jako
+    // JEDEN element. Trace zostaje na `IconColor_Query` (8,03:1 / 6,58:1), bo ten próg spełnia.
+    // ⛔ Nie „ujednolicać" tego z railem bez ponownego policzenia kontrastu.
+    //
+    // ⏸ Pełna semantyka kolorów aktywności (SQL / Debugger / Trace / Import — każdy własny, jednoznaczny
+    // kolor) pozostaje odłożona do M3b i bramy §13.3 (§19.4.4). Tutaj rozstrzygamy wyłącznie tyle, ile
+    // trzeba, żeby chip był czytelny.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    // ⚠ Widoczność chipów bierze się WPROST z `IsDebugSessionLive` / `IsTraceSessionLive` — bez aliasów
+    // typu `ShowDebugChip`. Alias byłby czwartą właściwością do podniesienia w `RaiseActivityChanged`,
+    // a jego pominięcie NIE zawodzi buildu ani testu: chip po prostu nigdy się nie pojawia. Warunek
+    // pokazania jest tu tożsamy z faktem, więc druga nazwa nie niesie nic poza ryzykiem.
+    // (Chip transakcji ma `ShowTransactionChip`, bo tam warunek jest ZŁOŻONY: aktywna LUB błąd.)
+
+    /// <summary>
+    /// Szczegóły żywych sesji debuggera — nazwa procedury plus status każdej z nich.
+    /// ⭐ Tekst statusu czyta z <c>DebuggerTabViewModel.StatusText</c>, czyli z tego samego producenta,
+    /// którym karmi się sekcja 2. Etykieta chipa niesie FAKT, tooltip niesie SZCZEGÓŁ — i żaden z nich
+    /// nie jest drugą definicją stanu debuggera.
+    /// </summary>
+    public string DebugChipTooltip => string.Join(
+        Environment.NewLine,
+        WorkspaceTabs
+            .Where(t => t.Debugger is { Phase: DebuggerPhase.Busy or DebuggerPhase.Paused })
+            .Select(t => string.IsNullOrWhiteSpace(t.ObjectName)
+                ? t.Debugger!.StatusText
+                : $"{t.ObjectName} — {t.Debugger!.StatusText}"));
+
+    /// <summary>
+    /// Szczegóły żywej sesji Trace — reużywa <c>TraceMonitorTabViewModel.StatusText</c>
+    /// („Recording · 12/40 events”), który już istnieje i już mapuje <c>TraceSessionState</c> na tekst.
+    /// ⛔ Zero drugiego mapowania stanu Trace w aplikacji.
+    /// </summary>
+    public string TraceChipTooltip => string.Join(
+        Environment.NewLine,
+        WorkspaceTabs
+            .Where(t => t.TraceMonitor is { State: TraceSessionState.Starting or TraceSessionState.Running
+                                                or TraceSessionState.Paused or TraceSessionState.Stopping })
+            .Select(t => t.TraceMonitor!.StatusText));
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ CHIP TRANSAKCJI (§8.4.5) — najważniejsza informacja w pasku
+    //
+    // Chip odpowiada GLOBALNIE na pytanie „czy aplikacja ma otwartą transakcję i od jak dawna?".
+    // Pasek nad wynikami edytora SQL odpowiada na inne, LOKALNE: „ile instrukcji poszło w tej
+    // transakcji". ⭐ To nie jest redundancja, tylko dwa poziomy informacji (decyzja użytkownika,
+    // 2026-08-02): przechodząc do debuggera albo edytora obiektu nadal chcę wiedzieć, że mam otwartą
+    // transakcję — ale licznik instrukcji przestaje mnie wtedy obchodzić, bo nie pracuję w edytorze.
+    //
+    // ⚠⚠ CHIP NIGDY NIE JEST PRZYCISKIEM (§8.4.5). Commit i Rollback zostają w toolbarze pod F6 /
+    // Shift+F6. Operacja nieodwracalna nie może stać w miejscu, które użytkownik czyta kątem oka.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Moment otwarcia bieżącej transakcji — albo <c>null</c>, gdy żadna nie jest otwarta.
+    /// ⭐ Mierzymy CZAS PO STRONIE KLIENTA i to jest rozstrzygnięcie z iteracji 0 (§19.0.2):
+    /// `TransactionService` nie ma znacznika czasu, ale ma zdarzenie `TransactionStateChanged`,
+    /// które ten VM już subskrybuje. Zero zapytań do `MON$`, zero round-tripów, zero zmian w Core
+    /// i w warstwie Firebird. ⚠ Konsekwencja przyjęta świadomie: to czas od chwili, w której
+    /// EmberTern otworzył transakcję, a nie odczyt z serwera — dla pytania „jak długo TO trzymam"
+    /// jest to właściwa odpowiedź.
+    /// </summary>
+    private DateTimeOffset? _transactionStartedAt;
+
+    private DispatcherTimer? _transactionChipTimer;
+
+    public bool ShowTransactionChip => IsTransactionActive || IsTransactionError;
+
+    public string TransactionChipBrushKey => IsTransactionError ? "ErrorBrush" : "TransactionActiveBrush";
+
+    /// <summary>Tooltip chipa — profil i lane (§8.4.5). Tekst chipa zostaje krótki; szczegóły na żądanie.</summary>
+    public string TransactionChipTooltip => DataTransactionProfileTooltip;
+
+    /// <summary>Treść chipa: etykieta + czas trwania, np. „Transakcja · 2 min".</summary>
+    public string TransactionChipText => _transactionStartedAt is { } started
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            UiStrings.StatusBarTransactionChipFormat,
+            FormatTransactionDuration(DateTimeOffset.UtcNow - started))
+        : UiStrings.StatusBarTransactionChipBare;
+
+    /// <summary>
+    /// Czas trwania w postaci zgrubnej i czytelnej kątem oka. ⭐ Funkcja CZYSTA — bierze `TimeSpan`,
+    /// nie zegar — więc daje się przetestować bez timera i bez czekania (gotcha #251: wyzwalacz
+    /// oparty wyłącznie na timerze jest nieosiągalny dla testu headless).
+    /// ⚠ Zgrubna świadomie: pasek statusu czyta się kątem oka, a „02:37.4" wymagałoby czytania.
+    /// </summary>
+    internal static string FormatTransactionDuration(TimeSpan elapsed)
+    {
+        if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+
+        if (elapsed.TotalMinutes < 1)
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.DurationSecondsFormat, (int)elapsed.TotalSeconds);
+
+        if (elapsed.TotalHours < 1)
+            return string.Format(CultureInfo.CurrentCulture, UiStrings.DurationMinutesFormat, (int)elapsed.TotalMinutes);
+
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            UiStrings.DurationHoursFormat,
+            (int)elapsed.TotalHours,
+            elapsed.Minutes);
+    }
+
+    // ⚠ Timer odświeża WYŁĄCZNIE wyświetlany tekst — fakt (`_transactionStartedAt`) jest od niego
+    // niezależny i testowalny. Chodzi co sekundę i tylko wtedy, gdy transakcja jest otwarta; przy
+    // Idle jest zatrzymywany, żeby aplikacja nie tykała w nieskończoność po zamkniętej transakcji.
+    private void UpdateTransactionChipTimer()
+    {
+        if (ShowTransactionChip)
+        {
+            _transactionChipTimer ??= new DispatcherTimer(
+                TimeSpan.FromSeconds(1),
+                DispatcherPriority.Background,
+                (_, _) => OnPropertyChanged(nameof(TransactionChipText)));
+            _transactionChipTimer.Start();
+        }
+        else
+        {
+            _transactionChipTimer?.Stop();
+        }
+    }
 
     // Title-bar transaction-profile block: two stacked lines, each a static lane label
     // ("Data:" / "Meta:") plus the full profile name in a lane-colored badge. These
@@ -1237,13 +1825,22 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool ShowDataTransactionButtons
         => IsQueryTabActive || IsDataTabActive || IsTransactionActive || IsTransactionError;
 
+    // ⭐ Od M3.1d ten pasek niesie WYŁĄCZNIE kontekst lokalny edytora SQL — liczbę instrukcji
+    // wykonanych w transakcji. FAKT „transakcja jest otwarta" przejął chip w pasku statusu (§8.4.5),
+    // który jest widoczny także wtedy, gdy użytkownik pracuje w debuggerze albo w edytorze obiektu,
+    // a ten pasek jest bramkowany `IsQueryTabActive` i wtedy go nie ma.
+    //
+    // > Użytkownik (2026-08-02): „to nie jest zbędna redundancja, tylko dwa różne poziomy informacji…
+    // > licznik instrukcji przestaje być istotny, gdy nie pracuję już w SQL Editorze".
+    //
+    // ⛔ Nie przywracać tu kropki stanu ani etykiety „Active Transaction" — to byłby drugi właściciel
+    // tego samego faktu (§0.1.2).
     private static string BuildTransactionBarText(TransactionService tx) => tx.State switch
     {
-        TransactionState.Active when tx.HasExecutedStatements
-            => $"{UiStrings.TransactionBarActive} · {string.Format(UiStrings.TransactionStatementCountFormat, tx.StatementCount)}",
-        TransactionState.Active => UiStrings.TransactionBarActive,
         TransactionState.Error => UiStrings.TransactionBarError,
-        _ => UiStrings.TransactionBarInactive,
+        _ when tx.HasExecutedStatements
+            => string.Format(UiStrings.TransactionStatementCountFormat, tx.StatementCount),
+        _ => string.Empty,
     };
     public void ReloadConnections()
     {
@@ -2366,15 +2963,43 @@ public partial class MainWindowViewModel : ViewModelBase
         SqlEditorPerformance.Clear();
     }
 
+    /// <summary>
+    /// Czy trwa nawiązywanie połączenia — faza 1 ładowania (§19.34).
+    /// <para>
+    /// ⚠⚠ <b>Gaszone NIE w <c>finally</c> tej metody, i to jest wybór, nie przeoczenie.</b> Ładowanie
+    /// połączenia ma trzy fazy w dwóch klasach: (1) otwarcie dołączeń tutaj, (2) odtworzenie zakładek
+    /// w <see cref="ApplyActiveConnectionChange"/> — <b>synchronicznie na wątku UI</b>, (3) prefetch
+    /// kategorii w węźle połączenia. Gaszenie na wyjściu z fazy 1 zostawiłoby lukę na fazę 2, a w niej
+    /// pasek zgasłby i zapalił się ponownie — użytkownik ratyfikował utrzymanie etykiety fazy 1
+    /// (2026-08-04), więc flaga żyje aż faza 3 ją przejmie.
+    /// </para>
+    /// <para>
+    /// ⭐ Nie ma tu ryzyka wiecznie zapalonego paska, bo <b>każda</b> droga wyjścia gasi flagę:
+    /// nieudane połączenie — w <c>catch</c> poniżej (faza 2 ani 3 wtedy nie nastąpią);
+    /// rozłączenie i brak profilu — w <see cref="ApplyActiveConnectionChange"/>;
+    /// udane połączenie — w <c>finally</c> prefetchu, razem z fazą 3.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _isConnecting;
+
+    // ⭐ Jeden punkt przeliczenia sekcji, dokładnie jak `OnIsExecutingChanged` dla zapytania. Rozsypane
+    // wywołania `UpdateProgressSection()` przy każdym przypisaniu flagi byłyby czwartą rzeczą do
+    // pamiętania — i pierwszy test, który ustawił flagę wprost, natychmiast to pokazał.
+    partial void OnIsConnectingChanged(bool value) => UpdateProgressSection();
+
     public async Task ConnectAsync(ConnectionProfile profile)
     {
         try
         {
             ClearError();
+            IsConnecting = true;
             await _service.ConnectAsync(profile).ConfigureAwait(true);
         }
         catch (ConnectionFailedException ex)
         {
+            // Faza 2 ani 3 już nie nastąpią, więc to jedyne miejsce, które może tu zgasić pasek.
+            IsConnecting = false;
             SetError(ex.Message);
         }
     }
@@ -2441,7 +3066,6 @@ public partial class MainWindowViewModel : ViewModelBase
             Password = profile.Password,
             Charset = profile.Charset,
             Dialect = profile.Dialect,
-            ClientLibraryPath = profile.ClientLibraryPath,
             DataTransactionProfile = profile.DataTransactionProfile,
             MetadataTransactionProfile = profile.MetadataTransactionProfile,
         };
@@ -2468,6 +3092,19 @@ public partial class MainWindowViewModel : ViewModelBase
         return ConfirmationRequested?.Invoke(request) ?? Task.FromResult(true);
     }
 
+    /// <summary>
+    /// Tells the user something they must not miss and waits for them to acknowledge it. The shared confirm
+    /// dialog with no Cancel — a report of what already happened, where there is nothing left to decline.
+    /// </summary>
+    private Task RequestAcknowledgeAsync(string title, string message)
+        => RequestConfirmAsync(new ConfirmRequest
+        {
+            Title = title,
+            Message = message,
+            ConfirmLabel = UiStrings.DialogOk,
+            CancelLabel = string.Empty,
+        });
+
     // Multi-outcome (N-button) sibling of ConfirmationRequested — Commit / Roll back /
     // Cancel (disconnect) and Cancel / Discard-and-exit (app close). Returns the chosen
     // ChoiceOption.Id or null when dismissed; with no handler (tests) → null = cancel,
@@ -2479,29 +3116,38 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // ─── Data-loss WorkGuard ───────────────────────────────────────────────
     //
-    // One aggregation feeding three entry points: tab close (RequestCloseTabAsync),
-    // disconnect (ConfirmDisconnectAsync), and app close (TryCloseApplicationAsync).
+    // One aggregation feeding FOUR entry points: tab close (RequestCloseTabAsync),
+    // disconnect (ConfirmDisconnectAsync), app close (TryCloseApplicationAsync) and — since
+    // M3.3c — the tab context menu's bulk closes (CloseTabsAsync).
     // Unsaved CODE work (uncompiled new objects / modified source / queued structural
     // changes) lives only in the open tabs; transactions live on the server and can't
     // survive a restart, so they always need a conscious Commit/Roll-back decision.
+    //
+    // ⭐⭐ M3.3c NADAŁO TYM TRZEM METODOM ZASIĘG, i to jest jedyna zmiana, jakiej bramka
+    // potrzebowała. „Zamknij zakładki po prawej" dotyczy PODZBIORU, a metody iterowały po
+    // wszystkich — bez zasięgu czwarte wejście musiałoby albo ominąć bramkę, albo pytać
+    // o pracę w zakładkach, których nie zamyka. ⚠ `scope == null` ZNACZY „wszystkie", więc
+    // trzy istniejące wejścia są nietknięte i nie było potrzeby dotykać ich kodu.
+    // ⛔ Nie budować drugiej ścieżki „zapisz wiele zakładek" — ta jest przetestowana.
 
     // Unsaved-work descriptors across the currently-open tabs (the active connection's).
     // Other connections' tabs are stashed serialized and hold no live uncompiled source.
-    internal IReadOnlyList<UnsavedWorkItem> CollectUnsavedWork()
+    internal IReadOnlyList<UnsavedWorkItem> CollectUnsavedWork(
+        IReadOnlyCollection<WorkspaceTabViewModel>? scope = null)
     {
         var items = new List<UnsavedWorkItem>();
-        foreach (var tab in WorkspaceTabs)
+        foreach (var tab in scope ?? (IReadOnlyCollection<WorkspaceTabViewModel>)WorkspaceTabs)
         {
             if (tab.UnsavedWork is { } item) items.Add(item);
         }
         return items;
     }
 
-    // True when at least one open tab holds unsaved work AND can compile it (every object
+    // True when at least one tab IN SCOPE holds unsaved work AND can compile it (every object
     // editor can). Drives whether the WorkGuard offers "Save …" alongside Discard/Cancel.
-    private bool HasSavableDirtyEditors()
+    private bool HasSavableDirtyEditors(IReadOnlyCollection<WorkspaceTabViewModel>? scope = null)
     {
-        foreach (var tab in WorkspaceTabs)
+        foreach (var tab in scope ?? (IReadOnlyCollection<WorkspaceTabViewModel>)WorkspaceTabs)
             if (tab.UnsavedWork is not null && tab.SavableEditor is not null) return true;
         return false;
     }
@@ -2516,10 +3162,11 @@ public partial class MainWindowViewModel : ViewModelBase
     // lane), so a mid-batch failure does NOT undo the ones already saved — only the failing
     // objects remain to fix and retry. Save order = tab order (a deliberate v1 simplification;
     // dependency-derived order is a possible future refinement, not required here).
-    private async Task<bool> SaveDirtyEditorsAsync()
+    private async Task<bool> SaveDirtyEditorsAsync(
+        IReadOnlyCollection<WorkspaceTabViewModel>? scope = null)
     {
         var savable = new List<(WorkspaceTabViewModel Tab, ISavableObjectEditor Editor)>();
-        foreach (var tab in WorkspaceTabs)
+        foreach (var tab in scope ?? (IReadOnlyCollection<WorkspaceTabViewModel>)WorkspaceTabs)
             if (tab.UnsavedWork is not null && tab.SavableEditor is { } editor)
                 savable.Add((tab, editor));
         if (savable.Count == 0) return true;
@@ -3132,7 +3779,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadProcedureListsAsync(detail);
         detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Procedure);
-        detail.ObjectCreated += name => OnProcedureCreated(detail, name);
+        detail.ObjectCreated += outcome => _ = OnProcedureCreated(detail, outcome);
         // Start in Easy mode (approved target design): the template SourceText is parsed
         // into the editable name + Input/Output params + Variables/Cursors/Subprograms +
         // body. The user can flip to Source at any time.
@@ -3147,29 +3794,71 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(tab);
     }
 
-    private async void OnProcedureCreated(ProcedureDetailTabViewModel detail, string? procedureName)
+    private Task OnProcedureCreated(ProcedureDetailTabViewModel detail, SourceObjectDetailTabViewModel.ObjectCompileOutcome outcome)
+        => OnObjectMaterializedAsync(detail, MetadataObjectKind.Procedure, UiStrings.NewProcedureExecutedFormat, outcome);
+
+    /// <summary>
+    /// An object now exists under a name the tab that compiled it is NOT bound to — a New-tab create, or a
+    /// rename. ⭐ ONE handler for both and for all three object kinds, because the work is identical (refresh
+    /// the tree, close the originating tab, open what now exists) and only the WORDING differs. Three copies
+    /// of it existed before this; adding the rename disclosure to each would have made three copies of the one
+    /// message the user must not miss.
+    /// </summary>
+    private async Task OnObjectMaterializedAsync(
+        object detail,
+        MetadataObjectKind kind,
+        string createdFormat,
+        SourceObjectDetailTabViewModel.ObjectCompileOutcome outcome)
     {
-        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewProcedureExecutedFormat, procedureName ?? string.Empty));
+        if (outcome.IsRename)
+        {
+            var notice = string.Format(
+                CultureInfo.CurrentCulture,
+                UiStrings.ObjectRenameNotSupportedFormat,
+                outcome.Name ?? string.Empty,
+                outcome.PreviousName ?? string.Empty);
+
+            // Both surfaces on purpose. The MODAL is what guarantees the user learns that a second object is
+            // now in their database — they did not ask for one, and the tab is about to switch out from under
+            // them, so a message they might scroll past later is not enough. The Messages entry is the
+            // durable record of the same fact, copyable, after the dialog is gone.
+            AddMessage(MessageSeverity.Warning, notice);
+            await RequestAcknowledgeAsync(UiStrings.ObjectRenameNotSupportedTitle, notice).ConfigureAwait(true);
+        }
+        else
+        {
+            AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, createdFormat, outcome.Name ?? string.Empty));
+        }
+
         await Metadata.RefreshAsync().ConfigureAwait(true);
 
-        // Close the New Procedure tab.
-        WorkspaceTabViewModel? newTab = null;
+        // Close the tab that compiled it. ⚠ CloseTab, not RequestCloseTabAsync: on a rename the buffer is
+        // still "dirty" against the ORIGINAL object (nothing reloaded it), so the confirming close would ask
+        // the user to save work that has just been saved — under the old name, which is the one thing that
+        // must not happen.
+        if (FindTabForDetail(detail) is { } originating) CloseTab(originating);
+
+        // Open what now exists, so the user is never left looking at a tab bound to the old name — the
+        // "Compile did nothing" symptom. Falls back to the tree when the name could not be parsed.
+        if (!string.IsNullOrEmpty(outcome.Name))
+        {
+            OnOpenDdlRequested(new MetadataObject(outcome.Name, kind));
+        }
+    }
+
+    /// <summary>The workspace tab hosting this detail view model, whichever of the three kinds it is.</summary>
+    private WorkspaceTabViewModel? FindTabForDetail(object detail)
+    {
         foreach (var t in WorkspaceTabs)
         {
-            if (t.Kind == WorkspaceTabKind.ProcedureDetail && ReferenceEquals(t.ProcedureDetail, detail))
+            if (ReferenceEquals(t.ProcedureDetail, detail)
+                || ReferenceEquals(t.TriggerDetail, detail)
+                || ReferenceEquals(t.FunctionDetail, detail))
             {
-                newTab = t;
-                break;
+                return t;
             }
         }
-        if (newTab is not null) CloseTab(newTab);
-
-        // Reopen the freshly-created procedure as a normal (existing) tab when we
-        // could parse its name; otherwise the user finds it in the tree.
-        if (!string.IsNullOrEmpty(procedureName))
-        {
-            OnOpenDdlRequested(new MetadataObject(procedureName, MetadataObjectKind.Procedure));
-        }
+        return null;
     }
 
     public bool CanCreateTrigger => _service.IsConnected;
@@ -3194,7 +3883,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ExecutableBody = "BEGIN\nEND";
         detail.EasyMode = true;
         detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Trigger);
-        detail.ObjectCreated += name => OnTriggerCreated(detail, name);
+        detail.ObjectCreated += outcome => _ = OnTriggerCreated(detail, outcome);
         // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
         detail.ClearDirty();
 
@@ -3204,27 +3893,8 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(tab);
     }
 
-    private async void OnTriggerCreated(TriggerDetailTabViewModel detail, string? triggerName)
-    {
-        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewTriggerExecutedFormat, triggerName ?? string.Empty));
-        await Metadata.RefreshAsync().ConfigureAwait(true);
-
-        WorkspaceTabViewModel? newTab = null;
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.TriggerDetail && ReferenceEquals(t.TriggerDetail, detail))
-            {
-                newTab = t;
-                break;
-            }
-        }
-        if (newTab is not null) CloseTab(newTab);
-
-        if (!string.IsNullOrEmpty(triggerName))
-        {
-            OnOpenDdlRequested(new MetadataObject(triggerName, MetadataObjectKind.Trigger));
-        }
-    }
+    private Task OnTriggerCreated(TriggerDetailTabViewModel detail, SourceObjectDetailTabViewModel.ObjectCompileOutcome outcome)
+        => OnObjectMaterializedAsync(detail, MetadataObjectKind.Trigger, UiStrings.NewTriggerExecutedFormat, outcome);
 
     public bool CanCreateFunction => _service.IsConnected;
 
@@ -3245,7 +3915,7 @@ public partial class MainWindowViewModel : ViewModelBase
         detail.ColumnsLoader = new DelegateColumnsLoader(t => EnsureColumnsAsync(t));
         _ = LoadFunctionListsAsync(detail);
         detail.ObjectExistsProbe = ObjectExistsProbeFor(MetadataObjectKind.Function);
-        detail.ObjectCreated += name => OnFunctionCreated(detail, name);
+        detail.ObjectCreated += outcome => _ = OnFunctionCreated(detail, outcome);
         detail.EasyMode = true;
         // Seeding marked the VM dirty; a brand-new untouched tab must not prompt on close.
         detail.ClearDirty();
@@ -3256,27 +3926,8 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectTab(tab);
     }
 
-    private async void OnFunctionCreated(FunctionDetailTabViewModel detail, string? functionName)
-    {
-        AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.NewFunctionExecutedFormat, functionName ?? string.Empty));
-        await Metadata.RefreshAsync().ConfigureAwait(true);
-
-        WorkspaceTabViewModel? newTab = null;
-        foreach (var t in WorkspaceTabs)
-        {
-            if (t.Kind == WorkspaceTabKind.FunctionDetail && ReferenceEquals(t.FunctionDetail, detail))
-            {
-                newTab = t;
-                break;
-            }
-        }
-        if (newTab is not null) CloseTab(newTab);
-
-        if (!string.IsNullOrEmpty(functionName))
-        {
-            OnOpenDdlRequested(new MetadataObject(functionName, MetadataObjectKind.Function));
-        }
-    }
+    private Task OnFunctionCreated(FunctionDetailTabViewModel detail, SourceObjectDetailTabViewModel.ObjectCompileOutcome outcome)
+        => OnObjectMaterializedAsync(detail, MetadataObjectKind.Function, UiStrings.NewFunctionExecutedFormat, outcome);
 
     // Persist a freshly-added connection into a folder. Called by the view after
     // the dialog returns with a profile; isolated here so tests can drive the
@@ -3667,6 +4318,29 @@ public partial class MainWindowViewModel : ViewModelBase
     // the column cache. Feeds the editor's Signature Help (Etap 5 / M6) via the metadata snapshot.
     private readonly Dictionary<string, IReadOnlyList<RoutineParameterMetadata>> _routineParameterCache =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Drops every per-object cache that was read from the current schema — columns, routine parameters and
+    /// the warmed Quick Info detail. The ONE place those three are dropped together, so a caller cannot
+    /// forget one of them (and a fourth such cache, added later, has one obvious home).
+    /// <para>
+    /// Two callers, one meaning: switching CONNECTION (the caches describe a different database) and a manual
+    /// METADATA REFRESH (the schema may have moved under them — S-2, 2026-08-05). The refresh case is the one
+    /// that was missing: a refresh rebuilt every open editor's semantic model against the same stale columns,
+    /// so a column added to a table stayed "unknown" for the rest of the session on every open tab.
+    /// </para>
+    /// <para>
+    /// ⚠ Safe to drop mid-session only because <c>ISqlMetadataProvider.KnowsColumns</c> now lets diagnostics
+    /// tell "not loaded yet" from "absent". An empty cache used to read as "this table has no such column",
+    /// so clearing it would have squiggled every qualified column until the warm pass refilled it.
+    /// </para>
+    /// </summary>
+    private void InvalidateObjectCaches()
+    {
+        _columnCache.Clear();
+        _routineParameterCache.Clear();
+        _objectDetailCache.Clear();
+    }
 
     /// <summary>Synchronous cache read for the signature-help snapshot (M6). Null when not loaded.</summary>
     internal IReadOnlyList<RoutineParameterMetadata>? TryGetCachedRoutineParameters(string routineName)
@@ -5742,6 +6416,46 @@ public partial class MainWindowViewModel : ViewModelBase
         => kind is MetadataObjectKind.Procedure or MetadataObjectKind.Function
             or MetadataObjectKind.Trigger or MetadataObjectKind.Package or MetadataObjectKind.View;
 
+    /// <summary>
+    /// Raised to open the Database Properties window. Same shape as every other dialog hook here — the view
+    /// model builds the content, the view owns the window.
+    /// </summary>
+    public event Func<DatabasePropertiesViewModel, Task>? DatabasePropertiesRequested;
+
+    /// <summary>
+    /// Builds the Database Properties content for the ACTIVE profile and asks the view to show it.
+    ///
+    /// <para>⚠ The reader and the writer are handed over as delegates rather than as objects, which keeps the
+    /// window's view model free of Firebird types and — the part that matters — testable with no server.</para>
+    ///
+    /// <para>⚠ Reading rides the <b>Metadata</b> lane (read-only, implicit per-command transactions); writing
+    /// goes through the <b>Services API</b>, which is its own connection outside all three lanes. So nothing
+    /// this window does can touch the user's working transaction.</para>
+    /// </summary>
+    internal async Task ShowDatabasePropertiesAsync()
+    {
+        if (DatabasePropertiesRequested is not { } request)
+        {
+            return;
+        }
+
+        if (Service.ActiveProfile is not { } profile)
+        {
+            return;
+        }
+
+        var reader = new FirebirdDatabasePropertiesReader(Service);
+        var writer = new FirebirdDatabaseConfigurationWriter();
+
+        var vm = new DatabasePropertiesViewModel(
+            profile.Name,
+            FirebirdDatabaseConfigurationWriter.CanAttempt(profile),
+            ct => reader.ReadAsync(profile, ct),
+            (change, ct) => writer.ApplyAsync(profile, change, ct));
+
+        await request(vm).ConfigureAwait(true);
+    }
+
     // ─── Connection-node (database-wide) bulk ops ─────────────────────────────
     // Recompute selectivity statistics for every index (SET STATISTICS INDEX).
     internal Task RecomputeAllIndexStatisticsAsync()
@@ -5836,10 +6550,41 @@ public partial class MainWindowViewModel : ViewModelBase
     // nothing needs to: the delegate lives on the tab's own editor, so tab and handler are collected together.
     private void OnWorkspaceTabsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        if (e.NewItems is null) return;
+        // ⚠ Pozycje menu zakładki bramkują się SKŁADEM tej kolekcji, więc każda jej zmiana musi je
+        //   przeliczyć — inaczej „Zamknij po prawej" zostaje aktywne po zamknięciu ostatniej zakładki.
+        //   Podpięte TUTAJ, w jednym istniejącym punkcie, a nie przy ~39 miejscach dodających zakładkę.
+        RaiseTabMenuCanExecuteChanged();
+
+        // ⚠ `Reset` (czyli `Clear()`, m.in. przy rozłączeniu) nie niesie ANI `NewItems`, ANI `OldItems`.
+        // Dlatego odpinamy po własnym zbiorze — inaczej zamknięte zakładki dalej zapalałyby rail.
+        // ⭐ Od M3b.1 ta sama droga gasi sekcję postępu: zamknięcie zakładki z trwającym importem (albo
+        // rozłączenie, które czyści wszystkie) przelicza sekcję i nie zostawia zapalonego paska po
+        // operacji, której nośnik już nie istnieje.
+        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var tab in _activitySources.ToList()) UnwireActivitySource(tab);
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (var item in e.OldItems)
+            {
+                if (item is WorkspaceTabViewModel tab) UnwireActivitySource(tab);
+            }
+        }
+
+        if (e.NewItems is null)
+        {
+            // Zakładka zniknęła — odpowiedź railu mogła się zmienić nawet bez nowych źródeł.
+            RaiseActivityChanged();
+            return;
+        }
+
         foreach (var item in e.NewItems)
         {
-            if (item is WorkspaceTabViewModel tab) WireObjectCompiled(tab);
+            if (item is not WorkspaceTabViewModel tab) continue;
+            WireObjectCompiled(tab);
+            WireActivitySource(tab);
         }
     }
 
@@ -6080,30 +6825,116 @@ public partial class MainWindowViewModel : ViewModelBase
     /// without an extra click. The view marshals + focuses; the VM stays free of Avalonia types.</summary>
     public event Action? EditorFocusRequested;
 
-    // Types each scanned parameter: catalog types for an EXECUTE PROCEDURE call (positional, only
-    // when the count matches), otherwise "Unknown" — never a guessed type (the user's rule).
+    // Types each scanned parameter from the catalog: the input parameter whose ARGUMENT SLOT the placeholder
+    // fills. Anything not provably a whole argument stays "Unknown" — never a guessed type (the user's rule).
+    //
+    // ⚠⚠ TWO DEFECTS LIVED HERE, AND THE SECOND IS WHY THE FIRST FIX CHANGED NOTHING THE USER COULD SEE
+    // (report 2026-08-03, re-opened after that fix):
+    //
+    //   1. It required `catalog.Count == names.Count`. A placeholder is not an input parameter, so counting them
+    //      is not the question — a call that omits parameters carrying DEFAULTS, repeats a placeholder, or uses
+    //      `RETURNING_VALUES :r` breaks the equality while being perfectly typeable, and lost EVERY type at once.
+    //
+    //   2. ⭐⭐ It enumerated STATEMENT SHAPES. First `EXECUTE PROCEDURE` only; then also a `SELECT` whose FROM
+    //      held a call. Each version left the next syntax silently unhandled — a PSQL `FOR SELECT … FROM P(…)
+    //      INTO …`, an `INSERT … SELECT … FROM P(…)`, a CTE body, `MERGE … USING P(…)`, a call in any subquery —
+    //      and the user reported the same defect three times, each time on a shape the last fix had not listed.
+    //
+    // ⭐⭐ THE FIX IS THAT THE MODEL NOW ANSWERS THE QUESTION. `IRoutineInvocation` makes "a routine is invoked
+    // here, with these argument spans" a fact the AST carries, so this method asks the TREE
+    // (`SqlParameterScanner.MapNamesToArgumentSlots`) and knows nothing about statements at all. Every shape
+    // above — and every shape added later — is reached by the same walk. ⛔ If a call is ever not found, the
+    // parser is not modelling it; fix it there, never with a branch here.
+    //
+    // ⚠ Typing is resolved PER PLACEHOLDER, because one statement can have several type sources: two selectable
+    // procedures joined, a call inside a subquery, or a table being written to. Each source names its own owner,
+    // so the catalog is read per owner and cached for the statement.
     private async Task<IReadOnlyList<(string Name, string TypeText)>> BuildSmartParamSpecsAsync(
         string sql, IReadOnlyList<string> names)
     {
-        var procName = SqlParameterScanner.TryExtractExecuteProcedureName(sql);
-        if (procName is not null)
+        var sources = SqlParameterScanner.ResolveTypeSources(sql, names);
+        var cache = new MetadataTypeCache();
+        var specs = new List<(string Name, string TypeText)>(names.Count);
+
+        for (int i = 0; i < names.Count; i++)
         {
-            try
-            {
-                var catalog = await _tableDetailReader
-                    .GetProcedureParametersAsync(procName, 0, CancellationToken.None) // 0 = input params
-                    .ConfigureAwait(true);
-                if (catalog.Count == names.Count)
-                {
-                    return names.Select((n, idx) => (n, catalog[idx].Type)).ToList();
-                }
-            }
-            catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
-            {
-                // fall through to Unknown — never guess
-            }
+            specs.Add((names[i], await TypeForSourceAsync(sources[i], cache).ConfigureAwait(true)));
         }
-        return names.Select(n => (n, UiStrings.SmartParamUnknownType)).ToList();
+
+        return specs;
+    }
+
+    // Per-statement memo of what was read, so one owner costs one catalog round trip however many placeholders
+    // point at it — and an owner that cannot be read is remembered as unreadable rather than retried per value.
+    private sealed class MetadataTypeCache
+    {
+        public Dictionary<string, IReadOnlyList<ProcedureParameterInfo>> Routines { get; } = new(StringComparer.Ordinal);
+
+        public Dictionary<string, IReadOnlyList<FieldInfo>> Tables { get; } = new(StringComparer.Ordinal);
+    }
+
+    // The declared type the MODEL proved this placeholder has, or Unknown.
+    //
+    // ⭐ Switches on the KIND OF SOURCE, never on the kind of statement — that is the whole point of
+    // ParameterTypeSource. Two sources exist because a type has two provable origins in Firebird DML (a routine's
+    // input parameter, a table's column); a third would arrive as a new AST fact plus one arm here, not as a
+    // statement branch anywhere.
+    private async Task<string> TypeForSourceAsync(
+        SqlParameterScanner.ParameterTypeSource source, MetadataTypeCache cache)
+    {
+        if (!source.IsResolved) return UiStrings.SmartParamUnknownType;
+        var owner = source.Owner!;
+
+        switch (source.Kind)
+        {
+            case SqlParameterScanner.TypeSourceKind.RoutineParameter:
+            {
+                if (!cache.Routines.TryGetValue(owner, out var parameters))
+                {
+                    parameters = await ReadOrEmptyAsync(
+                        () => _tableDetailReader.GetProcedureParametersAsync(owner, 0, CancellationToken.None))
+                        .ConfigureAwait(true);
+                    cache.Routines[owner] = parameters;
+                }
+
+                // A slot the routine does not have is Unknown — a call with more arguments than the routine has
+                // parameters is the user's error to see from Firebird, not ours to paper over with the wrong one.
+                return source.Slot < parameters.Count
+                    ? parameters[source.Slot].Type
+                    : UiStrings.SmartParamUnknownType;
+            }
+
+            case SqlParameterScanner.TypeSourceKind.TableColumn:
+            {
+                if (!cache.Tables.TryGetValue(owner, out var columns))
+                {
+                    columns = await ReadOrEmptyAsync(
+                        () => _tableDetailReader.GetFieldsAsync(owner, CancellationToken.None))
+                        .ConfigureAwait(true);
+                    cache.Tables[owner] = columns;
+                }
+
+                var column = columns.FirstOrDefault(
+                    c => string.Equals(c.Name, source.ColumnName, StringComparison.OrdinalIgnoreCase));
+                return column?.Type ?? UiStrings.SmartParamUnknownType;
+            }
+
+            default:
+                return UiStrings.SmartParamUnknownType;
+        }
+    }
+
+    // A metadata read whose failure means "no type", never an exception into the execute path (rule: never guess).
+    private static async Task<IReadOnlyList<T>> ReadOrEmptyAsync<T>(Func<Task<IReadOnlyList<T>>> read)
+    {
+        try
+        {
+            return await read().ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
+        {
+            return Array.Empty<T>();
+        }
     }
 
     internal static IReadOnlyList<QueryParameter> BuildQueryParameters(
@@ -6215,7 +7046,10 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         IsExecuting = true;
-        QueryStatsText = UiStrings.ExecutingStatus;
+        // ⭐ M3.1f: „Executing…" to POSTĘP i mieszka w sekcji 4 (ustawia je `OnIsExecutingChanged`).
+        // Tutaj CZYŚCIMY wynik poprzedniego wykonania — zostawiony wisiałby jako „143 rows in 46 ms"
+        // obok paska mówiącego, że trwa coś innego, czyli kłamałby o bieżącej chwili.
+        QueryStatsText = string.Empty;
         ClearError();
         _executionCts = new CancellationTokenSource();
 
@@ -6314,7 +7148,9 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (_executionCts is not { IsCancellationRequested: false } cts) return;
         IsCancelling = true;
-        QueryStatsText = UiStrings.CancellingStatus;
+        // ⚠ Nie `Progress.Report` wprost — od M3b.1 sekcję zapisuje wyłącznie `UpdateProgressSection`.
+        _queryProgressDetail = UiStrings.CancellingStatus;
+        UpdateProgressSection();
         cts.Cancel();
     }
 
@@ -6330,8 +7166,23 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // A Full load's live "Loading… N rows" counter. Created on the UI thread → Progress<T>
     // marshals its callbacks back here, so QueryStatsText is written on the UI thread.
+    // ⭐ Od M3.1f licznik ładowania idzie do SEKCJI POSTĘPU, nie do `QueryStatsText`. To trzecie
+    // zastosowanie tego samego podziału (§19.5.1, §19.6.1): „Loading… N rows" to POSTĘP, więc należy do
+    // powierzchni globalnej; „143 rows in 46 ms" to WYNIK i zostaje przy edytorze SQL.
+    // ⚠ Tryb pozostaje NIEOKREŚLONY, bo strumieniowy odczyt nie zna sumy wierszy — nie ma z czego
+    // policzyć procentu i udawanie go byłoby zmyślaniem (§19.7.2).
+    //
+    // ⚠ Od M3b.1 licznik NAZYWA swoją operację (`StatusProgressQueryRowsFormat`, nie
+    // `ResultsLoadingFormat`): sekcja ma trzy źródła, więc samo „Loading… 12 345 rows" nie mówi, czy to
+    // zapytanie, skrypt, czy import. ⚠ I nie zapisuje sekcji wprost — odkłada szczegół i prosi
+    // `UpdateProgressSection` o przeliczenie, żeby pisarz sekcji pozostał jeden.
     private IProgress<long> MakeLoadProgress()
-        => new Progress<long>(n => QueryStatsText = string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, n));
+        => new Progress<long>(n =>
+        {
+            _queryProgressDetail = string.Format(
+                CultureInfo.CurrentCulture, UiStrings.StatusProgressQueryRowsFormat, n);
+            UpdateProgressSection();
+        });
 
     // Soft-threshold choice ids (returned by the "keep loading?" dialog; wording can change freely).
     internal const string LoadAllKeepChoiceId = "keep";
@@ -6393,7 +7244,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IsExecuting = true;
         ClearError();
         _executionCts = new CancellationTokenSource();
-        QueryStatsText = string.Format(CultureInfo.CurrentCulture, UiStrings.ResultsLoadingFormat, 0);
+        QueryStatsText = string.Empty;   // wynik poprzedniego wykonania — patrz komentarz w ExecuteQueryAsync
         try
         {
             var (result, reads) = await ExecuteWithMetricsAsync(
@@ -6568,47 +7419,219 @@ public partial class MainWindowViewModel : ViewModelBase
         CloseTab(tab);
     }
 
+    // ─── Menu kontekstowe zakładki — zamykanie masowe (M3.3c / §8.3) ───────────────────────
+    //
+    // ⚠⚠ REGUŁA #11 OBOWIĄZUJE BEZWZGLĘDNIE, I TO JEST TA METODA. „Zamknij wszystkie" nie może po
+    // cichu odrzucić nieskompilowanej pracy w ośmiu edytorach, więc CZTERY pozycje menu schodzą się
+    // tutaj i przechodzą przez ISTNIEJĄCĄ bramkę Save / Discard / Cancel — czwarte jej wejście,
+    // obok zamknięcia zakładki, rozłączenia i zamknięcia aplikacji.
+    //
+    // ⭐ Bramka jest AGREGUJĄCA, a nie „N pytań po kolei", i tak być musi: pytanie zadane osiem razy
+    // pod rząd nie jest bramką, tylko przeszkodą, którą użytkownik przeklika bez czytania. Ten sam
+    // kształt ma rozłączenie i zamknięcie aplikacji — jedno okno wymienia wszystkie zakładki z pracą.
+    //
+    // ⚠ ZASIĘG JEST ARGUMENTEM, nie założeniem: „Zamknij po prawej" dotyczy podzbioru, więc bramka
+    // pyta wyłącznie o pracę w zakładkach, KTÓRE FAKTYCZNIE ZOSTANĄ ZAMKNIĘTE. Pytanie o cudzą pracę
+    // byłoby fałszywe, a pominięcie własnej — utratą danych.
+    //
+    // ⚠ Po „Zapisz" nie ufamy zgłoszonemu sukcesowi: `SaveDirtyEditorsAsync` zwraca false, gdy
+    // którykolwiek edytor nie zapisał, i sam zaznacza winną zakładkę z jej błędem. Wtedy nie
+    // zamykamy NICZEGO — częściowe zamknięcie po nieudanym zapisie byłoby najgorszym wynikiem.
+    private async Task CloseTabsAsync(IReadOnlyList<WorkspaceTabViewModel> targets, string messageFormat)
+    {
+        var closable = targets.Where(t => t.IsClosable).ToArray();
+        if (closable.Length == 0) return;
+
+        var unsaved = CollectUnsavedWork(closable);
+        if (unsaved.Count > 0)
+        {
+            var message = string.Format(
+                CultureInfo.CurrentCulture,
+                messageFormat,
+                string.Join(Environment.NewLine, unsaved.Select(u => "• " + u.Label)));
+
+            var options = new List<ChoiceOption>();
+            if (HasSavableDirtyEditors(closable))
+                options.Add(new ChoiceOption
+                {
+                    Id = "save", Label = UiStrings.TabsCloseUnsavedSave, IsDefault = true,
+                });
+            options.Add(new ChoiceOption
+            {
+                Id = "discard", Label = UiStrings.TabsCloseUnsavedDiscard, IsDestructive = true,
+            });
+            options.Add(new ChoiceOption
+            {
+                Id = "cancel", Label = UiStrings.DialogCancel, IsCancel = true, IsDefault = options.Count == 1,
+            });
+
+            var id = await RequestChoiceAsync(new ChoiceRequest
+            {
+                Title = UiStrings.TabsCloseUnsavedTitle,
+                Message = message,
+                Options = options,
+            }).ConfigureAwait(true);
+
+            if (id is null or "cancel") return;
+            if (id == "save" && !await SaveDirtyEditorsAsync(closable).ConfigureAwait(true)) return;
+        }
+
+        // ⚠ Zamykamy po ROZSTRZYGNIĘCIU bramki, więc `CloseTab` (bezpytaniowe), a nie
+        //   `RequestCloseTabAsync` — inaczej użytkownik dostałby drugie pytanie o to samo.
+        foreach (var tab in closable) CloseTab(tab);
+    }
+
+    /// <summary>Zakładki, których dotyczy „Zamknij pozostałe" — wszystkie zamykalne poza wskazaną.</summary>
+    private IReadOnlyList<WorkspaceTabViewModel> TabsOtherThan(WorkspaceTabViewModel keep)
+        => WorkspaceTabs.Where(t => !ReferenceEquals(t, keep)).ToArray();
+
+    /// <summary>
+    /// Zakładki na PRAWO od wskazanej. ⚠ „Na prawo" znaczy dalej w kolekcji, i to jest prawdziwe
+    /// w obu trybach paska: w wielowierszowym „dalej" to kolejny wiersz, co czyta się tak samo.
+    /// </summary>
+    private IReadOnlyList<WorkspaceTabViewModel> TabsRightOf(WorkspaceTabViewModel anchor)
+    {
+        var index = WorkspaceTabs.IndexOf(anchor);
+        return index < 0
+            ? Array.Empty<WorkspaceTabViewModel>()
+            : WorkspaceTabs.Skip(index + 1).ToArray();
+    }
+
+    /// <summary>
+    /// Zakładki bez niezapisanej pracy. ⭐ Ta jedna pozycja menu NIE POTRZEBUJE bramki — z definicji
+    /// nie ma czego stracić — i właśnie dlatego jest w menu: daje sposób na uprzątnięcie paska bez
+    /// odpowiadania na jakiekolwiek pytanie.
+    /// </summary>
+    private IReadOnlyList<WorkspaceTabViewModel> UnmodifiedTabs()
+        => WorkspaceTabs.Where(t => t.UnsavedWork is null).ToArray();
+
+    // ─── Menu kontekstowe zakładki — komendy (M3.3c / §8.3) ────────────────────────────────
+    //
+    // ⚠ Każda bierze zakładkę PARAMETREM, a nie z `SelectedWorkspaceTab`. Menu kontekstowe otwiera się
+    // nad zakładką, która NIE MUSI być aktywna — czytanie zaznaczenia zamykałoby cudzy dokument, i to
+    // jest dokładnie ten defekt, przed którym broni gotcha #16/#99 przy siatkach.
+
+    // ⭐⭐ KAŻDA POZYCJA MA WŁASNE `CanExecute` — żadna nie jest ani martwa, ani zawsze aktywna.
+    // Menu, w którym „Zamknij po prawej" jest klikalne na ostatniej zakładce, uczy, że polecenie nie
+    // działa; menu, w którym „Odśwież" stoi na zakładce SQL Editora, uczy tego samego. ⚠ Predykaty
+    // pytają o STAN, na który patrzy użytkownik otwierając menu, a nie o zaznaczenie.
+
+    private static bool CanTabMenuClose(WorkspaceTabViewModel? tab) => tab is { IsClosable: true };
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuClose))]
+    private Task TabMenuCloseAsync(WorkspaceTabViewModel? tab)
+        => tab is null ? Task.CompletedTask : RequestCloseTabAsync(tab);
+
+    private bool CanTabMenuCloseOthers(WorkspaceTabViewModel? tab)
+        => tab is not null && TabsOtherThan(tab).Any(t => t.IsClosable);
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuCloseOthers))]
+    private Task TabMenuCloseOthersAsync(WorkspaceTabViewModel? tab)
+        => tab is null
+            ? Task.CompletedTask
+            : CloseTabsAsync(TabsOtherThan(tab), UiStrings.TabsCloseUnsavedFormat);
+
+    private bool CanTabMenuCloseAll() => WorkspaceTabs.Any(t => t.IsClosable);
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuCloseAll))]
+    private Task TabMenuCloseAllAsync()
+        => CloseTabsAsync(WorkspaceTabs.ToArray(), UiStrings.TabsCloseUnsavedFormat);
+
+    /// <summary>⚠ Wyłączone na OSTATNIEJ zakładce — nie ma czego zamknąć po prawej.</summary>
+    private bool CanTabMenuCloseToTheRight(WorkspaceTabViewModel? tab)
+        => tab is not null && TabsRightOf(tab).Any(t => t.IsClosable);
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuCloseToTheRight))]
+    private Task TabMenuCloseToTheRightAsync(WorkspaceTabViewModel? tab)
+        => tab is null
+            ? Task.CompletedTask
+            : CloseTabsAsync(TabsRightOf(tab), UiStrings.TabsCloseUnsavedFormat);
+
+    /// <summary>⚠ Wyłączone, gdy nie ma ani jednej zamykalnej niezmodyfikowanej zakładki.</summary>
+    private bool CanTabMenuCloseUnmodified() => UnmodifiedTabs().Any(t => t.IsClosable);
+
+    /// <summary>⭐ Nie przechodzi przez bramkę, bo z definicji nie ma czego stracić — patrz
+    /// <see cref="UnmodifiedTabs"/>.</summary>
+    [RelayCommand(CanExecute = nameof(CanTabMenuCloseUnmodified))]
+    private Task TabMenuCloseUnmodifiedAsync()
+        => CloseTabsAsync(UnmodifiedTabs(), UiStrings.TabsCloseUnsavedFormat);
+
+    /// <summary>⚠ Tylko rodzaje, które NAPRAWDĘ się odświeżają (<c>WorkspaceTabViewModel.CanRefresh</c> —
+    /// piąty członek tej samej rodziny per-kind), i tylko gdy nie ma niezapisanej pracy.</summary>
+    private static bool CanTabMenuRefresh(WorkspaceTabViewModel? tab)
+        => tab is { CanRefresh: true, UnsavedWork: null };
+
+    /// <summary>Przeładowuje zakładkę z bazy. ⚠ Zakładka z niezapisaną pracą NIE jest odświeżana —
+    /// `RefreshAsync` przeładowuje źródło i czyści dirty, więc odświeżenie brudnej zakładki
+    /// zniszczyłoby edycję (reguła #11, to samo wykluczenie co w Seam 6d).</summary>
+    [RelayCommand(CanExecute = nameof(CanTabMenuRefresh))]
+    private async Task TabMenuRefreshAsync(WorkspaceTabViewModel? tab)
+    {
+        if (tab is null || tab.UnsavedWork is not null) return;
+        await tab.RefreshAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>⚠ Zakładki narzędziowe (SQL Editor, Trace, Import…) nie mają nazwy obiektu.</summary>
+    private static bool CanTabMenuCopyObjectName(WorkspaceTabViewModel? tab)
+        => tab?.ObjectName is { Length: > 0 };
+
+    [RelayCommand(CanExecute = nameof(CanTabMenuCopyObjectName))]
+    private async Task TabMenuCopyObjectNameAsync(WorkspaceTabViewModel? tab)
+    {
+        if (tab?.ObjectName is not { Length: > 0 } name) return;
+        if (ClipboardWriteRequested is { } write) await write(name).ConfigureAwait(true);
+    }
+
+    /// <summary>⚠ Wymaga RODZAJU i NAZWY — bez obu nie ma czego szukać w drzewie — oraz połączenia.</summary>
+    private bool CanTabMenuRevealInExplorer(WorkspaceTabViewModel? tab)
+        => tab is { ObjectKind: not null, ObjectName: { Length: > 0 } } && HasActiveConnection;
+
+    /// <summary>⭐ Zaznacza obiekt w Metadata Explorerze <b>i przewija listę tak, żeby był widoczny</b> —
+    /// samo zaznaczenie poza ekranem jest nieodróżnialne od braku reakcji.</summary>
+    [RelayCommand(CanExecute = nameof(CanTabMenuRevealInExplorer))]
+    private async Task TabMenuRevealInExplorerAsync(WorkspaceTabViewModel? tab)
+    {
+        if (tab is not { ObjectKind: { } kind, ObjectName: { Length: > 0 } name }) return;
+        await Metadata.RevealObjectAsync(kind, name).ConfigureAwait(true);
+    }
+
+    /// <summary>Skrót do Settings Center, prosto na kategorię „Tabs" (decyzja D8).</summary>
+    [RelayCommand]
+    private void TabMenuSettings() => SettingsRequested?.Invoke(SettingsCatalog.CategoryTabs);
+
+    /// <summary>Prosi widok o otwarcie Settings Center na wskazanej kategorii.</summary>
+    public event Action<string>? SettingsRequested;
+
+    /// <summary>
+    /// ⚠⚠ Odświeża stan WŁĄCZENIA pozycji menu zakładki. Ich `CanExecute` zależy od SKŁADU kolekcji
+    /// (ile jest zakładek, czy któraś jest na prawo, czy któraś jest czysta), a `[RelayCommand]` sam
+    /// z siebie o zmianie kolekcji nic nie wie — bez tego „Zamknij po prawej" zostałoby aktywne po
+    /// zamknięciu ostatniej zakładki, czyli dokładnie martwe polecenie, którego menu ma nie mieć.
+    /// </summary>
+    internal void RaiseTabMenuCanExecuteChanged()
+    {
+        TabMenuCloseCommand.NotifyCanExecuteChanged();
+        TabMenuCloseOthersCommand.NotifyCanExecuteChanged();
+        TabMenuCloseAllCommand.NotifyCanExecuteChanged();
+        TabMenuCloseToTheRightCommand.NotifyCanExecuteChanged();
+        TabMenuCloseUnmodifiedCommand.NotifyCanExecuteChanged();
+        TabMenuRefreshCommand.NotifyCanExecuteChanged();
+        TabMenuCopyObjectNameCommand.NotifyCanExecuteChanged();
+        TabMenuRevealInExplorerCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// The SQL Editor grid's clipboard text. ⭐ The FORMAT is <see cref="GridCopyText"/>'s — the one builder
+    /// the four other data grids use — so this grid cannot drift from them. What stays here is only the
+    /// index-based signature its own call site and tests use.
+    /// </summary>
     public string? BuildCopyText(CopyGridMode mode, int rowIndex, int columnIndex)
     {
         if (CurrentResult is not { HasResultSet: true } r) return null;
-        var rows = r.Rows;
-        var cols = r.Columns;
-        if (cols.Count == 0) return null;
-
-        switch (mode)
-        {
-            case CopyGridMode.Cell:
-            {
-                if (rowIndex < 0 || rowIndex >= rows.Count) return null;
-                if (columnIndex < 0 || columnIndex >= cols.Count) return null;
-                return FormatCell(rows[rowIndex][columnIndex]);
-            }
-            case CopyGridMode.Row:
-            {
-                if (rowIndex < 0 || rowIndex >= rows.Count) return null;
-                return FormatRow(rows[rowIndex]);
-            }
-            case CopyGridMode.RowWithHeaders:
-            {
-                if (rowIndex < 0 || rowIndex >= rows.Count) return null;
-                var headers = string.Join('\t', cols.Select(c => EscapeCell(c.Name)));
-                return headers + Environment.NewLine + FormatRow(rows[rowIndex]);
-            }
-            case CopyGridMode.AllWithHeaders:
-            {
-                var headers = string.Join('\t', cols.Select(c => EscapeCell(c.Name)));
-                var sb = new System.Text.StringBuilder();
-                sb.Append(headers);
-                foreach (var row in rows)
-                {
-                    sb.Append(Environment.NewLine);
-                    sb.Append(FormatRow(row));
-                }
-                return sb.ToString();
-            }
-            default:
-                return null;
-        }
+        // ⚠ AllWithHeaders is reached with rowIndex -1 (there is no target row), so an out-of-range index
+        // resolves to "no row" rather than to a null result — the mode decides whether that matters.
+        var row = rowIndex >= 0 && rowIndex < r.Rows.Count ? r.Rows[rowIndex] : null;
+        return GridCopyText.Build(mode, r.Columns, r.Rows, row, columnIndex);
     }
 
     // ── Copy as INSERT / UPDATE ───────────────────────────────────────────────
@@ -6701,26 +7724,6 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         AddMessage(MessageSeverity.Info, string.Format(CultureInfo.CurrentCulture, UiStrings.GridCopiedToClipboardFormat, label));
         return true;
-    }
-
-    private static string FormatRow(object?[] row)
-        => string.Join('\t', row.Select(FormatCell).Select(EscapeCell));
-
-    private static string FormatCell(object? value) => value switch
-    {
-        null => string.Empty,
-        System.DBNull => string.Empty,
-        _ => value.ToString() ?? string.Empty,
-    };
-
-    // TSV cells with embedded tab or newline would break the column alignment when
-    // pasted into Excel/IBExpert. Match the IBExpert convention: replace them with
-    // spaces. Quoting/escaping isn't standard for TSV consumers.
-    private static string EscapeCell(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return value;
-        if (value.IndexOfAny(new[] { '\t', '\r', '\n' }) < 0) return value;
-        return value.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
     }
 
     partial void OnQueryTextChanged(string value)
@@ -7103,6 +8106,10 @@ public partial class MainWindowViewModel : ViewModelBase
             // that produced them — disconnecting must drop them too so the next
             // connect doesn't surface stale rows or success/error toasts.
             ClearResultsAndMessages();
+
+            // ⚠ Rozłączenie w trakcie ładowania: faza 3 już nie nastąpi, więc pasek gaśnie tutaj.
+            // Bez tego rozłączenie w połowie prefetchu zostawiłoby zapalony pasek (§19.34).
+            IsConnecting = false;
         }
         else
         {
@@ -7112,9 +8119,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // Column + routine-parameter caches belong to the previous schema — drop
         // them on any switch so that "X.column" / a routine signature against a
         // same-named object in another DB doesn't surface stale metadata.
-        _columnCache.Clear();
-        _routineParameterCache.Clear();
-        _objectDetailCache.Clear();
+        InvalidateObjectCaches();
 
         UpdateStatusFromConnection();
         OnPropertyChanged(nameof(IsConnected));
@@ -7317,11 +8322,20 @@ public partial class MainWindowViewModel : ViewModelBase
                     if (tab.TableDetail is { } committed) committed.HasPendingDataEdits = false;
             }
 
+            // ⭐ Znacznik czasu chipa (§8.4.5) — jedyne miejsce, w którym powstaje i ginie. `becameActive`
+            // i `settled` są już policzone wyżej, więc chip nie potrzebuje własnej maszyny stanów.
+            if (becameActive) _transactionStartedAt = DateTimeOffset.UtcNow;
+            if (settled) _transactionStartedAt = null;
+
             OnPropertyChanged(nameof(IsTransactionIdle));
             OnPropertyChanged(nameof(IsTransactionActive));
             OnPropertyChanged(nameof(IsTransactionError));
             OnPropertyChanged(nameof(HasExecutedInTransaction));
             OnPropertyChanged(nameof(TransactionBarText));
+            OnPropertyChanged(nameof(ShowTransactionChip));
+            OnPropertyChanged(nameof(TransactionChipBrushKey));
+            OnPropertyChanged(nameof(TransactionChipText));
+            UpdateTransactionChipTimer();
             OnPropertyChanged(nameof(ShowDataTransactionButtons));
             CommitCommand.NotifyCanExecuteChanged();
             RollbackCommand.NotifyCanExecuteChanged();
@@ -7395,26 +8409,22 @@ public partial class MainWindowViewModel : ViewModelBase
         ShowSettingsHealthWarning = true;
     }
 
+    // ⚠ Nie pisze już żadnego tekstu — sekcja 1 czyta stan wprost z serwisu. Zadaniem tej metody jest
+    // POWIADOMIĆ o zmianie tożsamości i zgasić komunikat, który dotyczył poprzedniego połączenia.
+    // Gaszenie zachowuje zastane zachowanie: dopóki obie rzeczy dzieliły `StatusText`, zmiana połączenia
+    // nadpisywała błąd — i jest to samo w sobie słuszne, bo komunikat opisuje kontekst, którego już nie ma.
     private void UpdateStatusFromConnection()
     {
-        var active = _service.ActiveProfile;
-        StatusText = active is null
-            ? UiStrings.StatusBarDisconnected
-            : $"{UiStrings.StatusBarConnectedTo} {active.Name}";
-        IsStatusError = false;
+        OnPropertyChanged(nameof(ConnectionDisplayName));
+        OnPropertyChanged(nameof(ConnectionEndpointLabel));
+        ClearError();
     }
 
     private void SetError(string message)
     {
-        StatusText = message;
-        IsStatusError = true;
+        StatusMessageSeverity = MessageSeverity.Error;
+        StatusMessage = message;
     }
 
-    private void ClearError()
-    {
-        if (IsStatusError)
-        {
-            UpdateStatusFromConnection();
-        }
-    }
+    private void ClearError() => StatusMessage = string.Empty;
 }

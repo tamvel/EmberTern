@@ -86,7 +86,7 @@ internal static class QuickInfoView
     public static Control Card(Control content, ThemeVariant theme) => new Border
     {
         Child = content,
-        Background = Brush("ElevatedPanelBrush", theme) ?? Brush("BackgroundBrush", theme),
+        Background = Brush("SurfaceRaisedBrush", theme) ?? Brush("BackgroundBrush", theme),
         BorderBrush = Brush("BorderBrush", theme),
         BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(4),

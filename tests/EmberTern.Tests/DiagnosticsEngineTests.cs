@@ -40,6 +40,20 @@ public class DiagnosticsEngineTests
             return this;
         }
 
+        /// <summary>Declares a table whose COLUMNS ARE NOT LOADED YET — the real snapshot's state for every
+        /// object at the moment a tab opens, since columns are warmed lazily (S-2). Distinct from a table
+        /// with an empty column list, which has been answered.</summary>
+        public FakeMetadata ObjectWithColumnsPending(string name)
+        {
+            Object(name, SymbolKind.Table);
+            _columnsPending.Add(name);
+            return this;
+        }
+
+        private readonly HashSet<string> _columnsPending = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool KnowsColumns(string tableOrView) => !_columnsPending.Contains(tableOrView);
+
         public ObjectMetadata? FindObject(string name)
             => _objects.TryGetValue(name, out var o) ? o : null;
 
@@ -126,6 +140,59 @@ public class DiagnosticsEngineTests
     {
         var meta = new FakeMetadata().Object("KONTRAHENT", SymbolKind.Table); // no columns for NOSUCH
         Assert.Empty(Analyze("select n.qty from nosuch n", meta));
+    }
+
+    // ══ Column readiness — "not loaded yet" is not "absent" (S-2, 2026-08-05) ════════════════
+    //
+    // ⭐⭐ THE REPORTED SYMPTOM: opening a procedure underlined practically everything as an error for a
+    // moment, then the errors disappeared. Cause: columns are warmed LAZILY, so at the moment a tab opens the
+    // snapshot knows every object and NONE of their columns — and the engine read an empty column set as
+    // "this table has no such column", flagging every qualified column until the warm pass finished and the
+    // model was rebuilt. The provider contract said as much in its own words ("unknown OR has no columns
+    // loaded yet"), so the two facts were indistinguishable BY CONTRACT rather than by oversight.
+    //
+    // ⚠ Both directions are pinned, because the dangerous half of this fix is over-silencing: a diagnostic
+    // that never fires is indistinguishable from one that does not exist.
+
+    [Fact]
+    public void UnknownColumn_ColumnsNotLoadedYet_IsNotFlagged()
+    {
+        var meta = new FakeMetadata().ObjectWithColumnsPending("KONTRAHENT");
+        Assert.Empty(Analyze("select k.nosuchcolumn from kontrahent k", meta));
+    }
+
+    [Fact]
+    public void UnknownColumn_OnceColumnsAreLoaded_IsFlaggedAgain()
+    {
+        // The SAME query, the same unknown column — the only difference is that the snapshot has now
+        // answered about this table. Silence must be temporary, not permanent.
+        var meta = new FakeMetadata().Col("KONTRAHENT", "NAZWA", "VARCHAR(60)");
+        var d = Assert.Single(Analyze("select k.nosuchcolumn from kontrahent k", meta));
+        Assert.Equal(DiagnosticCategory.UnknownColumn, d.Category);
+    }
+
+    [Fact]
+    public void UnknownColumn_TriggerContextColumn_RespectsReadiness()
+    {
+        // NEW/OLD resolve against the TARGET TABLE's columns, so a trigger body is the surface where the
+        // storm was most visible — every NEW.x in the body at once.
+        const string sql =
+            "create trigger t_bu for kontrahent before update as begin new.nosuchcolumn = 1; end";
+        Assert.Empty(Analyze(sql, new FakeMetadata().ObjectWithColumnsPending("KONTRAHENT")));
+        Assert.Single(Analyze(sql, new FakeMetadata().Col("KONTRAHENT", "NAZWA", "VARCHAR(60)")));
+    }
+
+    [Fact]
+    public void UnknownColumn_CteProjection_IsNotGatedOnTheSnapshot()
+    {
+        // ⚠ A CTE's columns come from its own projection IN THE TEXT, never from the catalog, so its
+        // readiness answer is CteSymbol.ColumnsComplete — already handled. Asking the snapshot about a name
+        // that is not a catalog object would silence every CTE typo forever, so the CTE arm is exempt.
+        var meta = new FakeMetadata().Col("ORDERS", "ID", "INTEGER").Col("ORDERS", "AMOUNT", "NUMERIC(15,2)");
+        const string sql = "with c as (select id, amount from orders) select c.nosuch from c";
+
+        var d = Assert.Single(Analyze(sql, meta));
+        Assert.Equal(DiagnosticCategory.UnknownColumn, d.Category);
     }
 
     // ══ Unresolved variable / parameter (local scope, no connection needed) ═══════════════════
@@ -245,6 +312,81 @@ public class DiagnosticsEngineTests
         Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
         Assert.Equal("ET0003", d.Code);
         Assert.Equal(sql.IndexOf("v_typo", StringComparison.Ordinal), d.Start);
+    }
+
+    // ══ EXTRACT's date/time part is syntax, not a variable ════════════════════════════════════
+    //
+    // `EXTRACT(YEAR FROM …)` in a PSQL body reported ET0003 on YEAR. Same shape as the GEN_ID case above: the
+    // part names are NOT in the keyword catalog — deliberately, because they are not reserved words in Firebird
+    // and a column may be called MONTH — so they lex as identifiers, and the PSQL walker read one as a local.
+    //
+    // ⭐ The fix is the POSITION, so these two groups of tests are the pair that matters: nothing after
+    // `EXTRACT (` is flagged, and the very same word elsewhere behaves exactly as it did before.
+
+    [Theory]
+    [InlineData("YEAR")]
+    [InlineData("MONTH")]
+    [InlineData("DAY")]
+    [InlineData("HOUR")]
+    [InlineData("MINUTE")]
+    [InlineData("SECOND")]
+    [InlineData("MILLISECOND")]
+    [InlineData("WEEK")]
+    [InlineData("WEEKDAY")]
+    [InlineData("YEARDAY")]
+    [InlineData("QUARTER")]
+    public void ExtractPart_InPsqlBody_IsNotFlagged(string part)
+    {
+        var sql = "create procedure p as declare variable v integer;\n"
+            + "begin\n  v = extract(" + part + " from current_date);\nend";
+        Assert.Empty(Analyze(sql));
+    }
+
+    // Every PSQL position the walker flags from: an assignment RHS, a RETURN, an IF and a WHILE header.
+    [Theory]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = extract(year from current_date);\nend")]
+    [InlineData("create function f returns integer as\nbegin\n  return extract(month from current_date);\nend")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  if (extract(year from current_date) > 2000) then v = 1;\nend")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  while (extract(year from current_date) > 0) do v = 1;\nend")]
+    [InlineData("execute block as declare variable v integer;\nbegin\n  v = extract(year from current_date);\nend")]
+    // Nested inside another call, and twice in one expression.
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = coalesce(extract(year from current_date), 0);\nend")]
+    [InlineData("create procedure p as declare variable v integer;\nbegin\n  v = extract(year from current_date) - extract(month from current_date);\nend")]
+    public void ExtractPart_InEveryFlaggingPosition_IsNotFlagged(string sql)
+        => Assert.Empty(Analyze(sql));
+
+    // ⛔ The word is not exempt — only the position is. An undeclared bare YEAR outside EXTRACT is still an
+    // unresolved variable, which is what stops this fix from becoming a silent hole named YEAR.
+    [Fact]
+    public void TheSameWord_OutsideExtract_IsStillFlagged()
+    {
+        const string sql = "create procedure p as declare variable v integer;\nbegin\n  v = year;\nend";
+        var d = Assert.Single(Analyze(sql));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal("ET0003", d.Code);
+        Assert.Equal(sql.IndexOf("year;", StringComparison.Ordinal), d.Start);
+    }
+
+    // …and EXTRACT's SECOND operand is an ordinary expression, so a typo there still reports.
+    [Fact]
+    public void ExtractValueOperand_UndeclaredVariable_IsStillFlagged()
+    {
+        const string sql = "create procedure p as declare variable v integer;\n"
+            + "begin\n  v = extract(year from v_typo);\nend";
+        var d = Assert.Single(Analyze(sql));
+        Assert.Equal(DiagnosticCategory.UnresolvedVariable, d.Category);
+        Assert.Equal("ET0003", d.Code);
+        Assert.Equal(sql.IndexOf("v_typo", StringComparison.Ordinal), d.Start);
+    }
+
+    // A variable a user genuinely called MONTH still resolves to itself — the position rule leaves the
+    // declaration and every ordinary use of it completely alone.
+    [Fact]
+    public void AVariableNamedLikeADatePart_StillResolves()
+    {
+        const string sql = "create procedure p as declare variable month integer;\n"
+            + "begin\n  month = extract(month from current_date);\nend";
+        Assert.Empty(Analyze(sql));
     }
 
     // ══ EXECUTE BLOCK — declarations reach the body (segmentation regression) ═════════════════

@@ -16,7 +16,7 @@
 
   <UserControl.Styles>
     <Style Selector="DataGridRow">
-      <Setter Property="Height" Value="30" />
+      <Setter Property="Height" Value="{DynamicResource Size.Row.GridEdit}" />
     </Style>
     <Style Selector="DataGridCell">
       <Setter Property="Padding" Value="6 2" />
@@ -39,7 +39,7 @@
                          IsVisible="{Binding IsSourceMode}"
                          ShowLineNumbers="True"
                          FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                         FontSize="13"
+                         FontSize="{DynamicResource Text.Code.Size}"
                          HorizontalScrollBarVisibility="Auto"
                          VerticalScrollBarVisibility="Auto"
                          Background="{DynamicResource BackgroundBrush}"
@@ -54,7 +54,7 @@
                 <TextBlock Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                            Margin="0,0,8,0" Text="{x:Static app:UiStrings.TriggerNameHeader}" />
                 <TextBox Grid.Column="1" Text="{Binding EditableTriggerName, Mode=TwoWay}"
-                         IsReadOnly="{Binding !IsNew}" FontSize="12" />
+                         IsReadOnly="{Binding !IsNew}" />
                 <TextBlock Grid.Column="2" Classes="field-label" VerticalAlignment="Center"
                            Margin="12,0,8,0" Text="{x:Static app:UiStrings.TriggerTableHeader}" />
                 <controls:SearchableComboBox Grid.Column="3" ItemsSource="{Binding AvailableTables}"
@@ -68,27 +68,27 @@
                              Text="{x:Static app:UiStrings.TriggerTimingHeader}" />
                   <ComboBox ItemsSource="{Binding TimingOptions}"
                             SelectedItem="{Binding SelectedTiming, Mode=TwoWay}"
-                            FontSize="12" MinWidth="100" />
+ MinWidth="100" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                   <TextBlock Classes="field-label" VerticalAlignment="Center"
                              Text="{x:Static app:UiStrings.TriggerEventsHeader}" />
                   <CheckBox IsChecked="{Binding FiresInsert, Mode=TwoWay}"
-                            Content="{x:Static app:UiStrings.TriggerEventInsert}" FontSize="11" />
+                            Content="{x:Static app:UiStrings.TriggerEventInsert}" FontSize="{DynamicResource Text.Compact.Size}" />
                   <CheckBox IsChecked="{Binding FiresUpdate, Mode=TwoWay}"
-                            Content="{x:Static app:UiStrings.TriggerEventUpdate}" FontSize="11" />
+                            Content="{x:Static app:UiStrings.TriggerEventUpdate}" FontSize="{DynamicResource Text.Compact.Size}" />
                   <CheckBox IsChecked="{Binding FiresDelete, Mode=TwoWay}"
-                            Content="{x:Static app:UiStrings.TriggerEventDelete}" FontSize="11" />
+                            Content="{x:Static app:UiStrings.TriggerEventDelete}" FontSize="{DynamicResource Text.Compact.Size}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <TextBlock Classes="field-label" VerticalAlignment="Center"
                              Text="{x:Static app:UiStrings.TriggerPositionHeader}" />
                   <NumericUpDown Value="{Binding PositionValue, Mode=TwoWay}"
                                  Minimum="0" Maximum="32767" Increment="1" FormatString="0"
-                                 FontSize="12" MinWidth="110" />
+ MinWidth="110" />
                 </StackPanel>
                 <CheckBox IsChecked="{Binding Active, Mode=TwoWay}"
-                          Content="{x:Static app:UiStrings.TriggerActive}" FontSize="11"
+                          Content="{x:Static app:UiStrings.TriggerActive}" FontSize="{DynamicResource Text.Compact.Size}"
                           VerticalAlignment="Center" />
               </StackPanel>
             </StackPanel>
@@ -101,7 +101,7 @@
                       PointerPressed="OnEasyGridPointerPressed"
                       IsReadOnly="False" AutoGenerateColumns="False"
                       CanUserSortColumns="False" CanUserResizeColumns="True"
-                      CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="11"
+                      CanUserReorderColumns="True" ColumnWidth="Auto" FontSize="{DynamicResource Text.Grid.Size}"
                       GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                       HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
                       VerticalGridLinesBrush="{DynamicResource BorderBrush}"
@@ -125,7 +125,7 @@
                            Grid.Row="3"
                            ShowLineNumbers="True"
                            FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                           FontSize="13"
+                           FontSize="{DynamicResource Text.Code.Size}"
                            HorizontalScrollBarVisibility="Auto"
                            VerticalScrollBarVisibility="Auto"
                            Background="{DynamicResource BackgroundBrush}"
@@ -140,7 +140,7 @@
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
                       IsVisible="{Binding CanEditDescription}">
             <TextBlock Text="{x:Static app:UiStrings.TriggerDescriptionEditLabel}"
-                       Classes="subtle" FontSize="11" VerticalAlignment="Center" />
+                       Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
                     Command="{Binding SaveDescriptionCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.Save}" />
@@ -152,7 +152,7 @@
           <TextBox Grid.Row="1"
                    Text="{Binding EditableDescription, Mode=TwoWay}"
                    IsEnabled="{Binding CanEditDescription}"
-                   AcceptsReturn="True" TextWrapping="Wrap" FontSize="11"
+                   AcceptsReturn="True" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}"
                    Margin="8,0,8,8" Background="{DynamicResource BackgroundBrush}" />
         </Grid>
       </TabItem>
@@ -162,46 +162,8 @@
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
-                       FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
-            <TreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}"
-                      Background="{DynamicResource BackgroundBrush}">
-              <TreeView.DataTemplates>
-                <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="5">
-                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15" VerticalAlignment="Center">
-                      <controls:SvgIcon.Foreground>
-                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                          <Binding Path="IconResourceKey" />
-                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                        </MultiBinding>
-                      </controls:SvgIcon.Foreground>
-                    </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
-                  </StackPanel>
-                </TreeDataTemplate>
-                <DataTemplate DataType="vm:DependencyLeafNode">
-                  <Border HorizontalAlignment="Stretch" Background="Transparent"
-                          DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="15" Height="15" VerticalAlignment="Center">
-                        <controls:SvgIcon.Foreground>
-                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                            <Binding Path="IconResourceKey" />
-                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                          </MultiBinding>
-                        </controls:SvgIcon.Foreground>
-                      </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding FieldName}" FontSize="10"
-                                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
-                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </TreeView.DataTemplates>
-            </TreeView>
+                       FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="{DynamicResource Margin.PanelCaption}" />
+            <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}" />
           </Grid>
 
           <GridSplitter Grid.Column="1" Width="4" Background="{DynamicResource BorderBrush}"
@@ -209,46 +171,8 @@
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
-                       FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,4,0,4" />
-            <TreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}"
-                      Background="{DynamicResource BackgroundBrush}">
-              <TreeView.DataTemplates>
-                <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="5">
-                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15" VerticalAlignment="Center">
-                      <controls:SvgIcon.Foreground>
-                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                          <Binding Path="IconResourceKey" />
-                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                        </MultiBinding>
-                      </controls:SvgIcon.Foreground>
-                    </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
-                  </StackPanel>
-                </TreeDataTemplate>
-                <DataTemplate DataType="vm:DependencyLeafNode">
-                  <Border HorizontalAlignment="Stretch" Background="Transparent"
-                          DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="15" Height="15" VerticalAlignment="Center">
-                        <controls:SvgIcon.Foreground>
-                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                            <Binding Path="IconResourceKey" />
-                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                          </MultiBinding>
-                        </controls:SvgIcon.Foreground>
-                      </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding FieldName}" FontSize="10"
-                                 Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
-                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </TreeView.DataTemplates>
-            </TreeView>
+                       FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="{DynamicResource Margin.PanelCaption}" />
+            <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}" />
           </Grid>
         </Grid>
       </TabItem>
@@ -258,7 +182,7 @@
         <ae:TextEditor x:Name="TriggerDdlEditor"
                        ShowLineNumbers="True" IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
                        Foreground="{DynamicResource ForegroundBrush}" />
@@ -278,7 +202,7 @@
     <!-- Status panel — loading hint + error (consistent with Procedure Detail). -->
     <StackPanel Grid.Row="1" Orientation="Vertical">
       <TextBlock Text="{x:Static app:UiStrings.TriggerDetailLoadingHint}" Classes="subtle"
-                 Margin="10,4" FontSize="11" IsVisible="{Binding IsLoading}" />
+                 Margin="10,4" FontSize="{DynamicResource Text.Compact.Size}" IsVisible="{Binding IsLoading}" />
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->
       <controls:MessageBanner Classes="docked" Severity="Error"

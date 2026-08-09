@@ -52,8 +52,8 @@
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:AggregationLineViewModel">
-            <Border CornerRadius="4" Padding="8,2" Margin="0,0,6,6"
-                    Background="{DynamicResource ElevatedPanelBrush}"
+            <Border CornerRadius="{DynamicResource Radius.Chip}" Padding="8,2" Margin="0,0,6,6"
+                    Background="{DynamicResource ChromeStrongBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1">
               <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">

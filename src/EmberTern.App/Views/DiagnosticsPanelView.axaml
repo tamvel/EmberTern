@@ -47,7 +47,7 @@
 
             <controls:SvgIcon Grid.Column="0"
                               Data="{Binding SeverityGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                              Width="14" Height="14"
+                              Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               VerticalAlignment="Top"
                               Margin="0,2,8,0"
                               ToolTip.Tip="{Binding SeverityText}">
@@ -63,14 +63,14 @@
                        Text="{Binding Code}"
                        Classes="subtle"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Width="56"
                        VerticalAlignment="Top"
                        Margin="0,1,10,0" />
 
             <TextBlock Grid.Column="2"
                        Text="{Binding Message}"
-                       FontSize="12"
+                       FontSize="{DynamicResource Text.Application.Size}"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource ForegroundBrush}" />
 
@@ -78,7 +78,7 @@
                        Text="{Binding LocationLabel}"
                        Classes="subtle"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Top"
                        Margin="12,1,4,0" />
           </Grid>

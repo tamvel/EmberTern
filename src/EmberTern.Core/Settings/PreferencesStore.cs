@@ -47,7 +47,7 @@ namespace EmberTern.Core.Settings;
 ///     complete encrypted rewrites of every setting the user owns.
 ///   </description></item>
 ///   <item><description>
-///     ⭐ And the consequence that is not performance: <c>AtomicWrite</c> keeps exactly <b>one</b> generation
+///     ⭐ And the consequence that is not performance: <c>TryAtomicWrite</c> keeps exactly <b>one</b> generation
 ///     of <c>settings.dat.bak</c>. Four keystrokes roll it through four generations, destroying the pre-edit
 ///     state the hardening sprint added it to preserve — the one hand-recovery net, gone at precisely the
 ///     moment someone is editing settings. That backup's value depends on saves being <i>deliberate</i>.
@@ -166,6 +166,7 @@ public sealed class PreferencesStore
             FormatterKeywordCase = PreferenceOptions.Casing.Normalize(source.FormatterKeywordCase),
             FormatterIdentifierCase = PreferenceOptions.Casing.Normalize(source.FormatterIdentifierCase),
             DebuggerIsolation = PreferenceOptions.DebuggerIsolation.Normalize(source.DebuggerIsolation),
+            TabStripMode = PreferenceOptions.TabStripMode.Normalize(source.TabStripMode),
 
             // Numeric preferences are clamped, not reset (see PreferenceRange): a stored 50 000 000 means "as
             // many as possible", and answering it with the shipped 5 000 would be data loss with extra steps.
@@ -173,6 +174,7 @@ public sealed class PreferencesStore
             FullLoadPromptThreshold =
                 PreferenceOptions.FullLoadPromptThreshold.Normalize(source.FullLoadPromptThreshold),
             DataPageSize = PreferenceOptions.DataPageSize.Normalize(source.DataPageSize),
+            TabStripMaxRows = PreferenceOptions.TabStripMaxRows.Normalize(source.TabStripMaxRows),
 
             // ⚠ The booleans are absent on purpose, and it is a decision rather than an omission: a bool has no
             // illegal value to correct, so listing it here could only be a no-op — and `source with { … }` is

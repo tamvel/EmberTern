@@ -233,6 +233,75 @@ static void MeasureOneObjectAdded()
 }
 
 Console.WriteLine();
+Console.WriteLine("── B4. EXPAND / COLLAPSE BY CLICK on an ALREADY-LOADED category ────────────────────────");
+Console.WriteLine();
+Console.WriteLine("The path NOBODY measured before (M3.4). B/B2/B3 all measure the LOAD path — Children being");
+Console.WriteLine("replaced — which LoadGroupAsync wraps in the bulk guard since 2026-07-27. This is the OTHER");
+Console.WriteLine("path: the user clicks the chevron of a category whose leaves are already in memory, so");
+Console.WriteLine("Children never changes and SidebarFlatController.OnExpandedChanged splices the rows itself:");
+Console.WriteLine("  collapse -> RemoveDescendants: N x Rows.RemoveAt(i+1)");
+Console.WriteLine("  expand   -> InsertNode:        N x Rows.Insert(at++)");
+Console.WriteLine("The bulk guard SKIPS this path (`if (_suspendDepth > 0) return;`), so it is unguarded by");
+Console.WriteLine("construction. `tail` = rows standing BELOW the category (each Insert/Remove shifts them).");
+Console.WriteLine();
+Console.WriteLine($"{"leaves",8} {"tail rows",10} {"expand (ms)",12} {"collapse (ms)",14} {"notifications",14} {"one Rebuild (ms)",17}");
+
+foreach (var (leaves, tail) in new[] { (2400, 0), (2400, 3000), (2400, 6000), (5000, 6000) })
+{
+    MeasureClickExpand(leaves, tail);
+}
+
+static void MeasureClickExpand(int leafCount, int tailRows)
+{
+    // A connection with TWO categories: the one being clicked, and a second one holding `tailRows`
+    // already-projected leaves BELOW it. The tail is the part the handover flagged as the real cost
+    // driver: List<T>.Insert shifts everything after the insertion point.
+    var root = new Node("connection", isContainer: true) { IsExpanded = true };
+    var group = new Node("Tables", isContainer: true);
+    var below = new Node("Zzz_below", isContainer: true) { IsExpanded = true };
+    root.Children.Add(group);
+    root.Children.Add(below);
+
+    foreach (var leaf in MakeLeaves(leafCount)) group.Children.Add(leaf);
+    foreach (var leaf in MakeLeaves(tailRows)) below.Children.Add(leaf);
+
+    var roots = new System.Collections.ObjectModel.ObservableCollection<object> { root };
+    using var controller = new SidebarFlatController(
+        roots,
+        childrenSelector: o => ((Node)o).IsContainer ? ((Node)o).Children.Cast<object>() : null,
+        isContainer: o => ((Node)o).IsContainer,
+        hasChildren: o => ((Node)o).Children.Count > 0,
+        isExpanded: o => ((Node)o).IsExpanded,
+        setExpanded: (o, v) => ((Node)o).IsExpanded = v);
+
+    var notifications = 0;
+    controller.Rows.CollectionChanged += (_, _) => notifications++;
+
+    // (1) EXPAND by click — exactly what the chevron does: flip IsExpanded, nothing else.
+    var sw = Stopwatch.StartNew();
+    controller.Toggle(controller.Rows.First(r => ReferenceEquals(r.Node, group)));
+    sw.Stop();
+    var expandNotifications = notifications;
+
+    // (2) COLLAPSE by click.
+    notifications = 0;
+    var sw2 = Stopwatch.StartNew();
+    controller.Toggle(controller.Rows.First(r => ReferenceEquals(r.Node, group)));
+    sw2.Stop();
+
+    // (3) For scale: ONE full re-projection of the same tree (what the guarded load path costs).
+    var sw3 = Stopwatch.StartNew();
+    controller.Rebuild();
+    sw3.Stop();
+
+    Console.WriteLine(string.Format(
+        CultureInfo.InvariantCulture,
+        "{0,8} {1,10} {2,12:F1} {3,14:F1} {4,14} {5,17:F1}",
+        leafCount, tailRows, sw.Elapsed.TotalMilliseconds, sw2.Elapsed.TotalMilliseconds,
+        expandNotifications, sw3.Elapsed.TotalMilliseconds));
+}
+
+Console.WriteLine();
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════
 // PART A — the catalog, at realistic scale.

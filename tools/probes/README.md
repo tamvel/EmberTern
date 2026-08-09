@@ -58,3 +58,82 @@ database built to production size) and the PROJECTION (real `SidebarFlatControll
 Part B needs no server at all. Part A creates and reuses `C:\Temp\embertern_metaperf.fdb`; the lab database
 is never touched. Findings and the recommendation:
 [docs/design/metadata-refresh-analysis.md](../../docs/design/metadata-refresh-analysis.md).
+
+## `VisualCandidateProbe` — renders visual CANDIDATES for a §0.5 judgement
+
+Product Polish M3.5. Renders a proposed visual change **beside the current state**, in both themes, to PNG.
+
+⭐⭐ It exists because `color-language.md` §0.5 requires an answer to *"will the user recognise the action
+FASTER?"* before any colour changes, and *"don't know"* is a refusal. Without a tool that shows the candidate,
+the only available answer about reception is a guess — which is exactly what §0.5 forbids. This turns the guess
+into a picture. In M3.5 it did so three times: geometric variants → badge variants → badge proportions.
+
+⚠ **Candidates are defined IN THE PROBE, not in the product**, so running it deploys nothing.
+⭐ A separate `z6-SHIPPED-*` render uses the **real control and its ControlTheme** and pulls the geometry
+**from the application's resources by key** — because *"the variant looks good"* and *"this is what shipped"*
+are two different assertions, and M3.3b paid for conflating them.
+
+⚠⚠ Inherited limit (`TabStripVisualProbe`, §19.23.9): **it lays out ONCE, so it cannot rule on convergence.**
+It answers "how does this LOOK", never "does this SETTLE".
+⚠ It must merge the same dictionaries as `App.axaml` — a missing one does not fail, it silently removes an
+element from the image.
+
+Run: `dotnet run --project tools/probes/VisualCandidateProbe` → `tools/probes/VisualCandidateProbe/out/*.png`
+
+## `DatabasePropertiesProbe` — what Firebird and the driver ACTUALLY do
+
+**A DIAGNOSTIC MEASUREMENT TOOL, NOT PART OF ANY PRODUCT FEATURE.** Written for the Database Properties
+mini-etap (post-M5 UX package, point 6) as its **step 0** — the measurement gate that had to pass *before* a
+dialog, a view model, a menu entry or a writer existed. Nothing it exercises ships; it exists so the design
+decisions rest on measurement rather than on plausible reading.
+
+It confirmed seven things that CLAUDE.md forbids inferring, and **three of them contradicted what reading the
+code and the binary had suggested**:
+
+1. **`ENGINE_VERSION` is NOT interchangeable with `FbConnection.ServerVersion`.** The context call returns
+   `5.0.3`; the driver property returns `WI-V5.0.3.1683 Firebird 5.0/tcp (STREAMSOFT-0089)/P16:C` — the full
+   banner, **including the server's machine name**. A "reuse before create" recommendation that would have
+   dropped the context call was withdrawn because of this.
+2. **The real column inventory of `MON$DATABASE` (28 columns) and `RDB$DATABASE` (6)** on live FB5 — plus the
+   two presentation traps: `RDB$LINGER` reads **NULL**, not `0`, on a database that never set it, and
+   `MON$OWNER` comes back **space-padded**.
+3. **`FbConfiguration`'s contract.** Finding a method NAME inside the shipped assembly proves a symbol exists,
+   never that it works or what it takes — the same shape as gotcha #321. Measured: a single
+   `ctor(String connectionString)`, no `Database` property, and `SetAccessModeAsync` takes a **`bool`**, not
+   the enum the design had assumed.
+4. **Services API requirements** — `Database` is mandatory in the connection string (a no-database service
+   string is refused with *"Action should be executed against a specific database"*), a profile with no stored
+   password cannot authenticate at all, and ⚠ **a wrong password surfaces as `Not supported plugin
+   'Legacy_Auth'`** rather than as a credentials error.
+5. **The privilege gate is `USE_GFIX_UTILITY`** (SQLSTATE 28000) — a specific, quotable message, which is why
+   the feature needs no pre-check of its own. Reading `MON$DATABASE` needs no such privilege.
+6. ⭐⭐ **`Page buffers` reads and writes DIFFERENT THINGS.** `MON$PAGE_BUFFERS` reports the **running cache of
+   the open database instance**, not the stored header value; a write takes effect only when the database is
+   next **fully released** and re-opened — not on the next attachment. Isolating that required its own
+   scenario (a held "keeper" attachment), because the ordinary read → write → re-read sequence cannot tell
+   "next attachment" from "full release".
+7. **`Read Only` genuinely requires exclusive access** — refused with SQLSTATE 40001 while one attachment was
+   open, accepted once every attachment was closed.
+
+⭐ **Why it stays in the repo.** Its reproduction value is real: every one of the seven is a property of a
+SERVER VERSION and a DRIVER VERSION, so a Firebird or `FirebirdSql.Data.FirebirdClient` upgrade can move any
+of them, and several are the kind of finding somebody would otherwise "fix" in the wrong direction — the page
+buffers one in particular reads as a bug in our code rather than as engine semantics.
+
+⚠ **Referenced deliberately against the NuGet package only, with NO `EmberTern.*` project reference.** Two
+reasons: the question is *what does the engine and the driver do*, so measuring through our own wrappers would
+answer a different one (the `Fb3ClosureProbe` pattern); and an out-of-solution probe that references
+application projects rots silently — `DataImportProbe` stopped compiling and nobody noticed, because
+`dotnet build EmberTern.slnx` never built it.
+⚠ Its package version must stay pinned to the one `EmberTern.Firebird` ships (10.3.4), or it measures a
+different driver than the product uses.
+⚠ It registers `CodePagesEncodingProvider` itself — in the app that lives in `FirebirdConnectionService`'s
+static constructor, so any entry point that deliberately bypasses our wrappers must repeat it (found by the
+first run failing on `Invalid character set specified`, not by reading).
+
+⚠ It **creates and drops its own scratch database** at an ASCII path (#149) and **changes database header
+settings by design** — which is exactly why it must never be pointed at `Lab/EmberTern_Lab.fdb`, a committed
+binary artifact. Every value it writes is restored, and the run prints the final state as proof.
+
+Run: `dotnet run --project tools/probes/DatabasePropertiesProbe -- <sysdba-password>`
+Findings: [docs/history/27-post-m5-ux-package.md](../../docs/history/27-post-m5-ux-package.md) §10.

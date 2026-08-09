@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:EmberTern.App"
         xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:ae="using:AvaloniaEdit"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
@@ -41,7 +42,7 @@
                MinHeight="64"
                PlaceholderText="{x:Static app:UiStrings.CheckConstraintExpressionWatermark}"
                FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-               FontSize="12" />
+ />
     </StackPanel>
 
     <!-- Live DDL preview -->
@@ -49,17 +50,18 @@
       <TextBlock Text="{x:Static app:UiStrings.ConstraintDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
-        <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
-                 IsReadOnly="True"
-                 AcceptsReturn="True"
-                 TextWrapping="NoWrap"
-                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 FontSize="11"
-                 BorderThickness="0"
-                 Padding="8,6"
-                 MinHeight="56"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+              CornerRadius="{DynamicResource Radius.Surface}">
+        <ae:TextEditor x:Name="DdlEditor"
+                       ShowLineNumbers="False"
+                       IsReadOnly="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="{DynamicResource Text.Compact.Size}"
+                       Padding="8,6"
+                       MinHeight="56"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
       </Border>
     </StackPanel>
 
@@ -69,7 +71,7 @@
             IsVisible="{Binding HasValidationMessage}">
       <TextBlock Text="{Binding ValidationMessage}"
                  Classes="error"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  TextWrapping="Wrap" />
     </Border>
 

@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.App.ViewModels"
         xmlns:app="using:EmberTern.App"
@@ -38,91 +38,50 @@
        persisting (ApplicationSettingsStore.Save refuses rather than destroy data it cannot see — audit A-03),
        and a user who is not told that would reasonably assume their work is being saved. It is deliberately
        NOT the status bar: that line is rewritten on the next connection change, and this must not scroll away. -->
-  <Grid RowDefinitions="36,Auto,*,28">
+  <!-- ⚠ Wysokości chromy stoją na `Height` BORDERÓW, a nie w tym ciągu — `RowDefinition.Height` to
+       `GridLength`, a tokeny są `x:Double`, więc `{DynamicResource}` nie ma się na co skonwertować
+       (§3.2 — katalog ma dwie warstwy, ale `GridLength` nie jest żadną z nich). Wiersze 0 i 3 są
+       `Auto` i mierzą to, co zadeklarował ich Border. ⛔ Nie wracać do literałów „36" i „28": do M3.1a
+       stały tu obie liczby, żaden licznik M2c ich nie widział, a `Size.StatusBar` był konsumowany
+       wyłącznie przez belkę Data Importu — czyli wszędzie poza swoim własnym miejscem (§19.0.1). -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
 
     <!-- Custom titlebar: brand + active connection + connection toolbar + theme + window controls -->
     <Border Grid.Row="0"
             x:Name="Titlebar"
-            Background="{DynamicResource ElevatedPanelBrush}"
+            Height="{DynamicResource Size.TitleBar}"
+            Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             PointerPressed="OnTitleBarPointerPressed"
             DoubleTapped="OnTitleBarDoubleTapped">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+      <!-- ⭐⭐ KOLUMNA 0 ZNIKNĘŁA W M3.1b — i to nie jest pominięcie, tylko rozstrzygnięcie (§19.3).
+           Stał tu blok aktywnego połączenia: nazwa bazy (Bold 14 z zielonym podkreśleniem) + badge DEV MODE.
+           Cała ta informacja przeniosła się do SEKCJI 1 PASKA STATUSU, która jest od teraz jedynym miejscem
+           odpowiadającym na pytanie „gdzie jestem podłączony?".
 
-        <!-- Active-connection block. Every item is VerticalAlignment=Center; the
-             parent StackPanel is centered in the fixed 36px row, so all items share one
-             vertical axis. No manual margin nudges.
+           Decyzja użytkownika (2026-08-02): *„jedna informacja powinna mieć jednego właściciela… pasek tytułu
+           będzie odpowiadał wyłącznie za nawigację i polecenia"*. §8.4.3 przypisuje tożsamość połączenia
+           paskowi statusu, a §0.1.2 mówi, że Application Chrome to JEDNA powierzchnia — trzymanie tej samej
+           nazwy w dwóch miejscach naraz czytałoby się jako defekt, nie jako redundancja.
 
-             ⛔ There is deliberately NO application logo here, and it is not an omission: the brand
-             mark was removed from the titlebar on purpose (2026-08-01). A working surface's chrome
-             is for the document, not for the product's identity — ChatGPT, Claude and VS Code all
-             put nothing of the sort in this row — and the 26px mark plus its divider were spending
-             ~40px of the most contested horizontal space in the window on information the user
-             already knows. The branding lives in About, where it is the subject (AboutWindow.axaml).
-             The divider that used to separate the mark from the connection name went with it: with
-             nothing to its left it would be a rule against the window edge.
+           ⭐ Efekt uboczny, który był jednym z powodów: zwolniło się do ~300 px w najbardziej zatłoczonym
+           wierszu okna, a z trzech przyczyn H‑3 (przesuwanie się paska narzędzi przy zmianie stanu) zniknęły
+           dwie — blok połączenia i badge DEV MODE. ⭐ Trzecią, `CanExportDdl`, zamknęło M3.2a: przycisk
+           Export DDL stoi teraz na KOŃCU kolumny 0, za kreatorami, więc nie ma niczego w dół strumienia
+           (uzasadnienie przy samym przycisku). **Pasek tytułu nie ma już ani jednej bramki `IsVisible`,
+           która przesuwałaby cokolwiek** — i to jest stan docelowy, nie etap pośredni.
 
-             The whole block is gated on HasActiveConnection so that with no connection it is not
-             MEASURED at all. IsVisible on the children alone would leave the StackPanel's own Margin
-             behind — an empty inset at the window's left edge, exactly the "something left over
-             where the logo used to be" this change is meant to avoid. -->
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
-                    VerticalAlignment="Center" Margin="8,0,2,0"
-                    IsVisible="{Binding HasActiveConnection}">
-          <!-- Active DB name = key "where am I connected" info. Bold 14, full-contrast
-               ForegroundBrush (white), plus a 2px ConnectedBrush underline (same green
-               as the active-connection status) — Rider/DataGrip-style accent: instantly
-               recognizable, no badge / glow / border / colored text. The underline is a
-               stretched 2px Border inside a vertical StackPanel, so it spans exactly the
-               name width. -->
-          <!-- No IsVisible of its own: the block above already carries HasActiveConnection. -->
-          <StackPanel Orientation="Vertical" Spacing="2"
-                      VerticalAlignment="Center">
-            <!-- MaxWidth + ellipsis so a very long profile name can't expand the
-                 brand row and push the connection toolbar / window buttons off-screen.
-                 Full name on hover. -->
-            <TextBlock Text="{Binding ActiveConnectionName}"
-                       FontWeight="Bold"
-                       FontSize="14"
-                       MaxWidth="260"
-                       TextTrimming="CharacterEllipsis"
-                       ToolTip.Tip="{Binding ActiveConnectionName}"
-                       Foreground="{DynamicResource ForegroundBrush}" />
-            <Border Height="2"
-                    HorizontalAlignment="Stretch"
-                    Background="{DynamicResource ConnectedBrush}" />
-          </StackPanel>
-          <!-- Right separator: mirrors the left one so the connection name reads as its
-               own section between the brand and the transaction-profile block. Same
-               inline Border pattern (1px, 14 high, BorderBrush) used across the titlebar. -->
-          <Border Width="1" Height="14"
-                  Background="{DynamicResource BorderBrush}"
-                  Margin="4,0"
-                  VerticalAlignment="Center"
-                  IsVisible="{Binding IsDeveloperModeActive}" />
-          <!-- DEV MODE badge: shown only when the active connection has Developer Mode
-               on (DDL waits for in-use objects). No transaction terminology surfaced. -->
-          <Border Background="{DynamicResource ConnectedBrush}"
-                  CornerRadius="3" Padding="6,1"
-                  VerticalAlignment="Center"
-                  IsVisible="{Binding IsDeveloperModeActive}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DeveloperModeBadgeTooltip}">
-            <TextBlock Text="{x:Static app:UiStrings.DeveloperModeBadge}"
-                       FontSize="10" FontWeight="Bold"
-                       Foreground="{DynamicResource DevModeBadgeForegroundBrush}" />
-          </Border>
-        </StackPanel>
+           ⛔ Nie przywracać tu ani nazwy połączenia, ani badge'a DEV MODE. ⛔ Nie ma tu też logo — mark
+           został usunięty osobną decyzją (2026-08-01) i mieszka w About. -->
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
 
         <!-- Connection toolbar (moved from sidebar) -->
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2"
                     VerticalAlignment="Center" Margin="4,0,0,0">
-          <!-- Leading divider between the connection block and the toolbar. Same style as the
-               toolbar's own group separators (1px, Margin 4,6). Gated on the same condition as the
-               block it separates: with no connection there is nothing to its left, and a divider
-               against the window edge is chrome left over from something that is not there. -->
-          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}"
-                  IsVisible="{Binding HasActiveConnection}" />
+          <!-- ⛔ Wiodący separator USUNIĘTY razem z blokiem połączenia (M3.1b): oddzielał go od paska
+               narzędzi, a bez niczego po lewej byłby kreską opartą o krawędź okna — dokładnie ten rodzaj
+               chromy po nieistniejącym elemencie, który sprzątał sprint brandingowy. -->
           <!-- ☰ Application Menu — the FIRST button of the action zone, and deliberately NOT fenced off
                with a separator of its own: ChatGPT and its peers do not, and it reads better (design §6).
                The rows are application-level only; anything belonging to the active document stays on the
@@ -166,7 +125,7 @@
             <controls:SvgIcon Data="{StaticResource Icon.PanelLeft}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="New Connection"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionNewTooltip}"
                   Click="OnNewConnectionClick">
             <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
           </Button>
@@ -176,43 +135,64 @@
             <controls:SvgIcon Data="{StaticResource Icon.FolderPlus}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Edit Connection"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionEditTooltip}"
                   Command="{Binding Metadata.EditSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Pencil}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Copy Connection"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionCopyTooltip}"
                   Command="{Binding Metadata.CopySelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Copy}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Delete Connection"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionDeleteTooltip}"
                   Command="{Binding Metadata.DeleteSelectedCommand}">
+            <!-- ⭐ Rola R‑4 „Destrukcja" (`color-language.md` §3, krok K2). Żółty był resztką
+                 PORZUCONEGO schematu („Warning=delete" z pierwotnej legendy Colors.axaml), a nie
+                 świadomym wyjątkiem: to samo usunięcie jest czerwone w 5 przyciskach paska narzędzi
+                 i w 13 pozycjach menu — w tym w menu kontekstowym TEGO SAMEGO drzewa (niżej,
+                 `Icon.Trash, Brush=DangerIconBrush`). Dwie drogi do jednej operacji miały dwa kolory
+                 obok siebie. ⚠ Kod już klasyfikował ją jako destrukcję (`IsDestructive = true`
+                 w `DeleteWithConfirmationAsync`) — nie zgadzał się wyłącznie kolor. -->
             <controls:SvgIcon Data="{StaticResource Icon.Trash}"
-                              Foreground="{DynamicResource WarningIconBrush}" />
+                              Foreground="{DynamicResource DangerIconBrush}" />
           </Button>
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
-                  ToolTip.Tip="Connect"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionConnectTooltip}"
                   Command="{Binding Metadata.ConnectSelectedCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.PlugZap}"
-                              Foreground="{DynamicResource AccentIconBrush}" />
+            <!-- ⭐ Rola R‑7 (domknięcie K‑final, dawne O‑4 — §8.2 języka). ⚠⚠ WCZEŚNIEJ WSTRZYMANE
+                 I TERAZ WYKONANE, bo kontekst wokół się zmienił: po K6 (Odśwież → neutralny) Connect
+                 został OSTATNIM elementem tego paska na `AccentIconBrush`, czyli na retiring‑owym
+                 tokenie „ważnej ikony", podczas gdy sześć przycisków obok niesie `AccentBrush` w roli
+                 R‑6 „wejście do modułu". Dwa odcienie niebieskiego w jednym pasku, znaczące co innego.
+                 ⭐ Po zmianie pasek czyta się jedną regułą: SZARY działa na zaznaczeniu · NIEBIESKI
+                 otwiera moduł · CZERWONY usuwa. Connect nie przestaje być główną akcją tej grupy —
+                 przestaje udawać, że otwiera narzędzie. -->
+            <controls:SvgIcon Data="{StaticResource Icon.PlugZap}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Disconnect"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionDisconnectTooltip}"
                   Command="{Binding Metadata.DisconnectSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Unplug}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="Reconnect"
+                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionReconnectTooltip}"
                   Command="{Binding Metadata.ReconnectSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.RotateCw}" />
           </Button>
           <Button Classes="icon"
                   ToolTip.Tip="{Binding Metadata.RefreshTooltip}"
                   Command="{Binding Metadata.RefreshCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}"
-                              Foreground="{DynamicResource InfoIconBrush}" />
+            <!-- ⭐⭐ Rola R‑7 „Narzędzie" (krok K6) — i to jest krok, który WZMACNIA niebieski, a nie
+                 wygasza pasek. W tym samym pasku niebieski niesie rolę R‑6 „wejście do narzędzia"
+                 (Activity Monitor, Session Manager, Global Search, Script Executor, Data Import — pięć
+                 przycisków, wszystkie `AccentBrush`). Odświeżenie NIE otwiera modułu: działa na widoku,
+                 który już jest na ekranie. Dopóki było niebieskie, jeden kolor znaczył w jednym pasku
+                 dwie różne rzeczy.
+                 ⛔ To NIE jest odbarwianie narzędzi paska tytułu — sześć wejść do modułów ZOSTAJE
+                 kolorowych (`color-language.md` §11.3). Tamto zrobiło M3.2b i zostało wycofane. -->
+            <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
           </Button>
           <!-- Security Manager — sits between the Connection/Database section and the
                Create-Object section, separated on both sides (it's a tool, not a
@@ -221,8 +201,13 @@
           <Button Classes="icon"
                   ToolTip.Tip="{x:Static app:UiStrings.ToolbarSecurityManagerTooltip}"
                   Command="{Binding OpenSecurityManagerCommand}">
+            <!-- ⭐ Rola R‑6 „Wejście do narzędzia" (domknięcie K‑final, dawne O‑5). Security Manager
+                 otwiera moduł dokładnie tak jak pięć przycisków obok — i był jedynym, który zamiast
+                 koloru ROLI (S2) nosił kolor RODZAJU obiektu (S1, `IconColor_Role`). ⚠ To pozostałość
+                 po czasach, gdy przycisk „dziedziczył" kolor po tym, o czym jest; §1.2/3 mówi wprost,
+                 że gdy element miałby nieść i rodzaj, i skutek — **wygrywa skutek**. -->
             <controls:SvgIcon Data="{StaticResource Icon.Role}"
-                              Foreground="{DynamicResource IconColor_Role}" />
+                              Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Monitoring section: live database Activity Monitor (trace) + Session Manager. -->
           <Button Classes="icon"
@@ -259,8 +244,82 @@
             <controls:SvgIcon Data="{StaticResource Icon.Import}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
-          <!-- Export DDL of the active object to a portable .sql file. Contextual: the
-               separator + button hide together unless a DDL-bearing object tab is active. -->
+          <!-- Table-creation section sits AFTER all connection-related buttons.
+               Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
+               visually rhymes with the sidebar where new tables will appear. -->
+          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTableTooltip}"
+                  Command="{Binding NewTableCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.Table}"
+                              Foreground="{DynamicResource IconColor_Table}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewViewTooltip}"
+                  Command="{Binding NewViewCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.View}"
+                              Foreground="{DynamicResource IconColor_View}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewProcedureTooltip}"
+                  Command="{Binding NewProcedureCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.Procedure}"
+                              Foreground="{DynamicResource IconColor_Procedure}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTriggerTooltip}"
+                  Command="{Binding NewTriggerCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.Trigger}"
+                              Foreground="{DynamicResource IconColor_Trigger}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewFunctionTooltip}"
+                  Command="{Binding NewFunctionCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.Function}"
+                              Foreground="{DynamicResource IconColor_Function}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewGeneratorTooltip}"
+                  Command="{Binding NewGeneratorCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.Generator}"
+                              Foreground="{DynamicResource IconColor_Generator}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewDomainTooltip}"
+                  Command="{Binding NewDomainCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.Domain}"
+                              Foreground="{DynamicResource IconColor_Domain}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewPackageTooltip}"
+                  Command="{Binding NewPackageCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.Package}"
+                              Foreground="{DynamicResource IconColor_Package}" />
+          </Button>
+          <Button Classes="icon"
+                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewExceptionTooltip}"
+                  Command="{Binding NewExceptionCommand}">
+            <controls:CreateIcon Data="{StaticResource Icon.Exception}"
+                              Foreground="{DynamicResource IconColor_Exception}" />
+          </Button>
+
+          <!-- ⭐⭐ EXPORT DDL STOI NA KOŃCU KOLUMNY 0 CELOWO — to jest cała naprawa H‑3 dla paska tytułu
+               (M3.2a, wariant T2, §19.10). Separator + przycisk chowają się razem, gdy aktywna zakładka nie
+               niesie obiektu z DDL-em (`CanExportDdl`).
+
+               ⚠ Do M3.2a ta para stała PRZED kreatorami *Nowy X* i była JEDYNĄ pozostałą bramką `IsVisible`
+               w całym pasku tytułu (dwie inne — blok połączenia i badge DEV MODE — zabrało M3.1b). Pokazanie
+               jej wstawiało 9 px separatora + 6 spacingu + 28 px przycisku = **43 px** i przesuwało wszystkie
+               dziewięć kreatorów. Stojąc na końcu nie ma niczego w dół strumienia, więc pasek tytułu jest
+               teraz trwale stabilny — bez rezerwowania pustego slotu i bez przycisku wyszarzonego na stałe
+               (ten drugi wariant odrzucono: patrz komentarz przy Section 3 toolbara, „a permanently-greyed
+               button teaches nothing").
+
+               ⚠ Rozważono też przeniesienie przycisku do SEKCJI 4 toolbara dokumentu — semantycznie
+               czystsze, bo `CanExportDdl` czyta `SelectedWorkspaceTab`, czyli to jedyne polecenie
+               DOKUMENTOWE w pasku o zasięgu POŁĄCZENIA. Użytkownik świadomie tego nie wybrał (2026-08-02):
+               zachowanie dotychczasowego miejsca często używanej akcji jest ważniejsze niż idealny rozdział
+               odpowiedzialności. ⛔ Nie przenosić „dla czystości" bez nowej decyzji. -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}"
                   IsVisible="{Binding CanExportDdl}" />
           <Button Classes="icon"
@@ -270,70 +329,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.Save}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
-          <!-- Table-creation section sits AFTER all connection-related buttons.
-               Icon ▦＋ mirrors the metadata tree's Table glyph with a plus —
-               visually rhymes with the sidebar where new tables will appear. -->
-          <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTableTooltip}"
-                  Command="{Binding NewTableCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.TablePlus}"
-                              Foreground="{DynamicResource IconColor_Table}" />
-          </Button>
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewViewTooltip}"
-                  Command="{Binding NewViewCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.ViewPlus}"
-                              Foreground="{DynamicResource IconColor_View}" />
-          </Button>
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewProcedureTooltip}"
-                  Command="{Binding NewProcedureCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.ProcedurePlus}"
-                              Foreground="{DynamicResource IconColor_Procedure}" />
-          </Button>
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTriggerTooltip}"
-                  Command="{Binding NewTriggerCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.TriggerPlus}"
-                              Foreground="{DynamicResource IconColor_Trigger}" />
-          </Button>
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewFunctionTooltip}"
-                  Command="{Binding NewFunctionCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.FunctionPlus}"
-                              Foreground="{DynamicResource IconColor_Function}" />
-          </Button>
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewGeneratorTooltip}"
-                  Command="{Binding NewGeneratorCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.GeneratorPlus}"
-                              Foreground="{DynamicResource IconColor_Generator}" />
-          </Button>
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewDomainTooltip}"
-                  Command="{Binding NewDomainCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.DomainPlus}"
-                              Foreground="{DynamicResource IconColor_Domain}" />
-          </Button>
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewPackageTooltip}"
-                  Command="{Binding NewPackageCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.PackagePlus}"
-                              Foreground="{DynamicResource IconColor_Package}" />
-          </Button>
-          <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewExceptionTooltip}"
-                  Command="{Binding NewExceptionCommand}">
-            <controls:SvgIcon Data="{StaticResource Icon.ExceptionPlus}"
-                              Foreground="{DynamicResource IconColor_Exception}" />
-          </Button>
         </StackPanel>
 
-        <!-- Drag spacer (column 2 = *) -->
+        <!-- Drag spacer (kolumna 1 = *) -->
 
         <!-- Theme toggle -->
-        <Button Grid.Column="3" Classes="icon"
+        <Button Grid.Column="2" Classes="icon"
                 ToolTip.Tip="{Binding ThemeToggleTooltip}"
                 Click="OnThemeToggleClick"
                 VerticalAlignment="Center"
@@ -345,18 +346,21 @@
         </Button>
 
         <!-- Window controls -->
-        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch">
-          <Button Classes="caption" Click="OnMinimizeClick" ToolTip.Tip="Minimize">
-            <controls:SvgIcon Data="{StaticResource Icon.WindowMinimize}" Width="16" Height="16" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch">
+          <Button Classes="caption" Click="OnMinimizeClick"
+                  ToolTip.Tip="{x:Static app:UiStrings.WindowMinimizeTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.WindowMinimize}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
           </Button>
-          <Button Classes="caption" Click="OnMaxRestoreClick" ToolTip.Tip="Maximize / Restore"
+          <Button Classes="caption" Click="OnMaxRestoreClick"
+                  ToolTip.Tip="{x:Static app:UiStrings.WindowMaxRestoreTooltip}"
                   x:Name="MaxRestoreButton">
             <controls:SvgIcon x:Name="MaxRestoreGlyph"
                               Data="{StaticResource Icon.WindowMaximize}"
-                              Width="16" Height="16" />
+                              Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
           </Button>
-          <Button Classes="caption close" Click="OnCloseClick" ToolTip.Tip="Close">
-            <controls:SvgIcon Data="{StaticResource Icon.WindowClose}" Width="16" Height="16" />
+          <Button Classes="caption close" Click="OnCloseClick"
+                  ToolTip.Tip="{x:Static app:UiStrings.WindowCloseTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.WindowClose}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
           </Button>
         </StackPanel>
       </Grid>
@@ -392,10 +396,9 @@
 
           <!-- Filter -->
           <Border DockPanel.Dock="Top" Margin="8,6,8,4">
-            <TextBox x:Name="SidebarFilterBox"
+            <TextBox x:Name="SidebarFilterBox" Classes="search"
                      Text="{Binding FilterText, Mode=TwoWay}"
                      PlaceholderText="{Binding FilterPlaceholder}"
-                     FontSize="12"
                      Padding="6,4" />
           </Border>
 
@@ -406,12 +409,43 @@
                chevron + the SAME per-type node template as before (icons, colours, context
                menus, double-click handlers — verbatim), so it looks identical to the tree
                but scrolls on one stable-extent VSP. -->
+          <!-- ⛔⛔ `AutoScrollToSelectedItem="False"` — NAPRAWA PRZYCZYNY DEFEKTU „drzewo samo przewija
+               się w dół i zawiesza aplikację". ⛔ NIE USUWAĆ. Diagnoza z żywego logu:
+               `metadata-refresh-analysis.md` §11.
+
+               MECHANIZM (zmierzony, nie wydedukowany). Gdy jakiś wiersz jest zaznaczony, a użytkownik
+               rozwinie dużą kategorię, indeks zaznaczonego wiersza przesuwa się i Avalonia odkłada na
+               Dispatcher `SelectingItemsControl.AutoScrollToSelectedItemIfNecessary`. Zaznaczony wiersz
+               leży wtedy tysiące pozycji poza oknem realizacji, a `VirtualizingStackPanel.ScrollIntoView`
+               NIE POTRAFI skoczyć do nierealizowanego indeksu — zna geometrię wyłącznie zrealizowanych
+               elementów. Więc przewija o JEDEN wiersz, realizuje następny, znów podnosi
+               `RequestBringIntoView` — i pełznie do celu po jednym wierszu na cykl Dispatchera.
+               W logu: offset rośnie dokładnie o 24 px (jeden wiersz) co ~98 ms, bez końca, przy
+               13 217 wierszach.
+
+               ⭐ Dlaczego „nie da się tego zatrzymać": pętla zapycha kolejkę Dispatchera i zagładza
+               priorytet tła — w logu `heartbeat` (Background) UMIERA w chwili jej startu i już nie wraca,
+               więc kliknięcia i kółko myszy trafiają do kolejki, która nie ma kiedy ich obsłużyć.
+               ⚠ Zero wyjątków, zero reentrancji, zero `SelectionChanged` w trakcie pętli — przewijanie
+               jest SKUTKIEM ciągłych `BringIntoView`, nie ich przyczyną.
+
+               ⭐ Dlaczego akurat ta lista może się bez tego obejść, a nie jest to obejście objawu:
+               drzewo jest ogromne i wirtualizowane, a „pokaż mi ten obiekt" mamy WŁASNE i świadome —
+               `OnRevealSidebarRow` robi jawne `ScrollIntoView`. Drugi, automatyczny mechanizm próbujący
+               tego samego jest tu zbędny i szkodliwy.
+               ⛔ Świadomie BEZ warunków typu „przewijaj, jeżeli cel jest blisko" i bez własnego
+               algorytmu przewijania (decyzja użytkownika) — najmniejsza zmiana, która usuwa przyczynę. -->
+          <!-- ⭐ `Panel`, żeby stan pusty leżał NA obszarze listy, a nie zabierał jej wiersz: pusta lista
+               ma zerową wysokość treści, więc nakładka nic nie przesuwa, a przy pierwszym połączeniu
+               znika bez ruchu układu (§13.3 Zero Layout Shift). -->
+          <Panel>
           <ListBox ItemsSource="{Binding SidebarRows}"
                    x:Name="SidebarList"
                    Classes="sidebar-list"
                    Background="Transparent"
                    BorderThickness="0"
                    SelectionMode="Multiple"
+                   AutoScrollToSelectedItem="False"
                    SelectionChanged="OnSidebarListSelectionChanged">
             <ListBox.ItemsPanel>
               <ItemsPanelTemplate>
@@ -420,14 +454,30 @@
             </ListBox.ItemsPanel>
             <ListBox.Styles>
               <!-- Dense, uniform sidebar rows (scoped to this ListBox so the Saved-Queries
-                   ListBox is unaffected). Uniform height keeps the single VSP's extent exact. -->
+                   ListBox is unaffected).
+                   ⭐⭐ WYSOKOŚĆ WIERSZA JEST TU I JEST JEDNA. Treść mierzy 15 px (ikona 15,
+                   `Text.Compact.LineHeight` 15) przy zerowym padding'u pionowym, więc to `MinHeight`
+                   rozstrzyga — zmierzone w M3.4a, nie założone. Uniform height keeps the single VSP's
+                   extent exact, co jest warunkiem stabilnego przewijania przy tysiącach wierszy.
+                   ⚠ `Padding` pionowy MUSI zostać zerowy: gdyby rósł, walczyłby z `MinHeight` o tę samą
+                   wielkość i wygrywałby większy z nich — ta sama reguła „jedna wielkość, jeden
+                   właściciel", co przy `Pad.Control` (Tokens.axaml §4.1). Poziome 2 px to wcięcie
+                   zaznaczenia od krawędzi panelu, nie odstęp treści; katalog nie ma dla niego roli. -->
               <Style Selector="ListBox.sidebar-list ListBoxItem">
                 <Setter Property="Padding" Value="2,0" />
-                <Setter Property="MinHeight" Value="24" />
+                <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Tree}" />
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
               </Style>
               <!-- Expander chevron: subtle, borderless, generous 20px hit area (modern
-                   explorer feel) with a 12px glyph. -->
+                   explorer feel) with a 12px glyph.
+                   ⚠ 20×20 to POLE TRAFIENIA MYSZY, nie kontrolka — dlatego świadomie nie bierze
+                   `Size.Control` (24, wysokość pola formularza) ani `Size.ControlToolbar` (22, akcja
+                   w chromie). Musi zmieścić się w wierszu 24 px i zostawić chevron optycznie lekkim;
+                   ⛔ podniesienie go do którejkolwiek z tych ról rozepchnęłoby wiersz.
+                   ⚠ AKTUALIZACJA M4: brama §13.3 przeszła, a K15 (ikona + odstęp) została zamknięta
+                   decyzją B‑1 — ale POLE TRAFIENIA CHEVRONU nie było jej przedmiotem i świadomie zostaje
+                   przy 20. To nie jest rozmiar rysunku (glif bierze `Size.Icon.Sm`), tylko cel myszy,
+                   a jego zmiana jest osobnym pytaniem o ergonomię, nie o gęstość. -->
               <Style Selector="Button.sidebar-chevron">
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
@@ -456,6 +506,207 @@
               </Style>
             </ListBox.Styles>
 
+            <!-- ══════════════════════════════════════════════════════════════════════════════════
+                 ⭐⭐ MENU KONTEKSTOWE PASKA BOCZNEGO — JEDNA INSTANCJA NA RODZAJ WĘZŁA,
+                 a nie jedna na każdy zrealizowany wiersz (M3.4b, product-polish.md §19.28).
+
+                 POWÓD JEST ZMIERZONY, nie estetyczny. Do tej zmiany każdy z tych trzech bloków stał
+                 INLINE w swoim `DataTemplate`, a szablon dostaje KAŻDY zrealizowany wiersz. Zmierzone
+                 na 5 000 wierszy i 40 skokach przewijania (`SharedContextMenuFeasibilityProbe`):
+
+                     menu na wiersz     : 1237–2619 ms przewijania, 440 żywych `MenuItem`
+                     menu współdzielone :  324– 504 ms przewijania,  22 żywe `MenuItem`
+                     różnica: ~74% czasu przewijania
+
+                 ⚠ Wirtualizacja NIE odzyskuje kontenerów w pełni — przy przewijaniu 5 000 wierszy
+                 szablon budowany jest 1 640 razy, więc menu było tworzone i wyrzucane 1 640 razy.
+                 To jest ten sam mechanizm, który daje dużą WARIANCJĘ czasu (presja alokacyjna), a ta
+                 w działającej aplikacji objawia się szarpaniem, nie równym spowolnieniem.
+
+                 ⭐ DLACZEGO TO JEST POPRAWNE, A NIE OBEJŚCIE. Zmierzone: jedna instancja `ContextMenu`
+                 przypina się do wielu kontrolek, a po otwarciu przejmuje `DataContext` TEGO wiersza,
+                 na którym ją otwarto — więc zwykłe `{Binding}` w pozycjach rozwiązuje się do właściwego
+                 obiektu i podąża przy kolejnych otwarciach. Żadnych sztuczek w bindowaniu.
+                 ⚠ Nośnikiem kontekstu jest DZIEDZICZENIE `DataContext`, nie `PlacementTarget`
+                 (ten przy programowym `Open` odczytał się jako `null`). ⛔ Nie opieraj tu niczego
+                 na `PlacementTarget` bez własnego pomiaru.
+
+                 ⭐⭐ `x:DataType` NA KAŻDYM MENU JEST TU OBOWIĄZKOWE — I TO JEST ZYSK, NIE KOSZT.
+                 W `DataTemplate` typ kontekstu brał się z jego `DataType`, więc bindingi kompilowane
+                 miały go za darmo i NIEJAWNIE. W zasobach tego rodzica nie ma, więc kompilator próbował
+                 rozwiązać je względem `MetadataExplorerViewModel` i zgłosił ~30 błędów AVLN2000 — czyli
+                 defekt, który przy bindingach refleksyjnych byłby CICHY (puste menu przy prawym
+                 kliknięciu, zielony build). Po zadeklarowaniu `x:DataType` kontrakt jest JAWNY
+                 i sprawdzany przy kompilacji. ⛔ Nie usuwaj go „bo się kompiluje" — bez niego pierwszy
+                 błędnie wpisany binding przestanie być błędem kompilacji.
+
+                 ⛔ NIE WRACAĆ DO MENU INLINE W SZABLONIE. Wygląda niewinnie i jest wygodne w edycji,
+                 a kosztuje trzy czwarte czasu przewijania najgęstszego widoku aplikacji.
+                 ══════════════════════════════════════════════════════════════════════════════════ -->
+            <ListBox.Resources>
+              <ContextMenu x:Key="SidebarFolderMenu" x:DataType="vm:FolderNodeViewModel">
+                <MenuItem Header="{x:Static app:UiStrings.FolderContextAddConnection}"
+                          Icon="{app:MenuIcon Icon.Plus}"
+                          Command="{Binding AddConnectionCommand}" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.FolderContextRename}"
+                          Icon="{app:MenuIcon Icon.Pencil}"
+                          Command="{Binding BeginRenameCommand}" />
+                <MenuItem Header="{x:Static app:UiStrings.FolderContextDelete}"
+                          Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                          Command="{Binding DeleteCommand}" />
+              </ContextMenu>
+
+              <ContextMenu x:Key="SidebarConnectionMenu" x:DataType="vm:ConnectionNodeViewModel">
+                <MenuItem Header="Connect"
+                          Icon="{app:MenuIcon Icon.PlugZap}"
+                          Command="{Binding ConnectCommand}"
+                          IsVisible="{Binding !IsConnected}" />
+                <MenuItem Header="Disconnect"
+                          Icon="{app:MenuIcon Icon.Unplug}"
+                          Command="{Binding DisconnectCommand}"
+                          IsVisible="{Binding IsConnected}" />
+                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRefresh}"
+                          Icon="{app:MenuIcon Icon.RefreshCw}"
+                          InputGesture="{app:CommandGesture RefreshMetadata}"
+                          Command="{Binding RefreshMetadataCommand}"
+                          IsVisible="{Binding IsConnected}" />
+                <Separator />
+                <MenuItem Header="Edit" Icon="{app:MenuIcon Icon.Pencil}" Command="{Binding EditCommand}" />
+                <MenuItem Header="Copy" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
+                <MenuItem Header="Delete" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                          Command="{Binding DeleteCommand}" />
+                <Separator IsVisible="{Binding IsConnected}" />
+                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecomputeStats}"
+                          Icon="{app:MenuIcon Icon.Sigma}"
+                          Command="{Binding RecomputeAllStatisticsCommand}"
+                          IsVisible="{Binding IsConnected}" />
+                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecompile}"
+                          Icon="{app:MenuIcon Icon.Hammer}"
+                          Command="{Binding RecompileAllObjectsCommand}"
+                          IsVisible="{Binding IsConnected}" />
+                <Separator />
+                <!-- ⚠ WYŁĄCZANE, nie ukrywane — inaczej niż sąsiedzi w tym samym menu, i to jest reguła
+                     ratyfikowana w M3.4b część 2, a nie rozjazd: ukrywaj, gdy pozycja w danym stanie nie ma
+                     sensu w ogóle; wyszarzaj, gdy operacja istnieje, ale jest chwilowo niedostępna. Baza ma
+                     właściwości niezależnie od tego, czy jesteśmy podłączeni — po prostu nie da się ich teraz
+                     odczytać. Bramkuje `CanExecute`, więc nie ma tu nic do dodania. -->
+                <MenuItem Header="{x:Static app:UiStrings.DatabasePropertiesMenuItem}"
+                          Icon="{app:MenuIcon Icon.Info}"
+                          Command="{Binding DatabasePropertiesCommand}" />
+                <Separator />
+                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}"
+                          Icon="{app:MenuIcon Icon.ListFilter}">
+                  <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"
+                            Icon="{app:MenuIcon Icon.ArrowUp}"
+                            Command="{Binding SortAscendingCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortDescending}"
+                            Icon="{app:MenuIcon Icon.ArrowDown}"
+                            Command="{Binding SortDescendingCommand}" />
+                </MenuItem>
+              </ContextMenu>
+
+              <ContextMenu x:Key="SidebarMetadataMenu" x:DataType="vm:MetadataNodeViewModel">
+                <!-- Icons come from the existing geometry dictionary through {app:MenuIcon}; gestures
+                     from CommandCatalog through {app:CommandGesture}, so a re-bind reaches this menu
+                     without anyone editing it. New / Delete / Refresh are the Tree-scope gestures —
+                     this is where they were always meant to be surfaced (etap 4 §14.4 deliberately
+                     kept them off the toolbar, where they do not fire). -->
+                <MenuItem Header="{Binding ContextNewLabel}"
+                          Icon="{app:MenuIcon Icon.Plus}"
+                          InputGesture="{app:CommandGesture NewObject}"
+                          Command="{Binding NewCommand}"
+                          IsVisible="{Binding SupportsNew}" />
+                <MenuItem Header="{Binding ContextRecompileAllLabel}"
+                          Icon="{app:MenuIcon Icon.Hammer}"
+                          Command="{Binding RecompileAllCommand}"
+                          IsVisible="{Binding IsRecompilableGroup}" />
+                <Separator IsVisible="{Binding IsTriggerGroup}" />
+                <!-- Trigger-GROUP bulk ops: Visible (current filter set) or All. The "Selected"
+                     scope moved onto the selected trigger leaves (see below) so the user doesn't
+                     scroll back to this header to act on a multi-selection. -->
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                          Icon="{app:MenuIcon Icon.Check}"
+                          IsVisible="{Binding IsTriggerGroup}">
+                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
+                            Command="{Binding ActivateVisibleCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
+                            Command="{Binding ActivateAllCommand}" />
+                </MenuItem>
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                          Icon="{app:MenuIcon Icon.Pause}"
+                          IsVisible="{Binding IsTriggerGroup}">
+                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
+                            Command="{Binding DeactivateVisibleCommand}" />
+                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
+                            Command="{Binding DeactivateAllCommand}" />
+                </MenuItem>
+                <!-- Trigger-LEAF multi-select bulk ops — visible only when >1 trigger is
+                     selected (Ctrl/Shift-click). Commands are forwarded from the explorer VM
+                     (which owns the selection) via the node VM so they resolve inside the
+                     ContextMenu's popup namescope (gotcha #180). -->
+                <MenuItem Header="{Binding ActivateSelectedTriggersLabel}"
+                          Icon="{app:MenuIcon Icon.Check}"
+                          Command="{Binding ActivateSelectedTriggersCommand}"
+                          IsVisible="{Binding ShowSelectedTriggerOps}" />
+                <MenuItem Header="{Binding DeactivateSelectedTriggersLabel}"
+                          Icon="{app:MenuIcon Icon.Pause}"
+                          Command="{Binding DeactivateSelectedTriggersCommand}"
+                          IsVisible="{Binding ShowSelectedTriggerOps}" />
+                <MenuItem Header="{Binding ContextEditLabel}"
+                          Icon="{app:MenuIcon Icon.Pencil}"
+                          Command="{Binding OpenDdlCommand}"
+                          IsVisible="{Binding CanEditLeaf}" />
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
+                          Icon="{app:MenuIcon Icon.Play}"
+                          Command="{Binding ExecuteProcedureCommand}"
+                          IsVisible="{Binding IsProcedureLeaf}" />
+                <!-- The debugger's identity mark is a two-colour composite control, not a single
+                     stroked geometry, so it cannot come through {app:MenuIcon}. Set inline — reusing
+                     the one existing mark rather than drawing a second, flatter debugger icon. -->
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
+                          Command="{Binding DebugProcedureCommand}"
+                          IsVisible="{Binding IsProcedureLeaf}">
+                  <MenuItem.Icon>
+                    <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
+                  </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
+                          Command="{Binding DebugTriggerCommand}"
+                          IsVisible="{Binding IsTriggerLeaf}">
+                  <MenuItem.Icon>
+                    <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
+                  </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
+                          Command="{Binding DebugFunctionCommand}"
+                          IsVisible="{Binding IsFunctionLeaf}">
+                  <MenuItem.Icon>
+                    <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
+                  </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                          Icon="{app:MenuIcon Icon.Check}"
+                          Command="{Binding ActivateCommand}"
+                          IsVisible="{Binding ShowActivate}" />
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                          Icon="{app:MenuIcon Icon.Pause}"
+                          Command="{Binding DeactivateCommand}"
+                          IsVisible="{Binding ShowDeactivate}" />
+                <Separator IsVisible="{Binding CanDeleteLeaf}" />
+                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
+                          Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                          InputGesture="{app:CommandGesture DeleteObject}"
+                          Command="{Binding DeleteCommand}"
+                          IsVisible="{Binding CanDeleteLeaf}" />
+                <Separator IsVisible="{Binding ShowCopyNameLeaf}" />
+                <MenuItem Header="{Binding ContextCopyNameLabel}"
+                          Icon="{app:MenuIcon Icon.Copy}"
+                          Command="{Binding CopyNameCommand}"
+                          IsVisible="{Binding ShowCopyNameLeaf}" />
+              </ContextMenu>
+            </ListBox.Resources>
+
             <ListBox.DataTemplates>
               <!-- The flattened row: indentation spacer + chevron + the per-type node
                    content (hosted via ContentControl, which resolves the DataTemplates
@@ -463,16 +714,26 @@
               <DataTemplate DataType="vm:SidebarRow">
                 <Grid ColumnDefinitions="Auto,Auto,*">
                   <Border Grid.Column="0" Width="{Binding IndentWidth}" />
+                  <!-- ⚠ Kolumna chevronu ma stałą szerokość równą polu trafienia przycisku (20 px, styl
+                       `Button.sidebar-chevron` wyżej) i to jest celowe: liść nie ma chevronu, a mimo to
+                       jego etykieta musi stać w tej samej kolumnie co etykieta kategorii — inaczej wcięcie
+                       przestaje czytać się jako poziom drzewa. Rezerwacja jest tu uzasadniona i NIE łamie
+                       R13: element pojawia się w tym kontekście regularnie (każda kategoria), a pusty slot
+                       niesie informację o strukturze. ⛔ Zmieniając 20 w stylu, zmień je i tutaj. -->
                   <Panel Grid.Column="1" Width="20" VerticalAlignment="Center">
                     <Button Classes="sidebar-chevron"
                             IsVisible="{Binding IsExpandable}"
                             Click="OnSidebarChevronClick">
                       <Panel>
+                        <!-- `Size.Icon.Sm` (12) — rola „ikona inline w tekście 11 px". Chevron stoi obok
+                             etykiety `Text.Compact` (11), więc to jest jego rola, nie `Size.Icon` (14). -->
                         <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}"
-                                          Width="12" Height="12"
+                                          Width="{DynamicResource Size.Icon.Sm}"
+                                          Height="{DynamicResource Size.Icon.Sm}"
                                           IsVisible="{Binding !IsExpanded}" />
                         <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}"
-                                          Width="12" Height="12"
+                                          Width="{DynamicResource Size.Icon.Sm}"
+                                          Height="{DynamicResource Size.Icon.Sm}"
                                           IsVisible="{Binding IsExpanded}" />
                       </Panel>
                     </Button>
@@ -485,37 +746,41 @@
               </DataTemplate>
 
               <DataTemplate DataType="vm:FolderNodeViewModel">
+                <!-- ⭐ Menu z zasobów listy — JEDNA instancja na wszystkie wiersze folderów.
+                     Powód i pomiar: komentarz przy `ListBox.Resources` wyżej. -->
                 <Border HorizontalAlignment="Stretch"
                         Classes="row-target"
-                        Classes.drop-target="{Binding IsDropTarget}">
-                  <Border.ContextMenu>
-                    <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.FolderContextAddConnection}"
-                                Icon="{app:MenuIcon Icon.Plus}"
-                                Command="{Binding AddConnectionCommand}" />
-                      <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.FolderContextRename}"
-                                Icon="{app:MenuIcon Icon.Pencil}"
-                                Command="{Binding BeginRenameCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.FolderContextDelete}"
-                                Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
-                                Command="{Binding DeleteCommand}" />
-                    </ContextMenu>
-                  </Border.ContextMenu>
+                        Classes.drop-target="{Binding IsDropTarget}"
+                        ContextMenu="{StaticResource SidebarFolderMenu}">
                   <Panel>
-                    <StackPanel Orientation="Horizontal" Spacing="5"
+                    <!-- ✅ KOLIZJA K15 ZAMKNIĘTA — decyzja użytkownika B‑1 (2026‑08‑08, M4).
+                         Wiersz drzewa bierze `Size.Icon` (14) i `Space.Xs` (4) zamiast literałów 15 i 5.
+                         ⭐ Pomiar, który to odblokował, obalił własne uzasadnienie odroczenia: zapisane
+                         „112 wystąpień w 17 plikach" opisywało dwie różne rzeczy zliczone razem. Ikona
+                         15 px to **44 deklaracje w 13 plikach i 41 z nich to WIERSZ DRZEWA** — te trzy
+                         szablony plus wiersz każdego drzewa „Zależności" i drzewa wyników wyszukiwania.
+                         Czyli nie „łatanie jednego ekranu" (R7), tylko jedna rola zmieniona w całości —
+                         a R7 przemawiał wtedy ZA zmianą, nie przeciw niej.
+                         ⚠ Wysokość wiersza się przez to NIE zmienia: `Size.Row.Tree` (24) jest `MinHeight`,
+                         a ikona 14 mieści się w niej tak samo jak 15. Zmiana jest wyłącznie pozioma.
+                         ⛔ Nie wracać do literałów „bo w drzewie ikona wyglądała mocniej" — jeżeli waga
+                         optyczna ikony w wierszu ma się zmienić, zmienia się ROLA, i wtedy razem
+                         z zakładką i menu kontekstowym, które ją współdzielą. -->
+                    <!-- ⭐ Ten szablon i dwa poniżej (połączenie, węzeł metadanych) niosą KAŻDY wiersz
+                         drzewa, więc to one decydują o gęstości najgęstszego widoku aplikacji. -->
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}"
                                 IsVisible="{Binding IsNotRenaming}">
                       <controls:SvgIcon Data="{StaticResource Icon.Folder}"
-                                        Width="15" Height="15"
+                                        Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                         VerticalAlignment="Center" />
                       <TextBlock Text="{Binding Name}"
                                  FontWeight="SemiBold"
-                                 FontSize="11"
+                                 FontSize="{DynamicResource Text.Compact.Size}"
                                  VerticalAlignment="Center"
                                  DoubleTapped="OnFolderNameDoubleTapped" />
                     </StackPanel>
                     <TextBox Text="{Binding EditingName, Mode=TwoWay}"
-                             FontSize="11"
+                             FontSize="{DynamicResource Text.Compact.Size}"
                              Padding="2,1"
                              IsVisible="{Binding IsRenaming}"
                              behaviors:FocusBehavior.FocusOnVisible="True"
@@ -526,54 +791,16 @@
               </DataTemplate>
 
               <DataTemplate DataType="vm:ConnectionNodeViewModel">
+                <!-- ⭐ Menu z zasobów listy — JEDNA instancja na wszystkie wiersze połączeń. -->
                 <Border HorizontalAlignment="Stretch"
                         Classes="row-target"
                         Classes.drop-target="{Binding IsDropTarget}"
-                        DoubleTapped="OnConnectionNodeDoubleTapped">
-                  <Border.ContextMenu>
-                    <ContextMenu>
-                      <MenuItem Header="Connect"
-                                Icon="{app:MenuIcon Icon.PlugZap}"
-                                Command="{Binding ConnectCommand}"
-                                IsVisible="{Binding !IsConnected}" />
-                      <MenuItem Header="Disconnect"
-                                Icon="{app:MenuIcon Icon.Unplug}"
-                                Command="{Binding DisconnectCommand}"
-                                IsVisible="{Binding IsConnected}" />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRefresh}"
-                                Icon="{app:MenuIcon Icon.RefreshCw}"
-                                InputGesture="{app:CommandGesture RefreshMetadata}"
-                                Command="{Binding RefreshMetadataCommand}"
-                                IsVisible="{Binding IsConnected}" />
-                      <Separator />
-                      <MenuItem Header="Edit" Icon="{app:MenuIcon Icon.Pencil}" Command="{Binding EditCommand}" />
-                      <MenuItem Header="Copy" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
-                      <MenuItem Header="Delete" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
-                                Command="{Binding DeleteCommand}" />
-                      <Separator IsVisible="{Binding IsConnected}" />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecomputeStats}"
-                                Icon="{app:MenuIcon Icon.Sigma}"
-                                Command="{Binding RecomputeAllStatisticsCommand}"
-                                IsVisible="{Binding IsConnected}" />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecompile}"
-                                Icon="{app:MenuIcon Icon.Hammer}"
-                                Command="{Binding RecompileAllObjectsCommand}"
-                                IsVisible="{Binding IsConnected}" />
-                      <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}"
-                                Icon="{app:MenuIcon Icon.ListFilter}">
-                        <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"
-                                  Icon="{app:MenuIcon Icon.ArrowUp}"
-                                  Command="{Binding SortAscendingCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortDescending}"
-                                  Icon="{app:MenuIcon Icon.ArrowDown}"
-                                  Command="{Binding SortDescendingCommand}" />
-                      </MenuItem>
-                    </ContextMenu>
-                  </Border.ContextMenu>
-                  <StackPanel Orientation="Horizontal" Spacing="5">
+                        DoubleTapped="OnConnectionNodeDoubleTapped"
+                        ContextMenu="{StaticResource SidebarConnectionMenu}">
+                  <!-- ⭐ Ikona i odstęp z ról (`Size.Icon` / `Space.Xs`) — K15 zamknięta w M4, powód przy węźle folderu. -->
+                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                     <controls:SvgIcon Data="{StaticResource Icon.Connection}"
-                                      Width="15" Height="15"
+                                      Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                       VerticalAlignment="Center">
                       <controls:SvgIcon.Foreground>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -584,7 +811,7 @@
                     </controls:SvgIcon>
                     <TextBlock Text="{Binding DisplayName}"
                                FontWeight="SemiBold"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{Binding DisplayName}"
                                VerticalAlignment="Center" />
@@ -593,113 +820,19 @@
               </DataTemplate>
 
               <DataTemplate DataType="vm:MetadataNodeViewModel">
+                <!-- ⭐⭐ Menu z zasobów listy — JEDNA instancja zamiast jednej NA KAŻDY wiersz drzewa.
+                     To jest wystąpienie, dla którego cała zmiana powstała: 22 pozycje × każdy
+                     zrealizowany wiersz. Pomiar i powód: komentarz przy `ListBox.Resources` wyżej. -->
                 <Border HorizontalAlignment="Stretch"
                         Background="Transparent"
-                        DoubleTapped="OnMetadataNodeDoubleTapped">
-                  <Border.ContextMenu>
-                    <ContextMenu>
-                      <!-- Icons come from the existing geometry dictionary through {app:MenuIcon}; gestures
-                           from CommandCatalog through {app:CommandGesture}, so a re-bind reaches this menu
-                           without anyone editing it. New / Delete / Refresh are the Tree-scope gestures —
-                           this is where they were always meant to be surfaced (etap 4 §14.4 deliberately
-                           kept them off the toolbar, where they do not fire). -->
-                      <MenuItem Header="{Binding ContextNewLabel}"
-                                Icon="{app:MenuIcon Icon.Plus}"
-                                InputGesture="{app:CommandGesture NewObject}"
-                                Command="{Binding NewCommand}"
-                                IsVisible="{Binding SupportsNew}" />
-                      <MenuItem Header="{Binding ContextRecompileAllLabel}"
-                                Icon="{app:MenuIcon Icon.Hammer}"
-                                Command="{Binding RecompileAllCommand}"
-                                IsVisible="{Binding IsRecompilableGroup}" />
-                      <Separator IsVisible="{Binding IsTriggerGroup}" />
-                      <!-- Trigger-GROUP bulk ops: Visible (current filter set) or All. The "Selected"
-                           scope moved onto the selected trigger leaves (see below) so the user doesn't
-                           scroll back to this header to act on a multi-selection. -->
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
-                                Icon="{app:MenuIcon Icon.Check}"
-                                IsVisible="{Binding IsTriggerGroup}">
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
-                                  Command="{Binding ActivateVisibleCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
-                                  Command="{Binding ActivateAllCommand}" />
-                      </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
-                                Icon="{app:MenuIcon Icon.Pause}"
-                                IsVisible="{Binding IsTriggerGroup}">
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
-                                  Command="{Binding DeactivateVisibleCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
-                                  Command="{Binding DeactivateAllCommand}" />
-                      </MenuItem>
-                      <!-- Trigger-LEAF multi-select bulk ops — visible only when >1 trigger is
-                           selected (Ctrl/Shift-click). Commands are forwarded from the explorer VM
-                           (which owns the selection) via the node VM so they resolve inside the
-                           ContextMenu's popup namescope (gotcha #180). -->
-                      <MenuItem Header="{Binding ActivateSelectedTriggersLabel}"
-                                Icon="{app:MenuIcon Icon.Check}"
-                                Command="{Binding ActivateSelectedTriggersCommand}"
-                                IsVisible="{Binding ShowSelectedTriggerOps}" />
-                      <MenuItem Header="{Binding DeactivateSelectedTriggersLabel}"
-                                Icon="{app:MenuIcon Icon.Pause}"
-                                Command="{Binding DeactivateSelectedTriggersCommand}"
-                                IsVisible="{Binding ShowSelectedTriggerOps}" />
-                      <MenuItem Header="{Binding ContextEditLabel}"
-                                Icon="{app:MenuIcon Icon.Pencil}"
-                                Command="{Binding OpenDdlCommand}"
-                                IsVisible="{Binding CanEditLeaf}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
-                                Icon="{app:MenuIcon Icon.Play}"
-                                Command="{Binding ExecuteProcedureCommand}"
-                                IsVisible="{Binding IsProcedureLeaf}" />
-                      <!-- The debugger's identity mark is a two-colour composite control, not a single
-                           stroked geometry, so it cannot come through {app:MenuIcon}. Set inline — reusing
-                           the one existing mark rather than drawing a second, flatter debugger icon. -->
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
-                                Command="{Binding DebugProcedureCommand}"
-                                IsVisible="{Binding IsProcedureLeaf}">
-                        <MenuItem.Icon>
-                          <controls:DebuggerIcon Width="14" Height="14" />
-                        </MenuItem.Icon>
-                      </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
-                                Command="{Binding DebugTriggerCommand}"
-                                IsVisible="{Binding IsTriggerLeaf}">
-                        <MenuItem.Icon>
-                          <controls:DebuggerIcon Width="14" Height="14" />
-                        </MenuItem.Icon>
-                      </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
-                                Command="{Binding DebugFunctionCommand}"
-                                IsVisible="{Binding IsFunctionLeaf}">
-                        <MenuItem.Icon>
-                          <controls:DebuggerIcon Width="14" Height="14" />
-                        </MenuItem.Icon>
-                      </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
-                                Icon="{app:MenuIcon Icon.Check}"
-                                Command="{Binding ActivateCommand}"
-                                IsVisible="{Binding ShowActivate}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
-                                Icon="{app:MenuIcon Icon.Pause}"
-                                Command="{Binding DeactivateCommand}"
-                                IsVisible="{Binding ShowDeactivate}" />
-                      <Separator IsVisible="{Binding CanDeleteLeaf}" />
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
-                                Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
-                                InputGesture="{app:CommandGesture DeleteObject}"
-                                Command="{Binding DeleteCommand}"
-                                IsVisible="{Binding CanDeleteLeaf}" />
-                      <Separator IsVisible="{Binding ShowCopyNameLeaf}" />
-                      <MenuItem Header="{Binding ContextCopyNameLabel}"
-                                Icon="{app:MenuIcon Icon.Copy}"
-                                Command="{Binding CopyNameCommand}"
-                                IsVisible="{Binding ShowCopyNameLeaf}" />
-                    </ContextMenu>
-                  </Border.ContextMenu>
-                  <StackPanel Orientation="Horizontal" Spacing="5">
+                        DoubleTapped="OnMetadataNodeDoubleTapped"
+                        ContextMenu="{StaticResource SidebarMetadataMenu}">
+                  <!-- ⭐ Ikona i odstęp z ról (`Size.Icon` / `Space.Xs`) — K15 zamknięta w M4, powód przy węźle folderu.
+                       ⭐ To jest jej najważniejsze wystąpienie: ten szablon niesie KAŻDY wiersz kategorii
+                       i każdy wiersz liścia, więc to on decyduje o gęstości całego drzewa. -->
+                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
                     <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15"
+                                      Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                       VerticalAlignment="Center"
                                       IsVisible="{Binding !IsPlaceholder}">
                       <controls:SvgIcon.Foreground>
@@ -713,10 +846,10 @@
                                VerticalAlignment="Center"
                                Classes.subtle="{Binding IsPlaceholder}"
                                Classes.inactive="{Binding IsInactive}"
-                               FontSize="11" />
+                               FontSize="{DynamicResource Text.Compact.Size}" />
                     <TextBlock Text="…"
                                Classes="subtle"
-                               FontSize="10"
+                               FontSize="{DynamicResource Text.Caption.Size}"
                                VerticalAlignment="Center"
                                IsVisible="{Binding IsLoading}" />
                   </StackPanel>
@@ -724,6 +857,49 @@
               </DataTemplate>
             </ListBox.DataTemplates>
           </ListBox>
+
+            <!-- ══ STAN PUSTY PASKA BOCZNEGO — M5 / M‑3 klasa A, wariant W4 ═══════════════════════════
+                 Pierwsze uruchomienie EmberTerna: zero profili ⇒ pod polem filtra nie było NIC, a jedyna
+                 akcja „nowe połączenie" żyje w pasku tytułu jako SAM GLIF `Icon.Plus` (drugie miejsce to
+                 menu kontekstowe folderu — którego przy pustej liście też nie ma czym otworzyć).
+
+                 ⭐⭐ DLACZEGO GLIF, A NIE SAM TEKST (ratyfikowane na renderze, wariant W4 z sześciu):
+                 przycisk nie ma podpisu, więc każdy wariant czysto tekstowy każe użytkownikowi przetłumaczyć
+                 słowa „New Connection" na kształt, którego jeszcze nie zna. Tu widzi TEN SAM kształt.
+                 ⛔ Świadomie BEZ własnego przycisku akcji w panelu (wariant W5, odrzucony): dawałby drugą
+                 afordancję tej samej akcji, a ta ma dziś jednego właściciela.
+
+                 ⚠ Bramka to `ShowEmptyState` (korzeń pusty), a NIE „lista wierszy pusta" — filtr bez trafień
+                 to inny stan pusty i celowo nie jest tu obsługiwany. Powód przy właściwości w ViewModelu.
+                 ⚠ `IsHitTestVisible=False`, bo to komunikat, nie cel: bez tego nakładka przechwytywałaby
+                 kliknięcia na obszarze listy. -->
+            <StackPanel IsVisible="{Binding ShowEmptyState}"
+                        IsHitTestVisible="False"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Margin="{DynamicResource Pad.Panel}"
+                        Spacing="{DynamicResource Space.Sm}">
+              <TextBlock Text="{x:Static app:UiStrings.SidebarPlaceholderEmpty}"
+                         Foreground="{DynamicResource SubtleForegroundBrush}"
+                         FontSize="{DynamicResource Text.Application.Size}"
+                         TextWrapping="Wrap" TextAlignment="Center" />
+              <!-- ⚠ ODSTĘPSTWO OD ZATWIERDZONEGO RENDERU, zapisane świadomie: render miał glif 14 px przy
+                   tekście 10 px, tutaj jest 12 przy 11. Powodem jest UDOKUMENTOWANA PARA z katalogu —
+                   komentarz przy `Size.Icon.Sm` mówi wprost, że „ikona 14 px obok tekstu 11 px optycznie go
+                   przerasta", a nasz tekst był jeszcze mniejszy niż te 11. Zmiana idzie więc w stronę reguły,
+                   którą katalog już ma, i przy okazji podnosi czytelność drugiej linii (10 → 11 px). -->
+              <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}"
+                          HorizontalAlignment="Center">
+                <controls:SvgIcon Data="{StaticResource Icon.Plus}"
+                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
+                                  Foreground="{DynamicResource SubtleForegroundBrush}"
+                                  VerticalAlignment="Center" />
+                <TextBlock Text="{x:Static app:UiStrings.ConnectionsEmptyHint}"
+                           Foreground="{DynamicResource SubtleForegroundBrush}"
+                           FontSize="{DynamicResource Text.Compact.Size}"
+                           VerticalAlignment="Center" TextWrapping="Wrap" />
+              </StackPanel>
+            </StackPanel>
+          </Panel>
         </DockPanel>
       </Border>
 
@@ -754,7 +930,7 @@
               ToolTip.Tip="{x:Static app:UiStrings.SidebarExpandTooltip}"
               PointerPressed="OnSidebarRailPointerPressed">
         <TextBlock Text="›"
-                   FontSize="11"
+                   FontSize="{DynamicResource Text.Compact.Size}"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center" />
@@ -777,11 +953,33 @@
           <!-- Tab strip — WrapPanel so overflow flows to a second row (IBExpert style)
                instead of horizontal scrolling. Auto-height (Grid row was 36; we replaced
                it with Auto on the parent below). -->
+          <!-- `Classes="tab-strip"` NIE jest kosmetyką — to deklaracja kontenera (§17.2/2). Reguła
+               `Border.tab-strip Button` w ControlStyles.axaml zdejmuje z przycisków zakładki geometrię
+               akcji dialogowej, którą dziedziczyły po `Button.flat`. Powód i pomiar stoją przy tej regule. -->
           <Border Grid.Row="0"
+                  x:Name="TabStripRoot"
+                  Classes="tab-strip"
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,0,0,1">
-            <ItemsControl ItemsSource="{Binding WorkspaceTabs}">
+            <!-- ⭐⭐ DWA TRYBY, JEDEN MECHANIZM (M3.3b / §8.2). Jest tu JEDEN `ItemsControl` i JEDEN
+                 `WrapPanel`; o trybie rozstrzygają wyłącznie kierunki przewijania `ScrollViewera`, bo
+                 `WrapPanel` zawija się dokładnie wtedy, gdy dostanie skończoną szerokość:
+                   · MultiRow  — poziome przewijanie WYŁĄCZONE ⇒ szerokość ograniczona ⇒ zawija;
+                                 pionowe AUTO + `MaxHeight` = wiersze × `Size.Row.Tab` ⇒ przewija się
+                                 SAM PASEK, a interfejs pod nim nie drgnie (§8.2, §13.3 specyfikacji).
+                   · SingleRow — poziome AUTO ⇒ szerokość nieskończona ⇒ NIE zawija nigdy ⇒ jeden wiersz.
+                 ⛔ Nie rozbijać tego na dwa `ItemsControl`e z osobnymi panelami: szablon zakładki
+                 zduplikowałby się i od tej chwili mógłby się rozjechać między trybami.
+                 ⚠ `MaxHeight` ustawia code-behind (`ApplyTabStripMode`), bo `MaxHeight` to liczba, a rytm
+                 niesie ROLA `Size.Row.Tab` — mnożenie roli przez preferencję nie jest wyrażalne
+                 w `{DynamicResource}` i nie ma po co zakładać trzeciej warstwy katalogu (§19.1.4). -->
+            <Grid RowDefinitions="*,Auto">
+            <ScrollViewer x:Name="TabStripScroll"
+                          Grid.Row="0"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="TabStripItems" ItemsSource="{Binding WorkspaceTabs}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                   <WrapPanel Orientation="Horizontal" />
@@ -789,44 +987,106 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vm:WorkspaceTabViewModel">
-                  <Border BorderBrush="{DynamicResource BorderBrush}"
+                  <Border Classes="workspace-tab"
+                          BorderBrush="{DynamicResource BorderBrush}"
                           BorderThickness="0,0,1,0"
-                          Background="{DynamicResource PanelBrush}"
+                          MinHeight="{DynamicResource Size.Row.Tab}"
                           Classes.active-tab="{Binding IsSelected}">
-                    <Border.Styles>
-                      <Style Selector="Border.active-tab">
-                        <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
-                      </Style>
-                      <!-- Active tab title: SemiBold + full-contrast (only the selected
-                           tab; inactive tabs untouched). Pairs with the 2px accent top
-                           line for a clear Rider/DataGrip active-tab read. -->
-                      <Style Selector="Border.active-tab TextBlock">
-                        <Setter Property="FontWeight" Value="SemiBold" />
-                        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-                      </Style>
-                    </Border.Styles>
+                    <!-- ⭐ MENU KONTEKSTOWE ZAKŁADKI (M3.3c / §8.3) — zero nowej chromy: style
+                         `ContextMenu`/`MenuItem`, `{app:MenuIcon}` i `{app:CommandGesture}` są gotowe
+                         od etapu 5 Keyboard Managera.
+                         ⚠⚠ Każda pozycja przekazuje `CommandParameter` = TA zakładka, nigdy zaznaczenie:
+                         menu otwiera się nad zakładką, która nie musi być aktywna, a czytanie zaznaczenia
+                         zamykałoby cudzy dokument (kształt gotchy #16/#99).
+                         ⚠ Komendy mieszkają na `MainWindowViewModel`, więc wiązanie idzie przez
+                         `$parent[Window].DataContext` — DataContext tego szablonu to zakładka. -->
+                    <Border.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuClose}"
+                                  Icon="{app:MenuIcon Icon.X}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseOthers}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseOthersCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseToTheRight}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseToTheRightCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseUnmodified}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseUnmodifiedCommand}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseAll}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCloseAllCommand}" />
+                        <Separator />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuRefresh}"
+                                  Icon="{app:MenuIcon Icon.RefreshCw}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuRefreshCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCopyObjectName}"
+                                  Icon="{app:MenuIcon Icon.Copy}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuCopyObjectNameCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuRevealInExplorer}"
+                                  Icon="{app:MenuIcon Icon.Crosshair}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuRevealInExplorerCommand}"
+                                  CommandParameter="{Binding}" />
+                        <Separator />
+                        <MenuItem Header="{x:Static app:UiStrings.TabMenuSettings}"
+                                  Icon="{app:MenuIcon Icon.Settings}"
+                                  Command="{Binding $parent[Window].DataContext.TabMenuSettingsCommand}" />
+                      </ContextMenu>
+                    </Border.ContextMenu>
+                    <!-- ⛔ ZAKŁADKA AKTYWNA NIE JEST STYLOWANA TUTAJ. Wszystkie trzy jej stany —
+                         tło kafelka, waga i kontrast etykiety oraz 2 px wskaźnika — mieszkają
+                         w `ControlStyles.axaml`, razem z powodem. Krótko: reguła w `Border.Styles`
+                         jest nieosiągalna dla jakiegokolwiek testu (headless test konstruujący
+                         `MainWindow` zawiesza suite, #94/#226/#286), a wskaźnik już raz przez to
+                         przepadł bezgłośnie — stał tu z lokalnym `Background="Transparent"`, które
+                         biło setter stylu, więc akcent nie malował się nigdy (§19.2).
+                         ⛔⛔ DLATEGO KAFELEK NIE MA JUŻ ATRYBUTU `Background` — i to nie jest kosmetyka.
+                         Przy przenoszeniu stylu w M3.3a test odtworzył ten sam mechanizm i pokazał, że
+                         lokalne `Background="{DynamicResource PanelBrush}"` BIŁO setter `Border.active-tab`,
+                         więc podmiana tła przestałaby działać dokładnie tak samo jak wtedy wskaźnik.
+                         Oba stany — spoczynkowy PanelBrush i aktywny BackgroundBrush — są teraz setterami
+                         na klasie `workspace-tab` (reguła sformułowana POZYTYWNIE, §17.2/3).
+                         ⛔ Nie przywracać tu ani stylu, ani atrybutu `Background`. -->
                     <!-- Rider/DataGrip-style active-tab indicator: a 2px accent line at
                          the top of the SELECTED tab. The 2px row is always reserved so
                          active/inactive tabs keep identical height + content baseline;
                          only the selected tab paints the accent (over the existing
                          background swap, which alone read too subtly). -->
-                    <Grid RowDefinitions="2,*">
+                    <Grid RowDefinitions="Auto,*">
                       <Border Grid.Row="0"
-                              Background="{DynamicResource AccentBrush}"
-                              IsVisible="{Binding IsSelected}" />
+                              Classes="tab-indicator"
+                              Height="{DynamicResource Size.TabIndicator}" />
                       <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="0">
+                      <!-- ⚠ `Padding="8,4"` ZOSTAJE wartością lokalną — rejestr §18.R / K12. Rola
+                           `Pad.Tab` (10,4) pasuje funkcją, ale niesie inną liczbę: wzięcie jej
+                           poszerza KAŻDĄ zakładkę o 4 px, czyli mieści ich mniej w wierszu — wprost
+                           przeciw D6/§8.1 (pełna czytelność nazw) i przeciw temu, co M3.1a osiągnęło,
+                           zdejmując podłogę szerokości. To decyzja produktowa o gęstości paska
+                           i rozstrzyga ją użytkownik na przeglądzie §13.3, nie iteracja.
+                           ⚠ `Background`/`BorderThickness` już tu nie stoją: pierwsze dawał
+                           `Button.flat`, drugie jest teraz regułą kontenera `Border.tab-strip
+                           Button.flat` w `ControlStyles.axaml`. -->
                       <Button Classes="flat"
                               Padding="8,4"
-                              Background="Transparent"
-                              BorderThickness="0"
                               Command="{Binding ActivateCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="{DynamicResource Space.Sm}"
+                                    VerticalAlignment="Center">
                           <!-- The debugger tab wears the two-colour debugger identity mark
-                               (D15.2 Seam B); every other tab uses its single-colour SvgIcon. -->
-                          <controls:DebuggerIcon Width="14" Height="14" VerticalAlignment="Center"
+                               (D15.2 Seam B); every other tab uses its single-colour SvgIcon.
+                               ⭐ Rozmiar z roli `Size.Icon` (14) — komentarz tej roli w `Tokens.axaml`
+                               wymienia zakładkę wprost jako jej miejsce. Zakładka jest jej PIERWSZYM
+                               konsumentem; pozostałe 64 wystąpienia literału 14 w aplikacji to sweep
+                               spoza tego etapu (§19.22.4). -->
+                          <controls:DebuggerIcon Width="{DynamicResource Size.Icon}"
+                                                 Height="{DynamicResource Size.Icon}"
+                                                 VerticalAlignment="Center"
                                                  IsVisible="{Binding IsDebuggerTab}" />
                           <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                            Width="14" Height="14"
+                                            Width="{DynamicResource Size.Icon}"
+                                            Height="{DynamicResource Size.Icon}"
                                             VerticalAlignment="Center"
                                             IsVisible="{Binding !IsDebuggerTab}">
                             <controls:SvgIcon.Foreground>
@@ -837,19 +1097,34 @@
                             </controls:SvgIcon.Foreground>
                           </controls:SvgIcon>
                           <TextBlock Text="{Binding DisplayTitle}"
-                                     FontSize="11"
+                                     FontSize="{DynamicResource Text.Compact.Size}"
                                      VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
+                      <!-- ⚠ `Padding="4,2"` (rola `Pad.ButtonIcon` = 6,0) i `Margin="0,0,3,0"` (3 nie ma
+                           roli — `Space` daje 2/4/6) ZOSTAJĄ wartościami lokalnymi: rejestr §18.R / K13
+                           i K14. Obie zmieniają szerokość zakładki, więc dzielą los K12 i idą na §13.3.
+                           ⚠⚠ `BorderThickness="0"` ZOSTAJE i NIE jest redundantne — w odróżnieniu od
+                           `Button.flat`, wariant `Button.icon` w ogóle nie ustawia `BorderThickness`,
+                           więc zdjęcie tej wartości przywróciłoby grubość bazowego `Button`. Przy
+                           `BorderBrush="Transparent"` w spoczynku byłoby to niewidoczne, ale reguła
+                           `Button.icon:focus` podmienia pędzel na `FocusBorderBrush` — czyli zmiana
+                           dotyczyłaby STANU FOKUSU, a tego ta iteracja nie mierzyła (R2: komponent
+                           ocenia się w komplecie stanów). Zostaje do §13.3 razem z pytaniem o widoczność
+                           fokusu na ikonach chromy.
+                           ⭐ `Background="Transparent"` usunięte — to akurat dawał już `Button.icon`. -->
                       <Button Classes="icon"
                               Padding="4,2"
                               Margin="0,0,3,0"
-                              Background="Transparent"
                               BorderThickness="0"
-                              ToolTip.Tip="Close tab"
+                              ToolTip.Tip="{x:Static app:UiStrings.TabCloseTooltip}"
                               IsVisible="{Binding IsClosable}"
                               Command="{Binding CloseCommand}">
-                        <controls:SvgIcon Data="{StaticResource Icon.X}" Width="12" Height="12" />
+                        <!-- `Size.Icon.Sm` (12) — rola „ikona inline przy tekście 11 px"; etykieta
+                             zakładki stoi dokładnie na `Text.Compact.Size` = 11. -->
+                        <controls:SvgIcon Data="{StaticResource Icon.X}"
+                                          Width="{DynamicResource Size.Icon.Sm}"
+                                          Height="{DynamicResource Size.Icon.Sm}" />
                       </Button>
                       </StackPanel>
                     </Grid>
@@ -857,6 +1132,26 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+            </ScrollViewer>
+
+            <!-- ⭐⭐ PASEK PRZEWIJANIA MA WŁASNY WIERSZ SIATKI — i to jest POPRAWKA UKŁADU, nie kosmetyka.
+                 Szablon `ScrollViewera` w FluentTheme rozciąga `ScrollContentPresenter` przez CAŁĄ swoją
+                 siatkę, więc jego własne paski ZAWSZE leżą na treści; nie ma tam czego ustawić. Próba
+                 zarezerwowania miejsca `Paddingiem` (pierwsza runda odbiorcza) tworzy SPRZĘŻENIE ZWROTNE —
+                 padding zmienia viewport, viewport zmienia widoczność paska, pasek zmienia padding — i nie
+                 ustala się. ⛔ Nie wracać do tamtego pomysłu.
+                 ⭐ Rozwiązaniem jest STRUKTURA: własny `ScrollBar` jako RODZEŃSTWO w osobnym wierszu.
+                 Rodzeństwo w siatce nie ma jak nachodzić na sąsiada — zakładki są widoczne w 100%
+                 z konstrukcji, a nie dzięki dobranej liczbie.
+                 ⚠ Widoczny tylko w trybie jednowierszowym i tylko gdy jest co przewijać (R13).
+                 ⚠ Tryb WIELOWIERSZOWY zostaje na własnym pasku `ScrollViewera` (pionowym, przy prawej
+                 krawędzi) — użytkownik go odebrał, więc go nie ruszamy. -->
+            <ScrollBar x:Name="TabStripHScroll"
+                       Grid.Row="1"
+                       Orientation="Horizontal"
+                       AllowAutoHide="False"
+                       IsVisible="False" />
+            </Grid>
           </Border>
 
           <!-- Unified editor toolbar — fixed 5-section model, identical for every object
@@ -867,6 +1162,7 @@
                router (AddCollectionItem…) routed to the active editor's active collection,
                so there are NO per-editor collection bars and no special-case layouts. -->
           <Border Grid.Row="1"
+                  Classes="chrome"
                   Background="{DynamicResource PanelBrush}"
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,0,0,1"
@@ -877,12 +1173,29 @@
                    cohesive "Elapsed: mm:ss.f" while any SQL Editor / Execute Procedure / Execute
                    Function run is in progress; the final "N ms" is shown by the metrics display. -->
               <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionTimer.ElapsedDisplay}"
-                         FontSize="11" FontFamily="Consolas,Menlo,monospace" Margin="8,0,14,0"
+                         FontSize="{DynamicResource Text.Compact.Size}" FontFamily="Consolas,Menlo,monospace" Margin="8,0,14,0"
                          VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}"
                          IsVisible="{Binding ExecutionTimer.IsRunning}" />
             <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,4" VerticalAlignment="Center">
 
-              <!-- ── SECTION 1 · Mode toggle (Table Grid-Edit / View+Procedure Easy) ── -->
+              <!-- ── SECTION 1 · Mode toggle (Table Grid-Edit / View+Procedure Easy) ────────────────
+                   ⛔⛔ TA SEKCJA NIE REZERWUJE MIEJSCA, GDY JEST PUSTA — i to jest ROZSTRZYGNIĘCIE
+                   ODEBRANE NA ŻYWO, nie stan zastany (M3.2a, §19.12).
+
+                   M3.2a dało jej stały slot 43 px (przycisk + separator w środku rezerwacji), żeby akcja
+                   główna dokumentu startowała pod tym samym x we wszystkich 12 rodzajach zakładek.
+                   Mechanizm działał. ⛔ **Użytkownik odrzucił go po obejrzeniu w SQL Editorze**
+                   (2026-08-02), gdzie żadna z pięciu bramek poniżej nie jest prawdziwa i rezerwacja
+                   zostawiała pustą dziurę przy lewej krawędzi: *„Pusta dziura w SQL Editorze nie wnosi
+                   żadnej wartości i sprawia wrażenie błędu układu."*
+
+                   ⭐⭐ REGUŁA R13, KTÓRA Z TEGO ZOSTAŁA I OBOWIĄZUJE W CAŁEJ APLIKACJI:
+                   **nie rezerwujemy miejsca na element, który w danym kontekście nigdy się nie pojawi.**
+                   Stabilizacja układu ma sens tylko wtedy, gdy nie pogarsza wykorzystania przestrzeni.
+
+                   ⛔ Nie przywracać slotu. Przesunięcie paska do lewej krawędzi na zakładkach bez trybu
+                   (Generator, Domain, Package, Exception, Index, New Table, SQL) jest ŚWIADOMIE
+                   ZAAKCEPTOWANE — zwarty układ wygrywa z nieruchomym. -->
               <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleFieldEditTooltip}"
                             IsChecked="{Binding ActiveTableDetail.IsFieldEditMode, Mode=TwoWay}"
                             IsVisible="{Binding ShowFieldEditTools}">
@@ -916,63 +1229,90 @@
                       IsVisible="{Binding ToolbarSep1Visible}" />
 
               <!-- ── SECTION 2 · Main actions (Execute / Compile / Commit / Rollback) ── -->
-              <Button Classes="primary" Padding="10,4"
+              <!-- ⛔⛔ EXECUTE I CANCEL NIE MAJĄ WSPÓLNEJ PODŁOGI SZEROKOŚCI — I TO JEST DECYZJA,
+                   NIE PRZEOCZENIE (M3.2a, §19.11).
+
+                   Oba wykluczają się wzajemnie (`ShowExecuteButton` = `IsQueryTabActive &&
+                   !IsExecuting`, `ShowCancelButton` = ten sam warunek zanegowany), a Execute niesie
+                   ikonę + etykietę + CHIP SKRÓTU, Cancel tylko ikonę + etykietę. ⚠ Zmierzone headless:
+                   **Execute 156 px, Cancel 118 px**, więc naciśnięcie F5 przesuwa o 38 px resztę
+                   paska i oddaje ją po zakończeniu zapytania.
+
+                   M3.2a wyrównało to wspólną podłogą `MinWidth="156"`. ⛔ **Użytkownik odrzucił to po
+                   obejrzeniu w działającej aplikacji** (2026-08-02): *„Execute nie powinien mieć
+                   sztucznie wymuszonej dużej szerokości. Wygląda ciężko i dominuje toolbar."*
+
+                   ⭐ Powód jest głębszy niż gust: podłoga rozciągała przycisk ponad jego treść, więc
+                   AKCJA GŁÓWNA rosła bez powodu semantycznego — a to jest R5 od drugiej strony
+                   („kolor może określać priorytet akcji, ROZMIAR NIE"). Rozmiar wzięty z wyrównania
+                   czyta się jak deklaracja ważności, której nikt nie zamierzał złożyć.
+
+                   ⛔ Nie przywracać podłogi. Drganie 38 px przy F5 jest ŚWIADOMIE ZAAKCEPTOWANE. -->
+              <Button Classes="primary"
                       ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteTooltip}"
                       Command="{Binding ExecuteQueryCommand}" IsVisible="{Binding ShowExecuteButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource OnAccentBrush}"
-                                    Width="14" Height="14" VerticalAlignment="Center" />
+                  <!-- ⭐ `Size.Icon` (14), nie `Size.Icon.Toolbar` (16): ikona stoi PRZY ETYKIECIE, więc
+                       celem myszy jest przycisk, a nie ona (A‑3, M4). Samotna ikona w tym samym pasku —
+                       np. `Icon.Hammer` niżej — bierze `Size.Icon.Toolbar`. Wartość bez zmiany. -->
+                  <controls:SvgIcon Data="{StaticResource Icon.Play}"
+                                    Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
+                                    VerticalAlignment="Center" />
                   <TextBlock Text="{Binding ExecuteLabel}" VerticalAlignment="Center" />
                   <TextBlock Classes="shortcut-chip" Text="{Binding ExecuteHint}" />
                 </StackPanel>
               </Button>
-              <Button Classes="flat" Padding="10,4"
+              <!-- ⚠ Lokalne `Padding="10,4"` USUNIĘTE (M3.2a) — nieudokumentowana wartość lokalna bijąca
+                   rolę `Pad.Button`, czyli dokładnie ten kształt, który sprzątało M2c. Wysokości nie
+                   zmienia: daje ją `Border.chrome Button` przez `Size.ControlToolbar`. -->
+              <Button Classes="flat"
                       Command="{Binding CancelQueryCommand}" IsVisible="{Binding ShowCancelButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}"
-                                    Width="14" Height="14" VerticalAlignment="Center" />
+                                    Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
+                                    VerticalAlignment="Center" />
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}" IsVisible="{Binding ShowStructureCompileTools}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FieldEditDiscardTooltip}"
                       Command="{Binding ActiveTableDetail.DiscardPendingChangesCommand}" IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
                       Command="{Binding ActiveNewTable.CompileCommand}" IsVisible="{Binding IsNewTableTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
                       Command="{Binding ActiveViewDetail.CompileCommand}" IsVisible="{Binding IsViewDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveViewDetail.RevertChangesCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
                       Command="{Binding ActiveProcedureDetail.CompileCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveProcedureDetail.RevertChangesCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.TriggerCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.TriggerCompileTooltip}"
                       Command="{Binding ActiveTriggerDetail.CompileCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveTriggerDetail.RevertChangesCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.FunctionCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.FunctionCompileTooltip}"
                       Command="{Binding ActiveFunctionDetail.CompileCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveFunctionDetail.RevertChangesCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
@@ -980,9 +1320,9 @@
               </Button>
               <!-- Generator: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for a generator tab). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.GeneratorCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.GeneratorCompileTooltip}"
                       Command="{Binding ActiveGeneratorDetail.CompileCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveGeneratorDetail.RevertChangesCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
@@ -994,9 +1334,9 @@
               </Button>
               <!-- Domain: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for a domain tab). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.DomainCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.DomainCompileTooltip}"
                       Command="{Binding ActiveDomainDetail.CompileCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveDomainDetail.RevertChangesCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
@@ -1008,9 +1348,9 @@
               </Button>
               <!-- Package: Compile (header then body) / Revert / Delete. Compile
                    auto-commits via the autonomous DDL path, so no Commit/Rollback pair. -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.PackageCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.PackageCompileTooltip}"
                       Command="{Binding ActivePackageDetail.CompileCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActivePackageDetail.RevertChangesCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
@@ -1022,9 +1362,9 @@
               </Button>
               <!-- Exception: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for an exception tab). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.ExceptionCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ExceptionCompileTooltip}"
                       Command="{Binding ActiveExceptionDetail.CompileCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveExceptionDetail.RevertChangesCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
@@ -1037,9 +1377,9 @@
               <!-- Index: Compile / Revert / Recompute statistics / Delete. Compile auto-commits
                    via the autonomous DDL path, so no Commit/Rollback pair. Delete greys out for
                    constraint-backed indexes (CanDelete = !IsConstraintBacked). -->
-              <Button Classes="primary" Padding="8,4" ToolTip.Tip="{x:Static app:UiStrings.IndexCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.IndexCompileTooltip}"
                       Command="{Binding ActiveIndexDetail.CompileCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Foreground="{DynamicResource OnAccentBrush}" Width="16" Height="16" />
+                <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
                       Command="{Binding ActiveIndexDetail.RevertChangesCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
@@ -1053,14 +1393,39 @@
                       Command="{Binding ActiveIndexDetail.DeleteCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
-              <!-- Single unified Commit / Rollback pair (auto-routed to the open lane(s)). -->
+              <!-- ⭐⭐ COMMIT / ROLLBACK ZOSTAJĄ TUTAJ, W SEKCJI 2, PRZY EXECUTE — i to jest
+                   ROZSTRZYGNIĘCIE ODEBRANE NA ŻYWO, nie stan zastany (M3.2a, §19.11).
+
+                   M3.2a przeniosło tę parę na prawą krawędź paska: geometrycznie była to największa
+                   pojedyncza różnica między rodzajami zakładek (68 px), a argument zasięgowy brzmiał
+                   dobrze — jako jedyna w sekcji 2 mówi o TRANSAKCJI, nie o edytowanym obiekcie.
+                   ⛔ **Użytkownik odrzucił to po obejrzeniu w działającej aplikacji** (2026-08-02):
+                   *„Commit, Rollback i Execute tworzą jedną logiczną grupę i użytkownik intuicyjnie
+                   ich tam szuka. Po przeniesieniu Commit/Rollback na prawą stronę sam przez chwilę
+                   nie mogłem ich znaleźć."*
+
+                   ⭐ LEKCJA, KTÓRA OBOWIĄZUJE DALEJ: **grupa semantyczna bije stabilność pozycji.**
+                   Rozdzielenie akcji, których użytkownik szuka razem, kosztuje więcej niż przesunięcie
+                   o 68 px — i tego kosztu nie widać w żadnym pomiarze, bo pomiar mierzy piksele, a nie
+                   to, gdzie ktoś odruchowo patrzy. To ten sam kształt, co runda QA ikony debuggera
+                   w M3.1e: wariant wygrywał w każdej mierzonej liczbie i przegrał w wymiarze, którego
+                   nikt nie mierzył.
+
+                   ⛔ Nie przenosić tej pary — ani na prawą krawędź, ani do paska statusu (§8.4.5:
+                   chip transakcji nigdy nie jest przyciskiem). Przesuwanie się paska przy zmianie
+                   rodzaju zakładki jest tu ŚWIADOMIE ZAAKCEPTOWANYM kompromisem. -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
                       Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
-                <controls:SvgIcon Data="{StaticResource Icon.Check}" Foreground="{DynamicResource SuccessIconBrush}" />
+                <!-- ⭐ Role R‑2 / R‑3 na własnych tokenach (decyzja DD, krok K7). Wartości tokenów są
+                     równe dotychczasowym `Success`/`Danger`, więc wygląd się nie zmienia — zmienia się
+                     to, że przestrojenie zieleni „sukcesu" albo czerwieni „destrukcji" nie rusza już
+                     decyzji transakcyjnej. ⚠ Rollback NIE jest tym samym co Revert w edytorze (§3.2):
+                     ten wycofuje pracę ZATWIERDZALNĄ, tamten porzuca bufor i jest neutralny. -->
+                <controls:SvgIcon Data="{StaticResource Icon.Check}" Foreground="{DynamicResource CommitButtonBrush}" />
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
                       Command="{Binding RollbackAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
-                <controls:SvgIcon Data="{StaticResource Icon.Undo}" Foreground="{DynamicResource DangerIconBrush}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Undo}" Foreground="{DynamicResource RollbackButtonBrush}" />
               </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep2Visible}" />
@@ -1126,7 +1491,9 @@
               <!-- Procedure: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
                       Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+                <!-- Rola R‑1 „Uruchom" (`color-language.md` §3). Ten sam odcień co dotąd — K1 podmienia
+                     wyłącznie token, żeby „Uruchom" i „Zatwierdź" przestały dzielić jeden (W4). -->
+                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource ActionRunBrush}" />
               </Button>
               <!-- Debugger entry point (Stage X / D5) — same launch as the sidebar "Debug procedure…". -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureDebugTooltip}"
@@ -1143,7 +1510,18 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+                <!-- ⭐⭐ Domknięcie K‑final, dawne O‑2 — i uważnie: WYJĄTEK W‑1 ZOSTAJE W MOCY.
+                     Użytkownik zamówił, żeby Comment i Uncomment dało się rozróżnić kolorem, bo ikony
+                     są bardzo podobne — i to nadal obowiązuje. Zmienia się tylko to, KTÓRYM kolorem:
+                     odkomentowanie nosiło `DangerIconBrush`, czyli po K2 kolor operacji NIEODWRACALNEJ,
+                     będąc najłagodniejszą akcją paska (cofa się jednym Ctrl+Z). Czerwień traciła na tym
+                     jednoznaczność dokładnie tam, gdzie K2 ją zbudowało.
+                     ⚠⚠ Wariant (c) z §9.1 („para w obrębie jednego niebieskiego") ZMIERZONY I ODRZUCONY:
+                     `InfoIconColor` #5BA7D0 i `AccentIconColor` #5B9BD5 różnią się o 12 jednostek na
+                     jednym kanale — jako kreska ikony są nie do odróżnienia, więc skasowałby wyjątek,
+                     który miał chronić. Para NIEBIESKI vs SZARY rozróżnia natychmiast, nie kłamie
+                     i nie wymaga nowego tokenu. -->
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <!-- Trigger: debug / format / comment / uncomment -->
               <!-- Debugger entry point (Stage X / D10) — same launch as the sidebar "Debug trigger…". -->
@@ -1161,12 +1539,13 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveTriggerDetail.UncommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <!-- Function: execute / debug / format / comment / uncomment -->
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionExecuteTooltip}"
                       Command="{Binding ActiveFunctionDetail.ExecuteFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+                <!-- Rola R‑1 „Uruchom" — patrz Execute procedury wyżej. -->
+                <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource ActionRunBrush}" />
               </Button>
               <!-- Debugger entry point (D-function) — same launch as the sidebar "Debug function…"; the
                    function runs as the debug root (Return group in Variables). -->
@@ -1184,7 +1563,7 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActiveFunctionDetail.UncommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <!-- Package: debug the selected Members-tab member (D15.3 Seam E) — the action lives on the
                    editor toolbar, like the procedure/trigger Debug buttons, rather than as a row inside the
@@ -1212,7 +1591,7 @@
               </Button>
               <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
                       Command="{Binding ActivePackageDetail.UncommentBodyCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
-                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" Foreground="{DynamicResource DangerIconBrush}" />
+                <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <Border Width="1" Margin="4,4" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ToolbarSep4Visible}" />
@@ -1234,7 +1613,7 @@
               <ae:TextEditor x:Name="SqlEditor"
                              ShowLineNumbers="True"
                              FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                             FontSize="13"
+                             FontSize="{DynamicResource Text.Code.Size}"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
                              Background="{DynamicResource BackgroundBrush}"
@@ -1244,7 +1623,7 @@
                              ShowLineNumbers="True"
                              IsReadOnly="True"
                              FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                             FontSize="13"
+                             FontSize="{DynamicResource Text.Code.Size}"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
                              Background="{DynamicResource BackgroundBrush}"
@@ -1324,7 +1703,7 @@
                     <TextBlock Grid.Column="0"
                                Text="{x:Static app:UiStrings.QueryPanelHeader}"
                                FontWeight="SemiBold"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
                       <Button Classes="icon"
@@ -1335,14 +1714,26 @@
                       <Button Classes="icon"
                               ToolTip.Tip="{x:Static app:UiStrings.QueryDeleteTooltip}"
                               Command="{Binding DeleteSelectedQueryCommand}">
+                        <!-- Rola R‑4 (K2) — patrz komentarz przy „Delete Connection". Ten sam wzorzec:
+                             usunięcie zapytania z menu kontekstowego wiersza jest czerwone od zawsze,
+                             więc przycisk nagłówka panelu był jedynym miejscem, gdzie ta sama operacja
+                             miała inny kolor niż tuż obok. -->
                         <controls:SvgIcon Data="{StaticResource Icon.Trash}"
-                                          Foreground="{DynamicResource WarningIconBrush}" />
+                                          Foreground="{DynamicResource DangerIconBrush}" />
                       </Button>
                       <Button Classes="icon"
                               ToolTip.Tip="{x:Static app:UiStrings.QueryClearAllTooltip}"
                               Command="{Binding ClearAllQueriesCommand}">
+                        <!-- ⚠ Rola R‑4 (K2), i tu zmiana naprawia nie tylko spójność: „wyczyść
+                             wszystkie" jest z tej trójki NAJDALEJ idące (kasuje cały zbiór), a niosło
+                             kolor, który w języku EmberTerna znaczy „uwaga / pauza" (Pause, Break on
+                             exception). Sygnał był ZANIŻONY względem skutku.
+                             ⭐ Rozróżnienie „jedno" vs „wszystkie" niesie KSZTAŁT (`Icon.Trash` vs
+                             `Icon.ListX`) — wyraźnie różny, więc kolor może klasyfikować skutek. To
+                             odwrotność wyjątku W‑1, gdzie ikony Comment/Uncomment są zbyt podobne
+                             i to kolor musi je rozróżniać. -->
                         <controls:SvgIcon Data="{StaticResource Icon.ListX}"
-                                          Foreground="{DynamicResource WarningIconBrush}" />
+                                          Foreground="{DynamicResource DangerIconBrush}" />
                       </Button>
                     </StackPanel>
                   </Grid>
@@ -1351,7 +1742,7 @@
                 <TextBlock Grid.Row="1"
                            Text="{x:Static app:UiStrings.QueryPanelEmptyHint}"
                            Classes="subtle"
-                           FontSize="11"
+                           FontSize="{DynamicResource Text.Compact.Size}"
                            Margin="10,8"
                            TextWrapping="Wrap"
                            IsVisible="{Binding ShowQueryPanelEmptyHint}" />
@@ -1396,7 +1787,7 @@
                                 IsVisible="{Binding IsNotRenaming}">
                             <TextBlock Grid.Column="0"
                                        Text="{Binding Name}"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource Text.Compact.Size}"
                                        Padding="2,1"
                                        VerticalAlignment="Center" />
                             <Button Grid.Column="1"
@@ -1409,7 +1800,7 @@
                             </Button>
                           </Grid>
                           <TextBox Text="{Binding EditingName, Mode=TwoWay}"
-                                   FontSize="11"
+                                   FontSize="{DynamicResource Text.Compact.Size}"
                                    Padding="2,1"
                                    IsVisible="{Binding IsRenaming}"
                                    behaviors:FocusBehavior.FocusOnVisible="True"
@@ -1430,19 +1821,14 @@
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,1,0,0"
                   IsVisible="{Binding IsQueryTabActive}">
-            <!-- ONE transaction, so ONE status chip. (There used to be a second "metadata lane"
-                 chip beside it, because F5 silently routed DDL onto a hidden second transaction.
-                 The SQL Editor is a classic console now: one attachment, one transaction.) -->
+            <!-- ⭐ KONTEKST LOKALNY EDYTORA SQL — liczba instrukcji wykonanych w transakcji.
+                 FAKT „transakcja jest otwarta" przejął w M3.1d chip w pasku statusu (§8.4.5), bo to
+                 stan CAŁEJ aplikacji: ma być widoczny także w debuggerze i w edytorze obiektu, a ten
+                 pasek jest bramkowany `IsQueryTabActive`. Licznik zostaje tutaj, bo ma sens dokładnie
+                 tam, gdzie instrukcje są wykonywane.
+                 ⛔ Nie przywracać kropek stanu ani etykiety „Active Transaction" — drugi właściciel
+                 tego samego faktu (§0.1.2). -->
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="14,0" VerticalAlignment="Center">
-              <Ellipse Width="8" Height="8"
-                       Fill="{DynamicResource SubtleForegroundBrush}"
-                       IsVisible="{Binding IsTransactionIdle}" />
-              <Ellipse Width="8" Height="8"
-                       Fill="{DynamicResource TransactionActiveBrush}"
-                       IsVisible="{Binding IsTransactionActive}" />
-              <Ellipse Width="8" Height="8"
-                       Fill="{DynamicResource ErrorBrush}"
-                       IsVisible="{Binding IsTransactionError}" />
               <TextBlock Text="{Binding TransactionBarText}"
                          Classes="subtle"
                          Classes.error="{Binding IsTransactionError}"
@@ -1478,9 +1864,9 @@
                   ToolTip.Tip="{x:Static app:UiStrings.ResultsPanelMaximizeTooltip}"
                   Click="OnToggleResultsMaximizeClick">
             <Panel>
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 IsVisible="{Binding !IsResultsMaximized}" />
-              <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="14" Height="14"
+              <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 IsVisible="{Binding IsResultsMaximized}" />
             </Panel>
           </Button>
@@ -1494,7 +1880,7 @@
                      accent, plain-language message, and a working [Load all rows] for a
                      truncated preview (hidden for a ceiling-hit Full — nothing more to load). -->
                 <Border Grid.Row="0"
-                        Background="{DynamicResource ElevatedPanelBrush}"
+                        Background="{DynamicResource ChromeStrongBrush}"
                         BorderBrush="{DynamicResource WarningBrush}"
                         BorderThickness="0,0,0,2"
                         Padding="12,6"
@@ -1516,7 +1902,7 @@
                                         Foreground="{DynamicResource WarningBrush}"
                                         Width="15" Height="15" VerticalAlignment="Center" />
                       <TextBlock Text="{Binding ResultsNoticeText}"
-                                 FontSize="12" VerticalAlignment="Center"
+                                 FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center"
                                  Foreground="{DynamicResource ForegroundBrush}" />
                     </StackPanel>
                   </DockPanel>
@@ -1525,7 +1911,7 @@
                      strings as the Table Data View. Client-side paging over the
                      materialized result set; the hint shows page + row counts. -->
                 <Border Grid.Row="1"
-                        Background="{DynamicResource ElevatedPanelBrush}"
+                        Background="{DynamicResource ChromeStrongBrush}"
                         BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="0,0,0,1"
                         Padding="6,2"
@@ -1534,31 +1920,31 @@
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
                             Command="{Binding ResultFirstPageCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
                             Command="{Binding ResultPreviousPageCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
                             Command="{Binding ResultNextPageCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
                             Command="{Binding ResultLastPageCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <TextBlock Text="{Binding ResultPaginationHint}"
                                Classes="subtle"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                Margin="8,0,0,0"
                                VerticalAlignment="Center" />
                     <TextBlock Text="{Binding ResultRecordInfo}"
                                Classes="subtle"
-                               FontSize="11"
+                               FontSize="{DynamicResource Text.Compact.Size}"
                                Margin="12,0,0,0"
                                VerticalAlignment="Center" />
                     <!-- Filter + aggregation toggles (right side of the pagination bar).
@@ -1567,20 +1953,20 @@
                             ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
                             IsChecked="{Binding ResultFilterPanel.IsPanelOpen, Mode=TwoWay}">
                       <Panel>
-                        <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="14" Height="14" />
+                        <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                         <Border Classes="filter-active-dot" IsVisible="{Binding ResultFilterPanel.IsFilterActive}" />
                       </Panel>
                     </ToggleButton>
                     <ToggleButton Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
                             IsChecked="{Binding ResultAggregationBar.IsBarOpen, Mode=TwoWay}">
-                      <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </ToggleButton>
                     <!-- Export the results (opens the shared Export dialog, default Scope = All rows). -->
                     <Button Classes="icon"
                             ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}"
                             Command="{Binding ExportResultsCommand}">
-                      <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="14" Height="14" />
+                      <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                   </StackPanel>
                 </Border>
@@ -1698,12 +2084,12 @@
                                        Text="{Binding TimestampLabel}"
                                        Classes="subtle"
                                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource Text.Compact.Size}"
                                        Margin="14,0,0,0"
                                        VerticalAlignment="Top" />
                             <SelectableTextBlock Grid.Column="2"
                                        Text="{Binding Text}"
-                                       FontSize="12"
+                                       FontSize="{DynamicResource Text.Application.Size}"
                                        LineHeight="18"
                                        TextWrapping="Wrap">
                               <SelectableTextBlock.Foreground>
@@ -1741,49 +2127,343 @@
     </Grid>
 
     <!-- Status bar -->
+    <!-- ⚠ Wysokość z katalogu (`Size.StatusBar` = 24), nie literał. Do M3.1a stało tu 28, a token 24 nie
+         miał w pasku statusu ani jednego konsumenta. Decyzja DA (użytkownik, 2026-08-02): stosujemy katalog —
+         §8.5 specyfikacji zabrania WZROSTU paska, zmniejszenie jest dozwolone, a 36/26/24 to ratyfikowany
+         rytm pionowy Application Chrome (§0.1.2). ⛔ Nie zwiększać. -->
+    <!-- ⭐⭐ RAIL (§8.4.1) — to jest GÓRNA KRAWĘDŹ tego paska, nie nowy element. Linia była tu zawsze
+         jako separator obszaru roboczego; rail nadaje jej PRACĘ: w spoczynku maluje się `BorderBrush`
+         i pozostaje separatorem, a gdy coś się dzieje, przyjmuje kolor stanu o najwyższym priorytecie.
+         Zero nowych pikseli, jeden element więcej znaczy (§3.3 specyfikacji — *every pixel has a purpose*).
+
+         ⚠ Grubość jest STAŁA w każdym stanie (`Border.Rail`), więc zmiana stanu nie może przesunąć
+         układu. ⛔ Nie zmieniać koloru CAŁEGO paska — użytkownik odrzucił model Visual Studio.
+         ⚠ Kolor nie jest jedynym nośnikiem (§10): każdy stan ma też tekst albo ikonę w sekcji 2.
+         Priorytet i uzasadnienie kolejności stoją przy `RailBrushKey`. -->
     <Border Grid.Row="3"
+            Height="{DynamicResource Size.StatusBar}"
             Background="{DynamicResource PanelBrush}"
-            BorderBrush="{DynamicResource BorderBrush}"
-            BorderThickness="0,1,0,0">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="14,0">
+            BorderThickness="{DynamicResource Border.Rail}">
+      <Border.BorderBrush>
+        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+          <Binding Path="RailBrushKey" />
+          <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+        </MultiBinding>
+      </Border.BorderBrush>
+      <!-- ⭐⭐ CZTERY SEKCJE (§8.4.3). Kolejność kolumn `Auto,*,Auto,Auto` jest WYMOGIEM STRUKTURALNYM,
+           nie estetycznym: §8.5 specyfikacji żąda, żeby komunikaty nie zasłaniały informacji o połączeniu,
+           a przy tym układzie rosnący komunikat zjada WYŁĄCZNIE elastyczną kolumnę 1. Wymóg jest spełniony
+           przez układ, a nie przez ostrożność autora kolejnej zmiany.
+           ⚠ Sekcje 3 (chipy stanu) i 4 (postęp) powstają w M3.1d–M3.1f; ich kolumny już tu są, żeby
+           dołożenie zawartości nie przesuwało niczego, co użytkownik zdążył zapamiętać. -->
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="14,0">
+
+        <!-- ── 1. POŁĄCZENIE — jedyne miejsce odpowiadające na „gdzie jestem podłączony?" ───────────── -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <Ellipse Width="7" Height="7" Fill="{DynamicResource ConnectedBrush}" IsVisible="{Binding IsConnected}" />
-          <Ellipse Width="7" Height="7" Fill="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding !IsConnected}" />
-          <TextBlock Text="{Binding StatusText}"
+          <!-- ⭐⭐ `UseLayoutRounding="False"` NA KROPCE — i TYLKO na kropce.
+
+               ⚠⚠ KOREKTA 2026-08-03 (drugi odbiór): ten sam atrybut stał przez chwilę także na
+               badge'u i został ZDJĘTY, bo pogarszał wygląd. Powód jest pouczający — kropka to
+               jedyny element tego wiersza, którego FARBA JEST JEGO PUDEŁKIEM, więc wyśrodkowanie
+               pudełka jest dla niej zarazem wyśrodkowaniem optycznym. Badge ma wewnątrz tekst
+               wersalikowy z paddingiem, więc jego farba leży WYSOKO w pudełku; zaokrąglenie w dół,
+               które „psuło" geometrię, w rzeczywistości nadrabiało tę różnicę. Zdjęcie go odsunęło
+               napis DEV MODE o pół piksela w górę od reszty.
+               ⭐ Wniosek do zapamiętania: `UseLayoutRounding="False"` jest narzędziem dla elementu,
+               który JEST swoją farbą (koło, prostokąt tła). Dla elementu z tekstem w środku trzeba
+               patrzeć na farbę, nie na pudełko.
+               ⚠⚠ To NIE jest ten sam problem co w komentarzu przy `Run` niżej. Tamten dotyczy DWÓCH
+               RUNÓW WEWNĄTRZ jednego `TextBlocka` i pozostaje w mocy. Ten dotyczy TRZECH SĄSIADUJĄCYCH
+               ELEMENTÓW wiersza, których pudełka mają różne wysokości.
+
+               Zmierzone: `VerticalAlignment="Center"` liczy `(16 − h) / 2`, więc kropka o wysokości
+               NIEPARZYSTEJ (7) lądowała na połówce piksela i zaokrąglała się w GÓRĘ — środek 7,50
+               zamiast 8,00. Po zdjęciu zaokrąglania siedzi dokładnie w osi wiersza.
+
+               ⛔ NIE naprawione zmianą rozmiaru (7→8): użytkownik zgłosił, że „kropka wygląda
+               poprawnie" — problemem była pozycja, nie wielkość.
+               ⭐ Precedens w tym repo: `PART_MarkArea` w `RadioButton` — przyciąganie do piksela pomaga
+               PROSTEJ KRAWĘDZI i nie ma nic do zaoferowania KOŁU. -->
+          <Ellipse Width="7" Height="7" UseLayoutRounding="False"
+                   Fill="{DynamicResource ConnectedBrush}" IsVisible="{Binding IsConnected}" />
+          <Ellipse Width="7" Height="7" UseLayoutRounding="False"
+                   Fill="{DynamicResource SubtleForegroundBrush}" IsVisible="{Binding !IsConnected}" />
+          <!-- ⭐⭐ NAZWA I ENDPOINT TO DWA RUNY W JEDNYM `TextBlocku`, A NIE DWA `TextBlocki` — i to jest
+               naprawa przyczyny, nie kosmetyka (§19.3.1).
+
+               Nazwa = element główny (§8.4.4): pełny kontrast + SemiBold. Endpoint = informacja podrzędna,
+               mniejsza i wyciszona. Rozróżnienie wagi jest CAŁYM sensem tej sekcji — wcześniej stan
+               połączenia i komunikat miały identyczną wagę, co audyt nazwał „Status Bar jest tylko
+               miejscem na tekst".
+
+               ⚠⚠ Ale dwa napisy o RÓŻNYCH ROZMIARACH, każdy we własnym `TextBlocku` z
+               `VerticalAlignment="Center"`, wyrównują się PUDEŁKAMI, a nie liniami bazowymi. Zmierzone:
+               linie bazowe rozjeżdżały się o 0,16 px w DIP — samo w sobie niewidoczne, ale pudełka miały
+               różne wysokości (12 vs 11) i różne pozycje (6 vs 7), a `UseLayoutRounding` przycina KAŻDY
+               ELEMENT OSOBNO do piksela urządzenia. Przy 125% te dwa topy lądują po różnych stronach
+               zaokrąglenia i tekst widocznie „siada wyżej" — dokładnie to zgłosił użytkownik.
+
+               ⭐ Run-y w jednym `TextBlocku` układa silnik tekstu na WSPÓLNEJ linii bazowej z konstrukcji:
+               jedno pudełko, jedno zaokrąglenie, jedna linia. Zmierzone po zmianie: jeden baseline zamiast
+               dwóch. ⛔ Nie rozdzielać tego z powrotem na dwa `TextBlocki` i nie „naprawiać" marginesem —
+               nudge naprawiłby jedno DPI i zepsuł pozostałe.
+
+               ⚠ `Classes="subtle"` nie działa na `Run`, więc kolor idzie `{DynamicResource}` wprost —
+               nadal w pełni motywowalny. Odstęp niesie separator w `ConnectionEndpointLabel`, bo między
+               runami nie ma `Spacing` kontenera. -->
+          <!-- ⭐⭐ −1 px W GÓRĘ — KOREKTA OPTYCZNA, ŚWIADOMA I POTRZEBNA. Nie „poprawiaj" jej z powrotem
+               na 0 dlatego, że pomiar mówi, iż pudełka są równo. ⛔ Właśnie ten pomiar był złym
+               kryterium (odbiór użytkownika, 2026-08-03): „użytkownik nie patrzy na środki geometryczne
+               elementów — patrzy na efekt optyczny".
+
+               Dlaczego wyrównanie PUDEŁEK nie wystarcza: pudełko `TextBlocka` ma wysokość INTERLINII
+               (16 px), a nie wysokość farby. Linia bazowa leży na 11,83, więc dolne ~4 px to obszar
+               znaków schodzących — w tym napisie PUSTY („Szkoleniowa · localhost:3050" nie ma ani
+               jednego). Farba siedzi więc wysoko w ascencie i nisko w pudełku: środek masy wypada ok.
+               9,0, podczas gdy kropka — której farba JEST jej pudełkiem — leży na 8,0. Stąd wrażenie
+               osiadania o mniej więcej piksel, dokładnie tak, jak to widać na ekranie.
+
+               ⚠ `RenderTransform`, a nie margines: nie rusza układu, więc nie wchodzi w interakcję
+               z zaokrąglaniem pudełek (§19.19) i nie przesuwa niczego, co stoi obok. Wartość całkowita,
+               więc tekst nie robi się rozmyty.
+               ⚠ Endpoint jest o 1 px mniejszy i stoi na TEJ SAMEJ linii bazowej, więc jego środek masy
+               jest jeszcze niżej — to jest ta sama obserwacja co w §19.8, tylko że tamta dotyczyła
+               relacji runów MIĘDZY SOBĄ, a ta całego bloku wobec kropki. -->
+          <TextBlock VerticalAlignment="Center">
+            <TextBlock.RenderTransform>
+              <TranslateTransform Y="-1" />
+            </TextBlock.RenderTransform>
+            <Run Text="{Binding ConnectionDisplayName}"
+                 FontSize="{DynamicResource Text.Status.Size}"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource ForegroundBrush}" />
+            <!-- ⛔⛔ NIE PRÓBUJ WYŚRODKOWAĆ TEGO RUNU W PIONIE. Zmierzone w rundzie po M3.1f (§19.8),
+                 bo użytkownik zgłosił, że endpoint „opada" — sprawdzone TRZY mechanizmy:
+
+                   środek nazwy (11 px SemiBold)      8,54
+                   środek endpointu — dziś (baseline) 8,83   → +0,30 px
+                   środek endpointu — InlineUIContainer 7,50 → −1,04 px
+
+                 ⚠⚠ `BaselineAlignment="Center"` na `Run` jest w Avalonii **IGNOROWANE** — per-run
+                 baseline wychodzi identyczny (8,45) z nim i bez niego. Właściwość istnieje w API i nie
+                 robi nic; wstawienie jej byłoby martwym kodem udającym poprawkę.
+                 ⚠ `InlineUIContainer` DZIAŁA, ale przestrzeliwuje ponad trzykrotnie w drugą stronę.
+                 ⚠ Dwa osobne `TextBlocki` z `VerticalAlignment="Center"` przywracają defekt DPI
+                 z §19.3.3 (osobne zaokrąglenie na element; przy 125% cały piksel).
+
+                 ⭐ Wniosek: obecne wyrównanie do linii bazowej jest NAJBLIŻSZE optycznego środka ze
+                 wszystkiego, co jest dostępne. Wrażenie osiadania bierze się z tego, że nazwy połączeń
+                 bywają WERSALIKAMI („GAL"), a endpoint jest minuskułą — to różnica wysokości wersalika
+                 i x-height przy wspólnej linii bazowej, nie błąd wyrównania pudełek.
+
+                 ⚠⚠ UZUPEŁNIENIE 2026-08-03: powyższe pozostaje prawdziwe i dotyczy WYŁĄCZNIE relacji
+                 nazwa ↔ endpoint. Zgłoszenie „tekst siedzi niżej niż kropka" miało JEDNAK przyczynę
+                 mierzalną i została naprawiona — ale wyżej, na poziomie WIERSZA (zaokrąglanie pudełek
+                 o nieparzystej wysokości), nie tutaj. Patrz komentarz przy `Ellipse`. ⛔ Nie czytaj
+                 tego bloku jako „temat zamknięty, nie ruszać" — on zamyka jedno z dwóch pytań. -->
+            <Run Text="{Binding ConnectionEndpointLabel}"
+                 FontSize="{DynamicResource Text.Caption.Size}"
+                 Foreground="{DynamicResource SubtleForegroundBrush}" />
+          </TextBlock>
+          <!-- DEV MODE — badge PRZY NAZWIE POŁĄCZENIA, bo jest własnością tego połączenia, a nie okna.
+               Przeniesiony z paska tytułu w M3.1b (§19.3).
+
+               ⚠ `Padding="4,1"` LOKALNIE I ŚWIADOMIE. Katalog nie ma roli dla paddingu chipa, a jedyny
+               drugi element tego rodzaju (`AggregationBarView`, `8,2`) niesie inną wartość — nowa rola
+               albo zmieniłaby tamten wygląd, albo powstałaby z JEDNEGO konsumenta wbrew R3. Wyjątek jest
+               lepszy od błędnej roli (R12). Rozstrzygnięcie „czy chipy zasługują na wspólną rolę" należy
+               do przeglądu §13.3, który zobaczy je wszystkie naraz.
+               ⚠ Pion (1) jest nietykalny — wysokość badge'a i rozmiar fontu były w QA ocenione jako dobre;
+               poziom zszedł 6 → 4, bo przy tekście 10 px Bold proporcja 6:1 czytała się jako zbyt szeroka
+               (zgłoszenie użytkownika, QA M3.1b). -->
+          <Border Background="{DynamicResource ConnectedBrush}"
+                  CornerRadius="{DynamicResource Radius.Surface}" Padding="4,1"
+                  VerticalAlignment="Center"
+                  IsVisible="{Binding IsDeveloperModeActive}"
+                  ToolTip.Tip="{x:Static app:UiStrings.DeveloperModeBadgeTooltip}">
+            <TextBlock Text="{x:Static app:UiStrings.DeveloperModeBadge}"
+                       FontSize="{DynamicResource Text.Caption.Size}" FontWeight="Bold"
+                       Foreground="{DynamicResource DevModeBadgeForegroundBrush}" />
+          </Border>
+        </StackPanel>
+
+        <!-- ── 2. KOMUNIKATY — kolumna elastyczna; wszystko, co ma coś do powiedzenia o BIEŻĄCEJ chwili ── -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                    Margin="20,0,0,0" VerticalAlignment="Center">
+
+          <!-- Komunikat aplikacji z ikoną severity. ⚠ Mapowanie severity → pędzel i geometria czyta
+               z `MessageBanner.BrushKeyFor`/`GeometryKeyFor` — tego samego, którym maluje się log Messages
+               w edytorze SQL. ⛔ Zero drugiej definicji severity w aplikacji (§8.4.4). -->
+          <controls:SvgIcon Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
+                            IsVisible="{Binding HasStatusMessage}"
+                            VerticalAlignment="Center"
+                            Data="{Binding StatusMessageGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}">
+            <controls:SvgIcon.Foreground>
+              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                <Binding Path="StatusMessageBrushKey" />
+                <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+              </MultiBinding>
+            </controls:SvgIcon.Foreground>
+          </controls:SvgIcon>
+          <TextBlock Text="{Binding StatusMessage}"
+                     IsVisible="{Binding HasStatusMessage}"
+                     FontSize="{DynamicResource Text.Status.Size}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding StatusMessage}"
+                     VerticalAlignment="Center">
+            <TextBlock.Foreground>
+              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                <Binding Path="StatusMessageBrushKey" />
+                <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+              </MultiBinding>
+            </TextBlock.Foreground>
+          </TextBlock>
+
+          <!-- Kontekst AKTYWNEJ ZAKŁADKI: edytor SQL kładzie tu statystyki wykonania, debugger status sesji
+               (UX Polish Seam 6a — wyprowadzony z paska debuggera, który potrzebował miejsca na Break on
+               exception + Save). Każdy inny rodzaj zakładki zostawia to puste, a obie pozycje wykluczają się
+               bramkami `IsVisible`. ⚠ VM debuggera jest nietknięty: `MainWindowViewModel` wystawia
+               `ActiveDebugger`, a Avalonia subskrybuje `PropertyChanged` zagnieżdżonego VM wzdłuż ścieżki
+               wiązania. ⛔ Status debuggera nigdy nie może być wpisywany w komunikat okna — to dwaj różni
+               właściciele i właśnie ich zlanie w jedno było defektem H‑4. -->
+          <TextBlock Text="{Binding QueryStatsText}"
+                     IsVisible="{Binding IsQueryTabActive}"
                      Classes="subtle"
-                     Classes.error="{Binding IsStatusError}"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Status.Size}"
+                     VerticalAlignment="Center" />
+          <TextBlock Text="{Binding ActiveDebugger.StatusText}"
+                     IsVisible="{Binding IsDebuggerTabActive}"
+                     Classes="subtle"
+                     Classes.error="{Binding ActiveDebugger.IsFaulted}"
+                     FontSize="{DynamicResource Text.Status.Size}"
                      VerticalAlignment="Center" />
         </StackPanel>
-        <!-- Column 1 belongs to the ACTIVE TAB: the SQL Editor puts its query stats here, the debugger its
-             session status (UX Polish Seam 6a — moved out of the debugger toolbar, which needed the room for
-             Break on exception + Save). Every other tab kind leaves it empty. The two are mutually exclusive
-             by their IsVisible gates, so the Auto column only ever measures the one that is showing.
-             The debugger VM is untouched: MainWindowViewModel already exposes ActiveDebugger, and Avalonia
-             subscribes to the nested VM's PropertyChanged along the binding path. Column 0 keeps its own
-             owner (connection state); debugger status must never be written into MainWindowViewModel.StatusText. -->
-        <TextBlock Grid.Column="1"
-                   Text="{Binding QueryStatsText}"
-                   IsVisible="{Binding IsQueryTabActive}"
-                   Classes="subtle"
-                   FontSize="11"
-                   Margin="20,0,0,0"
-                   VerticalAlignment="Center" />
-        <TextBlock Grid.Column="1"
-                   Text="{Binding ActiveDebugger.StatusText}"
-                   IsVisible="{Binding IsDebuggerTabActive}"
-                   Classes="subtle"
-                   Classes.error="{Binding ActiveDebugger.IsFaulted}"
-                   FontSize="11"
-                   Margin="20,0,0,0"
-                   VerticalAlignment="Center" />
-        <!-- Product + version from AppInfo — the same single source the About window reads. This used to be
-             the literal "EmberTern 0.1.0", which had gone stale and then disagreed with About on screen. -->
-        <TextBlock Grid.Column="3"
-                   Text="{Binding AppVersionChip}"
-                   Classes="subtle"
-                   FontSize="11"
-                   VerticalAlignment="Center" />
+
+        <!-- ── 3. STAN — chipy współistniejące (§8.4.5). Trace i Debugger dochodzą w M3.1e ──────────── -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                    Margin="12,0,0,0" VerticalAlignment="Center">
+
+          <!-- ⭐ CHIP TRANSAKCJI. Nieobecny, gdy transakcji nie ma — brak transakcji to stan domyślny
+               i nie wymaga komunikatu (§8.4.5). Odpowiada GLOBALNIE na „czy mam otwartą transakcję
+               i od jak dawna", niezależnie od aktywnej zakładki.
+               ⚠⚠ TO NIE JEST PRZYCISK i nigdy nim nie będzie. Commit/Rollback zostają w toolbarze pod
+               F6 / Shift+F6 — operacja nieodwracalna nie może stać w miejscu czytanym kątem oka. -->
+          <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}" VerticalAlignment="Center"
+                      IsVisible="{Binding ShowTransactionChip}"
+                      ToolTip.Tip="{Binding TransactionChipTooltip}">
+            <!-- ⚠ 7×7 i Spacing 5 to WARTOŚCI LOKALNE ze świadomego wyboru.
+                 Kropka jest GEOMETRIĄ (§18.0.5 ratyfikowało, że geometrii wychodzącej z arytmetyki
+                 nie tokenizujemy) — katalog nie ma dla niej roli i mieć nie powinien.
+                 ⭐ K11 ZAMKNIĘTA (M4, decyzja użytkownika D): odstęp bierze `Space.Xs` (4), nie `Space.Sm`
+                 (6), na który wskazywał rejestr. ⚠ Powód jest rolą, nie zaokrągleniem w dół: `Space.Xs` to
+                 „ikona ↔ tekst; elementy wewnątrz JEDNEGO WIERSZA", a kropka i etykieta chipa są dokładnie
+                 tym — `Space.Sm` opisuje odstęp kontrolka ↔ kontrolka. Przy równej czytelności wygrywa
+                 wariant gęstszy (R18), a różnica 5 → 4 jest przy 1:1 podprogowa (sprawdzone na renderze).
+                 ⭐ Zbiega się z paddingiem badge'a DEV MODE, który poziomo niesie 4 od QA M3.1b — czyli
+                 wnętrza obu chipów paska tytułu mają teraz jedną miarę. -->
+
+            <Ellipse Width="7" Height="7" VerticalAlignment="Center">
+              <Ellipse.Fill>
+                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                  <Binding Path="TransactionChipBrushKey" />
+                  <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                </MultiBinding>
+              </Ellipse.Fill>
+            </Ellipse>
+            <TextBlock Text="{Binding TransactionChipText}"
+                       FontSize="{DynamicResource Text.Caption.Size}"
+                       VerticalAlignment="Center">
+              <TextBlock.Foreground>
+                <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                  <Binding Path="TransactionChipBrushKey" />
+                  <Binding ElementName="RootWindow" Path="ActualThemeVariant" />
+                </MultiBinding>
+              </TextBlock.Foreground>
+            </TextBlock>
+          </StackPanel>
+
+          <!-- ⭐ CHIP DEBUGGERA (M3.1e). Prawdziwy, gdy sesja żyje GDZIEKOLWIEK — także na innej
+               zakładce. ⛔ To nie dubluje `ActiveDebugger.StatusText` z sekcji 2: tamten jest
+               bramkowany `IsDebuggerTabActive`, czyli znika dokładnie tam, gdzie fakt globalny zaczyna
+               mieć znaczenie (§0.1.2). Etykieta = fakt, tooltip = szczegół (nazwa procedury + status).
+               ⚠⚠ Kolor to `AccentIconBrush`, a NIE railowy `DebugCurrentLineBarBrush` — ten drugi jest
+               półprzezroczysty i na tle paska daje 3,77:1, czyli poniżej progu §10 dla tekstu (4,5:1).
+               Jako 2 px rail przechodzi (próg 3:1 dla elementu UI), jako napis nie. Zbieżność
+               z trójkątem `DebuggerIcon` jest przy okazji zaletą — znak i napis czytają się jako
+               jeden element. ⛔ Nie ujednolicać z railem bez ponownego policzenia kontrastu. -->
+          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                      IsVisible="{Binding IsDebugSessionLive}"
+                      ToolTip.Tip="{Binding DebugChipTooltip}">
+            <!-- Znak tożsamości debuggera (D15.2 Seam B) — kompozyt dwukolorowy w `Viewbox`, więc
+                 skaluje się dowolnie. 12 px zrównuje go z ikoną severity w sekcji 2. -->
+            <controls:DebuggerIcon Width="{DynamicResource Size.Icon.Sm}"
+                                   Height="{DynamicResource Size.Icon.Sm}"
+                                   VerticalAlignment="Center" />
+            <TextBlock Text="{x:Static app:UiStrings.StatusBarDebugChipLabel}"
+                       FontSize="{DynamicResource Text.Caption.Size}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource AccentIconBrush}" />
+          </StackPanel>
+
+          <!-- ⭐ CHIP TRACE (M3.1e). `Icon.Activity` to znak tożsamości Monitora Aktywności — ten sam,
+               który nosi jego zakładka i przycisk Monitoring; reuse-before-create.
+               Kolor `IconColor_Query` zgodnie z railem (§8.4.2) — tu akurat próg §10 spełnia
+               z zapasem (8,03:1 Dark / 6,58:1 Light), więc nie ma powodu go zmieniać.
+               Tooltip czyta `TraceMonitorTabViewModel.StatusText` („Recording · 12/40 events”),
+               czyli istniejące mapowanie stanu. ⛔ Zero drugiej definicji stanu Trace. -->
+          <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                      IsVisible="{Binding IsTraceSessionLive}"
+                      ToolTip.Tip="{Binding TraceChipTooltip}">
+            <controls:SvgIcon Width="{DynamicResource Size.Icon.Sm}"
+                              Height="{DynamicResource Size.Icon.Sm}"
+                              VerticalAlignment="Center"
+                              Data="{StaticResource Icon.Activity}"
+                              Foreground="{DynamicResource IconColor_Query}" />
+            <TextBlock Text="{x:Static app:UiStrings.StatusBarTraceChipLabel}"
+                       FontSize="{DynamicResource Text.Caption.Size}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource IconColor_Query}" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- ── 4. POSTĘP (§8.4.6) — „co się teraz liczy" ────────────────────────────────────────────
+             ⭐ GLOBALNA: operacja jest widoczna niezależnie od aktywnej zakładki. To trzecie
+             zastosowanie tego samego podziału (§19.5.1, §19.6.1) — „Loading… N rows" to POSTĘP i mieszka
+             tutaj, a „143 rows in 46 ms" to WYNIK i zostaje przy edytorze SQL w sekcji 2.
+             ⚠⚠ Przycisk Cancel wiąże `Progress.CancelCommand`, czyli TEN SAM obiekt komendy, który
+             naciska przycisk w toolbarze — dwa zasięgi jednej komendy, nie dwie implementacje. Zamyka to
+             realną lukę: `ShowCancelButton` jest bramkowane `IsQueryTabActive`, więc przełączenie
+             zakładki w trakcie długiego zapytania ODBIERAŁO możliwość anulowania.
+             ⚠ Cancel w pasku statusu nie łamie §8.4.5 („chip nigdy nie jest przyciskiem") — tamten zakaz
+             dotyczy operacji NIEODWRACALNEJ, a anulowanie jest zaworem bezpieczeństwa. -->
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8"
+                    Margin="16,0,0,0" VerticalAlignment="Center"
+                    IsVisible="{Binding Progress.IsRunning}">
+          <TextBlock Text="{Binding Progress.Label}"
+                     Classes="subtle"
+                     FontSize="{DynamicResource Text.Caption.Size}"
+                     VerticalAlignment="Center" />
+          <ProgressBar Classes="status"
+                       IsIndeterminate="{Binding Progress.IsIndeterminate}"
+                       Minimum="0" Maximum="100"
+                       Value="{Binding Progress.Percent}" />
+          <!-- ⭐ Bez własnych `Width`/`Height`: `Button.icon` bierze wysokość chromy
+               (`Size.ControlToolbar`) i nie ma podłogi szerokości, więc jego rozmiar wyznacza ikona,
+               a wysokość — pasek, w którym stoi. To decyzja architektoniczna 2 z M2b („kontener
+               rozstrzyga wielkość, element ją przyjmuje"); nadpisanie tutaj byłoby jej złamaniem. -->
+          <Button Classes="icon"
+                  Command="{Binding Progress.CancelCommand}"
+                  IsVisible="{Binding Progress.HasCancel}"
+                  ToolTip.Tip="{x:Static app:UiStrings.StatusBarCancelOperationTooltip}">
+            <controls:SvgIcon Data="{StaticResource Icon.X}"
+                              Width="{DynamicResource Size.Icon.Sm}"
+                              Height="{DynamicResource Size.Icon.Sm}" />
+          </Button>
+        </StackPanel>
+
+        <!-- ── zarezerwowane ────────────────────────────────────────────────────────────────────── -->
+        <!-- ⛔ Nazwa aplikacji i numer wersji NIE wracają tutaj (decyzja D3) — mieszkają w oknie About,
+             gdzie są tematem. Pasek statusu mówi, co dzieje się TERAZ; wersja nie zmienia się w sesji. -->
       </Grid>
     </Border>
 

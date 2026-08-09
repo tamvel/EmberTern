@@ -27,6 +27,11 @@ public partial class ConfirmDialogViewModel : ViewModelBase
     public string Message { get; }
     public string ConfirmLabel { get; }
     public string CancelLabel { get; }
+
+    /// <summary>An empty <see cref="CancelLabel"/> means this is an acknowledgement, not a choice — there is
+    /// nothing to decline, so the button is not rendered.</summary>
+    public bool HasCancel => !string.IsNullOrEmpty(CancelLabel);
+
     public bool IsDestructive { get; }
 
     public bool Result { get; private set; }

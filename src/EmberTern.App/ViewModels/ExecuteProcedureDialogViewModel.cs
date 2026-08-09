@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.Core.Formatting;
 using EmberTern.Core.Settings;
 
 namespace EmberTern.App.ViewModels;
@@ -257,9 +258,18 @@ public partial class ExecuteProcedureParamRowViewModel : ObservableObject
     /// mechanism, so it is the one that knows (history and same-name carry-over are both
     /// <see cref="ValueOrigin.Restored"/>; the sole-remaining-pair rule is <see cref="ValueOrigin.Assumed"/>).
     /// Assigned last, because writing the value itself marks the row as the user's own.</param></summary>
-    internal bool ApplyHistoryValue(ParameterValue value, ValueOrigin origin = ValueOrigin.Restored)
+    /// <param name="requireProvenType">
+    /// ⭐⭐ Czy wymagać DOWODU zgodności typu (<see cref="IsProvablyCompatible"/>). <c>true</c> dla
+    /// zastosowania AUTOMATYCZNEGO — wtedy nikt nie prosił o tę wartość, więc niedowiedzionej nie
+    /// wstawiamy. <c>false</c> dla JAWNEGO wyboru użytkownika: wskazał ten wpis i widzi jego wartości na
+    /// etykiecie, więc ciche nic-nierobienie jest błędem, a nie ostrożnością (§19.8).
+    /// ⚠ Zniesienie dowodu NIE znosi zabezpieczenia — parsowanie niżej dalej odrzuca wartość, której nie
+    /// da się wczytać w typ tego wiersza.
+    /// </param>
+    internal bool ApplyHistoryValue(
+        ParameterValue value, ValueOrigin origin = ValueOrigin.Restored, bool requireProvenType = true)
     {
-        if (!IsProvablyCompatible(value)) return false;
+        if (requireProvenType && !IsProvablyCompatible(value)) return false;
 
         if (value.IsNull)
         {
@@ -394,7 +404,9 @@ public sealed class ParameterHistorySnapshotViewModel
     public ParameterHistorySnapshotViewModel(ParameterSet set)
     {
         Set = set;
-        TimestampText = set.ExecutedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+        // ⚠ The reader's own date/time format, not a hard-coded ISO shape (P5, 2026-08-07). This label is
+        // pure presentation — it says WHEN a parameter set was last used, and nothing parses it back.
+        TimestampText = DateTimeDisplay.DateAndTime(set.ExecutedAt);
         PreviewText = BuildPreview(set.Values);
     }
 
@@ -471,11 +483,21 @@ public partial class ExecuteProcedureDialogViewModel : ObservableObject
 
         // Auto-load the most recent set ("last run") so re-opening the dialog shows the
         // values used last time — the common re-run case needs zero interaction.
+        //
+        // ⚠⚠ To jest ta SAMA ścieżka, co ręczny wybór z listy (`OnSelectedHistoryChanged`), więc bez
+        // znacznika nie dałoby się ich rozróżnić — a różnią się zasadniczo: tutaj NIKT o tę wartość nie
+        // prosił, tam użytkownik wskazał konkretny wpis. Dowód zgodności typu (C3) obowiązuje wyłącznie
+        // w tym pierwszym przypadku (§19.8).
         if (History.Count > 0)
         {
-            SelectedHistory = History[0];
+            _seedingHistory = true;
+            try { SelectedHistory = History[0]; }
+            finally { _seedingHistory = false; }
         }
     }
+
+    // Prawda WYŁĄCZNIE w czasie zasiewu z konstruktora — patrz komentarz wyżej.
+    private bool _seedingHistory;
 
     public ObservableCollection<ExecuteProcedureParamRowViewModel> Params { get; }
 
@@ -497,7 +519,10 @@ public partial class ExecuteProcedureDialogViewModel : ObservableObject
             {
                 var row = Params.FirstOrDefault(
                     r => string.Equals(r.Name, pv.Name, StringComparison.OrdinalIgnoreCase));
-                row?.ApplyHistoryValue(pv);
+                // ⭐ Dowód typu obowiązuje TYLKO przy zasiewie z konstruktora. Przy jawnym wyborze
+                // użytkownika wpis bez zapisanego typu (historia sprzed C3) też ma się przywrócić —
+                // parsowanie w `ApplyHistoryValue` pozostaje zabezpieczeniem (§19.8).
+                row?.ApplyHistoryValue(pv, ValueOrigin.Restored, requireProvenType: _seedingHistory);
             }
         }
         finally { _applyingHistory = false; }

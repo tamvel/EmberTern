@@ -1,10 +1,23 @@
-<!-- Debugger identity mark (D15.2 Seam B): a blue Play triangle (execution pointer,
-     dominant) + a small red breakpoint dot nested into its lower-right, overlapping the
-     tip so the two read as one "Start Debugging" glyph. Runtime uses the DebuggerIcon
-     ControlTheme (Themes/IconGeometries.axaml), which paints these two shapes with the
-     reused AccentIconBrush + DebugBreakpointBrush theme tokens; the hex values below are
-     the light-theme tokens, shown here only so the source .svg previews faithfully. -->
+<!-- Debugger identity mark (D15.2 Seam B): the Execute icon plus a red breakpoint dot.
+     ⭐⭐ The triangle IS Icon.Play — at runtime the DebuggerIcon ControlTheme
+     (Themes/IconGeometries.axaml) references the Icon.Play StreamGeometry rather than
+     carrying a path of its own, so Execute and Debug cannot drift apart. The path below is
+     a transcription of Icon.Play, present only so this source .svg previews faithfully; if
+     Icon.Play ever changes, this file follows it, never the reverse.
+     ⚠⚠ MEASURED in the M3.1e QA round (product-polish.md §19.6): this mark never actually
+     was the Execute icon. It carried its own triangle (6,4)(18,12)(6,20) against
+     Icon.Play's (8,5)(19,12)(8,19) — a hand-maintained approximation, which is exactly why
+     it drifted the first time anyone adjusted it.
+     ⚠ The dot moved (16; 15.5) -> (19; 19) in that same round. It used to overlap the lower
+     edge deliberately, so the two read as one glyph, and at 16 px that worked; measured
+     against Icon.Play the overlap is -1.91 units of clearance past the 2 px stroke, which at
+     the status-bar chip's 12 px reads as a rendering artifact. x = 19 is the apex's own x,
+     so the breakpoint sits at the end of the execution pointer. Clearance +2.66 units.
+     ⛔ If it ever needs more room, move the DOT. An intermediate round redrew the triangle
+     instead; it measured better and was rejected on sight, because Execute and Debug stopped
+     reading as one family. Consistency of the set beats the optimum of one glyph.
+     The hex values are the light-theme tokens (AccentIconBrush + DebugBreakpointBrush). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M6 4 L18 12 L6 20 Z" stroke="#2D6BBF"/>
-  <circle cx="16" cy="15.5" r="2.25" fill="#C42B1C"/>
+  <path d="M8 5 L19 12 L8 19 Z" stroke="#2D6BBF"/>
+  <circle cx="19" cy="19" r="2.25" fill="#C42B1C"/>
 </svg>

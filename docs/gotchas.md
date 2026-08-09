@@ -373,6 +373,165 @@ is genuinely ambiguous (column vs variable vs label), but in a position the gram
 unknown name is *provably* an unknown object — so it is recorded **unresolved** rather than dropped, which is
 what makes ET0001 reachable there. Dropping the reference is not conservatism, it is losing the finding.
 
+303. **A grammatically-pinned position is decided by the POSITION, never by adding its words to the keyword
+catalog — and the difference is whether a user's column named `MONTH` survives.** `EXTRACT(YEAR FROM d)` inside a
+PSQL body reported **ET0003 UnresolvedVariable** on `YEAR`. The date/time parts (`YEAR`/`MONTH`/`DAY`/`HOUR`/
+`MINUTE`/`SECOND`/`MILLISECOND`/`WEEK`/`WEEKDAY`/`YEARDAY`/`QUARTER`/`TIMEZONE_*`) are **deliberately not** in
+`FirebirdSyntax` — they are not reserved words in Firebird, so a column or a variable may legitimately be called
+`MONTH` — which means they lex as identifiers and the PSQL walker read one as a local. ⛔ **The tempting fix
+(catalog them as keywords) is wrong twice over:** it would colour and re-case every legitimate `MONTH` in the
+application, and it answers a question about vocabulary when the actual question is about position. The fix is a
+sibling of `IsGeneratorNamePosition` (#302) asking *"is this identifier immediately after `EXTRACT (`"*, composed
+with it at the ONE caller that has the shared job (*"does the grammar pin this to something that is not a
+local?"*) — ⚠ **composed at the caller, not merged into one predicate**, because the two have opposite
+consequences: a generator name must be RESOLVED by the catalog scan (an unknown one is a provable ET0001), while
+a date part resolves to nothing and must simply go unclaimed. ⚠ The predicate deliberately does **not** also
+require the next token to be `FROM`: nothing else can stand in that position, so the extra condition buys no
+precision and costs a false ET0003 on every keystroke of a half-typed `EXTRACT(YEA`.
+
+304. **A write is only atomic within one process if the temp file it swaps in is unique to that process — and a
+shared temp name turns two instances of the app into total data loss.** `ApplicationSettingsStore.AtomicWrite`
+wrote to the FIXED path `settings.dat.tmp`, identical in every process, then `File.Replace`d it in. The user ran a
+second EmberTern from the same exe (a smoke test beside a working instance) and lost every setting. The mechanism
+is arithmetic, not chance: `File.WriteAllText` **truncates before it writes**, so the shared temp is momentarily
+zero-length, and a second instance reaching its `File.Replace` inside that window **publishes an empty
+settings.dat**. From there the loss is automatic and silent — an empty file loads as `Missing` (correctly: that is
+what a killed-mid-write leaves behind), every section facade answers `Missing` with `Load() ?? new()`, the save
+guard lets a blank file through, and the next write makes defaults permanent while `File.Replace` rolls the single
+`.bak` generation away. ⭐ **Two independent lessons.** (a) *A benign read classification is only as safe as the
+guarantee that nothing FABRICATES its input* — "an empty file holds no user data, so replacing it destroys
+nothing" was sound reasoning about the disk and became a data-loss path once a bug could produce an empty file
+from a good one. ⛔ Do not "harden" the read side by calling an empty file `Corrupt`; that strands the genuinely
+truncated case for a cause fixed where it lived, on the write side. (b) ⭐⭐ **A race is the wrong instrument for
+pinning a race.** A concurrent-save stress test (4 threads × 15 writes, asserting the file always deserializes)
+passes against the *broken* code — the window is microseconds wide. What fails on the pre-fix code is the
+DETERMINISTIC statement of the property: plant a file at the shared temp path and require the save to leave it
+untouched. Keep both, but know which one is the guard. The full fix is a per-write temp name (`<pid>.<guid>`), a
+named `Local\` mutex spanning the whole read-judge-write, and an I/O failure that becomes
+`LastSaveDiagnostic` + a refusal instead of an exception escaping into `MainWindow`'s Closing handler.
+
+305. **Ask the panel that HOLDS a popup to remove it — never re-derive the container from a control that may
+already be detached.** Every `OverlayLayer`-hosted card in the editor (hover info, Parameter Helper, code-action
+menu, construct hint) closed itself with `OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card)`. That
+answers *"which overlay would this editor use NOW"* — and after a tab switch the editor is detached, so it answers
+**null**, `Remove` does nothing, and clearing the field drops the last reference to a card still parented in the
+**window's** overlay. The overlay outlives every tab, so the card stays on screen: no tab change removes it, no
+pointer exit removes it, no click removes it — only restarting the application does. ⭐ The rule was already
+written in this very file, on `HideBulb`, with its reason (*"clearing the field while the control stayed parented
+is how one gets stranded in the overlay"*) — and missing from the other four sites, which is #302's shape one
+layer up: **one piece of knowledge, partially copied**. ⚠ The correct form needs no container lookup at all:
+`(card.Parent as Panel)?.Children.Remove(card)`. ⚠⚠ **And the first fix attempted here was inert.** The symptom
+was reported as a "tooltip", so the first fix closed `ToolTip.IsOpen` on the owner's detach — measured
+afterwards, it changed nothing, because Avalonia's own tooltip service already resets that state on detach. It was
+deleted rather than kept as belt-and-braces (§15.7: an inert guard reads to the next author as a real safety net).
+**A fix whose mechanism you cannot demonstrate is not a cautious fix, it is a false record of what was wrong.**
+
+306. **Persist a layout decision only where the user can make it — a remembered column ORDER replayed onto a grid
+that cannot be reordered is not a preference, it is corruption.** `GridLayoutBehavior` remembered column order for
+every grid carrying a `GridId`, and the SQL editor's result grid has ONE profile (`GridId="QueryResults"`) shared
+by every query. So the column order of an earlier result was replayed onto the next result's columns and the grid
+stopped matching the `SELECT` list. ⚠ **The producer was innocent and looked guilty:** `PopulateResultGrid` adds
+columns strictly in `result.Columns` order, so every hypothesis that starts at the grid-building code is a dead
+end. ⭐ The fix is a rule read from the grid itself — `CanUserReorderColumns` — applied to **both** the restore and
+the save (they must agree on whose order it is, or the save keeps re-seeding a profile the next result has replayed
+onto it). Reading the criterion from the control rather than declaring it per `GridId` means nothing has to be
+remembered when a grid is added: *whether the user can arrange the columns is the same question as whether an
+order is worth storing.* It corrected five grids at once, of which three had never shown the symptom — the two
+table-data grids because a table's own column order does not change between loads. ⚠ Widths are NOT affected and
+should not be: they are keyed by header name, so a column that is absent simply has no width to restore, whereas
+only ORDER can put a column that IS present in the wrong place.
+
+307. **Firebird calls a procedure TWO ways, and code that recognises only `EXECUTE PROCEDURE` silently ignores the
+one users reach for most.** A **selectable** procedure is invoked from a `FROM` clause —
+`select … from XXX_SEL_RAP_CZASUPRACY(:p_dataod, :p_datado, :p_id_jedkadr)` — which parses to a
+`SelectStatement`, not an `ExecuteProcedureStatement`. The Smart-Parameters type lookup tested only the latter, so
+for every selectable procedure it returned before consulting the catalog and the dialog showed `Unknown` for every
+parameter with a plain text box. ⚠ Selectable procedures are how reports and parameterised views are written in
+ERP code, i.e. the overwhelming majority of real uses of that dialog. ⭐⭐ **The methodological half is the
+transferable one: a correct fix to a real defect can leave the reported symptom completely untouched.** The first
+round of this bug found and fixed a genuine defect in the same method (an all-or-nothing
+`catalog.Count == names.Count` gate, which breaks on parameters with DEFAULTS, a repeated placeholder, or
+`RETURNING_VALUES`), verified it with tests, and shipped — and the user saw no change at all, because the question
+asked was *"why does the count gate fail?"* instead of *"is this statement even the shape the code looks for?"*
+The screenshot they attached answered it in one line. ⚠ Ask what shape the input actually is before asking why the
+handling of that shape is wrong. ⚠⚠ **And one measured trap inside the fix:** a `TableReference`'s own `Tokens`
+hold **only the name** — the parser models a FROM entry's name and alias, and a selectable-procedure argument list
+is not a node — so scanning the entry for `(` finds nothing while looking entirely correct. The argument spans
+live in the enclosing **clause's** tokens.
+
+308. **"Almost visible" is indistinguishable from "invisible" to the person using it — move a contrast value to a
+THRESHOLD, not merely in the right direction.** Filter fields in the domain/column picker sit on
+`SurfaceRaised`, where the `TextBox`'s resting colours (tuned for a field on the WINDOW background) leave it
+blending in; only hover revealed it, because hover swaps the border to `AccentMuted`. The first fix strengthened
+the border alone and the user re-reported the defect **on both themes** — and the measurement then said two things
+at once: the selector *was* applying (so "it does not work" was the wrong reading), and it was still not enough.
+In Light the field's fill was `#FCFCFD` on a `#FFFFFF` surface — a **three-unit** difference, so the field's whole
+shape rested on one pixel of line, and that line measured **2.55:1**, under the 3:1 floor for a non-text boundary
+(WCAG 1.4.11). ⭐ The fix is a **recessed fill plus a border that clears the threshold** — the fill is what gives a
+field its shape; the border only closes it. ⚠⚠ And an app-level style beats the `ControlTheme`, so a stateless
+`/template/ Border#PART_BorderElement` setter must be accompanied by `:pointerover` **and** `:focus` overrides —
+otherwise fixing resting visibility silently removes the hover cue and the focus ring. Pin the **threshold**, not
+the shade: such a test survives a change of tint and fails exactly when the field starts blending again.
+
+
+309. **When a consumer starts enumerating statement shapes, the missing thing is a fact on the AST — and each
+"one more syntax" fix leaves the next one silently dead.** Firebird invokes a procedure through unrelated
+syntaxes: `EXECUTE PROCEDURE P(a, b)`, and a SELECTABLE procedure standing where a table would (`… FROM P(a, b)`),
+which then appears inside a plain `SELECT`, a PSQL `FOR SELECT … INTO`, an `INSERT … SELECT`, a CTE body, a
+`MERGE … USING`, a cursor declaration, or any subquery of any of those. The Smart-Parameters type lookup asked
+*"which statement kind is this?"* and was fixed three times — `EXECUTE PROCEDURE`, then `SELECT … FROM P(…)`, then
+the user stopped it: *"AST powinno umieć odpowiedzieć na pytanie: «W tym miejscu wykonywane jest wywołanie
+procedury z listą argumentów»."* ⭐ The fix is an interface on the tree (`IRoutineInvocation`: routine, package,
+argument spans) plus **the parser no longer discarding the argument list** — `ParsePrimaryFromItem` read the name
+and jumped to the alias, so `rap(:a, :b) r` produced a node carrying the single token `rap`, neither arguments
+**nor alias**; consumers re-scanned text because the structure was not there to read. Consumers now ask
+`DescendantNodesAndSelf().OfType<IRoutineInvocation>()` and know nothing about statements; ~130 lines of token
+walking were deleted. ⭐⭐ **The test for whether you fixed the cause or added a patch: write the theory for every
+syntax you can think of, and check how many needed code.** Here eight rows — FOR SELECT, INSERT…SELECT, UPDATE OR
+INSERT, CTE, MERGE USING, cursor declaration, derived table, EXISTS subquery — passed with **none**, because the
+parser already hangs each embedded query off its owning statement. ⚠ Model the invocation as its OWN node type
+(`RoutineTableReference`, a *subclass* of `TableReference` so existing consumers are untouched) rather than adding
+a possibly-empty `Arguments` to the table node: "arguments is empty" would conflate a no-argument call with a
+plain table, and every consumer would carry the filter. ⚠ A bare `FROM MY_PROC` with no parentheses stays a table
+— a name alone is not evidence of a call.
+
+310. **A drag-and-drop template that generates code and the parser that reads it are one feature; pin the
+round-trip or they drift.** Two things fell out of the same session. (a) ⚠ **`FOR SELECT … INTO` for selectable
+procedures existed and was unreachable**: the snippet insertion context was fixed when the drop target was
+*attached* — body editors `PsqlBody`, the SQL Editor always `PlainSql` — while PSQL scaffolds are `PsqlOnly`. That
+is right about body editors and wrong about the SQL Editor, where writing `CREATE OR ALTER PROCEDURE … BEGIN … END`
+is ordinary work. Resolve the context from the **drop offset** by asking the parser whether it lies inside a
+`BlockStatement`; ⛔ never by counting `BEGIN`/`END`, which is wrong for `CASE … END` (#117/#128/#129). (b) ⭐⭐ The
+contract worth having: **feed every template that emits a routine call back through the same AST walk the
+parameter dialog uses**, asserting the same routine, the same argument count and each generated `:param` bound to
+the slot it was generated into. Otherwise a generator can emit a shape the model does not recognise — the exact
+defect above — and nothing fails until a user drops it into an editor and presses F5.
+
+311. **Before shipping an architecture, inventory what ELSE consumes the behaviour it replaced — and check that
+the surfaces built on it still read correctly to a user.** A model-driven rewrite of routine-call recognition was
+correct, broadly tested, and the user rejected the round anyway with four findings, of which only two were code
+defects. The inventory they demanded took minutes and separated the questions cleanly: *"does this SQL carry named
+placeholders?"* (scope: **any** SQL — gates the parameter dialog) versus *"is this placeholder provably a routine
+argument?"* (scope: **typing only**). ⭐ With that written down it was provable — from `git show HEAD:`, not from
+argument — that the new model **could not** have widened the dialog's reach, because it is consulted only for
+types. ⚠⚠ **What the user was actually seeing was a MISLABELLED surface:** the parameter editor is reused for any
+parameterised statement, so a plain `INSERT … VALUES (:a, :b)` opened a window titled *"Execute Procedure"*. The
+behaviour was right and only the label lied — **and a lying label is indistinguishable from a malfunction**, which
+is why it was reported as one. Two rules follow: when a dialog is reused for a second purpose, its title is part of
+the reuse, not decoration; and *"my change cannot have caused this"* is worth proving from history before saying
+it, because it is equally worth **saying** once proved — it stops the wrong thing being fixed.
+
+312. **A value's declared type can have more than one provable origin; model each as its own AST fact and give the
+consumer ONE uniform answer.** In Firebird DML a placeholder's type comes either from an invoked routine's input
+parameter or from the column it is written into — two different metadata, so two facts (`IRoutineInvocation`,
+`IColumnValueTarget`), but one resolver returning one `ParameterTypeSource` so the consumer switches on the **kind
+of source** and never on a kind of statement. ⭐ Model the column fact as **(column, value-span) PAIRS**, not as two
+parallel lists: `INSERT (cols) VALUES (…)` and `UPDATE OR INSERT` pair positionally while `UPDATE SET col = expr`
+pairs by adjacency, and pairs let one interface serve both while keeping that difference out of the consumer.
+⚠ Refuse rather than guess, each with a written reason: no column list (matching values to columns would need the
+catalog's order — a lookup, not a fact about the text), a length mismatch (Firebird rejects the statement anyway;
+pairing the prefix types values whose column is undecided), a predicate (`WHERE col = :p` is a token fragment at
+structural depth), and a value that is not the whole placeholder (`:a + 1`).
 
 ## Avalonia UI: controls, XAML binding & templates
 
@@ -731,6 +890,10 @@ every emit path to be individually perfect.**
 
 300. **Removing an opaque background by colour distance is only safe while the tolerance stays BELOW the distance to the artwork's own darkest (or nearest) pixel — and a flood fill does not save you, it just changes where the damage appears.** EmberTern's icon master arrived 24bpp on a uniform `rgb(14,15,19)` ground, and the artwork itself contains **pure black**: Chebyshev distance **19**. Two failures follow, and both were observed. **(a) A global threshold** ("make every pixel within N of the background transparent") punches holes straight through the subject, because parts of the subject are *darker* than the background — the intuition "the background is the darkest thing in the image" is simply false for dark-on-dark art. **(b) A flood fill from the border is the right tool but inherits the same ceiling**: at tolerance 28 the fill reached the subject's black pixels, treated them as background, and **walked through them into the interior**, eating a wedge out of the middle of the logo while the outline stayed perfect. ⭐ **The rule: measure two numbers before choosing a tolerance — the background's own noise across the border (±4 here) and the distance from the background to the subject's nearest colour (19) — and pick strictly between them.** Do not carry a tolerance over from another image; both numbers are properties of the specific source. ⚠ **The same ceiling binds any anti-alias feathering:** scaling alpha by "distance from the background colour" across the whole image makes the subject's near-black interior semi-transparent, so restrict the feather to the 1px rim that actually touches the removed region. ⚠⚠ **And the verification trap that let the wedge through the first review: a cut-out inspected against the background it came from shows nothing.** A hole, a leak and a residual dark halo are all invisible against near-black and all obvious over white and magenta — composite over both, at full size, before rendering anything down. *(Branding UX sprint, 2026-08-01; `Assets/Branding/BRANDING.md`)*
 
+303. **A text control's BOX is not its INK, and vertical centring aligns the box — so a row of "centred" elements can still read as misaligned, and the mismatch grows with how little of the line height the glyphs actually use.** A `TextBlock`'s height is the **line height**: ascent + descent. EmberTern's status bar puts `Szkoleniowa · localhost:3050` beside a 7px status dot, and the text is **descender-free**, so the bottom ~4 px of its 16 px box is empty — the ink sits high in the ascent and therefore **low in the box**. Measured: the ink's mass centre lands near **9.0** while the dot — whose ink *is* its box — sits at **8.0**, a visible offset the user reported twice. ⚠⚠ **The first fix aligned the box centres, measured perfectly equal, and the screen was still wrong**; only the second, an explicit **optical** correction, closed it. **Three rules.** **(a) When aligning text against a non-text element, reason about the ink** (baseline, cap height, x-height), never the box — box centring is correct only for elements that *are* their own ink. **(b) Apply the correction with a `RenderTransform`, not a margin**: it does not participate in layout, so it cannot interact with per-element pixel snapping or shift the neighbours; keep the value **integral** or the glyphs blur. **(c) `UseLayoutRounding="False"` is a tool for an element that IS its own ink** — a circle, a filled background. Placed on a control with text inside it, it makes things *worse*: the DEV MODE badge holds caps with padding, so its ink already sits high in its box, and the downward snap that "broke" the geometry was in fact compensating for that; removing the snap moved the badge half a pixel out of line. ⚠ Adjacent trap, paid for in the same session: the spot carried an emphatic older comment (*"⛔⛔ do not try to centre this vertically"*) backed by three measurements — true, but about a **different question** (two `Run`s inside one `TextBlock`, not the block versus its neighbour). **Read what a prior measurement was measuring before using it as an answer; the more emphatic it is, the stronger the pull to treat it as closed.** *(Product Polish M3, 2026-08-03; `product-polish.md` §19.19)*
+
+304. **A guard whose criterion is not the acceptance criterion is worse than no guard: it goes green on a bad result and closes the question.** The alignment fix above shipped with a test asserting that the dot, the text and the badge had equal box centres. It passed, and the screen was still visibly wrong — so the test did not merely fail to help, it **certified the defect** and made "measured, verified, done" the honest-looking summary. ⭐ The user's framing is the rule: *"potraktuj pomiary jako narzędzie diagnostyczne, a nie kryterium zakończenia zadania"* — a measurement is how you find the cause, not how you decide you are finished. **The repair is to NARROW the test to what the machine can actually judge, never to strengthen it**: here only the dot survives as an assertion (box == ink for a circle), and the text's optical offset is documented as a visual-QA matter with a `⛔ do not "strengthen" this back` note beside it. ⚠ The tell is specific and worth memorising: **you have a green test and a user still reporting the original symptom.** At that moment the test is a suspect, not evidence — and adding *more* assertions of the same kind makes the trap deeper. Generalises past pixels to anything judged by a human: readability, wording, latency "feel", audio levels. Related in spirit to R8 (a measurement is a tool, not a closing argument) and to #299 (run the instrument against a known-good artefact before believing it). *(Product Polish M3, 2026-08-03; `StatusBarConnectionDot_SitsOnTheRowAxis`)*
+
 ## MVVM / CommunityToolkit patterns
 
 11. **`ObservableCollection` mutations from non-UI threads break compiled bindings.** `FirebirdConnectionService.ActiveConnectionChanged` fires on whichever thread the async work completed on (`ConfigureAwait(false)` everywhere). Touching `WorkspaceTabs.Add/Clear` from that thread crashes the binding layer for `ItemsControl` consumers. **Rule**: any service-event handler in a VM that mutates ObservableCollection (or properties bound to ItemsControl) must `Dispatcher.UIThread.Post(...)` the work. Scalar OnPropertyChanged is fine (binding layer handles it), but collection-change events go through directly.
@@ -929,3 +1092,644 @@ every emit path to be individually perfect.**
 295. **A `SizeToContent` window that grows AFTER it opens grows DOWNWARDS from where it already is — the top-left stays put — so a dialog centred on its owner can push its own footer, and its primary button, off the bottom of the screen.** `WindowStartupLocation="CenterOwner"` centres the window ONCE, at the size it had when it opened; nothing re-evaluates that when the content changes. EmberTern's settings import dialog reveals its section list after a file is opened, and on a 1080-tall screen the *Import* button ended up under the desktop edge with no way back except dragging the window. Nothing throws and nothing is clipped — the window is simply partly off-screen, which no layout test can see. **The fix needs TWO rules and neither works alone:** a **ceiling** (`MaxHeight` from the screen's working area) so the window can never exceed the desktop, and a **ScrollViewer around the body with the footer outside it** so the ceiling scrolls the content instead of clipping the buttons away; plus a **nudge** that pushes the window back inside the working area after a size change — ⚠ *only* when it has actually fallen outside, because re-centring on every size change moves a dialog the user is reading and is more disorienting than the defect. ⚠⚠ **The units are the real trap:** `Window.Position` and `Screen.WorkingArea` are PHYSICAL pixels while `MaxHeight`, `ClientSize` and `FrameSize` are DIPs, so on a 150% display a mixed calculation gives a ceiling a third too tall and a clamp a third too eager — convert through the screen's own `Scaling`, every time. And clamp against the **working area's own origin**, never `0,0`: a top-docked taskbar or a monitor to the left of the primary gives it a non-zero (possibly negative) origin, and the `0,0` version passes every single-monitor test. *(Settings Center — etap 5b QA, 2026-07-31; `GrowingDialogBehavior`)*
 
 296. **A disabled control's REASON needs the same change notifications as the control's enabled state — notify one and not the other and the button greys out while the explanation still describes the previous state.** EmberTern's export dialog computes `CanExport` and a separate "why not" property from the same seven checkboxes. Five of the seven declared `[NotifyPropertyChangedFor(nameof(CanExport))]` and nothing else, so unticking every section correctly disabled Export and the *"select at least one thing to include"* line **never appeared at all** — the exact confusion the line exists to prevent, with a green build and a property that returns the right answer whenever anyone reads it. ⚠ **That last part is what makes it hard to test by accident:** a test that reads the property passes, because the value was never wrong; only a test that listens to `PropertyChanged` can tell whether the UI was ever told. Two rules. **(a) Whenever a gate and its explanation are separate members, every input notifies BOTH** — they are two halves of one answer, and a declarative `[NotifyPropertyChangedFor]` next to the field is better than a hand-written `OnPropertyChanged` in a changed-handler, because the next field added is far more likely to copy the attributes than to remember the handler. **(b) When pinning it, end the test on an input that was previously silent** — the export's `Connections` flag already announced (it had a handler for an unrelated rule), so a test that unticked it last would have passed against the defect. ⚠ Generalises to any derived "why is this unavailable" text: a tooltip on a disabled button, a readiness strip, a validation summary. *(Settings Center — etap 5b QA, 2026-07-31; verified by planting the violation)*
+
+313. **A control variant that cancels its own chrome loses that cancellation in exactly one state —
+     `:disabled` — because FluentTheme paints the template child while the variant sets the control.**
+     `Button.icon` sets `Background`/`BorderBrush` to `Transparent` **on the Button**; Fluent's `:disabled`
+     style sets them on `/template/ ContentPresenter` from `ButtonBackgroundDisabled` /
+     `ButtonBorderBrushDisabled` (which `FluentBridge.axaml` repins to `PanelColor` / `BorderColor` — correctly,
+     for `Button.flat` and `Button.primary`). A style targeting the template child **beats** a setter on the
+     control, so a disabled icon button was the only icon button in the application that looked like a button.
+     ⚠ **`Opacity` makes it worse, not better, and hides the cause**: `Button.icon:disabled` set `Opacity 0.4`,
+     which *dimmed* the chip instead of removing it — and the dimmed value is what everyone measured. The
+     arithmetic gives the tell: 0.4 × `#252526` + 0.6 × `#2D2D2D` = `#2A2A2A`, i.e. a blend, not a token.
+     An earlier investigation (`docs/history/23`) attributed a disabled toolbar button's wrong look to
+     `Opacity` alone and stopped there; `Opacity` was real but secondary.
+     ⭐ **Fix at the same level as the offender** — `Button.icon:disabled /template/ ContentPresenter` →
+     Transparent, declared AFTER `:pointerover` so a pointer over a disabled button lights nothing.
+     ⛔ **Not in the Bridge**: those keys serve variants that are *supposed* to look like buttons when disabled.
+     ⭐⭐ **The second half is why it mattered for reception, and it generalises:** in the results pagination
+     strip the four *disabled* buttons were the only bordered elements while the three *enabled* ones were bare
+     — the strip said visually the opposite of the truth — and in Table Data the same rounded chip meant
+     **both** "unavailable" (`:disabled` background) and "engaged" (`ToggleButton.icon:checked`). **When one
+     visual device carries two opposite meanings, fixing the wrong one restores the other for free.**
+     Found by the §13.3 gate; a build, the full suite and a smoke test were all green throughout.
+     (Product Polish M3.5 / Z-1 — `product-polish.md` §19.36.1.)
+
+314. **In a fixed 24-unit icon box you cannot have both a full-size glyph and a large corner badge that do not
+     touch — and a stroked single-geometry icon cannot render a badge at all.** Two independent limits, both
+     measured, both worth knowing before designing an overlay mark.
+     (a) **Geometry:** a Lucide-style glyph occupies 18 of 24 units (3..21). A 6–7 unit badge in the corner
+     needs 15..22. The maximum non-overlapping split is glyph ~13 + badge 6, i.e. **+18 %** over a
+     glyph squeezed to 11 — not worth the work. So "grow the glyph and keep the badge beside it" is arithmetic,
+     not taste, and it is the wall a hand-authored `*Plus` family hits.
+     (b) ⚠⚠ **Rendering:** `SvgIcon` draws ONE `Path` with one `Stroke` and one `StrokeThickness` for the whole
+     geometry. A badge is by definition a *smaller, denser* mark; from there you can only get "smaller but
+     equally thick", which at 16 px is a blob. **A badge needs its own stroke/fill, therefore its own render
+     path** — a composite control (`DebuggerIcon`, `CreateIcon`), not a cleverer path string.
+     ⭐ **The escape that keeps one colour** is to put the badge where the glyph has **no ink** (Lucide's own
+     `folder-plus` does exactly this — full-size folder, plus inside the empty body), or to notch the glyph's
+     stroke around it. That works, and its cost is that the badge shrinks to whatever the interior allows.
+     ⚠ **When checking clearance, measure against the STROKED OUTLINE, not the path centreline.** With a 2-unit
+     stroke, "clear by 1 unit" means the outlines touch — which is how a candidate that computed clean rendered
+     as a smudge. (The ink-vs-path cousin of #288.)
+     ⭐ **And a solid badge needs no knockout**, which matters more than it sounds: the surface behind a toolbar
+     icon is not constant (`ChromeStrongBrush` at rest, `IconHoverBrush` on hover), so a knockout filled with
+     the chrome colour flashes a wrong-coloured patch the moment the pointer enters.
+     (Product Polish M3.5 / Z-6 — `product-polish.md` §19.36.3, `Assets/Icons/ICONS.md`.)
+
+315. **A guard that reads a token instead of the element that paints it is green while the product is broken.**
+     The first version of the M3.5 CheckBox guard looked `ControlOutlineBrush` up in the resources and asserted
+     its contrast ratio. That passes **unchanged** if someone points `CheckBox` back at `BorderBrush`: the token
+     still holds a good value, nobody uses it. ⭐ The correct shape constructs the control, finds the element
+     that actually paints (`Border#NormalRectangle`), and measures **that** brush — pinning two facts at once,
+     "the control takes the right role" and "the role clears the threshold".
+     ⚠ **Pin the THRESHOLD, not the value.** Asserting `#6A6A70` duplicates the catalog and goes green on a
+     value that has since drifted below the floor; asserting `>= 3:1` cannot. The hex is expected to move
+     (role before value); the reason the token exists is not.
+     ⭐⭐ **I only caught it because a planted violation was already scheduled** — the test was green, the code
+     was correct, and nothing about reading it suggested the gap. This is the operational argument for planting:
+     it does not merely confirm a guard works, it is the only step that reveals a guard measuring the wrong
+     thing. (Product Polish M3.5 / Z-2 — `product-polish.md` §19.36.2; same family as #308.)
+
+316. **A catalog read that resolves a domain to its base type DESTROYS the domain the next time the object is
+     compiled — and the editors compile from what the read returned.** `RDB$PROCEDURE_PARAMETERS.RDB$FIELD_SOURCE`
+     holds the DOMAIN name for a domain-typed parameter and an anonymous `RDB$n` for an inline type (measured on
+     FB5, 2026-08-05), and the same is true of `RDB$FUNCTION_ARGUMENTS` for arguments **and** for the
+     `RDB$RETURN_ARGUMENT` position. EmberTern's DDL reconstruction joined `RDB$FIELDS` and rebuilt the type from
+     its base attributes without ever selecting the field source, so the domain was discarded on READ — and
+     because the object editors reassemble the whole `CREATE OR ALTER` from what the read returned, opening a
+     procedure to edit its BODY and pressing Compile silently rewrote every domain-typed parameter as its base
+     type. Rule #11, gotcha #175's shape one object kind further along.
+     ⭐ **Demonstrated, not deduced:** with the pre-fix decision planted, the live probe reports
+     `the CATALOG still records D_CODE after the recompile — RDB$3` — an anonymous domain where `D_CODE` was.
+     ⚠⚠ **And byte-identity of the reconstruction PASSED under the plant**, because both reads were wrong the
+     same way. A round-trip assertion is necessary and not sufficient; the catalog is what has to be asked.
+     ⭐ **The nullability source must follow the TYPE source**, which is also measured: for `A D_NAME` (a domain
+     that is itself `NOT NULL`) the parameter's own `RDB$NULL_FLAG` is NULL and the domain's is 1; for
+     `C D_CODE NOT NULL` it is the other way round. So emitting the domain name means only the parameter's own
+     flag may add `NOT NULL` (else the reconstruction invents a clause), while emitting the base type means the
+     domain's flag MUST be materialised (else it loses one). A `COALESCE` in SQL makes that decision
+     unrepresentable. ⚠ The debugger needs the OPPOSITE answer (base type, spec R2 — an injected value must not
+     hit a domain's CHECK), so the two readers share only the "is this a user domain" predicate.
+     (Stabilization sprint S-1b — `docs/history/24-stabilization-sprint.md`.)
+
+317. **An empty result that means BOTH "absent" and "not loaded yet" will be read as "absent", and the contract
+     may say so in its own words.** `ISqlMetadataProvider.GetColumns` was documented to return an empty list
+     "when the object is unknown **or has no columns loaded yet**" — two opposite facts, indistinguishable by
+     contract. Columns are warmed lazily, so at the moment a tab opens the snapshot knows every object and none
+     of their columns, and `DiagnosticsEngine` flagged every qualified column as unknown until the warm pass
+     finished and the model was rebuilt. Symptom: "for a moment practically everything is underlined, then the
+     errors disappear" — a breach of the engine's own conservatism rule built into the contract rather than into
+     the engine.
+     ⭐ **The information existed one layer down**: the App's snapshot holds the cache DICTIONARY, which
+     distinguishes a missing key from a present-but-empty entry. It was being thrown away too early.
+     ⚠ **A readiness question needs `true` as its default**, so every provider that cannot distinguish the two
+     states keeps today's behaviour and must opt IN to reporting ignorance; a default of "not ready" silences a
+     real diagnostic everywhere, and a diagnostic that never fires is indistinguishable from one that does not
+     exist. ⚠ A present-but-EMPTY entry counts as KNOWN — the warm pass caches what it read, so an object with
+     no columns has been *answered*.
+     ⭐⭐ **The corollary that bites elsewhere:** a cache may only be dropped mid-session once its consumers can
+     tell "not loaded" from "absent". Invalidating the column cache on a metadata refresh — which had been
+     missing, so a newly added column stayed unknown for the rest of the session on every open tab — would
+     otherwise have turned every refresh into the same false-positive storm. The two halves are one fix.
+     (Stabilization sprint S-2; the same family as #285.)
+
+318. **Avalonia's `DataGrid` claims Enter itself, has no public "am I editing", and only a TUNNEL handler is
+     early enough to intervene.** Three measured framework facts (12.0.0, headless probe), each contradicting the
+     obvious approach. (a) `ProcessEnterKey` commits any edit and moves down one row — so "Enter does not start
+     editing" is the framework's design, not an application bug; `ProcessF2Key` is what begins an edit.
+     (b) A handler added at **tunnel** sees Enter first and unhandled, while at the **bubble** phase it is
+     already handled — a bubbling `KeyDown` therefore runs after the selection has moved (planting `Bubble`
+     instead of `Tunnel` fails 5 of 7 behavioural tests). (c) The only public editing-related member is
+     `CurrentColumn`; there is no `IsEditing`. So the usable gate is FOCUS: when nothing in a cell has focus the
+     focused element is the grid ITSELF, and once an edit begins it is the editing control — which also hands
+     Enter back to an embedded control the moment the user is inside one. `BeginEdit()` focuses the editing
+     element by itself. ⚠ `DataGridCell` exposes no public `Column`, so the current cell is located from
+     `SelectedItem` + the column's `DisplayIndex` (display order, because these grids allow reordering).
+     (Stabilization sprint S-1a.)
+
+319. **A setting for a mode the product never selects is not "harmless when unused" — it invites a decision that
+     cannot have an effect.** The connection dialog offered a client library (`fbclient.dll`) path; pointing it
+     at a completely invalid DLL changed nothing, because EmberTern connects with `FbServerType.Default` — the
+     pure managed wire protocol, where no `fbclient.dll` is loaded at all — and the driver consults its
+     `ClientLibrary` only in `Embedded` mode, which appeared nowhere in the codebase. It had been documented for
+     years as "kept in the UI but harmless when unused"; it was not harmless, it was a lie the UI told.
+     ⭐ Removing a persisted field is safe without a schema bump: `System.Text.Json` ignores members it does not
+     know, so an older file deserializes cleanly and the value is dropped — while a version bump would trip the
+     downgrade protection that makes older builds refuse the whole file.
+     ⚠ **Remove the disclosure control with it** — the "Advanced" expander's only content was that field, and a
+     disclosure that reveals nothing is worse than none. ⚠ Watch for orphans that
+     `TreatWarningsAsErrors` cannot see: the two view-model properties and two `UiStrings` constants left behind
+     were public members, so nothing failed.
+     ⭐ **A guard written against a NAME can be tripped by prose:** the "Embedded is selected nowhere" check
+     failed on its own explanatory comment naming the mode whose absence it documents. The predicate is the
+     ASSIGNMENT (`ServerType = FbServerType.Embedded`), not the mention — a scan for a type name measures the
+     text, not the meaning (#285 met from the test side).
+     (Stabilization sprint S-5.)
+
+320. **A reported correlation can be real while its variable is wrong.** "The tooltip works on `VariableName`
+     and not on `:VariableName`" was exactly reproducible, and there was no colon bug: `SqlLexer` emits `:a` as
+     ONE `Parameter` token, `BindParameterToken` resolves it through the same `scope.Resolve` as a bare name, and
+     Quick Info answers on every offset of `:a` — including the colon itself. What had no binding at all was a
+     colon-form reference inside a QUERY CLAUSE, because the query binder's token walk handled `AS`, dotted and
+     bare names and had no `TokenKind.Parameter` branch. The colon form is simply WHERE an embedded `SELECT` puts
+     a local, so the two looked connected; the actual variable was the STATEMENT KIND.
+     ⚠ A second, independent gap sat beside it: a `SelectQuery`'s NODE span swallows a PSQL singleton select's
+     `INTO` while none of its CLAUSES covers it (`IsCoreEnd` does stop the core at `INTO`), so skipping the node
+     hid the INTO targets from the PSQL walk and nobody bound them. Skip the CLAUSES, not the node — a
+     binder-side skip cannot lose a lexeme, whereas tightening the parser's span risks dropping the INTO from
+     formatted output, where §0's net would revert the whole routine to verbatim.
+     ⭐⭐ **And the fix changed the DEBUGGER as a side effect** — its read/write set falls back to "inject every
+     in-scope local" precisely WHEN THE ANALYZER RETURNS NOTHING (#238), so restoring the references NARROWED the
+     injection. An absence is not a decidable signal: it meant both "this statement has no locals" and "the
+     binder does not cover this shape". ⚠⚠ The debugger's own 38-case fidelity probe said nothing about it,
+     because **not one of the 22 routines it drives contains a singleton `SELECT … INTO`** — a measurement can
+     reproduce a MECHANISM without reproducing the STATE. Before accepting that an existing probe rules a change
+     out, list the states it actually exercises. (The state was added to the lab as `SP_DBG_SELINTO` and the probe
+     grew case 39.)
+     (Stabilization sprint S-6.)
+
+321. **A `>=` dependency range makes a genuinely untested combination look like a supported one — and the build,
+     the restore and the test suite all stay silent about it.** `Avalonia.AvaloniaEdit` 12.0.0 declares
+     `Avalonia (>= 12.0.0)`, so raising the core to 12.1.1 satisfies it **without a warning, without NU1605, and
+     without a downgrade notice**: the package was compiled against 12.0 and is now running against a minor it
+     has never seen. ⭐ The asymmetry is the whole trap — a package that pinned `[12.0.0]` would have failed the
+     restore and forced a decision, so **the looser the range, the quieter the risk**. And the suite cannot fill
+     the gap: EmberTern's headless tests assert properties and brushes, not pixels, so an editor whose text
+     layout shifted by a line would pass all 7360 of them.
+     ⚠ The exposure is specific, not theoretical. 12.1 changed exactly the stack AvaloniaEdit is built on —
+     `Rework text fallback itemization`, `TextRunCache`, `Preserve lines at rounded fractional heights`,
+     `line break enumerator`, `Padding` in `ScrollContentPresenter` — while six `IBackgroundRenderer`s, a
+     hit-tested `BreakpointMargin`, `InlineValuesRenderer` (which draws in the empty space PAST the end of a
+     line, i.e. reads line geometry), four `OverlayLayer` cards and eleven read-only DDL previews all hang off
+     `TextView` and `GetRectsForSegment`.
+     ⭐⭐ **So the countermeasure is not a version number, it is a WRITTEN REASON at the reference.** A pinned
+     older version with no note reads as neglect and gets "tidied up" by the next author, whose build will be
+     green. The comment must say what does not exist yet, what would have to be re-verified, and where the
+     checklist lives — because the only instrument that can answer this question is a human looking at the
+     editor. ⚠ Generalises to any UI-adjacent package whose range is `>=`: **the absence of a restore error is
+     evidence about the metadata, never about compatibility.**
+     (Avalonia 12.1.1 update sprint, 2026-08-05; `docs/design/avalonia-12.1.1-update.md` §3 R1, decision D-3.)
+
+322. **A safety rule stated about a CLASS of things can be false for every actual member of that class — and the guard that pins it will look rigorous while protecting nothing.** `EditableGridBehavior` carried an `EditableGridKind` whose only job was to withhold the cell-editor height role from the Table Data grid, on a stated, emphatic, MEASURED-sounding ground: *"a 24 px minimum on the in-cell editor of a data grid grows every row the moment the user enters edit mode, because those grids have no ComboBox holding the row open (22–32 px rows)"*. Every word of that is true **about a data grid in general** — and the sentence was never checked against the one grid it governed. `TableDetailTabView.axaml` pins `DataGrid.data-edit DataGridRow` to a fixed **`Height="32"`** — an exact height, not a minimum, so the row cannot grow from its content at all — and after that view's `6 2` cell padding it offers 28 px to a 24 px editor. So the distinction protected nothing and cost a real, user-visible defect (*"the TextBox while editing is still too low"*) for as long as it stood. ⚠⚠ **The reinforcing part, and the reason this is worth an entry rather than a fix: a test pinned the wrong behaviour and called the correction "the tempting simplification"** — `TableData_IsAttachedAsAData_Grid_NotAsADefinitionOne`, complete with the M2b step-7 citation. A guard that asserts a *policy* inherits every unchecked premise of the policy; it cannot detect that the policy's precondition is absent, because it never looks at the precondition. ⭐ **The countermeasure is to guard the PREMISE, not the policy.** The replacement asserts the three numbers that must stay in relation to each other — the row's declared height, the cell padding, and `Size.Control` — each read from where it actually lives, so lowering the row or raising the role fails loudly and the seam's assumption can never go quietly false again. ⚠ Same family as **#285** (a measurement by carrier cannot answer a question about the role) and the stabilization sprint's *"a report says WHERE the user saw it, not WHAT is broken"*: the failure is always that the sentence and the thing it describes were never put side by side. *(Grid consistency sprint, 2026-08-07; `docs/history/25-grid-consistency-sprint.md`)*
+
+323. **A source guard with an "…or some call like this exists somewhere in the file" fallback answers YES for exactly the thing it was written to catch.** `EditableGridSeamTests.MentionsGrid` had to accept three ways a view binds a grid before attaching it (a field, a pattern variable, the `x:Name` directly), and its last clause degenerated into `Regex.IsMatch(codeBehind, @"EditableGridBehavior\.Attach\(\s*[A-Za-z0-9_]+\s*,")` AND "this file mentions the grid's name" — i.e. *any* attached grid in the file satisfied it for *every* grid in the file. A view with four grids, three attached, reported all four attached. ⚠ It went unnoticed because the fallback was written to make two real views pass, and they did — the clause was **calibrated against the passing case and never against the failing one**. It surfaced only when a signature change (dropping the second argument) broke the comma in the pattern and the guard suddenly named two grids that were, in fact, correctly attached. ⭐ **Rule: a guard that resolves an identifier must assert against THAT identifier.** Enumerate the binding forms, collect the candidate names, and require the call on one of them — never fall back to "the file does this somewhere", which is a existence check dressed as a per-item check. ⚠ And when a guard's fallback exists to cover shapes you could not parse, the honest move is to fail on the unparsed shape (forcing an entry with a reason, as the same file's `NotAttached` dictionary already does) rather than to wave it through. *(Grid consistency sprint, 2026-08-07)*
+
+324. **An allowlist of positional exceptions can never converge on a language, because its completeness is bounded by the bug reports that built it.** Four separate fixes had added one positional predicate each — `NEXT VALUE FOR`, then `GEN_ID`'s first argument, then `EXTRACT`'s first argument — for the same underlying fact: Firebird reserves very few words, so most of its own vocabulary (`MONTH`, `PLACING`, `UNBOUNDED`, `AUTONOMOUS`, `SHA256`) lexes as an ordinary IDENTIFIER *on purpose*, because a user may legally name a column `MONTH`. Every construct nobody had written yet was therefore a false ET0003 in waiting, and a fifth report was guaranteed. ⭐⭐ **The convergent tool is a VOCABULARY, because it is bounded by the LANGUAGE — finite, documented, and it does not grow with usage** — and it is safe because its only permitted consequence is SILENCE: an identifier that spells a Firebird word and resolves to nothing is not *provably* an unknown variable, while a variable genuinely named `MONTH` is declared, therefore resolves, therefore keeps its binding, colour, Quick Info and find-references. ⚠ **But a vocabulary alone is too blunt, and an existing guard is what proved it**: `v = year;` IS a genuine unknown variable, and a test pinned exactly that (*"the word is not exempt — only the position is… which is what stops this fix from becoming a silent hole named YEAR"*). The precise rule is ADJACENCY — a Firebird word is syntax when it sits next to another WORD (`USING SHA256`, `AT LOCAL`, `UNBOUNDED PRECEDING`, `OF MONTH`), and an operand when it stands alone between punctuation. ⚠ A third distinction falls out and is also merited: a CONTEXT VARIABLE (`ROW_COUNT`, `SQLCODE`, `USER`, `INSERTING`) is a complete value expression on its own, so `v = row_count;` must be silent *unconditionally* — one set with one suppression condition makes one of those two cases wrong whichever condition you pick. ⭐ Positional knowledge is still the right tool where the consequence is to RESOLVE a name (a generator must be looked up; an unknown one is a real ET0001) or where a column could plausibly collide inside a construct — the two mechanisms are complements, and neither is a superset of the other. *(Firebird language completeness sprint, 2026-08-07; `docs/history/26-firebird-language-completeness-sprint.md`)*
+
+325. **A defect measured on one code path can be absent from the report and present in its twin — and the twin's symptom is quieter, which is why nobody filed it.** The PSQL expression walker reported ET0003 on `DATEADD(MONTH, …)`; the QUERY walker had the identical blind spot and **no grammar gate at all**, but its failure mode is silent: a Firebird word that happens to match a column on one in-scope table simply BINDS to that column — wrong colour, wrong Quick Info, wrong find-references, no squiggle — and only produces a visible finding (ET0005 *Ambiguous column*) when two tables collide. ⚠ So the report's absence was evidence about *observability*, not about correctness. ⭐ The countermeasure when fixing a walker: ask what ELSE walks the same shape, and give the guard a fixture that makes the quiet failure loud — here a metadata snapshot deliberately seeded with columns named `MONTH`, `PLACING`, `UNBOUNDED`, so a mis-binding cannot pass as silence. ⚠ Note the fix could NOT be the vocabulary rule from #324 there: `SELECT MONTH FROM SALES` must keep binding its column, so the query walker gets the POSITIONAL rule only. *(Firebird language completeness sprint, 2026-08-07)*
+
+326. **A statement PREFIX the parser does not recognise does not degrade gracefully — it collapses the whole statement into a leaf that ends at the first nested semicolon.** `ParsePsqlUnit` dispatched on the first token alone, so a loop label (`retry: while (i < 10) do begin i = i + 1; leave retry; end`) and `IN AUTONOMOUS TRANSACTION DO BEGIN … END` both fell through to `ParsePsqlLeaf`, which stops at the first `;`. The fragment then contained a top-level `=`, so `ClassifyLeaf` called it an **Assignment** — a position where an unresolved bare name IS flagged — and the label was reported as an unknown variable while the loop body was never modelled at all. Gotcha #301's shape (`EXECUTE BLOCK`) one construct further along, and the same tell: *the visible symptom was a diagnostic, the actual damage was structural*. ⚠⚠ **Fixing the parser alone leaves the squiggle.** Once the prefix is inside the loop node's tokens, the binder's `BindControlHeader` walks it **with flagging on**, so the label is still read as a condition operand. Both halves are needed, which is why the prefix definition is public and shared: the parser uses it to REACH the statement, the binder to not START the header at the label. ⭐ **Two consumers, opposite reasons, one definition** — a second copy is how a rewrite ends up disagreeing with the walk it feeds. *(Firebird language completeness sprint, 2026-08-07)*
+
+327. **A refusal can rest on a premise that is true and a conclusion that does not follow — and it will read as a measured boundary for as long as it stands.** The debugger refused to step a trigger's `FOR SELECT` cursor that referenced `NEW`/`OLD`, documented as a §F fidelity boundary, on the ground that "the harness's synthetic context variables do not exist inside a separately-opened DSQL cursor". That ground is correct. The conclusion is not: **the cursor never needed them, because `NEW.ID` in a cursor query is a VALUE and the frame already holds it** — so it binds as a positional `?` exactly like the `:variable` references the same bridge had been rewriting since D6. The fix added no mechanism at all; it passed the trigger context to the existing span-driven rewrite. ⚠ The tell that a boundary deserves re-reading: it names a *missing thing* rather than a *missing capability*. "X does not exist there" invites the question "does it need to?", and that question had never been asked. ⭐ Fidelity was then a separate question with its own answer: binding at OPEN is what Firebird itself does (a compiled trigger evaluates its cursor parameters once), so a body assigning `NEW.col` mid-loop does not change an open cursor's rows — re-reading the frame per FETCH would have been the *unfaithful* choice, and also the one that "feels more live". *(Firebird language completeness sprint P6, 2026-08-07; `DebuggerFidelityProbe` case 40)*
+
+328. **"The application uses a rigid date format" can be the application faithfully following a setting the reporter forgot they made.** Measured before changing anything: both data grids already render dates through `CultureInfo.CurrentCulture` — the SQL results grid via an Avalonia binding, the Table Data grid via `object.ToString()` — and on the reporting machine that resolved to `yyyy-MM-dd` because **Windows' own short-date override for `pl-PL` is set to `yyyy-MM-dd`** (the unoverridden culture gives `d.MM.yyyy`, and true `InvariantCulture` gives `08/07/2026`, so all three are distinguishable and the measurement is decisive). ⭐ There was no defect on the surface the report pointed at, and saying so is a result. What WAS hard-coded were quieter places the report did not mention — the About window's release date under `InvariantCulture`'s `d MMMM yyyy`, i.e. an English month name on every machine. ⚠ The general shape: when a report is about *format* or *locale*, print the culture, the pattern AND the user-override variant before reading any code — `new CultureInfo("pl-PL")` honours Windows overrides when it is the current culture, so a test that constructs it can silently measure the developer's own control-panel setting. *(Firebird language completeness sprint P5, 2026-08-07)*
+
+329. **An editor that can only express PART of a column's type does not merely limit editing — it OVERWRITES the part it cannot express.** A `CalendarDatePicker` served both `DATE` and `TIMESTAMP` columns in the Table Data grid. The reported symptom was the mild one (*"I cannot edit the time"*); the real one is that the control yields a `SelectedDate`, so **committing a picked date wrote midnight over the time the row already held** — a silent write of a value the user never chose (rule #11). ⚠ The tell is worth generalising: whenever one editor serves several types, ask not *"can the user enter every value?"* but *"what does this control emit for the parts it does not show?"* — a partial editor's output is a complete value. ⭐ The replacement was chosen from a **measurement of the framework, not a guess**: Avalonia 12.1.1 ships `CalendarDatePicker`, `DatePicker`, `TimePicker` and `Calendar` and **no combined date+time control** (read from the package's own API metadata), so the honest answer was the plain text editor — the one editor that can express the whole value — rather than a bespoke composite in a 24 px cell. *(QA of the language completeness sprint, 2026-08-08)*
+
+330. **A display rule written against the CLR type cannot express the DECLARED type's semantics, and the obvious repair is wrong in the other direction.** Firebird's `DATE` and `TIMESTAMP` both reach the app as a `DateTime`, so a cell renderer that interrogates the VALUE printed `00:00:00` on a column that stores no time at all — an invented component the user cannot edit away. ⛔ The tempting fix — *"hide the time when it is midnight"* — is worse: it then hides a **real** `00:00:00` on a TIMESTAMP, i.e. it trades a visible defect for an invisible one. Only the declared column type answers both, so the renderer takes it as an input and returns "not mine" for everything else. ⚠⚠ The trap had already been laid: a general `Cell(object?)` helper written months earlier switched on `TimeOfDay == TimeSpan.Zero` and **had no production consumer at all** — it was deleted with the fix, because a dead helper embodying exactly the wrong heuristic is a defect waiting for its first caller. ⭐ Same shape as the debugger's own version of this question, one surface over: there, too, the declared type is what separates a DATE from a TIMESTAMP standing at midnight. *(QA of the language completeness sprint, 2026-08-08)*
+
+331. **A seed that deliberately shows LESS than the value holds turns a mere focus change into a write.** `DataGrid` commits a cell because focus left it, not because anything was typed — so once the TIMESTAMP editor was (correctly, on the user's call) seeded to second precision, **tabbing across a row would have written the rounded value back over a sub-second timestamp nobody touched**. ⚠ The rounding itself was the right product decision; what it created was a *second* decision nobody had made. The fix is "nothing typed ⇒ nothing written": the commit path compares the editor's text with the seed for the current value and returns without an UPDATE when they are equal. ⭐ **The load-bearing detail is that the seed has ONE owner** — the same function feeds the editing template and the untouched-edit check, because two copies of "what does this box start with" would eventually disagree about whether the user typed anything, and that disagreement is exactly the data loss the check exists to prevent. *(QA of the language completeness sprint, 2026-08-08)*
+
+332. **A `ControlTheme`'s default value is outside the design catalog, so the size most elements actually
+     render at can be a number nobody named.** Measured in EmberTern M4: of **355 icon declarations, 191 give
+     no size at all** and therefore take `Width="16"` written as a literal in `IconGeometries.axaml`'s
+     `ControlTheme` — while the catalog's `Size.Icon` role declared **14** and had **two** consumers. The role's
+     comment named four surfaces ("toolbar, tab, tree, context-menu row"); the measured sizes were **16 / 14 /
+     15 / 14**, so it described one of the four and did not describe its own stated default.
+     ⭐ **Why it drifted invisibly for so long:** the M2c compliance guards count `FontSize`, `FontFamily` and
+     `CornerRadius` — nobody ever counted icon size. An unmeasured property is not "clean", it is unmeasured,
+     and this one reached **seven** rendered sizes (10, 11, 12, 13, 14, 15, 16) with a green build throughout.
+     ⚠ **A measurement that counts only explicit declarations answers a different question than "what does the
+     product render".** The M2a inventory did exactly that and reported "14×64, 16×15, …", i.e. 164 of 355.
+     ⭐ The cure is not to delete the default — it is to give it a ROLE, at the same value, so the catalog can
+     see it: pointing the setter at a token changes nothing on screen and makes visible what would move those
+     191 icons at once. (Product Polish M4 / A-3 — `product-polish.md` §19.37.2.)
+
+333. **A guard that pins a premise by TRANSCRIBING the number fails the moment that number moves into a role —
+     and it fails for a reason its own name does not describe.** Two of five guards over "an editable grid row
+     must be able to carry a `Size.Control` editor" broke when four grids were unified onto a
+     `Size.Row.GridEdit` role: one asserted `Value="(\d+)"` against the markup and reported *"the row no longer
+     declares a fixed Height"*; the other kept `private const double DataRowHeight = 32;` and reported that the
+     view had stopped spelling 32. **Neither said what was true** — the rows were still fixed, still tall
+     enough, and the editor still fitted.
+     ⭐ **The cure is to RESOLVE the role, not to relax the assertion**: read the setter's value, and when it is
+     `{DynamicResource X}`, look X up in `Tokens.axaml`. That keeps the relation checked (height − padding ≥
+     `Size.Control`) across a representation change, and it fails loudly on a key the catalog does not
+     define — which XAML itself never would, since a missing `{DynamicResource}` silently leaves the property
+     at its inherited value.
+     ⚠ **The transcribed constant is #284 inside a guard**: a derived value written by hand goes stale exactly
+     as silently as a string, and a test file is not exempt because it is a test.
+     ⭐⭐ **And the repair is the moment to widen the guard**, because the same edit usually reveals that it only
+     ever covered one member of a class (#322): the first of the two checked Table Data alone and now runs over
+     all six editable definition grids. (Product Polish M4 / C-1 — `product-polish.md` §19.37.6.)
+
+334. **When several independent authors refuse the same catalog role, that is a MEASUREMENT of the role — not
+     several oversights to be swept up.** EmberTern's `Text.SectionHeader` carried 11 SemiBold, and its
+     canonical consumer (`TextBlock.group-header`, 19 uses) sits in **every one of them** directly above
+     `TextBlock.field-label`, which carries 12 Regular — so the section header was one step SMALLER than the
+     text it names, and "stronger than the field label", which the role's own comment claimed, was true of the
+     weight alone. Five views had quietly declined the role and kept their own 12 SemiBold, each with a written
+     "collision" note pointing at a future review.
+     ⭐ **The tell is the DISTRIBUTION, not any single screen**: 19 headers at 11 against 17 at 12, in an
+     identical context. A role the product contests roughly half the time is not being violated — it is being
+     corrected. Same shape as `Size.Row.Tree` (catalog said 20, product showed 24, the catalog was wrong).
+     ⚠ **Practically: before migrating exceptions onto a role, count the two populations and check whether they
+     share a context.** If they do, ask which side is right instead of assuming the catalog is; if they do not,
+     the "exception" is a different role that has not been named yet.
+     ⚠ A second thing this hid: the collision register recorded only ONE of the two answers as a collision
+     (the deviating views), which made a symmetrical disagreement look like one-sided drift.
+     ⭐⭐ **A related smell in the same catalog**: a role can duplicate another by ROLE and not merely by value.
+     `Text.Toolbar` (12) and `Text.Compact` (11) named the same job — the latter's comment already said
+     "chrome: panels, tabs, BARS" — so the catalog offered two answers to one question and the product used a
+     third. A role with no consumers is the visible symptom (#233); the duplicated *description* is the cause.
+     (Product Polish M4 / A-2 + B-1 — `product-polish.md` §19.38.)
+
+335. **Neither the VALUE nor the GEOMETRY NAME identifies a control, so a sweep keyed to either can report
+     progress while the thing a user actually looks at stays inconsistent — or gets described wrongly.**
+     EmberTern's icon sizes had been swept twice by value (every literal `16`, every literal `15`) and the
+     ceiling fell each time, yet the *pagination bar* — one control group, reused across five screens through
+     the same `TableDetailPagination*Tooltip` strings — carried **14 in two screens and 16 in three**, and
+     nobody had seen it, because no pass had ever grouped by the bar.
+     ⭐ **The general shape: `grep`-shaped work groups by the number; design coherence is a property of the
+     control.** A pass over "every `15`" or "every `#3C3C3C`" is a set no user can perceive; the set they
+     *can* perceive is "the pagination bar", "the filter toggle", "the panel chevron" — and those cut across
+     values.
+     ⚠ **Practically: before a value-keyed sweep, group the SAME control across screens and check it agrees
+     with itself.** That one query answered what three earlier passes could not: the same `Button.icon` shape
+     renders 16 in 135 places and 14 in 34, both populations living **in the same files**, so neither a
+     per-file nor a per-surface rule could describe it — which is what proved it a divergence rather than an
+     unnamed role, and stopped it from being "tidied" screen by screen.
+     ⚠⚠ **And the second half was paid for by committing the error while writing this entry.** The first
+     measurement grouped by the geometry name, so `Icon.ChevronRight` — which is *both* one of the four
+     pagination icons *and* the disclosure chevron beside a section title — put the debugger's "Advanced"
+     chevron into "pagination". That produced a written claim that the bar had **three** sizes and an
+     accusation that an earlier, accepted iteration had deepened the divergence; **both were false and were
+     retracted before any code changed.** ⭐ What exposed it was printing each icon's **host** — the button's
+     tooltip and command — beside it, i.e. asking *what is this thing to the user*, not *what is its resource
+     called*. A name is a carrier, and a measurement by carrier does not answer a question about a role
+     (#285, one layer further out).
+     ⛔ The practical rule: **an identifier is only a valid grouping key if one identifier means one control.**
+     Verify that before trusting the grouping — the unambiguous marker here was `Icon.ChevronFirst`, which
+     nothing but a pagination bar uses.
+     ⚠⚠ Its sibling in the same iteration is #332 one property further out: `Spacing`, `Padding` and `Margin`
+     had **no counter at all**, so three files reporting zero design debt held ~147 local values with the role
+     read exactly **zero** times for two of those properties. **A stage's reported number is bounded by what
+     anyone thought to measure**, and a clean report over an unmeasured property is not evidence of a clean
+     product. (Product Polish M4.1 — `product-polish.md` §19.39.)
+
+336. **A guard that COMPUTES something must compute it with the engine the product uses; the headless test
+     platform is not that engine, and the difference is silent.** A new guard asserting that every icon
+     geometry is vertically centred in its 24×24 grid used `StreamGeometry.GetRenderBounds` inside the test
+     suite's headless session and reported **six offenders that render perfectly** — every one of them
+     containing an arc. Measured side by side on the same path data: the headless platform
+     (`UseHeadlessDrawing`, i.e. how the tests run) **ignores an arc's bulge and takes the box from the
+     endpoints**, so `Icon.Search` reads Y 10..22 (centre 16, "4 units low"), while Skia — what actually
+     draws — reads Y 2..22 (centre 12, perfectly centred).
+     ⭐ **The failure mode is the dangerous one: the guard was RED, with a precise number, naming real files.**
+     Acting on it would have "fixed" six correct icons and shipped six new defects, and every step would have
+     looked rigorous. #315's shape (green or red for a reason its own name does not describe), one layer down:
+     here the wrong thing was not the assertion but the **measuring instrument**.
+     ⚠ **Practically: when a test computes geometry, text metrics, layout or colour blending, ask which
+     implementation answers — and validate it against a known-good case before trusting a finding.** What
+     exposed it here was that an earlier Skia-based audit of the same 86 geometries had reported only three
+     outliers; two measurements disagreeing is a fact about the tools, and the one that matches the renderer
+     wins.
+     ⭐ The fix also improved the test's placement: measuring with **SkiaSharp directly**
+     (`SKPath.ParseSvgPathData` → `GetFillPath` → `TightBounds`) needs no Avalonia platform at all, so the
+     guard lives in the MAIN partition instead of growing the fragile headless class list (#94/#226/#286).
+     ⚠ Use `TightBounds`, not `Bounds` — the latter is the control-point box, which for an arc answers a
+     different question again. (Product Polish M4.1 QA — `product-polish.md` §19.39.7a.)
+
+337. **A counter keyed to the NAME OF A CONTROL cannot see the same thing built a different way — so its
+     "zero" means "not built like that here", never "clean".** The icon-size ceiling
+     (`MeasureIconSizeLiterals`) matched `<controls:SvgIcon|DebuggerIcon|CreateIcon … Width="[0-9]`, i.e. it
+     asked *"is this an entry point into the icon system?"* while its name and its failure message both claim
+     to answer *"does an icon declare its size as a number?"*. `TableDetailTabView` draws primary-key, foreign-key
+     and unique markers with a raw `<Path Fill=…>` over three **locally declared** `StreamGeometry` resources —
+     so the file **reported 0 while carrying 5 size literals**, and had done so through every M2c/M4 sweep.
+     ⭐⭐ **The blind spot was not one guard's, it was structural: the same bypass hid the file from THREE
+     mechanisms at once** — the `ControlTheme` default size (so A‑3's "an icon with no attribute is correct"
+     never applied), the M4.1 centring audit (which reads `IconGeometries.axaml`, where these geometries are
+     not), and the size counter. Each is sound in isolation; all three share the assumption *"an icon is an
+     `SvgIcon`"*, so one file opted out of the entire design system in silence.
+     ⚠ **This is #285 one turn further.** #285 says a measurement keyed to the CARRIER cannot answer a question
+     about the ROLE. Here the carrier is the element name itself, which makes the failure invisible in the
+     friendliest possible way: **not a wrong number, but an absent row** — and an absent row reads as
+     compliance. A number you can see is debt; a file that never appears is nothing at all.
+     ⭐ **Practical rule: before trusting "this file is clean", check that the file is even IN the population
+     the counter can match.** The cheap test is a census of the alternative mechanism — here, one `grep` for
+     `<Path` across `src/` returned **9** hits: 5 the offenders, 4 legitimate `ControlTemplate` internals with
+     no literal size, so extending the regex needed **no exemption at all**. Two minutes of counting turned a
+     suspicion into a bounded fact.
+     ⚠ The complementary guard is structural, not numeric: *a geometry declared outside the icon system must
+     carry a written reason* (`IconGeometryOutsideTheSystem`) — because the value of such a list is never the
+     names in it, but that **adding yourself to it forces you to state which side of the boundary you are on**
+     (the `DatePresentationTests` pattern). ⛔ And note what the extended counter must NOT do: raising a
+     ceiling because a measurement improved is a **correction of the measurement, not a regression**, and
+     "fixing" it by lowering the number again would re-hide exactly what was just found.
+     (Product Polish M4.2 — `product-polish.md` §19.40.)
+
+338. **A subclass of a templated control does NOT inherit its base class's `ControlTheme` — Avalonia looks the
+     theme up by the CONCRETE type, so the control renders NOTHING while every observable state looks
+     healthy.** M4.2b's first shared dependency tree was `class DependencyTreeView : TreeView` with its own
+     XAML. It compiled, bound correctly and had its data — measured in the failing test: `ItemCount = 1`,
+     `DataTemplates = 2`, **realized rows = 0**, against a plain `TreeView` realizing 1 from the *same*
+     collection. No theme ⇒ no template ⇒ no `ItemsPresenter` ⇒ no containers. The fix is one line —
+     `protected override Type StyleKeyOverride => typeof(TreeView);`.
+     ⭐ **What identified it was the CONTROL EXPERIMENT, not reading the code**: the same collection in a bare
+     `TreeView`. Without that comparison "0 rows" is ambiguous between "our control is broken" and "the test
+     harness never laid anything out" — #336's lesson (validate the instrument against a known-good case)
+     applied to a control instead of a measurement.
+     ⚠⚠ **The failure mode is the dangerous one: an empty surface, not an exception.** Nothing logs, nothing
+     throws, the build is green, and a screen that shows no rows is indistinguishable from a screen whose
+     query returned none. ⛔ Never delete `StyleKeyOverride` as "redundant" — it looks like ceremony and its
+     removal costs an entire feature.
+     ⭐ The general rule beyond Avalonia: **when you subclass a control to share markup, check what the
+     framework resolves by concrete type** (themes, templates, implicit styles, resource lookup). Inheriting
+     the C# type does not inherit those. (Product Polish M4.2b — `product-polish.md` §19.41.)
+
+339. **"The rule is correct" and "the wiring exists" do not add up to "it works" — between them sits a third
+     question no source guard asks: does the event ever REACH the handler, and is there still state for it to
+     act on?** M4.2b shipped ←/→ tree navigation with seven green unit tests of the rule
+     (`SidebarFlatController.Navigate`) and a green source guard proving both trees wire it. In the app the
+     keys did nothing, and there were **two independent causes**:
+     ⭐ (a) `ListBox` handles the arrow keys in its own CLASS handler and marks them handled, so an instance
+     handler added with `list.KeyDown +=` **is never invoked at all** — #224 one control-family further along;
+     the fix is registering on the TUNNEL, which is exactly the case #224 says a tunnel is for.
+     ⭐⭐ (b) far worse and invisible to (a)'s fix: the control MIRRORED the controller's rows into its own
+     collection with `Clear()` + re-add, and **`Clear()` drops the `ListBox`'s `SelectedItem`**. Expanding a
+     node therefore erased the selection, so the *next* key had nothing to act on. ⚠ The tell is subtle —
+     **one keypress worked, two in a row did not** — so a test pressing a single key would have "proved" the
+     fix. The cure is to bind the list directly to the controller's collection, which splices on expand and
+     keeps row instances (and with them, selection).
+     ⚠⚠ **And the test that found this first sent the key NOWHERE**: measured `listFocused=False`,
+     `focusWithin=False`, no focused element — `list.Focus()` does not take focus in a headless session.
+     Until that was fixed, "the key does nothing" meant "the key was never delivered", and acting on it would
+     have fixed the wrong thing. ⭐ **Focus the ROW CONTAINER, as a real click does.**
+     ⭐ Practical rule: for anything keyboard-driven, one test must send a REAL key through the full event
+     pipeline and press **at least twice**, because single-shot input hides every state-loss defect.
+     (Product Polish M4.2b — `product-polish.md` §19.41.)
+
+340. **A decision DEFERRED in a code comment is not an entry in any register — so when the register is later
+     closed "in full", the deferral survives it, silently, and reads to the next author as a settled state.**
+     M4.2 found one such orphan (the twins' card radius, B2) and diagnosed it as a stray that "fell between
+     stages". M4.3 measured the population: **19 comments saying „rozstrzyga §13.3" in its five files alone**,
+     covering essentially every local value left there — plus ~43 more across `src/`. The §13.3 gate produced
+     six findings (Z‑1…Z‑6) and decided **none** of them; none received a K number; and the next stage then
+     declared the collision register **closed in full** and moved on to migration.
+     ⭐⭐ The mechanism is a **split of custody**: the deferral lives in the SOURCE, the register lives in a
+     DOCUMENT, and only the document ever gets closed. Nothing is wrong with either half — which is why this
+     is invisible to a build, a test suite and a document review alike.
+     ⚠ The practical tell is that the orphans are **not** distributed randomly: they cluster exactly where the
+     migration counters still show a remainder, because a value that was parked is a value that was not
+     migrated. So *"why does this file still have local values?"* and *"which decisions were never taken?"*
+     turn out to be the same question, and reading the comments answers both faster than reading the counters.
+     ⭐ Rule: when a stage hands a decision to a later review, the decision needs an **entry with an
+     identifier** in the register that review will close — a sentence in a comment is a reminder, not a
+     backlog item. And before declaring any register closed, grep the source for deferrals pointing at it.
+     (Product Polish M4.3 — `product-polish.md` §19.42; the B2 precedent is §19.40.5.)
+
+341. **One glyph can carry two different roles, so a rule grouped by the geometry's NAME is grouped by the
+     wrong thing — and this is easy to commit while quoting the rule against it.** M4.3 unified the inline ✕
+     (clear/remove what it sits in) onto `Size.Icon.Sm`, and the guard written to pin that swept every
+     `Icon.X` in the hosting views. It failed immediately on `MainWindow`, and correctly: the toolbar's
+     **"close tab"** button is also an `Icon.X`, but it is a standalone ACTION and rightly declares no size at
+     all, taking `Size.Icon.Toolbar` (16) from its `ControlTheme` (#332). The same shape as `Icon.RefreshCw`
+     (16 as a toolbar button, 14 when it refreshes a grid).
+     ⭐ The workable formulation is about the DECLARATION, not the glyph: *an icon that declares a size
+     declares the shared role; declaring nothing is a separate, correct path.* A guard should then also assert
+     the unsized case still exists, or the rule quietly stops describing reality.
+     ⚠⚠ Worth recording for the method, not the icon: this is #335 / §19.39.2a committed **inside the guard
+     written to prevent it**, in the same session in which that very lesson was quoted back to the user. The
+     error is not ignorance of the rule — it is that grouping by name is the path of least resistance when
+     writing the regex, and only running it against the whole codebase exposes the second role.
+     (Product Polish M4.3 — `product-polish.md` §19.42.)
+
+342. **Avalonia resolves two competing STYLES by selector specificity, not by document order — so "moving a
+     style changes its priority" is true only against a LOCAL VALUE, and conflating the two produces a rule
+     that sounds rigorous and is false.** M4.3c was split into its own iteration on the premise that hoisting
+     `Button.seg` from two `UserControl.Styles` blocks into the application sheet would put it in an
+     order-decided race with the base `<Style Selector="Button">` (which sets `CornerRadius` and
+     `BorderThickness`), so the block "must" sit below it. ⭐ **Measured by planting: a base
+     `<Style Selector="Button">` setting `Padding` to 99,99 and placed AFTER the `.seg` block did not
+     override 8,3.** A class-qualified selector beats a bare type selector wherever it sits.
+     ⚠⚠ The regression that started this fear (§19.2) was a different mechanism: a relocated style lost to a
+     **local value set directly on the element**, and a local value outranks every style setter regardless of
+     where the style lives. So the real precondition for hoisting a style is *do the target elements carry
+     local values for these properties?* — a question about the ELEMENTS, not about the file.
+     ⭐⭐ The transferable part is how this surfaced: **the plant did not fail the test, and that silence was
+     the finding.** A plant is usually described as proving the guard works; here it disproved the reasoning
+     the whole iteration was scoped on. Without it, a comment asserting a false mechanism would have shipped
+     into the one file every future author consults for styling rules.
+     ⛔ It does NOT follow that the earlier refusal (M3.4a, sidebar row style) was wrong — different elements,
+     never re-measured. Record what was measured, not what it seems to imply.
+     (Product Polish M4.3c — `product-polish.md` §19.43.)
+
+343. **A hand-set value can be doing TWO jobs, and a mechanism that "takes over" the property silently
+     discards the one it never knew about — so a generalization must MERGE with the local decision, not
+     replace it.** M‑5's whole point was to retire guessed `MaxHeight` literals in favour of
+     `GrowingDialogBehavior`, which computes a ceiling from the screen's working area. ⭐ **Measured before
+     implementing: `ApplyCeiling` assigned `window.MaxHeight` unconditionally, so attaching it to
+     `ExecuteProcedureDialog` would have raised its deliberate 720 to 1008 on an ordinary 1080-tall screen —
+     288 px taller than its author intended, as a side effect of adding protection that dialog did not need
+     on that screen.** The literal answered *both* "never exceed the screen" (which the behavior does better)
+     **and** "do not grow past a comfortable reading size even on a huge monitor" (which the behavior does not
+     do at all). ⭐ The fix is one word — the ceiling is `Math.Min(declared, screen)` — and it is provably a
+     no-op for the mechanism's existing consumers, because neither declares a cap of its own; an unset
+     `MaxHeight` is `PositiveInfinity`, so the minimum degenerates to exactly the old behaviour.
+     ⚠⚠ The general shape, and it is wider than layout: **before replacing N local answers with one
+     mechanism, ask what each local answer was FOR.** "They are all guessed constants" is a hypothesis about
+     their origin, not a measurement of their purpose — and here it was true of the number and false of the
+     intent. A migration that passes every test can still delete a decision.
+     ⚠ Its companion, from the same iteration: a ceiling **without** a scroll surface does not bound content,
+     it CLIPS it — so "attach the behavior" is not a portable one-liner. `ExportDialog` had no `ScrollViewer`
+     at all, which made the ceiling actively harmful there and turned a wiring change into a structural one.
+     The behavior's own doc had said so; nobody had checked the hosts against it.
+     (Product Polish M4.4 — `product-polish.md` §19.44.)
+
+344. **A rule in your own design document can cite a norm it does not actually satisfy — and the label,
+     not the number, is what a future decision will lean on.** Product Polish §10 carried a threshold
+     table whose second row read *"Large text (≥ 14 px or ≥ 12 px SemiBold) → ≥ 3:1 — **WCAG AA Large**"*.
+     The number was a defensible in-house choice; the **attribution was false**. WCAG 2.1 defines
+     large-scale text as 18 pt (**24 px**) or 14 pt bold (**18.7 px**), and this application's largest
+     typography role is 23 px — so **not one role in the product qualifies**, and the row could never
+     have been "WCAG AA Large" for anything.
+     ⭐⭐ **Why this is a gotcha and not a typo: it nearly decided a product change.** One of the
+     candidate fixes for a measured contrast defect was *"make the message text SemiBold and drop to the
+     3:1 row"*. That variant **satisfies the document as written** while satisfying no external standard
+     — and it would have changed the visual weight of every message in the application, justified by a
+     citation that did not hold. The error was caught only because the variant list was written out and
+     each option's norm was checked against the actual specification text.
+     ⚠ The failure mode is specific: a **number** in a design doc invites scrutiny, a **norm label**
+     invites deference. Nobody re-derives "WCAG AA" — they assume someone already did. So the label is
+     exactly the part that rots unnoticed, and it rots in the direction of *more* confidence, not less.
+     ⭐ The fix is not to delete the threshold — the in-house value was fine — but to say **whose rule it
+     is**: the row now reads "own requirement", like the row beside it that always did. A threshold with
+     an honest provenance can still be argued with; one wearing a borrowed badge cannot.
+     ⚠ Generalises past accessibility: any place a document says "per RFC-x", "per the spec", "per the
+     driver docs". **Check the citation before you check the number** — a wrong number produces a wrong
+     screen, a wrong citation produces a wrong argument, and the second survives review.
+     (Product Polish M5 / §10 — `product-polish.md` §19.45.3 and
+     `product-polish-m5-severity-contrast-decision.md` §3.)
+
+345. **Measuring a token instead of the thing that paints answers a question nobody asked — and the
+     error hides until something forces you to name a concrete producer.** Auditing severity-colour
+     contrast, I built the matrix from `BrushKeyFor(severity)` × surface and reported that the SQL
+     editor's Messages log rendered Success at 4.16:1 in Light, under the 4.5:1 floor. **That pairing
+     never renders.** The log's row view model gates the severity colour behind
+     `ShowSeverityMarker => Severity is Warning or Error`; Success and Info read `ForegroundBrush`
+     (16.49:1). I had measured a combination the product cannot produce.
+     ⭐ **What exposed it was writing the guard, not re-reading the code.** The test had to point at a
+     *production property* (`QueryMessageViewModel.MessageBrushKey`) rather than a transcribed mapping,
+     and the moment the mapping came from the real object the impossible row disappeared by itself.
+     ⚠⚠ This is the same shape as the sibling rule already recorded for the checkbox outline guard —
+     *read from the element that paints, not from the token* — but arriving one layer earlier, at
+     **measurement** rather than at **assertion**. A wrong assertion goes red; a wrong measurement goes
+     into a decision document and reads as evidence.
+     ⭐ Practical form: when a matrix is the product of two enumerations, ask which cells the code can
+     actually reach **before** costing them. A gate like `ShowSeverityMarker` makes half the grid
+     unreachable, and nothing about the enumeration says so.
+     ⛔ Note what it did **not** change: the same colour genuinely was under the floor on the *banner*,
+     where it does render — so the fix stood. A measurement can be wrong in a way that does not reverse
+     the conclusion, which is precisely why it survives unchallenged.
+     (Product Polish M5 / §10 — `product-polish.md` §19.45.6.)
+
+346. **An inventory of missing UI answers "is there a message here?" — it never asks "can this state
+     occur?", and those two questions produce different worklists.** Working M‑3 (empty states), an
+     audit row said *"explicit empty state in 3 of 48 views"*. Measured: 12 views and 5 view models
+     already had one. Then the list of thirteen apparent gaps was checked a second way — not *does a
+     message exist* but *is the state the message would describe reachable* — and it collapsed to four.
+     ⭐ Four fell because the emptiness was **already announced elsewhere** (a tab header carrying
+     `"(0)"`, a counter strip, a no-selection state built without the word "Empty" in its constant).
+     ⛔ Two fell because the state **cannot happen**: a users grid whose source is `SEC$USERS`, which
+     always contains SYSDBA and whose read failure surfaces as a banner; a view's column list, when a
+     view always projects at least one column. **Building an empty state for either would have shipped
+     UI nobody can ever see** — the same dead-branch shape as a guard for an unreachable case, which
+     reads to the next author as a real safety net (#233).
+     ⭐⭐ **The sharpest single finding, and the one that generalises furthest: a collection's NAME is
+     not evidence of what its grid shows.** `Privileges.Rows` sounds like a list of privileges, so
+     "No privileges in this category." sounded obviously right — and was false. The grid enumerates the
+     *objects* of the selected category with privileges as **cells**, so a grantee with no privileges on
+     200 tables still sees 200 rows, and an empty grid means *no objects of that kind* or *the filter
+     matched nothing*. Three proposed texts in a row were refuted the same way: `Membership.Rows`
+     depends on a direction selector the wording ignored, and "nothing is selected" in a local-routine
+     editor really means "the list is empty", because the selection auto-restores to the first item.
+     ⚠ Note the failure mode is **not** a wrong number. It is a message that is grammatical, plausible,
+     and describes something other than what the user is looking at — indistinguishable from a
+     malfunction once shipped (#311's shape).
+     ⭐ Practical order, and it is the reverse of the intuitive one: **first establish WHEN the state
+     occurs, only then decide what it says.** Deciding the wording first hides the question of whether
+     the state occurs at all, because a sentence about an absence always reads as sensible.
+     ⚠⚠ A corollary worth its own line: **a ready-made constant is not a ready-made answer.** Eight
+     orphaned `*Empty*` constants sat in `UiStrings`, and the pair that described a still-reachable
+     state carried text quoting a button label — *"+ New Connection"* — that **does not exist on
+     screen**; the button is a bare glyph. The defect had survived the product's whole life *because*
+     the constant was orphaned, waiting for someone to wire in "the text that is already written".
+     (Product Polish M5 / M‑3 — `product-polish.md` §19.47.)
+
+347. **A style variant that overrides `Foreground` on the CONTROL and on its explicit children still loses
+     to the template's own setter on the `ContentPresenter` — and it loses only for plain-STRING content,
+     so the same variant looks correct on one button and wrong on the next.** Measured headless in both
+     themes and four states: `Button.primary` set `Foreground` on the button (inheritance), on
+     `Button.primary TextBlock` and on `Button.primary SvgIcon`, but never on `/template/
+     ContentPresenter` — where Fluent puts `ButtonForegroundPointerOver` / `…Pressed` / `…Disabled`. A
+     `ContentPresenter` given a **string** renders the text itself, so it painted `ForegroundColor`:
+     **`#1B1D1F` on `#1A4F8F` = 2,04:1** in Light against a 4,5:1 floor, i.e. Save/OK went nearly black on
+     hover while Execute (an explicit `<TextBlock>` + icon) stayed white. Population: 22 primary buttons
+     declare `Content=` against 18 with element children.
+     ⭐⭐ **The mechanism was broken in BOTH themes; only Light crossed the threshold** — Dark measured
+     5,62:1 purely because its `ForegroundColor` is near-white. "It looks fine in Dark" was a coincidence,
+     and reading it as correctness turns one variant defect into a per-theme patch that can never finish.
+     ⛔ **Do not fix it in the theme bridge.** `ButtonForeground*` serves every ordinary button, where dark
+     text on light chrome is *right*; the fix is a variant-scoped setter on the presenter. Same reasoning
+     the codebase already records for `ButtonBackgroundDisabled`.
+     ⚠ The disabled state has the same shape but is NOT a contrast question — it is deliberately dimmed,
+     so its guard must assert the **binding** (the presenter reads the on-accent-disabled role), never a
+     ratio. Writing the obvious "every state clears 4,5:1" test turns a correct product red and invites
+     you to undo a ratified decision to make a test pass — #322 committed inside the guard written to
+     prevent it. (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §3.)
+
+348. **A missing REGISTRATION fails as silently as a missing resource dictionary, one layer further out —
+     and a render made without it looks entirely plausible.** A visual probe rendered the "after" column of
+     a syntax-highlighting change with no colour at all, identical to "before", because the XSHD
+     definitions are registered by the application's own `App` startup and the probe runs a minimal
+     `ProbeApp`: `HighlightingManager.GetDefinition(name)` simply returned `null`. Nothing threw, no
+     control was missing, and the image was a perfectly reasonable picture answering a different question
+     than the one asked — read casually it says *"the highlighting does not work"*.
+     ⭐ This is the general form of the probe rule already recorded for merged dictionaries: **anything the
+     real app does at startup and the probe does not is invisible in the output, not in an error.** Before
+     trusting a render that shows "no change", check what the app initialises that the probe skips.
+     ⚠ Its companion, found in the same step: the probe's own comment said `AvaloniaEdit` was *"deliberately
+     omitted — no render of this probe contains a text editor"*, which stopped being true the moment a
+     render did. #284 in the shape of a comment — the justification outlived its reason.
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §5.)
+
+349. **A token's ROLE decides which contrast threshold applies to it — so re-using an icon colour as TEXT
+     silently moves the goalposts, and the render still looks fine.** The `IconColor_*` family is designed
+     for ICONS, where the floor is **3:1** (a non-text element). The execution-plan tree began painting
+     11 px TEXT with them, which puts the same values under the **small-text floor of 4,5:1** — and two of
+     them failed it: Light `IconColor_Index` **4,00:1**, `IconColor_Procedure` **3,70:1**, while Dark passed
+     everything comfortably (10,03:1 / ~8:1). ⚠ Nothing about the token changed; what changed is what it
+     paints. That is #345 one step further out: measuring the element rather than the token is necessary but
+     not sufficient — you also have to ask which RULE that element is now subject to.
+     ⭐ The fix follows M5 §10's ratified method: recompute **at the threshold, preserving hue** (HSL, only L
+     moves), so the change is the smallest one that satisfies the requirement rather than a nicer colour. Both
+     values keep serving icons at 4,2:1 against a 3:1 requirement, so nothing regresses.
+     ⛔ **And the correction is then a PRECONDITION of the feature, not a separate aesthetic decision** —
+     reverting it while keeping the colouring puts the app back under its own floor. Record that link where
+     the values live, because a later cleanup instruction ("revert the colour change") can be perfectly
+     reasonable under one premise and destructive under another.
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §6.4.)
+
+350. **An UNTRACKED file that is deleted has no safety net in git — `git checkout` restores it to HEAD, which
+     means the state BEFORE the whole unmerged stage.** Cleaning up after a rejected experiment removed an
+     already-ACCEPTED mechanism along with it, and recovery was impossible: `git log --all` on the path was
+     empty, `git fsck` showed no matching dangling blob, and the compiled assembly had been rebuilt. The work
+     existed only in the working tree, and "revert the experiment" had nothing to revert TO.
+     ⭐ **The rule this yields: commit an accepted stage before experimenting on top of it.** The accepted
+     mechanism had been reviewed and signed off, yet stayed uncommitted for the whole experiment — which is
+     exactly the window in which a cleanup cannot tell "the part you approved" from "the part you rejected".
+     ⚠ Its second half is about the instruction, not the tooling: a cleanup instruction inherits the premise
+     it was written under. "Revert the colour change" was correct while the whole feature was going away and
+     harmful once the feature stayed — and the person holding the dependency (here: that the colour change was
+     what kept the feature above its contrast floor) is the one who has to say so BEFORE executing.
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §6a.)
+
+351. **A shared style can carry an unstated premise about its HOST, and at the one site that violates it the
+     style looks broken — so the natural fix is the wrong one.** `Border.settings-group` documents itself as
+     *"a recessed BackgroundBrush surface inside the PanelBrush chrome that hosts it"*. Measured across its
+     four consumers: three (both settings dialogs and Data Import) really do wrap it in a `PanelBrush`
+     container; **Settings Center wrapped it in nothing**, so the card painted `BackgroundBrush` directly onto
+     a `BackgroundBrush` window — **card and host identical to the byte** (`#1E1E1E` on `#1E1E1E` in Dark,
+     `#FCFCFD` on `#FCFCFD` in Light), and all 17 cards were carried by a 1 px hairline. ⭐ On screen that
+     reads as *"the card style is too weak"*, and the tempting repair — give the style a stronger background —
+     would have been applied at the one place the style is innocent and would have **broken the three sites
+     that were correct** (R7 in reverse). ⚠ The rule: **when a shared style looks wrong at one site, first
+     check whether that site satisfies the premise the style states about its container.** A style that
+     describes its own figure/ground pair is making a claim about something it does not own, and nothing
+     enforces it — the premise lives in the style's prose while the container lives in each host's XAML, which
+     is #340's split of custody applied to appearance instead of to decisions. ⭐ Corollary worth keeping: a
+     style whose correctness depends on its host should say so in its own comment (this one did — which is
+     exactly why the diagnosis took one measurement rather than an afternoon).
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §9.)
+
+352. **A hint that ASSERTS a cause is unsafe; one that ENUMERATES what to check is safe — and that distinction
+     is why a hint removed once can legitimately come back.** Firebird's managed driver reports a rejected
+     connection as **`Not supported plugin 'Legacy_Auth'`**, and the same text is produced by a wrong
+     password and by a missing user as well as by a genuinely non-SRP account. EmberTern once carried a hint
+     for it, and that hint was **removed for misfiring** — correctly, because it named a culprit (*"this
+     account is not an SRP user"*) and was wrong whenever the cause was one of the other two. ⭐ The
+     replacement is safe for the opposite reason: it says the server rejected authentication, that the client
+     speaks SRP only, and asks the reader to check the credentials **and** the account's SRP support — every
+     clause of which is **true for all three causes**. So the failure mode the removal was protecting against
+     cannot occur. ⚠ The rule to carry: before rejecting a hint because "we tried that and it misfired",
+     check whether the old one **asserted** and the new one **enumerates** — those are different artefacts
+     with different truth conditions, and treating them as the same thing preserves a misleading raw message
+     forever. ⚠⚠ Its second half is a boundary worth stating: recognition here **must** be by message TEXT,
+     which this codebase otherwise bans (`DebugErrorClassifier`, `DatabaseConfigurationDiagnosis` both key on
+     SQLSTATE/GDS only) — measured, this refusal arrives with **no SQLSTATE and no GDS codes at all**, so
+     there is nothing else to key on. That is tolerable *only* because a false positive costs guidance that
+     remains true; ⛔ it is not a licence to classify by text where codes exist.
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §11.7b.)

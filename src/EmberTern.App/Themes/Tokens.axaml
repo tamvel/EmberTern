@@ -1,0 +1,404 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ================================================================================================
+       EmberTern Design Tokens — warstwa NIEKOLOROWA.
+
+       Kolory mają swój dom w Colors.axaml i ten plik ich nie dotyka. Tutaj są odstępy, wysokości,
+       rozmiary ikon, promienie i krawędzie — czyli wszystko to, czego przed etapem Product Polish
+       w aplikacji NIE BYŁO: audyt M0 zmierzył ZERO tokenów niekolorowych, 114 unikalnych marginesów,
+       40 paddingów, 7 rozmiarów ikon i 5 promieni, wszystkie wpisane lokalnie w widokach.
+
+       ⭐ TOKEN NAZYWA ROLĘ, NIGDY WARTOŚĆ (product-polish.md §3.1).
+       `Pad.Control`, nie `Pad.8x3`. Token nazwany wartością to zwykła zmienna globalna na liczbę:
+       kiedy standardowy padding zmieni się z 8,0 na 8,1, nazwa albo skłamie, albo trzeba ją
+       przemianować w trzystu miejscach — czyli odtworzy się dokładnie ten problem, przed którym
+       katalog ma chronić. Rola przeżywa zmianę wartości.
+
+       ⭐ DWIE WARSTWY, BO XAML NIE LICZY (§3.2).
+       `Margin`/`Padding`/`BorderThickness` przyjmują `Thickness`, a XAML nie potrafi złożyć
+       `Thickness` z dwóch `x:Double`. Katalog ma więc warstwę SKALARNĄ (dla `Spacing=`, `Width=`,
+       `Height=`, `FontSize=`) i warstwę ZŁOŻONĄ — wartości pre-komponowane, nazwane rolą.
+       ⚠ Warstwa złożona jest ZAMKNIĘTA. Nowy `Thickness` wymaga nowej roli, a nowa rola wymaga
+       uzasadnienia rolą, której nie da się złożyć z istniejących. To jest miejsce, w którym dług
+       odrasta najłatwiej.
+
+       ⚠ ROLA MOŻE DZIELIĆ WARTOŚĆ Z INNĄ ROLĄ I TO JEST POPRAWNE (§3.3). Dwie role o tej samej
+       liczbie to nie duplikat do zwinięcia — to dwie niezależne decyzje, które chwilowo się
+       pokrywają i mogą się rozejść.
+
+       Typografia ma osobny plik (Themes/Typography.axaml) — jest osobnym systemem, nie sekcją tego.
+       ================================================================================================ -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       SKALA ODSTĘPÓW (§4) — baza 4 px, z półstopniami 2 i 6 dla ciasnej chromy.
+
+       Siedem stopni, nie pięć i nie dziesięć: zmierzone 114 unikalnych marginesów redukuje się do
+       tych siedmiu bez zauważalnej zmiany układu (weryfikacja w M2c). Pięć wymuszałoby widoczne
+       przeskoki w paskach narzędzi i wierszach siatek; dziesięć nie ogranicza swobody na tyle,
+       żeby zapobiec ponownemu dryfowi.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Ikona ↔ ikona w toolbarze; wnętrze chipa. Najciaśniejszy odstęp, jaki jeszcze coś rozdziela. -->
+  <x:Double x:Key="Space.Hair">2</x:Double>
+  <!-- Ikona ↔ tekst; elementy wewnątrz jednego wiersza. -->
+  <x:Double x:Key="Space.Xs">4</x:Double>
+  <!-- Kontrolka ↔ kontrolka w poziomie. -->
+  <x:Double x:Key="Space.Sm">6</x:Double>
+  <!-- Standardowy odstęp w formularzu. -->
+  <x:Double x:Key="Space.Md">8</x:Double>
+  <!-- Między grupami pól. -->
+  <x:Double x:Key="Space.Lg">12</x:Double>
+  <!-- Między sekcjami. -->
+  <x:Double x:Key="Space.Xl">16</x:Double>
+  <!-- Wewnętrzny margines okna dialogowego. -->
+  <x:Double x:Key="Space.Xxl">20</x:Double>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       WARSTWA ZŁOŻONA — role `Thickness` dla wnętrz i odstępów (§4.1). LISTA ZAMKNIĘTA.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Wnętrze `TextBox`/`ComboBox`. Wysokości nie daje padding, tylko `Size.Control` — dlatego
+       pion jest zerowy. Padding pionowy w polu tekstowym walczy z wysokością kontrolki i wygrywa
+       ten, który jest większy; jedna z tych dwóch rzeczy musi być jedynym źródłem wysokości. -->
+  <Thickness x:Key="Pad.Control">8,0</Thickness>
+  <!-- ⭐ Wnętrze pola WIELOWIERSZOWEGO (`TextBox` z `AcceptsReturn`) — i pion NIE jest tu zerowy, bo
+       przesłanka `Pad.Control` w takim polu nie obowiązuje. Tam wysokość daje `Size.Control`, więc padding
+       pionowy musiałby z nią walczyć; pole na kilkanaście wierszy jest właścicielem własnej wysokości, więc
+       nic z niczym nie konkuruje i zostaje sam skutek zera: tekst dociśnięty do górnej krawędzi ramki
+       (zgłoszenie użytkownika 2026-08-03, po wyrównaniu do góry z M2c §18.11).
+       ⚠ Jedna wielkość, jeden właściciel — reguła się nie zmieniła, zmienił się właściciel. -->
+  <Thickness x:Key="Pad.ControlMultiline">8,4</Thickness>
+  <!-- Wnętrze przycisku tekstowego. -->
+  <Thickness x:Key="Pad.Button">12,0</Thickness>
+  <!-- Wnętrze przycisku ikonowego — węższe, bo ikona ma własny margines optyczny. -->
+  <Thickness x:Key="Pad.ButtonIcon">6,0</Thickness>
+  <!-- Komórka siatki. Pion 3+3 to liczba, na której stoi wiersz 22 px (§5.1) — nie zmieniać
+       w oderwaniu od `Size.Row.Grid` i interlinii `Text.Grid`; te trzy były dobierane razem. -->
+  <Thickness x:Key="Pad.Cell">8,3</Thickness>
+  <!-- Komórka siatki gęstej — Trace Monitor, Session Manager: wiersze czytane jako strumień. -->
+  <Thickness x:Key="Pad.CellCompact">6,2</Thickness>
+  <!-- Wiersz menu kontekstowego. -->
+  <Thickness x:Key="Pad.MenuItem">10,3</Thickness>
+  <!-- Zakładka dokumentu i zakładka pomocnicza. -->
+  <Thickness x:Key="Pad.Tab">10,4</Thickness>
+  <!-- Wnętrze panelu. -->
+  <Thickness x:Key="Pad.Panel">8</Thickness>
+  <!-- Wnętrze okna dialogowego. -->
+  <Thickness x:Key="Pad.Dialog">20,16</Thickness>
+  <!-- Wnętrze karty grupy ustawień (`Border.settings-group`). -->
+  <Thickness x:Key="Pad.Group">10,8</Thickness>
+
+  <!-- Odstęp POD polem formularza. Kierunkowy (tylko dół) świadomie: odstęp między dwoma polami
+       ma jednego właściciela — pole górne. Marginesy z dwóch stron sumują się albo zlewają
+       zależnie od kontenera, co jest najczęstszym źródłem „dlaczego tu jest 12, a tam 8". -->
+  <Thickness x:Key="Margin.FieldGap">0,0,0,8</Thickness>
+  <!-- Odstęp pod sekcją. -->
+  <Thickness x:Key="Margin.SectionGap">0,0,0,16</Thickness>
+  <!-- Odstęp między kontrolkami w poziomie — ta sama reguła jednego właściciela, oś pozioma. -->
+  <Thickness x:Key="Margin.InlineGap">0,0,8,0</Thickness>
+
+  <!-- ⭐ DOPISANE W M4.2b (QA użytkownika): PODPIS NAD PANELEM — nagłówek „Used by" / „Depends on"
+       stojący bezpośrednio nad listą, wewnątrz tej samej kolumny.
+
+       Rola powstała, bo nie dało się jej złożyć z istniejących (procedura z §4.1): potrzebny jest
+       lewy wcięcie + mały odstęp pionowy, a XAML nie liczy — `Thickness` nie da się złożyć z dwóch
+       `x:Double` (§3.2), więc „użyj `Space.Md` po bokach i `Space.Xs` w pionie" nie jest zapisywalne
+       bez roli złożonej.
+       ⭐ NIE WNOSI NOWEJ WARTOŚCI: 8 to `Space.Md`, 4 to `Space.Xs` — to nazwana kompozycja
+       istniejących stopni skali, a nie nowa liczba w katalogu.
+       ⚠⚠ Świadomie NIE reużyto `Pad.Tab` (10,4), mimo że pionowo pasuje co do joty: jego rola opisuje
+       ZAKŁADKĘ. Wzięcie jej tutaj dałoby wartość, która wygląda dobrze, i regułę, która kłamie —
+       dokładnie to, przed czym broni R12 („błędna rola jest gorsza od wartości lokalnej”).
+       16 konsumentów w 8 widokach. -->
+  <Thickness x:Key="Margin.PanelCaption">8,4</Thickness>
+
+  <!-- ⭐ DOPISANE W M2b, kroku 1 (CheckBox) — pierwsze rozszerzenie „zamkniętej" listy §4.1,
+       wykonane procedurą, którą ta sekcja sama przewiduje: nową rolę wolno dodać wtedy, gdy nie da
+       się jej złożyć z istniejących.
+
+       Rola: odstęp między ZNAKIEM kontrolki (box `CheckBox`, kropka `RadioButton`, przełącznik)
+       a jego etykietą.
+
+       Dlaczego nie `Margin.InlineGap`: tamta rola jest prawostronna (`0,0,8,0`), bo jej właścicielem
+       jest element PO LEWEJ. Tutaj odstęp musi należeć do etykiety — gdyby należał do znaku, to
+       `CheckBox` bez etykiety (czyli kolumna w siatce danych) niósłby 8 px pustego marginesu po
+       prawej i przestałby być wyśrodkowany w komórce. Ten sam odstęp, inny właściciel, inna rola. -->
+  <Thickness x:Key="Margin.MarkGap">8,0,0,0</Thickness>
+
+  <!-- ⭐ DOPISANE W M2b, kroku 7 (DataGrid Standard) — druga i ostatnia rola dopisana w tym etapie,
+       również procedurą z §4.1, i również wykryta POMIAREM, a nie zaplanowana.
+
+       Rola: wnętrze EDYTORA W KOMÓRCE siatki (`TextBox`, `Button` w trybie edycji).
+
+       ⚠⚠ Dlaczego pion MUSI być zerowy — to jest arytmetyka §5.1, nie estetyka. Wiersz 22 minus
+       `Pad.Cell` (3+3) zostawia 16 px. Edytor z `Pad.CellCompact` (`6,2`) prosi o 18 px: tekst 14
+       plus 2+2 pionu. Wiersz rośnie wtedy do 24 **w momencie wejścia w edycję** — czyli dokładnie
+       ten skok układu, którego zabrania §13.3 specyfikacji (Zero Layout Shift). Defekt wszedł
+       w kroku 5.2 i był niewidoczny do chwili, w której test §8.4 policzył obie liczby naraz.
+
+       ⚠ Dlaczego nie `Pad.CellCompact`: tamta rola opisuje wnętrze GĘSTEJ KOMÓRKI (Trace Monitor,
+       Session Manager) — treści czytanej, nie edytowanej — i jej pion 2 px jest tam poprawny, bo to
+       ona jest właścicielem wysokości. W edytorze właścicielem wysokości jest WIERSZ, więc padding
+       pionowy musi zniknąć. Ta sama reguła „jedna wielkość, jeden właściciel", co przy `Pad.Control`
+       w kroku 5.2 — tam wysokość dawał `Size.Control`, tu daje `Size.Row.Grid`.
+       ⚠ Poziom 6, a nie 8: krawędź edytora nie ma dociskać tekstu do krawędzi komórki. -->
+  <Thickness x:Key="Pad.CellEditor">6,0</Thickness>
+
+  <!-- ⭐ DOPISANE W M2b, kroku 9 — zgłoszenie QA: „RadioButtony są ustawione zbyt ciasno pionowo".
+       Rola: odstęp POD opcją jednego wyboru (`RadioButton`, `CheckBox` w liście opcji).
+       ⚠ Nie da się jej złożyć z `Margin.FieldGap` (`0,0,0,8`): tamta rozdziela POLA FORMULARZA,
+       a opcje jednego wyboru mają czytać się jako JEDNA grupa — 8 px rozbiłoby ją na cztery osobne
+       wiersze. Ten sam kierunek (dół, jeden właściciel), o stopień ciaśniej, bo to ta sama decyzja
+       użytkownika, nie dwie sąsiadujące. -->
+  <Thickness x:Key="Margin.OptionGap">0,0,0,4</Thickness>
+
+  <!-- ⭐ DOPISANE W M2b, kroku 11 — zgłoszenie QA: „odstęp między napisem Search for a polem jest
+       zbyt duży; label wygląda, jakby należał do poprzedniej sekcji".
+       Rola: odstęp między PODPISEM a JEGO polem.
+       ⚠⚠ To jest reguła BLISKOŚCI, nie liczba: podpis należy do pola, więc odstęp podpis→pole musi
+       być MNIEJSZY niż odstęp pole→pole (`Margin.FieldGap` = 8). Jeżeli oba są równe albo odwrócone,
+       oko przypisuje podpis do elementu POWYŻEJ — dokładnie to zgłosił użytkownik.
+       ⚠ Wartość 2, bo to jedyny odstęp w katalogu, który ma być wyraźnie ciaśniejszy od `Space.Xs`. -->
+  <Thickness x:Key="Margin.LabelGap">0,0,0,2</Thickness>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       WYSOKOŚCI KONTROLEK (§5, decyzja D1 — ratyfikowana, nie podlega zmianie w tym etapie).
+
+       ⚠ Dziś NIC z tego nie obowiązuje: `ControlStyles.axaml` nie ma implicit style dla żadnej
+       kontrolki bazowej, więc `TextBox`, `ComboBox`, `CheckBox` i `Button` stoją na `MinHeight=32`
+       z FluentTheme. Podłączenie tych tokenów to M2b.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Kontrolka standardowa: `TextBox`, `ComboBox`, `Button.flat`, `NumericUpDown`,
+       `SearchableComboBox`. -->
+  <x:Double x:Key="Size.Control">24</x:Double>
+  <!-- ⛔ `Size.ControlPrimary` ZOSTAŁ WYCOFANY (M2b, krok 11) — ratyfikowana reguła użytkownika:
+       **kolor może określać priorytet akcji, ROZMIAR NIE POWINIEN.** Rola nie ma już konsumenta,
+       a token bez konsumenta jest nieodróżnialny od regresji (#233), więc znika z katalogu razem
+       z nim. Akcję główną niesie akcent `Button.primary`. Strażnik: `RetiredTokens`.
+       ⚠ To NIE unieważnia D1 w częściach, które D1 faktycznie rozstrzygnęło (24 / 22): zmienia się
+       przypisanie roli, o które D1 nie pytało, i to na wniosek użytkownika. -->
+
+  <!-- ⭐⭐ DOPISANE W M2b, kroku 8 — po QA użytkownika, który nazwał brakującą część systemu:
+       „nie wszystkie przyciski w aplikacji powinny mieć identyczną wysokość".
+
+       ⭐ TO SĄ DWIE NIEZALEŻNE DRABINY, nie jedna. Krok 5.4 zakładał, że przycisk jest kontrolką
+       jak każda inna, i dał mu `Size.Control` (24) — czyli wysokość POLA FORMULARZA. QA pokazało,
+       że przycisk nie jest polem: pole stoi w SERII i ma się wyrównywać, przycisk stoi SAMOTNIE
+       i jest CELEM MYSZY. Dlatego:
+
+           POLA (seria, wyrównanie)      →  Size.Control            24
+           AKCJE (cel, hierarchia)       →  Size.ControlToolbar     22   chroma
+                                            Size.ControlProminent   26   stopka dialogu
+                                            Size.ControlPrimary     28   akcja główna
+
+       ⚠ D1 (24 / 22 / 28) NIE JEST ZMIENIONE — te trzy liczby dalej znaczą to samo. Doszła jedna
+       nowa (26) i jedno przypisanie ról, o które D1 nie pytało. -->
+
+  <!-- Akcja w pasku narzędzi. ⚠ Rola istnieje po to, żeby pasek miał JEDNĄ wysokość niezależnie od
+       tego, jaki wariant przycisku w nim stoi: przycisk może być wyróżniony kolorem, ale nie ma
+       prawa PODNIEŚĆ paska (zgłoszenie QA — `Button.primary` w toolbarze robił dokładnie to).
+       Ta sama zasada co przy edytorze w komórce: element wypełnia kontener, nie rozpycha go. -->
+  <x:Double x:Key="Size.ControlToolbar">22</x:Double>
+
+  <!-- Kontrolka SAMOTNA, w którą użytkownik celuje świadomie i często: przycisk stopki dialogu
+       (Close, Cancel, OK) oraz pole wyszukiwania. ⚠ Nie jest to „większe `Size.Control`" — to inna
+       rola: `Size.Control` opisuje kontrolkę stojącą w SERII, gdzie liczy się wyrównanie i gęstość,
+       a ta opisuje kontrolkę stojącą SAMOTNIE, gdzie liczy się wygoda trafienia. Dwaj konsumenci
+       różnego rodzaju (przycisk i pole tekstowe) byli znani w chwili dodania. -->
+  <!-- ⚠ 28, a nie 26 (korekta z kroku 11 po QA). Po wycofaniu `Size.ControlPrimary` to jest JEDYNA
+       wysokość akcji poza chromą, więc przejmuje wartość, która w stopce dialogu czytała się dobrze —
+       „za mały" był Cancel, nie „za duży" Execute. Drugi konsument (pole wyszukiwania) zgłosił
+       niezależnie tę samą potrzebę: „lekkie zwiększenie wysokości". Dwie kontrolki, jedna liczba. -->
+  <x:Double x:Key="Size.ControlProminent">28</x:Double>
+
+  <!-- ⭐ DOPISANE W M2b, kroku 12 — PODŁOGA SZEROKOŚCI AKCJI (stopka dialogu, formularz).
+       Rola: minimalna szerokość przycisku stojącego w PARZE albo w SERII z innymi.
+       ⚠ Sama równa wysokość nie wystarczyła — dopóki szerokość brał tekst, `Save` obok `Cancel`
+       nie czytało się jak jeden komponent. To jest ta sama zasada co przy wysokości (§15.10.1):
+       rozmiar nie ma nieść informacji, którą niesie kolor.
+       ⚠ PODŁOGA, nie szerokość sztywna: „Test connection" nadal rozpycha się do swojej treści.
+       ⛔ Chroma, przycisk ikonowy i komórka siatki jej NIE biorą — tam szerokość wyznacza treść. -->
+  <!-- ⚠ 100, nie 80 (korekta z kroku 13, po pomiarze). 80 było PONIŻEJ naturalnej szerokości zwykłej
+       etykiety: „Cancel" mierzy 72 px tekstu + 24 paddingu + 2 obramowania = 98, więc `Save` siadał na
+       podłodze (80), a `Cancel` ją przekraczał — para różniła się o 18 px i podłoga nie wyrównała
+       niczego. ⭐ Podłoga działa tylko wtedy, gdy leży POWYŻEJ naturalnej szerokości etykiet, które ma
+       zrównać; ustawiona niżej jest martwym zapisem. -->
+  <x:Double x:Key="Size.ActionMinWidth">100</x:Double>
+
+  <!-- Wiersz siatki danych i edytor w komórce. -->
+  <x:Double x:Key="Size.Row.Grid">22</x:Double>
+  <!-- ⭐ WIERSZ SIATKI, KTÓRA MA EDYTOR W KOMÓRCE — pola tabeli, dane tabeli, nowa tabela, parametry
+       i zmienne procedury/funkcji/wyzwalacza. Dopisane w M4 (C‑1, decyzja użytkownika).
+
+       ⭐⭐ Powstało z pomiaru, nie z uśrednienia trzech liczb. Produkt używał 34 (Pola, Nowa tabela),
+       32 (Dane) i 30 (parametry) — czyli TRZECH liczb na JEDNO wymaganie, przy identycznym
+       `DataGridCell` `Padding="6 2"` w każdej z tych siatek. Wymaganie brzmi:
+
+           padding pionowy 2+2 = 4   +   edytor `Size.Control` 24   =   28  (minimum arytmetyczne)
+
+       więc żadna z trzech nie wynikała z pomiaru, a różnica między nimi nie niosła informacji.
+       ⚠ 30, nie 28: dwa piksele zapasu nad minimum, żeby edytor o parę pikseli wyższy od `Size.Control`
+       nie wymuszał natychmiastowego powrotu do tego tematu. ⛔ Zapasu nie zwiększać „na wszelki wypadek" —
+       zmierzona reguła gęstości M4 mówi, że przy równej czytelności wygrywa wariant gęstszy.
+       ⚠ Siatka BEZ edytora zostaje na `Size.Row.Grid` (22) — indeksy, ograniczenia, kolumny widoku,
+       wyniki zapytania. To nie jest ta sama rola i nie ma powodu, żeby rosła.
+       ⚠ Security Manager (28 / `.checkbox-grid` 34) świadomie NIE bierze tej roli: jego edytorem jest
+       `CheckBox`, a nie pole `Size.Control`, więc przesłanka arytmetyczna jest tam inna i wymaga
+       własnego pomiaru (#322 — reguła o KLASIE bywa fałszywa o każdym jej elemencie). -->
+  <x:Double x:Key="Size.Row.GridEdit">30</x:Double>
+  <!-- Nagłówek kolumny — o stopień wyższy niż wiersz, żeby czytał się jako nagłówek bez ramki. -->
+  <x:Double x:Key="Size.Row.Header">24</x:Double>
+  <!-- Wiersz Metadata Explorera i wiersz drzewa zależności. Najgęstszy widok w aplikacji — to on ma
+       najwięcej wierszy na ekran.
+       ⚠⚠ 24, nie 20 — KOREKTA KATALOGU wykonana w M3.4a (§19.26), decyzja użytkownika **DB**. Do tego
+       momentu token deklarował 20, rzeczywistość była 24 (`ListBoxItem.MinHeight` w `MainWindow.axaml`),
+       a token nie miał ANI JEDNEGO konsumenta — czyli nikt nigdy nie sprawdził, czy 20 jest dobre.
+       ⭐ Kierunek poprawki wynika z reguły prowadzącej: *dokument ma prowadzić produkt, nie produkt
+       dokument* — ale prowadzi go tam, gdzie produkt jest DOBRY. Zejście do 20 nie byłoby porządkowaniem,
+       tylko realną zmianą gęstości najgęstszego widoku, a to jest decyzja produktowa wymagająca oka
+       użytkownika. Produkt był dobry; kłamał token (pułapka 3 — katalog bywa zamiarem, nie opisem).
+       ⚠ Wartość dzieli z `Size.Row.Header`, `Size.StatusBar` i `Size.Control`, i to jest poprawne (§3.3):
+       cztery niezależne decyzje, które chwilowo się pokrywają i mogą się rozejść.
+       ⏸ Drugi konsument — 18 drzew „Zależności" — dołącza dopiero w M4.2b; dziś stoją na własnych
+       wartościach, więc ta korekta ich nie rusza. -->
+  <x:Double x:Key="Size.Row.Tree">24</x:Double>
+  <!-- Wiersz menu kontekstowego (stan faktyczny po etapie Keyboard Manager — token go formalizuje,
+       niczego nie zmienia). -->
+  <x:Double x:Key="Size.Row.Menu">22</x:Double>
+  <!-- Zakładka dokumentu i zakładka pomocnicza. -->
+  <x:Double x:Key="Size.Row.Tab">26</x:Double>
+
+  <!-- Wskaźnik aktywnej zakładki — pasek akcentu nad zakładką wybraną (§8.2). ⭐ Ta sama liczba niesie
+       rail Status Bara (§8.4.1), i to jest celowe: jeden język wizualny sygnału stanu, nie dwa. Token
+       powstał w M3.1a — wcześniej `2` stało literałem w `RowDefinitions="2,*"` szablonu zakładki, gdzie
+       żaden licznik M2c go nie widział (liczniki mierzyły `FontSize`/`CornerRadius`/`FontFamily`).
+       ⚠ Wysokość siedzi na `Height` ELEMENTU, nie na wierszu siatki: `RowDefinition.Height` to `GridLength`,
+       a token jest `x:Double` — `{DynamicResource}` się nie skonwertuje (§3.2, dwie warstwy katalogu). -->
+  <x:Double x:Key="Size.TabIndicator">2</x:Double>
+
+  <!-- Box `CheckBox`/`RadioButton`. ⚠ 14 px NIE da się ustawić setterem — Fluent koduje rozmiar
+       boxa w `ControlTemplate`, nie we właściwości. Ten token czeka na własny szablon w M2b
+       (ryzyko R‑2). Dopiero przy 14 px checkbox mieści się w wierszu 22 px (§5.1); dziś ten sam
+       wiersz ma 43 px. -->
+  <x:Double x:Key="Size.Checkbox">14</x:Double>
+
+  <!-- Pasek tytułu (stan faktyczny) i pasek statusu. ⭐ Te dwie liczby razem z `Size.Row.Tab`
+       tworzą rytm pionowy Application Chrome (§0.1.2) — nie zmieniać żadnej w oderwaniu od
+       pozostałych dwóch. §8.5 specyfikacji zabrania wprost zwiększania paska statusu. -->
+  <x:Double x:Key="Size.TitleBar">36</x:Double>
+  <x:Double x:Key="Size.StatusBar">24</x:Double>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       ROZMIARY IKON (§4.2.1)
+
+       ⚠⚠ POMIAR WEJŚCIOWY M2a BYŁ NIEPEŁNY I MÓWIŁ COŚ INNEGO, NIŻ SIĘ WYDAWAŁO. Brzmiał
+       „14×64, 16×15, 11×5, 13×4, 12×3, 15×2, 10×1" i liczył wyłącznie ikony z JAWNYM rozmiarem —
+       czyli 164 z 355 deklaracji. Pozostałych **191 nie deklaruje nic i renderuje się 16**, bo taką
+       liczbę wpisuje `ControlTheme` w `IconGeometries.axaml`. Rozkład zmierzony ponownie w M4:
+
+           brak (→16)  191   ·   14 → 75   ·   15 → 44   ·   16 → 16
+           Size.Icon.Sm 10   ·   12 →  7   ·   13 →  5   ·   11 →  4   ·   10 → 1   ·  Size.Icon → 2
+
+       ⭐⭐ I stąd rozstrzygnięcie A‑3 (użytkownik, 2026‑08‑08): chroma ma DWA poziomy, nie jeden.
+       Poprzedni komentarz `Size.Icon` obiecywał „toolbar, zakładka, drzewo, wiersz menu" i jedną
+       liczbę 14, a zmierzone było 16 / 14 / 15 / 14 — rola opisywała jedną z czterech powierzchni,
+       które wymieniała, i nie opisywała własnej wartości domyślnej (pułapka 3 w wydaniu metrycznym).
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- ⭐ IKONA STOJĄCA W SERII: zakładka dokumentu, wiersz drzewa, wiersz menu kontekstowego, ikona przy
+       etykiecie na powierzchni roboczej oraz PRZYCISK IKONOWY W PASKU DOKLEJONYM DO SIATKI LUB PANELU
+       (paginacja, filtr / agregacja / eksport, chevron zwijania panelu, przyciski `MessageBanner`).
+       ⚠ Rozstrzygające jest „stoi w SERII", a nie „czy jest klikalne": przycisk paginacji JEST celem
+       myszy, a mimo to bierze tę rolę, bo stoi w serii czterech identycznych i czyta się jako pasek,
+       nie jako pojedyncza akcja. Samotna akcja paska narzędzi bierze `Size.Icon.Toolbar` (16).
+       ⚠ Wiersz drzewa dołączył w M4 (B‑1, decyzja użytkownika): miał 15 px literałem w 13 plikach.
+       Wysokość wiersza się przez to nie zmienia — `Size.Row.Tree` to `MinHeight` 24.
+       ⭐⭐ Paski siatek dołączyły w M4.1 (decyzja użytkownika 2026‑08‑08 — „dokończyć regułę, którą
+       produkt już ma"). Zmierzone przed decyzją: identyczny kształt `Button.icon` renderował się 16
+       w 135 miejscach i 14 w 34, a pasek paginacji — JEDNA kontrolka, te same stringi tooltipów — miał
+       14 w wynikach SQL i Table Data, a 16 w edytorach funkcji / procedury / widoku.
+       ⭐ Że reguła istnieje, dowodziła `Icon.RefreshCw`, jedyna ikona stojąca po OBU stronach linii
+       i za każdym razem trafiająca dobrze: 16 jako przycisk paska narzędzi, 14 gdy odświeża siatkę. -->
+  <x:Double x:Key="Size.Icon">14</x:Double>
+  <!-- ⭐ IKONA JAKO SAMODZIELNA AKCJA: pasek narzędzi (tytułowy i edytora), przycisk okna, chevron
+       panelu. Stoi SAMOTNIE i jest CELEM MYSZY.
+
+       ⭐⭐ To NIE jest nowa zasada — to ta sama drabina, którą katalog ma już dla KONTROLEK i którą
+       użytkownik ratyfikował w M2b, przeniesiona o poziom niżej:
+
+           POLA / WIERSZE (seria, wyrównanie)  →  Size.Control 24   ·  Size.Icon 14
+           AKCJE (cel myszy, hierarchia)       →  Size.ControlToolbar 22  ·  Size.Icon.Toolbar 16
+
+       ⚠ Ta rola PRZEJĘŁA nazwę i wartość po `Size.Icon.Lg`, która niosła to samo 16 i **nie miała ani
+       jednego konsumenta** — czyli nikt nigdy nie sprawdził, czy jej opis („nagłówek, pusty stan,
+       akcja główna") cokolwiek opisuje. Wartość nie drgnęła, więc migracja jest wizualnie zerowa.
+       ⚠⚠ Tę rolę czyta DOMYŚLNA wartość `Width`/`Height` w `ControlTheme` ikony, więc każda ikona bez
+       jawnego rozmiaru ją bierze. To jest stan faktyczny sprzed M4 — zmiana polega wyłącznie na tym,
+       że domyślna ma teraz NAZWĘ i widać, co ją zmieni. -->
+  <x:Double x:Key="Size.Icon.Toolbar">16</x:Double>
+  <!-- Ikona inline w tekście 11 px (chip, wiersz siatki). Jedyna pozycja z ogona z własnym
+       uzasadnieniem: ikona 14 px obok tekstu 11 px optycznie go przerasta. -->
+  <x:Double x:Key="Size.Icon.Sm">12</x:Double>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       PROMIENIE (§4.2.2)
+
+       ⭐ To nie było pięć wartości do uśrednienia, tylko dwie role bez nazwy: wszystkie
+       wystąpienia 4 / 4.5 / 5 / 6 siedzą w Trace Monitor, Session Managerze i pasku agregacji
+       i wszystkie są CHIPAMI; 3 to wyłącznie powierzchnie. Różnica była celowa — brakowało jej nazwy.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Karta, grupa, panel, lista rozwijana, `Border.settings-group`, pasek postępu (§8.4.6). -->
+  <CornerRadius x:Key="Radius.Surface">3</CornerRadius>
+  <!-- Odznaka i chip — element o kształcie pigułki. -->
+  <CornerRadius x:Key="Radius.Chip">4</CornerRadius>
+  <!-- ⭐ ZAKŁADKA — dolny panel i pod‑zakładki edytorów. Dopisane w M4 (K10, decyzja użytkownika D).
+       ⚠ Ta sama liczba co `Radius.Chip` i to jest POPRAWNE, nie duplikat do zwinięcia: §3.3 tego pliku
+       mówi wprost, że dwie role o tej samej wartości są dwiema niezależnymi decyzjami, które mogą się
+       rozejść. Sporna była wyłącznie NAZWA — zakładka nie jest chipem, a R12 zabrania wpisywać rolę,
+       która do elementu nie pasuje, tylko po to, żeby licznik wartości lokalnych spadł.
+       ⚠ Zaokrąglane są wyłącznie GÓRNE narożniki (szablon zakładki) — token niesie promień, nie to,
+       których rogów dotyczy. -->
+  <CornerRadius x:Key="Radius.Tab">4</CornerRadius>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       KRAWĘDZIE (§4.2.3)
+
+       Trzy role złożone pokrywają 96 ze 133 zmierzonych wystąpień. Reszta to `0` (brak krawędzi
+       nie potrzebuje tokenu) i cztery krawędzie boczne, które zostają lokalne, dopóki nie pokażą
+       roli.
+
+       ⭐ Kierunek jest częścią roli, nie ozdobą: `Border.Top` i `Border.Bottom` mają tę samą
+       grubość i różne znaczenie — „oddzielam się od tego, co nade mną" vs „…pode mną". To jest
+       ta sama reguła jednego właściciela odstępu, co przy `Margin.FieldGap`: gdyby dwa sąsiadujące
+       panele rysowały każdy swoją krawędź, powstałaby linia o grubości 2 px w połowie miejsc
+       i 1 px w reszcie.
+
+       ⛔ `Stroke.Rail` = 2 (rail Status Bara, §8.4.2) świadomie NIE MA tu tokenu. Rail jeszcze nie
+       istnieje, a token bez konsumenta wygląda identycznie jak regresja (reguła #233) i nikt nie
+       potrafi zweryfikować, czy jego wartość jest dobra. Wchodzi w M3.1, razem z railem.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Grubość każdej krawędzi i separatora w aplikacji. Warstwa skalarna — dla miejsc, które liczą
+       wysokość albo rysują linię same. -->
+  <x:Double x:Key="Stroke.Hairline">1</x:Double>
+
+  <!-- Pełna ramka: karta, pole, przycisk konturowy. -->
+  <Thickness x:Key="Border.All">1</Thickness>
+  <!-- Linia oddzielająca od treści POWYŻEJ (panel dokowany u dołu, pasek statusu). -->
+  <Thickness x:Key="Border.Top">0,1,0,0</Thickness>
+  <!-- Rail Status Bara (§8.4.1) — górna krawędź paska statusu w roli sygnału stanu.
+       ⭐ Rail NIE DODAJE piksela do interfejsu: ta linia już tam była jako `Border.Top`, tylko cieńsza
+       i zawsze w kolorze `BorderBrush`. Rail nadaje jej PRACĘ — w spoczynku dalej jest separatorem,
+       a gdy coś się dzieje, przyjmuje kolor stanu. Grubość jest STAŁA w każdym stanie, więc zmiana
+       stanu nie może przesunąć układu (§13.3 specyfikacji).
+       ⚠ Wartość celowo równa `Size.TabIndicator` (2) — jeden język wizualny sygnału, nie dwa. Nie da
+       się jej wyliczyć z tamtego tokenu, bo `BorderThickness` to `Thickness`, a nie `double` (§3.2 —
+       katalog ma dwie warstwy). Zmieniając jedną, zmień drugą. -->
+  <Thickness x:Key="Border.Rail">0,2,0,0</Thickness>
+  <!-- Linia oddzielająca od treści PONIŻEJ (toolbar, nagłówek, pasek zakładek). -->
+  <Thickness x:Key="Border.Bottom">0,0,0,1</Thickness>
+
+</ResourceDictionary>

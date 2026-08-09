@@ -287,7 +287,16 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ObjectName = context?.Name ?? string.Empty,
             ConnectionProfileId = connectionProfileId,
             Icon = MetadataNodeViewModel.IconFor(iconKind),
-            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(iconKind),
+            // ⭐ KOLOR NIESIE ROLĘ (S2 „wejście do narzędzia”, R‑6), GEOMETRIA NIESIE KONTEKST (S1).
+            // Ten przycisk na pasku modułów przeszedł na `AccentBrush` przy domknięciu K‑final — z zapisanym
+            // uzasadnieniem, że gdy element miałby nieść i rodzaj, i skutek, **wygrywa skutek**. Zakładka
+            // została wtedy pominięta i przez to była JEDYNĄ z sześciu zakładek narzędziowych (Trace, Session,
+            // Global Search, Script Executor, Data Import, Security) na kolorze RODZAJU: `IconColor_Role`
+            // = #90A4AE, który przy 14 px czyta się jak biały. To nie był błąd renderowania, tylko połowa
+            // wykonanej decyzji — ten sam kształt co #340 (decyzja żyje w jednym miejscu, rejestr w drugim).
+            // ⚠ Geometria ZOSTAJE zależna od kontekstu otwarcia (User vs Role) i to jest świadome: kolor
+            // mówi „to jest narzędzie”, glif mówi „otwarte na użytkowniku/roli”. Dwie osie, dwie odpowiedzi.
+            IconResourceKey = "AccentBrush",
             IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(iconKind),
             SecurityManager = manager,
         };
@@ -504,6 +513,26 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     // A kind with nothing to reload (Query, a read-only Ddl snapshot, the live-tool tabs) does nothing, so the
     // caller does not need to know which kinds those are. The DEBUGGER is deliberately absent: reloading it
     // would reset the source its session was built from, which belongs to the Draft model, not here.
+    /// <summary>
+    /// Czy ten rodzaj zakładki w ogóle się odświeża — <b>piąty członek tej samej rodziny per-kind</b>
+    /// co <see cref="UnsavedWork"/> / <see cref="SavableEditor"/> / <see cref="RefreshAsync"/> /
+    /// <c>ResolveCommand</c>.
+    ///
+    /// <para>⚠ Istnieje, bo <see cref="RefreshAsync"/> ma ramię <c>_ =&gt; Task.CompletedTask</c>: samo
+    /// wywołanie go na zakładce SQL Editora czy Trace jest bezpieczne, ale pozycja menu „Odśwież", która
+    /// jest klikalna i nic nie robi, uczy użytkownika, że polecenie nie działa. ⛔ Nie zastępować tego
+    /// listą rodzajów w drugim miejscu — lista jest jedna, tuż niżej, i te dwie muszą się zgadzać.</para>
+    /// </summary>
+    public bool CanRefresh => Kind is WorkspaceTabKind.ViewDetail
+        or WorkspaceTabKind.ProcedureDetail
+        or WorkspaceTabKind.TriggerDetail
+        or WorkspaceTabKind.FunctionDetail
+        or WorkspaceTabKind.GeneratorDetail
+        or WorkspaceTabKind.DomainDetail
+        or WorkspaceTabKind.PackageDetail
+        or WorkspaceTabKind.ExceptionDetail
+        or WorkspaceTabKind.IndexDetail;
+
     public Task RefreshAsync() => Kind switch
     {
         WorkspaceTabKind.ViewDetail => ViewDetail?.RefreshAsync() ?? Task.CompletedTask,

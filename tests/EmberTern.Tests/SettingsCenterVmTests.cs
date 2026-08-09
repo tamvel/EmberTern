@@ -134,6 +134,42 @@ public class SettingsCenterVmTests
             "SettingsCatalog's table must name no strings of its own. Found: " + string.Join(" | ", offenders));
     }
 
+    /// <summary>
+    /// Każda kategoria niesie ikonę, a jej klucz wskazuje na GEOMETRIĘ, KTÓRA ISTNIEJE.
+    ///
+    /// <para>⭐⭐ To jest kompensacja za jedyny rodzaj ciągu, jaki tablica katalogu wpuszcza z zewnątrz —
+    /// klucz zasobu. Literówka w nim nie zawodzi: <c>IconGeometryConverter</c> zwraca na nieznanym kluczu
+    /// <c>null</c>, <c>SvgIcon</c> nie ma czego narysować i w nawigacji zostaje pusty slot — <b>przy zielonym
+    /// buildzie i zielonym całym suite</b>. To dokładnie kształt #348 z tego samego pakietu: brak
+    /// rejestracji/zasobu nie krzyczy, tylko po cichu zabiera element, a ekran wygląda wiarygodnie.</para>
+    ///
+    /// <para>⚠ Czytane ze ŹRÓDŁA <c>IconGeometries.axaml</c>, nie z przepisanej listy nazw (#333): lista
+    /// w teście rozjechałaby się z katalogiem geometrii w tę stronę, w którą nikt nie patrzy.</para>
+    /// </summary>
+    [Fact]
+    public void EveryCategoryIcon_ResolvesToARealGeometry()
+    {
+        var geometries = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "Themes", "IconGeometries.axaml"));
+
+        var declared = Regex.Matches(geometries, @"x:Key=""(Icon\.[A-Za-z0-9]+)""")
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.NotEmpty(declared);
+
+        foreach (var category in SettingsCatalog.Categories)
+        {
+            Assert.False(
+                string.IsNullOrWhiteSpace(category.IconKey),
+                $"kategoria '{category.Id}' nie deklaruje ikony");
+            Assert.True(
+                declared.Contains(category.IconKey),
+                $"kategoria '{category.Id}' wskazuje na nieistniejącą geometrię '{category.IconKey}' — "
+                + "ikona zniknęłaby po cichu");
+        }
+    }
+
     // ─── OPTIONS COME FROM CORE ─────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -308,7 +344,7 @@ public class SettingsCenterVmTests
     /// ⭐⭐ <b>The blur-or-Enter commit path (design §5.5.1) — the debt §16.8 recorded for this etap.</b>
     ///
     /// <para>Typing must persist NOTHING. Every save reads + decrypts + rewrites the whole <c>settings.dat</c>,
-    /// and — the part that is not performance — <c>AtomicWrite</c> keeps exactly ONE generation of
+    /// and — the part that is not performance — <c>TryAtomicWrite</c> keeps exactly ONE generation of
     /// <c>settings.dat.bak</c>, so a per-keystroke save would roll the single hand-recovery backup through four
     /// generations while somebody is editing settings.</para>
     /// </summary>
@@ -549,6 +585,70 @@ public class SettingsCenterVmTests
         });
     }
 
+    /// <summary>
+    /// ⭐ „Maximum rows" znika w trybie jednowierszowym — interfejs nie pokazuje ustawień, które w danym
+    /// trybie nic nie robią (decyzja użytkownika, 2026-08-03).
+    ///
+    /// <para>⚠⚠ Druga asercja jest ważniejsza od pierwszej: <b>ukrycie wiersza nie może skasować wartości.</b>
+    /// Ukrycie ustawienia i porzucenie go to dwie różne rzeczy, a mylą się bardzo łatwo — wystarczyłoby, żeby
+    /// `Compose` przestało czytać niewidoczny wiersz i liczba znikałaby z pliku po każdym przełączeniu trybu.
+    /// Test przechodzi przez PEŁNY obieg: ustaw → przełącz → wróć.</para>
+    /// </summary>
+    [Fact]
+    public void TabStripMaxRows_IsHiddenInSingleRow_ButItsValueSurvives()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+
+            vm.TabStripMode.Value = PreferenceOptions.TabStripModeMultiRow;
+            vm.TabStripMaxRows.EditText = "7";
+            vm.TabStripMaxRows.Commit();
+            Assert.True(vm.ShowTabStripMaxRows);
+
+            // ⚠⚠ Sama wartość właściwości NIE WYSTARCZY — czytana wprost jest poprawna nawet wtedy, gdy nic
+            //   o niej nie mówi, a wiązanie w widoku odpytuje ją WYŁĄCZNIE po `PropertyChanged`. To jest ta
+            //   sama luka, przez którą w §19.2 poprawny styl nigdy się nie namalował: mechanizm był dobry,
+            //   brakowało sygnału. Dlatego notyfikacja jest tu asercją, a nie założeniem.
+            var announced = false;
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(SettingsCenterViewModel.ShowTabStripMaxRows)) announced = true;
+            };
+
+            vm.TabStripMode.Value = PreferenceOptions.TabStripModeSingleRow;
+            Assert.False(vm.ShowTabStripMaxRows);
+            Assert.True(announced, "Zmiana trybu nie ogłosiła ShowTabStripMaxRows — widok nie odpyta.");
+
+            vm.TabStripMode.Value = PreferenceOptions.TabStripModeMultiRow;
+            Assert.True(vm.ShowTabStripMaxRows);
+            Assert.Equal(7, vm.TabStripMaxRows.Value);
+
+            // I to samo, co przetrwało w pamięci, musi być na dysku — inaczej „zachowana" znaczyłoby
+            // wyłącznie „do zamknięcia okna".
+            Assert.Equal(7, new PreferencesStore(dir).Load().TabStripMaxRows);
+        });
+    }
+
+    /// <summary>
+    /// ⚠ Tryb i filtr wyszukiwania to DWIE niezależne przyczyny ukrycia tego samego wiersza, więc żadna nie
+    /// może nadpisywać drugiej: fraza pasująca do wiersza nie ma go wskrzesić w trybie, w którym nic nie robi.
+    /// </summary>
+    [Fact]
+    public void TabStripMaxRows_StaysHiddenInSingleRow_EvenWhenTheSearchMatchesIt()
+    {
+        InTempDir(dir =>
+        {
+            var vm = VmOver(dir);
+            vm.TabStripMode.Value = PreferenceOptions.TabStripModeSingleRow;
+
+            vm.SearchText = "maximum rows";
+
+            Assert.True(vm.TabStripMaxRows.IsVisible);   // filtr go przepuszcza…
+            Assert.False(vm.ShowTabStripMaxRows);        // …a tryb i tak go ukrywa
+        });
+    }
+
     /// <summary>Every category the catalog declares has a page the window can show — otherwise selecting it
     /// leaves the right pane blank, which is what a missing <c>IsVisible</c> property looks like.</summary>
     [Fact]
@@ -562,6 +662,7 @@ public class SettingsCenterVmTests
                 () => vm.IsGeneralPageVisible,
                 () => vm.IsEditorPageVisible,
                 () => vm.IsGridPageVisible,
+                () => vm.IsTabsPageVisible,
                 () => vm.IsDebuggerPageVisible,
                 () => vm.IsFormatterPageVisible,
             };

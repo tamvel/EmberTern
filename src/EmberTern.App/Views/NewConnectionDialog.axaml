@@ -82,31 +82,18 @@
                     Content="{x:Static app:UiStrings.DialogFieldDeveloperMode}" />
           <TextBlock Text="{x:Static app:UiStrings.DeveloperModeDescription}"
                      Classes="subtle"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Compact.Size}"
                      TextWrapping="Wrap" />
         </StackPanel>
 
-        <Expander Header="{Binding AdvancedSectionLabel}" IsExpanded="False">
-          <StackPanel Spacing="14" Margin="0,10,0,0">
-
-            <StackPanel Spacing="4">
-              <TextBlock Text="{Binding ClientLibraryLabel}" Classes="field-label" />
-              <Grid ColumnDefinitions="*,8,Auto">
-                <TextBox Grid.Column="0"
-                         Text="{Binding ClientLibraryPath, Mode=TwoWay}"
-                         PlaceholderText="C:\Program Files\Firebird\Firebird_3_0\fbclient.dll" />
-                <Button Grid.Column="2"
-                        Classes="flat"
-                        Content="{Binding BrowseLabel}"
-                        Click="OnBrowseClientLibraryClick" />
-              </Grid>
-              <TextBlock Text="{Binding ClientLibraryHint}"
-                         Classes="subtle"
-                         FontSize="11"
-                         TextWrapping="Wrap" />
-            </StackPanel>
-          </StackPanel>
-        </Expander>
+        <!-- ⛔⛔ THE "ADVANCED" EXPANDER IS GONE WITH ITS ONLY CONTENT (S-5, 2026-08-05).
+             It held exactly one field — the client library (fbclient.dll) — and that field could never do
+             anything: EmberTern connects with FbServerType.Default, the pure managed wire protocol, where no
+             fbclient.dll is loaded, and the driver reads its ClientLibrary only in Embedded mode, which this
+             application never selects. The user found it by pointing the setting at a completely invalid DLL
+             and connecting successfully.
+             ⚠ The expander went too rather than being left empty: a disclosure control that reveals nothing is
+             worse than no control. If Embedded mode is ever offered, this section comes back WITH it. -->
 
       </StackPanel>
     </ScrollViewer>
@@ -116,7 +103,7 @@
             IsVisible="{Binding HasTestMessage}">
       <TextBlock Text="{Binding TestMessage}"
                  TextWrapping="Wrap"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  Classes.success="{Binding IsTestSuccess}"
                  Classes.error="{Binding IsTestFailure}"
                  Classes.subtle="{Binding IsTesting}" />
@@ -135,7 +122,7 @@
         <TextBlock Grid.Column="1"
                    Text="{Binding ValidationMessage}"
                    Classes="error"
-                   FontSize="12"
+                   FontSize="{DynamicResource Text.Application.Size}"
                    VerticalAlignment="Center"
                    Margin="6,0,0,0"
                    IsVisible="{Binding HasValidationMessage}" />

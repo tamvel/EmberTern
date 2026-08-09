@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using Avalonia;
@@ -13,6 +13,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
@@ -55,6 +56,13 @@ public partial class ViewDetailTabView : UserControl
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("ViewDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
         _dataPreviewGrid = this.FindControl<DataGrid>("DataPreviewGrid");
+        // The Easy-mode columns grid is editable (a single editable Name column) and declares that
+        // column in XAML, so it never went through FieldGridColumns.Build — the same silent miss as
+        // Table Detail and New Table. One explicit call to the ONE seam (S-1a + S-3).
+        if (this.FindControl<DataGrid>("ViewColumnsGrid") is { } columnsGrid)
+        {
+            EditableGridBehavior.Attach(columnsGrid);
+        }
         // Format is not wired here any more: it is CommandId.FormatSql (Ctrl+K), declared once in
         // Commands.CommandCatalog for this tab kind and routed to this VM's own FormatSqlCommand. The two
         // local Alt+F handlers this replaced existed only because the old window-level Alt+F binding
@@ -288,6 +296,9 @@ public partial class ViewDetailTabView : UserControl
     // ── Filter-from-cell (View Data) ──────────────────────────────────────────
     private GridCellFilterContext? _dataCellCtx;
 
+    /// <summary>The right-clicked row, for the copy actions. See <c>OnViewDataCellPointerPressed</c>.</summary>
+    private object?[]? _copyRow;
+
     private void OnViewDataSelectionChanged(object? sender, SelectionChangedEventArgs e)
         => _currentVm?.SetDataSelectedRow(_dataPreviewGrid?.SelectedIndex ?? -1);
 
@@ -295,10 +306,38 @@ public partial class ViewDetailTabView : UserControl
     {
         if (_dataPreviewGrid is null || _currentVm is null) return;
         if (!e.PointerPressedEventArgs.GetCurrentPoint(_dataPreviewGrid).Properties.IsRightButtonPressed) return;
-        if (e.Row?.DataContext is object?[] row) _dataPreviewGrid.SelectedItem = row;
+        _copyRow = null;
+        if (e.Row?.DataContext is object?[] row)
+        {
+            _dataPreviewGrid.SelectedItem = row;
+            // ⚠ Kept explicitly rather than re-read from SelectedItem at click time: the copy actions must act
+            // on the cell the menu was opened over, and a selection is a separate thing that can move.
+            _copyRow = row;
+        }
         _dataCellCtx = GridCellFilter.Resolve(_dataPreviewGrid, e, _currentVm.DataFilterPanel.Columns);
         if (ViewDataFilterContainsItem is not null)
             ViewDataFilterContainsItem.IsEnabled = _dataCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
+    }
+
+    // ── Copy cell / row / row with headers / all with headers ────────────────────────────────────────────
+    //
+    // ⭐ The same four plain-text copy actions the SQL Editor grid has, so a user learns one set of copying
+    // gestures for every data grid (user request, 2026-08-07). The text comes from the one shared
+    // GridCopyText builder behind the VM; the target is the RIGHT-CLICKED cell, never the grid's selection.
+    private void OnViewDataCopyCellClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Cell);
+
+    private void OnViewDataCopyRowClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Row);
+
+    private void OnViewDataCopyRowWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.RowWithHeaders);
+
+    private void OnViewDataCopyAllWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.AllWithHeaders);
+
+    private Task CopyGridAsync(CopyGridMode mode)
+    {
+        if (_currentVm is null) return Task.CompletedTask;
+        return GridClipboard.WriteAsync(this, _currentVm.BuildCopyText(mode, _copyRow, _dataCellCtx?.ColumnIndex ?? -1));
     }
 
     private void OnViewDataFilterByValueClick(object? sender, RoutedEventArgs e)
@@ -359,14 +398,6 @@ public partial class ViewDetailTabView : UserControl
         _ = _currentVm.ApplyColumnSortAsync(_dataPreviewColumnNames[index]);
     }
 
-    private void OnDependencyNodeDoubleTapped(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Control { DataContext: DependencyLeafNode leaf } && _currentVm is not null)
-        {
-            _currentVm.RequestOpen(leaf);
-            e.Handled = true;
-        }
-    }
 
     private void ApplyEditorTheme()
     {

@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="https://github.com/avaloniaui"
+﻿<ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="using:EmberTern.App.Controls">
 
@@ -22,11 +22,28 @@
   <StreamGeometry x:Key="Icon.Pause">M10 4 V20 M14 4 V20</StreamGeometry>
   <StreamGeometry x:Key="Icon.Activity">M22 12 H18 L15 21 L9 3 L6 12 H2</StreamGeometry>
   <StreamGeometry x:Key="Icon.Check">M5 12.5 L10 17.5 L19 6.5</StreamGeometry>
-  <StreamGeometry x:Key="Icon.Undo">M10 8 L5 12.5 L10 17 M5 12.5 H15 A4.5 4.5 0 0 1 15 21.5</StreamGeometry>
+  <!-- ⭐⭐ WYŚRODKOWANE W PIONIE W M4.1 (zgłoszenie QA: „strzałki wyglądają na nierówno ustawione względem
+       pozostałych ikon w pasku"). Zgłoszenie było trafne i przyczyną jest GEOMETRIA, nie pozycjonowanie:
+       przycisk, kontener, padding i rozmiar są identyczne jak u sąsiadów, a ikona i tak siedziała niżej.
+
+       Zmierzone przed poprawką (`GetRenderBounds` z piórem 2 px, siatka 24): środek tuszu **14,75**
+       zamiast 12, czyli **1,83 px za nisko przy renderze 16 px** — bo strzałka jest wyśrodkowana, a łuk
+       powrotu zwisa pod nią i ściąga całe pudełko w dół. Audyt wszystkich 86 geometrii: **73 mieszczą się
+       w 0,25 jednostki od środka, 83 w 1,0**, a `Icon.Undo`/`Icon.Redo` były DWOMA Z TRZECH największych
+       odchyleń pionowych w całym zestawie. To nie był więc styl rodziny, tylko odstępstwo od niej.
+
+       ⚠ Przesunięcie o **2,5**, nie o 2,75 (które wyzerowałoby odchylenie co do joty): 2,5 zostawia
+       współrzędne na siatce 0,5 jak reszta zestawu, a resztkowe 0,25 jednostki (0,17 px) leży w paśmie,
+       w którym mieszczą się 73 z 86 ikon. ⛔ To jest CZYSTE PRZESUNIĘCIE — ani kształt, ani rozmiar, ani
+       grubość kreski się nie zmieniły; ikona ma wyglądać tak samo, tylko stać równo.
+       ⚠ Ta sama zmiana musi trafić do `Assets/Icons/Actions/undo.svg` i `redo.svg` (źródło kanoniczne). -->
+  <StreamGeometry x:Key="Icon.Undo">M10 5.5 L5 10 L10 14.5 M5 10 H15 A4.5 4.5 0 0 1 15 19</StreamGeometry>
   <!-- Keyboard Manager etap 5 — the three marks the editor's context menu needed and the app did not have.
        Redo is Undo mirrored, so the pair reads as a pair; Cut / Paste are the Lucide scissors and clipboard.
-       Authored in the same 24×24, 2px-stroke, round-cap idiom as every other geometry here. -->
-  <StreamGeometry x:Key="Icon.Redo">M14 8 L19 12.5 L14 17 M19 12.5 H9 A4.5 4.5 0 0 0 9 21.5</StreamGeometry>
+       Authored in the same 24×24, 2px-stroke, round-cap idiom as every other geometry here.
+       ⚠ Wyśrodkowana w M4.1 razem z `Icon.Undo` — lustro musi zostać lustrem, więc idzie tym samym
+       przesunięciem, choć ma dziś jednego konsumenta (menu kontekstowe edytora). -->
+  <StreamGeometry x:Key="Icon.Redo">M14 5.5 L19 10 L14 14.5 M19 10 H9 A4.5 4.5 0 0 0 9 19</StreamGeometry>
   <StreamGeometry x:Key="Icon.Cut">M6 3 L18 15 M18 3 L10.5 10.5 M8.5 15.5 A3 3 0 1 1 6 18 M15.5 15.5 A3 3 0 1 0 18 18</StreamGeometry>
   <StreamGeometry x:Key="Icon.Paste">M9 4 H6 A2 2 0 0 0 4 6 V20 A2 2 0 0 0 6 22 H18 A2 2 0 0 0 20 20 V6 A2 2 0 0 0 18 4 H15 M9 4 A1 1 0 0 1 10 3 H14 A1 1 0 0 1 15 4 A1 1 0 0 1 14 5 H10 A1 1 0 0 1 9 4 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Plus">M12 5 V19 M5 12 H19</StreamGeometry>
@@ -43,7 +60,7 @@
   <!-- Lucide list-filter — the conditional "Add condition" grid filter (distinct from the funnel). -->
   <StreamGeometry x:Key="Icon.ListFilter">M3 6h18 M7 12h10 M10 18h4</StreamGeometry>
   <!-- Script Executor: a document with text lines (Lucide file-text style, hand-authored
-       in the same rounded-corner idiom as Icon.TablePlus). -->
+       in the same rounded-corner idiom as Icon.Table). -->
   <StreamGeometry x:Key="Icon.FileText">M7 2 H15 A2 2 0 0 1 17 4 V20 A2 2 0 0 1 15 22 H7 A2 2 0 0 1 5 20 V4 A2 2 0 0 1 7 2 Z M8.5 8 H13.5 M8.5 12 H13.5 M8.5 16 H12</StreamGeometry>
   <!-- EyeOff (Lucide): "hide own activity" toggle in the Activity Monitor. -->
   <StreamGeometry x:Key="Icon.EyeOff">M9.88 9.88a3 3 0 1 0 4.24 4.24 M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68 M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61 M2 2l20 20</StreamGeometry>
@@ -55,7 +72,7 @@
   <StreamGeometry x:Key="Icon.Download">M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3</StreamGeometry>
   <!-- Data Import: an arrow descending INTO a table grid. Deliberately not Icon.Download, whose tray
        means "fetch a file to disk" — this module puts rows into a TABLE, so the glyph rhymes with
-       Icon.Table / Icon.TablePlus the way the new-table button rhymes with the sidebar it feeds.
+       Icon.Table the way the new-table button rhymes with the sidebar it feeds.
        Canonical source: Assets/Icons/Actions/import.svg. -->
   <StreamGeometry x:Key="Icon.Import">M12 3 V9 M8.5 5.5 L12 9 L15.5 5.5 M5 12 H19 A2 2 0 0 1 21 14 V19 A2 2 0 0 1 19 21 H5 A2 2 0 0 1 3 19 V14 A2 2 0 0 1 5 12 Z M3 16.5 H21 M12 12 V21</StreamGeometry>
   <!-- X (Lucide x): generic close / dismiss — tab strip close + Close-tab toolbar.
@@ -85,36 +102,15 @@
   <StreamGeometry x:Key="Icon.LightbulbFilled">M12 3.2A6.4 6.4 0 1 0 12 16A6.4 6.4 0 1 0 12 3.2Z M8.8 16.6h6.4v1.9H8.8Z M10.1 19.6h3.8v1.8h-3.8Z</StreamGeometry>
   <!-- Folder-plus (Lucide folder-plus): all sub-paths start absolute M — verbatim. -->
   <StreamGeometry x:Key="Icon.FolderPlus">M12 10v6 M9 13h6 M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z</StreamGeometry>
-  <!-- New Table — composed from Lucide primitives (no `table-plus` in Lucide core):
-       a small rounded table grid (top-left) + a plus (bottom-right) = "create table". -->
-  <StreamGeometry x:Key="Icon.TablePlus">M5 3 H12 A2 2 0 0 1 14 5 V12 A2 2 0 0 1 12 14 H5 A2 2 0 0 1 3 12 V5 A2 2 0 0 1 5 3 Z M3 8.5 H14 M8.5 3 V14 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
-  <!-- New View: an eye (lens + pupil) shrunk into the top-left + the SAME
-       bottom-right "+" overlay as Icon.TablePlus, so "New View" reads as a create
-       action visually consistent with "New Table". -->
-  <StreamGeometry x:Key="Icon.ViewPlus">M2 9.5 C4.5 4 11.5 4 14 9.5 C11.5 15 4.5 15 2 9.5 Z M5.4 9.5 A2.6 2.6 0 1 0 10.6 9.5 A2.6 2.6 0 1 0 5.4 9.5 Z M18.5 15 V22 M15 18.5 H22</StreamGeometry>
-  <!-- New Procedure: a small rounded terminal square (top-left) with a ">" prompt +
-       the SAME bottom-right "+" overlay as Icon.TablePlus / Icon.ViewPlus, so
-       "New Procedure" reads as a create action consistent with the others. -->
-  <StreamGeometry x:Key="Icon.ProcedurePlus">M5 3 H12 A2 2 0 0 1 14 5 V12 A2 2 0 0 1 12 14 H5 A2 2 0 0 1 3 12 V5 A2 2 0 0 1 5 3 Z M6 6.5 l2 2 -2 2 M9.5 10.5 h3 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
-  <!-- New Trigger: a lightning bolt (top-left) + the SAME bottom-right "+" overlay,
-       so "New Trigger" reads as a create action consistent with the others (the bolt
-       matches the metadata-tree Trigger glyph Icon.Trigger). -->
-  <StreamGeometry x:Key="Icon.TriggerPlus">M9 2 L4 11 H8 L7 16 L13 7 H9 Z M18.5 15 V22 M15 18.5 H22</StreamGeometry>
-  <!-- New Function: a rounded square with an ƒ glyph (top-left) + the SAME bottom-right
-       "+" overlay, consistent with the other New-object create actions. -->
-  <StreamGeometry x:Key="Icon.FunctionPlus">M5 3 H12 A2 2 0 0 1 14 5 V12 A2 2 0 0 1 12 14 H5 A2 2 0 0 1 3 12 V5 A2 2 0 0 1 5 3 Z M10 5.4 c-1.5 0 -2.1 0.9 -2.1 2.3 V11.4 M6.6 8.3 H10.4 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
-  <!-- New Generator: a small "#" (top-left, matching the metadata-tree Generator glyph
-       Icon.Generator) + the SAME bottom-right "+" overlay as the other New-object icons. -->
-  <StreamGeometry x:Key="Icon.GeneratorPlus">M2 6 H13 M2 10 H13 M7 2 L6 14 M11 2 L10 14 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
-  <!-- New Domain: a small diamond (top-left, matching the metadata-tree Domain glyph
-       Icon.Domain) + the SAME bottom-right "+" overlay as the other New-object icons. -->
-  <StreamGeometry x:Key="Icon.DomainPlus">M8 2 L14 8 L8 14 L2 8 Z M18.5 15 V22 M15 18.5 H22</StreamGeometry>
-  <!-- New Package: a small isometric box (top-left, matching the metadata-tree Package
-       glyph Icon.Package) + the SAME bottom-right "+" overlay as the other New-object icons. -->
-  <StreamGeometry x:Key="Icon.PackagePlus">M2 5 L8 2 L14 5 L8 8 Z M2 5 V11 L8 14 M14 5 V11 L8 14 M8 8 V14 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
-  <!-- New Exception: a small warning triangle (top-left, matching the metadata-tree
-       Exception glyph Icon.Exception) + the SAME bottom-right "+" overlay as the other New-object icons. -->
-  <StreamGeometry x:Key="Icon.ExceptionPlus">M8 2 L14 13 H2 Z M8 6 V9 M8 11 h.01 M18.5 15 V22 M15 18.5 H22</StreamGeometry>
+  <!-- ⚠⚠ TU STAŁO DZIEWIĘĆ GEOMETRII `Icon.<Rodzaj>Plus` — USUNIĘTE W M3.5 / Z-6, I TO JEST ZAPIS, NIE
+       LUKA. Każda była ręcznie komponowaną KOPIĄ swojego odpowiednika bez plusa, ze glifem ściśniętym
+       do ~11 z 24 jednostek, żeby zrobić miejsce na plus obok. Zmierzone w bramie §13.3: ~62 % rozmiaru
+       liniowego i ~40 % powierzchni glifu, który dwa centymetry obok — w drzewie metadanych — ma 18 j.
+       ⭐ Zastąpione kontrolką `CreateIcon` (ControlTheme na końcu tego pliku), która bierze geometrię
+       PLAIN przez referencję i dokłada badge akcji. Skutek: pasek narzędzi i drzewo mają jedną geometrię
+       na rodzaj, więc nie mogą się już rozjechać.
+       ⛔ Nie przywracać wariantów `*Plus`. Nowa akcja „utwórz …" to `<controls:CreateIcon Data="{StaticResource
+       Icon.<Rodzaj>}" Foreground="{DynamicResource IconColor_<Rodzaj>}" />` — zero nowej geometrii. -->
   <!-- Pencil-ruler (Lucide pencil-ruler): design / edit table structure (the inline
        field-edit toggle). Relative "m…" sub-paths re-anchored to absolute M + l. -->
   <StreamGeometry x:Key="Icon.PencilRuler">M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13 M8 6 l2-2 M18 16 l2-2 M17 11 l4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17 M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z M15 5 l4 4</StreamGeometry>
@@ -130,7 +126,7 @@
   <StreamGeometry x:Key="Icon.Unplug">M19 5 l3-3 M2 22 l3-3 M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z M7.5 13.5 10 11 M10.5 16.5 13 14 M12 6 l6 6 l2.3-2.3 a2.4 2.4 0 0 0 0-3.4 l-2.6-2.6 a2.4 2.4 0 0 0-3.4 0 Z</StreamGeometry>
 
   <!-- Application Menu rows (hamburger-navigation §4). Both COMPOSED in the Lucide style rather than taken
-       verbatim, and the .svg sources say so — same precedent as Icon.TablePlus / Icon.Import. -->
+       verbatim, and the .svg sources say so — same precedent as Icon.Import. -->
   <!-- Settings: two setting tracks, each with a knob. A gear was rejected: its outline cannot be authored
        cleanly at a 2px stroke rendered into a 14px menu icon column. -->
   <StreamGeometry x:Key="Icon.Settings">M11 7 H20 M4 7 A3 3 0 1 1 10 7 A3 3 0 1 1 4 7 Z M4 17 H13 M14 17 A3 3 0 1 1 20 17 A3 3 0 1 1 14 17 Z</StreamGeometry>
@@ -274,12 +270,18 @@
        A fixed 24×24 Canvas inside a Uniform Viewbox guarantees a consistent
        coordinate space (and therefore consistent stroke weight) regardless of each
        icon's actual bounds. Stroke = Foreground so a theme token colors the icon
-       and theme toggle re-evaluates live. Default size 16; override Width/Height
-       per use (e.g. 14 for workspace tabs, 12 for the tab-strip close button).
+       and theme toggle re-evaluates live.
+
+       ⭐⭐ ROZMIAR DOMYŚLNY MA OD M4 ROLĘ (A‑3): `Size.Icon.Toolbar` = 16, czyli DOKŁADNIE ta liczba,
+       która stała tu literałem — zmiana jest wizualnie zerowa. Powód, dla którego mimo to jest ważna:
+       191 z 355 deklaracji ikon w aplikacji nie podaje rozmiaru, więc to ten setter decydował o ich
+       wielkości, a katalog o tym nie wiedział (`Size.Icon` obiecywał 14 i miał DWÓCH konsumentów).
+       Teraz widać, co zmieni te 191 ikon naraz.
+       ⚠ Ikona stojąca W WIERSZU nadpisuje to na `Size.Icon` (14) — zakładka, drzewo, menu kontekstowe.
        ============================================================================ -->
   <ControlTheme x:Key="{x:Type controls:SvgIcon}" TargetType="controls:SvgIcon">
-    <Setter Property="Width" Value="16" />
-    <Setter Property="Height" Value="16" />
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
     <Setter Property="Foreground" Value="{DynamicResource NeutralIconBrush}" />
     <Setter Property="Template">
       <ControlTemplate>
@@ -309,22 +311,120 @@
        overrides to 14. Canonical source: Assets/Icons/Debugger/debugger.svg.
        ============================================================================ -->
   <ControlTheme x:Key="{x:Type controls:DebuggerIcon}" TargetType="controls:DebuggerIcon">
-    <Setter Property="Width" Value="16" />
-    <Setter Property="Height" Value="16" />
+    <!-- Domyślna z roli `Size.Icon.Toolbar` (16) — jak `SvgIcon`; zakładka nadpisuje na `Size.Icon`. -->
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
     <Setter Property="Template">
       <ControlTemplate>
         <Viewbox Stretch="Uniform">
           <Canvas Width="24" Height="24">
-            <Path Data="M6 4 L18 12 L6 20 Z"
+            <!-- ⭐⭐ TRÓJKĄT TO DOSŁOWNIE `Icon.Play` — TA SAMA GEOMETRIA, NIE KOPIA.
+                 Decyzja użytkownika (M3.1e QA, §19.6): *„Debugger powinien być po prostu ikoną Execute
+                 z dodaną czerwoną kropką, a nie osobnym symbolem"*. Referencja zamiast własnej ścieżki
+                 czyni to POKREWIEŃSTWO STRUKTURALNYM: Execute i Debug nie mogą się rozjechać, bo jest
+                 jedna geometria, i zmiana `Icon.Play` pociąga za sobą znak debuggera automatycznie.
+
+                 ⚠⚠ POMIAR, KTÓRY TO WYMUSIŁ: znak NIGDY nie był ikoną Execute. Nosił własny trójkąt
+                 (6,4)(18,12)(6,20), podczas gdy `Icon.Play` to (8,5)(19,12)(8,19) — inny o 1 j. wszerz
+                 i 2 j. wzwyż. Rodzina była PRZYBLIŻENIEM utrzymywanym ręcznie, i dlatego rozjechała się
+                 przy pierwszej próbie poprawienia kropki. ⛔ Nie zamieniać tej referencji z powrotem na
+                 wpisaną ścieżkę, nawet identyczną — to przywraca dokładnie tę możliwość rozjazdu. -->
+            <Path Data="{StaticResource Icon.Play}"
                   Stroke="{DynamicResource AccentIconBrush}"
                   StrokeThickness="2"
                   StrokeLineCap="Round"
                   StrokeJoin="Round" />
-            <!-- The breakpoint dot is an accent on the pointer, not a second subject: kept at the same
-                 centre (16, 15.5) and the same overlap with the triangle's tip, diameter trimmed 6 → 4.5
-                 so it reads as a mark rather than competing with the play shape. -->
-            <Ellipse Canvas.Left="13.75" Canvas.Top="13.25" Width="4.5" Height="4.5"
+            <!-- The breakpoint dot is an accent on the pointer, not a second subject — diameter 4.5
+                 (trimmed 6 → 4.5 in the Seam 4 QA round) so it reads as a mark rather than competing
+                 with the play shape.
+
+                 ⚠⚠ CENTRE MOVED (16; 15.5) → (19; 19) in the M3.1e QA round (§19.6), and it is the ONLY
+                 thing that moved — the base symbol is untouched, by decision. The dot used to OVERLAP
+                 the triangle's lower edge, deliberately, so the two read as one glyph; at 16 px that
+                 worked. MEASURED against `Icon.Play`: the old position leaves −1.91 units of clearance
+                 past the 2 px stroke, i.e. at the chip's 12 px roughly a pixel of two antialiased shapes
+                 bleeding together. It stopped reading as one glyph and started reading as an artifact.
+
+                 ⭐ x = 19 is the apex's own x, so the breakpoint sits at the END OF THE EXECUTION
+                 POINTER — a stated relationship, not a tuned offset. Clearance +2.66 units
+                 = 1.33 px @12, 1.55 px @14, 1.77 px @16.
+
+                 ⛔⛔ THE LESSON, AND IT OUTRANKS THE DOT: an intermediate round redrew the TRIANGLE to
+                 make room (bigger, pushed right). It measured better and was rejected on sight, for the
+                 right reason — Execute and Debug stopped reading as one family. **Consistency of the
+                 icon set beats the optimum of any single glyph.** If this dot ever needs more room
+                 again, move the DOT; the base symbol is not the adjustable part.
+
+                 ⚠ ONE ControlTheme serves every size — chip 12, tab 14, editor "Debug…" buttons 16 —
+                 so a change here reaches every consumer; there is no per-scale variant and inventing one
+                 for a single consumer would violate R3. Canonical source updated in lockstep:
+                 Assets/Icons/Debugger/debugger.svg. -->
+            <Ellipse Canvas.Left="16.75" Canvas.Top="16.75" Width="4.5" Height="4.5"
                      Fill="{DynamicResource DebugBreakpointBrush}" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ============================================================================
+       CreateIcon ControlTheme — pasek narzędzi „Utwórz …" (Product Polish M3.5 / Z-6).
+       Pełnowymiarowy glif rodzaju + mały badge akcji nałożony na prawy dolny narożnik.
+
+       ⭐⭐ DWA FAKTY, DWA SYSTEMY — i to jest cała idea: glif niesie RODZAJ (S1, `IconColor_*`, ta sama
+       barwa co w drzewie metadanych), badge niesie AKCJĘ „utwórz" (S2, jedna barwa dla wszystkich
+       dziewięciu, więc znak wszędzie znaczy to samo — W1). Wcześniej obie informacje walczyły o te same
+       24 jednostki i przegrywały obie: glif był ściśnięty do ~11 j. tam, gdzie jego odpowiednik w drzewie
+       ma 18 — czyli ~62 % rozmiaru liniowego i ~40 % powierzchni, przy IDENTYCZNYM pudełku.
+
+       ⚠⚠ DLACZEGO NIE `SvgIcon`, POMIAR NIE GUST: `SvgIcon` to jeden `Path`, jeden `Stroke`, jedna
+       `StrokeThickness=2` dla całej geometrii. Badge jest z definicji znakiem MNIEJSZYM i GĘŚCIEJSZYM,
+       a stąd da się dostać tylko „mniejszy i równie grubo" — co przy 16 px daje kleks. Wariant czysto
+       geometryczny (plus we wnętrzu glifu) był wyrenderowany sondą i odrzucony: działał dla 5 z 9 ikon,
+       a badge przestawał się czytać.
+
+       ⭐ BADGE JEST SOLIDNY, WIĘC PO PROSTU ZASŁANIA — bez knockoutu, a zatem bez zależności od barwy
+       tła pod ikoną. To nie jest oszczędność, to warunek poprawności: tło paska to `ChromeStrongBrush`
+       w spoczynku, ale `IconHoverBrush` pod kursorem, więc knockout w barwie chromy pokazałby łatę złego
+       koloru przy najechaniu. Ten sam zabieg, którym kropka breakpointu siedzi na trójkącie wyżej.
+
+       ⚠ `AccentBrush` na badge'u NIE otwiera ponownie P-2 (akcent na panelu = 2,89:1 w Dark). P-2 dotyczy
+       linii 2 px, która niesie sygnał SAMA; tutaj pracuje solidny dysk 10 j. z białym plusem w środku —
+       powierzchnia i kontrast wewnętrzny, nie różnica wobec tła.
+
+       ⚠ PROPORCJE ZMIERZONE, NIE DOBRANE NA OKO (runda 3 sondy, na dwóch najgęstszych glifach): dysk
+       Ø10 odsunięty 0,5 j. od krawędzi. Ø11 przy krawędzi zasłaniał róg siatki `Table` i dolny narożnik
+       `Package`; Ø9,5 odsłaniał najwięcej glifu, ale plus tracił ostrość. ⚠ Przy 16 px sam plus jest na
+       granicy rozdzielczości przy KAŻDEJ średnicy (kreska 1,33 px) — i tak ma być: badge rozpoznaje się
+       po pozycji i barwie, jak w VS/JetBrains, a od ~20 px i przy 150 % DPI plus jest ostry.
+
+       ⛔ `Data` bierze geometrię PLAIN PRZEZ REFERENCJĘ (`Icon.Table`, nie `Icon.TablePlus` — te dziewięć
+       kopii zostało USUNIĘTYCH w M3.5). Nie wpisywać ścieżki na sztywno, nawet identycznej: to przywraca
+       dokładnie tę możliwość rozjazdu, którą `DebuggerIcon` opisuje u siebie.
+       ============================================================================ -->
+  <ControlTheme x:Key="{x:Type controls:CreateIcon}" TargetType="controls:CreateIcon">
+    <!-- ⚠ Domyślna z roli `Size.Icon.Toolbar` (16), i to jest jedyne miejsce, w którym ta ikona żyje:
+         dziewięć przycisków „utwórz…" w pasku narzędzi nie podaje rozmiaru. ⛔ Proporcje badge'a
+         (Ø10, inset 0,5) dobrano i odebrano PRZY 16 px — zmiana tej roli je unieważnia (M3.5 / Z‑6). -->
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Stretch="Uniform">
+          <Canvas Width="24" Height="24">
+            <Path Data="{TemplateBinding Data}"
+                  Stroke="{TemplateBinding Foreground}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round" />
+            <Ellipse Canvas.Left="13.5" Canvas.Top="13.5" Width="10" Height="10"
+                     Fill="{DynamicResource AccentBrush}" />
+            <!-- Plus kontrastuje wyłącznie z DYSKIEM, nie z tłem strony — dlatego jest pewny w obu
+                 motywach i niezależny od dziewięciu barw rodzajów. Ramię 2,6 j. = 0,26 × Ø. -->
+            <Path Data="M18.5 15.9 V21.1 M15.9 18.5 H21.1"
+                  Stroke="{DynamicResource OnAccentBrush}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round" />
           </Canvas>
         </Viewbox>
       </ControlTemplate>

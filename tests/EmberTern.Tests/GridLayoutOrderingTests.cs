@@ -47,4 +47,22 @@ public class GridLayoutOrderingTests
         var saved = new[] { "A", "A", "B" };
         Assert.Equal(new[] { "A", "B" }, GridLayoutOrdering.OrderedNames(current, saved));
     }
+
+    // ── Whose order is it? (user report 2026-08-03: result columns out of SELECT order) ──────────
+    //
+    // The ordering above is correct and was never the defect. What was wrong is that it ran at all on a grid
+    // whose columns the user cannot arrange: the SQL editor's result grid shares ONE profile across every query
+    // (GridId="QueryResults"), so an earlier result's column order was replayed onto the next result's columns.
+    //
+    // ⭐ The rule that fixed it is read from the grid — "order is remembered only where the user can set it" —
+    // and it is pinned here because the failure mode of losing it is invisible in tests and immediate on screen.
+    // A bare DataGrid needs no headless session, so this stays in the ordinary partition.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ColumnOrder_IsRemembered_OnlyWhereTheUserCanReorder(bool canReorder)
+    {
+        var grid = new Avalonia.Controls.DataGrid { CanUserReorderColumns = canReorder };
+        Assert.Equal(canReorder, EmberTern.App.Behaviors.GridLayoutBehavior.RemembersOrder(grid));
+    }
 }

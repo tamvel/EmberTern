@@ -19,8 +19,8 @@
   <Grid RowDefinitions="Auto,*">
 
     <!-- (1) PRIMARY SUMMARY -->
-    <Border Grid.Row="0"
-            Background="{DynamicResource ElevatedPanelBrush}"
+    <Border Classes="chrome" Grid.Row="0"
+            Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="12,10">
@@ -29,6 +29,8 @@
 
           <!-- grade line: dot + plain-language grade + time -->
           <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasReport}">
+            <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 3, §18.3). Znak oceny jest MARK-iem strojącym się
+                 do wiersza (sąsiedni tekst ma 14), a katalog ma przy 13 wyłącznie rolę kodu. Rozstrzyga §13.3. -->
             <TextBlock Text="●" FontSize="13" VerticalAlignment="Top" Margin="0,1,0,0">
               <TextBlock.Foreground>
                 <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -37,52 +39,64 @@
                 </MultiBinding>
               </TextBlock.Foreground>
             </TextBlock>
-            <TextBlock Text="{Binding GradeLine}" FontWeight="SemiBold" FontSize="14"
+            <TextBlock Text="{Binding GradeLine}" FontWeight="SemiBold" FontSize="{DynamicResource Text.Title.Size}"
                        TextWrapping="Wrap" Foreground="{DynamicResource ForegroundBrush}" />
           </StackPanel>
 
           <!-- plain-language plan lead: which table is full-scanned, in words -->
+          <!-- 🔒 K4 ZAMKNIĘTA JAKO WARTOŚĆ LOKALNA Z POWODEM — ratyfikowana decyzja użytkownika (M4, 2026‑08‑08),
+               a nie dług do spłacenia. Zapis decyzji, żeby nikt nie „dokończył" bloku typografii:
+
+                   „To pojedynczy element pełniący rolę nagłówka planu i nie widzę potrzeby sztucznego
+                    sprowadzania go do 12 tylko po to, żeby zniknął literał."
+
+               ⭐ To jest R12 w czystej postaci: celem katalogu jest usunięcie wartości NIEUZASADNIONYCH, nie
+               wyzerowanie licznika — a wyjątek nazwany i uzasadniony jest poprawnym stanem docelowym.
+               ⚠ 13 px niesie tu HIERARCHIĘ: ta linia stoi nad metrykami przy 12 i jest wiodącym zdaniem planu.
+               ⛔ Nowa rola przy 13 wymagałaby kilku konsumentów (R3), a ten jest jeden — dlatego wartość
+               lokalna, a nie rola. Sprawdzone na renderze sondy: po zejściu do 12 hierarchia utrzymuje się
+               na kolorze i pozycji, więc zmiana byłaby możliwa — i została ODRZUCONA, bo nic nie wnosi. -->
           <TextBlock Text="{Binding PlanLead}" FontSize="13" TextWrapping="Wrap"
                      Foreground="{DynamicResource ForegroundBrush}"
                      IsVisible="{Binding HasPlanLead}" />
 
           <!-- noise summary: N sub-queries -->
-          <TextBlock Text="{Binding NoiseSummary}" FontSize="12" TextWrapping="Wrap"
+          <TextBlock Text="{Binding NoiseSummary}" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding HasNoiseSummary}" />
 
           <!-- metrics + timing (promoted from the old Details panel) -->
           <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasReport}">
-            <TextBlock Text="{Binding Verdict.RowsText}" FontSize="11"
+            <TextBlock Text="{Binding Verdict.RowsText}" FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}" />
-            <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
+            <TextBlock Text="·" FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding Verdict.HasRowsRead}" />
-            <TextBlock Text="{Binding Verdict.RowsReadText}" FontSize="11"
+            <TextBlock Text="{Binding Verdict.RowsReadText}" FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding Verdict.HasRowsRead}" />
-            <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
+            <TextBlock Text="·" FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding Verdict.HasAmplification}" />
-            <TextBlock Text="{Binding Verdict.AmplificationText}" FontSize="11" FontWeight="SemiBold"
+            <TextBlock Text="{Binding Verdict.AmplificationText}" FontSize="{DynamicResource Text.Compact.Size}" FontWeight="SemiBold"
                        Foreground="{DynamicResource ForegroundBrush}"
                        IsVisible="{Binding Verdict.HasAmplification}" />
-            <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}"
+            <TextBlock Text="·" FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding HasTiming}" />
-            <TextBlock Text="{Binding TimingText}" FontSize="11"
+            <TextBlock Text="{Binding TimingText}" FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        IsVisible="{Binding HasTiming}" />
           </StackPanel>
 
           <!-- nudge to measure reads: a full scan, but this run wasn't profiled with reads -->
           <TextBlock Text="{x:Static app:UiStrings.PerformanceReadsNotMeasured}"
-                     FontSize="11" FontStyle="Italic" TextWrapping="Wrap"
+                     FontSize="{DynamicResource Text.Compact.Size}" FontStyle="Italic" TextWrapping="Wrap"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding ShowReadsNudge}" />
 
           <!-- empty / progress / error states -->
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceEmptyHint}" FontSize="12" TextWrapping="Wrap"
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceEmptyHint}" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding ShowEmptyState}" />
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceProfilingHint}" FontSize="12"
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceProfilingHint}" FontSize="{DynamicResource Text.Application.Size}"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding IsProfiling}" />
           <controls:MessageBanner Severity="Error" Message="{Binding ErrorMessage}"
@@ -103,41 +117,51 @@
 
         <!-- FINDINGS (measured reads) -->
         <StackPanel Spacing="6" Margin="0,0,0,10" IsVisible="{Binding HasReport}">
+          <!-- ⭐ K3 ZAMKNIĘTA (M4, decyzja użytkownika A-2). Ten nagłówek trzymał 12 SemiBold lokalnie od M2c,
+               bo rola `Text.SectionHeader` niosła 11 — a 11 SemiBold stało nad tekstem 12 i nie czytało się
+               jako nadrzędne. Rola niesie teraz 12: wartość bez zmian, wyjątek znika. -->
           <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsHeader}"
-                     FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ForegroundBrush}" />
+                     FontWeight="{DynamicResource Text.SectionHeader.Weight}" FontSize="{DynamicResource Text.SectionHeader.Size}" Foreground="{DynamicResource ForegroundBrush}" />
 
           <ItemsControl ItemsSource="{Binding Findings}" IsVisible="{Binding HasFindings}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:FindingViewModel">
+                <!-- ⭐ Q1 ZAMKNIĘTE (M4.3, decyzja użytkownika na renderze): karta findingu bierze
+                     `Radius.Surface` (4 → 3). Diagnoza z M2c była trafna („to KARTA, a nie chip") i tylko
+                     oddawała wniosek bramie §13.3 — ⚠ która go NIGDY nie podjęła. ⭐ Rola wymienia „Kartę"
+                     jako pierwszego konsumenta we własnym komentarzu, więc opisywała ten element od zawsze. -->
                 <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
+                        BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}" Padding="8,6" Margin="0,0,0,6">
                   <StackPanel Spacing="3">
                     <DockPanel LastChildFill="True">
-                      <Border DockPanel.Dock="Left" CornerRadius="3" Padding="4,0" VerticalAlignment="Center" Margin="0,0,6,0">
+                      <Border DockPanel.Dock="Left" CornerRadius="{DynamicResource Radius.Surface}" Padding="4,0" VerticalAlignment="Center" Margin="0,0,6,0">
                         <Border.Background>
                           <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                             <Binding Path="SeverityBrushKey" />
                             <Binding ElementName="RootControl" Path="ActualThemeVariant" />
                           </MultiBinding>
                         </Border.Background>
-                        <TextBlock Text="{Binding SeverityText}" FontSize="10" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding SeverityText}" FontSize="{DynamicResource Text.Caption.Size}" FontWeight="SemiBold"
                                    Foreground="{DynamicResource OnAccentBrush}" />
                       </Border>
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding ConfidenceText}" FontSize="10"
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding ConfidenceText}" FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center"
                                  Margin="6,0,0,0" />
-                      <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                      <!-- ⭐ K3 ZAMKNIĘTA (M4, decyzja użytkownika A-2). Ten nagłówek trzymał 12 SemiBold lokalnie od M2c,
+               bo rola `Text.SectionHeader` niosła 11 — a 11 SemiBold stało nad tekstem 12 i nie czytało się
+               jako nadrzędne. Rola niesie teraz 12: wartość bez zmian, wyjątek znika. -->
+                      <TextBlock Text="{Binding Title}" FontSize="{DynamicResource Text.SectionHeader.Size}" FontWeight="{DynamicResource Text.SectionHeader.Weight}" TextWrapping="Wrap"
                                  Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
                     </DockPanel>
-                    <TextBlock Text="{Binding Explanation}" FontSize="11" TextWrapping="Wrap"
+                    <TextBlock Text="{Binding Explanation}" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                                Foreground="{DynamicResource SubtleForegroundBrush}" />
                     <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="perf:FindingEvidence">
                           <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{Binding Label}" FontSize="10" Width="120"
+                            <TextBlock Text="{Binding Label}" FontSize="{DynamicResource Text.Caption.Size}" Width="120"
                                        Foreground="{DynamicResource SubtleForegroundBrush}" />
-                            <TextBlock Text="{Binding Value}" FontSize="10"
+                            <TextBlock Text="{Binding Value}" FontSize="{DynamicResource Text.Caption.Size}"
                                        Foreground="{DynamicResource ForegroundBrush}" />
                           </StackPanel>
                         </DataTemplate>
@@ -146,15 +170,15 @@
 
                     <!-- Phase 4: investigation guidance (inherits the finding's confidence) -->
                     <StackPanel Spacing="2" Margin="0,4,0,0" IsVisible="{Binding HasGuidance}">
-                      <TextBlock Text="{Binding GuidanceHeading}" FontSize="10" FontWeight="SemiBold"
+                      <TextBlock Text="{Binding GuidanceHeading}" FontSize="{DynamicResource Text.Caption.Size}" FontWeight="SemiBold"
                                  Foreground="{DynamicResource SubtleForegroundBrush}" />
                       <ItemsControl ItemsSource="{Binding GuidanceItems}">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate x:DataType="x:String">
                             <Grid ColumnDefinitions="Auto,*" Margin="0,1,0,0">
-                              <TextBlock Grid.Column="0" Text="•" FontSize="11" Margin="0,0,6,0"
+                              <TextBlock Grid.Column="0" Text="•" FontSize="{DynamicResource Text.Compact.Size}" Margin="0,0,6,0"
                                          Foreground="{DynamicResource SubtleForegroundBrush}" />
-                              <TextBlock Grid.Column="1" Text="{Binding}" FontSize="11" TextWrapping="Wrap"
+                              <TextBlock Grid.Column="1" Text="{Binding}" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                                          Foreground="{DynamicResource SubtleForegroundBrush}" />
                             </Grid>
                           </DataTemplate>
@@ -164,9 +188,9 @@
 
                     <!-- Phase 5: recommendation (inherits the finding's confidence) -->
                     <StackPanel Spacing="2" Margin="0,4,0,0" IsVisible="{Binding HasRecommendation}">
-                      <TextBlock Text="{Binding RecommendationHeading}" FontSize="10" FontWeight="SemiBold"
+                      <TextBlock Text="{Binding RecommendationHeading}" FontSize="{DynamicResource Text.Caption.Size}" FontWeight="SemiBold"
                                  Foreground="{DynamicResource AccentBrush}" />
-                      <TextBlock Text="{Binding RecommendationText}" FontSize="11" TextWrapping="Wrap"
+                      <TextBlock Text="{Binding RecommendationText}" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                                  Foreground="{DynamicResource ForegroundBrush}" />
                     </StackPanel>
                   </StackPanel>
@@ -175,18 +199,21 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsNone}" FontSize="11"
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsNone}" FontSize="{DynamicResource Text.Compact.Size}"
                      Foreground="{DynamicResource SuccessIconBrush}"
                      IsVisible="{Binding FindingsNoneVisible}" />
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsFuture}" FontSize="11" FontStyle="Italic"
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsFuture}" FontSize="{DynamicResource Text.Compact.Size}" FontStyle="Italic"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding HasFindings}" />
         </StackPanel>
 
         <!-- TABLE ACCESS (red = sequential, blue = index) -->
         <StackPanel Spacing="5" Margin="0,0,0,10" IsVisible="{Binding HasTableAccess}">
+          <!-- ⭐ K3 ZAMKNIĘTA (M4, decyzja użytkownika A-2). Ten nagłówek trzymał 12 SemiBold lokalnie od M2c,
+               bo rola `Text.SectionHeader` niosła 11 — a 11 SemiBold stało nad tekstem 12 i nie czytało się
+               jako nadrzędne. Rola niesie teraz 12: wartość bez zmian, wyjątek znika. -->
           <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessHeader}"
-                     FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource ForegroundBrush}" />
+                     FontWeight="{DynamicResource Text.SectionHeader.Weight}" FontSize="{DynamicResource Text.SectionHeader.Size}" Foreground="{DynamicResource ForegroundBrush}" />
           <ItemsControl ItemsSource="{Binding TableAccess}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:TableAccessBarViewModel">
@@ -194,13 +221,16 @@
                      the eye tracks a table name across to its bar mid-list. -->
                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,4">
                   <Grid ColumnDefinitions="170,160,*" VerticalAlignment="Center">
-                    <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="11"
+                    <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="{DynamicResource Text.Compact.Size}"
                                FontFamily="Consolas,Cascadia Code,monospace" TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{Binding Table}" Margin="0,0,10,0"
                                Foreground="{DynamicResource ForegroundBrush}" VerticalAlignment="Center" />
                     <!-- Fixed-width lane: every bar shares the same start AND end, so the reads
                          column no longer floats, and a faint track anchors even a 1px bar. -->
                     <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the seq/idx split -->
+                    <!-- ⚠ Promień 6 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 3, §18.3). To GEOMETRIA, nie rola:
+                         przy `Height=12` promień 6 daje kapsułę, czyli połowę boku. ⛔ Nie tokenizujemy promienia
+                         wynikającego z arytmetyki (§18.0.5/2, ratyfikowane). -->
                     <Border Grid.Column="1" Width="160" Height="12" CornerRadius="6" ClipToBounds="True"
                             Background="{DynamicResource RowAlternateBrush}" VerticalAlignment="Center" HorizontalAlignment="Left">
                       <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
@@ -209,9 +239,9 @@
                       </StackPanel>
                     </Border>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding ReadsText}" FontSize="10"
+                      <TextBlock Text="{Binding ReadsText}" FontSize="{DynamicResource Text.Caption.Size}"
                                  Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding ChangesText}" FontSize="10" IsVisible="{Binding HasChanges}"
+                      <TextBlock Text="{Binding ChangesText}" FontSize="{DynamicResource Text.Caption.Size}" IsVisible="{Binding HasChanges}"
                                  Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                     </StackPanel>
                   </Grid>
@@ -219,7 +249,7 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessLegend}" FontSize="10"
+          <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessLegend}" FontSize="{DynamicResource Text.Caption.Size}"
                      Foreground="{DynamicResource SubtleForegroundBrush}" />
         </StackPanel>
 
@@ -230,11 +260,18 @@
              section without the Fluent Expander's default 48px header. -->
         <Expander Header="{x:Static app:UiStrings.PerformancePlanAdvancedHeader}"
                   IsExpanded="False" IsVisible="{Binding HasPlan}" MinHeight="34">
+          <!-- ⚠ `ExpanderContentPadding` było ZEREM, przez co treść sekcji stała przy samych krawędziach,
+               podczas gdy nagłówek miał wcięcie 10 — czyli jedyny element z oddechem był tym, który go nie
+               potrzebował. `Pad.Group` (10,8) pasuje ROLĄ, nie tylko liczbą: jej pozioma składowa jest tą samą
+               dziesiątką, którą ma nagłówek, więc etykieta „Raw plan" i drzewo planu ustawiają się w jednej
+               linii pionowej z tytułem sekcji, zamiast wisieć 10 px na lewo od niego. -->
           <Expander.Resources>
             <Thickness x:Key="ExpanderHeaderPadding">10,0,0,0</Thickness>
-            <Thickness x:Key="ExpanderContentPadding">0</Thickness>
+            <StaticResource x:Key="ExpanderContentPadding" ResourceKey="Pad.Group" />
           </Expander.Resources>
-          <StackPanel Spacing="8" Margin="0,6,0,4">
+          <!-- ⚠ Pionowy margines zdjęty — dawał go ten sam brak paddingu, który wyżej naprawiono; zostawiony
+               dokładałby się do 8 z `Pad.Group` i sekcja rozjechałaby się w drugą stronę. -->
+          <StackPanel Spacing="{DynamicResource Space.Md}">
 
             <TreeView ItemsSource="{Binding PlanRoots}"
                       Background="Transparent" BorderThickness="0" MaxHeight="320">
@@ -242,23 +279,57 @@
                 <Style Selector="TreeViewItem">
                   <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
                 </Style>
-                <Style Selector="TextBlock.seq">
-                  <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+                <!-- Skan sekwencyjny nadal pogrubia CAŁY wiersz — barwę niesie już segment
+                     (`PlanTextSegments.SequentialScanBrushKey`), więc tutaj zostaje sama waga. -->
+                <Style Selector="ItemsControl.seq TextBlock">
                   <Setter Property="FontWeight" Value="SemiBold" />
                 </Style>
               </TreeView.Styles>
               <TreeView.ItemTemplate>
                 <TreeDataTemplate ItemsSource="{Binding Children}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
+                    <!-- ⚠ 9 px lokalnie, ŚWIADOMIE (M2c iteracja 3, §18.3). Katalog nie ma roli o tej wartości,
+                         a znak jest markerem skanu sekwencyjnego strojonym do wiersza drzewa. Rozstrzyga §13.3. -->
                     <TextBlock Text="●" FontSize="9" VerticalAlignment="Center"
                                Foreground="{DynamicResource WarningBrush}"
                                IsVisible="{Binding IsSequentialScan}"
                                ToolTip.Tip="Sequential (full) table scan" />
-                    <TextBlock Text="{Binding DisplayText}" FontSize="11"
-                               FontFamily="Consolas,Cascadia Code,monospace"
-                               Classes.seq="{Binding IsSequentialScan}"
-                               Foreground="{DynamicResource ForegroundBrush}"
-                               VerticalAlignment="Center" />
+                    <!-- ⭐ Wiersz planu jako CIĄG KOLOROWYCH PRZEBIEGÓW zamiast jednego płaskiego napisu.
+                         Podział pochodzi z klasyfikacji, którą parser planu już wykonywał, a widok wyrzucał
+                         (`PlanNodeViewModel.DisplayText => Node.RawText`) — nie powstał żaden nowy parser.
+                         Nazwy obiektów niosą te same barwy rodzaju, co Metadata Explorer, więc tabela w planie
+                         wygląda jak ta sama tabela w drzewie.
+                         ⚠ `DisplayText` zostaje jako `ToolTip` — pełny, niepodzielony wiersz w jednym kawałku
+                         do przeczytania, gdy segmenty są wąskie. -->
+                    <ItemsControl ItemsSource="{Binding Segments}"
+                                  Classes.seq="{Binding IsSequentialScan}"
+                                  VerticalAlignment="Center"
+                                  ToolTip.Tip="{Binding DisplayText}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PlanTextSegment">
+                          <!-- ⚠ `MultiBinding` z `ActualThemeVariant`, nie zwykłe wiązanie — `IconBrushConverter`
+                               rozwiązuje KLUCZ motywu, więc bez drugiego źródła przełączenie motywu nie
+                               przemalowałoby już zbudowanego drzewa. To ten sam wzorzec, którym idą wszystkie
+                               ikony rodzaju w aplikacji. -->
+                          <TextBlock Text="{Binding Text}"
+                                     FontSize="{DynamicResource Text.Compact.Size}"
+                                     FontFamily="Consolas,Cascadia Code,monospace"
+                                     VerticalAlignment="Center">
+                            <TextBlock.Foreground>
+                              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                                <Binding Path="BrushKey" />
+                                <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                              </MultiBinding>
+                            </TextBlock.Foreground>
+                          </TextBlock>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                   </StackPanel>
                 </TreeDataTemplate>
               </TreeView.ItemTemplate>
@@ -268,7 +339,7 @@
             <DockPanel IsVisible="{Binding Details.HasPlanText}">
               <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
                 <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.PerformanceRawPlanLabel}"
-                           FontSize="11" VerticalAlignment="Center"
+                           FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center"
                            Foreground="{DynamicResource SubtleForegroundBrush}" />
                 <Button Grid.Column="1" Classes="flat"
                         Content="{x:Static app:UiStrings.PerformanceCopy}"
@@ -276,22 +347,22 @@
               </Grid>
               <Border Background="{DynamicResource PanelBrush}"
                       BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                      CornerRadius="3" Padding="8">
+                      CornerRadius="{DynamicResource Radius.Surface}" Padding="8">
                 <SelectableTextBlock Text="{Binding Details.RawPlanText}"
-                                     FontFamily="Consolas,Cascadia Code,monospace" FontSize="11"
+                                     FontFamily="Consolas,Cascadia Code,monospace" FontSize="{DynamicResource Text.Compact.Size}"
                                      Foreground="{DynamicResource ForegroundBrush}" />
               </Border>
             </DockPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasReport}">
-              <TextBlock Text="{x:Static app:UiStrings.PerformanceCaptureLabel}" FontSize="11"
+              <TextBlock Text="{x:Static app:UiStrings.PerformanceCaptureLabel}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource SubtleForegroundBrush}" />
-              <TextBlock Text="{Binding Details.CaptureMethodText}" FontSize="11"
+              <TextBlock Text="{Binding Details.CaptureMethodText}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource ForegroundBrush}" />
-              <TextBlock Text="·" FontSize="11" Foreground="{DynamicResource SubtleForegroundBrush}" />
-              <TextBlock Text="{x:Static app:UiStrings.PerformancePlanDialectLabel}" FontSize="11"
+              <TextBlock Text="·" FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+              <TextBlock Text="{x:Static app:UiStrings.PerformancePlanDialectLabel}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource SubtleForegroundBrush}" />
-              <TextBlock Text="{Binding Details.PlanDialectText}" FontSize="11"
+              <TextBlock Text="{Binding Details.PlanDialectText}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource ForegroundBrush}" />
             </StackPanel>
           </StackPanel>

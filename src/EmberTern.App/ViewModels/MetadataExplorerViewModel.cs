@@ -26,6 +26,11 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         _reader = reader;
         Connections = new ObservableCollection<ConnectionNodeViewModel>();
         RootNodes = new ObservableCollection<object>();
+        // ⚠⚠ SAMA POPRAWNA WARTOŚĆ TO NIE JEST ODŚWIEŻONY EKRAN. `ShowEmptyState` liczy się z `RootNodes`,
+        // a wiązanie odpytuje właściwość WYŁĄCZNIE po `PropertyChanged` — bez tej subskrypcji stan pusty
+        // zniknąłby dopiero przy następnej zmianie czegoś innego. Ten sam błąd złapały testy w M3.3b i M3b.2,
+        // za każdym razem dopiero po podsadzeniu naruszenia; asercją jest tu POWIADOMIENIE, nie wartość.
+        RootNodes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowEmptyState));
         // Flat projection of RootNodes for the single-VSP sidebar ListBox (replaces the
         // nested-VSP TreeView). Created once; it tracks RootNodes.CollectionChanged so it
         // survives ReloadConnections (which clears + refills the same instance).
@@ -61,8 +66,29 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     // same order, only the currently-visible (expanded) rows — a stable-extent single VSP.
     public ObservableCollection<SidebarRow> SidebarRows => _sidebar.Rows;
 
+    /// <summary>
+    /// Stan pusty paska bocznego (M5 / M‑3 klasa A): panel nie ma NICZEGO w korzeniu, czyli pierwsze
+    /// uruchomienie albo usunięcie wszystkiego.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ Liczy się z <see cref="RootNodes"/>, a NIE z <see cref="SidebarRows"/> — i to jest różnica
+    /// merytoryczna, nie stylistyczna. `SidebarRows` jest projekcją FILTROWANĄ, więc bramka na niej
+    /// pokazywałaby „dodaj połączenie" użytkownikowi, który ma połączenia i tylko wpisał filtr bez
+    /// trafień. To są dwa różne stany puste i tylko pierwszy jest w zakresie M‑3.
+    /// ⚠ Świadomie NIE liczy się z <see cref="Connections"/>: użytkownik z samymi folderami i zerem
+    /// połączeń widzi foldery, więc panel nie jest pusty i podpowiedź pierwszego kroku byłaby szumem.
+    /// </remarks>
+    public bool ShowEmptyState => RootNodes.Count == 0;
+
     // Chevron click → flip the underlying node's expansion (drives the projection).
     public void ToggleSidebarRow(SidebarRow? row) => _sidebar.Toggle(row);
+
+    /// <summary>
+    /// Nawigacja pozioma klawiaturą — bliźniak <see cref="ToggleSidebarRow"/>. ⭐ Reguła żyje w JEDNYM
+    /// miejscu (<see cref="SidebarFlatController.Navigate"/>) i obsługuje zarówno drzewo połączenia, jak
+    /// i drzewa „Zależności", więc oba nie mogą się rozjechać.
+    /// </summary>
+    public SidebarRow? NavigateSidebarRow(SidebarRow row, bool forward) => _sidebar.Navigate(row, forward);
 
     // Node-access delegates for the flat controller (kept here so the node-type knowledge
     // stays with the explorer that owns the hierarchy).
@@ -190,6 +216,31 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         ObjectsChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Raised at the START of a manual metadata refresh: the SCHEMA may have changed, so every per-object
+    /// cache read from it (columns, routine parameters, object detail) is now suspect and must be dropped.
+    /// A distinct signal from <see cref="ObjectsChanged"/>, which says only that the loaded object LIST grew.
+    /// <para>
+    /// ⭐⭐ ITS ABSENCE WAS THE SECOND HALF OF THE REPORTED "diagnostics do not refresh after a metadata
+    /// refresh" (S-2, 2026-08-05). <see cref="RefreshAsync"/> dropped the object-NAME index
+    /// (<see cref="InvalidateNameCache"/>) and nothing else; the column / routine-parameter / object-detail
+    /// caches were cleared only when the user switched CONNECTION. So a refresh rebuilt every open editor's
+    /// semantic model — against the same stale columns. A column added to a table stayed "unknown" for the
+    /// rest of the session, on every open tab, no matter how often the user refreshed.
+    /// </para>
+    /// <para>
+    /// ⚠ Raised BEFORE the reload, not after: the per-category <see cref="ObjectsChanged"/> signals fire
+    /// during the reload and each schedules a model rebuild, so a cache cleared afterwards would be cleared
+    /// behind a rebuild that had already read it.
+    /// </para>
+    /// <para>
+    /// ⚠ Dropping the caches is only safe because the diagnostics engine can now tell "not loaded" from
+    /// "absent" (<c>ISqlMetadataProvider.KnowsColumns</c>). Without that, this event alone would turn every
+    /// refresh into the very false-positive storm the other half of S-2 removed — the two halves are one fix.
+    /// </para>
+    /// </summary>
+    public event Action? SchemaInvalidated;
+
     /// <summary>Raised ONCE when a connection's background prefetch has finished loading every metadata
     /// category — the definitive "metadata is complete" lifecycle event (Package 5 closure). Unlike the
     /// per-category <see cref="ObjectsChanged"/> (which the editor debounces for incremental updates),
@@ -201,6 +252,53 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     /// <summary>Raises <see cref="MetadataReady"/>. Called by the connection node once its prefetch
     /// loop completes.</summary>
     internal void NotifyMetadataReady() => MetadataReady?.Invoke();
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ POSTĘP PREFETCHU KATEGORII — sekcja postępu paska statusu (M3b.2, §19.34)
+    //
+    // ⚠⚠ Dlaczego NIE `MetadataReady` jako sygnał końca dla paska: to zdarzenie **nie nastąpi** przy
+    // nieudanym połączeniu (nie ma wtedy `ActiveConnectionChanged`, więc nie ma prefetchu), przy
+    // rozłączeniu w trakcie, ani gdy `LoadGroupAsync` rzuci coś poza dwoma wyjątkami, które łapie.
+    // Każda z tych ścieżek zostawiłaby zapalony pasek — pułapka §19.7.4. Flaga poniżej gaśnie we
+    // WŁASNYM `finally`, więc żadna ścieżka wyjścia nie jest w stanie jej pominąć.
+    // ⛔ `MetadataReady` zostaje bez zmian i nadal służy swojemu celowi (edytory przebudowują model);
+    // pasek statusu go nie używa.
+    //
+    // ⚠ Tylko PREFETCH PO POŁĄCZENIU. `RefreshAsync` wykonuje tę samą pracę i ma własne `try/finally`,
+    // więc raportowanie byłoby darmowe — ale użytkownik świadomie zawęził zakres do połączenia
+    // (2026-08-04). ⛔ Nie podłączać odświeżania bez jego decyzji.
+    // ══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Czy trwa prefetch kategorii po połączeniu.</summary>
+    [ObservableProperty]
+    private bool _isLoadingMetadata;
+
+    /// <summary>Ile kategorii jest już wczytanych, i ile ich jest — licznik postępu fazy 3.
+    /// ⭐ Suma jest ZNANA (<c>CategoryOrder.Length</c>), więc to jedyne źródło postępu w tej ścieżce,
+    /// które uczciwie wypełnia tryb procentowy.</summary>
+    [ObservableProperty]
+    private int _metadataCategoriesLoaded;
+
+    [ObservableProperty]
+    private int _metadataCategoriesTotal;
+
+    /// <summary>Otwiera fazę 3 dla paska statusu. Wołane przez węzeł połączenia, który jest jej właścicielem.
+    /// ⚠ Musi być sparowane z <see cref="EndMetadataPrefetch"/> w <c>finally</c>.</summary>
+    internal void BeginMetadataPrefetch(int total)
+    {
+        MetadataCategoriesTotal = total;
+        MetadataCategoriesLoaded = 0;
+        IsLoadingMetadata = true;
+    }
+
+    internal void ReportMetadataPrefetch(int loaded) => MetadataCategoriesLoaded = loaded;
+
+    internal void EndMetadataPrefetch()
+    {
+        IsLoadingMetadata = false;
+        MetadataCategoriesLoaded = 0;
+        MetadataCategoriesTotal = 0;
+    }
     // Tree object-lifecycle dispatch. The owner (MainWindowViewModel) REUSES its existing
     // New*/detail-editor/DROP/Execute flows — these are just the tree's entry points.
     public event Action<MetadataObjectKind>? NewObjectRequested;
@@ -386,6 +484,10 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     public async Task RefreshAsync()
     {
         Diagnostics.RefreshTrace.Log("RefreshTree", "begin");
+        // The schema may have changed under us, so every per-object cache read from it is suspect. Announced
+        // FIRST: the per-category ObjectsChanged signals below each schedule a model rebuild, and a cache
+        // cleared afterwards would be cleared behind a rebuild that already read it. See SchemaInvalidated.
+        SchemaInvalidated?.Invoke();
         // ⭐ ONE projection for the whole refresh. Each LoadGroupAsync guards itself too (so an expand or the
         // connect-time prefetch is covered wherever it is called from), but the guard is nesting-safe, so
         // wrapping the loop collapses 13 re-projections into one.
@@ -469,6 +571,60 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         catch (InvalidOperationException)
         {
         }
+    }
+
+    /// <summary>
+    /// Prosi widok o zaznaczenie wiersza i PRZEWINIĘCIE go w pole widzenia.
+    /// <para>⚠ Przewinięcie jest sprawą widoku, nie modelu: to płaska lista wirtualizująca, więc
+    /// „pokaż" znaczy „wywołaj <c>ScrollIntoView</c> na kontrolce". VM ustala WIERSZ, widok go pokazuje —
+    /// ta sama granica, którą trzyma cały ten etap.</para>
+    /// </summary>
+    public event Action<SidebarRow>? RevealRowRequested;
+
+    /// <summary>
+    /// Rozwija właściwą kategorię, znajduje obiekt po nazwie i prosi widok o pokazanie go.
+    ///
+    /// <para>⭐ <b>Rozwinięcie musi być POCZEKANE, a nie tylko zażądane.</b> Ustawienie
+    /// <c>IsExpanded</c> odpala <see cref="LoadGroupAsync"/> jako „fire and forget"
+    /// (<c>_ = _owner.LoadGroupAsync(this)</c>), więc szukanie liścia zaraz po tym trafiłoby
+    /// w kategorię, która jeszcze nie ma dzieci — i pozycja menu po cichu nic by nie robiła przy
+    /// pierwszym użyciu, a działała przy drugim. Dlatego ładowanie jest tu wywołane wprost.</para>
+    ///
+    /// <para>⚠ Nazwy obiektów Firebirda porównujemy bez uwzględniania wielkości liter: identyfikator
+    /// niecytowany jest składany do wersalików, a nazwa zakładki bierze się z katalogu.</para>
+    /// </summary>
+    internal async Task<bool> RevealObjectAsync(MetadataObjectKind kind, string name)
+    {
+        if (!_connectionService.IsConnected || string.IsNullOrEmpty(name)) return false;
+
+        var connection = Connections.FirstOrDefault(c => c.IsConnected);
+        if (connection is null) return false;
+
+        var group = connection.Children.FirstOrDefault(g => g.IsGroup && g.Kind == kind);
+        if (group is null) return false;
+
+        connection.IsExpanded = true;
+
+        if (!group.IsLoaded && !group.IsLoading)
+        {
+            await LoadGroupAsync(group).ConfigureAwait(true);
+        }
+
+        group.IsExpanded = true;
+
+        var leaf = group.Children.FirstOrDefault(
+            c => c.IsActionable
+                 && string.Equals(c.Object?.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (leaf is null) return false;
+
+        // ⚠ Wiersz szukamy PO rozwinięciu, bo dopiero wtedy istnieje w płaskiej projekcji — a jeśli
+        //   projekcja jeszcze go nie ma (filtr!), nie udajemy sukcesu.
+        var row = SidebarRows.FirstOrDefault(r => ReferenceEquals(r.Node, leaf));
+        if (row is null) return false;
+
+        SelectedNode = leaf;
+        RevealRowRequested?.Invoke(row);
+        return true;
     }
 
     internal async Task LoadGroupAsync(MetadataNodeViewModel group)

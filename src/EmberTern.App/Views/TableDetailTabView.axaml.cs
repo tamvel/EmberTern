@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -19,10 +19,12 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
 using EmberTern.App.Converters;
 using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
+using EmberTern.Core.Formatting;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
 
@@ -38,16 +40,25 @@ public partial class TableDetailTabView : UserControl
     // Resolved once per column rebuild — used by CellEditEnding to extract the
     // new value from the right kind of editing element (TextBox / picker / etc).
     private readonly List<CellEditorKind> _dataPreviewEditorKinds = new();
+    // The column's FIREBIRD type, resolved in the same pass — it decides how a value is displayed and how the
+    // editor is seeded. ⛔ Not the CLR type: DATE and TIMESTAMP both arrive as a DateTime.
+    private readonly List<string?> _dataPreviewColumnTypes = new();
 
     // The data cell under the last right-click — drives the "Set NULL" context-menu
     // item. Recorded in OnDataGridPointerPressed (before the menu opens).
     private object?[]? _dataNullRow;
     private int _dataNullColumnIndex = -1;
 
-    private enum CellEditorKind
+    // ⚠ `internal` (not private) only so the two pure decisions below — which editor a column type gets, and
+    // how its text becomes a value — are unit-pinnable without constructing this view.
+    internal enum CellEditorKind
     {
         Text,
         Date,
+        // ⭐ TIMESTAMP is NOT Date, and that split is the whole of the 2026-08-07 QA report: a
+        // CalendarDatePicker can only pick a DAY, so on a TIMESTAMP column it silently made the time part
+        // uneditable — and worse, committing the picked date would have written midnight over it.
+        Timestamp,
         Boolean,
         // BLOB cells aren't standard-editable — the cell template carries a
         // button that opens a modal text editor. Kept in the enum so the
@@ -77,6 +88,13 @@ public partial class TableDetailTabView : UserControl
                 }
             }
 
+            // ⭐⭐ THE SEAM THIS GRID USED TO MISS (S-1a + S-3, 2026-08-05). Its columns are declared in XAML
+            // and only the picker column is inserted here, so it never called FieldGridColumns.Build — which is
+            // where the cell-editor height role used to be granted. Result: the reported "the TextBox in Table
+            // is still too low", a DataGridTextColumn editor at MinHeight 0 inside a 34 px row. The role (and
+            // the Enter gesture) now come from one explicit call that a guard can require.
+            EditableGridBehavior.Attach(_fieldsGrid);
+
             // Inline structure-edit on the Pola grid: every row-commit (Tab/Enter
             // out of the editing element, or focus moves off the row) inspects
             // edited values vs. original and queues ALTER statements via the VM.
@@ -100,6 +118,15 @@ public partial class TableDetailTabView : UserControl
                 grid.LoadingRow += OnCorePendingRowLoading;
             }
         }
+        // ⚠⚠ CORRECTED 2026-08-07: this comment said the DATA grid gets the Enter gesture "but NOT the height
+        // role", because "its rows have no ComboBox holding them open, so a 24 px minimum would grow every row
+        // on entering edit mode". True of a data grid in the abstract — and false of THIS one, which was never
+        // measured: the `data-edit` row style a few lines into this view's XAML pins a fixed Height of 32, so
+        // the row cannot grow from its content, and after the view's `6 2` cell padding it offers 28 px to a
+        // 24 px editor. Withholding the role only produced the reported "the TextBox while editing is still
+        // too low". One UX rule for Enter and ONE answer about height — see EditableGridBehavior.
+        if (_dataPreviewGrid is not null) EditableGridBehavior.Attach(_dataPreviewGrid);
+
         if (_dataPreviewGrid is not null)
         {
             // Avalonia paints the column-header arrow itself when (a) the
@@ -512,9 +539,33 @@ public partial class TableDetailTabView : UserControl
         // its edit status); the clipboard write stays here in the view.
         if (_currentVm is null || _dataNullRow is null) return;
         var sql = await _currentVm.CopyRowAsSqlAsync(format, _dataNullRow);
-        if (sql is null) return;
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is not null) await clipboard.SetTextAsync(sql);
+        await GridClipboard.WriteAsync(this, sql);
+    }
+
+    // ── Copy cell / row / row with headers / all with headers ────────────────────────────────────────────
+    //
+    // ⭐ The four plain-text copy actions the SQL Editor grid has always had, now on this grid too so a user
+    // learns one set of copying gestures for every data grid (user request, 2026-08-07). They reuse the very
+    // things this grid already had: the right-clicked cell captured in OnDataCellPointerPressed, and the one
+    // GridCopyText builder behind the VM.
+    //
+    // ⚠ The target is the RIGHT-CLICKED cell, never the grid's selection — a context menu can open over a row
+    // that is not the selected one, and copying the selection then copies something the user did not point at
+    // (gotcha #16/#99's shape, one level up).
+    private void OnDataCopyCellClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Cell);
+
+    private void OnDataCopyRowClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Row);
+
+    private void OnDataCopyRowWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.RowWithHeaders);
+
+    private void OnDataCopyAllWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.AllWithHeaders);
+
+    private Task CopyGridAsync(CopyGridMode mode)
+    {
+        if (_currentVm is null) return Task.CompletedTask;
+        return GridClipboard.WriteAsync(this, _currentVm.BuildCopyText(mode, _dataNullRow, _dataNullColumnIndex));
     }
 
     private void OnDataExcludeValueClick(object? sender, RoutedEventArgs e)
@@ -618,6 +669,7 @@ public partial class TableDetailTabView : UserControl
             _dataPreviewGrid.Columns.Clear();
             _dataPreviewColumnNames.Clear();
             _dataPreviewEditorKinds.Clear();
+            _dataPreviewColumnTypes.Clear();
 
             // Field metadata lookup — once per build. The VM's Fields collection
             // is populated by LoadAsync; ReloadDataPreviewAsync now awaits
@@ -640,6 +692,7 @@ public partial class TableDetailTabView : UserControl
                 fieldByName.TryGetValue(columnName, out var field);
                 var kind = DetermineEditorKind(field);
                 _dataPreviewEditorKinds.Add(kind);
+                _dataPreviewColumnTypes.Add(field?.BaseTypeName);
 
                 var column = new DataGridTemplateColumn
                 {
@@ -650,7 +703,7 @@ public partial class TableDetailTabView : UserControl
                     CustomSortComparer = new RowIndexComparer(columnIndex),
                     CanUserSort = true,
                     CellTemplate = BuildCellTemplate(columnIndex, kind, field),
-                    CellEditingTemplate = BuildCellEditingTemplate(columnIndex, kind),
+                    CellEditingTemplate = BuildCellEditingTemplate(columnIndex, kind, field),
                 };
                 // Boolean toggling and BLOB editing don't use the standard
                 // cell-edit flow — the cell template itself handles the click,
@@ -681,14 +734,38 @@ public partial class TableDetailTabView : UserControl
     // in CellEditEnding.
 
     private static CellEditorKind DetermineEditorKind(FieldInfo? field)
+        => field is null ? CellEditorKind.Text : EditorKindForType(field.BaseTypeName, field.Domain);
+
+    /// <summary>
+    /// Which editor a column type gets. Pure, so the decision is pinnable without a view or a database.
+    /// <para>
+    /// ⭐ <b>DATE and TIMESTAMP part company here (QA, 2026-08-07).</b> A <c>CalendarDatePicker</c> offers a
+    /// day and nothing else, so on a TIMESTAMP column it did not merely fail to expose the time — committing
+    /// a picked date wrote midnight over the time the row already had. Avalonia 12.1.1 was checked before
+    /// choosing the replacement and ships <b>no combined date+time control</b> (only <c>CalendarDatePicker</c>,
+    /// <c>DatePicker</c>, <c>TimePicker</c>, <c>Calendar</c>), and pairing two of them inside a 24 px grid cell
+    /// would be a bespoke composite — out of scope by the reporter's own instruction. So a TIMESTAMP is edited
+    /// as text, exactly like a VARCHAR, which is the one editor that can express the whole value.
+    /// </para>
+    /// <para>
+    /// ⚠ <c>WITH TIME ZONE</c> stays plain text on purpose: its value is not a <see cref="DateTime"/>, so the
+    /// typed parse below would drop the zone. Handing Firebird the literal keeps the zone the user typed.
+    /// ⚠ Bare <c>TIME</c> likewise — <c>hh:mm:ss</c> has no ambiguity for the engine to resolve differently.
+    /// </para>
+    /// </summary>
+    internal static CellEditorKind EditorKindForType(string? baseTypeName, string? domain)
     {
-        if (field is null) return CellEditorKind.Text;
-        var typeName = field.BaseTypeName?.ToUpperInvariant() ?? string.Empty;
+        var typeName = baseTypeName?.ToUpperInvariant() ?? string.Empty;
+        if (typeName.StartsWith("TIMESTAMP", StringComparison.Ordinal))
+        {
+            return typeName.Contains("TIME ZONE", StringComparison.Ordinal)
+                ? CellEditorKind.Text
+                : CellEditorKind.Timestamp;
+        }
         if (typeName.StartsWith("DATE", StringComparison.Ordinal)) return CellEditorKind.Date;
-        if (typeName.StartsWith("TIMESTAMP", StringComparison.Ordinal)) return CellEditorKind.Date;
         if (typeName == "BOOLEAN") return CellEditorKind.Boolean;
         if (typeName == "SMALLINT"
-            && string.Equals(field.Domain, "T_BOOLEANN", StringComparison.OrdinalIgnoreCase))
+            && string.Equals(domain, "T_BOOLEANN", StringComparison.OrdinalIgnoreCase))
         {
             return CellEditorKind.Boolean;
         }
@@ -700,20 +777,25 @@ public partial class TableDetailTabView : UserControl
     {
         CellEditorKind.Boolean => BuildBooleanCellTemplate(columnIndex, field),
         CellEditorKind.Blob => BuildBlobCellTemplate(columnIndex),
-        _ => BuildTextCellTemplate(columnIndex),
+        _ => BuildTextCellTemplate(columnIndex, field?.BaseTypeName),
     };
 
-    private IDataTemplate BuildCellEditingTemplate(int columnIndex, CellEditorKind kind) => kind switch
+    private IDataTemplate BuildCellEditingTemplate(int columnIndex, CellEditorKind kind, FieldInfo? field) => kind switch
     {
         CellEditorKind.Date => BuildDateEditingTemplate(columnIndex),
         // Boolean / BLOB columns are IsReadOnly=true; the editing template is
         // never instantiated but Avalonia wants a non-null reference, so a
         // throwaway TextBlock is sufficient.
         CellEditorKind.Boolean or CellEditorKind.Blob => new FuncDataTemplate<object?[]>((_, _) => new TextBlock()),
-        _ => BuildTextEditingTemplate(columnIndex),
+        // ⭐ TIMESTAMP shares the VARCHAR editor — one text template, one seed rule (EditorSeedText). See
+        // EditorKindForType for why a TIMESTAMP gets text rather than a picker.
+        _ => BuildTextEditingTemplate(columnIndex, kind, field?.BaseTypeName),
     };
 
-    private static IDataTemplate BuildTextCellTemplate(int columnIndex)
+    // ⚠ `internal` so the rendered TEXT can be asserted, not merely the formatter that feeds it: both wirings
+    // produce a TextBlock, so nothing observable would distinguish "the column type reaches the cell" from
+    // "it does not" (the shape of gotcha #315).
+    internal static IDataTemplate BuildTextCellTemplate(int columnIndex, string? firebirdType)
         => new FuncDataTemplate<object?[]>((row, _) =>
         {
             var tb = new TextBlock
@@ -730,26 +812,64 @@ public partial class TableDetailTabView : UserControl
             }
             else
             {
-                tb.Text = value.ToString();
+                // ⛔ The COLUMN's Firebird type decides which parts are shown, never the value's CLR type
+                // (reported 2026-08-08): DATE and TIMESTAMP both arrive as a DateTime, so `ToString()` printed
+                // an invented `00:00:00` on a column that stores no time at all. An unknown type (no matching
+                // FieldInfo — a computed column, metadata not loaded) falls back to the value's own text.
+                tb.Text = DateTimeDisplay.CellForType(value, firebirdType) ?? value.ToString();
             }
             return tb;
         });
 
-    private static IDataTemplate BuildTextEditingTemplate(int columnIndex)
+    private static IDataTemplate BuildTextEditingTemplate(int columnIndex, CellEditorKind kind, string? firebirdType)
         => new FuncDataTemplate<object?[]>((row, _) =>
         {
             var tb = new TextBox
             {
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(2, 0),
-                FontSize = 11,
             };
+            // Rozmiar z katalogu ról (M2c iteracja 8): edytor stoi w KOMÓRCE SIATKI, więc czyta `Text.Grid`.
+            tb.Bind(TextBox.FontSizeProperty, tb.GetResourceObservable("Text.Grid.Size"));
             if (row is not null && columnIndex < row.Length)
             {
-                tb.Text = row[columnIndex]?.ToString() ?? string.Empty;
+                tb.Text = EditorSeedText(row[columnIndex], kind, firebirdType);
             }
             return tb;
         });
+
+    /// <summary>
+    /// ⭐ <b>The ONE answer to "what text does a cell's editor start with".</b> Shared by the editing template
+    /// and by the untouched-edit check, so the two cannot disagree about whether the user typed anything.
+    /// <para>
+    /// A TIMESTAMP is seeded in Firebird's own form <b>truncated to the second</b> (ratified 2026-08-08:
+    /// sub-second digits are needed rarely and make the value tedious to retype — entering one is still
+    /// accepted, it is simply not offered). Every other temporal column is seeded with exactly the text the
+    /// cell displays, so opening an editor never re-spells the value under the user.
+    /// </para>
+    /// </summary>
+    internal static string EditorSeedText(object? value, CellEditorKind kind, string? firebirdType)
+    {
+        if (value is null) return string.Empty;
+        if (kind == CellEditorKind.Timestamp && value is DateTime dt)
+        {
+            return DateTimeDisplay.FirebirdTimestampToSecond(dt);
+        }
+        return DateTimeDisplay.CellForType(value, firebirdType) ?? value.ToString() ?? string.Empty;
+    }
+
+    /// <summary>
+    /// True when the editor's text is still exactly what it was seeded with — i.e. the user committed without
+    /// typing anything.
+    /// <para>
+    /// ⚠⚠ <b>This is a data-safety check, not an optimisation.</b> A seed is allowed to show less than the
+    /// value holds (a TIMESTAMP's fraction is deliberately dropped), and <c>DataGrid</c> commits a cell merely
+    /// because focus left it — so without this, tabbing through a row would write the ROUNDED value back over
+    /// a sub-second timestamp the user never touched. Rule #11: never write back less than was read.
+    /// </para>
+    /// </summary>
+    internal static bool IsUntouchedEdit(string? editorText, object? value, CellEditorKind kind, string? firebirdType)
+        => string.Equals(editorText ?? string.Empty, EditorSeedText(value, kind, firebirdType), StringComparison.Ordinal);
 
     // Avalonia 12.0.3's CalendarDatePicker.SelectedDate is DateTime?. The
     // DateTimeToDateTimeOffsetConverter exists for future controls that use
@@ -763,9 +883,18 @@ public partial class TableDetailTabView : UserControl
             {
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(2, 0),
-                FontSize = 11,
-                MinWidth = 120,
             };
+            // ⛔ BEZ `MinWidth` — usunięte 2026-08-07 (P3), i to jest druga połowa zgłoszenia
+            // „kontrolka daty jest przycinana". Siatka danych PAMIĘTA szerokości kolumn
+            // (`GridLayoutBehavior.GridId="TableDetail.Data"` zapisuje je i przywraca jako
+            // `DataGridLength(px)`), więc kolumna daty zwężona przez użytkownika wraca po restarcie
+            // węższa niż 120 — a edytor z `MinWidth` 120 nie mieści się wtedy w swojej komórce i jest
+            // ucinany w poziomie. To ta sama reguła co przy wysokości: ROZMIAR NADAJE POJEMNIK, element
+            // go PRZYJMUJE (decyzja architektoniczna 2 z M2b) — a wymuszony `MinWidth` jest dokładnie
+            // odwrotnością tej reguły. Bez niego edytor zachowuje się jak `TextBox` obok: zwęża się
+            // razem z kolumną. ⚠ Wysokość zostaje w `ControlStyles.axaml`, nie tutaj (wartość lokalna
+            // przebija setter stylu, więc byłaby drugim właścicielem tej samej wielkości).
+            picker.Bind(CalendarDatePicker.FontSizeProperty, picker.GetResourceObservable("Text.Grid.Size"));
             if (row is not null && columnIndex < row.Length)
             {
                 picker.SelectedDate = row[columnIndex] is DateTime dt ? dt : (DateTime?)null;
@@ -1017,14 +1146,6 @@ public partial class TableDetailTabView : UserControl
         }
     }
 
-    private void OnDependencyNodeDoubleTapped(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Control { DataContext: DependencyLeafNode leaf } && _currentVm is not null)
-        {
-            _currentVm.RequestOpen(leaf);
-            e.Handled = true;
-        }
-    }
 
     // Double-click a row in the field-dependencies panel → open the object,
     // exactly like the Zależności tree leaf double-click. Walks to the row,
@@ -1062,6 +1183,19 @@ public partial class TableDetailTabView : UserControl
         var kind = columnIndex < _dataPreviewEditorKinds.Count
             ? _dataPreviewEditorKinds[columnIndex]
             : CellEditorKind.Text;
+        var firebirdType = columnIndex < _dataPreviewColumnTypes.Count
+            ? _dataPreviewColumnTypes[columnIndex]
+            : null;
+
+        // ⚠⚠ Nothing typed ⇒ nothing written. DataGrid commits a cell simply because focus left it, and an
+        // editor's seed may deliberately show less than the value holds (a TIMESTAMP's fraction), so without
+        // this, tabbing across a row would silently write the rounded value back. Rule #11.
+        if (columnIndex < row.Length
+            && e.EditingElement is TextBox box
+            && IsUntouchedEdit(box.Text, row[columnIndex], kind, firebirdType))
+        {
+            return;
+        }
 
         object? newValue = ExtractNewValue(kind, e.EditingElement);
         _ = _currentVm.UpdateCellAsync(row, columnIndex, newValue);
@@ -1072,7 +1206,58 @@ public partial class TableDetailTabView : UserControl
         CellEditorKind.Date => (editingElement as CalendarDatePicker)?.SelectedDate is { } dt
             ? (object?)dt
             : null,
+        CellEditorKind.Timestamp => ParseTimestampText((editingElement as TextBox)?.Text),
         _ => (editingElement as TextBox)?.Text is { } t && t.Length > 0 ? t : null,
+    };
+
+    /// <summary>
+    /// Turns the text of a TIMESTAMP cell editor into the value bound to the UPDATE / INSERT.
+    /// <para>
+    /// ⭐ <b>Parsing it here rather than letting the server parse the string is the safety half of the fix.</b>
+    /// Firebird reads an ambiguous literal by its SEPARATOR (<c>07/08/2026</c> is July 8th to the engine),
+    /// while the grid displays — and therefore invites the user to type — their own culture's spelling. A
+    /// typed <see cref="DateTime"/> parameter removes the disagreement entirely: what the reader meant is what
+    /// is written. The reader's culture is tried first for exactly that reason, ISO/invariant second so the
+    /// engine's own form is always accepted.
+    /// </para>
+    /// <para>
+    /// ⚠ Text that parses as none of them is passed through verbatim — the VARCHAR behaviour — so Firebird
+    /// judges it and its refusal reaches the existing edit-status banner. ⛔ Deliberately NOT silently
+    /// dropped: a commit that quietly does nothing is indistinguishable from a broken grid.
+    /// </para>
+    /// </summary>
+    internal static object? ParseTimestampText(string? text)
+    {
+        var trimmed = text?.Trim();
+        if (string.IsNullOrEmpty(trimmed)) return null;
+
+        // 1. The engine's own form FIRST, by exact shape. It is what the editor was seeded with, so an
+        //    untouched commit round-trips bit for bit — and being ISO-shaped it cannot mean two things.
+        if (DateTime.TryParseExact(trimmed, EngineTimestampFormats, CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var exact))
+        {
+            return exact;
+        }
+        // 2. Then the reader's own culture — because the grid shows their spelling, so that is what they
+        //    type. ⛔ This must come BEFORE any general invariant attempt: `07/08/2026` is 7 August to a Pole
+        //    and 8 July to the invariant culture, and the person typing it is looking at a Polish grid.
+        if (DateTime.TryParse(trimmed, CultureInfo.CurrentCulture, DateTimeStyles.None, out var local))
+        {
+            return local;
+        }
+        if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out var invariant))
+        {
+            return invariant;
+        }
+        return trimmed;
+    }
+
+    private static readonly string[] EngineTimestampFormats =
+    {
+        "yyyy-MM-dd HH:mm:ss.FFFF",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd",
     };
 
     // RowEditEnding fires after a full row is "confirmed" (Enter on the row,

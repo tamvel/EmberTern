@@ -79,8 +79,13 @@ public sealed class SqlSnippetDropTarget
             ? _editor.Document.TextLength
             : _editor.Document.GetOffset(tvp.Value.Location);
 
-        // Instant, metadata-free menu built from the dropped object's kind + this editor's
-        // insertion context (PSQL scaffolds only appear in a PSQL body editor).
+        // Instant, metadata-free menu built from the dropped object's kind + this editor's insertion context.
+        //
+        // ⚠ Every built-in template is now `SnippetContexts.Any`, so the context no longer hides anything — the
+        // user ratified that PSQL scaffolds belong in the SQL Editor too, because that is where EXECUTE BLOCK /
+        // CREATE PROCEDURE / CREATE TRIGGER get written (2026-08-03; see PsqlTemplates.cs). ⛔ An attempt to
+        // derive the context from the drop OFFSET (inside a BEGIN…END or not) was built and removed: it fails for
+        // the case that matters, since a scaffold is what you reach for to START a body.
         var descriptors = _vm.SnippetTemplatesFor(obj.Kind, _insertion);
         if (descriptors.Count == 0) return;
 

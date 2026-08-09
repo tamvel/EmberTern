@@ -56,9 +56,21 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
 
     public TableColumnPicker()
     {
+        // ⚠ TA SAMA REGUŁA CO W `SearchableComboBox` — filtr JEST polem wyszukiwania. Krok 11 nadał
+        // klasę tylko zakładce Domain i użytkownik natychmiast znalazł pominiętą zakładkę Column:
+        // reguła była poprawna, brakowało JEDNEJ instancji. Oba filtry tej kontrolki biorą ją teraz
+        // w jednym miejscu, więc nie da się już rozjechać ich pojedynczo.
+        // ⭐ `on-raised` obok `search`: ta kontrolka żyje w liście rozwijanej, czyli na `SurfaceRaised`, gdzie
+        // spoczynkowa ramka pola (dobrana do tła OKNA) ginie i pole pojawia się dopiero pod kursorem
+        // (zgłoszenie użytkownika 2026-08-03). Dwie klasy, dwie niezależne role: `search` mówi o WIELKOŚCI
+        // (pole samotne, celowane często), `on-raised` o TLE, na którym stoi.
         _tableFilter = new TextBox { PlaceholderText = "Filter tables…", Margin = new Thickness(4) };
+        _tableFilter.Classes.Add("search");
+        _tableFilter.Classes.Add("on-raised");
         _tableList = new ListBox { MaxHeight = 320 };
         _columnFilter = new TextBox { PlaceholderText = "Filter columns…", Margin = new Thickness(4) };
+        _columnFilter.Classes.Add("search");
+        _columnFilter.Classes.Add("on-raised");
         _columnList = new ListBox { MaxHeight = 320, ItemTemplate = ColumnRowTemplate() };
 
         _tableFilter.AddHandler(TextBox.TextChangedEvent, (_, _) => RefreshTables());
@@ -92,10 +104,13 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
         var g = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
         var caption = new TextBlock
         {
-            Text = header, FontSize = 10, FontWeight = FontWeight.SemiBold,
+            Text = header, FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(6, 4, 6, 0), [Grid.RowProperty] = 0,
         };
         caption[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("SubtleForegroundBrush");
+        // Rozmiar z katalogu ról (M2c iteracja 7) — idiom tego pliku: `DynamicResourceExtension`
+        // przez indekser, dokładnie jak `Foreground` w linii wyżej.
+        caption[!TextBlock.FontSizeProperty] = new DynamicResourceExtension("Text.Caption.Size");
         filter[Grid.RowProperty] = 1;
         list[Grid.RowProperty] = 2;
         g.Children.Add(caption);
@@ -108,14 +123,16 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
         => new((_, _) =>
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 2) };
-            var name = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+            var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+            name[!TextBlock.FontSizeProperty] = new DynamicResourceExtension("Text.Compact.Size");
             name[!TextBlock.TextProperty] = new Binding(nameof(ColumnSpec.Name));
             var type = new TextBlock
             {
-                FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(12, 0, 0, 0), [Grid.ColumnProperty] = 1,
             };
             type[!TextBlock.TextProperty] = new Binding(nameof(ColumnSpec.Type));
+            type[!TextBlock.FontSizeProperty] = new DynamicResourceExtension("Text.Compact.Size");
             type[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("SubtleForegroundBrush");
             g.Children.Add(name);
             g.Children.Add(type);

@@ -157,4 +157,28 @@ public sealed record Preferences
     /// <summary>The transaction isolation the debugger's launch panel opens with (§7.3). The per-launch
     /// selector is unchanged; this only decides its initial value.</summary>
     public string DebuggerIsolation { get; set; } = PreferenceOptions.DebuggerIsolation.Default;
+
+    /// <summary>
+    /// How the workspace tab strip lays its tabs out — <c>MultiRow</c> (the default) or <c>SingleRow</c>
+    /// (product-polish §8.2, ratified D5/D7).
+    /// </summary>
+    /// <remarks>
+    /// ⚠ The two modes differ in PHILOSOPHY, not only in geometry, which is why this is a mode and not a
+    /// flag on one layout: in <c>MultiRow</c> <b>no tab is ever hidden behind a menu</b> — the strip grows
+    /// to <see cref="TabStripMaxRows"/> rows and then scrolls vertically, and that promise is the ratified
+    /// difference from Visual Studio. <c>SingleRow</c> deliberately accepts hiding tabs, and pays for it
+    /// with an overflow button carrying a COUNT plus a name-filtered list of everything off screen.
+    /// </remarks>
+    public string TabStripMode { get; set; } = PreferenceOptions.TabStripMode.Default;
+
+    /// <summary>Maximum rows the multi-row tab strip may grow to before it starts scrolling (§8.2).</summary>
+    /// <remarks>
+    /// ⚠ Read only in <c>MultiRow</c> mode; the value is kept across a switch to <c>SingleRow</c> and back,
+    /// because a mode is a view of the same workspace and losing the row limit on a round trip would be a
+    /// silent settings loss.
+    /// <para>⭐ This is also what makes the Settings Center safe to HIDE the row in single-row layout: the
+    /// row disappears, the number does not. Hiding a setting and discarding it are different things, and
+    /// only the first one happens.</para>
+    /// </remarks>
+    public int TabStripMaxRows { get; set; } = PreferenceOptions.TabStripMaxRows.Default;
 }

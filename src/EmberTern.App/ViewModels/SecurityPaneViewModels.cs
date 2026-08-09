@@ -104,9 +104,27 @@ public partial class SecurityUsersPaneViewModel : ViewModelBase
 public partial class SecurityRolesPaneViewModel : ViewModelBase
 {
     private readonly SecurityManagerTabViewModel _owner;
-    public SecurityRolesPaneViewModel(SecurityManagerTabViewModel owner) => _owner = owner;
+
+    public SecurityRolesPaneViewModel(SecurityManagerTabViewModel owner)
+    {
+        _owner = owner;
+        // ⚠ Asercją strażnika jest POWIADOMIENIE, nie wartość — wiązanie odpytuje właściwość wyłącznie
+        // po `PropertyChanged`, więc bez tego stan pusty zostałby na ekranie po dodaniu pierwszej roli.
+        Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowEmptyState));
+    }
 
     public ObservableCollection<RoleInfo> Items { get; } = new();
+
+    /// <summary>
+    /// Stan pusty listy ról (M5 / M‑3, B2): baza bez ról niesystemowych — ⭐ stan ZWYCZAJNY, nie awaryjny,
+    /// bo <c>RDB$ROLES</c> po odfiltrowaniu systemowych jest pusta na świeżo utworzonej bazie.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Ta lista NIE MA FILTRA (zmierzone: `FilterText` istnieje wyłącznie w panelu uprawnień), więc pusto
+    /// znaczy tu dokładnie jedno — ról nie ma. ⛔ Nie wolno tu użyć treści mówiącej o filtrze; byłoby to
+    /// wskazanie elementu, którego na tym ekranie nie ma.
+    /// </remarks>
+    public bool ShowEmptyState => Items.Count == 0;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DropRoleCommand))]
@@ -198,6 +216,9 @@ public partial class SecurityMembershipPaneViewModel : ViewModelBase
             new(UiStrings.SecurityDirectionMembers, MembershipDirection.Members),
         };
         _selectedDirection = Directions[0];
+        // ⚠ Nie polegamy na kolejności generowanych powiadomień wobec `RebuildRows()`: wierszami rządzi
+        // kolekcja, więc to ona ogłasza zmianę stanu pustego.
+        Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowEmptyState));
     }
 
     public ObservableCollection<MembershipDirectionOption> Directions { get; }
@@ -210,9 +231,11 @@ public partial class SecurityMembershipPaneViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(Direction))]
     [NotifyPropertyChangedFor(nameof(PickerLabel))]
     [NotifyPropertyChangedFor(nameof(RowHeader))]
+    [NotifyPropertyChangedFor(nameof(EmptyText))]
     private MembershipDirectionOption _selectedDirection;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
     private GranteeOptionViewModel? _selectedPicker;
 
     public MembershipDirection Direction => SelectedDirection?.Direction ?? MembershipDirection.MemberOf;
@@ -220,6 +243,27 @@ public partial class SecurityMembershipPaneViewModel : ViewModelBase
         ? UiStrings.SecurityRolePickerLabel : UiStrings.SecurityGranteeLabel;
     public string RowHeader => Direction == MembershipDirection.Members
         ? UiStrings.SecurityColMemberName : UiStrings.SecurityColRoleName;
+
+    /// <summary>
+    /// Stan pusty przynależności (M5 / M‑3, B3): wybrany grantee nie ma wierszy.
+    /// </summary>
+    /// <remarks>
+    /// ⭐⭐ WYMAGA WYBRANEGO ELEMENTU (<c>SelectedPicker is not null</c>) i to nie jest ostrożność, tylko
+    /// rozgraniczenie stanów. Picker AUTOWYBIERA pierwszą pozycję, więc „nic nie wybrano" zachodzi jedynie
+    /// wtedy, gdy jest pusty — a w kierunku „Members" picker zawiera SAME ROLE, więc pusty picker znaczy
+    /// „baza nie ma ról". To jest ten sam fakt, który komunikuje już lista ról (B2), i decyzją użytkownika
+    /// NIE dostaje tu drugiego komunikatu.
+    /// </remarks>
+    public bool ShowEmptyState => SelectedPicker is not null && Rows.Count == 0;
+
+    /// <summary>
+    /// ⭐ Treść zależy od KIERUNKU, bo to dwa różne pytania — i produkt już to wie: <see cref="RowHeader"/>
+    /// przełącza się „Role name" ↔ „Member name" dokładnie z tego powodu. Jeden komunikat na oba kierunki
+    /// byłby nieprawdziwy w jednym z nich.
+    /// </summary>
+    public string EmptyText => Direction == MembershipDirection.Members
+        ? UiStrings.SecurityMembershipEmptyMembers
+        : UiStrings.SecurityMembershipEmptyMemberOf;
 
     partial void OnSelectedDirectionChanged(MembershipDirectionOption value)
     {

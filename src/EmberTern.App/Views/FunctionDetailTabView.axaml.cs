@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading.Tasks;
@@ -14,6 +14,8 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
+using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
@@ -71,10 +73,24 @@ public partial class FunctionDetailTabView : UserControl
         // S5: the panel's activation gestures navigate the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("FuncDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
-        if (_argumentsGrid is not null) FieldGridColumns.Build(_argumentsGrid, includeDefault: true);
+        // ⭐ Each editable grid also goes through the ONE seam (Enter gesture + cell-editor height role) —
+        // see EditableGridBehavior and ProcedureDetailTabView for why the call is explicit per grid.
+        if (_argumentsGrid is not null)
+        {
+            FieldGridColumns.Build(_argumentsGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_argumentsGrid);
+        }
         // The return value is a single, unnamed row — omit the Name + Default columns.
-        if (_resultTypeGrid is not null) FieldGridColumns.Build(_resultTypeGrid, includeDefault: false, includeName: false);
-        if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+        if (_resultTypeGrid is not null)
+        {
+            FieldGridColumns.Build(_resultTypeGrid, includeDefault: false, includeName: false);
+            EditableGridBehavior.Attach(_resultTypeGrid);
+        }
+        if (_variablesGrid is not null)
+        {
+            FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_variablesGrid);
+        }
 
         WireEditor(_sqlEditor, OnSqlEditorTextChanged);
         WireEditor(_bodyEditor, OnBodyEditorTextChanged);
@@ -216,13 +232,16 @@ public partial class FunctionDetailTabView : UserControl
         }
     }
 
-    // Ctrl+K in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE — the same
+    // Format SQL in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE — the same
     // deliberately narrow exception as ProcedureDetailTabView, for the same reason: the action is identified
     // by a specific TextEditor instance, and the router resolves commands rather than controls. Everything
     // else falls through to Commands.CommandCatalog's FormatSql.
+    //
+    // ⭐ The GESTURE comes from the catalog (Alt+F, with Ctrl+K as the alternate since 2026-08-03) — only the
+    // target is local. See the fuller note on the twin handler in ProcedureDetailTabView.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.K || e.KeyModifiers != KeyModifiers.Control) return;
+        if (CommandCatalog.For(CommandId.FormatSql)?.Matches(e.Key, e.KeyModifiers) != true) return;
         if (sender is TextEditor ed && (ReferenceEquals(ed, _cursorEditor) || ReferenceEquals(ed, _subprogramEditor)))
         {
             FormatEditorInPlace(ed, StyleForFormatting());
@@ -404,11 +423,44 @@ public partial class FunctionDetailTabView : UserControl
     // ── Filter-from-cell (Execute Result) ────────────────────────────────────
     private GridCellFilterContext? _execCellCtx;
 
+    /// <summary>The right-clicked row, for the copy actions. See <c>OnFuncExecCellPointerPressed</c>.</summary>
+    private object?[]? _copyRow;
+
+    // ── Copy cell / row / row with headers / all with headers ────────────────────────────────────────────
+    //
+    // ⭐ The same four plain-text copy actions the SQL Editor grid has, so a user learns one set of copying
+    // gestures for every data grid (user request, 2026-08-07). The text comes from the one shared
+    // GridCopyText builder behind the VM; the target is the RIGHT-CLICKED cell, never the grid's selection.
+    // ⚠ Copy as INSERT / UPDATE is deliberately absent here: a function's result set is not a table, so
+    // there is no provenance to build a statement from (the SqlCopy path reports NotATable for it).
+    private void OnFuncCopyCellClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Cell);
+
+    private void OnFuncCopyRowClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Row);
+
+    private void OnFuncCopyRowWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.RowWithHeaders);
+
+    private void OnFuncCopyAllWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.AllWithHeaders);
+
+    private Task CopyGridAsync(CopyGridMode mode)
+    {
+        if (_currentVm is null) return Task.CompletedTask;
+        return GridClipboard.WriteAsync(this, _currentVm.BuildCopyText(mode, _copyRow, _execCellCtx?.ColumnIndex ?? -1));
+    }
+
     private void OnFuncExecCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
     {
         if (_execResultGrid is null || _currentVm is null) return;
         if (!e.PointerPressedEventArgs.GetCurrentPoint(_execResultGrid).Properties.IsRightButtonPressed) return;
-        if (e.Row?.DataContext is object?[] row) _execResultGrid.SelectedItem = row;
+        _copyRow = null;
+        if (e.Row?.DataContext is object?[] row)
+        {
+            _execResultGrid.SelectedItem = row;
+            // ⚠ Kept explicitly rather than re-read from SelectedItem at click time: the copy actions must act
+            // on the cell the menu was opened over, and a selection is a separate thing that can move.
+            _copyRow = row;
+        }
         _execCellCtx = GridCellFilter.Resolve(_execResultGrid, e, _currentVm.ExecFilterPanel.Columns);
         if (FuncFilterContainsItem is not null)
             FuncFilterContainsItem.IsEnabled = _execCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
@@ -510,14 +562,6 @@ public partial class FunctionDetailTabView : UserControl
             return tb;
         });
 
-    private void OnDependencyNodeDoubleTapped(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Control { DataContext: DependencyLeafNode leaf } && _currentVm is not null)
-        {
-            _currentVm.RequestOpen(leaf);
-            e.Handled = true;
-        }
-    }
 
     private void ApplyEditorTheme()
     {

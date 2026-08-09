@@ -40,7 +40,7 @@
       </Grid>
       <TextBlock Text="{x:Static app:UiStrings.SecurityPasswordEditHint}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  IsVisible="{Binding !IsNew}" />
 
       <Grid ColumnDefinitions="*,*,*">

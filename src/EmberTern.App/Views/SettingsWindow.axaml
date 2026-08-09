@@ -36,33 +36,93 @@
                             Message="{Binding SaveRefusalMessage}"
                             IsVisible="{Binding ShowSaveRefusal}" />
 
-    <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*" Margin="16,16,16,0">
+    <!-- ⭐⭐ TRZY POWIERZCHNIE, ZERO NOWYCH TOKENÓW — ratyfikowany wariant T‑1 (pakiet UX po M5, punkt 5).
+         ⚠⚠ KOREKTA PO QA UŻYTKOWNIKA: nawigacja niosła `ChromeStrongBrush` i czytała się jako ZA JASNA wobec
+         głównego paska bocznego z listą połączeń. Zmierzone: `MainWindow.axaml` maluje `SidebarPanel`
+         `PanelBrush` — więc nawigacja ustawień bierze DOKŁADNIE ten sam zasób, a nie barwę do niego dobraną.
+         Powód jest rodzinowy, nie estetyczny: oba panele to ta sama rzecz w aplikacji — lewa nawigacja okna.
+         ⚠ Konsekwencja, świadoma: nawigacja i treść mają teraz ten sam ton, więc granicę niesie wyłącznie
+         kreska 1 px (tak robi VS Code). Karta zostaje `BackgroundBrush`, czyli zagłębienie w chromie —
+         para figura/tło, dla której `settings-group` napisano, obowiązuje bez zmian.
 
-      <Grid Grid.Column="0" RowDefinitions="Auto,*">
-        <TextBox Grid.Row="0"
-                 x:Name="SearchBox"
-                 Text="{Binding SearchText}"
-                 PlaceholderText="{x:Static app:UiStrings.SettingsSearchPlaceholder}"
-                 Margin="0,0,0,8" />
+         ⚠⚠ POWÓD, DLA KTÓREGO TO JEST POPRAWKA, A NIE UPIĘKSZENIE: `Border.settings-group` maluje się
+         `BackgroundBrush` i jego własny komentarz opisuje siebie jako „a recessed BackgroundBrush surface
+         inside the PanelBrush chrome that hosts it". Trzej pozostali konsumenci tego stylu (oba dialogi
+         ustawień i Data Import) rzeczywiście dają mu kontener `PanelBrush`. To okno NIE DAWAŁO ŻADNEGO —
+         karty stały wprost na tle okna, czyli karta i host miały DOKŁADNIE tę samą barwę i całą separację
+         niosła kreska 1 px. Naprawiony jest HOST; ⛔ sam styl karty jest nietknięty, bo u tamtych trzech
+         działa poprawnie (R7 w drugą stronę). -->
+    <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*">
 
-        <ListBox Grid.Row="1"
-                 x:Name="CategoryList"
-                 ItemsSource="{Binding Categories}"
-                 SelectedItem="{Binding SelectedCategory}"
-                 Background="Transparent"
-                 BorderThickness="0">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:SettingsCategoryViewModel">
-              <TextBlock Text="{Binding Title}" />
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-      </Grid>
+      <Border Grid.Column="0"
+              Background="{DynamicResource PanelBrush}"
+              Padding="{DynamicResource Pad.Panel}">
+        <Grid RowDefinitions="Auto,*">
+          <TextBox Grid.Row="0"
+                   x:Name="SearchBox"
+                   Classes="search"
+                   Text="{Binding SearchText}"
+                   PlaceholderText="{x:Static app:UiStrings.SettingsSearchPlaceholder}"
+                   Margin="{DynamicResource Margin.FieldGap}" />
 
-      <Border Grid.Column="1" Width="1" Margin="12,0" Background="{DynamicResource BorderBrush}" />
+          <!-- ⚠ `Classes="settings-nav"` jest nośne, nie ozdobne: bazowy `ListBoxItem` opisuje gest „czytasz
+               w serii i wybierasz jednym kliknięciem" (Saved Queries, listy rozwijane), a to jest nawigacja,
+               na której się LĄDUJE. Styl klasy stoi w `ControlStyles.axaml` razem z powodem. -->
+          <ListBox Grid.Row="1"
+                   x:Name="CategoryList"
+                   Classes="settings-nav"
+                   ItemsSource="{Binding Categories}"
+                   SelectedItem="{Binding SelectedCategory}"
+                   Background="Transparent"
+                   BorderThickness="0">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:SettingsCategoryViewModel">
+                <!-- ⭐ Pasek wskaźnika stoi ZAWSZE i zawsze zajmuje te same 2 px; zaznaczenie zmienia
+                     wyłącznie jego barwę (styl `:selected Border#NavIndicator`). Zero zmiany geometrii
+                     z konstrukcji — patrz komentarz przy stylu. -->
+                <StackPanel Orientation="Horizontal">
+                  <!-- ⚠⚠ BEZ `Background="Transparent"` — i to nie jest uproszczenie, tylko warunek
+                       działania. Wartość LOKALNA na elemencie bije każdy setter stylu (#342), więc
+                       zadeklarowana tu przezroczystość sprawiała, że styl `:selected` nie miał jak
+                       pomalować paska; render pokazywał wyłącznie wypełnienie zaznaczenia. Złapane
+                       POMIAREM PIKSELI (x=12..24 = #094771 zamiast #2D6BBF), nie okiem — na obrazku
+                       brak 2 px paska wygląda po prostu jak brak paska. Nieustawione tło nie maluje
+                       nic, czyli daje dokładnie stan spoczynku. -->
+                  <Border x:Name="NavIndicator"
+                          Width="{DynamicResource Size.TabIndicator}" />
+                  <StackPanel Orientation="Horizontal"
+                              Spacing="{DynamicResource Space.Md}"
+                              Margin="{DynamicResource Pad.MenuItem}">
+                    <!-- ⚠ Ikona przychodzi z KATALOGU jako klucz geometrii i jest rozwiązywana tym samym
+                         konwerterem, co ikona węzła w Metadata Explorerze — jeden mechanizm, nie drugi.
+                         Barwa jest dziedziczona (`ForegroundBrush`), więc ikona kategorii świadomie NIE
+                         niesie koloru rodzaju: kategoria ustawień nie jest obiektem bazy. -->
+                    <controls:SvgIcon Data="{Binding IconKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                      Width="{DynamicResource Size.Icon}"
+                                      Height="{DynamicResource Size.Icon}"
+                                      VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
 
-      <Panel Grid.Column="2">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasMatches}">
+      <!-- ⚠ Kreska ZOSTAJE mimo różnicy tonalnej i to jest świadome: krok Chrome→Panel to 8 jednostek
+           w Dark i 11 w Light, czyli separacja czytelna, ale miękka. Kreska daje krawędź, a nie drugą
+           powierzchnię. ⚠ Szerokość z roli `Stroke.Hairline`, nie z literału — katalog nie ma roli
+           `Thickness` dla krawędzi prawej, a wymyślanie jej dla jednego elementu byłoby rozpoczęciem
+           etapu odstępów tylnymi drzwiami. -->
+      <Border Grid.Column="1"
+              Width="{DynamicResource Stroke.Hairline}"
+              Background="{DynamicResource BorderBrush}" />
+
+      <Panel Grid.Column="2" Background="{DynamicResource PanelBrush}">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                      IsVisible="{Binding HasMatches}"
+                      Padding="{DynamicResource Pad.Dialog}">
 
           <!-- One page per category, each an IsVisible-gated block inside this Panel. A Panel (not a
                StackPanel) because exactly one page is ever visible, so they overlay rather than stack — and
@@ -180,47 +240,47 @@
 
               <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryEditor}" />
 
-              <Border Classes="settings-group" IsVisible="{Binding ProcedureEasyMode.IsVisible}">
+              <!-- ⭐⭐ JEDNA KARTA NA CZTERY POZYCJE — wyłącznie prezentacja (pakiet UX po M5, punkt 5).
+                   Cztery flagi zostają CZTEREMA wierszami katalogu: własne id, własny haystack, własna
+                   wartość, własne `IsVisible` filtra. Zmienia się tylko to, że widok rysuje wokół nich JEDNĄ
+                   ramkę, bo to jeden temat — „w jakim trybie otwiera się edytor obiektu" — a cztery
+                   równorzędne karty mówiły cztery tematy. ⛔ Zero zmian w `SettingsCatalog` i zero nowych
+                   abstrakcji; jedyny dodatek to `ShowEasyModeGroup`, czyli OR czterech `IsVisible`
+                   w kształcie istniejącego `ShowTabStripMaxRows`.
+
+                   ⚠ Opis jest JEDEN, wspólny, i to jest właściwe miejsce: wszystkie cztery wiersze niosły
+                   ten sam string, więc powtórzony czterokrotnie czytał się jak cztery różne wyjaśnienia
+                   tego samego. Teraz nazywa temat karty — raz. -->
+              <Border Classes="settings-group" IsVisible="{Binding ShowEasyModeGroup}">
                 <StackPanel>
-                  <CheckBox x:Name="ProcedureEasyModeCheck"
-                            Content="{Binding ProcedureEasyMode.Label}"
-                            IsChecked="{Binding ProcedureEasyMode.Value, Mode=TwoWay}" />
+                  <TextBlock Classes="group-header"
+                             Text="{x:Static app:UiStrings.SettingsEasyModeGroupLabel}" />
                   <TextBlock Classes="field-label"
                              Text="{Binding ProcedureEasyMode.Description}"
-                             TextWrapping="Wrap" />
-                </StackPanel>
-              </Border>
+                             TextWrapping="Wrap"
+                             Margin="{DynamicResource Margin.FieldGap}" />
 
-              <Border Classes="settings-group" IsVisible="{Binding ViewEasyMode.IsVisible}">
-                <StackPanel>
-                  <CheckBox x:Name="ViewEasyModeCheck"
-                            Content="{Binding ViewEasyMode.Label}"
-                            IsChecked="{Binding ViewEasyMode.Value, Mode=TwoWay}" />
-                  <TextBlock Classes="field-label"
-                             Text="{Binding ViewEasyMode.Description}"
-                             TextWrapping="Wrap" />
-                </StackPanel>
-              </Border>
-
-              <Border Classes="settings-group" IsVisible="{Binding TriggerEasyMode.IsVisible}">
-                <StackPanel>
-                  <CheckBox x:Name="TriggerEasyModeCheck"
-                            Content="{Binding TriggerEasyMode.Label}"
-                            IsChecked="{Binding TriggerEasyMode.Value, Mode=TwoWay}" />
-                  <TextBlock Classes="field-label"
-                             Text="{Binding TriggerEasyMode.Description}"
-                             TextWrapping="Wrap" />
-                </StackPanel>
-              </Border>
-
-              <Border Classes="settings-group" IsVisible="{Binding FunctionEasyMode.IsVisible}">
-                <StackPanel>
-                  <CheckBox x:Name="FunctionEasyModeCheck"
-                            Content="{Binding FunctionEasyMode.Label}"
-                            IsChecked="{Binding FunctionEasyMode.Value, Mode=TwoWay}" />
-                  <TextBlock Classes="field-label"
-                             Text="{Binding FunctionEasyMode.Description}"
-                             TextWrapping="Wrap" />
+                  <!-- ⚠ Każdy checkbox zachowuje SWOJE `IsVisible`, więc wyszukanie „procedure" pokazuje
+                       kartę z jednym wierszem, a nie kartę z czterema. Znaczenie filtra jest nietknięte —
+                       zmienił się wyłącznie jego pojemnik. -->
+                  <StackPanel Spacing="{DynamicResource Space.Xs}">
+                    <CheckBox x:Name="ProcedureEasyModeCheck"
+                              Content="{Binding ProcedureEasyMode.Label}"
+                              IsChecked="{Binding ProcedureEasyMode.Value, Mode=TwoWay}"
+                              IsVisible="{Binding ProcedureEasyMode.IsVisible}" />
+                    <CheckBox x:Name="ViewEasyModeCheck"
+                              Content="{Binding ViewEasyMode.Label}"
+                              IsChecked="{Binding ViewEasyMode.Value, Mode=TwoWay}"
+                              IsVisible="{Binding ViewEasyMode.IsVisible}" />
+                    <CheckBox x:Name="TriggerEasyModeCheck"
+                              Content="{Binding TriggerEasyMode.Label}"
+                              IsChecked="{Binding TriggerEasyMode.Value, Mode=TwoWay}"
+                              IsVisible="{Binding TriggerEasyMode.IsVisible}" />
+                    <CheckBox x:Name="FunctionEasyModeCheck"
+                              Content="{Binding FunctionEasyMode.Label}"
+                              IsChecked="{Binding FunctionEasyMode.Value, Mode=TwoWay}"
+                              IsVisible="{Binding FunctionEasyMode.IsVisible}" />
+                  </StackPanel>
                 </StackPanel>
               </Border>
 
@@ -303,6 +363,62 @@
                   <TextBlock Classes="field-label"
                              Text="{Binding GridAutoFitColumns.Description}"
                              TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+
+            <!-- Tabs (M3.3b / §8.2) — the workspace tab strip. ⭐ Own category, not two more rows in
+                 General: the tab strip is one of the four persistent surfaces (§0.1), and this is where
+                 M3.3c's "Tab settings…" context-menu item will jump.
+                 ⚠ Row order carries meaning — the MODE decides whether the row limit does anything, so the
+                 limit reads as its detail rather than as a peer. -->
+            <StackPanel Spacing="12" IsVisible="{Binding IsTabsPageVisible}">
+
+              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryTabs}" />
+
+              <Border Classes="settings-group" IsVisible="{Binding TabStripMode.IsVisible}">
+                <StackPanel>
+                  <TextBlock Classes="group-header" Text="{Binding TabStripMode.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding TabStripMode.Description}"
+                             TextWrapping="Wrap" />
+                  <ComboBox x:Name="TabStripModeBox"
+                            ItemsSource="{Binding TabStripMode.Options}"
+                            SelectedItem="{Binding TabStripMode.SelectedOption, Mode=TwoWay}"
+                            MinWidth="200"
+                            HorizontalAlignment="Left"
+                            Margin="0,6,0,0">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PreferenceOptionViewModel">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Border>
+
+              <!-- ⭐ Wiersz ZNIKA w trybie jednowierszowym — decyzja użytkownika (2026-08-03): interfejs nie
+                   pokazuje ustawień, które w danym trybie nic nie robią. ⚠ Sama LICZBA jest zachowywana;
+                   znika wiersz, nie wartość.
+                   ⚠⚠ `IsVisible` wisi na `Borderze`, który został na DataContexcie STRONY, bo warunek łączy
+                   dwie niezależne przyczyny (tryb + filtr wyszukiwania) i mieszka na stronie. DataContext
+                   wiersza schodzi poziom niżej — to wystarczy, bo znaczenie ma, żeby SWÓJ WIERSZ niósł
+                   `TextBox` (settings-center §17.4: na DataContexcie strony pole wpisuje się poprawnie,
+                   pokazuje liczbę i NIE ZAPISUJE NIC). -->
+              <Border Classes="settings-group" IsVisible="{Binding ShowTabStripMaxRows}">
+                <StackPanel DataContext="{Binding TabStripMaxRows}" x:DataType="vm:NumericSettingViewModel">
+                  <TextBlock Classes="group-header" Text="{Binding Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding Description}"
+                             TextWrapping="Wrap" />
+                  <TextBox x:Name="TabStripMaxRowsBox"
+                           Text="{Binding EditText, Mode=TwoWay}"
+                           LostFocus="OnNumericSettingLostFocus"
+                           KeyDown="OnNumericSettingKeyDown"
+                           MinWidth="140"
+                           HorizontalAlignment="Left"
+                           Margin="0,6,0,0" />
                 </StackPanel>
               </Border>
 
@@ -400,7 +516,7 @@
       <TextBlock Grid.Column="0"
                  Text="{x:Static app:UiStrings.SettingsAppliedImmediately}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  VerticalAlignment="Center" />
 
       <Button Grid.Column="1"

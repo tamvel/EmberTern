@@ -237,6 +237,8 @@ public class FormatterStylePreferenceTests
         SettingsCatalog.SettingFullLoadPromptThreshold => nameof(Preferences.FullLoadPromptThreshold),
         SettingsCatalog.SettingDataPageSize => nameof(Preferences.DataPageSize),
         SettingsCatalog.SettingGridAutoFit => nameof(Preferences.GridAutoFitColumns),
+        SettingsCatalog.SettingTabStripMode => nameof(Preferences.TabStripMode),
+        SettingsCatalog.SettingTabStripMaxRows => nameof(Preferences.TabStripMaxRows),
         SettingsCatalog.SettingDebuggerIsolation => nameof(Preferences.DebuggerIsolation),
         SettingsCatalog.SettingFormatterKeywordCase => nameof(Preferences.FormatterKeywordCase),
         SettingsCatalog.SettingFormatterIdentifierCase => nameof(Preferences.FormatterIdentifierCase),

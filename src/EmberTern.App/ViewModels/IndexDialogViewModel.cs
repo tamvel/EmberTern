@@ -31,7 +31,7 @@ public sealed record IndexSpec(
 /// is entered, the field list is ignored (expression index) — the UI disables
 /// the field picker to match Firebird semantics.
 /// </summary>
-public partial class IndexDialogViewModel : ViewModelBase
+public partial class IndexDialogViewModel : ViewModelBase, IDdlPreviewSource
 {
     public IndexDialogViewModel(string tableName, IReadOnlyList<string> fields,
         IReadOnlyList<string>? existingNames = null)

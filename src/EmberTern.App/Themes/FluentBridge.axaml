@@ -1,0 +1,394 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ================================================================================================
+       FluentBridge — warstwa TŁUMACZĄCA słownik FluentTheme na katalog EmberTerna.
+
+       ⭐ ZASADA POWSTANIA: nie przestylowujemy Fluenta i nie kopiujemy jego szablonów — PRZEPINAMY GO
+       na nasze tokeny. Fluent maluje wnętrza kontrolek (`PART_BorderElement` i podobne) z własnych
+       zasobów; ten plik podmienia te zasoby na nasze. Dzięki temu zachowujemy wszystkie sprawdzone
+       zachowania frameworka (zaznaczanie tekstu, watermark, walidacja, przewijanie, animacje stanów),
+       a wygląd i tak jest sterowany katalogiem.
+
+       ⛔⛔ REGUŁA WIĄŻĄCA (użytkownik, 2026-08-02) — TEN PLIK NIE JEST DRUGIM KATALOGIEM TOKENÓW.
+       Wyłącznie mapowanie. ŻADNYCH wartości lokalnych, ŻADNYCH nowych decyzji projektowych.
+       Każda liczba i każda rola ma właściciela w `Tokens.axaml` / `Typography.axaml` / `Colors.axaml`;
+       tutaj są wyłącznie odwołania. Egzekwuje to test `FluentBridge_ContainsNoLocalValues`.
+
+       ⚠⚠ DLATEGO SĄ TU WYŁĄCZNIE KOLORY — i to jest wynik pomiaru, nie upodobanie.
+       XAML nie potrafi ZAALIASOWAĆ zasobu skalarnego: `<x:Double x:Key="TextControlThemeMinHeight">`
+       musi zawierać liczbę, bo nie da się w tym miejscu napisać „to samo, co `Size.Control`".
+       Gdyby więc Bridge przejął metryki, musiałby wpisać liczby — czyli złamać powyższą regułę
+       w pierwszej linijce. Pędzel jest wyjątkiem, bo `Color="{StaticResource …}"` JEST odwołaniem.
+       ⭐ Konsekwencja jest korzystna: metryki (`MinHeight`, `Padding`, `FontSize`, `BorderThickness`)
+       idą przez SETTERY STYLU w `ControlStyles.axaml`, które potrafią czytać token — a reguła
+       „bez wartości lokalnych" staje się w tym pliku strukturalna, bo nie ma tu gdzie wpisać liczby.
+
+       ⚠ Czego tu NIE MA i nie powinno być: `ControlCornerRadius`. Fluent ma tam 3, `Radius.Surface`
+       ma 3 — wpis powielałby liczbę, więc zamiast niego zbieżność pinuje test.
+       ================================================================================================ -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       ⭐⭐ ALIASY METRYK — TRZECIA TRASA, dopisana w kroku 5.7 po pomiarze, który OBALIŁ przesłankę
+       §16.3. Zmierzone na Avalonii 12.0.3: `<StaticResource x:Key="A" ResourceKey="B" />` DZIAŁA
+       — `ProbeAliasScalar` rozwiązał się do `24` typu `Double`. XAML potrafi więc zaaliasować zasób
+       skalarny; nie potrafi jedynie ZŁOŻYĆ go w treści elementu (`<x:Double>` musi zawierać liczbę).
+
+       ⚠ To NIE unieważnia podziału z §16.3 — settery stylu zostają domyślną trasą dla metryk, bo są
+       widoczne tam, gdzie się o kontrolce myśli. Alias jest trasą dla JEDNEGO zmierzonego przypadku:
+       gdy szablon konsumuje zasób skalarny jako WARTOŚĆ LOKALNĄ elementu, setter stylu przegrywa
+       (wartość lokalna outranks setter — ta sama reguła, która w tym projekcie wypłynęła już przy
+       `MessageBanner`, `MainWindow.Icon` i `DangerIconBrush`). `ExpanderMinHeight` jest dokładnie
+       tym przypadkiem: mimo settera `ToggleButton` z kroku 5.6 nagłówek trzymał 48 px.
+
+       ⭐ Alias spełnia regułę użytkownika LEPIEJ niż liczba: jest ODWOŁANIEM, więc `Size.Control`
+       pozostaje jedynym właścicielem tej wartości. Strażnik `FluentBridge_ContainsNoLocalValues`
+       przepuszcza go, bo sam znacznik jest `StaticResource`.
+
+       ⚠ Te wpisy stoją POZA `ThemeDictionaries`, bo metryka nie zależy od motywu — dokładnie ten sam
+       podział, co między `Tokens.axaml` a `Colors.axaml`.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+  <StaticResource x:Key="ExpanderMinHeight" ResourceKey="Size.Control" />
+  <StaticResource x:Key="ExpanderHeaderPadding" ResourceKey="Pad.Control" />
+  <StaticResource x:Key="ExpanderContentPadding" ResourceKey="Pad.Panel" />
+
+  <ResourceDictionary.ThemeDictionaries>
+
+    <!-- ⚠ Oba słowniki mają IDENTYCZNĄ treść, bo mapowanie jest takie samo w obu motywach — różnią
+         się wyłącznie tokeny, na które wskazuje, a te są już rozdzielone w `Colors.axaml`. To jedyny
+         powód, dla którego ten plik w ogóle ma `ThemeDictionaries`: zasoby Fluenta, które nadpisuje,
+         są zależne od motywu, więc nadpisanie też musi być. -->
+
+    <ResourceDictionary x:Key="Dark">
+      <!-- ── TextBox (i wszystko, co go osadza: NumericUpDown, edytor komórki siatki) ────────────── -->
+      <SolidColorBrush x:Key="TextControlBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="TextControlForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- Podpowiedź w pustym polu — rola tekstu drugorzędnego, ta sama co podpisy pól. -->
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- Zaznaczenie tekstu — ten sam pędzel, którym zaznacza się wiersz siatki i pozycja listy. -->
+      <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{StaticResource SelectionColor}" />
+
+      <!-- ── ComboBox ────────────────────────────────────────────────────────────────────────────
+           ⭐ `ComboBoxDropDownBackground` to lista rozwijana, czyli powierzchnia UNIESIONA (RB‑4) —
+           kolejny naturalny konsument `SurfaceRaised`, a nie chromy. W motywie jasnym to właśnie
+           ta różnica sprawia, że rozwinięta lista czyta się jako pływająca nad formularzem.
+           ⚠ Tło pola NIE zmienia się przy najechaniu ani wciśnięciu — sygnał niesie krawędź.
+           Zmiana tła czytałaby się jak zmiana stanu DANYCH, a nie wskazania kursorem. -->
+      <SolidColorBrush x:Key="ComboBoxBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxPlaceHolderForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <!-- Chevron jest afordancją drugorzędną — niesie „to się rozwija", nie treść. -->
+      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="{StaticResource SubtleForegroundColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{StaticResource SurfaceRaisedColor}" />
+      <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{StaticResource HoverOverlayColor}" />
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{StaticResource SelectionColor}" />
+
+      <!-- ── Button (Product Polish M2b, krok 5.4) ────────────────────────────────────────────────
+           H‑8: 25 surowych przycisków Fluenta bez `Classes`. Fluent maluje je pół-przezroczystą
+           bielą (`#33ffffff`), a stan najechania CZYSTĄ BIELĄ — stąd „przycisk zapala się na biało",
+           efekt obcy palecie warsztatu w obu motywach.
+
+           ⭐ Drabina stanów jest MONOTONICZNA W OBU MOTYWACH i to jest cała jej treść:
+           Panel → ChromeStrong to w Dark rozjaśnienie (#252526 → #2D2D2D), a w Light przyciemnienie
+           (#F3F4F6 → #E8EAED). Kierunek jest przeciwny, znaczenie to samo — „o stopień bliżej
+           kursora". To ta sama zasada, którą RB‑4 wydobyło z `ElevatedPanelBrush`.
+
+           ⚠ WCIŚNIĘCIE NIESIE KRAWĘDŹ, NIE TRZECI ODCIEŃ SZAROŚCI — świadomie, i to jest ten sam
+           język, który krok 5.3 ustalił dla `ComboBoxa`. Trzeci stopień szarości musiałby sięgnąć po
+           `BorderColor` jako WYPEŁNIENIE, czyli użyć tokenu wbrew jego roli (§3.1) — a rola „krawędź"
+           przestałaby cokolwiek znaczyć. Akcent na krawędzi jest czytelniejszy i tańszy.
+           ⚠ Stan `:disabled` NIE zmienia tła: przygaszony jest TEKST. Zmiana tła czytałaby się jak
+           inny rodzaj przycisku, a nie jak przycisk chwilowo niedostępny. -->
+      <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="{StaticResource PanelColor}" />
+
+      <SolidColorBrush x:Key="ButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── RepeatButton — strzałki spinnera (`NumericUpDown`, krok 5.5) ─────────────────────────
+           Ta sama rodzina co `Button` i ten sam defekt: Fluent maluje je pół-przezroczystą bielą.
+           ⚠ Strzałka jest afordancją drugorzędną — niesie „zwiększ/zmniejsz", a nie treść — więc
+           w spoczynku jest BEZ TŁA i dopiero najechanie ją wydobywa. To ten sam podział, który
+           `Button.icon` realizuje w pasku narzędzi. -->
+      <SolidColorBrush x:Key="RepeatButtonBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrushPointerOver" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrushPressed" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── ToggleButton (Product Polish M2b, krok 5.6) ──────────────────────────────────────────
+           ⭐ Stany ZAZNACZONE celowo NIE SĄ tu mapowane i to jest decyzja, nie luka: `SystemAccentColor`
+           jest w tej aplikacji nadpisany naszym akcentem (`Colors.axaml`), więc
+           `ToggleButtonBackgroundChecked` Fluenta rozwiązuje się do `#2D6BBF` sam z siebie. Wpis
+           powielałby wartość, którą już kontrolujemy — dokładnie ten sam powód, dla którego nie ma
+           tu `ControlCornerRadius`. Zbieżność pinuje test.
+           Wadliwe były wyłącznie stany NEUTRALNE — ta sama pół-przezroczysta biel co w `Button`. -->
+      <SolidColorBrush x:Key="ToggleButtonBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundDisabled" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── Expander (Product Polish M2b, krok 5.7) ──────────────────────────────────────────────
+           Nagłówek jest pasmem klikalnym, więc bierze `Panel` — o stopień od dokumentu, tak jak
+           przycisk. Treść bierze tło DOKUMENTU: to, co rozwinięte, należy do czytanej zawartości,
+           a nie do chromy, która je otwiera.
+           ⚠ Chevron idzie na `SubtleForeground` — ta sama rola co strzałka `ComboBoxa` (krok 5.3)
+           i strzałki spinnera (krok 5.5): afordancja „to się rozwija", nie treść. -->
+      <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ExpanderHeaderForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ExpanderContentBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ExpanderChevronForeground" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── ScrollBar (H‑10, Product Polish M2b krok 6) ──────────────────────────────────────────
+           ⚠ Fluent maluje uchwyt pół-przezroczystą bielą, a stan wciśnięcia niemal czystą
+           (`#33ffffff` → `#66ffffff` → `#99ffffff`) — w motywie JASNYM biały uchwyt na białym tle
+           jest praktycznie niewidoczny. To jest cała treść H‑10.
+
+           ⭐ `ScrollBarThumbBackgroundColor` jest KOLOREM, nie pędzlem, więc idzie ALIASEM (§16.3,
+           trasa trzecia) — nie da się w treści `<Color>` napisać odwołania, ale osobnym znacznikiem
+           już tak. Ten sam mechanizm, który krok 5.7 zmierzył dla metryki, działa dla barwy.
+
+           ⚠ TOR (`ScrollBarTrackFill`) bierze tło DOKUMENTU, nie chromy: pasek przewijania przylega
+           do treści, którą przewija, i ma się z nią zlewać. Widoczny ma być UCHWYT — on niesie
+           informację o pozycji — a nie rynna, w której się porusza.
+           ⚠ Strzałki na `SubtleForeground`, jak każda afordancja drugorzędna w tym etapie
+           (chevron `ComboBoxa`, strzałki spinnera, chevron `Expandera`). -->
+      <StaticResource x:Key="ScrollBarThumbBackgroundColor" ResourceKey="ScrollBarThumbColor" />
+      <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{StaticResource ScrollBarThumbColor}" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="{StaticResource ScrollBarThumbHoverColor}" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="{StaticResource ScrollBarThumbPressedColor}" />
+      <SolidColorBrush x:Key="ScrollBarTrackFill" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPressed" Color="{StaticResource ForegroundColor}" />
+
+      <!-- ── DataGrid (§8.4 specyfikacji, Product Polish M2b krok 7) ─────────────────────────────
+           ⚠ Tylko siatka linii. Nagłówek i wiersz mają już settery stylu, więc wpis powielałby
+           wartość, którą już kontrolujemy (§16.3, wiersz czwarty).
+           Fluent daje tu pół-przezroczystą biel — w motywie jasnym linie siatki na białym tle
+           znikają, dokładnie ten sam defekt co uchwyt paska przewijania w kroku 6. -->
+      <SolidColorBrush x:Key="DataGridGridLinesBrush" Color="{StaticResource BorderColor}" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="TextControlBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="{StaticResource FocusBorderColor}" />
+      <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="TextControlForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="{StaticResource SubtleForegroundColor}" />
+
+      <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{StaticResource SelectionColor}" />
+
+      <!-- ── ComboBox ────────────────────────────────────────────────────────────────────────────
+           ⭐ `ComboBoxDropDownBackground` to lista rozwijana, czyli powierzchnia UNIESIONA (RB‑4) —
+           kolejny naturalny konsument `SurfaceRaised`, a nie chromy. W motywie jasnym to właśnie
+           ta różnica sprawia, że rozwinięta lista czyta się jako pływająca nad formularzem.
+           ⚠ Tło pola NIE zmienia się przy najechaniu ani wciśnięciu — sygnał niesie krawędź.
+           Zmiana tła czytałaby się jak zmiana stanu DANYCH, a nie wskazania kursorem. -->
+      <SolidColorBrush x:Key="ComboBoxBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxPlaceHolderForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <!-- Chevron jest afordancją drugorzędną — niesie „to się rozwija", nie treść. -->
+      <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="{StaticResource SubtleForegroundColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{StaticResource SurfaceRaisedColor}" />
+      <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{StaticResource HoverOverlayColor}" />
+      <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{StaticResource SelectionColor}" />
+
+      <!-- ── Button (Product Polish M2b, krok 5.4) ────────────────────────────────────────────────
+           H‑8: 25 surowych przycisków Fluenta bez `Classes`. Fluent maluje je pół-przezroczystą
+           bielą (`#33ffffff`), a stan najechania CZYSTĄ BIELĄ — stąd „przycisk zapala się na biało",
+           efekt obcy palecie warsztatu w obu motywach.
+
+           ⭐ Drabina stanów jest MONOTONICZNA W OBU MOTYWACH i to jest cała jej treść:
+           Panel → ChromeStrong to w Dark rozjaśnienie (#252526 → #2D2D2D), a w Light przyciemnienie
+           (#F3F4F6 → #E8EAED). Kierunek jest przeciwny, znaczenie to samo — „o stopień bliżej
+           kursora". To ta sama zasada, którą RB‑4 wydobyło z `ElevatedPanelBrush`.
+
+           ⚠ WCIŚNIĘCIE NIESIE KRAWĘDŹ, NIE TRZECI ODCIEŃ SZAROŚCI — świadomie, i to jest ten sam
+           język, który krok 5.3 ustalił dla `ComboBoxa`. Trzeci stopień szarości musiałby sięgnąć po
+           `BorderColor` jako WYPEŁNIENIE, czyli użyć tokenu wbrew jego roli (§3.1) — a rola „krawędź"
+           przestałaby cokolwiek znaczyć. Akcent na krawędzi jest czytelniejszy i tańszy.
+           ⚠ Stan `:disabled` NIE zmienia tła: przygaszony jest TEKST. Zmiana tła czytałaby się jak
+           inny rodzaj przycisku, a nie jak przycisk chwilowo niedostępny. -->
+      <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="{StaticResource PanelColor}" />
+
+      <SolidColorBrush x:Key="ButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+
+      <SolidColorBrush x:Key="ButtonForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── RepeatButton — strzałki spinnera (`NumericUpDown`, krok 5.5) ─────────────────────────
+           Ta sama rodzina co `Button` i ten sam defekt: Fluent maluje je pół-przezroczystą bielą.
+           ⚠ Strzałka jest afordancją drugorzędną — niesie „zwiększ/zmniejsz", a nie treść — więc
+           w spoczynku jest BEZ TŁA i dopiero najechanie ją wydobywa. To ten sam podział, który
+           `Button.icon` realizuje w pasku narzędzi. -->
+      <SolidColorBrush x:Key="RepeatButtonBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBackgroundDisabled" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrushPointerOver" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonBorderBrushPressed" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="RepeatButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── ToggleButton (Product Polish M2b, krok 5.6) ──────────────────────────────────────────
+           ⭐ Stany ZAZNACZONE celowo NIE SĄ tu mapowane i to jest decyzja, nie luka: `SystemAccentColor`
+           jest w tej aplikacji nadpisany naszym akcentem (`Colors.axaml`), więc
+           `ToggleButtonBackgroundChecked` Fluenta rozwiązuje się do `#2D6BBF` sam z siebie. Wpis
+           powielałby wartość, którą już kontrolujemy — dokładnie ten sam powód, dla którego nie ma
+           tu `ControlCornerRadius`. Zbieżność pinuje test.
+           Wadliwe były wyłącznie stany NEUTRALNE — ta sama pół-przezroczysta biel co w `Button`. -->
+      <SolidColorBrush x:Key="ToggleButtonBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundPointerOver" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundPressed" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBackgroundDisabled" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushPointerOver" Color="{StaticResource AccentMutedColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushPressed" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="ToggleButtonBorderBrushDisabled" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundPressed" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ToggleButtonForegroundDisabled" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── Expander (Product Polish M2b, krok 5.7) ──────────────────────────────────────────────
+           Nagłówek jest pasmem klikalnym, więc bierze `Panel` — o stopień od dokumentu, tak jak
+           przycisk. Treść bierze tło DOKUMENTU: to, co rozwinięte, należy do czytanej zawartości,
+           a nie do chromy, która je otwiera.
+           ⚠ Chevron idzie na `SubtleForeground` — ta sama rola co strzałka `ComboBoxa` (krok 5.3)
+           i strzałki spinnera (krok 5.5): afordancja „to się rozwija", nie treść. -->
+      <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ExpanderHeaderForeground" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ExpanderContentBackground" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="{StaticResource BorderColor}" />
+      <SolidColorBrush x:Key="ExpanderChevronForeground" Color="{StaticResource SubtleForegroundColor}" />
+
+      <!-- ── ScrollBar (H‑10, Product Polish M2b krok 6) ──────────────────────────────────────────
+           ⚠ Fluent maluje uchwyt pół-przezroczystą bielą, a stan wciśnięcia niemal czystą
+           (`#33ffffff` → `#66ffffff` → `#99ffffff`) — w motywie JASNYM biały uchwyt na białym tle
+           jest praktycznie niewidoczny. To jest cała treść H‑10.
+
+           ⭐ `ScrollBarThumbBackgroundColor` jest KOLOREM, nie pędzlem, więc idzie ALIASEM (§16.3,
+           trasa trzecia) — nie da się w treści `<Color>` napisać odwołania, ale osobnym znacznikiem
+           już tak. Ten sam mechanizm, który krok 5.7 zmierzył dla metryki, działa dla barwy.
+
+           ⚠ TOR (`ScrollBarTrackFill`) bierze tło DOKUMENTU, nie chromy: pasek przewijania przylega
+           do treści, którą przewija, i ma się z nią zlewać. Widoczny ma być UCHWYT — on niesie
+           informację o pozycji — a nie rynna, w której się porusza.
+           ⚠ Strzałki na `SubtleForeground`, jak każda afordancja drugorzędna w tym etapie
+           (chevron `ComboBoxa`, strzałki spinnera, chevron `Expandera`). -->
+      <StaticResource x:Key="ScrollBarThumbBackgroundColor" ResourceKey="ScrollBarThumbColor" />
+      <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="{StaticResource ScrollBarThumbColor}" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="{StaticResource ScrollBarThumbHoverColor}" />
+      <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="{StaticResource ScrollBarThumbPressedColor}" />
+      <SolidColorBrush x:Key="ScrollBarTrackFill" Color="{StaticResource BackgroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarBackgroundPointerOver" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForeground" Color="{StaticResource SubtleForegroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPointerOver" Color="{StaticResource ForegroundColor}" />
+      <SolidColorBrush x:Key="ScrollBarButtonArrowForegroundPressed" Color="{StaticResource ForegroundColor}" />
+
+      <!-- ── DataGrid (§8.4 specyfikacji, Product Polish M2b krok 7) ─────────────────────────────
+           ⚠ Tylko siatka linii. Nagłówek i wiersz mają już settery stylu, więc wpis powielałby
+           wartość, którą już kontrolujemy (§16.3, wiersz czwarty).
+           Fluent daje tu pół-przezroczystą biel — w motywie jasnym linie siatki na białym tle
+           znikają, dokładnie ten sam defekt co uchwyt paska przewijania w kroku 6. -->
+      <SolidColorBrush x:Key="DataGridGridLinesBrush" Color="{StaticResource BorderColor}" />
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

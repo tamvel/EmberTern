@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Settings;
+using EmberTern.Core.Formatting;
 using EmberTern.Core.Settings;
 
 namespace EmberTern.App.ViewModels;
@@ -59,12 +60,18 @@ public abstract partial class SettingRowViewModel : ObservableObject
         Id = descriptor.Id;
         CategoryId = descriptor.CategoryId;
         Label = descriptor.Label;
-        Description = descriptor.Description;
+
+        // ⭐ Applied HERE, in the one place every row's description passes through, so it covers the texts that
+        // exist and the ones nobody has written yet — a description with a grouped number cannot wrap in the
+        // middle of it. See ProseNumbers: a space between two digits is a separator, never a word gap.
+        Description = ProseNumbers.KeepNumbersWhole(descriptor.Description);
 
         // Searching matches what is DISPLAYED plus the keywords that lead to it — and the category's own
         // title, so typing "general" keeps the whole page rather than emptying it.
+        // ⚠ Built from the RAW description on purpose: the displayed one carries non-breaking spaces, so a
+        // user typing "1 000 000" with ordinary spaces would stop matching a row that plainly contains it.
         Haystack = string.Join('\n',
-            Label, Description, categoryTitle, string.Join(' ', descriptor.Keywords));
+            Label, descriptor.Description, categoryTitle, string.Join(' ', descriptor.Keywords));
     }
 
     public string Id { get; }
@@ -140,7 +147,7 @@ public sealed partial class BooleanSettingViewModel : SettingRowViewModel
 /// <para>⭐ <b>This is the class §16.8 recorded as etap 6's debt: the blur-or-Enter commit path (design
 /// §5.5.1).</b> <see cref="EditText"/> follows every keystroke and commits <b>nothing</b>; the view calls
 /// <see cref="Commit"/> on lost focus and on Enter. The reason is not performance: every save does a full
-/// read + decrypt + deserialize of <c>settings.dat</c> before rewriting it, and <c>AtomicWrite</c> keeps exactly
+/// read + decrypt + deserialize of <c>settings.dat</c> before rewriting it, and <c>TryAtomicWrite</c> keeps exactly
 /// <b>one</b> generation of <c>settings.dat.bak</c> — so typing <c>5000</c> per-keystroke would roll the single
 /// hand-recovery backup through four generations at precisely the moment someone is editing settings.</para>
 ///
@@ -388,11 +395,16 @@ public sealed class SettingsCategoryViewModel
     {
         Id = descriptor.Id;
         Title = descriptor.Title;
+        IconKey = descriptor.IconKey;
     }
 
     public string Id { get; }
 
     public string Title { get; }
+
+    /// <summary>The category's icon as a geometry KEY — a string, never a <c>Geometry</c> or a brush
+    /// (architecture rule #1). Resolved in the view by <c>IconGeometryConverter</c>.</summary>
+    public string IconKey { get; }
 }
 
 /// <summary>
@@ -505,6 +517,7 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsGeneralPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsEditorPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsGridPageVisible))]
+    [NotifyPropertyChangedFor(nameof(IsTabsPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsDebuggerPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsFormatterPageVisible))]
     private SettingsCategoryViewModel? _selectedCategory;
@@ -543,6 +556,50 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     public NumericSettingViewModel DataPageSize => Number(SettingsCatalog.SettingDataPageSize);
 
     public BooleanSettingViewModel GridAutoFitColumns => Toggle(SettingsCatalog.SettingGridAutoFit);
+
+    public PreferenceSettingViewModel TabStripMode => Preference(SettingsCatalog.SettingTabStripMode);
+
+    public NumericSettingViewModel TabStripMaxRows => Number(SettingsCatalog.SettingTabStripMaxRows);
+
+    /// <summary>
+    /// Whether <see cref="TabStripMaxRows"/> is shown at all — it is not, in single-row layout.
+    ///
+    /// <para>⭐ <b>Ratified by the user (2026-08-03), and it OVERTURNS this etap's first decision.</b> M3.3b
+    /// deliberately kept the row visible, reasoning that the value survives a mode round trip so hiding it
+    /// might suggest the number had been lost. The user's rule is better and simpler: <i>the interface does
+    /// not show settings that do nothing in the current mode.</i> The value is still kept — it is the ROW that
+    /// disappears, not the number.</para>
+    ///
+    /// <para>⚠ It is an AND with the row's own <c>IsVisible</c>, which is the search filter's property. Two
+    /// independent reasons to hide one row, so neither may overwrite the other: writing the mode's answer
+    /// into <c>IsVisible</c> would make a search for "rows" resurrect a row that does not apply, or a mode
+    /// switch resurrect a row the filter had excluded.</para>
+    /// </summary>
+    public bool ShowTabStripMaxRows
+        => TabStripMaxRows.IsVisible
+           && string.Equals(
+               TabStripMode.Value,
+               PreferenceOptions.TabStripModeMultiRow,
+               StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether the Easy-mode card is shown at all — it is not, when the search excludes all four of its rows.
+    ///
+    /// <para>⭐ <b>This is presentation only, and deliberately so.</b> The four flags stay four independent
+    /// catalog rows with four independent ids, four haystacks and four stored values; nothing about
+    /// <see cref="SettingsCatalog"/> or the meaning of a category changes. What changes is that the view draws
+    /// ONE card around them, because they are one subject — "which mode does an object editor open in" — and
+    /// four equal cards said four subjects.</para>
+    ///
+    /// <para>⚠ It is an OR, and each checkbox keeps its OWN <c>IsVisible</c> inside the card. So searching
+    /// "procedure" shows the card with one row in it, not the card with four: the filter's meaning is
+    /// unchanged, only its container is. Same shape as <see cref="ShowTabStripMaxRows"/>.</para>
+    /// </summary>
+    public bool ShowEasyModeGroup
+        => ProcedureEasyMode.IsVisible
+           || ViewEasyMode.IsVisible
+           || TriggerEasyMode.IsVisible
+           || FunctionEasyMode.IsVisible;
 
     public PreferenceSettingViewModel DebuggerIsolation
         => Preference(SettingsCatalog.SettingDebuggerIsolation);
@@ -601,6 +658,10 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryGrid, StringComparison.Ordinal);
 
     /// <inheritdoc cref="IsGeneralPageVisible"/>
+    public bool IsTabsPageVisible
+        => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryTabs, StringComparison.Ordinal);
+
+    /// <inheritdoc cref="IsGeneralPageVisible"/>
     public bool IsDebuggerPageVisible
         => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryDebugger, StringComparison.Ordinal);
 
@@ -636,6 +697,13 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         SelectedCategory = visible.Contains(previous) ? previous : visible.FirstOrDefault();
 
         OnPropertyChanged(nameof(HasMatches));
+        // ⚠ Filtr jest DRUGIM powodem ukrycia wiersza „Maximum rows" (pierwszym jest tryb), więc obie strony
+        //   muszą ogłaszać zmianę — inaczej wpisanie frazy w wyszukiwarkę zostawiłoby wiersz w poprzednim
+        //   stanie widoczności.
+        OnPropertyChanged(nameof(ShowTabStripMaxRows));
+        // ⚠ Ten sam powód co wiersz wyżej: karta Easy-mode jest widoczna, dopóki filtr zostawia w niej
+        //   choć jeden wiersz, więc jej widoczność musi być ogłaszana przy każdej zmianie filtra.
+        OnPropertyChanged(nameof(ShowEasyModeGroup));
     }
 
     /// <summary>
@@ -649,6 +717,7 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     {
         SettingsCatalog.SettingTheme => preferences.Theme,
         SettingsCatalog.SettingLanguage => preferences.Language,
+        SettingsCatalog.SettingTabStripMode => preferences.TabStripMode,
         SettingsCatalog.SettingDebuggerIsolation => preferences.DebuggerIsolation,
         SettingsCatalog.SettingFormatterKeywordCase => preferences.FormatterKeywordCase,
         SettingsCatalog.SettingFormatterIdentifierCase => preferences.FormatterIdentifierCase,
@@ -678,6 +747,7 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         SettingsCatalog.SettingPreviewRowLimit => preferences.PreviewRowLimit,
         SettingsCatalog.SettingFullLoadPromptThreshold => preferences.FullLoadPromptThreshold,
         SettingsCatalog.SettingDataPageSize => preferences.DataPageSize,
+        SettingsCatalog.SettingTabStripMaxRows => preferences.TabStripMaxRows,
         _ => throw new ArgumentOutOfRangeException(nameof(settingId), settingId, "No such setting in the catalog."),
     };
 
@@ -708,6 +778,8 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         FullLoadPromptThreshold = FullLoadPromptThreshold.Value,
         DataPageSize = DataPageSize.Value,
         GridAutoFitColumns = GridAutoFitColumns.Value,
+        TabStripMode = TabStripMode.Value,
+        TabStripMaxRows = TabStripMaxRows.Value,
         DebuggerIsolation = DebuggerIsolation.Value,
         FormatterKeywordCase = FormatterKeywordCase.Value,
         FormatterIdentifierCase = FormatterIdentifierCase.Value,
@@ -715,6 +787,12 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
 
     private void Commit()
     {
+        // ⚠ Wołane po KAŻDEJ ustalonej wartości, więc jest jedynym miejscem, w którym trzeba ogłosić, że
+        //   zmiana trybu paska zakładek mogła ukryć albo pokazać wiersz „Maximum rows". Stoi tutaj, a nie
+        //   przy samym wierszu trybu, bo `Wire` jest JEDNYM punktem subskrypcji dla wszystkich rodzajów
+        //   wierszy — dopisanie tego przy jednym z nich byłoby drugą ścieżką powiadomień.
+        OnPropertyChanged(nameof(ShowTabStripMaxRows));
+
         var persisted = _preferences.Apply(Compose());
 
         ShowSaveRefusal = !persisted;

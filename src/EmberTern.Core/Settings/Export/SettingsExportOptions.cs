@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace EmberTern.Core.Settings.Export;
 
@@ -8,10 +8,11 @@ namespace EmberTern.Core.Settings.Export;
 /// table describes — the three sensitive or bulky sections off, everything portable on.
 ///
 /// <para>⭐ <b>What is missing from this type is as deliberate as what is on it.</b> There is no option for
-/// <c>ParameterHistory</c>, <c>DebugWatches</c>, <c>ConnectionProfile.ClientLibraryPath</c> or
-/// <c>WorkspaceState.WindowBounds</c>, because those are ❌ rather than opt-in: execution history keyed to
-/// connection ids, a local filesystem path meaningful only in Embedded mode, and monitor geometry that can place
-/// a window off-screen. Making them unrepresentable is stronger than documenting that nobody should ask.</para>
+/// <c>ParameterHistory</c>, <c>DebugWatches</c> or <c>WorkspaceState.WindowBounds</c>, because those are ❌
+/// rather than opt-in: execution history keyed to connection ids, and monitor geometry that can place a window
+/// off-screen. Making them unrepresentable is stronger than documenting that nobody should ask.
+/// ⚠ <c>ConnectionProfile.ClientLibraryPath</c> used to be listed here as a third ❌ row; the field itself was
+/// removed in 2026-08-05 (S-5) because it could have no effect at all, so there is nothing left to exclude.</para>
 /// </summary>
 public sealed record SettingsExportOptions
 {

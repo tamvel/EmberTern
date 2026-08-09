@@ -370,3 +370,399 @@ roboczej, a nie mechanizm metadanych.
 2. **Warstwa 3** — uzgodnić prefetch z `RefreshAsync` (martwa gałąź `LoadCountAsync`), kategoria `Domain`
    (79 ms, skan `RDB$FIELDS`), kategoria `User` (odpytuje bazę bezpieczeństwa).
 3. **Koszt startu** — zmierzyć na realnej bazie instrumentem z §6 i dopiero wtedy decydować.
+
+### 7.6. ⚠⚠ ŚCIEŻKA, KTÓREJ TEN DOKUMENT NIE ZMIERZYŁ — rozwinięcie KLIKNIĘCIEM (dopisane 2026-08-03)
+
+> Powód dopisania: użytkownik zgłosił rzadkie (2–3 razy przez cały okres używania) **zawieszenie
+> aplikacji przy rozwijaniu dużej kategorii**, poprzedzone tym, że **drzewo samo przewija się w dół**.
+> Pełny zapis zgłoszenia i plan sprawdzenia: `product-polish-m3-handover.md` **§3.7a**.
+
+⭐ **§2 tego dokumentu mierzył `OnChildrenChanged`** — czyli ścieżkę, którą idzie `SetLeaves` przy
+ŁADOWANIU i ODŚWIEŻANIU kategorii. To ona była Θ(N²) i to ją naprawiła Warstwa 1.
+
+⚠ **Istnieje druga ścieżka i nie została zmierzona:** `SidebarFlatController.OnExpandedChanged`, którą
+idzie **rozwinięcie kliknięciem** na kategorii **już załadowanej**. Ona również wstawia liście
+**pojedynczo**, a strażnik zbiorczy jej **nie obejmuje — pomija ją** (`if (_suspendDepth > 0) return;`),
+bo przy operacjach zbiorczych projekcję i tak domyka `EndUpdate → Rebuild`.
+
+**Szacowany koszt (do zweryfikowania pomiarem, nie przyjmować na wiarę):**
+
+| | `OnChildrenChanged` przed Warstwą 1 | `OnExpandedChanged` (dziś) |
+|---|---|---|
+| powiadomienia `CollectionChanged` | **Θ(N²)** — 5 760 000 przy N=2 400 | **Θ(N)** — po jednym na liść |
+| przesunięcia w `List<T>` | Θ(N²) | **Θ(N × ogon)** — każdy `Insert` przesuwa to, co stoi ZA kategorią |
+
+⭐ Czyli **wyraźnie taniej niż naprawiony defekt, ale nieporównanie drożej niż jedna `Rebuild`.**
+⛔ **Nie „naprawiać" tego przed pomiarem.** Może się okazać, że koszt jest pomijalny, a przyczyną
+zgłoszonego zawieszenia jest co innego — kotwiczenie przewijania w wirtualizującym `ListBox`ie albo
+`Dispatcher.Post` w `MetadataNodeViewModel.OnIsExpandedChanged`. **Instrument istnieje**
+(`tools/probes/MetadataPerfProbe`, schemat 2 400 tabel); brakuje przypadku „rozwiń kliknięciem".
+
+---
+
+## 8. ⭐⭐ POMIAR WYKONANY (M3.4a, 2026-08-04) — ścieżka „rozwiń kliknięciem" NIE jest mechanizmem zawieszenia
+
+> Sekcja 7 kończyła się zapisem: *„brakuje przypadku «rozwiń kliknięciem»"* i wprost zakazywała
+> naprawiania go przed pomiarem. Pomiar wykonano. **Zakaz okazał się słuszny — hipoteza upadła.**
+
+Przypadek **B4** dopisany do `tools/probes/MetadataPerfProbe` uruchamia **prawdziwy
+`SidebarFlatController`** i przełącza `IsExpanded` kategorii, której liście **już są w pamięci** (czyli
+ścieżka omijająca strażnika zbiorczego, bo `Children` się nie zmienia). Kolumna `ogon` to liczba wierszy
+stojących **pod** kategorią — każdy `Insert`/`RemoveAt` je przesuwa.
+
+| liście | ogon | expand | collapse | powiadomienia | jedna `Rebuild` (dla skali) |
+|---|---|---|---|---|---|
+| 2400 | 0 | **1,0 ms** | 1,1 ms | 2400 | 0,1 ms |
+| 2400 | 3000 | 1,3 ms | 1,5 ms | 2400 | 0,4 ms |
+| 2400 | 6000 | **2,3 ms** | 2,7 ms | 2400 | 0,6 ms |
+| 5000 | 6000 | 4,8 ms | 7,4 ms | 5000 | 1,3 ms |
+
+**Szacunek z sekcji 7 potwierdził się co do KSZTAŁTU** — Θ(N) powiadomień, Θ(N × ogon) przesunięć,
+widoczne w kolumnie `ogon`: 0 → 6000 podnosi koszt z 1,0 do 2,3 ms. **Ale stała jest tak mała, że całość
+mieści się w jednej klatce.** Dla porównania defekt naprawiony przez Warstwę 1, na tych samych 2 400
+liściach: **916,9 ms** (sekcja 2, przebieg powtórzony 2026-08-04 — liczba niezmieniona).
+
+### 8.1 ⛔ Decyzja: nie dokładamy tu strażnika
+
+Zysk 2 ms nie uzasadnia zmiany w mechanizmie, który działa. Zapis w sekcji 7 przewidywał ten wynik
+(*„może się okazać, że koszt jest pomijalny"*) i to jest **poprawny rezultat analizy**, nie jej brak.
+
+### 8.2 ⚠⚠ Zakres pomiaru — bez tego akapitu tabela wyżej wprowadza w błąd
+
+Sonda mierzy **warstwę modelu**: `ObservableCollection` i algorytm projekcji, **bez Avalonii**.
+W działającej aplikacji te **2 400 powiadomień `CollectionChanged`** trafia do **wirtualizującego
+`ListBox`a**, i **ta część pozostaje niezmierzona**.
+
+⭐ A zgłoszony objaw — *„drzewo samo zaczyna przewijać się w dół"* — jest zachowaniem **panelu**, nie
+kolekcji. Pomiar więc **przesunął granicę niewiedzy, nie zamknął tematu**:
+
+| Wykluczone | Nadal otwarte |
+|---|---|
+| koszt projekcji jako przyczyna zamarcia UI | kotwiczenie przewijania w wirtualizującym `ListBox`ie |
+| | re-estymacja ekstentu przez `VirtualizingStackPanel` przy N pojedynczych wstawieniach |
+| | `Dispatcher.Post` w `MetadataNodeViewModel.OnIsExpandedChanged` |
+
+### 8.3 ⭐ Następny krok jest zaplanowany i ma instrument
+
+**Zaakceptowany przez użytkownika jako osobny krok po M3.4a:** eksperyment headless z prawdziwym
+`ListBox`em i wirtualizacją, wymuszający rozwinięcie dużej kategorii. Jeżeli odtworzy zawieszenie
+**deterministycznie**, długoletni „felerny test" `ConnectionExpandBindingProbe` staje się **testem
+regresyjnym prawdziwego defektu**. Jeżeli nie odtworzy — hipoteza upada i **ten wynik też należy zapisać**.
+⚠ Ryzyko: klasa headless konstruująca `MainWindow` zawiesza suite (#94/#226/#286) — asercje na najtańszej
+kontrolce, dołączenie do `HeadlessCollection` **i do filtra partycji**.
+
+⭐ **Instrument na żywą aplikację istnieje i nie trzeba nic budować:** `App/Diagnostics/ScrollTrace.cs`
+(`EMBERTERN_SCROLL_DIAG=1`) rozróżnia *ekstent re-estymowany przez VSP* od *my przebudowaliśmy drzewo*.
+Napisano go dokładnie pod ten objaw.
+
+### 8.4 ⚠ Warstwy 2 i 3 pozostają otwarte, bez zmian
+
+Ten pomiar niczego w nich nie rozstrzyga. Warstwa 2 (pierwszorzędne „co się zmieniło" na wszystkich
+ścieżkach DDL + zachowanie przewijania i zaznaczenia), Warstwa 3 (higiena zapytań) i **niezmierzony koszt
+startu** czekają na własny etap wydajnościowy po M3. ⛔ M3.4 ich nie dotyka.
+
+---
+
+## 9. ⭐⭐ WARSTWA PANELU ZMIERZONA (krok 15b, 2026-08-04) — wirtualizacja też nie jest przyczyną
+
+> Sekcja 8 zamykała się zdaniem: *„wykluczone — koszt projekcji; nadal otwarte — kotwiczenie przewijania
+> i re-estymacja ekstentu przez VSP"*. **Ta sekcja zamyka tamten wiersz.**
+
+Nowa klasa `tests/EmberTern.Tests/MetadataTreeVirtualizationProbe.cs` wpina **prawdziwy
+`SidebarFlatController`** w **prawdziwy `ListBox` z `VirtualizingStackPanel`**, w oknie o skończonej
+wysokości (600 px = 25 wierszy `Size.Row.Tree`). ⛔ **Świadomie gołe `Window`, nigdy `MainWindow`** —
+patrz §9.2, to jest istota eksperymentu.
+
+| Scenariusz (2 400 liści + 3 000 rodzeństwa) | Czas z układem | Offset przed → po | Pierwszy zrealizowany |
+|---|---|---|---|
+| rozwinięcie przy górze listy | 52,9 ms | 0 → 0 | — |
+| rozwinięcie, kategoria **nad** viewportem | 42,8 ms | 1500 → **1500** | 50 → **50** |
+| **pełna re-projekcja** przy offsecie 40 000 px | 46,6 ms | 40000 → **40000** | 1333 → **1333** |
+| splice inkrementalny vs jedna re-projekcja | 56,5 vs 32,1 ms | — | — |
+
+**Zero zawieszeń. Pozycja przewijania nie ruszyła się sama ani razu** — także tam, gdzie 2 400 wierszy
+wchodzi NAD tym, na co użytkownik patrzy.
+
+### 9.1 ⭐ Wniosek dla Warstwy 1 i dla ewentualnego strażnika
+
+**Strażnik zbiorczy na ścieżce „rozwiń kliknięciem" nic by nie kupił.** Splice inkrementalny i pojedyncza
+re-projekcja są tego samego rzędu (dziesiątki ms, duża wariancja między przebiegami: 52,7 vs 50,8
+w jednym, 56,5 vs 32,1 w innym) — panel i tak realizuje kontenery od nowa, więc zamiana N wstawień na
+jeden `Reset` **nie jest oszczędnością**. ⭐ To potwierdza decyzję z M3.4a **od drugiej strony**: tam
+argumentem był koszt modelu (2,3 ms), tu — brak zysku po stronie panelu.
+
+### 9.2 ⭐⭐ Eksperyment rozdzielił dwie zmienne i to jest jego główny produkt
+
+| | Zmienna | Wynik |
+|---|---|---|
+| **A** | konstruowanie `MainWindow` w teście headless | ⚠ **jedyny stojący podejrzany** o zawieszanie suity (zgodny z pomiarem `BrandingPresentationTests`: zawieszenie z `MainWindow`, 476 ms na gołym `new Window()`) — **nieudowodniony** |
+| **B** | inkrementalny splice do wirtualizującej listy | ⛔ **wykluczony w izolacji** |
+
+⚠⚠ `ConnectionExpandBindingProbe` — klasa uruchamiana osobno, bo się zawiesza — **buduje `MainWindow`
+w wielu testach**, więc obie zmienne siedzą w niej naraz i żadnej nie da się z niej odczytać. Dlatego
+eksperyment **musiał** być osobną klasą; dopisanie go tam skleiłoby z powrotem to, co rozdziela.
+
+⭐ **Odpowiedź na pytanie „czy stary bug drzewa dzieli mechanizm z felernym testem": NIE — i to jest
+wynik, nie jego brak.** ⛔ Zawieszanie suity zostaje **osobnym zadaniem infrastrukturalnym**.
+
+### 9.3 ⚠ ROZBIEŻNOŚĆ Z §7 — odnotowana, świadomie nierozstrzygnięta
+
+§7 opisuje kompromis Warstwy 1 jako *„lista przewija się na górę"*. **Pomiar tego nie potwierdza:**
+`Rebuild` przy offsecie 40 000 px zostawia offset i pierwszy zrealizowany wiersz bez zmian.
+
+Możliwe wyjaśnienia, **żadne nierozstrzygnięte**: (a) przewinięcie na górę bierze się z innego elementu tej
+ścieżki niż sama re-projekcja (ponowne nałożenie filtra, zmiana zaznaczenia, przeniesienie fokusu);
+(b) dotyczy `ApplyFilterAsync`, nie `EndUpdate`; (c) zapis w §7 był wnioskiem, nie pomiarem.
+⛔ **Nie poprawiam §7 na podstawie domysłu** — mój pomiar dotyczy `Rebuild` w gołym oknie i użycie go
+jako odpowiedzi na pytanie o produkt byłoby wyjściem poza jego zakres.
+
+### 9.4 Co pozostaje otwarte
+
+⛔ Warstwa 2 i Warstwa 3 oraz **niezmierzony koszt startu** — bez zmian, czekają na własny etap
+wydajnościowy po M3. ⚠ Rozbieżność z §9.3 warto rozstrzygnąć **przy okazji Warstwy 2**, bo to dokładnie
+jej przedmiot (zachowanie przewijania i zaznaczenia przy zmianie zawartości drzewa).
+
+---
+
+## 10. ⭐⭐ INSTRUMENT NA ŻYWY PRZEBIEG (2026-08-04) — `EMBERTERN_TREE_DIAG`
+
+> Sekcje 8 i 9 wykluczyły dwie hipotezy **pomiarami syntetycznymi**. Użytkownik odtworzył defekt u siebie
+> i zgłosił obserwację, która ustawia całą konstrukcję tego instrumentu.
+
+### 10.1 Zgłoszenie i obserwacja rozstrzygająca kierunek
+
+Scenariusz: rozwinięcie **kilku dużych kategorii** (łącznie kilkanaście tysięcy pozycji) → lista **sama
+zaczyna przewijać się w dół** → nie da się tego zatrzymać → kliknięcie w dowolne miejsce **zawiesza
+i zamyka proces**.
+
+⚠⚠ **Kluczowe: z EXE proces GINIE, spod Visual Studio przewija się do pewnego miejsca, ZATRZYMUJE się
+i aplikacja działa dalej.** Różnica „jest debugger / nie ma debuggera" wskazuje na **wyjątek**, nie na
+koszt: pod debuggerem wyjątek w callbacku Dispatchera bywa przechwycony, a bez niego kończy proces.
+⭐ Dlatego pytanie o wyjątki jest w tym instrumencie równorzędne z pytaniami o przewijanie, a nie dodatkiem.
+
+### 10.2 Pięć pytań, na które log ma odpowiedzieć (zadane przez użytkownika)
+
+| # | Pytanie | Kategoria w logu | Jak jest realizowane |
+|---|---|---|---|
+| 1 | Czy zmienia się offset, **kto** go zmienia i **z jakiego miejsca** | `SCROLL` | `Offset`/`Extent` obserwowane **dwiema drogami** + **zrzut stosu** przy zmianie offsetu |
+| 2 | Czy pojawiają się zdarzenia tworzące pętlę | `EVENT` | `ScrollChanged`, `SelectionChanged`, **`RequestBringIntoView`** (tunel + bąbel), `EffectiveViewportChanged` |
+| 3 | Czy podczas przewijania dochodzi do przebudów listy | `COLL`, `REBUILD` | `CollectionChanged` wierszy + trzy istniejące punkty „przebudowa" |
+| 4 | Czy Dispatcher kręci cyklicznie ten sam callback | `SCOPE`, `POST`, `DEPTH` | **głębokość zagnieżdżenia** naszych zakresów, licznik postów po nazwie, heartbeat 500 ms, **głębokość stosu** |
+| 5 | Czy leci nieobsłużony wyjątek | `EXC` | **`FirstChanceException`** + `UnhandledException` + `UnobservedTaskException` |
+
+### 10.3 ⭐ Decyzje konstrukcyjne, każda z powodem
+
+* **Własna flaga `EMBERTERN_TREE_DIAG` i własny plik** `%TEMP%\EmberTern-tree-diag-<pid>-<stamp>.log`.
+  ⚠ Nie wspólny `EmberTern-debug.log`: burza produkuje dziesiątki tysięcy linii i wymieszana z logiem
+  połączeń czyni oba bezużytecznymi. Plik na przebieg, więc dwa uruchomienia się nie nakładają.
+* **`AutoFlush = true`.** ⚠ To jeden syscall na linię i **realny efekt obserwatora** — przyjęty świadomie:
+  ⭐ **ostatnie linie przed śmiercią procesu są całym sensem tego pliku**, a bufor nigdy by ich nie oddał.
+* **Zrzuty stosu są BUDŻETOWANE** — pierwsze 25 zawsze, potem co najwyżej raz na 250 ms, zawsze podczas
+  burzy. ⚠ Bez budżetu log tonie we własnym szumie i zmienia timing tego, co mierzy.
+* **Wykrywacz burzy** (>200 zdarzeń / 100 ms) przełącza log w tryb eskalacji i sam się wyłącza, gdy
+  ruch opadnie. To on decyduje, kiedy warto płacić za stos.
+* ⛔ **Ani jednej linii diagnostyki w ViewModelach ani w `SidebarFlatControllerze`.** Wszystko przez
+  subskrypcje z zewnątrz, w jednym miejscu w code-behind. ⭐ Instrument ma **obserwować** mechanizm,
+  a nie stać się jego częścią. Wyjątkiem są trzy istniejące wywołania `ScrollTrace.Rebuild` — te
+  **przekierowano**, zamiast dopisywać obok drugi zestaw wywołań tego samego faktu.
+* ⭐⭐ **SAMOTEST KANAŁU WYJĄTKÓW.** Na starcie instrument rzuca i łapie nieszkodliwy wyjątek, żeby w logu
+  stanął dowód, że hak żyje. ⚠⚠ Bez tego **brak wpisów `EXC` na końcu logu jest nierozstrzygalny**:
+  znaczyłby albo „żaden wyjątek nie poleciał", albo „hak nie działa" — a to są **przeciwne wnioski
+  prowadzące do przeciwnych poszukiwań**. Pomiar negatywny jest tym niebezpiecznym (#285).
+* **Twardy limit 400 000 linii** z jawnym znacznikiem ucięcia — instrument nie ma prawa zapełnić dysku.
+
+### 10.4 Jak odtworzyć i co przysłać
+
+```
+set EMBERTERN_TREE_DIAG=1
+EmberTern.exe
+```
+
+Następnie: połączyć się z dużą bazą, rozwinąć kilka dużych kategorii, doprowadzić do objawu.
+Plik: `%TEMP%\EmberTern-tree-diag-<pid>-<stamp>.log` (ścieżka jest też w `TreeDiagnostics.LogPath`).
+⭐ **Wartościowy jest przebieg z EXE** (proces ginie) — i osobno, jeśli się da, ten sam scenariusz spod
+Visual Studio, bo **różnica między tymi dwoma logami jest samą hipotezą**.
+
+### 10.5 Czego szukać w logu
+
+* `SCROLL` z rosnącym offsetem **bez** poprzedzającego gestu użytkownika → przewijanie samoczynne;
+* **ten sam stos powtarzający się cyklicznie** → pętla, a jej sprawcą jest szczyt tego stosu;
+* `SCOPE ... depth>1` → **reentrancy**;
+* `DEPTH ramek=` rosnące monotonicznie → rekurencja; jej końcem jest `StackOverflowException`, którego
+  **nie da się przechwycić** i który tłumaczyłby natychmiastową śmierć EXE;
+* `EXC FIRST-CHANCE` tuż przed końcem logu → najpewniejszy kandydat na przyczynę.
+
+⛔ **Instrument niczego nie naprawia i nie zmienia zachowania aplikacji.** Bez flagi nie robi nic:
+żadnego pliku, żadnych subskrypcji, zero kosztu.
+
+### 10.6 ⛔⛔ PIERWSZE URUCHOMIENIE INSTRUMENTU ZABIŁO APLIKACJĘ — i to jest najważniejszy wpis tej sekcji
+
+`TreeDiagnostics.Scroll` składał wiersz przez `string.Format` z wyrównaniem **`{4,+8:0.0}`**. Wyrównanie
+w formacie złożonym przyjmuje **wyłącznie liczbę całkowitą**, więc `+` jest błędem składni; `FormatException`
+poleciał w górę przez handler `PropertyChanged` ScrollViewera prosto do Avalonii i **zakończył proces przy
+pierwszym rozwinięciu kategorii**. Build był zielony i **pozostałby zielony**, bo format złożony to
+mini-język parsowany dopiero w czasie wykonania.
+
+⭐ Użytkownik zdiagnozował to ze stosu w `EmberTern-debug.log`: *„Failure to parse near offset 77. Expected
+an ASCII digit"* — offset 77 to dokładnie ten `+`.
+
+⭐⭐ **Najgorsze jest to, CO ta awaria zniszczyła: narzędzie mające złapać cudzy defekt SAMO stało się
+defektem**, a log użytkownika opisywał wyłącznie błąd instrumentacji. Dlatego naprawa nie jest poprawką
+jednego znaku:
+
+1. **Zero formatów złożonych w klasie.** Wiersz powstaje ze składników sformatowanych osobno przez
+   `ToString(...)` i sklejonych — taki kod **nie ma czego sparsować**, więc nie ma jak rzucić.
+2. **Jedna brama `Safe`** na każdym wejściu publicznym: łapie `Exception`, **pomija wpis** i pracuje dalej
+   (wymaganie użytkownika postawione wprost). ⚠ Porzucone wpisy są **liczone i raportowane na wyjściu** —
+   cicha strata byłaby gorsza od braku instrumentu.
+3. **Strażnik reentrancji `[ThreadStatic]`** — bez niego wyjątek rzucony wewnątrz logowania trafia w hak
+   `FirstChanceException`, ten loguje, znowu rzuca, i instrument zapętla sam siebie.
+
+⭐ **Strażnik napisany przeciw PRZYCZYNIE znalazł drugie wystąpienie tej samej rodziny przy pierwszym
+uruchomieniu** — `$"{DateTime.Now:yyyy-MM-dd…}"` w nagłówku. `TreeDiagnosticsFormattingTests` karmi czyste
+funkcje formatujące wrogim wejściem (`NaN`, nieskończoności, `int.MinValue`, `null`, tekst z `{`, `}`,
+`{4,+8:0.0}`) **oraz skanuje źródło**, żeby klasa nie mogła wrócić do formatu parsowanego w czasie wykonania.
+
+⚠ **Reguła szersza niż ten plik: narzędzie, którego jedynym zadaniem jest NIE wywalić aplikacji, nie może
+używać mini-języka wykonywanego dopiero w produkcji.**
+
+⭐ Zweryfikowane po naprawie na działającej aplikacji: proces żyje, `EXC FIRST-CHANCE` samotestu obecny,
+numeracja ciągła, **0 wpisów porzuconych przez błąd instrumentu**.
+
+---
+
+## 11. 🐞 PRZYCZYNA ZNALEZIONA I NAPRAWIONA (2026-08-04) — `AutoScrollToSelectedItem`
+
+> Sekcja 10 dostarczyła instrument. Użytkownik odtworzył defekt i przysłał log. **Ta sekcja jest
+> odpowiedzią, po dwóch latach istnienia objawu.**
+
+### 11.1 Mechanizm — z dokładnymi znacznikami czasu z logu
+
+| t (ms) | Zdarzenie |
+|---|---|
+| 122 502 | `SelectionChanged added=1 removed=1` — **użytkownik kliknął wiersz** |
+| 123 041 | **ostatni `heartbeat`** |
+| 123 422 | koniec `ChevronClick` — kategoria rozwinięta, wstawienia na indeksach 1231…1234, lista urosła do **13 217 wierszy** (`extentH = 317 208 = 13 217 × 24`) |
+| 123 499 → 133 077 | offset **26 → 50 → 74 → … → 2 210**, zawsze **+24,0 px**, co ~98 ms, bez końca |
+
+**Pętla, identyczna w każdym z 93 zrzutów stosu:**
+
+```
+SelectingItemsControl.AutoScrollToSelectedItemIfNecessary   (odłożone na Dispatcher)
+  → ItemsControl.ScrollIntoView(index)
+    → ItemsPresenter.ScrollIntoView → VirtualizingStackPanel.ScrollIntoView
+      → ControlExtensions.BringIntoView → RaiseEvent(RequestBringIntoView)
+        → ScrollContentPresenter.BringDescendantIntoView → SetCurrentValue(Offset)  [+24 px]
+```
+
+⭐⭐ **Dlaczego dokładnie jeden wiersz i dlaczego bez końca.** Zaznaczony wiersz leży tysiące pozycji poza
+oknem realizacji (widocznych ~39 z 13 217). `VirtualizingStackPanel.ScrollIntoView(index)` **nie potrafi
+skoczyć** do nierealizowanego indeksu — zna geometrię wyłącznie zrealizowanych elementów. Przewija więc
+o jeden wiersz, realizuje następny, znów podnosi `RequestBringIntoView` i **pełznie do celu po jednym
+wierszu na cykl Dispatchera**. Przy 10,5 wiersza/s dotarcie do wiersza ~6 000 to ~9 minut.
+
+⭐⭐ **Dlaczego „nie da się tego zatrzymać" — to jest ZMIERZONE, nie wydedukowane: `heartbeat` UMIERA
+w chwili startu pętli i już nie wraca.** Bije na `DispatcherPriority.Background`; pętla zapycha kolejkę
+i zagładza priorytet tła, więc kliknięcia i kółko myszy trafiają do kolejki, która nie ma kiedy ich obsłużyć.
+
+### 11.2 ⭐ Co log WYKLUCZYŁ — i dlaczego to było równie ważne
+
+| Hipoteza | Werdykt z logu |
+|---|---|
+| wyjątek kończący proces | ⛔ **zero wyjątków** w całym przebiegu; jedyna linia `EXC` to samotest instrumentu |
+| reentrancy | ⛔ `ChevronClick` **nigdy** nie osiąga `depth>1` |
+| pętla zaznaczenia (`SelectionChanged` ↔ `BringIntoView`) | ⛔ **trzy** `SelectionChanged` w całym 133-sekundowym logu, **żaden w trakcie pętli** |
+| kwadratowy splice przy rozwijaniu | ⛔ rozwinięcia są **liniowe**: 218 liści → 220 wpisów, 8 178 → 8 180 |
+| nasz kod ustawia zaznaczenie lub woła `ScrollIntoView` | ⛔ jedyne nasze `ScrollIntoView` (`OnRevealSidebarRow`) **nie występuje w żadnym stosie tej pętli** |
+
+⭐ **Cisza w kategorii `EXC` była rozstrzygalna wyłącznie dzięki samotestowi kanału wyjątków** (§10.3):
+bez niego znaczyłaby albo „nic nie poleciało", albo „hak nie działa".
+
+### 11.3 ⚠⚠ DLACZEGO DWA WCZEŚNIEJSZE POMIARY TEGO NIE ZOBACZYŁY
+
+Ani sonda z M3.4a (§8), ani eksperyment headless z kroku 15b (§9) **nie miały nic zaznaczonego**.
+`AutoScrollToSelectedItem` nie miał czego gonić. **Zmienna decydująca o całym zjawisku nie występowała
+w żadnym eksperymencie** — i żaden z nich nie był przez to błędny, tylko ślepy na ten warunek.
+
+⭐ **Lekcja szersza niż ten defekt: pomiar syntetyczny odtwarza mechanizm, ale nie odtwarza STANU.**
+Obie sonde wiernie modelowały wstawianie wierszy do wirtualizowanej listy i obie poprawnie odpowiedziały
+na postawione im pytanie. Pytanie było niepełne, bo nie zawierało zaznaczenia — rzeczy, o której nikt nie
+pomyślał, dopóki nie zobaczył stosu z żywego przebiegu.
+⚠ Praktycznie: zanim uznasz, że pomiar syntetyczny wyklucza hipotezę, **wypisz stany, w których defekt
+występuje u użytkownika, i sprawdź, które z nich twój eksperyment odtwarza.**
+
+### 11.4 Naprawa — jedna właściwość, świadomie bez żadnych warunków
+
+`AutoScrollToSelectedItem="False"` **wyłącznie na `SidebarList`** (`MainWindow.axaml`).
+
+⭐ **To jest naprawa przyczyny, nie obejście objawu, i to z dwóch powodów:** (a) usuwa mechanizm, który
+w logu widać jako sprawcę — przewijanie jest SKUTKIEM ciągłych `BringIntoView`, nie ich przyczyną;
+(b) ta lista ma **własne, świadome** „pokaż mi ten obiekt" (`OnRevealSidebarRow` → jawne `ScrollIntoView`),
+więc drugi, automatyczny mechanizm próbujący tego samego jest tu zbędny.
+
+⛔ **Świadomie NIE zrobione** (decyzja użytkownika): żadnych warunków typu „przewijaj, jeżeli cel jest
+blisko viewportu", żadnego własnego algorytmu przewijania, żadnej zmiany poza tą jedną właściwością.
+
+⛔ **Strażnik `SidebarList_DisablesAvaloniaAutoScrollToSelectedItem`** — bo ta właściwość wygląda dokładnie
+jak coś, co ktoś kiedyś „posprząta": jest domyślnie `true`, jej usunięcie **nie psuje żadnego innego testu**,
+nie rusza wyglądu i nie zmienia niczego w codziennej pracy. Defekt wraca dopiero u użytkownika z bardzo
+dużą bazą. Zweryfikowany podłożeniem naruszenia.
+
+### 11.5 ⏸ Do sprawdzenia w QA — jedyna otwarta pozycja
+
+Nawigacja klawiaturą po drzewie: **strzałki góra/dół, PageUp/PageDown, Home/End** — czy nadal utrzymują
+zaznaczony element w widoku.
+
+⛔ **Gdyby nie utrzymywały, odpowiedzią jest rozwiązanie DLA NAWIGACJI KLAWIATURĄ, a nie powrót globalnego
+auto-scrolla** (ratyfikowane przez użytkownika, 2026-08-04).
+
+### 11.6 ✅ POTWIERDZONE NA ŻYWYM PRZEBIEGU PO NAPRAWIE (2026-08-04)
+
+Ten sam scenariusz, log `EmberTern-tree-diag-9224-20260804-101317.log`:
+
+| Sygnatura pętli | Przed naprawą | Po naprawie |
+|---|---|---|
+| `AutoScrollToSelectedItemIfNecessary` w stosach | **93** | **0** |
+| `dOffset=+24.0` (krok jednego wiersza) | **93** | **0** |
+| `heartbeat` (`DispatcherPriority.Background`) | **umiera** o t=123 041 i nie wraca | **żyje do końca** (t=112 408) |
+| `SelectionChanged` | 3 | **19** |
+| rozmiar drzewa | 13 217 wierszy | **15 980** |
+
+⭐⭐ **To jest silniejszy dowód niż zwykłe „nie powtórzyło się": drzewo było WIĘKSZE, a zaznaczeń
+SZEŚĆ RAZY WIĘCEJ** — czyli warunek wyzwalający występował częściej niż w przebiegu, który defekt
+pokazał. Ostatnie wpisy `SCROLL` mają `offsetY=0.0` przy rosnącym ekstencie: lista stoi na górze,
+kategorie się rozwijają, nic nie ucieka.
+⚠ `RequestBringIntoView` nadal występuje **84 razy** i to jest poprawne — normalne przewijanie do
+elementu przy interakcji użytkownika. Zniknął **mechanizm automatyczny**, nie zdarzenie.
+
+---
+
+## 12. ⏸ HIPOTEZA DO OBSERWACJI — czy to była też przyczyna zawieszającego się testu?
+
+> ⚠⚠ **To jest HIPOTEZA, nie fakt.** Zapisana na wyraźną prośbę użytkownika i **świadomie nie
+> podniesiona do rangi ustalenia**, bo twardego dowodu nie ma.
+
+`ConnectionExpandBindingProbe` zawiesza się sporadycznie od dawna (#94/#226/#261) i jest z tego powodu
+uruchamiany **osobno**. Przesłanka: **test wykonuje operacje na drzewie w prawdziwym `MainWindow`**,
+a jeżeli w którymś momencie miał zaznaczony wiersz, mógł nieświadomie uruchomić dokładnie ten sam
+mechanizm `AutoScrollToSelectedItem` — czyli wpaść w pętlę, która **zagładza priorytet tła**, co w teście
+headless objawia się jako **zawieszenie przebiegu**, a nie jako nieudana asercja.
+
+⭐ **To pasuje do wcześniejszej, zmierzonej obserwacji lepiej niż cokolwiek dotąd:** przy zawieszeniu
+całej suity raportowana jest nazwa **ostatniego testu headless**, a podejrzanym był „teardown sesji /
+zamykanie pętli dispatchera". Zagłodzony Dispatcher **wygląda dokładnie tak samo**.
+
+⚠ **Co przemawia PRZECIW, i trzeba to trzymać razem:** krok 15b wykluczył splice jako mechanizm
+w izolacji, a zawieszenia suity zdarzały się także w przebiegach, o których nie wiadomo, czy dotykały
+drzewa z zaznaczeniem.
+
+### 12.1 Jak to rozstrzygnąć — obserwacją, nie eksperymentem
+
+⭐ **Kryterium jest proste i nie wymaga żadnej nowej infrastruktury: jeżeli od 2026-08-04
+`ConnectionExpandBindingProbe` PRZESTANIE się sporadycznie zawieszać, będzie to bardzo mocna przesłanka,
+że oba problemy miały wspólną przyczynę.**
+
+⛔ Nie wolno tego uznać za rozstrzygnięte na podstawie kilku zielonych przebiegów — zawieszenie było
+rzadkie z definicji. **Obserwować przez dłuższy czas i zapisać wynik w OBIE strony.**
+⚠ Do tego czasu **procedura się nie zmienia**: probe nadal biegnie w osobnej partycji, a instrukcja
+użytkownika z 2026-08-01 pozostaje w mocy.

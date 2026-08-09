@@ -29,7 +29,7 @@ namespace EmberTern.App.ViewModels;
 /// the shared <see cref="SqlFormatter"/>), not via inheritance. A package is treated
 /// as a single logical object: ONE Compile that runs the header first, then the body.
 /// </summary>
-public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
+public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IDependencyNavigator
 {
     // Sub-tab indices — must match the TabItem order in PackageDetailTabView.axaml.
     // (Diagnostics is appended LAST so these indices, which are also persisted per tab, never shift.)

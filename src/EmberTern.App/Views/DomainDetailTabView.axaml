@@ -33,51 +33,51 @@
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainNameHeader}" />
             <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
                      Text="{Binding EditableName, Mode=TwoWay}"
-                     FontSize="12" HorizontalAlignment="Left" Width="280" />
+ HorizontalAlignment="Left" Width="280" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainDataTypeHeader}" />
             <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                       ItemsSource="{x:Static vm:DomainDetailTabViewModel.AvailableDataTypes}"
                       SelectedItem="{Binding DataType, Mode=TwoWay}"
-                      IsEnabled="{Binding IsTypeEditable}" FontSize="12" />
+                      IsEnabled="{Binding IsTypeEditable}" />
 
             <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainLengthHeader}" />
             <NumericUpDown Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                            Value="{Binding Length, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
-                           Minimum="0" Maximum="32767" Increment="1" FormatString="0" FontSize="12" />
+                           Minimum="0" Maximum="32767" Increment="1" FormatString="0" />
 
             <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainPrecisionHeader}" />
             <NumericUpDown Grid.Row="3" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                            Value="{Binding Precision, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
-                           Minimum="0" Maximum="38" Increment="1" FormatString="0" FontSize="12" />
+                           Minimum="0" Maximum="38" Increment="1" FormatString="0" />
 
             <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainScaleHeader}" />
             <NumericUpDown Grid.Row="4" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                            Value="{Binding Scale, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
-                           Minimum="0" Maximum="38" Increment="1" FormatString="0" FontSize="12" />
+                           Minimum="0" Maximum="38" Increment="1" FormatString="0" />
 
             <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainSubTypeHeader}" />
             <NumericUpDown Grid.Row="5" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                            Value="{Binding SubType, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
-                           Minimum="0" Maximum="32767" Increment="1" FormatString="0" FontSize="12" />
+                           Minimum="0" Maximum="32767" Increment="1" FormatString="0" />
 
             <TextBlock Grid.Row="6" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainCharacterSetHeader}" />
             <ComboBox Grid.Row="6" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                       ItemsSource="{x:Static vm:DomainDetailTabViewModel.AvailableCharsets}"
                       SelectedItem="{Binding CharacterSet, Mode=TwoWay}"
-                      IsEnabled="{Binding IsCharsetEditable}" FontSize="12" />
+                      IsEnabled="{Binding IsCharsetEditable}" />
 
             <TextBlock Grid.Row="7" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                        Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainCollationHeader}" />
             <TextBox Grid.Row="7" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                      Text="{Binding Collation, Mode=TwoWay}"
-                     IsReadOnly="{Binding !IsCollationEditable}" FontSize="12" />
+                     IsReadOnly="{Binding !IsCollationEditable}" />
 
             <CheckBox Grid.Row="8" Grid.Column="1" Margin="0,0,0,8"
                       IsChecked="{Binding NotNull, Mode=TwoWay}"
@@ -86,9 +86,9 @@
             <!-- Default + Check are editable on both new and existing domains -->
             <StackPanel Grid.Row="9" Grid.Column="1" Orientation="Vertical" Spacing="8" Margin="0,4,0,0">
               <TextBlock Classes="field-label" Text="{x:Static app:UiStrings.DomainDefaultHeader}" />
-              <TextBox Text="{Binding DefaultValue, Mode=TwoWay}" FontSize="12" Width="280" HorizontalAlignment="Left" />
+              <TextBox Text="{Binding DefaultValue, Mode=TwoWay}" Width="280" HorizontalAlignment="Left" />
               <TextBlock Classes="field-label" Text="{x:Static app:UiStrings.DomainCheckHeader}" />
-              <TextBox Text="{Binding CheckConstraint, Mode=TwoWay}" FontSize="12"
+              <TextBox Text="{Binding CheckConstraint, Mode=TwoWay}"
                        AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60"
                        Background="{DynamicResource BackgroundBrush}" />
             </StackPanel>
@@ -101,7 +101,7 @@
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DomainDetailTabDescription}">
         <Grid Margin="12">
           <TextBox Text="{Binding EditableDescription, Mode=TwoWay}"
-                   AcceptsReturn="True" TextWrapping="Wrap" FontSize="12"
+                   AcceptsReturn="True" TextWrapping="Wrap"
                    VerticalAlignment="Stretch"
                    Background="{DynamicResource BackgroundBrush}" />
         </Grid>
@@ -112,47 +112,7 @@
            grouped by object type. Reuses BuildDependencyTree + the dep-tree
            templates; double-click navigates via the shared OpenObjectRequested. -->
       <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DomainDetailTabUsedBy}">
-        <TreeView ItemsSource="{Binding UsedByTree}"
-                  Background="{DynamicResource BackgroundBrush}">
-          <TreeView.DataTemplates>
-            <TreeDataTemplate DataType="vm:DependencyGroupNode" ItemsSource="{Binding Children}">
-              <StackPanel Orientation="Horizontal" Spacing="5">
-                <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                  Width="15" Height="15" VerticalAlignment="Center">
-                  <controls:SvgIcon.Foreground>
-                    <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                      <Binding Path="IconResourceKey" />
-                      <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                    </MultiBinding>
-                  </controls:SvgIcon.Foreground>
-                </controls:SvgIcon>
-                <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
-              </StackPanel>
-            </TreeDataTemplate>
-            <DataTemplate DataType="vm:DependencyLeafNode">
-              <Border HorizontalAlignment="Stretch" Background="Transparent"
-                      DoubleTapped="OnDependencyNodeDoubleTapped">
-                <StackPanel Orientation="Horizontal" Spacing="5">
-                  <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                    Width="15" Height="15" VerticalAlignment="Center">
-                    <controls:SvgIcon.Foreground>
-                      <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                        <Binding Path="IconResourceKey" />
-                        <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                      </MultiBinding>
-                    </controls:SvgIcon.Foreground>
-                  </controls:SvgIcon>
-                  <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding FieldName}"
-                             FontSize="10"
-                             Foreground="{DynamicResource SubtleForegroundBrush}"
-                             VerticalAlignment="Center"
-                             IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                </StackPanel>
-              </Border>
-            </DataTemplate>
-          </TreeView.DataTemplates>
-        </TreeView>
+        <controls:DependencyTreeView ItemsSource="{Binding UsedByTree}" />
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE DOMAIN. -->
@@ -161,7 +121,7 @@
                        ShowLineNumbers="True"
                        IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto"
                        VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
@@ -174,7 +134,7 @@
       <TextBlock Text="{x:Static app:UiStrings.DomainLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  IsVisible="{Binding IsLoading}" />
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->

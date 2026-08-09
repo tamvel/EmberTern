@@ -113,7 +113,7 @@ public static class DiagnosticsEngine
                     break;
 
                 case ReferenceRole.Column when hasMetadata:
-                    AddColumnDiagnostic(previous, r, results);
+                    AddColumnDiagnostic(previous, r, model.Metadata, results);
                     break;
 
                 case ReferenceRole.Variable when IsInRoutineBody(model, r.Span.Start):
@@ -153,17 +153,18 @@ public static class DiagnosticsEngine
     //       – table unknown   ⇒ silence (the column can't be checked; no cascade)
     //   • BARE: no preceding qualifier — the binder records a bare unresolved Column ONLY when the name
     //     matched a column on ≥2 in-scope tables (ambiguous) ⇒ AmbiguousColumn.
-    private static void AddColumnDiagnostic(SymbolReference? previous, SymbolReference column, List<Diagnostic> results)
+    private static void AddColumnDiagnostic(
+        SymbolReference? previous, SymbolReference column, ISqlMetadataProvider metadata, List<Diagnostic> results)
     {
         if (IsQualifiedColumnReference(previous, column))
         {
-            if (QualifierResolvesTable(previous!))
+            if (QualifierResolvesTable(previous!) && ColumnsAreKnown(previous!, metadata))
             {
                 results.Add(new Diagnostic(
                     column.Span.Start, column.Span.Length, DiagnosticSeverity.Warning,
                     $"Unknown column '{column.Text}'.", CodeUnknownColumn, DiagnosticCategory.UnknownColumn));
             }
-            // else: qualified on an unknown table — stay silent.
+            // else: qualified on an unknown table, or on one whose columns are not loaded yet — stay silent.
             return;
         }
 
@@ -195,6 +196,36 @@ public static class DiagnosticsEngine
         TableReferenceSymbol { Target: not null } => true,
         RecordAliasSymbol { TargetTable: not null } => true,
         _ => false,
+    };
+
+    /// <summary>
+    /// Whether the snapshot has actually LOADED the qualifier's column set — the second half of
+    /// <see cref="QualifierResolvesTable"/>, and a distinct question from it.
+    /// <para>
+    /// ⭐⭐ "The table resolved" and "I know its columns" are two facts, and columns are loaded LAZILY. At the
+    /// moment a tab opens, the snapshot typically knows every object and none of their columns, so an absent
+    /// column meant nothing at all — yet every qualified column was reported unknown, clearing only once the
+    /// warm pass finished and the model was rebuilt. That is the reported "for a moment practically
+    /// everything is underlined, then the errors disappear" (S-2, 2026-08-05).
+    /// </para>
+    /// <para>
+    /// ⚠ This is not a workaround for a race — it is the conservatism rule applied to an input that is
+    /// explicitly incomplete. The engine already refuses to flag a column on an unknown TABLE and a column
+    /// on an incompletely-enumerated CTE, for exactly the same reason: never verify against something you
+    /// could not read.
+    /// </para>
+    /// <para>
+    /// ⚠ A CTE is exempt: its columns come from its own projection in the text, not from the catalog, so
+    /// <see cref="CteSymbol.ColumnsComplete"/> already IS its readiness answer and asking the snapshot about
+    /// a name that is not a catalog object would silence every CTE typo.
+    /// </para>
+    /// </summary>
+    private static bool ColumnsAreKnown(SymbolReference qualifier, ISqlMetadataProvider metadata) => qualifier.Symbol switch
+    {
+        TableReferenceSymbol { Target: CteSymbol } => true,
+        TableReferenceSymbol { TargetName: { Length: > 0 } table } => metadata.KnowsColumns(table),
+        RecordAliasSymbol { TargetTable: { Length: > 0 } recordTable } => metadata.KnowsColumns(recordTable),
+        _ => true,
     };
 
     // The names of every cursor the script declares (DECLARE … CURSOR / FOR … AS CURSOR), folded for

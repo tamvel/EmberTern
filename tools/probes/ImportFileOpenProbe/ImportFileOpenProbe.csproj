@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER MEASUREMENT TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Import file-selection cost (requested 2026-08-04, before M3b.2). The user reported that choosing a LARGE
+    file for import freezes the UI until the read finishes, and that the progress bar only starts afterwards.
+    This probe answers "what exactly costs what, and does it stay on the calling thread" so the proposal rests
+    on numbers instead of on reading the code and guessing.
+
+    It measures the file-selection chain the surface really runs (DataImportTabViewModel.ReadSourceAsync):
+      ListSheetsAsync → ReadSchemaAsync → ReadRecordsAsync (bounded preview head)
+    for BOTH a delimited file and a workbook, and it reports for every await whether the continuation came
+    back on the SAME managed thread — which is what decides whether the work can block the UI at all.
+
+    Deliberately NOT in EmberTern.slnx: it generates multi-hundred-MB scratch files under %TEMP%.
+    It needs no database and never touches Lab/EmberTern_Lab.fdb.
+
+    How to run: see the header of Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Office\EmberTern.Office.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.App\EmberTern.App.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+  </ItemGroup>
+
+</Project>

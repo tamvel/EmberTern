@@ -8,10 +8,11 @@ namespace EmberTern.App.Settings;
 /// <summary>One category in Settings Center's left-hand list.</summary>
 public sealed class SettingsCategoryDescriptor
 {
-    public SettingsCategoryDescriptor(string id, string title)
+    public SettingsCategoryDescriptor(string id, string title, string iconKey)
     {
         Id = id;
         Title = title;
+        IconKey = iconKey;
     }
 
     public string Id { get; }
@@ -19,6 +20,18 @@ public sealed class SettingsCategoryDescriptor
     /// <summary>The heading, from <c>UiStrings</c> — searchable, so "general" finds the page as well as its
     /// rows.</summary>
     public string Title { get; }
+
+    /// <summary>
+    /// The category's icon, as a geometry KEY from <c>IconGeometries.axaml</c> — never a brush and never a
+    /// <c>Geometry</c> (architecture rule #1: no Avalonia type reaches this layer). The view resolves it
+    /// through <c>IconGeometryConverter</c>, exactly as the metadata tree resolves a node's icon.
+    ///
+    /// <para>⚠ <b>It lives HERE and not in the XAML for the same reason every option list does</b> (design
+    /// §5.2.2): a second list keyed by category id would drift silently — add a category, forget the icon
+    /// row, and the nav renders a blank slot with a green build. Required by the constructor, so a new
+    /// category cannot compile without deciding.</para>
+    /// </summary>
+    public string IconKey { get; }
 }
 
 /// <summary>
@@ -173,6 +186,7 @@ public static class SettingsCatalog
     public const string CategoryGeneral = "general";
     public const string CategoryEditor = "editor";
     public const string CategoryGrid = "grid";
+    public const string CategoryTabs = "tabs";
     public const string CategoryDebugger = "debugger";
     public const string CategoryFormatter = "formatter";
 
@@ -188,19 +202,41 @@ public static class SettingsCatalog
     public const string SettingFullLoadPromptThreshold = "editor.fullLoadPromptThreshold";
     public const string SettingDataPageSize = "grid.dataPageSize";
     public const string SettingGridAutoFit = "grid.autoFitColumns";
+    public const string SettingTabStripMode = "tabs.stripMode";
+    public const string SettingTabStripMaxRows = "tabs.stripMaxRows";
     public const string SettingDebuggerIsolation = "debugger.isolation";
     public const string SettingFormatterKeywordCase = "formatter.keywordCase";
     public const string SettingFormatterIdentifierCase = "formatter.identifierCase";
 
+    // ⭐ Klucze geometrii ikon kategorii — nazwane TU, obok id kategorii, i z tego samego powodu: tablica
+    //   w konstruktorze statycznym nie nazywa własnych ciągów (`TheCatalogTableContainsNoStringLiterals`).
+    // ⚠ To nie jest obejście strażnika, tylko jego intencja: klucz zasobu jest wartością tak samo podatną
+    //   na literówkę jak klucz opcji, a `IconGeometryConverter` na nieznanym kluczu zwraca `null` —
+    //   ikona po prostu znika, przy zielonym buildzie (#348 w kształcie ikony). Dlatego oprócz nazwy
+    //   pilnuje ich `EveryCategoryIcon_ResolvesToARealGeometry`.
+    private const string IconGeneral = "Icon.Settings";
+    private const string IconEditor = "Icon.Braces";
+    private const string IconGrid = "Icon.Table";
+    private const string IconTabs = "Icon.PanelLeft";
+    private const string IconDebugger = "Icon.Crosshair";
+    private const string IconFormatter = "Icon.PencilRuler";
+
     static SettingsCatalog()
     {
+        // ⭐ Ikony kategorii — WYŁĄCZNIE istniejące geometrie (decyzja użytkownika, pakiet UX po M5 / punkt 5).
+        //   Żadna nie powstała na tę potrzebę; każda jest już w katalogu i już coś znaczy w aplikacji.
+        // ⚠ Debugger bierze `Icon.Crosshair`, a NIE kompozytu `DebuggerIcon` z paska narzędzi — ratyfikowane
+        //   wprost: kompozyt to osobna kontrolka o dwóch barwach i własnym `ControlTheme`, więc wpuszczenie go
+        //   tutaj oznaczałoby wyjątek w szablonie wiersza i DWA mechanizmy rysowania ikony kategorii zamiast
+        //   jednego. Spójność nawigacji wygrywa z wiernością wobec paska.
         Categories =
         [
-            new SettingsCategoryDescriptor(CategoryGeneral, UiStrings.SettingsCategoryGeneral),
-            new SettingsCategoryDescriptor(CategoryEditor, UiStrings.SettingsCategoryEditor),
-            new SettingsCategoryDescriptor(CategoryGrid, UiStrings.SettingsCategoryGrid),
-            new SettingsCategoryDescriptor(CategoryDebugger, UiStrings.SettingsCategoryDebugger),
-            new SettingsCategoryDescriptor(CategoryFormatter, UiStrings.SettingsCategoryFormatter),
+            new SettingsCategoryDescriptor(CategoryGeneral, UiStrings.SettingsCategoryGeneral, IconGeneral),
+            new SettingsCategoryDescriptor(CategoryEditor, UiStrings.SettingsCategoryEditor, IconEditor),
+            new SettingsCategoryDescriptor(CategoryGrid, UiStrings.SettingsCategoryGrid, IconGrid),
+            new SettingsCategoryDescriptor(CategoryTabs, UiStrings.SettingsCategoryTabs, IconTabs),
+            new SettingsCategoryDescriptor(CategoryDebugger, UiStrings.SettingsCategoryDebugger, IconDebugger),
+            new SettingsCategoryDescriptor(CategoryFormatter, UiStrings.SettingsCategoryFormatter, IconFormatter),
         ];
 
         Settings =
@@ -333,6 +369,42 @@ public static class SettingsCatalog
                 UiStrings.SettingsGridAutoFitDescription,
                 UiStrings.SettingsGridAutoFitKeywords,
                 valueKind: SettingValueKind.Toggle),
+
+            // ── Tabs ────────────────────────────────────────────────────────────────────────────────────
+            //
+            // §8.2, ratified D5–D8. ⭐ Own category rather than two more rows in General (user, 2026-08-03):
+            // the tab strip is one of the four PERSISTENT surfaces (§0.1), and this category is also where
+            // M3.3c's "Tab settings…" context-menu item will jump.
+            //
+            // ⚠ The row order is deliberate: the MODE decides whether the row limit means anything, so it
+            // comes first and the limit reads as its detail.
+            new SettingDescriptor(
+                SettingTabStripMode,
+                CategoryTabs,
+                UiStrings.SettingsTabStripModeLabel,
+                UiStrings.SettingsTabStripModeDescription,
+                UiStrings.SettingsTabStripModeKeywords,
+                PreferenceOptions.TabStripMode,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [PreferenceOptions.TabStripModeMultiRow] = UiStrings.SettingsTabStripModeMultiRow,
+                    [PreferenceOptions.TabStripModeSingleRow] = UiStrings.SettingsTabStripModeSingleRow,
+                }),
+
+            // ⚠⚠ HIDDEN in single-row mode — ratified by the user (2026-08-03), and it OVERTURNS this etap's
+            // first decision, which kept the row visible on the grounds that the value survives a mode round
+            // trip. The user's rule is better: the interface does not show settings that do nothing in the
+            // current mode. ⭐ The VALUE is still kept — it is the ROW that disappears, not the number.
+            // The condition lives on the page (`SettingsCenterViewModel.ShowTabStripMaxRows`), because it is
+            // an AND with the search filter's own visibility and neither may overwrite the other.
+            new SettingDescriptor(
+                SettingTabStripMaxRows,
+                CategoryTabs,
+                UiStrings.SettingsTabStripMaxRowsLabel,
+                UiStrings.SettingsTabStripMaxRowsDescription,
+                UiStrings.SettingsTabStripMaxRowsKeywords,
+                valueKind: SettingValueKind.Number,
+                range: PreferenceOptions.TabStripMaxRows),
 
             // ── Debugger ────────────────────────────────────────────────────────────────────────────────
             //

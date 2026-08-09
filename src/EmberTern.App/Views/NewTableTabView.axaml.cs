@@ -1,8 +1,15 @@
+﻿using System;
+
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
+using AvaloniaEdit;
+
+using EmberTern.App.Behaviors;
+using EmberTern.App.Completion;
+using EmberTern.App.ViewModels;
 
 namespace EmberTern.App.Views;
 
@@ -11,6 +18,14 @@ public partial class NewTableTabView : UserControl
     public NewTableTabView()
     {
         InitializeComponent();
+
+        // The Live DDL preview is the app's shared read-only SQL surface (see the comment at its
+        // declaration): one call wires the semantic + lexical layers, keeps them following the theme, and
+        // pushes the VM's DdlPreview in. The same call serves the four constraint/index dialogs.
+        if (this.FindControl<TextEditor>("DdlEditor") is { } ddl)
+        {
+            SqlEditorBehavior.AttachDdlPreview(ddl, this);
+        }
 
         // Faza 4 / Krok 3: replace the XAML single-Domain column with the shared merged
         // "Domena/Kolumna" picker (Domain + Table-column/TYPE OF COLUMN tabs). Built in code
@@ -26,6 +41,11 @@ public partial class NewTableTabView : UserControl
                     break;
                 }
             }
+
+            // The ONE seam (Enter gesture + cell-editor height role). This grid declares its columns in XAML,
+            // so it never went through FieldGridColumns.Build and never received the height role — the same
+            // silent miss as Table Detail's fields grid (S-1a + S-3).
+            EditableGridBehavior.Attach(grid);
         }
     }
 

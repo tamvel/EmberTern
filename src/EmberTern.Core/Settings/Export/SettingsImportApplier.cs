@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -68,8 +68,8 @@ public sealed class SettingsImportApplyResult
 ///     duplicating them, and a profile the file does not mention is left alone.
 ///   </description></item>
 ///   <item><description>
-///     ⚠ <b>Two connection fields are taken from the LOCAL profile, not the incoming one</b> —
-///     <c>ClientLibraryPath</c>, which never travels, and <c>Password</c> unless passwords were both exported
+///     ⚠ <b>One connection field is taken from the LOCAL profile, not the incoming one</b> —
+///     <c>Password</c>, unless passwords were both exported
 ///     and selected. This is the subtle one: an export without passwords carries every connection with an
 ///     <i>empty</i> password, so copying the incoming profile wholesale would erase a stored credential as a
 ///     side effect of importing a theme. <c>SettingsExporter.BuildContent</c> is where a NEW field's travel is
@@ -268,16 +268,12 @@ public static class SettingsImportApplier
             if (index < 0)
             {
                 // A profile this installation has never seen. Its password is whatever the file carried (empty
-                // when passwords were not exported) and its ClientLibraryPath is empty because that field never
-                // travels — both correct: there is no local value to preserve.
+                // when passwords were not exported) — correct: there is no local value to preserve.
                 list.Add(profile);
                 continue;
             }
 
             var local = list[index];
-
-            // Never travels (§6.3.4): a local filesystem path, meaningful only in Embedded mode.
-            profile.ClientLibraryPath = local.ClientLibraryPath;
 
             // The trap this whole method exists for. Keep the stored credential unless the user asked for the
             // file's and the file actually has one.

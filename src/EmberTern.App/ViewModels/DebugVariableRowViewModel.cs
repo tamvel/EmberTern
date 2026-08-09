@@ -1,5 +1,6 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EmberTern.Core.Formatting;
 
 namespace EmberTern.App.ViewModels;
 
@@ -142,9 +143,13 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
 
     // The full, untruncated invariant string of the raw value (empty for null) — the edit round-trips this,
     // not the display text.
+    // ⚠ A date/time goes through the SAME engine form the label shows: seeding the box with a different
+    // spelling of the value the user is looking at reads as the box having its own opinion, and
+    // TryParseEditedValue reads `yyyy-MM-dd HH:mm:ss` back under the invariant culture, so the round trip holds.
     private string RawEditString() => RawValue switch
     {
         null => string.Empty,
+        var v when DateTimeDisplay.FirebirdValue(v, TypeText) is { } engine => engine,
         System.IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
         var v => v.ToString() ?? string.Empty,
     };
@@ -172,11 +177,11 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
     {
         RawValue = (!hasValue || value is System.DBNull) ? null : value;
         IsNull = RawValue is null;
-        ValueText = FormatValue(hasValue, value);
+        ValueText = FormatValue(hasValue, value, TypeText);
         IsChanged = changed;
     }
 
-    private static string FormatValue(bool hasValue, object? value)
+    private static string FormatValue(bool hasValue, object? value, string typeText)
     {
         if (!hasValue || value is null || value is System.DBNull)
         {
@@ -188,8 +193,15 @@ public sealed partial class DebugVariableRowViewModel : ObservableObject
         {
             return string.Format(CultureInfo.InvariantCulture, UiStrings.DebuggerVariableBlobFormat, bytes.Length);
         }
+        // ⭐ A DATE / TIME / TIMESTAMP is shown the way FIREBIRD shows it (`yyyy-MM-dd HH:mm:ss`), not the way
+        // the invariant culture does (`08/07/2026 00:00:02` — an American date on every machine, matching
+        // nothing the engine ever prints). Reported during QA of this sprint; the declared type is what tells
+        // a DATE from a TIMESTAMP standing at midnight, since the driver returns both as a DateTime.
+        // ⛔ Numbers deliberately stay invariant below — that is the harness's literal convention, not a
+        // presentation choice, so the engine formatter answers only for the kinds it owns.
         string text = value switch
         {
+            _ when DateTimeDisplay.FirebirdValue(value, typeText) is { } engine => engine,
             System.IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
             _ => value.ToString() ?? UiStrings.DebuggerVariableNull,
         };

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -37,7 +37,6 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
         ? UiStrings.DialogEditConnectionTitle
         : UiStrings.DialogNewConnectionTitle;
     public string GeneralSectionLabel => UiStrings.DialogSectionGeneral;
-    public string AdvancedSectionLabel => UiStrings.DialogSectionAdvanced;
     public string NameLabel => UiStrings.DialogFieldName;
     public string HostLabel => UiStrings.DialogFieldHost;
     public string PortLabel => UiStrings.DialogFieldPort;
@@ -45,8 +44,6 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
     public string UsernameLabel => UiStrings.DialogFieldUsername;
     public string PasswordLabel => UiStrings.DialogFieldPassword;
     public string CharsetLabel => UiStrings.DialogFieldCharset;
-    public string ClientLibraryLabel => UiStrings.DialogFieldClientLibrary;
-    public string ClientLibraryHint => UiStrings.DialogFieldClientLibraryHint;
     public string TestConnectionLabel => UiStrings.DialogTestConnection;
     public string SaveLabel => UiStrings.DialogSave;
     public string CancelLabel => UiStrings.DialogCancel;
@@ -163,7 +160,6 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
         Password = profile.Password;
         Charset = profile.Charset;
         _carriedDialect = profile.Dialect;
-        ClientLibraryPath = profile.ClientLibraryPath;
         DeveloperMode = profile.DeveloperMode;
         OnPropertyChanged(nameof(IsEditing));
         OnPropertyChanged(nameof(DialogTitle));
@@ -215,7 +211,6 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
             Password = Password,
             Charset = string.IsNullOrWhiteSpace(Charset) ? CharsetCatalog.Default : Charset,
             Dialect = _carriedDialect == 1 ? 1 : 3,
-            ClientLibraryPath = ClientLibraryPath?.Trim() ?? string.Empty,
             DeveloperMode = DeveloperMode,
         };
 

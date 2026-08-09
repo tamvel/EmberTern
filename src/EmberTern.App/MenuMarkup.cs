@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using EmberTern.App.Commands;
@@ -73,7 +74,14 @@ public sealed class MenuIconExtension
             return null;
         }
 
-        var icon = new SvgIcon { Data = geometry, Width = 14, Height = 14 };
+        // ⭐ Rozmiar z roli `Size.Icon` (14), nie literałem — wiersz menu kontekstowego to jedna z
+        //   powierzchni, które ta rola nazywa (A‑3, M4). Wartość się nie zmienia; zmienia się to, że
+        //   zmiana roli dosięgnie także menu, a nie ominie go po cichu, bo stoi w C#, a nie w XAML.
+        // ⚠ `DynamicResource`, nie odczyt `TryFindResource`: przełączenie motywu ani podmiana katalogu
+        //   nie przebudowuje tych obiektów, a wiązanie przelicza się samo.
+        var icon = new SvgIcon { Data = geometry };
+        icon[!Layoutable.WidthProperty] = new DynamicResourceExtension("Size.Icon");
+        icon[!Layoutable.HeightProperty] = new DynamicResourceExtension("Size.Icon");
         if (!string.IsNullOrEmpty(Brush))
         {
             icon[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension(Brush);

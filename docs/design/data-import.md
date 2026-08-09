@@ -816,6 +816,24 @@ Przeliczenie jest **leniwe i anulowalne**: nowa zmiana anuluje trwające czytani
 z `EditorLanguageService`). Odczyt schematu i podgląd idą na wątek tła; gotowość jest tania i liczona
 synchronicznie.
 
+> ⚠⚠ **ZDANIE POWYŻEJ BYŁO ZAMIAREM, NIE OPISEM — do 2026-08-04 (`product-polish.md` §19.32).**
+> Zdanie *„odczyt schematu i podgląd idą na wątek tła"* stoi tu od v2 i **implementacja go nie realizowała**:
+> `FileImportSource.OpenStreamAsync`/`OpenTextAsync` zwracają `Task.FromResult(...)`, więc await na nich
+> kontynuował **inline**, a `Recalculate` startował łańcuch synchronicznie — cały odczyt biegł **wewnątrz
+> settera `Source.FilePath`**, na wątku UI. Zmierzone na pliku 300 000 wierszy: **17 768 ms bez ani jednej
+> okazji na odmalowanie okna**; po naprawie **1 ms**.
+>
+> ⭐ To **nie była zmiana projektowa** (zamrożenie §4.8 nietknięte): przeniesiono wyłącznie trzy wywołania
+> providera, a wszystko, co dotyka ViewModelu i kolekcji, zostało na Dispatcherze — czyli implementacja
+> dogoniła to, co ten dokument już deklarował. Wzorzec „czytaj poza wątkiem, publikuj na wątku" stosowały
+> już `InferNewTableColumnsAsync` i `RefreshConvertedPreviewAsync`; `ReadSourceAsync` był jedynym drogim
+> ogniwem poza nim.
+>
+> ⚠ **Lekcja szersza niż ten moduł: zapis w dokumencie projektowym starzeje się dokładnie tak cicho jak
+> komentarz i jak string** (gotcha #284, pułapka 21). To zdanie było *prawdziwe jako zamiar* i *fałszywe jako
+> opis* przez cały czas życia modułu, przy zielonym buildzie i zielonych testach — bo nic go nie sprawdzało.
+> ⛔ Przy czytaniu tego dokumentu jako opisu stanu faktycznego: sprawdź w kodzie, zanim się na nim oprzesz.
+
 **Reguła zachowania dowodliwego** — przeniesiona bez zmian z konfiguracji uruchomienia debuggera (C3),
 bo problem jest identyczny: *moduł zachowuje wszystko, co potrafi UDOWODNIĆ, że nadal jest poprawne,
 oddaje użytkownikowi wszystko, czego nie potrafi, i nigdy nie zgaduje.*

@@ -1,4 +1,6 @@
+using System;
 using System.Globalization;
+using EmberTern.Core.Formatting;
 
 namespace EmberTern.App.ViewModels;
 
@@ -23,12 +25,19 @@ public sealed class AboutViewModel
     /// <summary>
     /// "Released 29 July 2026", or empty when the build declared no date — in which case the view hides the
     /// line rather than showing a label with nothing after it.
-    /// <para>Formatted with the invariant culture's <c>d MMMM yyyy</c>, matching the rest of the window's
-    /// English text; the stored value stays ISO.</para>
+    /// <para>
+    /// ⚠ CORRECTED 2026-08-07 (P5): this used the INVARIANT culture's <c>d MMMM yyyy</c>, justified here as
+    /// "matching the rest of the window's English text". That reasoning does not survive the Language row
+    /// shipping in Settings Center — and it was wrong on its own terms anyway, because it spelled an English
+    /// month name on a machine whose every other date the application already rendered in the user's own
+    /// format. A single prominent date is exactly the case for the reader's long-date pattern.
+    /// </para>
+    /// <para>⚠ The value STORED in <c>Directory.Build.props</c> stays ISO — that half is a build contract and
+    /// <see cref="AppInfo"/> still parses it invariantly.</para>
     /// </summary>
     public string ReleasedText => AppInfo.ReleaseDate is { } date
         ? string.Format(CultureInfo.CurrentCulture, UiStrings.AboutReleasedFormat,
-            date.ToString("d MMMM yyyy", CultureInfo.InvariantCulture))
+            DateTimeDisplay.LongDate(date.ToDateTime(TimeOnly.MinValue)))
         : string.Empty;
 
     public bool HasReleaseDate => AppInfo.ReleaseDate is not null;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using EmberTern.Core.Performance;
 
@@ -22,6 +23,7 @@ public sealed class PlanNodeViewModel
             descendantHasFullScan |= childVm.ContainsFullScan;
         }
         Children = kids;
+        Segments = PlanTextSegments.Build(node);
         ContainsFullScan = node.IsSequentialScan || descendantHasFullScan;
         // Expand only branches that lead to a full scan; collapse everything else.
         IsExpanded = descendantHasFullScan;
@@ -42,6 +44,12 @@ public sealed class PlanNodeViewModel
 
     /// <summary>The faithful raw plan text for this node.</summary>
     public string DisplayText => Node.RawText;
+
+    /// <summary>The same text as <see cref="DisplayText"/>, split into coloured runs from the classification
+    /// <see cref="PlanNode"/> already carries. ⚠ Concatenating the segments reproduces
+    /// <see cref="DisplayText"/> exactly — pinned by <c>PlanTextSegmentTests</c>, because a presentation that
+    /// silently alters the engine's own wording would be worse than one with no colour at all.</summary>
+    public IReadOnlyList<PlanTextSegment> Segments { get; } = Array.Empty<PlanTextSegment>();
 
     public static IReadOnlyList<PlanNodeViewModel> BuildRoots(PlanTree? tree)
     {

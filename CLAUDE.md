@@ -34,8 +34,19 @@ verbatim, in the archive below.
 | **`docs/audits/embertern-full-audit-2026-07-26.md`** | An external full-repository audit (GPT Terra). **Read the verdicts in `docs/history/22-...` alongside it, never it alone** — the 2026-07-27 hardening sprint verified every finding against the code and several did not survive: A-02's P0 rating was rejected (a ratified design decision), A-04 was real only as a documentation defect, A-08 was declined, A-06 is historical — while A-05's mitigation and A-01's scope were both *understated*. | On demand, with the history file. |
 | **`docs/design/keyboard-manager.md`** | **🔒 THE COMMAND SYSTEM'S ARCHITECTURE + AS-BUILT — sprint CLOSED and merged (2026-07-28).** The `CommandDescriptor`/`CommandCatalog`/`CommandRouter` design and *why the obvious alternatives do not work here* (§7), the user's **ratified shortcut map**, the as-built per etap (§11 registry · §12 shortcuts · §14 tooltips · §15 context menus · §16 consistency pass), the **collision report vs Windows/IDE conventions** (§13 — accepted costs, not oversights), and the original command/shortcut/menu **audit** (§1–§6) with the measured facts that constrain the design. | **Before touching `EmberTern.App/Commands`, any shortcut, a tooltip that names a key, or a context menu** — §7 and the relevant as-built section. |
 | **`docs/design/settings-center.md`** | **🔒 SPRINT CLOSED — all six etaps delivered, user-accepted and merged to `master`. Design closed + ratified, ⭐ etap 2 (Core foundation, §12), ⭐ etap 3 (the Settings Center window + the complete General page, §13), ⭐ etap 4 (the formatter's two casing settings, §14), ⭐ etap 5a (the export FORMAT — Core only, §15), ⭐ etap 5b (the export/import UI + the non-destructive write into `settings.dat`, §16) and ⭐ etap 6 (the approved §7 settings — ratified Q9, §17) all DELIVERED.** ⚠ **§17 is the newest as-built** — the first non-string preferences + `PreferenceRange`, the blur-or-Enter numeric commit path, the Easy-mode migration out of `WorkspaceState`, and §17.5's measured correction (a `TextBox` does NOT claim Enter). ⚠⚠ **§2.7 and §7.1 were CORRECTED in etap 6 — the monospace font item left the sprint entirely** (7 strings / 95 occurrences / 33 files, not 4 / 10); do not re-add it here. ⚠ **§16.1 is the one to read before touching an import path** — the stale-snapshot trap and the measured list of in-memory holders; **§16.3** records the ratified live-session behaviour (⛔ the workspace-capture suppression must not become a setting). ⚠ **§15.1 records the one deviation from the etap brief — `aes256-passphrase` is deliberately NOT registered in `ResolveProtector`; read it before "fixing" that.** ⚠ **§14.1 corrects §2.2 on two measured points — read it before touching the formatter.** The self-contained guide for **Settings Center & formatter casing**: the full settings audit (what is persisted, what is a live UI control, what is a hard-coded constant in waiting), the ⭐ **measured facts** — the theme is *never saved* not "reset on restart" · the formatter has **no casing decision point** and cannot tell a keyword from an identifier · **localization is NOT built** (1 815 `const`s, so the ratified Language row is deliberately storage-only) · the export/import seam was reserved by name in `EncryptionSchemes` · ⚠ **`settings.dat` already carries the magic `EMBERTERN-SETTINGS`** (§6.3.1b — measured in etap 2, which is why the export gets its own, Q13) — the `UserSettings.Preferences` architecture, EmberTern's own **versioned encrypted export format** (magic · `ExportFormatVersion` · `SchemaVersion` · `AppVersion`, one job each), the **13 ratified decisions (§9)** + the standing "no features for the future" directive (§9.1), and the etap plan 2 → 3 → 4 → 5a → 5b → 6 (§10, all delivered). | **Before touching `Core/Settings`, the theme, `SqlFormatter` casing, or settings export** — §9 first, then §2, then §14.1 (formatter) / §15 (export). |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (289 entries, #1–#302), organized thematically. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. | On demand — search it when a bug "feels familiar". |
-| **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~20 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. | On demand — read a file when you need the backstory on a specific feature or bug. |
+| **`docs/design/product-polish.md`** | **⭐ THE ACTIVE STAGE — Product Polish. M0–M3 COMPLETE and user-accepted; the §13.3 gate PASSED; M4 decisions (density + typography) 🔒 ratified; screen migration in progress — M4.1 ✅ accepted, ⏳ M4.2 awaiting visual QA.** ⭐⭐ **§19.40 is M4.2's as-built and its headline is worth knowing before planning any migration etap: the counted debt in the ten object editors was ALREADY zero, so the etap's product is a MEASUREMENT — including B1, an editor that draws its own icons with a raw `<Path>` and was therefore invisible to three mechanisms at once (gotcha #337).** §19.37–§19.39 are M4's decision blocks + M4.1. ⭐⭐ **§19 is M3's as-built — and §19.20 is its closing summary for the colour language: what shipped, rules R15–R17, traps 18–21, the four architectural decisions, and what stays open.** §17 (M2b closing summary) and §18 (M2c) are **historical** — read a specific subsection, never the whole thing. The stage's one document: the measured audit (§1 — 4 Release Blockers, 10 High, 7 Medium, 3 Low, 7 UX Debt), the user's ratified decisions **D1–D12** (§2), the three catalog rules (§3 — ⭐ *a token names a ROLE, never a value*), the full token catalog (§4–§10: spacing · heights 24/22/28 · 12 typography roles · surfaces · colour semantics · tab strip · Status Bar 2.0 · motion · WCAG AA targets), the guard test (§11) and the complete plan M2a→M5 with dependencies, DoD and risks (§13). ⭐ **§0.1 Persistent UI · §0.1.1 tokens are a means not the end · §0.1.2 Application Chrome is ONE surface** are principles that outrank the catalog. ⛔ **§13.3 is a quality gate that blocks M4 on visual judgement, not on green tests.** | **Before any Product Polish work.** |
+| **`docs/design/color-language.md`** | **⭐⭐ THE COLOUR LANGUAGE — a PRODUCT document. 🔒 Accepted 2026-08-02, ROLLED OUT IN FULL and visually accepted 2026-08-03; zero open questions.** From now on it is a **reference, not a plan** — it outlives Product Polish and governs every new feature. Four independent systems (rodzaj · akcja · tożsamość modułu · hierarchia przycisku), seven action roles R‑1…R‑7, **named exceptions** (an exception with a written reason is the target state, not debt), and **§6**, the decision tree for colouring a NEW action. ⛔⛔ **§0.5 is an overriding gate — before changing ANY colour: "will the user recognise the action FASTER?"; "no"/"don't know" ⇒ stop and propose.** ⚠ Supersedes `product-polish.md` §7.5 entirely. ⚠ §0.4 (R14 tempo) is closed and historical — superseded by R15. | **Whenever you add an action or touch a colour** (§6 + §0.5). |
+| **`docs/design/product-polish-m5-next-session.md`** | ⭐⭐ **THE STARTUP PROMPT for the next Product Polish session — paste it and go.** State after **M4 closed in full**, the M4 summary (what shipped · ⭐ the four written premises measurement refuted · the three stages that turned out to be *acceptance of deferred decisions* rather than sweeps), and — the reason to read it first — ⛔ **the next stage is a USER DECISION, not an obvious next item**: three candidates with measured scope (M5 Final Polish · the ratified spacing stage, 969 local values with `Padding` reading a role **zero** times · the app-wide UX sprint incl. the monospace font), plus the parked items each with its reason and the mandatory closing order. | **First, at the start of every Product Polish session.** |
+| **`docs/design/product-polish-m4-migration-next-session.md`** | 🔒 **HISTORICAL (since 2026-08-09)** — was the startup prompt for the M4 screen migration, all of it now closed. ⛔ Do not plan from it: **four of its premises were refuted by measurement** (incl. its claim that `GridSplitter` was the one parked item M4.4 would meet — there is not one in any of the 25 windows). ⭐ Its main prediction was right, though, and is worth the read: M4.4 turned out to be the acceptance of orphaned §13.3 deferrals, in exactly the three files it named. | Historical only. |
+| **`docs/design/product-polish-m4-typography-decision.md`** | 🔒 **The M4 typography decision — measurement, variants, ratified answer (A‑2 · B‑1 · C · D · K5 struck). Accepted 2026-08-08; a RECORD, not a plan.** ⭐⭐ Its finding is the one worth carrying: `Text.SectionHeader` (11 SemiBold) stood above `field-label` (12) in **all 19** canonical uses, so the header was smaller than the text it names — and **five views had independently refused the role**, 19 against 17 in an identical context. ⚠ §6 is the recommendation as it stood BEFORE the decision; the user overruled one item (K4 stays 13) and one was withdrawn after building it (the counter window). | On demand — before touching a text role or the collision register. |
+| **`docs/design/product-polish-m4-next-session.md`** | 🔒 **HISTORICAL** — was the startup prompt for ENTERING M4. Its §5 records the ratified direction decisions D‑M4‑1…3, all now executed. ⛔ Do not plan from it; the live prompt is the migration one above. | Historical only. |
+| **`docs/design/product-polish-m4-density-decision.md`** | 🔒 **The M4 density decision — measurement, variants, recommendation, ratified answer (A‑3 · B‑1 · C‑1 · D). Accepted 2026-08-08; a RECORD, not a plan.** ⭐⭐ Read it for the method as much as the answer: **three written premises did not survive measurement from the code** — „`Size.Icon` — 64 literals" described 164 of 355 icon declarations (191 declare nothing and take 16 from a `ControlTheme`), „K15 — 112 occurrences in 17 files" was really 44 in 13 of which 41 are ONE role, and Z‑3's „40 px" **does not exist in `src/` at all**. ⚠ §6 is the recommendation as it stood BEFORE the decision — kept as reasoning, never as instructions. | On demand — before touching an icon size, a grid row height, or the collision register. |
+| **`docs/design/product-polish-m3-next-session.md`** | 🔒 **HISTORICAL (since 2026-08-04)** — was the M3 startup prompt. Describes closed work (M3 · M3b · the §13.3 gate · M3.5). ⛔ Do not plan from it; the live prompt is the M4 one above. Kept as the record of "why", not "what next". | Historical only. |
+| **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
+| **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
+| **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (**339 entries, #1–#352** — re-measured 2026-08-10; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐ **#351 came out of the post-M5 package's point 5 and is the one to read before "fixing" a shared style that looks wrong at ONE site** — `Border.settings-group` states in its own comment that it is a recessed surface *inside PanelBrush chrome*; three of its four consumers really do provide that chrome and the fourth provided none, so the card painted itself onto an identically-coloured host and read as *"the style is too weak"*. ⚠ Strengthening the style would have been applied at the only site where the style is innocent and would have broken the three that were correct. ⭐ The rule: **a style that describes its own figure/ground pair is making a claim about something it does not own**, so check the host's container before touching the style — #340's split of custody, applied to appearance instead of to decisions. ⭐⭐ **#349–#350 came out of the post-M5 UX package's point 4, and #350 is the one to read before cleaning up after ANY rejected experiment** — an untracked file that is deleted has **no safety net in git** (`git checkout` restores to HEAD, i.e. the state before the whole unmerged stage), so a cleanup removed an already-ACCEPTED mechanism and recovery was impossible: empty `git log --all`, no dangling blob, assembly rebuilt. ⭐ The rule: **commit an accepted stage before experimenting on top of it** — an uncommitted approval is exactly the window in which a cleanup cannot tell what you approved from what you rejected; and a cleanup instruction inherits the premise it was written under, so whoever holds the dependency must say so BEFORE executing. **#349** is its design-side companion: **a token's ROLE decides which contrast threshold applies**, so re-using an icon colour (floor 3:1) as 11 px TEXT (floor 4,5:1) silently moves the goalposts while the render still looks fine — #345 one step further out, because measuring the element is necessary but you must also ask which RULE it is now subject to. ⭐⭐ **#347 came out of the post-M5 UX package and is the one to read before trusting that a style variant's colour reaches its content** — a variant that overrides `Foreground` on the CONTROL and on its explicit `TextBlock`/`SvgIcon` children still loses to the template's setter on the `ContentPresenter`, and it loses **only for plain-STRING content**, so the same variant looked correct on Execute and painted Save nearly black on hover (**2,04:1** in Light); ⭐ the mechanism was broken in **both** themes and Dark passed at 5,62:1 purely because its `ForegroundColor` is near-white, so "it looks fine in Dark" was a coincidence that would have turned one variant defect into an endless per-theme patch. ⚠ Its second half is about the guard: the disabled state has the same shape but is **deliberately dimmed**, so the obvious "every state clears 4,5:1" test turns a correct product red and invites undoing a ratified decision — #322 committed inside the guard written to prevent it. **#348** is its companion from the same package: **a missing REGISTRATION fails as silently as a missing resource dictionary, one layer further out** — a probe rendered the "after" column with no colour because the XSHD definitions are registered by `App` and the probe runs `ProbeApp`, producing a perfectly plausible image that answers a different question. ⭐⭐ **#346 came out of M5/M‑3 and is the one to read before acting on ANY inventory of missing UI** — such an inventory answers *„is there a message here?"* and never *„can this state occur?"*, and the two produce different worklists: thirteen apparent gaps collapsed to four, two of them because the state CANNOT HAPPEN (a users grid over `SEC$USERS`, which always holds SYSDBA; a view's column list, when a view always projects a column), so building them would have shipped UI nobody can see. ⭐⭐ Its sharpest half: **a collection's NAME is not evidence of what its grid shows** — „No privileges in this category." sounded obviously right and was false, because that grid enumerates OBJECTS with privileges as cells; three proposed texts in a row were refuted the same way. ⚠ The failure mode is not a wrong number but a grammatical, plausible sentence describing something other than what the user is looking at. ⭐ Practical order, the reverse of the intuitive one: **establish WHEN the state occurs, only then decide what it says.** ⚠⚠ And a ready-made constant is not a ready-made answer: an orphaned `*Empty*` string quoted a button label that does not exist on screen, and had survived the product's whole life precisely BECAUSE nothing used it. ⭐⭐ **#344–#345 came out of M5/§10 and #344 is the one to read before leaning on ANY norm cited in our own docs** — a threshold row read *"≥ 3:1 — WCAG AA Large"*, and the **number was a defensible in-house choice while the attribution was false** (WCAG means 24 px or 18,7 px bold; the largest role here is 23 px, so nothing qualified). ⚠ It nearly decided a product change: one candidate fix satisfied the document *as written* and no external standard, and would have re-weighted every message in the app on a citation that did not hold. ⭐ The asymmetry is the lesson — **a number invites scrutiny, a norm label invites deference**, so the label is exactly the part that rots unnoticed, and it rots toward *more* confidence. #345 is its companion at one layer earlier: **measuring a token instead of the thing that paints** produced a reported failure for a pairing the product cannot render (a `ShowSeverityMarker` gate makes half the severity × surface grid unreachable) — and it surfaced only when the guard had to name a production property instead of a transcribed map. ⭐⭐ **#343 came out of M4.4 and is the one to read before replacing N local values with one mechanism** — a hand-set value can be doing TWO jobs, and a mechanism that takes over the property silently discards the one it never knew about: `GrowingDialogBehavior` assigned `MaxHeight` unconditionally, so attaching it would have raised a dialog’s deliberate 720 to 1008 on an ordinary 1080-tall screen, because the literal meant both „never exceed the screen” (which the mechanism does better) and „do not grow past a comfortable size on a huge monitor” (which it does not do at all); the fix is `Math.Min(declared, screen)` and it is provably a no-op for the existing consumers. ⚠⚠ Its general half: **before generalizing N local answers, ask what each was FOR** — „they are all guessed constants” is a hypothesis about their origin, not a measurement of their purpose. ⭐ Its companion, same iteration: a ceiling WITHOUT a scroll surface does not bound content, it CLIPS it, so „attach the behavior” is not a portable one-liner. ⭐⭐ **#342 came out of M4.3c and is the one to read before hoisting a style into the shared sheet — or before trusting a rule about style priority** — Avalonia resolves two competing STYLES by selector specificity, **not** by document order (measured: a base `Button` style setting `Padding` and placed AFTER `Button.seg` did not override it), so „moving a style changes its priority" is true only against a **local value on the element**; conflating the two produced a rigorous-sounding premise that scoped a whole iteration and was false. ⭐ Its transferable half is how it surfaced: **the plant did NOT fail the test, and that silence was the finding** — a plant usually proves a guard works; here it disproved the reasoning. ⭐⭐ **#340–#341 came out of M4.3, and #340 is the one to read before declaring ANY register closed** — a decision deferred in a CODE COMMENT is not an entry in the register, so closing the register „in full" leaves it standing, and it then reads to the next author as a settled state: the §13.3 gate decided **none** of the ~19 deferrals sitting in M4.3's five files (nor ~43 more across `src/`), because the deferral lives in the SOURCE while the register lives in a DOCUMENT and only the document ever gets closed; ⚠ the orphans are not scattered randomly — they cluster exactly where the migration counters still show a remainder, so *„why does this file still have local values?"* and *„which decisions were never taken?"* are the same question. #341 is its companion: one glyph can carry two roles (`Icon.X` is both an inline ✕ **and** the toolbar's close-tab ACTION, which correctly declares no size at all), so a rule grouped by the geometry's NAME is grouped by the wrong thing — an error committed **inside the guard written to prevent it**. ⭐⭐ **#338–#339 came out of M4.2b and both are about the gap between „the code is right" and „the feature works"** — a subclass of a templated control does NOT inherit its `ControlTheme` (Avalonia resolves it by CONCRETE type), so it renders an EMPTY surface while `ItemCount` and `DataTemplates` both look healthy; and „the rule is correct" + „the wiring exists" still leaves the question nobody asked — whether the event REACHES the handler, and whether there is still selection for it to act on (one keypress passed, two in a row did not). ⭐⭐ **#337 came out of M4.2 and is the one to read before trusting any "this file is clean"** — a counter keyed to the NAME OF A CONTROL cannot see the same thing built another way, so its zero means *"not built like that here"*, never *"clean"*: one editor drew PK/FK/Unique with a raw `<Path>` over locally declared geometries and thereby hid from the size counter, the `ControlTheme` default AND the centring audit at once; the failure mode is the friendly one — not a wrong number but an **absent row**, and an absent row reads as compliance. ⭐⭐ **#336 came out of M4.1's QA round and is the one to read before writing any guard that COMPUTES** — a guard must compute with the engine the product renders with; the headless test platform ignores an arc's bulge, so a geometry guard ran there was RED with precise numbers naming six icons that render perfectly, and acting on it would have shipped six new defects. ⭐⭐ **#335 came out of M4.1 and is the one to read before any value-keyed cleanup** — neither the VALUE nor the GEOMETRY NAME identifies a control, so a sweep keyed to either reports progress while the thing a user looks at stays inconsistent (one pagination bar carried two sizes across five screens through two prior sweeps); its practical half is *group the same control across screens and check it agrees with itself*, its second half was paid for by committing the error inside the entry itself (one geometry name serving two controls produced a false claim, retracted before any code changed), and its sibling finding is that `Spacing`/`Padding`/`Margin` had no counter at all, so files reporting zero debt held 985 local values app-wide. ⭐⭐ **#334 came out of M4's typography block and is the one to read before migrating exceptions onto a role** — when several independent authors refuse the same role, that is a MEASUREMENT of the role, not several oversights: the tell is the DISTRIBUTION (19 headers at one size against 17 at another, in an identical context), and a register that records only the deviating side makes a symmetrical disagreement look like one-sided drift. ⭐⭐ **#332–#333 came out of M4's density decision and both are about a value that lives OUTSIDE the place that claims to govern it** — a `ControlTheme` default is what 191 of 355 icons actually render at while the catalog's role describes two of them, and an unmeasured property is not "clean" but unmeasured (seven icon sizes, green build throughout); #333 is its mirror in the test suite — a guard that TRANSCRIBES a premise breaks when that premise moves onto a role, and reports something its own name does not describe. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~27 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`27-post-m5-ux-package.md` is the newest and is the one in progress** — the six post-M5 UX reports; read it for the phase-0 result (three of six described something other than what they looked like, and each time that changed the SHAPE of the work), and for #347/#348. ⭐ `24-stabilization-sprint.md` remains the sharpest on method: two of six reports were not what they described, plus the three shared causes and the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
 
@@ -77,27 +88,64 @@ git push origin <branch>
 git push private <branch>
 ```
 
-**Branch hygiene — ⭐ the repo is now at `master` ONLY (swept 2026-08-01, on the user's instruction).**
-Every feature branch has been merged and retired; there is **one local branch (`master`)** and, apart from the
-one residue below, **one branch on each remote**. So the working assumption for a new session is: *start from
-`master`, branch for the work, merge back `--no-ff`, delete the branch.*
+**Branch hygiene — ⚠⚠ CORRECTED 2026-08-05: the repo is NOT at `master` only any more, and that is deliberate.**
+There are **two branches** (`master` + **`feat/product-polish`**), and the working assumption for a new session
+is therefore: **start from `feat/product-polish`, not from `master`.**
 
-The final sweep merged the last outstanding branch — **`feat/branding-ux`** (the branding UX sprint plus the
+⭐⭐ **SUPERSEDED 2026-08-10 — `feat/product-polish` IS NOW MERGED TO `master`, on the user's explicit
+instruction closing the post-M5 UX package.** The 2026-08-05 decision below was *„nie chcę jej TERAZ scalać …
+czekają nas jeszcze większe prace"* — a decision about timing, and the user judged that the moment had come
+once Product Polish M0–M5 plus the whole UX package were accepted. Merged `--no-ff` so the arc stays readable.
+⚠ **The branch is deliberately KEPT on both remotes** (explicitly instructed — not deleted like the retired
+technical branches below), so the working assumption for a new session is unchanged: **start from
+`feat/product-polish`.** ⛔ The general rule below still stands — do not merge it again without an explicit
+instruction; this was one, for one closed stage.
+
+⭐ *(HISTORICAL, kept because it explains the branch's whole shape:)* `feat/product-polish` is the ACTIVE
+PRODUCT BRANCH and was deliberately NOT merged to `master` — the user's ratified decision (2026-08-05):
+*„to jest aktywna gałąź produktu i właśnie na niej będziemy kontynuować
+M4 oraz kolejne sprinty Product Polish. Nie chcę jej teraz scalać z `master`, ponieważ czekają nas jeszcze
+większe prace w tym obszarze."* ⛔ Do not merge it to `master` without an explicit instruction.
+
+⚠⚠ **AND THIS IS THE TRAP THE STABILIZATION SPRINT WALKED INTO, worth reading before the next cleanup:** a fix
+branch cut FROM a long-running feature branch **cannot be merged "alongside" it.** The sprint branched off
+`feat/product-polish`, so merging it to `master` would have carried **104 commits, only 8 of them the sprint's**
+— i.e. it would have merged Product Polish as a side effect, the one thing the same instruction forbade. ⭐ And
+separating it was measured impossible, not merely risky: 12 of its files do not exist on `master`, and the S-3
+fix hangs on a style with **0 occurrences on `master`** plus a token from a `Tokens.axaml` that `master` does
+not have. **The sprint's work is technically inseparable from Product Polish, because it fixed things Product
+Polish introduced.** So it was merged into `feat/product-polish` (`45ff01f`, `--no-ff`) and the technical branch
+was retired everywhere.
+
+**The general rule this yields: a short branch cut from a feature branch merges back into THAT branch, never
+into `master`.** For work cut from `master`, the old assumption still holds: *branch, merge back `--no-ff`,
+delete the branch.*
+
+Retired so far, each verified merged first (`git branch -d`, the safe variant that refuses unmerged work):
+`feat/stabilization-sprint` (2026-08-05, into `feat/product-polish`) · `chore/avalonia-12.1.1` (2026-08-05,
+into `feat/product-polish`). ⭐ The second one never reached either remote — it was not pushed before the
+user's acceptance, which is the rule working as intended: *push after ACCEPTED*, so a short technical branch
+can be retired locally with nothing to clean up remotely.
+
+The 2026-08-01 sweep (historical, and the reason the paragraph above had to be corrected rather than deleted —
+it describes a state that was true then) merged the last outstanding branch — **`feat/branding-ux`** (the branding UX sprint plus the
 two ET0003 diagnostics bugfixes) — into `master` as `93d640f`, `--no-ff` so the arc stays readable, then
 deleted **locally and from BOTH remotes**: `feat/branding-ux`, `feat/data-import`, `feat/hamburger-navigation`,
 `feat/keyboard-manager`, `feat/settings-center`. Each was verified merged first (`git branch -d`, the safe
 variant, which refuses unmerged work). Earlier retirements, same rule: `feat/completion-matching`,
 `feat/firebird-debugger`, `feat/save-and-close`, `feat/sql-data-export`.
 
-⚠ **One residue, unchanged and still the user's to clear: `private`'s default branch (HEAD) points at
-`feat/completion-matching`**, so GitHub refuses to delete it (`refusing to delete the current branch`) even
-though it is provably merged. It stays until the default is switched to `master` in the **GitHub repo
-settings** — a repo-settings change deliberately left to the user, not something to work around. Once switched,
-one command finishes it:
+✅ **RESOLVED — verified 2026-08-05, and this paragraph used to say the opposite.** The residue was: `private`'s
+default branch (HEAD) pointed at `feat/completion-matching`, so GitHub refused to delete it
+(`refusing to delete the current branch`) even though it was provably merged, and switching the default was a
+repo-settings change deliberately left to the user. Measured on closing the Avalonia sprint:
+`git ls-remote --symref private HEAD` → **`ref: refs/heads/master`**, and `feat/completion-matching` exists on
+**neither** remote. So the default was switched and the branch is gone.
 
-```bash
-git push private --delete feat/completion-matching
-```
+⭐ **Both remotes now hold exactly two branches — `master` and `feat/product-polish` — and nothing else.**
+⚠ Worth the line it costs: this was found by *verifying the state while closing an unrelated sprint*, not by
+anyone revisiting the note. A "still open, user's to clear" item goes stale in the direction nobody checks,
+because its own wording tells the next reader not to look.
 
 **⛔ Never change the remote configuration without the user's explicit decision** — not the URLs, not a
 `pushurl`, not a rename. A dual-`pushurl` "one push reaches both" variant was considered and **rejected on
@@ -150,7 +198,7 @@ A single, persistent Firebird lab database for hand-verifying EmberTern behaviou
 - **Location**: `Lab/EmberTern_Lab.fdb` — committed to Git (intentionally, for now; if it grows significantly we revisit and may switch to a `setup.sql`-only model). Canonical recreate script: `Lab/setup.sql`.
 - **Reference engine**: the local **Firebird 5.0** `DefaultInstance` on **localhost:3050** (FB3 is on 4050 and is **not** used for the lab — we keep ONE lab DB, not an FB3/FB5 matrix). `isql.exe` lives at `C:\Program Files\Firebird\Firebird_5_0\isql.exe`. SYSDBA password is the local dev password.
 - **DB settings**: dialect 3, **default charset WIN1250** (matches the user's real environment). Identifiers in `setup.sql` are ASCII so the script runs under any client charset.
-- **Purpose**: a development aid, not a test framework and not a compatibility matrix. It carries a small, representative object zoo: 8 domains, 5 tables, 3 views, 2 standalone procedures + 2 standalone functions, 3 triggers, 3 generators, 3 exceptions, 3 roles, 1 package (with body, containing 1 function + 1 procedure), plus a little sample data. Covers PK / FK / composite PK / unique / computed columns / identity (BY DEFAULT and ALWAYS) / domain-typed columns / SUSPEND / CASE / nested BEGIN-END / before-insert / before-update / after-update / COMMENT ON, etc.
+- **Purpose**: a development aid, not a test framework and not a compatibility matrix. It carries a small, representative object zoo: 8 domains, 5 tables, 3 views, 2 standalone procedures + 2 standalone functions, 3 triggers, 3 generators, 3 exceptions, 3 roles, 1 package (with body, containing 1 function + 1 procedure), plus a little sample data, plus the debugger zoo and — since the 2026-08-05 stabilization sprint — `SP_DOM_PARAMS` / `FN_DOM_ARG` (domain-typed parameters, arguments and RETURNS) and `SP_DBG_SELINTO` (a singleton `SELECT … INTO`, the state no fidelity case reproduced). Covers PK / FK / composite PK / unique / computed columns / identity (BY DEFAULT and ALWAYS) / domain-typed columns / SUSPEND / CASE / nested BEGIN-END / before-insert / before-update / after-update / COMMENT ON, etc.
 - **Use it from EmberTern**: add a connection profile → host `localhost`, port `3050`, database `C:\Dane\C#\Źródła\EmberTern\Lab\EmberTern_Lab.fdb`, SYSDBA, charset WIN1250, dialect 3.
 
 **The rule (enforce on yourself):** before implementing or fixing anything touching Firebird **metadata, DDL, dependencies, or SQL semantics**, prefer verifying the actual engine behaviour against `Lab/EmberTern_Lab.fdb` (via EmberTern or via `isql` at an ASCII path — see the gotcha below) rather than assuming how Firebird behaves. Several past milestones were corrected only after checking a live DB (e.g. gotchas #46, #147, #148).
@@ -201,12 +249,14 @@ src/
                              # and, since I9, the streaming SAX reader XlsxImportProvider) plus, since I10,
                              # ExcelDataReader for legacy .xls (XlsImportProvider). Renamed from
                              # EmberTern.Export.Office in I9.
-  EmberTern.App/             # WinExe, Avalonia 12.0.3, CommunityToolkit.Mvvm 8.4.2
+  EmberTern.App/             # WinExe, Avalonia 12.1.1, CommunityToolkit.Mvvm 8.4.2
     Program.cs, App.axaml(.cs), UiStrings.cs, app.manifest
     ViewModels/ Views/ Themes/ (Colors.axaml + ControlStyles.axaml — the ONLY theme sources)
     Behaviors/ Completion/ Controls/ Converters/ Diagnostics/ Export/ Security/ Sql/
     Assets/ (FirebirdSql.xshd + .Light.xshd, Branding/, Icons/ — SvgIcon geometries)
-    (NuGet: Avalonia.AvaloniaEdit 12.0.0, Avalonia.Controls.DataGrid 12.0.0)
+    (NuGet: Avalonia.AvaloniaEdit 12.0.0 — ⚠ deliberately BEHIND the core, no 12.1 build exists;
+     Avalonia.Controls.DataGrid 12.1.2 — ⚠ deliberately AHEAD, no 12.1.1 build exists. Both mismatches carry
+     their reason at the `PackageReference`; see `docs/design/avalonia-12.1.1-update.md` + gotcha #321)
 tests/
   EmberTern.Tests/           # xunit; ONE shared HeadlessUnitTestSession for the whole
                              # ConnectionExpandBindingProbe class — see gotchas #94 / #226
@@ -256,7 +306,13 @@ noted.
 - **Data grids** — shared filter panel + aggregation bar + Record-N-of-M indicator across all 5
   data-bearing grids (SQL Results, Procedure/Function Results, Table Data, View Data); client-side
   for materialized grids, SQL push-down for server-paged ones. Export to CSV/TXT/Clipboard/XLSX
-  via one shared `EmberTern.Core.Export` framework. *(history: 10, 12)*
+  via one shared `EmberTern.Core.Export` framework. ⭐ **All five also offer the same context-menu set**
+  (Copy cell / row / row with headers / all with headers · Filter by / Exclude / Contains · Export), through
+  the ONE text builder `App/ViewModels/GridCopyText.cs` and the ONE clipboard writer
+  `App/Views/GridClipboard.cs` — **only module-specific operations differ** (Table Data's edit group; Copy as
+  INSERT/UPDATE where a table backs the rows). ⛔ A new data grid gets that set or fails
+  `DataGridCopyMenuTests`; ⚠ each host supplies its OWN row list, because "all" means *the rows this grid is
+  showing* (Table Data must pass `EditableRows`). *(history: 10, 12, 25)*
 - **SQL Data Export — Copy as INSERT / UPDATE** — right-click a result row → runnable, provably-correct
   DML (de-aliased via the server's own provenance; UPDATE only on a catalog-verified complete PK, never a
   partial key → multi-row bug; `OVERRIDING SYSTEM VALUE` for `GENERATED ALWAYS`; InvariantCulture literals;
@@ -421,6 +477,1917 @@ noted.
 
 ## Current state
 
+- **⚙🔒 PAKIET UX PO M5 · PUNKT 5 — SETTINGS UX — ZAMKNIĘTY I ODEBRANY PO QA WIZUALNYM W OBU MOTYWACH
+  (2026-08-10).** Build 0/0; suite **8430** (8243 + 132 + 55); smoke czysty; `Lab/` nietknięty. As-built:
+  **[docs/history/27-post-m5-ux-package.md](docs/history/27-post-m5-ux-package.md) §9**. Nowa gotcha **#351**.
+  Render: `dotnet run --project tools/probes/VisualCandidateProbe -- settings after`.
+  🔒 Ratyfikowane: **T‑1** (nawigacja `ChromeStrongBrush` › treść `PanelBrush` › karta `BackgroundBrush`) ·
+  **sześć ikon, wszystkie istniejące** (`Icon.PanelLeft` dla Tabs, `Icon.Crosshair` dla Debuggera — ⛔ **nie**
+  kompozyt `DebuggerIcon`, bo byłby drugim mechanizmem rysowania ikony kategorii) · **`Size.Row.Tree` (24)**
+  bez roli `Size.Row.Nav` · wskaźnik aktywnej kategorii · **cztery pozycje Easy-mode w jednej karcie**.
+  ⛔ **Zero nowych tokenów** — kolorów, odstępów i ról wysokości.
+  ⭐⭐ **ZNALEZISKO GŁÓWNE: to był defekt HOSTA, nie stylu karty.** `Border.settings-group` opisuje siebie jako
+  *„recessed BackgroundBrush **inside the PanelBrush chrome** that hosts it"*; trzej pozostali konsumenci (oba
+  dialogi ustawień, Data Import) rzeczywiście dają mu ten kontener — **Settings Center nie dawał żadnego**, więc
+  karta i tło okna miały **identyczną barwę** (`#1E1E1E` na `#1E1E1E`; `#FCFCFD` na `#FCFCFD`) i całą separację
+  17 kart niosła kreska 1 px. ⛔ Kusząca naprawa — wzmocnić styl — trafiłaby w jedyne miejsce, gdzie styl jest
+  niewinny, i **zepsułaby trzy poprawne** (R7 w drugą stronę). Gotcha **#351**.
+  ⭐ **B4 zmieściło się w istniejącej architekturze**: cztery flagi zostają czterema wierszami katalogu, zmienia
+  się tylko pojemnik; jedyny dodatek to `ShowEasyModeGroup` w kształcie istniejącego `ShowTabStripMaxRows`.
+  ⛔ Zero zmian w `SettingsCatalog`. Skutek uboczny: strona Editor **mieści się w całości** (6 kart → 3).
+  ⭐ **Wskaźnik nie zmienia geometrii Z KONSTRUKCJI** — pasek `Size.TabIndicator` stoi zawsze, zaznaczenie
+  zmienia wyłącznie barwę (wzorzec ratyfikowany w M5 / L‑1). ⛔ Wariant `BorderThickness` na `ContentPresenter`
+  odrzucony: ramka wchodzi w desired size, więc rozpychałaby wiersz przy każdym kliknięciu (§13.3).
+  ⭐⭐ **DWIE RZECZY ZŁAPAŁ POMIAR PIKSELI, NIE OKO:** wskaźnik **w ogóle nie działał** (`Background="Transparent"`
+  lokalnie w szablonie bije setter stylu — **#342**; zmierzone `#094771` zamiast `#2D6BBF`), a render wyglądał
+  wiarygodnie — brak 2 px paska wygląda po prostu jak brak paska. ⚠ Odwrotnie: **zgłosiłem defekt, którego nie
+  ma** („panel treści nie bierze `PanelBrush`") i wycofałem go przed zmianą kodu — punkt pomiarowy trafił
+  w stopkę.
+  ⚠⚠ **Trzy istniejące strażniki padły na POPRAWNYM produkcie.** Dwa przepisywały przesłankę „jeden wiersz
+  katalogu = jedna karta" (**#333**) — przeformułowane na **tożsamość zamiast licznika** (każdy wiersz musi mieć
+  swoją etykietę na ekranie + kart nie może być więcej niż wierszy), ⛔ bez osłabiania i bez cofania grupowania.
+  Trzeci (`TheCatalogTableContainsNoStringLiterals`) **miał rację** — klucze ikon dostały nazwy jako `const`
+  obok istniejących id, a ⭐ nowy `EveryCategoryIcon_ResolvesToARealGeometry` pilnuje, żeby literówka w kluczu
+  **nie usuwała ikony po cichu** (`IconGeometryConverter` zwraca `null` — #348 w kształcie ikony).
+  ⏸ **Otwarte:** `Pad.Dialog` dostał pierwszego konsumenta (⚠ CLAUDE.md notuje tę rolę jako „zero konsumentów"
+  przy odłożonym pytaniu o padding NAGŁÓWKÓW dialogów — inne miejsce, ale zapisane) · ⛔ dwunastu innych
+  powierzchni nie ruszano.
+  ⏭ **Następny: punkt 6 (Database Properties), od KROKU 0 — wyłącznie sonda pomiarowa na żywym FB5**, bez
+  projektowania UX i bez implementacji, dopóki zachowanie API i bazy nie zostanie potwierdzone.
+
+- **🗄🔒 PAKIET UX PO M5 · PUNKT 6 — DATABASE PROPERTIES — ZAMKNIĘTY I ODEBRANY (2026-08-10). ⭐ TYM SAMYM
+  CAŁY PAKIET UX PO M5 JEST ZAMKNIĘTY (punkty 1–6).** Build 0/0; suite **8467** (8280 + 132 + 55); smoke
+  czysty; `Lab/` nietknięty. As-built: **[docs/history/27-post-m5-ux-package.md](docs/history/27-post-m5-ux-package.md) §11**
+  (krok 0 / pomiar: §10). Nowa gotcha **#352**. Render: `VisualCandidateProbe -- dbprops`.
+  **Co jest w produkcie:** `Properties…` w menu kontekstowym połączenia → okno z właściwościami bazy.
+  🔒 **Edytowalne wyłącznie: Sweep interval · Forced writes · Reserve space** — czyli dokładnie te, które
+  pomiar wykazał jako zapisywalne ONLINE, bez wyłączności. Reszta informacyjna.
+  ⭐⭐ **JEDNA OBIETNICA, NA KTÓREJ STOI BEZPIECZEŃSTWO: otwarcie okna i Apply nie wysyła NICZEGO.** To okno
+  pisze do współdzielonej bazy produkcyjnej przez API **bez wycofania**, poza wszystkimi lane'ami i poza
+  transakcją użytkownika. Realizacja: każda składowa `DatabaseConfigurationChange` jest nullowalna, `null` =
+  *nie ruszaj* ⇒ obietnica prawdziwa **z konstrukcji**. Potwierdzona **na żywym FB5**: wysłano
+  `sweep=4321 forced=<nic>`, a `ForcedWrites` po zapisie pozostało `True`.
+  ⚠⚠ **Apply NIE jest atomowy — to fakt o API, nie wybór**: każde ustawienie to osobne wywołanie Services,
+  więc wynik jest LISTĄ per ustawienie, a komunikat wymienia to, co **się udało**.
+  ⛔ **Poza V1, każde z powodem:** **SQL dialect** (zmierzony jako zapisywalny ONLINE — read-only jest tu
+  **decyzją produktową**, bo zmienia SQL samego EmberTerna) · **Page buffers** (`MON$` raportuje cache
+  DZIAŁAJĄCEJ instancji, więc pole zasiane tą wartością przypięłoby bazie liczbę dziedziczoną z serwera) ·
+  **Read Only** (wymaga wyłączności; usunięty w całości przy domykaniu — §11.6) · osiem kolumn FB4/FB5.
+  ⭐ **Bez bramkowania wersją, i to pomiar:** cały zestaw kolumn zweryfikowany na **FB3.0.13 (ODS 12.0)**
+  i **FB5.0.3 (ODS 13.1)**. ⭐ Odczyt na lane **Metadata**, zapis przez **Services API** (własne połączenie
+  poza lane'ami). ⛔ `FirebirdTraceService.BuildServiceConnectionString` **nie nadaje się wprost** — buduje
+  string *bez bazy*, a operacje konfiguracyjne wymagają `Database`.
+  ⭐ **VM bierze czytnik i writer jako DELEGATY** — dzięki temu każda reguła tej funkcji jest testowalna
+  **bez serwera**. ⚠ Menu jest **wyszarzane, nie ukrywane** (reguła z M3.4b część 2), na istniejącym
+  `CanDisconnect` — zero nowej maszynerii.
+  ⭐⭐ **Trzy poprawki UX z domknięcia** (§11.7): odstępy w Configuration (przyczyną była STRUKTURA — pole
+  i przełączniki w jednej siatce — nie brak marginesu) · **komunikat uwierzytelniania naprowadzający na SRP**
+  (⚠⚠ **odwrócenie zapisanej decyzji**: podpowiedź do `Legacy_Auth` raz usunięto, bo **orzekała** o przyczynie;
+  nowa **nie orzeka nic**, więc jest prawdziwa dla każdej przyczyny — gotcha **#352**; ⚠ rozpoznanie po
+  TEKŚCIE, bo ten błąd nie ma SQLSTATE ani GDS) · nawigacja Settings na **`PanelBrush`**, dokładnie tym
+  zasobie co `SidebarPanel` (⚠ skutek: nawigacja i treść mają ten sam ton, granicę niesie kreska) ·
+  **niełamliwe separatory liczb** w opisach Settings (`ProseNumbers` — reguła o KSZTAŁCIE: spacja z cyframi
+  po obu stronach; wpięta w JEDNYM miejscu, więc obejmuje też teksty przyszłe; ⚠ wyszukiwanie czyta tekst
+  surowy).
+  ⭐ **Strażniki zakresu, nie błędów:** writer nigdy nie woła trzech setterów wyłączonych z V1 (⚠ wszystkie
+  trzy **działają technicznie**, więc ich brak wygląda na przeoczenie) · czytnik nie nazywa żadnej kolumny
+  FB4/FB5 (asercja NEGATYWNA — lista dozwolonych byłaby przepisaniem katalogu FB3, #333).
+  ⏸ **Zapisane, nierozstrzygnięte:** `DatabaseApplyFailure.DatabaseInUse` straciło zmierzone uzasadnienie
+  (było nim Read Only) i **nie jest już dowodliwie osiągalne** — zostawione z jawnym zastrzeżeniem.
+  ⚠ Sonda pomiarowa `tools/probes/DatabasePropertiesProbe` **zostaje w repo** (decyzja użytkownika) — opis
+  i uzasadnienie w `tools/probes/README.md`.
+
+- **🔬 PAKIET UX PO M5 · PUNKT 6 · KROK 0 — SONDA POMIAROWA ZAKOŃCZONA (2026-08-10).** ⛔ **Zero kodu
+  produkcyjnego** — bez dialogu, VM, menu i writerów; produktem kroku jest POMIAR. Narzędzie:
+  `tools/probes/DatabasePropertiesProbe` (⭐ **sonda diagnostyczna, świadomie poza solucją, ZOSTAJE w repo**
+  decyzją użytkownika — jej wartość odtworzeniowa jest realna, bo każde ustalenie jest własnością WERSJI
+  silnika i sterownika). Pełny zapis: **[docs/history/27-post-m5-ux-package.md](docs/history/27-post-m5-ux-package.md) §10**;
+  opis sondy: `tools/probes/README.md`. FB **5.0.3**, ODS **13.1**, sterownik **10.3.4**, baza scratch;
+  ⚠ `Lab/` nietknięty (sonda z definicji zmienia nagłówek bazy).
+  ⭐⭐ **TRZY USTALENIA OBALIŁY TO, CO SUGEROWAŁA LEKTURA KODU I BINARKI.** (1) **`ENGINE_VERSION` NIE jest
+  zamiennikiem `FbConnection.ServerVersion`** — kontekst daje `5.0.3`, sterownik pełny banner **z nazwą
+  maszyny serwera**; moja własna rekomendacja „reuse before create, nie dodawaj zapytania" **wycofana**.
+  (2) **`SetAccessModeAsync` bierze `bool`, nie enum** — a refleksja STATYCZNA nie odpowiedziała w ogóle
+  (7 typów z całego assembly; graf zależności wymaga prawdziwego hosta), więc pomiar musiał być
+  URUCHOMIONY. Znalezienie nazwy metody w binarce to dowód o SYMBOLU, nigdy o zachowaniu — **#321**
+  w tym samym kształcie. (3) **Błędne hasło do Services API zgłasza się jako `Not supported plugin
+  'Legacy_Auth'`**, a nie jako błąd poświadczeń.
+  ⭐⭐ **NAJWAŻNIEJSZE DLA PROJEKTU: `Page buffers` ODCZYT I ZAPIS NIE DOTYCZĄ TEJ SAMEJ RZECZY.**
+  `MON$PAGE_BUFFERS` raportuje **cache DZIAŁAJĄCEJ instancji**, nie zapisany nagłówek; zmiana obowiązuje
+  dopiero po **PEŁNYM ZWOLNIENIU** bazy, nie przy następnym attachmencie (rozdzielone osobnym scenariuszem
+  z trzymanym attachmentem — zwykła sekwencja odczyt→zapis→odczyt tego nie rozróżnia). ⚠⚠ Konsekwencja:
+  pole zasiane z `MON$` pokazuje **wartość dziedziczoną z serwera** (51200), a Apply bez żadnej edycji
+  **przypiąłby ją do bazy na stałe**. ⭐ `SetPageBuffersAsync(0)` = „dziedzicz" i jest odwracalne, ale
+  „dziedziczone" i „przypięte 51200" są przez `MON$` **nierozróżnialne**.
+  ⭐ **`Read Only` wymaga WYŁĄCZNOŚCI — zmierzone**: SQLSTATE `40001` przy jednym otwartym attachmencie,
+  sukces po zamknięciu wszystkich. EmberTern trzyma 2–3 attachmenty na profil.
+  ⭐ **`SQL dialect` działa ONLINE** (3→1→3 przy otwartym attachmencie) — pozostawienie go do odczytu jest
+  decyzją PRODUKTOWĄ (wpływa na SQL samego EmberTerna), nie ograniczeniem technicznym.
+  ⭐ Bramka uprawnień to **`USE_GFIX_UTILITY`** (SQLSTATE `28000`) z cytowalnym komunikatem ⇒ własny
+  pre-check zbędny. ⛔ `Database` w connection stringu Services jest **wymagane**, a
+  `FirebirdTraceService.BuildServiceConnectionString` buduje string **bez bazy**.
+  ⚠ Pułapki odczytu: `RDB$LINGER` czyta się **NULL, nie 0**; `MON$OWNER` wraca **dopełniony spacjami**.
+  ⚠ Niezmierzone i zapisane jako takie: serwer zdalny (mierzone na `localhost`), FB3/FB4, `RDB$LINGER`
+  jako wartość zapisywalna.
+  ⏭ **Następny krok: propozycja zakresu, wyłącznie na podstawie pomiarów — bez implementacji.**
+
+- **🧰🔒 PAKIET UX PO M5 — ZAMKNIĘTY W CAŁOŚCI (2026-08-10). Wszystkie sześć punktów odebranych po QA
+  użytkownika.** Gałąź `feat/product-polish`; ⛔ **nadal NIE
+  scalona do `master`.** Sześć zgłoszeń ze zwykłego używania: 1 ikona zakładki Security · 2 `Button.primary`
+  w stanach · 3 Live DDL na pięciu powierzchniach · 4 Performance / Execution plan · 5 Settings UX ·
+  **6 Database Properties** (osobny mini-etap; ⭐ Faza 0 zmierzyła już jego wykonalność na żywym FB5 — patrz
+  historia §1). Narracja + as-built:
+  **[docs/history/27-post-m5-ux-package.md](docs/history/27-post-m5-ux-package.md)**. Nowe gotchy **#347–#348**.
+  Build 0/0; suite **8401** (8218 + 128 + 55); smoke czysty; render QA:
+  `dotnet run --project tools/probes/VisualCandidateProbe -- qa123`.
+  ⭐⭐ **WYNIK FAZY 0: trzy z sześciu zgłoszeń opisywały coś innego, niż się wydawało — i za każdym razem
+  zmieniło to KSZTAŁT pracy, nie jej rozmiar.** Ikona Security **nie była defektem renderowania**, tylko
+  ratyfikowaną decyzją (R‑6 / K‑final) wykonaną w połowie — przycisk przeniesiono na `AccentBrush`, zakładki
+  nie, przez co była **jedyną z sześciu** zakładek narzędziowych na kolorze RODZAJU (5:1). Plan wykonania
+  **nie potrzebuje parsera — parser już istnieje** (`PlanNode` niesie `Method`/`TableName`/`IndexName`/
+  `Detail`), a `PlanNodeViewModel.DisplayText` zwraca `Node.RawText`, czyli **wyrzuca całą klasyfikację**;
+  ⛔ dlatego highlighting SQL byłby złym narzędziem — plan Firebirda nie jest SQL-em. Live DDL to nie jedna
+  powierzchnia, tylko **pięć bajtowo identycznych kopii**.
+  ⭐⭐ **#347 — `Button.primary`: wariant nadpisywał `Foreground` na PRZYCISKU i na jawnych dzieciach, ale
+  nigdy na `ContentPresenter`**, gdzie Fluent stawia `ButtonForeground{PointerOver,Pressed,Disabled}` —
+  a presenter z treścią będącą ZWYKŁYM STRINGIEM rysuje tekst sam. Zmierzone: Light **2,04:1 → 8,33:1**;
+  22 przyciski z `Content=` zagrożone, 18 z dziećmi odporne. ⭐ **Mechanizm był zepsuty w OBU motywach** —
+  Dark przechodził przy 5,62:1 wyłącznie dlatego, że `ForegroundColor` jest tam prawie biały.
+  ⛔ **Nie naprawiać w `FluentBridge`** (obsługuje wszystkie zwykłe przyciski, gdzie ciemny tekst jest
+  poprawny).
+  ⚠⚠ **Pierwsza wersja strażnika zaświeciła na CZERWONO na poprawnym produkcie**: obejmowała progiem 4,5:1
+  także stan NIEAKTYWNY, który jest **świadomie przygaszony** (2,43:1 / 4,02:1, decyzja z 2026-08-03), więc
+  „naprawa" oznaczałaby cofnięcie tamtej decyzji dla zadowolenia progu. **#322 popełnione wewnątrz strażnika
+  pisanego przeciwko temu błędowi**; zakres zawężony do stanów akcyjnych, stan nieaktywny pilnuje asercja
+  WIĄZANIA.
+  ⭐ **Live DDL nie dostał pięciu kopii:** `AttachReadOnlyHighlighting` wpina tylko warstwę semantyczną,
+  a paletę XSHD + `SelectionBrush` + reakcję na motyw przepisano ręcznie do **dwunastu** widoków — piąta
+  powierzchnia byłaby kopią 13–17. Nowe `SqlEditorBehavior.AttachDdlPreview` = jedno wywołanie
+  (semantyka + leksyka + motyw + push tekstu przez nowy `IDdlPreviewSource`).
+  ⚠⚠ **Granica zapisana, nie ukryta: w czterech DIALOGACH warstwa semantyczna jest bezczynna** — jej
+  metadane płyną z `Window.DataContext as MainWindowViewModel`, a tam DataContextem jest VM dialogu; dialogi
+  dostają warstwę leksykalną, New Table (żyje w `MainWindow`) obie. ⛔ Dwunastu istniejących powierzchni
+  **nie migrowano** — follow-up, nie zmiana przy okazji.
+  ⚠ **Znalezisko z samego renderu (#348):** pierwsza wersja pokazała „PO" **bez koloru**, bo definicje XSHD
+  rejestruje `App`, a sonda uruchamia `ProbeApp` — brak rejestracji nie zawodzi, po cichu zabiera kolor,
+  a obrazek wygląda wiarygodnie.
+  ⭐⭐ **PUNKT 4 (Performance / Execution plan) — ZAMKNIĘTY: 4a layout + 4b kolorowanie nazw.** Suite **8429**
+  (8242 + 132 + 55). ⛔⛔ **NAJWAŻNIEJSZE DLA NASTĘPNEJ SESJI: warianty W1/W2 (różnicowanie metod dostępu,
+  wycofywanie czasowników `Table`/`Index`, trzeci poziom neutralny) zostały ZBUDOWANE, WYRENDEROWANE
+  I ODRZUCONE — nie projektować ich ponownie** (historia §6.5). Powód jest zmierzony, nie estetyczny:
+  katalog ma **dokładnie DWA** neutralne poziomy tekstu, a dzieli je w Dark **1,78:1** (Light 2,88:1), więc
+  deklarowane rozróżnienie nie było wiarygodnie widoczne; trzeci poziom wymagałby nowego tokenu.
+  ⭐⭐ **Znalezisko 4b: parser planu JUŻ ISTNIAŁ, a widok wyrzucał jego wynik** — `PlanNode` niesie
+  `Method`/`TableName`/`IndexName`/`Detail` dla każdego węzła, a `DisplayText` zwracał `Node.RawText`.
+  Kolorowanie nie potrzebowało nowej gramatyki, tylko żeby widok przestał spłaszczać. ⛔ Highlighting SQL
+  byłby złym narzędziem — plan Firebirda nie jest SQL-em.
+  ⚠⚠ **Podział bierze się z ROZCIĘCIA tekstu surowego, nigdy ze składania z pól** — inaczej klasa
+  odtwarzałaby wypowiedź silnika i każdy rozjazd po cichu pokazałby plan, którego serwer nie wydrukował.
+  Granica z faktu, że **`Detail` jest SUFIKSEM `RawText`**, więc nie ma tu drugiej kopii listy słów parsera.
+  ⚠⚠ **Korekta `IconColor_Index` → `#4F812C` i `IconColor_Procedure` → `#CE4800` (Light) NIE jest osobną
+  decyzją estetyczną, tylko WARUNKIEM poprawności kolorowania**: te role zaprojektowano dla IKON (próg 3:1),
+  a plan maluje nimi TEKST 11 px (próg 4,5:1) — zmierzone 4,00:1 i 3,70:1. ⛔ Cofnięcie ich przy zachowanym
+  kolorowaniu wraca pod próg §10 i zapala strażnika.
+  ⚠ **Copy przy „Raw plan" NIE kopiuje samego planu**, tylko ładunek „expert drawer" (timings + capture +
+  plan) — zachowanie zastane, świadomie nieruszone, przypięte testem.
+  ⛔⛔ **LEKCJA PROCESOWA, warta więcej niż sam punkt (historia §6a): sprzątanie po odrzuconym eksperymencie
+  skasowało ZAAKCEPTOWANY 4b, a git nie miał czego przywrócić — pliki nigdy nie były commitowane.**
+  `git checkout` cofa do HEAD, czyli do stanu SPRZED całego punktu; plik nieśledzony i usunięty nie ma
+  w gicie żadnej siatki bezpieczeństwa. ⭐ **Commituj odebrany etap, zanim zaczniesz na nim eksperymentować.**
+  ⏸ **Otwarte w pakiecie:** punkty 5–6; ujednolicenie dwunastu istniejących podglądów DDL; rozjazd rozmiaru
+  podglądu 13 (zakładka) / 11 (dialog) — świadomy, opisany rodziną, zmiana byłaby decyzją typograficzną.
+  ⚠ **`Lab/EmberTern_Lab.fdb` bywa modyfikowany przez SMOKE TESTY** (Firebird dotyka nagłówka przy
+  podłączeniu) — sprawdzaj `git status Lab/` przed commitem po smoke; to nie jest zmiana w kodzie.
+
+- **🏁🔒 M5 · PRODUCT POLISH — ETAP ZAMKNIĘTY W CAŁOŚCI I ODEBRANY (2026-08-10). ⭐ WRAZ Z NIM ZAMKNIĘTY
+  JEST CAŁY PLAN §13 — po M5 nie ma kolejnej pozycji.** Build 0/0; suite **8392** (8214 + 123 + 55); smoke
+  czysty. Podsumowanie: `product-polish.md` **§19.51**; startowy dokument:
+  **[product-polish-m5-next-session.md](docs/design/product-polish-m5-next-session.md)**.
+  ⛔ **`feat/product-polish` NIE jest scalona do `master`** — ratyfikowana decyzja użytkownika (2026-08-05)
+  nadal obowiązuje.
+  **Sześć pozycji:** kontrast **§10** (§19.45) · focus **L‑1** (§19.46) · empty states **M‑3** (§19.47) ·
+  animacje **§9** (§19.48) · **DPI** (§19.49) · terminologia **M‑4** (§19.50). „Oba motywy" to kryterium
+  przekrojowe każdego QA, nie osobna pozycja.
+  ⭐⭐ **WYNIK METODOLOGICZNY CAŁEGO M5: w CZTERECH z sześciu pozycji pomiar obalił zapis, na którym pozycja
+  stała — i za każdym razem zmieniło to kształt pracy, nie tylko liczbę.** §10 cytowało normę, której nie
+  spełnia (żadna rola typograficzna nie kwalifikuje się jako „duży tekst" WCAG) · L‑1 opisywał objaw, a
+  produkt miał **dwie konwencje focusu naraz** · §9 „zero naruszeń" pochodziło z licznika na źródłach, gdy
+  framework wnosi **16 przejść** · M‑4 „Drop wyłącznie w Data Import" opisywało **2 z 26** wystąpień, i to
+  na tej przesłance zapadła decyzja projektowa, zanim pomiar ją obalił. ⭐ Wspólny wniosek: **zapis
+  w dokumencie starzeje się ciszej niż kod, a najgroźniej wtedy, gdy brzmi konkretnie** — norma z nazwą,
+  liczba wystąpień, „zero". ⛔ Mierz przed planowaniem, nie cytuj.
+  ⭐ **Dwie pozycje (§9 i DPI) zamknięto BEZ zmiany produktu i to jest wynik, nie brak** — ich produktem był
+  pomiar i korekta zapisu. ⚠ Odwrotnie **M‑4 wymusiło zmianę KODU** (`CollectionCommands.RemoveVerb`), choć
+  wyglądało na etap czysto tekstowy: wspólny router kolekcji opisywał **jedną etykietą** trzy różne
+  operacje — `ALTER TABLE … DROP` na polu, `DELETE FROM` na wierszu i wyjęcie pozycji z bufora.
+  ⛔ **Świadomie odłożone po M5 (żadne NIE jest niedokończonym M5)** — pełna tabela z powodami w §19.51.3:
+  szerokość Activity Monitora i Data Importu przy 150 %/175 % (dług konstrukcyjny) · **etap odstępów**
+  (969 wartości lokalnych) · **app-wide UX sprint** (gęstość + czcionka monospace) · **B1** · **Z‑3** ·
+  ogon literałów ikon 10/11/13/15 · nazwane wyjątki terminologii · skale DPI > 175 % · `ToolTip` w §9.
+  ⏭ **Następny temat wymaga decyzji użytkownika.**
+
+- **🔤🔒 M5 · M‑4 TERMINOLOGIA — ZAMKNIĘTE I ODEBRANE PO QA (2026-08-10).** As-built: `product-polish.md`
+  **§19.50**; norma: **[terminology.md](docs/design/terminology.md)**; strażnik `TerminologyTests` (**R‑8**),
+  zweryfikowany podsadzeniem.
+  ⛔⛔ **INWENTARZ BYŁ BŁĘDNY I DECYZJA ZAPADŁA NA FAŁSZYWEJ PRZESŁANCE.** Raportowałem, że `Drop` występuje
+  **wyłącznie w Data Import**; zmierzone — **26 etykiet w sześciu modułach**, z czego import to **2**
+  (niecałe 8 %). Przyczyna: podgląd ucięty na `head -45`, czyli **uogólnienie z tego, co się wydrukowało**.
+  ⭐ Zgłoszone użytkownikowi **przed jakąkolwiek zmianą tekstu**; decyzja podjęta od nowa.
+  🔒 **Ratyfikowany wariant B: `Drop` = operacja DDL generująca `DROP`, `Delete` = pozostałe usuwanie,
+  `Remove` = element edytowanej kolekcji.** Uzasadnienie użytkownika: *„EmberTern jest narzędziem dla
+  developerów baz danych, więc chcę zachować informację o tym, jaka operacja DDL zostanie wykonana"*.
+  ⭐ Reguła **istniała utajona** i była łamana w połowie przypadków — M‑4 ją **dokończyło**: indeks miał
+  **cztery etykiety w dwóch słowach**, a generator kłócił się z własnym potwierdzeniem.
+  ⭐⭐ **To wymusiło zmianę kodu:** czasownik usunięcia stał się własnością **kolekcji**
+  (`CollectionCommands.RemoveVerb`), bo jedna etykieta nie może być poprawna dla pola tabeli (`DROP`),
+  wiersza danych (`DELETE FROM`) i pozycji bufora naraz.
+  ⭐ **Strażnik M‑3 złapał kaskadę** — zmiana tooltipa wymusiła synchronizację podpowiedzi w pustym pasku
+  bocznym. ⚠ **Dwa istniejące testy przepisywały starą treść** i padły (#333). ⚠ **Pułapka polskiego
+  cudzysłowu po raz TRZECI** (M4.3, M4.4, tutaj).
+  ⏸ **Nazwane wyjątki:** debuggerowe „Save" (kompiluje, ale „Save" opisuje akcję użytkownika —
+  `terminology.md` §2.1) · `FolderDialogCreate` · tytuły okien i zakładek · proza z „run".
+
+- **🖥🔒 M5 · DPI 100–175 % — ZAMKNIĘTE PO QA UŻYTKOWNIKA (2026-08-10). ⭐ ZERO ZMIAN PRODUKCYJNYCH; R‑6
+  SPŁACONE.** As-built: `product-polish.md` **§19.49**; checklista + wynik:
+  **[product-polish-m5-dpi-checklist.md](docs/design/product-polish-m5-dpi-checklist.md)**; pomiar:
+  `VisualCandidateProbe -- fit` → `out/m5-dpi-fit.txt`.
+  ⭐ **100 % i 125 % czyste; przystanki 1–7, 9 i 10 przeszły bez uwag** — czyli **żadna zmiana metryki
+  z M4 ani M5 nie okazała się defektem DPI**, a to był właściwy przedmiot R‑6. ⚠ Checklista była celowana:
+  dziesięć przystanków, każdy przypięty do iteracji, która go ruszył, a wszystkie liczby **policzone
+  z tokenów** — stąd priorytet: **125 % jest arytmetycznie najgorsze** (15 z 28 tokenów na ułamku piksela),
+  150 % ma 5, **200 % jest czyste dla wszystkiego**.
+  ⛔⛔ **ZNALEZISKO PRZY 150 % / 175 %: Activity Monitor i Data Import nie mieszczą się w szerokości,
+  bez możliwości przewinięcia.** 🔒 Ratyfikowane jako **DŁUG TECHNICZNY poza zakresem M5** — layout nie
+  jest zmieniany.
+  ⭐⭐ **To ograniczenie KONSTRUKCYJNE, nie defekt skalowania.** Pasek poleceń obu widoków to **goły poziomy
+  `StackPanel`** żądający **~1130 DIP** (18 i 20 dzieci), **bez `ScrollViewera`** — taki panel mierzy dzieci
+  przy nieskończoności i **nie kompresuje się, tylko przycina**. ⭐ Kontrolą jest Script Executor: żąda
+  *więcej* (1554 DIP) i problemu nie ma, bo jego nadmiar siedzi w siatce, która **umie się przewijać**.
+  ⛔ **Dowód, że to nie DPI:** na **1366×768 przy 100 %** dla treści zakładki zostaje **1082 DIP** (ekran −
+  pasek boczny 280 − splitter 4), czyli oba widoki nie mieszczą się **bez żadnego skalowania**; skalowanie
+  nie zmienia liczby DIP-ów, których żąda kontrolka, tylko liczbę, którą ma ekran. ⭐ Przewidywanie z pomiaru
+  **odtwarza obserwację co do skali** (mieści się przy 100/125, nie mieści przy 150/175) — to dowód, że
+  diagnoza trafia w mechanizm, a nie w objaw.
+  ⚠ **To nie regresja M4/M5, tylko dług, który M4 ZMNIEJSZYŁ** — mechanizm opisało już **§19.33** (M3b.1d),
+  licząc wtedy 520 px samych podłóg combo; blok gęstości M4 te podłogi zdjął (~154 px odzyskane).
+  ⚠ **Wysokość to osobny objaw i tylko Data Import** (żąda 739 DIP przy 688 dostępnych na 150 % i 590 na
+  175 %). ⚠ **Hipoteza dla znikającego paska statusu przy 175 % świadomie NIEDOWIEDZIONA** — `MainWindow`
+  nie daje się zbudować w sesji headless.
+  ⛔ **NIE implementować przewijania, `WrapPanela` ani redukcji toolbaru przy okazji innego etapu** — każdy
+  z tych kierunków to osobna decyzja UX (⚠ `WrapPanel` narusza §13.3 Zero Layout Shift). ⭐ Pomiar w §19.49
+  jest kompletny: **przy powrocie do tematu nie trzeba go powtarzać**.
+  ⚠ **175 % to obserwacja, nie cel projektowy**; skale >175 % nietestowane (Windows ich nie udostępnia na
+  konfiguracji użytkownika).
+
+- **🎬🔒 M5 · §9 RUCH I ANIMACJA — ZAMKNIĘTE (2026-08-10). ⭐ ZERO ZMIAN PRODUKCYJNYCH — iteracja
+  dostarczyła POMIAR, KOREKTĘ DOKUMENTU i JEDNEGO STRAŻNIKA.** Build 0/0; suite **8386** (8208 + 123 + 55,
+  +1); smoke czysty. As-built: `product-polish.md` **§19.48**; korekta: **§9 + nowe §9.1**; pomiar:
+  `VisualCandidateProbe -- motion` → `out/m5-motion.txt`.
+  ⭐⭐ **ZNALEZISKO: „§9 nie ma ani jednego naruszenia" opisywało coś innego, niż wyglądało.** Ten zapis
+  pochodził z licznika na źródłach (zero `Transitions`/`Animation`/`Storyboard` w `EmberTern.App`) — czyli
+  odpowiadał wyłącznie na pytanie **„czego MY nie napisaliśmy"**, podczas gdy §9 zakazuje przejść na
+  właściwościach układu **niezależnie od tego, kto je wniósł**, a sam §9 pisał *„Fluent wnosi własne
+  przejścia"* bez żadnej konsekwencji. **#337 jeszcze raz, o poziom wyżej.**
+  **Pomiar** z elementu, który maluje: **350 elementów na motyw**, zrealizowanych w prawdziwym oknie,
+  z wnętrzem szablonów i **otwartymi popupami** (lista `ComboBox`a i podmenu mają własny `PopupRoot`).
+  **16 przejść, wszystkie z Fluenta, wynik IDENTYCZNY w obu motywach.**
+  ⭐ **Zero przejść na właściwości UKŁADU** — jedyna reguła §9 z zapisanym uzasadnieniem jest spełniona.
+  ⛔ Naruszone są za to: **sufit 120 ms** (`ProgressBar` **197 ms**) i **krzywa** (wszystkie 16 na
+  `LinearEasing` zamiast `CubicEaseOut`).
+  ⭐⭐ **`RenderTransform` na przyciskach (7) jest BEZCZYNNY i zmierzenie tego zmieniło jego status:**
+  macierz jest **jednostkowa w spoczynku i po wymuszeniu `:pressed`**, również na **gołym `Button`** —
+  czyli to nie nasze warianty kasują efekt, tylko **Fluent 12.1.1 nie ustawia transformacji wciśnięcia**.
+  🔒 **DECYZJA UŻYTKOWNIKA (W‑A): korygujemy DOKUMENT, nie produkt.** ⛔ Nie nadpisujemy i nie przejmujemy
+  przejść Fluenta — ani czasu, ani krzywej, ani `ProgressBar`. ⭐ Powód rachunkowy: alternatywa to przejście
+  z **0 własnych przejść na 16** i utrzymywanie ich na zawsze, żeby zmienić zanikanie separatora paska
+  przewijania ze 100 ms liniowo na 100 ms kubicznie — zmiana dla użytkownika niewidoczna.
+  **§9 dostało kolumnę „Zakres"**: zakaz właściwości układu **bezwzględny**, a czas / krzywa / lista
+  dozwolonych właściwości dotyczą **ruchu, który EmberTern deklaruje sam**. Nowe **§9.1** zapisuje baseline
+  Fluenta jako **nazwany wyjątek z liczbami**; ⚠ wyjątek dla `RenderTransform` obejmuje **wyłącznie
+  zmierzone zachowanie** — gdy przyszły Fluent zacznie tę wartość zmieniać, decyzję trzeba podjąć od nowa.
+  ⭐ **Strażnik `EmberTernDeclaresNoMotionOfItsOwn`** (w `DesignTokenComplianceTests`): `EmberTern.App` ma
+  zero własnych `Transitions`/`Animation`/`Storyboard`. ⛔ **Celowo NIE próbuje kontrolować szablonów
+  Fluenta** — taki test wymagałby uruchomienia aplikacji i zmieniałby kolor przy każdej aktualizacji
+  frameworka (#333). ⭐ Zamienia stan **przypadkowy** („nikt nie napisał") w **egzekwowany**, żeby pierwsze
+  `<Transitions>` na `Width` było świadomą decyzją. Zweryfikowany podsadzeniem właśnie takiego przejścia.
+  ⚠⚠ **GRANICA POMIARU, zapisana świadomie:** **nie zmierzono `ToolTip`** (wymaga prawdziwego najechania)
+  ani przejść włączanych przez `ControlTheme` w stanie niewymuszonym przez sondę. „Zero na właściwościach
+  układu" jest **mocne, ale nie wyczerpujące**; ⛔ niczego w tych obszarach nie naprawiano.
+  ⚠ **Trzy rzeczy w samym pomiarze dawały fałszywą odpowiedź** — `ITransition.Property` i `Popup.Host`
+  **nie są publiczne** w Avalonii 12.1.1, `TransformOperations.ToString()` zwraca **samą nazwę typu**
+  (pierwsza wersja „pokazała" identyczny spoczynek i wciśnięcie, porównując dwie takie same etykiety),
+  a otwarcie popupu **mutuje drzewo w trakcie leniwej enumeracji**.
+  ⚠ **Jeden przebieg partycji głównej zaświecił raz na czerwono i NIE jest ogłaszany naprawionym ani
+  powiązanym** — trzy kolejne przebiegi po nim dały 8208 zielonych, nazwy nie udało się przechwycić.
+
+- **📭🔒 M5 · M‑3 STANY PUSTE — ZAMKNIĘTE I ODEBRANE PO QA WIZUALNYM UŻYTKOWNIKA W OBU MOTYWACH
+  (2026-08-10).** Trzecia iteracja M5. Build 0/0; suite **8385** (8207 + 123 + 55, +14); smoke czysty;
+  **wszystkie trzy podsadzenia złapane, każde przez swój i tylko swój test**. As-built:
+  `product-polish.md` **§19.47**. Nowa gotcha **#346**. Materiał: `VisualCandidateProbe -- empty`.
+  ⭐⭐ **ZNALEZISKO GŁÓWNE: audyt wskazał realną lukę, ale zbiór do zrobienia był ~3× mniejszy — i zawęziło
+  go PYTANIE, KTÓREGO INWENTARZ NIE ZADAŁ.** Audyt §1.1 mówił „empty state w **3 z 48** widoków"; zmierzone
+  — **12 widoków + 5 ViewModeli** już je miało, a i ta liczba jest zaniżona, bo licznik idzie po NAZWIE
+  stałej (`*Empty*`) i nie widzi Global Searcha, który ma pełny stan pusty pod nazwą `GlobalSearchNoResults`
+  (**#337 trzeci raz**). ⭐ Prawdziwe zawężenie dało jednak inne pytanie: nie *„czy jest komunikat"*, tylko
+  ***„czy ten stan JEST OSIĄGALNY"*** — z 13 zgłoszonych luk zostały **4**.
+  **Co weszło:** ⭐ **pusty pasek boczny** (wariant W4 z sześciu, ratyfikowany na renderze) — najpierw KROK,
+  potem miejsce akcji pokazane **glifem `Icon.Plus`**, bo przycisk „New Connection" nie ma na ekranie
+  podpisu; ⛔ wariant z własnym przyciskiem w panelu **odrzucony** (druga afordancja tej samej akcji) ·
+  **Roles** (baza bez ról to stan zwyczajny) · **Membership — DWA komunikaty kluczowane KIERUNKIEM**
+  (produkt wiedział o tym rozróżnieniu przed M‑3: `RowHeader` przełącza „Role name" ↔ „Member name") ·
+  **Script Executor — DWA stany** (`HasResults` liczy się z `_allRows` przed filtrem, siatka wiąże `Rows`
+  po filtrze).
+  ⚠ **Odstępstwo od zatwierdzonego renderu, zaakceptowane:** glif **12** i podpis **11**, nie 14 i 10 —
+  komentarz roli `Size.Icon.Sm` mówi wprost, że „ikona 14 px obok tekstu 11 px optycznie go przerasta".
+  ⚠ Bramka paska to **`RootNodes.Count == 0`**, nie „lista wierszy pusta": `SidebarRows` jest projekcją
+  FILTROWANĄ, więc bramka na niej pokazywałaby podpowiedź komuś, kto tylko wpisał filtr bez trafień.
+  ⛔⛔ **WPIĘCIE GOTOWEGO TEKSTU BYWA WPIĘCIEM DEFEKTU.** Z 8 osieroconych stałych `*Empty*` dwie opisywały
+  stan wciąż osiągalny — i **były wadliwe**: `ConnectionsEmptyHint` cytowało etykietę *„+ New Connection"*,
+  **której w produkcie nie ma** (przycisk to sam glif). Defekt przeżył całe życie produktu **dlatego, że
+  stała była osierocona**. Pilnuje tego dziś osobny strażnik.
+  ⛔ **WYCOFANE — stany NIEOSIĄGALNE, nie przeoczenia:** **Users** (`SEC$USERS` zawsze ma SYSDBA, a błąd
+  odczytu ląduje w banerze) · **View → Fields** (widok zawsze ma ≥1 kolumnę) · **klasa D** (zaznaczenie jest
+  null praktycznie tylko wtedy, gdy lista jest pusta — czyli klasa C).
+  ⛔ **WYCOFANE — treść nieprawdziwa:** **Privileges**. Ta siatka **wypisuje OBIEKTY** kategorii,
+  z uprawnieniami jako komórkami, więc grantee bez ani jednego uprawnienia do 200 tabel widzi **200 wierszy**;
+  „No privileges in this category." było zdaniem o czymś, czego użytkownik nie ogląda.
+  ⏸ **ODŁOŻONE decyzją:** **Session → Transactions** (licznik stoi w pasku podsumowania) · **Table → Indeksy**
+  (jedyna afordancja to menu kontekstowe — ⛔ nie budujemy stanu pustego wokół prawego przycisku myszy).
+  ⛔⛔ **NAZWANY WYJĄTEK — 17 drzew „Zależności" ZOSTAJE bez stanu pustego** (parytet z IBExpertem: każda
+  z 10 kategorii jest wierszem również pusta, więc obiekt bez zależności pokazuje `… (0)` ×10 — pustka jest
+  ogłoszona, ekran nie jest pusty). ⭐ Wyjątek jest **pilnowany TESTEM, nie zapisem w dokumencie** — to
+  **#340 przełożone na strażnika** — i test pilnuje **PRZESŁANKI**, nie polityki (#322).
+  ⚠ **Trzy razy pomiar obalił treść, którą sam zaproponowałem**, zawsze z tego samego powodu: **nazwa
+  kolekcji sugerowała, co siatka pokazuje, a kod mówił co innego**. ⭐ Wniosek na dalsze etapy: przy stanie
+  pustym pytaj najpierw, **KIEDY on zachodzi**, a nie jak go nazwać.
+
+- **⌨🔒 M5 · L‑1 FOCUS — ZAMKNIĘTE I ODEBRANE PO QA UŻYTKOWNIKA (2026-08-10).** QA potwierdziło: nawigacja
+  Tabem pokazuje widoczny focus, biała ramka na przycisku akcji działa, brak problemu wizualnego przy
+  przejściu focusu. ⛔ Nie wracać. Druga
+  iteracja M5. Build 0/0; suite **8371** (8193 + 123 + 55, +20); smoke czysty; **każdy z pięciu
+  wariantów zweryfikowany podsadzeniem**. As-built: `product-polish.md` **§19.46**; decyzja + pomiar:
+  **[product-polish-m5-focus-decision.md](docs/design/product-polish-m5-focus-decision.md)**.
+  🔒 **Ratyfikowany wariant 1** (użytkownik, 2026-08-10): **jedna konwencja `:focus-visible`** dla
+  wszystkich wariantów przycisku + uzupełnienie obu braków.
+  ⭐⭐ **ZNALEZISKO GŁÓWNE: L‑1 OPISYWAŁ OBJAW, NIE DEFEKT.** Audyt mówił *„`primary`/`caption` nie mają
+  `:focus`"*; pomiar headless dał trzy ustalenia: (1) ⛔ **`:focus` zapala się TAKŻE OD MYSZY** — więc
+  `Button.icon`/`.flat` trzymały obwódkę **po kliknięciu**, podczas gdy `CheckBox`/`RadioButton` używały
+  `:focus-visible` **od początku**, czyli produkt miał **dwie konwencje focusu naraz, w jednym oknie
+  dialogowym**; (2) ⛔ naiwna poprawka dla `primary` dałaby pierścień **niewidoczny** (`FocusBorderBrush`
+  na akcencie = **1,26:1 / 1,17:1** przy progu 3:1); (3) ⛔ naiwna poprawka dla `caption` byłaby **martwa**
+  (`BorderThickness=0` to świadomy reset, więc setter `BorderBrush` nie ma czego malować).
+  ⭐ Czyli **obie „brakujące" pozycje zawiodłyby przy dosłownym wykonaniu zalecenia audytu — i to
+  z dwóch różnych powodów.**
+  **Co weszło:** `icon`/`flat` — bez zmiany wyglądu, zmienił się WYZWALACZ · `primary` — ramka na
+  **`OnAccentBrush`** (barwa własnego tekstu), **5,29:1** · `caption` — **tło** `FocusBorderBrush`
+  + glif `OnAccentBrush` (3,27/3,76 i 4,21/4,53) · `ToggleButton.icon`. ⛔ **Żadnej nowej barwy.**
+  ⚠⚠ **ODSTĘPSTWO OD ZATWIERDZONEGO RENDERU: grubość pierścienia `primary` to 1, nie 2.** Render
+  pokazywał 2 px i tak został odebrany, ale grubość ramki wchodzi w desired size, a `ContentPresenter`
+  Fluenta jest wcinany o `BorderThickness` — więc 1 → 2 rozpycha przycisk **przy każdym Tabie**, czyli
+  łamie **§13.3 Zero Layout Shift** dokładnie tam, gdzie zmiana działa. ⭐ Odstępstwo **nic nie kosztuje**:
+  ramka grubości 1 **już tam była**, tylko niosła `AccentBrush` (barwę własnego tła), więc była
+  niewidoczna z konstrukcji — zmiana samej barwy **odsłania pierścień, który istniał**, przy zerowej
+  zmianie geometrii i tym samym kontraście.
+  ⚠ **`caption` wymaga DWÓCH setterów** — samo tło zostawia glif w `ForegroundBrush` = **2,84:1 w Dark**,
+  pod progiem; wariant „tylko tło" odrzucony pomiarem **zanim trafił do materiału decyzyjnego**.
+  ⚠ **`ToggleButton.icon` (22 wystąpienia) objęty poza dosłownym zakresem decyzji**, bo pozostawienie go
+  na `:focus` odtwarzałoby usuwaną niespójność w tym samym pasku. ⚠⚠ Uczciwie: weszło najpierw
+  **przypadkiem** (`sed` trafił w podciąg), zostało **rozstrzygnięte świadomie po fakcie** i objęte
+  strażnikiem — nie przepuszczone.
+  ⭐ **Strażnik ma DWIE asercje, bo dwa braki zawiodły inaczej:** focus musi **cokolwiek zmienić** i to
+  coś musi **trzymać 3:1**. Sama druga przepuściłaby martwy styl `caption`, sama pierwsza — niewidoczny
+  pierścień `primary`. Drugi test pilnuje, że wskazania **NIE MA** po fokusie wskaźnikiem.
+  ⏸ **Otwarte:** QA wizualne (w tym część, której render pokazać nie może — obwódka **nie** po myszy,
+  **tak** po Tabie) · ⚠ `TextBox` i `DataGrid` mają własne ścieżki focusu, **poza** zakresem L‑1.
+
+- **🎨 M5 · §10 KONTRAST SEVERITY — ZAIMPLEMENTOWANE 2026-08-10, ⏸ CZEKA NA QA WIZUALNE UŻYTKOWNIKA
+  w obu motywach.** Pierwsza iteracja M5. Build 0/0; suite **8351** (8193 + 103 + 55, +6); smoke czysty;
+  trzy nowe strażniki **zweryfikowane podsadzeniem**. As-built: `product-polish.md` **§19.45**; materiał
+  decyzyjny + pomiar: **[product-polish-m5-severity-contrast-decision.md](docs/design/product-polish-m5-severity-contrast-decision.md)**.
+  🔒 **Ratyfikowany wariant B** (użytkownik, 2026-08-10): trzy wartości w `Colors.axaml`, każda policzona
+  **przy progu** 4,5:1 na `PanelBrush` z zachowaniem odcienia — Light `WarningColor` `#C77800` → **`#A16100`**
+  (3,12 → 4,52) · Light `SuccessIconColor` `#2E8B4F` → **`#2A7E48`** (3,88 → 4,57) · Dark `ErrorColor`
+  `#F44747` → **`#F55252`** (4,26 → 4,53). ⚠ **Widać wyłącznie Light/Warning** (bursztyn → bursztynowo-brąz);
+  Dark/Error jest wizualnie nierozróżnialny i użytkownik świadomie odrzucił wariant „zostawmy, bo nie widać".
+  ⭐⭐ **ZNALEZISKO GŁÓWNE: to NIE był defekt `MessageBanner`, choć tak go nazwałem w inwentaryzacji.**
+  Zmierzony zasięg: `ErrorBrush` **30** konsumentów, `WarningBrush` **36**, `SuccessIconBrush` **25**, a każdy
+  maluje mały tekst w ~8–13 miejscach poza banerem — poprawka lokalna byłaby **R7** w czystej postaci.
+  ⭐ Druga połowa poszła w drugą stronę: **pasek i ikona przechodzą 3:1 we WSZYSTKICH ośmiu kombinacjach**,
+  więc sygnał severity był poprawny od początku, a wadliwy był wyłącznie TEKST — i to przesądziło o odrzuceniu
+  wariantu „tekst neutralny" (rozwiązywałby problem, którego nie ma, odwracając ratyfikowaną decyzję Seam 4).
+  ⚠⚠ **§10 CYTOWAŁO NORMĘ, KTÓREJ NIE SPEŁNIA, I O MAŁO NIE UZASADNIŁO DECYZJI.** Wiersz *„Tekst duży
+  (≥ 14 px lub ≥ 12 px SemiBold) → ≥ 3:1"* był opisany jako **„WCAG AA Large"**; WCAG wymaga **24 px** albo
+  **18,7 px bold**, a najwyższa rola EmberTerna to `Text.Display` = **23 px** — **żadna się nie kwalifikuje**.
+  Jeden z wariantów („SemiBold zamiast barwy") spełniałby §10 *jak napisane*, nie spełniając WCAG.
+  🔒 Ratyfikowane: próg 3:1 **zostaje jako wymóg własny EmberTerna**, jawnie nie jako WCAG (§10 + nowe §10.1).
+  ⚠ **`ActionRunColor` — rzecz spoza wariantów:** w Light miał wartość celowo identyczną z `SuccessIconColor`,
+  więc zmiana rozjeżdżała parę. 🔒 Rozstrzygnięte pomiarem — **wszystkie cztery** wystąpienia `ActionRunBrush`
+  to `SvgIcon` (próg 3:1, spełniony 3,88:1), więc **zostaje**. ⭐ Rozejście jest **projektem działającym zgodnie
+  z zamysłem**: decyzja W4 rozdzieliła te tokeny właśnie po to; komentarze w OBU słownikach zapisują rozejście
+  z powodem, więc żaden nie stał się nieprawdziwy.
+  ⭐ **Strażnik pilnuje DWÓCH progów, bo to dwa pytania** — tekst 12 px (4,5:1) osobno od paska/ikony (3:1),
+  na banerze i w logu Messages, w obu motywach. **Odczyt z ELEMENTU, KTÓRY MALUJE** (prawdziwy `MessageBanner`),
+  a log bierze mapowanie z produkcyjnego `QueryMessageViewModel.MessageBrushKey`, nie z przepisanej tablicy.
+  ⭐⭐ **Podsadzenie dało wynik mocniejszy niż „test świeci":** po cofnięciu `#C77800` **oba testy tekstu padły,
+  a test sygnału został ZIELONY** — dowód, że dwa progi są naprawdę rozdzielone, a nie zlane. Liczby
+  z podsadzenia (3,12 · 3,35) są **identyczne** z pomiarem statycznym sprzed wdrożenia.
+  ⚠⚠ **Sprostowanie mojej własnej tabeli, wykryte dopiero przy pisaniu strażnika:** twierdziłem, że w logu
+  Messages Success w Light ma 4,16:1 pod progiem — nieprawda, `ShowSeverityMarker` obejmuje **tylko Warning
+  i Error**, więc Success czyta tam `ForegroundBrush` i ta para **nigdy się nie renderuje**. Liczyłem kontrast
+  tokenu zamiast tego, co element maluje; decyzji nie zmienia (Success wymagał korekty z powodu banera).
+  ⏸ **Otwarte:** QA wizualne · brak **`SuccessBrush`** (jedyne severity odsyłające do tokenu IKONOWEGO —
+  asymetria zapisana, tokenu ⛔ NIE tworzono) · **P‑2** `AccentBrush` na railu 2,89:1 w Dark (poza zakresem,
+  `color-language.md` §9.2).
+
+- **🏁🔒 M4 · PRODUCT POLISH — ETAP M4 ZAMKNIĘTY W CAŁOŚCI I ODEBRANY (2026-08-09).** Oba bloki decyzyjne
+  (gęstość · typografia) + pięć etapów migracji (M4.1 · M4.2 · M4.2b · M4.3b+c · M4.4). Rejestr kolizji
+  **K1–K15 zamknięty**, zero otwartych pytań projektowych M4. ⏭ **Następny krok wymaga decyzji użytkownika —
+  patrz `docs/design/product-polish-m5-next-session.md`.**
+  ⭐⭐ **Wynik metodologiczny całego M4, wart więcej niż liczby: CZTERY zapisane przesłanki nie przeżyły
+  zderzenia z kodem** — „`Size.Icon` = 64 literały" opisywało 164 z 355 deklaracji (#332) · „K15 = 112
+  wystąpień w 17 plikach" to naprawdę 44 w 13, z czego 41 to JEDNA rola · §13.2 odrzucało `SidebarFlatController`
+  sprzężeniem, którego ten kontroler nie ma (§19.41.2) · a `GridSplitter` miał być „jedyną odłożoną pozycją,
+  którą M4.4 napotka" i nie ma go w oknach ani razu. ⭐ Do tego **trzy etapy z rzędu** (M4.2, M4.3, M4.4)
+  okazały się nie sweepem literałów, tylko **odbiorem decyzji, których nikt nie podjął** (#340).
+  ⚠ Praktyczny wniosek na następny sprint: **liczba w prozie starzeje się cicho** — mierz przed planowaniem.
+
+- **🪟🔒 M4.4 · DIALOGI I OKNA + `GrowingDialogBehavior` (M‑5) — ZAMKNIĘTY I ODEBRANY PO QA WIZUALNYM
+  (2026-08-09). Ostatni etap migracji M4.**
+  Build 0/0; suite **8345** (8193 + 97 + 55, +11); smoke czysty. As-built: `product-polish.md` **§19.44**.
+  Nowa gotcha **#343**. Decyzje użytkownika: punkt 1 TAK · `ApplyCeiling` = `min` · trzy dialogi wpięte ·
+  `RecompileDependents` wykluczony · nagłówki NIE TERAZ.
+  ⭐⭐ **MIGRACJA BYŁA PRAKTYCZNIE ZROBIONA — trzeci etap z rzędu o tym kształcie.** W zakresie 25 okien:
+  `FontSize` **3**, `CornerRadius` **0**, literały ikon **0**. Trzy pozostałe `FontSize` siedziały
+  w **tych samych trzech plikach**, co trzy żywe odesłania „Rozstrzyga §13.3" — sierocy backlog bramy
+  (#340), dokładnie jak przewidział dokument startowy. Wszystkie trzy zeszły na `Text.Application`;
+  grupa „TextBlock 13 px" przestała istnieć w dialogach. `FontSize` app-wide **31/12 → 28/9**.
+  ⚠⚠ **Trzeci przypadek nie był tym samym co dwa pierwsze i POMIAR ODWRÓCIŁ MOJĄ DIAGNOZĘ.** Wszystkie
+  trzy niosły identyczny odziedziczony komentarz („treść komunikatu"), ale w `ForeignKeyDialog` to nazwa
+  obiektu bazy pisana **monospace** — nasuwało to `Text.Code` (niesie 13, zero zmiany wyglądu) i tak
+  zamierzałem zrobić. ⭐ Rodzina to odrzuciła: **wszystkie 25 konsumentów `Text.Code` to EDYTORY**, a wśród
+  ~48 elementów monospace spoza edytora ten był **jedynym z literałem**; bliźniaczy `AddFieldDialog` (nazwa
+  typu bazy, monospace) czyta `Text.Application`. Reguła *„`Text.Code` opisuje edytor, monospace poza
+  edytorem bierze rolę tekstu"* **już w produkcie była** — M4.4 ją dokończyło (kształt Q2 z M4.3).
+  ⭐⭐ **M‑5: KRYTERIUM RZECZYWISTE, NIE GRUPOWE — i grupa 16 okazała się złym predyktorem.** Wpięte trzy
+  z czterech kandydatów: `NewConnectionDialog` (jedyny z prawdziwym wzrostem — komunikat testu połączenia
+  rośnie **poza** `ScrollViewerem`), `ExportDialog` (CSV odsłania opcje, baner błędu, podmiana paneli) oraz
+  `ExecuteProcedureDialog` — ⭐ ten ostatni **nie rośnie**, ale jego świadomy limit **720 stoi POWYŻEJ
+  obszaru roboczego 696** na 1366×768. ⛔ `RecompileDependentsDialog` **wykluczony pomiarem**: zero wiązań
+  `IsVisible`, lista gotowa przed otwarciem; jego 640 nietknięte.
+  ⛔⛔ **ZNALEZISKO, KTÓRE ZMIENIŁO KSZTAŁT PUNKTU: `ApplyCeiling` NADPISYWAŁ `MaxHeight`.** Podpięcie
+  podniosłoby świadome 720 → **1008** na zwykłym ekranie 1080 (a 640 → 1008), bo ręczny limit wykonuje **dwie
+  prace** — „nie przekraczaj ekranu" *i* „nie rośnij ponad wygodny rozmiar na dużym monitorze" — a mechanizm
+  znał tylko pierwszą. 🔒 Ratyfikowane: sufit to **`Math.Min(zadeklarowany, ekran)`**, i ⭐ jest to
+  **dowodliwie NO-OP dla obu dotychczasowych konsumentów** (żaden nie deklaruje limitu; nieustawiony
+  `MaxHeight` to `PositiveInfinity`). Gotcha **#343**.
+  ⭐ **`ExportDialog` dostał najpierw STRUKTURĘ, potem sufit** — nie miał `ScrollViewera` w ogóle, a sufit bez
+  przewijania **przycina** treść zamiast ją udostępnić (mówi to o sobie dokumentacja mechanizmu). Jeden
+  `ScrollViewer` obejmuje **`Panel`, czyli oba stany naraz**, więc trzeci stan odziedziczy przewijanie.
+  ⭐ **11 nowych strażników, wszystkie zweryfikowane podsadzeniem**, w tym `EverySizeToContentDialog_…` —
+  tablica 16 okien → decyzja + powód, egzekwowana w OBIE strony (nowe okno bez decyzji zapala test; wpis
+  niezgodny z kodem też). ⭐ To **#340 przełożone na strażnika**: odesłanie żyjące w źródle nie może już
+  wypaść między etapami, bo tablica jest w teście, a nie w dokumencie.
+  ⏸ **Otwarte:** ⛔ **nagłówki dialogu `20,16` ×15 vs `20,14` ×5** — 🔒 decyzja użytkownika: **na etap
+  odstępów po M4.4** (⚠ zmierzone: **stopka jest w pełni spójna 19/19**, rozjazd jest wyłącznie w nagłówku,
+  a rola `Pad.Dialog` = `20,16` ma **zero konsumentów**) · **B1** · **Z‑3** · migracja odstępów · ogon ikon
+  10/11/13/15 · `FontFamily`.
+  ⚠⚠ **Czwarta przesłanka M4 obalona pomiarem:** dokument startowy pisał, że `GridSplitter` to *„jedyna
+  z odłożonych pozycji, którą M4.4 może naturalnie napotkać"*. Zmierzone: wszystkie **15** deklaracji stoi
+  w **widokach zakładek**, a **w 25 oknach nie ma ani jednego**.
+
+- **🔘✅ M4.3c · `Button.seg` — ZAMKNIĘTY I ODEBRANY (2026-08-09).**
+  Build 0/0; suite **8334** (8182 + 97 + 55, +2); smoke czysty. As-built: `product-polish.md` **§19.43**.
+  Nowa gotcha **#342**. ⭐ Dziewięć segmentów w dwóch ekranach (Session 3, Trace 6) → **jeden styl**
+  w `ControlStyles.axaml`; dwie kopie lokalne usunięte.
+  ⭐⭐ **PRZESŁANKA, DLA KTÓREJ TA ITERACJA BYŁA OSOBNA, OKAZAŁA SIĘ NIEPRAWDZIWA — i ujawniło to
+  PODSADZENIE, KTÓRE NIE ZAPALIŁO TESTU.** M4.3b odłożyło `Button.seg` z uzasadnieniem *„konsolidacja zmienia
+  priorytet stylu — mechanizm §19.2, przez który M3.4a odmówiło"*. Zmierzone: bazowy `<Style Selector="Button">`
+  z `Padding` 99,99 postawiony **PO** bloku `.seg` **nie nadpisał** 8,3. ⭐ **Avalonia rozstrzyga między stylami
+  SPECYFICZNOŚCIĄ SELEKTORA, nie kolejnością** — selektor z klasą bije goły selektor typu niezależnie od
+  pozycji. ⚠⚠ §19.2 dotyczyło czego innego: styl przegrał z **WARTOŚCIĄ LOKALNĄ na elemencie**, a ta bije każdy
+  setter niezależnie od tego, gdzie styl mieszka. ⭐ Warunkiem bezpieczeństwa przeniesienia jest więc pytanie
+  **o ELEMENTY** („czy niosą wartości lokalne?" — nie niosą), a nie o pozycję bloku. ⛔ Nie wynika z tego, że
+  odmowa M3.4a była błędna — inne elementy, nieprzemierzone (**#342**).
+  ⭐ **Rozjazd, który to usunęło:** kopie różniły się **jedną wartością** — poziomym odstępem (Session 8,
+  Trace 10) — przy komentarzu Session deklarującym *„same segmented language as the Activity Monitor toolbar"*.
+  #335 ze świadkiem: **autor zapisał intencję, kod jej nie dotrzymywał.** 🔒 Wybrano **8** (R18 — przy równej
+  czytelności wygrywa gęstszy); ⏸ **widoczny skutek: sześć segmentów Trace zwęża się o 2 px z każdej strony.**
+  ⚠ Wartość jest LITERAŁEM celowo: `Pad.Cell` (8,3) i `Pad.MenuItem` (10,3) niosą te liczby, ale opisują
+  komórkę siatki i wiersz menu — rola niepasująca do elementu jest gorsza od wartości lokalnej z powodem (R12);
+  ⛔ nie utworzono `Pad.Segment` (jeden konsument = legalizacja wartości, jak odrzucone `Radius.Card` w B2).
+  ⭐ Wysokość segmentu nie była pytaniem: `Border.chrome Button` nadaje `Size.ControlToolbar` (22) — **rozstrzyga
+  KONTENER** (reguła #10). **Testy:** behawioralny (mierzy ZREALIZOWANY przycisk — kasowanie geometrii bazowej,
+  identyczność obu segmentów, 8,3, `MinHeight` z kontenera, stan aktywny, oraz **że kontrolka zajęła miejsce
+  w układzie**) + źródłowy (kopia lokalna wygrałaby przez bliskość w drzewie, a test behawioralny by jej nie
+  zobaczył, bo buduje segment bez widoku). Oba dołączyły do **istniejącej** klasy headless, żeby nie powiększać
+  kruchej listy nazw w filtrze partycji.
+  ⚠ **Drugi raz w tej iteracji poprawił mnie pomiar:** mój komentarz **podniósł licznik wartości lokalnych
+  o 1**, bo cytował składnię atrybutu, a `Measure` nie pomija komentarzy (kwirk znany od M2c iteracji 2).
+  Naprawa: przeredagować komentarz, **nie** podnosić sufit. ⚠ Spadek `CornerRadius` 9 → 7 i `Padding` 38 → 37
+  jest częściowo **PRZENIESIENIEM, nie migracją** — wartości wyszły do `Themes/`, którego licznik nie skanuje;
+  zapisane przy obu wpisach bazowych.
+
+- **🖥✅ M4.3 (M4.3b) · DEBUGGER · TRACE · SESSION · SECURITY · PERFORMANCE — ZAMKNIĘTY I ODEBRANY PO QA
+  UŻYTKOWNIKA (2026-08-09).** ⭐ Cały M4.3 (M4.3b + M4.3c) wszedł JEDNYM commitem `2ebb341`, zgodnie
+  z decyzją użytkownika.
+  Build 0/0; suite **8332** (8182 + 95 + 55, +3); smoke czysty. As-built: `product-polish.md` **§19.42**.
+  Nowe gotchy **#340–#341**. Decyzje **Q1–Q4 ratyfikowane na renderze** (`VisualCandidateProbe -- m43`).
+  ⭐⭐ **ZNALEZISKO GŁÓWNE: to nie był sweep literałów, tylko ODBIÓR ZALEGŁYCH DECYZJI.** W pięciu plikach
+  etapu stało **19 komentarzy „rozstrzyga §13.3"**, pokrywających praktycznie każdą pozostałą tam wartość
+  lokalną — a brama §13.3a nie podjęła **ani jednej** (Z‑1…Z‑6 dotyczą czego innego), żadna nie dostała
+  numeru K, po czym blok typografii ogłosił rejestr kolizji „zamknięty w całości". ⭐ §19.40.5 opisało ten
+  mechanizm przy **B2**, ale jako pojedynczą pozycję, która „wypadła między etapami"; zmierzone — **B2 było
+  pierwszym z ~19 w zakresie i ~43 w całym `src/`**. Przyczyna to **rozdzielenie kustodii**: odesłanie żyje
+  w ŹRÓDLE, rejestr w DOKUMENCIE, a zamykany bywa wyłącznie dokument (**#340**).
+  ⭐ **Q1 — siedem promieni 4 → `Radius.Surface` (3)** + chip Session → `Radius.Chip` (4 → 4, bez zmiany).
+  ⚠ Jedna liczba, **dwa różne argumenty**: trzy KARTY dziedziczą B2 (rola nazywa „Kartę" we własnym
+  komentarzu), a cztery RAMKI KONTROLEK rozstrzygnął argument mocniejszy — `ControlCornerRadius` Fluenta = 3
+  i jest świadomie **NIENADPISANY** w `FluentBridge`, więc **każda prawdziwa obramowana kontrolka renderuje
+  się przy 3**, a te cztery ją tylko udawały. ⛔ Zostaje 9: koła, kapsuły i dwa resety — arytmetyka, nie role.
+  ⭐ **Q2 — pięć inline ✕ → `Size.Icon.Sm`.** Rozjazd (12 vs 11) siedział **wewnątrz jednego pliku**, więc nie
+  opisywała go żadna reguła per ekran (#335 o poziom niżej). ⭐ `MainWindow` **już** używał tej roli dla dwóch
+  takich ✕, więc M4.3 dokończyło regułę, a nie wprowadziło nową. ⚠ Koszt przyjęty świadomie: cztery ikony
+  rosną 11 → 12, pod prąd R18; wariant „rola na 11" cofałby odebraną decyzję M4.2.
+  ⭐⭐ **Q3 — grupa „TextBlock 13 px" (§18.0.5/3) opisywała pod jedną nazwą DWIE różne rzeczy.** TEKST bez roli
+  migruje (puste stany Session + Trace 13 → `Text.Application`; podpisy 9 → `Text.Caption`), a **osiem „Bold
+  13" w Security Managerze zostaje** — są bindowane do `PrivilegeStateGlyphConverter` zwracającego `✓`/`✓+`
+  w przycisku **20×18**, czyli to GLIFY strojone do kontenera (reguła #10), a nie tekst. ⭐ **Zmieniony został
+  POWÓD, nie wartość**: komentarz twierdził „a to jest tekst" i to on był nieprawdziwy (R12 w drugą stronę).
+  ⚠ Oba puste stany są konstrukcyjnie identyczne — jedna decyzja na dwa ekrany, nie dwie.
+  ⭐ **Q4 — pole filtra Trace `Height="26"` → `Size.Control` (24).** Rozstrzygnął pomiar, nie render: `TextBox`
+  i `ComboBox` biorą `MinHeight = Size.Control` = 24, więc pole stało **2 px wyżej niż każdy prawdziwy sąsiad**
+  i to ono wyznaczało wysokość paska. ⭐ Argumentem za obiema zmianami naraz było zdanie z istniejącego
+  komentarza — *„reads clearly as a text input"*: autor zapisał intencję, kod jej nie dotrzymywał.
+  **Liczby:** `FontSize` 36 → **31** app-wide (w zakresie 22 → 17, Session zdjęty w całości) · `CornerRadius`
+  17 → **9** · literały ikon 19 → **14** (Debugger zdjęty w całości).
+  ⚠⚠ **SPROSTOWANIE:** zapis „sufit rośnie 20 → 25" (§19.40.4 i ta sekcja) **nigdy nie zgadzał się z kodem** —
+  dodano +5 za `TableDetailTabView`, nie odejmując −6 zdjętych w tej samej iteracji z bliźniaków. Rzeczywisty
+  sufit po M4.2 to **19**; tablica bazowa sumowała 19, więc strażnik był zielony i rozjeżdżała się wyłącznie
+  **proza**.
+  ⭐ **Trzy nowe strażniki, wszystkie RELACYJNE i wszystkie zweryfikowane podsadzeniem** —
+  `BothEmptyStates_ShareOneTextRole` · `TheTraceFilterField_TakesTheHeightOfTheControlsBesideIt` (pilnuje
+  PRZESŁANKI: czyta rolę z `ControlStyles.axaml`, skąd bierze ją prawdziwy `TextBox`, #322) ·
+  `EveryInlineClearIcon_SharesOneSizeRole`.
+  ⚠⚠ **DWA Z TRZECH BYŁY W PIERWSZEJ WERSJI BŁĘDNE i wykrył to dopiero PRZEBIEG:** strażnik ✕ grupował **po
+  NAZWIE GEOMETRII** i padł na `MainWindow`, gdzie trzeci `Icon.X` to przycisk „Zamknij zakładkę" — samodzielna
+  AKCJA, **poprawnie bez deklaracji**, biorąca 16 z `ControlTheme` (**#341**: §19.39.2a popełnione *wewnątrz
+  strażnika napisanego, żeby temu zapobiec*); a strażnik wysokości łapał ogon **`MinHeight="0"`** i porównywał
+  rolę z zerem. ⚠ I raz jeszcze pułapka §19.31: przebieg raportował „2 niepowodzenia" przy buildzie z **4
+  błędami** (polski cudzysłów otwierający + ASCII zamykający w komunikacie asercji) — złapane wyłącznie
+  dlatego, że `Liczba błędów` czyta się PRZED listą niepowodzeń.
+  ⏸ **Otwarte po M4.3:** ⛔ **`Button.seg` → osobne M4.3c z QA behawioralnym** (decyzja użytkownika) —
+  zmierzone: styl zadeklarowany **dwa razy lokalnie**, kopie różnią się `Padding` **8,3 vs 10,3**, przy
+  komentarzu autora *„same segmented language as the Activity Monitor toolbar"*; ⚠⚠ konsolidacja **zmienia
+  priorytet stylu** (mechanizm regresji §19.2, z powodu którego M3.4a odmówiło takiego przeniesienia) ·
+  **B1** · **Z‑3** · migracja odstępów · ogon ikon 10/11/13/15 · `FontFamily` · `GridSplitter` · **M4.4**.
+  ⏸ **Świadomie bez testu behawioralnego:** iteracja zmienia wyłącznie METRYKI i ROLE na
+  `Border`/`TextBlock`/`SvgIcon` — zero zdarzeń, klawiatury, zaznaczenia i szablonowania, więc przesłanka
+  reguły z M4.2b nie zachodzi. ⚠ Przy `Button.seg` zachodzi — i stąd M4.3c ma go mieć.
+
+- **🌳🔒 M4.2b · DRZEWA „ZALEŻNOŚCI" — ZAMKNIĘTY, ODEBRANY PO QA WIZUALNYM UŻYTKOWNIKA (2026-08-08).**
+  ⏭ **NASTĘPNY ETAP: M4.3** (Debugger · Trace · Session Manager · Security Manager · Performance) —
+  ⛔ **rozpoczynany w NOWEJ sesji**; punkt startowy niżej.
+  Build 0/0 w Debug i Release; suite **8329** (8179 + 95 + 55); smoke czysty. As-built: `product-polish.md`
+  **§19.41**. Nowe gotchy **#338–#339**.
+  ⭐ **17 drzew (nie 18) → jedna kontrolka** `Controls/DependencyTreeView`, na **tym samym
+  `SidebarFlatController`**, którym działa drzewo połączenia. Znikło 17 kopii szablonu i 9 bajtowo
+  identycznych kopii `OnDependencyNodeDoubleTapped`; model i role tokenów były wspólne już wcześniej —
+  duplikacja siedziała **wyłącznie w warstwie widoku**. `MemberGroups`, `PlanRoots` i `Groups` świadomie poza
+  zakresem.
+  ⛔⛔ **§13.2 ODRZUCAŁO TĘ DROGĘ PRZESŁANKĄ, KTÓRA JEST NIEPRAWDZIWA** — pisało, że kontroler *„jest
+  sprzężony z połączeniem, metadanymi, filtrowaniem, licznikami"*; zmierzone: jego konstruktor bierze
+  **wyłącznie delegaty**, a całe to sprzężenie żyje w `MetadataExplorerViewModel`. ⭐ Zapis mówił prawdę
+  o SĄSIEDZTWIE klasy, nie o klasie — czwarta przesłanka M4, która nie przeżyła zderzenia z kodem.
+  ⚠ Wykrył to **użytkownik z działającej aplikacji**, nie ja z dokumentu.
+  ⭐ **Wysokość wiersza `Size.Row.Tree` (24)** — ten sam rodzaj elementu co wiersz Metadata Explorera;
+  reguła **zawężona do tej kontrolki**, bo globalny `TreeViewItem` obsługuje też Performance i Global Search.
+  Nowa rola **`Margin.PanelCaption`** (`Space.Md` + `Space.Xs`) dla 16 nagłówków — bez nowej wartości;
+  ⚠ świadomie NIE `Pad.Tab`, mimo że pionowo pasuje: jego rola opisuje zakładkę (R12).
+  ⭐ **JEDNA kanoniczna kolejność kategorii** (`MetadataCategoryOrder.All`), z której każde drzewo filtruje
+  swoje — bo dwie tablice, które dziś się zgadzają, jutro się rozjadą. Odniesieniem jest drzewo połączenia,
+  więc **nie zmieniła się w nim ani jedna pozycja**. ⛔ **„UDF" usunięte w całości** (kategoria historyczna,
+  zawsze pusta, produkt wspiera FB5); ⭐ skutek uboczny lepszy od poprawki: **każda kategoria ma teraz `Kind`**,
+  więc lista jest wyłącznie zawężeniem kanonicznej — zero pozycji wstawianych lokalnie.
+  ⭐ **Nawigacja ←/→ wspólna dla OBU drzew** — reguła w `SidebarFlatController.Navigate`, wpięcie
+  w `Behaviors/SidebarKeyboardNavigation`. ⭐ Kontroler decyduje, widok wykonuje, dzięki czemu **7 testów
+  reguły jest CZYSTYCH** i nie powiększa listy klas headless.
+  ⛔⛔ **TRZY DEFEKTY PRZESZŁY PRZEZ ZIELONY SUITE I ZOSTAŁY ZŁAPANE DOPIERO PRZEZ QA UŻYTKOWNIKA** — to jest
+  główny wynik tego etapu: (1) **pusty ekran**, bo podklasa `TreeView` nie dostaje `ControlTheme` (Avalonia
+  szuka go po typie KONKRETNYM) — naprawa `StyleKeyOverride`, **#338**; (2) **←/→ nie działało**, bo `ListBox`
+  obsługuje strzałki w class handlerze i handler instancyjny nie jest wołany — naprawa **tunel**, #224
+  o rodzinę kontrolek dalej; (3) **zaznaczenie ginęło po rozwinięciu**, bo odwzorowywanie wierszy przez
+  `Clear()` kasuje `SelectedItem` — ⚠ pojedynczy klawisz przechodził, ujawniły to dopiero DWA po sobie
+  (**#339**). ⭐ Lekarstwem są **testy behawioralne**, których etap nie miał na starcie
+  (`DependencyTreeRenderTests` — realizacja wierszy, ujawnienie dzieci, przebarwienie ikon, **realny klawisz
+  przez pełny pipeline**); asercją jest **zrealizowany kontener**, nie `ItemCount` (w chwili awarii `ItemCount`
+  = 1 przy 0 wierszy).
+  ⚠⚠ **Trzy razy pomiar wykazał błąd w MOICH WŁASNYCH testach** — fikstura przechodząca z zepsutą
+  implementacją (pusty węzeł stał ostatni), strażnik liczący ZAKOMENTOWANE wpięcie, test wysyłający klawisz
+  **donikąd** (`list.Focus()` nie ustawia fokusu w sesji headless — fokusować trzeba KONTENER WIERSZA).
+  Wszystkie trzy wykryło podsadzenie albo pomiar, nigdy czytanie kodu.
+  ⏸ **Otwarte po M4.2b:** **B1** z M4.2 (prywatne ikony PK/FK/Unique w `TableDetailTabView`, rysowane surowym
+  `<Path>` na siatce 14 — przygotowane, wygląd nierozstrzygnięty) · **Z‑3** · migracja odstępów · ogon
+  literałów ikon 10/11/13/15.
+
+- **🧱🔒 M4.2 · EDYTORY OBIEKTÓW — ZAMKNIĘTY, ODEBRANY PO QA WIZUALNYM UŻYTKOWNIKA W OBU MOTYWACH
+  (2026-08-08).** Build 0/0 w Debug i Release; suite **8313** (8167 + 91 + 55, +2); smoke czysty. As-built:
+  `product-polish.md` **§19.40**. Nowa gotcha **#337**.
+  🔒 **B2 ROZSTRZYGNIĘTE NA RENDERZE: karta aktywności bierze `Radius.Surface` (4 → 3), wariant `Radius.Card`
+  = 4 ODRZUCONY.** ⭐ Uzasadnienie jest merytoryczne, nie estetyczne: komentarz roli w `Tokens.axaml` zaczyna
+  się od słowa **„Karta"**, więc rola opisywała ten element od zawsze, a element jej odmawiał. ⭐⭐ To **R12
+  przeczytane w drugą stronę** — reguła chroni wartość lokalną, która ma powód, ale nie legalizuje takiej,
+  której powodem było *„czeka na decyzję"*. ⚠ Różnica wobec **K10** (gdzie nowa rola `Radius.Tab` = 4 była
+  właśnie właściwa) jest rzeczowa: tam sporna była **NAZWA przy zgodnej liczbie**, tu **LICZBA przy zgodnej
+  nazwie**; §3.3 pozwala dwóm rolom dzielić wartość, nie pozwala dwóm wartościom dzielić roli.
+  ⭐⭐ **ZNALEZISKO GŁÓWNE: M4.2 w rozumieniu „policzone literały → role" BYŁO JUŻ WYKONANE.** Pomiar
+  (regeksy strażników odtworzone 1:1) dał **zero** dla `FontSize`, `CornerRadius`, literałów ikon **i kolorów
+  zaszytych** w ośmiu z dziesięciu edytorów; w bliźniakach zostały wyłącznie pozycje **ratyfikowane, żeby
+  zostać** (dwa `TextEditor` 12 px w wierszu siatki + znak rodzaju 9 px — decyzje KONTENERA z §18.0.5/3,
+  wyłączone wprost w §19.38.7). Robotę wykonały **M2c iteracja 5** i oba bloki decyzyjne M4. ⭐ Potwierdza się
+  §18.5.2: wyjątki biorą się z tego, **ile RÓŻNYCH decyzji projektowych zapadło w pliku**, a nie z jego
+  wielkości ani wieku — edytory obiektów stoją na jednym wzorcu i nie mają nic własnego.
+  ⭐ **Co weszło:** sześć ikon karty aktywności w bliźniakach (literał `12`) → **`Size.Icon.Sm`**, którego
+  własny opis brzmi *„ikona inline w tekście 11 px"*, a każda z nich stoi obok tekstu `Text.Compact.Size` (11).
+  Wartość 12 → 12, **wygląd bez zmiany**; bliźniaki znikają z sufitu ikon (3 + 3 → 0). ⚠ To część ogona
+  sparkowanego w §19.37.7, ale **tylko dla 12 rola już istnieje i pasuje opisem** — tu nie było pytania, tylko
+  odpowiedź; ogon 10/11/13/15 zostaje sparkowany.
+  ⛔⛔ **B1 — `TableDetailTabView` MA WŁASNY, PRYWATNY SYSTEM IKON.** Trzy `StreamGeometry` deklarowane
+  lokalnie (PK / FK / Unique), rysowane **surowym `<Path Fill=…>`** pięć razy, na **siatce 14 jednostek**
+  zamiast kanonicznych 24. ⭐⭐ Ten sam obchód ukrył plik przed **trzema mechanizmami naraz**: domyślnym
+  rozmiarem z `ControlTheme` (A‑3), audytem wyśrodkowania z rundy QA M4.1 (czyta `IconGeometries.axaml`)
+  i licznikiem literałów, który wymagał `<controls:SvgIcon` — więc **plik raportował 0 przy pięciu literałach**.
+  ⚠ Zmierzone: **to NIE duplikat** — katalog nie ma ikony klucza głównego, obcego ani unikalności, więc
+  przeniesienie do systemu = przerysowanie na siatkę 24 = **zmiana wyglądu**. 🔒 Decyzja użytkownika:
+  **przygotować jako osobny przypadek, wyglądu NIE rozstrzygać w M4.2** — zrobione dokładnie tyle, dług jest
+  teraz widoczny i zmierzony.
+  ⭐ **Strażnik ROZSZERZONY, nie dobudowany obok:** `MeasureIconSizeLiterals` dostał `|Path` w istniejącym
+  regeksie; **bez ani jednego wyjątku**, bo w całym `src/` jest 9 elementów `<Path>` — 5 to te ikony, 4 to
+  wnętrza `ControlTemplate` i żaden nie deklaruje literału. Druga połowa jest **strukturalna**: geometria poza
+  `IconGeometries.axaml` musi nieść **zapisany powód** (wzorzec `DatePresentationTests`), plus strażnik
+  nieaktualnych wyjątków (#333). ⚠⚠ **Sufit rośnie 20 → 25 i to KOREKTA POMIARU, nie regresja** — ⛔ nie wolno
+  <!-- ⚠ SPROSTOWANIE (M4.3, 2026-08-09): liczba „25" jest BŁĘDNA i nigdy nie zgadzała się z kodem — do 20
+       z M4.1 dodano +5 za `TableDetailTabView`, nie odejmując −6 zdjętych w tej samej iteracji z bliźniaków.
+       Rzeczywisty sufit po M4.2 to **19** (tyle sumowała tablica bazowa, więc strażnik był zielony —
+       rozjeżdżała się wyłącznie proza). Po M4.3 jest **14**. Zdanie zostaje jako zapis tego, co napisano. -->
+  „naprawiać" tego obniżeniem wpisu. **Wszystkie trzy gałęzie zweryfikowane podsadzeniem** (podsadzenie `5 → 4`
+  jest jedynym dowodem, że regeks naprawdę liczy pięć `<Path>`, a nie że wpisałem pasującą liczbę).
+  ⚠⚠ **B2 WYPADŁ MIĘDZY ETAPAMI i to jest lekcja o rejestrze, nie o promieniu:** §18.4.5 oddał decyzję bramie
+  §13.3, **a §13.3a nigdy jej nie podjęła** (Z‑1…Z‑6 tego nie dotyczą) i pozycja **nie dostała numeru K**, więc
+  przeżyła zamknięcie rejestru kolizji „w całości". ⭐ **Odesłanie do etapu NIE JEST wpisem do rejestru** —
+  widać to dopiero, gdy ktoś idzie po plikach, a nie po rejestrze. Materiał: `VisualCandidateProbe -- radius`
+  (oba motywy, 1:1 **i ×4**, karta w otoczeniu `Radius.Surface`/`Radius.Chip`).
+  ⭐ **Dwie hipotezy o wspólnym wzorcu OBALONE pomiarem** (wynik negatywny wart zapisania): `MinHeight` 60 vs 80
+  to dwa różne pola, a `EditableDescription` (2 × 80 przy 8 bez deklaracji) to **reguła #10 działająca
+  poprawnie** — 8 bierze rozmiar od kontenera, 2 stoją w wierszu formularza. Pułapka 17.
+  ⛔ **Poza zakresem, decyzja użytkownika:** `GridSplitter Height="4"` ×5 (element chromy dzielony z M4.3/M4.4,
+  rozstrzyga się raz, na komplecie — R7) · migracja odstępów · M4.2b · Z‑3.
+
+- **🖼 M4.1 · ZAMKNIĘTY, ODEBRANY PO QA WIZUALNYM UŻYTKOWNIKA (2026-08-08).** Build 0/0; suite **8311**
+  (8165 + 91 + 55, +7 — sześć przypadków teorii strażnika odstępów + strażnik wyśrodkowania ikon); smoke czysty. As-built:
+  `product-polish.md` **§19.39**. Nowa gotcha **#335**.
+  ⭐⭐ **SUFIT LITERAŁÓW ROZMIARU IKONY 95 → 20, I NIE MA JUŻ ANI JEDNEGO LITERAŁU `14` ANI `16`** — zostaje
+  wyłącznie ogon 10/11/12/13/15, czyli pytanie o ROLE, sparkowane osobno w §19.37.7.
+  ⭐ **Znalezisko, które ukształtowało iterację: pasek paginacji nie zgadzał się sam ze sobą.** Populacja `14`
+  to **75 z 95 literałów**, a jej druga połowa — samotna ikona w `Button.icon` — była sporna, bo **identyczny
+  kształt renderował się 16 w 135 miejscach i 14 w 34**. Zejście do konkretnej KONTROLKI pokazało rozjazd, nie
+  rolę bez nazwy: ten sam pasek paginacji (te same stringi `TableDetailPagination*Tooltip`) miał **14**
+  w wynikach SQL i Table Data, a **16** w edytorach funkcji / procedury / widoku; tak samo trio
+  filtr/agregacja/eksport i chevron zwijania panelu. ⚠ Obie populacje żyją **w tych samych plikach**, więc nie
+  opisuje tego reguła ani per plik, ani per powierzchnia.
+  ⭐⭐ **Reguła jednak ISTNIEJE — łamały ją trzy grupy, a nie „wszystko", i dowodzi tego `Icon.RefreshCw`**,
+  jedyna ikona stojąca po OBU stronach linii i za każdym razem trafiająca dobrze: **16** jako przycisk paska
+  narzędzi, **14** gdy odświeża SIATKĘ (Table Data).
+  🔒 **Decyzja użytkownika: „dokończyć regułę, którą produkt już ma" — wszystkie trzy grupy na `Size.Icon`.**
+  Kryterium A‑3 to drabina *stoi w SERII vs stoi SAMOTNIE*, a nie *czy jest klikalne*: przycisk paginacji stoi
+  w serii czterech. ⭐ Wariant „wszędzie 16" odrzucony, bo rósłby powierzchnie już odebrane — wybrany
+  **wyłącznie ZMNIEJSZA**. Wykonanie: 75 ikon literał → rola (**wygląd bez zmiany**) + **18 ikon 16 → 14**
+  (paginacja w edytorach funkcji/procedury/widoku, chevrony panelu w Session i Trace, filtr+eksport w Trace) —
+  ⏸ **to te 18 jest przedmiotem QA**, reszta jest wizualnie zerowa z konstrukcji. Reguła zapisana w komentarzu
+  `Size.Icon` w `Tokens.axaml`, razem z dowodem i odrzuconym wariantem.
+  ⚠ **Zakres świadomie wyszedł poza trzy ekrany M4.1** — rozjazd jest z natury app-wide (jedna kontrolka
+  w pięciu ekranach), więc migracja per ekran zostawiłaby pasek niezgodny ze sobą do M4.3 (R7). M4.2/M4.3
+  zastaną mniej literałów, niż zakładał ich sufit.
+  ⛔⛔ **DRUGIE ZNALEZISKO — `Spacing`/`Padding`/`Margin` NIE BYŁY NIGDY LICZONE, i to nadal NIE jest migracja.**
+  Zmierzone app-wide: **985 wartości lokalnych w 150 wpisach plikowych**, przy odczycie roli **zero razy** dla
+  `Padding` i `Margin` — mimo że katalog ma dla nich siedem stopni skali od M2a. 🔒 Decyzja użytkownika:
+  **sam strażnik, zero migracji, odstępy jako osobny etap po M4.4**; ⛔ *„nie zmieniaj teraz żadnych wartości
+  odstępów tylko po to, żeby zadowolić nowego strażnika"* — i ani jedna nie została zmieniona. Trzy własności
+  **dołączyły do ISTNIEJĄCEGO mechanizmu** (`GuardedProperties`), baseline **per plik, nie sumą** (suma
+  przepuściłaby +5 w jednym widoku przy −5 w innym), policzony **tym samym `Measure`, który egzekwuje regułę**.
+  Zweryfikowany podsadzeniem naruszenia. ⭐ Dla przyszłego etapu: **214 z 320 `Spacing` pokrywa się 1:1** ze
+  `Space.Sm`/`Space.Xs`/`Space.Md` i będzie mechaniczne — treścią tamtego etapu jest ogon (5, 2, 1, 10, 3 px).
+  ⭐ **RUNDA QA (2026-08-08): 18 ikon 16 → 14 odebrane bez uwag; jedno nowe zgłoszenie — strzałki Undo/Redo
+  „wyglądają na nierówno ustawione".** Zgłoszenie **trafne**, i przyczyną jest **GEOMETRIA, nie
+  pozycjonowanie**: przycisk, kontener, padding i rozmiar są identyczne jak u sąsiadów, ale szablon `SvgIcon`
+  to `Viewbox` nad **stałym** `Canvas 24×24`, więc położenie ścieżki przenosi się 1:1 na render i **nic go nie
+  normalizuje**. Zmierzone: środek tuszu **14,75 zamiast 12**, czyli **1,83 px za nisko przy 16 px** — strzałka
+  jest wyśrodkowana, ściąga ją **łuk powrotu**. ⭐⭐ Audyt **wszystkich 86 geometrii** zamienił wrażenie
+  w rozkład: **73 mieszczą się w 0,25 jednostki od środka, 83 w 1,0**, a Undo/Redo były **dwoma z trzech**
+  największych odchyleń w aplikacji. Poprawka: **czyste przesunięcie o 2,5** (nie 2,75 — zostawia współrzędne
+  na siatce 0,5, a reszta 0,17 px leży w paśmie rodziny), kanoniczne `.svg` zaktualizowane, decyzja podjęta
+  **na renderze**. ⛔ `Icon.StepOver` (+1,62) **świadomie nietknięty** — wyjątek z powodem: „przeskok" nie ma
+  podłogi ani sufitu jak rodzeństwo, to pasek debuggera (M4.3), a tę trójkę trzeba oceniać razem.
+  ⛔ Oś pozioma nie jest pilnowana: `Icon.Play` +1,5 to **poprawna korekta optyczna** trójkąta (#288).
+  ⛔⛔ **I strażnik, który to pilnuje, w pierwszej wersji MIERZYŁ INNYM SILNIKIEM NIŻ RENDER** — liczył
+  `GetRenderBounds` w sesji headless i zgłosił **sześć fałszywych naruszeń**, wszystkie z łukiem: platforma
+  headless **ignoruje wybrzuszenie łuku**. `Icon.Search` to u niej środek 16,00, a w Skii 12,00. Naprawione
+  pomiarem **wprost SkiaSharpem**, przez co test nie potrzebuje platformy Avalonii i **zostaje w partycji
+  głównej**, nie powiększając listy klas headless. Obie gałęzie zweryfikowane podsadzeniem. Nowa gotcha
+  **#336**; as-built **§19.39.7**.
+  ⚠⚠ **Dwa moje własne zapisy z tej iteracji były NIEPRAWDZIWE i zostały wycofane przed zmianą kodu**
+  (§19.39.2a): „pasek paginacji ma TRZY rozmiary, w tym w debuggerze" — **debugger nie ma paska paginacji**,
+  a `Icon.ChevronRight` pełni dwie funkcje (paginacja i chevron ujawnienia); oraz wynikające z tego oskarżenie,
+  że **blok gęstości pogłębił rozjazd** — sweep A‑3 nie zmienił tam ani jednej wartości. ⭐ Grupowałem po NAZWIE
+  GEOMETRII, czyli popełniłem dokładnie ten błąd, który w tej samej iteracji opisywałem jako #335; wykryło to
+  dopiero wypisanie HOSTA (tooltipa i komendy) obok każdej ikony — pytanie *„czym ta rzecz jest dla
+  użytkownika"*, a nie *„jak nazywa się jej ścieżka"*.
+
+- **🔤🔒 M4 · BLOK TYPOGRAFII — ZAMKNIĘTY, ODEBRANY PO QA WIZUALNYM UŻYTKOWNIKA (2026-08-08).**
+  ⭐⭐ **TYM SAMYM DECYZJE PROJEKTOWE M4 SĄ KOMPLETNE** — zostaje migracja ekranów **M4.1–M4.4** i odłożone
+  **Z‑3**. Punkt startowy następnej sesji:
+  **[docs/design/product-polish-m4-migration-next-session.md](docs/design/product-polish-m4-migration-next-session.md)**.
+  ⚠ **ZAPIS HISTORYCZNY — ten wskaźnik był aktualny 2026-08-08.** Migracja M4.1–M4.4 jest zamknięta, a tamten
+  dokument jest historyczny; żywy punkt startowy to `product-polish-m5-next-session.md`.
+  Zgodnie z **D‑M4‑1** to druga i ostatnia pozycja rejestru; po niej **rejestr kolizji K1–K15 jest ZAMKNIĘTY
+  W CAŁOŚCI** i nie zostaje ani jedna otwarta kolizja. Build 0/0; suite **8304** (8158 + 91 + 55); smoke
+  czysty; trzy nowe strażniki **zweryfikowane podsadzeniem**. Materiał + pomiar:
+  **[docs/design/product-polish-m4-typography-decision.md](docs/design/product-polish-m4-typography-decision.md)**;
+  as-built: `product-polish.md` **§19.38**. Nowa gotcha **#334**.
+  ⭐⭐ **ZNALEZISKO GŁÓWNE — nagłówek sekcji był MNIEJSZY od tekstu, który nazywa.** `Text.SectionHeader`
+  niosła 11 SemiBold, a jej kanoniczny konsument stoi w **każdym z 19 użyć** nad `field-label`, który niesie
+  12 — więc obietnica roli („mocniejszy od podpisu pola") była prawdziwa wyłącznie o WADZE. ⭐ Dowodem był
+  **ROZKŁAD, nie pojedynczy ekran**: pięć widoków niezależnie odmówiło tej roli, a populacje wyszły **19
+  nagłówków przy 11 i 17 przy 12, w identycznym kontekście**. Rola idzie na **12 SemiBold** (interlinia za
+  rozmiarem, 15 → 17), 17 wyjątków znika. Kształt `Size.Row.Tree` z M3.4a.
+  ⭐ **`Text.Toolbar` wycofana — duplikowała `Text.Compact` ROLĄ, nie tylko liczbą** (tamta mówi wprost
+  „chroma — panele, zakładki, **paski**"). Zero konsumentów, przy trzech paskach na 11 i jednym na 12;
+  pasmo importu zeszło 12 → 11. ⚠ Trzy podpisy w tym pasmie zachowały `field-label` (barwa + margines)
+  i dostały **jawny** rozmiar chromy — 164 użyć tej klasy blok nie rusza.
+  ⚠⚠ **K9 wskazywał ZŁY ELEMENT:** `.bottom-tab`/`.sub-tab` były na roli od M2c/M3, a trzynastka siedziała
+  na **bazowym** `TabItem` obsługującym 10 zakładek dialogowych — „zakładka" okazała się nośnikiem **trzech**
+  różnych rzeczy. ⛔ **K5 SKREŚLONE — nie miało przedmiotu** (rozwiązane w chwili zapisu, jak wycofane K12).
+  🔒 **K4 ZOSTAJE 13 — ratyfikowana decyzja użytkownika, nie dług:** *„to pojedynczy element pełniący rolę
+  nagłówka planu i nie widzę potrzeby sztucznego sprowadzania go do 12 tylko po to, żeby zniknął literał"*.
+  ⭐ To **R12** wypowiedziane wprost; render pokazał, że zejście do 12 jest możliwe — i właśnie dlatego
+  odmowa jest decyzją, a nie ograniczeniem. ⛔ Nie „dokańczać" tego bloku.
+  ⭐ **D w całości:** lokalne `MinHeight="26"` usunięte (nagłówek `Expandera` bierze `Size.Control` z mostu) ·
+  chip transakcji na **`Space.Xs`** (4), nie `Space.Sm` (6) — bo to „elementy wewnątrz jednego wiersza",
+  a przy równej czytelności wygrywa gęstszy (**R18**); zbiega się z paddingiem badge'a DEV MODE · nowa rola
+  **`Radius.Tab`** = 4, bo sporna była NAZWA, nie liczba (§3.3 pozwala dwóm rolom dzielić wartość).
+  ⚠ Kolumny **×3** w renderze były częścią pytania: przy 1:1 wszystkie trzy pary wyglądają identycznie,
+  a *„nie widać różnicy"* i *„render nie pokazuje różnicy"* wyglądają tak samo.
+  ⏸ **Wycofane po zbudowaniu i wymaga OSOBNEJ decyzji:** poszerzenie okna licznika `FontSize` o `Completion/`,
+  `Sql/` i `Themes/`. ⭐ Zmierzone: **29 deklaracji leży poza jego zasięgiem** (karty hover, Quick Info,
+  Parameter Helper — powierzchnie oglądane przy pisaniu każdego zapytania). Ten sam `Measure` obsługuje jednak
+  **`FontFamily`**, czyli temat czcionki monospace ratyfikowany jako backlog sprintu UX — to nowa informacja
+  wobec rekomendacji, więc nie wsuwam jej przy okazji. Pomiar w komentarzu `DesignTokenComplianceTests`.
+  ⚠ **Jeden czerwony test w pierwszym przebiegu:** `SettingsLoadHealthTests.ConcurrentSaves_…` — znany
+  jednorazowy flake ze sprintu stabilizacyjnego; **3 przebiegi solo zielone i partycja zielona przy
+  powtórzeniu**. Nie ma związku z typografią i nie jest ogłaszany naprawionym.
+
+- **📐🔒 M4 · GRUPA GĘSTOŚCI — ZAMKNIĘTA, ODEBRANA PO QA UŻYTKOWNIKA W OBU MOTYWACH (2026-08-08).**
+  QA objęło siedem powierzchni: pasek narzędzi · Metadata Explorer · menu kontekstowe · zakładki · siatki
+  edytowalne · pasek importu · Security Manager. **Zero nieprawidłowości i zero regresji wizualnych.**
+  ⚠ Poza zakresem tego QA (i nadal otwarte): **150 % DPI** — R‑6 jest częściowo nieweryfikowalne headlessowo
+  i sprawdza się okiem, a ta iteracja ruszyła metryki. Zgodnie z **D‑M4‑1** etap otworzył **rejestr kolizji**, nie migracja ekranów,
+  a zgodnie z **D‑M4‑2** cała gęstość poszła jako **jedno pytanie**. Build 0/0; suite **8301** (8155 + 91 + 55);
+  smoke czysty; cztery nowe strażniki **zweryfikowane podsadzeniem**. Materiał decyzyjny + pełny pomiar:
+  **[docs/design/product-polish-m4-density-decision.md](docs/design/product-polish-m4-density-decision.md)**;
+  as-built: `product-polish.md` **§19.37**. Nowe gotchy **#332–#333**.
+  ⭐⭐ **NOWA REGUŁA OBOWIĄZUJĄCA W CAŁYM M4 — R18 (ratyfikowana z decyzjami):** *„jeżeli dwa warianty są
+  równie czytelne, wybieramy ten gęstszy; EmberTern jest narzędziem dla deweloperów baz danych, więc
+  priorytetem jest ilość informacji widocznych na ekranie bez pogarszania czytelności"*. ⚠ To reguła
+  ROZSTRZYGAJĄCA REMIS — warunek „bez pogarszania czytelności" jest pierwszy, a jego kryterium jest ekran
+  (R16), nie arytmetyka.
+  ⭐⭐ **TRZY ZAPISY NIE PRZETRWAŁY POMIARU, I KAŻDY ZMIENIAŁ KSZTAŁT PYTANIA.** (1) „`Size.Icon` — 64
+  literały" opisywało 164 z **355 deklaracji ikon**: **191 nie deklaruje nic** i bierze **16** z
+  `ControlTheme`, a rola miała **dwóch** konsumentów — komentarz obiecywał „toolbar, zakładka, drzewo, menu"
+  i 14, zmierzone **16 / 14 / 15 / 14** (gotcha #332). (2) „K15 — 112 wystąpień w 17 plikach, zmiana
+  rozjechałaby drzewo z resztą aplikacji (R7)" — naprawdę **44 ikony w 13 plikach, 41 z nich to WIERSZ
+  DRZEWA**, więc ⭐ **R7 przemawiał ZA zmianą całej roli naraz, nie przeciw niej**. (3) ⛔ **Z‑3: liczby
+  40 px NIE MA w `src/`** — `data-edit` ma stałe `Height="32"` od commita sprzed bramy, a siatka wyników nie
+  ma własnego stylu wiersza; **Z‑3 zostaje otwarte do pomiaru na żywej aplikacji** i świadomie NIE weszło do
+  tej iteracji.
+  **Co weszło:** ⭐ **A‑3** — chroma ma dwa nazwane poziomy: `Size.Icon.Toolbar` (16; przejęła nazwę po
+  `Size.Icon.Lg`, która miała **zero** konsumentów, więc migracja jest wizualnie zerowa) czyta ją domyślna
+  `ControlTheme` ikon i 16 literałów paska narzędzi/okna, a `Size.Icon` (14) obsługuje **wiersz** — zakładka,
+  drzewo, menu (`MenuMarkup.cs` czyta rolę, nie literał). ⭐⭐ To **nie nowa zasada, tylko drabina z M2b
+  przeniesiona o poziom niżej**: *„pole stoi w SERII, przycisk stoi SAMOTNIE i jest CELEM MYSZY"*
+  (`Size.Control` 24 / `Size.ControlToolbar` 22 → `Size.Icon` 14 / `Size.Icon.Toolbar` 16). ⭐ **B‑1** — 41 par
+  `15 + Spacing 5` → `Size.Icon` + `Space.Xs`; **wysokość wiersza drzewa się nie zmienia** (`Size.Row.Tree` to
+  `MinHeight` 24), zmiana jest wyłącznie pozioma. ⭐⭐ **C‑1** — nowa rola **`Size.Row.GridEdit` = 30**
+  zastąpiła 34/32/30: **wszystkie** siatki definicji mają `Padding="6 2"` (pion 4), edytor ma `Size.Control`
+  24, więc minimum to **28** — trzy liczby na jedno wymaganie, żadna z niego nie wynikała. ⭐ **D** — podłogi
+  `Transaction` (170) i `Errors` (180) zdjęte, `Profile` 170 → **140**; zmierzone naturalne szerokości
+  110 / 90 / 137, a `ComboBox` mierzy się do **najszerszej pozycji**, nie do zaznaczonej, więc lista
+  o zamkniętym zbiorze jest stabilna sama z siebie. **~154 px wróciło przyciskom.**
+  ⚠ **Świadome wyłączenia z powodem:** Security Manager (28 / `.checkbox-grid` 34) — jego komórką
+  interaktywną jest `CheckBox`, nie pole `Size.Control`, więc przesłanka roli jest tam inna (#322) · trzy
+  ikony 15 px, które nie są wierszem drzewa · pole trafienia chevronu 20×20 (cel myszy, nie rozmiar rysunku).
+  ⚠⚠ **DWA ISTNIEJĄCE STRAŻNIKI ZAWIODŁY NA TEJ ZMIANIE I ŻADEN DLATEGO, ŻE PRODUKT JEST ZŁY** — oba
+  pilnowały przesłanki „wiersz musi unieść edytor 24", **czytając ją jako LITERAŁ**, więc migracja na rolę
+  odebrała im zdolność czytania; jeden miał wysokość **przepisaną do stałej `= 32`**. ⭐ Naprawione przez
+  **rozwiązywanie roli**, nie przez osłabienie asercji, i przy okazji jeden z nich objął **wszystkie** siatki
+  edytowalne zamiast jednej (gotcha #333). ⚠ Pierwsza wersja nowego strażnika drzewa **skanowała cały plik**
+  i zgłaszała poprawne ikony o roli `Size.Icon.Sm`; zawężona do trzech szablonów po `DataType`.
+  ⏸ **Otwarte po tej iteracji:** sweep **95 pozostałych literałów** rozmiaru ikony (**M4.3** — sufit
+  `IconSizeLiteralBaseline` pilnuje, żeby nie przybyło, więc „ile zostało" jest liczbą) · ogon 10/11/13 px
+  (pytanie o ROLE) · **Z‑3** · Security Manager · reszta rejestru **K1–K11**, w którym po zamknięciu K15
+  ⭐ **nie ma już ani jednego pytania o gęstość** — zostały pytania typograficzne, promień i odstęp chipa.
+  ⛔ Migracja ekranów dopiero po rejestrze (**D‑M4‑1**).
+
+- **🔤🔒 SPRINT ZGODNOŚCI Z GRAMATYKĄ FIREBIRDA + POLISH (P1…P6 + runda QA) — ZAMKNIĘTY, ODEBRANY PO QA
+  UŻYTKOWNIKA (2026-08-08).** Sześć zgłoszeń z normalnego użycia, świadomie **przed M4**, plus cztery poprawki
+  z QA. Build 0/0 w Debug i Release; suite **8291** (8145 + 91 + 55); smoke Debug + Release czysty;
+  `DebuggerFidelityProbe` **40/40 ALL PASS** i `ChangeSafetyProbe` ALL PASS na żywym FB5. Narracja:
+  **[docs/history/26-firebird-language-completeness-sprint.md](docs/history/26-firebird-language-completeness-sprint.md)**.
+  Nowe gotchy **#324–#331**.
+  ⚠ Skok 7378 → 8263 to **nie** ~900 ręcznie napisanych asercji: 80 pozycji korpusu weszło do
+  `SqlTestCorpus.All`, które zasila teorie formatera (§0 round-trip, idempotencja, casing) i harness różnicowy
+  AST — ~11 przebiegów na pozycję. ⚠ `GridDateEditorTests` dołącza do partycji headless **zbiorczej** — a jej
+  brak w filtrze partycji był defektem samego dokumentu, naprawionym przy zamykaniu (patrz „Tests").
+  ⭐⭐ **RUNDA QA (2026-08-08) — cztery poprawki, wszystkie o TEJ SAMEJ granicy: o formacie i o wyborze
+  kontrolki decydował dotąd typ CLR, a nie typ kolumny Firebirda.** Nowe gotchy **#329–#331**.
+  🐞 **`CalendarDatePicker` obsługiwał też kolumny TIMESTAMP, i defekt był groźniejszy niż zgłoszenie:** widoczna
+  połowa to „nie da się edytować czasu", prawdziwa — `SelectedDate` sprawiał, że **zatwierdzenie wybranej daty
+  zapisywało północ na miejsce godziny, którą wiersz już miał** (reguła #11). ⭐ Zamiennik wybrany z **pomiaru
+  frameworka**: Avalonia 12.1.1 nie ma kontrolki łączącej datę z czasem (`CalendarDatePicker`/`DatePicker`/
+  `TimePicker`/`Calendar`), więc TIMESTAMP edytuje się **jako tekst**. ⭐ Zatwierdzenie **parsuje na typowany
+  `DateTime`**, bo Firebird czyta literał po SEPARATORZE (`07/08/2026` = 8 lipca), a siatka pokazuje pisownię
+  kultury czytelnika; kolejność: forma silnika → kultura czytelnika → invariant → tekst dosłownie.
+  ⛔⛔ **Prezentacja w siatce danych idzie z typu METADANYCH Firebirda, nigdy z typu CLR** (dyrektywa
+  użytkownika): `DATE` → sama data · `TIME` → sam czas · `TIMESTAMP` → data i czas · `… WITH TIME ZONE` → pełna
+  wartość ze strefą. ⚠ Kusząca naprawa „ukryj czas, gdy północ" jest **gorsza** — ukrywa prawdziwe `00:00:00`
+  na TIMESTAMP. Nowe `DateTimeDisplay.CellForType(value, firebirdType)`; **martwy `Cell(object?)`**, który
+  rozstrzygał dokładnie tą heurystyką i nie miał konsumenta, **usunięty**. ⚠ Siatka wyników SQL świadomie poza
+  zakresem: `QueryColumn` niesie `ClrType`, nie typ Firebirda.
+  ⭐ **W debuggerze formą czytelną jest forma SILNIKA** (`yyyy-MM-dd [HH:mm:ss]`) — Variables/Context, Watche,
+  wartości inline i zasiew pola edycji; ⛔ liczby zostają invariantne (konwencja literałów harnessu).
+  ⚠⚠ **Edytor siatki pracuje do SEKUNDY (decyzja użytkownika), a to samo w sobie tworzyło drugi defekt:**
+  `DataGrid` zatwierdza komórkę dlatego, że wyszedł z niej fokus, więc przejście Tabem zapisywałoby zaokrągloną
+  wartość na miejsce ułamkowej. Stąd **„nic nie wpisano ⇒ nic nie zapisano"** i **jeden właściciel zasiewu**
+  (`EditorSeedText`, czytany przez szablon i przez to sprawdzenie). ⚠ Debugger zachowuje pełną precyzję —
+  tam wartość się OGLĄDA, a nie przepisuje.
+  ⭐⭐ **TRZY Z CZTERECH PUNKTÓW PO POMIARZE OKAZAŁY SIĘ CZYMŚ INNYM, NIŻ OPISYWAŁO ZGŁOSZENIE — a w P5
+  pomiar ODWRÓCIŁ DIAGNOZĘ:** siatki danych nigdy nie były przywiązane do `InvariantCulture`, tylko wiernie
+  odtwarzały **nadpisanie krótkiej daty w Windows samego zgłaszającego** (`pl-PL` z `yyyy-MM-dd`; kultura bez
+  nadpisania daje `d.MM.yyyy`, prawdziwy invariant `08/07/2026` — trzy rozróżnialne wyniki, więc pomiar jest
+  rozstrzygający). **Na wskazanej powierzchni nie było defektu, i powiedzenie tego wprost jest wynikiem**
+  (gotcha #328). Zaszyte było to, czego zgłoszenie nie wymieniało: data wydania w About pod
+  `InvariantCulture`'s `d MMMM yyyy`, czyli **angielska nazwa miesiąca na każdej maszynie**, oraz etykieta
+  historii parametrów.
+  ⭐⭐ **P2 — audyt gramatyki. Reguła, która się ZBIEGA, bo jest ograniczona JĘZYKIEM, a nie zgłoszeniami
+  (gotcha #324).** Cztery poprzednie poprawki dodały po jednym predykacie POZYCYJNYM (`NEXT VALUE FOR`, potem
+  `GEN_ID`, potem `EXTRACT`) — czyli listę wyjątków, której kompletność wyznaczają zgłoszenia, które ją
+  zbudowały. Nowy **korpus `SqlTestCorpus.LanguageReference`** (80 konstrukcji, przejście rozdział po rozdziale
+  przez Language Reference) zmierzył stan wyjściowy: **26 z 80 pozycji produkowało fałszywe znaleziska albo
+  błędne wiązania**, a zgłoszone konstrukcje były podzbiorem. Rozwiązanie to **dwa uzupełniające się
+  mechanizmy**: nowa klasa Core **`FirebirdGrammar`** (wiedza POZYCYJNA — gniazda słów w built-inach, ramka
+  okna, pozycja typu `CAST`, tablica fraz; przejęła oba stare predykaty, jeden właściciel) i
+  **`FirebirdSyntax.IsNonReservedWord`** (SŁOWNIK, którego jedyną dozwoloną konsekwencją jest MILCZENIE —
+  nigdy nie tłumi wiązania). ⚠ **Słownik sam był za tępy i dowiódł tego ISTNIEJĄCY strażnik**
+  (`TheSameWord_OutsideExtract_IsStillFlagged`: *„the word is not exempt — only the position is"*), więc
+  regułą jest **SĄSIEDZTWO SŁÓW** — `YEAR` samotny między `=` a `;` to operand, `USING SHA256` / `AT LOCAL` /
+  `UNBOUNDED PRECEDING` to frazy. ⚠ Trzecie rozróżnienie, też merytoryczne: **zmienna kontekstowa
+  (`ROW_COUNT`, `SQLCODE`, `USER`, `INSERTING`) JEST kompletnym wyrażeniem**, więc milczy bezwarunkowo;
+  sklejenie zbiorów czyni jeden z tych przypadków błędnym.
+  ⭐ **Druga połowa defektu nigdy nie trafiła do zgłoszenia (gotcha #325): spacer ZAPYTANIOWY nie miał żadnej
+  bramki gramatycznej** — jego objaw jest cichszy (ciche BŁĘDNE wiązanie słowa Firebirda z kolumną o tej
+  nazwie: zły kolor, złe Quick Info, złe find-references; ET0005 dopiero przy dwóch tabelach). ⛔ Tam **nie
+  wolno** użyć reguły słownikowej — `SELECT MONTH FROM SALES` musi dalej wiązać kolumnę — więc dostał wyłącznie
+  regułę pozycyjną.
+  🐞 **Znalezisko strukturalne spoza zgłoszenia (gotcha #326):** `ParsePsqlUnit` rozgałęział się po PIERWSZYM
+  tokenie, więc instrukcja z PREFIKSEM (etykieta pętli `retry: while …`, `IN AUTONOMOUS TRANSACTION DO`)
+  spadała do liścia kończącego się na **pierwszym średniku** → liść zawierał `=` → klasyfikacja jako
+  przypisanie → etykieta zgłaszana jako nieznana zmienna, **a ciało pętli w ogóle niezamodelowane**. Kształt
+  #301 o konstrukcję dalej. ⚠⚠ **Naprawa samego parsera zostawia squiggle** — po niej etykieta jest w tokenach
+  węzła, a `BindControlHeader` chodzi po nich z włączonym zgłaszaniem; dlatego
+  `FirebirdGrammar.StatementPrefixLength` jest **wspólne**: parser go używa, żeby DOJŚĆ do instrukcji, binder —
+  żeby nie zaczynać nagłówka od etykiety.
+  ⭐ **P6 — ograniczenie debuggera zniesione, i to bez nowego mechanizmu (gotcha #327).** Odmowa D10 („a FOR
+  SELECT cursor that references NEW/OLD is not supported") stała na **prawdziwej przesłance i niewynikającym
+  wniosku**: to prawda, że syntetyczne `ET_CTX_i` nie istnieją w osobno otwartym kursorze DSQL — ale kursor
+  ich nigdy nie potrzebował, bo **`NEW.ID` w zapytaniu kursora jest WARTOŚCIĄ, a ramka już ją ma**. Referencja
+  jest więc przepisywana na pozycyjne `?` i wiązana z ramki, dokładnie jak `:zmienna` od D6.
+  `ContextSubstitution.ReferencesIn` wyciągnięte i upublicznione (**jedna** definicja parowania
+  `RecordAlias`+`Column`, dwa konsumenty). ⚠ **Wiązanie przy OPEN to jest to, co robi sam Firebird** —
+  skompilowany wyzwalacz oblicza parametry kursora raz, więc przypisanie `NEW.col` w trakcie pętli nie zmienia
+  wierszy otwartego kursora; odczyt przy każdym FETCH byłby wyborem NIEwiernym. Lab +`TRIG_CURSOR_LAB` /
+  `TR_CURSOR_BU`, probe **przypadek 40** sim `'L=2/3'` == real `'L=2/3'` + asercja, że przypadek jest
+  **rozróżniający** (`L=0/0` to wynik kursora z `NULL`-owym `NEW.ID` — wyglądałby sensownie i przeszedłby samo
+  porównanie). ⛔ Martwy `QueryReferencesContext` usunięty.
+  ⭐ **P3 — edytor daty: przyczyna ZMIERZONA, nie zgadnięta.** `CalendarDatePicker` z Fluenta ma własne
+  `MinHeight` **32**, jego zawartość prosi o **24**, a wiersz `data-edit` (stałe `Height="32"`, #322) po
+  paddingu `6 2` zostawia **28**. Poprawką jest **ROLA** (`Size.Control`, ta sama co `TextBox` obok), nie
+  dobrana liczba. Druga połowa, pozioma: lokalne `MinWidth = 120` usunięte — siatka danych **pamięta
+  szerokości kolumn**, więc zwężona kolumna wraca po restarcie i edytor nie mieści się w komórce; **rozmiar
+  nadaje pojemnik** (decyzja 2 z M2b).
+  ⭐ **P5 — jeden właściciel prezentacji daty:** `EmberTern.Core.Formatting.DateTimeDisplay`. Nie „na
+  przyszłość" — użytkownik zapowiedział wybór formatu w Settings Center, a preferencja potrzebuje jednego
+  miejsca, w którym zadziała. ⚠ Jeden świadomy wyjątek: **`LogTime` zostaje 24-godzinny i stałej szerokości**
+  (kolumny logu czyta się w dół i porównuje). ⛔ Strona maszynowa nietknięta i **przypilnowana**:
+  `DatePresentationTests` trzyma listę plików wolno formatujących invariantnie **wraz z powodem** — wartością
+  listy nie są nazwy, tylko to, że dopisanie się do niej zmusza autora do zadeklarowania strony granicy.
+  Strażnik zweryfikowany podsadzeniem naruszenia.
+  ⏸ **Otwarte, każde z powodem:** wybór formatu daty w Settings Center (zapowiedziany, nie zbudowany) ·
+  etykieta pętli zapisana bez spacji (`retry:while` → lekser daje jeden token `Parameter` `:WHILE`; rozdzielenie
+  = przeniesienie gramatyki do tokenizacji za pisownię, której nikt nie używa) · `BindBareReference`
+  rozwiązujące gołą nazwę do LOKALNEJ przed kolumną (otwarte od sprintu stabilizacyjnego).
+  ⚠ (Zapis historyczny: „M4 wymaga osobnego pozwolenia" — pozwolenie padło 2026-08-08 i M4 trwa.) ⛔ M4 startuje z `product-polish-m4-next-session.md`.
+
+- **🔲🔒 SPRINT SPÓJNOŚCI GRIDÓW DANYCH — ZAMKNIĘTY, ODEBRANY PO QA UŻYTKOWNIKA (2026-08-07).** Mały sprint
+  domykający stan produktu **przed M4**, świadomie nie będący M4. Build 0/0; suite **7378** (7250 + 73 + 55,
+  +18); smoke czysty. Narracja:
+  **[docs/history/25-grid-consistency-sprint.md](docs/history/25-grid-consistency-sprint.md)**. Nowe gotchy
+  **#322–#323**.
+  ⭐ **Co jest w produkcie:** wysokość edytora w komórce Table Data zgodna z pozostałymi edytowalnymi siatkami,
+  oraz **komplet operacji kopiowania (Copy cell / row / row with headers / all with headers) we wszystkich
+  pięciu gridach danych** — od pozycji kopiowania w dół menu wszystkich pięciu są identyczne co do pozycji i
+  kolejności, a różnią się wyłącznie operacjami specyficznymi dla modułu (grupa edycyjna Table Data na górze;
+  Copy as INSERT/UPDATE tylko tam, gdzie za wierszami stoi jedna tabela).
+  ⭐⭐ **Najtrwalszy wynik jest metodologiczny i dotyczy strażników — gotcha #322: reguła bezpieczeństwa
+  wypowiedziana o KLASIE rzeczy („siatka danych") może być fałszywa o każdym jej rzeczywistym elemencie, a test,
+  który jej pilnuje, wygląda rygorystycznie i nie chroni przed niczym.** `EditableGridKind` wstrzymywał rolę
+  wysokości Table Data z uzasadnieniem brzmiącym jak pomiar (*„24 px urosłoby każdy wiersz, bo te siatki nie
+  mają ComboBoxa"*) — prawdziwym o siatce danych w ogóle i **nigdy niesprawdzonym na tej jednej, której
+  dotyczyło**: `TableDetailTabView` przypina jej wierszowi **stałą** `Height="32"` (nie `MinHeight`), więc
+  wiersz nie ma jak urosnąć. ⚠ Wzmacnia to fakt, że **istniejący test pilnował złego zachowania i nazywał
+  poprawkę „the tempting simplification"**. ⭐ Lekarstwo: **pilnować PRZESŁANKI, nie POLITYKI** — nowy strażnik
+  czyta wysokość wiersza z widoku, padding komórki z tego samego widoku i `Size.Control` z `Tokens.axaml`, i
+  wymaga, by relacja między nimi się utrzymała. `EditableGridKind` usunięty; jedno `Attach(grid)`, jedna reguła.
+  ⭐ **Jeden formater dla wszystkich gridów** — `App/ViewModels/GridCopyText.cs` (czysty, statyczny);
+  `MainWindowViewModel.BuildCopyText` tylko deleguje, a **wszystkie 12 istniejących `CopyGridTests` przeszło bez
+  edycji ani jednego oczekiwanego ciągu** — to jest dowód bajtowej niezmienności wyjścia gridu SQL.
+  ⚠ **Trzy ratyfikowane decyzje (2026-08-07), do nierewidowania:** (a) **„Copy all" w Table Data czyta
+  `EditableRows`, nie `DataResult.Rows`** — wiersz dodany/usunięty w sesji istnieje tylko w mirrorze, więc
+  kopia wyniku emitowałaby wiersze już niewidoczne i pomijała dodane, cicho i z poprawnie wyglądającym tekstem;
+  (b) **pojedyncza KOMÓRKA kopiuje się dosłownie** — spłaszczanie tabulatorów/nowych linii do spacji zostaje
+  tylko przy kopiowaniu WIERSZY, gdzie służy strukturze TSV; (c) **brak danych ⇒ schowek nietknięty** —
+  `Views/GridClipboard.cs` jest jedynym miejscem zapisu i odmawia, bo przepuszczenie pustego ciągu zniszczyłoby
+  zawartość schowka użytkownika.
+  ⚠ **Cel to prawoklikniętą KOMÓRKA, nigdy zaznaczenie gridu** (kształt #16/#99 o poziom wyżej).
+  ⛔ **Czego sprint NIE ruszył:** wysokości WIERSZY żadnej siatki — rozjazd 34/32/30/22 i **Z‑3** to pytania o
+  **gęstość**, przypisane do M4/§13.3; naprawiona wyłącznie wysokość EDYTORA w komórce.
+  ⚠ (Zapis historyczny: „M4 wymaga osobnego pozwolenia" — pozwolenie padło 2026-08-08 i M4 trwa.) ⛔ M4 startuje z
+  `product-polish-m4-next-session.md`.
+
+- **⬆🔒 AVALONIA 12.0.3 → 12.1.1 — SPRINT ZAMKNIĘTY, ODEBRANY PO QA UŻYTKOWNIKA I SCALONY (2026-08-05).**
+  Osobny sprint techniczny **przed M4**, świadomie nie mieszany z Product Polish. QA wzrokowe: **brak regresji
+  w aplikacji i w edytorze**. Scalony `--no-ff` do **`feat/product-polish`** (`42a6b98`) i wypchnięty na **oba**
+  remote'y; **`master` nietknięty**. Gałąź `chore/avalonia-12.1.1` wycofana lokalnie — ⭐ na remote'ach jej
+  **nigdy nie było**, bo nie pushowałem przed odbiorem, więc nie było czego usuwać (sprawdzone
+  `git ls-remote`). Weryfikacja **po scaleniu**: build 0/0 Debug + Release, **7232 + 73 + 55 = 7360**, smoke
+  Release z zerem `FATAL`. Siedem commitów sprintu zostaje osobno, żeby `git bisect` trafiał w pojedynczą
+  zmianę wersji.
+  Jeden dokument: **[docs/design/avalonia-12.1.1-update.md](docs/design/avalonia-12.1.1-update.md)** —
+  ratyfikowane decyzje D‑1…D‑5 (§0), ryzyka **R1–R8** (§3), wpływ na nasze komponenty (§4), checklista QA
+  (§6), dziennik wykonania (§7), wynik QA (§8), znaleziska do decyzji (§9).
+  **Wersje: core `Avalonia`/`Desktop`/`Themes.Fluent`/`Fonts.Inter` + `Avalonia.Headless` = 12.1.1 · ⚠ dwa
+  celowe rozjazdy, każdy z powodem zapisanym przy `PackageReference`:** `Avalonia.AvaloniaEdit` **12.0.0**
+  (buildu 12.1 nie ma) i `Avalonia.Controls.DataGrid` **12.1.2** (DataGrida 12.1.1 nie ma — pakiet ma własne
+  repo i własny cykl).
+  **QA maszynowe:** build **0/0 w Debug i Release** · suite **7360** zielona **dziewięć razy** (3 partycje
+  × 3 przebiegi, każdy `--blame-hang`) · `MetadataTreeVirtualizationProbe` 4/4 (93–823 ms przy limitach 5 s)
+  · `SharedContextMenuFeasibilityProbe` 2/2 · żywe FB5: `DebuggerFidelityProbe` **39/39**,
+  `ChangeSafetyProbe` ALL PASS, `DataImportRunProbe` **33 sprawdzenia** ALL PASS · smoke Debug + Release, **0
+  wpisów `FATAL`**.
+  ⭐⭐ **Najmocniejszy wynik: 18/18 renderów obu sond wizualnych jest BAJTOWO IDENTYCZNYCH** z zapisanymi na
+  12.0.3 (SHA‑256 plik po pliku, oba motywy) — zero ruchu w geometrii, układzie i rozwiązywaniu pędzli.
+  ⚠ Identyczność zweryfikowana **zanim** została uznana za wynik (`Avalonia.Base.dll` w `bin/Release` sondy
+  raportuje 12.1.1.0), bo „identyczne rendery" i „sonda się nie przebudowała" wyglądają tak samo.
+  ⚠⚠ **ZAKRES TEGO WYNIKU:** `RenderTargetBitmap` idzie ścieżką natychmiastowej rasteryzacji Skia, **nie przez
+  kompozytor GPU** — czyli tam, gdzie *nie* żyją zmienione w 12.1.0 domyślne (`dirty-rect clipping`,
+  `stencil buffers`). Dowodzi, że nie ruszyła się geometria; **nie dowodzi, że żywe okno maluje się tak samo.**
+  ⛔⛔ **RYZYKO R1 JEST NIETKNIĘTE PRZEZ CAŁE QA MASZYNOWE I TO ONO DECYDUJE O ODBIORZE: AvaloniaEdit nie ma
+  buildu pod 12.1**, jego zakres `>= 12.0.0` spełnia core 12.1.1 **bez ostrzeżenia, bez `NU1605`, bez
+  informacji o downgrade** — a 7360 asercji przeszłoby również wtedy, gdyby układ tekstu w edytorze przesunął
+  się o wiersz (testy asertują właściwości i pędzle, nie piksele). Na `TextView`/`GetRectsForSegment` wisi
+  sześć `IBackgroundRenderer`ów, hit-testowany `BreakpointMargin`, `InlineValuesRenderer` (rysuje **za** końcem
+  linii), cztery karty `OverlayLayer`, `SqlIndentationStrategy` i 11 preview DDL. **Punkt 1 checklisty
+  wzrokowej = edytor SQL, priorytet bezwzględny.** Nowa gotcha **#321** generalizuje to poza ten pakiet:
+  *brak błędu restore jest dowodem o metadanych, nigdy o zgodności.*
+  ⚠ **Kryterium wycofania (ratyfikowane D‑5): cokolwiek z R1 → cofnij do 12.0.5, nie do 12.0.3** — 12.0.5 daje
+  `TextRunCache`, Unicode v17, `ScrollViewer` NaN fix i headless `TestContext` fix przy **zerowej** zmianie
+  domyślnych renderowania, zerowym ruchu w compiled bindings i zerowej zmianie hit-testingu.
+  ⚠ **Czego QA NIE dowiodło, powiedziane wprost:** brak zawieszenia suite w 9 przebiegach po zmianie (i w 9
+  przed) **nie jest** dowodem, że 12.1.1's `Fix headless session hang when cleanup throws` (#21781) naprawiło
+  nasz wieloletni objaw (#94/#226/#261) — od 2026‑08‑04 mamy **dwie** niezależne kandydatki na tę przyczynę
+  (`AutoScrollToSelectedItem` i teraz #21781), a objaw jest rzadki z definicji. Obserwować, notować w obie
+  strony, nie przypisywać.
+  ⏸ **Dwa znaleziska do decyzji, żadne nie blokuje odbioru (§9):** (a) 🐞 **`DataImportProbe` NIE KOMPILUJE
+  SIĘ — i jest to defekt WCZEŚNIEJSZY, dowiedziony a nie założony**: identyczny błąd (`TransactionService` →
+  `ImportSessionConnection`, skutek I7.5) na commicie `8d5c510` zbudowanym w osobnym `git worktree`, a sonda
+  nie referencuje **ani jednego** pakietu Avalonii. ⭐ Jest **poza solucją**, więc `dotnet build EmberTern.slnx`
+  nigdy jej nie kompilował — 20 sprawdzeń modułu zamkniętego jako „user-accepted" zgniło cicho przy zielonym
+  buildzie; ⛔ nie naprawione, bo Data Import ma stojącą dyrektywę „wracać tylko po rzeczywisty defekt
+  funkcjonalny", a sprint ma zostać przypisywalny. (b) ⚠ **numery gotchy 303 i 304 są użyte po dwa razy**, więc
+  odwołania „gotchas #303/#304" są niejednoznaczne; przy okazji sprostowano **dwa** liczniki wpisów w CLAUDE.md,
+  które nie zgadzały się ze sobą i **oba** były błędne — zmierzone **308 wpisów, #1–#321** (#284 o warstwę wyżej).
+  ⚠ (Zapis historyczny: „M4 wymaga osobnego pozwolenia" — pozwolenie padło 2026-08-08 i M4 trwa.) ⛔ M4 startuje z
+  `product-polish-m4-next-session.md`; ten sprint niczego w Product Polish nie zmienił.
+
+- **🔧🔒 SPRINT STABILIZACYJNY (S-1 … S-6) — CLOSED, USER-QA'D AND ACCEPTED 2026-08-05.** All six confirmed in
+  the running app (S-1a/S-1b · S-2 no flicker and correct after a metadata refresh · S-3 · S-4 · S-5 · S-6),
+  **no regressions found**. Branch `feat/stabilization-sprint` (off `feat/product-polish`), pushed to both
+  remotes. ⏸ **M4 Product Polish still needs its own explicit go-ahead — and the user deferred it to the next
+  session, to be started from `product-polish-m4-next-session.md`.**
+  ⭐ The user's own closing note, worth keeping because it is a directive about method, not praise: *„kilka
+  zgłoszeń okazało się prowadzić do głębszych przyczyn niż same objawy — dzięki temu udało się naprawić
+  fundamenty, a nie tylko zamaskować problemy."* ⛔ So on the next report of this kind: **find the cause before
+  fixing the symptom, even when the symptom points somewhere plausible** — twice in this sprint the plausible
+  place was the wrong one.
+  Narrative: **[docs/history/24-stabilization-sprint.md](docs/history/24-stabilization-sprint.md)**.
+  Six defects from ordinary use, closed in etaps E0–E6, one commit each; build 0/0, suite **7360**
+  (7232 + 74 + 54), smoke clean. New gotchas **#316–#320**.
+  ⭐⭐ **THE SPRINT'S DURABLE RESULT IS METHODOLOGICAL, AND IT IS THE §13.3 GATE'S LESSON FROM THE OTHER SIDE:
+  TWO of the six reports were not what they described.** The gate taught that *an impression from a screenshot
+  is a hypothesis*; this sprint adds that **a precisely reproducible report can be a real CORRELATION with the
+  wrong VARIABLE**. Operationally: *a report says WHERE the user saw it, not WHAT is broken* — and in both
+  cases reading the code would have **confirmed** the wrong hypothesis, because it sends you where the symptom
+  points. Only measurement separated them.
+  ⭐ **THREE SHARED CAUSES, so it was not six independent fixes** (the user asked for exactly this assessment):
+  **S-1a + S-3** — the set of editable definition grids was IMPLICIT (*whoever calls `FieldGridColumns.Build`*,
+  which is where the height-role class lived), so the three grids that declare columns in XAML silently missed
+  it · **S-2** — both halves are one fact: the snapshot could not say "not yet", AND nothing invalidated the
+  caches on refresh; ⚠ the second **cannot** be fixed without the first, or every refresh becomes the same
+  false-positive storm · **S-1b + S-6** — the same SHAPE, not the same code: a layer discarding information it
+  had, fixed at the PRODUCER both times.
+  🐞 **S-1b was the serious one: a rule #11 data-loss path, worse than reported.** "Changing a parameter's
+  domain does not save" was really *the domain died on READ* — `RDB$FIELD_SOURCE` was never selected, so
+  opening a procedure to edit its BODY and pressing Compile rewrote every domain-typed parameter as its base
+  type, destroying the domain link in the database. Gotcha #175's shape, one object kind further along.
+  ⭐ Demonstrated live, not deduced: with the pre-fix decision planted, the probe reports
+  `the CATALOG still records D_CODE after the recompile — RDB$3`. ⚠⚠ **And byte-identity of the reconstruction
+  PASSED under that plant** — both reads were wrong the same way, so a round-trip assertion is necessary and
+  insufficient; the catalog is what must be asked. ⭐ Nullability follows the TYPE source (measured: a domain's
+  own `NOT NULL` lives on the domain's flag, an explicit one on the parameter's), so a `COALESCE` in SQL made
+  that decision unrepresentable. ⚠ The debugger needs the OPPOSITE answer (base type, R2) and still gets it —
+  the two readers share only the "is this a user domain" predicate; `DebuggerFidelityProbe` 39/39.
+  ⚠ **This changes the visible DDL text** for every routine with domain-typed parameters (preview, `.sql`
+  export, Source mode). In QA it looks like a behaviour change; it is a return to the truth.
+  ⭐ **S-6 had no colon bug at all.** Measured: `:a` is ONE `Parameter` token and resolves through the same
+  `scope.Resolve` as a bare name, with Quick Info answering on every offset including the colon. What had no
+  binding was a colon-form reference **inside a query clause** (the query binder's walk had no
+  `TokenKind.Parameter` branch) plus the `INTO` targets of a singleton `SELECT` (the `SelectQuery` NODE span
+  swallows them while no CLAUSE covers them → skip the clauses, not the node). The colon form is simply where
+  an embedded `SELECT` puts a local.
+  ⚠⚠ **AND THAT FIX CHANGED THE DEBUGGER AS A SIDE EFFECT — the most transferable warning here.** Its
+  read/write set falls back to "inject every in-scope local" **precisely when the analyzer returns nothing**
+  (#238), so restoring the references NARROWED the injection. ⭐⭐ Its own 38-case fidelity probe said nothing
+  about it, because **not one of the 22 routines it drives contains a singleton `SELECT … INTO`** — *a
+  measurement can reproduce a MECHANISM without reproducing the STATE.* The state was added to the lab
+  (`SP_DBG_SELINTO`) and the probe grew case 39, with an assertion that the case is **discriminating**.
+  ⭐ **S-2: `ISqlMetadataProvider.KnowsColumns`** (default `true`, so a provider must opt IN to admitting
+  ignorance — a default of `false` would silence real ET0002 everywhere) + parameters loaded BEFORE the body in
+  the routine editors + `SchemaInvalidated` raised BEFORE the reload. ⚠ CTE is exempt: its columns come from
+  its own projection in the text.
+  ⭐ **S-1a/S-3: `Behaviors/EditableGridBehavior`** carries the Enter gesture and the height role; nine explicit
+  `Attach` calls, no automatic path to forget. Measured framework facts: `DataGrid` claims Enter itself, a
+  **TUNNEL** handler is required (at bubble it is already handled), there is **no public "am I editing"** so
+  the gate is FOCUS, and `DataGridCell` has no public `Column` (locate the cell by `SelectedItem` +
+  `DisplayIndex`). ⚠ The data grid gets Enter but NOT the height role (M2b step 7's measured row growth).
+  ⚠⚠ The guard **cannot** key on `IsReadOnly="False"` — Table Detail's fields grid binds it, so a scan by that
+  attribute misses the very grid that was reported (#285).
+  ⛔ **S-4: the import module has no progress bar of its own** — this REVERSES §19.33's "the status bar
+  complements, never replaces", on the user's call after living with two bars on screen. The progress TEXT and
+  the elapsed timer stay. ⛔ **S-5: `ClientLibraryPath` is removed** — see the driver-gotcha section; it could
+  never have an effect, and the "Advanced" expander went with it because that field was its only content.
+  ⏸ **Left open, each with a reason** (full list in the history file): the `BindBareReference` ordering (a bare
+  name in a query resolves to a LOCAL before a column; Firebird prefers the column — worth its own
+  measurement) · the row-HEIGHT divergence across definition grids (34/32/30/22 — a **density** question, so
+  M4/§13.3 by the user's decision; only the in-cell EDITOR height was fixed) · ET0001 during a partial catalog
+  load (same shape as #317 if it ever surfaces) · the import command bar's three 170/180 px combos (density).
+  ⚠ **Two one-off reds, not reproduced and claimed neither fixed nor unrelated:**
+  `DataImportNewTableTests.ANewTable_NeverCarriesEmptyTheTableFirst…` (once, during E3) and
+  `SettingsLoadHealthTests.ConcurrentSaves_NeverLeaveSettingsUnreadable` (once, during E4 — a `Parallel.For`
+  test). Each passed alone and in two subsequent full runs; no mechanism links them to those etaps.
+
+- **🎨 PRODUCT POLISH — ACTIVE STAGE. Branch `feat/product-polish`. M3 · M3b · ⛔ the §13.3 GATE · M3.5 are all
+  CLOSED. ⏸ NEXT IS M4, and it needs the user's explicit go-ahead — do not start it.**
+  ✅ **⛔ BRAMA §13.3 PRZESZŁA (2026-08-04) — zapis: `product-polish.md` §13.3a.** Reviewed on the user's own
+  16 screenshots (8 states × 2 themes, maximized, PNG, `SZKOLENIE_SQL` 2218 tabel / 1075 procedur). Verdict per
+  question: the **status bar, tab strip and metadata tree read as one designed frame**; the **toolbar did not**,
+  and the reason turned out to be **optical glyph size, not colour**. Six findings, three taken into **M3.5**
+  (Z‑1/Z‑2/Z‑6), three deferred with reasons (Z‑3/Z‑4/Z‑5), one folded into `color-language.md` P‑1.
+  ⭐⭐ **THE GATE'S MOST DURABLE RESULT IS METHODOLOGICAL: of seven suspicions SIX fell to measurement, and two
+  of those were errors of the measurement itself** — a pixel scan missed the 2 px active-tab indicator by one
+  row (it *is* there: `#2D6BBF` at y=111–113), and screen capture lost the status bar entirely (the user
+  confirmed it renders correctly). ⚠ **An impression from looking at a screenshot is a HYPOTHESIS, not a
+  finding** — in this gate it was wrong more often than right.
+  ⛔⛔ **„TĘCZA IKON" WYCOFANA I ZAMKNIĘTA — nie wolno jej „naprawić" drugi raz** (§13.3a.3). The gate reported
+  nine differently-coloured create icons beside six uniformly blue tools as incoherent; **the user rejected it
+  and was right**: those colours are S1 (kind identity) and match the metadata tree, so the user learns a kind
+  once and recognises it everywhere. ⭐ That was **trap 17 committed by the gate itself** — seeing a system and
+  following the observation to its logical conclusion instead of asking whether it WORKS.
+  ✅🔒 **M3.5 DONE, USER-QA-CONFIRMED AND CLOSED (2026-08-04) — three defects from the gate**
+  (`product-polish.md` §19.36). Build 0/0; suite **7317** (7196 + 67 + 54, +7); smoke clean.
+  **All four new guards verified by planting the violation.** Pushed to both remotes (`cb76c0b`).
+  **QA verdict (both themes):** a disabled `Button.icon` no longer pretends to be active · unchecked
+  `CheckBox`es are finally visible **without dominating** · the create icons are markedly more legible.
+  ⭐ On the architecture the user was explicit: **`CreateIcon` is a better answer than maintaining nine
+  separate `*Plus` variants**, and the accent badge *„dobrze odcina się od glifu, nie konkuruje z kolorem
+  rodzaju obiektu i czyta się bardzo naturalnie jako akcja «utwórz»"*. ⛔ Do not revisit either decision.
+  **Z‑1 — a disabled `Button.icon` no longer paints a chip.** Mechanism measured, not inferred: Fluent's
+  `:disabled` paints `/template/ ContentPresenter` from `ButtonBackgroundDisabled` (Bridge → `PanelColor`),
+  and `Button.icon`'s transparent setters sit **on the control**, so they lose; `Opacity 0.4` merely *dimmed*
+  the chip (0,4 × `#252526` + 0,6 × `#2D2D2D` = `#2A2A2A`, the measured value). Visible on four chrome
+  surfaces; **169 `Classes="icon"` in 15 files** is the structural reach. ⛔ **Deliberately NOT fixed in the
+  Bridge** — those keys serve `Button.flat`/`Button.primary`, which are *supposed* to look like buttons when
+  disabled. ⭐⭐ **Second half, and it is why this was a reception defect:** in the results strip the four
+  *disabled* buttons were the only bordered elements while the three *enabled* ones were bare, and in Table
+  Data the same chip meant **both** „unavailable" and „engaged" (`ToggleButton.icon:checked`) — fixing one
+  restored the other for free. ⚠ Corrects an earlier diagnosis: `docs/history/23` blamed `Opacity` alone.
+  **Z‑2 — the interactive-control outline gets its own role.** New token **`ControlOutlineBrush`**
+  (`#6A6A70` / `#90939A`), consumers `CheckBox` + `RadioButton`. On `BorderBrush` an unchecked box measured
+  **1,60:1 (Dark) / 1,35:1 (Light)**, i.e. the control you must click was invisible in its **default** state.
+  ⭐ Value computed **at the threshold** (~3,1:1), the road gotcha **#308** ratified; the
+  `SubtleForegroundBrush` variant (6,31:1) was rendered and **rejected** as heavier than its own label.
+  ⛔ Never alias it to `BorderBrush` or `SubtleForegroundColor` (K1).
+  **Z‑6 — `CreateIcon`: the glyph is the KIND, the badge is the ACTION.** All nine `*Plus` geometries carried
+  the identical plus segment in the whole lower-right quadrant while the glyph was squeezed to **11–12 of 24
+  units** where its own counterpart in the tree has **18** — ~62 % linear, ~40 % area, in an **identical box**
+  (gotcha #288 inverted: the ink box started dictating optical size). Replaced by a composite on the proven
+  `DebuggerIcon` pattern: full-size plain glyph (`IconColor_*`, **by reference**) + a solid `AccentBrush`
+  disc Ø10 inset 0,5 with an `OnAccentBrush` plus. ⭐⭐ **Nine hand-maintained copies are GONE** — the toolbar
+  and the tree now share one geometry per kind, so improving a glyph reaches both; this was nine unfixed
+  instances of the very defect `DebuggerIcon` documents for itself. ⚠ **`AccentBrush` here does NOT re-open
+  P‑2**: a solid 10-unit disc with a white plus works by area and internal contrast, not by a 2 px difference
+  against the surface.
+  ⚠⚠ **THE ROUTE MATTERS AS MUCH AS THE RESULT — two dead ends closed by measurement, so nobody re-walks
+  them.** (1) *Plus inside the glyph* (pure geometry, `Icon.FolderPlus`'s own model) won decisively on the
+  glyph and **lost the badge**: 5 of 9 worked, and in `View`/`Trigger`/`Generator` the plus merged with the
+  outline. ⚠ My design error there is worth keeping: I measured clearance against **path centrelines, not the
+  stroked outline** — with a 2-unit stroke a „1-unit gap" is touching outlines. (2) ⭐⭐ *Full glyph + big
+  corner plus is ARITHMETICALLY IMPOSSIBLE* in 24 units: the maximum non-overlapping split is glyph ~13 +
+  plus 6, i.e. **+18 %** over the old 11. **So today's 11+7 was near the optimum for „no overlap"** — very
+  likely the wall the user's earlier attempt hit. (3) The badge route is **structurally** required, not a
+  taste call: `SvgIcon` is one `Path`, one `Stroke`, **one `StrokeThickness=2` for the whole geometry**, and a
+  badge is by definition *smaller and denser* — from there you only get „smaller but equally thick", which at
+  16 px is a blob.
+  ⭐ **New tool: `tools/probes/VisualCandidateProbe`** — renders candidates beside the current state, both
+  themes. It exists because §0.5 demands an answer about *reception* and „don't know" is a refusal; without it
+  the only answer is a guess. ⚠ Candidates live **in the probe, not the product**, and a separate
+  `z6-SHIPPED-*` render uses the **real control + resources by key**, because „the variant looks good" and
+  „this is what shipped" are different assertions.
+  ⏸⏸ **NEXT IS M4 — direction RATIFIED 2026-08-04, start needs a separate explicit go-ahead** (full text +
+  reasoning: [product-polish-m4-next-session.md](docs/design/product-polish-m4-next-session.md) §5):
+  **D‑M4‑1** M4 opens with the **collision register K1–K15**, not with screen migration — *„najpierw zamknąć
+  decyzje projektowe o charakterze globalnym"*, so no surface is touched twice (**R7 applied to ORDER**, and
+  §13.0.1's Z‑6: migrating onto an unaccepted frame is migrating to a fix) · **D‑M4‑2** **`Size.Icon` (64
+  literals) and K15 (112 occurrences / 17 files) are ONE design question about visual density** — ⛔ never
+  settled separately, because two independent iterations would change density twice without ever looking at
+  the whole (R17, exactly as K12–K14 and K15 went to the gate as single questions) · **D‑M4‑3** none of the
+  deferred topics comes **before** M4. ⚠⚠ **That is not „do not touch"** — it forbids *pulling them forward*,
+  not meeting them: *„jeżeli podczas M4 okaże się, że któryś z nich naturalnie wiąże się z wykonywaną pracą,
+  wtedy podejmiemy decyzję w kontekście konkretnej zmiany, a nie z góry"* — so stop and ask **in the context
+  of that change**, rather than deciding up front or avoiding the topic artificially.
+  ⏸ **Open from the gate, each with a home:** **Z‑3** (Table Data row 40 px vs the catalog's 22 and the
+  sibling grid's 27) — ⛔ **find the CAUSE first; the user ratified that a taller row may be a deliberate
+  readability decision and then it stays** · **Z‑4** (Settings window clips a row mid-description) · **Z‑5**
+  (the Execute dialog's date editor looks disabled and breaks the row rhythm) · ⏸⏸ **Settings Center as a UX
+  surface** (§13.3a.5 — icons per category, a distinct nav-pane surface, a more „product" left nav; ⭐ measured
+  delta: **the nav pane and content have IDENTICAL backgrounds today**, so the largest part is giving the pane
+  `PanelBrush`). ⛔ None of these is M4 and none is a defect blocking it.
+  ⚠ **Execute dialog semantics confirmed intended by the user:** a ticked NULL passes `NULL` and the Value
+  field is ignored. Not a functional defect; whether the field should *look* excluded belongs to the later
+  dialog polish.
+  **Historical pointer for M3/M3b detail:**
+  [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md) and the
+  handover it points at — ⚠ both now describe CLOSED work; read them for the why, not for what to do next.
+  🔒 **M3.3 (TAB STRIP) IS CLOSED AND ACCEPTED (2026-08-03)** — `product-polish.md` **§19.25** is its closing
+  summary. Three sub-etaps: **M3.3a** paid off the strip's technical debt (12 → 5 local values), **M3.3b**
+  delivered **two modes + two preferences + a Tabs category** in Settings Center, **M3.3c** added the
+  **context menu** and took the rule-#11 gate from three entries to four. ⛔ Do not return to the tab strip
+  without a real functional defect.
+  ⚠⚠ **THREE ITEMS ADDED TO M3.4's CHECKLIST BY THE USER (2026-08-03), before implementation** — full
+  record in the handover **§3.7a**, and they are a checklist to walk *while* working on the Metadata
+  Explorer, **not** a new feature. (a) 🐞 **A rare tree hang**: expanding a **large** category makes the
+  tree **scroll down on its own**, then the app freezes and closes — seen **2–3 times in the whole life of
+  EmberTern**, so it predates Product Polish. ⭐⭐ **A measured mechanism candidate already exists, found by
+  reading during the M3.3 close-out:** `SidebarFlatController.OnExpandedChanged` inserts children **one at a
+  time** (`Rows.Insert` in a loop) and the bulk guard **does not cover that path — it SKIPS it**
+  (`if (_suspendDepth > 0) return;`). So an expand *from code* runs under the guard (what Layer 1 fixed),
+  while an expand **by click** on an already-loaded category does **N individual inserts** into an
+  `ObservableCollection` bound to a virtualizing `ListBox`. ⚠⚠ **Scale, stated precisely because the first
+  draft of this note overstated it:** this is **not** Layer 1's Θ(N²) — it is **Θ(N) notifications** plus
+  **Θ(N × tail)** element shifts in the backing `List<T>`, i.e. far cheaper than the fixed defect but far
+  dearer than the guarded single `Rebuild`. ⭐ **Nobody has measured this path** — Layer 1 measured
+  *refresh*, not *click-expand*. ⛔ Measure before "fixing": the cost may turn out negligible and the real
+  cause lie elsewhere (scroll anchoring, or the `Dispatcher.Post` in `OnIsExpandedChanged`). (b) ⚠ The user asks whether this **shares a mechanism with the long-standing flaky
+  test** — and explicitly says *not* to assume it does. **For:** the class is `ConnectionExpandBindingProbe`
+  and its `AutoExpandOnConnect_ReflectedInFlatList` exercises exactly that path. **Against:** it was measured
+  (Keyboard Manager etap 5) that the full-suite hang reports the last headless test **positionally**, with
+  teardown as the suspect. ⭐ Two different observations; the decisive experiment is cheap — if the mechanism
+  is the incremental splice, forcing a large-category expand in a headless test should reproduce the hang
+  **deterministically**, which would turn a "flaky test" into a **regression test for a real defect**.
+  Record the outcome either way. (c) ⚠ A **short performance review** of category expansion — ⛔ nothing
+  forced; finding nothing is a valid result, and this is *not* `metadata-refresh-analysis.md`'s Layer 2/3.
+  ⭐⭐ **Four findings from M3.3 that outlive it:** (1) **moving a rule changes its PRIORITY** — the same style
+  in `Border.Styles` and in the global sheet behaves differently against a local value, so *"I moved the style
+  unchanged"* is a sentence you may not say without measuring; (2) **a tool that computes ONCE cannot rule on
+  CONVERGENCE** — the visual probe renders one layout pass, so a feedback-loop defect is outside its reach by
+  construction, not by mistake; (3) **a stage plan goes stale exactly as silently as a string or a comment** —
+  check in the code that a sub-etap's subject still exists before starting it; (4) **a test on a property's
+  VALUE is not a test that the screen works** — the binding re-queries only on `PropertyChanged`, so the
+  notification must be an assertion, verified by planting the violation (R16).
+  Build 0/0; suite **7245** (7134 + 57 + 54); smoke clean.
+  ✅ **M3.4a DONE (2026-08-04) — the Metadata Explorer tree row; the CATALOG followed the PRODUCT**
+  (`product-polish.md` §19.26). `Size.Row.Tree` **20 → 24** (ratified decision **DB**), `MinHeight` moved
+  onto the role — **the token gained its first consumer, having had zero** — the two chevron glyphs onto
+  `Size.Icon.Sm`, and the remaining local values got a reason in place. Zero visual change, +2 guards.
+  ⭐⭐ **The iteration's most important result is NEGATIVE, and that is the point: the measurement REFUTED
+  the hang hypothesis this file recorded above.** New probe case **B4** (`MetadataPerfProbe`, out of
+  solution) drives the real `SidebarFlatController`: a click-expand of **2 400 leaves with a 6 000-row
+  tail costs 2,3 ms** (collapse 2,7 ms; 5 000 + 6 000 → 4,8 / 7,4 ms). The predicted **shape** held —
+  Θ(N) notifications, Θ(N × tail) shifts, visible in the tail column — but the constant is small enough to
+  fit in one frame, against **916,9 ms** for the defect Layer 1 fixed on the same 2 400 leaves. ⛔ **No
+  guard was added there**: 2 ms does not justify changing a working mechanism, and §3.7a(c) explicitly
+  allows "found nothing" as a result.
+  ⚠⚠ **THE MEASUREMENT'S SCOPE, STATED BECAUSE WITHOUT IT THE NUMBER MISLEADS: the probe measures the
+  MODEL, not the PANEL.** Those 2 400 `CollectionChanged` notifications reach a **virtualizing `ListBox`**
+  in the real app and that half is **unmeasured** — while the reported symptom (*the tree scrolls down on
+  its own*) is a **panel** behaviour, not a collection one. So the measurement **moved the boundary of
+  ignorance; it did not close the question**. ⭐ Consequently the hypothesis in (b) **weakens but does not
+  fall**, and the two observations stay **unjoined**; the decisive headless experiment is now its own step
+  (**15b**, user's call — do not mix it with catalog housekeeping). ⭐ The live-app instrument already
+  exists and needed no work: `App/Diagnostics/ScrollTrace.cs` (`EMBERTERN_SCROLL_DIAG=1`) distinguishes
+  *VSP re-estimating the extent* from *we rebuilt the tree*.
+  ⛔⛔ **A tempting move was refused and is worth knowing: "move the style into `ControlStyles.axaml` so it
+  can be tested".** The sidebar row style lives in a local `<ListBox.Styles>` block, so only `MainWindow`
+  sees it — and a headless test constructing `MainWindow` hangs the suite. Moving it is **exactly what
+  re-created the §19.2 regression in M3.3a** (*moving a rule changes its PRIORITY*) and the narrowing is
+  deliberate, so the Saved-Queries list is untouched. ⭐ **We do not move the product to fit the tool** —
+  both guards read the SOURCE instead, and both were verified by planting the violation.
+  ⚠ **K15 joins the collision register** — the node icon (15 vs `Size.Icon` 14) **and** the icon↔label gap
+  (`Spacing` 5 vs `Space.Xs` 4), as **ONE question about tree density** for §13.3, exactly as K12–K14 went
+  as one question about tab-strip density. ⛔ Not fixed here: those two literals have **112 occurrences
+  across 17 files**, so changing them in the tree alone would patch one screen (R7) *and* drift the tree
+  away from the rest of the app; the sweep belongs with `Size.Icon`'s 64 literals in **M4.3**.
+  ⛔⛔ **STANDING USER DIRECTIVE FOR ALL OF M3.4 (2026-08-04): scroll stability is an acceptance criterion
+  alongside correctness and performance, and it outranks a few milliseconds.** Judge every larger Metadata
+  Explorer change by it too, and **if you meet a mechanism that could cause a reentrant layout, a
+  notification loop, or a fight over the `ScrollViewer`'s position — stop and show the user BEFORE
+  implementing.** ⭐ This is §19.23.9 generalised: that defect was a feedback loop, and a tool that computes
+  one layout pass could not have caught it *by construction* — and the tree has thousands of rows,
+  virtualization and scroll anchoring, i.e. exactly those conditions.
+  ✅ **STEP 15b DONE (2026-08-04) — the headless experiment; the hypothesis is refuted a SECOND time, now in
+  the layer M3.4a could not reach** (`product-polish.md` §19.27, `metadata-refresh-analysis.md` §9). New
+  `MetadataTreeVirtualizationProbe` wires the **real `SidebarFlatController`** into a **real `ListBox` with a
+  `VirtualizingStackPanel`** in a 600 px window. Four scenarios on 2 400 leaves + 3 000 siblings: **no hang
+  (43–57 ms each, layout included) and the scroll position never moved by itself** — 0→0, 1500→1500 (first
+  realized row 50→50) and, in the sharpest case, a **full re-projection at offset 40 000 px leaving both the
+  offset and the first realized row unchanged**.
+  ⭐⭐ **The experiment's main product is that it SEPARATED TWO VARIABLES that had always occurred together:**
+  **A** = constructing `MainWindow` in a headless test (the measured hang-prone shape — `BrandingPresentationTests`
+  hung until it stopped doing it, 476 ms on a bare `new Window()`), **B** = the incremental splice into a
+  virtualizing list. ⚠⚠ `ConnectionExpandBindingProbe` — the class the user runs alone because it hangs —
+  **builds `MainWindow` in several tests**, so both variables sit inside it and neither can be read off it.
+  ⛔ That is why the experiment **had to be its own class**; adding it there would have re-glued exactly what
+  it separates. **Result: B is exonerated in isolation; A stays the only standing suspect, unproven.**
+  ⭐ **So the answer to "does the old tree bug share a mechanism with the flaky test" is NO — and that is a
+  result, not the absence of one.** ⛔ The suite hang stays its own infrastructure task; the two observations
+  stay unjoined.
+  ⭐ **Side finding that confirms M3.4a from the other side: a bulk guard on that path would buy nothing** —
+  the incremental splice and a single re-projection are the same order (tens of ms, high run-to-run variance),
+  because the panel re-realizes its containers either way.
+  ⚠ **A discrepancy recorded and deliberately NOT resolved:** `metadata-refresh-analysis.md` §7 describes the
+  Layer-1 trade-off as *"the list scrolls to top"*; the measurement does not reproduce that. Candidate
+  explanations (filter re-application, selection, focus, or §7 being a conclusion rather than a measurement)
+  are listed in §9.3 — ⛔ no document was "corrected" on a guess, and it belongs to Layer 2, whose subject it is.
+  ⚠ **What the experiment does NOT prove:** the row template is simplified and the nodes synthetic, so it
+  shows the **mechanism** is stable, not that the **product's** tree is. Uniform row height — the property the
+  extent and anchoring depend on — is reproduced faithfully.
+  ⭐ **The four tests stay** and become the machine check behind the user's standing request: every larger
+  Metadata Explorer change now has a guard that a large expand finishes in bounded time and does not move the
+  scroll position. ⚠ Their 5 s bounds are **deliberately generous** — a hang shows up as seconds, and a bound
+  tightened to the measured ~50 ms would be a test that fails for reasons unrelated to its subject (R16 applied
+  to test construction).
+  ✅ **M3.4b PART 1 DONE (2026-08-04) — the sidebar's context menus stop being multiplied by
+  virtualization** (`product-polish.md` §19.28). ⭐⭐ **The finding came from the INVENTORY, not the plan**:
+  the `MetadataNodeViewModel` row template carried an **inline `ContextMenu` with 22 items**, and that
+  template is applied to **every realized row** of the virtualized sidebar. Per the standing request I
+  stopped and showed it before implementing.
+  **Measured** (`SharedContextMenuFeasibilityProbe`, 5 000 rows, 40 scroll jumps): virtualization does **not**
+  fully recycle containers — the template is built **1 640 times per scroll**, so the menu was created and
+  discarded 1 640 times. Per-row **1237–2619 ms** vs shared **324–504 ms** → **~74 % of scroll time**, and
+  live `MenuItem`s **440 → 22**. ⭐ The *variance* is the second datum: the per-row variant swings 2.1×,
+  which is the allocation-pressure signature — and that shows up as **stutter**, not as uniform slowness.
+  ⭐ **Feasibility answered before any change: a shared `ContextMenu` needs no binding workaround.** One
+  instance attaches to all rows and, on open, adopts the **DataContext of the row it was opened on**
+  (`OBJ_3` → `OBJ_7` → `OBJ_1`), so ordinary `{Binding}` resolves correctly and follows. ⚠ The carrier is
+  **DataContext inheritance, not `PlacementTarget`** (which read `null` under a programmatic `Open`) — ⛔ do
+  not build on `PlacementTarget` here without your own measurement.
+  **As built:** three `<ContextMenu>` blocks moved into `<ListBox.Resources>` with `x:Key`, referenced as
+  `ContextMenu="{StaticResource …}"`. **No code-behind, no behaviour, no change to any item's bindings.**
+  ⭐⭐ **The compiler caught something that is an IMPROVEMENT, not an obstacle:** inside a `DataTemplate` the
+  context type came from its `DataType` — implicitly and for free — so in resources ~30 `AVLN2000` errors
+  appeared. The answer is **`x:DataType` on each menu**, which makes the binding contract **explicit and
+  compile-checked** where it used to be positional. ⚠⚠ With reflection bindings the same defect would have
+  been **silence**: an empty menu on right-click and a green build. ⛔ Do not remove `x:DataType`.
+  ⚠⚠ **Three guards, each verified by planting the violation — and one of them is the ONLY net.**
+  `EverySharedMenuReference_HasItsResource`: a planted bad key **passed the build**, because an unresolved
+  `StaticResource` throws only **when a row is realized** — i.e. after connecting and expanding a category.
+  ⭐ **Smoke cannot catch it**: an empty sidebar realizes no metadata row at all, so the app starts, looks
+  right, and fails later in the user's hands.
+  ⏸ **Verification scope, stated plainly:** the folder and connection menus are machine-verified (the
+  existing probe realizes those rows); **`SidebarMetadataMenu` and the `IsVisible` re-evaluation are the
+  user's QA** — the latter by explicit decision (*"no point building more measuring infrastructure for
+  something verifiable in the running app"*).
+  ⚠ **The same "inline menu in a row template" shape exists in two more places and was deliberately left
+  alone**: Saved Queries and the tab strip — **neither is virtualized nor reaches thousands of rows**, so the
+  multiplier that decided here does not exist there (trap 17).
+  ✅ **M3.4b PART 2 DONE (2026-08-04) — the review of all 32 context menus, and it found NOTHING to fix**
+  (`product-polish.md` §19.30). ⚠ **The entry measurement was wrong and is corrected: 6 items lack an icon,
+  not 14** — eight carry one through the ELEMENT syntax `<MenuItem.Icon>`, which a scan for the `Icon=`
+  attribute cannot see (#285 again: a measurement by carrier does not answer the question about the role).
+  ⭐⭐ **Two apparent inconsistencies both turned out to be rules working correctly.** `DeleteCommand`
+  appears in four menus and only one shows `F8` — because `ResolveCommand` resolves `DeleteObject` **only**
+  for a metadata leaf, so the gesture genuinely does not work on a folder or a connection and showing it
+  would teach something false. `Connect`/`Disconnect` have no `CanExecute` — they are gated by `IsVisible`,
+  and ⭐ **hiding and disabling are two correct tools for two different situations**: hide when the item
+  makes no sense in that state at all, disable when the operation exists but is momentarily unavailable
+  (a vanishing item destroys muscle memory — which is why M3.3c chose `CanExecute`).
+  ⚠⚠ **Method note worth keeping: an automated cross-check BY NAME cannot answer the gesture question.**
+  Menus bind ViewModel commands (`AddFieldCommand`) while the catalog holds ids (`CollectionAdd`); the
+  mapping lives in `ResolveCommand`, not in names. Across 154 items the names coincided **once**, by
+  accident. ⛔ Do not build a guard on that association — it would give false comfort.
+  ⭐ **M3.4 IS CLOSED IN FULL** (M3.4a §19.26 · step 15b §19.27 · M3.4b part 1 §19.28 · part 2 §19.30).
+  ✅ **M3b.1 DONE (2026-08-04) — import and the Script Executor now report to the status-bar progress
+  section** (`product-polish.md` §19.31). ⭐⭐ **The entry measurement refuted the stage inventory on three
+  points, and one of them halved the scope.** (1) There are **FIVE** `IProgress` paths, not three and not
+  four — the missing one is the **Script Executor** (`IProgress<ScriptStatementResult>`), which is also the
+  **only path in the app with an exact total** (`_lastStatements.Count`), so it became the first live
+  consumer of the percentage path §19.7.2 warned was untested. (2) ⛔⛔ **Export and batch run MODALLY**
+  (`ShowDialog(owner)`), so the section's whole value — §19.7.3's *"the operation survives switching tabs"* —
+  cannot exist there, and `HasCancel` would render a button **that cannot be clicked** behind a blocked
+  window; they are out of scope **permanently**, and their own `ProgressBar`s stay (the status bar
+  *complements*, never replaces). (3) ⚠ The **"16 ViewModels" figure is not a list of things to wire** —
+  14 are `IsLoading` for "loading this tab's content" and **each already has its own in-place carrier**
+  (11 `*LoadingHint` constants); trap 13's question answers itself, because the owner of that fact is *what
+  you are looking at*. `PerformancePanelViewModel` was declined separately: `CancellationToken.None`, i.e.
+  an operation with no cancel.
+  ⭐ **Two operations genuinely CAN run at once** — import owns its own transaction since I7.5 — so the
+  arbitration `StatusProgressViewModel`'s comment deferred to M3b had a real subject. **Ratified: one
+  operation at a time, on a priority ladder** (connect/metadata › query **and** script › import), with the
+  label always naming its operation. ⚠ Query and script are **one rung on purpose**: they contend for the
+  Data lane (`RunAsync` refuses over an open transaction), so they cannot meaningfully overlap — ⛔ a rule
+  for an unreachable case would be an inert branch posing as a design decision.
+  ⭐⭐ **The architecture is one sentence: ONE writer of the section.** Every source now only says
+  *"recompute"*; `UpdateProgressSection` alone calls `Begin`/`Report`/`End`. The tab VMs deliberately got
+  **no reference** to `StatusProgressViewModel` — two writers would be two owners of one state, and the
+  arbitration would have nowhere to live. The aggregation seam needed **widening, not building**, and the
+  name followed the responsibility: `WireRailSource` → `WireActivitySource` (`RaiseActivityChanged` has been
+  named for "activity" since M3.1e precisely because it feeds consumers with different roles; progress is
+  the **third**). ⭐ That one subscription set is also what guarantees **no source outlives its tab** —
+  closing a tab mid-import and disconnecting (`Reset`, which carries no `OldItems`) both go the same way.
+  ⚠ **`RailBrushKey` was NOT touched** — rail colour semantics are M3b.3, after every source is wired
+  (the user's call: *if the current colours turn out to be enough, there is no need to complicate them*).
+  ⚠⚠ **THE ITERATION'S MOST IMPORTANT RESULT IS A LESSON ABOUT TESTS, AND IT GENERALISES: the first
+  version of the guard PASSED with the violation planted.** Its scenario ended the script *before* starting
+  the query, so the section passed through "nothing running" — and `End()` resets the mode **by itself**.
+  The test was green for a reason its own name did not describe, and **only planting the violation revealed
+  it**; without that step the iteration would have closed with a pin that pinned nothing. ⭐ The correct
+  shape is an **owner handover with no gap** (script running, user hits F5) — reachable exactly because the
+  ladder puts the query above the script. ⚠ Two more measured notes: the **first plant was too broad**
+  (removing `Begin` took `IsRunning` with it, so 7 of 13 tests fell and nothing was isolated — a plant must
+  lie in **one** dimension), and one plant **failed to compile** while the tests ran against the **stale
+  binary** and showed the *previous* plant's red — ⭐ check `0 errors` **before** reading the failure list.
+  ⚠ The label is short **from a measurement, not for taste**: the status bar is
+  `ColumnDefinitions="Auto,*,Auto,Auto"`, so section 4 grows at the star column's expense and **pushes the
+  state chips left** — which is why §8.4.6 fixed the bar itself at 120 px. ⛔ Do not add the operation's
+  detail to it; the detail belongs to the surface running the operation (§19.5.1/§19.7.1's ownership split).
+  ✅ **M3b.1 A+B+C DONE (2026-08-04) — selecting a large `.xlsx` for import no longer blocks the UI:
+  17 768 ms → 1 ms** (`product-polish.md` §19.32). ⚠⚠ **My first measurement answered a different question and
+  the user caught it.** I priced the *provider* (`ListSheetsAsync`, `ReadSchemaAsync`, the shared-string table)
+  and the numbers were right, but they did not explain the symptom; the user's reply was exact — *"the problem
+  is at the boundary between OpenFileDialog closing and the first preview, not in reading the XLSX"*.
+  ⭐⭐ **Cost explains why something is SLOW; it does not explain why the UI is BLOCKED** — the second
+  measurement was about the thread, not milliseconds, and that is the one that named the mechanism.
+  **The mechanism:** `Recalculate` starts the chain synchronously (`PendingRecalculation =
+  RunGuardedChainAsync(...)`) and an `async` method runs inline until its first *incomplete* await — while
+  `FileImportSource.OpenStreamAsync`/`OpenTextAsync` return `Task.FromResult(...)`, so every provider await
+  continues **inline regardless of `ConfigureAwait`**. So the whole read ran **inside the `Source.FilePath =
+  path` setter**, and a Dispatcher job posted at **`Render`** priority beforehand did not run **once** in
+  17 768 ms. ⭐ That is what "the window looks frozen and repaints oddly" is: a window that stopped pumping.
+  **A —** `RowsFromDimension` fetched one attribute through `worksheetPart.Worksheet`, the **DOM accessor**,
+  which materializes the entire sheet *before* checking whether the element exists: **8 546 ms vs 15 ms** via
+  `OpenXmlReader` for the same value, paid **twice** per file selection. ⭐ Not an optimization — the class's own
+  doc lists *"SAX not DOM (1)"* as the first of I0's seven binding REK-6 guidelines, and this one place had
+  quietly broken it. ⚠ The stop at `<sheetData>` is part of the fix: without it a workbook with **no**
+  dimension would be walked row by row, trading one expensive mechanism for another (13 ms measured).
+  **B —** three provider calls moved off the Dispatcher; ⛔ **everything touching a ViewModel or an observable
+  collection stayed on it**. ⭐ Not a new pattern — `InferNewTableColumnsAsync` and
+  `RefreshConvertedPreviewAsync` **already** did "read off-thread, publish on-thread"; `ReadSourceAsync` was
+  the one expensive link left out, and its `await foreach` had the collection *pinning the read to the UI
+  thread*. ⚠ Encoding/delimiter detection was deliberately **not** moved (bounded 64 KB, 1–3 ms) — moving work
+  whose cost was never measured as a problem is exactly the "artificial `Task.Run`" the user forbade.
+  **C —** new `IsRecalculating` (⚠ **not** `IsBusy`, which covers only `ReadSourceAsync` while the chain has
+  two more flags — a bar bound to it would blink mid-operation) drives *"Loading file…"* / *"Reading
+  clipboard…"* through M3b.1's one writer. ⚠⚠ Clearing it is **conditional on still being the current chain**:
+  a superseded chain finishes *after* its successor starts, so an unconditional `false` would darken the bar
+  for an operation that just began.
+  ⭐⭐ **The most durable finding is in the frozen design doc: `data-import.md` §4.7 has said "the schema read
+  and the preview go on a background thread" since v2 — and the implementation never did it.** So B was not a
+  design change; it was the code finally catching up. ⚠ A sentence in a design document goes stale exactly as
+  silently as a comment or a string (#284): that one was *true as intent* and *false as description* for the
+  module's whole life, with a green build and green tests, because nothing checked it.
+  ⚠⚠ **`XlsxImportProvider` had NO unit tests at all** (live probes only) — the fix brought its first four.
+  ⭐ One guard reads the **source**, and that is justified rather than lazy: DOM and SAX return the **same
+  value**, so no assertion about the result can tell 15 ms from 8 546 ms; only the mechanism differs. Verified
+  by planting it — the source guard failed and all three behavioural tests stayed green. ⚠ **The suite does
+  not prove the work left the UI thread**; that is the probe's standing job
+  (`tools/probes/ImportFileOpenProbe`, which posts a `Render`-priority job and reports a verdict against a
+  frame budget). ⚠ `.xls` (`ExcelDataReader`) is **unmeasured** and left alone — no large `.xls` to hand.
+  ✅ **M3b.1d DONE (2026-08-04) — the import progress lives in ONE place, and the import command bar stops
+  clipping** (`product-polish.md` §19.33). QA on A+B+C found the run's progress in two places at once and the
+  top bar not fitting. ⚠ **A correction of fact changed what had to be removed: "Loading file…" was never in
+  the top bar** — the elements there (`ProgressText`/`ProgressBar`/`Timer`) are gated on `IsRunning`, so the
+  duplication was of the RUN, and one half of it (the toolbar bar) had been there since etap I5. Without that
+  correction the fix would have deleted the wrong element.
+  ⭐⭐ **The clipping mechanism is worth knowing generally: band B is a `DockPanel` with `LastChildFill`, so
+  right-docked children take their size FIRST and the buttons are the last child — a horizontal `StackPanel`,
+  which does not compress, it CLIPS.** Measured from the XAML: that panel already carries **520 px of combo
+  minimums** (170+170+180) plus 7 buttons, 3 dividers, 3 labels and ~18 gaps, and a run took another ~400 px
+  from it. ⚠ Band B's own comment said the timer is docked right *"so a running import never shifts the
+  buttons"* — true and insufficient: they do not shift, they **disappear**. ⛔ Do not dock anything else there
+  without counting what is left for the last child.
+  **The user's call:** only the elapsed time stays on top; the bar and all statistics move to the **bottom
+  panel** — which matches the module's ratified split (*top = where the import is DESIGNED, bottom = where
+  RESULTS land*). ⭐ The elapsed time stays for a reason: the status bar does not carry it, and the SQL Editor
+  and Script Executor both keep theirs in the toolbar, so removing it would break a family, not simplify.
+  ⭐ Placed as an **overlay on the bottom panel's tab strip** (the chevron's own pattern), never its own row:
+  a row would push the tabs down exactly when the run starts — §13.3 spread over time, the very defect this
+  iteration removes — and an overlay costs zero pixels at rest. It is also visible whichever tab is selected,
+  which a placement inside the Report tab would not be (and the Report is still empty during a run).
+  ⚠ Recorded and deliberately unsolved: on a very narrow window the overlay could cover the last tab — QA,
+  not a number tuned blind. ⚠ The command bar was NOT slimmed down: three 170/180 px combos are a **density**
+  question, so they belong to the §13.3 gate and the UX sprint, not to a patch here (R7).
+  ✅ **M3b.2 DONE (2026-08-04) — connecting to a database now reports in the status bar**
+  (`product-polish.md` §19.34). ⭐⭐ **The start had a funnel; the END did not, and that decided the design.**
+  Connect has two entry points, both through `MainWindowViewModel.ConnectAsync` — but `MetadataReady`, the
+  obvious end signal, **does not fire** on three paths: a failed connect (no `ActiveConnectionChanged`, so no
+  prefetch), a disconnect mid-load, and a prefetch throwing anything `LoadGroupAsync` does not catch (the
+  `NotifyMetadataReady()` call sits *after* the loop). Each would have left the bar lit forever — §19.7.4's
+  hazard at its worst, because the symptom would be permanent and unrelated to anything the user is doing.
+  ⭐ So **each phase clears itself in its own `finally`**, which removes the "did the event fire" question
+  entirely; `MetadataReady` is untouched and the status bar does not use it. ⚠ Verified and NOT a defect:
+  `OnIsConnectedChanged` sets `IsExpanded = true`, which calls `LoadCategoriesAsync` synchronously, and then
+  calls it again — no double prefetch, because `_categoriesBuilt = true` lands *before* the first await.
+  ⚠⚠ **Phase 2 (restoring the tabs) got NO label, because one would be dead UI** — measured: the repaint
+  happens *before* it, so a label set at its start only appears once it ends, i.e. when it is already false.
+  ⭐ Ratified instead: keep phase 1's label up, so the window freezes showing *"Connecting to database…"*
+  rather than going dark — and nothing flickers, because nothing repaints while it blocks.
+  ⚠ Consequently `IsConnecting` is **not** cleared in its own method's `finally`: that would leave a gap over
+  phase 2 and the bar would go off and on inside one operation. It lives until phase 3 takes over, and three
+  paths guarantee every ending clears it (catch · `ApplyActiveConnectionChange(null)` · the prefetch's
+  `finally`). ⭐ Phase 3 needed **no new `try/finally`** — the existing one (for `EndSidebarBulkUpdate`) was
+  widened, so the safety mechanism is the one already proven there. It is also the **second** path in the app
+  with an honest percentage (13 categories; the first was the Script Executor).
+  ⭐ **A test caught a missing notification for the second time this stage:** 4 of 9 guards were red not
+  because of the ladder but because `IsConnecting` had no change hook — the section only recomputed where I
+  called `UpdateProgressSection()` by hand. The fix is also the better design (`OnIsConnectingChanged`, exactly
+  like `OnIsExecutingChanged`) and deleted three scattered calls. §19.23.10 again: **a value being correct is
+  not the screen updating.**
+  ⚠ Manual metadata refresh is deliberately **not** wired (the user narrowed the scope) — pinned by a guard,
+  because `RefreshAsync` does the same work with its own `try/finally`, so wiring it "while we are here" would
+  be one line nobody would notice. ⛔ No cancel for connecting: there is no command for it, and inventing one
+  would be adding a feature under cover of wiring progress.
+  ✅ **M3b.3 CLOSED AS ANALYSED + DEFERRED (2026-08-04) — zero code changes, and that is the result**
+  (`product-polish.md` §19.35). With every source wired the progress section reports **five** activities while
+  `RailBrushKey` knows **three**, so the status bar could say *"Importing data… 110 200 rows"* while the rail
+  showed **rest**. The user reconfirmed the direction — the rail distinguishes activity types by colour — but
+  ⛔ **the set cannot be built today, and that is measured, not estimated:** the rail is **2 px**, severity owns
+  hue **0°** and **~36°**, and **every** existing identity colour sits in the **149–215°** band
+  (`ConnectedColor` 154° · `DebugLoopIconColor` 174° · `IconColor_Query` 200° · `AccentIconColor` 209°), so
+  every pair collides (9–35° apart). Five distinguishable hues would need colours the product has never used.
+  ⭐⭐ **The lesson is bigger than colour: a limitation of the TOOL is not an argument for shrinking the
+  REQUIREMENT.** I recommended cutting the number of categories to fit the current palette; the user rejected
+  that — *"I would not give up distinguishing activities just because the palette turned out too poor"* — and
+  was right. The correct order is the reverse: the requirement stands and the insufficient tool becomes its own
+  topic. ⭐ Stopping was also the correct execution of `color-language.md` **§0.5**: with three of five hues
+  needing to be invented, the honest answer to *"will the user recognise it faster?"* is **"don't know"**.
+  ⏸ **New topic P‑1 in `color-language.md` §9.2** (the palette's own question), carrying two defects found on
+  the way, deliberately **not** fixed one at a time: **P‑2** `AccentBrush` on the rail is **2,89:1 in Dark**,
+  below §10's 3:1 (⚠ `AccentColor` is shared, so it is not a local correction), and **P‑3** ⛔⛔ **the debugger
+  has TWO colours for ONE fact in the same status bar** — the chip paints `AccentIconBrush`, the rail paints
+  `DebugCurrentLineBarBrush`, i.e. the **editor's** current-line token; neither is a debugger identity colour
+  and `AccentIconBrush` is already slated for retirement (DC).
+  ⚠ Correction to §19.4.4 in passing: its note *"trace reads weak in Light"* is **not about contrast** — trace
+  has the **best** contrast of the set (8,03:1 / 6,58:1).
+  ⭐ **M3b IS NOW CLOSED IN FULL** (§19.31 · §19.32 · §19.33 · §19.34 · §19.35).
+  ⏸⏸ **Next: ⛔ the §13.3 GATE** — the four persistent surfaces reviewed *together*, on a real database, in
+  both themes, for **visual reception, not document compliance**. It blocks M4.
+  ⭐ **A ready startup prompt for the next session:**
+  [docs/design/product-polish-m3-next-session.md](docs/design/product-polish-m3-next-session.md).
+- **🔬 THE OLD TREE DEFECT IS NOW REPRODUCIBLE BY THE USER, AND AN INSTRUMENT IS SHIPPED FOR IT
+  (2026-08-04) — `EMBERTERN_TREE_DIAG`.** Full record: `metadata-refresh-analysis.md` **§10**.
+  Reported scenario: expand several large categories (~tens of thousands of rows) → the list **starts
+  scrolling down on its own** → cannot be stopped → any click hangs and closes the process.
+  ⚠⚠ **The observation that shapes everything: from the EXE the process DIES, under Visual Studio it
+  scrolls to a point, STOPS, and the app carries on.** A "debugger present / absent" difference points at
+  an **exception**, not at cost — under a debugger an exception in a Dispatcher callback can be caught,
+  without one it ends the process. ⭐ That is why the exception channel is a first-class part of the
+  instrument, not an extra.
+  **What the log answers** (five questions, set by the user): (1) does the offset change, **who** changes
+  it and **from where** — `Offset`/`Extent` watched by two routes plus a **stack trace** on movement;
+  (2) loop-forming events — `ScrollChanged`, `SelectionChanged`, **`RequestBringIntoView`** (tunnel +
+  bubble), `EffectiveViewportChanged`; (3) rebuilds — row `CollectionChanged` plus the three existing
+  rebuild points; (4) a cyclic Dispatcher callback — **scope nesting depth**, post counters by name, a
+  500 ms heartbeat and **call-stack depth**; (5) exceptions — **`FirstChanceException`** plus unhandled
+  and unobserved-task.
+  ⭐ **Design decisions worth keeping:** own flag and **own file** (`%TEMP%\EmberTern-tree-diag-<pid>-<stamp>.log`)
+  because a storm writes tens of thousands of lines and would drown the shared debug log · **`AutoFlush`
+  on**, a real observer effect accepted on purpose because **the last lines before the process dies are
+  the whole point** · **stack captures are budgeted** (first 25, then ≤1 per 250 ms, always during a
+  detected storm) so the log does not drown in its own noise · ⛔ **not one diagnostic line inside a
+  ViewModel or `SidebarFlatController`** — everything is subscribed from outside in one code-behind
+  method, because the instrument must *observe* the mechanism, not join it (the three existing
+  `ScrollTrace.Rebuild` calls were **re-routed**, not duplicated).
+  ⭐⭐ **The instrument SELF-TESTS its exception channel** — it throws and catches a benign exception at
+  startup so the log proves the hook is live. ⚠⚠ Without that, **an absence of `EXC` lines is
+  undecidable**: it would mean either "nothing was thrown" or "the hook is dead", which are opposite
+  conclusions leading to opposite searches (a negative measurement is the dangerous kind, #285).
+  ⛔⛔ **THE INSTRUMENT'S FIRST RUN KILLED THE APP, AND THAT IS THE ENTRY WORTH READING (fixed 2026-08-04).**
+  `TreeDiagnostics.Scroll` built its line with `string.Format` using the alignment `{4,+8:0.0}` —
+  **alignment takes only an integer, so `+` is a syntax error** — and the `FormatException` travelled up
+  through the ScrollViewer's `PropertyChanged` handler into Avalonia and **ended the process on the first
+  category expand**. The build was green and would have stayed green: a composite format string is a
+  mini-language parsed **at run time**. The user diagnosed it from the stack in `EmberTern-debug.log`
+  (*"Failure to parse near offset 77. Expected an ASCII digit"* — offset 77 is that `+`).
+  ⭐⭐ **The worst part is what it destroyed: a tool meant to catch someone else's defect BECAME the defect**,
+  and the user's log described only the instrumentation. So the fix is not one character:
+  **(1)** every line is now built from **separately formatted pieces** (`ToString`) — ⛔ **not one composite
+  format string is left in the class**, because concatenation has nothing to parse and therefore nothing to
+  throw; **(2)** every public entry goes through **one `Safe` gate** that swallows `Exception` and drops the
+  entry (the user's requirement stated plainly: *a failed log write must skip the entry, never stop the
+  app*), with dropped entries **counted and reported at exit** — a silent loss would be worse than no
+  instrument; **(3)** a **`[ThreadStatic]` reentrancy guard**, because a throw inside logging reaches the
+  `FirstChanceException` hook, which logs, which throws again.
+  ⭐ **And the guard written against the CAUSE found a second instance on its first run** —
+  `$"{DateTime.Now:yyyy-MM-dd…}"` in the header, the same family. `TreeDiagnosticsFormattingTests` feeds the
+  pure formatters hostile input (`NaN`, infinities, `int.MinValue`, `null`, and text containing `{`, `}`,
+  `{4,+8:0.0}`) and scans the source so the class cannot go back to a run-time-parsed format.
+  ⚠ **The general lesson, wider than this file: a tool whose only job is to not crash the app must not use
+  a mini-language evaluated in production.**
+  🐞🔧 **CAUSE FOUND AND FIXED FROM THE USER'S LIVE LOG (2026-08-04) — `AutoScrollToSelectedItem`.**
+  Full record: `metadata-refresh-analysis.md` **§11**. **The loop, identical in all 93 stack captures:**
+  `SelectingItemsControl.AutoScrollToSelectedItemIfNecessary` (posted to the Dispatcher) →
+  `ItemsControl.ScrollIntoView(index)` → `VirtualizingStackPanel.ScrollIntoView` →
+  `RequestBringIntoView` → `ScrollContentPresenter.BringDescendantIntoView` → **Offset +24 px**.
+  **Timeline:** t=122 502 the user clicks a row (`SelectionChanged`) · t=123 422 a category expands, the
+  list reaches **13 217 rows** · t=123 499 onward the offset walks **26 → 50 → 74 → … → 2 210, always
+  exactly +24,0 px, every ~98 ms, without end**.
+  ⭐⭐ **Why one row and why never-ending:** the selected row sits thousands of positions outside the
+  realized window (~39 of 13 217 visible), and `VirtualizingStackPanel.ScrollIntoView` **cannot jump** to
+  an unrealized index — it knows the geometry of realized elements only. So it scrolls one row, realizes
+  the next, raises `RequestBringIntoView` again, and **crawls toward the target one row per dispatcher
+  cycle** (~9 minutes to reach row 6 000).
+  ⭐⭐ **Why it cannot be stopped — measured, not deduced: the `heartbeat` DIES the moment the loop starts
+  and never returns.** It runs at `DispatcherPriority.Background`; the loop floods the queue and starves
+  that priority, so clicks and wheel events queue behind work that never yields.
+  ⭐ **What the log RULED OUT, which mattered as much:** **zero exceptions** in the whole run (the only
+  `EXC` line is the instrument's self-test — the silence was decidable *only* because of it) · **no
+  reentrancy** (`ChevronClick` never exceeds `depth=1`) · **no selection loop** (three `SelectionChanged`
+  in 133 s, none inside the loop) · expansion is **linear**, not quadratic (218 leaves → 220 entries) ·
+  **our own `ScrollIntoView` appears in no stack of the loop**. ⭐ So the scrolling is a **CONSEQUENCE** of
+  continuous `BringIntoView`, not its cause — the user's reading of the log, confirmed.
+  ⚠⚠ **WHY BOTH EARLIER MEASUREMENTS MISSED IT, and the lesson is bigger than this defect: neither had
+  anything SELECTED**, so `AutoScrollToSelectedItem` had nothing to chase. The variable that decides the
+  whole phenomenon was absent from both experiments — neither was wrong, both were blind to that
+  condition. ⭐ **A synthetic measurement reproduces the MECHANISM but not the STATE.** Before accepting
+  that one rules a hypothesis out, list the states in which the defect occurs for the user and check which
+  of them the experiment actually reproduces.
+  **The fix is one property — `AutoScrollToSelectedItem="False"` on `SidebarList` only.** ⭐ It is a fix of
+  the cause, not a workaround: it removes the mechanism the log names, and this list already has its **own,
+  deliberate** "show me this object" (`OnRevealSidebarRow` → explicit `ScrollIntoView`), so a second
+  automatic mechanism doing the same job is redundant here. ⛔ **Deliberately no conditions** ("scroll only
+  if the target is near the viewport"), no custom scrolling algorithm, nothing else changed — the user's
+  ratified call. ⛔ Guarded by `SidebarList_DisablesAvaloniaAutoScrollToSelectedItem`, because the property
+  looks exactly like something that will one day be "tidied up": it defaults to `true`, removing it breaks
+  **no other test**, changes no pixel, and the defect only returns for a user with a very large database.
+  ✅ **CONFIRMED ON A LIVE RUN AFTER THE FIX, and the evidence is stronger than "it did not recur":**
+  `AutoScrollToSelectedItemIfNecessary` in stacks **93 → 0**, `dOffset=+24.0` **93 → 0**, and the
+  `heartbeat` **alive to the end** instead of dying — on a **bigger** tree (15 980 rows vs 13 217) with
+  **six times more selections** (19 vs 3), i.e. the triggering condition occurred *more* often than in the
+  run that produced the defect. ⚠ `RequestBringIntoView` still fires 84 times and that is correct — normal
+  scroll-to-item on user interaction; what disappeared is the **automatic mechanism**, not the event.
+  ⏸ **One open item for QA: keyboard navigation** (arrows, PageUp/PageDown, Home/End) keeping the selected
+  row in view. ⛔ If it does not, the answer is a fix **for keyboard navigation**, never the return of the
+  global auto-scroll (ratified 2026-08-04).
+  ⏸⏸ **HYPOTHESIS TO OBSERVE, recorded at the user's request and deliberately NOT raised to a finding —
+  there is no hard proof:** this may also have been the cause of the long-standing **flaky
+  `ConnectionExpandBindingProbe` hang** (#94/#226/#261). The probe drives tree operations inside a real
+  `MainWindow`; if a row happened to be selected it could have entered the same `AutoScrollToSelectedItem`
+  loop, and a **starved Dispatcher looks exactly like** the previously-measured "teardown / dispatcher-loop
+  shutdown" suspicion — a hung run rather than a failed assertion. ⭐ **The decisive criterion needs no new
+  infrastructure: if that probe stops hanging from 2026-08-04 on, it is strong evidence the two problems
+  shared one cause.** ⛔ Not to be declared resolved on a few green runs — the hang was rare by definition;
+  observe over time and **record the outcome either way**. ⚠ Until then nothing changes: the probe still
+  runs in its own partition and the user's 2026-08-01 instruction stands. Full record:
+  `metadata-refresh-analysis.md` **§12**.
+  ⏸ **DATA POINT, recorded because the note above says to record the outcome either way (2026-08-05, Avalonia
+  12.1.1 sprint): the probe did NOT hang once in ~25 runs** across the sprint (nine baseline, nine post-change,
+  plus the partition verifications). ⚠⚠ **This is NOT evidence for the hypothesis and must not be read as
+  such** — three reasons: the observation window is days, not the months over which the hang was rare; the
+  probe now shares its partition with `BrandingPresentationTests`, so it is not the same experiment any more;
+  and Avalonia 12.1.1 itself brings **`Fix headless session hang when cleanup throws` (#21781)**, which is a
+  *third* candidate cause. ⭐ So the sprint **added a candidate rather than eliminating one**, and the
+  hypothesis is now less decidable than before, not more. ⛔ Do not close it on this.
+  🔧 **`EMBERTERN_TREE_DIAG` STAYS as a hidden developer tool** (user's decision) — it is what found this
+  cause after two years of the symptom, and it costs nothing when the flag is unset: no file, no
+  subscriptions. ⛔ Do not remove it and do not surface it in the UI; reach for it whenever a
+  scroll/selection/Dispatcher-shaped defect appears anywhere in the app, not only in the tree.
+- **📋 OBSERVATION PARKED, NOT TO BE ACTED ON (user, 2026-08-04):** startup is still noticeably slower with
+  a large number of open tabs. ⚠ This is the **known cost of the deliberate deterministic load** — chosen so
+  diagnostics always has the full metadata context and never flags valid symbols as errors. ⛔ Do not touch
+  it; recorded for the future only.
+  ✅ **M3.3c DONE (2026-08-03) — the tab context menu; the tab strip is complete** (`product-polish.md`
+  §19.24). Nine items, **zero new chrome** (the Keyboard Manager's `ContextMenu`/`MenuItem` styles +
+  `{app:MenuIcon}` already exist).
+  ⭐⭐ **The rule-#11 gate went from three entries to four by gaining a SCOPE, and that was the only change it
+  needed.** `CollectUnsavedWork` / `HasSavableDirtyEditors` / `SaveDirtyEditorsAsync` iterated over *all*
+  tabs, because the three existing entries always concern the whole set — but *"close tabs to the right"*
+  concerns a **subset**, and without a scope the fourth entry would have to either **bypass the gate** or
+  **ask about work in tabs it does not close** (the first is data loss, the second is a lie). ⭐ `scope ==
+  null` means "all", so the three existing entries are untouched and their 26 tests passed unchanged.
+  ⛔ Do not build a second "save many tabs" path. ⚠ The gate is **aggregating, not N prompts in a row** — a
+  question asked eight times is not a gate, it is an obstacle to click through — and a failed save closes
+  **nothing** (a partial close after a failed save is the worst outcome).
+  ⚠ **Every command takes the tab as a PARAMETER, never the selection**: a context menu opens over a tab that
+  need not be active, so reading `SelectedWorkspaceTab` would close someone else's document — gotcha #16/#99
+  one level up.
+  ⭐ **Every item has its own `CanExecute`** (user's request before implementation): *close to the right* is
+  disabled on the last tab, *close unmodified* when every tab is dirty, *refresh* for a dirty tab **or a kind
+  that does not refresh** — hence `WorkspaceTabViewModel.CanRefresh`, the **fifth member of the per-kind
+  family**, because `RefreshAsync`'s `_ => Task.CompletedTask` arm makes the call *safe* but the menu item
+  *dead*, and a clickable item that does nothing teaches that the command is broken. ⚠⚠ Gating depends on the
+  COLLECTION's composition and `[RelayCommand]` knows nothing about it, so it is recomputed in the one
+  existing `OnWorkspaceTabsChanged` hook — pinned on `CanExecuteChanged`, not on the value (§19.23.10's
+  lesson again).
+  ⭐ **"Show in Metadata Explorer" selects AND scrolls** — a selection off screen is indistinguishable from no
+  reaction. ⚠⚠ **Expanding the category must be AWAITED, not merely requested**: setting `IsExpanded` fires
+  `LoadGroupAsync` fire-and-forget, so looking for the leaf straight after would hit a category with no
+  children — the item would do nothing the first time and work the second, the worst kind of defect. ⚠ Select
+  synchronously, `ScrollIntoView` posted at `Background` (gotcha #221's shape).
+  ✅ **M3.3b DONE (2026-08-03) — two tab-strip modes + two preferences** (`product-polish.md` §19.23).
+  ⭐⭐ **Two modes, ONE mechanism**: one `ItemsControl`, one tab template, and the mode is *only* the
+  `ScrollViewer`'s scroll directions — a `WrapPanel` wraps exactly when it is given a **finite** width, so
+  horizontal-`Disabled` gives multi-row (+ `MaxHeight` = `Size.Row.Tab` × rows, so **only the strip scrolls**)
+  and horizontal-`Auto` gives an infinite width and therefore a single row, forever. ⛔ Do not split it into
+  two `ItemsControl`s: the ~60-line tab template would be duplicated and could then drift between modes.
+  ⚠ `MaxHeight` is computed in code-behind because it is a **product of a role and a preference** and
+  `{DynamicResource}` does not multiply — ⛔ no third catalog layer of ready-made heights (§19.1.4 settled the
+  same question for `GridLength`).
+  ⭐⭐ **The overflow counter counts the tabs you CANNOT see, not the tabs you have** (ratified) — the first is
+  the only number nothing else on screen tells you. It is therefore measured from the **real layout**, not from
+  the collection; a half-clipped tab counts as hidden. ⚠ Recorded risk: the strip does not virtualise, so the
+  count is complete — if it ever starts to, the counter goes **silently low**. Reuse before create: the
+  filtered list is the existing `SearchableComboBox`, the count rides its `SelectionBoxText`, zero new chrome.
+  ⚠ Preferences are additive — **`CurrentSchemaVersion` stays 2** — and travel in the `.etsettings` export for
+  free. `TabStripMaxRows` **survives a round trip through single-row mode** (pinned): resetting a limit that
+  momentarily does not apply would look like tidiness and read as lost settings. Its minimum is **1, not 2**,
+  because one row of a *multi*-row strip still hides nothing behind a menu, which `SingleRow` does not.
+  ⭐ Settings Center got its own **Tabs** category (user's call — the tab strip is a separate surface, and it
+  gives M3.3c's *"Tab settings…"* a precise destination).
+  ⚠ **Two Settings Center guards fired on the first run and both were right** — a missing page-visibility
+  property (selecting "Tabs" would have left the right pane blank) and a preference with no row and no
+  recorded reason. That mechanism was not ceremony.
+  ⚠ **Third time the visual probe showed a state that did not exist**: it loaded six resource dictionaries and
+  `SearchableComboBox.axaml` was not among them, so the overflow control had no `ControlTheme`, no template,
+  and rendered as **nothing** — a plausible-looking image with the subject missing. ⭐ **The probe must load
+  the same dictionaries as `App.axaml`**; a missing one does not fail, it silently removes an element.
+  ⭐⭐ **ACCEPTANCE ROUND ON M3.3b — three reports, and TWO OF THEM HAD ONE CAUSE** (§19.23.8). *"The scrollbar
+  covers the tabs"* (single-row) and *"the scrollbar practically disappears"* (multi-row) are the same fact
+  seen twice: Avalonia's `ScrollViewer` keeps its bar as a **thin line lying ON the content**, expanded only
+  under the pointer. `AllowAutoHide = false` removes both properties at once — constant thickness, so space
+  *can* be reserved, and visible without hovering. ⚠ **Reserving that space had to be code**: Fluent's
+  `ScrollViewer` template spans the `ScrollContentPresenter` across the whole grid, so the bars always overlay
+  and there is no "reserve space" property; the reservation is the `ScrollViewer`'s **`Padding`**, which the
+  template passes to the presenter. ⭐⭐ **The thickness is MEASURED off the bar itself, never typed** — our
+  themes declare no scrollbar width, and writing `12` would either be a dead literal or, worse, a reach for
+  `Space.Lg`, which happens to be 12 too (**trap 6: a number does not determine a role**). Reservation is
+  conditional (R13). ⛔ **The thumb colour was NOT touched even though the report named colour**:
+  `ScrollBarThumbColor` is an application token, so raising it for one strip is patching a single screen (R7)
+  and raising it globally leaves the etap — and it proved unnecessary, because the problem was the control's
+  **state**, not its colour. ⭐ Wheel scrolling is single-row only (multi-row's built-in vertical wheel is
+  already what one expects), handled on the **whole strip** and on the **tunnel**, stepping by a **quarter of
+  the viewport** — tab widths vary by design (D6/§8.1), so "one tab" is not a unit.
+  ⛔⛔ **AND THE FIRST FIX FOR THE OVERLAP WAS WRONG — the round that matters most** (§19.23.9). Reserving the
+  bar's space with the `ScrollViewer`'s `Padding` is a **feedback loop**: padding changes the viewport, the
+  viewport changes the bar's visibility, the bar changes the padding. In the **probe**, which lays out **once**,
+  it rendered correctly and convincingly; in the app, which lays out in a loop, it never settled. ⭐⭐ **That is
+  the FIFTH time this strip's probe showed a state that did not exist — and the first where the probe could not
+  have been right in principle**: the other three were bugs *in* the probe, this one is outside its reach by
+  construction. ⚠ **A tool that computes once cannot rule on convergence** — written on the probe, in place.
+  ⭐ **The fix is structural**: the horizontal bar is no longer the `ScrollViewer`'s (it runs `Hidden`) but a
+  **sibling of the tabs in its own grid row** — siblings cannot overlap, by construction rather than by a
+  tuned number. ⭐⭐ And that same structure is why the loop cannot return: the bar's visibility depends on the
+  **horizontal** span while its presence changes only the **vertical** dimension — orthogonal quantities.
+  ⛔ Never gate that bar's visibility on anything it affects itself.
+  ⏸ **The overflow button/counter is DEFERRED by the user, not abandoned** — the `SearchableComboBox` version
+  was visually wrong (mispositioned popup, rows rendered by `ToString()` because `DisplayMemberPath` does not
+  feed the popup list — it needs an `ItemTemplate`), but the deeper error was the one the user named: it mixed
+  the strip's LAYOUT with an extra element. `TabStripOverflow*` strings stay for its return.
+  ⭐ **Third round: "Maximum rows" now HIDES in single-row layout** (§19.23.10) — the user overruled this
+  etap's own decision to keep it visible, and the rule is better: *the interface does not show settings that do
+  nothing in the current mode.* My argument confused **hiding a row** with **discarding a value**; the number
+  is still kept. ⚠ The comment stating the opposite was corrected in the same step (trap 21 in its worst form —
+  it justified behaviour that no longer existed). ⭐ The condition is an **AND of two independent reasons**
+  (mode ∧ search filter) and lives on the page: writing the mode's answer into the row's `IsVisible` would let
+  a search resurrect a row that does not apply. ⚠⚠ **Asserting the property's VALUE was not enough** — read
+  directly it is correct even when nothing announces it, while the binding re-queries only on
+  `PropertyChanged`; the notification is therefore an assertion, **verified by planting the violation**.
+  ✅ **M3.3a DONE (2026-08-03) — RE-SCOPED BY THE USER BEFORE IT STARTED, and that is its first lesson**
+  (`product-polish.md` §19.22). The plan row read *"geometry, `Size.Row.Tab`, indicator"* — **all three were
+  already delivered by M3.1a**, so the user refused to do the etap for the etap's sake: *"jeżeli M3.1a
+  faktycznie dostarczyło geometrię M3.3a, to nie cofajmy się do planu tylko dlatego, że plan jest
+  nieaktualny."* ⭐⭐ **A stage plan goes stale exactly as silently as a string or a comment** (#284, traps
+  20/21) — check in the CODE that a sub-etap's subject still exists before starting it.
+  The iteration instead closed the strip's **technical debt**: 12 → 5 local values (4 onto roles, 2 deleted
+  as genuinely redundant, 3 moved into styles), and the last M‑1 literal.
+  ⚠⚠ **Moving a style is a change to its PRIORITY, and this one re-created the §19.2 regression.** The tab
+  Border carried a local `Background="{DynamicResource PanelBrush}"`; the relocated
+  `Border.active-tab { Background = BackgroundBrush }` **lost to it**, so the active-tab background swap
+  would have silently stopped working — build, suite and smoke all green, exactly like the indicator in
+  §19.2. The new test failed with `#ff252526` vs `#ff1e1e1e` and named it. ⭐ Fix is §19.2's own recipe —
+  **both states as setters** — plus a component-class anchor: `Border.workspace-tab` (rest) and
+  `Border.workspace-tab.active-tab` (active). ⚠ **The anchor is load-bearing**: without it the *resting*
+  rule would paint every `Border` in the application. **A state class says WHICH state; a component class
+  says OF WHAT.**
+  ⚠ **K9/K10 were never about this strip** — both sit on `TabItem` (bottom-panel + editor sub-tabs); the
+  document tab strip has no `TabItem`, no 13 px label and no `CornerRadius`. New **K12–K14** (the two
+  paddings + the close-button margin) go to §13.3 **as one question**, because all three change how many
+  tabs fit in a row — a density decision, not a catalog one.
+  ⭐ Three catalog findings recorded, not acted on: **`Pad.Tab` has 0 consumers**, and **`Size.Icon` (14) /
+  `Size.Icon.Lg` (16) have 0** while the literals appear **64 ×** and **15 ×** app-wide — an app-wide sweep
+  for §13.3/M4.3. The tab strip is now `Size.Icon`'s first consumer (the role's own comment names it).
+  ✅ **M3.2d DONE (2026-08-03) — M‑1, pure housekeeping, zero visual change and zero test-count change**
+  (`product-polish.md` §19.21): the 13 English `ToolTip.Tip` literals are **13 → 3** (7 connection-toolbar
+  + 3 window-caption buttons migrated to `UiStrings`; 1 belongs to M3.3, 2 to M4.3). ⭐ They got their **own
+  `*Tooltip` constants rather than reusing the existing label strings** — a label and a tooltip answer
+  different questions, and the *reverse* of that reuse is already recorded as a defect (Keyboard Manager
+  audit finding **D6**: seven menu items whose `Header` read a tooltip constant, which is how "Add item"
+  became a menu entry). ⚠ **None carries a gesture, by rule**: the commands are `Tree`-scoped (F3/F4/F8), and
+  a toolbar tooltip promising a key that only works in the tree teaches something false
+  (`keyboard-manager.md` §14). ⚠ `{x:Static}` is **compile-checked**, so a typo is a build error — the exact
+  opposite failure mode from `{DynamicResource}`, which silently keeps the inherited value.
+  ⭐ **Side finding, measured and deliberately NOT fixed** (scope was literals in XAML, not orphans in
+  `UiStrings`): six constants have **no consumer anywhere** — `ConnectionConnect`, `ConnectionDisconnect`,
+  `ConnectionDelete`, `ConnectionNew`, `ConnectionsEmptyHint` and **`TabCloseTooltip`**. The last one matters
+  for planning: the string for M3.3's remaining literal **already exists**, so that item is probably one
+  substitution rather than new work.
+  ⚠ **An ACCEPTANCE FIX ROUND ran first (2026-08-03)** — 14 defects from ordinary
+  use, grouped into 6 causes: [docs/history/23-acceptance-fix-round.md](docs/history/23-acceptance-fix-round.md).
+  ⭐⭐ **One of them was a data-loss bug: two instances of EmberTern could publish an EMPTY `settings.dat`**
+  and the empty file then loaded as `Missing`, so the next write made defaults permanent (gotcha #304 —
+  `AtomicWrite` shared one temp filename across processes). ⭐ **Four reports were NOT where they pointed:**
+  the result grid's column order was `GridLayoutBehavior` replaying a saved order, not `PopulateResultGrid`;
+  the disabled hammer's problem was `Opacity` letting the toolbar through, not a colour (`AccentColor` is
+  identical in both themes); the "tooltip" that only a restart removed is an `OverlayLayer` card, not a
+  tooltip — the first fix for it was measured **inert** and deleted; and the parameter-type dialog was fed a
+  **selectable procedure called from `FROM`**, a shape the lookup did not recognise at all (gotcha #307).
+  ⭐ **`Alt+F` is Format SQL again**, with `Ctrl+K` as its alternate — the one ratified `Alt+letter`
+  (`keyboard-manager.md` §18).
+  ⚠⚠ **TWO of the six needed further rounds after the user's acceptance passes, and the lesson is the SCOPE OF THE
+  QUESTION, not the analysis.** (a) The picker filter fields — round one moved the border only, and the measurement
+  then showed the selector **was** applying while the value still sat at **2.55:1**, under §10's 3:1 floor;
+  ⭐ *"almost visible" is indistinguishable from "invisible"*, and the fix is a recessed **fill** plus a border over
+  the threshold, pinned at the threshold in both themes (gotcha #308). (b) Parameter types took **four** rounds and
+  ended in an architectural change — see below.
+  ⚠⚠ **AND ROUND FOUR'S LESSON IS THE BIGGEST: an architecture is not verified by the tests of the thing it
+  replaced.** The user rejected round three with four findings, of which **only two were code defects** — and the
+  inventory they demanded (*which consumers must work for a routine call, which for any parameterised SQL, which
+  must not fire at all*) settled it in minutes: **"does this SQL carry named placeholders?"** is scoped to **any SQL**
+  and gates the parameter dialog, while **`IRoutineInvocation`** is scoped to **typing only**. So the new model
+  *could not* have widened the dialog — provable from `git show HEAD:`, and the gate is unchanged since `54b630c`.
+  ⭐ What the screenshots really showed was a **mislabelled dialog**: the parameter editor is reused for any
+  parameterised statement, so a plain `INSERT … VALUES (:a, :b)` opened a window headed *"Execute Procedure"*.
+  Title and header are now neutral (**"Execute"**, the user's choice). ⭐⭐ **A lying label is indistinguishable from
+  a malfunction** (gotcha #311).
+  **⭐⭐ THE ROUTINE-INVOCATION MODEL (2026-08-03) — the round's most durable result, and it came from the user
+  refusing a third patch.** Parameter typing had been fixed twice by adding a STATEMENT SHAPE to a consumer
+  (`EXECUTE PROCEDURE`, then `SELECT … FROM P(…)`), and each fix left the next syntax dead — `FOR SELECT … INTO`,
+  `INSERT … SELECT`, and a long tail after them. The user named the cause: *the AST should be able to answer "a
+  procedure is invoked here with an argument list"*. Delivered: **`IRoutineInvocation`** on the AST (routine ·
+  package · argument spans), implemented by `ExecuteProcedureStatement` and a new **`RoutineTableReference`**
+  (⚠ a **subclass** of `TableReference`, so the binder/highlighting/navigation are untouched); the parser **stopped
+  discarding the argument list** — `ParsePrimaryFromItem` read the name then jumped to the alias, so `rap(:a,:b) r`
+  carried the single token `rap`, neither arguments **nor alias**, which is *why* consumers were re-scanning text;
+  `MERGE … USING <name>(args)` modelled through the same `ParsePrimaryFromItem`; and the consumer now asks
+  `DescendantNodesAndSelf().OfType<IRoutineInvocation>()`, with ~130 lines of token walking and
+  `TryExtractExecuteProcedureName` **deleted**. Typing resolves **per placeholder** (one statement can invoke
+  several routines), so a binding carries its routine plus the slot and a name standing in two routines claims
+  nothing. ⭐ **The proof it is architecture and not a patch: the pinning theory has rows for FOR SELECT,
+  INSERT…SELECT, UPDATE OR INSERT, a CTE body, MERGE USING, a cursor declaration, a derived table and an EXISTS
+  subquery — and none of them has a line of code behind it.** ⛔ **Do not add a statement-kind branch to that walk;
+  a call it cannot find is a call the parser does not model** (gotcha #309, Contract #1).
+  **⭐ Two drag-and-drop templates, on that same foundation:** `INSERT INTO … SELECT` for tables (new — both column
+  lists from ONE `Insertable` call, so they cannot drift), and `FOR SELECT … INTO` for selectable procedures, which
+  **already existed and was unreachable from the SQL Editor** because the snippet context was fixed at attach time.
+  New `SnippetInsertionContextResolver` decides it from the **drop offset** by asking the parser whether it is
+  inside a `BlockStatement` — so scaffolds appear inside a routine being written in the console and stay hidden at
+  the top of an empty one (⛔ never by counting `BEGIN`/`END`: wrong for `CASE … END`, #117/#128/#129).
+  ⭐⭐ **`EveryGeneratedInvocation_IsRecognisedByTheModel` is what makes generation and parsing ONE feature** — every
+  template that emits a call is fed back through the walk the parameter dialog uses (gotcha #310).
+  ⚠ **And EVERY built-in scaffold is now offered in every editor**, ratified on the user's general argument (the SQL
+  Editor is where `EXECUTE BLOCK` / `CREATE PROCEDURE` / `CREATE TRIGGER` get written). Two narrower answers were
+  built and removed: widening only the reported template (an exception, not a rule), and deriving the context from
+  the drop offset — which fails for the case that matters, since a scaffold is what you reach for **to start** a
+  body. Pinned once over the whole catalog by `NoBuiltInTemplate_IsHiddenByTheInsertionContext`.
+  **⭐⭐ A TYPE HAS TWO PROVABLE ORIGINS, AND THAT IS THE SECOND AST FACT (round four).** On the user's directive
+  (*"nie seria if-ów dla kolejnych instrukcji, tylko wykorzystanie modelu AST jako jednego źródła wiedzy"*):
+  **`IColumnValueTarget`** — table + **(column, value-span) PAIRS** — implemented by `InsertStatement`,
+  `UpdateOrInsertStatement` (positional `(cols)`↔`VALUES`, ONE producer since the shape is identical) and
+  `UpdateStatement` (`SET col = expr`, paired by adjacency). ⭐ Pairs rather than two parallel lists is what lets one
+  interface serve shapes that pair differently while keeping that difference out of the consumer. One
+  **`ParameterTypeSource`** (`RoutineParameter(owner, slot)` | `TableColumn(owner, column)`) is the uniform answer,
+  so the VM switches on the **kind of source**, never on a kind of statement — a third origin would be a new fact
+  plus one arm. ⚠ Refusals, each with a reason: no column list · a column/value length mismatch · `WHERE col = :p`
+  (a predicate is a token fragment at structural depth) · a value that is not the whole placeholder (gotcha #312).
+  ✅ Pushed to both remotes (`85c8747`). ⏸ Awaits the user's visual QA (both themes).
+  **Closed and not returning:** M3.1 (Status Bar 2.0, six iterations) · **H‑3** (stable titlebar
+  layout) · **H‑5** (Commit/Rollback on their own tokens) · **§7.5** (superseded by the colour
+  language) · 🔒 **the colour language itself — designed, ratified, rolled out across the whole product
+  and visually accepted** (K1–K7 + a closing sweep + one optical fix; `product-polish.md`
+  §19.15–§19.20). Measured on close: **230 `SvgIcon` in views, 81 coloured, not one action button
+  outside the language**, zero open questions.
+  **⭐⭐ THE STAGE'S HARDEST LESSON IS ABOUT METHOD, NOT PIXELS.** Of four moves in M3.2a **one
+  survived**; M3.2b was **withdrawn in full**. Every rejected change *worked* and removed a measured
+  defect — the user's diagnosis names the mechanism: *"analiza jest bardzo dobra, pomiary są bardzo
+  dobre, ale później próbujesz doprowadzić regułę do logicznej konsekwencji, zamiast jeszcze raz
+  spojrzeć na gotową aplikację."* ⛔ **Trap 17: a rule DESCRIBES what is already good; it is not a
+  mandate to change everything that does not fit it. An element that breaks the rule is often an
+  exception that WORKS.**
+  **⭐⭐ SEVENTEEN RATIFIED RULES (R1–R17) — handover §5 holds them all; six are load-bearing
+  everywhere:** **R5** colour may express an action's priority, SIZE MAY NOT · **R8** the acceptance
+  criterion is *"does this look like a polished commercial application?"* · **R13** never reserve space
+  for an element that cannot appear in that context · ⭐ **R15** *iteration size follows UNCERTAINTY,
+  not caution* — small steps while a design is forming, one pass once it is accepted; keeping
+  micro-iterations after the uncertainty is gone is its own failure mode · ⭐⭐ **R16** *a measurement is
+  a DIAGNOSTIC tool; the acceptance criterion is the screen*, with the hard corollary that **a test
+  which goes green on a bad screen is worse than no test** — such a test is NARROWED to what a machine
+  can judge, never "strengthened" · ⭐ **R17** *conformance to the document ≠ coherence of the product*;
+  a whole-surface review is its own step, never the sum of per-iteration acceptances.
+  **⭐ [docs/design/color-language.md](docs/design/color-language.md) IS NOW A REFERENCE DOCUMENT, NOT A
+  PLAN — read it whenever you add an action or touch a colour.** Colour in an IDE answers **four**
+  disjoint questions, which is why they never contradict: **S1 rodzaj** (`IconColor_*`) · **S2 akcja**
+  (roles R‑1…R‑7) · **S3 tożsamość modułu** (state only, never a button) · **S4 hierarchia przycisku**
+  (`primary` + `OnAccentBrush` = contrast, *not* semantics). ⛔⛔ **§0.5 is an overriding gate that
+  outranks the role table: before changing ANY colour, answer "will the user recognise the action
+  FASTER?" — "no" or "don't know" means STOP and come back with a proposal.** *"It now matches the
+  language"* is **not** an answer to that question — it was M3.2b's only justification. ⭐ And if a rule
+  turns out to make the UX worse, the **rule in the document gets fixed, not the implementation
+  defended**.
+  **⚠ Four traps this stage paid for, all wider than Product Polish** (handover §9; gotchas
+  **#303/#304**): ⭐⭐ **a text control's BOX is not its INK** — line height includes descent, which
+  descender-free text leaves empty, so box-centring still reads as misaligned against an element whose
+  ink *is* its box; correct it with a `RenderTransform` (never a margin), and note that
+  `UseLayoutRounding="False"` helps only an element that IS its own ink · ⭐ **a measurement by CARRIER
+  cannot tell a role from a state** (the icon inventory counted by token, so state glyphs landed in the
+  actions table and three planned rows evaporated) · ⭐ **read what a prior measurement was MEASURING
+  before using it as an answer** — the more emphatic the old comment, the stronger the pull to treat it
+  as closed · ⚠ **a stale comment teaches the wrong thing exactly like a stale string**
+  (`Colors.axaml`'s "Warning=delete" legend outlived the change it described and generated the whole
+  drift K2 had to undo — gotcha #284's shape in prose).
+  **⭐ Four architectural decisions from the colour rollout that outlive it:** a role gets its **own
+  value, never an alias** (an alias re-couples what was just uncoupled, silently), and **a value meant
+  to diverge is a measurement with a date, not an assertion** · an optical correction goes through
+  `RenderTransform` · when moving a role onto its own token, **give the token per-theme values BEFORE
+  repointing consumers** (that is what made K7 visually neutral instead of a contrast regression) ·
+  `UseLayoutRounding="False"` is for an element that is its own ink.
+  **⏸ Still open, each with a home:** **DC** (retiring `AccentIconBrush`/`InfoIconBrush` → M4.3/M5;
+  ⚠ both still have consumers and are **not** orphans) · the **K1–K11 collision register** (§18.R → the
+  §13.3 gate) · **V‑1** (the SQL comment colour, ratified to stay) · **R‑6 (DPI)** — ⚠ partly
+  **unverifiable headlessly**, check 150% by eye.
+  ⛔ **§13.3 IS A QUALITY GATE THAT BLOCKS M4** — after M3 the four persistent surfaces are reviewed
+  *together, on a real database, in both themes*, for **visual reception, not document compliance**.
+  ⭐ R17 raised its weight: the colour language's closing sweep found two residues that became decidable
+  only when the whole strip was looked at at once.
+  **⭐ THREE PRINCIPLES THAT OUTRANK THE CATALOG:** **§0.1 Persistent UI** — Status Bar, Toolbar, tab
+  strip, Metadata Explorer, DataGrid, base controls and context menus beat screens opened once a day;
+  governs *order and effort, not scope*. **§0.1.1 tokens are a means, not the end** — ⛔ never report a
+  stage done on green tests alone. **§0.1.2 Application Chrome is ONE surface, not four components.**
+  **⭐ RATIFIED (D1–D12), do not re-litigate:** control heights **24 / 22 / 28** · **Cascadia Mono** ·
+  app name + version **removed** from the status bar · progress infrastructure (M3.1) split from wiring
+  operations (M3b) · **two tab-strip modes**, multi-row default, row limit 1–10 default 3, only the
+  strip scrolls · ⛔ **no `MaxWidth`/ellipsis on tabs** — measured refutation: `XXX_GG_WYSTCECHKART_AU99`
+  and `…_BU99` differ at **character 20**, so truncation renders them identically · Metadata Explorer
+  unchanged (a decision, not debt) · Dependencies trees migrate for **consistency, not performance**,
+  onto a shared `TreeListView` — **never onto `SidebarFlatController`**.
+  ⚠ Tab-strip preferences are **additive — `CurrentSchemaVersion` STAYS 2**, and `TabStripMaxRows` is a
+  numeric preference, so the settings-center §17.4/§17.4a pattern applies (`PreferenceRange`,
+  blur-or-Enter commit, digits-only on the tunnel, and ⚠⚠ **the control carries its ROW as
+  `DataContext`**).
+  **Earlier sub-stages (M0–M2c) — one line each; detail lives in `product-polish.md`:** **M2a** built
+  the catalog (`Tokens.axaml`, `Typography.axaml`) with zero visual change; **M2b** switched the base
+  controls onto it over 21 iterations and produced the **`FluentBridge`** pattern plus four
+  architectural decisions (⛔ the Bridge is mapping only · **the container decides size, the element
+  accepts it** · **a rule must be written POSITIVELY** · **height comes from context, the variant
+  carries colour**); **M2c** removed what the catalog blocked — `FontSize` 605 → 43, `CornerRadius`
+  37 → 19, **62 deliberate exceptions each with its reason written beside it** (R12), appearance
+  unchanged. ⚠ Two views still carry a local `MinHeight="26"` for Fluent's chunky `Expander`
+  (`ProcedureDetailTabView`, `FunctionDetailTabView`) — **removing it is NOT neutral** (the Bridge maps
+  `ExpanderMinHeight` to 24), so it stays with a reason as register entry **K7**.
 - **🐞 ET0003 NA NAZWIE GENERATORA W `GEN_ID(…)` — FIXED 2026-08-01 (minimal bugfix, awaits the user's
   confirmation in the running app).** `v = GEN_ID(gen_bomitem, 1);` w ciele PSQL zgłaszało **ET0003
   UnresolvedVariable** na istniejącym generatorze. Build 0/0; suite **7057** green (6989 + 14 + 54, up 17).
@@ -676,8 +2643,9 @@ noted.
   nothing new to record.
   **⭐ ETAP 5b — the etap that connected the feature to the user. See "What's built" for what it IS; the notes
   here are the WHY.** Build 0/0; suite **6988** green (partitions 6924 + 64, up 28); smoke clean.
-  ⚠ **The headless partition now holds THREE classes** (`ConnectionExpandBindingProbe` ·
-  `SettingsCenterViewTests` · `ContextMenuPresentationTests`), all in `HeadlessCollection`.
+  ⚠ **The headless partition held THREE classes at that point** (`ConnectionExpandBindingProbe` ·
+  `SettingsCenterViewTests` · `ContextMenuPresentationTests`), all in `HeadlessCollection`. ⚠ Historical: the
+  third was later folded into the probe and **no longer exists** — the live list is under "Tests" below.
   **⚠⚠ THE QA DEFECT AND ITS ONE-SENTENCE CAUSE (2026-07-31, §16.6) — the generalisation outlives this module.**
   An exported workspace did not survive a restart. ⭐ **Cause: `SettingsPortability.ExportTo` read the whole
   configuration off `settings.dat`, which is correct for every section EXCEPT `Workspace` — the one section the
@@ -3088,29 +5056,119 @@ noted.
   `DdlGenerator.PresentIdentifier` folds a picked domain to UPPERCASE + bare in generated DDL (regular
   ASCII identifiers only — §0-safe; special/case-sensitive names preserved verbatim + quoted), kept
   distinct from `SqlFormatter` (which preserves its own casing on existing source).
-- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **7057 as of 2026-08-01
-  (after the ET0003/`GEN_ID` generator-position bugfix, +17; 7040 after the ET0003/`EXECUTE BLOCK`
-  segmentation bugfix, +13; 7027 after the Branding UX sprint; 7026 after Settings Center etap 6 + its QA follow-up; 6988 after etap 5b + its three QA fixes, 6976 at etap 5b as delivered, 6960 after
-  etap 5a, 6784 after
-  etap 4, 6022 after etap 3, 6003 after etap 2, 5971 after the Hamburger Navigation sprint)** — green in the
-  three documented partitions (**6989 + 14 + 54**).
+- **Build**: 0 warnings / 0 errors (`TreatWarningsAsErrors=true`). **Tests**: **8345, MEASURED 2026-08-09**
+  (Product Polish through **M4.4** + M4's density decision + typography block + the stabilization sprint
+  S-1…S-6 + the grid consistency sprint + the Firebird language completeness sprint incl. its QA round).
+  Green in the three documented partitions (**8193 + 97 + 55**).
+  ⚠⚠ **NIEAKTUALNE OD 2026-08-10 — po ZAMKNIĘCIU CAŁEGO M5 suma to 8392
+  (8214 + 123 + 55).** Zdanie wyżej zostaje jako zapis stanu po M4; ⛔ nie cytuj go jako bieżącego.
+  ⚠⚠ **I TO TEŻ JEST JUŻ NIEAKTUALNE — po ZAMKNIĘCIU CAŁEGO pakietu UX po M5 suma to 8467
+  (8280 + 132 + 55), zmierzone 2026-08-10.** ⭐ Trzeci warstwowy dopisek do jednej linii w ciągu dwóch dni jest sam w sobie
+  pomiarem: **licznik trzymany w prozie starzeje się co etap**. Zmierz przed cytowaniem; nie kopiuj żadnej
+  z tych liczb w przód.
+  ⭐ **M‑3 (+14), §9 (+1) i M‑4 (+6) trafiły w całości do partycji GŁÓWNEJ** (8193 → 8214), bo żaden z tych
+  testów nie konstruuje kontrolek Avalonii — czytają ViewModele i ŹRÓDŁA. ⭐⭐ Krucha ręczna lista nazw
+  w filtrze partycji headless **nie urosła przez CAŁY M5 ani razu**, przez sześć iteracji z rzędu.
+  ⭐ Wcześniej: §10 i L‑1 dołożyły **26**
+  testów i **wszystkie** wylądowały w partycji ZGRUPOWANEJ (97 → 123), bo obie dopisały się do
+  **istniejącej** klasy `DesignTokenApplicationTests` — krucha ręczna lista nazw w filtrze partycji
+  headless **nie urosła ani o jedną pozycję**. ⭐ +6 to trzy teorie kontrastu × dwa motywy,
+  wszystkie dołączone do **istniejącej** klasy `DesignTokenApplicationTests`, więc krucha ręczna lista nazw
+  w filtrze partycji headless **nie urosła** — a rosnąca jest wyłącznie partycja ZGRUPOWANA (97 → 103).
+  ⚠ M4.4: +11, wszystkie w partycji GŁÓWNEJ — 8 przypadków arytmetyki sufitu (`CeilingFor`, czysta statyka,
+  wzorzec `ClampOnScreen`), 2 strażniki strukturalne M‑5 (sufit wymaga `ScrollViewera`; tablica 16 okien
+  `SizeToContent` → decyzja + powód, egzekwowana w obie strony) i 1 relacyjny na bliźniaczych dialogach
+  komunikatu. ⭐ Żaden nie zakłada nowej klasy headless — arytmetyka jest czysta, a strażniki czytają ŹRÓDŁO,
+  więc krucha ręczna lista nazw w filtrze partycji nie urosła.
+  ⚠ M4.2b: +16 netto — 7 CZYSTYCH testów reguły ←/→ (`SidebarKeyboardNavigationTests`, bez sesji headless,
+  bo reguła żyje w kontrolerze), 4 behawioralne w partycji headless (`DependencyTreeRenderTests`, w tym
+  REALNY klawisz przez pełny pipeline), 6 strażników źródłowych, minus usunięty test kategorii „UDF".
+  ⚠ M4.2's +2 are both main-partition and both source-reading: the structural guard requiring an icon geometry
+  declared outside `IconGeometries.axaml` to carry a written reason, plus its stale-exemption sibling. ⭐ The
+  size counter itself did **not** gain a test — it gained `|Path` inside the regex it already had, which is
+  why the ceiling moved 20 → 25 without a second mechanism appearing beside the first.
+  ⚠⚠ **This line was internally inconsistent until 2026-08-08 — it declared 8304 while its own partitions
+  summed to 8301** (the density block's numbers, left behind when the typography block moved the total). ⭐ The
+  warning below is therefore not hypothetical: **re-measure BOTH numbers, and check that they add up.**
+  ⚠ M4.1's +6 is the spacing ratchet: `Spacing`/`Padding`/`Margin` joined the existing `GuardedProperties`
+  theory (3 properties × 2 tests), so no new mechanism was built beside the old one.
+  ⚠ M4's +10 is all main-partition and all source-reading: four new guards over icon-size roles, the tree-row
+  pair and the editable-grid row height. ⭐ Two of them are a **ceiling with a number** (now 20 literal icon
+  sizes in 8 files, down from 95), so „how much of the sweep is left" stops being an opinion — the same
+  mechanism the `FontSize` baseline uses.
+  ⚠ The language sprint's jump (7378 → 8263) is mostly **not** hand-written assertions: 80 Language-Reference
+  corpus entries joined `SqlTestCorpus.All`, which feeds the formatter theories (§0 round-trip, idempotency,
+  casing) and the AST differential harness — ~11 runs per entry. Its QA round added the remaining 28
+  (`DebuggerValueFormatTests` + the grid date-editor and cell-rendering guards).
+  ⚠ The grid consistency sprint's +18 is all main-partition (`GridCopyTextTests` 14 + `DataGridCopyMenuTests` 3
+  + one premise guard in `EditableGridSeamTests`): every one of them reads source or calls a pure static, and
+  the behavioural half it replaced was a swap inside `EditableGridEnterTests`, which is why the headless
+  partitions did not move.
+  ⚠ The stabilization sprint's +43 split both ways on the same criterion: the source-reading guards
+  (`EditableGridSeamTests`, `MetadataCacheInvalidationTests`) are main-partition, while the behavioural Enter
+  tests construct a real `DataGrid` and therefore became the **eighth** headless class (see the list below —
+  the filter grew by one name, deliberately, because there was nothing existing for it to join).
+  ⚠ M3.5's +7 splits across BOTH partitions and the split follows one criterion: `CreateIconContractTests` (3)
+  reads **source files** so it is main-partition; the four new `DesignTokenApplicationTests` cases construct
+  Avalonia controls, so they went into a class **already inside** the headless filter — deliberately, to avoid
+  growing that fragile list of names by one more entry.
+  ⚠ This line said **7228 (7118 + 56 + 54)**, then **7271 (7154 + 63 + 54)**, then **7310 (7193 + 63 + 54)**,
+  then **7317 (7196 + 67 + 54)** — i.e. **it has now drifted five times**. Re-measure; do not copy it forward.
+  ⚠⚠ **A count kept in prose goes stale silently — this very line has been wrong twice.** Once because a
+  partition filter named a class that no longer existed (so the total read one too high, `product-polish.md`
+  §18.1.6), and once because the sub-stage's own numbers moved under it. **Re-measure before quoting it.**
+  **⚠⚠ THIS LINE SAID 7088 / "54 + 34" AND THE ARITHMETIC WAS NEVER MEASURED — corrected 2026-08-02 (M2c
+  iteration 1, `product-polish.md` §18.1.6), verified on a clean `HEAD`.** The cause is the next paragraph's
+  own class list: it named **`ContextMenuPresentationTests`**, a class that **no longer exists** — the Keyboard
+  Manager sprint's context-menu tests were folded into `ConnectionExpandBindingProbe` (which is where
+  `TheSameMenuOperationAlwaysCarriesTheSameIcon` lives today), and the name survived in the filter. Excluding a
+  name that matches nothing is harmless *as a filter*, which is exactly why nobody noticed the total was one
+  too high. ⭐ The general shape is gotcha #284 one layer out: **a number kept in prose stays green while the
+  thing it counts moves.**
   ⚠ Etap 6's +34 is mostly `SettingsConsumerWiringTests` — the etap's centre of gravity, because a stored value
   and a mapping are two lines each and what actually fails is **a consumer left on the shipped constant**.
   ⚠ Etap 5a's +176 is
   mostly one 126-case theory: the export round trip runs for **every combination of sections**, which is what
   the DoD asked for on a rule-#11 surface. ⚠ Etap 4's +762 is mostly theory rows:
   the shared SQL corpus is re-run under three non-default formatter styles, so a corpus addition now costs
-  four times its own count. ⚠ The headless partition now holds **four** classes
-  (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `ContextMenuPresentationTests` +
-  `BrandingPresentationTests`), all in
+  four times its own count. ⚠ The headless partition holds **ten** classes — measured, not listed from memory
+  (`ConnectionExpandBindingProbe` + `SettingsCenterViewTests` + `BrandingPresentationTests` +
+  `DesignTokenApplicationTests` + `TabStripPresentationTests` + `MetadataTreeVirtualizationProbe` +
+  `SharedContextMenuFeasibilityProbe` + `EditableGridEnterTests` + `GridDateEditorTests` +
+  `DependencyTreeRenderTests`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
-  (#94/#226/#286). The partition filter is the four class names excluded / included:
-  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~ContextMenuPresentationTests&FullyQualifiedName!~BrandingPresentationTests"`
-  and its inverse with `|`.
+  (#94/#226/#286). The partition filter is those class names excluded / included:
+  `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe&FullyQualifiedName!~EditableGridEnterTests&FullyQualifiedName!~GridDateEditorTests&FullyQualifiedName!~DependencyTreeRenderTests"`
+  and its inverse with `|` — ⚠ **except that `BrandingPresentationTests` now belongs to the ISOLATED partition,
+  so the grouped inverse must NOT include it** (grouped = the other eight; isolated =
+  `ConnectionExpandBindingProbe|BrandingPresentationTests`).
+  ⚠⚠ **`GridDateEditorTests` was MISSING from this filter until 2026-08-08, and that is the mirror image of the
+  `ContextMenuPresentationTests` defect two paragraphs up.** There, an excluded name matched nothing — harmless
+  as a filter, which is why nobody noticed. Here, a headless class was simply **absent from the exclusion**, so
+  it ran inside the main partition, quietly creating a headless session there. ⭐ Both are the same failure:
+  **the split is enforced by a hand-maintained list of names, and a list is exactly as stale-prone as a
+  count.** Check the list against the classes that carry `[Collection(HeadlessCollection.Name)]`, not against
+  memory.
+  ⛔⛔ **AND THE ACCEPTANCE CRITERION IS THE TOTAL, NOT „0 FAILURES" — measured 2026-08-05.** With
+  `--blame-hang`, a broken headless state reported **`Powodzenie!` — 0 niepowodzeń, łącznie 7232** while **128
+  tests silently never started**; the same state without the flag gave 94 failures, and on a retry it hung.
+  So a run is green only when it reports **`łącznie: 8304`** (or the partition's own 8158 / 91 / 55). A summary
+  line saying „0 niepowodzeń" is satisfiable by a run in which a whole partition failed to load.
+  ⚠⚠ **The filter is a LIST OF NAMES and goes stale silently** — an excluded name
+  that matches nothing is harmless *as a filter*, which is exactly why nobody notices (§18.1.6). The
+  criterion for adding a class: **does it construct Avalonia controls?**
   **⚠⚠ A THIRD, FINER SPLIT — USER DIRECTIVE, 2026-08-01: do NOT run `ConnectionExpandBindingProbe` together
-  with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** (54 green,
-  ~9 s) and the other three together (14 green, ~2 s). Both were clean that way on the same commit where a
-  combined run had to be interrupted twice.
+  with the other headless classes; it hangs often enough that it is not worth it.** Run it **alone** and the
+  rest together. ⭐ **CORRECTED 2026-08-05 (Avalonia 12.1.1 sprint): the isolated partition now holds TWO
+  classes — `ConnectionExpandBindingProbe` + `BrandingPresentationTests` — so the split is 7250 + 73 + 55 (7232 at the time; the main partition has since grown).**
+  `BrandingPresentationTests` moved there because it failed ~1 in 3 in the grouped run with *"The calling
+  thread cannot access this object because a different thread owns it"* and is **green 6/6 alone**; it is the
+  only headless test that opens a real platform `Window` (`Show()`), which is why it is the one that needed
+  isolating. ⚠ Weakening its assertion was rejected — dropping `Show()` makes `Icon` read null, i.e. the test
+  would pass while proving nothing. Detail + the two rejected attempts: the class doc and
+  `docs/design/avalonia-12.1.1-update.md` §11. Both were clean that way on the same
+  commit where a combined run had to be interrupted twice. ⚠ That "the other four" used to read four and then
+  seven — the number moves with the class list above, so read the list, not this sentence.
   **⭐ A NEW DATUM ON THE CAUSE, and it is a better suspect than any assertion: a headless test that constructs
   a `MainWindow` is the hang-prone shape.** The first draft of `BrandingPresentationTests` built one to check
   the titlebar and hung; rewritten around a bare `new Window()` the same class runs in **476 ms**. Constructing
@@ -3918,9 +5976,14 @@ long ago — the surviving, still-true boundary is kept below):
 
 The app has **one** central theming system. Every new window, dialog, UserControl, DataTemplate, and control MUST go through it — no exceptions. These rules exist because new UI kept introducing local colors and FluentTheme's `SystemAccentColor`-derived highlights (the brown/orange selection rectangles), which clash with the workbench palette.
 
-**The central system — two files, nothing else holds colors:**
+**The central system — five files, each with ONE job; nothing else holds a colour or a metric:**
 - [`Themes/Colors.axaml`](src/EmberTern.App/Themes/Colors.axaml) — the **single source of every color**. `ThemeDictionaries` with a `Dark` and a `Light` dictionary, each defining the same set of `Color` keys then `SolidColorBrush` keys over them. This is the token catalog.
-- [`Themes/ControlStyles.axaml`](src/EmberTern.App/Themes/ControlStyles.axaml) — the **single home for shared/reusable styles** (`Button.icon`, `Button.primary`, `Button.flat`, `Button.caption`, `TabItem.bottom-tab`, `TabItem.sub-tab`, `TextBlock.field-label`, `DataGridRow`/`DataGridCell`/`DataGridColumnHeader`, `ListBoxItem`/`TreeViewItem` state overrides, etc.). Loaded app-wide via `Application.Styles`, so these styles apply inside dialog windows and UserControls too.
+- [`Themes/Tokens.axaml`](src/EmberTern.App/Themes/Tokens.axaml) *(M2a)* — the **non-colour catalog**: spacing, `Thickness`/`CornerRadius` roles, control heights, icon sizes, radii, border widths. **No `ThemeDictionaries`** — a metric does not depend on the theme.
+- [`Themes/Typography.axaml`](src/EmberTern.App/Themes/Typography.axaml) *(M2a)* — the **12 typography roles** (size · weight · line-height) + `Font.Ui` / `Font.Code`.
+- [`Themes/FluentBridge.axaml`](src/EmberTern.App/Themes/FluentBridge.axaml) *(M2b)* — ⭐ **the mapping layer that repins FluentTheme's own named resources onto our tokens**, so we keep the framework's behaviour without copying its templates. ⛔ **Mapping only — never a second token catalog** (rule 8 below).
+- [`Themes/ControlStyles.axaml`](src/EmberTern.App/Themes/ControlStyles.axaml) — the **single home for shared/reusable styles** (`Button.icon`, `Button.primary`, `Button.flat`, `Button.caption`, `TabItem.bottom-tab`, `TabItem.sub-tab`, `TextBlock.field-label`, `DataGridRow`/`DataGridCell`/`DataGridColumnHeader`, `ListBoxItem`/`TreeViewItem` state overrides, etc.). Loaded app-wide via `Application.Styles`, so these styles apply inside dialog windows and UserControls too. **Also the home of every control METRIC setter** (rule 8).
+
+⚠ [`Themes/ControlThemes.axaml`](src/EmberTern.App/Themes/ControlThemes.axaml) holds the **two** hand-written `ControlTemplate`s (`CheckBox`, `RadioButton`) — structure, not style. Adding a third requires the two measured conditions in `product-polish.md` §16.4.
 
 **Hard rules:**
 1. **No hardcoded colors. Anywhere.** No hex literals (`#RRGGBB`, `#AARRGGBB`), no named colors (`White`, `Black`, `Red`, …) on any `Background` / `Foreground` / `BorderBrush` / `Fill` / `Stroke` / `Color` / `Value` in views, code-behind, or styles. The only literal allowed is `Transparent` (it's "no fill", not a theme color — used for hit-target borders and reset states). If you need a color, it is a **theme token** in `Colors.axaml` or it does not exist.
@@ -3930,8 +5993,15 @@ The app has **one** central theming system. Every new window, dialog, UserContro
 5. **Reusable styles live in `ControlStyles.axaml`, not in views.** If a style (label, button variant, tab variant, grid styling) is or will be used in more than one place, it goes in the central file and views reference it by `Classes="..."`. A view's local `<X.Styles>` block is allowed **only** for genuinely view-specific, non-duplicated structure — and even then it must use theme tokens (e.g. row-height/padding sizing, opacity-only hover affordances, a `Classes.active-tab` background swap that reads `BackgroundBrush`). When in doubt, centralize.
 6. **Never override FluentTheme state colors with hardcoded values.** FluentTheme paints selection/hover/focus from `SystemAccentColor` (brown/orange on a default Win11 install). The fix is already centralized: the `TreeViewItem*` / `DataGridCell*` / `ListBoxItem` resource-key overrides in `Colors.axaml` + the Style selectors in `ControlStyles.axaml`. New selection-driven controls inherit these automatically — do not re-solve it locally with a hex color.
 7. **New windows/dialogs must set `Background="{DynamicResource BackgroundBrush}"` + `Foreground="{DynamicResource ForegroundBrush}"`** on the root so they theme correctly (FluentTheme's window default isn't our palette). Use `Classes="field-label"` for form captions, `Classes="h1"` for dialog headers, the `Button.primary` / `Button.flat` / `Button.icon` variants for buttons — don't restyle from scratch.
+8. ⭐ **Restyling a base control: repin Fluent, don't rewrite it — and metrics, colours and aliases take THREE SEPARATE ROUTES.** Full pattern + the per-control procedure: [`product-polish.md` §16](docs/design/product-polish.md). In short: **metrics** (`MinHeight`, `Padding`, `FontSize`, `BorderThickness`) → a **style setter** in `ControlStyles.axaml` reading a token; **colours painted by template internals** (`PART_BorderElement` and friends) → **`FluentBridge.axaml`**; **a value the template holds as a LOCAL value on the element** (measured: `ExpanderMinHeight`, `ScrollBarThumbBackgroundColor`) → a **resource alias** `<StaticResource x:Key="…" ResourceKey="…" />`, because a setter cannot beat a local value. ⛔ **No local values in the Bridge** (`FluentBridge_ContainsNoLocalValues` fails the build otherwise), and ⛔ **no new `ControlTemplate`** unless §16.4's two conditions are both measured true.
+9. ⭐ **Never write a number a token already names.** Spacing, control height, font size, radius, border width and icon size all have roles in `Tokens.axaml` / `Typography.axaml`; consume them with `{DynamicResource}` (architectural — §3.4 wants a future font/scale preference to swap the base tokens live). ⚠ `{DynamicResource}` **does not throw on a missing key** — the property silently keeps its default, so a typo is invisible at build time; that is what `DesignTokenApplicationTests` exists to catch.
+10. ⭐⭐ **A control's size comes from its CONTEXT, never from its variant** (M2b §17.2). A chrome strip (`Border.chrome`), a `DataGridCell`, an `Expander` header and a dialog footer each declare what their children may be; the variant (`.primary`) carries **colour**. ⛔ **Never put `MinHeight`/`MinWidth` on the base `Button` style** — that exact setter silently grew the metadata tree's expander arrow from 20 to 100 px, because Avalonia clamps `Width` by `MinWidth`.
+11. ⭐ **Write the rule POSITIVELY.** *"Everything is X unless…"* leaks: in M2b it leaked twice, the second time as a layout regression. State what a thing IS (a class, a container), never what it is not.
 
-**Token cheat-sheet** (semantic name → use): `BackgroundBrush` (window/editor), `PanelBrush` (sidebar/header panels), `ElevatedPanelBrush` (titlebar/column headers), `BorderBrush`, `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`). If none fit, add a new token (both dictionaries) — don't reach for a literal.
+**Token cheat-sheet** (semantic name → use): `BackgroundBrush` (window/editor), `PanelBrush` (sidebar/header panels), `ChromeStrongBrush` (titlebar/column headers — chrome one step further from the document), `SurfaceRaisedBrush` (⭐ anything that FLOATS above its container: popups, menus, tooltips, dropdown lists, the selected tab — **not** the same job as chrome, and in Light the two are opposites), `BorderBrush` (structural separators, gridlines, the rest rail), ⭐ `ControlOutlineBrush` (**the visible
+outline of an interactive control at rest** — a different role from `BorderBrush`, and that distinction is
+what makes an unchecked `CheckBox` findable: sharing one token measured 1.35:1 in Light. Consumers: CheckBox,
+RadioButton), `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`). If none fit, add a new token (both dictionaries) — don't reach for a literal.
 
 ### Reuse before create
 
@@ -3954,6 +6024,9 @@ Before considering any UI task done, verify:
 - [ ] no hardcoded colors (`#RRGGBB` / named) — only theme tokens;
 - [ ] no local color definitions (no `<SolidColorBrush>`/`<Color>` in a view, no `new SolidColorBrush(...)` / `Brushes.X` in code-behind);
 - [ ] colors consumed via `{DynamicResource}`;
+- [ ] **no literal metric a token already names** — spacing, height, `FontSize`, radius, border width, icon size come from `Tokens.axaml` / `Typography.axaml` (rule 9);
+- [ ] **a restyled base control follows §16** — metrics via a style setter, colours via `FluentBridge`, no new `ControlTemplate` without §16.4;
+- [ ] **judged in the complete set of states** — normal · hover · active/checked · disabled · focus;
 - [ ] renders correctly in **Light** theme;
 - [ ] renders correctly in **Dark** theme;
 - [ ] existing styles / components reused (no reinvented label / button / grid / pagination);
@@ -3963,7 +6036,8 @@ Before considering any UI task done, verify:
 
 ## Live gotchas — load-bearing subset
 
-The **complete** catalog (280 entries, organized thematically) lives in
+The **complete** catalog (organized thematically; ⚠ its entry count is kept in ONE place — the Documentation
+map's row — never repeated here) lives in
 **[`docs/gotchas.md`](docs/gotchas.md)**. Below are the ~20 that are load-bearing across almost
 *any* future session — the rest are searchable there by keyword the moment a bug "feels
 familiar". Each line is a one-sentence summary; follow the `#N` reference into `docs/gotchas.md`
@@ -4085,7 +6159,7 @@ for the full explanation, code, and the failure it prevents.
 ## Known driver gotchas (Firebird + managed .NET driver)
 
 - **`FirebirdSql.Data.FirebirdClient` 10.3.4 implements only Srp / Srp256.** No `Legacy_Auth` code path in the managed assembly. `FbConnectionStringBuilder.AuthPlugins` does **not exist** as a typed property; setting it via the dictionary indexer is silently ignored.
-- **`FbServerType` is `Default` or `Embedded`.** `Default` is pure managed wire — `fbclient.dll` is **not loaded** on this code path. `ClientLibraryPath` only matters in Embedded mode (kept in the UI but harmless when unused).
+- **`FbServerType` is `Default` or `Embedded`.** `Default` is pure managed wire — `fbclient.dll` is **not loaded** on this code path, and the driver consults its `ClientLibrary` only in Embedded mode, which EmberTern never selects. ⚠⚠ **This line used to end "`ClientLibraryPath` only matters in Embedded mode (kept in the UI but harmless when unused)" — and that parenthesis was wrong, which is why the field is GONE (S-5, 2026-08-05).** It was not harmless: it offered the user a decision that could have no effect, and the user found it by pointing it at a completely invalid DLL and connecting successfully. ⛔ Do not re-add a client-library setting without the Embedded mode that would make it work; two guards in `ConnectionProfileStoreTests` say so, and the second keys on the **assignment** `ServerType = FbServerType.Embedded`, not on a mention.
 - **Firebird 3 "Install incomplete... CREATE USER" error**: caused by SYSDBA living only in the legacy password file. Fix is **server-side**, not client-side: `CREATE USER SYSDBA PASSWORD '…' USING PLUGIN Srp;` against any database on the instance (security3.fdb is instance-wide). IBExpert works because it uses native fbclient with Legacy_Auth support; managed .NET driver can't. See `memory/feedback_firebird_multiversion.md`.
 - **WIN1250 / WIN1252 / ISO8859_2**: register `CodePagesEncodingProvider.Instance` before any `OpenAsync` (done in `FirebirdConnectionService` static ctor). See `memory/feedback_firebird_codepages.md`.
 - **Connection errors show the raw server message.** `MapErrorMessage` always returns `"Could not connect to {endpoint}: {ex.Message}"` — nothing else. Do not add hints or interpret error causes (wrong password, missing user, plugin mismatch, host down, …); the server message is authoritative and the user or admin can read it directly. Earlier builds tried to categorize errors and surface a `CREATE USER … USING PLUGIN Srp` hint for Legacy_Auth; that was removed because it misfired on unrelated failures (the driver concatenates the whole GDS error vector, so wrong-password / missing-user errors often carried `"plugin"`/`"Legacy_Auth"` text and got mis-hinted).
@@ -4169,8 +6243,12 @@ above; do not revert to the old habit, it's exactly what made CLAUDE.md too expe
   §F outranks features, verify-don't-infer, one milestone per session ending green). **Order: P1 → P2 →
   D1 → D2 → D3 → D4 …** — risk first; the wiring consolidation sits at D3 because D1/D2 are pure and need
   no wiring.
-- **`docs/gotchas.md`** — the complete gotcha catalog (289 entries, #1–#302), organized thematically.
-  Search it whenever a bug looks familiar.
+- **`docs/gotchas.md`** — the complete gotcha catalog. Search it whenever a bug looks familiar.
+  ⚠⚠ **The entry count is deliberately NOT repeated here.** This line and the one above "Live gotchas" used to
+  carry their own numbers, and all three disagreed while every one of them was wrong — a prose counter drifts
+  the moment the file it counts grows, and three counters drift three ways (#284's shape, one layer out).
+  **The count lives in exactly one place: the Documentation map's `docs/gotchas.md` row.** Re-measure before
+  quoting it (`grep -oE "^[0-9]+\. \*\*"` → unique numbers), and note the duplicate-number caveat recorded there.
 - **`docs/history/README.md`** — index into the full project narrative archive (every milestone,
   session, and investigation, ~20 thematic files). Read a file when you need the "why" behind a
   specific feature or fix; nothing here is loaded automatically.

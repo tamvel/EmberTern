@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -47,7 +47,6 @@ public sealed class SettingsImportApplyTests
             {
                 Id = "conn-alpha", Name = tag + "-alpha", Host = "alpha.example",
                 DatabasePath = "/db/alpha.fdb", Password = tag + "-secret-alpha",
-                ClientLibraryPath = @"C:\local\" + tag + @"\fbclient.dll",
             },
             new ConnectionProfile
             {
@@ -173,11 +172,15 @@ public sealed class SettingsImportApplyTests
     ///
     /// <para>An export without passwords carries every connection with an <i>empty</i> password — that is how the
     /// exporter omits them — so a merge that copied the incoming profile wholesale would erase a working
-    /// credential as a side effect of importing a host name. The same applies to <c>ClientLibraryPath</c>, which
-    /// never travels at all.</para>
+    /// credential as a side effect of importing a host name (gotcha #292).</para>
+    ///
+    /// <para>⚠ This used to cover <c>ClientLibraryPath</c> too, as the second field taken from the LOCAL
+    /// profile. That field was removed in 2026-08-05 (S-5) because it could have no effect at all — EmberTern
+    /// connects with the managed wire protocol, where no fbclient.dll is loaded — so the password is now the
+    /// only field with this rule, and the test says so in its name.</para>
     /// </summary>
     [Fact]
-    public void ImportingConnectionsWithoutPasswords_KeepsTheLocalPasswordAndClientLibrary()
+    public void ImportingConnectionsWithoutPasswords_KeepsTheLocalPassword()
     {
         InTempDir(dir =>
         {
@@ -194,7 +197,6 @@ public sealed class SettingsImportApplyTests
             var alpha = store.Load()!.Connections.Single(c => c.Id == "conn-alpha");
             Assert.Equal("remote-alpha", alpha.Name);
             Assert.Equal("local-secret-alpha", alpha.Password);
-            Assert.Equal(@"C:\local\local\fbclient.dll", alpha.ClientLibraryPath);
         });
     }
 

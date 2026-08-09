@@ -53,8 +53,7 @@ Disabled state is conveyed by button `Opacity`, not a separate color.
 | `Icon.Eraser` | Actions/eraser.svg | Clear editor text | SQL editor toolbar (Neutral) |
 | `Icon.Braces` | Actions/braces.svg | Format SQL (`{ }` code) | SQL editor toolbar (Neutral) |
 | `Icon.Hammer` | Actions/hammer.svg | Compile / build DDL | Pola + New Table toolbar — accent **primary** CTA button (OnAccent) |
-| `Icon.TablePlus` | Actions/table-plus.svg (composed) | New Table | Connection toolbar (IconColor_Table). No Lucide `table-plus` exists → composed from Lucide table grid + plus. |
-| `Icon.Import` | Actions/import.svg (composed) | Data Import | Main toolbar, beside the Script Executor (Accent). Composed: an arrow descending **into a table grid**. Deliberately NOT `Icon.Download` — that tray means "fetch a file to disk", while this module puts rows into a TABLE, so the glyph rhymes with `Icon.Table`/`Icon.TablePlus`. |
+| `Icon.Import` | Actions/import.svg (composed) | Data Import | Main toolbar, beside the Script Executor (Accent). Composed: an arrow descending **into a table grid**. Deliberately NOT `Icon.Download` — that tray means "fetch a file to disk", while this module puts rows into a TABLE, so the glyph rhymes with `Icon.Table`. |
 | `Icon.PencilRuler` | Actions/pencil-ruler.svg | Design / edit table structure | Pola field-edit toggle (Neutral; blue selection bg when checked) |
 | `Icon.FolderPlus` | Actions/folder-plus.svg | New folder | Connection toolbar (Neutral) |
 | `Icon.PlugZap` | Connection/plug-zap.svg | Connect | Connection toolbar (Accent) |
@@ -154,6 +153,42 @@ breakpoint dot uses). Same idiom (24×24, 2px stroke, round caps/joins); canonic
 | `DebuggerIcon` | Debugger/debugger.svg | Debugger identity — blue Play + red breakpoint = "Start Debugging" | Debugger tab; Procedure + Trigger editor toolbar "Debug…" buttons |
 
 The fault message bar is Seam C.
+
+### Catalog (Product Polish M3.5 / Z-6) — the "create …" composite
+
+The nine toolbar create actions. **`CreateIcon` is the second composite in the product**, for the same
+structural reason as `DebuggerIcon` and with the same shape: `Controls/CreateIcon.cs` + a ControlTheme in
+`Themes/IconGeometries.axaml`, 24×24 Canvas in a Uniform Viewbox, 2px stroke, round caps/joins.
+
+| Control | Glyph source | Badge | Used in |
+|---|---|---|---|
+| `CreateIcon` | **`Data` = the PLAIN kind geometry by reference** (`Icon.Table`, `Icon.View`, …) | solid `AccentBrush` disc Ø10 at the lower-right, inset 0.5, with an `OnAccentBrush` plus | the nine "New <object>" buttons on the connection toolbar |
+
+**Two facts, two systems:** the glyph carries the object **kind** (S1 — `IconColor_*`, the very colour the
+metadata tree uses) and the badge carries the **action** "create" (S2 — one colour for all nine, so the mark
+means the same thing everywhere). ⭐ Consequence worth knowing: the toolbar and the tree now share **one
+geometry per kind**, so improving a glyph reaches both.
+
+⛔ **`Data` takes the plain geometry by reference — never a written-out path and never a "…Plus" variant.**
+The nine `Icon.<Kind>Plus` geometries this replaced were hand-composed **copies** with their glyph squeezed to
+~11 of 24 units to make room for a plus beside it (~62 % of the linear size its own counterpart has in the
+tree). Both defects — the small glyph and the silently-drifting copy — are what the reference removes. Pinned
+by `CreateIconContractTests`.
+
+⚠ **Why not a single geometry.** `SvgIcon` renders ONE `Path` with one `Stroke` and one `StrokeThickness=2`
+for the whole path, and a badge is by definition a *smaller, denser* mark. "Smaller but equally thick"
+degenerates into a blob at 16 px — measured with `tools/probes/VisualCandidateProbe`, not assumed. And in a
+24-unit box a full-size glyph plus a large corner badge **cannot avoid overlapping**: the maximum
+non-overlapping split is glyph ~13 + badge 6, i.e. +18 % over the old 11.
+
+⚠ **The badge is SOLID so it simply covers what is beneath — no knockout, therefore no dependency on the
+surface colour.** That is a correctness condition, not a shortcut: the toolbar surface is `ChromeStrongBrush`
+at rest but `IconHoverBrush` under the pointer, so a knockout filled with the chrome colour would flash a
+wrong-coloured patch on hover.
+
+⚠ At 16 px the plus inside the badge is at the resolution limit **at any diameter** (1.33 px stroke) — and
+that is the intent: a badge is recognised by **position and colour**, as in VS/JetBrains. It sharpens from
+~20 px and at 150 % DPI.
 
 ## Application Menu (hamburger-navigation, etap 2)
 

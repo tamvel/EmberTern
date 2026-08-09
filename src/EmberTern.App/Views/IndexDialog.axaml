@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:EmberTern.App"
         xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:ae="using:AvaloniaEdit"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
@@ -46,14 +47,14 @@
             Margin="20,4,20,8"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1"
-            CornerRadius="3"
+            CornerRadius="{DynamicResource Radius.Surface}"
             IsEnabled="{Binding IsFieldPickerEnabled}">
       <Grid RowDefinitions="Auto,*">
         <Border Grid.Row="0"
                 Background="{DynamicResource PanelBrush}"
                 Padding="8,4">
           <TextBlock Text="{x:Static app:UiStrings.IndexFieldsLabel}"
-                     FontSize="11"
+                     FontSize="{DynamicResource Text.Compact.Size}"
                      FontWeight="SemiBold" />
         </Border>
         <ListBox Grid.Row="1"
@@ -63,7 +64,7 @@
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:SelectableFieldViewModel">
               <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
-                <TextBlock Text="{Binding Name}" FontSize="11" />
+                <TextBlock Text="{Binding Name}" FontSize="{DynamicResource Text.Compact.Size}" />
               </CheckBox>
             </DataTemplate>
           </ListBox.ItemTemplate>
@@ -76,7 +77,7 @@
       <TextBlock Text="{x:Static app:UiStrings.IndexComputedLabel}" Classes="field-label" />
       <TextBox Text="{Binding ComputedExpression, Mode=TwoWay}"
                FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-               FontSize="12" />
+ />
     </StackPanel>
 
     <!-- Live DDL preview -->
@@ -84,17 +85,18 @@
       <TextBlock Text="{x:Static app:UiStrings.IndexDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
-        <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
-                 IsReadOnly="True"
-                 AcceptsReturn="True"
-                 TextWrapping="NoWrap"
-                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 FontSize="11"
-                 BorderThickness="0"
-                 Padding="8,6"
-                 MinHeight="56"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+              CornerRadius="{DynamicResource Radius.Surface}">
+        <ae:TextEditor x:Name="DdlEditor"
+                       ShowLineNumbers="False"
+                       IsReadOnly="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="{DynamicResource Text.Compact.Size}"
+                       Padding="8,6"
+                       MinHeight="56"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
       </Border>
     </StackPanel>
 
@@ -104,7 +106,7 @@
             IsVisible="{Binding HasValidationMessage}">
       <TextBlock Text="{Binding ValidationMessage}"
                  Classes="error"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  TextWrapping="Wrap" />
     </Border>
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -133,9 +133,6 @@ public static class SettingsExporter
                 {
                     connection.Password = string.Empty;
                 }
-
-                // ❌ Never travels: a local filesystem path, and only meaningful in Embedded mode.
-                connection.ClientLibraryPath = string.Empty;
 
                 // ❌ The v1→v2 migration shim. It is cleared on the next save of settings.dat anyway, and an
                 // export carrying it would hand the importer a legacy field to re-consume for no reason.

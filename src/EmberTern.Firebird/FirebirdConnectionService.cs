@@ -658,13 +658,12 @@ public sealed class FirebirdConnectionService : IDisposable
             Charset = string.IsNullOrWhiteSpace(profile.Charset) ? CharsetCatalog.Default : profile.Charset,
             Dialect = profile.Dialect is 1 or 3 ? profile.Dialect : 3,
             Pooling = false,
+            // ⛔ `Default` is the pure MANAGED wire protocol: fbclient.dll is not loaded on this path, and the
+            // driver's `ClientLibrary` is consulted only for `Embedded`. That is why there is no client-library
+            // setting to thread in here — see the note in ConnectionProfile (S-5, 2026-08-05). Setting one had
+            // no effect whatsoever, which the user found by pointing it at an invalid DLL.
             ServerType = FbServerType.Default,
         };
-
-        if (!string.IsNullOrWhiteSpace(profile.ClientLibraryPath))
-        {
-            builder.ClientLibrary = profile.ClientLibraryPath;
-        }
 
         return builder.ToString();
     }
@@ -731,13 +730,42 @@ public sealed class FirebirdConnectionService : IDisposable
         return $"Unsupported Firebird server ({v}). EmberTern requires Firebird 3.0 or later.";
     }
 
+    /// <summary>
+    /// The <c>Legacy_Auth</c> refusal, rewritten — the ONE exception to "show the raw message".
+    ///
+    /// <para>⚠⚠ <b>A Legacy_Auth hint was added once before and REMOVED</b>, because it asserted a cause and
+    /// then misfired: the driver concatenates the whole GDS error vector, so wrong-password and missing-user
+    /// failures also carry this text. <b>This message is safe precisely where that one was not — it asserts
+    /// NOTHING.</b> The measured fact is that a single message covers several causes, so the text enumerates
+    /// what to check instead of naming a culprit: it never says the password is wrong, and never says the
+    /// account is not an SRP account.</para>
+    ///
+    /// <para>⚠⚠ Recognition is by MESSAGE TEXT, which is the thing this codebase otherwise bans
+    /// (<c>DebugErrorClassifier</c>, <c>DatabaseConfigurationDiagnosis</c>). It has to be: measured on a live
+    /// server, this refusal arrives with <b>no SQLSTATE and no GDS codes at all</b>, so there is nothing else
+    /// to key on. Recorded rather than hidden — and it is only tolerable because a false positive costs
+    /// guidance that is still true for every cause the text covers.</para>
+    /// </summary>
+    internal const string SrpAuthenticationMessage =
+        "the server rejected the connection during authentication. EmberTern authenticates with SRP only. "
+        + "Check the username and password, and make sure the account is set up with SRP support. "
+        + "An administrator can create such an account with: "
+        + "CREATE USER <name> PASSWORD '<password>' USING PLUGIN Srp;";
+
     internal static string MapErrorMessage(Exception ex, ConnectionProfile profile)
     {
-        // Always surface the server's own message verbatim. We deliberately do not
-        // interpret or categorize error causes (wrong password, missing user, plugin
-        // mismatch, host down, …) — the raw server text is authoritative and the user
-        // or admin can read it directly. No hints, no special cases, no chain scanning.
+        // Surface the server's own message verbatim. We deliberately do not interpret or categorize error
+        // causes (wrong password, missing user, host down, …) — the raw server text is authoritative and the
+        // user or admin can read it directly. No hints, no chain scanning.
         var endpoint = $"{profile.Host}:{profile.Port}";
+
+        // ⚠ The single, ratified exception. See SrpAuthenticationMessage for why this one is replaced rather
+        // than passed through, and why it may be recognised by text when nothing else may.
+        if (ex.Message.Contains("Legacy_Auth", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Could not connect to {endpoint}: {SrpAuthenticationMessage}";
+        }
+
         return $"Could not connect to {endpoint}: {ex.Message}";
     }
 }

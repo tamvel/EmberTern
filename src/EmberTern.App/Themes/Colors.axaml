@@ -1,14 +1,37 @@
-<ResourceDictionary xmlns="https://github.com/avaloniaui"
+﻿<ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <ResourceDictionary.ThemeDictionaries>
 
     <ResourceDictionary x:Key="Dark">
       <Color x:Key="BackgroundColor">#1E1E1E</Color>
       <Color x:Key="PanelColor">#252526</Color>
-      <Color x:Key="ElevatedPanelColor">#2D2D2D</Color>
+      <Color x:Key="ChromeStrongColor">#2D2D2D</Color>
+      <!-- ⭐ RB‑4: powierzchnia UNIESIONA — popup, menu, lista uzupełniania, zaznaczona zakładka
+           panelu. W motywie ciemnym „o stopień dalej od dokumentu" i „unosi się nad kontenerem"
+           zbiegają się na tej samej wartości, dlatego jest identyczna z ChromeStrongColor. W jasnym
+           są PRZECIWNE i tam te dwie role się rozchodzą — patrz komentarz w słowniku Light. -->
+      <Color x:Key="SurfaceRaisedColor">#2D2D2D</Color>
       <Color x:Key="BorderColor">#3F3F46</Color>
+      <!-- ⭐⭐ M3.5 / Z-2 — KONTUR KONTROLKI INTERAKTYWNEJ W SPOCZYNKU. Rola inna niż `BorderColor`
+           (separator konstrukcyjny) i to rozróżnienie jest przyczyną defektu, nie jego ozdobą: dopóki
+           obie dzieliły jeden token, niezaznaczony `CheckBox` miał 1,60:1 w Dark i 1,35:1 w Light,
+           czyli PONIŻEJ progu 3:1 z §10 — kontrolka, którą trzeba kliknąć, była niewidoczna w swoim
+           stanie DOMYŚLNYM (zaznaczona jest jaskrawo niebieska, więc krzyczała włączona i nie
+           istniała wyłączona).
+           ⭐ Wartość policzona NA PRÓG (~3,1:1 wobec `BackgroundColor`), nie wyżej — ta sama droga,
+           którą ratyfikowała gotcha #308 dla pól filtra. Wariant na `SubtleForegroundColor` (6,31:1)
+           był renderowany i ODRZUCONY: kontur przyciągał więcej uwagi niż własna etykieta.
+           ⛔ Nie zamieniać na alias `BorderColor` ani `SubtleForegroundColor` — rola ma mieć WŁASNĄ
+           wartość (K1: wspólna wartość dziś nie jest zależnością architektoniczną).
+           Konsumenci: `CheckBox` i `RadioButton` (oba nasze własne szablony w `ControlThemes.axaml`). -->
+      <Color x:Key="ControlOutlineColor">#6A6A70</Color>
       <Color x:Key="ForegroundColor">#D4D4D4</Color>
-      <Color x:Key="SubtleForegroundColor">#858585</Color>
+      <!-- ⭐ H‑7 / §7.4 — tekst drugorzędny. Poprzednia wartość #858585 dawała 4,52:1, czyli
+           DOKŁADNIE na granicy AA, przy FontSize 11 i dla głównego elementu nawigacyjnego narzędzia
+           używanego osiem godzin dziennie. ⚠ Specyfikacja twierdziła, że problem dotyczy głównie
+           motywu jasnego — pomiar tego NIE potwierdził: ciemny był równie słaby, po prostu mniej
+           rzucał się w oczy. Teraz 6,31:1. -->
+      <Color x:Key="SubtleForegroundColor">#9AA0A6</Color>
       <Color x:Key="AccentColor">#2D6BBF</Color>
       <Color x:Key="AccentMutedColor">#1A4F8F</Color>
       <Color x:Key="TransactionActiveColor">#F0A458</Color>
@@ -20,13 +43,20 @@
       <!-- Avalonia color hex is ARGB (alpha-first). #FFFFFF12 = opaque yellow-white;
            #12FFFFFF = 7% white overlay. We meant the latter. -->
       <Color x:Key="HoverOverlayColor">#12FFFFFF</Color>
-      <Color x:Key="ErrorColor">#F44747</Color>
+      <!-- ⭐ M5 / §10: #F44747 → #F55252. `ErrorBrush` maluje TEKST komunikatu 12 px (MessageBanner
+           i log Messages), a na `PanelBrush` dawał 4,26:1 przy progu 4,5:1 dla tekstu < 14 px.
+           Kandydat policzony PRZY PROGU przez rozjaśnienie (mieszanie z bielą — odcień zachowany,
+           ⚠ nasycenie minimalnie niższe): Panel 4,26 → 4,53, Background 4,64 → 4,93.
+           ⚠ Zmiana jest WIZUALNIE NIEROZRÓŻNIALNA (delta 0,27) — jej jedynym zyskiem jest zgodność
+           z progiem; potwierdzone na renderze `m5c-text-Dark.png`. Pasek i ikona banera miały zapas
+           już wcześniej, więc sygnał severity się nie zmienia. -->
+      <Color x:Key="ErrorColor">#F55252</Color>
       <Color x:Key="WarningColor">#E8A020</Color>
       <!-- The part of a completion row that MATCHED what the user typed (the IBExpert cue). Red on
            purpose, by user request. Deliberately its own token rather than ErrorColor, which it sits
            next to in the palette: the two must be free to diverge, because this one means "this is why
            the row is here" and never "something is wrong". Chosen to stay legible on BOTH surfaces a row
-           can have — the popup's ElevatedPanel and the SelectionColor of the selected row. -->
+           can have — the popup's ChromeStrong and the SelectionColor of the selected row. -->
       <Color x:Key="CompletionMatchColor">#FF6B6B</Color>
       <Color x:Key="SelectionColor">#094771</Color>
       <Color x:Key="FocusBorderColor">#007FD4</Color>
@@ -89,8 +119,18 @@
       <!-- Buffered Table Designer pending-row washes (~20% alpha, alpha-first ARGB). -->
       <Color x:Key="RowAddedColor">#3327AE60</Color>
       <Color x:Key="RowDroppedColor">#33E53935</Color>
-      <Color x:Key="CommitButtonForeground">#4CAF50</Color>
-      <Color x:Key="RollbackButtonForeground">#F44336</Color>
+      <!-- ⭐ Role R‑2 „Zatwierdź" i R‑3 „Wycofaj transakcję" (`color-language.md` §3, krok K7).
+           ⚠⚠ TE WARTOŚCI ZOSTAŁY WYMIENIONE. Wcześniej stało tu `#4CAF50` / `#F44336` — surowy
+           Material Design, wstawiony na zapas, IDENTYCZNY w obu motywach i nigdy nieużyty (oba tokeny
+           nie miały ani jednego konsumenta). Każdy inny token semantyczny ma osobną wartość dla Light
+           i Dark, bo ten sam odcień nie ma poprawnego kontrastu na obu tłach — przyjęcie tamtych
+           wprost dałoby regres kontrastu w motywie jasnym (§7.2 języka, klasa problemu V‑1).
+           ⭐ Wartości = dostrojone pary `SuccessIconColor` / `DangerIconColor`, czyli DOKŁADNIE to, czym
+           Commit i Rollback malowały się dotąd. Dzięki temu K7 nie zmienia niczego na ekranie, a role
+           dostają własne tokeny (ten sam zabieg co `ActionRunColor` w K1).
+           ⛔ Nie jest to alias — patrz komentarz przy `ActionRunColor`; powód jest ten sam. -->
+      <Color x:Key="CommitButtonForeground">#6DBE7E</Color>
+      <Color x:Key="RollbackButtonForeground">#D77373</Color>
       <!-- Chrome-on-color tokens. These read identically in Dark + Light because
            they sit on theme-independent fills: OnAccent* over the blue AccentBrush /
            colored lane chips, CloseButtonHover is the Windows caption-close red.
@@ -100,13 +140,71 @@
       <Color x:Key="OnAccentSubtleColor">#80FFFFFF</Color>
       <Color x:Key="CloseButtonHoverColor">#E81123</Color>
 
+      <!-- ⭐⭐ NIEAKTYWNY PRZYCISK GŁÓWNY — WYPEŁNIENIE NIEPRZEZROCZYSTE, NIE PRZEZROCZYSTOŚĆ, i to jest
+           mechanizm defektu, nie dobór barwy (zgłoszenie użytkownika 2026-08-03: „na jasnym motywie nieaktywny
+           młotek praktycznie znika").
+           ⚠ Wcześniej stan nieaktywny to było `Opacity 0.5` na CAŁYM przycisku. `AccentColor` i `OnAccentColor`
+           są w obu motywach IDENTYCZNE, więc winna nie mogła być barwa — winne było to, przez co przezroczystość
+           przepuszcza: pod spodem stoi pasek narzędzi, w ciemnym `#2D2D2D`, w jasnym `#E8EAED`. Biała ikona
+           blaknąca w stronę jasnego tła traci kontrast prawie do zera, a w stronę ciemnego go ZYSKUJE — jedna
+           liczba, przeciwny skutek w dwóch motywach.
+           ⭐ Dlatego to są dwie role z wartościami PER MOTYW, a nie jedna liczba: nieprzezroczyste wypełnienie
+           odcina tło, więc kontrast ikony przestaje zależeć od tego, co za przyciskiem. -->
+      <Color x:Key="AccentDisabledColor">#3A3F46</Color>
+      <Color x:Key="OnAccentDisabledColor">#9AA0A6</Color>
+
+      <!-- ⭐⭐ POLE STOJĄCE NA POWIERZCHNI UNOSZĄCEJ SIĘ — WYPEŁNIENIE **I** RAMKA (zgłoszenie użytkownika
+           2026-08-03, PONOWIONE po pierwszej poprawce: „pola filtrów nadal zlewają się z tłem, na OBU motywach").
+           Dotyczy filtra w liście rozwijanej domeny i obu filtrów w okienku wyboru kolumny.
+
+           ⚠⚠ Pierwsza poprawka ruszyła TYLKO ramkę i była za słaba — i to jest zmierzone, nie odczute:
+           selektor stosował się poprawnie (`PART_BorderElement`, 1 px, moje kolory na miejscu), ale
+           w motywie jasnym tło pola to `#FCFCFD` na powierzchni `#FFFFFF`, czyli **różnica trzech jednostek** —
+           wypełnienie nie odcinało pola w ogóle i cały ciężar spoczynkowej widoczności spadał na jedną
+           kreskę. ⭐ Dlatego pole dostaje teraz WKLĘSŁE TŁO: to ono nadaje kształt, ramka go tylko domyka.
+           Tak samo działa każde pole wyszukiwania na jasnym panelu w dojrzałych edytorach.
+
+           ⚠ Skoki są celowo WYRAŹNE, a nie „o włos": ciemny `#171717` przy powierzchni `#2D2D2D` i jasny
+           `#EDEFF2` przy `#FFFFFF`. Trzy jednostki to był właśnie ten włos. -->
+      <Color x:Key="FieldOnRaisedColor">#171717</Color>
+      <!-- ⭐ Ramka trafia w PRÓG 3:1 wobec powierzchni, na której stoi — to kryterium §10 dla granic
+           nietekstowych (WCAG 1.4.11), a nie dobór na oko. Zmierzone: `#6E757E` dawało 2,96 (pod progiem),
+           `#767D87` daje 3,31. Dokładnie ten rodzaj różnicy, którego „prawie widać" nie odróżnia od „widać". -->
+      <Color x:Key="FieldOnRaisedBorderColor">#767D87</Color>
+
       <!-- Semantic icon colors (dark theme). Subtle, professional tones — not the
-           loud primary green/red. Applied via Foreground on SvgIcon:
-           Accent=execute-class, Success=commit, Danger=rollback/abort,
-           Warning=delete, Info=refresh, Neutral=everything else. Disabled state is
-           conveyed by button Opacity, not a separate color. -->
+           loud primary green/red. Applied via Foreground on SvgIcon. Disabled state is
+           conveyed by button Opacity, not a separate color.
+
+           ⛔⛔ TU STAŁA LEGENDA „Accent=execute-class, Success=commit, Danger=rollback/abort,
+           Warning=delete, Info=refresh" — PIERWOTNY schemat, PORZUCONY i NIEAKTUALNY. To ona jest
+           źródłem dryfu opisanego w `product-polish.md` §20: „usuń trwale" miało trzy kolory, bo
+           osiem edytorów i 131 pozycji menu przeszło na czerwień, a legenda dalej mówiła „żółty".
+           ⚠ Komentarz przeżył zmianę, którą opisywał — dokładnie kształt gotchy #284, tylko że
+           w komentarzu zamiast w stringu.
+
+           ⭐ JEDYNYM ŹRÓDŁEM PRAWDY O ZNACZENIU KOLORU JEST `docs/design/color-language.md`
+           (role akcji R‑1…R‑7 + wyjątki nazwane §5). Tutaj są WARTOŚCI, nie znaczenia — i nie
+           dopisuj tu drugiej legendy, bo to ona rozjedzie się jako następna. -->
+      <!-- Odpowiedniki ról: R‑4 → Danger · R‑5 → Warning · R‑6 → Accent · R‑7 → Neutral ·
+           R‑1 → ActionRun (niżej). -->
+
       <Color x:Key="AccentIconColor">#5B9BD5</Color>
       <Color x:Key="SuccessIconColor">#6DBE7E</Color>
+      <!-- ⭐ Język kolorów / rola R‑1 „Uruchom" (`color-language.md` §3, §7.3 — krok K1).
+           „Uruchom" i „Zatwierdź transakcję" to DWIE role (decyzja W4), więc mają dwa tokeny.
+           ⚠ Wartość jest DZIŚ CELOWO IDENTYCZNA z `SuccessIconColor` — K1 jest krokiem neutralnym
+           wizualnie (§11.1) i nie wolno mu nic przesunąć na ekranie.
+           ⛔ To NIE jest alias przez `{StaticResource SuccessIconColor}`, i to jest istota W4: alias
+           znaczyłby „Uruchom to kolor sukcesu", więc przestrojenie zieleni Commita przesunęłoby
+           po cichu także Execute — czyli dokładnie to zlanie ról, które W4 kończy. Rozdzielenie
+           odcieni w przyszłości jest zmianą JEDNEJ linijki i nie dotyka drugiej roli.
+           ⭐ I TA PRZYSZŁOŚĆ JUŻ NASTAŁA — w motywie JASNYM para rozeszła się w M5 (§10): tam
+           `SuccessIconColor` zszedł na #2A7E48 pod próg tekstowy, a `ActionRunColor` został na
+           #2E8B4F, bo maluje wyłącznie ikony. W TYM motywie wartości są nadal identyczne, bo Dark
+           nie wymagał korekty. Dowód, że rozdzielenie tokenów zadziałało dokładnie tak, jak W4
+           zapowiadał: zmiana jednej roli nie ruszyła drugiej. -->
+      <Color x:Key="ActionRunColor">#6DBE7E</Color>
       <Color x:Key="DangerIconColor">#D77373</Color>
       <Color x:Key="WarningIconColor">#DBA13C</Color>
       <Color x:Key="InfoIconColor">#5BA7D0</Color>
@@ -125,10 +223,24 @@
            toolbar icon's hover reads clearly. ARGB: ~13% white on dark. -->
       <Color x:Key="IconHoverColor">#22FFFFFF</Color>
 
+      <!-- ⭐ Pasek przewijania (H‑10, Product Polish M2b krok 6) — TRZY WŁASNE ROLE, bo żadna
+           istniejąca nie pasuje bez łamania §3.1. Uchwyt jest WYPEŁNIENIEM, a jedyne tokeny o dobrym
+           kontraście w obu motywach są rolami TEKSTU (`SubtleForeground`) — użycie ich tutaj
+           odebrałoby tamtej roli znaczenie. Konsument istnieje od pierwszej linii (każdy przewijalny
+           widok w aplikacji), więc reguła „token bez konsumenta wygląda jak regresja" jest spełniona.
+           ⚠ Uchwyt musi być widoczny bez bycia głośnym: to jedyny element chromy, który użytkownik
+           śledzi wzrokiem przy przewijaniu i zarazem ignoruje przez resztę czasu. -->
+      <Color x:Key="ScrollBarThumbColor">#4A4A50</Color>
+      <Color x:Key="ScrollBarThumbHoverColor">#5F5F67</Color>
+      <Color x:Key="ScrollBarThumbPressedColor">#7A7A83</Color>
+
       <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
-      <SolidColorBrush x:Key="ElevatedPanelBrush" Color="{StaticResource ElevatedPanelColor}" />
+      <SolidColorBrush x:Key="ChromeStrongBrush" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}" />
       <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+      <!-- M3.5 / Z-2 — kontur kontrolki interaktywnej; rola i powód przy `ControlOutlineColor`. -->
+      <SolidColorBrush x:Key="ControlOutlineBrush" Color="{StaticResource ControlOutlineColor}" />
       <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
       <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
@@ -155,10 +267,15 @@
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}" />
       <SolidColorBrush x:Key="OnAccentSubtleBrush" Color="{StaticResource OnAccentSubtleColor}" />
+      <SolidColorBrush x:Key="AccentDisabledBrush" Color="{StaticResource AccentDisabledColor}" />
+      <SolidColorBrush x:Key="FieldOnRaisedBrush" Color="{StaticResource FieldOnRaisedColor}" />
+      <SolidColorBrush x:Key="FieldOnRaisedBorderBrush" Color="{StaticResource FieldOnRaisedBorderColor}" />
+      <SolidColorBrush x:Key="OnAccentDisabledBrush" Color="{StaticResource OnAccentDisabledColor}" />
       <SolidColorBrush x:Key="CloseButtonHoverBrush" Color="{StaticResource CloseButtonHoverColor}" />
 
       <SolidColorBrush x:Key="AccentIconBrush" Color="{StaticResource AccentIconColor}" />
       <SolidColorBrush x:Key="SuccessIconBrush" Color="{StaticResource SuccessIconColor}" />
+      <SolidColorBrush x:Key="ActionRunBrush" Color="{StaticResource ActionRunColor}" />
       <SolidColorBrush x:Key="DangerIconBrush" Color="{StaticResource DangerIconColor}" />
       <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
       <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
@@ -248,16 +365,57 @@
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Light">
-      <Color x:Key="BackgroundColor">#F3F3F3</Color>
+      <Color x:Key="BackgroundColor">#FCFCFD</Color>
       <!-- Light theme panel hierarchy: editor/results stay near-white (BackgroundColor),
            sidebar is a step darker (PanelColor), titlebar is darker still
-           (ElevatedPanelColor). Borders sit between PanelColor and ElevatedPanelColor
-           so panel edges read clearly without a sharp line. -->
-      <Color x:Key="PanelColor">#E0E0E0</Color>
-      <Color x:Key="ElevatedPanelColor">#D6D6D6</Color>
-      <Color x:Key="BorderColor">#BDBDBD</Color>
-      <Color x:Key="ForegroundColor">#1F1F1F</Color>
-      <Color x:Key="SubtleForegroundColor">#6E6E6E</Color>
+           (ChromeStrongColor). Borders sit between PanelColor and ChromeStrongColor
+           so panel edges read clearly without a sharp line.
+
+           ⭐ PRZEPROJEKTOWANE W M2b, KROKU 3 (§7.2). Poprzednia skala — tło #F3F3F3, chroma
+           #E0E0E0/#D6D6D6, obramowania #BDBDBD — była po prostu ciężka: rysowała siatkę, która
+           konkurowała z treścią, zamiast ją oprawiać (narusza §3.4 specyfikacji, „calm interface").
+           Kierunek zmiany: chroma odróżnialna od dokumentu, ale nie dominująca; obramowanie ma
+           ODDZIELAĆ, nie RYSOWAĆ.
+
+           ⭐ Tło to #FCFCFD, a NIE czysta biel — ratyfikowana decyzja Q7 (§7.2.1), podjęta
+           z powodów ergonomicznych: „aplikacja będzie używana przez wiele godzin dziennie i zależy
+           mi bardziej na komforcie pracy niż maksymalnym kontraście". Nadmiar kontrastu nie poprawia
+           czytelności — podnosi jasność całego pola widzenia przy ośmiogodzinnej sesji. Tekst główny
+           ma tu 16,49:1, czyli ponad trzykrotność progu AA.
+           ⚠ Ta decyzja okazała się też poprawna architektonicznie: dopiero odsunięcie tła od bieli
+           daje `SurfaceRaisedColor = #FFFFFF` (RB‑4) DOKĄD się unieść. Przy tle #FFFFFF powierzchnia
+           uniesiona nie miałaby jak być jaśniejsza i §7.1 wymagałby innego mechanizmu. -->
+      <Color x:Key="PanelColor">#F3F4F6</Color>
+      <Color x:Key="ChromeStrongColor">#E8EAED</Color>
+      <!-- ⭐⭐ RB‑4 — TU JEST CAŁY DEFEKT I JEGO ROZWIĄZANIE.
+
+           Do tej pory jeden token (`ElevatedPanelBrush`) wykonywał DWIE sprzeczne prace:
+             (a) „chroma o stopień dalej od dokumentu" — nagłówki kolumn, pasek tytułu,
+             (b) „element unosi się nad swoim kontenerem" — popup, menu, zaznaczona zakładka.
+
+           W motywie CIEMNYM obie schodzą się na tej samej wartości i defektu nie widać.
+           W JASNYM są przeciwne — i powód jest fizyczny, nie stylistyczny: *uniesienie* czyta się
+           jako ruch KU ŚWIATŁU w każdym motywie, bo światło pada z góry. Oddalenie się od bieli
+           to wejście w cień, czyli WGŁĘBIENIE. Dlatego zaznaczona zakładka, opisana w kodzie jako
+           „a raised, filled segment", w Light wyglądała na wciśniętą.
+
+           Rozwiązaniem musiał być nowy TOKEN, nie nowa wartość: podział na dwie prace jest
+           sprawdzalny mechanicznie („czy ten element pływa nad swoim kontenerem?" ma jednoznaczną
+           odpowiedź dla każdego z 33 miejsc), więc żadna pojedyncza wartość nie mogła obsłużyć obu.
+
+           ⚠ Biel, nie „jaśniejszy szary": powierzchnia uniesiona musi mieć dokąd się unieść ponad
+           tło dokumentu — i to jest ta niezamierzona korzyść z decyzji Q7 (§7.2.1), która odsunęła
+           tło od czystej bieli. Krawędź niesie `BorderBrush`, bo różnica wobec tła jest niewielka. -->
+      <Color x:Key="SurfaceRaisedColor">#FFFFFF</Color>
+      <Color x:Key="BorderColor">#D8DBE0</Color>
+      <!-- M3.5 / Z-2 — patrz pełne uzasadnienie w słowniku Dark. Tu defekt był GORSZY (1,35:1),
+           bo `BorderColor` #D8DBE0 na tle #FCFCFD to niemal ta sama jasność. ~3,1:1 na progu. -->
+      <Color x:Key="ControlOutlineColor">#90939A</Color>
+      <Color x:Key="ForegroundColor">#1B1D1F</Color>
+      <!-- ⭐ H‑7 / §7.4 — tekst drugorzędny; na nowej chromie #F3F4F6 daje 5,33:1 zamiast
+           granicznych 3,86:1, jakie #6E6E6E dawało na #E0E0E0. To jest kolor nieaktywnych zakładek
+           i podpisów pól — czyli tego, co użytkownik czyta kątem oka przez cały dzień. -->
+      <Color x:Key="SubtleForegroundColor">#5F6570</Color>
       <!-- Light accent shares the dark blue palette so the Execute button + focus
            ring + transaction marker stay consistent across themes. Earlier
            purple values clashed against the rest of the chrome on light. -->
@@ -270,7 +428,17 @@
       <SolidColorBrush x:Key="DevModeBadgeForegroundBrush" Color="{StaticResource DevModeBadgeForegroundColor}" />
       <Color x:Key="HoverOverlayColor">#10000000</Color>
       <Color x:Key="ErrorColor">#CC2929</Color>
-      <Color x:Key="WarningColor">#C77800</Color>
+      <!-- ⭐⭐ M5 / §10: #C77800 → #A16100 — NAJWIĘKSZA zmiana w tym etapie i jedyna, którą widać.
+           `WarningBrush` maluje TEKST komunikatu 12 px, a na `PanelBrush` dawał 3,12:1 przy progu
+           4,5:1 — deficyt 1,38, największy w całej palecie. Kandydat policzony PRZY PROGU przez
+           mnożenie kanałów RGB, co zachowuje odcień i nasycenie HSV DOKŁADNIE (ta sama barwa,
+           ciemniejsza): Panel 3,12 → 4,52, Background 3,35 → 4,85.
+           ⚠ Koszt przyjęty świadomie (decyzja użytkownika 2026-08-10, wariant B): bursztyn ciemnieje
+           w stronę bursztynowo-brązowego. Render: `m5c-text-Light.png` kolumna B.
+           ⛔ To NIE jest poprawka `MessageBanner` — ten pędzel maluje mały tekst w ~9 miejscach
+           (Data Import, Debugger, Index Detail, Performance…), więc poprawka lokalna byłaby
+           naruszeniem R7. Ikony ostrzeżeń mają WŁASNY token `WarningIconColor` i są nietknięte. -->
+      <Color x:Key="WarningColor">#A16100</Color>
       <!-- Matched fragment of a completion row — see the Dark dictionary for why this is its own token
            and not ErrorColor. Darker/denser than the dark theme's red so it carries on the near-white
            popup and on the pale SelectionColor of the selected row. -->
@@ -330,19 +498,54 @@
       <!-- Buffered Table Designer pending-row washes (~20% alpha, alpha-first ARGB). -->
       <Color x:Key="RowAddedColor">#3327AE60</Color>
       <Color x:Key="RowDroppedColor">#33E53935</Color>
-      <Color x:Key="CommitButtonForeground">#4CAF50</Color>
-      <Color x:Key="RollbackButtonForeground">#F44336</Color>
+      <!-- Role R‑2 / R‑3 — patrz komentarz w słowniku Dark. Wartości = dostrojone pary
+           `SuccessIconColor` / `DangerIconColor` motywu JASNEGO, czyli dotychczasowy wygląd
+           Commita i Rollbacku. To one były powodem, dla którego §7.2 kazało zacząć K7 od wartości:
+           wspólne `#4CAF50` / `#F44336` były czytelne na ciemnym tle i za jasne na tym. -->
+      <Color x:Key="CommitButtonForeground">#2E8B4F</Color>
+      <Color x:Key="RollbackButtonForeground">#C23B3B</Color>
       <!-- Chrome-on-color tokens — identical to the Dark dictionary on purpose
            (they sit on theme-independent fills). See the Dark dictionary comment. -->
       <Color x:Key="OnAccentColor">#FFFFFF</Color>
       <Color x:Key="OnAccentSubtleColor">#80FFFFFF</Color>
       <Color x:Key="CloseButtonHoverColor">#E81123</Color>
 
+      <!-- ⭐ Nieaktywny przycisk główny — patrz komentarz w słowniku Dark, gdzie stoi cały mechanizm.
+           ⚠ TU wartości MUSZĄ się różnić od ciemnych i to jest sedno zgłoszenia: nieaktywna kontrolka ma być
+           przygaszona względem SWOJEGO otoczenia, a otoczenie w tym motywie jest jasne. Ciemnoszare wypełnienie
+           z Darka czytałoby się tutaj jak przycisk WŁĄCZONY, tylko w innym kolorze. -->
+      <Color x:Key="AccentDisabledColor">#DDE1E6</Color>
+      <Color x:Key="OnAccentDisabledColor">#8A9199</Color>
+
+      <!-- ⭐ Pole na powierzchni unoszącej się — patrz słownik Dark, gdzie stoi cały pomiar. ⚠ TO jest motyw,
+           w którym przesłanka zawodzi najmocniej: `SurfaceRaised` to tutaj `#FFFFFF`, a domyślne tło pola
+           `#FCFCFD` — trzy jednostki. Wklęsłe `#EDEFF2` daje osiemnaście i pole wreszcie ma kształt
+           w spoczynku, bez najeżdżania kursorem. -->
+      <Color x:Key="FieldOnRaisedColor">#E9ECF1</Color>
+      <!-- ⭐ Ten sam próg 3:1 wobec powierzchni (§10 / WCAG 1.4.11), zmierzony w tym motywie: `#9AA3B0` dawało
+           2,55, `#8A94A3` daje 3,08. Na białym podłożu jasna kreska „prawie widoczna" to kreska niewidoczna. -->
+      <Color x:Key="FieldOnRaisedBorderColor">#8A94A3</Color>
+
       <!-- Semantic icon colors (light theme): darker + more saturated than the dark
            variants so icons stay legible on the near-white surfaces. Same semantic
            keys; see the Dark dictionary for the mapping. -->
       <Color x:Key="AccentIconColor">#2D6BBF</Color>
-      <Color x:Key="SuccessIconColor">#2E8B4F</Color>
+      <!-- ⭐ M5 / §10: #2E8B4F → #2A7E48. `SuccessIconBrush` jest — jako jedyny w rodzinie severity —
+           tokenem IKONOWYM użytym przez `MessageBanner.BrushKeyFor` także do TEKSTU (nie istnieje
+           `SuccessBrush`), a na `PanelBrush` dawał 3,88:1 przy progu 4,5:1 dla tekstu < 14 px.
+           Kandydat policzony PRZY PROGU przez mnożenie kanałów RGB: Panel 3,88 → 4,57,
+           Background 4,16 → 4,90. ⚠ Zmiana ledwie zauważalna (render `m5c-text-Light.png`).
+           ⏸ Brak `SuccessBrush` jest zapisany jako otwarta asymetria — patrz
+           `product-polish-m5-severity-contrast-decision.md` §2.3; ⛔ nie tworzymy go tutaj. -->
+      <Color x:Key="SuccessIconColor">#2A7E48</Color>
+      <!-- Rola R‑1 „Uruchom" — patrz komentarz w słowniku Dark.
+           ⚠⚠ OD M5 TA WARTOŚĆ ROZESZŁA SIĘ Z `SuccessIconColor` W TYM MOTYWIE (2E8B4F vs 2A7E48),
+           i to jest projekt działający zgodnie z zamysłem, nie dryf: to dwa tokeny właśnie po to,
+           żeby mogły się rozejść. Powód rozejścia jest MERYTORYCZNY — `SuccessIconColor` musiał
+           zejść pod próg tekstowy 4,5:1, a R‑1 maluje WYŁĄCZNIE ikony (zmierzone: wszystkie cztery
+           wystąpienia to `SvgIcon`), więc obowiązuje ją próg 3:1, który #2E8B4F spełnia z zapasem
+           (3,88:1 na Panel). ⛔ Nie „naprawiać" tego przez zrównanie wartości. -->
+      <Color x:Key="ActionRunColor">#2E8B4F</Color>
       <Color x:Key="DangerIconColor">#C23B3B</Color>
       <Color x:Key="WarningIconColor">#B5790E</Color>
       <Color x:Key="InfoIconColor">#2A7AA8</Color>
@@ -359,10 +562,19 @@
       <!-- ARGB: ~9% black on light. -->
       <Color x:Key="IconHoverColor">#18000000</Color>
 
+      <!-- ⭐ Pasek przewijania (H‑10) — patrz komentarz w motywie ciemnym. W Light uchwyt jest
+           CIEMNIEJSZY od tła, czyli kierunek jest odwrotny, a rola ta sama. -->
+      <Color x:Key="ScrollBarThumbColor">#C3C7CE</Color>
+      <Color x:Key="ScrollBarThumbHoverColor">#A6ABB4</Color>
+      <Color x:Key="ScrollBarThumbPressedColor">#888E98</Color>
+
       <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
       <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
-      <SolidColorBrush x:Key="ElevatedPanelBrush" Color="{StaticResource ElevatedPanelColor}" />
+      <SolidColorBrush x:Key="ChromeStrongBrush" Color="{StaticResource ChromeStrongColor}" />
+      <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource SurfaceRaisedColor}" />
       <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+      <!-- M3.5 / Z-2 — kontur kontrolki interaktywnej; rola i powód przy `ControlOutlineColor`. -->
+      <SolidColorBrush x:Key="ControlOutlineBrush" Color="{StaticResource ControlOutlineColor}" />
       <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
       <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
       <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
@@ -389,10 +601,15 @@
       <SolidColorBrush x:Key="RollbackButtonBrush" Color="{StaticResource RollbackButtonForeground}" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccentColor}" />
       <SolidColorBrush x:Key="OnAccentSubtleBrush" Color="{StaticResource OnAccentSubtleColor}" />
+      <SolidColorBrush x:Key="AccentDisabledBrush" Color="{StaticResource AccentDisabledColor}" />
+      <SolidColorBrush x:Key="FieldOnRaisedBrush" Color="{StaticResource FieldOnRaisedColor}" />
+      <SolidColorBrush x:Key="FieldOnRaisedBorderBrush" Color="{StaticResource FieldOnRaisedBorderColor}" />
+      <SolidColorBrush x:Key="OnAccentDisabledBrush" Color="{StaticResource OnAccentDisabledColor}" />
       <SolidColorBrush x:Key="CloseButtonHoverBrush" Color="{StaticResource CloseButtonHoverColor}" />
 
       <SolidColorBrush x:Key="AccentIconBrush" Color="{StaticResource AccentIconColor}" />
       <SolidColorBrush x:Key="SuccessIconBrush" Color="{StaticResource SuccessIconColor}" />
+      <SolidColorBrush x:Key="ActionRunBrush" Color="{StaticResource ActionRunColor}" />
       <SolidColorBrush x:Key="DangerIconBrush" Color="{StaticResource DangerIconColor}" />
       <SolidColorBrush x:Key="WarningIconBrush" Color="{StaticResource WarningIconColor}" />
       <SolidColorBrush x:Key="InfoIconBrush" Color="{StaticResource InfoIconColor}" />
@@ -425,7 +642,29 @@
       <SolidColorBrush x:Key="DataGridCellForegroundBrushFocused" Color="{StaticResource ForegroundColor}" />
 
       <!-- Per-kind metadata icon brushes (light theme: Material 700/800 — darker and
-           more saturated so glyphs stay legible against the near-white editor background). -->
+           more saturated so glyphs stay legible against the near-white editor background).
+
+           ⭐⭐ DWIE Z NICH PRZELICZONO PRZY PROGU MAŁEGO TEKSTU (2026-08-09, pakiet po M5 / punkt 4b) —
+           `IconColor_Index` #558B2F → #4F812C i `IconColor_Procedure` #E65100 → #CE4800.
+
+           POWÓD: te role zaprojektowano dla IKON, a ikona podlega progowi **3:1** (element nietekstowy).
+           Drzewo planu wykonania maluje nimi **TEKST 11 px**, czyli ta sama wartość zmieniła rolę — a wraz
+           z rolą zmienił się obowiązujący próg na **4,5:1** (§10 + §10.1: wymóg WŁASNY EmberTerna, jawnie
+           nie „WCAG AA Large"). Zmierzone na `BackgroundColor`: Index **4,00:1**, Procedure **3,70:1** —
+           obie pod progiem, przy czym Dark przechodził w całości (10,03:1 / ~8:1). ⚠ Render wyglądał dobrze;
+           to jest przypadek, w którym oko nie wystarcza.
+
+           ⭐ METODA jest ta sama, którą ratyfikowano w M5 §10: policzyć **przy progu, zachowując odcień**
+           (HSL: H i S bez zmian, opada wyłącznie L). Stąd 4,54:1 i 4,50:1 — nie „ładniejszy zielony",
+           tylko najmniejsza zmiana, która spełnia wymóg.
+
+           ⛔ ŚWIADOMIE JEDNA BARWA NA RODZAJ W CAŁEJ APLIKACJI — to korekta TYCH tokenów, nigdy osobna
+           paleta dla planu (ratyfikowane). Dlatego zmiana dotyczy też ikon w Metadata Explorerze i na pasku:
+           jako ikony trzymają teraz **4,23:1 / 4,19:1** wobec wymaganych 3:1, więc nic nie tracą.
+           ⚠ Dark NIETKNIĘTY — tam próg był spełniony z zapasem i zmiana byłaby zmianą bez powodu.
+           ⚠⚠ TA KOREKTA JEST WARUNKIEM POPRAWNOŚCI KOLOROWANIA PLANU, nie osobną decyzją estetyczną:
+           cofnięcie jej przy zachowanym kolorowaniu wraca pod próg. Pilnuje tego
+           `EveryColourThePlanTreePaintsTextWith_ClearsTheSmallTextFloor`. -->
       <SolidColorBrush x:Key="IconColor_Table"       Color="#0277BD" />
       <SolidColorBrush x:Key="IconColor_View"        Color="#2E7D32" />
 
@@ -433,7 +672,7 @@
            Deeper on light so white chip text stays legible. -->
       <SolidColorBrush x:Key="DataLaneChipBrush"     Color="#1F5BAA" />
       <SolidColorBrush x:Key="MetadataLaneChipBrush" Color="#6A3DB5" />
-      <SolidColorBrush x:Key="IconColor_Procedure"   Color="#E65100" />
+      <SolidColorBrush x:Key="IconColor_Procedure"   Color="#CE4800" />
       <SolidColorBrush x:Key="IconColor_Trigger"     Color="#C62828" />
       <SolidColorBrush x:Key="IconColor_Function"    Color="#F9A825" />
       <SolidColorBrush x:Key="IconColor_Generator"   Color="#00838F" />
@@ -442,7 +681,7 @@
       <SolidColorBrush x:Key="IconColor_Exception"   Color="#B71C1C" />
       <SolidColorBrush x:Key="IconColor_Role"        Color="#37474F" />
       <SolidColorBrush x:Key="IconColor_User"        Color="#37474F" />
-      <SolidColorBrush x:Key="IconColor_Index"       Color="#558B2F" />
+      <SolidColorBrush x:Key="IconColor_Index"       Color="#4F812C" />
       <SolidColorBrush x:Key="IconColor_SystemTable" Color="#424242" />
       <SolidColorBrush x:Key="IconColor_Query"       Color="#455A64" />
 

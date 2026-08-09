@@ -20,12 +20,12 @@
   <Grid ColumnDefinitions="5*,4,7*">
     <!-- Left: status + results tree -->
     <DockPanel Grid.Column="0" Background="{DynamicResource PanelBrush}">
-      <Border DockPanel.Dock="Top"
+      <Border Classes="chrome" DockPanel.Dock="Top"
               BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
               Padding="10,6">
         <TextBlock Text="{Binding StatusText}"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
-                   FontSize="12" TextWrapping="Wrap" />
+                   FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap" />
       </Border>
 
       <TreeView ItemsSource="{Binding Groups}"
@@ -33,9 +33,9 @@
                 Background="Transparent">
         <TreeView.DataTemplates>
           <TreeDataTemplate DataType="vm:SearchResultGroupViewModel" ItemsSource="{Binding Items}">
-            <StackPanel Orientation="Horizontal" Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
               <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                Width="15" Height="15" VerticalAlignment="Center">
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
                 <controls:SvgIcon.Foreground>
                   <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                     <Binding Path="IconResourceKey" />
@@ -51,7 +51,7 @@
             <StackPanel Orientation="Horizontal" Spacing="6" Background="Transparent"
                         DoubleTapped="OnLeafDoubleTapped">
               <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                Width="14" Height="14" VerticalAlignment="Center">
+                                Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center">
                 <controls:SvgIcon.Foreground>
                   <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
                     <Binding Path="IconResourceKey" />
@@ -71,6 +71,9 @@
 
     <!-- Right: read-only source preview with all matches highlighted -->
     <Grid Grid.Column="2">
+      <!-- ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 8, §18.8). Podgląd Global Search to jeden z sześciu
+           edytorów stojących w wierszu siatki — gęstość kontenera, nie dryf (§18.0.5/3). Rola `Text.Code`
+           niesie 13. Rozstrzyga §13.3. -->
       <ae:TextEditor x:Name="PreviewEditor"
                      IsReadOnly="True"
                      ShowLineNumbers="True"

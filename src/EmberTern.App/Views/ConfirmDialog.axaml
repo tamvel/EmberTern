@@ -24,10 +24,15 @@
       <TextBlock Text="{Binding Title}" Classes="h1" />
     </Border>
 
+    <!-- ⭐ M4.4: treść komunikatu na rolę Text.Application — ta sama decyzja co w ChoiceDialog, i z tego
+         samego powodu: przy 13 katalog ma wyłącznie rolę kodu, a komunikat potwierdzenia jest prozą.
+         ⚠ Oba dialogi są konstrukcyjnie identyczne w tym miejscu (ten sam wiersz, to samo zawijanie, ten
+         sam margines), więc to JEDNA decyzja na dwa okna, nie dwie — kształt Q3 z M4.3.
+         ⚠ Sam rozmiar, bez interlinii: patrz uzasadnienie w ChoiceDialog. -->
     <TextBlock Grid.Row="1"
                Text="{Binding Message}"
                TextWrapping="Wrap"
-               FontSize="13"
+               FontSize="{DynamicResource Text.Application.Size}"
                Margin="20,18,20,18" />
 
     <Border Grid.Row="2"
@@ -38,8 +43,12 @@
       <StackPanel Orientation="Horizontal"
                   HorizontalAlignment="Right"
                   Spacing="8">
+        <!-- ⭐ An ACKNOWLEDGEMENT has nothing to cancel. Hiding the button on an empty CancelLabel turns the
+             one shared dialog into an info dialog too, instead of adding a second dialog that would then be
+             free to drift from this one's chrome. -->
         <Button Classes="flat"
                 Content="{Binding CancelLabel}"
+                IsVisible="{Binding HasCancel}"
                 Command="{Binding CancelCommand}" />
         <Button Classes="primary"
                 Content="{Binding ConfirmLabel}"

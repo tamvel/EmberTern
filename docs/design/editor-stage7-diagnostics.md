@@ -82,6 +82,16 @@ the Semantic Model records every identifier occurrence as a `SymbolReference` wi
   *certain*. `unknown-object` requires a **live metadata connection**; with no metadata
   (`EmptyMetadataProvider`) emit **no** unresolved-object diagnostics (the model already distinguishes
   this). Local-scope diagnostics (unresolved variable, count-mismatch) do not need a connection.
+  ⚠⚠ **CORRECTED 2026-08-05 (stabilization sprint S-2): "a live connection" is NOT the same question as "this
+  particular input is loaded", and treating them as one broke this very rule for years.** Columns are warmed
+  LAZILY, so with a live connection the snapshot typically knows every object and NONE of their columns — and
+  the engine read an empty column set as "this table has no such column", squiggling practically every
+  qualified column in a freshly-opened document until the warm pass finished. The provider contract said as
+  much in its own words ("unknown **or has no columns loaded yet**"), i.e. the two facts were
+  indistinguishable BY CONTRACT rather than by oversight. `ISqlMetadataProvider.KnowsColumns` now draws that
+  line and `UnknownColumn` waits for it. ⭐ The general form, worth applying to any future category: **the gate
+  is not "is there metadata" but "is the specific fact this diagnostic depends on KNOWN"** — and an empty
+  result is only an answer if the provider can say it was asked. See gotcha #317.
 - **Never mutate code** (§0 holds by construction — read-only analysis).
 - **Deterministic** — same model ⇒ same diagnostics (stable ordering by span for the panel + tests).
 - Be **cancellable and cheap** (§9 / §10) — it runs on the shared idle tick.

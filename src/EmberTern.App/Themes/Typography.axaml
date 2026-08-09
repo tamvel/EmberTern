@@ -1,0 +1,188 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ================================================================================================
+       EmberTern Design Tokens — TYPOGRAFIA.
+
+       Dwanaście ról z product-polish.md §6. Rola to nie „rozmiar pisma" — to komplet: RODZINA +
+       ROZMIAR + WAGA + INTERLINIA. Audyt M0 zmierzył 589 lokalnych `FontSize` i 7 różnych ciągów
+       czcionki monospace; ten plik jest ich docelowym jedynym źródłem.
+
+       ⭐ DWIE ROLE MOGĄ MIEĆ TĘ SAMĄ LICZBĘ I TO NIE JEST DUPLIKAT (§3.3).
+       `Text.Compact`, `Text.Grid` i `Text.Status` mają dziś wszystkie 11 px. ⛔ NIE WOLNO ich
+       „uprościć" do jednej roli. Zwinięcie odbiera możliwość zmiany rozmiaru tekstu w siatkach bez
+       ruszania paska statusu — czyli dokładnie tę elastyczność, dla której ten system powstaje.
+
+       ⭐ RODZINA JEST W DWÓCH TOKENACH, NIE W DWUNASTU (§3.4).
+       Każda rola czyta rodzinę z `Font.Ui` albo `Font.Code` (tabela poniżej mówi, z którego).
+       Przyszła preferencja czcionki (§8.2 specyfikacji) podmienia te dwa tokeny i skalę rozmiarów —
+       nic więcej. ⛔ Ten etap NIE buduje żadnego mechanizmu, który by z tego korzystał; komponent
+       bez konsumenta wygląda identycznie jak regresja (reguła #233).
+
+       ⚠ JAK TO SIĘ KONSUMUJE (§6.4 — rozstrzygnięte pomiarem, nie założeniem).
+       Warstwa skalarna poniżej jest jedyną, którą da się skonsumować WSZĘDZIE: w implicit style
+       kontrolki, w `ControlTemplate`, w code-behind, w AvaloniaEdit. Wygodne złożenie trzech
+       skalarów w jeden atrybut (`Classes="text-compact"`) działa tylko dla `TextBlock` — wnętrze
+       `TextBox` czy komórki `DataGrid` i tak musi czytać skalar w swoim stylu. Dlatego warstwa
+       klasowa powstaje w M2b, w `ControlStyles.axaml`, obok kontrolek które jej użyją. Wzorzec
+       jest w projekcie sprawdzony: `TextBlock.field-label`, `.title`, `.h1`, `.group-header`
+       i `.shortcut-chip` są dokładnie takimi rolami — tyle że z liczbami wpisanymi na sztywno.
+
+       ⛔ PALETA SKŁADNI EDYTORA JEST POZA ZAKRESEM (§6.3). System typografii dotyka edytora kodu
+       WYŁĄCZNIE przez `Font.Code` i `Text.Code`. Nie dotyka kolorów, `SemanticHighlighter` ani
+       żadnego tokenu `Editor*` — ta praca (D15.1) przeszła dwie rundy QA i jej cofnięcie byłoby
+       regresją, nie polerowaniem.
+       ================================================================================================ -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       RODZINY BAZOWE (§6.1)
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Rodzina interfejsu. `$Default` to czcionka domyślna aplikacji, którą `Program.cs` ustawia
+       przez `.WithInterFont()` — czyli Inter. Zapis przez `$Default`, a nie przez „Inter", jest
+       celowy: rodzina interfejsu ma JEDNO źródło (rejestracja w `Program.cs`), a token jest jego
+       nazwą, nie drugą kopią. -->
+  <FontFamily x:Key="Font.Ui">$Default</FontFamily>
+
+  <!-- Rodzina kodu (decyzja D2). ⭐ Mono, nie Code — świadomie BEZ LIGATUR: w SQL/PSQL ligatura
+       zlepia `<=` czy `!=` w jeden glif, a to jest język, w którym operator porównania czyta się
+       znak po znaku. Docelowo obowiązuje jednocześnie edytor SQL, debugger, karty hover
+       i 11 podglądów DDL.
+
+       ⚠⚠ TEN TOKEN NIE MA DZIŚ ANI JEDNEGO KONSUMENTA I TO JEST STAN RATYFIKOWANY (M2c krok 0,
+       2026-08-02 — product-polish.md §18.0.5/1). Pierwsza redakcja tego komentarza mówiła, że
+       „zastępuje 7 rozjechanych ciągów"; pomiar pokazał, że NIE ZASTĘPUJE ŻADNEGO: 65 z 81
+       wystąpień w widokach to `Cascadia Code,…`, a token niesie `Cascadia Mono,…`, więc podmiana
+       ZMIENIŁABY KRÓJ PISMA w edytorze, debuggerze i jedenastu podglądach DDL naraz.
+       ⛔ M2c jest sweepem de-lokalizacyjnym o niezmienionym wyglądzie, więc `FontFamily` wypadło
+       z jego zakresu w całości. Decyzja `Cascadia Code` (z ligaturami) vs `Cascadia Mono` (bez)
+       należy do backlogowego sprintu UX razem z konsolidacją 7 ciągów / 95 wystąpień / 33 plików
+       (settings-center.md §2.7 + §7.1) — to jest decyzja typograficzna o produkcie, nie
+       sprzątanie. Do tego czasu token czeka, świadomie i z zapisanym powodem. -->
+  <FontFamily x:Key="Font.Code">Cascadia Mono, Consolas, Menlo, monospace</FontFamily>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════════════════════
+       ROLE (§6). Każda ma komplet trzech skalarów, także wtedy, gdy waga jest zwykła.
+
+       ⭐ Dlaczego `.Weight` istnieje również dla ról Regular: dzięki temu konsumpcja roli jest
+       zawsze mechaniczna — Size + Weight + LineHeight, te same trzy klucze dla każdej roli.
+       Gdyby waga była tylko tam, gdzie odbiega od domyślnej, każde użycie roli w M2b–M4
+       zaczynałoby się od pytania „czy ta akurat rola ma wagę?", a pytanie zadawane przy każdym
+       użyciu jest dokładnie tym, z czego bierze się dryf.
+
+       INTERLINIA: ×1,4 dla treści, ×1,36 dla ról 11 px. Przy 11 px daje 15 px, co w wierszu siatki
+       22 px zostawia dokładnie tyle miejsca, ile wymaga §5.1 — te dwie liczby były dobierane razem,
+       nie niezależnie.
+       ══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- KOD — AvaloniaEdit i 11 podglądów DDL. Rodzina: Font.Code.
+       ⭐ 13 px: zmierzono 25 edytorów na 13 i 6 na 12; wybrano wartość dominującą, na której stroił
+       się kontrast palety składni z D15.1.
+       ⚠ Bez interlinii — wysokość wiersza w edytorze kodu należy do samego edytora.
+
+       ⚠⚠ KOREKTA (M2c krok 0, 2026-08-02 — §18.0.5/3, ratyfikowana). Pierwsza redakcja pisała
+       „edytor kodu o dwóch rozmiarach w jednej aplikacji jest defektem, nie decyzją". Pomiar tego
+       nie potwierdził: te SZEŚĆ edytorów przy 12 px to edytory stojące W WIERSZU SIATKI (kursory
+       i podprogramy w trybie Easy, podgląd Global Search, szczegół Trace), gdzie o rozmiarze
+       decyduje gęstość wiersza, a nie dryf — czyli ta sama zasada „kontener rozstrzyga wielkość",
+       którą M2b ratyfikował jako decyzję architektoniczną (§17.2/2).
+       ⛔ Rolę `Text.Code` biorą w M2c wyłącznie edytory pełnowymiarowe (25 × 13 px). Sześć
+       pozostałych zostaje lokalnych z komentarzem na miejscu; „12 → 13" byłoby zmianą wyglądu
+       i możliwym skokiem układu, a rozstrzyga je przegląd §13.3. -->
+  <x:Double x:Key="Text.Code.Size">13</x:Double>
+  <FontWeight x:Key="Text.Code.Weight">Normal</FontWeight>
+
+  <!-- TREŚĆ — dialogi, etykiety, opisy. Rodzina: Font.Ui. Najczęstsza rola w aplikacji (153 użycia). -->
+  <x:Double x:Key="Text.Application.Size">12</x:Double>
+  <FontWeight x:Key="Text.Application.Weight">Normal</FontWeight>
+  <x:Double x:Key="Text.Application.LineHeight">17</x:Double>
+
+  <!-- CHROMA — panele, zakładki, paski. Rodzina: Font.Ui. -->
+  <x:Double x:Key="Text.Compact.Size">11</x:Double>
+  <FontWeight x:Key="Text.Compact.Weight">Normal</FontWeight>
+  <x:Double x:Key="Text.Compact.LineHeight">15</x:Double>
+
+  <!-- KOMÓRKA SIATKI. Rodzina: Font.Ui. Osobna rola od `Text.Compact` mimo tej samej liczby (§3.3). -->
+  <x:Double x:Key="Text.Grid.Size">11</x:Double>
+  <FontWeight x:Key="Text.Grid.Weight">Normal</FontWeight>
+  <x:Double x:Key="Text.Grid.LineHeight">15</x:Double>
+
+  <!-- NAGŁÓWEK KOLUMNY. Rodzina: Font.Ui. Waga, nie rozmiar, odróżnia nagłówek od danych — nagłówek
+       wyższy o stopień rozbijałby rytm wierszy. -->
+  <x:Double x:Key="Text.GridHeader.Size">11</x:Double>
+  <FontWeight x:Key="Text.GridHeader.Weight">SemiBold</FontWeight>
+  <x:Double x:Key="Text.GridHeader.LineHeight">15</x:Double>
+
+  <!-- PASEK STATUSU. Rodzina: Font.Ui. Osobna rola od `Text.Compact` i `Text.Grid` (§3.3) — pasek
+       statusu jest powierzchnią trwałą (§0.1) i musi dać się wyregulować niezależnie. -->
+  <x:Double x:Key="Text.Status.Size">11</x:Double>
+  <FontWeight x:Key="Text.Status.Weight">Normal</FontWeight>
+  <x:Double x:Key="Text.Status.LineHeight">15</x:Double>
+
+  <!-- ⛔ `Text.Toolbar` (12) ZOSTAŁA WYCOFANA W M4 — decyzja użytkownika **B‑1** (2026‑08‑08).
+       Powstała, żeby ujednolicić paski narzędzi (jej komentarz brzmiał *„dziś mieszany — to jedna
+       z pozycji, dla których ta rola w ogóle powstała"*), i do końca **nie miała ani jednego
+       konsumenta**, a token bez konsumenta jest nieodróżnialny od regresji (#233).
+
+       ⭐⭐ Ale prawdziwym powodem wycofania nie jest brak konsumentów, tylko to, że rola DUPLIKOWAŁA
+       `Text.Compact`: tamta opisuje *„chroma — panele, zakładki, **paski**"*, czyli tę samą robotę,
+       i różniły się wyłącznie liczbą. Zmierzone przed decyzją: pasek poleceń debuggera (12 przycisków),
+       pasek edytora SQL i Script Executor stały na `Text.Compact` (11), a pasmo poleceń Data Import
+       na `Text.Application` (12) — dwie odpowiedzi na jedno pytanie, żadna z nich nie ta.
+       ⛔ Nie przywracać. Tekst paska narzędzi to `Text.Compact`. -->
+
+  <!-- PODPIS POMOCNICZY, chip skrótu klawiszowego. Rodzina: Font.Ui.
+       ⚠ Najmniejszy stopień pisma w aplikacji.
+
+       ⚠⚠ KOREKTA (M2c krok 0, 2026-08-02 — §18.0.5/3, ratyfikowana). Pierwsza redakcja zapowiadała,
+       że „`FontSize=9` znika — 7 wystąpień wchodzi tutaj". Tak się NIE STANIE w M2c: dwa z tych
+       siedmiu to glify (`▶`, `●`), gdzie 9 px stroi ROZMIAR ZNAKU i sam ten komentarz je zawsze
+       wyłączał, a pozostałe pięć to realna zmiana 9 → 10, czyli zmiana wyglądu.
+       ⛔ M2c nie zmienia wyglądu, a reguła R12 (§18.0.8) zabrania wpisywania roli, która do wartości
+       nie pasuje, wyłącznie po to, żeby licznik spadł. Wszystkie siedem zostaje lokalnych
+       z komentarzem; „czy 9 px ma prawo istnieć" rozstrzyga przegląd §13.3. -->
+  <x:Double x:Key="Text.Caption.Size">10</x:Double>
+  <FontWeight x:Key="Text.Caption.Weight">Normal</FontWeight>
+  <x:Double x:Key="Text.Caption.LineHeight">14</x:Double>
+
+  <!-- NAGŁÓWEK SEKCJI (`group-header`). Rodzina: Font.Ui. Mocniejszy od podpisu pola celowo:
+       podpis nazywa jedną wartość, nagłówek nazywa temat — przy tej samej wadze konkurują.
+
+       ⚠⚠ 12, NIE 11 — KOREKTA KATALOGU wykonana w M4, decyzja użytkownika **A‑2** (2026‑08‑08).
+       Do tego momentu rola niosła 11 SemiBold i w KAŻDYM z 19 kanonicznych użyć stała bezpośrednio
+       NAD `TextBlock.field-label`, który niesie `Text.Application` = 12. Czyli nagłówek był o stopień
+       MNIEJSZY od tekstu, który nazywa, a zdanie wyżej („mocniejszy od podpisu pola") było prawdziwe
+       wyłącznie o wadze — i nieprawdziwe o rozmiarze.
+
+       ⭐⭐ Dowodem nie był pomiar jednego ekranu, tylko rozkład: **pięć widoków niezależnie od siebie
+       odmówiło tej roli** i zostało przy 12 SemiBold (Performance ×3, bliźniaki Procedure/Function ×2,
+       `TextBlock.section` Session + Trace — dwa style, 12 użyć). Populacje były niemal równe: 19
+       nagłówków przy 11 i 17 przy 12, w IDENTYCZNYM kontekście. To nie było pięć przeoczeń wobec
+       reguły, tylko jedna sytuacja rozstrzygnięta w produkcie dwa razy.
+
+       ⭐ Kierunek poprawki jak przy `Size.Row.Tree` w M3.4a: *dokument prowadzi produkt, ale prowadzi
+       go tam, gdzie produkt jest DOBRY*. Tu produkt miał rację po stronie 12; kłamał token. -->
+  <x:Double x:Key="Text.SectionHeader.Size">12</x:Double>
+  <FontWeight x:Key="Text.SectionHeader.Weight">SemiBold</FontWeight>
+  <!-- ⚠ Interlinia idzie ZA rozmiarem, bo katalog wiąże je regułą, a nie parami liczb: „×1,4 dla treści,
+       ×1,36 dla ról 11 px" (nagłówek sekcji). 12 × 1,4 = 17 — ta sama wartość co `Text.Application`,
+       nad którym ten nagłówek stoi. Zostawienie 15 dałoby nagłówek ciaśniejszy od tekstu pod nim. -->
+  <x:Double x:Key="Text.SectionHeader.LineHeight">17</x:Double>
+
+  <!-- TYTUŁ — nazwa połączenia, tytuł panelu. Rodzina: Font.Ui. -->
+  <x:Double x:Key="Text.Title.Size">14</x:Double>
+  <FontWeight x:Key="Text.Title.Weight">SemiBold</FontWeight>
+  <x:Double x:Key="Text.Title.LineHeight">19</x:Double>
+
+  <!-- NAGŁÓWEK OKNA DIALOGOWEGO (`h1`). Rodzina: Font.Ui. -->
+  <x:Double x:Key="Text.DialogHeader.Size">16</x:Double>
+  <FontWeight x:Key="Text.DialogHeader.Weight">SemiBold</FontWeight>
+  <x:Double x:Key="Text.DialogHeader.LineHeight">22</x:Double>
+
+  <!-- WYŁĄCZNIE OKNO ABOUT. Rodzina: Font.Ui. Jedno użycie w całej aplikacji i tak ma zostać —
+       rola istnieje po to, żeby nikt nie sięgnął po tę skalę „bo trzeba coś wyróżnić". -->
+  <x:Double x:Key="Text.Display.Size">23</x:Double>
+  <FontWeight x:Key="Text.Display.Weight">SemiBold</FontWeight>
+  <x:Double x:Key="Text.Display.LineHeight">30</x:Double>
+
+</ResourceDictionary>

@@ -1,6 +1,8 @@
 using System;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using AvaloniaEdit;
+using EmberTern.App.Completion;
 using EmberTern.App.ViewModels;
 
 namespace EmberTern.App.Views;
@@ -15,6 +17,14 @@ public partial class CheckConstraintDialog : Window
     public CheckConstraintDialog()
     {
         InitializeComponent();
+
+        // The Live DDL preview is the app's shared read-only SQL surface: one call wires the semantic +
+        // lexical highlighting layers, keeps them following the theme, and pushes the VM's DdlPreview in.
+        if (this.FindControl<TextEditor>("DdlEditor") is { } ddl)
+        {
+            SqlEditorBehavior.AttachDdlPreview(ddl, this);
+        }
+
         DataContextChanged += OnDataContextChanged;
     }
 

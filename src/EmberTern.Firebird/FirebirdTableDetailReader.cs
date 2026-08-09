@@ -455,12 +455,14 @@ public sealed class FirebirdTableDetailReader
                 var nullFlag = reader.IsDBNull(6) ? (int?)null : reader.GetInt32(6);
                 var defaultSource = reader.IsDBNull(7) ? null : reader.GetString(7).Trim();
                 var description = reader.IsDBNull(8) ? null : reader.GetString(8).Trim();
+                var fieldSource = reader.IsDBNull(9) ? string.Empty : reader.GetString(9).Trim();
 
                 results.Add(new ProcedureParameterInfo
                 {
                     Position = ++position,
                     Name = name,
                     Type = FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType),
+                    Domain = FirebirdDdlReader.IsUserDomain(fieldSource) ? fieldSource : null,
                     NotNull = nullFlag == 1,
                     DefaultValue = StripDefaultPrefix(defaultSource),
                     Description = string.IsNullOrEmpty(description) ? null : description,
@@ -555,7 +557,16 @@ public sealed class FirebirdTableDetailReader
         "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
         "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, " +
         "       COALESCE(pp.RDB$NULL_FLAG, f.RDB$NULL_FLAG), " +
-        "       pp.RDB$DEFAULT_SOURCE, pp.RDB$DESCRIPTION " +
+        "       pp.RDB$DEFAULT_SOURCE, pp.RDB$DESCRIPTION, " +
+        // ⭐ The parameter's field source — the DOMAIN when a user domain governs the type. Without it
+        // the Easy-mode grid loaded a domain-typed parameter as its base type, and Compile (which
+        // reassembles the whole CREATE OR ALTER from the grid) wrote that base type back, destroying the
+        // domain link in the database. Rule #11, gotcha #175's shape (S-1b, 2026-08-05).
+        // ⚠ The NULL flags stay COALESCEd here, unlike the DDL reconstruction's own query: this row
+        // feeds a GRID whose NotNull checkbox must show the EFFECTIVE nullability the parameter has, and
+        // a domain's NOT NULL is part of that. The DDL reconstruction has the opposite need (reproduce
+        // the declaration, not its effect) — see FirebirdDdlReader.EmitsNotNull.
+        "       TRIM(pp.RDB$FIELD_SOURCE) " +
         "FROM RDB$PROCEDURE_PARAMETERS pp " +
         "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = pp.RDB$FIELD_SOURCE " +
         "WHERE pp.RDB$PROCEDURE_NAME = @name AND pp.RDB$PARAMETER_TYPE = @pt " +
@@ -848,6 +859,7 @@ public sealed class FirebirdTableDetailReader
 
             var arguments = new List<ProcedureParameterInfo>();
             var returnType = string.Empty;
+            string? returnDomain = null;
             await using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = FirebirdDdlReader.InsertBeforeOrderBy(FunctionArgumentsSql, pkgFilter);
@@ -868,11 +880,14 @@ public sealed class FirebirdTableDetailReader
                     var nullFlag = reader.IsDBNull(7) ? (int?)null : reader.GetInt32(7);
                     var defaultSource = reader.IsDBNull(8) ? null : reader.GetString(8).Trim();
                     var description = reader.IsDBNull(9) ? null : reader.GetString(9).Trim();
+                    var fieldSource = reader.IsDBNull(10) ? string.Empty : reader.GetString(10).Trim();
+                    var domain = FirebirdDdlReader.IsUserDomain(fieldSource) ? fieldSource : null;
 
                     var type = FormatFieldType(fieldType, fieldLength, fieldScale, fieldPrecision, subType);
                     if (argPos == returnArgPos)
                     {
                         returnType = type;
+                        returnDomain = domain;
                     }
                     else
                     {
@@ -881,6 +896,7 @@ public sealed class FirebirdTableDetailReader
                             Position = ++displayPosition,
                             Name = name,
                             Type = type,
+                            Domain = domain,
                             NotNull = nullFlag == 1,
                             DefaultValue = StripDefaultPrefix(defaultSource),
                             Description = string.IsNullOrEmpty(description) ? null : description,
@@ -893,6 +909,7 @@ public sealed class FirebirdTableDetailReader
             {
                 Arguments = arguments,
                 ReturnType = returnType,
+                ReturnDomain = returnDomain,
                 Deterministic = deterministic,
             };
         }
@@ -981,7 +998,10 @@ public sealed class FirebirdTableDetailReader
         "       f.RDB$FIELD_TYPE, f.RDB$FIELD_SUB_TYPE, f.RDB$FIELD_LENGTH, " +
         "       f.RDB$FIELD_PRECISION, f.RDB$FIELD_SCALE, " +
         "       COALESCE(fa.RDB$NULL_FLAG, f.RDB$NULL_FLAG), " +
-        "       fa.RDB$DEFAULT_SOURCE, fa.RDB$DESCRIPTION " +
+        "       fa.RDB$DEFAULT_SOURCE, fa.RDB$DESCRIPTION, " +
+        // ⭐ The argument's (or the RETURNS position's) field source — the DOMAIN when a user domain
+        // governs the type. Same rule #11 reason as ProcedureParametersSql above (S-1b).
+        "       TRIM(fa.RDB$FIELD_SOURCE) " +
         "FROM RDB$FUNCTION_ARGUMENTS fa " +
         "JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = fa.RDB$FIELD_SOURCE " +
         "WHERE fa.RDB$FUNCTION_NAME = @name " +

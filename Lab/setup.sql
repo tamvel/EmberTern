@@ -127,6 +127,17 @@ CREATE TABLE TRIG_SUBQ_LAB (
   CONSTRAINT PK_TRIG_SUBQ_LAB PRIMARY KEY (ID)
 );
 
+/* A third isolated table for the debugger's trigger zoo (Stage X / P6, 2026-08-07). Its BEFORE UPDATE
+   trigger's body is a FOR SELECT CURSOR whose WHERE references NEW — the shape D10 refused to step, now
+   bridged by binding NEW.col as an ordinary cursor parameter. Its own table for the reason the comment on
+   TR_CURSOR_BU gives: two BEFORE UPDATE triggers writing NEW.NOTE on one table would let execution order
+   decide the value another fidelity case asserts.                                                          */
+CREATE TABLE TRIG_CURSOR_LAB (
+  ID   INTEGER NOT NULL,
+  NOTE VARCHAR(20),
+  CONSTRAINT PK_TRIG_CURSOR_LAB PRIMARY KEY (ID)
+);
+
 /* ---------- Standalone indexes --------------------------------------
    Exercise the Index Detail surface: a plain index, a DESCENDING index,
    a composite index, a standalone UNIQUE index, an expression index, and
@@ -194,6 +205,78 @@ BEGIN
   ELSE
     RESULT = TRIM(CODE) || ' - ' || NAME;
   RETURN RESULT;
+END^
+
+/* ---------- Domain-typed routine signatures ------------------------
+   Added by the 2026-08-05 stabilization sprint (S-1b). These exist so
+   the DDL reconstruction can be verified to PRESERVE a domain used as a
+   parameter / argument / RETURNS type instead of resolving it to its
+   base type. Measured on FB5 before they were written:
+   RDB$PROCEDURE_PARAMETERS.RDB$FIELD_SOURCE holds 'D_CODE' for a
+   domain-typed parameter and an anonymous 'RDB$n' for a plain one, so
+   the two are distinguishable — exactly as they are for table columns.
+
+   Coverage on purpose: an INPUT domain param, an OUTPUT domain param, a
+   plain param beside them (so the anonymous case is exercised in the
+   same routine), a domain param carrying a DEFAULT (the shape gotcha
+   #175 destroyed), and a function with both a domain argument and a
+   domain RETURNS.                                                     */
+
+/* ⚠ The defaulted parameter is LAST because Firebird requires it: a
+   parameter list with 'P_QTY D_QTY = 5' in the middle is rejected with
+   -204 "defaults must be last". Measured while writing this file.      */
+CREATE PROCEDURE SP_DOM_PARAMS(P_CODE D_CODE, P_PLAIN INTEGER, P_QTY D_QTY = 5)
+RETURNS (R_CODE D_CODE, R_TOTAL NUMERIC(15,2))
+AS
+BEGIN
+  R_CODE  = P_CODE;
+  R_TOTAL = P_QTY * COALESCE(P_PLAIN, 0);
+  SUSPEND;
+END^
+
+CREATE FUNCTION FN_DOM_ARG(P_CODE D_CODE)
+RETURNS D_NAME
+AS
+BEGIN
+  RETURN COALESCE(TRIM(P_CODE), 'NONE');
+END^
+
+/* ---------- Singleton SELECT … INTO as a debugger step unit ---------
+   Added by the 2026-08-05 stabilization sprint (S-6). The sprint taught
+   the semantic binder to bind PSQL locals inside an embedded query — a
+   ':param' in a WHERE clause and the INTO targets, which previously no
+   binder looked at. That has a CONSEQUENCE for the debugger: its
+   read/write set for a statement falls back to "inject every in-scope
+   local" precisely WHEN THE ANALYZER RETURNS NOTHING (gotcha #238), so
+   restoring the references narrows the injection to the referenced set.
+
+   ⚠⚠ A narrowing of a live-fidelity-verified subsystem must be PROVEN on
+   the engine, and the existing probe could not: it drives 22 routines and
+   NOT ONE of them contains a singleton SELECT … INTO (the shape lives in
+   SP_ADD_ORDER and PKG_ORDERS.ORDER_TOTAL, neither of which the probe
+   steps). "ALL PASS" therefore said nothing about this change — a
+   measurement can reproduce a mechanism without reproducing the state.
+
+   So this routine exists to BE that state: a parameter read inside the
+   query's WHERE, a local written by INTO, and a branch that depends on the
+   written value — i.e. an under-injected read or a dropped write-back
+   would change the result rather than hide.                             */
+
+CREATE PROCEDURE SP_DBG_SELINTO(P_CUSTOMER_ID INTEGER)
+RETURNS (ORDER_COUNT INTEGER, LABEL VARCHAR(20))
+AS
+  DECLARE VARIABLE V_COUNT INTEGER;
+BEGIN
+  SELECT COUNT(*) FROM ORDERS
+    WHERE CUSTOMER_ID = :P_CUSTOMER_ID
+    INTO :V_COUNT;
+
+  ORDER_COUNT = V_COUNT;
+  IF (V_COUNT = 0) THEN
+    LABEL = 'NONE';
+  ELSE
+    LABEL = 'SOME';
+  SUSPEND;
 END^
 
 SET TERM ; ^
@@ -716,6 +799,35 @@ DECLARE VARIABLE CNT INTEGER = 0;
 BEGIN
   CNT = COALESCE((SELECT COUNT(*) FROM ORDER_ITEMS oi WHERE oi.ORDER_ID = NEW.ID), 0);
   NEW.NOTE = 'CNT=' || CAST(CNT AS VARCHAR(10));
+END^
+
+/* BEFORE UPDATE whose body is a FOR SELECT CURSOR that references NEW in its WHERE (Stage X / P6,
+   2026-08-07). This is the shape D10 REFUSED to step ("a FOR SELECT cursor that references NEW/OLD is not
+   supported — step over the loop"), on the true premise that the harness's synthetic context variables do
+   not exist inside a separately-opened DSQL cursor — and the wrong conclusion, because the cursor never
+   needed them: NEW.ID there is a VALUE the frame already holds, so the Cursor Bridge binds it as an
+   ordinary `?` parameter, exactly like a :variable.
+
+   NEW.ID = 1000 walks the two ORDER_ITEMS rows of order 1000 (QTY 2 and 1, so CNT = 2 and SUMQ = 3)
+   ⇒ NEW.NOTE = 'L=2/3'. The cursor reads a table OTHER than its own, so the trigger cannot see rows it is in
+   the middle of changing and the expected value stays independent of execution order.
+
+   ⚠ Its OWN table, not TRIG_SUBQ_LAB — a second BEFORE UPDATE trigger there would also write NEW.NOTE, and
+   whichever ran second would decide the value, silently invalidating the existing gotcha-#248 fidelity case
+   that reads it. The lab's isolation convention exists for exactly this.                                   */
+CREATE TRIGGER TR_CURSOR_BU FOR TRIG_CURSOR_LAB
+ACTIVE BEFORE UPDATE POSITION 0
+AS
+DECLARE VARIABLE Q INTEGER;
+DECLARE VARIABLE SUMQ INTEGER = 0;
+DECLARE VARIABLE CNT INTEGER = 0;
+BEGIN
+  FOR SELECT oi.QTY FROM ORDER_ITEMS oi WHERE oi.ORDER_ID = NEW.ID INTO :Q DO
+  BEGIN
+    SUMQ = SUMQ + Q;
+    CNT = CNT + 1;
+  END
+  NEW.NOTE = 'L=' || CAST(CNT AS VARCHAR(10)) || '/' || CAST(SUMQ AS VARCHAR(10));
 END^
 
 SET TERM ; ^

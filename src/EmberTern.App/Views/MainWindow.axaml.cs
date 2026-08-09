@@ -1,13 +1,16 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
@@ -94,6 +97,7 @@ public partial class MainWindow : Window
     private bool _vmRestored;
     private bool _boundsRestored;
     private bool _scrollDiagHooked;
+    private bool _treeDiagHooked;
 
     // Resizable / collapsible layout (Part 2 + 3). Definitions are reached through
     // their parent grids (a ColumnDefinition isn't a Control). Width/height + the
@@ -178,10 +182,16 @@ public partial class MainWindow : Window
             _resultGrid.PointerPressed += OnResultGridPointerPressed;
             // 3-state header sort (asc → desc → none). Avalonia's DataGridColumnEventArgs
             // can't be cancelled, so instead of using the built-in (2-state) sort we keep
-            // the grid non-sortable and detect header clicks via a tunneled PointerPressed,
-            // driving the cycle through the VM (client-side sort over the materialized set
-            // via the shared RowIndexComparer).
+            // the grid non-sortable and detect header clicks ourselves, driving the cycle
+            // through the VM (client-side sort over the materialized set via the shared
+            // RowIndexComparer).
+            //
+            // ⚠⚠ A CLICK IS PRESS **AND** RELEASE, AND THAT IS A BUG FIX, NOT A REFINEMENT. This used to sort on
+            // PointerPressed alone — but a column RESIZE also begins with a press inside the header, so dragging a
+            // separator sorted the grid on mouse-up (user report 2026-08-03). Both handlers stay on the TUNNEL
+            // phase, because the header's own gripper handles the press before it would bubble.
             _resultGrid.AddHandler(PointerPressedEvent, OnResultHeaderPointerPressed, RoutingStrategies.Tunnel);
+            _resultGrid.AddHandler(PointerReleasedEvent, OnResultHeaderPointerReleased, RoutingStrategies.Tunnel);
             // Filter-from-cell: capture the right-clicked cell (gotcha #99) so the
             // context-menu's Filter-by/Exclude/Contains act on the exact cell.
             _resultGrid.CellPointerPressed += OnResultCellPointerPressed;
@@ -209,6 +219,16 @@ public partial class MainWindow : Window
         var sidebar = this.FindControl<ListBox>("SidebarList");
         if (sidebar is not null)
         {
+            // ⭐ Nawigacja ←/→ (M4.2b) — TO SAMO wpięcie, którego używa drzewo „Zależności". Reguła
+            // (zwiń / skocz do rodzica / rozwiń / skocz do pierwszego dziecka) żyje w JEDNYM miejscu,
+            // `SidebarFlatController.Navigate`, więc oba drzewa nie mogą się rozjechać — wymóg
+            // użytkownika postawiony wprost przy odbiorze M4.2b.
+            // ⚠ Delegat, nie kontroler: ten jest kapsułkowany przez `MetadataExplorerViewModel`, a VM
+            // podmienia się razem z połączeniem, więc instancja przechwycona tutaj byłaby nieaktualna.
+            Behaviors.SidebarKeyboardNavigation.Attach(
+                sidebar,
+                (row, forward) => _currentVm?.Metadata.NavigateSidebarRow(row, forward));
+
             // Tunnel PointerPressed so we see it before the ListBox's own selection handling
             // (otherwise selection moves before we record the drag candidate). Moved/Released
             // bubble up — defaults are fine for those.
@@ -247,6 +267,35 @@ public partial class MainWindow : Window
         };
 
         DataContextChanged += OnDataContextChanged;
+
+        // ── Pasek zakładek (M3.3b) ───────────────────────────────────────────────────────────────────
+        // Licznik przepełnienia jest faktem o UKŁADZIE, więc odświeża się wtedy, kiedy układ się zmienia:
+        // po przewinięciu paska i po każdym przeliczeniu rozmiarów (dodanie/zamknięcie zakładki, zmiana
+        // szerokości okna, zmiana nazwy dokumentu). ⚠ `LayoutUpdated` jest częste, ale `UpdateTabOverflow`
+        // wychodzi natychmiast w trybie wielowierszowym, a w jednowierszowym robi jeden przebieg po
+        // kontenerach bez alokacji — mierzone tanio.
+        if (this.FindControl<ScrollViewer>("TabStripScroll") is { } tabScroll)
+            tabScroll.ScrollChanged += (_, _) => UpdateTabStripScroll();
+
+        if (this.FindControl<ScrollBar>("TabStripHScroll") is { } tabBar)
+            tabBar.Scroll += OnTabStripScroll;
+
+        // ⚠ Kółko wpięte na CAŁYM pasku, nie na `ScrollViewerze`, i to jest różnica praktyczna: użytkownik
+        //   kręci kółkiem tam, gdzie ma kursor, a nie tam, gdzie akurat kończy się treść. Na TUNELU, bo
+        //   `ScrollViewer` w środku sam obsługuje `PointerWheelChanged` i bąbelkowy handler dostałby zdarzenie
+        //   już oznaczone jako obsłużone (albo wcale). ⭐ Handler sam wychodzi w trybie wielowierszowym —
+        //   tam wbudowane pionowe przewijanie jest dokładnie tym, czego się oczekuje.
+        if (this.FindControl<Border>("TabStripRoot") is { } stripRoot)
+            stripRoot.AddHandler(PointerWheelChangedEvent, OnTabStripPointerWheel, RoutingStrategies.Tunnel);
+
+        LayoutUpdated += (_, _) => UpdateTabStripScroll();
+
+        // ⏸ PRZYCISK/LICZNIK PRZEPEŁNIENIA — ODŁOŻONY PRZEZ UŻYTKOWNIKA (2026-08-03), nie porzucony.
+        // Wersja na `SearchableComboBox` była wizualnie wadliwa (zła pozycja rozwiniętej listy, wiersze
+        // renderowane przez `ToString()` zamiast `DisplayTitle`, całość „doklejona" do paska), a przede
+        // wszystkim mieszała dwie sprawy: układ paska i dodatkowy element. Decyzja użytkownika: najpierw
+        // SingleRow ma wyglądać jak NORMALNY pasek kart z przewijaniem, dopiero potem wraca przepełnienie.
+        // ⚠ Stałe `TabStripOverflow*` w `UiStrings` ZOSTAJĄ — wracają razem z nim (§8.2 nadal go wymaga).
         PropertyChanged += OnWindowPropertyChanged;
         PositionChanged += OnWindowPositionChanged;
         Opened += OnWindowOpened;
@@ -274,6 +323,15 @@ public partial class MainWindow : Window
         if (EmberTern.App.Diagnostics.ScrollTrace.IsEnabled)
         {
             Dispatcher.UIThread.Post(HookSidebarScrollDiagnostics, DispatcherPriority.Background);
+        }
+
+        // Pełna diagnostyka drzewa (EMBERTERN_TREE_DIAG) — osobna, bogatsza i z własnym plikiem.
+        // ⚠ Ten sam wzorzec „poczekaj na szablon": ScrollViewer paska bocznego jest częścią szablonu
+        // SidebarList i istnieje dopiero po jego zastosowaniu.
+        if (EmberTern.App.Diagnostics.TreeDiagnostics.IsEnabled)
+        {
+            EmberTern.App.Diagnostics.TreeDiagnostics.Start("MainWindow.Opened");
+            Dispatcher.UIThread.Post(HookTreeDiagnostics, DispatcherPriority.Background);
         }
 
         if (_boundsRestored) return;
@@ -340,6 +398,82 @@ public partial class MainWindow : Window
             lastExtent = v.Extent.Height;
         };
         EmberTern.App.Diagnostics.ScrollTrace.Rebuild($"scroll diagnostics hooked (name={sv.Name ?? "?"})");
+    }
+
+    // ⭐⭐ Podpięcie pełnej diagnostyki drzewa (EMBERTERN_TREE_DIAG). Wszystko w JEDNYM miejscu i przez
+    // subskrypcje z zewnątrz — ⛔ świadomie ani jednej linii diagnostyki w ViewModelach ani w
+    // SidebarFlatControllerze, bo instrument ma obserwować mechanizm, a nie stać się jego częścią.
+    private void HookTreeDiagnostics()
+    {
+        if (_treeDiagHooked) return;
+        var list = this.FindControl<ListBox>("SidebarList");
+        if (list is null) return;
+
+        var descendants = list.GetVisualDescendants().OfType<ScrollViewer>().ToList();
+        var sv = descendants.FirstOrDefault(s => s.Name == "PART_ScrollViewer") ?? descendants.FirstOrDefault();
+        if (sv is null) return;
+        _treeDiagHooked = true;
+
+        int Realized() => list.GetVisualDescendants().OfType<ListBoxItem>().Count();
+
+        // (1) Offset — obserwowany DWOMA drogami, bo żadna sama nie wystarcza: przeciągnięcie kciuka,
+        // które nie „commituje", nie podnosi ScrollChanged, a zmiana programowa nie zawsze przechodzi
+        // przez zdarzenie. To jest lekcja z pierwszego podejścia do ScrollTrace.
+        var lastOffset = sv.Offset.Y;
+        var lastExtent = sv.Extent.Height;
+        sv.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != ScrollViewer.OffsetProperty && e.Property != ScrollViewer.ExtentProperty) return;
+            EmberTern.App.Diagnostics.TreeDiagnostics.Scroll(
+                sv.Offset.Y, sv.Extent.Height, sv.Viewport.Height,
+                sv.Offset.Y - lastOffset, sv.Extent.Height - lastExtent, Realized(), "Offset/Extent");
+            lastOffset = sv.Offset.Y;
+            lastExtent = sv.Extent.Height;
+        };
+
+        // (2) Zdarzenia mogące zamknąć pętlę.
+        sv.ScrollChanged += (_, e) => EmberTern.App.Diagnostics.TreeDiagnostics.Event(
+            "ScrollChanged",
+            string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"dOffset={e.OffsetDelta.Y:0.0} dExtent={e.ExtentDelta.Y:0.0} dViewport={e.ViewportDelta.Y:0.0}"));
+
+        list.SelectionChanged += (_, e) => EmberTern.App.Diagnostics.TreeDiagnostics.Event(
+            "SelectionChanged", $"added={e.AddedItems.Count} removed={e.RemovedItems.Count}");
+
+        // ⭐ RequestBringIntoView jest najsilniejszym kandydatem na domykacz pętli: przewinięcie zmienia
+        // realizację kontenerów, realizacja może zażądać pokazania elementu, a to przewija dalej.
+        list.AddHandler(
+            Control.RequestBringIntoViewEvent,
+            (object? _, RequestBringIntoViewEventArgs e) => EmberTern.App.Diagnostics.TreeDiagnostics.Event(
+                "RequestBringIntoView",
+                string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"target={e.TargetObject?.GetType().Name ?? "?"} rect={e.TargetRect}")),
+            RoutingStrategies.Tunnel | RoutingStrategies.Bubble);
+
+        sv.EffectiveViewportChanged += (_, e) => EmberTern.App.Diagnostics.TreeDiagnostics.Event(
+            "EffectiveViewport",
+            string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{e.EffectiveViewport}"));
+
+        // (3) Przebudowy listy — z zewnątrz, przez kolekcję wierszy, żeby kontroler został nietknięty.
+        if (_currentVm?.Metadata.SidebarRows is System.Collections.Specialized.INotifyCollectionChanged rows)
+        {
+            rows.CollectionChanged += (_, e) => EmberTern.App.Diagnostics.TreeDiagnostics.Collection(
+                e, _currentVm?.Metadata.SidebarRows.Count ?? -1);
+        }
+
+        // (4) Czy Dispatcher kręci ten sam callback — heartbeat na priorytecie tła. Jeśli kolejka jest
+        // zapchana pętlą, ten wpis przestaje się pojawiać, a to samo w sobie jest odpowiedzią.
+        var beat = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) =>
+        {
+            EmberTern.App.Diagnostics.TreeDiagnostics.Log(
+                "POST",
+                string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"heartbeat  offsetY={sv.Offset.Y:0.0} extentH={sv.Extent.Height:0.0} realized={Realized()}"));
+        });
+        beat.Start();
+
+        EmberTern.App.Diagnostics.TreeDiagnostics.Log(
+            "REBUILD", $"diagnostyka podpięta (ScrollViewer={sv.Name ?? "?"}, wierszy={_currentVm?.Metadata.SidebarRows.Count ?? -1})");
     }
 
     private bool AreBoundsSane(WindowBounds b)
@@ -523,6 +657,33 @@ public partial class MainWindow : Window
     // ⚠ It takes the view model's PreferencesService rather than opening a store of its own: the store saves a
     // whole Preferences at a time (etap 2, §12.3), so a second snapshot holder would write its stale copy of
     // Theme back over whatever the titlebar toggle had just set.
+    /// <summary>
+    /// Zaznacza wiersz w drzewie metadanych <b>i przewija listę tak, żeby był widoczny</b>.
+    ///
+    /// <para>⚠⚠ Przewinięcie jest OSOBNYM krokiem i bez niego pozycja menu jest bezużyteczna: przy
+    /// dwóch tysiącach obiektów zaznaczony wiersz niemal na pewno leży poza ekranem, a zaznaczenie,
+    /// którego nie widać, jest nieodróżnialne od braku reakcji.</para>
+    ///
+    /// <para>⚠ `ScrollIntoView` jest ODŁOŻONE na `Background`: rozwinięcie kategorii dopiero co
+    /// przebudowało płaską projekcję, więc kontener wiersza jeszcze nie istnieje i natychmiastowe
+    /// przewinięcie nie miałoby do czego celować. ⛔ Zaznaczenie ustawiamy SYNCHRONICZNIE — odłożone
+    /// razem z przewinięciem przegrałoby z kolejnym kliknięciem użytkownika (kształt gotchy #221).</para>
+    /// </summary>
+    private void OnRevealSidebarRow(SidebarRow row)
+    {
+        var list = this.FindControl<ListBox>("SidebarList");
+        if (list is null) return;
+
+        list.SelectedItem = row;
+        Dispatcher.UIThread.Post(() => list.ScrollIntoView(row), DispatcherPriority.Background);
+    }
+
+    private async void OnSettingsRequested(string categoryId)
+    {
+        if (_currentVm is null) return;
+        await new SettingsWindow(_currentVm.Preferences, _currentVm.Portability, categoryId).ShowDialog(this);
+    }
+
     private async void OnAppMenuSettingsClick(object? sender, RoutedEventArgs e)
     {
         if (_currentVm is null) return;
@@ -585,6 +746,7 @@ public partial class MainWindow : Window
             _currentVm.ExportRequested -= OnExportRequested;
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
+            _currentVm.DatabasePropertiesRequested -= OnDatabasePropertiesRequested;
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
             _currentVm.ImportFilePickRequested -= OnImportFilePickRequested;
             _currentVm.ImportClipboardReadRequested -= OnImportClipboardReadRequested;
@@ -593,6 +755,8 @@ public partial class MainWindow : Window
             _currentVm.EditorFocusRequested -= OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = null;
             _currentVm.ReplaceSelectedOrAllText = null;
+            _currentVm.Metadata.RevealRowRequested -= OnRevealSidebarRow;
+            _currentVm.SettingsRequested -= OnSettingsRequested;
         }
 
         _currentVm = DataContext as MainWindowViewModel;
@@ -610,6 +774,7 @@ public partial class MainWindow : Window
             _currentVm.ExportRequested += OnExportRequested;
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.BatchResultsRequested += OnBatchResultsRequested;
+            _currentVm.DatabasePropertiesRequested += OnDatabasePropertiesRequested;
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
             _currentVm.ImportFilePickRequested += OnImportFilePickRequested;
             _currentVm.ImportClipboardReadRequested += OnImportClipboardReadRequested;
@@ -618,6 +783,18 @@ public partial class MainWindow : Window
             _currentVm.EditorFocusRequested += OnEditorFocusRequested;
             _currentVm.SelectedQueryTextProvider = GetSqlEditorSelection;
             _currentVm.ReplaceSelectedOrAllText = ReplaceSqlEditorSelectionOrAll;
+
+            // Pasek zakładek — tryb czytany z preferencji przy starcie i po każdej zmianie
+            // (OnVmPropertyChanged). Jedno miejsce, w którym preferencja staje się układem.
+            ApplyTabStripMode();
+
+            // ⭐ „Pokaż w Metadata Explorer" — VM ustala WIERSZ, widok go pokazuje. Przewinięcie jest
+            //   sprawą kontrolki (lista wirtualizuje), a samo zaznaczenie poza ekranem byłoby
+            //   nieodróżnialne od braku reakcji.
+            _currentVm.Metadata.RevealRowRequested += OnRevealSidebarRow;
+
+            // „Ustawienia zakładek…" — skrót prosto na kategorię (D8).
+            _currentVm.SettingsRequested += OnSettingsRequested;
 
             // D3 — wire the main SQL editor's language capabilities ONCE, now that the stable VM has
             // arrived, through the SAME shared path the object editors use (SqlEditorBehavior.Attach). The
@@ -807,6 +984,11 @@ public partial class MainWindow : Window
         if (_currentVm is null) return;
         if (sender is Button { DataContext: SidebarRow row })
         {
+            // Diagnostyka drzewa (EMBERTERN_TREE_DIAG): to jest GEST UŻYTKOWNIKA, czyli punkt
+            // odniesienia dla pytania „czy przewijanie było samoczynne". Każdy SCROLL bez
+            // poprzedzającego wpisu z tej linii nie pochodzi od kliknięcia w chevron.
+            using var scope = EmberTern.App.Diagnostics.TreeDiagnostics.Scope("ChevronClick");
+            EmberTern.App.Diagnostics.TreeDiagnostics.StackDepth("ChevronClick");
             _currentVm.Metadata.ToggleSidebarRow(row);
         }
     }
@@ -1165,6 +1347,9 @@ public partial class MainWindow : Window
         return await dialog.ShowDialog<string?>(this);
     }
 
+    private System.Threading.Tasks.Task OnDatabasePropertiesRequested(DatabasePropertiesViewModel vm)
+        => new DatabasePropertiesDialog(vm).ShowDialog(this);
+
     private async System.Threading.Tasks.Task OnBatchResultsRequested(BatchResultsViewModel vm)
     {
         var dialog = new BatchResultsDialog { DataContext = vm };
@@ -1229,6 +1414,13 @@ public partial class MainWindow : Window
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MainWindowViewModel.IsTabStripMultiRow)
+            || e.PropertyName == nameof(MainWindowViewModel.TabStripMaxRows))
+        {
+            ApplyTabStripMode();
+            return;
+        }
+
         if (e.PropertyName == nameof(MainWindowViewModel.CurrentResultVersionTag)
             || e.PropertyName == nameof(MainWindowViewModel.ResultPageVersionTag))
         {
@@ -1393,13 +1585,54 @@ public partial class MainWindow : Window
         }
     }
 
+    // The header a left-press landed on, and where — a sort fires only if the RELEASE comes back to the same
+    // header without the pointer having travelled (i.e. it was a click, not the start of a resize drag).
+    private DataGridColumnHeader? _pressedResultHeader;
+    private Point _pressedResultHeaderAt;
+
+    // A pointer that moved further than this between press and release was dragging, not clicking. Column
+    // resize is the drag that matters here; the same threshold also forgives the sub-pixel jitter of a real click.
+    private const double HeaderClickSlopPx = 4;
+
     private void OnResultHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        _pressedResultHeader = null;
         if (_currentVm is null || _resultGrid is null) return;
         if (!e.GetCurrentPoint(_resultGrid).Properties.IsLeftButtonPressed) return;
         if (e.Source is not Visual visual) return;
+
+        // ⚠ A press on the resize gripper is never a sort. Matched by TYPE rather than by the template part's
+        // name: the name is Avalonia's to change, the fact that a gripper is a Thumb is what the control IS.
+        // And if that ever stops holding, the travel check below still catches the drag — the two guards are
+        // deliberately independent, because this defect reached the user once already.
+        if (visual.FindAncestorOfType<Thumb>(includeSelf: true) is not null) return;
+
         var header = visual.FindAncestorOfType<DataGridColumnHeader>(includeSelf: true);
         if (header is null) return;
+
+        _pressedResultHeader = header;
+        _pressedResultHeaderAt = e.GetCurrentPoint(_resultGrid).Position;
+    }
+
+    private void OnResultHeaderPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        var header = _pressedResultHeader;
+        _pressedResultHeader = null;
+
+        if (header is null || _currentVm is null || _resultGrid is null) return;
+        if (e.InitialPressMouseButton != MouseButton.Left) return;
+
+        // Same header, and the pointer stayed put: a click. A resize drag fails the second test even when it
+        // ends over the header it started on, which is the case that used to sort.
+        if (e.Source is not Visual visual) return;
+        if (!ReferenceEquals(visual.FindAncestorOfType<DataGridColumnHeader>(includeSelf: true), header)) return;
+
+        var released = e.GetCurrentPoint(_resultGrid).Position;
+        if (Math.Abs(released.X - _pressedResultHeaderAt.X) > HeaderClickSlopPx
+            || Math.Abs(released.Y - _pressedResultHeaderAt.Y) > HeaderClickSlopPx)
+        {
+            return;
+        }
 
         // DataGridColumnHeader.OwningColumn is internal (gotcha #43), so map the
         // header back to a column index by its (arrow-stripped) text against the
@@ -1541,6 +1774,154 @@ public partial class MainWindow : Window
     {
         if (_sidebarCollapsed) ExpandSidebar();
         else CollapseSidebar();
+        e.Handled = true;
+    }
+
+    // ── Pasek zakładek — dwa tryby (M3.3b / product-polish §8.2) ─────────────────────────────────────
+    //
+    // ⭐⭐ CAŁA RÓŻNICA MIĘDZY TRYBAMI TO KIERUNKI PRZEWIJANIA, i to nie jest sztuczka tylko własność
+    // `WrapPanela`: zawija się dokładnie wtedy, gdy dostanie SKOŃCZONĄ szerokość. Wyłączony poziomy pasek
+    // przewijania ją ogranicza (⇒ wiele wierszy), włączony daje nieskończoną (⇒ jeden wiersz, na zawsze).
+    // Dlatego jest tu JEDEN `ItemsControl` i JEDEN szablon zakładki, a nie dwa układy do utrzymania.
+    //
+    // ⚠ `MaxHeight` liczy się tutaj, a nie w XAML, bo jest ILOCZYNEM roli i preferencji
+    // (`Size.Row.Tab` × wiersze), a `{DynamicResource}` nie mnoży. ⛔ Nie zakładać trzeciej warstwy
+    // katalogu z gotowymi wysokościami — byłaby drugą reprezentacją tej samej liczby (§19.1.4).
+    private void ApplyTabStripMode()
+    {
+        if (_currentVm is null) return;
+
+        var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
+        if (scroll is null) return;
+
+        // ⭐ `AllowAutoHide = false` — pasek przestaje być cienką kreską rozwijaną pod kursorem i staje się
+        // widocznym sygnałem „tu można przewijać". To odpowiedź na uwagę o trybie WIELOWIERSZOWYM (pionowy
+        // pasek przy prawej krawędzi „praktycznie znikał"), odebraną przez użytkownika.
+        // ⛔ Nie podnosić kontrastu kciuka: `ScrollBarThumbColor` jest tokenem APLIKACJI, a zmiana koloru
+        //    dla jednego paska byłaby łataniem pojedynczego ekranu (R7) i wyszłaby poza etap. Okazało się
+        //    zbędne — problemem był STAN kontrolki, nie jej barwa.
+        scroll.AllowAutoHide = false;
+
+        if (_currentVm.IsTabStripMultiRow)
+        {
+            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+
+            // ⚠ Rola, nie literał — i czytana z ŻYWEGO wariantu motywu, bo `FindResource(key)` bez wariantu
+            //   zwraca UnsetValue (gotcha #250). Gdyby roli zabrakło, pasek zostaje bez ograniczenia:
+            //   nieprzycięty pasek jest brzydki, przycięty do zera byłby awarią.
+            var rowHeight = this.TryFindResource("Size.Row.Tab", ActualThemeVariant, out var value)
+                            && value is double h
+                ? h
+                : double.NaN;
+
+            scroll.MaxHeight = double.IsNaN(rowHeight)
+                ? double.PositiveInfinity
+                : rowHeight * _currentVm.TabStripMaxRows;
+        }
+        else
+        {
+            // ⭐⭐ `Hidden`, NIE `Auto` — i to jest sedno poprawki. `Hidden` znaczy „przewijaj, ale nie
+            //    pokazuj SWOJEGO paska": treść dostaje nieskończoną szerokość (więc `WrapPanel` nie zawija),
+            //    a jedynym paskiem na ekranie jest nasz własny, stojący w osobnym wierszu siatki. Przy `Auto`
+            //    pasek `ScrollViewera` leżał NA zakładkach i żadne ustawienie tego nie zmienia (jego szablon
+            //    rozciąga prezentera przez całą siatkę).
+            scroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
+            scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scroll.MaxHeight = double.PositiveInfinity;
+        }
+
+        UpdateTabStripScroll();
+    }
+
+    // ⭐⭐ LICZNIK POKAZUJE ZAKŁADKI NIEWIDOCZNE, NIE WSZYSTKIE OTWARTE — ratyfikowane przez użytkownika:
+    // „to jest informacja, której użytkownik potrzebuje w danym momencie". Ile jest otwartych, widać po
+    // samym pasku; ile jest POZA nim — nie widać znikąd, i to jest jedyna liczba, której nie da się
+    // odczytać wzrokiem.
+    //
+    // ⚠ Dlatego liczy się ją z RZECZYWISTEGO UKŁADU, a nie z modelu: „nie mieści się" jest faktem o widoku.
+    // ⚠ `ItemsControl` nad `WrapPanelem` nie wirtualizuje, więc wszystkie kontenery istnieją i pomiar jest
+    //   zupełny — gdyby kiedyś zaczął wirtualizować, ta metoda zacznie liczyć tylko zrealizowane i trzeba
+    //   ją będzie oprzeć na czymś innym. Zapisane, bo objawem byłby licznik po cichu za niski.
+    // ⭐⭐ SYNCHRONIZUJE WŁASNY POZIOMY PASEK PRZEWIJANIA ZE STANEM `ScrollViewera` (tryb jednowierszowy).
+    //
+    // ⚠⚠ POPRZEDNIE PODEJŚCIE BYŁO BŁĘDNE I ZOSTAŁO USUNIĘTE — zapisane, bo wygląda rozsądnie i wróci.
+    // Rezerwowanie miejsca `Paddingiem` `ScrollViewera` tworzy SPRZĘŻENIE ZWROTNE: padding zmienia viewport,
+    // viewport zmienia widoczność paska, widoczność paska zmienia padding. W sondzie, gdzie układ liczy się
+    // RAZ, wychodziło poprawnie; w aplikacji, gdzie układ przelicza się w pętli, nie ustalało się i pasek
+    // dalej leżał na zakładkach. ⛔ Nie wracać do `Paddingu`.
+    //
+    // ⭐ Rozwiązaniem jest STRUKTURA, nie liczba: pasek jest RODZEŃSTWEM zakładek w osobnym wierszu siatki,
+    // więc nie ma jak na nie nachodzić — z konstrukcji, niezależnie od kolejności przeliczeń układu.
+    //
+    // ⚠ Widoczny tylko wtedy, gdy naprawdę jest co przewijać (R13) — pusty pas pod trzema zakładkami
+    // czytałby się jako błąd układu.
+    //
+    // ⭐⭐ I TO JEST DOKŁADNIE TEN WARUNEK, KTÓREGO NIE SPEŁNIAŁA POPRZEDNIA WERSJA: widoczność paska zależy
+    // od rozpiętości POZIOMEJ, a pojawienie się paska zmienia wyłącznie wymiar PIONOWY (zabiera wysokość
+    // wierszowi 0 siatki). Te dwie wielkości są ortogonalne, więc sprzężenie zwrotne nie ma jak powstać —
+    // w odróżnieniu od `Paddingu`, gdzie rezerwacja zmieniała tę samą wielkość, od której zależała.
+    // ⛔ Nie wiązać widoczności tego paska z niczym, na co on sam wpływa.
+    private void UpdateTabStripScroll()
+    {
+        var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
+        var bar = this.FindControl<ScrollBar>("TabStripHScroll");
+        if (scroll is null || bar is null || _currentVm is null) return;
+
+        if (_currentVm.IsTabStripMultiRow)
+        {
+            // Tryb wielowierszowy przewija się PIONOWO własnym paskiem `ScrollViewera`, przy prawej
+            // krawędzi — odebrany przez użytkownika, więc nietknięty.
+            bar.IsVisible = false;
+            return;
+        }
+
+        var span = scroll.Extent.Width - scroll.Viewport.Width;
+
+        bar.IsVisible = span > 0.5;
+        bar.Minimum = 0;
+        bar.Maximum = Math.Max(0, span);
+        bar.ViewportSize = scroll.Viewport.Width;
+        bar.LargeChange = scroll.Viewport.Width;
+        bar.SmallChange = scroll.Viewport.Width * 0.25;
+
+        // ⚠ Wartość ustawiana bez pętli zwrotnej: `OnTabStripScroll` przepisuje ją w drugą stronę, więc
+        //   bez tego strażnika suwak i widok szarpałyby się nawzajem.
+        if (Math.Abs(bar.Value - scroll.Offset.X) > 0.5) bar.Value = scroll.Offset.X;
+    }
+
+    private void OnTabStripScroll(object? sender, ScrollEventArgs e)
+    {
+        var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
+        if (scroll is null || sender is not ScrollBar bar) return;
+
+        if (Math.Abs(scroll.Offset.X - bar.Value) > 0.5)
+            scroll.Offset = scroll.Offset.WithX(bar.Value);
+    }
+
+    // ⭐⭐ PRZEWIJANIE KÓŁKIEM W TRYBIE JEDNOWIERSZOWYM (zgłoszenie odbiorcze).
+    //
+    // ⚠ `ScrollViewer` przewija kółkiem PIONOWO i tylko pionowo — w trybie wielowierszowym to jest dokładnie
+    // to, czego się oczekuje, więc tam nie robimy NIC i zostaje zachowanie wbudowane. W trybie jednowierszowym
+    // pionowe przewijanie jest wyłączone, więc kółko nie robiłoby nic; obrót zamieniamy na ruch poziomy.
+    //
+    // ⭐ Krok jest UŁAMKIEM WIDOCZNEGO OBSZARU, nie stałą liczbą pikseli ani szerokością zakładki: zakładki
+    //   mają różne szerokości (D6/§8.1 — nazw nie skracamy), więc „jedna zakładka" nie jest jednostką.
+    //   Ćwiartka widoku skaluje się sama z szerokością okna i nie wymaga żadnego tokenu.
+    private void OnTabStripPointerWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (_currentVm is null || _currentVm.IsTabStripMultiRow) return;
+
+        var scroll = this.FindControl<ScrollViewer>("TabStripScroll");
+        if (scroll is null) return;
+
+        var span = scroll.Extent.Width - scroll.Viewport.Width;
+        if (span <= 0) return;
+
+        var step = scroll.Viewport.Width * 0.25;
+        var x = Math.Clamp(scroll.Offset.X - e.Delta.Y * step, 0, span);
+
+        scroll.Offset = scroll.Offset.WithX(x);
         e.Handled = true;
     }
 

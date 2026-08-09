@@ -73,6 +73,69 @@ public sealed class SidebarFlatController : IDisposable
         _setExpanded(row.Node, !_isExpanded(row.Node));
     }
 
+    /// <summary>
+    /// Nawigacja pozioma klawiaturą (←/→) — <b>jedna implementacja dla KAŻDEGO drzewa stojącego na tym
+    /// kontrolerze</b>. Zwraca wiersz, który ma zostać zaznaczony, albo <c>null</c>, gdy klawisz zmienił
+    /// wyłącznie rozwinięcie.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⭐⭐ <b>Dlaczego tutaj, a nie w widoku:</b> reguła jest identyczna dla drzewa połączenia i drzew
+    /// „Zależności", a obydwa mają już wspólny mechanizm spłaszczania. Dwa handlery w dwóch code-behind
+    /// rozjechałyby się tak samo, jak rozjechały się dwie tablice <c>CategoryOrder</c> — ten sam defekt
+    /// o jedną warstwę wyżej. Widok wnosi wyłącznie zaznaczenie i przewinięcie.
+    /// </para>
+    /// <para>
+    /// ⭐ Reguła (standard drzewa, ratyfikowana przez użytkownika 2026-08-08): <c>←</c> na ROZWINIĘTYM
+    /// zwija; <c>←</c> na zwiniętym albo na liściu skacze do RODZICA; <c>→</c> na ZWINIĘTYM rozwija;
+    /// <c>→</c> na rozwiniętym skacze do PIERWSZEGO DZIECKA.
+    /// </para>
+    /// <para>
+    /// ⚠ Rodzic i pierwsze dziecko są liczone z <b>płaskiej projekcji przez GŁĘBOKOŚĆ</b>, a nie z modelu:
+    /// kontroler celowo nie wie, czym są jego węzły (bierze same delegaty), a spłaszczona lista i tak niesie
+    /// pełną strukturę. Rodzic = najbliższy wiersz WYŻEJ o mniejszej głębokości; pierwsze dziecko = wiersz
+    /// bezpośrednio NIŻEJ, jeżeli jest głębszy.
+    /// </para>
+    /// <para>
+    /// ⚠⚠ <c>→</c> na rozwiniętym węźle BEZ dzieci nie robi nic i to jest poprawne — kategoria pusta bywa
+    /// „rozwinięta" (drzewo zależności wypisuje każdą kategorię, również pustą), więc „rozwinięty" i „ma
+    /// dzieci" to tutaj naprawdę dwa różne pytania.
+    /// </para>
+    /// </remarks>
+    public SidebarRow? Navigate(SidebarRow? row, bool forward)
+    {
+        if (row is null) return null;
+
+        var index = Rows.IndexOf(row);
+        if (index < 0) return null;
+
+        if (forward)
+        {
+            if (row.IsExpandable && !_isExpanded(row.Node))
+            {
+                _setExpanded(row.Node, true);
+                return null;
+            }
+
+            // Pierwsze dziecko stoi bezpośrednio pod rodzicem w płaskiej projekcji.
+            var child = index + 1;
+            return child < Rows.Count && Rows[child].Depth > row.Depth ? Rows[child] : null;
+        }
+
+        if (row.IsExpandable && _isExpanded(row.Node))
+        {
+            _setExpanded(row.Node, false);
+            return null;
+        }
+
+        for (var i = index - 1; i >= 0; i--)
+        {
+            if (Rows[i].Depth < row.Depth) return Rows[i];
+        }
+
+        return null;
+    }
+
     /// <summary>Full re-projection (root changes, filter re-apply).</summary>
     public void Rebuild()
     {

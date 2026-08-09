@@ -148,7 +148,7 @@
       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
                   VerticalAlignment="Center" Margin="0,0,12,0"
                   IsVisible="{Binding Blocked.IsVisible}">
-        <controls:SvgIcon Width="14" Height="14" VerticalAlignment="Center"
+        <controls:SvgIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center"
                           Data="{Binding Blocked.GeometryKey,
                                          Converter={x:Static app:IconGeometryConverter.Instance}}">
           <controls:SvgIcon.Foreground>
@@ -160,7 +160,7 @@
             </MultiBinding>
           </controls:SvgIcon.Foreground>
         </controls:SvgIcon>
-        <TextBlock Text="{Binding Blocked.Text}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center">
+        <TextBlock Text="{Binding Blocked.Text}" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap" VerticalAlignment="Center">
           <TextBlock.Foreground>
             <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
               <Binding Path="Blocked.BrushKey" />

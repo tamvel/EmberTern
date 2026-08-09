@@ -1,4 +1,4 @@
-<Styles xmlns="https://github.com/avaloniaui"
+﻿<Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:EmberTern.App.Controls"
         xmlns:aecc="using:AvaloniaEdit.CodeCompletion">
@@ -60,7 +60,7 @@
        Elevated panel + border in both themes; item selection/hover colours come from the ListBoxItem
        overrides below. (Included after AvaloniaEdit's theme in App.axaml, so these setters win.) -->
   <Style Selector="aecc|CompletionListBox">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
@@ -71,14 +71,14 @@
        Fluent's default ListBoxItem padding is what made this read as a separate window. Chrome lives
        here rather than on the control so no future caller can invent a second look. -->
   <Style Selector="ListBox.code-action-menu">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
   </Style>
   <Style Selector="ListBox.code-action-menu ListBoxItem">
     <Setter Property="Padding" Value="9,3" />
     <Setter Property="MinHeight" Value="0" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
   </Style>
 
   <Style Selector="Window">
@@ -90,6 +90,553 @@
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
   </Style>
 
+  <!-- ================================================================================================
+       ToolTip — M‑2 („bez stylu i bez standardu opóźnienia"), Product Polish M2b krok 4.
+
+       ⭐ Pierwszy NOWY konsument `SurfaceRaisedBrush` (RB‑4) — i najczystszy przypadek tej roli, jaki
+       jest w aplikacji: podpowiedź nie należy do żadnego kontenera, tylko unosi się nad wszystkim.
+       Dzięki temu ten styl jest zarazem sprawdzianem, czy podział z kroku 2 jest użyteczny, a nie
+       tylko poprawny.
+
+       ⚠ OPÓŹNIENIA ZOSTAJĄ NA WARTOŚCIACH AVALONII I TO JEST DECYZJA, NIE POMINIĘCIE.
+       Zmierzone: `ShowDelay` = 400 ms, `BetweenShowDelay` = 100 ms, `Placement` = Pointer.
+       Audyt zarzucał „brak standardu", a nie złą wartość — i 400 ms jest dobrą wartością: krócej
+       oznacza podpowiedzi wyskakujące, gdy kursor tylko PRZEJEŻDŻA przez pasek narzędzi, co przy
+       ośmiogodzinnej pracy jest hałasem, nie pomocą. Drugie 100 ms sprawia, że przejście na sąsiedni
+       przycisk pokazuje podpowiedź natychmiast — czyli seria przycisków czyta się płynnie.
+       ⛔ Nie da się ich zresztą ustawić tutaj: to właściwości DOŁĄCZONE, ustawiane na WŁAŚCICIELU
+       podpowiedzi, więc styl `ToolTip` ich nie widzi. Zmiana wymagałaby settera na selektorze
+       uniwersalnym — kosztu nieproporcjonalnego do wartości, która i tak jest właściwa.
+
+       ⚠ Rozmiar celowo nietknięty (`MaxWidth`, zawijanie). Zawartość podpowiedzi to zwykły tekst
+       renderowany jako `TextBlock` bez zawijania — samo `MaxWidth` przycięłoby go, zamiast zawinąć.
+       Długie podpowiedzi to osobny, mierzalny temat, nie efekt uboczny zmiany wyglądu.
+       ================================================================================================ -->
+  <!-- ================================================================================================
+       TextBox — Compact Controls (RB‑3, decyzja D1), Product Polish M2b krok 5.2.
+
+       ⭐ TU SĄ WYŁĄCZNIE METRYKI. Kolory tej kontrolki maluje wnętrze szablonu Fluenta
+       (`PART_BorderElement`), więc setter `Background`/`BorderBrush` na `TextBox` nie ma dokąd
+       trafić — one idą przez `Themes/FluentBridge.axaml`. Podział jest wymuszony pomiarem, nie
+       upodobaniem: XAML nie potrafi zaaliasować zasobu skalarnego, więc gdyby metryki trafiły do
+       Bridge'a, musiałby on wpisać liczby i przestałby być warstwą mapującą (§15.6.3).
+
+       ⚠ Setter stylu aplikacji ma wyższy priorytet niż `ControlTheme` Fluenta — stąd `MinHeight`
+       zadziała mimo `TextControlThemeMinHeight` = 32.
+
+       ⚠ `VerticalContentAlignment=Center` jest konieczne, a nie kosmetyczne: `Pad.Control` ma pion
+       ZEROWY, bo wysokość ma dawać `Size.Control`, a nie padding (jedna wielkość, jeden właściciel).
+       Bez wyśrodkowania tekst przy `Stretch` osiadłby przy górnej krawędzi.
+       ================================================================================================ -->
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ================================================================================================
+       ⭐ POLE WIELOWIERSZOWE ZACZYNA TEKST OD GÓRY (zgłoszenie użytkownika przy odbiorze M2c, §18.11).
+
+       Styl wyżej wyśrodkowuje pionowo KAŻDY `TextBox`, i dla pola jednowierszowego jest to konieczne
+       (`Pad.Control` ma pion zerowy, bo wysokość daje `Size.Control`). Ale to samo wyśrodkowanie
+       w polu na kilkanaście wierszy — opis wyjątku, komentarz obiektu, treść CHECK — zawiesza krótki
+       tekst w połowie ramki, a użytkownik oczekuje tam standardowego zachowania edytora tekstu.
+
+       ⭐ Reguła jest sformułowana POZYTYWNIE (decyzja architektoniczna §17.2/3): mówi, czym pole JEST
+       („przyjmuje Enter, więc jest polem wielowierszowym"), a nie „wszystko jest wyśrodkowane, chyba
+       że…". Selektor własnościowy czyta `AcceptsReturn` z samej kontrolki, więc żaden widok nie musi
+       o niczym pamiętać — obejmuje wszystkie 29 pól w 21 plikach i każde następne.
+       ⚠ MUSI stać PO stylu bazowym: przy równej trafności rozstrzyga kolejność deklaracji (M2b §17.5/5).
+       ================================================================================================ -->
+  <!-- ⚠⚠ I DLATEGO TEN SELEKTOR USTAWIA TAKŻE PADDING (zgłoszenie użytkownika 2026-08-03). Samo wyrównanie
+       do góry przeniosło tekst z połowy ramki na jej KRAWĘDŹ, bo `Pad.Control` ma pion zerowy — i zero było
+       tam poprawne wyłącznie dlatego, że pole jednowierszowe bierze wysokość z `Size.Control`, a padding
+       pionowy z nią walczy. W polu wielowierszowym wysokość daje samo pole, więc ta przesłanka nie
+       obowiązuje: nie ma z czym konkurować, a został sam skutek. Dwie własności, jedna rola, jeden selektor —
+       bo to jedna decyzja („tak wygląda wnętrze pola wielowierszowego"), nie dwie. -->
+  <Style Selector="TextBox[AcceptsReturn=True]">
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ControlMultiline}" />
+  </Style>
+
+  <!-- ⚠ Edytor w komórce siatki NIE jest kontrolką formularza i nie może narzucać wiersza.
+       `Size.Row.Grid` (22) minus `Pad.Cell` (3+3) zostawia 16 px — pole o `MinHeight` 24 podniosłoby
+       każdy edytowany wiersz o 8 px, czyli wprowadziłoby skok układu przy wejściu w edycję
+       (§13.3 specyfikacji, Zero Layout Shift). §5 wprost przypisuje edytorom w komórce wysokość
+       wiersza siatki, nie kontrolki. -->
+  <Style Selector="DataGridCell TextBox">
+    <Setter Property="MinHeight" Value="0" />
+    <!-- ⚠ `Pad.CellEditor` (pion ZEROWY), nie `Pad.CellCompact` — poprawka z kroku 7, wykryta
+         pomiarem. Z pionem 2 px edytor prosił o 18 px przy 16 px, jakie zostawia komórka, więc
+         wiersz rósł w momencie wejścia w edycję. Właścicielem wysokości jest tu WIERSZ. -->
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellEditor}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+    <!-- ⭐ Edytor WYPEŁNIA wysokość komórki, zamiast obejmować sam tekst (§19.8). Bez tego pudełko
+         zaciska się do ~14 px w 16-px obszarze i czyta się jak wąski „dysk" wrzucony w wiersz, a nie
+         jak kontrolka tej siatki — najmocniej przy stanie wyłączonym, gdzie nie ma kursora ani
+         zawartości, które nadałyby mu sens.
+         ⚠ `Stretch`, a NIE `Height`: element ma PRZYJĄĆ wysokość od komórki (decyzja architektoniczna 2
+         z M2b), a nie deklarować własną. To także jedyny wariant, który nie może podnieść wiersza —
+         `Stretch` nie zwiększa `DesiredSize`, więc §13.3 (Zero Layout Shift) zostaje nienaruszone,
+         w przeciwieństwie do `MinHeight`, które w kroku 7 M2b urosło wiersz o 2 px. -->
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- ⭐ Chroma edytora komórki należy TU, a nie do kodu budującego kolumnę. `FieldGridColumns`
+         ustawiał to jako wartości lokalne, przez co żaden setter tego stylu nie miał do nich dostępu
+         (§19.9). Edytor w komórce jest bez ramki i bez własnego tła — pudełko rysuje dopiero fokus,
+         a spoczynkowy wiersz siatki ma się czytać jako dane, nie jako formularz. -->
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- ⭐⭐ EDYTOR W SIATCE DEFINICJI PÓL PROSI O TĘ SAMĄ WYSOKOŚĆ, CO `ComboBox` OBOK (§19.9).
+       ⚠ `Stretch` na samym `TextBoxie` NIE WYSTARCZY i to jest zmierzone: `DataGridCell` ma
+       `VerticalContentAlignment="Center"`, więc komórka CENTRUJE dziecko zamiast je rozciągać —
+       po naprawie wartości lokalnych `VA` raportowało już `Stretch`, a wysokość dalej 12 px przy
+       komórce 30 px. ⛔ Tamtego settera nie wolno odwrócić: istnieje po to, żeby zwykły TEKST nie
+       osiadał przy górnej krawędzi komórki (§8.4).
+
+       ⭐ Dlatego element ma PROSIĆ o wysokość, a nie liczyć na kontener — dokładnie tak, jak robi to
+       `ComboBox`, który w tej samej komórce wygląda poprawnie wyłącznie dzięki `Size.Control` ze
+       swojego stylu. To ta sama ROLA, nie dobrana liczba.
+
+       ⚠⚠ KLASA, a nie styl na wszystkich `DataGridCell TextBox` — i to jest warunek bezpieczeństwa.
+       Klasę dostaje każda EDYTOWALNA siatka (przez `EditableGridBehavior.Attach`), a nie każda siatka:
+       gridy WYNIKÓW są `IsReadOnly` i nie mają ani edytora w komórce, ani zarezerwowanej na niego wysokości
+       wiersza, więc setter globalny sięgnąłby tam, gdzie nie ma czego wymiarować.
+
+       ⚠⚠ KOREKTA W MIEJSCU (2026-08-07): ten akapit mówił, że siatki DANYCH klasy dostać NIE MOGĄ, bo
+       „`ComboBoxa` nie mają — tam ten sam setter urósłby każdy wiersz". Rozumowanie poprawne o siatce danych
+       w ogóle i NIGDY niesprawdzone na tej jednej, której dotyczyło: `TableDetailTabView` przypina wierszowi
+       `data-edit` STAŁĄ wysokość 32 (`Height`, nie `MinHeight` — wiersz nie ma jak urosnąć od zawartości),
+       a po paddingu komórki `6 2` zostaje 28 px na edytor o minimum 24. Wstrzymanie roli nie chroniło więc
+       przed niczym, a dawało zgłoszony defekt „TextBox w edycji nadal jest zbyt niski". ⚠ Warunek, który to
+       zastępuje: siatka przechodząca przez seam ma mieć wiersz zdolny UNIEŚĆ edytor `Size.Control` — pilnuje
+       tego `EditableGridSeamTests` na podstawie znaczników, nie na podstawie tego komentarza. -->
+  <Style Selector="DataGridCell TextBox.field-editor">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+  </Style>
+
+  <!-- ⭐⭐ EDYTOR DATY W KOMÓRCE (P3, zgłoszenie 2026-08-07: „kontrolka daty jest przycinana").
+
+       ⚠ PRZYCZYNA ZMIERZONA, NIE ZGADNIĘTA, bo zgłoszenie nie nazywa wymiaru, a kandydaci byli dwaj
+       (za wąska kolumna albo za niski wiersz) i mają różne przyczyny. Pomiar drzewa wizualnego
+       (`GridDateEditorTests`): `CalendarDatePicker` z motywu Fluent ma WŁASNE `MinHeight` = 32, podczas
+       gdy jego zawartość prosi o 24 (`PART_TextBox` 22, `PART_Button` 24). Wiersz `data-edit` ma
+       STAŁE `Height` (nie `MinHeight` — nie ma jak urosnąć, gotcha #322), a `Pad.Cell` zabiera 2+2,
+       więc na edytor zostaje wysokość wiersza minus 4. W chwili zgłoszenia było to 32 − 4 = 28, a więc
+       32 > 28 ⇒ obcięcie, bez błędu i bez skoku układu, który by je pokazał.
+       ⚠ AKTUALIZACJA M4 / C‑1: wiersz stoi teraz na roli `Size.Row.GridEdit` (30), czyli na edytor
+       zostaje 26 — nadal powyżej 24, więc reguła poniżej trzyma się z tego samego powodu, tylko z innym
+       zapasem. ⛔ Nie zapisywać tu liczby wiersza na sztywno: pilnuje jej `EditableGridSeamTests`,
+       czytając wysokość, padding i `Size.Control` z miejsc, w których naprawdę stoją.
+
+       ⭐ Dlatego poprawką jest ROLA, a nie dobrana liczba: ten sam `Size.Control`, który bierze `TextBox`
+       w sąsiedniej komórce (§19.9). Zawartość mieści się w 24 z zapasem, więc nic nie zostaje ściśnięte
+       w środku — obniżamy tylko żądanie kontrolki do jej rzeczywistej potrzeby. Przy okazji znika drugi
+       objaw ze zgłoszenia: edytor daty przestaje być wyższy od pozostałych edytorów tej samej siatki.
+
+       ⚠ Selektor CELUJE W KOMÓRKĘ i nie potrzebuje klasy — inaczej niż `TextBox` powyżej. `TextBox`
+       mieszka w komórkach WSZYSTKICH siatek, także wyników (tylko do odczytu, bez zarezerwowanej
+       wysokości), więc tam globalny setter sięgnąłby za daleko; `CalendarDatePicker` trafia do komórki
+       wyłącznie z `BuildDateEditingTemplate` siatki danych. ⛔ Nie zawężać tego klasą „na wszelki
+       wypadek": klasa jest czymś, o czym następna siatka może zapomnieć, a selektor nie.
+
+       ⛔ NIE dotyczy `CalendarDatePicker` w formularzach (dialog Execute, panel startowy debuggera) —
+       tam kontrolka jest polem formularza i 32 jest poprawne. Gęstość kontrolek formularzowych to
+       osobne pytanie, przypisane do M4. -->
+  <Style Selector="DataGridCell CalendarDatePicker">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⭐⭐ …I TO SAMO DLA EDYTORA, KTÓREGO NIE BUDUJEMY MY (zgłoszenie użytkownika 2026-08-03: „nadal są
+       miejsca, gdzie TextBox jest zbyt niski, np. parametry procedury w Easy Mode").
+
+       Reguła wyżej sięga tylko edytorów, którym `FieldGridColumns` może nadać klasę. Kolumny Name / Collate /
+       Default / Description to zwykłe `DataGridTextColumn`, a ich `TextBox` tworzy sama siatka w chwili wejścia
+       w komórkę — nie ma na czym postawić klasy. Zostawały więc na `MinHeight` 0 i czytały się jak cienki pasek
+       obok poprawnie wymiarowanych sąsiadów, w PIERWSZEJ i najczęściej edytowanej kolumnie.
+
+       ⭐ Jedna ROLA i jedna wartość, dwie drogi powstawania elementu — dlatego dwa selektory, a nie dwie
+       decyzje. ⚠ Zasięg daje klasa NA SIATCE, bo globalny setter sięgnąłby także gridów WYNIKÓW, gdzie nie
+       ma edytora w komórce ani wysokości wiersza na niego zarezerwowanej (patrz korekta przy regule wyżej —
+       „siatka danych" nie jest tu granicą; granicą jest „siatka edytowalna").
+
+       ⚠⚠ KOREKTA W MIEJSCU (S-3, 2026-08-05): ten komentarz mówił, że klasę nadaje
+       `FieldGridColumns.Build` — „w jednym miejscu". To była prawda i to był DEFEKT, bo jedno miejsce nie było
+       każdym miejscem: Table Detail Fields, New Table Fields i View Detail Columns deklarują kolumny w XAML,
+       nigdy nie wołały Build i nigdy nie dostawały roli. Stąd zgłoszenie „w Table TextBox nadal jest zbyt
+       niski". Klasę nadaje teraz `Behaviors.EditableGridBehavior.Attach`, przez które przechodzi KAŻDA
+       edytowalna siatka, a `EditableGridSeamTests` tego pilnuje. ⛔ Nie nadawać jej z dwóch miejsc. -->
+  <Style Selector="DataGrid.field-grid DataGridCell TextBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+  </Style>
+
+  <!-- ⭐ EDYTOR W KOMÓRCE, KTÓREGO NIE DA SIĘ EDYTOWAĆ, MA WYGLĄDAĆ JAK INFORMACJA, A NIE JAK PUSTE
+       POLE DO WYPEŁNIENIA (§19.8). Siatki pól trzymają w komórkach ZAWSZE WIDOCZNY `TextBox`, bo
+       `DataGridTextColumn` umie tylko `IsReadOnly` per KOLUMNA, a bramka jest per WIERSZ
+       (gotcha #83/#124). Gdy typ narzuca domena albo `TYPE OF`, kolumny Size/Scale/SubType/Charset są
+       wyłączane — i wtedy pudełko wejściowe kłamie: sugeruje brakującą daną tam, gdzie dana nie jest
+       ani brakująca, ani do wpisania.
+
+       ⚠ To UJAWNIONY DŁUG, nie regresja: te pola były wyłączone od zawsze, ale przed M2b nieaktywny
+       `TextBox` zlewał się z tłem. Nadanie kontrolce spójnej ramki sprawiło, że zaczął czytać się jak
+       pole edycyjne — użytkownik zgłosił to jako „puste prostokąty".
+
+       ⛔ Selektor celuje w `DataGridCell`, więc NIE dotyka wyłączonych `TextBox`ów w formularzach, gdzie
+       ramka niesie sens „tu normalnie się wpisuje, ale teraz nie można". W komórce siatki tej roli nie
+       ma — wiersz obok pokazuje to samo pole aktywne, więc kontrast sam nazywa stan. -->
+  <Style Selector="DataGridCell TextBox:disabled">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <!-- ================================================================================================
+       ComboBox — Compact Controls, Product Polish M2b krok 5.3. Metryki tutaj, kolory w Bridge'u.
+
+       ⭐ Ta kontrolka jest sprawdzianem, czy most SKALUJE SIĘ na kolejne kontrolki — i skaluje:
+       nie trzeba było ani jednego własnego szablonu, mimo że `ComboBox` ma ich znacznie więcej niż
+       `TextBox` (Background, HighlightBackground, DropDownOverlay, DropDownGlyph, PART_Popup).
+
+       ⚠ `ComboBoxItem` dostaje `Size.Row.Menu` (22) i `Pad.MenuItem`, a nie wysokość kontrolki.
+       Pozycja listy rozwijanej jest wierszem MENU, nie polem formularza: czyta się ją w pionowej
+       serii, wybiera jednym kliknięciem i nigdy nie edytuje. Rola dzielona z menu kontekstowym jest
+       tu poprawna (§3.3), a nie oszczędnością na tokenie.
+       ================================================================================================ -->
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ComboBoxItem">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Menu}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.MenuItem}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+
+  <!-- ================================================================================================
+       ListBoxItem — Product Polish M2b krok 9, zgłoszenie QA (dwa punkty, jedna przyczyna).
+
+       ⭐ Użytkownik zgłosił to jako DWIE osobne rzeczy — „lista kategorii w Ustawieniach jest zbyt
+       wysoka, a czcionka o stopień za duża" oraz „lista Saved Queries powinna być bardziej zwarta,
+       to nie formularz tylko lista robocza" — a to jest JEDEN defekt: `ListBoxItem` nigdy nie dostał
+       stylu, więc obie listy stały na Fluencie (wysoki wiersz, `FontSize` 14).
+
+       ⭐ Rola dzielona z `ComboBoxItem` i wierszem menu jest tu POPRAWNA, nie oszczędnością (§3.3):
+       pozycja listy, pozycja listy rozwijanej i wiersz menu to ten sam gest — czytasz w pionowej
+       serii i wybierasz jednym kliknięciem.
+
+       ⚠ Pasek boczny jest NIETKNIĘTY i to nie przypadek: ma własny styl `ListBox.sidebar-list
+       ListBoxItem` zadeklarowany w `ListBox.Styles` samego drzewa, a styl bliższy w drzewie bije
+       styl aplikacji. Metadata Explorer jest świadomie poza zakresem tego etapu (decyzja D‑, §2).
+       ================================================================================================ -->
+  <Style Selector="ListBoxItem">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Menu}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.MenuItem}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ================================================================================================
+       NAWIGACJA SETTINGS CENTER — pakiet UX po M5, punkt 5.
+
+       ⭐ Własna klasa, a nie zmiana bazowego `ListBoxItem`, bo to INNY GEST. Komentarz przy stylu bazowym
+       opisuje go dokładnie: „pozycja listy, pozycja listy rozwijanej i wiersz menu to ten sam gest —
+       czytasz w pionowej serii i wybierasz jednym kliknięciem". Nawigacja Settings to sześć pozycji,
+       na których się LĄDUJE i przebywa, a nie seria do przebiegnięcia wzrokiem. Stąd wiersz `Size.Row.Tree`
+       (24) zamiast `Size.Row.Menu` (22) — ratyfikowane, bez tworzenia roli `Size.Row.Nav`.
+
+       ⚠ Zawężenie klasą jest wymagane, nie kosmetyczne: bazowy `ListBoxItem` obsługuje Saved Queries
+       i każdą inną listę w aplikacji. Bezpieczne mechanicznie z pomiaru #342 — Avalonia rozstrzyga między
+       stylami SPECYFICZNOŚCIĄ SELEKTORA, nie kolejnością, więc selektor z klasą bije goły selektor typu
+       niezależnie od tego, gdzie w pliku stoi.
+
+       ⭐⭐ WSKAŹNIK AKTYWNEJ KATEGORII NIE ZMIENIA GEOMETRII — i to jest cała jego konstrukcja.
+       Pasek stoi w szablonie wiersza ZAWSZE (szerokość `Size.TabIndicator`), a zaznaczenie zmienia
+       wyłącznie jego BARWĘ z przezroczystej na akcent. To jest wprost wzorzec ratyfikowany w M5 / L‑1
+       dla `Button.primary`: „ramka już tam była, tylko niosła barwę własnego tła, więc była niewidoczna
+       z konstrukcji" — przy zerowej zmianie geometrii.
+
+       ⚠⚠ Odrzucony wariant, żeby nikt go nie wracał: `BorderThickness` na `ContentPresenter` wiersza.
+       Ramka WCHODZI W DESIRED SIZE, a presenter Fluenta jest o nią wcinany, więc pasek dokładany przy
+       zaznaczeniu rozpychałby wiersz przy KAŻDYM kliknięciu — §13.3 Zero Layout Shift złamane dokładnie
+       tam, gdzie zmiana działa (pomiar z M5 / L‑1). Wariant szablonowy nie ma tego problemu Z KONSTRUKCJI,
+       a nie przez dobraną liczbę — i nie potrzebuje roli `Thickness`, której katalog nie ma.
+
+       ⚠ `Padding` wiersza jest ZEROWY, a odstęp niesie kontener w szablonie — inaczej pasek stałby
+       w środku wcięcia zamiast przy krawędzi panelu i przestałby być wskaźnikiem krawędziowym.
+       ================================================================================================ -->
+  <Style Selector="ListBox.settings-nav ListBoxItem">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Tree}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ListBox.settings-nav ListBoxItem:selected Border#NavIndicator">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <!-- ⛔ Świadomie BEZ pogrubienia etykiety w stanie aktywnym: pasek i wypełnienie zaznaczenia już niosą
+       ten stan, a `SemiBold` zmienia SZEROKOŚĆ tekstu, czyli dokładnie ten rodzaj ruchu, którego pasek
+       został tak skonstruowany, żeby uniknąć. Trzeci sygnał na jeden stan to nie wzmocnienie, tylko szum. -->
+
+  <!-- ================================================================================================
+       Pole WYSZUKIWANIA — Product Polish M2b krok 9, zgłoszenie QA.
+
+       ⭐ To jest drugi konsument `Size.ControlProminent` i powód, dla którego ta rola jest ROLĄ,
+       a nie „wyższym przyciskiem": pole wyszukiwania nie stoi w serii pól formularza — stoi samotnie,
+       jest celem myszy i wpisuje się w nie często. `Size.Control` (24) czytało się w nim jako ciasne.
+       ⚠ `VerticalContentAlignment=Center` jest tu wymagane wprost przez zgłoszenie („idealne
+       wyśrodkowanie tekstu w pionie") i działa, bo `Pad.Control` ma pion zerowy — wysokość daje
+       `MinHeight`, więc tekst ma gdzie się wyśrodkować.
+       ================================================================================================ -->
+  <Style Selector="TextBox.search">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ================================================================================================
+       ⭐ POLE STOJĄCE NA POWIERZCHNI UNOSZĄCEJ SIĘ (zgłoszenie użytkownika 2026-08-03: „w ciemnym motywie
+       pola filtrów praktycznie zlewają się z tłem, dopiero po najechaniu myszką stają się widoczne").
+
+       ⚠ Ramka `TextBoxa` jest dobrana do pola stojącego na tle OKNA. Filtr w liście rozwijanej domeny
+       i oba filtry w okienku wyboru kolumny stoją na `SurfaceRaised`, gdzie ta przesłanka nie obowiązuje:
+       w spoczynku ramka jest jedynym wyróżnikiem pola i ginie, a po najechaniu przechodzi na
+       `AccentMuted` — dlatego pole „pojawia się" dopiero pod kursorem. To jest dokładnie ten objaw.
+
+       ⚠⚠ Selektor MUSI celować w `PART_BorderElement`, a nie w samą kontrolkę: kolory `TextBoxa` maluje
+       wnętrze szablonu Fluenta, więc setter `BorderBrush` na `TextBox` nie ma dokąd trafić (§15.6.3).
+       Precedens obok: `TextBox.frameless /template/ Border#PART_BorderElement`.
+
+       ⚠⚠ WYPEŁNIENIE, NIE TYLKO RAMKA — pierwsza wersja ruszała samą ramkę i użytkownik zgłosił defekt
+       PONOWNIE, na obu motywach. Zmierzone wtedy: selektor stosował się poprawnie, kolory były na miejscu,
+       tylko w motywie jasnym tło pola `#FCFCFD` stało na powierzchni `#FFFFFF` — trzy jednostki różnicy,
+       czyli kształt pola niósł wyłącznie jeden piksel kreski. Tło jest tu nośnikiem kształtu.
+
+       ⚠ Stany `:pointerover` i `:focus` są POWTÓRZONE świadomie i to jest warunek poprawności, nie ozdoba.
+       Styl aplikacji bije `ControlTheme` Fluenta, więc bezstanowy selektor przykryłby również te dwa stany —
+       pole straciłoby reakcję na kursor ORAZ obwódkę fokusa, czyli naprawiając widoczność spoczynkową
+       zabralibyśmy afordancję i wskazanie klawiatury.
+
+       ⛔ Rola jest nadawana KLASĄ tam, gdzie pole faktycznie stoi na powierzchni unoszącej się, a nie
+       wszystkim polom `.search`: to samo pole w Settings Center i w Global Search stoi na tle okna, gdzie
+       obecna ramka jest poprawna i nikt jej nie zgłaszał (pułapka 17 — reguła opisuje to, co jest dobre).
+       ================================================================================================ -->
+  <Style Selector="TextBox.on-raised /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource FieldOnRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource FieldOnRaisedBorderBrush}" />
+  </Style>
+  <Style Selector="TextBox.on-raised:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource FieldOnRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
+  </Style>
+  <Style Selector="TextBox.on-raised:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource FieldOnRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <!-- ⚠ Odstęp między opcjami jednego wyboru. Zgłoszenie QA: „RadioButtony są ustawione zbyt ciasno
+       pionowo — brakuje oddechu". Przyczyna jest skutkiem kroku 5.1: `RadioButton` stracił wtedy
+       `MinHeight` (słusznie — kontrolka zaznaczenia nie ma własnej wysokości do narzucenia), więc
+       kolejne opcje stykają się swoimi znakami.
+
+       ⚠⚠ SELEKTOR JEST `ItemsControl RadioButton`, A NIE `RadioButton`, I ZŁAPAŁ TO DOPIERO TEST.
+       Pierwsza wersja dawała margines KAŻDEMU `RadioButtonowi` w aplikacji — i natychmiast wywróciła
+       `RadioButton_FitsInsideAGridRow_LikeItsCheckBoxSibling`, czyli niezmiennik RB‑2: margines wchodzi
+       do `DesiredSize`, więc kontrolka przestawała mieścić się w wierszu siatki. Guard z kroku 5.1
+       zadziałał dokładnie tak, jak miał.
+       ⭐ Poprawka jest zarazem trafniejsza semantycznie: rola nazywa odstęp **między OPCJAMI**, a opcja
+       to `RadioButton` będący POZYCJĄ LISTY. Przełącznik stojący samotnie (komórka siatki, pole
+       formularza) nie jest opcją i odstępu nie dostaje. ⚠ `DataGrid` nie jest `ItemsControl`, więc
+       komórki są poza zasięgiem tego selektora z konstrukcji — bez osobnego wyjątku do pamiętania. -->
+  <Style Selector="ItemsControl RadioButton">
+    <Setter Property="Margin" Value="{DynamicResource Margin.OptionGap}" />
+  </Style>
+
+  <!-- ================================================================================================
+       Button — Compact Controls (RB‑3, D1) + H‑8, Product Polish M2b krok 5.4.
+
+       ⭐ TA KONTROLKA MA JUŻ CZTERY ŚWIADOMIE ZAPROJEKTOWANE WARIANTY (`.icon`, `.flat`, `.primary`,
+       `.caption`) i to jest różnica wobec kroków 5.2–5.3: nie stylujemy pustego miejsca, tylko
+       DODAJEMY BRAKUJĄCĄ PODSTAWĘ pod istniejącą rodzinę. Audyt H‑8 zmierzył 25 przycisków bez
+       `Classes` — czyli takich, które nie należą do żadnego wariantu i stoją na gołym Fluencie.
+
+       ⚠ KOLEJNOŚĆ W PLIKU JEST ZNACZĄCA: styl bazowy musi stać PRZED wariantami, bo w Avalonii przy
+       tej samej trafności wygrywa setter zadeklarowany PÓŹNIEJ. Wariant ma dopowiadać podstawę,
+       a nie z nią przegrywać. ⛔ Nie przenosić tego bloku poniżej `Button.icon`.
+
+       ⭐⭐ WYSOKOŚĆ PRZYCISKU BIERZE SIĘ Z KONTEKSTU, NIGDY Z WARIANTU (ratyfikowane, krok 11).
+       Podstawa daje `Size.ControlProminent` (stopka dialogu, formularz); pasek narzędzi obniża swoje
+       dzieci do `Size.ControlToolbar`; `Button.caption` ma wysokość paska tytułu; komórka siatki —
+       wysokość wiersza. ⛔ Wariant `.primary` NIE zmienia wysokości: kolor określa priorytet akcji,
+       rozmiar nie. To jest ta sama reguła, którą realizują `Border.toolbar` i `DataGridCell`:
+       **kontener rozstrzyga wielkość, element ją przyjmuje.**
+
+       Kolory: `FluentBridge.axaml`. Metryki: tutaj. Bez własnego szablonu — Fluent wystawia
+       `ButtonBackground` / `ButtonBorderBrush` / `ButtonForeground` jako zasoby (§16.4 niespełnione).
+       ================================================================================================ -->
+  <!-- ⭐⭐ STYL BAZOWY NIESIE WYŁĄCZNIE TO, CO JEST PRAWDĄ O KAŻDYM PRZYCISKU (korekta z kroku 13).
+
+       ⚠⚠ Wcześniej trzymał tu GEOMETRIĘ AKCJI (`MinHeight` 28 + `MinWidth` 80 + `Pad.Button`), czyli
+       wymiary STOPKI DIALOGU narzucone każdemu przyciskowi w aplikacji — a każdy przycisk, który
+       akcją nie jest, musiał się z tego WYPISYWAĆ. Reguła sformułowana przecząco („wszystko jest
+       akcją, chyba że…") przecieka zawsze i przeciekła dwa razy: najpierw na pasma chromy (krok 11),
+       potem na strzałkę rozgałęzienia w drzewie — która ma własne `Width=20 Height=20`, ale
+       `MinWidth`/`MinHeight` ze stylu bazowego ją NADPISAŁY (Avalonia klamruje `Width` przez
+       `MinWidth`), więc strzałka urosła do 80×28 i wjechała na tekst. To była regresja, nie estetyka.
+
+       ⭐ Reguła jest teraz POZYTYWNA: geometrię akcji niosą klasy, które akcją SĄ — `.primary`
+       i `.flat`. Wszystkie stopki dialogów w tej aplikacji są nimi konsekwentnie oznaczone, więc
+       reguła nie traci zasięgu, a przestaje przeciekać na przyciski o własnym rozmiarze.
+       ⛔ Nie wolno tu wracać z `MinHeight`/`MinWidth` „dla wygody" — to jest dokładnie ten setter,
+       który zepsuł drzewo. -->
+  <Style Selector="Button">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⭐ GEOMETRIA AKCJI — jedno miejsce dla obu wariantów, żeby `Save` i `Cancel` nie mogły się
+       rozjechać. Wysokość: akcja stoi samotnie i jest celem myszy (§15.10.1). Szerokość: PODŁOGA,
+       bo bez niej szerokość bierze TEKST i krótka etykieta daje mniejszy przycisk niż długa — czyli
+       rozmiar znowu niesie informację, której nieść nie ma.
+       ⚠ `Pad.Button` ma pion ZEROWY (wysokość daje `MinHeight`), stąd wyśrodkowanie w stylu bazowym. -->
+  <Style Selector="Button.primary, Button.flat">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+  </Style>
+
+  <!-- ⚠ Przycisk w komórce siatki — ta sama reguła i ten sam powód co przy `TextBoxie` (§15.6.4):
+       `Size.Row.Grid` (22) − `Pad.Cell` (3+3) = 16 px, więc `MinHeight` 24 podniósłby wiersz o 8 px.
+       Kontrolka w komórce bierze wysokość WIERSZA, nie kontrolki. Zmierzone 182 kolumny szablonowe
+       w widokach — to nie jest przypadek teoretyczny. -->
+  <Style Selector="DataGridCell Button">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellEditor}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+  </Style>
+
+  <!-- ================================================================================================
+       ToggleButton — Compact Controls, Product Polish M2b krok 5.6.
+
+       ⚠ Metryki identyczne z `Button` i to NIE JEST kopia przez niedbałość: `ToggleButton` dziedziczy
+       po `Button`, ale selektor typu w Avalonii dopasowuje TYP DOKŁADNY (stąd `:is(TextBlock)`
+       w tym pliku dla `SelectableTextBlock`) — więc styl `Button` go nie widzi. Alternatywa
+       `:is(Button)` byłaby gorsza: złapałaby też `RepeatButton` strzałek spinnera i przyciski
+       `ScrollBara`, którym wysokość kontrolki formularza jest wprost szkodliwa.
+
+       ⭐ STAN ZAZNACZONY BYŁ JUŻ POPRAWNY I TO NIE PRZYPADEK: `SystemAccentColor` jest w tej
+       aplikacji nadpisany naszym akcentem (`Colors.axaml`), więc `ToggleButtonBackgroundChecked`
+       Fluenta rozwiązuje się do `#2D6BBF` samoistnie. Wadliwe były wyłącznie stany NEUTRALNE —
+       ta sama pół-przezroczysta biel co w `Button`.
+       ================================================================================================ -->
+  <Style Selector="ToggleButton">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ================================================================================================
+       Expander — Compact Controls, Product Polish M2b krok 5.7.
+
+       ⚠⚠ TEN BLOK MUSI STAĆ PO STYLU `ToggleButton` I TO JEST JEGO POŁOWA TREŚCI. Nagłówek
+       `Expandera` JEST `ToggleButtonem`, więc styl z kroku 5.6 sięgnął do środka szablonu i wyrównał
+       jego treść do ŚRODKA (`HorizontalContentAlignment=Center`) — nagłówek sekcji wyśrodkowany jak
+       etykieta przycisku. Zmierzone, nie przewidziane: `Pad=12,0,12,0`, `HCA=Center`, `FS=12`.
+       ⭐ Lekcja ogólniejsza: styl typu obowiązuje TAKŻE wewnątrz cudzego szablonu — to ta sama
+       właściwość, która w kroku 5.5 zadziałała na naszą korzyść (wewnętrzny `TextBox` `NumericUpDown`
+       wziął wysokość za darmo). Jeden mechanizm, dwa znaki.
+
+       ⚠ `MinHeight` nagłówka NIE dało się naprawić setterem i to jest przypadek, który wymusił
+       trzecią trasę w `FluentBridge.axaml`: szablon Fluenta konsumuje `ExpanderMinHeight` jako
+       WARTOŚĆ LOKALNĄ elementu, a wartość lokalna outranks setter stylu — nagłówek trzymał 48 px
+       mimo settera z kroku 5.6. Rozwiązaniem jest ALIAS zasobu, nie kolejny selektor.
+       ================================================================================================ -->
+  <Style Selector="Expander">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+
+  <!-- Przywrócenie tego, co styl `ToggleButton` zabrał nagłówkowi. `Stretch`, nie `Left`: treść
+       nagłówka bywa całym `StackPanelem` (Procedure/Function — jednolinijkowe podsumowanie), więc ma
+       dostać całą szerokość, a nie zostać dosunięta do krawędzi. -->
+  <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- ⚠ Promień 0 zostaje: RESET, nie rola (§3.6 handovera). -->
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <!-- ================================================================================================
+       NumericUpDown — Compact Controls, Product Polish M2b krok 5.5.
+
+       ⚠ TA KONTROLKA NIE JEST JEDNĄ KONTROLKĄ, tylko trzema zagnieżdżonymi: `NumericUpDown` opakowuje
+       `ButtonSpinner` (`PART_Spinner`), a ten opakowuje `TextBox` (`PART_TextBox`) i dwa
+       `RepeatButton`y. Wysokość 32 wymusza ŚRODKOWA z nich — dlatego sam setter na `NumericUpDown`
+       niczego by nie dał, a to jest inny kształt problemu niż w krokach 5.2–5.4.
+       ⭐ Wewnętrzny `TextBox` wziął `Size.Control` już w kroku 5.2, bez żadnej zmiany tutaj — most
+       sięga w głąb szablonu sam z siebie. To najtańszy możliwy dowód, że warstwa działa kompozycyjnie.
+
+       ⚠ `ButtonSpinner` dostaje własny implicit style, a nie selektor `/template/`, bo jest osobnym
+       TYPEM kontrolki, nie częścią szablonu — i bywa używany samodzielnie.
+       ================================================================================================ -->
+  <Style Selector="NumericUpDown">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ButtonSpinner">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⚠ Strzałki spinnera: Fluent daje im `MinWidth` 34 px, czyli kolumnę SZERSZĄ niż wysokość całej
+       kontrolki po zmianie (24). Przy 15 z 18 użyć spinner jest widoczny, więc to nie jest szczegół.
+       Obie są NAZWANYMI częściami szablonu, więc selektor `/template/` trafia w nie jednoznacznie
+       i §16.4 nie wchodzi w grę — to nie jest własny szablon, tylko setter na nazwanej części
+       (precedens: `TextBox.frameless /template/ Border#PART_BorderElement`). -->
+  <Style Selector="ButtonSpinner /template/ RepeatButton#PART_IncreaseButton">
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+  </Style>
+  <Style Selector="ButtonSpinner /template/ RepeatButton#PART_DecreaseButton">
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+  </Style>
+
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Panel}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <!-- Rola: Text.Application — podpowiedź jest treścią, którą użytkownik czyta świadomie,
+         a nie chromą, którą omiata wzrokiem. -->
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+
   <!-- :is(TextBlock) so it also matches SelectableTextBlock (a TextBlock subclass) —
        error messages use Classes="subtle error" on a SelectableTextBlock so they can be
        selected/copied. -->
@@ -97,32 +644,91 @@
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
+  <!-- ================================================================================================
+       ⭐ TYPOGRAFIA CZYTANA Z KATALOGU (Product Polish M2b, krok 0)
+
+       Pięć poniższych stylów klasowych BYŁO rolami typograficznymi z §6 — tyle że z liczbami
+       wpisanymi na sztywno. Teraz czytają je z Themes/Typography.axaml. Zmiana jest bajtowo
+       neutralna (te same wartości) i to jest jej cel: pierwszy dowód, że warstwa skalarna
+       rzeczywiście rozwija się w runtime — na pięciu setterach, a nie na czterdziestu.
+
+       ⚠ `DynamicResource`, nie `StaticResource`, mimo że tokeny nie zależą od motywu. Powód jest
+       architektoniczny, nie estetyczny: §3.4 wymaga, aby przyszłe ustawienie czcionki i skali
+       podmieniało tokeny bazowe — a wartość rozwiązana statycznie nie zareagowałaby na podmianę
+       w czasie działania aplikacji. Tego ustawienia ten etap NIE buduje (reguła #233); zostawia
+       jedynie warstwę, która je udźwignie.
+
+       ⚠ Marginesy zostają lokalne. Odstęp pod podpisem pola (4 px) nie ma dziś roli w §4.1, a
+       `Margin.FieldGap` to inna rola („odstęp pod polem", 8 px). Dopisanie roli tylko po to, żeby
+       nie było tu liczby, byłoby dokładnie tym, przed czym ostrzega §4.1 — katalog rośnie od
+       potrzeby, nie od symetrii.
+       ================================================================================================ -->
+
   <!-- Form field caption above an input. Centralized here (was duplicated verbatim
        in every dialog's local Window.Styles). Application-level styles apply inside
-       dialog windows too, so each dialog just uses Classes="field-label". -->
+       dialog windows too, so each dialog just uses Classes="field-label".
+       Rola: Text.Application (§6). -->
+  <!-- ⚠⚠ `Margin.LabelGap` (2), nie 4 — i przyczyną zgłoszenia QA („label wygląda, jakby należał do
+       poprzedniej sekcji") było DWÓCH WŁAŚCICIELI JEDNEGO ODSTĘPU: podpis niósł margines 4, a kontener
+       dokładał do tego swoje `Spacing`, więc w Global Search odstęp podpis→pole wynosił 14 przy
+       odstępie pole→pole 10 — **proporcja odwrócona**, a oko przypisuje podpis do tego, co bliżej.
+       ⭐ Katalog już tę regułę zna (`Margin.FieldGap`: „odstęp ma jednego właściciela") — tutaj była
+       złamana. ⛔ Kontener trzymający podpis i jego pole NIE MOŻE dokładać między nie odstępu;
+       jeżeli używa `Spacing`, podpis i pole muszą być jednym dzieckiem (patrz Global Search). -->
   <Style Selector="TextBlock.field-label">
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="Margin" Value="{DynamicResource Margin.LabelGap}" />
   </Style>
 
   <!-- The keyboard-shortcut hint shown beside a command's label on an accent (primary) button — e.g.
        Execute F5, Start debugging F5. ONE presentation for every such chip across the app; the shortcut
        is carried in this chip, never baked into the label string with parentheses. -->
+  <!-- Rola: Text.Caption (§6) — najmniejszy stopień pisma w aplikacji. -->
   <Style Selector="TextBlock.shortcut-chip">
     <Setter Property="Foreground" Value="{DynamicResource OnAccentSubtleBrush}" />
-    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
-  <Style Selector="TextBlock.title">
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="FontSize" Value="14" />
+  <!-- ⭐ Pasek postępu SEKCJI 4 PASKA STATUSU (§8.4.6, M3.1f). Klasa, a nie styl na wszystkich
+       `ProgressBar` — to osobna ROLA: cienki wskaźnik w chromie okna, a nie pasek w dialogu. Trzy inne
+       `ProgressBar` (Export, Batch, Data Import) mieszkają w dialogach, mają inną gęstość i NIE są
+       przedmiotem tej iteracji; ujednolicenie ich to temat M3b/§13.3, nie doklejka tutaj (R7).
+
+       ⚠⚠ `MinWidth`/`MinHeight` = 0 SĄ KONIECZNE, nie porządkowe: Avalonia przycina `Width` przez
+       `MinWidth`, a Fluent nadaje `ProgressBar` własne minimum — bez tego stała szerokość 120 px
+       (§8.4.6) po cichu wyszłaby szersza. To ta sama pułapka, którą M2b zapłacił strzałką drzewa
+       metadanych (20 px urosło do 100 przez `MinWidth` na bazowym `Button`).
+
+       ⚠ Szerokość jest STAŁA z powodu układu, nie estetyki: pasek rosnący z treścią przesuwałby chipy
+       stanu przy każdej operacji, czyli §13.3 („Zero Layout Shift") rozłożony w czasie. Pojawienie się
+       sekcji przesuwa układ RAZ, o znaną wartość. -->
+  <Style Selector="ProgressBar.status">
+    <Setter Property="Width" Value="120" />
+    <Setter Property="MinWidth" Value="0" />
+    <!-- ⚠ `4` LOKALNIE I ŚWIADOMIE. Katalog nie ma roli dla grubości wskaźnika, a jedynym kandydatem
+         przy tej liczbie jest `Space.Xs` (odstęp) — użycie go byłoby BŁĘDNĄ ROLĄ, czyli gorszym stanem
+         niż wartość lokalna (R12). Nowa rola z jednym konsumentem łamałaby R3; czy paski postępu
+         zasługują na wspólną metrykę, rozstrzyga §13.3 na komplecie (Export, Batch, Data Import). -->
+    <Setter Property="Height" Value="4" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <!-- Rola: Text.Title (§6) — nazwa połączenia, tytuł panelu. -->
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Title.Weight}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Title.Size}" />
+  </Style>
+
+  <!-- Rola: Text.DialogHeader (§6). -->
   <Style Selector="TextBlock.h1">
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.DialogHeader.Weight}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.DialogHeader.Size}" />
   </Style>
 
   <!-- ── Settings group: a titled card around one coherent set of options ──────────────
@@ -138,27 +744,40 @@
 
        (This replaces a `Border.panel` style that had NO consumers anywhere in the app —
        kept only as a near-identical sibling for someone to pick by mistake.) -->
+  <!-- ⭐ Ten styl jest w kroku 0 świadomie: pięć stylów tekstowych powyżej dowodzi wyłącznie, że
+       rozwijają się `x:Double` i `FontWeight`. Warstwa ZŁOŻONA (`Thickness`, `CornerRadius`) to
+       osobny mechanizm i bez niego dowód byłby połowiczny — a to ona jest w §3.2 wskazana jako
+       miejsce, w którym dług odrasta najłatwiej. Role: Border.All · Radius.Surface · Pad.Group. -->
   <Style Selector="Border.settings-group">
     <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="3" />
-    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Group}" />
   </Style>
 
+  <!-- Rola: Text.SectionHeader (§6) — mocniejsza od podpisu pola, bo nazywa temat, nie wartość. -->
   <Style Selector="TextBlock.group-header">
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />
     <Setter Property="Margin" Value="0,0,0,8" />
   </Style>
 
+  <!-- ⚠ `Button.icon` znosi tło i krawędź podstawy CELOWO: ikona w pasku narzędzi ma być samą ikoną,
+       a afordancję niesie dopiero najechanie. To jedyny wariant, w którym przycisk nie wygląda jak
+       przycisk w stanie spoczynku — i dlatego ma własną, mocniejszą podświetlaną „pastylkę". -->
   <Style Selector="Button.icon">
+    <!-- ⚠ Przycisk ikonowy jest z natury CHROMĄ (pasek narzędzi, akcja w wierszu listy), więc bierze
+         wysokość chromy, a nie stopki dialogu — niezależnie od tego, gdzie akurat stoi. Z tego samego
+         powodu nie ma podłogi szerokości: jego szerokość wyznacza ikona. -->
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <Setter Property="MinWidth" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="Padding" Value="8,4" />
-    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Chip}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
@@ -168,7 +787,14 @@
     <Setter Property="Background" Value="{DynamicResource IconHoverBrush}" />
   </Style>
 
-  <Style Selector="Button.icon:focus /template/ ContentPresenter">
+  <!-- ⭐⭐ M5 / L‑1 — `:focus-visible`, NIE `:focus`, i to jest zmiana ZACHOWANIA, nie barwy.
+       Zmierzone headlessowo: po `Focus(NavigationMethod.Pointer)` klasa `:focus` JEST obecna
+       (`:focus-visible` nie), więc na `:focus` ten przycisk pokazywał niebieską obwódkę
+       **po kliknięciu myszą** i trzymał ją, aż fokus odszedł.
+       ⚠ `CheckBox` i `RadioButton` w `ControlThemes.axaml` używały `:focus-visible` od początku —
+       aplikacja miała więc DWIE konwencje focusu naraz, spotykane w jednym oknie dialogowym.
+       Ta zmiana nie wprowadza nowej reguły, tylko dokańcza tę, którą produkt już miał w połowie. -->
+  <Style Selector="Button.icon:focus-visible /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
@@ -178,16 +804,44 @@
     <Setter Property="Opacity" Value="0.4" />
   </Style>
 
+  <!-- ⭐⭐ M3.5 / Z-1 — WYŁĄCZONY PRZYCISK IKONOWY NIE MALUJE TŁA ANI KRAWĘDZI. Bez tych dwóch setterów
+       `Button.icon` łamał swój własny kontrakt („ikona ma być samą ikoną") DOKŁADNIE w jednym stanie:
+       wyłączonym — i był to jedyny przycisk ikonowy w aplikacji, który wyglądał jak przycisk.
+
+       MECHANIZM (zmierzony w bramie §13.3, nie wywnioskowany): `:disabled` Fluenta maluje
+       `/template/ ContentPresenter`, przypinając `ButtonBackgroundDisabled` (Bridge → `PanelColor`)
+       i `ButtonBorderBrushDisabled` (→ `BorderColor`). Settery `Background`/`BorderBrush` z bloku
+       `Button.icon` stoją na KONTROLCE, więc przegrywają ze stylem celującym w element szablonu —
+       a `Opacity 0.4` tylko PRZYGASZAŁA tę pastylkę, zamiast ją usunąć. Arytmetyka się zgadzała:
+       0,4 × #252526 + 0,6 × #2D2D2D = #2A2A2A, dokładnie tyle, ile zmierzono na pasku paginacji.
+
+       ⛔ NIE naprawiać tego w `FluentBridge.axaml`. `ButtonBackgroundDisabled` obsługuje też
+       `Button.flat` i `Button.primary`, które w stanie wyłączonym MAJĄ wyglądać jak przyciski;
+       przezroczystość jest wyjątkiem wariantu ikonowego, nie regułą Bridge'a.
+
+       ⚠ Kolejność ma znaczenie: blok stoi PO `:pointerover`, więc przy równej trafności wygrywa i kursor
+       nad wyłączonym przyciskiem nie zapala pastylki najechania.
+
+       ⭐ Skutek uboczny, który był drugą połową znaleziska: pastylka odzyskuje jednoznaczność. Wcześniej
+       ten sam kształt oznaczał JEDNOCZEŚNIE „niedostępne" (tło :disabled) i „włączone"
+       (`ToggleButton.icon:checked`) — w pasku paginacji Table Data widać było oba naraz. -->
+  <Style Selector="Button.icon:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
   <!-- ToggleButton.icon mirrors Button.icon's defaults, but the FluentTheme's
        default :checked state paints the SystemAccent (orange/brown on Windows).
        Override with our blue SelectionBrush so it matches the rest of the
        app's selection / accent visuals. -->
   <Style Selector="ToggleButton.icon">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <Setter Property="MinWidth" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="Padding" Value="8,4" />
-    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Chip}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
   <Style Selector="ToggleButton.icon:pointerover /template/ ContentPresenter">
@@ -195,6 +849,13 @@
   </Style>
   <Style Selector="ToggleButton.icon:disabled">
     <Setter Property="Opacity" Value="0.4" />
+  </Style>
+  <!-- M3.5 / Z-1 — ten sam powód i ten sam mechanizm co przy `Button.icon:disabled` powyżej
+       (`ToggleButtonBackgroundDisabled` też jest przypięty do `PanelColor` w Bridge'u). ⚠ Blok MUSI stać
+       przed `:checked`, żeby wyłączony-ale-zaznaczony `ToggleButton` nadal pokazywał swój stan włączenia. -->
+  <Style Selector="ToggleButton.icon:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="ToggleButton.icon:checked /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
@@ -204,7 +865,13 @@
   <Style Selector="ToggleButton.icon:checked:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
   </Style>
-  <Style Selector="ToggleButton.icon:focus /template/ ContentPresenter">
+  <!-- ⚠ M5 / L‑1 — ŚWIADOME ROZSZERZENIE POZA DOSŁOWNY ZAKRES DECYZJI. Użytkownik ratyfikował jedną
+       konwencję focusu „dla wszystkich wariantów Button: icon, flat, primary i caption"; `ToggleButton`
+       nie padł z nazwy. Objęty mimo to, bo pozostawienie go na `:focus` odtwarzałoby dokładnie tę
+       niespójność, którą ten etap usuwa: przełącznik ikonowy trzymałby obwódkę po kliknięciu myszą,
+       stojąc W TYM SAMYM PASKU obok zwykłego przycisku ikonowego, który już jej nie trzyma.
+       Zmierzone: **22 wystąpienia** `ToggleButton Classes="icon"` w widokach. -->
+  <Style Selector="ToggleButton.icon:focus-visible /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
@@ -216,6 +883,7 @@
   <Style Selector="Border.filter-active-dot">
     <Setter Property="Width" Value="7" />
     <Setter Property="Height" Value="7" />
+    <!-- ⚠ Promień 3.5 zostaje: to GEOMETRIA — kropka 7×7, promień to połowa boku (§18.0.5/2). -->
     <Setter Property="CornerRadius" Value="3.5" />
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BackgroundBrush}" />
@@ -240,16 +908,19 @@
   </Style>
 
   <Style Selector="Border.sidebar-rail:pointerover">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
   </Style>
 
+  <!-- ⚠ `Button.flat` różni się od podstawy JEDNĄ rzeczą: przezroczystym tłem. Po kroku 5.4 nie jest
+       to już „przycisk zaprojektowany" wobec „przycisku Fluenta", tylko wariant CHROMELESS wobec
+       własnej podstawy — dlatego zostają tu wyłącznie te settery, które podstawę faktycznie zmieniają. -->
   <Style Selector="Button.flat">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="Padding" Value="10,4" />
-    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
@@ -257,7 +928,8 @@
     <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
   </Style>
 
-  <Style Selector="Button.flat:focus /template/ ContentPresenter">
+  <!-- M5 / L‑1 — `:focus-visible`; uzasadnienie przy `Button.icon` wyżej. -->
+  <Style Selector="Button.flat:focus-visible /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
@@ -265,12 +937,25 @@
     <Setter Property="Opacity" Value="0.5" />
   </Style>
 
+  <!-- ⛔⛔ `Button.primary` NIE MA WŁASNEJ WYSOKOŚCI I TO JEST RATYFIKOWANA REGUŁA CAŁEJ APLIKACJI
+       (użytkownik, 2026-08-02): **kolor może określać priorytet akcji, ROZMIAR NIE POWINIEN.**
+
+       ⚠ Krok 8 dał temu wariantowi `Size.ControlPrimary` (28) przy 26 na rodzeństwie — i to była
+       przyczyna, dla której Execute był większy od Cancel w KAŻDYM oknie: 38 przycisków w 26 plikach,
+       jeden setter. Zgłoszenie brzmiało „dialogi są niespójne", ale poprawianie ich po kolei leczyłoby
+       objaw. ⭐ Usunięcie jednego settera naprawia wszystkie naraz — i to jest test na to, czy defekt
+       został znaleziony w systemie, czy na ekranie.
+
+       ⭐ Powód głębszy: stopka dialogu to SERIA przycisków w jednym rzędzie, a seria musi się
+       wyrównywać (dokładnie ta sama racja, dla której pole formularza ma `Size.Control`). Różnica
+       wysokości w rzędzie nie czyta się jako hierarchia, tylko jako niedbałość układu.
+       ⛔ Nie przywracać tu `MinHeight` „dla podkreślenia akcji głównej" — podkreśla ją akcent. -->
   <Style Selector="Button.primary">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
-    <Setter Property="Padding" Value="12,4" />
-    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
 
@@ -282,28 +967,111 @@
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
+  <!-- ⭐⭐ IKONA W PRZYCISKU GŁÓWNYM BIERZE KOLOR ZE STYLU, A NIE Z WARTOŚCI LOKALNEJ W WIDOKU — i to nie jest
+       porządkowanie, to WARUNEK naprawy stanu nieaktywnego (zgłoszenie użytkownika 2026-08-03). Dwanaście ikon
+       w `MainWindow` miało `Foreground="{DynamicResource OnAccentBrush}"` wpisane lokalnie, a **wartość lokalna
+       bije setter stylu**, więc żaden selektor `:disabled` nie mógł ich dosięgnąć. Ta sama reguła i ten sam
+       mechanizm, którym `MessageBanner` dorobił się sześciu wariantów chromy per host, a `FieldGridColumns`
+       trzymał 12-pikselowy edytor (§19.9).
+       ⛔ Nie wpisywać `Foreground` na ikonie w widoku — host ustawia `Data`, rozmiar i wyrównanie. -->
+  <Style Selector="Button.primary controls|SvgIcon">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <!-- ⭐⭐ `Foreground` MUSI STAĆ NA `ContentPresenter`, A NIE TYLKO NA PRZYCISKU — i to jest przyczyna
+       zgłoszenia „w Light theme tekst na przycisku Save robi się przy najechaniu prawie czarny”.
+
+       ⚠⚠ ZMIERZONE headless, oba motywy, cztery stany. Wariant `.primary` nadpisuje `Foreground`
+       na PRZYCISKU (dziedziczenie) oraz na jawnych dzieciach `TextBlock`/`SvgIcon` — ale nigdy na
+       `ContentPresenter` w szablonie. Fluent ustawia `ButtonForegroundPointerOver` / `…Pressed` /
+       `…Disabled` właśnie NA PRESENTERZE, a `FluentBridge` mapuje pierwsze dwa na `ForegroundColor`.
+       Skutek: przycisk, którego `Content` jest ZWYKŁYM STRINGIEM (tekst rysuje sam presenter), traci
+       biały tekst; przycisk z jawnym `<TextBlock>` — nie. Stąd Execute/Start debugging wyglądały
+       poprawnie, a Save/OK w dialogach nie. Zmierzony zasięg: **22 przyciski `.primary` deklarują
+       `Content=`** wobec 18 z dziećmi.
+
+       Liczby (tekst na tle `AccentMutedBrush` #1A4F8F):
+         Light, string-content : #1B1D1F → **2,04:1**  ⛔ (przy 4,5:1 wymaganym przez §10)
+         Dark,  string-content : #D4D4D4 → 5,62:1  ⚠ przechodzi PRZYPADKIEM
+         po poprawce (OnAccentBrush)   : #FFFFFF → **8,33:1**
+       ⭐ Mechanizm był zepsuty w OBU motywach — tylko Light przekraczał próg, bo `ForegroundColor`
+       w Dark jest prawie biały. „W Dark wygląda dobrze” było zbiegiem okoliczności, nie regułą.
+
+       ⛔⛔ NIE NAPRAWIAĆ TEGO W `FluentBridge.axaml`. `ButtonForegroundPointerOver` obsługuje każdy
+       zwykły przycisk, gdzie ciemny tekst na jasnej chromie jest POPRAWNY — podniesienie go zepsułoby
+       wszystkie pozostałe. To ta sama racja, którą ten plik zapisuje już przy `ButtonBackgroundDisabled`:
+       przezroczystość/barwa jest wyjątkiem WARIANTU, nie regułą Bridge'a. -->
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
   <Style Selector="Button.primary:pressed /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
     <Setter Property="Opacity" Value="0.85" />
   </Style>
 
-  <Style Selector="Button.primary:disabled">
-    <Setter Property="Opacity" Value="0.5" />
+  <!-- ⭐⭐ M5 / L‑1 — PIERŚCIEŃ FOCUSU DLA PRZYCISKU AKCJI, i NIE jest to `FocusBorderBrush`.
+       Zmierzone: `FocusBorderBrush` na tle akcentu daje **1,26:1 w Dark i 1,17:1 w Light** przy progu
+       3:1 — skopiowanie settera z `Button.flat` wyglądałoby jak naprawa i nie naprawiłoby niczego.
+       ⭐ `OnAccentBrush` to barwa WŁASNEGO TEKSTU tego przycisku, więc nie jest nową barwą w palecie,
+       a na akcencie daje **5,29:1**.
+
+       ⚠⚠ GRUBOŚĆ ZOSTAJE 1 I TO JEST DECYZJA, NIE NIEDOPATRZENIE. Render kandydata pokazywał 2 px
+       i tak został odebrany, ale grubość ramki wchodzi w desired size przycisku — a `ContentPresenter`
+       w szablonie Fluenta jest wcinany o `BorderThickness`, więc 1 → 2 przesuwa treść i rozpycha
+       przycisk o 2 px. To jest **§13.3 Zero Layout Shift** złamane w momencie przejścia Tabem, czyli
+       dokładnie ten defekt, którego §9 zabrania nawet rozłożonego w czasie.
+       ⭐ Nic nie tracimy: ramka o grubości 1 już TAM JEST — niesie `AccentBrush`, czyli barwę własnego
+       tła, więc jest niewidoczna z konstrukcji. Zmiana jej barwy odsłania pierścień, który istniał,
+       przy ZEROWEJ zmianie geometrii. -->
+  <Style Selector="Button.primary:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
+  <!-- ⭐⭐ STAN NIEAKTYWNY TO PRZYGASZONE WYPEŁNIENIE, NIE PRZEZROCZYSTOŚĆ (zgłoszenie użytkownika 2026-08-03:
+       „na jasnym motywie nieaktywny młotek praktycznie znika"; aktywny wyglądał poprawnie).
+       ⚠ Stało tu `Opacity 0.5` na całym przycisku — i to jest kształt pułapki, nie zły odcień: `AccentColor`
+       i `OnAccentColor` są w OBU motywach identyczne, więc barwa nie mogła być winna. Winne było to, co
+       przezroczystość przepuszcza — pasek narzędzi pod przyciskiem, ciemny `#2D2D2D` albo jasny `#E8EAED`.
+       Biała ikona blaknąca w stronę jasnego tła traci kontrast niemal do zera, a w stronę ciemnego go ZYSKUJE:
+       jedna liczba, przeciwny skutek w dwóch motywach.
+       ⭐ Nieprzezroczyste wypełnienie odcina tło, więc kontrast ikony przestaje od niego zależeć — a `Foreground`
+       może wreszcie zgasić i tekst, i ikonę, bo styl wyżej zabrał im wartości lokalne.
+       ⛔ Nie dokładać tu z powrotem `Opacity` — wróci dokładnie ten defekt, tylko słabszy. -->
+  <Style Selector="Button.primary:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
+  </Style>
+  <!-- ⚠ `Foreground` tu z tego samego powodu co przy `:pointerover` wyżej — bez niego string-content
+       malował `ButtonForegroundDisabled` (Light **#5F6570**) obok TextBlock-content na `OnAccentDisabledBrush`
+       (**#8A9199**), czyli dwa wyłączone przyciski główne w jednej stopce różniły się barwą tekstu. -->
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentDisabledBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentDisabledBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
+  </Style>
+  <Style Selector="Button.primary:disabled TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
+  </Style>
+  <Style Selector="Button.primary:disabled controls|SvgIcon">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
+  </Style>
+
+  <!-- ⚠ Przycisk paska tytułu ma wysokość PASKA, nie kontrolki — `Size.TitleBar` jest tu tym samym
+       rodzajem decyzji co `Size.Row.Grid` dla edytora w komórce: element wypełnia swój kontener
+       i nie ma prawa go rozpychać. Szerokość 46 zostaje lokalna — to konwencja przycisków okna
+       Windows, a nie rola w katalogu (§4.2.4: rola powstaje z drugiego konsumenta). -->
   <Style Selector="Button.caption">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
+    <!-- ⚠ Promień 0 zostaje: RESET, nie rola. -->
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="Width" Value="46" />
-    <Setter Property="Height" Value="36" />
+    <Setter Property="Height" Value="{DynamicResource Size.TitleBar}" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -313,9 +1081,247 @@
     <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
   </Style>
 
+  <!-- ================================================================================================
+       ⭐⭐ PASMO CHROMY MA JEDNĄ WYSOKOŚĆ — Product Polish M2b krok 8, rozszerzone w kroku 11.
+
+       ⚠ Klasa nazywa się `chrome`, a nie `toolbar`, i to jest poprawka nazwy z kroku 11: obejmuje
+       również DOLNE paski statusu (Data Import), a te nie są paskami narzędzi. `toolbar` nazywał
+       INSTANCJĘ, `chrome` nazywa ROLĘ — pasmo Application Chrome (§0.1.2).
+       ⛔ KAŻDE nowe pasmo chromy musi tę klasę dostać. Krok 8 otagował tylko jedno i użytkownik
+       natychmiast znalazł nieotagowane (Script Executor: „Run jest wyższy niż powinien").
+
+       > „Przycisk może być wizualnie wyróżniony kolorem, ale nie powinien podnosić całego paska."
+
+       ⚠ `Button.primary` (28) stojący w pasku razem z przyciskami ikonowymi (22) rozpychał pasek do
+       swojej wysokości — Execute / Run / Commit „podnosiły" całą chromę i pasek czytał się ciężko.
+       ⭐ Rozwiązanie jest tym samym mechanizmem, którego użyliśmy dla edytora w komórce siatki
+       (§15.6.4) i dla nagłówka `Expandera` (§15.6.9): **KONTENER DEKLARUJE WYSOKOŚĆ SWOICH DZIECI.**
+       Element wypełnia kontener, a nie rozpycha go — niezależnie od tego, jakim jest wariantem.
+
+       ⚠ MUSI STAĆ PO `Button.primary` i po `Button.icon`: przy tej samej trafności wygrywa setter
+       zadeklarowany PÓŹNIEJ, a to właśnie `.primary` ma tu zostać pokonany. ⛔ Nie przenosić wyżej.
+       ⚠ Hierarchię niesie nadal KOLOR (akcent `.primary`) i ikona — traci tylko wysokość, czyli
+       jedyny nośnik, który psuł sąsiadów.
+       ================================================================================================ -->
+  <!-- ⭐⭐ PASMO CHROMY JEST JEDNĄ LINIĄ — i to jest reguła, nie opis (krok 12, zgłoszenie QA:
+       „elementy nie wyglądają jak jedna linia, każdy żyje własnym życiem").
+
+       ⚠ Przyczyna była systemowa: pasmo deklarowało wysokość PRZYCISKÓW (krok 11), ale nic nie
+       deklarowało dla TEKSTU. Każdy `TextBlock` sam decydował o wyrównaniu pionowym — część miała
+       `VerticalAlignment="Center"`, część nic (czyli `Stretch`, przy którym tekst osiada u GÓRY) —
+       więc etykiety, separatory i przycisk stały na trzech różnych liniach bazowych.
+       ⭐ Kontener, który deklaruje wysokość dzieci, musi też deklarować ich LINIĘ. Inaczej wyrównuje
+       pudełka, a nie treść — a użytkownik widzi treść. -->
+  <Style Selector="Border.chrome TextBlock">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.chrome :is(TextBlock)">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.chrome Button">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <!-- ⚠ Pasmo chromy wychodzi też z podłogi SZEROKOŚCI: przycisk paska jest tak szeroki, jak jego
+         treść. Podłoga istnieje dla stopki dialogu, gdzie przyciski stoją w parze i mają się
+         wyrównać — w pasku narzędzi wymusiłaby puste 100 px wokół każdej etykiety. ⚠ Nadal potrzebne
+         po kroku 13, bo `Button.flat` bywa właśnie w pasmie chromy (Data Import → Clear). -->
+    <Setter Property="MinWidth" Value="0" />
+  </Style>
+  <Style Selector="Border.chrome ToggleButton">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+  </Style>
+
   <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource CloseButtonHoverBrush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <!-- ⭐⭐ M5 / L‑1 — FOCUS PRZYCISKU PASKA TYTUŁU SYGNALIZUJE TŁO, NIE RAMKA, i to nie jest wybór
+       estetyczny. Ten wariant ma `BorderThickness="0"` jako świadomy RESET (przyciski systemowe okna),
+       więc setter `BorderBrush` nie namalowałby **niczego** — powstałby styl bezczynny, który dla
+       następnej osoby czyta się jak działające zabezpieczenie (pułapka settings-center §15.7).
+       ⭐ Tło jest też językiem, którym ten wariant JUŻ mówi o stanie: tak działa jego hover.
+
+       ⚠⚠ DWA SETTERY, NIE JEDEN — i wyszło to dopiero z renderu. Samo tło zostawia glif
+       w `ForegroundBrush`, co na niebieskim daje **2,84:1 w Dark**, czyli pod progiem 3:1.
+       `OnAccentBrush` podnosi to do 4,21 (Dark) / 4,53 (Light).
+       ⭐ `TextElement.Foreground` na prezenterze, a nie `Foreground` na przycisku — to wzorzec, który
+       działa dla tych konkretnych przycisków, sprawdzony przez sąsiedni `.close:pointerover` wyżej.
+       ⚠⚠ O PIERWSZEŃSTWIE WOBEC `.close:pointerover` DECYDUJE SPECYFICZNOŚĆ, NIE KOLEJNOŚĆ — pierwsza
+       wersja tego komentarza twierdziła inaczej i była nieprawdziwa. Avalonia rozstrzyga dwa
+       konkurujące STYLE specyficznością selektora (zmierzone w M4.3c, gotcha **#342**), a
+       `Button.caption.close:pointerover` ma dwie klasy wobec jednej tutaj — więc przy jednoczesnym
+       najechaniu i fokusie wygrywa czerwień zamknięcia niezależnie od tego, gdzie ten blok stoi.
+       ⭐ I jest to zachowanie właściwe: hover jest stanem chwilowym i bardziej konkretnym. -->
+  <Style Selector="Button.caption:focus-visible /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource FocusBorderBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <!-- ⭐⭐ PRZEŁĄCZNIK SEGMENTOWY (M4.3c) — JEDEN styl na dziewięć segmentów w dwóch ekranach.
+       Konsumenci: Session Manager (filtry Health-Bara, 3) + Trace Monitor (grupowanie i szybki filtr, 6).
+       Segment jest przyciskiem BEZ własnej geometrii: ramkę i promień niesie otaczający `Border`
+       z `ClipToBounds`, więc segment kasuje oba (`CornerRadius` 0, `BorderThickness` 0) i rysuje
+       wyłącznie tło + etykietę.
+
+       ⚠⚠ CZEGO NIE TRZEBA SIĘ TU BAĆ — I JEST TO WYNIK POMIARU, KTÓRY OBALIŁ MOJĄ WŁASNĄ PRZESŁANKĘ.
+       Wchodząc w ten etap zakładałem, że po przeniesieniu `.seg` na poziom aplikacji o zwycięstwie
+       z bazowym `<Style Selector="Button">` (nadaje `Radius.Surface` + `Border.All`) zacznie decydować
+       KOLEJNOŚĆ w pliku, więc blok musi stać poniżej. ⭐ ZMIERZONE (M4.3c, podsadzenie): bazowy
+       `Button` ustawiający `Padding="99,99"` i postawiony PO tym bloku **nie nadpisał** `8,3`.
+       Avalonia rozstrzyga między stylami **SPECYFICZNOŚCIĄ SELEKTORA, nie pozycją** — selektor
+       z klasą (`Button.seg`) bije goły selektor typu (`Button`) niezależnie od kolejności.
+       ⚠ Mechanizm regresji §19.2 to co innego: tam styl przegrał z WARTOŚCIĄ LOKALNĄ ustawioną
+       na elemencie (`Background` wprost na `Border`), a wartość lokalna bije KAŻDY setter stylu
+       niezależnie od tego, gdzie styl mieszka. ⭐ Dlatego warunkiem bezpieczeństwa tego przeniesienia
+       nie jest pozycja bloku, tylko to, że **żaden z dziewięciu segmentów nie niesie wartości lokalnej**
+       dla ustawianych tu właściwości — sprawdzone.
+
+       ⛔ Mimo to blok zostaje tutaj, przy rodzinie `Button.*`: to porządek, a nie zabezpieczenie —
+       i nie należy opisywać go jako zabezpieczenie.
+
+       Test BEHAWIORALNY
+       `DesignTokenApplicationTests.SegmentedButton_TakesItsGeometryFromTheSharedStyle_NotFromTheBaseButton`
+       mierzy ZREALIZOWANY przycisk, bo realnym ryzykiem przeniesienia jest to, że styl **przestanie
+       docierać** (M4.2b: pięciu zielonych strażników źródłowych opisywało pusty ekran). Towarzyszy mu
+       `NoView_DeclaresItsOwnSegmentedButtonStyle` — kopia lokalna w widoku wygrałaby ze wspólnym stylem
+       przez bliskość w drzewie i przywróciłaby rozjazd.
+
+       ⚠ Czego ten styl świadomie NIE ustawia: `MinHeight`. Segment stoi w pasku `Border.chrome`,
+       a `Border.chrome Button` nadaje mu `Size.ControlToolbar` (22) — czyli WYSOKOŚĆ ROZSTRZYGA
+       KONTENER (reguła #10), tak samo jak dla pozostałych przycisków paska. Zmierzone, nie założone.
+
+       ⭐ POZIOM 8, NIE 10 — rozstrzygnięcie rozjazdu, który ten etap zastał. Dwie lokalne kopie tego
+       stylu różniły się jedną wartością: Session `8,3`, Trace `10,3`, przy komentarzu Session
+       deklarującym wprost „same segmented language as the Activity Monitor toolbar" — czyli autor
+       ZAPISAŁ INTENCJĘ, a kod jej nie dotrzymywał (kształt #335 ze świadkiem w postaci komentarza).
+       Pion był w obu identyczny, więc sporny był wyłącznie poziom. Wybrano gęstszy wariant na
+       podstawie R18 („przy równej czytelności wygrywa gęstszy"), a czytelność jest tu równa: różnica
+       to 2 px odstępu poziomego na etykiecie w pasku narzędzi.
+       ⚠ Wartość jest LITERAŁEM celowo: `Pad.Cell` (8,3) i `Pad.MenuItem` (10,3) niosą dokładnie te
+       dwie liczby, ale opisują KOMÓRKĘ SIATKI i WIERSZ MENU — segment nie jest ani jednym, ani drugim,
+       a rola, która do elementu nie pasuje, jest gorsza od wartości lokalnej z powodem (R12).
+       ⛔ Nie tworzono też roli `Pad.Segment`: miałaby jednego konsumenta, czyli legalizowałaby wartość
+       zamiast opisywać element — wariant odrzucony z tego samego powodu co `Radius.Card` w M4.2 (B2). -->
+  <Style Selector="Button.seg">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <!-- ⚠ Promień 0 zostaje literałem, ŚWIADOMIE: to RESET, a nie rola — krok 0 M2c ratyfikował,
+         że zeru token nie jest potrzebny (§3.6 handovera). -->
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+  <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+  <Style Selector="Button.seg.active">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- ⭐ PASEK ZAKŁADEK ROZSTRZYGA WIELKOŚĆ SWOICH DZIECI — szóste wystąpienie decyzji architektonicznej
+       §17.2/2, w kształcie identycznym z regułą `DataGridCell Button` i z tego samego powodu.
+
+       ⚠⚠ ZMIERZONE w M3.1a (§19.1), nie wydedukowane: przycisk aktywujący zakładkę nosi `Classes="flat"`
+       dla WYGLĄDU, więc selektor `Button.primary, Button.flat` nadawał mu GEOMETRIĘ AKCJI DIALOGOWEJ —
+       `MinHeight` 28 (`Size.ControlProminent`) i `MinWidth` 100 (`Size.ActionMinWidth`). Sonda headless
+       zmierzyła zakładkę przed poprawką: H=30, W=132, przycisk H=28 W=108.
+
+       ⭐ To jest lekcja §17.2/3 („reguła musi być sformułowana pozytywnie") w drugim wydaniu: bazowy
+       `MinWidth` urósł raz strzałkę drzewa metadanych z 20 do 100 px i dostała ona wtedy jawną ucieczkę
+       (`Button.sidebar-chevron` ma własne `Width`/`Height`). Przycisk zakładki jej NIE dostał, a M2c nie
+       mógł tego zobaczyć — jego liczniki mierzyły wyłącznie `FontSize`/`CornerRadius`/`FontFamily`.
+
+       ⚠ Podłoga szerokości nie jest kosmetyką: `Size.ActionMinWidth` istnieje po to, żeby `Save` i `Cancel`
+       miały równą szerokość w stopce dialogu. Na pasku zakładek oznaczała, że KAŻDA zakładka zajmuje ≥132 px
+       niezależnie od długości nazwy — czyli mniej zakładek w wierszu i szybsze przepełnienie paska
+       wielowierszowego (D5/D7), co działa wprost przeciw decyzji D6/§8.1 chroniącej czytelność nazw.
+
+       ⚠⚠ POZYCJA W PLIKU JEST CZĘŚCIĄ REGUŁY, nie porządkiem alfabetycznym. Styl stoi PO wszystkich
+       wariantach `Button.*`, bo przy równej trafności rozstrzyga kolejność deklaracji (§17.5/5). Postawiony
+       wcześniej pokonywał `Button.flat` (zadeklarowany wyżej), ale PRZEGRYWAŁ z `Button.icon`. ⛔ Nie
+       przenosić w górę pliku.
+
+       ⚠⚠ SELEKTOR CELUJE W `.flat`, A NIE W KAŻDY `Button` — i to jest korekta wykonana PO POMIARZE, nie
+       zawężenie z ostrożności. Pierwsza wersja zerowała geometrię wszystkim przyciskom paska i zmierzone
+       skutki były dwa: zakładka faktycznie zeszła do 26, ale przycisk zamykania stracił wysokość CHROMY
+       (`Size.ControlToolbar` = 22) i zszedł do 16 px — czyli reguła naprawiła jeden cel kliknięcia i zepsuła
+       drugi. ⭐ Defektem nigdy nie było „przycisk w pasku ma wysokość"; defektem było, że przycisk zakładki
+       nosił geometrię AKCJI DIALOGOWEJ. Przycisk zamykania jest ikoną chromy i 22 px to jego właściwa
+       wysokość (R1 — komfort ośmiu godzin pracy). Zdejmujemy dokładnie to, co nie należy.
+
+       Wysokość wiersza deklaruje sam kafelek zakładki (`Size.Row.Tab`); przyciski ją PRZYJMUJĄ. -->
+  <Style Selector="Border.tab-strip Button.flat">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <!-- ⭐ M3.3a — trzeci setter tej samej reguły i z tego samego powodu. `Button.flat` nadaje
+         `BorderThickness = Border.All` (ramka wariantu dialogowego); kafelek zakładki własną ramkę
+         już ma (`BorderThickness="0,0,1,0"` na `Border`ze zakładki), więc ramka przycisku rysowałaby
+         drugi obrys wewnątrz pierwszego. Stało to jako wartość lokalna w szablonie — tu jest
+         DEKLARACJĄ KONTENERA (§17.2/2), a nie wyjątkiem w widoku.
+         ⚠ `0` nie jest rolą i nie potrzebuje tokenu: „brak ramki" to nieobecność, nie wartość
+         z katalogu (`Border.*` nazywa krawędzie, które SĄ). -->
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- ⭐ WSKAŹNIK AKTYWNEJ ZAKŁADKI — pasek akcentu nad zakładką wybraną (styl Rider/DataGrip).
+       Dwa stany, OBA jako setter stylu, i to jest cała istota tego bloku.
+
+       ⚠⚠ REGRESJA, KTÓRA TU MIESZKAŁA (M3.1a → naprawione w §19.2). Wskaźnik stał w szablonie zakładki
+       z LOKALNYM `Background="Transparent"`, a akcent próbował nadać mu setter stylu. **Wartość lokalna
+       bije setter stylu**, więc akcent nie malował się NIGDY — aktywna zakładka została wyłącznie
+       z podmianą tła i pogrubieniem etykiety. ⭐ To jest dosłownie teza M2c, popełniona w pierwszej
+       iteracji po jego zamknięciu: dopóki wartość lokalna stoi w widoku, żadna reguła systemu nie działa.
+
+       ⭐ DLATEGO STAN SPOCZYNKOWY TEŻ JEST SETTEREM, a nie wartością w widoku: gdyby „przezroczysty"
+       wrócił do szablonu jako atrybut, defekt odtworzyłby się natychmiast i znowu bezgłośnie. Reguła jest
+       sformułowana pozytywnie (§17.2/3) — wskaźnik ZAWSZE istnieje i ZAWSZE ma tło; zmienia się barwa.
+
+       ⚠ Wskaźnik musi być obecny także wtedy, gdy nie jest aktywny: od M3.1a jego wysokość niesie `Height`
+       elementu (`Size.TabIndicator`), a nie sztywny wiersz siatki, więc `IsVisible="False"` zwinęłoby wiersz
+       i aktywna zakładka byłaby o 2 px wyższa od nieaktywnej.
+
+       ⚠ Blok stoi tutaj, a nie w `Border.Styles` szablonu, bo reguła wewnątrz szablonu w `MainWindow.axaml`
+       jest NIEOSIĄGALNA DLA TESTU (headless test konstruujący `MainWindow` zawiesza suite — #94/#226/#286).
+       Tutaj zapina ją `TabStripPresentationTests` na gołym `Window`. ✅ Pozostałe style `active-tab` dołączyły
+       tu w M3.3a (§19.22) — cały wygląd zakładki aktywnej mieszka od tego momentu w jednym miejscu. -->
+  <Style Selector="Border.tab-indicator">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.active-tab Border.tab-indicator">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- ⭐ KAFELEK ZAKŁADKI ROBOCZEJ — pozostałe dwa stany, przeniesione z `Border.Styles` szablonu w M3.3a.
+       Razem ze wskaźnikiem wyżej dają PEŁNY opis zakładki wybranej w jednym miejscu: tło kafelka
+       podnosi się do tła dokumentu, etykieta idzie na SemiBold i pełny kontrast, a nad wszystkim
+       stoi 2 px akcentu. Wcześniej trzy reguły opisujące jeden stan leżały w dwóch plikach.
+       ⚠ Powód przeniesienia jest ten sam co przy wskaźniku i jest nim TESTOWALNOŚĆ, nie porządek:
+       reguła w `Border.Styles` wewnątrz `MainWindow.axaml` jest nieosiągalna dla jakiegokolwiek testu.
+
+       ⛔⛔ STAN SPOCZYNKOWY JEST SETTEREM, I TO JEST CAŁA ISTOTA TEGO BLOKU — nie porządek, tylko warunek
+       działania. Kafelek niósł `Background="{DynamicResource PanelBrush}"` jako WARTOŚĆ LOKALNĄ; przy
+       samym przeniesieniu setter `.active-tab` przegrywał z nią i podmiana tła przestawała działać —
+       ZMIERZONE testem w trakcie iteracji, nie wywnioskowane. To dokładnie ta sama regresja, którą §19.2
+       naprawiała na wskaźniku, powtórzona jeden poziom wyżej. ⭐ Skoro obie strony są setterami, reguła
+       jest sformułowana POZYTYWNIE (§17.2/3): kafelek ZAWSZE ma tło, zmienia się wyłącznie które.
+
+       ⚠ Selektor kotwiczy na `workspace-tab`, a nie na samym `active-tab`, i to też jest celowe: klasa
+       stanu opisuje STAN, a klasa komponentu mówi, CZEGO ten stan dotyczy. Bez kotwicy reguła spoczynkowa
+       (`Background = PanelBrush`) trafiłaby w KAŻDY `Border` aplikacji — czyli stan spoczynkowy zakładki
+       przemalowałby pół produktu. ⛔ Nie skracać selektora. -->
+  <Style Selector="Border.workspace-tab">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+  </Style>
+  <Style Selector="Border.workspace-tab.active-tab">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+  </Style>
+  <Style Selector="Border.workspace-tab.active-tab TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
   </Style>
 
   <Style Selector="TabControl">
@@ -324,13 +1330,20 @@
   </Style>
 
   <Style Selector="TabItem">
-    <Setter Property="FontSize" Value="13" />
+    <!-- ⭐ K9 ZAMKNIĘTA (M4, decyzja użytkownika C): `Text.Compact` (11), jak każda inna zakładka.
+         ⚠⚠ Pierwotny wpis rejestru wskazywał ZŁY ELEMENT — mówił o „etykiecie dolnego panelu
+         i pod‑zakładek", a te przeszły na `Text.Compact` już w M2c/M3. Trzynastka została na stylu
+         BAZOWYM, który obsługuje **10 zakładek**: osiem w `AddFieldDialog` i dwie w `NewTableTabView`.
+         ⭐ To trzecia populacja „zakładek" w produkcie — po pasku dokumentów i po dolnym panelu.
+         §18.R sam ostrzegał, że rejestr indeksuje po NAZWIE, a „zakładka" jest nośnikiem kilku rzeczy;
+         okazało się, że trzech. -->
+    <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     <Setter Property="Padding" Value="14,8" />
     <Setter Property="MinHeight" Value="0" />
   </Style>
 
   <!-- ── Active-tab design language (shared by bottom-tab + sub-tab) ─────────
-       Active tab = a raised, filled segment: ElevatedPanel background + SemiBold +
+       Active tab = a raised, filled segment: ChromeStrong background + SemiBold +
        full-contrast foreground, rounded corners. NO accent fill / outline / underline
        (accent is reserved for connection name / DEV MODE / toolbar actions). Inactive
        tabs read subtle on a transparent background. Height is identical in every state
@@ -339,14 +1352,19 @@
 
   <!-- Bottom-panel + main editor tabs (Results / Messages / Output, Editor / Fields / …). -->
   <Style Selector="TabItem.bottom-tab">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     <Setter Property="Padding" Value="8,4" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
   <Style Selector="TabItem.bottom-tab /template/ Border#PART_LayoutRoot">
-    <Setter Property="CornerRadius" Value="4" />
+    <!-- ⭐ K10 ZAMKNIĘTA (M4, decyzja użytkownika D): własna rola `Radius.Tab`, nie `Radius.Chip`.
+         ⚠ Obie niosą 4 i to jest poprawne — §3.3 katalogu mówi wprost, że dwie role o tej samej
+         wartości to dwie niezależne decyzje, które mogą się rozejść. Sporna była NAZWA, nie liczba:
+         zakładka chipem nie jest, a R12 zabrania wpisywać rolę, która do elementu nie pasuje, tylko
+         po to, żeby zniknęła wartość lokalna. Zmiana jest wizualnie zerowa. -->
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Tab}" />
   </Style>
 
   <Style Selector="TabItem.bottom-tab:pointerover /template/ Border#PART_LayoutRoot">
@@ -354,7 +1372,7 @@
   </Style>
 
   <Style Selector="TabItem.bottom-tab:selected /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
 
   <Style Selector="TabItem.bottom-tab:selected">
@@ -372,14 +1390,15 @@
        SAME active-state language as bottom-tab — elevated fill + SemiBold, no accent,
        no border, no underline. .empty greys an empty group's label. -->
   <Style Selector="TabItem.sub-tab">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     <Setter Property="Padding" Value="11,5" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
   <Style Selector="TabItem.sub-tab /template/ Border#PART_LayoutRoot">
-    <Setter Property="CornerRadius" Value="4" />
+    <!-- ⭐ Jak wyżej — `Radius.Tab`, drugi konsument tej roli (K10 zamknięta w M4). -->
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Tab}" />
   </Style>
 
   <Style Selector="TabItem.sub-tab.empty">
@@ -391,7 +1410,7 @@
   </Style>
 
   <Style Selector="TabItem.sub-tab:selected /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
 
   <Style Selector="TabItem.sub-tab:selected">
@@ -419,15 +1438,42 @@
     <Setter Property="Fill" Value="{DynamicResource HoverOverlayBrush}" />
   </Style>
 
-  <!-- Compact rows: smaller font, tighter cell padding for dense result sets. -->
+  <!-- ================================================================================================
+       ⭐ DATAGRID STANDARD — §8.4 specyfikacji, Product Polish M2b krok 7 (ostatni krok etapu).
+
+       Specyfikacja żąda JEDNEGO standardu dla wszystkich siatek i wylicza, co ma definiować:
+       wysokość nagłówków · wysokość wierszy · wysokość edytorów · wysokość checkboxów ·
+       wyrównanie tekstu · odstępy · zaznaczenie aktywnego wiersza · zachowanie podczas edycji.
+
+       ⚠ TEN KROK NIE JEST PRZEBUDOWĄ — jest DOMKNIĘCIEM. Sześć z ośmiu punktów było już zrobionych,
+       tylko rozproszonych po etapie i wyrażonych LICZBAMI zamiast rolami:
+         · wysokość checkboxów  → krok 1 (własny szablon, `Size.Checkbox`)
+         · wysokość edytorów    → kroki 5.2 i 5.4 (`DataGridCell TextBox` / `Button`)
+         · zaznaczenie wiersza  → istniejące `SelectionBrush` na `Rectangle#BackgroundRectangle`
+         · zachowanie w edycji  → konsekwencja dwóch powyższych: edytor bierze wysokość WIERSZA,
+                                   więc wejście w edycję nie rusza układu (Zero Layout Shift)
+       Brakowało dwóch: **zadeklarowanej wysokości wiersza i nagłówka**. Reszta to zamiana liczb
+       (11 · `8,3` · `8,4` · `SemiBold`) na role, które i tak niosły dokładnie te wartości.
+
+       ⚠ `MinHeight` wiersza to PODŁOGA, nie sztywna wysokość — wyższa zawartość nadal rozpycha
+       wiersz. Dotąd stało tu `0`, czyli „siatka nie ma standardu, ma wynik pomiaru zawartości":
+       identyczne dane dawały identyczne wiersze przypadkiem, a nie z decyzji.
+       ================================================================================================ -->
   <Style Selector="DataGridCell">
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Grid.Weight}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Cell}" />
+    <!-- ⚠ Komórka nie ma własnej wysokości — daje ją WIERSZ. Dwa źródła wysokości w jednym miejscu
+         zawsze wygrywa większe, więc jedno z nich musi być zerowe (ta sama reguła co `Pad.Control`
+         z zerowym pionem w kroku 5.2). -->
     <Setter Property="MinHeight" Value="0" />
+    <!-- „Wyrównanie tekstu" z §8.4: przy podłodze wiersza wyższej niż zawartość tekst bez
+         wyśrodkowania osiadłby przy górnej krawędzi komórki. -->
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
   <Style Selector="DataGridRow">
-    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Grid}" />
   </Style>
 
   <!-- Zebra stripes: tint every other row. Avalonia 12's DataGrid doesn't expose
@@ -452,12 +1498,17 @@
   <!-- Column headers consistent with the rest of the UI: elevated panel background,
        subtle border, themed foreground. Default FluentTheme picks SystemAccent for
        hover/press which clashes with the dark blue accent. -->
+  <!-- ⚠ Nagłówek jest o stopień WYŻSZY od wiersza (`Size.Row.Header` 24 vs `Size.Row.Grid` 22) i to
+       jest cała jego rama: czyta się jako nagłówek bez potrzeby ramki, kreski ani innego tła
+       niż chroma. Dwie role wysokości, jedna decyzja (§5). -->
   <Style Selector="DataGridColumnHeader">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Header}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.GridHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.GridHeader.Weight}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Cell}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="SeparatorBrush" Value="{DynamicResource BorderBrush}" />
   </Style>
 
@@ -611,13 +1662,15 @@
        ============================================================================================ -->
 
   <Style Selector="ContextMenu">
-    <Setter Property="Background" Value="{DynamicResource ElevatedPanelBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
+    <!-- ⚠ Promień 4 zostaje, ŚWIADOMIE: menu kontekstowe unosi się nad treścią, a `Radius.Surface`
+             niesie 3. Decyzja „powierzchnia unosząca się: 3 czy 4" → przegląd §13.3. -->
     <Setter Property="CornerRadius" Value="4" />
     <!-- A 4px band top and bottom so the first and last row do not touch the border. -->
     <Setter Property="Padding" Value="0,4" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
   </Style>
 
   <Style Selector="ContextMenu, MenuItem">
@@ -627,13 +1680,13 @@
   <!-- The row. 12px type (down from 14) and a symmetric 3px vertical pad bring a row from 27px to ~22px
        without crowding the text; MinHeight keeps an icon-less row exactly as tall as one with an icon. -->
   <Style Selector="MenuItem">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
     <Setter Property="Padding" Value="10,3" />
     <Setter Property="MinHeight" Value="22" />
   </Style>
 
   <Style Selector="MenuItem /template/ Border#PART_LayoutRoot">
-    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
     <Setter Property="Margin" Value="3,0" />
   </Style>
 
@@ -671,7 +1724,7 @@
        template; the left margin guarantees a gap even when a label is long. -->
   <Style Selector="MenuItem /template/ TextBlock#PART_InputGestureText">
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Compact.Size}" />
     <Setter Property="Margin" Value="24,0,0,0" />
   </Style>
 

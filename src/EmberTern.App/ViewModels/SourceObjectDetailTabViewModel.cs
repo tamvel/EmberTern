@@ -34,7 +34,7 @@ namespace EmberTern.App.ViewModels;
 /// param/header collections. View Detail is deliberately NOT on this base — a view has no
 /// PSQL body / variables / params, so it is a different family.
 /// </summary>
-public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IFieldRowOwner
+public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IFieldRowOwner, IDependencyNavigator
 {
     protected readonly FirebirdTableDetailReader? Reader;
     protected readonly FirebirdDdlReader? DdlReader;
@@ -505,10 +505,29 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
 
     // ─── Compile ────────────────────────────────────────────────────────────
 
-    /// <summary>Raised after a successful CREATE of a new object — carries the parsed
-    /// object name (or null). The owner refreshes the tree, closes the New tab and
-    /// reopens the real object.</summary>
-    public event Action<string?>? ObjectCreated;
+    /// <summary>
+    /// What a successful compile actually produced. ⭐ The two cases go through ONE event because from the
+    /// tab's point of view they are the same act: <b>an object now exists under a name this tab is not bound
+    /// to</b>, so the owner must refresh the tree, close this tab and open that object. The payload says which
+    /// case it was, because only the WORDING differs.
+    /// </summary>
+    /// <param name="Name">The name the statement created, as parsed from the statement that ran.</param>
+    /// <param name="PreviousName">
+    /// The name this tab was loaded under, when the compile was a RENAME attempt; <c>null</c> for an ordinary
+    /// create. ⚠ Non-null means a second object now exists — the original was NOT removed, because Firebird
+    /// has no rename for these kinds (measured on FB 5.0: <c>ALTER PROCEDURE … TO …</c> is <c>-104 Token
+    /// unknown</c>). The user must be told all three facts.
+    /// </param>
+    public sealed record ObjectCompileOutcome(string? Name, string? PreviousName = null)
+    {
+        /// <summary>The compile created a SECOND object rather than altering the one this tab was showing.</summary>
+        public bool IsRename => !string.IsNullOrEmpty(PreviousName);
+    }
+
+    /// <summary>Raised after a successful CREATE of an object under a name this tab is not bound to — a new
+    /// object, or a rename (see <see cref="ObjectCompileOutcome"/>). The owner refreshes the tree, closes this
+    /// tab and opens the object that now exists.</summary>
+    public event Action<ObjectCompileOutcome>? ObjectCreated;
 
     /// <summary>Raised after a successful Compile of an EXISTING object — the owner offers to
     /// recompile its dependents (Part 2). Not raised in the New flow (a new object has no
@@ -551,16 +570,17 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
             return;
         }
 
-        // ⭐ CHANGE SAFETY — the last thing checked before anything is written.
-        //
-        // Placed here, after every cheap refusal, for two reasons: it costs a catalog round trip, and the
-        // earlier refusals have their own settled wording that tests pin. Placed BEFORE ExecuteAsync because
-        // that call auto-commits — there is no "after" in which to reconsider.
-        //
-        // A refusal sets ErrorMessage and returns, so it travels the same route as a failed compile: the
-        // banner shows it, and SaveAsync's adapter reads "there is an error" as save-failed, which is what
-        // stops the save-and-close WorkGuard from discarding the buffer it could not write.
-        var safety = await CheckChangeSafetyAsync(sql, cancellationToken).ConfigureAwait(true);
+        // ⭐⭐ IS THIS A RENAME? Asked BEFORE change safety, because the answer decides WHICH safety question is
+        // the right one. A compile whose statement names a different object than this tab loaded is not an
+        // ALTER of this object at all — Firebird will CREATE a second one. Checking "is the definition I
+        // loaded still there?" would then re-read the ORIGINAL, find it unchanged, and answer Safe about an
+        // object the statement does not touch (measured 2026-08-07: that is exactly how a rename onto an
+        // EXISTING name silently overwrote it — the gate was not bypassed, it was asked about the wrong
+        // object).
+        var renameTarget = ResolveRenameTarget(sql);
+        var safety = renameTarget is null
+            ? await CheckChangeSafetyAsync(sql, cancellationToken).ConfigureAwait(true)
+            : await CheckRenameSafetyAsync(renameTarget, cancellationToken).ConfigureAwait(true);
         if (!safety.MayProceed)
         {
             ErrorMessage = safety.RefusalMessage;
@@ -585,13 +605,67 @@ public abstract partial class SourceObjectDetailTabViewModel : ViewModelBase, IU
 
         if (IsNew)
         {
-            ObjectCreated?.Invoke(TryParseName(sql));
+            ObjectCreated?.Invoke(new ObjectCompileOutcome(TryParseName(sql)));
+            return;
+        }
+
+        if (renameTarget is not null)
+        {
+            // ⚠ Deliberately NOT followed by RefreshAsync(): this tab is bound to the ORIGINAL name, so a
+            // reload would fetch the object the user just renamed AWAY from and the editor would snap back to
+            // it — the reported "Compile did nothing" symptom. The owner closes this tab and opens the object
+            // that now exists, and tells the user what happened to the original.
+            ObjectCreated?.Invoke(new ObjectCompileOutcome(renameTarget, LoadedObjectName));
             return;
         }
 
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
         CompiledExistingObject?.Invoke();
     }
+
+    /// <summary>
+    /// The name the compile would create, when that is NOT the object this tab is bound to; <c>null</c> for an
+    /// ordinary compile of the loaded object.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Compares against <see cref="LoadedObjectName"/> — the immutable name the tab was OPENED with — never
+    /// against <see cref="ObjectDisplayName"/>, which follows the editable field and therefore already carries
+    /// the NEW name by the time this runs. That conflation is the defect: one property answered both "what do
+    /// we call this to the user" and "which object is this tab", and those stop being the same answer the
+    /// moment the name becomes editable.
+    /// </remarks>
+    internal string? ResolveRenameTarget(string sql)
+    {
+        if (IsNew) return null;
+        var target = TryParseName(sql);
+        if (string.IsNullOrWhiteSpace(target)) return null;
+        var loaded = LoadedObjectName;
+        if (string.IsNullOrWhiteSpace(loaded)) return null;
+        // Firebird folds unquoted identifiers to upper case, so the comparison is case-insensitive. A tab
+        // opened on "MYPROC" and a statement naming "myproc" address the same object.
+        return string.Equals(target.Trim(), loaded.Trim(), StringComparison.OrdinalIgnoreCase) ? null : target.Trim();
+    }
+
+    /// <summary>
+    /// A rename is a CREATE as far as safety goes: the question is whether <paramref name="targetName"/> is
+    /// free, because <c>CREATE OR ALTER</c> would otherwise overwrite somebody else's object — the very thing
+    /// <see cref="ObjectChangeGate"/> exists to refuse. The original object is not at risk here (nothing
+    /// touches it), so its definition is not re-read.
+    /// </summary>
+    private Task<ObjectChangeCheck> CheckRenameSafetyAsync(string targetName, CancellationToken cancellationToken)
+    {
+        var probe = ObjectExistsProbe;
+        return _changeGate.CheckCreateAsync(
+            targetName,
+            probe is null ? null : ct => probe(targetName, ct),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The name this tab was OPENED with — its identity, fixed for the tab's life. Distinct from
+    /// <see cref="ObjectDisplayName"/>, which is a label and follows the editable name field.
+    /// </summary>
+    protected abstract string LoadedObjectName { get; }
 
     /// <summary>
     /// Asks the gate whether <paramref name="sql"/> may be written. Two different questions, because the two

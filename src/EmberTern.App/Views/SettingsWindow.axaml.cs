@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -56,10 +57,23 @@ public partial class SettingsWindow : Window
         AddHandler(TextInputEvent, OnNumericSettingTextInput, RoutingStrategies.Tunnel);
     }
 
-    public SettingsWindow(PreferencesService preferences, SettingsPortability portability)
+    /// <param name="initialCategoryId">
+    /// Kategoria, na której okno ma się otworzyć — dla skrótu „Ustawienia zakładek…" z menu kontekstowego
+    /// zakładki (D8 / M3.3c). ⚠ Nieznane albo puste id znaczy „zostaw domyślną": skrót ma zaprowadzić na
+    /// stronę, a nie zepsuć okno, gdy kategoria zostanie kiedyś przemianowana.
+    /// </param>
+    public SettingsWindow(
+        PreferencesService preferences, SettingsPortability portability, string? initialCategoryId = null)
         : this()
     {
         var vm = new SettingsCenterViewModel(preferences, portability);
+
+        if (!string.IsNullOrEmpty(initialCategoryId)
+            && vm.Categories.FirstOrDefault(
+                   c => string.Equals(c.Id, initialCategoryId, StringComparison.Ordinal)) is { } category)
+        {
+            vm.SelectedCategory = category;
+        }
 
         // The view supplies the modal owner, the shell and the pickers — the view model supplies everything that
         // can be decided without them. Same request/callback shape the data ExportDialog already uses.

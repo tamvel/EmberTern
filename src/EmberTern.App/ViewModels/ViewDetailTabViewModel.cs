@@ -26,7 +26,7 @@ namespace EmberTern.App.ViewModels;
 /// (same <see cref="FirebirdTableDetailReader"/> read methods, same
 /// <see cref="TableDetailTabViewModel.BuildDependencyTree"/>), not via inheritance.
 /// </summary>
-public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor
+public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource, ISavableObjectEditor, IDependencyNavigator
 {
     // Mirrors TableDetail's data-preview knobs — a view's Data tab uses the
     // exact same paged SELECT * infrastructure.
@@ -1045,6 +1045,23 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
     }
 
     public bool CanExportData => _reader is not null && DataResult is { HasResultSet: true };
+
+    /// <summary>
+    /// Clipboard text for the grid's Copy cell / row / row with headers / all with headers actions, through
+    /// the one shared <see cref="GridCopyText"/> builder every data grid uses. Returns null when there is
+    /// nothing to copy; the view writes the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ "All" is this grid's current PAGE — the rows it is showing — because a view's data is server-paged
+    /// and no other row set exists in memory to mean anything else.
+    /// </remarks>
+    public string? BuildCopyText(CopyGridMode mode, object?[]? row, int columnIndex)
+        => GridCopyText.Build(
+            mode,
+            DataResult?.Columns ?? Array.Empty<QueryColumn>(),
+            DataResult?.Rows ?? Array.Empty<object?[]>(),
+            row,
+            columnIndex);
 
     /// <summary>Builds the shared-framework export source for the View's Data grid (server-paged):
     /// current page for CurrentView; a page-by-page re-fetch (current filter + order) for AllRows.</summary>

@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:EmberTern.App"
         xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:ae="using:AvaloniaEdit"
         xmlns:controls="using:EmberTern.App.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -36,9 +37,19 @@
         </StackPanel>
         <StackPanel Grid.Row="0" Grid.Column="2" Spacing="4" MinWidth="220">
           <TextBlock Text="{x:Static app:UiStrings.ForeignKeySourceTableLabel}" Classes="field-label" />
+          <!-- ⭐⭐ M4.4 — trzeci element grupy „TextBlock 13 px", i JEDYNY, w którym odziedziczony komentarz
+               był nieprawdziwy: to nie jest „treść komunikatu", tylko nazwa obiektu bazy pisana monospace.
+               Nasuwało to rolę Text.Code (niesie 13, wygląd bez zmiany) — i pomiar rodziny to ODRZUCIŁ.
+               ⭐ Zmierzone: wszystkie 25 konsumentów Text.Code to pełnowymiarowe edytory kodu, a spośród
+               ~48 elementów monospace SPOZA edytora ten był JEDYNYM z literałem — pozostałe czytają role
+               tekstu interfejsu. Najbliższy sąsiad jest w dialogu obok: AddFieldDialog pokazuje nazwę typu
+               bazy, monospace, na tej samej roli Text.Application.
+               ⭐ Więc to nie jest wprowadzenie reguły, tylko dokończenie tej, którą produkt już ma:
+               Text.Code opisuje EDYTOR, a monospace poza edytorem bierze rolę tekstu.
+               ⚠ Widoczny skutek: nazwa tabeli maleje o 1 px i zrównuje się z podpisem pola nad nią. -->
           <TextBlock Text="{Binding SourceTableName}"
                      FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                     FontSize="13"
+                     FontSize="{DynamicResource Text.Application.Size}"
                      VerticalAlignment="Center" />
         </StackPanel>
       </Grid>
@@ -52,13 +63,13 @@
       <Border Grid.Column="0"
               BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
+              CornerRadius="{DynamicResource Radius.Surface}">
         <Grid RowDefinitions="Auto,*">
           <Border Grid.Row="0"
                   Background="{DynamicResource PanelBrush}"
                   Padding="8,4">
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeySourceFieldsLabel}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        FontWeight="SemiBold" />
           </Border>
           <ListBox Grid.Row="1"
@@ -71,7 +82,7 @@
                      ContentPresenter doesn't treat "_" in the field name as an
                      access-key mnemonic (ID_NAGL → IDNAGL). See gotcha #76. -->
                 <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
-                  <TextBlock Text="{Binding Name}" FontSize="11" />
+                  <TextBlock Text="{Binding Name}" FontSize="{DynamicResource Text.Compact.Size}" />
                 </CheckBox>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -87,13 +98,13 @@
       <Border Grid.Column="2"
               BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
+              CornerRadius="{DynamicResource Radius.Surface}">
         <Grid RowDefinitions="Auto,Auto,*">
           <Border Grid.Row="0"
                   Background="{DynamicResource PanelBrush}"
                   Padding="8,4">
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsLabel}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        FontWeight="SemiBold" />
           </Border>
           <StackPanel Grid.Row="1" Margin="8,6,8,4" Spacing="4">
@@ -103,7 +114,7 @@
                       Watermark=""
                       HorizontalAlignment="Stretch" />
             <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsHint}"
-                       FontSize="10"
+                       FontSize="{DynamicResource Text.Caption.Size}"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="0,4,0,0" />
@@ -116,7 +127,7 @@
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:SelectableFieldViewModel">
                 <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}">
-                  <TextBlock Text="{Binding Name}" FontSize="11" />
+                  <TextBlock Text="{Binding Name}" FontSize="{DynamicResource Text.Compact.Size}" />
                 </CheckBox>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -160,18 +171,18 @@
       <TextBlock Text="{x:Static app:UiStrings.ForeignKeyDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
-              CornerRadius="3">
-        <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
-                 IsReadOnly="True"
-                 AcceptsReturn="True"
-                 TextWrapping="NoWrap"
-                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 FontSize="11"
-                 BorderThickness="0"
-                 Padding="8,6"
-                 MinHeight="80"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+              CornerRadius="{DynamicResource Radius.Surface}">
+        <ae:TextEditor x:Name="DdlEditor"
+                       ShowLineNumbers="False"
+                       IsReadOnly="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="{DynamicResource Text.Compact.Size}"
+                       Padding="8,6"
+                       MinHeight="80"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
       </Border>
     </StackPanel>
 
@@ -181,7 +192,7 @@
             IsVisible="{Binding HasValidationMessage}">
       <TextBlock Text="{Binding ValidationMessage}"
                  Classes="error"
-                 FontSize="12"
+                 FontSize="{DynamicResource Text.Application.Size}"
                  TextWrapping="Wrap" />
     </Border>
 

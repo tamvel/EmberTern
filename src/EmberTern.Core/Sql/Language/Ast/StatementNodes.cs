@@ -30,7 +30,7 @@ public sealed class SelectStatement : SqlStatement, IExecutableStatement
 }
 
 /// <summary><c>INSERT …</c> (INTO … VALUES / SELECT / DEFAULT VALUES).</summary>
-public sealed class InsertStatement : SqlStatement, IExecutableStatement
+public sealed class InsertStatement : SqlStatement, IExecutableStatement, IColumnValueTarget
 {
     private readonly SqlNode[] _children;
 
@@ -39,13 +39,26 @@ public sealed class InsertStatement : SqlStatement, IExecutableStatement
         int length,
         IReadOnlyList<SqlToken> tokens,
         QueryNode? sourceQuery = null,
-        IReadOnlyList<SqlNode>? subqueries = null)
+        IReadOnlyList<SqlNode>? subqueries = null,
+        string? targetTable = null,
+        IReadOnlyList<ColumnValue>? columnValues = null)
         : base(start, length, tokens)
     {
         SourceQuery = sourceQuery;
         Subqueries = subqueries ?? Array.Empty<SqlNode>();
+        TargetTable = targetTable;
+        ColumnValues = columnValues ?? Array.Empty<ColumnValue>();
         _children = AstChildren.Of(sourceQuery, subqueries);
     }
+
+    /// <inheritdoc />
+    public string? TargetTable { get; }
+
+    /// <summary><inheritdoc cref="IColumnValueTarget.ColumnValues" path="/summary"/>
+    /// <para>Paired POSITIONALLY from <c>(cols)</c> against <c>VALUES (…)</c>. Empty for
+    /// <c>INSERT … SELECT</c> (the values are a query's columns, not spans) and for an insert written without a
+    /// column list.</para></summary>
+    public IReadOnlyList<ColumnValue> ColumnValues { get; }
 
     /// <summary>The source query of an <c>INSERT … SELECT / WITH … SELECT</c> (Etap 6.9 / B3.1) — a real
     /// <see cref="QueryNode"/>. Null for an <c>INSERT … VALUES</c> / <c>… DEFAULT VALUES</c>. An additive
@@ -65,17 +78,34 @@ public sealed class InsertStatement : SqlStatement, IExecutableStatement
 }
 
 /// <summary><c>UPDATE … SET … [WHERE …]</c>.</summary>
-public sealed class UpdateStatement : SqlStatement, IExecutableStatement
+public sealed class UpdateStatement : SqlStatement, IExecutableStatement, IColumnValueTarget
 {
     private readonly SqlNode[] _children;
 
     public UpdateStatement(
-        int start, int length, IReadOnlyList<SqlToken> tokens, IReadOnlyList<SqlNode>? subqueries = null)
+        int start,
+        int length,
+        IReadOnlyList<SqlToken> tokens,
+        IReadOnlyList<SqlNode>? subqueries = null,
+        string? targetTable = null,
+        IReadOnlyList<ColumnValue>? columnValues = null)
         : base(start, length, tokens)
     {
         Subqueries = subqueries ?? Array.Empty<SqlNode>();
+        TargetTable = targetTable;
+        ColumnValues = columnValues ?? Array.Empty<ColumnValue>();
         _children = AstChildren.Of(null, subqueries);
     }
+
+    /// <inheritdoc />
+    public string? TargetTable { get; }
+
+    /// <summary><inheritdoc cref="IColumnValueTarget.ColumnValues" path="/summary"/>
+    /// <para>The <c>SET col = &lt;expr&gt;</c> assignments — paired by adjacency rather than by position, which is
+    /// why the interface carries pairs. ⚠ The <c>WHERE</c> predicate is NOT included: at the structural-depth
+    /// boundary a predicate is a token fragment, so <c>WHERE col = :p</c> is not a modelled pairing and its
+    /// placeholder stays untyped rather than guessed.</para></summary>
+    public IReadOnlyList<ColumnValue> ColumnValues { get; }
 
     /// <summary>Subquery expressions embedded in the <c>SET</c> / <c>WHERE</c> / <c>RETURNING</c>
     /// expressions (Etap 6.9 / B3.1) — each owning a real <see cref="QueryNode"/>. Empty when none.</summary>
@@ -88,17 +118,33 @@ public sealed class UpdateStatement : SqlStatement, IExecutableStatement
 }
 
 /// <summary><c>UPDATE OR INSERT INTO … VALUES …</c> (Firebird's upsert).</summary>
-public sealed class UpdateOrInsertStatement : SqlStatement, IExecutableStatement
+public sealed class UpdateOrInsertStatement : SqlStatement, IExecutableStatement, IColumnValueTarget
 {
     private readonly SqlNode[] _children;
 
     public UpdateOrInsertStatement(
-        int start, int length, IReadOnlyList<SqlToken> tokens, IReadOnlyList<SqlNode>? subqueries = null)
+        int start,
+        int length,
+        IReadOnlyList<SqlToken> tokens,
+        IReadOnlyList<SqlNode>? subqueries = null,
+        string? targetTable = null,
+        IReadOnlyList<ColumnValue>? columnValues = null)
         : base(start, length, tokens)
     {
         Subqueries = subqueries ?? Array.Empty<SqlNode>();
+        TargetTable = targetTable;
+        ColumnValues = columnValues ?? Array.Empty<ColumnValue>();
         _children = AstChildren.Of(null, subqueries);
     }
+
+    /// <inheritdoc />
+    public string? TargetTable { get; }
+
+    /// <summary><inheritdoc cref="IColumnValueTarget.ColumnValues" path="/summary"/>
+    /// <para>Paired POSITIONALLY from <c>(cols)</c> against <c>VALUES (…)</c> — the same shape as
+    /// <see cref="InsertStatement"/>, which is why one producer serves both. The <c>MATCHING (…)</c> list names
+    /// columns but supplies no values, so it contributes no pairs.</para></summary>
+    public IReadOnlyList<ColumnValue> ColumnValues { get; }
 
     /// <summary>Subquery expressions embedded in the <c>VALUES</c> / <c>RETURNING</c> expressions
     /// (Etap 6.9 / B3.1) — each owning a real <see cref="QueryNode"/>. Empty when none.</summary>
@@ -143,18 +189,35 @@ public sealed class MergeStatement : SqlStatement, IExecutableStatement
         int length,
         IReadOnlyList<SqlToken> tokens,
         QueryNode? sourceQuery = null,
-        IReadOnlyList<SqlNode>? subqueries = null)
+        IReadOnlyList<SqlNode>? subqueries = null,
+        FromItem? sourceItem = null)
         : base(start, length, tokens)
     {
         SourceQuery = sourceQuery;
+        SourceItem = sourceItem;
         Subqueries = subqueries ?? Array.Empty<SqlNode>();
-        _children = AstChildren.Of(sourceQuery, subqueries);
+        // The two source forms are mutually exclusive by construction (parenthesised query vs bare reference),
+        // and the source precedes the ON/WHEN subqueries in the text — so one head child, in source order.
+        _children = AstChildren.Of((SqlNode?)sourceItem ?? sourceQuery, subqueries);
     }
 
     /// <summary>The <c>USING ( &lt;query&gt; )</c> source query (Etap 6.9 / B3.1) — a real
-    /// <see cref="QueryNode"/>. Null when the source is a bare table/view reference. An additive overlay;
-    /// <see cref="SqlStatement.Tokens"/> still round-trips (§0).</summary>
+    /// <see cref="QueryNode"/>. Null when the source is a bare table/view/routine reference, which is
+    /// <see cref="SourceItem"/> instead.</summary>
     public QueryNode? SourceQuery { get; }
+
+    /// <summary>
+    /// The <c>USING &lt;name&gt;[(args)] [[AS] alias]</c> source when it is NOT parenthesised — a
+    /// <see cref="TableReference"/>, or a <see cref="RoutineTableReference"/> when it is a selectable-procedure
+    /// call. Null when the source is a parenthesised query (<see cref="SourceQuery"/>) or unreadable.
+    ///
+    /// <para>⭐ Added 2026-08-03 with <see cref="IRoutineInvocation"/>: this source was previously not modelled at
+    /// all (the parser noted "bare table source" and moved on), so <c>MERGE … USING MY_PROC(:a) s</c> was the one
+    /// remaining place a routine could be invoked without the tree knowing. Parsed by the same
+    /// <c>ParsePrimaryFromItem</c> a <c>FROM</c> entry uses, so it is the same node kinds and no second notion of
+    /// "a source" exists.</para>
+    /// </summary>
+    public FromItem? SourceItem { get; }
 
     /// <summary>Subquery expressions embedded OUTSIDE the source — in the <c>ON</c> / <c>WHEN</c>
     /// conditions and the <c>UPDATE SET</c> / <c>INSERT VALUES</c> expressions (B3.1) — each owning a real
@@ -187,8 +250,12 @@ public sealed class ExecuteBlockStatement : SqlStatement
 }
 
 /// <summary><c>EXECUTE PROCEDURE name [(args)] [RETURNING_VALUES …]</c>.</summary>
-public sealed class ExecuteProcedureStatement : SqlStatement, IExecutableStatement
+public sealed class ExecuteProcedureStatement : SqlStatement, IExecutableStatement, IRoutineInvocation
 {
+    /// <summary><see cref="IRoutineInvocation.RoutineName"/> — the same value as
+    /// <see cref="ProcedureName"/>, under the name every call site uses regardless of syntax.</summary>
+    string? IRoutineInvocation.RoutineName => ProcedureName;
+
     public ExecuteProcedureStatement(
         int start,
         int length,
@@ -235,11 +302,80 @@ public sealed class ExecuteProcedureStatement : SqlStatement, IExecutableStateme
     public override StatementKind Kind => StatementKind.ExecuteProcedure;
 }
 
-/// <summary>One positional argument of an <see cref="ExecuteProcedureStatement"/> — the source span of the
-/// argument expression (Stage X / D8). A debugger step-into slices this span and evaluates it in the caller
-/// frame; the ordinary expression content is not modelled deeper (structural-depth boundary). Not a tree
-/// child (it carries only a span, like <see cref="ForSelectStatement.IntoTargets"/>).</summary>
+/// <summary>One positional argument of a routine invocation — the source span of the argument expression
+/// (Stage X / D8). A debugger step-into slices this span and evaluates it in the caller frame; the ordinary
+/// expression content is not modelled deeper (structural-depth boundary). Not a tree child (it carries only a
+/// span, like <see cref="ForSelectStatement.IntoTargets"/>).</summary>
 public sealed record CallArgument(int Start, int Length);
+
+/// <summary>
+/// A node that <b>invokes a routine with a positional argument list</b> — the ONE question the model answers
+/// about a call, whatever syntax made it.
+///
+/// <para>⭐⭐ <b>Why this exists, and why it is an interface on the AST rather than a helper somewhere else.</b>
+/// Firebird has several unrelated syntaxes for "call this procedure": <c>EXECUTE PROCEDURE P(a, b)</c>, and a
+/// SELECTABLE procedure standing where a table would (<c>select … from P(a, b)</c>) — which then appears inside
+/// a plain <c>SELECT</c>, a PSQL <c>FOR SELECT … INTO</c>, an <c>INSERT … SELECT</c>, a CTE body, a
+/// <c>MERGE … USING</c>, a cursor declaration, or any subquery in any of those. Consumers that ask
+/// <i>"which statement kind is this?"</i> therefore have to enumerate syntaxes, and each new one is a silent
+/// gap: the Smart-Parameters dialog typed <c>EXECUTE PROCEDURE</c> only, then <c>SELECT … FROM P(…)</c> only,
+/// and each fix left the next syntax broken (user report 2026-08-03, three rounds).</para>
+///
+/// <para>⭐ With the invocation modelled, every consumer asks the TREE instead:
+/// <c>root.DescendantNodes().OfType&lt;IRoutineInvocation&gt;()</c>. Nesting and statement kind stop being its
+/// business — the parser already hangs each embedded query off the statement that owns it, so every syntax above
+/// is reached by the same walk, including ones added later.</para>
+///
+/// <para>⚠ Implemented only by nodes that ARE invocations, never by one that merely might be: a plain table in a
+/// <c>FROM</c> clause is a <see cref="TableReference"/>, a selectable-procedure call is a
+/// <see cref="RoutineTableReference"/>. The type carries the distinction, so no consumer has to filter on
+/// "arguments is empty" — which would conflate a no-argument call with a table.</para>
+/// </summary>
+/// <summary>One value written into a named column — the column's name and the source span of the expression
+/// supplying it. Not a tree child (a span, like <see cref="CallArgument"/>).</summary>
+public sealed record ColumnValue(string ColumnName, int Start, int Length);
+
+/// <summary>
+/// A node that <b>writes values into named columns of a table</b> — the second thing the model can prove about
+/// where a value's TYPE comes from.
+///
+/// <para>⭐⭐ <b>Why this sits beside <see cref="IRoutineInvocation"/> rather than inside it.</b> A placeholder's
+/// declared type has exactly two provable origins in Firebird DML: it is an argument of a routine (type = that
+/// input parameter's), or it is a value written into a column (type = that column's). Those are different
+/// metadata, so they are different facts — but a consumer must not care which statement syntax produced either,
+/// which is why both are interfaces walked off the tree. ⛔ The rule the user set: no series of per-statement
+/// branches. If the AST can prove the pairing, the type is available; if it cannot, the value stays untyped.</para>
+///
+/// <para>⚠ Modelled as (column, value-span) PAIRS, not as two parallel lists, and that is what lets one interface
+/// serve shapes that pair differently: <c>INSERT … (cols) VALUES (…)</c> and <c>UPDATE OR INSERT</c> pair
+/// POSITIONALLY, while <c>UPDATE … SET col = expr</c> pairs by writing them adjacently. The producer resolves the
+/// pairing; the consumer never learns there was more than one way to do it.</para>
+///
+/// <para>⚠ A pairing that cannot be established is simply absent — an <c>INSERT</c> with no column list
+/// (<c>INSERT INTO T VALUES (…)</c>) yields nothing, because matching values to columns would then require the
+/// table's catalog order, which is a lookup, not a fact about the text (rule #11: never guess).</para>
+/// </summary>
+public interface IColumnValueTarget
+{
+    /// <summary>The table being written to, folded to the catalog convention, or null when unreadable.</summary>
+    string? TargetTable { get; }
+
+    /// <summary>The (column, value-span) pairs this statement establishes, in source order.</summary>
+    IReadOnlyList<ColumnValue> ColumnValues { get; }
+}
+
+public interface IRoutineInvocation
+{
+    /// <summary>The invoked routine's name, folded to the catalog convention (an unquoted name upper-cased, a
+    /// quoted one kept verbatim), or null when it could not be read.</summary>
+    string? RoutineName { get; }
+
+    /// <summary>The package qualifier for <c>PKG.PROC</c>, or null for an unqualified call.</summary>
+    string? PackageName { get; }
+
+    /// <summary>The positional arguments, in source order. Empty for a call written with no argument list.</summary>
+    IReadOnlyList<CallArgument> Arguments { get; }
+}
 
 /// <summary><c>EXECUTE STATEMENT …</c> (or a bare <c>EXECUTE …</c> that is neither BLOCK nor PROCEDURE).</summary>
 public sealed class ExecuteStatementStatement : SqlStatement, IExecutableStatement

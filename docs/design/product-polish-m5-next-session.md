@@ -1,0 +1,296 @@
+# Product Polish — prompt startowy PO ZAMKNIĘCIU M4
+
+> # 🏁🔒 M5 ZAMKNIĘTY W CAŁOŚCI (2026-08-10) — A WRAZ Z NIM CAŁY PLAN §13
+>
+> **Wszystkie sześć pozycji M5 wykonane i odebrane po QA użytkownika**, a **M5 był ostatnim wierszem
+> planu §13**. Podsumowanie zamknięcia: `product-polish.md` **§19.51**.
+> Build 0/0 · suite **8392** (8214 + 123 + 55) · smoke czysty · `feat/product-polish` na obu remote'ach.
+> ⛔ **Gałąź NIE jest scalona do `master`** — ratyfikowana decyzja użytkownika z 2026-08-05 nadal obowiązuje.
+>
+> | pozycja | as-built | wynik |
+> |---|---|---|
+> | kontrast **§10** | §19.45 | trzy wartości policzone przy progu; §10 sprostowane (cytowało normę, której nie spełnia) |
+> | focus **L‑1** | §19.46 | jedna konwencja `:focus-visible`; audyt opisywał objaw, nie defekt |
+> | empty states **M‑3** | §19.47 | z 13 zgłoszonych luk zostały **4** |
+> | animacje **§9** | §19.48 | **zero zmian produkcyjnych** — korekta dokumentu + strażnik |
+> | **DPI** 100–175 % | §19.49 | **zero zmian produkcyjnych** — R‑6 spłacone, znalezisko zapisane jako dług |
+> | terminologia **M‑4** | §19.50 | `terminology.md` + strażnik R‑8 + ujednolicenie |
+>
+> ### ⛔ Wynik QA DPI — przyjęty jako DŁUG, nie regresja
+>
+> **100 % i 125 % — OK.** **150 %** — Activity Monitor i Data Import **nie mieszczą się poziomo**, bo ich
+> paski poleceń to poziome `StackPanel`e **bez przewijania** (~1130 DIP, nie kompresują się, tylko
+> przycinają). **175 %** — dochodzi problem z **dolnym paskiem aplikacji**. Skale > 175 % nietestowane.
+> ⭐ **To istniejące ograniczenie layoutu, NIE regresja M4/M5** — dowód: na **1366×768 przy 100 %** zostaje
+> **1082 DIP**, czyli nie mieści się **bez żadnego skalowania**. ⛔ **Nie naprawiane w M5**; trzy kierunki
+> naprawy to trzy osobne decyzje UX. ⭐ Pomiar w §19.49 jest kompletny — **przy powrocie nie trzeba go
+> powtarzać**.
+>
+> ### ⏭ Co dalej — ⛔ WYMAGA DECYZJI UŻYTKOWNIKA
+>
+> Po M5 **nie ma kolejnej pozycji planu**. Kandydatury i świadomie odłożone tematy: `product-polish.md`
+> **§19.51.3** oraz §3.2 / §3.3 tego dokumentu (etap odstępów · app-wide UX sprint · B1 · Z‑3 · ogon ikon).
+> ⛔ Nie zaczynać żadnej z nich bez wskazania.
+>
+> ---
+>
+> ## ⚠ ZAPIS HISTORYCZNY — poniższa treść opisuje WEJŚCIE w M5 i jest już wykonana
+>
+> Użytkownik wybrał **M5 — Final Polish** (§3.1) i zlecił kolejność: najpierw §10, potem dalsze punkty M5.
+>
+> ✅ **§10 / kontrast severity — ZAIMPLEMENTOWANE, ⏸ CZEKA NA QA WIZUALNE UŻYTKOWNIKA.**
+> **Commit `6223045`** (`feat(m5): kontrast severity…`), na `feat/product-polish`, wypchnięty na **oba**
+> remote'y i zweryfikowany (`origin` == `private` == lokalne `6223045`), drzewo czyste.
+> Wariant **B** ratyfikowany; trzy wartości w `Colors.axaml`;
+> §10 sprostowane (próg 3:1 to **wymóg własny**, nie „WCAG AA Large"); trzy strażniki
+> (`SeverityText_*`, `SeveritySignal_*`) zweryfikowane podsadzeniem.
+> Zapis: `product-polish.md` **§19.45** · decyzja: **`product-polish-m5-severity-contrast-decision.md`**.
+>
+> ✅ **§10 ODEBRANE PRZEZ UŻYTKOWNIKA (QA wizualne zaliczone).** Iteracja zamknięta, ⛔ nie wracać.
+>
+> ✅ **L‑1 / focus — ODEBRANE PO QA UŻYTKOWNIKA (2026-08-10).** Wariant **1**: jedna konwencja
+> **`:focus-visible`** dla `Button.icon`/`.flat`/`.primary`/`.caption` **+ `ToggleButton.icon`**.
+> `primary` → ramka `OnAccentBrush` (5,29:1); `caption` → tło `FocusBorderBrush` + glif `OnAccentBrush`.
+> Zapis: `product-polish.md` **§19.46** · decyzja: **`product-polish-m5-focus-decision.md`**. ⛔ Nie wracać.
+>
+> ✅ **M‑3 / empty states — ZAMKNIĘTE I ODEBRANE PO QA UŻYTKOWNIKA (2026-08-10).** Zapis:
+> `product-polish.md` **§19.47** · nowa gotcha **#346**.
+> ⭐⭐ **Wynik wart przeniesienia dalej: audyt wskazał realną lukę, ale zbiór do zrobienia był ~3× mniejszy,
+> i zawęziło go pytanie, którego inwentarz nie zadawał — nie „czy jest komunikat", tylko „czy ten stan jest
+> OSIĄGALNY".** Z 13 zgłoszonych luk zostały 4; dwie odpadły, bo stan **nie może zajść**. ⚠ Trzy razy pomiar
+> obalił treść, którą sam zaproponowałem, i zawsze z tego samego powodu: **nazwa kolekcji sugerowała, co
+> siatka pokazuje, a kod mówił co innego**.
+> **Weszło:** pusty pasek boczny (W4, z glifem) · Roles · Membership ×2 kierunki · Script Executor ×2 stany.
+> ⛔ **Wycofane jako nieosiągalne:** Users · View → Fields · klasa D. ⛔ **Wycofane jako treść nieprawdziwa:**
+> Privileges. ⏸ **Odłożone:** Session → Transactions · Table → Indeksy. ⛔⛔ **Nazwany wyjątek:** 17 drzew
+> „Zależności" **zostaje bez stanu pustego** (parytet z IBExpertem) — pilnowane **testem**, nie tylko zapisem.
+>
+> ✅ **§9 / ruch i animacja — ZAMKNIĘTE (2026-08-10), ZERO ZMIAN PRODUKCYJNYCH.** Zapis:
+> `product-polish.md` **§19.48**; korekta: **§9 + nowe §9.1**; pomiar: `VisualCandidateProbe -- motion`.
+> ⭐⭐ **Zapis „§9 nie ma ani jednego naruszenia" (z inwentaryzacji M5, cytowany też w tym dokumencie)
+> BYŁ MYLĄCY i został zastąpiony pomiarem.** Pochodził z licznika na źródłach, więc odpowiadał wyłącznie
+> na pytanie „czego MY nie napisaliśmy". Zmierzone z elementów, które malują: **16 przejść z Fluenta**,
+> identycznie w obu motywach. **Zero na właściwościach układu** (jedyna reguła §9 z uzasadnieniem — jest
+> spełniona), ale sufit 120 ms i krzywa są łamane przez framework, a `RenderTransform` na przyciskach jest
+> **bezczynny** (macierz jednostkowa również na gołym `Button`).
+> 🔒 **Decyzja W‑A:** korygujemy dokument, nie produkt — ⛔ nie przejmujemy przejść Fluenta. §9 dostało
+> kolumnę „Zakres", §9.1 zapisuje baseline jako nazwany wyjątek, a strażnik
+> `EmberTernDeclaresNoMotionOfItsOwn` pilnuje **naszego źródła**, nie cudzych szablonów.
+> ⚠ **Granica pomiaru zapisana:** `ToolTip` i stany niewymuszone przez sondę są NIEZMIERZONE.
+>
+> ✅ **DPI 100–175 % — ZAMKNIĘTE (2026-08-10), ZERO ZMIAN PRODUKCYJNYCH.** Zapis: `product-polish.md`
+> **§19.49**; checklista + wynik QA: **[product-polish-m5-dpi-checklist.md](product-polish-m5-dpi-checklist.md)**.
+> **R‑6 spłacone.** 100 % i 125 % czyste; **przystanki 1–7, 9 i 10 przeszły bez uwag** — czyli **żadna zmiana
+> metryki z M4 ani M5 nie okazała się defektem DPI**, a to był właściwy przedmiot R‑6.
+> ⛔⛔ **Znalezisko przy 150 % / 175 %: Activity Monitor i Data Import nie mieszczą się w szerokości.**
+> Zdiagnozowane i 🔒 **ratyfikowane jako DŁUG TECHNICZNY poza zakresem M5** — layout nie jest zmieniany.
+> ⭐ **To ograniczenie KONSTRUKCYJNE, nie defekt skalowania:** pasek poleceń obu widoków to goły poziomy
+> `StackPanel` żądający **~1130 DIP**, bez `ScrollViewera` — nie kompresuje się, tylko przycina. Dowód, że
+> nie chodzi o DPI: na **1366×768 przy 100 %** zostaje **1082 DIP**, czyli nie mieści się **bez żadnego
+> skalowania**. ⭐ Pomiar w §19.49 jest kompletny — **przy powrocie nie trzeba go powtarzać**.
+> ⛔ **Nie implementować** przewijania, `WrapPanela` ani redukcji toolbaru przy okazji innego etapu;
+> to osobny etap z własną decyzją UX. ⚠ 175 % to obserwacja, nie cel projektowy; >175 % nietestowane.
+>
+> ⏭ **POZOSTAŁA W M5 JEDNA POZYCJA: terminologia M‑4.**
+> ⚠⚠ **M‑4: audyt opisuje MNIEJSZY problem, niż jest.** Mówi o parze `Execute`/`Run`; zmierzone
+> w `UiStrings`: **Delete 59 · Drop 29 · Compile 22 · Save 21 · Execute 15 · Run 13 · Refresh 10 ·
+> Remove 6 · Apply 1**. Największy rozjazd to **Delete/Drop/Remove**, z konkretną kolizją — drzewo
+> metadanych mówi **„Delete Table"**, import **„Drop table"** o tej samej operacji DDL. Wymaga inwentarza
+> i słownika (R‑8), więc jest najdroższe.
+>
+> ⚠ Liczby w §1 i §3 niżej pochodzą sprzed M5 — suite to teraz **8386** (8208 + 123 + 55).
+>
+> ### Co konkretnie obejrzeć w QA (oba motywy)
+>
+> 1. ⭐ **Motyw JASNY, komunikat ostrzegawczy** — to jedyna realnie widoczna zmiana: bursztyn
+>    `#C77800` → `#A16100`. Powierzchnie: baner `MessageBanner` (m.in. edytory obiektów, Execute
+>    Procedure, Data Import, Security Manager) **oraz** log Messages w edytorze SQL.
+> 2. Motyw jasny, komunikat sukcesu — zmiana ledwie zauważalna (`#2E8B4F` → `#2A7E48`).
+> 3. Motyw ciemny, komunikat błędu — **powinno nie być widać różnicy** (delta 0,27); jeżeli coś
+>    rzuca się w oczy, to jest znalezisko.
+> 4. ⚠ **Ikony „Uruchom" (Play) w motywie jasnym mają zostać BEZ ZMIAN** — `ActionRunColor` celowo
+>    nie ruszony. Jeżeli zzieleniały inaczej niż wcześniej, to regresja.
+>
+> ### Następny krok po QA
+>
+> ⛔ Dopiero po Twojej akceptacji rusza kolejna pozycja M5. Rekomendowana kolejność wynika z pomiaru,
+> **nie z planu**: **L‑1 (focus)** jest najmniejsze i w pełni zmierzone · **M‑3 (empty states)**
+> ma gotowy pierwszy przypadek (8 osieroconych stałych + trójka `*DescriptionEmpty`) · **§9**
+> to wyłącznie decyzja „strażnik czy nie" (zero naruszeń) · **DPI** jest czystym QA i nie da się go
+> przygotować kodem · **M‑4 (terminologia)** wymaga najpierw inwentarza i słownika (R‑8), więc jest
+> najdroższe.
+
+> **Do wklejenia na początku następnej sesji.** Zastępuje `product-polish-m4-migration-next-session.md`,
+> który jest od 2026-08-09 **historyczny** — czytaj go tylko dla „dlaczego", nigdy dla „co dalej".
+>
+> 🏁 **M4 JEST ZAMKNIĘTY W CAŁOŚCI I ODEBRANY (2026-08-09).** Oba bloki decyzyjne (gęstość · typografia)
+> + pięć etapów migracji (M4.1 · M4.2 · M4.2b · M4.3b+c · M4.4). Rejestr kolizji **K1–K15 zamknięty**,
+> **zero otwartych pytań projektowych M4**.
+>
+> ⛔⛔ **PIERWSZY KROK TEJ SESJI TO DECYZJA UŻYTKOWNIKA, NIE KOD.** Po M4 nie ma jednego oczywistego
+> następnego etapu — są **trzy kandydatury o różnym charakterze** (§3). Nie zaczynaj żadnej z nich bez
+> wskazania. ⛔ Nie zaczynaj też sesji od raportowania stanu: jeżeli `git status` jest czysty, to jest
+> cała odpowiedź.
+
+---
+
+## 1. Punkt odniesienia
+
+**`feat/product-polish`**, build 0/0, suite **8345** w trzech partycjach (**8193 + 97 + 55**), smoke czysty,
+oba remote'y zsynchronizowane. ⚠ Liczbę testów **zmierz, nie przepisuj** — ta linia dryfowała wielokrotnie
+i raz była wewnętrznie sprzeczna (deklarowała sumę inną niż jej własne składniki).
+
+⛔ **Kryterium zieloności to SUMA, nie „0 niepowodzeń"** — run, w którym cała partycja nie wystartowała, też
+raportuje zero błędów (zmierzone 2026-08-05).
+
+⚠ **Znany flake, nie ogłaszany naprawionym:** `SettingsLoadHealthTests.ConcurrentSaves_NeverLeaveSettingsUnreadable`
+(test na `Parallel.For`) potrafi zaświecić raz na czerwono i przechodzi solo.
+
+---
+
+## 2. ⭐⭐ Co M4 naprawdę dostarczył — i co z tego wynika na przyszłość
+
+### 2.1 Produkt
+
+| blok / etap | as-built | treść |
+|---|---|---|
+| gęstość | §19.37 | `Size.Icon.Toolbar` (16) / `Size.Icon` (14) — drabina „akcja vs wiersz"; wiersz drzewa; `Size.Row.GridEdit` = 30; podłogi list w imporcie |
+| typografia | §19.38 | `Text.SectionHeader` 11 → **12 SemiBold** (nagłówek był mniejszy od tekstu, który nazywa); `Text.Toolbar` wycofana; `Radius.Tab` |
+| M4.1 | §19.39 | ikony przy etykiecie; **sufit literałów ikon 95 → 20**; zapadka na odstępy; wyśrodkowanie `Icon.Undo`/`Icon.Redo` |
+| M4.2 | §19.40 | edytory obiektów — **pomiar wykazał, że migracja była już wykonana**; `Radius.Surface` na karcie; **B1** ujawnione |
+| M4.2b | §19.41 | 17 drzew „Zależności" → jedna kontrolka na `SidebarFlatController`; wspólna kolejność kategorii; nawigacja ←/→ |
+| M4.3b+c | §19.42–43 | monitory i debugger na role; **jeden `Button.seg`** zamiast dwóch kopii |
+| M4.4 | §19.44 | dialogi i okna; **M‑5** — `GrowingDialogBehavior` z regułą `min` |
+
+**Liczniki po M4** (regeks strażnika, `Views/` + `Controls/`): `FontSize` **28 / 9 plików** · `CornerRadius`
+**7 / 3** · literały rozmiaru ikony **14 / 6**. ⭐ To już wyłącznie **uzasadnione wyjątki i arytmetyka**
+(koła, kapsuły, resety, glify strojone do kontenera) plus **B1** — a nie „reszta do zrobienia".
+
+### 2.2 ⭐⭐ Wynik metodologiczny — ważniejszy od liczb
+
+**CZTERY zapisane przesłanki nie przeżyły zderzenia z kodem:**
+
+1. „`Size.Icon` — 64 literały" opisywało **164 z 355** deklaracji ikon; 191 nie deklaruje nic i bierze 16
+   z `ControlTheme` (**#332**).
+2. „K15 — 112 wystąpień w 17 plikach, zmiana rozjechałaby drzewo z resztą aplikacji" — naprawdę **44 w 13**,
+   z czego **41 to JEDNA rola**, więc R7 przemawiał *za* zmianą, nie przeciw.
+3. §13.2 odrzucało `SidebarFlatController` sprzężeniem *„z połączeniem, metadanymi, filtrowaniem"* —
+   jego konstruktor bierze **wyłącznie delegaty** (§19.41.2). Wykrył to **użytkownik z działającej
+   aplikacji**, nie ja z dokumentu.
+4. „`GridSplitter` to jedyna odłożona pozycja, którą M4.4 napotka" — **w 25 oknach nie ma go ani razu**.
+
+**TRZY ETAPY Z RZĘDU** (M4.2, M4.3, M4.4) okazały się nie sweepem literałów, tylko **odbiorem decyzji,
+których nikt nie podjął** — odesłanie „rozstrzyga §13.3" żyje w ŹRÓDLE, rejestr w DOKUMENCIE, a zamykany
+bywa wyłącznie dokument (**#340**).
+
+⭐ **Praktyczne wnioski, które przenoszą się na każdy następny sprint:**
+
+* **liczba w prozie starzeje się cicho** — mierz przed planowaniem, nie cytuj;
+* **podsadzenie, które NIE zapala testu, jest wynikiem** — wtedy dowiadujesz się, że mierzysz co innego,
+  niż deklarujesz (#342 zniósł tak uzasadnienie całej iteracji);
+* **grupuj po tym, CZYM element jest dla użytkownika**, nie po nazwie geometrii, wartości ani po tym, że
+  właśnie migrował (#335, #341);
+* **zero z licznika bywa „nie zbudowano tego tak tutaj", nie „czysto"** (#337);
+* ⚠ **spadek licznika bywa PRZENIESIENIEM, nie migracją** — `Measure` skanuje tylko `Views/` + `Controls/`,
+  więc wartość przeniesiona do `Themes/` znika z licznika, choć istnieje dalej.
+
+---
+
+## 3. ⏭ TRZY KANDYDATURY NA NASTĘPNY ETAP — wymagają decyzji użytkownika
+
+⚠ Podane zakresy są **zmierzone 2026-08-09**, nie przepisane z planu.
+
+### 3.1 **M5 — Final Polish** (pozycja z planu §13)
+
+Zakres z §13: oba motywy · kontrast §10 · **DPI 100/125/150/200** · empty states (**M‑3**) · terminologia
+i słownik (**M‑4**) · focus (**L‑1**) · animacje (**§9**).
+
+⭐ **Argument za teraz:** to jedyna pozycja, która domyka *etap* zgodnie z jego własnym planem, i jedyna,
+która patrzy na produkt **jako całość** — a §0.1.1 mówi, że kryterium sukcesu jest pierwsze wrażenie, nie
+zgodność z katalogiem. ⚠ **R‑6 / 150 % DPI jest zaległe od dwóch bloków M4** — oba ruszały metryki, a QA
+użytkownika ich nie obejmowało.
+
+### 3.2 **Etap odstępów** (`Spacing` / `Padding` / `Margin`) — ratyfikowany jako osobny etap PO M4.4
+
+**Zmierzone teraz:** `Spacing` **309 / 46 plików** · `Padding` **185 / 50** · `Margin` **475 / 55** —
+razem **969 wartości lokalnych**. Rolę czyta: `Spacing` **11**, `Margin` **16**, `Padding` **0**.
+
+⚠ Dziś działa **wyłącznie zapadka** (per plik), i ⛔ obowiązuje jawne zastrzeżenie: *nie zmieniać żadnej
+wartości tylko po to, żeby ją zadowolić*. ⭐ Z M4.1: **214 z 320 `Spacing` pokrywa się 1:1** ze skalą, więc
+ta część jest mechaniczna — treścią etapu jest **ogon** (5, 2, 1, 10, 3 px) i pytanie, czy `Padding`/`Margin`
+w ogóle mają czytać role, skoro dziś nie czytają ich **ani razu**.
+⭐ **Materiał gotowy z M4.4:** nagłówek dialogu ma **`20,16` ×15 vs `20,14` ×5** przy **w pełni spójnej
+stopce (19/19 przy `20,12`)**, a rola **`Pad.Dialog` = `20,16`** opisuje większość dokładnie i ma **zero
+konsumentów**. To jest gotowy pierwszy przypadek tego etapu.
+
+### 3.3 **App-wide UX sprint** (backlog, odblokowany od zamknięcia Data Import)
+
+Gęstość kontrolek formularzy app-wide + **czcionka monospace**: zmierzone **`FontFamily` 81 wystąpień
+w 28 plikach** (dokumentacja mówi o 7 różnych stringach / 95 / 33 — ⚠ **przelicz, zanim zacytujesz**).
+⭐ Ten sprint decyduje `Cascadia Code` vs `Cascadia Mono` dla edytora, debuggera, kart hover i 11 podglądów
+DDL **naraz** — to decyzja typograficzna dla sprintu, który widzi wszystkie powierzchnie razem.
+
+### 3.4 ⏸ Pozycje odłożone, każda z powodem — **żadna nie jest samodzielnym etapem**
+
+* **B1** — prywatne ikony PK/FK/Unique w `TableDetailTabView` na siatce 14 zamiast kanonicznych 24;
+  przeniesienie do systemu = **zmiana wyglądu**, więc czeka na decyzję wizualną (§19.40.3). To **5 z 14**
+  literałów sufitu ikon.
+* **Z‑3** — wiersz Table Data; ⛔ **najpierw PRZYCZYNA**: zmierzone, że liczby 40 px **nie ma w `src/`**,
+  a `data-edit` czyta rolę 30. Wymaga pomiaru na żywej aplikacji (skala DPI? inny element?).
+* **ogon literałów ikon 10/11/13/15** — pytanie o ROLE, nie o gęstość (§19.37.7).
+* **sieroty po §13.3 poza zakresem M4** — ⚠ **50 wystąpień „13.3" w `src/`, ale to DWIE różne rzeczy**:
+  7 to cytat WYMAGANIA („§13.3 specyfikacji", Zero Layout Shift), reszta to odesłania i zapisy historyczne.
+  ⛔ Przed ogłoszeniem czegokolwiek „zamkniętym" trzeba je rozdzielić **czytając**, nie regeksem (#340).
+* **poszerzenie okna licznika `FontSize`** o `Completion/`, `Sql/`, `Themes/` — **29 deklaracji poza
+  zasięgiem**; zbudowane i **wycofane**, bo ten sam `Measure` obsługuje `FontFamily` (§19.38.7).
+
+---
+
+## 4. Co przeczytać i w jakiej kolejności
+
+1. **`CLAUDE.md`** — „Current state" (wpis M4 + M4.4) i „UI styling rules" (reguły 1–11, zwłaszcza **#8**
+   trzy trasy restylowania, **#9** zakaz literałów tam, gdzie jest rola, **#10** kontener rozstrzyga
+   wielkość, **#11** reguła formułowana pozytywnie).
+2. **`docs/design/product-polish.md`** — ⛔ nie w całości: **§13** plan + **§13.0** DoD + **§0.1 / §0.1.1 /
+   §0.1.2** (zasady nadrzędne wobec katalogu) + as-built etapu, którego dotyczy praca.
+3. **`docs/design/product-polish-m3-handover.md`** — **reguły R1–R18** (§5) i **21 pułapek** (§9).
+4. **`docs/design/color-language.md`** — **§0.5** przed każdą zmianą koloru, **§6** przy nowej akcji.
+5. **`docs/gotchas.md`** — **#340 · #341 · #342 · #343** (świeże, z M4.3/M4.4), **#335**, **#337**, **#322**, **#284**.
+
+---
+
+## 5. ⭐ Reguły, które w M4 decydowały najczęściej
+
+| # | reguła |
+|---|---|
+| **R7** | nie łatać pojedynczego ekranu, gdy defekt jest app-wide |
+| **R8** | kryterium odbioru: *„czy to wygląda jak dopracowana aplikacja komercyjna?"* |
+| **R12** | **błędna rola jest gorsza od wartości lokalnej**; celem jest usunięcie wartości NIEUZASADNIONYCH |
+| **R16** | pomiar jest narzędziem DIAGNOSTYCZNYM, kryterium odbioru jest ekran; **test zielony na złym ekranie jest gorszy niż brak testu** |
+| **R17** | zgodność z dokumentem ≠ spójność produktu |
+| **R18** | przy równej czytelności wygrywa wariant **gęstszy** — ⚠ rozstrzyga REMIS, warunek czytelności jest pierwszy |
+| **pułapka 17** | reguła OPISUJE to, co już jest dobre; element niezgodny z regułą bywa wyjątkiem, który DZIAŁA |
+
+⛔ **Do NIEOTWIERANIA bez osobnej decyzji:** „tęcza ikon" w pasku narzędzi (§13.3a.3) · pasek zakładek
+(M3.3) · menu kontekstowe · Metadata Explorer · `field-label` i jego 164 użycia · 9 px i 12 px w edytorach
+stojących w wierszu siatki · ratyfikowane decyzje M4 z §19.37 i §19.38 · **K4 (`PlanLead`) zostaje 13**.
+
+---
+
+## 6. Obowiązkowa kolejność zamykania iteracji
+
+1. `dotnet build EmberTern.slnx` → **0/0**;
+2. **trzy partycje** testów (filtr w `CLAUDE.md` → „Tests"); ⚠ `ConnectionExpandBindingProbe`
+   + `BrandingPresentationTests` **osobno**;
+3. **smoke** — aplikacja startuje;
+4. **150 % DPI na oko**, jeśli iteracja ruszała metrykę;
+5. **QA wizualne użytkownika w obu motywach** — to ono zamyka iterację, nie zielone testy (§0.1.1);
+6. dokumentacja **w tej samej iteracji**: as-built w `product-polish.md`, gotcha w `docs/gotchas.md`,
+   „Current state" w `CLAUDE.md` **w miejscu**, i ⚠ **przelicz liczbę testów**;
+7. commit; po akceptacji **push na OBA remote'y** (`origin` i `private`), potem weryfikacja SHA.
+
+⭐ **Nowy strażnik weryfikuje się PODSADZENIEM NARUSZENIA** — w M4 wyłapało to **cztery** błędy w moich
+własnych testach, w tym dwa, których czytanie kodu by nie znalazło.
+⚠ **Czytaj `Liczba błędów: 0` PRZED listą niepowodzeń** — inaczej testy biegną na starym binarium.
+⚠ **Polski cudzysłów otwierający sparowany z ASCII zamykającym** wewnątrz interpolowanego stringa zamyka
+literał; ta pułapka wystąpiła w M4.3 i **ponownie w M4.4**.

@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER MEASUREMENT TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Domain-typed routine signatures (stabilization sprint S-1b, 2026-08-05). The user reported that
+    changing a procedure PARAMETER's domain "does not save on compile", while the same change on a
+    VARIABLE does. Reading the code found something worse than a failed save: the domain was discarded
+    on READ, so the object editors — which reassemble the whole CREATE OR ALTER from what the read
+    returned — wrote the resolved BASE type back. Opening a procedure whose parameters use domains and
+    pressing Compile for any unrelated reason therefore destroyed the domain link in the database,
+    silently. That is architecture rule #11 (never lose information), gotcha #175's shape.
+
+    The unit tests pin the two decision points (TypeTextForField, EmitsNotNull) but they cannot prove
+    the end-to-end claim, because the claim is about what the CATALOG holds and what a real
+    reconstruction produces from it. This probe proves exactly that, on a live engine:
+
+      (1) THE DOMAIN SURVIVES THE READ — the reconstructed CREATE OR ALTER for a procedure and a
+          function names the domain (D_CODE / D_QTY / D_NAME), not its base type, while a plain
+          parameter beside it still shows its base type.
+
+      (2) THE ROUND TRIP IS LOSSLESS — recompiling the reconstruction and reading it again yields a
+          BYTE-IDENTICAL definition. This is the assertion that actually covers the reported defect:
+          it is precisely what the editors do on Compile, so if it holds, "open and compile" can no
+          longer change the object. It would have FAILED before the fix.
+
+      (3) NULLABILITY IS NOT INVENTED — a parameter on a NOT NULL domain must not come back carrying an
+          explicit NOT NULL the original declaration never had, and a parameter that DID declare
+          NOT NULL must keep it. Measured on FB5 first: the parameter's own RDB$NULL_FLAG and the
+          domain's are two different facts, and which one applies depends on which type is emitted.
+
+      (4) THE DEBUGGER IS UNAFFECTED — FirebirdDebugMetadata resolves a domain-typed parameter to its
+          BASE type on purpose (spec R2: a domain-constrained parameter cannot take an injected NULL),
+          and it shares IsUserDomain with the DDL reader. The two needs are opposite, so the probe
+          checks that the debugger's frame layout still reports base types.
+
+    Creates and drops its OWN scratch database at an ASCII path (gotcha #149) — the lab is never
+    touched, so the probe is safe to run at any time. Deliberately NOT in EmberTern.slnx: it needs a
+    live server and a password.
+
+    How to run: see the header of Program.cs.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>

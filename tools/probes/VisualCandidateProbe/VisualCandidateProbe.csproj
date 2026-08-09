@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER MEASUREMENT TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Product Polish M3.5. Renderuje KANDYDATÓW zmiany wizualnej do plików PNG, w obu motywach, obok stanu
+    obecnego — żeby decyzja zapadła NA OBRAZIE.
+
+    ⭐⭐ Powód istnienia jest wprost regułą `color-language.md` §0.5: przed zmianą jakiegokolwiek koloru
+    trzeba odpowiedzieć „czy użytkownik rozpozna akcję SZYBCIEJ", a „nie wiadomo" jest odpowiedzią
+    ODMOWNĄ. Bez narzędzia, które pokazuje kandydata, jedyną dostępną odpowiedzią na pytanie o odbiór
+    jest domysł — czyli dokładnie to, czego §0.5 zabrania. Ta sonda zamienia domysł w obrazek.
+
+    ⚠ Dlaczego sonda, a nie zrzut z aplikacji: kandydat NIE JEST jeszcze w aplikacji i nie ma tam wejść,
+    dopóki nie zostanie odebrany. Sonda ładuje TE SAME słowniki zasobów i TEN SAM `ControlStyles.axaml`
+    co aplikacja i renderuje przez Skia, więc obraz jest wierny — ale kandydaci są zdefiniowani W SONDZIE,
+    nie w produkcie, więc nic się nie wdraża przez samo uruchomienie.
+
+    ⚠⚠ GRANICA, odziedziczona po `TabStripVisualProbe` (§19.23.9): SONDA LICZY UKŁAD RAZ, WIĘC NIE MOŻE
+    ORZEC O ZBIEŻNOŚCI. Odpowiada na „jak to WYGLĄDA", nigdy na „czy to się USTALA".
+
+    ⚠ Reguła, za którą M3.3b zapłaciło: sonda musi ładować te same słowniki co `App.axaml` — brakujący
+    słownik nie zawodzi, tylko po cichu usuwa element z obrazu.
+
+    ⚠ Deliberately NOT in EmberTern.slnx.
+
+    Uruchomienie: patrz nagłówek Program.cs. Wynik: tools/probes/VisualCandidateProbe/out/*.png
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\EmberTern.App\EmberTern.App.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+  </ItemGroup>
+
+</Project>

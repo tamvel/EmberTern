@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -55,7 +55,6 @@ internal static class ExportFixtures
                 Password = Secret,
                 Charset = "WIN1250",
                 Dialect = 3,
-                ClientLibraryPath = @"C:\Program Files\Firebird\fbclient.dll",
                 DeveloperMode = true,
                 DataTransactionProfile = TransactionProfile.ReadCommitted,
                 MetadataTransactionProfile = TransactionProfile.ReadCommitted,
@@ -184,7 +183,6 @@ public class SettingsExportContentTests
             Assert.Equal(options.Passwords ? ExportFixtures.Secret : string.Empty, connection.Password);
 
             // ❌ Never travels, whatever was selected: a local path, meaningful only in Embedded mode.
-            Assert.Equal(string.Empty, connection.ClientLibraryPath);
             // ❌ The v1→v2 shim never travels either.
             Assert.Null(connection.LegacyTransactionProfile);
         }
@@ -222,7 +220,6 @@ public class SettingsExportContentTests
         SettingsExporter.BuildContent(source, new SettingsExportOptions { Connections = true });
 
         Assert.Equal(ExportFixtures.Secret, source.Connections[0].Password);
-        Assert.NotEqual(string.Empty, source.Connections[0].ClientLibraryPath);
         Assert.NotNull(source.Workspace.WindowBounds);
     }
 
@@ -332,7 +329,6 @@ public class SettingsExportContentTests
             [nameof(ConnectionProfile.DataTransactionProfile)] = "✅ exported",
             [nameof(ConnectionProfile.MetadataTransactionProfile)] = "✅ exported",
             [nameof(ConnectionProfile.Password)] = "⚠ OPT-IN only (Q2) — credentials in a file that travels",
-            [nameof(ConnectionProfile.ClientLibraryPath)] = "❌ never — a local filesystem path, Embedded mode only",
             [nameof(ConnectionProfile.LegacyTransactionProfile)] = "❌ never — the v1→v2 migration shim, cleared on export",
         });
     }

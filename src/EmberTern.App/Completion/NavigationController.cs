@@ -71,7 +71,18 @@ internal sealed class NavigationController
     // Plain hover fires on every pointer move, where Ctrl+hover was self-limiting — the dwell is the
     // whole noise budget. Long enough not to flash while the pointer crosses the text on its way
     // somewhere, short enough to feel like an answer rather than a wait.
-    private static readonly TimeSpan HoverDwell = TimeSpan.FromMilliseconds(350);
+    //
+    // ⚠⚠ 350 → 250 ms (user report "Quick Info appears too late", 2026-08-07). The number was IN the normal
+    // IDE band (VS Code's editor.hover.delay is 300 ms, Visual Studio ≈ 400, Rider ≈ 500) — so the report
+    // looked like it contradicted the measurement, and the reason it does not is UpdateHoverInfo below:
+    // the dwell RESTARTS on every offset change outside the open card's span. That is deliberate and must
+    // stay (it is what stops cards strobing along the pointer's path), but it means the wait is 350 ms after
+    // the pointer STOPS, not 350 ms after it reaches the symbol — and a pointer settling onto a name is
+    // exactly the slow-moving case. The perceived delay is therefore strictly longer than the constant, which
+    // is why a value at the fast end of the band is the right correction rather than a value below it.
+    // ⛔ Do not go under ~200 ms: below that the card starts appearing during the pointer's final approach,
+    // which is the flashing this budget exists to prevent.
+    private static readonly TimeSpan HoverDwell = TimeSpan.FromMilliseconds(250);
     // Gap between the pointer and the card, so the card never sits under the cursor itself.
     private const double HoverGap = 16;
 
@@ -412,7 +423,14 @@ internal sealed class NavigationController
         _hoverDwell.Stop();
         if (_hoverCard is { } card)
         {
-            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            // ⭐⭐ REMOVE FROM THE PANEL THAT ACTUALLY HOLDS IT — the rule HideBulb already states, and this is
+            // the site that made the user pay for it (report 2026-08-03: a hover card left on screen that no
+            // tab change, no pointer exit and no click could remove — only restarting the application).
+            // GetOverlayLayer(_editor) answers "which overlay would this editor use NOW". Once the tab has been
+            // switched the editor is detached, so it answers null (or a different window's layer) and Remove
+            // silently does nothing — while the card is still parented in the OLD overlay, which belongs to the
+            // WINDOW and therefore outlives every tab. Clearing the field then drops the last reference to it.
+            (card.Parent as Panel)?.Children.Remove(card);
             _hoverCard = null;
         }
         _hoverSpan = null;
@@ -670,7 +688,7 @@ internal sealed class NavigationController
         list.Classes.Add("code-action-menu");
         var card = new Border
         {
-            Background = ThemeBrush("ElevatedPanelBrush"),
+            Background = ThemeBrush("SurfaceRaisedBrush"),
             BorderBrush = ThemeBrush("BorderBrush"),
             BorderThickness = new Thickness(1),
             Child = list,
@@ -945,7 +963,7 @@ internal sealed class NavigationController
 
     private void HideBulb()
     {
-        if (_bulb is not null)        if (_bulb is { } bulb)
+        if (_bulb is { } bulb)
         {
             // Remove from the panel that ACTUALLY holds it, not from whatever GetOverlayLayer resolves
             // to now: clearing the field while the control stayed parented is how one gets stranded in
@@ -967,7 +985,9 @@ internal sealed class NavigationController
     {
         if (_codeActionMenu is { } card)
         {
-            OverlayLayer.GetOverlayLayer(_editor)?.Children.Remove(card);
+            // Same rule as HideBulb / HideHover: the panel that holds it, not the one the editor would resolve
+            // to now — otherwise a tab switch strands the menu in the window's overlay for good.
+            (card.Parent as Panel)?.Children.Remove(card);
             _codeActionMenu = null;
             _codeActionList = null;
             _codeActionOffset = -1;
@@ -1037,7 +1057,7 @@ internal sealed class NavigationController
         _renameBorder = new Border
         {
             Child = _renameBox,
-            Background = Brush("ElevatedPanelBrush"),
+            Background = Brush("SurfaceRaisedBrush"),
             BorderBrush = Brush("FocusBorderBrush") ?? Brush("AccentBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
@@ -1244,7 +1264,7 @@ internal sealed class NavigationController
         var border = new Border
         {
             Child = panel,
-            Background = Brush("ElevatedPanelBrush") ?? Brush("BackgroundBrush"),
+            Background = Brush("SurfaceRaisedBrush") ?? Brush("BackgroundBrush"),
             BorderBrush = Brush("BorderBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),

@@ -1,10 +1,13 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Security;
 using EmberTern.Core.Workspace;
@@ -131,6 +134,16 @@ public sealed class ApplicationSettingsStore
             {
                 // An empty file holds no user data, so replacing it destroys nothing — Missing, not Corrupt.
                 // (A zero-length settings.dat is what a disk-full or killed-mid-write leaves behind.)
+                //
+                // ⚠⚠ THIS CLASSIFICATION IS STILL RIGHT, AND IT WAS ALSO THE SECOND HALF OF A DATA-LOSS BUG.
+                // Missing means the facades fall back to `Load() ?? new()`, ExistingFileBlocksSave lets a blank
+                // file through, and the next write makes DEFAULTS permanent. That is correct for a file the disk
+                // truncated — but until 2026-08-03 a second EmberTern instance could PRODUCE a zero-length
+                // settings.dat out of a perfectly good one, by publishing the shared "settings.dat.tmp" mid-write
+                // (see TryAtomicWrite). ⛔ Do not "harden" this by treating an empty file as Corrupt: that would
+                // strand the genuinely-truncated case behind SaveOverUnreadableFile for a cause that has been
+                // fixed where it lived, on the WRITE side. The lesson is that a benign-looking read
+                // classification is only as safe as the guarantee that nothing fabricates its input.
                 return SettingsLoadResult.Missing();
             }
 
@@ -305,6 +318,16 @@ public sealed class ApplicationSettingsStore
     {
         LastSaveDiagnostic = null;
 
+        // ⭐ The read-and-judge and the write are ONE operation, and it has to be one operation across
+        // PROCESSES too — see TryAcquireFileLock. Without this, two EmberTern instances interleave inside the
+        // gap between ExistingFileBlocksSave and the write.
+        using var fileLock = TryAcquireFileLock(out var lockDiagnostic);
+        if (fileLock is null)
+        {
+            LastSaveDiagnostic = lockDiagnostic;
+            return;
+        }
+
         // Never clobber a settings.dat this build could not interpret — whether because a NEWER build wrote it
         // (downgrade protection) or because it could not be decrypted or parsed (audit A-03).
         if (ExistingFileBlocksSave(out var diagnostic))
@@ -318,7 +341,10 @@ public sealed class ApplicationSettingsStore
         var payload = _protector.Protect(json);
         var container = SettingsFileContainer.Wrap(
             SettingsFileContainer.CurrentContainerVersion, _protector.Scheme, payload);
-        AtomicWrite(_filePath, container);
+        if (!TryAtomicWrite(_filePath, container, out var writeDiagnostic))
+        {
+            LastSaveDiagnostic = writeDiagnostic;
+        }
     }
 
     /// <summary>
@@ -351,6 +377,11 @@ public sealed class ApplicationSettingsStore
     /// </summary>
     public string? CopyAsideForImport()
     {
+        // Under the same cross-process lock as Save: a rescue copy taken while another instance is publishing a
+        // new settings.dat would preserve neither generation cleanly. A lock we cannot get is not a reason to
+        // skip the copy — the caller treats a failed copy as a refusal, which is the safe answer either way.
+        using var fileLock = TryAcquireFileLock(out _);
+
         if (!File.Exists(_filePath))
         {
             return null;
@@ -376,6 +407,11 @@ public sealed class ApplicationSettingsStore
         LastSaveDiagnostic = null;
         string? preservedAt = null;
 
+        // Same cross-process lock as Save. This path is an explicit human decision, so it does NOT abandon the
+        // write when the lock is unavailable — it proceeds, because the alternative (refusing the escape hatch)
+        // is the dead end the method exists to remove. TryAtomicWrite still reports a genuine I/O failure.
+        using var fileLock = TryAcquireFileLock(out _);
+
         if (File.Exists(_filePath))
         {
             // Timestamped, so a second attempt cannot overwrite the first rescue copy.
@@ -389,7 +425,10 @@ public sealed class ApplicationSettingsStore
         var payload = _protector.Protect(json);
         var container = SettingsFileContainer.Wrap(
             SettingsFileContainer.CurrentContainerVersion, _protector.Scheme, payload);
-        AtomicWrite(_filePath, container);
+        if (!TryAtomicWrite(_filePath, container, out var writeDiagnostic))
+        {
+            LastSaveDiagnostic = writeDiagnostic;
+        }
 
         return preservedAt;
     }
@@ -740,7 +779,9 @@ public sealed class ApplicationSettingsStore
             : UnprotectSafe(d.ProtectedPassword),
         Charset = d.Charset,
         Dialect = d.Dialect,
-        ClientLibraryPath = d.ClientLibraryPath,
+        // ⛔ No ClientLibraryPath: the setting was removed in 2026-08-05 (S-5) because it could not have any
+        // effect — see ConnectionProfile. An older file still carries the property and the reader simply
+        // ignores it, which is the intended outcome and why CurrentSchemaVersion did not move.
         // Variant A: the pre-split single profile maps to Data; Metadata defaults safe.
         DataTransactionProfile = d.TransactionProfile,
         MetadataTransactionProfile = TransactionProfile.ReadCommitted,
@@ -768,25 +809,169 @@ public sealed class ApplicationSettingsStore
     // torn settings.dat if the process dies mid-write (the old file stays intact until
     // the replace succeeds).
     //
-    // The swap now keeps the PREVIOUS file as settings.dat.bak — File.Replace does this in the same atomic
+    // The swap keeps the PREVIOUS file as settings.dat.bak — File.Replace does this in the same atomic
     // operation, so it costs one filename and no extra I/O. It is a secondary net, not the A-03 fix: it holds
     // one generation only, and Save is frequent enough that a second write would roll a bad value through it.
     // ExistingFileBlocksSave is what actually prevents the bad write; this is what makes an ordinary
     // "I saved something I didn't mean to" recoverable by hand.
-    private static void AtomicWrite(string path, string content)
+    //
+    // ⭐⭐ THE TEMP FILENAME IS UNIQUE PER WRITE, AND THAT IS A DATA-LOSS FIX, NOT TIDINESS (2026-08-03).
+    // It used to be the fixed "settings.dat.tmp", i.e. the SAME path in every process. The user ran a second
+    // EmberTern from the same exe and lost their settings, and this is the mechanism: File.WriteAllText
+    // truncates before it writes, so there is a window in which the shared .tmp holds ZERO bytes. A second
+    // instance reaching its File.Replace inside that window publishes an EMPTY settings.dat — and an empty
+    // file is read as Missing (see LoadWithStatus: "an empty file holds no user data"), so every facade falls
+    // back to `Load() ?? new()`, ExistingFileBlocksSave lets a blank file through, and the very next write
+    // makes DEFAULTS permanent while File.Replace rolls the single .bak generation away. Nothing throws,
+    // nothing is logged, and the settings are simply gone. A per-write name removes the shared object the
+    // race needs; the lock below removes the rest.
+    //
+    // ⚠ Returns false instead of throwing. A settings write happens on paths that must not be derailed by it —
+    // most sharply MainWindow's Closing handler, where an escaping IOException would abandon the remainder of
+    // the shutdown sequence. The caller reports the reason through LastSaveDiagnostic, which is the channel the
+    // App already surfaces in its docked MessageBanner.
+    private static bool TryAtomicWrite(string path, string content, out string diagnostic)
     {
+        diagnostic = string.Empty;
         var directory = Path.GetDirectoryName(path)!;
-        var tempPath = Path.Combine(directory, Path.GetFileName(path) + ".tmp");
+        var tempPath = Path.Combine(
+            directory,
+            $"{Path.GetFileName(path)}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp");
 
-        File.WriteAllText(tempPath, content);
-
-        if (File.Exists(path))
+        try
         {
-            File.Replace(tempPath, path, destinationBackupFileName: path + ".bak");
+            File.WriteAllText(tempPath, content);
+
+            if (File.Exists(path))
+            {
+                File.Replace(tempPath, path, destinationBackupFileName: path + ".bak");
+            }
+            else
+            {
+                File.Move(tempPath, path);
+            }
+
+            return true;
         }
-        else
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            File.Move(tempPath, path);
+            diagnostic = $"settings.dat could not be written: {ex.Message}. The previous file is unchanged.";
+            return false;
+        }
+        finally
+        {
+            // A successful swap consumes the temp file; a failed one must not leave it behind, or the settings
+            // folder accumulates one orphan per failure and the next reader has to guess what they are.
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Cleaning up is best-effort; an orphaned temp file is untidy, never harmful. Swallowing here
+                // is deliberate — throwing out of a finally would replace the real diagnostic with this one.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Takes the cross-process lock guarding <c>settings.dat</c>, or returns null with the reason.
+    ///
+    /// <para>⭐ <b>Why a named OS mutex and not a lock object.</b> The thing being serialized is not a field, it
+    /// is a FILE, and the second writer is a second EmberTern process — which the user does have (a smoke test
+    /// beside a working instance, two databases side by side). An in-process lock cannot see it. The unique temp
+    /// filename above already removes the way that race destroyed data; this removes what is left: the gap
+    /// between <see cref="ExistingFileBlocksSave"/> reading the file and the write replacing it, plus the
+    /// spurious "could not be read" refusals two instances hand each other by colliding on the same file.</para>
+    ///
+    /// <para>⚠ <b>What this deliberately does NOT fix</b>, so nobody reads more into it: last-writer-wins at the
+    /// SECTION level survives. Instance A holds live in-memory copies (<c>PreferencesService</c>'s preferences,
+    /// <c>MainWindowViewModel</c>'s folder state — settings-center.md §16.1) and <c>Save</c> persists the whole
+    /// aggregate, so A's next write still carries A's older copy of whatever B changed. That is a coherent,
+    /// visible outcome for two deliberately-run instances. Losing everything to defaults was not.</para>
+    ///
+    /// <para>⚠ Scoped <c>Local\</c>, not <c>Global\</c>: the file lives in the user's own AppData and is
+    /// DPAPI-protected per user, so a lock spanning terminal-server sessions would guard nothing extra and would
+    /// need privileges an ordinary user may not have. Named from a hash of the full path, because two stores on
+    /// different directories are independent and a mutex name cannot contain a path separator.</para>
+    ///
+    /// <para>⚠ A timeout rather than an unbounded wait, and a failure to acquire is reported, never ignored:
+    /// blocking the UI thread forever on a stuck peer would be a worse defect than the one being fixed.</para>
+    /// </summary>
+    private IDisposable? TryAcquireFileLock(out string diagnostic)
+    {
+        diagnostic = string.Empty;
+        try
+        {
+            var mutex = new Mutex(initiallyOwned: false, FileLockName(_filePath));
+            try
+            {
+                if (!mutex.WaitOne(FileLockTimeout))
+                {
+                    mutex.Dispose();
+                    diagnostic =
+                        "settings.dat is being written by another EmberTern instance and did not become "
+                        + "available; nothing was saved. The previous file is unchanged.";
+                    return null;
+                }
+            }
+            catch (AbandonedMutexException)
+            {
+                // The previous holder died without releasing — but the wait SUCCEEDED and we now own the lock.
+                // Proceeding is safe: File.Replace is atomic, so settings.dat is either the old or the new file
+                // and never a torn one; the dead process can only have orphaned its own uniquely-named temp.
+            }
+
+            return new MutexRelease(mutex);
+        }
+        catch (Exception ex) when (
+            ex is WaitHandleCannotBeOpenedException or UnauthorizedAccessException or NotSupportedException)
+        {
+            // A platform (or a policy) that refuses us the named object at all. Degrade to the UNLOCKED path
+            // rather than refusing to save: the unique temp filename is what prevents the data loss, and this
+            // lock is the additional coherence on top of it. Refusing here would turn a missing nicety into a
+            // settings store that cannot write.
+            return NoLock.Instance;
+        }
+    }
+
+    private static readonly TimeSpan FileLockTimeout = TimeSpan.FromSeconds(5);
+
+    private static string FileLockName(string path)
+    {
+        var key = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToLowerInvariant())));
+        return @"Local\EmberTern.settings." + key[..32];
+    }
+
+    private sealed class MutexRelease(Mutex mutex) : IDisposable
+    {
+        public void Dispose()
+        {
+            try
+            {
+                mutex.ReleaseMutex();
+            }
+            catch (ApplicationException)
+            {
+                // Not owned (only reachable if ownership was already lost); nothing to release.
+            }
+
+            mutex.Dispose();
+        }
+    }
+
+    // Stands in for the lock where the OS will not give us one, so callers keep a single non-null-means-locked
+    // shape and no path has to special-case "no lock available".
+    private sealed class NoLock : IDisposable
+    {
+        internal static readonly NoLock Instance = new();
+
+        public void Dispose()
+        {
         }
     }
 
@@ -816,7 +1001,9 @@ public sealed class ApplicationSettingsStore
         public string? ProtectedPassword { get; set; }
         public string Charset { get; set; } = "WIN1250";
         public int Dialect { get; set; } = 3;
-        public string ClientLibraryPath { get; set; } = string.Empty;
+        // ⛔ ClientLibraryPath is deliberately absent (S-5, 2026-08-05). System.Text.Json ignores members it
+        // does not know, so an older settings.dat that still has it deserializes cleanly and the value is
+        // dropped — exactly what should happen to a setting that never did anything.
         public TransactionProfile TransactionProfile { get; set; } = TransactionProfile.ReadCommitted;
     }
 }

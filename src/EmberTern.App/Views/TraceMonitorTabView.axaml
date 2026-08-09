@@ -22,27 +22,22 @@
     <Style Selector="TextBlock.trace-error">
       <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
     </Style>
-    <!-- Segmented control (grouping + quick filter): flat segments, active one raised -->
-    <Style Selector="Button.seg">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="Padding" Value="10,3" />
-      <Setter Property="FontSize" Value="12" />
-    </Style>
-    <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
-    </Style>
-    <Style Selector="Button.seg.active">
-      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
+    <!-- ⭐ M4.3c: styl `Button.seg` przeniesiony do `Themes/ControlStyles.axaml` — jeden styl na oba ekrany.
+         ⚠ To TEN widok niósł szerszy wariant odstępu wewnętrznego (poziom 10); wspólny styl bierze 8
+         (R18 — przy równej czytelności wygrywa gęstszy), więc sześć segmentów tego paska zwęża się
+         o 2 px z każdej strony. Powód i odrzucone warianty stoją przy stylu; ⛔ nie przywracać kopii lokalnej.
+         ⚠⚠ Powyższe zdanie CELOWO nie zapisuje składni atrybutu: licznik wartości lokalnych czyta plik
+         regeksem i nie pomija komentarzy, więc proza cytująca `Nazwa="wartość"` liczy się jak deklaracja.
+         Ten komentarz w pierwszej wersji cytował ją i podniósł licznik tego pliku o 1 (M2c iteracja 2
+         zapłaciła dokładnie to samo). -->
+
     <!-- Detail-panel section header -->
     <Style Selector="TextBlock.section">
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="FontSize" Value="12" />
+      <!-- ⭐ K8 ZAMKNIĘTA (M4, decyzja użytkownika A-2): rola `Text.SectionHeader` niesie teraz 12 SemiBold,
+           czyli dokładnie to, co ten nagłówek deklarował lokalnie od M2c. Wartość się nie zmienia — zmienia
+           się to, że przestaje być wyjątkiem. Powód korekty katalogu stoi przy roli w `Typography.axaml`. -->
+      <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />
+      <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
       <Setter Property="Margin" Value="0,0,0,3" />
     </Style>
     <!-- Compact, uncramped column headers for this grid only -->
@@ -54,16 +49,23 @@
   <Grid x:Name="RootGrid" RowDefinitions="Auto,Auto,*,4,240">
 
     <!-- ① Session bar -->
-    <Border Grid.Row="0" Background="{DynamicResource ElevatedPanelBrush}"
+    <Border Classes="chrome" Grid.Row="0" Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
       <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
         <Button Classes="icon" Command="{Binding StartCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStart}">
-          <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource SuccessIconBrush}" />
+          <!-- Rola R‑1 „Uruchom" (`color-language.md` §3): Start trace uruchamia operację, więc niesie
+               ten sam token co Execute procedury — nie kolor sukcesu. Odcień bez zmiany (krok K1). -->
+          <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource ActionRunBrush}" />
         </Button>
         <!-- Pause is enabled only while Running; once paused it disables and Start (which doubles
              as Resume) lights up. Two distinct buttons, never both usable at once. -->
         <Button Classes="icon" Command="{Binding PauseCommand}" ToolTip.Tip="{x:Static app:UiStrings.TracePause}">
-          <controls:SvgIcon Data="{StaticResource Icon.Pause}" Foreground="{DynamicResource WarningBrush}" />
+          <!-- Rola R‑5 „Ostrzeżenie / Wstrzymanie" na tokenie IKONOWYM (`color-language.md` §7.4).
+               Dwa tokeny opisywały jedną rolę: `WarningBrush` i `WarningIconBrush`. Język przypisuje
+               R‑5 ten drugi, a `WarningBrush` zostaje dla TEKSTU i komunikatów (np. pasek uwagi nad
+               wynikami w MainWindow) — Pause był ostatnim PRZYCISKIEM po niewłaściwej stronie tego
+               podziału, obok Break on exception, które nosi już `WarningIconBrush`. -->
+          <controls:SvgIcon Data="{StaticResource Icon.Pause}" Foreground="{DynamicResource WarningIconBrush}" />
         </Button>
         <Button Classes="icon" Command="{Binding StopCommand}" ToolTip.Tip="{x:Static app:UiStrings.TraceStop}">
           <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
@@ -75,7 +77,11 @@
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <!-- Grouping / lens selector (segmented) -->
-        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+        <!-- ⭐ Q1 ZAMKNIĘTE (M4.3): ramka przełącznika bierze `Radius.Surface` (4 → 3). Ten element UDAJE
+             obramowaną kontrolkę, a `ControlCornerRadius` Fluenta = 3 i jest świadomie NIENADPISANY
+             w `FluentBridge`, więc każda prawdziwa obramowana kontrolka renderuje się przy 3. -->
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource Radius.Surface}" ClipToBounds="True">
           <StackPanel Orientation="Horizontal">
             <Button Classes="seg" Classes.active="{Binding IsGroupNone}"
                     Content="{x:Static app:UiStrings.TraceGroupNone}" Command="{Binding ShowChronologicalCommand}" />
@@ -89,7 +95,10 @@
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <!-- Quick filter chips (segmented) -->
-        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+        <!-- ⭐ Q1 ZAMKNIĘTE (M4.3): jak przełącznik wyżej — `Radius.Surface` (4 → 3). Oba stoją w jednym
+             pasku, więc rozstrzygały się razem, na komplecie wystąpień (R7). -->
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource Radius.Surface}" ClipToBounds="True">
           <StackPanel Orientation="Horizontal">
             <Button Classes="seg" Classes.active="{Binding IsQuickFilterAll}"
                     Content="{x:Static app:UiStrings.TraceFilterAll}" Command="{Binding ShowAllCommand}" />
@@ -104,7 +113,7 @@
              DISPLAY-level — distinct from the source-level "Include function calls" capture toggle. -->
         <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TraceFilterEventsTip}">
           <Panel>
-            <controls:SvgIcon Data="{StaticResource Icon.Filter}" />
+            <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             <Border Classes="filter-active-dot" IsVisible="{Binding IsEventFilterActive}" />
           </Panel>
           <Button.Flyout>
@@ -132,13 +141,23 @@
 
         <!-- Free-text search over the visible rows — full SQL, object/routine name, error message,
              session identity (user/role/process/host) and the ids (tx/attachment/pid). A FILLED
-             search field (BackgroundBrush contrasts the ElevatedPanel toolbar) so it reads clearly
+             search field (BackgroundBrush contrasts the ChromeStrong toolbar) so it reads clearly
              as a text input, not another segmented button group. Grouped with the quick chips +
              funnel as the one "filter" zone; distinct from the funnel (structured). -->
+        <!-- ⭐⭐ Q1 + Q4 ZAMKNIĘTE (M4.3), i oba wynikają z JEDNEGO zdania, które stoi w komentarzu wyżej:
+             ten element ma czytać się „as a text input". Skoro tak, bierze metryki pola tekstowego:
+               • promień → `Radius.Surface` (4 → 3), bo `ControlCornerRadius` Fluenta = 3 i prawdziwy
+                 `TextBox` renderuje się właśnie przy 3;
+               • wysokość → `Size.Control` (26 → 24), bo ZMIERZONE: `TextBox` i `ComboBox` biorą
+                 `MinHeight = Size.Control` = 24, więc przy 26 to pole stało 2 px wyżej niż każdy prawdziwy
+                 sąsiad w tym samym pasku — i to ono wyznaczało wysokość paska.
+             ⚠ 26 nie występowało nigdzie indziej w `src/`; drugie `MinHeight="26"` zdjął blok typografii
+             (decyzja D), więc to był ostatni egzemplarz tego samego kształtu. -->
         <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1" CornerRadius="4" Height="26" Padding="7,0,6,0" VerticalAlignment="Center">
+                BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}"
+                Height="{DynamicResource Size.Control}" Padding="7,0,6,0" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-            <controls:SvgIcon Data="{StaticResource Icon.Search}" Width="14" Height="14"
+            <controls:SvgIcon Data="{StaticResource Icon.Search}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
             <TextBox Width="200" Classes="frameless" Padding="0" MinHeight="0"
                      VerticalAlignment="Center" VerticalContentAlignment="Center"
@@ -178,7 +197,7 @@
         <!-- Export the trace grid via the shared Export Framework (default = the filtered view). -->
         <Button Classes="icon" Click="OnExportClick" IsEnabled="{Binding CanExport}"
                 ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
-          <controls:SvgIcon Data="{StaticResource Icon.Download}" />
+          <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
         </Button>
 
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
@@ -200,20 +219,20 @@
             <!-- Transaction lens: representative statement, then TRA · N stmt · duration -->
             <DataTemplate DataType="vm:TraceTransactionLensItem">
               <StackPanel Spacing="1" Margin="2,3">
-                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" FontSize="11"
+                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource Text.Compact.Size}"
                            FontFamily="Cascadia Code,Consolas,monospace" />
-                <TextBlock Text="{Binding SubText}" FontSize="10" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                <TextBlock Text="{Binding SubText}" FontSize="{DynamicResource Text.Caption.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" />
               </StackPanel>
             </DataTemplate>
             <!-- Statements lens: representative SQL, then ×N (accent) + total · avg · max -->
             <DataTemplate DataType="vm:TraceFingerprintLensItem">
               <StackPanel Spacing="1" Margin="2,3">
-                <TextBlock Text="{Binding Sql}" TextTrimming="CharacterEllipsis" FontSize="11"
+                <TextBlock Text="{Binding Sql}" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource Text.Compact.Size}"
                            FontFamily="Cascadia Code,Consolas,monospace" />
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="{Binding CountText}" FontSize="11" FontWeight="SemiBold"
+                  <TextBlock Text="{Binding CountText}" FontSize="{DynamicResource Text.Compact.Size}" FontWeight="SemiBold"
                              Foreground="{DynamicResource AccentBrush}" />
-                  <TextBlock Text="{Binding MetricsText}" FontSize="10"
+                  <TextBlock Text="{Binding MetricsText}" FontSize="{DynamicResource Text.Caption.Size}"
                              Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
                 </StackPanel>
               </StackPanel>
@@ -231,7 +250,7 @@
                   AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
                   CanUserSortColumns="False" CanUserReorderColumns="True"
                   ColumnWidth="Auto"
-                  GridLinesVisibility="Horizontal" FontSize="11">
+                  GridLinesVisibility="Horizontal" FontSize="{DynamicResource Text.Grid.Size}">
           <DataGrid.ContextMenu>
             <ContextMenu>
               <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnCopyCellClick" />
@@ -320,9 +339,12 @@
         </DataGrid>
 
         <!-- Empty state (no session / waiting / no match) -->
+        <!-- ⭐ Q3/A ZAMKNIĘTE (M4.3): komunikat pustego stanu bierze `Text.Application` (13 → 12).
+             ⚠ Bliźniak tego elementu stoi w Session Managerze i jest konstrukcyjnie identyczny, więc to
+             była JEDNA decyzja na dwa ekrany; pilnuje jej `BothEmptyStates_ShareOneTextRole`. -->
         <TextBlock IsVisible="{Binding ShowEmptyState}" Text="{Binding EmptyStateText}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
-                   Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="13" />
+                   Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Application.Size}" />
 
         <!-- Resume follow-tail (appears when follow is paused, e.g. after a manual scroll-up) -->
         <Button Classes="primary" Command="{Binding JumpToLatestCommand}" IsVisible="{Binding !FollowTail}"
@@ -382,11 +404,14 @@
               <Button Grid.Column="6" Classes="icon" Click="OnToggleDetailMaximizeClick"
                       ToolTip.Tip="{x:Static app:UiStrings.TraceDetailMaximizeTip}">
                 <Panel>
-                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" IsVisible="{Binding !IsDetailMaximized}" />
-                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" IsVisible="{Binding IsDetailMaximized}" />
+                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding !IsDetailMaximized}" />
+                  <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding IsDetailMaximized}" />
                 </Panel>
               </Button>
             </Grid>
+            <!-- ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Szczegół Trace to jeden z sześciu edytorów,
+                 które krok 0 zmierzył jako stojące w wierszu siatki — gęstość kontenera, nie dryf (§18.0.5/3).
+                 Rola `Text.Code` niesie 13. Rozstrzyga §13.3. -->
             <ae:TextEditor x:Name="DetailSqlEditor" IsReadOnly="True"
                            FontFamily="Cascadia Code,Consolas,Menlo,monospace" FontSize="12"
                            HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
@@ -400,16 +425,19 @@
             <StackPanel Spacing="10">
 
               <!-- error -->
-              <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="4" Padding="8,6"
+              <!-- ⭐ Q1 ZAMKNIĘTE (M4.3): karta błędu bierze `Radius.Surface` (4 → 3) — ta sama decyzja
+                   co karta ostrzeżenia w Session i karta findingu w Performance, rozstrzygnięta raz,
+                   na komplecie wystąpień (R7). -->
+              <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="{DynamicResource Radius.Surface}" Padding="8,6"
                       IsVisible="{Binding Detail.HasError}">
                 <TextBlock Text="{Binding Detail.ErrorText}" Foreground="{DynamicResource ErrorBrush}"
-                           TextWrapping="Wrap" FontSize="11" />
+                           TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}" />
               </Border>
 
               <!-- timing -->
               <StackPanel IsVisible="{Binding Detail.HasTiming}">
                 <TextBlock Classes="section" Text="{x:Static app:UiStrings.TraceDetailTiming}" />
-                <TextBlock Text="{Binding Detail.TimingText}" FontSize="11" />
+                <TextBlock Text="{Binding Detail.TimingText}" FontSize="{DynamicResource Text.Compact.Size}" />
               </StackPanel>
 
               <!-- session (who ran this) -->
@@ -419,9 +447,9 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TraceDetailKv">
                       <Grid ColumnDefinitions="86,*" Margin="0,1">
-                        <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="11"
+                        <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="{DynamicResource Text.Compact.Size}"
                                    Foreground="{DynamicResource SubtleForegroundBrush}" />
-                        <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="11"
+                        <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="{DynamicResource Text.Compact.Size}"
                                    TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Value}" />
                       </Grid>
                     </DataTemplate>
@@ -436,10 +464,14 @@
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:TableAccessBarViewModel">
                       <Grid ColumnDefinitions="110,160,Auto" Margin="0,2" VerticalAlignment="Center">
-                        <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="11"
+                        <TextBlock Grid.Column="0" Text="{Binding Table}" FontSize="{DynamicResource Text.Compact.Size}"
                                    FontFamily="Consolas,Cascadia Code,monospace" TextTrimming="CharacterEllipsis"
                                    ToolTip.Tip="{Binding Table}" Margin="0,0,8,0" VerticalAlignment="Center" />
                         <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the seq/idx split -->
+                        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA —
+                             kapsuła (`Height=10`) ma promień równy POŁOWIE BOKU. ⛔ Nie tokenizujemy
+                             arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4" zniknęło w M4.3:
+                             obie ramki przełączników, pole filtra i karta błędu zeszły na `Radius.Surface`. -->
                         <Border Grid.Column="1" Width="160" Height="10" CornerRadius="5" ClipToBounds="True"
                                 Background="{DynamicResource RowAlternateBrush}" VerticalAlignment="Center" HorizontalAlignment="Left">
                           <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
@@ -447,7 +479,7 @@
                             <Border Width="{Binding IdxWidth}" Background="{DynamicResource InfoIconBrush}" />
                           </StackPanel>
                         </Border>
-                        <TextBlock Grid.Column="2" Text="{Binding ReadsText}" FontSize="10" Margin="8,0,0,0"
+                        <TextBlock Grid.Column="2" Text="{Binding ReadsText}" FontSize="{DynamicResource Text.Caption.Size}" Margin="8,0,0,0"
                                    Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
                       </Grid>
                     </DataTemplate>
@@ -461,7 +493,7 @@
                 <ItemsControl ItemsSource="{Binding Detail.Parameters}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" />
+                      <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="{DynamicResource Text.Compact.Size}" />
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>

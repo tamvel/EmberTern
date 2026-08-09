@@ -70,7 +70,7 @@
       <TextBlock Grid.Column="0"
                  Text="{Binding CountText}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  VerticalAlignment="Center" />
 
       <!-- Restores Global → Tab → Tree → Grid → Editor → alphabetical. Always visible: it first appeared only

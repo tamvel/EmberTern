@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
+using EmberTern.App;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Connections;
 using EmberTern.Firebird;
@@ -137,6 +139,83 @@ public class MetadataExplorerViewModelTests
         Assert.Single(harness.Main.Metadata.Connections);
         Assert.Equal("ERP-EDITED", harness.Main.Metadata.Connections[0].Profile.Name);
     }
+
+    // ══ M5 / M‑3 klasa A — stan pusty paska bocznego ═══════════════════════════════════════════════
+
+    [Fact]
+    public void SidebarEmptyState_ShowsOnlyWhileTheRootIsEmpty()
+    {
+        using var harness = new Harness();
+
+        // Pierwsze uruchomienie: zero profili ⇒ panel nie ma nic w korzeniu.
+        harness.Main.ReloadConnections();
+        Assert.True(harness.Main.Metadata.ShowEmptyState);
+
+        harness.Store.Upsert(new ConnectionProfile { Name = "A", Host = "h", Port = 3050 });
+        harness.Main.ReloadConnections();
+        Assert.False(harness.Main.Metadata.ShowEmptyState);
+    }
+
+    /// <summary>
+    /// ⭐⭐ ASERCJĄ JEST POWIADOMIENIE, NIE WARTOŚĆ. Odczytana wprost właściwość jest poprawna nawet wtedy,
+    /// gdy nic o zmianie nie mówi, a wiązanie odpytuje ją WYŁĄCZNIE po <c>PropertyChanged</c> — więc bez tego
+    /// testu podpowiedź „dodaj połączenie" zostałaby na ekranie po podłączeniu pierwszego profilu.
+    /// Ten sam błąd złapały testy w M3.3b i M3b.2, za każdym razem dopiero przy podsadzeniu naruszenia.
+    /// </summary>
+    [Fact]
+    public void SidebarEmptyState_AnnouncesItsOwnChange()
+    {
+        using var harness = new Harness();
+        harness.Main.ReloadConnections();
+
+        var announced = 0;
+        harness.Main.Metadata.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MetadataExplorerViewModel.ShowEmptyState)) announced++;
+        };
+
+        harness.Store.Upsert(new ConnectionProfile { Name = "A", Host = "h", Port = 3050 });
+        harness.Main.ReloadConnections();
+
+        Assert.True(announced > 0, "ShowEmptyState zmieniło wartość, ale nie powiadomiło — wiązanie nie odświeży ekranu.");
+        Assert.False(harness.Main.Metadata.ShowEmptyState);
+    }
+
+    /// <summary>
+    /// ⚠ Strażnik ŹRÓDŁOWY, i jest konieczny: poprawna właściwość w ViewModelu nie jest tym samym, co element
+    /// na ekranie. Bez wiązania w widoku oba testy wyżej byłyby zielone przy pustym pasku bocznym.
+    /// ⛔ Pilnuje też TREŚCI: obie stałe muszą być użyte i musi być przy nich GLIF — bo to glif jest powodem,
+    /// dla którego wybrano ten wariant (przycisk „New Connection" nie ma na ekranie podpisu).
+    /// </summary>
+    [Fact]
+    public void SidebarEmptyState_IsActuallyBoundInTheView()
+    {
+        var xaml = File.ReadAllText(Path.Combine(RepoRoot(), "src", "EmberTern.App", "Views", "MainWindow.axaml"));
+
+        Assert.Contains("IsVisible=\"{Binding ShowEmptyState}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("UiStrings.SidebarPlaceholderEmpty", xaml, StringComparison.Ordinal);
+        Assert.Contains("UiStrings.ConnectionsEmptyHint", xaml, StringComparison.Ordinal);
+        Assert.Contains("Icon.Plus", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⛔⛔ Treść, która CYTUJE ETYKIETĘ NIEISTNIEJĄCĄ NA EKRANIE, jest defektem, nie niedokładnością — i taka
+    /// dokładnie stała czekała w `UiStrings` osierocona przez cały czas życia produktu („Click “+ New
+    /// Connection” to add one."), przy przycisku, który jest samym glifem. Ten strażnik pilnuje, żeby nie
+    /// wróciła: napis, którego użytkownik ma szukać, musi zgadzać się z tym, jak akcja nazywa się naprawdę.
+    /// </summary>
+    [Fact]
+    public void SidebarEmptyState_NeverQuotesALabelTheProductDoesNotShow()
+    {
+        Assert.DoesNotContain("+ New Connection", UiStrings.ConnectionsEmptyHint, StringComparison.Ordinal);
+        Assert.DoesNotContain("+ New Connection", UiStrings.SidebarPlaceholderEmpty, StringComparison.Ordinal);
+
+        // Nazwa, na którą wskazuje podpowiedź, to nazwa z tooltipa tego samego przycisku.
+        Assert.Contains(UiStrings.ConnectionNewTooltip, UiStrings.ConnectionsEmptyHint, StringComparison.Ordinal);
+    }
+
+    private static string RepoRoot([CallerFilePath] string thisFile = "")
+        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", ".."));
 
     private sealed class Harness : IDisposable
     {

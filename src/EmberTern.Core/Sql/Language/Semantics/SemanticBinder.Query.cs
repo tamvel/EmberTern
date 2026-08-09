@@ -369,6 +369,33 @@ internal sealed partial class SemanticBinder
                 continue;
             }
 
+            // ⭐⭐ A ':name' / '@name' host-parameter token, bound against the SCOPE CHAIN by the same
+            // BindParameterToken the PSQL binder uses (S-6, 2026-08-05). No second mechanism, and no
+            // special case for the colon.
+            //
+            // ⚠⚠ ITS ABSENCE WAS THE WHOLE OF THE REPORTED "no tooltip on :VariableName" DEFECT, and the
+            // report's own correlation pointed at the wrong variable. Measured: the colon form resolves
+            // identically to the bare form everywhere the PSQL binder walks (an assignment, an IF/WHILE
+            // condition, INSERT … VALUES, EXECUTE PROCEDURE, a FOR SELECT header) — SqlLexer emits ':a' as
+            // ONE Parameter token and BindParameterToken calls the same scope.Resolve. What had no binding
+            // at all was a ':name' inside a QUERY CLAUSE, because this walk handled only 'AS', dotted and
+            // bare names. The colon form is simply WHERE an embedded SELECT puts a local, which is why the
+            // two looked connected.
+            //
+            // ⭐ The payoff is much wider than a tooltip: highlighting, Ctrl+Click, find-references and
+            // diagnostics were all blind in that range.
+            //
+            // ⚠ SCOPE, and it needs no gate of its own: at TOP level there are no locals in scope, so
+            // scope.Resolve returns null and the reference is recorded UNRESOLVED — which is exactly right
+            // for a SQL-Editor smart parameter, and DiagnosticsEngine.IsInRoutineBody already keeps it
+            // from being flagged outside a routine body. Inside a body the same call resolves it.
+            if (tok.Kind == TokenKind.Parameter)
+            {
+                BindParameterToken(tok, scope);
+                k++;
+                continue;
+            }
+
             if (IsNameToken(tok) && At(t, k + 1).Kind == TokenKind.Dot && IsWord(At(t, k + 2)))
             {
                 BindDottedReference(tok, t[k + 2], scope);
@@ -378,6 +405,17 @@ internal sealed partial class SemanticBinder
 
             if (IsNameToken(tok) && At(t, k + 1).Kind != TokenKind.LParen)
             {
+                // ⭐⭐ The same grammar gate the PSQL walker applies — and this walker had NONE, which is the
+                // half of the defect class that never reached a bug report because its symptom is quieter
+                // (2026-08-07). Where PSQL reports ET0003 on `DATEADD(MONTH, …)`, a query silently BINDS
+                // MONTH to a column of that name if one in-scope table has it — wrong colour, wrong Quick
+                // Info, wrong find-references — and reports ET0005 "Ambiguous column" if two do.
+                //
+                // ⚠ Positional, never vocabulary alone: `SELECT MONTH FROM SALES` must keep binding its
+                // column. FirebirdGrammar decides from the construct the word sits in, so an ordinary
+                // identifier — and a Firebird word outside such a construct — is untouched here.
+                if (IsGrammarPinnedNonLocal(t, k)) { k++; continue; }
+
                 BindBareReference(tok, scope);
                 k++;
                 continue;

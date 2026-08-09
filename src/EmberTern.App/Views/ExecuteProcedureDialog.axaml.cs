@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using EmberTern.App.Behaviors;
 using EmberTern.App.ViewModels;
 
 namespace EmberTern.App.Views;
@@ -19,6 +20,16 @@ public partial class ExecuteProcedureDialog : Window
     public ExecuteProcedureDialog()
     {
         InitializeComponent();
+
+        // ⭐ M4.4 / M‑5. Ten dialog nie ROŚNIE po otwarciu — parametry są znane przed `ShowDialog` — ale ma
+        // ten sam objaw z innego powodu: jego świadomy limit 720 stoi POWYŻEJ obszaru roboczego ekranu
+        // 1366×768 (zmierzone 696), więc procedura o wielu parametrach daje okno wyższe od ekranu i stopka
+        // z przyciskiem Execute wychodzi poza dolną krawędź. ⭐ Sufit liczony z ekranu ogranicza go tylko
+        // wtedy, gdy ekran jest mniejszy — na 1080 zostaje 720 (ratyfikowana reguła `min`).
+        // ⚠ Ściśnięcie trafia we właściwe miejsce z konstrukcji: wiersz 3 jest gwiazdkowy i to on niesie
+        // `ScrollViewer` z listą parametrów, więc nagłówek, baner walidacji i stopka zostają widoczne.
+        GrowingDialogBehavior.Attach(this);
+
         DataContextChanged += OnDataContextChanged;
     }
 

@@ -29,7 +29,7 @@
                      Margin="0,0,12,8" Text="{x:Static app:UiStrings.GeneratorNameHeader}" />
           <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
                    Text="{Binding EditableName, Mode=TwoWay}"
-                   IsReadOnly="{Binding !IsNew}" FontSize="12" />
+                   IsReadOnly="{Binding !IsNew}" />
 
           <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
                      Margin="0,0,12,8" Text="{x:Static app:UiStrings.GeneratorCurrentValueHeader}" />
@@ -37,7 +37,7 @@
             <NumericUpDown Value="{Binding CurrentValue, Mode=TwoWay}"
                            IsEnabled="{Binding IsCurrentValueEditable}"
                            Minimum="-9223372036854775808" Maximum="9223372036854775807"
-                           Increment="1" FormatString="0" FontSize="12"
+                           Increment="1" FormatString="0"
                            Width="240" />
             <!-- Refresh Current Value: re-reads ONLY the live runtime counter (the
                  generator may be in active ERP use) — no full reload, no dirty change. -->
@@ -54,7 +54,7 @@
                          Value="{Binding InitialValue, Mode=TwoWay}"
                          IsEnabled="{Binding IsDefinitionEditable}"
                          Minimum="-9223372036854775808" Maximum="9223372036854775807"
-                         Increment="1" FormatString="0" FontSize="12"
+                         Increment="1" FormatString="0"
                          HorizontalAlignment="Left" Width="240" />
 
           <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
@@ -63,14 +63,14 @@
                          Value="{Binding Increment, Mode=TwoWay}"
                          IsEnabled="{Binding IsDefinitionEditable}"
                          Minimum="-9223372036854775808" Maximum="9223372036854775807"
-                         Increment="1" FormatString="0" FontSize="12"
+                         Increment="1" FormatString="0"
                          HorizontalAlignment="Left" Width="240" />
 
           <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label"
                      Margin="0,0,12,0" Text="{x:Static app:UiStrings.GeneratorDescriptionHeader}" />
           <TextBox Grid.Row="4" Grid.Column="1"
                    Text="{Binding EditableDescription, Mode=TwoWay}"
-                   AcceptsReturn="True" TextWrapping="Wrap" FontSize="12"
+                   AcceptsReturn="True" TextWrapping="Wrap"
                    MinHeight="80"
                    Background="{DynamicResource BackgroundBrush}" />
         </Grid>
@@ -83,55 +83,10 @@
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
                        Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
-                       Margin="0,4,0,4" />
-            <TreeView Grid.Row="1"
-                      ItemsSource="{Binding DependedOnByTree}"
-                      Background="{DynamicResource BackgroundBrush}">
-              <TreeView.DataTemplates>
-                <TreeDataTemplate DataType="vm:DependencyGroupNode"
-                                  ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="5">
-                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15"
-                                      VerticalAlignment="Center">
-                      <controls:SvgIcon.Foreground>
-                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                          <Binding Path="IconResourceKey" />
-                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                        </MultiBinding>
-                      </controls:SvgIcon.Foreground>
-                    </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
-                  </StackPanel>
-                </TreeDataTemplate>
-                <DataTemplate DataType="vm:DependencyLeafNode">
-                  <Border HorizontalAlignment="Stretch"
-                          Background="Transparent"
-                          DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="15" Height="15"
-                                        VerticalAlignment="Center">
-                        <controls:SvgIcon.Foreground>
-                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                            <Binding Path="IconResourceKey" />
-                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                          </MultiBinding>
-                        </controls:SvgIcon.Foreground>
-                      </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding FieldName}"
-                                 FontSize="10"
-                                 Foreground="{DynamicResource SubtleForegroundBrush}"
-                                 VerticalAlignment="Center"
-                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </TreeView.DataTemplates>
-            </TreeView>
+                       Margin="{DynamicResource Margin.PanelCaption}" />
+            <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}" />
           </Grid>
 
           <GridSplitter Grid.Column="1"
@@ -143,55 +98,10 @@
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
                        Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
-                       FontSize="11"
+                       FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
-                       Margin="0,4,0,4" />
-            <TreeView Grid.Row="1"
-                      ItemsSource="{Binding DependsOnTree}"
-                      Background="{DynamicResource BackgroundBrush}">
-              <TreeView.DataTemplates>
-                <TreeDataTemplate DataType="vm:DependencyGroupNode"
-                                  ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Spacing="5">
-                    <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                      Width="15" Height="15"
-                                      VerticalAlignment="Center">
-                      <controls:SvgIcon.Foreground>
-                        <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                          <Binding Path="IconResourceKey" />
-                          <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                        </MultiBinding>
-                      </controls:SvgIcon.Foreground>
-                    </controls:SvgIcon>
-                    <TextBlock Text="{Binding Header}" FontSize="11" VerticalAlignment="Center" />
-                  </StackPanel>
-                </TreeDataTemplate>
-                <DataTemplate DataType="vm:DependencyLeafNode">
-                  <Border HorizontalAlignment="Stretch"
-                          Background="Transparent"
-                          DoubleTapped="OnDependencyNodeDoubleTapped">
-                    <StackPanel Orientation="Horizontal" Spacing="5">
-                      <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
-                                        Width="15" Height="15"
-                                        VerticalAlignment="Center">
-                        <controls:SvgIcon.Foreground>
-                          <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
-                            <Binding Path="IconResourceKey" />
-                            <Binding ElementName="RootControl" Path="ActualThemeVariant" />
-                          </MultiBinding>
-                        </controls:SvgIcon.Foreground>
-                      </controls:SvgIcon>
-                      <TextBlock Text="{Binding ObjectName}" FontSize="11" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding FieldName}"
-                                 FontSize="10"
-                                 Foreground="{DynamicResource SubtleForegroundBrush}"
-                                 VerticalAlignment="Center"
-                                 IsVisible="{Binding FieldName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </TreeView.DataTemplates>
-            </TreeView>
+                       Margin="{DynamicResource Margin.PanelCaption}" />
+            <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}" />
           </Grid>
         </Grid>
       </TabItem>
@@ -202,7 +112,7 @@
                        ShowLineNumbers="True"
                        IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                       FontSize="13"
+                       FontSize="{DynamicResource Text.Code.Size}"
                        HorizontalScrollBarVisibility="Auto"
                        VerticalScrollBarVisibility="Auto"
                        Background="{DynamicResource BackgroundBrush}"
@@ -215,7 +125,7 @@
       <TextBlock Text="{x:Static app:UiStrings.GeneratorLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
-                 FontSize="11"
+                 FontSize="{DynamicResource Text.Compact.Size}"
                  IsVisible="{Binding IsLoading}" />
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->

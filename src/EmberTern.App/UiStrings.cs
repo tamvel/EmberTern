@@ -1,4 +1,4 @@
-using EmberTern.App.Commands;
+﻿using EmberTern.App.Commands;
 
 namespace EmberTern.App;
 
@@ -27,7 +27,19 @@ internal static class UiStrings
 
     public const string SidebarMetadataHeader = "Metadata";
     public const string SidebarConnectionsHeader = "Connections";
-    public const string SidebarPlaceholderEmpty = "No connection yet";
+    // ── Pusty pasek boczny (M5 / M‑3 klasa A) ────────────────────────────────────────────────────
+    // Pierwsze uruchomienie: zero profili ⇒ pod polem filtra nie ma NIC. Wariant W4, ratyfikowany na
+    // renderze: najpierw KROK, potem miejsce akcji — i miejsce pokazane GLIFEM, nie tylko słowem, bo
+    // przycisk „New Connection" jest w pasku tytułu wyłącznie ikoną `Icon.Plus`.
+    //
+    // ⚠⚠ POPRZEDNIA TREŚĆ TEJ PARY STAŁYCH BYŁA WADLIWA I NIE WOLNO JEJ PRZYWRACAĆ. `ConnectionsEmptyHint`
+    //    brzmiało „Click “+ New Connection” to add one." i CYTOWAŁO ETYKIETĘ, KTÓREJ W PRODUKCIE NIE MA —
+    //    przycisk nie ma podpisu, a jego tooltip brzmi „New Connection" (bez plusa w treści). Użytkownik
+    //    dostawał polecenie znalezienia napisu, który nigdzie nie występuje: kształt gotchy #311, gdzie
+    //    kłamiąca etykieta jest nieodróżnialna od awarii. Obie stałe były przy tym OSIEROCONE — nigdy nie
+    //    wpięte — więc defekt nigdy się nie ujawnił, tylko czekał na kogoś, kto „wpnie gotowy tekst".
+    // ⛔ Zmieniając te napisy, sprawdź w `MainWindow.axaml`, jak akcja NAPRAWDĘ nazywa się na ekranie.
+    public const string SidebarPlaceholderEmpty = "Add a connection to get started.";
     public const string SidebarTabMetadata = "Metadata";
     public const string SidebarTabConnections = "Connections";
 
@@ -48,24 +60,24 @@ internal static class UiStrings
     public const string MetadataFilterPlaceholder = "Filter objects…";
     public const string MetadataRefreshTooltip = "Refresh metadata";
     public const string MetadataContextOpenDdl = "View DDL";
-    public const string MetadataContextCopyName = "Copy Name";
+    public const string MetadataContextCopyName = "Copy name";
     // Table context menu (metadata tree, Session 5 UX sprint)
-    public const string MetadataContextNewTable = "New Table";
+    public const string MetadataContextNewTable = "New table";
     public const string MetadataContextOpenTable = "Open";
-    public const string MetadataContextDesignTable = "Design Table";
-    public const string MetadataContextDeleteTable = "Delete Table";
-    public const string MetadataDeleteTableConfirmTitle = "Delete table";
-    public const string MetadataDeleteTableConfirmFormat = "Are you sure you want to delete table {0}?";
-    public const string MetadataDeleteTableConfirmYes = "Delete";
+    public const string MetadataContextDesignTable = "Design table";
+    public const string MetadataContextDeleteTable = "Drop table";
+    public const string MetadataDeleteTableConfirmTitle = "Drop table";
+    public const string MetadataDeleteTableConfirmFormat = "Are you sure you want to drop table {0}?";
+    public const string MetadataDeleteTableConfirmYes = "Drop";
     public const string MetadataDeleteTableExecutedFormat = "Table {0} deleted.";
-    public const string MetadataDeleteTableFailedFormat = "Could not delete table {0}: {1}";
+    public const string MetadataDeleteTableFailedFormat = "Could not drop table {0}: {1}";
     public const string MetadataNameCopiedFormat = "Copied “{0}” to clipboard.";
     public const string MetadataLoadingPlaceholder = "Loading…";
     // Generic metadata-tree context menu (Metadata Tree & Context Menu sprint).
     public const string MetadataContextNewFormat = "New {0}";
     public const string MetadataContextEdit = "Edit";
     public const string MetadataContextOpen = "Open";
-    public const string MetadataContextDelete = "Delete";
+    public const string MetadataContextDelete = "Drop";
     public const string MetadataContextExecuteProcedure = "Execute procedure";
     public const string MetadataContextActivate = "Activate";
     public const string MetadataContextDeactivate = "Deactivate";
@@ -80,11 +92,11 @@ internal static class UiStrings
     public const string MetadataContextRecompileAllFormat = "Recompile all {0}s";
     public const string MetadataInactiveSuffix = " (inactive)";
     // Generic delete (all deletable kinds) — {0}=kind noun, {1}=object name.
-    public const string MetadataDeleteObjectConfirmTitle = "Delete object";
+    public const string MetadataDeleteObjectConfirmTitle = "Drop object";
     public const string MetadataDeleteObjectConfirmFormat = "Are you sure you want to delete {0} “{1}”? This cannot be undone.";
-    public const string MetadataDeleteObjectConfirmYes = "Delete";
+    public const string MetadataDeleteObjectConfirmYes = "Drop";
     public const string MetadataDeleteObjectExecutedFormat = "Deleted {0} “{1}”.";
-    public const string MetadataDeleteObjectFailedFormat = "Could not delete {0} “{1}”: {2}";
+    public const string MetadataDeleteObjectFailedFormat = "Could not drop {0} “{1}”: {2}";
     // Connection (database) node — database-wide operations.
     public const string ConnectionContextRefresh = "Refresh metadata";
     public const string ConnectionContextRecomputeStats = "Recompute statistics (all indexes)";
@@ -123,8 +135,8 @@ internal static class UiStrings
     public const string BatchResultsFilterAll = "All";
     public const string BatchResultsFilterSuccess = "Success";
     public const string BatchResultsFilterFailed = "Failed";
-    public const string BatchResultsCopyAll = "Copy All";
-    public const string BatchResultsCopyFailed = "Copy Failed";
+    public const string BatchResultsCopyAll = "Copy all";
+    public const string BatchResultsCopyFailed = "Copy failed";
     public const string BatchResultsCancel = "Cancel";
 
     // ─── Script Executor ──────────────────────────────────────────────────────
@@ -612,7 +624,7 @@ internal static class UiStrings
     public const string ImportErrorServerTransliteration = "The server could not transliterate the value.";
     public const string ImportErrorServerError = "The server refused the row.";
 
-    public const string ScriptRun = "Run";
+    public const string ScriptRun = "Execute";
     public static readonly string ScriptRunTooltip = CommandTip.For(
         CommandId.Go, "Run the whole script in one transaction");
     public const string ScriptStopTooltip = "Stop after the current statement";
@@ -682,7 +694,17 @@ internal static class UiStrings
     public const string ScriptColumnDuration = "Duration";
     public const string ScriptColumnError = "Error";
     // Status line.
-    public const string ScriptStatusReady = "Ready. Paste or type a script, then Run.";
+    public const string ScriptStatusReady = "Ready. Paste or type a script, then Execute.";
+
+    // ── Stany puste siatki wyników (M5 / M‑3, B6) ────────────────────────────────────────────────
+    // ⭐ DWA, bo model niósł to rozróżnienie na długo przed M‑3: `HasResults` liczy się z `_allRows`
+    //    (przed filtrem), a siatka wiąże się z `Rows` (po filtrze). Jeden komunikat mówiłby „uruchom
+    //    skrypt" komuś, kto właśnie go uruchomił i tylko przełączył filtr na „Failed".
+    // ⚠ Druga treść świadomie powtarza język, którym mówią już Session Manager i Trace Monitor
+    //    („No sessions match the current filter." / „No events match the current filter.") — ta sama
+    //    sytuacja ma brzmieć tak samo, niezależnie od ekranu.
+    public const string ScriptResultsEmpty = "Execute the script — each statement and its result appear here.";
+    public const string ScriptResultsNoFilterMatch = "No statements match the current filter.";
     public const string ScriptStatusRunning = "Running…";
     public const string ScriptStatusNothingToRun = "Nothing to run — the script has no statements.";
     public const string ScriptStatusCancelled = "Cancelled. The transaction is still open — Commit or Rollback.";
@@ -726,7 +748,10 @@ internal static class UiStrings
     public const string ConnectionDisconnect = "Disconnect";
     public const string ConnectionDelete = "Delete";
     public const string ConnectionNew = "+ New Connection";
-    public const string ConnectionsEmptyHint = "No connections yet.\nClick “+ New Connection” to add one.";
+    // Druga linia stanu pustego paska bocznego — stoi obok glifu `Icon.Plus` i nazywa akcję dokładnie tak,
+    // jak nazywa ją jej własny tooltip (`ConnectionNewTooltip`). ⚠ Powód i historia poprzedniej treści:
+    // przy `SidebarPlaceholderEmpty`.
+    public const string ConnectionsEmptyHint = "New connection — in the toolbar above";
 
     public const string WorkspaceTabUntitled = "SQL Editor";
     public const string WorkspaceEditorPlaceholder = "-- Connect to a database to start writing SQL";
@@ -737,6 +762,64 @@ internal static class UiStrings
     public const string TransactionCommit = "Commit";
     public const string TransactionRollback = "Rollback";
     public const string TransactionStatementCountFormat = "{0} statement(s)";
+
+    // ⭐ Chip transakcji w pasku statusu (§8.4.5) — GLOBALNA odpowiedź na „czy mam otwartą transakcję
+    // i od jak dawna". Pasek nad wynikami edytora SQL niesie osobną, LOKALNĄ informację: liczbę
+    // instrukcji. Dwa poziomy informacji, nie redundancja (decyzja użytkownika, 2026-08-02).
+    public const string StatusBarTransactionChipFormat = "Transaction · {0}";
+    // Stan przejściowy: transakcja jest otwarta, ale znacznik czasu jeszcze nie powstał (np. otwarta
+    // przed podpięciem chipa). Lepszy niż chip pokazujący „0 s", który sugerowałby świeży start.
+    public const string StatusBarTransactionChipBare = "Transaction";
+
+    // ⭐ Sekcja postępu (§8.4.6) — M3.1f. ⚠ Tekst jest ogólny („operation"), bo od M3b ta sekcja
+    // obsługuje każdą długo trwającą operację, nie tylko zapytanie SQL. Skrótu klawiaturowego nie
+    // podajemy: anulowanie nie ma gestu w `CommandCatalog`, a tooltip obiecujący nieistniejący
+    // klawisz uczyłby nieprawdy (reguła z etapu Keyboard Manager, gotcha #284).
+    public const string StatusBarCancelOperationTooltip = "Cancel the running operation";
+
+    // ⭐⭐ ETYKIETY SEKCJI POSTĘPU — M3b.1. Wymóg użytkownika: „etykieta zawsze jednoznacznie określa,
+    // co jest wykonywane", bo od tej iteracji sekcja ma TRZY źródła i sam napis „Loading… 12 345 rows"
+    // nie mówi, czy to zapytanie, skrypt, czy import. Stąd nazwa operacji w każdym formacie.
+    //
+    // ⚠⚠ KAŻDA JEST KRÓTKA I OGRANICZONA, I TO NIE JEST ESTETYKA — POMIAR. Pasek statusu ma
+    // `ColumnDefinitions="Auto,*,Auto,Auto"` (MainWindow.axaml:2095), więc sekcja 4 rośnie kosztem
+    // kolumny gwiazdkowej i PRZESUWA chipy stanu w lewo. §8.4.6 nadało samemu paskowi stałe 120 px
+    // dokładnie z tego powodu; etykieta takiego ograniczenia nie ma, więc ogranicza ją treść.
+    // ⛔ Nie dopisywać tu szczegółu operacji (np. „N read · M written · K failed"). Szczegół należy do
+    // powierzchni, która operację prowadzi — to ten sam podział własności, który §19.5.1 i §19.7.1 już
+    // ratyfikowały: pasek statusu niesie FAKT globalny, właściciel operacji niesie SZCZEGÓŁ lokalny.
+    public const string StatusProgressQueryRowsFormat = "Executing query… {0:N0} rows";
+    public const string StatusProgressScriptFormat = "Running script… {0:N0} / {1:N0}";
+    public const string StatusProgressImportFormat = "Importing data… {0:N0} rows";
+
+    // ⭐ Odczyt źródła przed importem (M3b.1c). ⚠ DWIE etykiety, nie jedna z „file" na sztywno: to samo ogniwo
+    // obsługuje schowek, a napis „Loading file…" nad odczytem schowka byłby nieprawdą — a kłamiąca etykieta jest
+    // nieodróżnialna od awarii (gotcha #311). Jeden warunek, dwa uczciwe zdania.
+    // ⚠ Bez licznika: ten odcinek nie zna ani sumy, ani postępu (czyta próbkę schematu i ograniczony podgląd),
+    // więc jakakolwiek liczba tutaj byłaby zmyślona.
+    public const string StatusProgressImportReadingFile = "Loading file…";
+    public const string StatusProgressImportReadingClipboard = "Reading clipboard…";
+
+    // ⭐ Ładowanie połączenia (M3b.2). Dwie etykiety na trzy fazy, i to jest zmierzone, nie oszczędne:
+    // faza 2 (odtworzenie zakładek) jest SYNCHRONICZNA na wątku UI, a odmalowanie następuje PRZED nią —
+    // napis ustawiony na jej początku pojawiłby się dopiero po jej zakończeniu, czyli gdy jest już
+    // nieprawdziwy. Zamiast martwego UI zostaje etykieta fazy 1 (decyzja użytkownika 2026-08-04).
+    // ⭐ Faza 3 jest jedyną fazą ze ZNANĄ sumą (13 kategorii), więc jedyną, która uczciwie pokazuje procent.
+    public const string StatusProgressConnecting = "Connecting to database…";
+    public const string StatusProgressMetadataFormat = "Loading metadata… {0:N0} / {1:N0}";
+
+    // ⭐ Chipy Trace i Debuggera (§8.4.3 sekcja 3) — M3.1e. Etykieta niesie sam FAKT („gdzieś żyje
+    // sesja"), a szczegół idzie do tooltipa, który czyta `StatusText` z VM-a odpowiedniej zakładki.
+    // ⚠ Rzeczownik, nie czasownik: chip mówi, CO jest prawdą, a nie co się dzieje — „co się dzieje"
+    // to rola railu (§8.4.1). Stąd „Debug"/„Trace", a nie „Debugging"/„Tracing".
+    public const string StatusBarDebugChipLabel = "Debug";
+    public const string StatusBarTraceChipLabel = "Trace";
+
+    // Zgrubny czas trwania, czytelny kątem oka (§8.4.5). ⛔ Nie zwiększać precyzji — pasek statusu
+    // nie jest stoperem; dokładny czas wykonania niesie ExecutionTimer w toolbarze edytora.
+    public const string DurationSecondsFormat = "{0} s";
+    public const string DurationMinutesFormat = "{0} min";
+    public const string DurationHoursFormat = "{0} h {1} min";
     public const string TransactionStartedMessage = "Transaction started.";
     public const string TransactionCommittedFormat = "Transaction committed ({0} statement(s)).";
     public const string TransactionRolledBackFormat = "Transaction rolled back ({0} statement(s)).";
@@ -746,10 +829,10 @@ internal static class UiStrings
     public const string TransactionLaneCommittedFormat = "{0} transaction committed ({1} statement(s)).";
     public const string TransactionLaneRolledBackFormat = "{0} transaction rolled back ({1} statement(s)).";
     public const string TransactionCommitDataTooltip = "Commit data transaction";
-    public const string TransactionRollbackDataTooltip = "Roll back data transaction";
+    public const string TransactionRollbackDataTooltip = "Rollback data transaction";
     // Unified single-pair tooltips — the app commits/rolls back whichever lane(s) are open.
     public static readonly string TransactionCommitTooltip = CommandTip.For(CommandId.Commit, "Commit");
-    public static readonly string TransactionRollbackTooltip = CommandTip.For(CommandId.Rollback, "Roll back");
+    public static readonly string TransactionRollbackTooltip = CommandTip.For(CommandId.Rollback, "Rollback");
     // Execution-lane feedback: which profile the auto-router chose for a statement.
     // {0} = lane (Data/Metadata), {1} = profile label (e.g. "Read Committed").
     // Legacy binary disconnect-confirm strings — superseded by the DisconnectChoice*
@@ -795,7 +878,7 @@ internal static class UiStrings
     public const string DisconnectChoiceHeaderFormat = "Connection \"{0}\" has an active transaction:";
     public const string DisconnectChoiceQuestion = "What should happen before disconnecting?";
     public const string DisconnectChoiceCommit = "Commit and disconnect";
-    public const string DisconnectChoiceRollback = "Roll back and disconnect";
+    public const string DisconnectChoiceRollback = "Rollback and disconnect";
     public const string DisconnectChoiceCancel = "Cancel";
     public const string DisconnectUnsavedDiscardNoteFormat = "Uncompiled changes in {0} tab(s) will be discarded.";
 
@@ -832,12 +915,40 @@ internal static class UiStrings
     public const string DiagnosticSeverityWarning = "Warning";
     public const string DiagnosticSeverityInfo = "Info";
 
-    public const string StatusBarReady = "Ready";
-    public const string StatusBarConnectedTo = "Connected to";
+    // ⛔ `StatusBarReady` i `StatusBarConnectedTo` usunięte w M3.1b. Pasek statusu nie opisuje już
+    // połączenia zdaniem — sekcja 1 pokazuje NAZWĘ połączenia i endpoint, a stan „połączony / nie"
+    // niesie kropka. `StatusBarDisconnected` zostaje: jest etykietą w slocie nazwy, gdy połączenia
+    // nie ma (§19.3).
     public const string StatusBarDisconnected = "Disconnected";
 
     public const string ThemeToggleTooltip = "Toggle dark / light theme";
     public const string SidebarToggleTooltip = "Show / hide the connections panel";
+
+    // ── Title bar — connection toolbar (M‑1, M3.2d) ─────────────────────────────────────────────────
+    // The seven buttons between the sidebar toggle and the separator. They carried English literals in
+    // MainWindow.axaml since the sidebar was built; the text is unchanged here, only its home.
+    // ⚠ Deliberately their OWN `*Tooltip` members rather than a reuse of `ConnectionConnect` /
+    // `ConnectionDisconnect` / `ConnectionNew` above: those are (orphaned) LABEL strings, and the UX
+    // Consistency Pass recorded the reverse mistake as audit finding D6 — seven menu items whose Header
+    // read a tooltip constant, which is how "Add item" became a menu entry. A label and a tooltip answer
+    // different questions and are free to diverge the moment either is reworded.
+    // ⚠ No gesture is spelled here, and that is the ratified rule, not an omission: these commands are
+    // Tree-scoped (F3 / F4 / F8 reach them only while the tree has focus), so a toolbar tooltip promising
+    // a key would teach something false outside the tree — keyboard-manager.md §14.
+    public const string ConnectionNewTooltip = "New connection";
+    public const string ConnectionEditTooltip = "Edit connection";
+    public const string ConnectionCopyTooltip = "Copy connection";
+    public const string ConnectionDeleteTooltip = "Delete connection";
+    public const string ConnectionConnectTooltip = "Connect";
+    public const string ConnectionDisconnectTooltip = "Disconnect";
+    public const string ConnectionReconnectTooltip = "Reconnect";
+
+    // ── Title bar — window caption buttons (M‑1, M3.2d) ─────────────────────────────────────────────
+    // EmberTern draws its own caption buttons (the window is `ExtendClientAreaToDecorationsHint`), so
+    // these three are ordinary application strings and not the OS's.
+    public const string WindowMinimizeTooltip = "Minimize";
+    public const string WindowMaxRestoreTooltip = "Maximize / Restore";
+    public const string WindowCloseTooltip = "Close";
 
     // ── Application Menu (the hamburger) ────────────────────────────────────────────────────────────
     // A rarely-used ADMINISTRATIVE menu for application-level functions — never commands of the active
@@ -948,6 +1059,63 @@ internal static class UiStrings
     public const string SettingsEditorModeKeywords =
         "editor mode easy source default open procedure view trigger function structured";
 
+    // Nagłówek karty, która grupuje te cztery wiersze (pakiet UX po M5, punkt 5). ⚠ Nazywa TEMAT, a nie
+    // sumę pozycji — cztery flagi odpowiadają na jedno pytanie, i dopiero to czyni z nich jedną kartę.
+    public const string SettingsEasyModeGroupLabel = "Default editor mode";
+
+    // ── Database Properties (pakiet UX po M5, punkt 6) ────────────────────────────────────────────────
+    public const string DatabasePropertiesMenuItem = "Properties…";
+    public const string DatabasePropertiesTitle = "Database Properties";
+    public const string DatabasePropertiesGroupIdentity = "Identity";
+    public const string DatabasePropertiesGroupStorage = "Storage";
+    public const string DatabasePropertiesGroupConfiguration = "Configuration";
+
+    public const string DatabasePropertiesDatabase = "Database";
+    public const string DatabasePropertiesOwner = "Owner";
+    public const string DatabasePropertiesEngine = "Engine version";
+    public const string DatabasePropertiesOds = "ODS";
+    public const string DatabasePropertiesDialect = "SQL dialect";
+    public const string DatabasePropertiesCharset = "Charset";
+    public const string DatabasePropertiesCreated = "Created";
+    public const string DatabasePropertiesPageSize = "Page size";
+    public const string DatabasePropertiesPages = "Pages";
+    public const string DatabasePropertiesSize = "Size";
+    public const string DatabasePropertiesPageBuffers = "Page buffers";
+    public const string DatabasePropertiesLinger = "Linger";
+
+    public const string DatabasePropertiesSweepInterval = "Sweep interval";
+    public const string DatabasePropertiesForcedWrites = "Forced writes";
+    public const string DatabasePropertiesReserveSpace = "Reserve space";
+
+    // ⚠ Mówi o CACHE DZIAŁAJĄCEJ INSTANCJI, a nie o wartości zapisanej w nagłówku — bo dokładnie to
+    // raportuje MON$PAGE_BUFFERS (zmierzone). Bez tego zdania liczba wyglądałaby na ustawienie bazy.
+    public const string DatabasePropertiesPageBuffersNote =
+        "Cache of the running database instance. A stored value takes effect when the database is next "
+        + "fully released.";
+
+    public const string DatabasePropertiesLingerNotSet = "not set";
+    public const string DatabasePropertiesLingerSeconds = "{0} s";
+
+    public const string DatabasePropertiesApply = "Apply";
+    public const string DatabasePropertiesClose = "Close";
+    public const string DatabasePropertiesApplied = "Changes applied.";
+    public const string DatabasePropertiesNothingToApply = "Nothing to apply.";
+
+    // ⚠ Wymienia to, co SIĘ UDAŁO — Apply nie jest atomowy, więc bez tej listy użytkownik nie wie, które
+    // zmiany są już w bazie.
+    public const string DatabasePropertiesPartial = "Applied: {0}. The rest failed:";
+
+    public const string DatabasePropertiesNoPassword =
+        "This connection profile has no stored password, so these settings cannot be changed. Firebird's "
+        + "Services API needs one.";
+
+    // ⭐ Dwa jedyne wyjaśnienia, jakie wolno dodać — bo tylko te dwa przypadki są rozpoznawalne po
+    // SQLSTATE/GDS. ⛔ Komunikat serwera jest ZAWSZE pokazywany obok; to jest lead, nie zamiennik.
+    public const string DatabasePropertiesMissingPrivilege =
+        "Your account is missing the system privilege these operations require.";
+    public const string DatabasePropertiesInUse =
+        "The database is in use and this operation needs exclusive access.";
+
     public const string SettingsProcedureEasyModeLabel = "Open procedures in Easy mode";
     public const string SettingsViewEasyModeLabel = "Open views in Easy mode";
     public const string SettingsTriggerEasyModeLabel = "Open triggers in Easy mode";
@@ -997,6 +1165,63 @@ internal static class UiStrings
         + "resized keeps its own layout.";
     public const string SettingsGridAutoFitKeywords =
         "grid columns auto fit width size layout default resize";
+
+    // ── Tabs (M3.3b / product-polish §8.2) ──────────────────────────────────────────────────────────
+    // ⭐ Zakładki dostały WŁASNĄ kategorię, a nie wiersze w General — decyzja użytkownika (2026-08-03):
+    // pasek zakładek jest osobną powierzchnią aplikacji (§0.1), a General i tak już nosi motyw, język,
+    // workspace i eksport. Kategoria jest też celem skoku dla przyszłej pozycji „Ustawienia zakładek…"
+    // z menu kontekstowego zakładki (D9 / M3.3c).
+    public const string SettingsCategoryTabs = "Tabs";
+
+    // ⚠ Opis mówi, co użytkownik ZOBACZY, a nie jak to jest zbudowane — i nazywa różnicę, która naprawdę
+    // dzieli te tryby: czy zakładka może zniknąć z widoku. To jest ratyfikowana istota decyzji D5/D7.
+    public const string SettingsTabStripModeLabel = "Tab strip layout";
+    public const string SettingsTabStripModeDescription =
+        "Multiple rows keeps every open tab visible — the strip grows and then scrolls. A single row scrolls "
+        + "sideways instead and moves the rest into a searchable list.";
+    public const string SettingsTabStripModeKeywords =
+        "tabs tab strip rows layout multi row single row overflow scroll workspace documents";
+
+    public const string SettingsTabStripModeMultiRow = "Multiple rows";
+    public const string SettingsTabStripModeSingleRow = "Single row";
+
+    // ⚠ Mówi wprost, że dotyczy tylko trybu wielowierszowego — wiersz widoczny w trybie B, w którym nic
+    // nie robi, byłby dokładnie tym „martwym zapisem wyglądającym na regułę", przed którym broni §18.R.
+    public const string SettingsTabStripMaxRowsLabel = "Maximum rows";
+    public const string SettingsTabStripMaxRowsDescription =
+        "How tall the tab strip may grow before it starts scrolling. Multiple-rows layout only. Between 1 "
+        + "and 10.";
+    public const string SettingsTabStripMaxRowsKeywords =
+        "tabs tab strip rows maximum height limit scroll workspace";
+
+    // Przycisk przepełnienia w trybie pojedynczego wiersza. ⭐ Licznik pokazuje zakładki NIEWIDOCZNE,
+    // nie wszystkie otwarte (§8.2 + decyzja użytkownika) — „ile mam poza ekranem" jest informacją, której
+    // użytkownik potrzebuje w tym momencie; „ile mam otwartych" widać po samym pasku.
+    public const string TabStripOverflowTooltip = "Tabs that do not fit — click to search all open tabs";
+    public const string TabStripOverflowFilterWatermark = "Filter tabs…";
+
+    // ── Menu kontekstowe zakładki (M3.3c / §8.3) ────────────────────────────────────────────────────
+    // ⚠ Ikony przez `{app:MenuIcon}`, gesty przez `{app:CommandGesture}` — zero nowej chromy
+    // (Keyboard Manager etap 5). Tu mieszkają wyłącznie słowa.
+    public const string TabMenuClose = "Close";
+    public const string TabMenuCloseOthers = "Close others";
+    public const string TabMenuCloseAll = "Close all";
+    public const string TabMenuCloseToTheRight = "Close tabs to the right";
+    public const string TabMenuCloseUnmodified = "Close unmodified";
+    public const string TabMenuRefresh = "Refresh";
+    public const string TabMenuCopyObjectName = "Copy object name";
+    public const string TabMenuRevealInExplorer = "Show in Metadata Explorer";
+    public const string TabMenuSettings = "Tab settings…";
+
+    // ⚠⚠ Bramka reguły #11 dla zamykania masowego — CZWARTE wejście do tej samej bramki, obok
+    // zamknięcia zakładki, rozłączenia i zamknięcia aplikacji.
+    // ⭐ Komunikat WYMIENIA zakładki z pracą ({0} = lista), bo „kilka zakładek ma niezapisane zmiany"
+    // nie pozwala podjąć decyzji — a to jest moment, w którym użytkownik ją podejmuje.
+    public const string TabsCloseUnsavedTitle = "Unsaved changes";
+    public const string TabsCloseUnsavedFormat =
+        "These tabs have uncompiled changes:\n\n{0}\n\nSave them before closing?";
+    public const string TabsCloseUnsavedSave = "Save and close";
+    public const string TabsCloseUnsavedDiscard = "Discard and close";
 
     // ── Debugger (etap 6) ───────────────────────────────────────────────────────────────────────────
     public const string SettingsCategoryDebugger = "Debugger";
@@ -1171,20 +1396,18 @@ internal static class UiStrings
     // Generic on purpose: these route through the app's ONE collection router, which serves fields, rows,
     // columns, parameters and variables. The per-collection nouns ("New field") belong to the toolbar and the
     // grid's own menu, which know which collection they are looking at; a catalogue does not.
-    public const string CommandTitleCollectionAdd = "New item in list";
+    public const string CommandTitleCollectionAdd = "Add item to list";
     public const string CommandTitleCollectionEdit = "Edit selected item";
-    public const string CommandTitleCollectionRemove = "Delete selected item";
+    public const string CommandTitleCollectionRemove = "Remove selected item";
 
     public const string CommandTitleGlobalSearch = "Global search";
     public const string CommandTitleFocusSidebarFilter = "Focus object filter";
     public const string CommandTitleCommit = "Commit transaction";
-    public const string CommandTitleRollback = "Roll back transaction";
+    public const string CommandTitleRollback = "Rollback transaction";
     public const string CommandTitleCloseTab = "Close tab";
 
-    // The status bar's version chip. It shows the SAME AppInfo value the About window does — it used to be the
-    // literal "EmberTern 0.1.0" in MainWindow.axaml, i.e. a second source of truth that had gone stale and
-    // then disagreed with About in front of the user.
-    public const string StatusBarVersionFormat = "{0} {1}";
+    // ⛔ `StatusBarVersionFormat` usunięty w M3.1b (decyzja D3): nazwa aplikacji i numer wersji nie należą
+    // do paska statusu, tylko do okna About. `AppInfo` pozostaje jedynym źródłem wersji.
     // No gesture is shown beside Exit: EmberTern does not own Alt+F4, and a gesture typed by hand is the
     // drift CommandTip exists to prevent (gotcha #284). It routes through the window's ordinary close, so
     // unsaved work and an open transaction still get their prompts.
@@ -1201,7 +1424,6 @@ internal static class UiStrings
     public const string DialogEditConnectionTitle = "Edit Connection";
     public const string ConnectionEdit = "Edit";
     public const string DialogSectionGeneral = "Connection";
-    public const string DialogSectionAdvanced = "Advanced";
     public const string DialogFieldName = "Name";
     public const string DialogFieldHost = "Host";
     public const string DialogFieldPort = "Port";
@@ -1210,8 +1432,6 @@ internal static class UiStrings
     public const string DialogFieldPassword = "Password";
     public const string DialogFieldCharset = "Charset";
     public const string DialogFieldDialect = "Dialect";
-    public const string DialogFieldClientLibrary = "Client library (fbclient.dll)";
-    public const string DialogFieldClientLibraryHint = "Leave empty to use the default. Set when connecting to a Firebird version different from the default client (e.g. Firebird 3 server while Firebird 5 client is on PATH).";
     // (Removed 2026-07-27, audit A-09: DialogFieldTransactionProfile + its Data/Metadata pair were three
     // captions for a connection-dialog field that no longer exists. The TPB profile is not user-configurable —
     // TransactionService.EnforcedProfile is a constant, deliberately — so a label offering to configure it
@@ -1352,7 +1572,7 @@ internal static class UiStrings
     // content and manual widths aren't remembered; when unchecked, manual widths persist.
     public const string GridAutoFitColumns = "Auto-fit columns";
 
-    public const string ResultsEmptyHint = "Run a query to see results.";
+    public const string ResultsEmptyHint = "Execute a query to see results.";
     public const string MessagesEmptyHint = "No messages yet.";
     public const string ExecutingStatus = "Executing query…";
     public const string CancellingStatus = "Cancelling…";
@@ -1494,7 +1714,6 @@ internal static class UiStrings
     public const string TableDetailTabDependencies = "Dependencies";
     public const string TableDetailDependsOnHeader = "Depends on";
     public const string TableDetailDependedOnByHeader = "Used by";
-    public const string DependencyCategoryUdfs = "UDFs";
     public const string TableDetailDependencyType = "Type";
     public const string TableDetailDependencyName = "Name";
     public const string TableDetailDependencyField = "Field";
@@ -1561,11 +1780,11 @@ internal static class UiStrings
     public const string TableDetailDescriptionEmpty = "No description.";
 
     public const string DataEditAddRowIcon = "+";
-    public const string DataEditAddRowTooltip = "Add new row";
+    public const string DataEditAddRowTooltip = "Add row";
     public const string DataEditDeleteRowIcon = "−";
     public const string DataEditDeleteRowTooltip = "Delete selected row";
     // Context-menu labels for the same two commands, in the surface's New / Edit / Delete vocabulary.
-    public const string DataEditNewRow = "New row";
+    public const string DataEditNewRow = "Add row";
     public const string DataEditDeleteRow = "Delete row";
     public const string DataEditDeleteConfirmTitle = "Delete row";
     public const string DataEditDeleteConfirmMessage = "Delete the selected row? This becomes part of the current transaction — use Rollback to revert.";
@@ -1623,7 +1842,7 @@ internal static class UiStrings
     public const string ConnectionContextSortAscending = "Ascending (A→Z)";
     public const string ConnectionContextSortDescending = "Descending (Z→A)";
 
-    public const string FolderContextAddConnection = "Add connection";
+    public const string FolderContextAddConnection = "New connection";
 
     public const string QueryContextRename = "Rename";
     public const string QueryContextDelete = "Delete";
@@ -1634,10 +1853,10 @@ internal static class UiStrings
     // Two glyphs: ▦ matches the metadata tree's Table icon (see MetadataNodeViewModel
     // IconFor) so the toolbar visually rhymes with the sidebar; ＋ signals "add".
     public const string ToolbarNewTableIcon = "▦＋";
-    public const string ToolbarNewTableTooltip = "New Table";
+    public const string ToolbarNewTableTooltip = "New table";
     public const string ToolbarToggleFieldEditIcon = "▦✎";
     public const string ToolbarToggleFieldEditTooltip = "Toggle inline field editing";
-    public const string NewTableDialogTitle = "Create Table";
+    public const string NewTableDialogTitle = "New table";
     public const string NewTableDialogTableNameLabel = "Table name";
     public const string NewTableDialogTableKindLabel = "Table kind";
     public const string NewTableKindPersistent = "Persistent";
@@ -1680,7 +1899,7 @@ internal static class UiStrings
     public const string ViewDetailTabDdl = "DDL";
     public const string ViewDetailDescriptionEmpty = "No description.";
     public const string ViewDetailLoadingHint = "Loading view…";
-    public const string ToolbarNewViewTooltip = "New View";
+    public const string ToolbarNewViewTooltip = "New view";
     public const string ViewCompileIcon = "⚡";
     public static readonly string ViewCompileTooltip = CommandTip.For(
         CommandId.Compile, "Compile view (CREATE OR ALTER VIEW)");
@@ -1705,16 +1924,16 @@ internal static class UiStrings
     public const string PackageDetailLoadingHint = "Loading package…";
     public const string PackageDetailDependsOnHeader = "Depends on";
     public const string PackageDetailDependedOnByHeader = "Used by";
-    public const string ToolbarNewPackageTooltip = "New Package";
+    public const string ToolbarNewPackageTooltip = "New package";
     public static readonly string PackageCompileTooltip = CommandTip.For(
         CommandId.Compile, "Compile package (header then body)");
     public const string PackageCompileHeaderFailedFormat = "Header compile failed: {0}";
     public const string PackageCompileBodyFailedFormat = "Body compile failed: {0}";
     public const string NewPackageTabDefaultTitle = "New Package";
     public const string NewPackageExecutedFormat = "Package \"{0}\" created.";
-    public const string PackageDeleteConfirmTitle = "Delete package";
-    public const string PackageDeleteConfirmFormat = "Are you sure you want to delete package {0}? This drops the header and its body.";
-    public const string PackageDeleteConfirmYes = "Delete";
+    public const string PackageDeleteConfirmTitle = "Drop package";
+    public const string PackageDeleteConfirmFormat = "Are you sure you want to drop package {0}? This drops the header and its body.";
+    public const string PackageDeleteConfirmYes = "Drop";
 
     // View Detail Easy mode (mirrors the Procedure Detail Source/Easy toggle).
     // Unified toolbar Collection section (routes to the active editor's collection —
@@ -1727,9 +1946,17 @@ internal static class UiStrings
     // ⚠ The {0} is the ACTIVE collection's own noun (below), supplied by MainWindowViewModel — which is why
     // the toolbar tooltips are computed properties rather than constants: the same button is "New field" on a
     // table's fields and "New parameter" on a procedure's arguments.
-    public const string CollectionNewFormat = "New {0}";
+    // ⭐⭐ Czasownik usunięcia jest WŁASNOŚCIĄ KOLEKCJI, nie wspólnego formatu — słownik
+    // (`docs/design/terminology.md` §1) rozcina ten router w poprzek: to samo polecenie obsługuje pole tabeli
+    // (`ALTER TABLE … DROP` → „Drop"), wiersz danych (`DELETE FROM` → „Delete") i pozycję bufora edytora
+    // (żadnego DDL → „Remove"). ⚠ Wcześniej wszystkie mówiły „Delete {0}", czyli o polu tabeli twierdziły
+    // coś, czego produkt nie robi. Powód i mechanizm: `MainWindowViewModel.CollectionCommands`.
+    public const string CollectionVerbDrop = "Drop";
+    public const string CollectionVerbDelete = "Delete";
+    public const string CollectionVerbRemove = "Remove";
+    public const string CollectionRemoveFormat = "{0} {1}";
+    public const string CollectionAddFormat = "Add {0}";
     public const string CollectionEditFormat = "Edit {0}";
-    public const string CollectionDeleteFormat = "Delete {0}";
 
     public const string CollectionNounField = "field";
     public const string CollectionNounRow = "row";
@@ -1742,8 +1969,8 @@ internal static class UiStrings
     // Menu labels for the collections whose grids are edited in place — a generic noun, but the same verbs.
     // (These are LABELS. They used to be the tooltip constants above, reused as MenuItem headers, which is
     // how "Add item" ended up as a menu entry.)
-    public const string CollectionMenuNew = "New item";
-    public const string CollectionMenuDelete = "Delete item";
+    public const string CollectionMenuNew = "Add item";
+    public const string CollectionMenuDelete = "Remove item";
     public const string CollectionMoveUpTooltip = "Move up";
     public const string CollectionMoveDownTooltip = "Move down";
 
@@ -1753,7 +1980,7 @@ internal static class UiStrings
     public const string ViewNameHeader = "View name";
     public const string ViewColumnsHeader = "Columns";
     public const string ViewColumnAddTooltip = "Add column";
-    public const string ViewColumnDeleteTooltip = "Delete column";
+    public const string ViewColumnDeleteTooltip = "Remove column";
     public const string ViewColumnMoveUpTooltip = "Move column up";
     public const string ViewColumnMoveDownTooltip = "Move column down";
     public const string ViewColumnName = "Name";
@@ -1770,14 +1997,14 @@ internal static class UiStrings
     public const string GeneratorDescriptionHeader = "Description";
     public const string GeneratorLoadingHint = "Loading generator…";
     public const string GeneratorRefreshCurrentValueTooltip = "Refresh current value (re-read from database)";
-    public const string ToolbarNewGeneratorTooltip = "New Generator";
+    public const string ToolbarNewGeneratorTooltip = "New generator";
     public static readonly string GeneratorCompileTooltip = CommandTip.For(
         CommandId.Compile, "Compile generator (CREATE / ALTER SEQUENCE)");
     public const string GeneratorCompileFailedFormat = "Compile failed: {0}";
-    public const string GeneratorDeleteTooltip = "Delete generator";
-    public const string GeneratorDeleteConfirmTitle = "Delete generator";
+    public const string GeneratorDeleteTooltip = "Drop generator";
+    public const string GeneratorDeleteConfirmTitle = "Drop generator";
     public const string GeneratorDeleteConfirmFormat = "Drop generator \"{0}\"? This cannot be undone.";
-    public const string GeneratorDeleteConfirmYes = "Delete";
+    public const string GeneratorDeleteConfirmYes = "Drop";
     public const string NewGeneratorTabDefaultTitle = "New Generator";
     public const string NewGeneratorExecutedFormat = "Generator \"{0}\" created.";
 
@@ -1790,14 +2017,14 @@ internal static class UiStrings
     public const string ExceptionMessageHeader = "Message";
     public const string ExceptionDescriptionEditLabel = "Exception description";
     public const string ExceptionLoadingHint = "Loading exception…";
-    public const string ToolbarNewExceptionTooltip = "New Exception";
+    public const string ToolbarNewExceptionTooltip = "New exception";
     public static readonly string ExceptionCompileTooltip = CommandTip.For(
         CommandId.Compile, "Compile exception (CREATE / ALTER EXCEPTION)");
     public const string ExceptionCompileFailedFormat = "Compile failed: {0}";
-    public const string ExceptionDeleteTooltip = "Delete exception";
-    public const string ExceptionDeleteConfirmTitle = "Delete exception";
+    public const string ExceptionDeleteTooltip = "Drop exception";
+    public const string ExceptionDeleteConfirmTitle = "Drop exception";
     public const string ExceptionDeleteConfirmFormat = "Drop exception \"{0}\"? This cannot be undone.";
-    public const string ExceptionDeleteConfirmYes = "Delete";
+    public const string ExceptionDeleteConfirmYes = "Drop";
     public const string NewExceptionTabDefaultTitle = "New Exception";
     public const string NewExceptionExecutedFormat = "Exception \"{0}\" created.";
 
@@ -1825,10 +2052,10 @@ internal static class UiStrings
         CommandId.Compile, "Compile index changes (ALTER INDEX / COMMENT ON INDEX)");
     public const string IndexCompileFailedFormat = "Compile failed: {0}";
     public const string IndexRecomputeStatisticsTooltip = "Recompute statistics (SET STATISTICS INDEX)";
-    public const string IndexDeleteTooltip = "Delete index";
-    public const string IndexDeleteConfirmTitle = "Delete index";
+    public const string IndexDeleteTooltip = "Drop index";
+    public const string IndexDeleteConfirmTitle = "Drop index";
     public const string IndexDeleteConfirmFormat = "Drop index \"{0}\"? This cannot be undone.";
-    public const string IndexDeleteConfirmYes = "Delete";
+    public const string IndexDeleteConfirmYes = "Drop";
 
     // ─── Domain Detail ───────────────────────────────────────────────────────
     public const string DomainDetailTabDomain = "Domain";
@@ -1847,15 +2074,15 @@ internal static class UiStrings
     public const string DomainCheckHeader = "Check constraint";
     public const string DomainNotNullHeader = "Not null";
     public const string DomainLoadingHint = "Loading domain…";
-    public const string ToolbarNewDomainTooltip = "New Domain";
+    public const string ToolbarNewDomainTooltip = "New domain";
     public static readonly string DomainCompileTooltip = CommandTip.For(
         CommandId.Compile, "Compile domain (CREATE / ALTER DOMAIN)");
     public const string DomainCompileFailedFormat = "Compile failed: {0}";
     public const string DomainRenamedFormat = "Domain renamed to \"{0}\".";
-    public const string DomainDeleteTooltip = "Delete domain";
-    public const string DomainDeleteConfirmTitle = "Delete domain";
+    public const string DomainDeleteTooltip = "Drop domain";
+    public const string DomainDeleteConfirmTitle = "Drop domain";
     public const string DomainDeleteConfirmFormat = "Drop domain \"{0}\"? This cannot be undone.";
-    public const string DomainDeleteConfirmYes = "Delete";
+    public const string DomainDeleteConfirmYes = "Drop";
     public const string NewDomainTabDefaultTitle = "New Domain";
     public const string NewDomainExecutedFormat = "Domain \"{0}\" created.";
 
@@ -1871,7 +2098,7 @@ internal static class UiStrings
     public static readonly string ProcedureCompileTooltip = CommandTip.For(
         CommandId.Compile, "Compile procedure (CREATE OR ALTER PROCEDURE)");
     public const string ProcedureCompileFailedFormat = "Compile failed: {0}";
-    public const string ToolbarNewProcedureTooltip = "New Procedure";
+    public const string ToolbarNewProcedureTooltip = "New procedure";
     public const string NewProcedureTabDefaultTitle = "New Procedure";
     public const string NewProcedureExecutedFormat = "Procedure \"{0}\" created.";
 
@@ -1900,7 +2127,7 @@ internal static class UiStrings
     public const string ProcedureCommentTooltip = "Comment body — disable the procedure body (/* */)";
     public const string ProcedureUncommentTooltip = "Uncomment body — re-enable the procedure body";
     public const string ProcedureParamAddTooltip = "Add parameter";
-    public const string ProcedureParamDeleteTooltip = "Delete parameter";
+    public const string ProcedureParamDeleteTooltip = "Remove parameter";
     public const string ProcedureParamMoveUpTooltip = "Move parameter up";
     public const string ProcedureParamMoveDownTooltip = "Move parameter down";
     public const string ProcedureExecRowsFormat = "{0} row(s) returned.";
@@ -1910,7 +2137,7 @@ internal static class UiStrings
     public const string ProcedureExecInfoAffectedFormat = "Executed in {1} ms · {0} row(s) affected";
     public const string ProcedureExecInfoCompletedFormat = "Executed in {0} ms · completed";
     public const string ProcedureExecutedViaDataProfile = "Executed procedure via Data profile.";
-    public const string ProcedureExecEmptyHint = "Run Execute to see results.";
+    public const string ProcedureExecEmptyHint = "Execute to see results.";
 
     // New-element templates (FB-valid PSQL) used when adding a cursor / subprogram.
     public const string ProcedureSnippetVariable = "declare variable NewVariable integer;\n";
@@ -1937,11 +2164,11 @@ internal static class UiStrings
     public const string FunctionResultRequiredNotice = "A function must declare a return type (Result).";
     public const string FunctionParseFailedNotice =
         "Couldn't parse the source into structured form — Easy mode is showing the last loaded state. Edit in Source mode, or fix the header.";
-    public const string ToolbarNewFunctionTooltip = "New Function";
+    public const string ToolbarNewFunctionTooltip = "New function";
     public const string NewFunctionTabDefaultTitle = "New Function";
     public const string NewFunctionExecutedFormat = "Function \"{0}\" created.";
     public const string FunctionArgumentAddTooltip = "Add argument";
-    public const string FunctionArgumentDeleteTooltip = "Delete argument";
+    public const string FunctionArgumentDeleteTooltip = "Remove argument";
     public const string FunctionArgumentMoveUpTooltip = "Move argument up";
     public const string FunctionArgumentMoveDownTooltip = "Move argument down";
 
@@ -1972,7 +2199,14 @@ internal static class UiStrings
     public const string ProcedureLocalMoveDownTooltip = "Move down";
 
     // Execute Procedure parameter dialog
-    public const string ProcedureExecuteDialogTitle = "Execute Procedure";
+    // ⚠⚠ NEUTRAL ON PURPOSE (user decision, 2026-08-03). This dialog stopped being only about procedures long
+    // ago: Smart SQL Parameters reuses it to collect values for ANY statement carrying `:name` placeholders, so a
+    // plain INSERT or UPDATE OR INSERT opened a window headed "Execute Procedure". The user read that as the
+    // Execute-Procedure feature misfiring — *"To nie jest wywołanie procedury"* — which is exactly what a
+    // mislabelled surface causes: the behaviour was correct and only the label lied.
+    // ⛔ Do not narrow it back to a procedure-specific wording; the reuse is the design (one parameter editor, not
+    // two), and the dialog is reached from procedure execution AND from F5 on parameterised SQL.
+    public const string ProcedureExecuteDialogTitle = "Execute";
     public const string ProcedureExecuteDialogColumnName = "Parameter";
     public const string ProcedureExecuteDialogColumnType = "Type";
     public const string ProcedureExecuteDialogColumnValue = "Value";
@@ -2003,9 +2237,26 @@ internal static class UiStrings
         "Couldn't parse the source into structured form — Easy mode is showing the last loaded state. Edit in Source mode, or fix the header.";
     public const string TriggerTableRequiredNotice = "Select the table the trigger fires for before compiling.";
     public const string TriggerEventRequiredNotice = "Select at least one event (INSERT / UPDATE / DELETE) before compiling.";
-    public const string ToolbarNewTriggerTooltip = "New Trigger";
+    public const string ToolbarNewTriggerTooltip = "New trigger";
     public const string NewTriggerTabDefaultTitle = "New Trigger";
     public const string NewTriggerExecutedFormat = "Trigger \"{0}\" created.";
+
+    /// <summary>
+    /// The three facts a user must be told after compiling a renamed object, because Firebird has no rename
+    /// for procedures / functions / triggers (measured on FB 5.0: <c>ALTER PROCEDURE … TO …</c> is
+    /// <c>-104 Token unknown</c>). ⚠ The third sentence is the one that matters: an object they did not expect
+    /// is now in their database, and nothing else will tell them.
+    /// </summary>
+    public const string ObjectRenameNotSupportedTitle = "Renaming created a new object";
+
+    /// <summary>The acknowledge button of a dialog that reports rather than asks.</summary>
+    public const string DialogOk = "OK";
+
+    public const string ObjectRenameNotSupportedFormat =
+        "Firebird cannot rename this kind of object, so the compile created a new one.\n\n"
+        + "• \"{0}\" has been created with the definition from this tab.\n"
+        + "• \"{1}\" still exists in the database and was NOT removed.\n\n"
+        + "Delete \"{1}\" yourself once you have checked that nothing depends on it.";
 
     public const string FieldEditCompileIcon = "⚡";
     public static readonly string FieldEditCompileTooltip = CommandTip.For(
@@ -2058,7 +2309,7 @@ internal static class UiStrings
     // Pola context menu + shortcuts
     public const string FieldsContextMenuAdd = "New field";
     public const string FieldsContextMenuEdit = "Edit field";
-    public const string FieldsContextMenuDrop = "Delete field";
+    public const string FieldsContextMenuDrop = "Drop field";
     public const string FieldsContextMenuCreateForeignKey = "Create foreign key…";
     public const string FieldEditEditIcon = "✎";
     // (FieldEditEditTooltip — "Edit selected field · F2" — was removed in the UX Consistency Pass. It had no
@@ -2124,14 +2375,14 @@ internal static class UiStrings
     public const string CheckConstraintExpressionWatermark = "e.g. ID > 0  (or  CHECK (ID > 0))";
     public const string CheckConstraintValidationExpressionRequired = "Check expression is required.";
     // Context-menu actions
-    public const string ConstraintMenuAddPrimaryKey = "Add Primary Key";
-    public const string ConstraintMenuDropPrimaryKey = "Drop Primary Key";
-    public const string ConstraintMenuAddForeignKey = "Add Foreign Key";
-    public const string ConstraintMenuDropForeignKey = "Drop Foreign Key";
-    public const string ConstraintMenuAddCheck = "Add Check Constraint";
-    public const string ConstraintMenuDropCheck = "Drop Check Constraint";
-    public const string ConstraintMenuAddUnique = "Add Unique Constraint";
-    public const string ConstraintMenuDropUnique = "Drop Unique Constraint";
+    public const string ConstraintMenuAddPrimaryKey = "Add primary key";
+    public const string ConstraintMenuDropPrimaryKey = "Drop primary key";
+    public const string ConstraintMenuAddForeignKey = "Add foreign key";
+    public const string ConstraintMenuDropForeignKey = "Drop foreign key";
+    public const string ConstraintMenuAddCheck = "Add check constraint";
+    public const string ConstraintMenuDropCheck = "Drop check constraint";
+    public const string ConstraintMenuAddUnique = "Add unique constraint";
+    public const string ConstraintMenuDropUnique = "Drop unique constraint";
     // Drop confirmation
     public const string ConstraintDropConfirmTitle = "Drop constraint";
     public const string ConstraintDropConfirmFormat = "Are you sure you want to drop constraint '{0}'?";
@@ -2144,7 +2395,7 @@ internal static class UiStrings
     // Pola sub-tab: Drop Foreign Key context-menu entry (routes through the
     // shared Drop Constraint path; the FK constraint is resolved from the
     // selected field).
-    public const string FieldsContextMenuDropForeignKey = "Drop Foreign Key";
+    public const string FieldsContextMenuDropForeignKey = "Drop foreign key";
 
     // ─── Index Management V1 ──────────────────────────────────────────────
     public const string IndexDialogTitle = "Add Index";
@@ -2159,8 +2410,8 @@ internal static class UiStrings
     public const string IndexDdlPreviewIncomplete = "-- Fill in the index name and select at least one field (or enter a COMPUTED BY expression).";
     public const string IndexValidationNameRequired = "Index name is required.";
     public const string IndexValidationFieldsRequired = "Select at least one field, or enter a COMPUTED BY expression.";
-    public const string IndexMenuAdd = "Add Index";
-    public const string IndexMenuDrop = "Drop Index";
+    public const string IndexMenuAdd = "Add index";
+    public const string IndexMenuDrop = "Drop index";
     public const string IndexDropConfirmTitle = "Drop index";
     public const string IndexDropConfirmFormat = "Are you sure you want to drop index '{0}'?";
     public const string IndexDropConfirmYes = "Drop";
@@ -2256,8 +2507,8 @@ internal static class UiStrings
     public const string SecurityColPlugin = "Plugin";
     public const string SecurityAddUser = "Add user";
     public const string SecurityEditUser = "Edit user";
-    public const string SecurityDeleteUser = "Delete user";
-    public const string SecurityDeleteUserTitle = "Delete user";
+    public const string SecurityDeleteUser = "Drop user";
+    public const string SecurityDeleteUserTitle = "Drop user";
     public const string SecurityDeleteUserMessage = "Drop server user '{0}'? This removes the login from the Firebird server.";
 
     // Roles pane
@@ -2285,6 +2536,24 @@ internal static class UiStrings
     public const string SecurityColMembership = "Membership";
     public const string SecurityColMemberName = "User / Role";
     public const string SecurityMembershipLegend = "✓ member     ✓+ with admin option     ·     click a cell to cycle";
+
+    // ── Stany puste Security Managera (M5 / M‑3, B2 + B3) ────────────────────────────────────────
+    //
+    // ⚠ „Brak ról" to stan ZWYCZAJNY, nie awaryjny: `RDB$ROLES` po odfiltrowaniu systemowych jest pusta
+    //    na świeżo utworzonej bazie. ⭐ Treść wskazuje następny krok, bo przycisk „Add role" stoi tuż nad
+    //    siatką i MA WIDOCZNĄ ETYKIETĘ — inaczej niż „+" w pasku tytułu, przez które stan pusty paska
+    //    bocznego musiał pokazać glif.
+    // ⛔ Nazwa akcji jest SKŁADANA ze stałej przycisku, nie przepisana: przepisany napis rozjeżdża się po
+    //    cichu przy pierwszej zmianie etykiety (ta sama lekcja co `CommandTip`, gotcha #284).
+    // ⛔⛔ NIE WOLNO tu użyć treści mówiącej o filtrze — zmierzone: `FilterText` istnieje wyłącznie
+    //    w panelu uprawnień, a listy użytkowników i ról filtra NIE MAJĄ.
+    public static readonly string SecurityRolesEmpty = $"No roles yet — use {SecurityAddRole} above.";
+
+    // ⭐ DWA komunikaty, bo selektor kierunku zadaje DWA różne pytania — i produkt już to wie: nagłówek
+    //    kolumny przełącza się „Role name" ↔ „Member name" dokładnie z tego powodu. Jeden komunikat na oba
+    //    kierunki byłby nieprawdziwy w jednym z nich.
+    public const string SecurityMembershipEmptyMemberOf = "This user or role belongs to no roles.";
+    public const string SecurityMembershipEmptyMembers = "This role has no members.";
 
     // Privileges pane
     public const string SecurityPrivilegesHeader = "Object privileges";
@@ -2356,7 +2625,7 @@ internal static class UiStrings
     public const string MetadataContextNewUser = "Add user…";
     public const string MetadataContextNewRole = "Add role…";
     public const string MetadataContextOpenSecurity = "Open in Security Manager";
-    public const string MetadataContextDeleteUser = "Delete user";
+    public const string MetadataContextDeleteUser = "Drop user";
     public const string MetadataContextDropRole = "Drop role";
 
     // Toolbar (New User / New Role buttons)

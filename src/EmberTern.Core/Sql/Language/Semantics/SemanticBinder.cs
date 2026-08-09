@@ -129,7 +129,7 @@ internal sealed partial class SemanticBinder
                 // knows it, and deliberately UNRESOLVED when it does not — a mistyped generator then reads
                 // as an unknown OBJECT (ET0001, itself metadata-gated) instead of disappearing. GEN_ID and
                 // NEXT VALUE FOR are built-in syntax the catalog doesn't carry, so they stay uncoloured.
-                if (IsNameToken(tok) && IsGeneratorNamePosition(t, i))
+                if (IsNameToken(tok) && FirebirdGrammar.IsGeneratorNamePosition(t, i))
                 {
                     if (referenced.Add(tok.Start))
                     {
@@ -160,31 +160,33 @@ internal sealed partial class SemanticBinder
         => t.Kind is TokenKind.Identifier or TokenKind.Keyword
            && string.Equals(t.Text, text, StringComparison.OrdinalIgnoreCase);
 
-    // Does Firebird's grammar say the name token at <paramref name="k"/> is a GENERATOR (sequence) NAME
-    // rather than an ordinary expression? True in exactly two positions: the operand of
-    // <c>NEXT VALUE FOR</c>, and the FIRST argument of <c>GEN_ID(…)</c>.
+    // The ONE question BOTH expression walkers ask before treating a bare identifier as an operand: does
+    // Firebird's grammar already pin this name to something that is neither a variable nor a column?
     //
-    // Those two are the whole list, measured on FB5 (2026-08-01) rather than assumed: GEN_ID takes a bare
-    // identifier (`GEN_ID(GEN_ORDER_ID, 0)` → 999), while MAKE_DBKEY's first argument is an ordinary
-    // expression — a bare name there is rejected by the engine with "-206 Column unknown" — and
-    // RDB$GET_CONTEXT / RDB$SET_CONTEXT take string literals, which never lex as identifiers. So no other
-    // built-in can put an object name where a column or variable would otherwise be read.
+    // ⚠ The composed predicates stay SEPARATE inside FirebirdGrammar on purpose, because they have opposite
+    // consequences. A generator name is an object the catalog scan must RESOLVE (an unknown one is a provable
+    // ET0001); a syntax word resolves to nothing at all and simply must not be claimed by anyone; a CAST type
+    // may be a domain the caller resolves. Merging them would either make the catalog scan look up a sequence
+    // called YEAR, or stop it looking up generators — which is why the composition lives here, at the caller
+    // with the shared job, and not in any of the predicates.
     //
-    // ONE owner for that question. It is asked by two binders with OPPOSITE jobs — the global catalog scan
-    // RESOLVES the name, while the PSQL expression walker must leave the occurrence unclaimed instead of
-    // treating it as a local variable — and a partial second copy of it (a bare "is the previous token FOR"
-    // test, which covered NEXT VALUE FOR but not GEN_ID) is exactly how GEN_ID's argument came to be
-    // reported as an unresolved variable.
-    private static bool IsGeneratorNamePosition(IReadOnlyList<SqlToken> t, int k)
+    // ⭐ Returns true when the walker must NOT bind the token as an operand. The CAST arm is the one that
+    // also does something: a cast's type may name a DOMAIN, and resolving it there gives it the same colour,
+    // hover and Ctrl+Click a domain already gets in a DECLARE VARIABLE / parameter type position (D15.1) —
+    // one rule for "a domain used as a type", wherever the type appears.
+    private bool IsGrammarPinnedNonLocal(IReadOnlyList<SqlToken> t, int k)
     {
-        // NEXT VALUE FOR <name> — each word may lex as a keyword or an identifier, so match by text.
-        if (k >= 3 && IsWordText(t[k - 3], "NEXT") && IsWordText(t[k - 2], "VALUE") && IsWordText(t[k - 1], "FOR"))
-        {
-            return true;
-        }
+        if (FirebirdGrammar.IsGeneratorNamePosition(t, k)) return true;
+        if (FirebirdGrammar.IsSyntaxWordPosition(t, k)) return true;
+        if (!FirebirdGrammar.IsCastTypePosition(t, k)) return false;
 
-        // GEN_ID( <name> , … ) — the first argument only; every later one is an ordinary expression.
-        return k >= 2 && t[k - 1].Kind == TokenKind.LParen && IsWordText(t[k - 2], "GEN_ID");
+        // Only a name that really is a domain records anything; TYPE / OF / COLUMN and a qualified
+        // column reference inside `TYPE OF COLUMN t.c` resolve to nothing and stay unclaimed.
+        if (ResolveObject(FoldedName(t[k])) is { Kind: SymbolKind.Domain } domain)
+        {
+            AddReference(t[k], domain, ReferenceRole.SchemaObject);
+        }
+        return true;
     }
 
     private void BindStatement(SqlStatement stmt)

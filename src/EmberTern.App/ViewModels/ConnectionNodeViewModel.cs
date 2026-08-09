@@ -12,22 +12,11 @@ namespace EmberTern.App.ViewModels;
 
 public partial class ConnectionNodeViewModel : ViewModelBase
 {
-    private static readonly MetadataObjectKind[] CategoryOrder =
-    {
-        MetadataObjectKind.Table,
-        MetadataObjectKind.View,
-        MetadataObjectKind.Procedure,
-        MetadataObjectKind.Trigger,
-        MetadataObjectKind.Function,
-        MetadataObjectKind.Generator,
-        MetadataObjectKind.Domain,
-        MetadataObjectKind.Package,
-        MetadataObjectKind.Exception,
-        MetadataObjectKind.Role,
-        MetadataObjectKind.User,
-        MetadataObjectKind.Index,
-        MetadataObjectKind.SystemTable,
-    };
+    // ⭐ M4.2b: kolejność przeniesiona do WSPÓLNEJ `MetadataCategoryOrder`, którą czyta też drzewo
+    // zależności. ⚠ Ta lista BYŁA kolejnością kanoniczną i nią pozostaje — migracja nie zmienia tu ani
+    // jednej pozycji; zmienia się wyłącznie drzewo zależności, które miało własną, rozjechaną tablicę.
+    // ⛔ Nie przywracać lokalnej kopii: dwie tablice, które dziś się zgadzają, jutro się rozjadą.
+    private static IReadOnlyList<MetadataObjectKind> CategoryOrder => MetadataCategoryOrder.All;
 
     private readonly MainWindowViewModel? _owner;
     private readonly FirebirdConnectionService? _service;
@@ -60,6 +49,7 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(RefreshMetadataCommand))]
     [NotifyCanExecuteChangedFor(nameof(RecomputeAllStatisticsCommand))]
     [NotifyCanExecuteChangedFor(nameof(RecompileAllObjectsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DatabasePropertiesCommand))]
     private bool _isConnected;
 
     [ObservableProperty]
@@ -121,7 +111,7 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         }
 
         Children.Clear();
-        var categories = new System.Collections.Generic.List<MetadataNodeViewModel>(CategoryOrder.Length);
+        var categories = new System.Collections.Generic.List<MetadataNodeViewModel>(CategoryOrder.Count);
         foreach (var kind in CategoryOrder)
         {
             var cat = MetadataNodeViewModel.CreateGroup(metadata, kind);
@@ -142,15 +132,24 @@ public partial class ConnectionNodeViewModel : ViewModelBase
         // itself as well; the guard is nesting-safe, so this only collapses the 13 re-projections into one.
         var sw = System.Diagnostics.Stopwatch.StartNew();
         metadata.BeginSidebarBulkUpdate();
+        // ⭐ Faza 3 dla sekcji postępu paska statusu (§19.34). Suma jest tu ZNANA, więc to jedyna faza
+        // ładowania połączenia, która uczciwie wypełnia tryb procentowy.
+        // ⚠⚠ `finally` obejmuje CAŁĄ pętlę, i to jest cały mechanizm bezpieczeństwa: pasek gaśnie także
+        // wtedy, gdy któraś kategoria rzuci wyjątek, którego `LoadGroupAsync` nie łapie. Bez tego pasek
+        // zostałby zapalony na zawsze — a `MetadataReady` niżej wtedy NIE padnie.
+        metadata.BeginMetadataPrefetch(categories.Count);
         try
         {
+            var loaded = 0;
             foreach (var cat in categories)
             {
                 await metadata.LoadGroupAsync(cat).ConfigureAwait(true);
+                metadata.ReportMetadataPrefetch(++loaded);
             }
         }
         finally
         {
+            metadata.EndMetadataPrefetch();
             metadata.EndSidebarBulkUpdate();
         }
         sw.Stop();
@@ -233,6 +232,21 @@ public partial class ConnectionNodeViewModel : ViewModelBase
 
     [RelayCommand(CanExecute = nameof(CanDisconnect))]
     private Task RecompileAllObjectsAsync() => _owner?.RecompileAllObjectsAsync() ?? Task.CompletedTask;
+
+    /// <summary>
+    /// Opens the Database Properties window for this connection.
+    ///
+    /// <para>⚠ <b>Gated by DISABLING, where its neighbours in the same menu HIDE</b> (they use
+    /// <c>IsVisible="{Binding IsConnected}"</c>) — and that is the ratified rule rather than drift: hide when
+    /// the item makes no sense in that state at all, disable when the operation exists but is momentarily
+    /// unavailable (M3.4b part 2). A database has properties whether or not EmberTern is attached; it just
+    /// cannot read them right now.</para>
+    ///
+    /// <para>⭐ It needs no new mechanism: <c>CanDisconnect</c> is already "requires a connection", and
+    /// <see cref="IsConnected"/> already re-evaluates every command listed on it.</para>
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDisconnect))]
+    private Task DatabasePropertiesAsync() => _owner?.ShowDatabasePropertiesAsync() ?? Task.CompletedTask;
 
     private bool CanConnect() => !IsConnected;
     private bool CanDisconnect() => IsConnected;

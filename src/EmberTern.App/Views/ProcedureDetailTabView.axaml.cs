@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading.Tasks;
@@ -16,6 +16,8 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using EmberTern.App.Behaviors;
+using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Sql;
 using EmberTern.App.ViewModels;
@@ -77,9 +79,25 @@ public partial class ProcedureDetailTabView : UserControl
         // S5: the panel's activation gestures navigate the active SQL document.
         var diagnosticsPanel = this.FindControl<DiagnosticsPanelView>("ProcDiagnosticsPanel");
         if (diagnosticsPanel is not null) diagnosticsPanel.Navigator = _diagnostics;
-        if (_inputGrid is not null) FieldGridColumns.Build(_inputGrid, includeDefault: true);
-        if (_outputGrid is not null) FieldGridColumns.Build(_outputGrid, includeDefault: false);
-        if (_variablesGrid is not null) FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+        // ⭐ Every editable grid goes through EditableGridBehavior.Attach — the ONE seam carrying the Enter
+        // gesture and the cell-editor height role (S-1a + S-3). Explicit per grid on purpose: the previous
+        // arrangement hung the height role inside FieldGridColumns.Build, so the three grids that build their
+        // own columns silently missed it. An explicit call is the thing a guard can require.
+        if (_inputGrid is not null)
+        {
+            FieldGridColumns.Build(_inputGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_inputGrid);
+        }
+        if (_outputGrid is not null)
+        {
+            FieldGridColumns.Build(_outputGrid, includeDefault: false);
+            EditableGridBehavior.Attach(_outputGrid);
+        }
+        if (_variablesGrid is not null)
+        {
+            FieldGridColumns.Build(_variablesGrid, includeDefault: true);
+            EditableGridBehavior.Attach(_variablesGrid);
+        }
 
         WireEditor(_sqlEditor, OnSqlEditorTextChanged);
         WireEditor(_bodyEditor, OnBodyEditorTextChanged);
@@ -225,7 +243,7 @@ public partial class ProcedureDetailTabView : UserControl
         }
     }
 
-    // Ctrl+K in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE.
+    // Alt+F (or Ctrl+K) in the Easy-mode CURSOR / SUBPROGRAM editors formats that one editor IN PLACE.
     //
     // ⚠ This is the one gesture etap 3 could not move into Commands.CommandCatalog, and the reason is
     // structural rather than incidental: "format the object's source" (the VM's FormatSqlCommand, which the
@@ -233,12 +251,19 @@ public partial class ProcedureDetailTabView : UserControl
     // and the second one is identified by a specific TextEditor INSTANCE. The router resolves commands, not
     // control instances, so it has nothing to route to here.
     //
-    // It stays deliberately narrow: it handles the key ONLY for those two editors, so Ctrl+K anywhere else
+    // It stays deliberately narrow: it handles the key ONLY for those two editors, so the gesture anywhere else
     // in the tab falls through to the router and reaches the catalog's FormatSql exactly like the other five
     // formattable tabs. The body/source editors are no longer special-cased here at all.
+    //
+    // ⭐⭐ THE GESTURE IS READ FROM THE CATALOG, NOT TYPED HERE. It used to be a literal
+    // `e.Key != Key.K || e.KeyModifiers != Control`, which was fine until Format SQL moved to Alt+F with Ctrl+K
+    // as its alternate (2026-08-03): the shortcut would then have worked everywhere in the application EXCEPT
+    // these two editors, with a green build and no failing test — gotcha #284's drift, in a key handler instead
+    // of a string. What cannot be moved into the router is the TARGET (a specific TextEditor instance), never
+    // the gesture.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.K || e.KeyModifiers != KeyModifiers.Control) return;
+        if (CommandCatalog.For(CommandId.FormatSql)?.Matches(e.Key, e.KeyModifiers) != true) return;
         if (sender is TextEditor ed && (ReferenceEquals(ed, _cursorEditor) || ReferenceEquals(ed, _subprogramEditor)))
         {
             FormatEditorInPlace(ed, StyleForFormatting());
@@ -470,11 +495,44 @@ public partial class ProcedureDetailTabView : UserControl
     // ── Filter-from-cell (Execute Result) ────────────────────────────────────
     private GridCellFilterContext? _execCellCtx;
 
+    /// <summary>The right-clicked row, for the copy actions. See <c>OnProcResultCellPointerPressed</c>.</summary>
+    private object?[]? _copyRow;
+
+    // ── Copy cell / row / row with headers / all with headers ────────────────────────────────────────────
+    //
+    // ⭐ The same four plain-text copy actions the SQL Editor grid has, so a user learns one set of copying
+    // gestures for every data grid (user request, 2026-08-07). The text comes from the one shared
+    // GridCopyText builder behind the VM; the target is the RIGHT-CLICKED cell, never the grid's selection.
+    // ⚠ Copy as INSERT / UPDATE is deliberately absent here: a procedure's result set is not a table, so
+    // there is no provenance to build a statement from (the SqlCopy path reports NotATable for it).
+    private void OnProcCopyCellClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Cell);
+
+    private void OnProcCopyRowClick(object? sender, RoutedEventArgs e) => _ = CopyGridAsync(CopyGridMode.Row);
+
+    private void OnProcCopyRowWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.RowWithHeaders);
+
+    private void OnProcCopyAllWithHeadersClick(object? sender, RoutedEventArgs e)
+        => _ = CopyGridAsync(CopyGridMode.AllWithHeaders);
+
+    private Task CopyGridAsync(CopyGridMode mode)
+    {
+        if (_currentVm is null) return Task.CompletedTask;
+        return GridClipboard.WriteAsync(this, _currentVm.BuildCopyText(mode, _copyRow, _execCellCtx?.ColumnIndex ?? -1));
+    }
+
     private void OnProcResultCellPointerPressed(object? sender, DataGridCellPointerPressedEventArgs e)
     {
         if (_resultGrid is null || _currentVm is null) return;
         if (!e.PointerPressedEventArgs.GetCurrentPoint(_resultGrid).Properties.IsRightButtonPressed) return;
-        if (e.Row?.DataContext is object?[] row) _resultGrid.SelectedItem = row;
+        _copyRow = null;
+        if (e.Row?.DataContext is object?[] row)
+        {
+            _resultGrid.SelectedItem = row;
+            // ⚠ Kept explicitly rather than re-read from SelectedItem at click time: the copy actions must act
+            // on the cell the menu was opened over, and a selection is a separate thing that can move.
+            _copyRow = row;
+        }
         _execCellCtx = GridCellFilter.Resolve(_resultGrid, e, _currentVm.ExecFilterPanel.Columns);
         if (ProcFilterContainsItem is not null)
             ProcFilterContainsItem.IsEnabled = _execCellCtx is { } ctx && GridCellFilter.SupportsContains(ctx);
@@ -527,14 +585,6 @@ public partial class ProcedureDetailTabView : UserControl
             return tb;
         });
 
-    private void OnDependencyNodeDoubleTapped(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Control { DataContext: DependencyLeafNode leaf } && _currentVm is not null)
-        {
-            _currentVm.RequestOpen(leaf);
-            e.Handled = true;
-        }
-    }
 
     private void ApplyEditorTheme()
     {

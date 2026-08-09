@@ -15,6 +15,15 @@ public sealed record ContextRewrite(
     IReadOnlyList<string> ContextReads,
     IReadOnlyList<string> ContextWrites);
 
+/// <summary>One <c>NEW.col</c> / <c>OLD.col</c> occurrence in the source: the whole reference
+/// <see cref="Span"/> (qualifier through member, so a rewrite replaces the dotted name as a unit), which
+/// record it names, the folded column, and the <see cref="Synthetic"/> frame variable holding its value.</summary>
+public readonly record struct ContextOccurrence(
+    TextSpan Span,
+    TriggerRecord Record,
+    string Column,
+    string Synthetic);
+
 /// <summary>
 /// The <b>one</b> engine that removes a trigger's context (<c>NEW</c>/<c>OLD</c> record columns and the
 /// <c>INSERTING</c>/<c>UPDATING</c>/<c>DELETING</c> predicates) from a source fragment so it can run inside the
@@ -104,43 +113,35 @@ public static class ContextSubstitution
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(context);
 
-        var lookup = BuildLookup(context.Columns);
-        var refs = InScope(model, region);
         var edits = new List<Edit>();
         var reads = new List<string>();
         var writes = new List<string>();
         var seenRead = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenWrite = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        for (int i = 0; i < refs.Count; i++)
+        foreach (var occurrence in ReferencesIn(model, region, context))
         {
-            var r = refs[i];
+            // Replace the whole NEW.col span (qualifier .. member) with the synthetic name — colon-prefixed
+            // when this reference lies inside an embedded DSQL region, bare inside a PSQL expression
+            // (gotchas #247/#248). Reads/writes stay bare (the harness declares + injects them bare).
+            bool colon = InsideAnyRegion(occurrence.Span.Start, occurrence.Span.End, colonRegions);
+            edits.Add(new Edit(
+                occurrence.Span.Start, occurrence.Span.End,
+                colon ? ":" + occurrence.Synthetic : occurrence.Synthetic));
 
-            // NEW.col / OLD.col — a RecordAlias reference paired with the following Column reference.
-            if (r.Role == ReferenceRole.RecordAlias
-                && i + 1 < refs.Count && refs[i + 1].Role == ReferenceRole.Column
-                && TryRecord(r.Text, out var record))
+            if (seenRead.Add(occurrence.Synthetic)) reads.Add(occurrence.Synthetic);
+            if (occurrence.Record == TriggerRecord.New && context.NewWritable
+                && seenWrite.Add(occurrence.Synthetic))
             {
-                var member = refs[i + 1];
-                i++; // consume the paired Column reference
-                string column = Fold(member.Text);
-                if (lookup.TryGetValue((record, column), out var synthetic))
-                {
-                    // Replace the whole NEW.col span (qualifier .. member) with the synthetic name — colon-prefixed
-                    // when this reference lies inside an embedded DSQL region, bare inside a PSQL expression
-                    // (gotchas #247/#248). Reads/writes stay bare (the harness declares + injects them bare).
-                    bool colon = InsideAnyRegion(r.Span.Start, member.Span.End, colonRegions);
-                    edits.Add(new Edit(r.Span.Start, member.Span.End, colon ? ":" + synthetic : synthetic));
-                    if (seenRead.Add(synthetic)) reads.Add(synthetic);
-                    if (record == TriggerRecord.New && context.NewWritable && seenWrite.Add(synthetic))
-                    {
-                        writes.Add(synthetic);
-                    }
-                }
-                continue;
+                writes.Add(occurrence.Synthetic);
             }
+        }
 
-            // INSERTING / UPDATING / DELETING — a boolean literal for the simulated event.
+        // INSERTING / UPDATING / DELETING — a boolean literal for the simulated event. A separate pass because
+        // it reads a different reference role (ContextVariable) from the column pairing above; the two role
+        // sets are disjoint, so neither can consume the other's occurrences.
+        foreach (var r in InScope(model, region))
+        {
             if (r.Role == ReferenceRole.ContextVariable && TryPredicate(r.Text, out var predicate))
             {
                 edits.Add(new Edit(r.Span.Start, r.Span.End, predicate == context.Event ? "TRUE" : "FALSE"));
@@ -148,6 +149,53 @@ public static class ContextSubstitution
         }
 
         return new ContextRewrite(ApplyEdits(source, region, edits), reads, writes);
+    }
+
+    /// <summary>
+    /// Every <c>NEW.col</c> / <c>OLD.col</c> occurrence inside <paramref name="region"/>, as a span paired with
+    /// the synthetic frame variable that holds its value.
+    /// <para>
+    /// ⭐ Public because the Cursor Bridge needs the SAME pairing rule for a different purpose (P6,
+    /// 2026-08-07). A trigger's <c>FOR SELECT</c> cursor runs as a separately-opened DSQL statement where the
+    /// harness's synthetic variables do not exist — but its <c>NEW.col</c> references are values the frame
+    /// already holds, so the bridge binds them as ordinary <c>?</c> parameters instead of rewriting them to a
+    /// name. Two consumers, two rewrites, ONE definition of "what is a context reference and which frame
+    /// variable holds it" — a second copy of this pairing is how a rewrite ends up disagreeing with the
+    /// injection it feeds.
+    /// </para>
+    /// <para>⚠ An occurrence whose column is not in <paramref name="context"/> is skipped, exactly as
+    /// <see cref="Substitute"/> skips it: an unmapped context reference is left verbatim so the server reports
+    /// an honest error rather than us guessing a rewrite (§F).</para>
+    /// </summary>
+    public static IReadOnlyList<ContextOccurrence> ReferencesIn(
+        SemanticModel model, TextSpan region, TriggerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(context);
+
+        var lookup = BuildLookup(context.Columns);
+        var refs = InScope(model, region);
+        var found = new List<ContextOccurrence>();
+
+        for (int i = 0; i < refs.Count; i++)
+        {
+            var r = refs[i];
+            // NEW.col / OLD.col — a RecordAlias reference paired with the following Column reference.
+            if (r.Role != ReferenceRole.RecordAlias) continue;
+            if (i + 1 >= refs.Count || refs[i + 1].Role != ReferenceRole.Column) continue;
+            if (!TryRecord(r.Text, out var record)) continue;
+
+            var member = refs[i + 1];
+            i++; // consume the paired Column reference
+            string column = Fold(member.Text);
+            if (lookup.TryGetValue((record, column), out var synthetic))
+            {
+                found.Add(new ContextOccurrence(
+                    TextSpan.FromBounds(r.Span.Start, member.Span.End), record, column, synthetic));
+            }
+        }
+
+        return found;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────

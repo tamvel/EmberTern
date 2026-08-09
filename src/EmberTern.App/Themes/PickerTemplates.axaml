@@ -29,7 +29,7 @@
 
   <!-- Column-header row above the domain list (same fixed widths as DomainRowTemplate). -->
   <DataTemplate x:Key="DomainHeaderTemplate">
-    <Border Background="{DynamicResource ElevatedPanelBrush}"
+    <Border Background="{DynamicResource SurfaceRaisedBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid Margin="8,3" HorizontalAlignment="Stretch"
             ColumnDefinitions="*,110,55,55,60,90">
