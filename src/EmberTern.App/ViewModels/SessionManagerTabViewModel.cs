@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -109,7 +109,7 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     [ObservableProperty] private double _gapFillWidth;               // fill px = lag / danger budget
     [ObservableProperty] private string _gapValueText = "0";         // the gap count (severity-coloured)
     [ObservableProperty] private string _gapSeverityBrushKey = "SubtleForegroundBrush";
-    [ObservableProperty] private string _gapStatusText = string.Empty; // plain-language "what it means"
+    [ObservableProperty] private string _gapStatusText = string.Empty; // plain-language UiStrings.SessionManagerWhatItMeans
     [ObservableProperty] private string _gapScaleMaxText = "0";      // right-hand scale label (the danger line)
 
     // --- Session Details: plain-language "why it matters" ---

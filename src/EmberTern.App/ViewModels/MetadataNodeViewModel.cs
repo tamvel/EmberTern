@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -290,19 +290,19 @@ public partial class MetadataNodeViewModel : ViewModelBase
     // Title-cased singular noun for menu labels ("New View", "Recompile all functions").
     private string KindNounTitle => Kind switch
     {
-        MetadataObjectKind.Table => "Table",
-        MetadataObjectKind.View => "View",
-        MetadataObjectKind.Procedure => "Procedure",
-        MetadataObjectKind.Trigger => "Trigger",
-        MetadataObjectKind.Function => "Function",
-        MetadataObjectKind.Generator => "Generator",
-        MetadataObjectKind.Domain => "Domain",
-        MetadataObjectKind.Package => "Package",
-        MetadataObjectKind.Exception => "Exception",
-        MetadataObjectKind.Role => "Role",
-        MetadataObjectKind.User => "User",
-        MetadataObjectKind.Index => "Index",
-        MetadataObjectKind.SystemTable => "System table",
+        MetadataObjectKind.Table => UiStrings.ObjectKindTable,
+        MetadataObjectKind.View => UiStrings.ObjectKindView,
+        MetadataObjectKind.Procedure => UiStrings.ObjectKindProcedure,
+        MetadataObjectKind.Trigger => UiStrings.ObjectKindTrigger,
+        MetadataObjectKind.Function => UiStrings.ObjectKindFunction,
+        MetadataObjectKind.Generator => UiStrings.ObjectKindGenerator,
+        MetadataObjectKind.Domain => UiStrings.ObjectKindDomain,
+        MetadataObjectKind.Package => UiStrings.ObjectKindPackage,
+        MetadataObjectKind.Exception => UiStrings.ObjectKindException,
+        MetadataObjectKind.Role => UiStrings.ObjectKindRole,
+        MetadataObjectKind.User => UiStrings.ObjectKindUser,
+        MetadataObjectKind.Index => UiStrings.ObjectKindIndex,
+        MetadataObjectKind.SystemTable => UiStrings.ObjectKindSystemTable,
         _ => Kind.ToString(),
     };
 

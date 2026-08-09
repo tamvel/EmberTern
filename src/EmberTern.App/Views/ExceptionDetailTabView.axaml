@@ -21,18 +21,18 @@
       <!-- Exception — the editable form (name + message). Name is read-only for an
            existing exception (editable only in the New flow); Message is editable.
            Compile / Revert / Delete live in the main app toolbar. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ExceptionDetailTabException}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ExceptionDetailTabException}">
         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,*"
               Margin="12" VerticalAlignment="Top">
 
           <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                     Margin="0,0,12,8" Text="{x:Static app:UiStrings.ExceptionNameHeader}" />
+                     Margin="0,0,12,8" Text="{app:Loc ExceptionNameHeader}" />
           <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
                    Text="{Binding EditableName, Mode=TwoWay}"
                    IsReadOnly="{Binding !IsNew}" />
 
           <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label"
-                     Margin="0,0,12,0" Text="{x:Static app:UiStrings.ExceptionMessageHeader}" />
+                     Margin="0,0,12,0" Text="{app:Loc ExceptionMessageHeader}" />
           <TextBox Grid.Row="1" Grid.Column="1"
                    Text="{Binding Message, Mode=TwoWay}"
                    AcceptsReturn="True" TextWrapping="Wrap"
@@ -42,10 +42,10 @@
       </TabItem>
 
       <!-- Description — editable COMMENT ON EXCEPTION. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ExceptionDetailTabDescription}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ExceptionDetailTabDescription}">
         <Grid RowDefinitions="Auto,*" Margin="12">
           <TextBlock Grid.Row="0" Classes="field-label"
-                     Margin="0,0,0,6" Text="{x:Static app:UiStrings.ExceptionDescriptionEditLabel}" />
+                     Margin="0,0,0,6" Text="{app:Loc ExceptionDescriptionEditLabel}" />
           <TextBox Grid.Row="1"
                    Text="{Binding EditableDescription, Mode=TwoWay}"
                    AcceptsReturn="True" TextWrapping="Wrap"
@@ -57,11 +57,11 @@
       <!-- Dependencies — reuses the same dual-tree layout + templates as
            TableDetail / Generator (Used by / Depends on). An exception is normally
            only "depended on by" procedures / triggers / functions / packages. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ExceptionDetailTabDependencies}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ExceptionDetailTabDependencies}">
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+                       Text="{app:Loc TableDetailDependedOnByHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -76,7 +76,7 @@
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+                       Text="{app:Loc TableDetailDependsOnHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -86,7 +86,7 @@
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE EXCEPTION. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ExceptionDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ExceptionDetailTabDdl}">
         <ae:TextEditor x:Name="ExceptionDdlEditor"
                        ShowLineNumbers="True"
                        IsReadOnly="True"
@@ -101,7 +101,7 @@
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">
-      <TextBlock Text="{x:Static app:UiStrings.ExceptionLoadingHint}"
+      <TextBlock Text="{app:Loc ExceptionLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
                  FontSize="{DynamicResource Text.Compact.Size}"

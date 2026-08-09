@@ -1,4 +1,5 @@
 ﻿using EmberTern.App.Commands;
+using EmberTern.App.Localization;
 
 namespace EmberTern.App;
 
@@ -14,19 +15,210 @@ namespace EmberTern.App;
 /// </summary>
 internal static class UiStrings
 {
-    public const string AppTitle = "EmberTern";
-    public const string AppSubtitle = "Firebird Developer Workbench";
+    // ── LOCALIZATION ─────────────────────────────────────────────────────────────────────────────────────
+    //
+    // ⭐ A localized member is a PROPERTY reading `Loc.Text(nameof(X))` — never a `const`, never a
+    //    `static readonly` field. The member NAME is the resource key in `Localization/Strings.resx`, so
+    //    there is one owner of a key and no second naming scheme to keep in step.
+    //
+    // ⚠⚠ THE SHAPE IS DICTATED BY LIVE SWITCHING (decision D‑1, ratified 2026-08-09) AND ALL THREE FORMS
+    //    DIFFER IN A WAY THAT MATTERS:
+    //      `const`          — inlined by the compiler; after the build there is no field left to resolve,
+    //                         so no resource plumbing can ever reach it.
+    //      `static readonly`— resolved ONCE at type initialization; correct for a restart-only design and
+    //                         silently frozen in the first language for a live one.
+    //      property         — resolved at the moment of the call. This one.
+    //
+    // ⚠ For XAML the equivalent rule is `{app:Loc Key}`, not `{x:Static app:UiStrings.Key}`: `x:Static` is
+    //    not a binding and never re-evaluates. These members remain for C# consumers, which read them at
+    //    call time and therefore follow the language for free.
+    //
+    // ⚠ A consumer that CAPTURES the text once (a tab header assigned on open, a grid column built in
+    //    code-behind) still needs `Loc.LanguageChanged` to rebuild — a property cannot help something that
+    //    never asks again.
+
+    public static string AppTitle => Loc.Text(nameof(AppTitle));
+    public static string ExecRowsReadFormat => Loc.Text(nameof(ExecRowsReadFormat));
+    public static string ExecRowsReadSuffixFormat => Loc.Text(nameof(ExecRowsReadSuffixFormat));
+    public static string ObjectKindLowerDomain => Loc.Text(nameof(ObjectKindLowerDomain));
+    public static string ObjectKindLowerException => Loc.Text(nameof(ObjectKindLowerException));
+    public static string ObjectKindLowerFunction => Loc.Text(nameof(ObjectKindLowerFunction));
+    public static string ObjectKindLowerGenerator => Loc.Text(nameof(ObjectKindLowerGenerator));
+    public static string ObjectKindLowerIndex => Loc.Text(nameof(ObjectKindLowerIndex));
+    public static string ObjectKindLowerPackage => Loc.Text(nameof(ObjectKindLowerPackage));
+    public static string ObjectKindLowerProcedure => Loc.Text(nameof(ObjectKindLowerProcedure));
+    public static string ObjectKindLowerRole => Loc.Text(nameof(ObjectKindLowerRole));
+    public static string ObjectKindLowerSystemTable => Loc.Text(nameof(ObjectKindLowerSystemTable));
+    public static string ObjectKindLowerTable => Loc.Text(nameof(ObjectKindLowerTable));
+    public static string ObjectKindLowerTrigger => Loc.Text(nameof(ObjectKindLowerTrigger));
+    public static string ObjectKindLowerUser => Loc.Text(nameof(ObjectKindLowerUser));
+    public static string ObjectKindLowerView => Loc.Text(nameof(ObjectKindLowerView));
+    public static string ParameterHelperMemberFormat => Loc.Text(nameof(ParameterHelperMemberFormat));
+    public static string PeekHeaderFormat => Loc.Text(nameof(PeekHeaderFormat));
+    public static string SecurityRolesEmptyFormat => Loc.Text(nameof(SecurityRolesEmptyFormat));
+    public static string SessionRowSelfSuffix => Loc.Text(nameof(SessionRowSelfSuffix));
+    public static string StatusQueryPrefix => Loc.Text(nameof(StatusQueryPrefix));
+    public static string TableDetailAddConstraintFormat => Loc.Text(nameof(TableDetailAddConstraintFormat));
+    public static string TableDetailAddForeignKeyPrefix => Loc.Text(nameof(TableDetailAddForeignKeyPrefix));
+    public static string TableDetailAddIndexPrefix => Loc.Text(nameof(TableDetailAddIndexPrefix));
+    public static string TraceFormatMinutesFormat => Loc.Text(nameof(TraceFormatMinutesFormat));
+    public static string TraceFormatMsFormat => Loc.Text(nameof(TraceFormatMsFormat));
+    public static string TraceFormatSecondsFormat => Loc.Text(nameof(TraceFormatSecondsFormat));
+    public static string TraceLensDurationSummaryFormat => Loc.Text(nameof(TraceLensDurationSummaryFormat));
+    public static string TraceLensTransactionSummaryFormat => Loc.Text(nameof(TraceLensTransactionSummaryFormat));
+    public static string TraceTimingFetchesFormat => Loc.Text(nameof(TraceTimingFetchesFormat));
+    public static string TraceTimingMsFormat => Loc.Text(nameof(TraceTimingMsFormat));
+    public static string TraceTimingReadsFormat => Loc.Text(nameof(TraceTimingReadsFormat));
+    public static string TraceTimingRowsManyFormat => Loc.Text(nameof(TraceTimingRowsManyFormat));
+    public static string TraceTimingRowsOneFormat => Loc.Text(nameof(TraceTimingRowsOneFormat));
+    public static string TraceTimingWritesFormat => Loc.Text(nameof(TraceTimingWritesFormat));
+    public static string ConnectionCopySuffix => Loc.Text(nameof(ConnectionCopySuffix));
+    public static string ConnectionNoPath => Loc.Text(nameof(ConnectionNoPath));
+    public static string DpapiWindowsOnly => Loc.Text(nameof(DpapiWindowsOnly));
+    public static string DurationMsFormat => Loc.Text(nameof(DurationMsFormat));
+    public static string ExecutionCaptureMonAttachment => Loc.Text(nameof(ExecutionCaptureMonAttachment));
+    public static string ExecutionCaptureMonStatement => Loc.Text(nameof(ExecutionCaptureMonStatement));
+    public static string ExecutionCapturePlanOnly => Loc.Text(nameof(ExecutionCapturePlanOnly));
+    public static string ExecutionCaptureTrace => Loc.Text(nameof(ExecutionCaptureTrace));
+    public static string ExecutionCopyCaptureLabel => Loc.Text(nameof(ExecutionCopyCaptureLabel));
+    public static string ExecutionCopyPlanLabelFormat => Loc.Text(nameof(ExecutionCopyPlanLabelFormat));
+    public static string ExecutionCopyTimingsLabel => Loc.Text(nameof(ExecutionCopyTimingsLabel));
+    public static string ExecutionPlanDialectExplain => Loc.Text(nameof(ExecutionPlanDialectExplain));
+    public static string ExecutionPlanDialectLegacy => Loc.Text(nameof(ExecutionPlanDialectLegacy));
+    public static string ExecutionTimingsExecute => Loc.Text(nameof(ExecutionTimingsExecute));
+    public static string ExecutionTimingsFetch => Loc.Text(nameof(ExecutionTimingsFetch));
+    public static string ExecutionTimingsPrepare => Loc.Text(nameof(ExecutionTimingsPrepare));
+    public static string ExportDelimitedOptionsRequired => Loc.Text(nameof(ExportDelimitedOptionsRequired));
+    public static string ExportFormatUnsupportedFormat => Loc.Text(nameof(ExportFormatUnsupportedFormat));
+    public static string ExportInsertTargetRequired => Loc.Text(nameof(ExportInsertTargetRequired));
+    public static string ExportUpdateTargetRequired => Loc.Text(nameof(ExportUpdateTargetRequired));
+    public static string FilePickerCsvTxt => Loc.Text(nameof(FilePickerCsvTxt));
+    public static string FilePickerExcel => Loc.Text(nameof(FilePickerExcel));
+    public static string FilePickerFirebirdDatabases => Loc.Text(nameof(FilePickerFirebirdDatabases));
+    public static string FilePickerSelectDatabase => Loc.Text(nameof(FilePickerSelectDatabase));
+    public static string FilePickerSqlScripts => Loc.Text(nameof(FilePickerSqlScripts));
+    public static string FilterPlaceholder => Loc.Text(nameof(FilterPlaceholder));
+    public static string FindingConfidenceHigh => Loc.Text(nameof(FindingConfidenceHigh));
+    public static string FindingConfidenceLow => Loc.Text(nameof(FindingConfidenceLow));
+    public static string FindingConfidenceMedium => Loc.Text(nameof(FindingConfidenceMedium));
+    public static string ImportDateOrderIso => Loc.Text(nameof(ImportDateOrderIso));
+    public static string ParameterHelperFunctionSuffix => Loc.Text(nameof(ParameterHelperFunctionSuffix));
+    public static string ParameterHelperProcedureSuffix => Loc.Text(nameof(ParameterHelperProcedureSuffix));
+    public static string PeekLoading => Loc.Text(nameof(PeekLoading));
+    public static string PlaceholderFieldName => Loc.Text(nameof(PlaceholderFieldName));
+    public static string PlaceholderTableName => Loc.Text(nameof(PlaceholderTableName));
+    public static string PlanInsightSubquery => Loc.Text(nameof(PlanInsightSubquery));
+    public static string QuickInfoMoreFormat => Loc.Text(nameof(QuickInfoMoreFormat));
+    public static string ScriptDurationSecondsFormat => Loc.Text(nameof(ScriptDurationSecondsFormat));
+    public static string SessionManagerWhatItMeans => Loc.Text(nameof(SessionManagerWhatItMeans));
+    public static string SqlCopyKindFunction => Loc.Text(nameof(SqlCopyKindFunction));
+    public static string SqlCopyKindNotATable => Loc.Text(nameof(SqlCopyKindNotATable));
+    public static string SqlCopyKindProcedure => Loc.Text(nameof(SqlCopyKindProcedure));
+    public static string SqlCopyKindSystemTable => Loc.Text(nameof(SqlCopyKindSystemTable));
+    public static string SqlCopyKindView => Loc.Text(nameof(SqlCopyKindView));
+    public static string StatusTracePrefix => Loc.Text(nameof(StatusTracePrefix));
+    public static string TableAccessDelFormat => Loc.Text(nameof(TableAccessDelFormat));
+    public static string TableAccessIdxFormat => Loc.Text(nameof(TableAccessIdxFormat));
+    public static string TableAccessInsFormat => Loc.Text(nameof(TableAccessInsFormat));
+    public static string TableAccessSeqFormat => Loc.Text(nameof(TableAccessSeqFormat));
+    public static string TableAccessUpdFormat => Loc.Text(nameof(TableAccessUpdFormat));
+    public static string TableColumnPickerFilterColumns => Loc.Text(nameof(TableColumnPickerFilterColumns));
+    public static string TableColumnPickerFilterTables => Loc.Text(nameof(TableColumnPickerFilterTables));
+    public static string TraceDetailFetchesFormat => Loc.Text(nameof(TraceDetailFetchesFormat));
+    public static string TraceDetailPidPrefix => Loc.Text(nameof(TraceDetailPidPrefix));
+    public static string TraceDetailReadsFormat => Loc.Text(nameof(TraceDetailReadsFormat));
+    public static string TraceDetailTriggerEvent => Loc.Text(nameof(TraceDetailTriggerEvent));
+    public static string TraceDetailWhatFired => Loc.Text(nameof(TraceDetailWhatFired));
+    public static string TraceDetailWritesFormat => Loc.Text(nameof(TraceDetailWritesFormat));
+    public static string TraceDroppedSuffixFormat => Loc.Text(nameof(TraceDroppedSuffixFormat));
+    public static string TraceLensNoTransaction => Loc.Text(nameof(TraceLensNoTransaction));
+    public static string TraceLensSystemEvents => Loc.Text(nameof(TraceLensSystemEvents));
+    public static string TraceLensTransactionPrefix => Loc.Text(nameof(TraceLensTransactionPrefix));
+    public static string TraceStateError => Loc.Text(nameof(TraceStateError));
+    public static string TraceStatePaused => Loc.Text(nameof(TraceStatePaused));
+    public static string TraceStateRecording => Loc.Text(nameof(TraceStateRecording));
+    public static string TraceStateStarting => Loc.Text(nameof(TraceStateStarting));
+    public static string TraceStateStopped => Loc.Text(nameof(TraceStateStopped));
+    public static string TraceStateStopping => Loc.Text(nameof(TraceStateStopping));
+    public static string ValueNone => Loc.Text(nameof(ValueNone));
+    public static string VerdictGradeAcceptable => Loc.Text(nameof(VerdictGradeAcceptable));
+    public static string VerdictGradeAnalyzed => Loc.Text(nameof(VerdictGradeAnalyzed));
+    public static string VerdictGradeFast => Loc.Text(nameof(VerdictGradeFast));
+    public static string VerdictGradeNeedsAttention => Loc.Text(nameof(VerdictGradeNeedsAttention));
+    public static string VerdictGradeSlow => Loc.Text(nameof(VerdictGradeSlow));
+    public static string VerdictRowsChangedManyFormat => Loc.Text(nameof(VerdictRowsChangedManyFormat));
+    public static string VerdictRowsChangedOne => Loc.Text(nameof(VerdictRowsChangedOne));
+    public static string VerdictRowsManyFormat => Loc.Text(nameof(VerdictRowsManyFormat));
+    public static string VerdictRowsOne => Loc.Text(nameof(VerdictRowsOne));
+    public static string VerdictRowsReadFormat => Loc.Text(nameof(VerdictRowsReadFormat));
+
+    // ── Shared object-kind vocabulary ────────────────────────────────────────────────────────────────
+    // ⭐ ONE owner per WORD, read by four independent mappers that used to carry their own copies:
+    //   QuickInfoView.KindLabel · SqlCompletionData.DescribeKind · MetadataNodeViewModel.KindNounTitle ·
+    //   NavigationController.KindLabel. They map FOUR DIFFERENT enums, so the mapping stays per-enum —
+    //   what is shared is the vocabulary, not the switch. ⚠ Where two surfaces deliberately say different
+    //   things for the same concept (a completion row says "Field"/"CTE", Quick Info says
+    //   "Column"/"Common table expression") they read DIFFERENT keys — the terseness is a decision, and
+    //   collapsing it would be a text change disguised as a cleanup.
+    // ⛔ MainWindowViewModel's lowercase nouns ("table", "view") are NOT part of this family: they sit
+    //   mid-sentence, and a language with grammatical case will not derive them from the title-cased word.
+    public static string ObjectKindTable => Loc.Text(nameof(ObjectKindTable));
+    public static string ObjectKindView => Loc.Text(nameof(ObjectKindView));
+    public static string ObjectKindSystemTable => Loc.Text(nameof(ObjectKindSystemTable));
+    public static string ObjectKindProcedure => Loc.Text(nameof(ObjectKindProcedure));
+    public static string ObjectKindFunction => Loc.Text(nameof(ObjectKindFunction));
+    public static string ObjectKindTrigger => Loc.Text(nameof(ObjectKindTrigger));
+    public static string ObjectKindDomain => Loc.Text(nameof(ObjectKindDomain));
+    public static string ObjectKindException => Loc.Text(nameof(ObjectKindException));
+    public static string ObjectKindGenerator => Loc.Text(nameof(ObjectKindGenerator));
+    public static string ObjectKindRole => Loc.Text(nameof(ObjectKindRole));
+    public static string ObjectKindPackage => Loc.Text(nameof(ObjectKindPackage));
+    public static string ObjectKindIndex => Loc.Text(nameof(ObjectKindIndex));
+    public static string ObjectKindUser => Loc.Text(nameof(ObjectKindUser));
+    public static string ObjectKindColumn => Loc.Text(nameof(ObjectKindColumn));
+    public static string ObjectKindField => Loc.Text(nameof(ObjectKindField));
+    public static string ObjectKindTableReference => Loc.Text(nameof(ObjectKindTableReference));
+    public static string ObjectKindAlias => Loc.Text(nameof(ObjectKindAlias));
+    public static string ObjectKindVariable => Loc.Text(nameof(ObjectKindVariable));
+    public static string ObjectKindParameter => Loc.Text(nameof(ObjectKindParameter));
+    public static string ObjectKindCte => Loc.Text(nameof(ObjectKindCte));
+    public static string ObjectKindCteShort => Loc.Text(nameof(ObjectKindCteShort));
+    public static string ObjectKindCursor => Loc.Text(nameof(ObjectKindCursor));
+    public static string ObjectKindRecordAlias => Loc.Text(nameof(ObjectKindRecordAlias));
+    public static string ObjectKindRecord => Loc.Text(nameof(ObjectKindRecord));
+    public static string ObjectKindKeyword => Loc.Text(nameof(ObjectKindKeyword));
+    public static string ObjectKindDefinition => Loc.Text(nameof(ObjectKindDefinition));
+    public static string QuickInfoGroupColumns => Loc.Text(nameof(QuickInfoGroupColumns));
+    public static string QuickInfoGroupParameters => Loc.Text(nameof(QuickInfoGroupParameters));
+    public static string QuickInfoGroupReturns => Loc.Text(nameof(QuickInfoGroupReturns));
+    public static string DebuggerContinueLabel => Loc.Text(nameof(DebuggerContinueLabel));
+    public static string DebuggerStepIntoLabel => Loc.Text(nameof(DebuggerStepIntoLabel));
+    public static string DebuggerStepOverLabel => Loc.Text(nameof(DebuggerStepOverLabel));
+    public static string DebuggerStepOutLabel => Loc.Text(nameof(DebuggerStepOutLabel));
+    public static string DebuggerRunToCursorLabel => Loc.Text(nameof(DebuggerRunToCursorLabel));
+    public static string DebuggerRunToSuspendLabel => Loc.Text(nameof(DebuggerRunToSuspendLabel));
+    public static string DebuggerNextIterationLabel => Loc.Text(nameof(DebuggerNextIterationLabel));
+    public static string DebuggerLoopExitLabel => Loc.Text(nameof(DebuggerLoopExitLabel));
+    public static string DebuggerStopLabel => Loc.Text(nameof(DebuggerStopLabel));
+    public static string DebuggerRestartLabel => Loc.Text(nameof(DebuggerRestartLabel));
+    public static string ConnectionCopy => Loc.Text(nameof(ConnectionCopy));
+    public static string NewConnectionNamePlaceholder => Loc.Text(nameof(NewConnectionNamePlaceholder));
+    public static string NewConnectionPathPlaceholder => Loc.Text(nameof(NewConnectionPathPlaceholder));
+    public static string PerformanceLegendFullScanTooltip => Loc.Text(nameof(PerformanceLegendFullScanTooltip));
+    public static string SessionManagerFilterAll => Loc.Text(nameof(SessionManagerFilterAll));
+    public static string SessionManagerTxGapTooltip => Loc.Text(nameof(SessionManagerTxGapTooltip));
+    public static string AppSubtitle => Loc.Text(nameof(AppSubtitle));
 
     // Shared MessageBanner (UX Polish Sprint / Seam 4) — the IDE's one message surface, so its
     // affordances are named once and read identically on every host (debugger, object editors,
     // Execute Procedure, Security Manager, …).
-    public const string MessageBannerCopyTooltip = "Copy message";
-    public const string MessageBannerExpandTooltip = "Show full message";
-    public const string MessageBannerCollapseTooltip = "Collapse message";
-    public const string MessageBannerDismissTooltip = "Dismiss";
+    public static string MessageBannerCopyTooltip => Loc.Text(nameof(MessageBannerCopyTooltip));
+    public static string MessageBannerExpandTooltip => Loc.Text(nameof(MessageBannerExpandTooltip));
+    public static string MessageBannerCollapseTooltip => Loc.Text(nameof(MessageBannerCollapseTooltip));
+    public static string MessageBannerDismissTooltip => Loc.Text(nameof(MessageBannerDismissTooltip));
 
-    public const string SidebarMetadataHeader = "Metadata";
-    public const string SidebarConnectionsHeader = "Connections";
+    public static string SidebarMetadataHeader => Loc.Text(nameof(SidebarMetadataHeader));
+    public static string SidebarConnectionsHeader => Loc.Text(nameof(SidebarConnectionsHeader));
     // ── Pusty pasek boczny (M5 / M‑3 klasa A) ────────────────────────────────────────────────────
     // Pierwsze uruchomienie: zero profili ⇒ pod polem filtra nie ma NIC. Wariant W4, ratyfikowany na
     // renderze: najpierw KROK, potem miejsce akcji — i miejsce pokazane GLIFEM, nie tylko słowem, bo
@@ -39,122 +231,122 @@ internal static class UiStrings
     //    kłamiąca etykieta jest nieodróżnialna od awarii. Obie stałe były przy tym OSIEROCONE — nigdy nie
     //    wpięte — więc defekt nigdy się nie ujawnił, tylko czekał na kogoś, kto „wpnie gotowy tekst".
     // ⛔ Zmieniając te napisy, sprawdź w `MainWindow.axaml`, jak akcja NAPRAWDĘ nazywa się na ekranie.
-    public const string SidebarPlaceholderEmpty = "Add a connection to get started.";
-    public const string SidebarTabMetadata = "Metadata";
-    public const string SidebarTabConnections = "Connections";
+    public static string SidebarPlaceholderEmpty => Loc.Text(nameof(SidebarPlaceholderEmpty));
+    public static string SidebarTabMetadata => Loc.Text(nameof(SidebarTabMetadata));
+    public static string SidebarTabConnections => Loc.Text(nameof(SidebarTabConnections));
 
-    public const string MetadataGroupTables = "Tables";
-    public const string MetadataGroupViews = "Views";
-    public const string MetadataGroupProcedures = "Procedures";
-    public const string MetadataGroupTriggers = "Triggers";
-    public const string MetadataGroupFunctions = "Functions";
-    public const string MetadataGroupGenerators = "Generators";
-    public const string MetadataGroupDomains = "Domains";
-    public const string MetadataGroupPackages = "Packages";
-    public const string MetadataGroupExceptions = "Exceptions";
-    public const string MetadataGroupRoles = "Roles";
-    public const string MetadataGroupUsers = "Users";
-    public const string MetadataGroupIndexes = "Indexes";
-    public const string MetadataGroupSystemTables = "System Tables";
-    public const string MetadataNotConnectedHint = "Connect to a database to browse its objects.";
-    public const string MetadataFilterPlaceholder = "Filter objects…";
-    public const string MetadataRefreshTooltip = "Refresh metadata";
-    public const string MetadataContextOpenDdl = "View DDL";
-    public const string MetadataContextCopyName = "Copy name";
+    public static string MetadataGroupTables => Loc.Text(nameof(MetadataGroupTables));
+    public static string MetadataGroupViews => Loc.Text(nameof(MetadataGroupViews));
+    public static string MetadataGroupProcedures => Loc.Text(nameof(MetadataGroupProcedures));
+    public static string MetadataGroupTriggers => Loc.Text(nameof(MetadataGroupTriggers));
+    public static string MetadataGroupFunctions => Loc.Text(nameof(MetadataGroupFunctions));
+    public static string MetadataGroupGenerators => Loc.Text(nameof(MetadataGroupGenerators));
+    public static string MetadataGroupDomains => Loc.Text(nameof(MetadataGroupDomains));
+    public static string MetadataGroupPackages => Loc.Text(nameof(MetadataGroupPackages));
+    public static string MetadataGroupExceptions => Loc.Text(nameof(MetadataGroupExceptions));
+    public static string MetadataGroupRoles => Loc.Text(nameof(MetadataGroupRoles));
+    public static string MetadataGroupUsers => Loc.Text(nameof(MetadataGroupUsers));
+    public static string MetadataGroupIndexes => Loc.Text(nameof(MetadataGroupIndexes));
+    public static string MetadataGroupSystemTables => Loc.Text(nameof(MetadataGroupSystemTables));
+    public static string MetadataNotConnectedHint => Loc.Text(nameof(MetadataNotConnectedHint));
+    public static string MetadataFilterPlaceholder => Loc.Text(nameof(MetadataFilterPlaceholder));
+    public static string MetadataRefreshTooltip => Loc.Text(nameof(MetadataRefreshTooltip));
+    public static string MetadataContextOpenDdl => Loc.Text(nameof(MetadataContextOpenDdl));
+    public static string MetadataContextCopyName => Loc.Text(nameof(MetadataContextCopyName));
     // Table context menu (metadata tree, Session 5 UX sprint)
-    public const string MetadataContextNewTable = "New table";
-    public const string MetadataContextOpenTable = "Open";
-    public const string MetadataContextDesignTable = "Design table";
-    public const string MetadataContextDeleteTable = "Drop table";
-    public const string MetadataDeleteTableConfirmTitle = "Drop table";
-    public const string MetadataDeleteTableConfirmFormat = "Are you sure you want to drop table {0}?";
-    public const string MetadataDeleteTableConfirmYes = "Drop";
-    public const string MetadataDeleteTableExecutedFormat = "Table {0} deleted.";
-    public const string MetadataDeleteTableFailedFormat = "Could not drop table {0}: {1}";
-    public const string MetadataNameCopiedFormat = "Copied “{0}” to clipboard.";
-    public const string MetadataLoadingPlaceholder = "Loading…";
+    public static string MetadataContextNewTable => Loc.Text(nameof(MetadataContextNewTable));
+    public static string MetadataContextOpenTable => Loc.Text(nameof(MetadataContextOpenTable));
+    public static string MetadataContextDesignTable => Loc.Text(nameof(MetadataContextDesignTable));
+    public static string MetadataContextDeleteTable => Loc.Text(nameof(MetadataContextDeleteTable));
+    public static string MetadataDeleteTableConfirmTitle => Loc.Text(nameof(MetadataDeleteTableConfirmTitle));
+    public static string MetadataDeleteTableConfirmFormat => Loc.Text(nameof(MetadataDeleteTableConfirmFormat));
+    public static string MetadataDeleteTableConfirmYes => Loc.Text(nameof(MetadataDeleteTableConfirmYes));
+    public static string MetadataDeleteTableExecutedFormat => Loc.Text(nameof(MetadataDeleteTableExecutedFormat));
+    public static string MetadataDeleteTableFailedFormat => Loc.Text(nameof(MetadataDeleteTableFailedFormat));
+    public static string MetadataNameCopiedFormat => Loc.Text(nameof(MetadataNameCopiedFormat));
+    public static string MetadataLoadingPlaceholder => Loc.Text(nameof(MetadataLoadingPlaceholder));
     // Generic metadata-tree context menu (Metadata Tree & Context Menu sprint).
-    public const string MetadataContextNewFormat = "New {0}";
-    public const string MetadataContextEdit = "Edit";
-    public const string MetadataContextOpen = "Open";
-    public const string MetadataContextDelete = "Drop";
-    public const string MetadataContextExecuteProcedure = "Execute procedure";
-    public const string MetadataContextActivate = "Activate";
-    public const string MetadataContextDeactivate = "Deactivate";
+    public static string MetadataContextNewFormat => Loc.Text(nameof(MetadataContextNewFormat));
+    public static string MetadataContextEdit => Loc.Text(nameof(MetadataContextEdit));
+    public static string MetadataContextOpen => Loc.Text(nameof(MetadataContextOpen));
+    public static string MetadataContextDelete => Loc.Text(nameof(MetadataContextDelete));
+    public static string MetadataContextExecuteProcedure => Loc.Text(nameof(MetadataContextExecuteProcedure));
+    public static string MetadataContextActivate => Loc.Text(nameof(MetadataContextActivate));
+    public static string MetadataContextDeactivate => Loc.Text(nameof(MetadataContextDeactivate));
     // Trigger-group Activate/Deactivate submenus are scoped by these — Visible (current filter set)
     // or All. ("Selected" moved onto the selected trigger leaves — see the *SelectedFormat below.)
-    public const string MetadataContextScopeVisible = "Visible";
-    public const string MetadataContextScopeAll = "All";
+    public static string MetadataContextScopeVisible => Loc.Text(nameof(MetadataContextScopeVisible));
+    public static string MetadataContextScopeAll => Loc.Text(nameof(MetadataContextScopeAll));
     // Shown directly on a selected trigger leaf's context menu when >1 trigger is multi-selected, so
     // the bulk op is reachable without scrolling back to the Triggers group header. {0} = count.
-    public const string MetadataContextActivateSelectedFormat = "Activate selected ({0})";
-    public const string MetadataContextDeactivateSelectedFormat = "Deactivate selected ({0})";
-    public const string MetadataContextRecompileAllFormat = "Recompile all {0}s";
-    public const string MetadataInactiveSuffix = " (inactive)";
+    public static string MetadataContextActivateSelectedFormat => Loc.Text(nameof(MetadataContextActivateSelectedFormat));
+    public static string MetadataContextDeactivateSelectedFormat => Loc.Text(nameof(MetadataContextDeactivateSelectedFormat));
+    public static string MetadataContextRecompileAllFormat => Loc.Text(nameof(MetadataContextRecompileAllFormat));
+    public static string MetadataInactiveSuffix => Loc.Text(nameof(MetadataInactiveSuffix));
     // Generic delete (all deletable kinds) — {0}=kind noun, {1}=object name.
-    public const string MetadataDeleteObjectConfirmTitle = "Drop object";
-    public const string MetadataDeleteObjectConfirmFormat = "Are you sure you want to delete {0} “{1}”? This cannot be undone.";
-    public const string MetadataDeleteObjectConfirmYes = "Drop";
-    public const string MetadataDeleteObjectExecutedFormat = "Deleted {0} “{1}”.";
-    public const string MetadataDeleteObjectFailedFormat = "Could not drop {0} “{1}”: {2}";
+    public static string MetadataDeleteObjectConfirmTitle => Loc.Text(nameof(MetadataDeleteObjectConfirmTitle));
+    public static string MetadataDeleteObjectConfirmFormat => Loc.Text(nameof(MetadataDeleteObjectConfirmFormat));
+    public static string MetadataDeleteObjectConfirmYes => Loc.Text(nameof(MetadataDeleteObjectConfirmYes));
+    public static string MetadataDeleteObjectExecutedFormat => Loc.Text(nameof(MetadataDeleteObjectExecutedFormat));
+    public static string MetadataDeleteObjectFailedFormat => Loc.Text(nameof(MetadataDeleteObjectFailedFormat));
     // Connection (database) node — database-wide operations.
-    public const string ConnectionContextRefresh = "Refresh metadata";
-    public const string ConnectionContextRecomputeStats = "Recompute statistics (all indexes)";
-    public const string ConnectionContextRecompile = "Recompile all objects";
+    public static string ConnectionContextRefresh => Loc.Text(nameof(ConnectionContextRefresh));
+    public static string ConnectionContextRecomputeStats => Loc.Text(nameof(ConnectionContextRecomputeStats));
+    public static string ConnectionContextRecompile => Loc.Text(nameof(ConnectionContextRecompile));
     // Bulk-operation execution + report.
-    public const string BatchNothingToDo = "Nothing to do — every object is already in the requested state.";
-    public const string BatchOpActivate = "Activate";
-    public const string BatchOpDeactivate = "Deactivate";
-    public const string BatchOpRecompile = "Recompile";
-    public const string BatchOpRecompileHeader = "Recompile header";
-    public const string BatchOpRecompileBody = "Recompile body";
-    public const string BatchOpRecomputeStatistics = "Recompute statistics";
-    public const string BatchOpSave = "Save";
-    public const string BatchTitleActivateTriggers = "Activate triggers";
-    public const string BatchTitleDeactivateTriggers = "Deactivate triggers";
+    public static string BatchNothingToDo => Loc.Text(nameof(BatchNothingToDo));
+    public static string BatchOpActivate => Loc.Text(nameof(BatchOpActivate));
+    public static string BatchOpDeactivate => Loc.Text(nameof(BatchOpDeactivate));
+    public static string BatchOpRecompile => Loc.Text(nameof(BatchOpRecompile));
+    public static string BatchOpRecompileHeader => Loc.Text(nameof(BatchOpRecompileHeader));
+    public static string BatchOpRecompileBody => Loc.Text(nameof(BatchOpRecompileBody));
+    public static string BatchOpRecomputeStatistics => Loc.Text(nameof(BatchOpRecomputeStatistics));
+    public static string BatchOpSave => Loc.Text(nameof(BatchOpSave));
+    public static string BatchTitleActivateTriggers => Loc.Text(nameof(BatchTitleActivateTriggers));
+    public static string BatchTitleDeactivateTriggers => Loc.Text(nameof(BatchTitleDeactivateTriggers));
     // "Selected" scope confirmation — {0} = number of selected triggers.
-    public const string BatchConfirmActivateSelectedTitle = "Activate selected triggers";
-    public const string BatchConfirmActivateSelectedFormat = "Activate {0} selected trigger(s)?";
-    public const string BatchConfirmDeactivateSelectedTitle = "Deactivate selected triggers";
-    public const string BatchConfirmDeactivateSelectedFormat = "Deactivate {0} selected trigger(s)?";
-    public const string BatchTitleRecompileFormat = "Recompile {0}s";
-    public const string BatchTitleRecompileAll = "Recompile all objects";
-    public const string BatchTitleRecomputeStatistics = "Recompute index statistics";
+    public static string BatchConfirmActivateSelectedTitle => Loc.Text(nameof(BatchConfirmActivateSelectedTitle));
+    public static string BatchConfirmActivateSelectedFormat => Loc.Text(nameof(BatchConfirmActivateSelectedFormat));
+    public static string BatchConfirmDeactivateSelectedTitle => Loc.Text(nameof(BatchConfirmDeactivateSelectedTitle));
+    public static string BatchConfirmDeactivateSelectedFormat => Loc.Text(nameof(BatchConfirmDeactivateSelectedFormat));
+    public static string BatchTitleRecompileFormat => Loc.Text(nameof(BatchTitleRecompileFormat));
+    public static string BatchTitleRecompileAll => Loc.Text(nameof(BatchTitleRecompileAll));
+    public static string BatchTitleRecomputeStatistics => Loc.Text(nameof(BatchTitleRecomputeStatistics));
     // Save-and-close / Save-and-disconnect: compile every dirty object editor (shared batch dialog).
-    public const string SaveDirtyEditorsBatchTitle = "Saving changes";
-    public const string SaveDirtyEditorsUnknownError = "Compilation failed.";
-    public const string BatchResultsColumnObject = "Object";
-    public const string BatchResultsColumnOperation = "Operation";
-    public const string BatchResultsColumnResult = "Result";
-    public const string BatchResultsColumnError = "Error";
-    public const string BatchResultOk = "OK";
-    public const string BatchResultFailed = "Failed";
+    public static string SaveDirtyEditorsBatchTitle => Loc.Text(nameof(SaveDirtyEditorsBatchTitle));
+    public static string SaveDirtyEditorsUnknownError => Loc.Text(nameof(SaveDirtyEditorsUnknownError));
+    public static string BatchResultsColumnObject => Loc.Text(nameof(BatchResultsColumnObject));
+    public static string BatchResultsColumnOperation => Loc.Text(nameof(BatchResultsColumnOperation));
+    public static string BatchResultsColumnResult => Loc.Text(nameof(BatchResultsColumnResult));
+    public static string BatchResultsColumnError => Loc.Text(nameof(BatchResultsColumnError));
+    public static string BatchResultOk => Loc.Text(nameof(BatchResultOk));
+    public static string BatchResultFailed => Loc.Text(nameof(BatchResultFailed));
     // Live footer: Processed / Total, Success, Failed, Duration (hh:mm:ss).
-    public const string BatchResultsLiveSummaryFormat = "Processed: {0} / {1}    Success: {2}    Failed: {3}    Duration: {4}";
-    public const string BatchResultsFilterLabel = "Show:";
-    public const string BatchResultsFilterAll = "All";
-    public const string BatchResultsFilterSuccess = "Success";
-    public const string BatchResultsFilterFailed = "Failed";
-    public const string BatchResultsCopyAll = "Copy all";
-    public const string BatchResultsCopyFailed = "Copy failed";
-    public const string BatchResultsCancel = "Cancel";
+    public static string BatchResultsLiveSummaryFormat => Loc.Text(nameof(BatchResultsLiveSummaryFormat));
+    public static string BatchResultsFilterLabel => Loc.Text(nameof(BatchResultsFilterLabel));
+    public static string BatchResultsFilterAll => Loc.Text(nameof(BatchResultsFilterAll));
+    public static string BatchResultsFilterSuccess => Loc.Text(nameof(BatchResultsFilterSuccess));
+    public static string BatchResultsFilterFailed => Loc.Text(nameof(BatchResultsFilterFailed));
+    public static string BatchResultsCopyAll => Loc.Text(nameof(BatchResultsCopyAll));
+    public static string BatchResultsCopyFailed => Loc.Text(nameof(BatchResultsCopyFailed));
+    public static string BatchResultsCancel => Loc.Text(nameof(BatchResultsCancel));
 
     // ─── Script Executor ──────────────────────────────────────────────────────
-    public const string ScriptExecutorTabTitle = "Script Executor";
-    public const string ToolbarScriptExecutorTooltip = "Script Executor (migrations & multi-object DDL)";
+    public static string ScriptExecutorTabTitle => Loc.Text(nameof(ScriptExecutorTabTitle));
+    public static string ToolbarScriptExecutorTooltip => Loc.Text(nameof(ToolbarScriptExecutorTooltip));
 
     // ---- Data Import (etap I5: the tab, the frame, the readiness strip, Source & format) ----
     // Core returns codes only (rule #6); every sentence the module shows lives here.
 
-    public const string DataImportTabTitle = "Data Import";
-    public const string ToolbarDataImportTooltip = "Import data (clipboard, TXT, CSV, XLSX) into a table";
+    public static string DataImportTabTitle => Loc.Text(nameof(DataImportTabTitle));
+    public static string ToolbarDataImportTooltip => Loc.Text(nameof(ToolbarDataImportTooltip));
 
     // Section titles — also the readiness strip's chip labels.
-    public const string ImportSectionSource = "Source";
-    public const string ImportSectionFormat = "Format";
-    public const string ImportSectionTarget = "Target";
-    public const string ImportSectionMapping = "Mapping";
-    public const string ImportSectionTransaction = "Transaction";
+    public static string ImportSectionSource => Loc.Text(nameof(ImportSectionSource));
+    public static string ImportSectionFormat => Loc.Text(nameof(ImportSectionFormat));
+    public static string ImportSectionTarget => Loc.Text(nameof(ImportSectionTarget));
+    public static string ImportSectionMapping => Loc.Text(nameof(ImportSectionMapping));
+    public static string ImportSectionTransaction => Loc.Text(nameof(ImportSectionTransaction));
 
     // Source & format section.
     //
@@ -163,284 +355,260 @@ internal static class UiStrings
     // format are set once and then survive for months. So the picker stays live at all times and only these
     // options fold away — otherwise the commonest action in the module (point at the next file) would cost
     // an expand and a collapse, and §1.2's promise that a repeat import is one F5 would be false.
-    public const string ImportSourceHeader = "SOURCE";
+    public static string ImportSourceHeader => Loc.Text(nameof(ImportSourceHeader));
     // Deliberately not "Format": that word also reads as "which format is this file", i.e. the source kind,
     // which is decided by the picker beside it. And not "Import parameters" either — the transaction mode and
     // the error policy are import parameters too, and they live in the command bar.
-    public const string ImportFormatOptionsHeader = "Format options";
-    public const string ImportFormatOptionsTooltip = "Separator, encoding, dates and number formats";
-    public const string ImportSourceFile = "File";
-    public const string ImportSourceClipboard = "Clipboard";
-    public const string ImportSourceNoFile = "no file chosen";
-    public const string ImportSourceBrowseTooltip = "Choose a file…";
+    public static string ImportFormatOptionsHeader => Loc.Text(nameof(ImportFormatOptionsHeader));
+    public static string ImportFormatOptionsTooltip => Loc.Text(nameof(ImportFormatOptionsTooltip));
+    public static string ImportSourceFile => Loc.Text(nameof(ImportSourceFile));
+    public static string ImportSourceClipboard => Loc.Text(nameof(ImportSourceClipboard));
+    public static string ImportSourceNoFile => Loc.Text(nameof(ImportSourceNoFile));
+    public static string ImportSourceBrowseTooltip => Loc.Text(nameof(ImportSourceBrowseTooltip));
     // Choosing the clipboard READS it — that is the whole point of it being a live source, and a control with a
     // side effect should say so rather than let the user discover it.
-    public const string ImportSourceUseClipboardTooltip =
-        "Use the clipboard as the source, and read it now · Ctrl+V re-reads it";
-    public const string ImportParsingHeader = "Parsing";
-    public const string ImportCultureHeader = "Data culture";
-    public const string ImportDelimiterLabel = "Column separator";
-    public const string ImportQuoteLabel = "Text qualifier";
-    public const string ImportEncodingLabel = "Encoding";
-    public const string ImportLineEndingLabel = "Line ending";
-    public const string ImportAutoDetectLabel = "detect automatically";
-    public const string ImportHasHeaderLabel = "First record holds column names";
-    public const string ImportFirstDataRowLabel = "First data row";
-    public const string ImportLastRowLabel = "Last row";
+    public static string ImportSourceUseClipboardTooltip => Loc.Text(nameof(ImportSourceUseClipboardTooltip));
+    public static string ImportParsingHeader => Loc.Text(nameof(ImportParsingHeader));
+    public static string ImportCultureHeader => Loc.Text(nameof(ImportCultureHeader));
+    public static string ImportDelimiterLabel => Loc.Text(nameof(ImportDelimiterLabel));
+    public static string ImportQuoteLabel => Loc.Text(nameof(ImportQuoteLabel));
+    public static string ImportEncodingLabel => Loc.Text(nameof(ImportEncodingLabel));
+    public static string ImportLineEndingLabel => Loc.Text(nameof(ImportLineEndingLabel));
+    public static string ImportAutoDetectLabel => Loc.Text(nameof(ImportAutoDetectLabel));
+    public static string ImportHasHeaderLabel => Loc.Text(nameof(ImportHasHeaderLabel));
+    public static string ImportFirstDataRowLabel => Loc.Text(nameof(ImportFirstDataRowLabel));
+    public static string ImportLastRowLabel => Loc.Text(nameof(ImportLastRowLabel));
     // Never "2147483647" — an implementation detail in the UI is what §8 point 7 criticises.
-    public const string ImportLastRowPlaceholder = "(to the end)";
-    public const string ImportTrimWhitespaceLabel = "Trim whitespace around values";
+    public static string ImportLastRowPlaceholder => Loc.Text(nameof(ImportLastRowPlaceholder));
+    public static string ImportTrimWhitespaceLabel => Loc.Text(nameof(ImportTrimWhitespaceLabel));
     // ── Spreadsheet sources (etap I9). Shown only when the provider declares sheets. ──
-    public const string ImportSheetLabel = "Sheet";
-    public const string ImportDatesAsDatesLabel = "Treat date cells as dates (otherwise: Excel serial number)";
+    public static string ImportSheetLabel => Loc.Text(nameof(ImportSheetLabel));
+    public static string ImportDatesAsDatesLabel => Loc.Text(nameof(ImportDatesAsDatesLabel));
 
-    public const string ImportNullTokenLabel = "NULL value";
-    public const string ImportNullTokenPlaceholder = "(empty field)";
-    public const string ImportDecimalSeparatorLabel = "Decimal separator";
-    public const string ImportThousandsSeparatorLabel = "Thousands separator";
-    public const string ImportDateOrderLabel = "Date format";
-    public const string ImportDateSeparatorLabel = "Date separator";
-    public const string ImportTimeSeparatorLabel = "Time separator";
-    public const string ImportDelimiterTab = "Tab";
-    public const string ImportSeparatorNone = "(none)";
-    public const string ImportSeparatorSpace = "space";
-    public const string ImportLineEndingAuto = "auto";
-    public const string ImportChangeButton = "Change";
+    public static string ImportNullTokenLabel => Loc.Text(nameof(ImportNullTokenLabel));
+    public static string ImportNullTokenPlaceholder => Loc.Text(nameof(ImportNullTokenPlaceholder));
+    public static string ImportDecimalSeparatorLabel => Loc.Text(nameof(ImportDecimalSeparatorLabel));
+    public static string ImportThousandsSeparatorLabel => Loc.Text(nameof(ImportThousandsSeparatorLabel));
+    public static string ImportDateOrderLabel => Loc.Text(nameof(ImportDateOrderLabel));
+    public static string ImportDateSeparatorLabel => Loc.Text(nameof(ImportDateSeparatorLabel));
+    public static string ImportTimeSeparatorLabel => Loc.Text(nameof(ImportTimeSeparatorLabel));
+    public static string ImportDelimiterTab => Loc.Text(nameof(ImportDelimiterTab));
+    public static string ImportSeparatorNone => Loc.Text(nameof(ImportSeparatorNone));
+    public static string ImportSeparatorSpace => Loc.Text(nameof(ImportSeparatorSpace));
+    public static string ImportLineEndingAuto => Loc.Text(nameof(ImportLineEndingAuto));
+    public static string ImportChangeButton => Loc.Text(nameof(ImportChangeButton));
 
     // Detection evidence — an automatic decision that explains itself builds trust; a silent one does not.
-    public const string ImportDelimiterEvidenceFormat = "{0}/{1} records have the same field count ({2} fields)";
-    public const string ImportEncodingEvidenceBom = "byte-order mark";
-    public const string ImportEncodingEvidenceAscii = "pure ASCII — the file does not distinguish encodings";
-    public const string ImportEncodingEvidenceHeuristic = "no BOM → heuristic over the file's bytes";
+    public static string ImportDelimiterEvidenceFormat => Loc.Text(nameof(ImportDelimiterEvidenceFormat));
+    public static string ImportEncodingEvidenceBom => Loc.Text(nameof(ImportEncodingEvidenceBom));
+    public static string ImportEncodingEvidenceAscii => Loc.Text(nameof(ImportEncodingEvidenceAscii));
+    public static string ImportEncodingEvidenceHeuristic => Loc.Text(nameof(ImportEncodingEvidenceHeuristic));
 
-    public const string ImportSummaryDelimiterFormat = "\"{0}\"";
-    public const string ImportSummaryNoHeader = "no header";
-    public const string ImportFileFactsFormat = "{0:N1} KB · {1:g}";
-    public const string ImportFileMissing = "file not found";
+    public static string ImportSummaryDelimiterFormat => Loc.Text(nameof(ImportSummaryDelimiterFormat));
+    public static string ImportSummaryNoHeader => Loc.Text(nameof(ImportSummaryNoHeader));
+    public static string ImportFileFactsFormat => Loc.Text(nameof(ImportFileFactsFormat));
+    public static string ImportFileMissing => Loc.Text(nameof(ImportFileMissing));
     // The clipboard's facts carry the READ TIME, not a last-write time it does not have: for a live source that
     // is the question ("is what I see still what I copied?"), and it is also what makes a refresh visibly
     // acknowledge itself when the pasted content happens to be identical.
-    public const string ImportClipboardFactsFormat = "clipboard: {0} lines · {1:N1} KB · read {2:T}";
-    public const string ImportClipboardEmpty = "clipboard is empty";
+    public static string ImportClipboardFactsFormat => Loc.Text(nameof(ImportClipboardFactsFormat));
+    public static string ImportClipboardEmpty => Loc.Text(nameof(ImportClipboardEmpty));
     // (There is deliberately no "format not supported yet" string any more. It refused .xls until etap I10 gave
     // that format a provider, and every source kind the surface can resolve now has one — a message for a state
     // that can no longer occur is worse than none, because the next reader of the code has to work out when it
     // fires before discovering it never does.)
 
     // Readiness strip.
-    public const string ImportReadinessHeader = "Ready:";
-    public const string ImportReadySummary = "Ready to import";
-    public const string ImportReadySummaryWithRowsFormat = "Ready to import — {0:N0} rows previewed";
-    public const string ImportReadyBlocked = "Not ready yet";
+    public static string ImportReadinessHeader => Loc.Text(nameof(ImportReadinessHeader));
+    public static string ImportReadySummary => Loc.Text(nameof(ImportReadySummary));
+    public static string ImportReadySummaryWithRowsFormat => Loc.Text(nameof(ImportReadySummaryWithRowsFormat));
+    public static string ImportReadyBlocked => Loc.Text(nameof(ImportReadyBlocked));
 
-    public const string ImportReadyNoSource = "No source chosen — pick a file or paste from the clipboard.";
-    public const string ImportReadySourceMissingFormat = "The file is gone: {0}";
-    public const string ImportReadySourceUnreadable = "The source could not be read.";
-    public const string ImportReadySourceHasNoFields = "The source has no fields yet.";
-    public const string ImportReadySourceOptionsMismatch = "The format settings do not match this kind of source.";
-    public const string ImportReadyNoTarget = "No target table chosen.";
-    public const string ImportReadyTargetNotFoundFormat = "Table {0} is not in this database.";
-    public const string ImportReadyNewTableHasNoColumns = "The new table has no columns defined.";
-    public const string ImportReadyNewTableWillBeCommittedFormat =
-        "Table {0} will be created and COMMITTED before any row is written — a rollback will not remove it.";
+    public static string ImportReadyNoSource => Loc.Text(nameof(ImportReadyNoSource));
+    public static string ImportReadySourceMissingFormat => Loc.Text(nameof(ImportReadySourceMissingFormat));
+    public static string ImportReadySourceUnreadable => Loc.Text(nameof(ImportReadySourceUnreadable));
+    public static string ImportReadySourceHasNoFields => Loc.Text(nameof(ImportReadySourceHasNoFields));
+    public static string ImportReadySourceOptionsMismatch => Loc.Text(nameof(ImportReadySourceOptionsMismatch));
+    public static string ImportReadyNoTarget => Loc.Text(nameof(ImportReadyNoTarget));
+    public static string ImportReadyTargetNotFoundFormat => Loc.Text(nameof(ImportReadyTargetNotFoundFormat));
+    public static string ImportReadyNewTableHasNoColumns => Loc.Text(nameof(ImportReadyNewTableHasNoColumns));
+    public static string ImportReadyNewTableWillBeCommittedFormat => Loc.Text(nameof(ImportReadyNewTableWillBeCommittedFormat));
     // Refused here rather than by the engine: the CREATE is the first thing the run does, so without this the
     // user would meet a raw server error immediately after being told everything was ready (§0).
-    public const string ImportReadyNewTableAlreadyExistsFormat =
-        "A table named {0} already exists — choose another name, or import into the existing table.";
-    public const string ImportReadyBeforeInsertTriggersFormat =
-        "{0} BEFORE INSERT trigger(s) on the target can overwrite imported values.";
-    public const string ImportReadyTargetWillBeEmptiedFormat = "{0} will be emptied before the import.";
-    public const string ImportReadyNothingMapped = "No column is mapped — there is nothing to import.";
-    public const string ImportReadyRequiredColumnNotMappedFormat =
-        "Column {0} is NOT NULL with no default and is unmapped — every row would fail.";
-    public const string ImportReadyUnsupportedColumnTypeFormat = "Column {0} has a type this build cannot write.";
-    public const string ImportReadyColumnsNotMappedFormat = "{0} target column(s) not mapped.";
-    public const string ImportReadyFieldsUnusedFormat = "{0} source field(s) unused.";
-    public const string ImportReadyAmbiguousNameFormat = "Two source fields match column {0} — pick one.";
-    public const string ImportReadyMappingDroppedFormat = "Field {0} no longer exists; its mapping was dropped.";
-    public const string ImportReadyColumnNotWritableFormat = "Column {0} is computed and can never be written.";
-    public const string ImportReadyIdentityOverrideFormat =
-        "Column {0} is GENERATED ALWAYS — the INSERT will carry OVERRIDING SYSTEM VALUE.";
-    public const string ImportReadyPairingAssumedFormat = "Column {0} was paired by position — worth a look.";
-    public const string ImportReadyNotConnected = "Not connected.";
-    public const string ImportReadyUserTransactionOpen =
-        "A working transaction is open — commit or roll it back before importing.";
-    public const string ImportReadyBatchedNotAtomicFormat =
-        "Batched mode is NOT atomic: it commits every {0:N0} rows, and a committed batch stays applied.";
-    public const string ImportReadyTrimmingEnabled =
-        "Value trimming is on — over-long values will be SHORTENED, and every one is reported.";
-    public const string ImportReadyLongTransactionFormat =
-        "About {0:N0} rows in one transaction — it will stay open for a while. Consider Batched mode.";
-    public const string ImportReadyNotRepresentableFormat =
-        "{0} sampled value(s) carry characters this connection's charset cannot store — connect in UTF8 to keep them.";
+    public static string ImportReadyNewTableAlreadyExistsFormat => Loc.Text(nameof(ImportReadyNewTableAlreadyExistsFormat));
+    public static string ImportReadyBeforeInsertTriggersFormat => Loc.Text(nameof(ImportReadyBeforeInsertTriggersFormat));
+    public static string ImportReadyTargetWillBeEmptiedFormat => Loc.Text(nameof(ImportReadyTargetWillBeEmptiedFormat));
+    public static string ImportReadyNothingMapped => Loc.Text(nameof(ImportReadyNothingMapped));
+    public static string ImportReadyRequiredColumnNotMappedFormat => Loc.Text(nameof(ImportReadyRequiredColumnNotMappedFormat));
+    public static string ImportReadyUnsupportedColumnTypeFormat => Loc.Text(nameof(ImportReadyUnsupportedColumnTypeFormat));
+    public static string ImportReadyColumnsNotMappedFormat => Loc.Text(nameof(ImportReadyColumnsNotMappedFormat));
+    public static string ImportReadyFieldsUnusedFormat => Loc.Text(nameof(ImportReadyFieldsUnusedFormat));
+    public static string ImportReadyAmbiguousNameFormat => Loc.Text(nameof(ImportReadyAmbiguousNameFormat));
+    public static string ImportReadyMappingDroppedFormat => Loc.Text(nameof(ImportReadyMappingDroppedFormat));
+    public static string ImportReadyColumnNotWritableFormat => Loc.Text(nameof(ImportReadyColumnNotWritableFormat));
+    public static string ImportReadyIdentityOverrideFormat => Loc.Text(nameof(ImportReadyIdentityOverrideFormat));
+    public static string ImportReadyPairingAssumedFormat => Loc.Text(nameof(ImportReadyPairingAssumedFormat));
+    public static string ImportReadyNotConnected => Loc.Text(nameof(ImportReadyNotConnected));
+    public static string ImportReadyUserTransactionOpen => Loc.Text(nameof(ImportReadyUserTransactionOpen));
+    public static string ImportReadyBatchedNotAtomicFormat => Loc.Text(nameof(ImportReadyBatchedNotAtomicFormat));
+    public static string ImportReadyTrimmingEnabled => Loc.Text(nameof(ImportReadyTrimmingEnabled));
+    public static string ImportReadyLongTransactionFormat => Loc.Text(nameof(ImportReadyLongTransactionFormat));
+    public static string ImportReadyNotRepresentableFormat => Loc.Text(nameof(ImportReadyNotRepresentableFormat));
 
     // The readiness strip's ceiling (U6). The chips carry §3.2's "every gap at once"; this only caps how
     // many findings are spelled out, so the strip cannot take the whole surface exactly when there is most
     // to fix.
-    public const string ImportReadyMoreItemsFormat = "… and {0} more problem(s)";
-    public const string ImportReadyShowFewer = "Show fewer";
-    public const string ImportReadyExpandTooltip = "Show every finding";
+    public static string ImportReadyMoreItemsFormat => Loc.Text(nameof(ImportReadyMoreItemsFormat));
+    public static string ImportReadyShowFewer => Loc.Text(nameof(ImportReadyShowFewer));
+    public static string ImportReadyExpandTooltip => Loc.Text(nameof(ImportReadyExpandTooltip));
     /// <summary>A chip is a status light AND a way in — so it says which, rather than leaving the user to
     /// guess whether it is a filter, a tab, a shortcut or an indicator (§3.2).</summary>
-    public const string ImportReadyChipHintFormat = "Go to {0}";
-    public const string ImportReadyChipFormatHint = "Show or hide the format options";
+    public static string ImportReadyChipHintFormat => Loc.Text(nameof(ImportReadyChipHintFormat));
+    public static string ImportReadyChipFormatHint => Loc.Text(nameof(ImportReadyChipFormatHint));
 
     // Band H, left half — where the rows land. The lane is a constant because it is one: rows always go to
     // the Data lane as the one user working transaction (§4.5).
-    public const string ImportDestinationFormat = "{0} · {1} lane";
+    public static string ImportDestinationFormat => Loc.Text(nameof(ImportDestinationFormat));
     /// <summary>Band H once the command bar exists: where the rows land, on which lane, and what then happens
     /// to the transaction (§3.1).</summary>
-    public const string ImportDestinationWithModeFormat = "{0} · {1} lane · transaction: {2}";
-    public const string ImportDestinationDataLane = "Data";
-    public const string ImportDestinationNotConnected = "Not connected";
+    public static string ImportDestinationWithModeFormat => Loc.Text(nameof(ImportDestinationWithModeFormat));
+    public static string ImportDestinationDataLane => Loc.Text(nameof(ImportDestinationDataLane));
+    public static string ImportDestinationNotConnected => Loc.Text(nameof(ImportDestinationNotConnected));
 
     // The work area's empty state. Every area on this surface names the NEXT STEP rather than reporting an
     // absence (§9.4) — "no data" tells the user something they can already see.
-    public const string ImportWorkAreaEmpty =
-        "Choose a target table to map its columns. The mapping grid and the converted preview appear here.";
+    public static string ImportWorkAreaEmpty => Loc.Text(nameof(ImportWorkAreaEmpty));
 
     // ---- Data Import, etap I6: the Target tile (§3.4) and the Mapping panel (§3.5) ----
 
-    public const string ImportTargetExistingTable = "Existing table";
-    public const string ImportTargetTableWatermark = "Choose a table…";
-    public const string ImportTargetFilterWatermark = "Type to filter…";
-    public const string ImportTargetColumnsFormat = "{0} columns";
-    public const string ImportTargetNoPrimaryKey = "primary key: none";
-    public const string ImportTargetPrimaryKeyFormat = "primary key: {0}";
+    public static string ImportTargetExistingTable => Loc.Text(nameof(ImportTargetExistingTable));
+    public static string ImportTargetTableWatermark => Loc.Text(nameof(ImportTargetTableWatermark));
+    public static string ImportTargetFilterWatermark => Loc.Text(nameof(ImportTargetFilterWatermark));
+    public static string ImportTargetColumnsFormat => Loc.Text(nameof(ImportTargetColumnsFormat));
+    public static string ImportTargetNoPrimaryKey => Loc.Text(nameof(ImportTargetNoPrimaryKey));
+    public static string ImportTargetPrimaryKeyFormat => Loc.Text(nameof(ImportTargetPrimaryKeyFormat));
     // Triggers are NAMED, not counted: a count says something is there, the names say what will rewrite the
     // values on the way in (R6).
-    public const string ImportTargetNoBeforeInsertTriggers = "BEFORE INSERT triggers: none";
-    public const string ImportTargetBeforeInsertTriggersFormat = "BEFORE INSERT triggers: {0}";
-    public const string ImportTargetEmptyFirst = "Empty the table before importing";
-    public const string ImportTargetEmptyFirstTooltip =
-        "DELETE FROM in the SAME transaction as the rows — a rollback takes the deletion with it.";
+    public static string ImportTargetNoBeforeInsertTriggers => Loc.Text(nameof(ImportTargetNoBeforeInsertTriggers));
+    public static string ImportTargetBeforeInsertTriggersFormat => Loc.Text(nameof(ImportTargetBeforeInsertTriggersFormat));
+    public static string ImportTargetEmptyFirst => Loc.Text(nameof(ImportTargetEmptyFirst));
+    public static string ImportTargetEmptyFirstTooltip => Loc.Text(nameof(ImportTargetEmptyFirstTooltip));
 
     // ---- Data Import, etap I8: a table that does not exist yet (§3.4) ----
 
-    public const string ImportTargetNewTable = "New table";
-    public const string ImportTargetNewTableWatermark = "Name for the new table…";
+    public static string ImportTargetNewTable => Loc.Text(nameof(ImportTargetNewTable));
+    public static string ImportTargetNewTableWatermark => Loc.Text(nameof(ImportTargetNewTableWatermark));
 
     // ⚠ §0.5 / gotcha #213 — the module's most important honest sentence ("the CREATE is committed before the
     // first row, so a rollback cannot take the table with it") is NOT here any more. It lives in exactly one
     // place: Core's IMP0018, rendered by the readiness strip, which additionally names the table. There used to
     // be a second copy as a banner under the type grid, and saying one fact twice on one screen is how a warning
     // stops being read. If it ever needs to be louder, make the strip louder — do not add a second sentence.
-    public const string ImportNewTableDropOnFailure = "Drop the table if the import fails";
-    public const string ImportNewTableDropOnFailureTooltip =
-        "On failure: roll back the imported rows, then DROP the table on the DDL connection. You are asked first.";
+    public static string ImportNewTableDropOnFailure => Loc.Text(nameof(ImportNewTableDropOnFailure));
+    public static string ImportNewTableDropOnFailureTooltip => Loc.Text(nameof(ImportNewTableDropOnFailureTooltip));
     /// <summary>The DDL bottom tab — shown only in the „new table" variant, because in the other one there is
     /// no statement to generate and a permanently empty tab is a promise nothing keeps.</summary>
-    public const string ImportDdlTab = "DDL";
+    public static string ImportDdlTab => Loc.Text(nameof(ImportDdlTab));
 
     /// <summary>Said inside the tab, once: it is regenerated from the grid above, so it can be read as current
     /// rather than as something that had to be refreshed.</summary>
-    public const string ImportDdlLive =
-        "Generated from the types above — this is the statement the import will run.";
+    public static string ImportDdlLive => Loc.Text(nameof(ImportDdlLive));
 
-    public const string ImportDdlEmpty = "Name the new table and choose a source — the CREATE TABLE appears here.";
+    public static string ImportDdlEmpty => Loc.Text(nameof(ImportDdlEmpty));
 
     // The type grid.
-    public const string ImportNewTableColumnName = "Column";
-    public const string ImportNewTableColumnType = "Type";
-    public const string ImportNewTableColumnSize = "Size";
-    public const string ImportNewTableColumnScale = "Scale";
-    public const string ImportNewTableColumnNullable = "NULL";
-    public const string ImportNewTableColumnBasis = "Basis";
-    public const string ImportNewTableEmpty =
-        "Name the new table and choose a source — its columns are proposed from the file, and you can correct every type before anything is created.";
+    public static string ImportNewTableColumnName => Loc.Text(nameof(ImportNewTableColumnName));
+    public static string ImportNewTableColumnType => Loc.Text(nameof(ImportNewTableColumnType));
+    public static string ImportNewTableColumnSize => Loc.Text(nameof(ImportNewTableColumnSize));
+    public static string ImportNewTableColumnScale => Loc.Text(nameof(ImportNewTableColumnScale));
+    public static string ImportNewTableColumnNullable => Loc.Text(nameof(ImportNewTableColumnNullable));
+    public static string ImportNewTableColumnBasis => Loc.Text(nameof(ImportNewTableColumnBasis));
+    public static string ImportNewTableEmpty => Loc.Text(nameof(ImportNewTableEmpty));
 
     // ⭐ Always visible (§3.4): the types are worth exactly as much as the evidence behind them, and REK-7 makes
     // that evidence the WHOLE source rather than a sample.
-    public const string ImportNewTableInferenceFormat = "Types inferred from {0:N0} rows analysed — editable:";
-    public const string ImportNewTableInferenceTruncatedFormat =
-        "Types inferred from the first {0:N0} rows (safety limit reached) — editable:";
+    public static string ImportNewTableInferenceFormat => Loc.Text(nameof(ImportNewTableInferenceFormat));
+    public static string ImportNewTableInferenceTruncatedFormat => Loc.Text(nameof(ImportNewTableInferenceTruncatedFormat));
 
     // The "Basis" cell — why this column has this type.
-    public const string ImportNewTableBasisNoValues = "no values — text";
-    public const string ImportNewTableBasisTextFormat = "text, {0:N0} values, longest {1}";
-    public const string ImportNewTableBasisMatchedFormat = "{0:N0} values, all {1}";
+    public static string ImportNewTableBasisNoValues => Loc.Text(nameof(ImportNewTableBasisNoValues));
+    public static string ImportNewTableBasisTextFormat => Loc.Text(nameof(ImportNewTableBasisTextFormat));
+    public static string ImportNewTableBasisMatchedFormat => Loc.Text(nameof(ImportNewTableBasisMatchedFormat));
     // R19: a mixed column is the norm, not the exception — so it names the value that decided it and the row
     // the user can open their file at (§0.6).
-    public const string ImportNewTableBasisMixedFormat =
-        "mixed — {0} until row {1} “{2}”; text, longest {3}";
-    public const string ImportNewTableBasisRestored = "from the restored configuration";
+    public static string ImportNewTableBasisMixedFormat => Loc.Text(nameof(ImportNewTableBasisMixedFormat));
+    public static string ImportNewTableBasisRestored => Loc.Text(nameof(ImportNewTableBasisRestored));
 
-    public const string ImportNewTableKindInteger = "whole numbers";
-    public const string ImportNewTableKindDecimal = "decimals";
-    public const string ImportNewTableKindDate = "dates";
-    public const string ImportNewTableKindTimestamp = "dates with time";
-    public const string ImportNewTableKindTime = "times";
-    public const string ImportNewTableKindBoolean = "true/false";
-    public const string ImportNewTableKindText = "text";
+    public static string ImportNewTableKindInteger => Loc.Text(nameof(ImportNewTableKindInteger));
+    public static string ImportNewTableKindDecimal => Loc.Text(nameof(ImportNewTableKindDecimal));
+    public static string ImportNewTableKindDate => Loc.Text(nameof(ImportNewTableKindDate));
+    public static string ImportNewTableKindTimestamp => Loc.Text(nameof(ImportNewTableKindTimestamp));
+    public static string ImportNewTableKindTime => Loc.Text(nameof(ImportNewTableKindTime));
+    public static string ImportNewTableKindBoolean => Loc.Text(nameof(ImportNewTableKindBoolean));
+    public static string ImportNewTableKindText => Loc.Text(nameof(ImportNewTableKindText));
 
     // Creating and dropping.
-    public const string ImportCreatingTableFormat = "Creating table {0}…";
-    public const string ImportCreatedTableFormat = "Table {0} created and committed.";
-    public const string ImportCreateTableFailedFormat = "Table {0} could not be created: {1}";
+    public static string ImportCreatingTableFormat => Loc.Text(nameof(ImportCreatingTableFormat));
+    public static string ImportCreatedTableFormat => Loc.Text(nameof(ImportCreatedTableFormat));
+    public static string ImportCreateTableFailedFormat => Loc.Text(nameof(ImportCreateTableFailedFormat));
     /// <summary>⚠ Its own heading. The shared confirmation used to be titled "Empty the table before importing"
     /// for every question the module asked, so this one appeared under the name of a different action.</summary>
-    public const string ImportConfirmDropTableTitle = "Drop the created table";
-    public const string ImportConfirmDropTableConfirm = "Drop table";
-    public const string ImportConfirmDropTableFormat =
-        "The import into {0} did not succeed.\n\nRoll back the imported rows and DROP the table?\n\n" +
-        "The table was committed when it was created, so this is the only way to remove it.";
-    public const string ImportDroppedTableFormat = "Table {0} dropped.";
-    public const string ImportDropTableFailedFormat = "Table {0} could not be dropped: {1}";
+    public static string ImportConfirmDropTableTitle => Loc.Text(nameof(ImportConfirmDropTableTitle));
+    public static string ImportConfirmDropTableConfirm => Loc.Text(nameof(ImportConfirmDropTableConfirm));
+    public static string ImportConfirmDropTableFormat => Loc.Text(nameof(ImportConfirmDropTableFormat));
+    public static string ImportDroppedTableFormat => Loc.Text(nameof(ImportDroppedTableFormat));
+    public static string ImportDropTableFailedFormat => Loc.Text(nameof(ImportDropTableFailedFormat));
     // §0.5 / §0.6 — the report never leaves the created table unsaid, whether or not it was dropped.
-    public const string ImportReportCreatedTableFormat = "created table {0} (a rollback does not remove it)";
+    public static string ImportReportCreatedTableFormat => Loc.Text(nameof(ImportReportCreatedTableFormat));
 
     // Mapping panel.
-    public const string ImportMappingHeadlineFormat = "Mapped {0} of {1} columns.";
-    public const string ImportMappingMatchByPosition = "Match by position";
-    public const string ImportMappingMatchByPositionTooltip =
-        "Pair column 1 with field 1, and so on — for a source whose names say nothing";
-    public const string ImportMappingClear = "Clear";
-    public const string ImportMappingOnlyUnmapped = "Only unmapped";
-    public const string ImportMappingDoNotImport = "— do not import —";
-    public const string ImportMappingFieldLabelFormat = "{0}  {1}";
-    public const string ImportMappingUnusedFieldsFormat = "Source fields nobody uses: {0}";
-    public const string ImportMappingColumnTarget = "Target column";
-    public const string ImportMappingColumnSource = "Source field";
-    public const string ImportMappingColumnType = "Target type";
-    public const string ImportMappingColumnNote = "Note";
-    public const string ImportMappingEmpty =
-        "Choose a target table above — its columns will appear here, already matched by name where the names agree.";
+    public static string ImportMappingHeadlineFormat => Loc.Text(nameof(ImportMappingHeadlineFormat));
+    public static string ImportMappingMatchByPosition => Loc.Text(nameof(ImportMappingMatchByPosition));
+    public static string ImportMappingMatchByPositionTooltip => Loc.Text(nameof(ImportMappingMatchByPositionTooltip));
+    public static string ImportMappingClear => Loc.Text(nameof(ImportMappingClear));
+    public static string ImportMappingOnlyUnmapped => Loc.Text(nameof(ImportMappingOnlyUnmapped));
+    public static string ImportMappingDoNotImport => Loc.Text(nameof(ImportMappingDoNotImport));
+    public static string ImportMappingFieldLabelFormat => Loc.Text(nameof(ImportMappingFieldLabelFormat));
+    public static string ImportMappingUnusedFieldsFormat => Loc.Text(nameof(ImportMappingUnusedFieldsFormat));
+    public static string ImportMappingColumnTarget => Loc.Text(nameof(ImportMappingColumnTarget));
+    public static string ImportMappingColumnSource => Loc.Text(nameof(ImportMappingColumnSource));
+    public static string ImportMappingColumnType => Loc.Text(nameof(ImportMappingColumnType));
+    public static string ImportMappingColumnNote => Loc.Text(nameof(ImportMappingColumnNote));
+    public static string ImportMappingEmpty => Loc.Text(nameof(ImportMappingEmpty));
 
     // Why a column's picker is disabled. A blocked control that does not say why is a UX defect (§9.1.3).
-    public const string ImportMappingLockedComputed = "COMPUTED BY — Firebird rejects an INSERT naming it.";
-    public const string ImportMappingLockedUnsupportedFormat = "Type {0} is not supported by the import.";
-    public const string ImportMappingLockedIdentity =
-        "Identity GENERATED ALWAYS — tick to override it; the INSERT then carries OVERRIDING SYSTEM VALUE.";
-    public const string ImportMappingUnlockIdentity = "override";
+    public static string ImportMappingLockedComputed => Loc.Text(nameof(ImportMappingLockedComputed));
+    public static string ImportMappingLockedUnsupportedFormat => Loc.Text(nameof(ImportMappingLockedUnsupportedFormat));
+    public static string ImportMappingLockedIdentity => Loc.Text(nameof(ImportMappingLockedIdentity));
+    public static string ImportMappingUnlockIdentity => Loc.Text(nameof(ImportMappingUnlockIdentity));
 
     // Mapping origin (§9.3 — the debugger's ValueOrigin vocabulary, reused rather than reinvented).
-    public const string ImportMappingOriginMatched = "matched";
-    public const string ImportMappingOriginAssumed = "assumed";
+    public static string ImportMappingOriginMatched => Loc.Text(nameof(ImportMappingOriginMatched));
+    public static string ImportMappingOriginAssumed => Loc.Text(nameof(ImportMappingOriginAssumed));
 
     // Bottom panel + surface status.
-    public const string ImportSourcePreviewTab = "Source preview";
-    public const string ImportSourcePreviewEmpty = "Choose a file or paste from the clipboard.";
-    public const string ImportSourcePreviewRaggedTooltip =
-        "This record has a different number of fields than the header — usually a wrong column separator.";
-    public const string ImportRowNumberColumn = "#";
+    public static string ImportSourcePreviewTab => Loc.Text(nameof(ImportSourcePreviewTab));
+    public static string ImportSourcePreviewEmpty => Loc.Text(nameof(ImportSourcePreviewEmpty));
+    public static string ImportSourcePreviewRaggedTooltip => Loc.Text(nameof(ImportSourcePreviewRaggedTooltip));
+    public static string ImportRowNumberColumn => Loc.Text(nameof(ImportRowNumberColumn));
     /// <summary>Gutter marker for a record whose field count disagrees with the rest of the file (§3.6).</summary>
-    public const string ImportRaggedMarker = "⚠";
-    public const string ImportSurfaceStatusNoSource = "No source yet.";
-    public const string ImportSurfaceStatusFormat = "{0} fields · {1:N0} rows previewed{2}";
-    public const string ImportSurfaceStatusMore = "+";
-    public const string ImportBottomPanelToggleTooltip = "Collapse / expand the bottom panel";
+    public static string ImportRaggedMarker => Loc.Text(nameof(ImportRaggedMarker));
+    public static string ImportSurfaceStatusNoSource => Loc.Text(nameof(ImportSurfaceStatusNoSource));
+    public static string ImportSurfaceStatusFormat => Loc.Text(nameof(ImportSurfaceStatusFormat));
+    public static string ImportSurfaceStatusMore => Loc.Text(nameof(ImportSurfaceStatusMore));
+    public static string ImportBottomPanelToggleTooltip => Loc.Text(nameof(ImportBottomPanelToggleTooltip));
 
     // ---- Data Import, etap I7: the command bar (§3.1 band B), the run, and the report (§3.7) ----
 
-    public const string ImportRun = "Import";
-    public static readonly string ImportRunTooltip = CommandTip.For(
-        CommandId.Go, "Read the source and write the rows into the target table");
-    public const string ImportValidate = "Validate";
-    public static readonly string ImportValidateTooltip = CommandTip.For(
+    public static string ImportRun => Loc.Text(nameof(ImportRun));
+    public static string ImportRunTooltip => CommandTip.For(
+        CommandId.Go, Loc.Text(nameof(ImportRunTooltip)));
+    public static string ImportValidate => Loc.Text(nameof(ImportValidate));
+    public static string ImportValidateTooltip => CommandTip.For(
         CommandId.ImportValidate,
-        "Run everything except the write — same pipeline, same conversion, same checks");
-    public const string ImportCancel = "Cancel";
-    public const string ImportCancelTooltip = "Stop after the current batch · Esc";
+        Loc.Text(nameof(ImportValidateTooltip)));
+    public static string ImportCancel => Loc.Text(nameof(ImportCancel));
+    public static string ImportCancelTooltip => Loc.Text(nameof(ImportCancelTooltip));
 
     // Refresh names what it does to the WORLD, not to the screen: it re-reads every fact the surface holds. The
     // tooltip lists the cases because that is what makes the button discoverable — a bare "Refresh" leaves the
@@ -449,252 +617,225 @@ internal static class UiStrings
     // ⚠ Ctrl+V stays literal here, and it is the one deliberate exception: it is not a catalog command (it
     // means "re-read the clipboard SOURCE", i.e. paste semantics that must yield to a focused text box), so
     // there is no descriptor to read it from. Ctrl+R comes from the catalog like every other gesture.
-    public static readonly string ImportRefreshTooltip = CommandTip.For(
+    // ⚠ TWO keys, not one, and the split is forced by where the gesture lands. CommandTip.For appends
+    // " · <gesture>" to the label it is given, so folding the trailing note into the label would move the
+    // gesture behind it and silently reword the tooltip. The note is therefore its own member.
+    // ⚠ Its literal "Ctrl+V" is the standing, recorded exemption in UiStringsShortcutSourceTests — a raw key
+    // in prose rather than a catalog gesture — and it stays exempt after moving into the resource file.
+    public static string ImportRefreshTooltip => CommandTip.For(
         CommandId.ImportRefresh,
-        "Read the source, the table list and the target again, then recompute everything: mapping, readiness and "
-        + "the preview. Use it when the file has changed on disk, the clipboard now holds something else, or a "
-        + "table has been added or dropped")
-        + " (Ctrl+V re-reads the clipboard)";
-    public const string ImportRunCancelled = "Cancelled. Rows already written stay in the open transaction.";
+        Loc.Text(nameof(ImportRefreshTooltip)))
+        + ImportRefreshTooltipClipboardNote;
 
-    public const string ImportTransactionLabel = "Transaction";
-    public const string ImportTransactionManual = "Manual";
-    public const string ImportTransactionAutoCommit = "Commit on success";
-    public const string ImportTransactionBatched = "Batched";
-    public const string ImportTransactionManualDescription =
-        "The transaction stays open. You commit or roll back after reading the report.";
-    public const string ImportTransactionAutoCommitDescription =
-        "Commits automatically when every row went in and nothing was cancelled; otherwise it stays open for you.";
-    public const string ImportTransactionBatchedDescriptionFormat =
-        "Commits every {0:N0} rows — NOT atomic: a later failure cannot roll back what was already committed.";
+    public static string ImportRefreshTooltipClipboardNote =>
+        Loc.Text(nameof(ImportRefreshTooltipClipboardNote));
+    public static string ImportRunCancelled => Loc.Text(nameof(ImportRunCancelled));
 
-    public const string ImportErrorPolicyLabel = "Errors";
-    public const string ImportErrorPolicyStop = "Stop at the first";
-    public const string ImportErrorPolicySkip = "Skip the row and continue";
+    public static string ImportTransactionLabel => Loc.Text(nameof(ImportTransactionLabel));
+    public static string ImportTransactionManual => Loc.Text(nameof(ImportTransactionManual));
+    public static string ImportTransactionAutoCommit => Loc.Text(nameof(ImportTransactionAutoCommit));
+    public static string ImportTransactionBatched => Loc.Text(nameof(ImportTransactionBatched));
+    public static string ImportTransactionManualDescription => Loc.Text(nameof(ImportTransactionManualDescription));
+    public static string ImportTransactionAutoCommitDescription => Loc.Text(nameof(ImportTransactionAutoCommitDescription));
+    public static string ImportTransactionBatchedDescriptionFormat => Loc.Text(nameof(ImportTransactionBatchedDescriptionFormat));
 
-    public const string ImportProgressFormat = "{0:N0} read · {1:N0} written · {2:N0} failed";
+    public static string ImportErrorPolicyLabel => Loc.Text(nameof(ImportErrorPolicyLabel));
+    public static string ImportErrorPolicyStop => Loc.Text(nameof(ImportErrorPolicyStop));
+    public static string ImportErrorPolicySkip => Loc.Text(nameof(ImportErrorPolicySkip));
 
-    public const string ImportConfirmEmptyFormat =
-        "Empty table {0} before importing? The DELETE runs in the same transaction, so Rollback takes it back too.";
-    public const string ImportConfirmEmptyCountFormat =
-        "This deletes {0:N0} row(s) from {1} before importing. The DELETE runs in the same transaction, so Rollback takes it back too.";
+    public static string ImportProgressFormat => Loc.Text(nameof(ImportProgressFormat));
+
+    public static string ImportConfirmEmptyFormat => Loc.Text(nameof(ImportConfirmEmptyFormat));
+    public static string ImportConfirmEmptyCountFormat => Loc.Text(nameof(ImportConfirmEmptyCountFormat));
 
     // The converted preview (§3.6).
-    public const string ImportMappingTitle = "Mapping";
+    public static string ImportMappingTitle => Loc.Text(nameof(ImportMappingTitle));
 
     /// <summary>Title of the work area's left half in the „new table" variant — the columns about to be
     /// created. It names a CONFIGURATION subject, which is why it lives beside Mapping rather than beside the
     /// preview: the work area is where the import is designed, the bottom panel is where results land.</summary>
-    public const string ImportNewTableTypesTitle = "Table types";
+    public static string ImportNewTableTypesTitle => Loc.Text(nameof(ImportNewTableTypesTitle));
 
-    public const string ImportPreviewTitle = "Preview after conversion";
-    public const string ImportPreviewHeadlineFormat = "{0:N0} row(s) after conversion — this is what reaches the database.";
-    public const string ImportPreviewHeadlineProblemsFormat =
-        "{0:N0} row(s) after conversion — {1:N0} would be rejected. Failed rows show their RAW values.";
-    public const string ImportPreviewEmpty =
-        "Choose a source and a target table, and map at least one column — the converted rows appear here.";
-    public const string ImportPreviewFailedTooltip = "This row would be rejected; the values shown are the raw ones.";
+    public static string ImportPreviewTitle => Loc.Text(nameof(ImportPreviewTitle));
+    public static string ImportPreviewHeadlineFormat => Loc.Text(nameof(ImportPreviewHeadlineFormat));
+    public static string ImportPreviewHeadlineProblemsFormat => Loc.Text(nameof(ImportPreviewHeadlineProblemsFormat));
+    public static string ImportPreviewEmpty => Loc.Text(nameof(ImportPreviewEmpty));
+    public static string ImportPreviewFailedTooltip => Loc.Text(nameof(ImportPreviewFailedTooltip));
 
     // The Errors / Report bottom tabs (§3.1 band G).
-    public const string ImportErrorsTab = "Errors";
-    public const string ImportErrorsTabCountFormat = "Errors ({0})";
-    public const string ImportErrorsEmpty = "Nothing in the previewed rows would be rejected.";
-    public const string ImportReportTab = "Report";
-    public const string ImportReportEmpty = "Run an import or a validation — what happened appears here.";
-    public const string ImportReportExport = "Export report…";
-    public const string ImportReportCopy = "Copy";
-    public const string ImportReportColumnRow = "Row";
-    public const string ImportReportColumnColumn = "Column";
-    public const string ImportReportColumnValue = "Value";
-    public const string ImportReportColumnReason = "Reason";
-    public const string ImportReportRevealTooltip = "Double-click to show this row in the converted preview";
+    public static string ImportErrorsTab => Loc.Text(nameof(ImportErrorsTab));
+    public static string ImportErrorsTabCountFormat => Loc.Text(nameof(ImportErrorsTabCountFormat));
+    public static string ImportErrorsEmpty => Loc.Text(nameof(ImportErrorsEmpty));
+    public static string ImportReportTab => Loc.Text(nameof(ImportReportTab));
+    public static string ImportReportEmpty => Loc.Text(nameof(ImportReportEmpty));
+    public static string ImportReportExport => Loc.Text(nameof(ImportReportExport));
+    public static string ImportReportCopy => Loc.Text(nameof(ImportReportCopy));
+    public static string ImportReportColumnRow => Loc.Text(nameof(ImportReportColumnRow));
+    public static string ImportReportColumnColumn => Loc.Text(nameof(ImportReportColumnColumn));
+    public static string ImportReportColumnValue => Loc.Text(nameof(ImportReportColumnValue));
+    public static string ImportReportColumnReason => Loc.Text(nameof(ImportReportColumnReason));
+    public static string ImportReportRevealTooltip => Loc.Text(nameof(ImportReportRevealTooltip));
 
-    public const string ImportReportImportedFormat =
-        "Imported {0:N0} of {1:N0} row(s). {2:N0} rejected. Time {3}.";
-    public const string ImportReportCancelledFormat =
-        "Cancelled — {0:N0} of {1:N0} row(s) written. {2:N0} rejected. Time {3}.";
-    public const string ImportReportValidatedFormat =
-        "Validated {0:N0} of {1:N0} row(s). {2:N0} would be rejected. Nothing was written. Time {3}.";
-    public const string ImportReportValidatedCancelledFormat =
-        "Validation cancelled — {0:N0} of {1:N0} row(s) checked. {2:N0} would be rejected. Time {3}.";
+    public static string ImportReportImportedFormat => Loc.Text(nameof(ImportReportImportedFormat));
+    public static string ImportReportCancelledFormat => Loc.Text(nameof(ImportReportCancelledFormat));
+    public static string ImportReportValidatedFormat => Loc.Text(nameof(ImportReportValidatedFormat));
+    public static string ImportReportValidatedCancelledFormat => Loc.Text(nameof(ImportReportValidatedCancelledFormat));
     /// <summary>§0.6: an open transaction is never described as a finished import.</summary>
-    public const string ImportReportTransactionOpen = "Transaction OPEN — commit or roll back.";
-    public const string ImportReportRowsCommittedFormat =
-        "{0:N0} row(s) already committed — Rollback cannot take those back.";
-    public const string ImportReportShortenedFormat = "{0:N0} value(s) were shortened to fit.";
-    public const string ImportReportListTruncatedFormat = "The list stops at {0:N0} entries; the counts are exact.";
-    public const string ImportCommit = "Commit";
-    public const string ImportCommitTooltip = "Commit the rows this import wrote";
-    public const string ImportRollback = "Rollback";
-    public const string ImportRollbackTooltip = "Roll back everything this import wrote";
+    public static string ImportReportTransactionOpen => Loc.Text(nameof(ImportReportTransactionOpen));
+    public static string ImportReportRowsCommittedFormat => Loc.Text(nameof(ImportReportRowsCommittedFormat));
+    public static string ImportReportShortenedFormat => Loc.Text(nameof(ImportReportShortenedFormat));
+    public static string ImportReportListTruncatedFormat => Loc.Text(nameof(ImportReportListTruncatedFormat));
+    public static string ImportCommit => Loc.Text(nameof(ImportCommit));
+    public static string ImportCommitTooltip => Loc.Text(nameof(ImportCommitTooltip));
+    public static string ImportRollback => Loc.Text(nameof(ImportRollback));
+    public static string ImportRollbackTooltip => Loc.Text(nameof(ImportRollbackTooltip));
     /// <summary>Toolbar marker: the import left a transaction open and the decision is pending. Amber, not
     /// red — a pending decision is not a failure, and after a clean import the red readiness line was being
     /// read as "the import did not work".</summary>
-    public const string UnsavedImportRowsFormat = "Data Import: {0:N0} row(s) written but not committed";
-    public const string ImportTransactionOpenMarker = "● transaction open";
-    public const string ImportTransactionOpenMarkerTooltip =
-        "This import's rows are written but not persisted. Commit keeps them, Rollback discards them.";
-    public const string ImportCommitted = "Committed.";
-    public const string ImportRolledBack = "Rolled back.";
-    public const string ImportRestoredLastConfiguration = "restored the last configuration";
-    public const string ImportForgetLastConfiguration = "Clear";
+    public static string UnsavedImportRowsFormat => Loc.Text(nameof(UnsavedImportRowsFormat));
+    public static string ImportTransactionOpenMarker => Loc.Text(nameof(ImportTransactionOpenMarker));
+    public static string ImportTransactionOpenMarkerTooltip => Loc.Text(nameof(ImportTransactionOpenMarkerTooltip));
+    public static string ImportCommitted => Loc.Text(nameof(ImportCommitted));
+    public static string ImportRolledBack => Loc.Text(nameof(ImportRolledBack));
+    public static string ImportRestoredLastConfiguration => Loc.Text(nameof(ImportRestoredLastConfiguration));
+    public static string ImportForgetLastConfiguration => Loc.Text(nameof(ImportForgetLastConfiguration));
 
     // ---- Data Import: named profiles (etap I11) ----
 
-    public const string ImportProfileLabel = "Profile";
+    public static string ImportProfileLabel => Loc.Text(nameof(ImportProfileLabel));
     /// <summary>The standing first row. ⚠ Named for what it IS — no profile attached — and deliberately NOT
     /// „default configuration", which would promise defaults it does not restore. Restoring them is Reset.</summary>
-    public const string ImportProfileNone = "(no profile)";
-    public const string ImportProfileDetached =
-        "Working without a profile. The decisions on the surface are unchanged — use Reset to clear them.";
+    public static string ImportProfileNone => Loc.Text(nameof(ImportProfileNone));
+    public static string ImportProfileDetached => Loc.Text(nameof(ImportProfileDetached));
     /// <summary>Says which profiles the selector holds. A restriction the user cannot see is indistinguishable
     /// from a profile that has gone missing (§4.8.3).</summary>
-    public const string ImportProfileScopeFormat =
-        "Profiles saved on {0}, plus any that are not tied to a connection. A profile saved on another " +
-        "connection is not offered — it names a table this database may not have.";
+    public static string ImportProfileScopeFormat => Loc.Text(nameof(ImportProfileScopeFormat));
     /// <summary>Appended in the list to a profile that is not tied to a connection and is therefore offered
     /// everywhere.</summary>
-    public const string ImportProfilePortableSuffix = "  · any connection";
+    public static string ImportProfilePortableSuffix => Loc.Text(nameof(ImportProfilePortableSuffix));
     /// <summary>Appended to a profile written by a newer build. It stays in the list on purpose — hiding it
     /// would look exactly like a deletion.</summary>
-    public const string ImportProfileUnreadableSuffix = "  · newer version";
-    public const string ImportProfileUnreadableFormat =
-        "Profile {0} was saved by a newer version of EmberTern and was not loaded. Applying only the parts " +
-        "this build understands would silently change decisions you did not take.";
-    public const string ImportProfileLoadedFormat = "Loaded profile {0}.";
+    public static string ImportProfileUnreadableSuffix => Loc.Text(nameof(ImportProfileUnreadableSuffix));
+    public static string ImportProfileUnreadableFormat => Loc.Text(nameof(ImportProfileUnreadableFormat));
+    public static string ImportProfileLoadedFormat => Loc.Text(nameof(ImportProfileLoadedFormat));
 
-    public const string ImportProfileSaveAs = "Save as…";
-    public const string ImportProfileSaveAsTooltip = "Save the current decisions as a named profile";
-    public const string ImportProfileSaveAsTitle = "Save the import profile";
-    public const string ImportProfileNameLabel = "Profile name";
-    public const string ImportProfileSaveConfirm = "Save";
-    public const string ImportProfileSavedFormat = "Saved profile {0}.";
-    public const string ImportProfileOverwriteTitle = "Overwrite the profile";
-    public const string ImportProfileOverwriteFormat =
-        "A profile named {0} already exists. Overwrite it with the decisions currently on the surface?";
-    public const string ImportProfileOverwriteConfirm = "Overwrite";
+    public static string ImportProfileSaveAs => Loc.Text(nameof(ImportProfileSaveAs));
+    public static string ImportProfileSaveAsTooltip => Loc.Text(nameof(ImportProfileSaveAsTooltip));
+    public static string ImportProfileSaveAsTitle => Loc.Text(nameof(ImportProfileSaveAsTitle));
+    public static string ImportProfileNameLabel => Loc.Text(nameof(ImportProfileNameLabel));
+    public static string ImportProfileSaveConfirm => Loc.Text(nameof(ImportProfileSaveConfirm));
+    public static string ImportProfileSavedFormat => Loc.Text(nameof(ImportProfileSavedFormat));
+    public static string ImportProfileOverwriteTitle => Loc.Text(nameof(ImportProfileOverwriteTitle));
+    public static string ImportProfileOverwriteFormat => Loc.Text(nameof(ImportProfileOverwriteFormat));
+    public static string ImportProfileOverwriteConfirm => Loc.Text(nameof(ImportProfileOverwriteConfirm));
 
-    public const string ImportProfileRenameTooltip = "Rename the selected profile";
-    public const string ImportProfileRenameTitle = "Rename the profile";
-    public const string ImportProfileRenameConfirm = "Rename";
-    public const string ImportProfileRenamedFormat = "Renamed to {0}.";
-    public const string ImportProfileNameTakenFormat = "A profile named {0} already exists.";
+    public static string ImportProfileRenameTooltip => Loc.Text(nameof(ImportProfileRenameTooltip));
+    public static string ImportProfileRenameTitle => Loc.Text(nameof(ImportProfileRenameTitle));
+    public static string ImportProfileRenameConfirm => Loc.Text(nameof(ImportProfileRenameConfirm));
+    public static string ImportProfileRenamedFormat => Loc.Text(nameof(ImportProfileRenamedFormat));
+    public static string ImportProfileNameTakenFormat => Loc.Text(nameof(ImportProfileNameTakenFormat));
 
-    public const string ImportProfileDeleteTooltip = "Delete the selected profile";
-    public const string ImportProfileDeleteTitle = "Delete the profile";
-    public const string ImportProfileDeleteFormat =
-        "Delete profile {0}? Only the saved decisions are removed — nothing on the surface changes and no " +
-        "data is touched.";
-    public const string ImportProfileDeleteConfirm = "Delete";
-    public const string ImportProfileDeletedFormat = "Deleted profile {0}.";
+    public static string ImportProfileDeleteTooltip => Loc.Text(nameof(ImportProfileDeleteTooltip));
+    public static string ImportProfileDeleteTitle => Loc.Text(nameof(ImportProfileDeleteTitle));
+    public static string ImportProfileDeleteFormat => Loc.Text(nameof(ImportProfileDeleteFormat));
+    public static string ImportProfileDeleteConfirm => Loc.Text(nameof(ImportProfileDeleteConfirm));
+    public static string ImportProfileDeletedFormat => Loc.Text(nameof(ImportProfileDeletedFormat));
 
     /// <summary>Start again: every decision back to its default, and no profile attached. The counterpart to
     /// „(no profile)", which only detaches.</summary>
-    public const string ImportReset = "Reset";
-    public const string ImportResetTooltip =
-        "Start a new configuration — clears every decision, restores the defaults and detaches from the profile";
-    public const string ImportResetTitle = "Start a new configuration";
-    public const string ImportResetQuestion =
-        "Clear every decision on this surface and start again? Saved profiles are not affected, and no data " +
-        "is touched.";
-    public const string ImportResetConfirm = "Start again";
-    public const string ImportResetDone = "New configuration — defaults restored, no profile attached.";
+    public static string ImportReset => Loc.Text(nameof(ImportReset));
+    public static string ImportResetTooltip => Loc.Text(nameof(ImportResetTooltip));
+    public static string ImportResetTitle => Loc.Text(nameof(ImportResetTitle));
+    public static string ImportResetQuestion => Loc.Text(nameof(ImportResetQuestion));
+    public static string ImportResetConfirm => Loc.Text(nameof(ImportResetConfirm));
+    public static string ImportResetDone => Loc.Text(nameof(ImportResetDone));
 
     // ---- Data Import: ImportErrorKind → one sentence. The ONE table (rule #6). ----
 
-    public const string ImportErrorNotAnInteger = "Not a whole number.";
-    public const string ImportErrorNotANumber = "Not a number under the declared decimal separator.";
-    public const string ImportErrorNotADateTime = "Not a date/time under the declared field order.";
-    public const string ImportErrorNotABoolean = "Neither a true nor a false token.";
-    public const string ImportErrorValueTooLong = "Longer than the target column.";
-    public const string ImportErrorValueTooLongMeasuredFormat = "Too long: {0} characters, limit {1}.";
-    public const string ImportErrorValueOutOfRange = "Outside the target column's range.";
-    public const string ImportErrorPrecisionWouldBeLost = "Writing it would drop decimal places or a time part.";
-    public const string ImportErrorUnsupportedTargetType = "The target column's type cannot be imported.";
-    public const string ImportErrorNullNotAllowed = "The column is NOT NULL and has no default.";
-    public const string ImportErrorNotRepresentable =
-        "A character the connection charset cannot represent — it would be stored as '?'.";
-    public const string ImportErrorSourceErrorValue = "The source cell holds an error value.";
-    public const string ImportErrorServerNullViolation = "The server rejected a NULL.";
-    public const string ImportErrorServerUniqueViolation = "Unique-key violation.";
-    public const string ImportErrorServerCheckViolation = "CHECK constraint violated.";
-    public const string ImportErrorServerForeignKeyViolation = "Foreign key: the referenced row does not exist.";
-    public const string ImportErrorServerStringTruncation = "The server refused the value as too long.";
-    public const string ImportErrorServerNumericOverflow = "Numeric overflow on the server.";
-    public const string ImportErrorServerTransliteration = "The server could not transliterate the value.";
-    public const string ImportErrorServerError = "The server refused the row.";
+    public static string ImportErrorNotAnInteger => Loc.Text(nameof(ImportErrorNotAnInteger));
+    public static string ImportErrorNotANumber => Loc.Text(nameof(ImportErrorNotANumber));
+    public static string ImportErrorNotADateTime => Loc.Text(nameof(ImportErrorNotADateTime));
+    public static string ImportErrorNotABoolean => Loc.Text(nameof(ImportErrorNotABoolean));
+    public static string ImportErrorValueTooLong => Loc.Text(nameof(ImportErrorValueTooLong));
+    public static string ImportErrorValueTooLongMeasuredFormat => Loc.Text(nameof(ImportErrorValueTooLongMeasuredFormat));
+    public static string ImportErrorValueOutOfRange => Loc.Text(nameof(ImportErrorValueOutOfRange));
+    public static string ImportErrorPrecisionWouldBeLost => Loc.Text(nameof(ImportErrorPrecisionWouldBeLost));
+    public static string ImportErrorUnsupportedTargetType => Loc.Text(nameof(ImportErrorUnsupportedTargetType));
+    public static string ImportErrorNullNotAllowed => Loc.Text(nameof(ImportErrorNullNotAllowed));
+    public static string ImportErrorNotRepresentable => Loc.Text(nameof(ImportErrorNotRepresentable));
+    public static string ImportErrorSourceErrorValue => Loc.Text(nameof(ImportErrorSourceErrorValue));
+    public static string ImportErrorServerNullViolation => Loc.Text(nameof(ImportErrorServerNullViolation));
+    public static string ImportErrorServerUniqueViolation => Loc.Text(nameof(ImportErrorServerUniqueViolation));
+    public static string ImportErrorServerCheckViolation => Loc.Text(nameof(ImportErrorServerCheckViolation));
+    public static string ImportErrorServerForeignKeyViolation => Loc.Text(nameof(ImportErrorServerForeignKeyViolation));
+    public static string ImportErrorServerStringTruncation => Loc.Text(nameof(ImportErrorServerStringTruncation));
+    public static string ImportErrorServerNumericOverflow => Loc.Text(nameof(ImportErrorServerNumericOverflow));
+    public static string ImportErrorServerTransliteration => Loc.Text(nameof(ImportErrorServerTransliteration));
+    public static string ImportErrorServerError => Loc.Text(nameof(ImportErrorServerError));
 
-    public const string ScriptRun = "Execute";
-    public static readonly string ScriptRunTooltip = CommandTip.For(
-        CommandId.Go, "Run the whole script in one transaction");
-    public const string ScriptStopTooltip = "Stop after the current statement";
-    public const string ScriptCommit = "Commit";
-    public const string ScriptCommitTooltip = "Commit the open script transaction";
-    public const string ScriptRollback = "Rollback";
-    public const string ScriptRollbackTooltip = "Roll back the open script transaction";
-    public const string ScriptTransactionLabel = "Transaction:";
-    public const string ScriptModeManual = "Manual (review, then commit)";
-    public const string ScriptModeAutoCommit = "Auto-commit on success";
-    public const string ScriptModeSequenced = "Sequenced (deployment, commits in steps)";
+    public static string ScriptRun => Loc.Text(nameof(ScriptRun));
+    public static string ScriptRunTooltip => CommandTip.For(
+        CommandId.Go, Loc.Text(nameof(ScriptRunTooltip)));
+    public static string ScriptStopTooltip => Loc.Text(nameof(ScriptStopTooltip));
+    public static string ScriptCommit => Loc.Text(nameof(ScriptCommit));
+    public static string ScriptCommitTooltip => Loc.Text(nameof(ScriptCommitTooltip));
+    public static string ScriptRollback => Loc.Text(nameof(ScriptRollback));
+    public static string ScriptRollbackTooltip => Loc.Text(nameof(ScriptRollbackTooltip));
+    public static string ScriptTransactionLabel => Loc.Text(nameof(ScriptTransactionLabel));
+    public static string ScriptModeManual => Loc.Text(nameof(ScriptModeManual));
+    public static string ScriptModeAutoCommit => Loc.Text(nameof(ScriptModeAutoCommit));
+    public static string ScriptModeSequenced => Loc.Text(nameof(ScriptModeSequenced));
     // Per-mode descriptions — surfaced where the user picks the mode (the picker's tooltip), so the
     // Sequenced trade-off is stated at the point of choice (not buried). No transaction jargon.
-    public const string ScriptModeManualDescription =
-        "Runs the whole script as one transaction and leaves it open so you can review the results, then Commit or Roll back. All-or-nothing.";
-    public const string ScriptModeAutoCommitDescription =
-        "Runs the whole script as one transaction and commits it automatically if nothing failed, otherwise rolls the whole script back. All-or-nothing.";
-    public const string ScriptModeSequencedDescription =
-        "For deployments: runs the script in steps, committing after each schema change so a later statement can use an object an earlier one created. NOT all-or-nothing — steps that already committed stay applied if a later step fails.";
-    public const string ScriptStopOnError = "Stop on error";
-    public const string ScriptOpenTooltip = "Open a .sql script…";
-    public const string ScriptSaveTooltip = "Save the script to a .sql file…";
-    public const string ScriptStatusOpenedFormat = "Opened {0}.";
-    public const string ScriptStatusSavedFormat = "Saved {0}.";
-    public const string ScriptStatusFileErrorFormat = "File error: {0}";
+    public static string ScriptModeManualDescription => Loc.Text(nameof(ScriptModeManualDescription));
+    public static string ScriptModeAutoCommitDescription => Loc.Text(nameof(ScriptModeAutoCommitDescription));
+    public static string ScriptModeSequencedDescription => Loc.Text(nameof(ScriptModeSequencedDescription));
+    public static string ScriptStopOnError => Loc.Text(nameof(ScriptStopOnError));
+    public static string ScriptOpenTooltip => Loc.Text(nameof(ScriptOpenTooltip));
+    public static string ScriptSaveTooltip => Loc.Text(nameof(ScriptSaveTooltip));
+    public static string ScriptStatusOpenedFormat => Loc.Text(nameof(ScriptStatusOpenedFormat));
+    public static string ScriptStatusSavedFormat => Loc.Text(nameof(ScriptStatusSavedFormat));
+    public static string ScriptStatusFileErrorFormat => Loc.Text(nameof(ScriptStatusFileErrorFormat));
 
     // ─── Recompile Dependents (Part 2) ────────────────────────────────────────
-    public const string RecompileDependentsTitle = "Recompile dependents";
-    public const string RecompileDependentsHeaderFormat = "Recompile objects that depend on {0}?";
-    public const string RecompileDependentsHint =
-        "This change may affect the objects below. Nothing is recompiled unless you choose to.";
-    public const string RecompileDependentsSelectAll = "Select all";
-    public const string RecompileDependentsSelectNone = "Select none";
-    public const string RecompileDependentsDontAskAgain = "Don't ask again this session";
-    public const string RecompileDependentsRecompile = "Recompile selected";
-    public const string RecompileDependentsSkip = "Skip";
-    public const string RecompileDependentsBatchTitleFormat = "Recompile dependents of {0}";
+    public static string RecompileDependentsTitle => Loc.Text(nameof(RecompileDependentsTitle));
+    public static string RecompileDependentsHeaderFormat => Loc.Text(nameof(RecompileDependentsHeaderFormat));
+    public static string RecompileDependentsHint => Loc.Text(nameof(RecompileDependentsHint));
+    public static string RecompileDependentsSelectAll => Loc.Text(nameof(RecompileDependentsSelectAll));
+    public static string RecompileDependentsSelectNone => Loc.Text(nameof(RecompileDependentsSelectNone));
+    public static string RecompileDependentsDontAskAgain => Loc.Text(nameof(RecompileDependentsDontAskAgain));
+    public static string RecompileDependentsRecompile => Loc.Text(nameof(RecompileDependentsRecompile));
+    public static string RecompileDependentsSkip => Loc.Text(nameof(RecompileDependentsSkip));
+    public static string RecompileDependentsBatchTitleFormat => Loc.Text(nameof(RecompileDependentsBatchTitleFormat));
 
     // ─── Smart SQL Parameters (Part 3) ────────────────────────────────────────
     // Shown in the parameter dialog's Type column when the type can't be resolved from the
     // catalog — we show "Unknown", never a guessed type (a plain text input is used).
-    public const string SmartParamUnknownType = "Unknown";
-    public const string ScriptTransactionOpenMarker = "● Transaction open — review, then Commit or Rollback";
+    public static string SmartParamUnknownType => Loc.Text(nameof(SmartParamUnknownType));
+    public static string ScriptTransactionOpenMarker => Loc.Text(nameof(ScriptTransactionOpenMarker));
     // Result grid column headers.
-    public const string ScriptColumnLine = "#";
+    public static string ScriptColumnLine => Loc.Text(nameof(ScriptColumnLine));
     // Sequenced only: which committed step (segment/transaction) the statement ran in. Blank in the
     // single-transaction modes, where the whole script is one transaction.
-    public const string ScriptColumnStep = "Step";
-    public const string ScriptColumnStepTooltip =
-        "In Sequenced mode, the committed step (transaction) this statement ran in. Each step commits before the next begins.";
+    public static string ScriptColumnStep => Loc.Text(nameof(ScriptColumnStep));
+    public static string ScriptColumnStepTooltip => Loc.Text(nameof(ScriptColumnStepTooltip));
     // Per-step outcome, shown by colouring the Step cell (Sequenced only). A step's outcome is distinct
     // from a statement's own result: a statement can have succeeded yet its step still rolled back.
-    public const string ScriptStepCommittedTooltip =
-        "This step committed — its changes are permanent.";
-    public const string ScriptStepRolledBackTooltip =
-        "This step rolled back — its changes were undone because a statement in this step failed (or the run was cancelled). Steps committed earlier stay applied.";
-    public const string ScriptColumnStatement = "Statement";
-    public const string ScriptColumnType = "Type";
-    public const string ScriptColumnResult = "Result";
+    public static string ScriptStepCommittedTooltip => Loc.Text(nameof(ScriptStepCommittedTooltip));
+    public static string ScriptStepRolledBackTooltip => Loc.Text(nameof(ScriptStepRolledBackTooltip));
+    public static string ScriptColumnStatement => Loc.Text(nameof(ScriptColumnStatement));
+    public static string ScriptColumnType => Loc.Text(nameof(ScriptColumnType));
+    public static string ScriptColumnResult => Loc.Text(nameof(ScriptColumnResult));
     // Sequenced only: a statement a stop-on-error / cancellation left unexecuted. It never ran, so it
     // is neither a success nor a failure — surfaced as a muted "Not run" row so the grid shows exactly
     // what the deployment did NOT reach.
-    public const string ScriptResultNotRun = "Not run";
-    public const string ScriptResultNotRunTooltip =
-        "This statement was never reached — the run stopped (an earlier step failed) or was cancelled before it. It had no effect.";
-    public const string ScriptColumnRows = "Rows";
-    public const string ScriptColumnDuration = "Duration";
-    public const string ScriptColumnError = "Error";
+    public static string ScriptResultNotRun => Loc.Text(nameof(ScriptResultNotRun));
+    public static string ScriptResultNotRunTooltip => Loc.Text(nameof(ScriptResultNotRunTooltip));
+    public static string ScriptColumnRows => Loc.Text(nameof(ScriptColumnRows));
+    public static string ScriptColumnDuration => Loc.Text(nameof(ScriptColumnDuration));
+    public static string ScriptColumnError => Loc.Text(nameof(ScriptColumnError));
     // Status line.
-    public const string ScriptStatusReady = "Ready. Paste or type a script, then Execute.";
+    public static string ScriptStatusReady => Loc.Text(nameof(ScriptStatusReady));
 
     // ── Stany puste siatki wyników (M5 / M‑3, B6) ────────────────────────────────────────────────
     // ⭐ DWA, bo model niósł to rozróżnienie na długo przed M‑3: `HasResults` liczy się z `_allRows`
@@ -703,79 +844,72 @@ internal static class UiStrings
     // ⚠ Druga treść świadomie powtarza język, którym mówią już Session Manager i Trace Monitor
     //    („No sessions match the current filter." / „No events match the current filter.") — ta sama
     //    sytuacja ma brzmieć tak samo, niezależnie od ekranu.
-    public const string ScriptResultsEmpty = "Execute the script — each statement and its result appear here.";
-    public const string ScriptResultsNoFilterMatch = "No statements match the current filter.";
-    public const string ScriptStatusRunning = "Running…";
-    public const string ScriptStatusNothingToRun = "Nothing to run — the script has no statements.";
-    public const string ScriptStatusCancelled = "Cancelled. The transaction is still open — Commit or Rollback.";
-    public const string ScriptStatusCommitted = "Committed.";
-    public const string ScriptStatusRolledBack = "Rolled back.";
-    public const string ScriptStatusParseErrorFormat = "Could not parse the script: {0}";
-    public const string ScriptStatusDisallowedFormat =
-        "Cannot run — remove the transaction-control / session statements: {0}";
+    public static string ScriptResultsEmpty => Loc.Text(nameof(ScriptResultsEmpty));
+    public static string ScriptResultsNoFilterMatch => Loc.Text(nameof(ScriptResultsNoFilterMatch));
+    public static string ScriptStatusRunning => Loc.Text(nameof(ScriptStatusRunning));
+    public static string ScriptStatusNothingToRun => Loc.Text(nameof(ScriptStatusNothingToRun));
+    public static string ScriptStatusCancelled => Loc.Text(nameof(ScriptStatusCancelled));
+    public static string ScriptStatusCommitted => Loc.Text(nameof(ScriptStatusCommitted));
+    public static string ScriptStatusRolledBack => Loc.Text(nameof(ScriptStatusRolledBack));
+    public static string ScriptStatusParseErrorFormat => Loc.Text(nameof(ScriptStatusParseErrorFormat));
+    public static string ScriptStatusDisallowedFormat => Loc.Text(nameof(ScriptStatusDisallowedFormat));
     // Run gate: a transaction is already open and must be settled before a script runs.
-    public const string ScriptBlockOwnTxOpen =
-        "This script's previous run left a transaction open. Commit or Roll back (buttons above) before running again.";
-    public const string ScriptBlockExternalTxOpen =
-        "A transaction is already open (e.g. an uncommitted SQL Editor statement). Commit or roll back that transaction before running a script.";
+    public static string ScriptBlockOwnTxOpen => Loc.Text(nameof(ScriptBlockOwnTxOpen));
+    public static string ScriptBlockExternalTxOpen => Loc.Text(nameof(ScriptBlockExternalTxOpen));
     // Pre-flight: a mixed DDL+DML script cannot run in a single-transaction mode (Manual / Auto-commit)
     // because Firebird cannot use an object a statement created until it is committed (#213). Stop before
     // the first statement and point the user at Sequenced, which is built for exactly this.
-    public const string ScriptStatusMixedNeedsSequenced =
-        "This script mixes schema changes (CREATE / ALTER / …) with data statements (INSERT / UPDATE / …). In Manual and Auto-commit the whole script runs as a single transaction, and Firebird cannot use an object a statement just created until that change is committed — so a later statement would fail. Choose the “Sequenced (deployment)” transaction mode: it commits each schema change before the statements that depend on it.";
-    public const string ScriptStatusManualSummaryFormat =
-        "{0} succeeded, {1} failed in {2}. Transaction open — Commit or Rollback.";
-    public const string ScriptStatusAutoSummaryFormat = "{0} {1} succeeded, {2} failed in {3}.";
+    public static string ScriptStatusMixedNeedsSequenced => Loc.Text(nameof(ScriptStatusMixedNeedsSequenced));
+    public static string ScriptStatusManualSummaryFormat => Loc.Text(nameof(ScriptStatusManualSummaryFormat));
+    public static string ScriptStatusAutoSummaryFormat => Loc.Text(nameof(ScriptStatusAutoSummaryFormat));
     // Sequenced (deployment) — committed step-by-step, so the summary states the non-atomic reality
     // rather than a single Committed/Rolled-back verdict.
-    public const string ScriptStatusSequencedSummaryFormat =
-        "Deployment: {0} succeeded, {1} failed in {2}. Committed steps stay applied — this mode is not all-or-nothing.";
+    public static string ScriptStatusSequencedSummaryFormat => Loc.Text(nameof(ScriptStatusSequencedSummaryFormat));
     // Sequenced headline: how many committed steps (transactions) of all the steps the run planned —
     // committed + rolled-back + not-run. Prepended to the deployment / cancelled summary (seam C3).
-    public const string ScriptStatusSequencedStepsFormat = "{0} of {1} steps committed.";
-    public const string ScriptStatusSequencedCancelled =
-        "Deployment cancelled. Steps that already committed stay applied; the step in progress was rolled back.";
-    public const string BatchResultsClose = "Close";
+    public static string ScriptStatusSequencedStepsFormat => Loc.Text(nameof(ScriptStatusSequencedStepsFormat));
+    public static string ScriptStatusSequencedCancelled => Loc.Text(nameof(ScriptStatusSequencedCancelled));
+    public static string BatchResultsClose => Loc.Text(nameof(BatchResultsClose));
     // Preparation phase — the dialog opens here immediately so feedback is instant while
     // the object list + per-object SQL are still being built (Batch Operations UX sprint).
-    public const string BatchPreparing = "Preparing operation…";
-    public const string BatchPreparingBuildList = "Building operation list…";
-    public const string BatchPreparingListFormat = "Loading {0}…";          // {0} = plural noun, count unknown
-    public const string BatchPreparingLoadFormat = "Loading {0} {1} / {2}";  // e.g. "Loading procedures 143 / 1965"
-    public const string TabCloseTooltip = "Close tab";
+    public static string BatchPreparing => Loc.Text(nameof(BatchPreparing));
+    public static string BatchPreparingBuildList => Loc.Text(nameof(BatchPreparingBuildList));
+    public static string BatchPreparingListFormat => Loc.Text(nameof(BatchPreparingListFormat));          // {0} = plural noun, count unknown
+    public static string BatchPreparingLoadFormat => Loc.Text(nameof(BatchPreparingLoadFormat));  // e.g. "Loading procedures 143 / 1965"
+    public static string TabCloseTooltip => Loc.Text(nameof(TabCloseTooltip));
 
-    public const string ConnectionConnect = "Connect";
-    public const string ConnectionDisconnect = "Disconnect";
-    public const string ConnectionDelete = "Delete";
-    public const string ConnectionNew = "+ New Connection";
+    public static string ConnectionConnect => Loc.Text(nameof(ConnectionConnect));
+    public static string ConnectionDisconnect => Loc.Text(nameof(ConnectionDisconnect));
+    public static string ConnectionDelete => Loc.Text(nameof(ConnectionDelete));
+    public static string ConnectionNew => Loc.Text(nameof(ConnectionNew));
     // Druga linia stanu pustego paska bocznego — stoi obok glifu `Icon.Plus` i nazywa akcję dokładnie tak,
     // jak nazywa ją jej własny tooltip (`ConnectionNewTooltip`). ⚠ Powód i historia poprzedniej treści:
     // przy `SidebarPlaceholderEmpty`.
-    public const string ConnectionsEmptyHint = "New connection — in the toolbar above";
+    public static string ConnectionsEmptyHint => Loc.Text(nameof(ConnectionsEmptyHint));
 
-    public const string WorkspaceTabUntitled = "SQL Editor";
-    public const string WorkspaceEditorPlaceholder = "-- Connect to a database to start writing SQL";
+    public static string WorkspaceTabUntitled => Loc.Text(nameof(WorkspaceTabUntitled));
+    public static string WorkspaceEditorPlaceholder => Loc.Text(nameof(WorkspaceEditorPlaceholder));
 
-    public const string TransactionBarInactive = "No transaction";
-    public const string TransactionBarActive = "Active Transaction";
-    public const string TransactionBarError = "Transaction Error";
-    public const string TransactionCommit = "Commit";
-    public const string TransactionRollback = "Rollback";
-    public const string TransactionStatementCountFormat = "{0} statement(s)";
+    public static string TransactionBarInactive => Loc.Text(nameof(TransactionBarInactive));
+    public static string TransactionBarActive => Loc.Text(nameof(TransactionBarActive));
+    public static string TransactionBarError => Loc.Text(nameof(TransactionBarError));
+    public static string TransactionCommit => Loc.Text(nameof(TransactionCommit));
+    public static string TransactionRollback => Loc.Text(nameof(TransactionRollback));
+    public static string TransactionStatementCountFormat => Loc.Text(nameof(TransactionStatementCountFormat));
 
     // ⭐ Chip transakcji w pasku statusu (§8.4.5) — GLOBALNA odpowiedź na „czy mam otwartą transakcję
     // i od jak dawna". Pasek nad wynikami edytora SQL niesie osobną, LOKALNĄ informację: liczbę
     // instrukcji. Dwa poziomy informacji, nie redundancja (decyzja użytkownika, 2026-08-02).
-    public const string StatusBarTransactionChipFormat = "Transaction · {0}";
+    public static string StatusBarTransactionChipFormat => Loc.Text(nameof(StatusBarTransactionChipFormat));
     // Stan przejściowy: transakcja jest otwarta, ale znacznik czasu jeszcze nie powstał (np. otwarta
     // przed podpięciem chipa). Lepszy niż chip pokazujący „0 s", który sugerowałby świeży start.
-    public const string StatusBarTransactionChipBare = "Transaction";
+    public static string StatusBarTransactionChipBare => Loc.Text(nameof(StatusBarTransactionChipBare));
 
     // ⭐ Sekcja postępu (§8.4.6) — M3.1f. ⚠ Tekst jest ogólny („operation"), bo od M3b ta sekcja
     // obsługuje każdą długo trwającą operację, nie tylko zapytanie SQL. Skrótu klawiaturowego nie
     // podajemy: anulowanie nie ma gestu w `CommandCatalog`, a tooltip obiecujący nieistniejący
     // klawisz uczyłby nieprawdy (reguła z etapu Keyboard Manager, gotcha #284).
-    public const string StatusBarCancelOperationTooltip = "Cancel the running operation";
+    public static string StatusBarCancelOperationTooltip => Loc.Text(nameof(StatusBarCancelOperationTooltip));
 
     // ⭐⭐ ETYKIETY SEKCJI POSTĘPU — M3b.1. Wymóg użytkownika: „etykieta zawsze jednoznacznie określa,
     // co jest wykonywane", bo od tej iteracji sekcja ma TRZY źródła i sam napis „Loading… 12 345 rows"
@@ -788,141 +922,141 @@ internal static class UiStrings
     // ⛔ Nie dopisywać tu szczegółu operacji (np. „N read · M written · K failed"). Szczegół należy do
     // powierzchni, która operację prowadzi — to ten sam podział własności, który §19.5.1 i §19.7.1 już
     // ratyfikowały: pasek statusu niesie FAKT globalny, właściciel operacji niesie SZCZEGÓŁ lokalny.
-    public const string StatusProgressQueryRowsFormat = "Executing query… {0:N0} rows";
-    public const string StatusProgressScriptFormat = "Running script… {0:N0} / {1:N0}";
-    public const string StatusProgressImportFormat = "Importing data… {0:N0} rows";
+    public static string StatusProgressQueryRowsFormat => Loc.Text(nameof(StatusProgressQueryRowsFormat));
+    public static string StatusProgressScriptFormat => Loc.Text(nameof(StatusProgressScriptFormat));
+    public static string StatusProgressImportFormat => Loc.Text(nameof(StatusProgressImportFormat));
 
     // ⭐ Odczyt źródła przed importem (M3b.1c). ⚠ DWIE etykiety, nie jedna z „file" na sztywno: to samo ogniwo
     // obsługuje schowek, a napis „Loading file…" nad odczytem schowka byłby nieprawdą — a kłamiąca etykieta jest
     // nieodróżnialna od awarii (gotcha #311). Jeden warunek, dwa uczciwe zdania.
     // ⚠ Bez licznika: ten odcinek nie zna ani sumy, ani postępu (czyta próbkę schematu i ograniczony podgląd),
     // więc jakakolwiek liczba tutaj byłaby zmyślona.
-    public const string StatusProgressImportReadingFile = "Loading file…";
-    public const string StatusProgressImportReadingClipboard = "Reading clipboard…";
+    public static string StatusProgressImportReadingFile => Loc.Text(nameof(StatusProgressImportReadingFile));
+    public static string StatusProgressImportReadingClipboard => Loc.Text(nameof(StatusProgressImportReadingClipboard));
 
     // ⭐ Ładowanie połączenia (M3b.2). Dwie etykiety na trzy fazy, i to jest zmierzone, nie oszczędne:
     // faza 2 (odtworzenie zakładek) jest SYNCHRONICZNA na wątku UI, a odmalowanie następuje PRZED nią —
     // napis ustawiony na jej początku pojawiłby się dopiero po jej zakończeniu, czyli gdy jest już
     // nieprawdziwy. Zamiast martwego UI zostaje etykieta fazy 1 (decyzja użytkownika 2026-08-04).
     // ⭐ Faza 3 jest jedyną fazą ze ZNANĄ sumą (13 kategorii), więc jedyną, która uczciwie pokazuje procent.
-    public const string StatusProgressConnecting = "Connecting to database…";
-    public const string StatusProgressMetadataFormat = "Loading metadata… {0:N0} / {1:N0}";
+    public static string StatusProgressConnecting => Loc.Text(nameof(StatusProgressConnecting));
+    public static string StatusProgressMetadataFormat => Loc.Text(nameof(StatusProgressMetadataFormat));
 
     // ⭐ Chipy Trace i Debuggera (§8.4.3 sekcja 3) — M3.1e. Etykieta niesie sam FAKT („gdzieś żyje
     // sesja"), a szczegół idzie do tooltipa, który czyta `StatusText` z VM-a odpowiedniej zakładki.
     // ⚠ Rzeczownik, nie czasownik: chip mówi, CO jest prawdą, a nie co się dzieje — „co się dzieje"
     // to rola railu (§8.4.1). Stąd „Debug"/„Trace", a nie „Debugging"/„Tracing".
-    public const string StatusBarDebugChipLabel = "Debug";
-    public const string StatusBarTraceChipLabel = "Trace";
+    public static string StatusBarDebugChipLabel => Loc.Text(nameof(StatusBarDebugChipLabel));
+    public static string StatusBarTraceChipLabel => Loc.Text(nameof(StatusBarTraceChipLabel));
 
     // Zgrubny czas trwania, czytelny kątem oka (§8.4.5). ⛔ Nie zwiększać precyzji — pasek statusu
     // nie jest stoperem; dokładny czas wykonania niesie ExecutionTimer w toolbarze edytora.
-    public const string DurationSecondsFormat = "{0} s";
-    public const string DurationMinutesFormat = "{0} min";
-    public const string DurationHoursFormat = "{0} h {1} min";
-    public const string TransactionStartedMessage = "Transaction started.";
-    public const string TransactionCommittedFormat = "Transaction committed ({0} statement(s)).";
-    public const string TransactionRolledBackFormat = "Transaction rolled back ({0} statement(s)).";
+    public static string DurationSecondsFormat => Loc.Text(nameof(DurationSecondsFormat));
+    public static string DurationMinutesFormat => Loc.Text(nameof(DurationMinutesFormat));
+    public static string DurationHoursFormat => Loc.Text(nameof(DurationHoursFormat));
+    public static string TransactionStartedMessage => Loc.Text(nameof(TransactionStartedMessage));
+    public static string TransactionCommittedFormat => Loc.Text(nameof(TransactionCommittedFormat));
+    public static string TransactionRolledBackFormat => Loc.Text(nameof(TransactionRolledBackFormat));
     // Lane-qualified transaction strings (C2 — Data / Metadata working transactions).
-    public const string TransactionLaneData = "Data";
-    public const string TransactionLaneStartedFormat = "{0} transaction started.";
-    public const string TransactionLaneCommittedFormat = "{0} transaction committed ({1} statement(s)).";
-    public const string TransactionLaneRolledBackFormat = "{0} transaction rolled back ({1} statement(s)).";
-    public const string TransactionCommitDataTooltip = "Commit data transaction";
-    public const string TransactionRollbackDataTooltip = "Rollback data transaction";
+    public static string TransactionLaneData => Loc.Text(nameof(TransactionLaneData));
+    public static string TransactionLaneStartedFormat => Loc.Text(nameof(TransactionLaneStartedFormat));
+    public static string TransactionLaneCommittedFormat => Loc.Text(nameof(TransactionLaneCommittedFormat));
+    public static string TransactionLaneRolledBackFormat => Loc.Text(nameof(TransactionLaneRolledBackFormat));
+    public static string TransactionCommitDataTooltip => Loc.Text(nameof(TransactionCommitDataTooltip));
+    public static string TransactionRollbackDataTooltip => Loc.Text(nameof(TransactionRollbackDataTooltip));
     // Unified single-pair tooltips — the app commits/rolls back whichever lane(s) are open.
-    public static readonly string TransactionCommitTooltip = CommandTip.For(CommandId.Commit, "Commit");
-    public static readonly string TransactionRollbackTooltip = CommandTip.For(CommandId.Rollback, "Rollback");
+    public static string TransactionCommitTooltip => CommandTip.For(CommandId.Commit, Loc.Text(nameof(TransactionCommitTooltip)));
+    public static string TransactionRollbackTooltip => CommandTip.For(CommandId.Rollback, Loc.Text(nameof(TransactionRollbackTooltip)));
     // Execution-lane feedback: which profile the auto-router chose for a statement.
     // {0} = lane (Data/Metadata), {1} = profile label (e.g. "Read Committed").
     // Legacy binary disconnect-confirm strings — superseded by the DisconnectChoice*
     // set below (Commit / Roll back / Cancel). Kept only to avoid churn; not referenced.
-    public const string DisconnectConfirmTitle = "Active transaction";
-    public const string DisconnectConfirmMessage = "Disconnecting will roll back the active transaction.\n\nDisconnect anyway?";
-    public const string DisconnectConfirmYes = "Disconnect";
-    public const string DisconnectConfirmNo = "Cancel";
+    public static string DisconnectConfirmTitle => Loc.Text(nameof(DisconnectConfirmTitle));
+    public static string DisconnectConfirmMessage => Loc.Text(nameof(DisconnectConfirmMessage));
+    public static string DisconnectConfirmYes => Loc.Text(nameof(DisconnectConfirmYes));
+    public static string DisconnectConfirmNo => Loc.Text(nameof(DisconnectConfirmNo));
 
     // ─── Data-loss WorkGuard ───────────────────────────────────────────────
     // Unsaved-work summary lines (one per affected tab / transaction lane).
-    public const string UnsavedNewTableFormat = "New table (not yet created) — {0}";
-    public const string UnsavedNewViewFormat = "New view (not yet created) — {0}";
-    public const string UnsavedNewProcedureFormat = "New procedure (not yet created) — {0}";
-    public const string UnsavedModifiedViewFormat = "View {0} — uncompiled changes";
-    public const string UnsavedModifiedProcedureFormat = "Procedure {0} — uncompiled changes";
-    public const string UnsavedNewTriggerFormat = "New trigger (not yet created) — {0}";
-    public const string UnsavedModifiedTriggerFormat = "Trigger {0} — uncompiled changes";
-    public const string UnsavedNewFunctionFormat = "New function (not yet created) — {0}";
-    public const string UnsavedModifiedFunctionFormat = "Function {0} — uncompiled changes";
-    public const string UnsavedNewGeneratorFormat = "New generator (not yet created) — {0}";
-    public const string UnsavedModifiedGeneratorFormat = "Generator {0} — unsaved changes";
-    public const string UnsavedNewDomainFormat = "New domain (not yet created) — {0}";
-    public const string UnsavedModifiedDomainFormat = "Domain {0} — unsaved changes";
-    public const string UnsavedNewPackageFormat = "New package (not yet created) — {0}";
-    public const string UnsavedModifiedPackageFormat = "Package {0} — uncompiled changes";
-    public const string UnsavedNewExceptionFormat = "New exception (not yet created) — {0}";
-    public const string UnsavedModifiedExceptionFormat = "Exception {0} — unsaved changes";
-    public const string UnsavedModifiedIndexFormat = "Index {0} — unsaved changes";
-    public const string UnsavedPendingStructureFormat = "Table {0} — uncompiled structural changes";
-    public const string UnsavedTransactionDataFormat = "Data transaction — {0} pending statement(s)";
+    public static string UnsavedNewTableFormat => Loc.Text(nameof(UnsavedNewTableFormat));
+    public static string UnsavedNewViewFormat => Loc.Text(nameof(UnsavedNewViewFormat));
+    public static string UnsavedNewProcedureFormat => Loc.Text(nameof(UnsavedNewProcedureFormat));
+    public static string UnsavedModifiedViewFormat => Loc.Text(nameof(UnsavedModifiedViewFormat));
+    public static string UnsavedModifiedProcedureFormat => Loc.Text(nameof(UnsavedModifiedProcedureFormat));
+    public static string UnsavedNewTriggerFormat => Loc.Text(nameof(UnsavedNewTriggerFormat));
+    public static string UnsavedModifiedTriggerFormat => Loc.Text(nameof(UnsavedModifiedTriggerFormat));
+    public static string UnsavedNewFunctionFormat => Loc.Text(nameof(UnsavedNewFunctionFormat));
+    public static string UnsavedModifiedFunctionFormat => Loc.Text(nameof(UnsavedModifiedFunctionFormat));
+    public static string UnsavedNewGeneratorFormat => Loc.Text(nameof(UnsavedNewGeneratorFormat));
+    public static string UnsavedModifiedGeneratorFormat => Loc.Text(nameof(UnsavedModifiedGeneratorFormat));
+    public static string UnsavedNewDomainFormat => Loc.Text(nameof(UnsavedNewDomainFormat));
+    public static string UnsavedModifiedDomainFormat => Loc.Text(nameof(UnsavedModifiedDomainFormat));
+    public static string UnsavedNewPackageFormat => Loc.Text(nameof(UnsavedNewPackageFormat));
+    public static string UnsavedModifiedPackageFormat => Loc.Text(nameof(UnsavedModifiedPackageFormat));
+    public static string UnsavedNewExceptionFormat => Loc.Text(nameof(UnsavedNewExceptionFormat));
+    public static string UnsavedModifiedExceptionFormat => Loc.Text(nameof(UnsavedModifiedExceptionFormat));
+    public static string UnsavedModifiedIndexFormat => Loc.Text(nameof(UnsavedModifiedIndexFormat));
+    public static string UnsavedPendingStructureFormat => Loc.Text(nameof(UnsavedPendingStructureFormat));
+    public static string UnsavedTransactionDataFormat => Loc.Text(nameof(UnsavedTransactionDataFormat));
 
     // Tab close (binary Discard / Cancel). {0} = the tab's unsaved-work label.
-    public const string CloseTabUnsavedConfirmTitle = "Unsaved changes";
-    public const string CloseTabUnsavedConfirmFormat = "{0}\n\nClosing this tab discards these changes.";
-    public const string CloseTabUnsavedConfirmYes = "Discard and close";
+    public static string CloseTabUnsavedConfirmTitle => Loc.Text(nameof(CloseTabUnsavedConfirmTitle));
+    public static string CloseTabUnsavedConfirmFormat => Loc.Text(nameof(CloseTabUnsavedConfirmFormat));
+    public static string CloseTabUnsavedConfirmYes => Loc.Text(nameof(CloseTabUnsavedConfirmYes));
     // Seam 5c — per-tab close is Save / Discard / Cancel whenever the tab has somewhere to save,
     // matching the disconnect and app-close guards instead of forcing "discard or stay".
-    public const string CloseTabUnsavedSave = "Save and close";
+    public static string CloseTabUnsavedSave => Loc.Text(nameof(CloseTabUnsavedSave));
 
     // Disconnect with an active transaction (3-way choice; default Roll back).
-    public const string DisconnectChoiceTitle = "Active transaction";
-    public const string DisconnectChoiceHeaderFormat = "Connection \"{0}\" has an active transaction:";
-    public const string DisconnectChoiceQuestion = "What should happen before disconnecting?";
-    public const string DisconnectChoiceCommit = "Commit and disconnect";
-    public const string DisconnectChoiceRollback = "Rollback and disconnect";
-    public const string DisconnectChoiceCancel = "Cancel";
-    public const string DisconnectUnsavedDiscardNoteFormat = "Uncompiled changes in {0} tab(s) will be discarded.";
+    public static string DisconnectChoiceTitle => Loc.Text(nameof(DisconnectChoiceTitle));
+    public static string DisconnectChoiceHeaderFormat => Loc.Text(nameof(DisconnectChoiceHeaderFormat));
+    public static string DisconnectChoiceQuestion => Loc.Text(nameof(DisconnectChoiceQuestion));
+    public static string DisconnectChoiceCommit => Loc.Text(nameof(DisconnectChoiceCommit));
+    public static string DisconnectChoiceRollback => Loc.Text(nameof(DisconnectChoiceRollback));
+    public static string DisconnectChoiceCancel => Loc.Text(nameof(DisconnectChoiceCancel));
+    public static string DisconnectUnsavedDiscardNoteFormat => Loc.Text(nameof(DisconnectUnsavedDiscardNoteFormat));
 
     // Disconnect with uncompiled tab work but no transaction (binary).
-    public const string DisconnectUnsavedTitle = "Unsaved changes";
-    public const string DisconnectUnsavedIntro = "Disconnecting will discard uncompiled changes in:";
-    public const string DisconnectUnsavedYes = "Discard and disconnect";
+    public static string DisconnectUnsavedTitle => Loc.Text(nameof(DisconnectUnsavedTitle));
+    public static string DisconnectUnsavedIntro => Loc.Text(nameof(DisconnectUnsavedIntro));
+    public static string DisconnectUnsavedYes => Loc.Text(nameof(DisconnectUnsavedYes));
 
     // Disconnect with unsaved metadata editors (Phase 1: Save / Discard / Cancel; default Save).
-    public const string DisconnectSaveTitle = "Unsaved changes";
-    public const string DisconnectSaveHeaderFormat = "Connection \"{0}\" has unsaved changes in these editors:";
-    public const string DisconnectSaveQuestion = "Save them before disconnecting?";
-    public const string DisconnectSaveConfirm = "Save and disconnect";
-    public const string DisconnectSaveDiscard = "Discard and disconnect";
+    public static string DisconnectSaveTitle => Loc.Text(nameof(DisconnectSaveTitle));
+    public static string DisconnectSaveHeaderFormat => Loc.Text(nameof(DisconnectSaveHeaderFormat));
+    public static string DisconnectSaveQuestion => Loc.Text(nameof(DisconnectSaveQuestion));
+    public static string DisconnectSaveConfirm => Loc.Text(nameof(DisconnectSaveConfirm));
+    public static string DisconnectSaveDiscard => Loc.Text(nameof(DisconnectSaveDiscard));
 
     // App close with unsaved work / active transactions (default Cancel; "Save and exit"
     // appears when there are unsaved editors to compile).
-    public const string ExitUnsavedTitle = "Unsaved work";
-    public const string ExitUnsavedIntro = "Exiting now will lose the following:";
-    public const string ExitUnsavedTransactionNote = "Active transactions will be rolled back.";
-    public const string ExitUnsavedSave = "Save and exit";
-    public const string ExitUnsavedDiscard = "Discard and exit";
-    public const string ExitUnsavedCancel = "Cancel";
+    public static string ExitUnsavedTitle => Loc.Text(nameof(ExitUnsavedTitle));
+    public static string ExitUnsavedIntro => Loc.Text(nameof(ExitUnsavedIntro));
+    public static string ExitUnsavedTransactionNote => Loc.Text(nameof(ExitUnsavedTransactionNote));
+    public static string ExitUnsavedSave => Loc.Text(nameof(ExitUnsavedSave));
+    public static string ExitUnsavedDiscard => Loc.Text(nameof(ExitUnsavedDiscard));
+    public static string ExitUnsavedCancel => Loc.Text(nameof(ExitUnsavedCancel));
 
-    public const string BottomTabMessages = "Messages";
-    public const string BottomTabResults = "Results";
-    public const string BottomTabOutput = "Output";
-    public const string BottomTabDiagnostics = "Diagnostics";
+    public static string BottomTabMessages => Loc.Text(nameof(BottomTabMessages));
+    public static string BottomTabResults => Loc.Text(nameof(BottomTabResults));
+    public static string BottomTabOutput => Loc.Text(nameof(BottomTabOutput));
+    public static string BottomTabDiagnostics => Loc.Text(nameof(BottomTabDiagnostics));
 
     // Diagnostics panel (Stage 7 / S4) — a view of the DiagnosticsEngine's findings for the SQL editor.
-    public const string DiagnosticsEmptyHint = "No diagnostics — nothing to report for this document.";
-    public const string DiagnosticsLocationFormat = "Ln {0}, Col {1}";
-    public const string DiagnosticSeverityError = "Error";
-    public const string DiagnosticSeverityWarning = "Warning";
-    public const string DiagnosticSeverityInfo = "Info";
+    public static string DiagnosticsEmptyHint => Loc.Text(nameof(DiagnosticsEmptyHint));
+    public static string DiagnosticsLocationFormat => Loc.Text(nameof(DiagnosticsLocationFormat));
+    public static string DiagnosticSeverityError => Loc.Text(nameof(DiagnosticSeverityError));
+    public static string DiagnosticSeverityWarning => Loc.Text(nameof(DiagnosticSeverityWarning));
+    public static string DiagnosticSeverityInfo => Loc.Text(nameof(DiagnosticSeverityInfo));
 
     // ⛔ `StatusBarReady` i `StatusBarConnectedTo` usunięte w M3.1b. Pasek statusu nie opisuje już
     // połączenia zdaniem — sekcja 1 pokazuje NAZWĘ połączenia i endpoint, a stan „połączony / nie"
     // niesie kropka. `StatusBarDisconnected` zostaje: jest etykietą w slocie nazwy, gdy połączenia
     // nie ma (§19.3).
-    public const string StatusBarDisconnected = "Disconnected";
+    public static string StatusBarDisconnected => Loc.Text(nameof(StatusBarDisconnected));
 
-    public const string ThemeToggleTooltip = "Toggle dark / light theme";
-    public const string SidebarToggleTooltip = "Show / hide the connections panel";
+    public static string ThemeToggleTooltip => Loc.Text(nameof(ThemeToggleTooltip));
+    public static string SidebarToggleTooltip => Loc.Text(nameof(SidebarToggleTooltip));
 
     // ── Title bar — connection toolbar (M‑1, M3.2d) ─────────────────────────────────────────────────
     // The seven buttons between the sidebar toggle and the separator. They carried English literals in
@@ -935,33 +1069,33 @@ internal static class UiStrings
     // ⚠ No gesture is spelled here, and that is the ratified rule, not an omission: these commands are
     // Tree-scoped (F3 / F4 / F8 reach them only while the tree has focus), so a toolbar tooltip promising
     // a key would teach something false outside the tree — keyboard-manager.md §14.
-    public const string ConnectionNewTooltip = "New connection";
-    public const string ConnectionEditTooltip = "Edit connection";
-    public const string ConnectionCopyTooltip = "Copy connection";
-    public const string ConnectionDeleteTooltip = "Delete connection";
-    public const string ConnectionConnectTooltip = "Connect";
-    public const string ConnectionDisconnectTooltip = "Disconnect";
-    public const string ConnectionReconnectTooltip = "Reconnect";
+    public static string ConnectionNewTooltip => Loc.Text(nameof(ConnectionNewTooltip));
+    public static string ConnectionEditTooltip => Loc.Text(nameof(ConnectionEditTooltip));
+    public static string ConnectionCopyTooltip => Loc.Text(nameof(ConnectionCopyTooltip));
+    public static string ConnectionDeleteTooltip => Loc.Text(nameof(ConnectionDeleteTooltip));
+    public static string ConnectionConnectTooltip => Loc.Text(nameof(ConnectionConnectTooltip));
+    public static string ConnectionDisconnectTooltip => Loc.Text(nameof(ConnectionDisconnectTooltip));
+    public static string ConnectionReconnectTooltip => Loc.Text(nameof(ConnectionReconnectTooltip));
 
     // ── Title bar — window caption buttons (M‑1, M3.2d) ─────────────────────────────────────────────
     // EmberTern draws its own caption buttons (the window is `ExtendClientAreaToDecorationsHint`), so
     // these three are ordinary application strings and not the OS's.
-    public const string WindowMinimizeTooltip = "Minimize";
-    public const string WindowMaxRestoreTooltip = "Maximize / Restore";
-    public const string WindowCloseTooltip = "Close";
+    public static string WindowMinimizeTooltip => Loc.Text(nameof(WindowMinimizeTooltip));
+    public static string WindowMaxRestoreTooltip => Loc.Text(nameof(WindowMaxRestoreTooltip));
+    public static string WindowCloseTooltip => Loc.Text(nameof(WindowCloseTooltip));
 
     // ── Application Menu (the hamburger) ────────────────────────────────────────────────────────────
     // A rarely-used ADMINISTRATIVE menu for application-level functions — never commands of the active
     // document, which stay on the toolbars, the shortcuts and the context menus. Design + the reasoning
     // for what is deliberately absent: docs/design/hamburger-navigation.md §3–§5.
-    public const string AppMenuTooltip = "Application menu";
+    public static string AppMenuTooltip => Loc.Text(nameof(AppMenuTooltip));
     // ⭐ Live since Settings Center etap 3. It shipped as a DISABLED row with a "Not available yet" tooltip
     // while the window did not exist — the rule being that a row never ships ahead of what it opens — and the
     // etap that built the window is the etap that enabled the row and removed that tooltip string.
-    public const string AppMenuSettings = "Settings…";
-    public const string AppMenuKeyboardShortcuts = "Keyboard Shortcuts…";
-    public const string AppMenuAbout = "About EmberTern…";
-    public const string AppMenuExit = "Exit";
+    public static string AppMenuSettings => Loc.Text(nameof(AppMenuSettings));
+    public static string AppMenuKeyboardShortcuts => Loc.Text(nameof(AppMenuKeyboardShortcuts));
+    public static string AppMenuAbout => Loc.Text(nameof(AppMenuAbout));
+    public static string AppMenuExit => Loc.Text(nameof(AppMenuExit));
 
     // The About window. Deliberately a PRODUCT window, not a diagnostic one: the logo, the name, the version,
     // the author and the copyright — no runtime/OS block, no library names, and no liability or privacy
@@ -969,39 +1103,37 @@ internal static class UiStrings
     // document). Design: docs/design/hamburger-navigation.md §8.
     // ⛔ There is deliberately NO version string here. The number is read from the assembly by AppInfo, whose
     // single source is <Version> in Directory.Build.props.
-    public const string AboutTitle = "About EmberTern";
-    public const string AboutVersionFormat = "Version {0}";
+    public static string AboutTitle => Loc.Text(nameof(AboutTitle));
+    public static string AboutVersionFormat => Loc.Text(nameof(AboutVersionFormat));
     // Released on its own line under the version. The date is assembly metadata fed by <ReleaseDate> in
     // Directory.Build.props — same single source as the version, so it is never a date typed into a view.
-    public const string AboutReleasedFormat = "Released {0}";
+    public static string AboutReleasedFormat => Loc.Text(nameof(AboutReleasedFormat));
     // ⚠ The author line is LABELLED on purpose. Unlabelled it read as an unsigned line of text, and the name
     // already appears in the copyright below — the label is what turns a repetition into authorship.
-    public const string AboutAuthorFormat = "Created by {0}";
-    public const string AboutClose = "Close";
+    public static string AboutAuthorFormat => Loc.Text(nameof(AboutAuthorFormat));
+    public static string AboutClose => Loc.Text(nameof(AboutClose));
     // A discreet footer button rather than a tab: a tab strip on a five-line window makes it look like a
     // configuration dialog. No licence requires these names on the About face itself — MIT is silent on
     // placement and IDPL 1.0 §3.6 scopes its "conspicuously" to the notices document — so the face stays bare
     // and the obligation is met by the document behind this button.
-    public const string AboutThirdPartyNotices = "Third-party notices";
-    public const string ThirdPartyNoticesTitle = "Third-party notices";
-    public const string ThirdPartyNoticesUnavailable =
-        "The third-party notices file could not be read from this build.";
+    public static string AboutThirdPartyNotices => Loc.Text(nameof(AboutThirdPartyNotices));
+    public static string ThirdPartyNoticesTitle => Loc.Text(nameof(ThirdPartyNoticesTitle));
+    public static string ThirdPartyNoticesUnavailable => Loc.Text(nameof(ThirdPartyNoticesUnavailable));
 
     // ── Keyboard Shortcuts window ───────────────────────────────────────────────────────────────────
     // A read-only VIEW of CommandCatalog: no name, gesture or scope is written here or in the window.
-    public const string KeyboardShortcutsTitle = "Keyboard Shortcuts";
-    public const string KeyboardShortcutsSearchPlaceholder = "Search commands and shortcuts…";
-    public const string KeyboardShortcutsColumnCommand = "Command";
-    public const string KeyboardShortcutsColumnShortcut = "Shortcut";
-    public const string KeyboardShortcutsColumnScope = "Scope";
-    public const string KeyboardShortcutsCountFormat = "{0} commands";
-    public const string KeyboardShortcutsCountOne = "1 command";
-    public const string KeyboardShortcutsEmpty = "No command matches this search.";
+    public static string KeyboardShortcutsTitle => Loc.Text(nameof(KeyboardShortcutsTitle));
+    public static string KeyboardShortcutsSearchPlaceholder => Loc.Text(nameof(KeyboardShortcutsSearchPlaceholder));
+    public static string KeyboardShortcutsColumnCommand => Loc.Text(nameof(KeyboardShortcutsColumnCommand));
+    public static string KeyboardShortcutsColumnShortcut => Loc.Text(nameof(KeyboardShortcutsColumnShortcut));
+    public static string KeyboardShortcutsColumnScope => Loc.Text(nameof(KeyboardShortcutsColumnScope));
+    public static string KeyboardShortcutsCountFormat => Loc.Text(nameof(KeyboardShortcutsCountFormat));
+    public static string KeyboardShortcutsCountOne => Loc.Text(nameof(KeyboardShortcutsCountOne));
+    public static string KeyboardShortcutsEmpty => Loc.Text(nameof(KeyboardShortcutsEmpty));
     // Restores Global → Tab → Tree → Grid → Editor → alphabetically. Shown only while a column sort is
     // overriding it, because an always-visible reset for a state you are not in is noise.
-    public const string KeyboardShortcutsResetOrder = "Reset order";
-    public const string KeyboardShortcutsResetOrderTooltip =
-        "Return to the default order: Global, Tab, Tree, Grid, Editor, then alphabetical";
+    public static string KeyboardShortcutsResetOrder => Loc.Text(nameof(KeyboardShortcutsResetOrder));
+    public static string KeyboardShortcutsResetOrderTooltip => Loc.Text(nameof(KeyboardShortcutsResetOrderTooltip));
 
     // ── Settings Center ─────────────────────────────────────────────────────────────────────────────
     // The app's one home for user preferences: a category list, a search box, and pages that apply on change
@@ -1009,267 +1141,229 @@ internal static class UiStrings
     // ⚠ Every OPTION KEY ("Dark", "en") lives in Core's PreferenceOptions, because it is persisted and
     // validated; only the words are here. The two are bound by a test — a key without a label ships a blank
     // row.
-    public const string SettingsCenterTitle = "Settings";
-    public const string SettingsSearchPlaceholder = "Search settings…";
-    public const string SettingsNoMatch = "No setting matches this search.";
-    public const string SettingsClose = "Close";
+    public static string SettingsCenterTitle => Loc.Text(nameof(SettingsCenterTitle));
+    public static string SettingsSearchPlaceholder => Loc.Text(nameof(SettingsSearchPlaceholder));
+    public static string SettingsNoMatch => Loc.Text(nameof(SettingsNoMatch));
+    public static string SettingsClose => Loc.Text(nameof(SettingsClose));
     // Apply-on-change is the ratified model (Q8), so the window has no OK/Cancel and nothing to confirm. The
     // hint says so once, quietly, rather than leaving the user hunting for a missing OK button.
-    public const string SettingsAppliedImmediately = "Changes apply immediately.";
+    public static string SettingsAppliedImmediately => Loc.Text(nameof(SettingsAppliedImmediately));
 
-    public const string SettingsCategoryGeneral = "General";
+    public static string SettingsCategoryGeneral => Loc.Text(nameof(SettingsCategoryGeneral));
 
-    public const string SettingsThemeLabel = "Theme";
-    public const string SettingsThemeDescription =
-        "Colour scheme for the whole application. The titlebar button switches the same setting.";
+    public static string SettingsThemeLabel => Loc.Text(nameof(SettingsThemeLabel));
+    public static string SettingsThemeDescription => Loc.Text(nameof(SettingsThemeDescription));
     // Extra search terms: the words a user types when they do not know our label.
-    public const string SettingsThemeKeywords = "colour color appearance dark light contrast";
-    public const string SettingsThemeDark = "Dark";
-    public const string SettingsThemeLight = "Light";
+    public static string SettingsThemeKeywords => Loc.Text(nameof(SettingsThemeKeywords));
+    public static string SettingsThemeDark => Loc.Text(nameof(SettingsThemeDark));
+    public static string SettingsThemeLight => Loc.Text(nameof(SettingsThemeLight));
 
-    public const string SettingsLanguageLabel = "Language";
+    public static string SettingsLanguageLabel => Loc.Text(nameof(SettingsLanguageLabel));
     // ⚠ It says "interface language" and nothing about availability, because the row is REAL: the value is
     // stored, validated and round-tripped from day one, and its list happens to have one entry. Presenting it
     // as unavailable would misrepresent what it does. Adding Polish is a row in Core's language catalog plus
     // the localization milestone (design §8) — no change to this window.
-    public const string SettingsLanguageDescription = "Language of the EmberTern interface.";
-    public const string SettingsLanguageKeywords = "locale translation localization interface";
-    public const string SettingsLanguageEnglish = "English";
+    public static string SettingsLanguageDescription => Loc.Text(nameof(SettingsLanguageDescription));
+    public static string SettingsLanguageKeywords => Loc.Text(nameof(SettingsLanguageKeywords));
+    public static string SettingsLanguageEnglish => Loc.Text(nameof(SettingsLanguageEnglish));
 
     // ⚠ The description says "open tabs" and "saved queries stay" because the setting is narrower than its name
     // suggests, and the narrower half is the important one: a connection's saved queries live in the same stored
     // workspace and are the user's own content, so they come back either way.
-    public const string SettingsRestoreWorkspaceLabel = "Restore open tabs on startup";
-    public const string SettingsRestoreWorkspaceDescription =
-        "Reopen the tabs from your last session when you connect. Saved queries are always restored.";
-    public const string SettingsRestoreWorkspaceKeywords =
-        "workspace session tabs restore startup launch reopen clean start";
+    public static string SettingsRestoreWorkspaceLabel => Loc.Text(nameof(SettingsRestoreWorkspaceLabel));
+    public static string SettingsRestoreWorkspaceDescription => Loc.Text(nameof(SettingsRestoreWorkspaceDescription));
+    public static string SettingsRestoreWorkspaceKeywords => Loc.Text(nameof(SettingsRestoreWorkspaceKeywords));
 
     // ── Editor (etap 6) ─────────────────────────────────────────────────────────────────────────────
     // The default Source/Easy mode for newly opened object editors (§7.6) and the execution row limits
     // (§7.2). §7.2 calls this an "Editor / Execution" page; it is one page.
-    public const string SettingsCategoryEditor = "Editor";
+    public static string SettingsCategoryEditor => Loc.Text(nameof(SettingsCategoryEditor));
 
     // ⚠ One description for all four rows, and it states the two things a user needs to know: this is a
     // DEFAULT for newly opened editors, and switching a mode inside an editor no longer changes it. That second
     // sentence is the etap's actual fix — the four flags used to be rewritten silently by the last toggle.
-    public const string SettingsEditorModeDescription =
-        "Mode a newly opened editor starts in. Switching mode inside an editor affects that tab only; a "
-        + "restored tab keeps the mode it was saved in.";
-    public const string SettingsEditorModeKeywords =
-        "editor mode easy source default open procedure view trigger function structured";
+    public static string SettingsEditorModeDescription => Loc.Text(nameof(SettingsEditorModeDescription));
+    public static string SettingsEditorModeKeywords => Loc.Text(nameof(SettingsEditorModeKeywords));
 
     // Nagłówek karty, która grupuje te cztery wiersze (pakiet UX po M5, punkt 5). ⚠ Nazywa TEMAT, a nie
     // sumę pozycji — cztery flagi odpowiadają na jedno pytanie, i dopiero to czyni z nich jedną kartę.
-    public const string SettingsEasyModeGroupLabel = "Default editor mode";
+    public static string SettingsEasyModeGroupLabel => Loc.Text(nameof(SettingsEasyModeGroupLabel));
 
     // ── Database Properties (pakiet UX po M5, punkt 6) ────────────────────────────────────────────────
-    public const string DatabasePropertiesMenuItem = "Properties…";
-    public const string DatabasePropertiesTitle = "Database Properties";
-    public const string DatabasePropertiesGroupIdentity = "Identity";
-    public const string DatabasePropertiesGroupStorage = "Storage";
-    public const string DatabasePropertiesGroupConfiguration = "Configuration";
+    public static string DatabasePropertiesMenuItem => Loc.Text(nameof(DatabasePropertiesMenuItem));
+    public static string DatabasePropertiesTitle => Loc.Text(nameof(DatabasePropertiesTitle));
+    public static string DatabasePropertiesGroupIdentity => Loc.Text(nameof(DatabasePropertiesGroupIdentity));
+    public static string DatabasePropertiesGroupStorage => Loc.Text(nameof(DatabasePropertiesGroupStorage));
+    public static string DatabasePropertiesGroupConfiguration => Loc.Text(nameof(DatabasePropertiesGroupConfiguration));
 
-    public const string DatabasePropertiesDatabase = "Database";
-    public const string DatabasePropertiesOwner = "Owner";
-    public const string DatabasePropertiesEngine = "Engine version";
-    public const string DatabasePropertiesOds = "ODS";
-    public const string DatabasePropertiesDialect = "SQL dialect";
-    public const string DatabasePropertiesCharset = "Charset";
-    public const string DatabasePropertiesCreated = "Created";
-    public const string DatabasePropertiesPageSize = "Page size";
-    public const string DatabasePropertiesPages = "Pages";
-    public const string DatabasePropertiesSize = "Size";
-    public const string DatabasePropertiesPageBuffers = "Page buffers";
-    public const string DatabasePropertiesLinger = "Linger";
+    public static string DatabasePropertiesDatabase => Loc.Text(nameof(DatabasePropertiesDatabase));
+    public static string DatabasePropertiesOwner => Loc.Text(nameof(DatabasePropertiesOwner));
+    public static string DatabasePropertiesEngine => Loc.Text(nameof(DatabasePropertiesEngine));
+    public static string DatabasePropertiesOds => Loc.Text(nameof(DatabasePropertiesOds));
+    public static string DatabasePropertiesDialect => Loc.Text(nameof(DatabasePropertiesDialect));
+    public static string DatabasePropertiesCharset => Loc.Text(nameof(DatabasePropertiesCharset));
+    public static string DatabasePropertiesCreated => Loc.Text(nameof(DatabasePropertiesCreated));
+    public static string DatabasePropertiesPageSize => Loc.Text(nameof(DatabasePropertiesPageSize));
+    public static string DatabasePropertiesPages => Loc.Text(nameof(DatabasePropertiesPages));
+    public static string DatabasePropertiesSize => Loc.Text(nameof(DatabasePropertiesSize));
+    public static string DatabasePropertiesPageBuffers => Loc.Text(nameof(DatabasePropertiesPageBuffers));
+    public static string DatabasePropertiesLinger => Loc.Text(nameof(DatabasePropertiesLinger));
 
-    public const string DatabasePropertiesSweepInterval = "Sweep interval";
-    public const string DatabasePropertiesForcedWrites = "Forced writes";
-    public const string DatabasePropertiesReserveSpace = "Reserve space";
+    public static string DatabasePropertiesSweepInterval => Loc.Text(nameof(DatabasePropertiesSweepInterval));
+    public static string DatabasePropertiesForcedWrites => Loc.Text(nameof(DatabasePropertiesForcedWrites));
+    public static string DatabasePropertiesReserveSpace => Loc.Text(nameof(DatabasePropertiesReserveSpace));
 
     // ⚠ Mówi o CACHE DZIAŁAJĄCEJ INSTANCJI, a nie o wartości zapisanej w nagłówku — bo dokładnie to
     // raportuje MON$PAGE_BUFFERS (zmierzone). Bez tego zdania liczba wyglądałaby na ustawienie bazy.
-    public const string DatabasePropertiesPageBuffersNote =
-        "Cache of the running database instance. A stored value takes effect when the database is next "
-        + "fully released.";
+    public static string DatabasePropertiesPageBuffersNote => Loc.Text(nameof(DatabasePropertiesPageBuffersNote));
 
-    public const string DatabasePropertiesLingerNotSet = "not set";
-    public const string DatabasePropertiesLingerSeconds = "{0} s";
+    public static string DatabasePropertiesLingerNotSet => Loc.Text(nameof(DatabasePropertiesLingerNotSet));
+    public static string DatabasePropertiesLingerSeconds => Loc.Text(nameof(DatabasePropertiesLingerSeconds));
 
-    public const string DatabasePropertiesApply = "Apply";
-    public const string DatabasePropertiesClose = "Close";
-    public const string DatabasePropertiesApplied = "Changes applied.";
-    public const string DatabasePropertiesNothingToApply = "Nothing to apply.";
+    public static string DatabasePropertiesApply => Loc.Text(nameof(DatabasePropertiesApply));
+    public static string DatabasePropertiesClose => Loc.Text(nameof(DatabasePropertiesClose));
+    public static string DatabasePropertiesApplied => Loc.Text(nameof(DatabasePropertiesApplied));
+    public static string DatabasePropertiesNothingToApply => Loc.Text(nameof(DatabasePropertiesNothingToApply));
 
     // ⚠ Wymienia to, co SIĘ UDAŁO — Apply nie jest atomowy, więc bez tej listy użytkownik nie wie, które
     // zmiany są już w bazie.
-    public const string DatabasePropertiesPartial = "Applied: {0}. The rest failed:";
+    public static string DatabasePropertiesPartial => Loc.Text(nameof(DatabasePropertiesPartial));
 
-    public const string DatabasePropertiesNoPassword =
-        "This connection profile has no stored password, so these settings cannot be changed. Firebird's "
-        + "Services API needs one.";
+    public static string DatabasePropertiesNoPassword => Loc.Text(nameof(DatabasePropertiesNoPassword));
 
     // ⭐ Dwa jedyne wyjaśnienia, jakie wolno dodać — bo tylko te dwa przypadki są rozpoznawalne po
     // SQLSTATE/GDS. ⛔ Komunikat serwera jest ZAWSZE pokazywany obok; to jest lead, nie zamiennik.
-    public const string DatabasePropertiesMissingPrivilege =
-        "Your account is missing the system privilege these operations require.";
-    public const string DatabasePropertiesInUse =
-        "The database is in use and this operation needs exclusive access.";
+    public static string DatabasePropertiesMissingPrivilege => Loc.Text(nameof(DatabasePropertiesMissingPrivilege));
+    public static string DatabasePropertiesInUse => Loc.Text(nameof(DatabasePropertiesInUse));
 
-    public const string SettingsProcedureEasyModeLabel = "Open procedures in Easy mode";
-    public const string SettingsViewEasyModeLabel = "Open views in Easy mode";
-    public const string SettingsTriggerEasyModeLabel = "Open triggers in Easy mode";
-    public const string SettingsFunctionEasyModeLabel = "Open functions in Easy mode";
+    public static string SettingsProcedureEasyModeLabel => Loc.Text(nameof(SettingsProcedureEasyModeLabel));
+    public static string SettingsViewEasyModeLabel => Loc.Text(nameof(SettingsViewEasyModeLabel));
+    public static string SettingsTriggerEasyModeLabel => Loc.Text(nameof(SettingsTriggerEasyModeLabel));
+    public static string SettingsFunctionEasyModeLabel => Loc.Text(nameof(SettingsFunctionEasyModeLabel));
 
     // ⚠ Both numeric descriptions name their range, because the field CLAMPS silently: a user who types 50000000
     // and gets 1000000 back has to be able to see why, and the alternative — a validation error on a settings
     // page that applies on change — would be a worse answer to the same problem.
-    public const string SettingsPreviewRowLimitLabel = "Preview row limit";
+    public static string SettingsPreviewRowLimitLabel => Loc.Text(nameof(SettingsPreviewRowLimitLabel));
 
     // ⚠ The key comes from the catalog, not from this string — CommandId.Go is what F5 actually runs, and a
     // hand-typed "(F5)" here would teach a stale shortcut the day it is re-bound, silently (gotcha #284). That
     // is also why this one member is `static readonly` while its neighbours are `const`: the guard keys on
     // const-ness, because a correctly composed string contains the same text at run time.
-    public static readonly string SettingsPreviewRowLimitDescription = CommandTip.Sentence(
+    public static string SettingsPreviewRowLimitDescription => CommandTip.Sentence(
         CommandId.Go,
-        "Rows a Preview execution ({0}) stops at. Full load is unaffected. Between 1 and 1 000 000.");
-    public const string SettingsPreviewRowLimitKeywords =
-        "execution execute preview rows limit f5 query results fetch cap";
+        Loc.Text(nameof(SettingsPreviewRowLimitDescription)));
+    public static string SettingsPreviewRowLimitKeywords => Loc.Text(nameof(SettingsPreviewRowLimitKeywords));
 
     // ⚠ It says the safety ceiling is separate and fixed, so the absence of a control for it reads as a decision
     // rather than an omission — ratified Q9: a configurable memory backstop is not a backstop.
-    public const string SettingsFullLoadPromptLabel = "Ask before loading more than";
-    public const string SettingsFullLoadPromptDescription =
-        "Rows at which a Full load stops to ask whether to keep going. The hard 1 000 000-row memory limit is "
-        + "separate and not configurable.";
-    public const string SettingsFullLoadPromptKeywords =
-        "execution execute full load threshold prompt rows ask keep loading memory";
+    public static string SettingsFullLoadPromptLabel => Loc.Text(nameof(SettingsFullLoadPromptLabel));
+    public static string SettingsFullLoadPromptDescription => Loc.Text(nameof(SettingsFullLoadPromptDescription));
+    public static string SettingsFullLoadPromptKeywords => Loc.Text(nameof(SettingsFullLoadPromptKeywords));
 
     // ── Grid (etap 6) ───────────────────────────────────────────────────────────────────────────────
-    public const string SettingsCategoryGrid = "Grid";
+    public static string SettingsCategoryGrid => Loc.Text(nameof(SettingsCategoryGrid));
 
     // ⚠ Names the two grids explicitly. This is the page size of the SERVER-PAGED data grids, which is what
     // ratified Q9 admits; the SQL editor's results and the Procedure / Function exec grids page an
     // already-materialized result in memory and are not this setting's subject. A description saying just
     // "grids" would be a promise the code deliberately does not keep.
-    public const string SettingsDataPageSizeLabel = "Data page size";
-    public const string SettingsDataPageSizeDescription =
-        "Rows per page in the Table Data and View Data grids. Each grid's own page-size box still overrides it. "
-        + "Between 1 and 1 000.";
-    public const string SettingsDataPageSizeKeywords =
-        "grid data page size rows pagination table view records per page";
+    public static string SettingsDataPageSizeLabel => Loc.Text(nameof(SettingsDataPageSizeLabel));
+    public static string SettingsDataPageSizeDescription => Loc.Text(nameof(SettingsDataPageSizeDescription));
+    public static string SettingsDataPageSizeKeywords => Loc.Text(nameof(SettingsDataPageSizeKeywords));
 
-    public const string SettingsGridAutoFitLabel = "Auto-fit columns by default";
-    public const string SettingsGridAutoFitDescription =
-        "Size columns to their content in a grid whose layout you have not adjusted yet. A grid you have "
-        + "resized keeps its own layout.";
-    public const string SettingsGridAutoFitKeywords =
-        "grid columns auto fit width size layout default resize";
+    public static string SettingsGridAutoFitLabel => Loc.Text(nameof(SettingsGridAutoFitLabel));
+    public static string SettingsGridAutoFitDescription => Loc.Text(nameof(SettingsGridAutoFitDescription));
+    public static string SettingsGridAutoFitKeywords => Loc.Text(nameof(SettingsGridAutoFitKeywords));
 
     // ── Tabs (M3.3b / product-polish §8.2) ──────────────────────────────────────────────────────────
     // ⭐ Zakładki dostały WŁASNĄ kategorię, a nie wiersze w General — decyzja użytkownika (2026-08-03):
     // pasek zakładek jest osobną powierzchnią aplikacji (§0.1), a General i tak już nosi motyw, język,
     // workspace i eksport. Kategoria jest też celem skoku dla przyszłej pozycji „Ustawienia zakładek…"
     // z menu kontekstowego zakładki (D9 / M3.3c).
-    public const string SettingsCategoryTabs = "Tabs";
+    public static string SettingsCategoryTabs => Loc.Text(nameof(SettingsCategoryTabs));
 
     // ⚠ Opis mówi, co użytkownik ZOBACZY, a nie jak to jest zbudowane — i nazywa różnicę, która naprawdę
     // dzieli te tryby: czy zakładka może zniknąć z widoku. To jest ratyfikowana istota decyzji D5/D7.
-    public const string SettingsTabStripModeLabel = "Tab strip layout";
-    public const string SettingsTabStripModeDescription =
-        "Multiple rows keeps every open tab visible — the strip grows and then scrolls. A single row scrolls "
-        + "sideways instead and moves the rest into a searchable list.";
-    public const string SettingsTabStripModeKeywords =
-        "tabs tab strip rows layout multi row single row overflow scroll workspace documents";
+    public static string SettingsTabStripModeLabel => Loc.Text(nameof(SettingsTabStripModeLabel));
+    public static string SettingsTabStripModeDescription => Loc.Text(nameof(SettingsTabStripModeDescription));
+    public static string SettingsTabStripModeKeywords => Loc.Text(nameof(SettingsTabStripModeKeywords));
 
-    public const string SettingsTabStripModeMultiRow = "Multiple rows";
-    public const string SettingsTabStripModeSingleRow = "Single row";
+    public static string SettingsTabStripModeMultiRow => Loc.Text(nameof(SettingsTabStripModeMultiRow));
+    public static string SettingsTabStripModeSingleRow => Loc.Text(nameof(SettingsTabStripModeSingleRow));
 
     // ⚠ Mówi wprost, że dotyczy tylko trybu wielowierszowego — wiersz widoczny w trybie B, w którym nic
     // nie robi, byłby dokładnie tym „martwym zapisem wyglądającym na regułę", przed którym broni §18.R.
-    public const string SettingsTabStripMaxRowsLabel = "Maximum rows";
-    public const string SettingsTabStripMaxRowsDescription =
-        "How tall the tab strip may grow before it starts scrolling. Multiple-rows layout only. Between 1 "
-        + "and 10.";
-    public const string SettingsTabStripMaxRowsKeywords =
-        "tabs tab strip rows maximum height limit scroll workspace";
+    public static string SettingsTabStripMaxRowsLabel => Loc.Text(nameof(SettingsTabStripMaxRowsLabel));
+    public static string SettingsTabStripMaxRowsDescription => Loc.Text(nameof(SettingsTabStripMaxRowsDescription));
+    public static string SettingsTabStripMaxRowsKeywords => Loc.Text(nameof(SettingsTabStripMaxRowsKeywords));
 
     // Przycisk przepełnienia w trybie pojedynczego wiersza. ⭐ Licznik pokazuje zakładki NIEWIDOCZNE,
     // nie wszystkie otwarte (§8.2 + decyzja użytkownika) — „ile mam poza ekranem" jest informacją, której
     // użytkownik potrzebuje w tym momencie; „ile mam otwartych" widać po samym pasku.
-    public const string TabStripOverflowTooltip = "Tabs that do not fit — click to search all open tabs";
-    public const string TabStripOverflowFilterWatermark = "Filter tabs…";
+    public static string TabStripOverflowTooltip => Loc.Text(nameof(TabStripOverflowTooltip));
+    public static string TabStripOverflowFilterWatermark => Loc.Text(nameof(TabStripOverflowFilterWatermark));
 
     // ── Menu kontekstowe zakładki (M3.3c / §8.3) ────────────────────────────────────────────────────
     // ⚠ Ikony przez `{app:MenuIcon}`, gesty przez `{app:CommandGesture}` — zero nowej chromy
     // (Keyboard Manager etap 5). Tu mieszkają wyłącznie słowa.
-    public const string TabMenuClose = "Close";
-    public const string TabMenuCloseOthers = "Close others";
-    public const string TabMenuCloseAll = "Close all";
-    public const string TabMenuCloseToTheRight = "Close tabs to the right";
-    public const string TabMenuCloseUnmodified = "Close unmodified";
-    public const string TabMenuRefresh = "Refresh";
-    public const string TabMenuCopyObjectName = "Copy object name";
-    public const string TabMenuRevealInExplorer = "Show in Metadata Explorer";
-    public const string TabMenuSettings = "Tab settings…";
+    public static string TabMenuClose => Loc.Text(nameof(TabMenuClose));
+    public static string TabMenuCloseOthers => Loc.Text(nameof(TabMenuCloseOthers));
+    public static string TabMenuCloseAll => Loc.Text(nameof(TabMenuCloseAll));
+    public static string TabMenuCloseToTheRight => Loc.Text(nameof(TabMenuCloseToTheRight));
+    public static string TabMenuCloseUnmodified => Loc.Text(nameof(TabMenuCloseUnmodified));
+    public static string TabMenuRefresh => Loc.Text(nameof(TabMenuRefresh));
+    public static string TabMenuCopyObjectName => Loc.Text(nameof(TabMenuCopyObjectName));
+    public static string TabMenuRevealInExplorer => Loc.Text(nameof(TabMenuRevealInExplorer));
+    public static string TabMenuSettings => Loc.Text(nameof(TabMenuSettings));
 
     // ⚠⚠ Bramka reguły #11 dla zamykania masowego — CZWARTE wejście do tej samej bramki, obok
     // zamknięcia zakładki, rozłączenia i zamknięcia aplikacji.
     // ⭐ Komunikat WYMIENIA zakładki z pracą ({0} = lista), bo „kilka zakładek ma niezapisane zmiany"
     // nie pozwala podjąć decyzji — a to jest moment, w którym użytkownik ją podejmuje.
-    public const string TabsCloseUnsavedTitle = "Unsaved changes";
-    public const string TabsCloseUnsavedFormat =
-        "These tabs have uncompiled changes:\n\n{0}\n\nSave them before closing?";
-    public const string TabsCloseUnsavedSave = "Save and close";
-    public const string TabsCloseUnsavedDiscard = "Discard and close";
+    public static string TabsCloseUnsavedTitle => Loc.Text(nameof(TabsCloseUnsavedTitle));
+    public static string TabsCloseUnsavedFormat => Loc.Text(nameof(TabsCloseUnsavedFormat));
+    public static string TabsCloseUnsavedSave => Loc.Text(nameof(TabsCloseUnsavedSave));
+    public static string TabsCloseUnsavedDiscard => Loc.Text(nameof(TabsCloseUnsavedDiscard));
 
     // ── Debugger (etap 6) ───────────────────────────────────────────────────────────────────────────
-    public const string SettingsCategoryDebugger = "Debugger";
+    public static string SettingsCategoryDebugger => Loc.Text(nameof(SettingsCategoryDebugger));
 
     // ⚠ Says the launch panel still offers it, because that is what makes this a DEFAULT rather than a
     // replacement — the recorded D4 wish was "show only params at launch", not "take the choice away".
-    public const string SettingsDebuggerIsolationLabel = "Default transaction isolation";
-    public const string SettingsDebuggerIsolationDescription =
-        "Isolation a debug session starts with. The launch panel's Advanced section can still change it for a "
-        + "single run.";
-    public const string SettingsDebuggerIsolationKeywords =
-        "debugger debug transaction isolation snapshot read committed default launch";
+    public static string SettingsDebuggerIsolationLabel => Loc.Text(nameof(SettingsDebuggerIsolationLabel));
+    public static string SettingsDebuggerIsolationDescription => Loc.Text(nameof(SettingsDebuggerIsolationDescription));
+    public static string SettingsDebuggerIsolationKeywords => Loc.Text(nameof(SettingsDebuggerIsolationKeywords));
 
     // ── SQL Formatter ───────────────────────────────────────────────────────────────────────────────
     // Exactly two rows, and that is ratified (§6.4 / §9.1): no line width, no indent size, no comma
     // placement. Both default to lower case, so a user who never opens this page sees the output EmberTern
     // has always produced.
-    public const string SettingsCategoryFormatter = "SQL Formatter";
+    public static string SettingsCategoryFormatter => Loc.Text(nameof(SettingsCategoryFormatter));
 
     // ⚠ Says "Format SQL" rather than "the formatter", because that is the scope: the action on the
     // Ctrl+K / toolbar / context menu. SQL that EmberTern composes (Copy as INSERT, .sql export) and
     // generated DDL keep their own casing, by ratified Q1 — a description promising "everywhere" would be
     // a promise the code deliberately does not keep.
-    public const string SettingsFormatterKeywordCaseLabel = "Keyword case";
-    public const string SettingsFormatterKeywordCaseDescription =
-        "How Format SQL cases keywords, data types and built-in functions — select or SELECT.";
-    public const string SettingsFormatterKeywordCaseKeywords =
-        "formatter format sql case casing uppercase lowercase keyword reserved word";
+    public static string SettingsFormatterKeywordCaseLabel => Loc.Text(nameof(SettingsFormatterKeywordCaseLabel));
+    public static string SettingsFormatterKeywordCaseDescription => Loc.Text(nameof(SettingsFormatterKeywordCaseDescription));
+    public static string SettingsFormatterKeywordCaseKeywords => Loc.Text(nameof(SettingsFormatterKeywordCaseKeywords));
 
-    public const string SettingsFormatterIdentifierCaseLabel = "Identifier case";
+    public static string SettingsFormatterIdentifierCaseLabel => Loc.Text(nameof(SettingsFormatterIdentifierCaseLabel));
     // ⚠ Says quoted names are untouched because that is a correctness guarantee the user can rely on, not a
     // limitation: "MyTable" is a different object from MYTABLE in Firebird, so re-casing it would change
     // which object the statement names (§0 / architecture rule #11).
-    public const string SettingsFormatterIdentifierCaseDescription =
-        "How Format SQL cases table, column and variable names. Quoted names like \"MixedCase\" are never "
-        + "changed — their case is part of the object's identity.";
-    public const string SettingsFormatterIdentifierCaseKeywords =
-        "formatter format sql case casing uppercase lowercase identifier name table column variable";
+    public static string SettingsFormatterIdentifierCaseDescription => Loc.Text(nameof(SettingsFormatterIdentifierCaseDescription));
+    public static string SettingsFormatterIdentifierCaseKeywords => Loc.Text(nameof(SettingsFormatterIdentifierCaseKeywords));
 
-    public const string SettingsCaseLower = "lower case";
-    public const string SettingsCaseUpper = "UPPER CASE";
+    public static string SettingsCaseLower => Loc.Text(nameof(SettingsCaseLower));
+    public static string SettingsCaseUpper => Loc.Text(nameof(SettingsCaseUpper));
 
     // Shown in the docked MessageBanner when a change could not be written. Settings Center is the ONE place
     // where the store's silent refusal (audit A-03) must be spoken: every other writer in the app is
     // incidental, but a dialog whose entire purpose is "change this setting" cannot accept a change and
     // persist nothing without saying so. {0} = the store's diagnostic.
-    public const string SettingsSaveRefusedFormat =
-        "This change applies for the current session only — it could not be saved. {0}";
+    public static string SettingsSaveRefusedFormat => Loc.Text(nameof(SettingsSaveRefusedFormat));
 
     // ── Settings export / import (etap 5b) ──────────────────────────────────────────────────────────
     // The user-facing half of EmberTern's own .etsettings format. Design §6.3; the format itself is §15.
@@ -1277,315 +1371,291 @@ internal static class UiStrings
     // Core, on purpose (the same reason Firebird connection-failure text lives in the Firebird layer): a status
     // whose meaning is decided in Core should not have its explanation decided somewhere else. Surfaces switch
     // on the STATUS and show the message as-is (§15.8).
-    public const string SettingsImportExportLabel = "Import / export settings";
-    public const string SettingsImportExportDescription =
-        "Copy your settings to another machine, or keep a backup. The file is always encrypted with a "
-        + "passphrase you choose.";
-    public const string SettingsImportExportKeywords =
-        "export import backup restore transfer move copy migrate passphrase encrypt file etsettings folder";
+    public static string SettingsImportExportLabel => Loc.Text(nameof(SettingsImportExportLabel));
+    public static string SettingsImportExportDescription => Loc.Text(nameof(SettingsImportExportDescription));
+    public static string SettingsImportExportKeywords => Loc.Text(nameof(SettingsImportExportKeywords));
 
-    public const string SettingsExportButton = "Export…";
-    public const string SettingsImportButton = "Import…";
-    public const string SettingsOpenFolderButton = "Open settings folder";
-    public const string SettingsOpenFolderTooltip =
-        "Opens the folder holding settings.dat and its backup copies.";
+    public static string SettingsExportButton => Loc.Text(nameof(SettingsExportButton));
+    public static string SettingsImportButton => Loc.Text(nameof(SettingsImportButton));
+    public static string SettingsOpenFolderButton => Loc.Text(nameof(SettingsOpenFolderButton));
+    public static string SettingsOpenFolderTooltip => Loc.Text(nameof(SettingsOpenFolderTooltip));
 
     // ── Export dialog ───────────────────────────────────────────────────────────────────────────────
-    public const string SettingsExportTitle = "Export settings";
-    public const string SettingsExportIntro = "Choose what to include, then set a passphrase for the file.";
-    public const string SettingsExportSectionsHeader = "Include";
-    public const string SettingsExportPassphraseHeader = "Passphrase";
-    public const string SettingsExportRun = "Export…";
-    public const string SettingsExportCancel = "Cancel";
-    public const string SettingsExportFileFilter = "EmberTern settings export";
-    public const string SettingsExportSuggestedName = "embertern-settings";
+    public static string SettingsExportTitle => Loc.Text(nameof(SettingsExportTitle));
+    public static string SettingsExportIntro => Loc.Text(nameof(SettingsExportIntro));
+    public static string SettingsExportSectionsHeader => Loc.Text(nameof(SettingsExportSectionsHeader));
+    public static string SettingsExportPassphraseHeader => Loc.Text(nameof(SettingsExportPassphraseHeader));
+    public static string SettingsExportRun => Loc.Text(nameof(SettingsExportRun));
+    public static string SettingsExportCancel => Loc.Text(nameof(SettingsExportCancel));
+    public static string SettingsExportFileFilter => Loc.Text(nameof(SettingsExportFileFilter));
+    public static string SettingsExportSuggestedName => Loc.Text(nameof(SettingsExportSuggestedName));
 
-    public const string SettingsSectionPreferences = "Preferences (theme, language, formatter)";
-    public const string SettingsSectionGridProfiles = "Grid column layouts";
-    public const string SettingsSectionFolders = "Connection folders";
-    public const string SettingsSectionConnections = "Connection profiles";
+    public static string SettingsSectionPreferences => Loc.Text(nameof(SettingsSectionPreferences));
+    public static string SettingsSectionGridProfiles => Loc.Text(nameof(SettingsSectionGridProfiles));
+    public static string SettingsSectionFolders => Loc.Text(nameof(SettingsSectionFolders));
+    public static string SettingsSectionConnections => Loc.Text(nameof(SettingsSectionConnections));
     // ⚠ Ratified Q2: the label must state that the file will contain database credentials. It says it plainly —
     // the whole reason the checkbox exists is that the user should be making this decision knowingly.
-    public const string SettingsSectionPasswords = "Connection passwords — the file will contain database credentials";
-    public const string SettingsSectionWorkspaces = "Open tabs, SQL text and saved queries";
-    public const string SettingsSectionImportProfiles = "Data Import configurations";
+    public static string SettingsSectionPasswords => Loc.Text(nameof(SettingsSectionPasswords));
+    public static string SettingsSectionWorkspaces => Loc.Text(nameof(SettingsSectionWorkspaces));
+    public static string SettingsSectionImportProfiles => Loc.Text(nameof(SettingsSectionImportProfiles));
 
-    public const string SettingsExportPassphraseLabel = "Passphrase";
-    public const string SettingsExportPassphraseConfirmLabel = "Repeat passphrase";
+    public static string SettingsExportPassphraseLabel => Loc.Text(nameof(SettingsExportPassphraseLabel));
+    public static string SettingsExportPassphraseConfirmLabel => Loc.Text(nameof(SettingsExportPassphraseConfirmLabel));
     // ⚠ Stated where the passphrase is TYPED, not in a help page: a passphrase-derived key means a forgotten
     // passphrase makes the file permanently unreadable, with no reset and no back door (design §6.3.1). That is
     // a consequence of the ratified always-encrypted decision, and the only honest place to say it is here.
-    public const string SettingsExportPassphraseWarning =
-        "There is no way to recover this passphrase. Without it the file cannot be read again — by anyone, "
-        + "including us.";
-    public const string SettingsExportPassphraseMismatch = "The two passphrases are not the same.";
-    public const string SettingsExportPassphraseMissing = "Enter a passphrase — every export is encrypted.";
-    public const string SettingsExportNothingSelected = "Select at least one thing to include.";
+    public static string SettingsExportPassphraseWarning => Loc.Text(nameof(SettingsExportPassphraseWarning));
+    public static string SettingsExportPassphraseMismatch => Loc.Text(nameof(SettingsExportPassphraseMismatch));
+    public static string SettingsExportPassphraseMissing => Loc.Text(nameof(SettingsExportPassphraseMissing));
+    public static string SettingsExportNothingSelected => Loc.Text(nameof(SettingsExportNothingSelected));
     // {0} = file name.
-    public const string SettingsExportDoneFormat = "Exported to {0}.";
+    public static string SettingsExportDoneFormat => Loc.Text(nameof(SettingsExportDoneFormat));
     // {0} = the failure message.
-    public const string SettingsExportFailedFormat = "The export could not be written: {0}";
+    public static string SettingsExportFailedFormat => Loc.Text(nameof(SettingsExportFailedFormat));
 
     // ── Import dialog ───────────────────────────────────────────────────────────────────────────────
-    public const string SettingsImportTitle = "Import settings";
-    public const string SettingsImportPickFile = "Choose file…";
-    public const string SettingsImportIntro =
-        "Choose an exported settings file. Its contents are shown once it has been opened.";
-    public const string SettingsImportPassphraseLabel = "Passphrase";
-    public const string SettingsImportOpen = "Open";
-    public const string SettingsImportRun = "Import selected";
-    public const string SettingsImportCancel = "Close";
-    public const string SettingsImportContentsHeader = "Take from this file";
+    public static string SettingsImportTitle => Loc.Text(nameof(SettingsImportTitle));
+    public static string SettingsImportPickFile => Loc.Text(nameof(SettingsImportPickFile));
+    public static string SettingsImportIntro => Loc.Text(nameof(SettingsImportIntro));
+    public static string SettingsImportPassphraseLabel => Loc.Text(nameof(SettingsImportPassphraseLabel));
+    public static string SettingsImportOpen => Loc.Text(nameof(SettingsImportOpen));
+    public static string SettingsImportRun => Loc.Text(nameof(SettingsImportRun));
+    public static string SettingsImportCancel => Loc.Text(nameof(SettingsImportCancel));
+    public static string SettingsImportContentsHeader => Loc.Text(nameof(SettingsImportContentsHeader));
     // Shown only once the file is open and every box has been unticked — the one state in which Import is dead
     // with nothing on screen saying why.
-    public const string SettingsImportNothingSelected = "Select at least one thing to import.";
+    public static string SettingsImportNothingSelected => Loc.Text(nameof(SettingsImportNothingSelected));
     // ⚠ Shown only when the file carries passwords AND the row is offered — an import overwrites the password
     // stored for the same connection, which is a thing to say before it happens rather than after.
-    public const string SettingsImportPasswordsNote =
-        "Taking passwords replaces the password stored for each matching connection.";
+    public static string SettingsImportPasswordsNote => Loc.Text(nameof(SettingsImportPasswordsNote));
     // ⭐ The honest disclosure of what an import can and cannot do to a RUNNING session, in the place the user
     // decides. Nothing is blocked (EmberTern discloses rather than forbids); it just has to be true.
-    public const string SettingsImportLiveSessionNote =
-        "Theme, formatter, folders and connections apply immediately. A profile you are connected to keeps its "
-        + "current settings until you reconnect. Open tabs and saved queries apply the next time EmberTern "
-        + "starts.";
+    public static string SettingsImportLiveSessionNote => Loc.Text(nameof(SettingsImportLiveSessionNote));
     // {0} = the comma-separated sections taken. {1} = the preserved copy's file name.
-    public const string SettingsImportDoneFormat = "Imported: {0}. Your previous settings were kept as {1}.";
+    public static string SettingsImportDoneFormat => Loc.Text(nameof(SettingsImportDoneFormat));
     // Used when there was no settings.dat to preserve — a first run.
-    public const string SettingsImportDoneNoBackupFormat = "Imported: {0}.";
+    public static string SettingsImportDoneNoBackupFormat => Loc.Text(nameof(SettingsImportDoneNoBackupFormat));
 
     // ── Canonical command names (CommandDescriptor.Title) ───────────────────────────────────────────
     // ONE host-independent name per command, for surfaces that LIST commands: the Keyboard Shortcuts window
     // today, a Command Palette later. Deliberately separate from the tooltip strings above and below, which
     // stay host-specific prose — that distinction is why adding Title did not reopen etap 4's decision.
     // ⛔ These belong here and not in CommandCatalog: the catalog owns the gesture, UiStrings owns the words.
-    public const string CommandTitleGo = "Execute (active tab)";
-    public const string CommandTitleExecuteQuery = "Execute query";
-    public const string CommandTitleExecuteQueryFull = "Execute query, all rows";
-    public const string CommandTitleFormatSql = "Format SQL";
-    public const string CommandTitleCompile = "Compile";
-    public const string CommandTitleImportValidate = "Validate import";
-    public const string CommandTitleImportRefresh = "Re-read import source";
-    public const string CommandTitleImportBrowse = "Choose import file";
+    public static string CommandTitleGo => Loc.Text(nameof(CommandTitleGo));
+    public static string CommandTitleExecuteQuery => Loc.Text(nameof(CommandTitleExecuteQuery));
+    public static string CommandTitleExecuteQueryFull => Loc.Text(nameof(CommandTitleExecuteQueryFull));
+    public static string CommandTitleFormatSql => Loc.Text(nameof(CommandTitleFormatSql));
+    public static string CommandTitleCompile => Loc.Text(nameof(CommandTitleCompile));
+    public static string CommandTitleImportValidate => Loc.Text(nameof(CommandTitleImportValidate));
+    public static string CommandTitleImportRefresh => Loc.Text(nameof(CommandTitleImportRefresh));
+    public static string CommandTitleImportBrowse => Loc.Text(nameof(CommandTitleImportBrowse));
 
-    public const string CommandTitleDebuggerStepOver = "Step over";
-    public const string CommandTitleDebuggerStepInto = "Step into";
-    public const string CommandTitleDebuggerStepOut = "Step out";
-    public const string CommandTitleDebuggerRunToCursor = "Run to cursor";
-    public const string CommandTitleDebuggerStop = "Stop debugging";
-    public const string CommandTitleDebuggerRestart = "Restart debugging";
-    public const string CommandTitleDebuggerToggleBreakpoint = "Toggle breakpoint";
-    public const string CommandTitleDebuggerEvaluateSelection = "Evaluate selection";
-    public const string CommandTitleDebuggerSaveSource = "Save debugged source";
+    public static string CommandTitleDebuggerStepOver => Loc.Text(nameof(CommandTitleDebuggerStepOver));
+    public static string CommandTitleDebuggerStepInto => Loc.Text(nameof(CommandTitleDebuggerStepInto));
+    public static string CommandTitleDebuggerStepOut => Loc.Text(nameof(CommandTitleDebuggerStepOut));
+    public static string CommandTitleDebuggerRunToCursor => Loc.Text(nameof(CommandTitleDebuggerRunToCursor));
+    public static string CommandTitleDebuggerStop => Loc.Text(nameof(CommandTitleDebuggerStop));
+    public static string CommandTitleDebuggerRestart => Loc.Text(nameof(CommandTitleDebuggerRestart));
+    public static string CommandTitleDebuggerToggleBreakpoint => Loc.Text(nameof(CommandTitleDebuggerToggleBreakpoint));
+    public static string CommandTitleDebuggerEvaluateSelection => Loc.Text(nameof(CommandTitleDebuggerEvaluateSelection));
+    public static string CommandTitleDebuggerSaveSource => Loc.Text(nameof(CommandTitleDebuggerSaveSource));
 
-    public const string CommandTitleEditorFind = "Find";
-    public const string CommandTitleEditorReplace = "Replace";
-    public const string CommandTitleEditorCompletion = "Show completion list";
-    public const string CommandTitleEditorParameterHelper = "Show parameter help";
-    public const string CommandTitleEditorRename = "Rename";
-    public const string CommandTitleEditorPeekDefinition = "Peek definition";
-    public const string CommandTitleEditorQuickFix = "Quick fix";
-    public const string CommandTitleEditorExpandConstruct = "Expand construct";
-    public const string CommandTitleEditorNextDiagnostic = "Next diagnostic";
-    public const string CommandTitleEditorPreviousDiagnostic = "Previous diagnostic";
+    public static string CommandTitleEditorFind => Loc.Text(nameof(CommandTitleEditorFind));
+    public static string CommandTitleEditorReplace => Loc.Text(nameof(CommandTitleEditorReplace));
+    public static string CommandTitleEditorCompletion => Loc.Text(nameof(CommandTitleEditorCompletion));
+    public static string CommandTitleEditorParameterHelper => Loc.Text(nameof(CommandTitleEditorParameterHelper));
+    public static string CommandTitleEditorRename => Loc.Text(nameof(CommandTitleEditorRename));
+    public static string CommandTitleEditorPeekDefinition => Loc.Text(nameof(CommandTitleEditorPeekDefinition));
+    public static string CommandTitleEditorQuickFix => Loc.Text(nameof(CommandTitleEditorQuickFix));
+    public static string CommandTitleEditorExpandConstruct => Loc.Text(nameof(CommandTitleEditorExpandConstruct));
+    public static string CommandTitleEditorNextDiagnostic => Loc.Text(nameof(CommandTitleEditorNextDiagnostic));
+    public static string CommandTitleEditorPreviousDiagnostic => Loc.Text(nameof(CommandTitleEditorPreviousDiagnostic));
 
-    public const string CommandTitleNewObject = "New object";
-    public const string CommandTitleDeleteObject = "Delete object";
-    public const string CommandTitleRefreshMetadata = "Refresh metadata";
+    public static string CommandTitleNewObject => Loc.Text(nameof(CommandTitleNewObject));
+    public static string CommandTitleDeleteObject => Loc.Text(nameof(CommandTitleDeleteObject));
+    public static string CommandTitleRefreshMetadata => Loc.Text(nameof(CommandTitleRefreshMetadata));
 
     // Generic on purpose: these route through the app's ONE collection router, which serves fields, rows,
     // columns, parameters and variables. The per-collection nouns ("New field") belong to the toolbar and the
     // grid's own menu, which know which collection they are looking at; a catalogue does not.
-    public const string CommandTitleCollectionAdd = "Add item to list";
-    public const string CommandTitleCollectionEdit = "Edit selected item";
-    public const string CommandTitleCollectionRemove = "Remove selected item";
+    public static string CommandTitleCollectionAdd => Loc.Text(nameof(CommandTitleCollectionAdd));
+    public static string CommandTitleCollectionEdit => Loc.Text(nameof(CommandTitleCollectionEdit));
+    public static string CommandTitleCollectionRemove => Loc.Text(nameof(CommandTitleCollectionRemove));
 
-    public const string CommandTitleGlobalSearch = "Global search";
-    public const string CommandTitleFocusSidebarFilter = "Focus object filter";
-    public const string CommandTitleCommit = "Commit transaction";
-    public const string CommandTitleRollback = "Rollback transaction";
-    public const string CommandTitleCloseTab = "Close tab";
+    public static string CommandTitleGlobalSearch => Loc.Text(nameof(CommandTitleGlobalSearch));
+    public static string CommandTitleFocusSidebarFilter => Loc.Text(nameof(CommandTitleFocusSidebarFilter));
+    public static string CommandTitleCommit => Loc.Text(nameof(CommandTitleCommit));
+    public static string CommandTitleRollback => Loc.Text(nameof(CommandTitleRollback));
+    public static string CommandTitleCloseTab => Loc.Text(nameof(CommandTitleCloseTab));
 
     // ⛔ `StatusBarVersionFormat` usunięty w M3.1b (decyzja D3): nazwa aplikacji i numer wersji nie należą
     // do paska statusu, tylko do okna About. `AppInfo` pozostaje jedynym źródłem wersji.
     // No gesture is shown beside Exit: EmberTern does not own Alt+F4, and a gesture typed by hand is the
     // drift CommandTip exists to prevent (gotcha #284). It routes through the window's ordinary close, so
     // unsaved work and an open transaction still get their prompts.
-    public const string AppMenuExitTooltip = "Close EmberTern";
-    public const string SidebarExpandTooltip = "Show the connections panel";
-    public const string ResultsPanelMaximizeTooltip = "Maximize / restore results (double-click the splitter)";
+    public static string AppMenuExitTooltip => Loc.Text(nameof(AppMenuExitTooltip));
+    public static string SidebarExpandTooltip => Loc.Text(nameof(SidebarExpandTooltip));
+    public static string ResultsPanelMaximizeTooltip => Loc.Text(nameof(ResultsPanelMaximizeTooltip));
 
     // Max length for a connection profile name. 60 chars comfortably holds
     // "ENV - Client - Database"-style names while keeping the titlebar chip and
     // sidebar rows from being pushed off-screen by an abusive name.
     public const int ConnectionNameMaxLength = 60;
 
-    public const string DialogNewConnectionTitle = "New Connection";
-    public const string DialogEditConnectionTitle = "Edit Connection";
-    public const string ConnectionEdit = "Edit";
-    public const string DialogSectionGeneral = "Connection";
-    public const string DialogFieldName = "Name";
-    public const string DialogFieldHost = "Host";
-    public const string DialogFieldPort = "Port";
-    public const string DialogFieldDatabasePath = "Database path";
-    public const string DialogFieldUsername = "Username";
-    public const string DialogFieldPassword = "Password";
-    public const string DialogFieldCharset = "Charset";
-    public const string DialogFieldDialect = "Dialect";
+    public static string DialogNewConnectionTitle => Loc.Text(nameof(DialogNewConnectionTitle));
+    public static string DialogEditConnectionTitle => Loc.Text(nameof(DialogEditConnectionTitle));
+    public static string ConnectionEdit => Loc.Text(nameof(ConnectionEdit));
+    public static string DialogSectionGeneral => Loc.Text(nameof(DialogSectionGeneral));
+    public static string DialogFieldName => Loc.Text(nameof(DialogFieldName));
+    public static string DialogFieldHost => Loc.Text(nameof(DialogFieldHost));
+    public static string DialogFieldPort => Loc.Text(nameof(DialogFieldPort));
+    public static string DialogFieldDatabasePath => Loc.Text(nameof(DialogFieldDatabasePath));
+    public static string DialogFieldUsername => Loc.Text(nameof(DialogFieldUsername));
+    public static string DialogFieldPassword => Loc.Text(nameof(DialogFieldPassword));
+    public static string DialogFieldCharset => Loc.Text(nameof(DialogFieldCharset));
+    public static string DialogFieldDialect => Loc.Text(nameof(DialogFieldDialect));
     // (Removed 2026-07-27, audit A-09: DialogFieldTransactionProfile + its Data/Metadata pair were three
     // captions for a connection-dialog field that no longer exists. The TPB profile is not user-configurable —
     // TransactionService.EnforcedProfile is a constant, deliberately — so a label offering to configure it
     // described a control nothing could honour. They were defined and never referenced.)
-    public const string DialogTestConnection = "Test connection";
-    public const string DialogSave = "Save";
-    public const string DialogCancel = "Cancel";
-    public const string DialogBrowse = "Browse…";
+    public static string DialogTestConnection => Loc.Text(nameof(DialogTestConnection));
+    public static string DialogSave => Loc.Text(nameof(DialogSave));
+    public static string DialogCancel => Loc.Text(nameof(DialogCancel));
+    public static string DialogBrowse => Loc.Text(nameof(DialogBrowse));
 
     // Developer Mode — the single user-facing switch that replaces the TPB profile
     // pickers. No transaction terminology is exposed (NOWAIT/WAIT/consistency are
     // implementation details).
-    public const string DialogFieldDeveloperMode = "Developer Mode";
-    public const string DeveloperModeDescription = "Lets you modify procedures, functions, triggers and other objects that are in use by active sessions: compiling waits for the object to be released instead of returning an error immediately.\n\nAffects how objects are compiled — not how your SQL runs. It applies when you compile an object in its editor, and when the Script Executor runs a script that only creates or changes objects. The SQL Editor is not affected: it runs every statement in your working transaction, which never waits, so a query or an update can never be left hanging on someone else's lock.";
-    public const string DeveloperModeBadge = "DEV MODE";
-    public const string DeveloperModeBadgeTooltip = "Developer Mode is on — compiling an object waits for other sessions to release it instead of failing immediately. Does not affect the SQL Editor.";
+    public static string DialogFieldDeveloperMode => Loc.Text(nameof(DialogFieldDeveloperMode));
+    public static string DeveloperModeDescription => Loc.Text(nameof(DeveloperModeDescription));
+    public static string DeveloperModeBadge => Loc.Text(nameof(DeveloperModeBadge));
+    public static string DeveloperModeBadgeTooltip => Loc.Text(nameof(DeveloperModeBadgeTooltip));
 
     // Transaction profile labels (IBExpert terms — kept in English on purpose).
-    public const string TransactionProfileReadCommitted = "Read Committed";
-    public const string TransactionProfileSnapshot = "Snapshot";
-    public const string TransactionProfileReadOnlyTableStability = "Read Only Table Stability";
-    public const string TransactionProfileReadWriteTableStability = "Read Write Table Stability";
+    public static string TransactionProfileReadCommitted => Loc.Text(nameof(TransactionProfileReadCommitted));
+    public static string TransactionProfileSnapshot => Loc.Text(nameof(TransactionProfileSnapshot));
+    public static string TransactionProfileReadOnlyTableStability => Loc.Text(nameof(TransactionProfileReadOnlyTableStability));
+    public static string TransactionProfileReadWriteTableStability => Loc.Text(nameof(TransactionProfileReadWriteTableStability));
     // Per-profile one-line descriptions shown under the picker.
-    public const string TransactionProfileReadCommittedDesc = "Sees committed changes from other transactions. Safe default for everyday work.";
-    public const string TransactionProfileSnapshotDesc = "Stable snapshot of the database taken at transaction start. Does not see later commits.";
-    public const string TransactionProfileReadOnlyTableStabilityDesc = "Read-only with table stability (consistency). Warning: locks whole tables and can block other users.";
-    public const string TransactionProfileReadWriteTableStabilityDesc = "Read-write with table stability (consistency). Warning: locks whole tables and can block other users.";
+    public static string TransactionProfileReadCommittedDesc => Loc.Text(nameof(TransactionProfileReadCommittedDesc));
+    public static string TransactionProfileSnapshotDesc => Loc.Text(nameof(TransactionProfileSnapshotDesc));
+    public static string TransactionProfileReadOnlyTableStabilityDesc => Loc.Text(nameof(TransactionProfileReadOnlyTableStabilityDesc));
+    public static string TransactionProfileReadWriteTableStabilityDesc => Loc.Text(nameof(TransactionProfileReadWriteTableStabilityDesc));
     // Title-bar transaction-profile block (C2): two stacked lines, each a static lane
     // label + the full profile name in a lane-colored badge. Vertical layout keeps the
     // block narrow while the full name stays readable without hovering.
-    public const string TransactionProfileDataLabel = "Data:";
-    public const string TransactionProfileMetadataLabel = "Meta:";
-    public const string TransactionProfileDataChipTooltipFormat = "Data lane: {0}";
-    public const string TransactionProfileMetadataChipTooltipFormat = "Metadata lane: {0}";
+    public static string TransactionProfileDataLabel => Loc.Text(nameof(TransactionProfileDataLabel));
+    public static string TransactionProfileMetadataLabel => Loc.Text(nameof(TransactionProfileMetadataLabel));
+    public static string TransactionProfileDataChipTooltipFormat => Loc.Text(nameof(TransactionProfileDataChipTooltipFormat));
+    public static string TransactionProfileMetadataChipTooltipFormat => Loc.Text(nameof(TransactionProfileMetadataChipTooltipFormat));
 
-    public const string TestInProgress = "Testing connection…";
-    public const string TestSuccess = "Connection successful.";
+    public static string TestInProgress => Loc.Text(nameof(TestInProgress));
+    public static string TestSuccess => Loc.Text(nameof(TestSuccess));
 
-    public const string ValidationNameRequired = "Name is required.";
-    public const string ValidationDatabaseRequired = "Database path is required.";
+    public static string ValidationNameRequired => Loc.Text(nameof(ValidationNameRequired));
+    public static string ValidationDatabaseRequired => Loc.Text(nameof(ValidationDatabaseRequired));
 
-    public const string ToolbarExecute = "Execute";
-    public const string ToolbarCancel = "Cancel";
+    public static string ToolbarExecute => Loc.Text(nameof(ToolbarExecute));
+    public static string ToolbarCancel => Loc.Text(nameof(ToolbarCancel));
     // The shortcut chip beside the Execute button — the gesture alone, no label.
-    public static readonly string ToolbarExecuteHint = CommandTip.Gesture(CommandId.Go);
+    public static string ToolbarExecuteHint => CommandTip.Gesture(CommandId.Go);
     // Tooltip on the single Execute button — surfaces the Shift+F5 full-read power path (Variant A+D:
     // one button, no split-button, no second Execute button).
     // Two gestures in one tooltip, so it interpolates CommandTip.Gesture twice rather than using Sentence —
     // still the one formatter, still nothing typed by hand.
-    public static readonly string ToolbarExecuteTooltip =
-        $"Execute  ·  {CommandTip.Gesture(CommandId.Go)} preview  ·  "
+    public static string ToolbarExecuteTooltip => $"Execute  ·  {CommandTip.Gesture(CommandId.Go)} preview  ·  "
         + $"{CommandTip.Gesture(CommandId.ExecuteQueryFull)} all rows";
-    public const string ToolbarClearEditor = "Clear";
-    public const string ToolbarClearEditorIcon = "🗑";
-    public const string ToolbarClearEditorTooltip = "Clear editor content";
-    public const string ToolbarCloseTab = "Close tab";
-    public const string ToolbarCloseTabIcon = "✕";
-    public static readonly string ToolbarCloseTabTooltip = CommandTip.For(CommandId.CloseTab, "Close active tab");
-    public const string ToolbarNewQueryIcon = "+";
-    public const string ToolbarNewQueryTooltip = "New saved query";
-    public const string ToolbarToggleQueryPanelIcon = "▤";
-    public const string ToolbarToggleQueryPanelTooltip = "Show / hide saved queries panel";
-    public const string ToolbarFormatSqlIcon = "⎄";
+    public static string ToolbarClearEditor => Loc.Text(nameof(ToolbarClearEditor));
+    public static string ToolbarClearEditorIcon => Loc.Text(nameof(ToolbarClearEditorIcon));
+    public static string ToolbarClearEditorTooltip => Loc.Text(nameof(ToolbarClearEditorTooltip));
+    public static string ToolbarCloseTab => Loc.Text(nameof(ToolbarCloseTab));
+    public static string ToolbarCloseTabIcon => Loc.Text(nameof(ToolbarCloseTabIcon));
+    public static string ToolbarCloseTabTooltip => CommandTip.For(CommandId.CloseTab, Loc.Text(nameof(ToolbarCloseTabTooltip)));
+    public static string ToolbarNewQueryIcon => Loc.Text(nameof(ToolbarNewQueryIcon));
+    public static string ToolbarNewQueryTooltip => Loc.Text(nameof(ToolbarNewQueryTooltip));
+    public static string ToolbarToggleQueryPanelIcon => Loc.Text(nameof(ToolbarToggleQueryPanelIcon));
+    public static string ToolbarToggleQueryPanelTooltip => Loc.Text(nameof(ToolbarToggleQueryPanelTooltip));
+    public static string ToolbarFormatSqlIcon => Loc.Text(nameof(ToolbarFormatSqlIcon));
     // ⚠ This constant is why CommandTip exists: it said "Alt+F" for a whole etap after the gesture became
     // Ctrl+K, and nothing failed. It can no longer disagree with the catalog.
-    public static readonly string ToolbarFormatSqlTooltip = CommandTip.For(CommandId.FormatSql, "Format SQL");
-    public const string ToolbarRefreshDataIcon = "↺";
-    public const string ToolbarRefreshDataTooltip = "Refresh data preview";
+    public static string ToolbarFormatSqlTooltip => CommandTip.For(CommandId.FormatSql, Loc.Text(nameof(ToolbarFormatSqlTooltip)));
+    public static string ToolbarRefreshDataIcon => Loc.Text(nameof(ToolbarRefreshDataIcon));
+    public static string ToolbarRefreshDataTooltip => Loc.Text(nameof(ToolbarRefreshDataTooltip));
 
-    public const string QueryPanelHeader = "Saved Queries";
-    public const string QueryPanelEmptyHint = "No saved queries yet.";
-    public const string QueryDefaultNameFormat = "Query {0}";
-    public const string QueryDeleteTooltip = "Delete selected query";
-    public const string QueryClearAllTooltip = "Clear all saved queries";
-    public const string QueryDeleteConfirmTitle = "Delete saved query";
-    public const string QueryDeleteConfirmFormat = "Delete “{0}”?";
-    public const string QueryDeleteConfirmYes = "Delete";
-    public const string QueryClearAllConfirmTitle = "Clear saved queries";
-    public const string QueryClearAllConfirmMessage = "Clear all saved queries for this connection?";
-    public const string QueryClearAllConfirmYes = "Clear all";
-    public const string GridCopyCell = "Copy cell";
-    public const string GridCopyRow = "Copy row";
-    public const string GridCopyRowWithHeaders = "Copy row with headers";
-    public const string GridCopyAllWithHeaders = "Copy all with headers";
-    public const string GridCopiedToClipboardFormat = "Copied {0} to clipboard.";
-    public const string GridCopiedCellLabel = "cell";
-    public const string GridCopiedRowLabel = "row";
-    public const string GridCopiedRowsFormat = "{0} rows";
+    public static string QueryPanelHeader => Loc.Text(nameof(QueryPanelHeader));
+    public static string QueryPanelEmptyHint => Loc.Text(nameof(QueryPanelEmptyHint));
+    public static string QueryDefaultNameFormat => Loc.Text(nameof(QueryDefaultNameFormat));
+    public static string QueryDeleteTooltip => Loc.Text(nameof(QueryDeleteTooltip));
+    public static string QueryClearAllTooltip => Loc.Text(nameof(QueryClearAllTooltip));
+    public static string QueryDeleteConfirmTitle => Loc.Text(nameof(QueryDeleteConfirmTitle));
+    public static string QueryDeleteConfirmFormat => Loc.Text(nameof(QueryDeleteConfirmFormat));
+    public static string QueryDeleteConfirmYes => Loc.Text(nameof(QueryDeleteConfirmYes));
+    public static string QueryClearAllConfirmTitle => Loc.Text(nameof(QueryClearAllConfirmTitle));
+    public static string QueryClearAllConfirmMessage => Loc.Text(nameof(QueryClearAllConfirmMessage));
+    public static string QueryClearAllConfirmYes => Loc.Text(nameof(QueryClearAllConfirmYes));
+    public static string GridCopyCell => Loc.Text(nameof(GridCopyCell));
+    public static string GridCopyRow => Loc.Text(nameof(GridCopyRow));
+    public static string GridCopyRowWithHeaders => Loc.Text(nameof(GridCopyRowWithHeaders));
+    public static string GridCopyAllWithHeaders => Loc.Text(nameof(GridCopyAllWithHeaders));
+    public static string GridCopiedToClipboardFormat => Loc.Text(nameof(GridCopiedToClipboardFormat));
+    public static string GridCopiedCellLabel => Loc.Text(nameof(GridCopiedCellLabel));
+    public static string GridCopiedRowLabel => Loc.Text(nameof(GridCopiedRowLabel));
+    public static string GridCopiedRowsFormat => Loc.Text(nameof(GridCopiedRowsFormat));
 
     // ── Copy as INSERT / UPDATE ───────────────────────────────────────────────
     // A disabled item here always carries a REASON (see SqlCopyReasonText): naming the actual obstacle
     // teaches the tool's model, and it is strictly more information than the alternative — generating
     // INSERT INTO TABLE_NAME (…) for the user to fix — could ever convey.
-    public const string GridCopyAsInsert = "Copy as INSERT";
-    public const string GridCopyAsUpdate = "Copy as UPDATE";
-    public const string GridCopiedInsertLabel = "row as INSERT";
-    public const string GridCopiedUpdateLabel = "row as UPDATE";
-    public const string GridCopyNoRow = "Copy as SQL: right-click a data row first — no row is selected.";
+    public static string GridCopyAsInsert => Loc.Text(nameof(GridCopyAsInsert));
+    public static string GridCopyAsUpdate => Loc.Text(nameof(GridCopyAsUpdate));
+    public static string GridCopiedInsertLabel => Loc.Text(nameof(GridCopiedInsertLabel));
+    public static string GridCopiedUpdateLabel => Loc.Text(nameof(GridCopiedUpdateLabel));
+    public static string GridCopyNoRow => Loc.Text(nameof(GridCopyNoRow));
 
     // The reasons. Three kinds of claim, and the wording keeps them apart on purpose: what the QUERY
     // cannot be, what EMBERTERN cannot do yet, and what is merely not ready.
-    public const string SqlCopyUnavailablePrefix = "unavailable";
-    public const string SqlCopyReasonSetOperation =
-        "the result is a UNION, so EmberTern cannot tell which table each row came from";
-    public const string SqlCopyReasonMultipleTablesFormat = "the result combines {0} tables ({1})";
-    public const string SqlCopyReasonJoinFormat =
-        "the result is a join ({0}), so a row is not one table's row";
-    public const string SqlCopyReasonAggregate = "the rows are aggregates, not table rows";
-    public const string SqlCopyReasonNoSourceTable = "no column in the result comes from a table";
-    public const string SqlCopyReasonDuplicateColumnFormat =
-        "{0} appears twice in the result";
-    public const string SqlCopyReasonUnknownObjectFormat = "{0} is not in the catalog";
-    public const string SqlCopyReasonNotATableFormat = "{0} is a {1}, not a table";
-    public const string SqlCopyReasonViewFormat =
-        "{0} is a view; EmberTern does not generate DML for views yet";
+    public static string SqlCopyUnavailablePrefix => Loc.Text(nameof(SqlCopyUnavailablePrefix));
+    public static string SqlCopyReasonSetOperation => Loc.Text(nameof(SqlCopyReasonSetOperation));
+    public static string SqlCopyReasonMultipleTablesFormat => Loc.Text(nameof(SqlCopyReasonMultipleTablesFormat));
+    public static string SqlCopyReasonJoinFormat => Loc.Text(nameof(SqlCopyReasonJoinFormat));
+    public static string SqlCopyReasonAggregate => Loc.Text(nameof(SqlCopyReasonAggregate));
+    public static string SqlCopyReasonNoSourceTable => Loc.Text(nameof(SqlCopyReasonNoSourceTable));
+    public static string SqlCopyReasonDuplicateColumnFormat => Loc.Text(nameof(SqlCopyReasonDuplicateColumnFormat));
+    public static string SqlCopyReasonUnknownObjectFormat => Loc.Text(nameof(SqlCopyReasonUnknownObjectFormat));
+    public static string SqlCopyReasonNotATableFormat => Loc.Text(nameof(SqlCopyReasonNotATableFormat));
+    public static string SqlCopyReasonViewFormat => Loc.Text(nameof(SqlCopyReasonViewFormat));
     // A CURRENT LIMITATION of EmberTern's analysis — never worded as a property of SQL.
-    public const string SqlCopyReasonCte =
-        "EmberTern cannot yet trace which table a CTE reads";
-    public const string SqlCopyReasonNotUnderstood =
-        "EmberTern could not analyse this statement";
+    public static string SqlCopyReasonCte => Loc.Text(nameof(SqlCopyReasonCte));
+    public static string SqlCopyReasonNotUnderstood => Loc.Text(nameof(SqlCopyReasonNotUnderstood));
     // TRANSIENT — the user's response is to wait, not to change anything.
-    public const string SqlCopyReasonCatalogNotLoadedFormat =
-        "{0}'s metadata is still loading";
-    public const string SqlCopyReasonUnknownColumnFormat =
-        "{0} is not in the cached metadata — commit the DDL, or reconnect to refresh it";
-    public const string SqlCopyReasonNoPrimaryKeyFormat =
-        "{0} has no primary key, so a single row cannot be identified";
-    public const string SqlCopyReasonIncompletePkFormat =
-        "this needs the complete primary key; {0} is not in the result";
-    public const string SqlCopyReasonNoWritableColumnsFormat = "{0} has no writable columns here";
-    public const string SqlCopyReasonKeyValueIsNullFormat = "{0} is NULL in this row and cannot identify it";
-    public const string SqlCopyReasonValueNotRenderableFormat =
-        "{0}'s value has no exact SQL literal, and EmberTern will not write an approximation";
-    public const string SqlCopyReasonValueTooLargeFormat = "{0}'s value is too large for an SQL literal";
-    public const string SqlCopyReasonStatementTooLongFormat =
-        "the statement would exceed Firebird's size limit";
+    public static string SqlCopyReasonCatalogNotLoadedFormat => Loc.Text(nameof(SqlCopyReasonCatalogNotLoadedFormat));
+    public static string SqlCopyReasonUnknownColumnFormat => Loc.Text(nameof(SqlCopyReasonUnknownColumnFormat));
+    public static string SqlCopyReasonNoPrimaryKeyFormat => Loc.Text(nameof(SqlCopyReasonNoPrimaryKeyFormat));
+    public static string SqlCopyReasonIncompletePkFormat => Loc.Text(nameof(SqlCopyReasonIncompletePkFormat));
+    public static string SqlCopyReasonNoWritableColumnsFormat => Loc.Text(nameof(SqlCopyReasonNoWritableColumnsFormat));
+    public static string SqlCopyReasonKeyValueIsNullFormat => Loc.Text(nameof(SqlCopyReasonKeyValueIsNullFormat));
+    public static string SqlCopyReasonValueNotRenderableFormat => Loc.Text(nameof(SqlCopyReasonValueNotRenderableFormat));
+    public static string SqlCopyReasonValueTooLargeFormat => Loc.Text(nameof(SqlCopyReasonValueTooLargeFormat));
+    public static string SqlCopyReasonStatementTooLongFormat => Loc.Text(nameof(SqlCopyReasonStatementTooLongFormat));
     // Context-menu toggle for grid column layout — when checked, columns auto-size to
     // content and manual widths aren't remembered; when unchecked, manual widths persist.
-    public const string GridAutoFitColumns = "Auto-fit columns";
+    public static string GridAutoFitColumns => Loc.Text(nameof(GridAutoFitColumns));
 
-    public const string ResultsEmptyHint = "Execute a query to see results.";
-    public const string MessagesEmptyHint = "No messages yet.";
-    public const string ExecutingStatus = "Executing query…";
-    public const string CancellingStatus = "Cancelling…";
+    public static string ResultsEmptyHint => Loc.Text(nameof(ResultsEmptyHint));
+    public static string MessagesEmptyHint => Loc.Text(nameof(MessagesEmptyHint));
+    public static string ExecutingStatus => Loc.Text(nameof(ExecutingStatus));
+    public static string CancellingStatus => Loc.Text(nameof(CancellingStatus));
     // Live execution-timer indicator (SQL Editor / Execute Procedure/Function / Script Executor).
     // One cohesive label — {0} = mm:ss.f elapsed.
-    public const string ExecutionElapsedFormat = "Elapsed: {0}";
-    public const string NoConnectionMessage = "Connect to a database first.";
+    public static string ExecutionElapsedFormat => Loc.Text(nameof(ExecutionElapsedFormat));
+    public static string NoConnectionMessage => Loc.Text(nameof(NoConnectionMessage));
     // Compile pre-condition refusals, shared by EVERY object editor's compile and the debugger's Save
     // (UX Polish Seam 6b). An ISavableObjectEditor adapter reads success as "no error after the attempt",
     // so a compile that cannot run must SAY so — otherwise the save-and-close WorkGuard is told the work
     // was written when nothing was, and discards it. NoConnectionMessage above covers the no-DDL-executor
     // case; this one covers "the buffer holds nothing to compile".
-    public const string EditorNothingToCompile = "There is nothing to compile.";
+    public static string EditorNothingToCompile => Loc.Text(nameof(EditorNothingToCompile));
     // ─── Change-safety refusals (ObjectChangeGate) ──────────────────────────────────────────────
     // Every object editor compiles by REPLACING a whole object (CREATE OR ALTER … AS <entire body>), so a
     // compile can discard work the editor never saw. These three sentences are the whole user-facing
@@ -1595,345 +1665,330 @@ internal static class UiStrings
     // existing features, deliberately: the escape hatch for a deliberate overwrite already exists (run the
     // statement yourself, where the console makes it unmistakably your decision), which is why the gate
     // ships with no force-overwrite button of its own.
-    public const string ObjectChangedInDatabaseFormat =
-        "{0} was changed in the database after this tab opened it, so compiling now would discard that newer " +
-        "version. Nothing was written. Use Revert to load the current definition, then re-apply your changes " +
-        "— or run your statement in the SQL Editor if you mean to overwrite it.";
-    public const string ObjectAlreadyExistsFormat =
-        "{0} already exists. This editor creates objects with CREATE OR ALTER, which would overwrite it " +
-        "rather than fail. Nothing was written. Choose a different name, or close this tab and open the " +
-        "existing object to edit it.";
-    public const string ObjectChangeUnverifiableFormat =
-        "EmberTern could not read the current state of {0}, so it cannot confirm that compiling would not " +
-        "overwrite newer work. Nothing was written. Check the connection and try again.";
+    public static string ObjectChangedInDatabaseFormat => Loc.Text(nameof(ObjectChangedInDatabaseFormat));
+    public static string ObjectAlreadyExistsFormat => Loc.Text(nameof(ObjectAlreadyExistsFormat));
+    public static string ObjectChangeUnverifiableFormat => Loc.Text(nameof(ObjectChangeUnverifiableFormat));
     // Fallback label when the object has no name yet — the message must still read as a sentence.
-    public const string ObjectChangeUnnamedObject = "This object";
+    public static string ObjectChangeUnnamedObject => Loc.Text(nameof(ObjectChangeUnnamedObject));
     // ─── Settings health (audit A-03) ───────────────────────────────────────────────────────────
     // Shown when settings.dat exists but this build cannot read it. Saving is refused for the whole session so
     // the unreadable file is never replaced, which means nothing the user does will persist — and that has to
     // be said out loud, with the path (so they can back it up or move it) and the reason (so they can tell a
     // wrong-machine DPAPI file, which is intact, from a damaged one).
     // {0} = full path to settings.dat, {1} = the load diagnostic.
-    public const string SettingsUnreadableWarningFormat =
-        "Your settings file could not be read, so EmberTern will not save settings this session — connections, " +
-        "saved queries, workspace and grid layouts will not persist. Nothing has been lost and the existing " +
-        "file has been left untouched: it is most often readable on the Windows account or machine that wrote " +
-        "it. File: {0} — {1}";
+    // ⭐ Localized (L1). Also the app's clearest illustration of the D‑3 boundary: {1} is a diagnostic
+    // produced by CORE (ApplicationSettingsStore) and shown verbatim, so today one half of this sentence is
+    // translatable and the other half is not. Stage L4 turns that argument into a resolved MessageKey.
+    public static string SettingsUnreadableWarningFormat => Loc.Text(nameof(SettingsUnreadableWarningFormat));
     // The code-action light bulb (Stage Q / Q3) — a discreet affordance for the same menu Ctrl+. opens.
-    public static readonly string CodeActionsTooltip = CommandTip.For(
-        CommandId.EditorQuickFix, "Show code actions");
+    public static string CodeActionsTooltip => CommandTip.For(
+        CommandId.EditorQuickFix, Loc.Text(nameof(CodeActionsTooltip)));
     // Shown at the foot of the diagnostic hover when fixes exist there. Information only — the hover
     // never offers an action (§15.1.1); this just makes the shortcut discoverable.
-    public static readonly string CodeActionsHoverHint = CommandTip.For(
-        CommandId.EditorQuickFix, "Quick Fix available");
+    public static string CodeActionsHoverHint => CommandTip.For(
+        CommandId.EditorQuickFix, Loc.Text(nameof(CodeActionsHoverHint)));
     // Diagnostics-panel row → the same menu (Stage Q / Q5).
-    public const string CodeActionsMenuItem = "Quick Fix…";
-    public const string QueryCancelledMessage = "Query cancelled.";
-    public const string AffectedRowsFormat = "{0} rows affected in {1} ms";
+    public static string CodeActionsMenuItem => Loc.Text(nameof(CodeActionsMenuItem));
+    public static string QueryCancelledMessage => Loc.Text(nameof(QueryCancelledMessage));
+    public static string AffectedRowsFormat => Loc.Text(nameof(AffectedRowsFormat));
     // Truncated-Preview notice bar — loud + actionable (A.6). {0} = rows loaded so far
     // (thousands-separated — these strings front large full reads).
-    public const string ResultsTruncatedFormat = "Showing the first {0:N0} rows — the full result is larger.";
+    public static string ResultsTruncatedFormat => Loc.Text(nameof(ResultsTruncatedFormat));
     // Full hit the hard safety ceiling. {0} = ceiling row count.
-    public const string ResultsCeilingFormat = "Stopped at {0:N0} rows — a safety limit, not the end of the result. Narrow the query to see the rest.";
+    public static string ResultsCeilingFormat => Loc.Text(nameof(ResultsCeilingFormat));
     // Live counter shown in the status area while a Full / Load-all read streams. {0} = rows so far.
-    public const string ResultsLoadingFormat = "Loading… {0:N0} rows";
-    public const string ToolbarLoadAllRows = "Load all rows";
+    public static string ResultsLoadingFormat => Loc.Text(nameof(ResultsLoadingFormat));
+    public static string ToolbarLoadAllRows => Loc.Text(nameof(ToolbarLoadAllRows));
     // Smart soft-threshold prompt (Etap 2) — asked once mid-stream when a Full load crosses the soft
     // threshold and more rows remain. {0} = rows loaded so far.
-    public const string LoadAllThresholdTitle = "Large result";
-    public const string LoadAllThresholdMessageFormat = "Loaded {0:N0} rows so far and there's more. Keep loading the whole result into memory?";
-    public const string LoadAllThresholdKeep = "Keep loading";
-    public const string LoadAllThresholdStop = "Stop here";
-    public const string RowsFetchedFormat = "{0:N0} rows in {1} ms";
-    public const string MessagesCopyAll = "Copy all";
-    public const string MessagesClear = "Clear messages";
+    public static string LoadAllThresholdTitle => Loc.Text(nameof(LoadAllThresholdTitle));
+    public static string LoadAllThresholdMessageFormat => Loc.Text(nameof(LoadAllThresholdMessageFormat));
+    public static string LoadAllThresholdKeep => Loc.Text(nameof(LoadAllThresholdKeep));
+    public static string LoadAllThresholdStop => Loc.Text(nameof(LoadAllThresholdStop));
+    public static string RowsFetchedFormat => Loc.Text(nameof(RowsFetchedFormat));
+    public static string MessagesCopyAll => Loc.Text(nameof(MessagesCopyAll));
+    public static string MessagesClear => Loc.Text(nameof(MessagesClear));
     // {0} = current page, {1} = total pages, {2} = total rows in the result set.
-    public const string ResultsPaginationHintFormat = "Page {0} of {1} · {2} rows";
+    public static string ResultsPaginationHintFormat => Loc.Text(nameof(ResultsPaginationHintFormat));
     // Record position (IBExpert-style). {0} = 1-based absolute position of the
     // selected row in the full (sorted) result, {1} = total row count.
-    public const string RecordPositionFormat = "Record {0} of {1}";
+    public static string RecordPositionFormat => Loc.Text(nameof(RecordPositionFormat));
     // Shown when the grid has rows but none is selected. {0} = total row count.
-    public const string RecordCountFormat = "{0} rows";
+    public static string RecordCountFormat => Loc.Text(nameof(RecordCountFormat));
     // Preview variants — the true total is unknown (only the first N were loaded), so "N+" + a
     // "(preview)" marker makes the fragment unmissable even away from the notice bar. Thousands-
     // separated (preview counts can be large, e.g. a 250,000-row soft-stop).
-    public const string RecordPositionPreviewFormat = "Record {0:N0} of {1:N0}+ (preview)";
-    public const string RecordCountPreviewFormat = "{0:N0}+ rows (preview)";
+    public static string RecordPositionPreviewFormat => Loc.Text(nameof(RecordPositionPreviewFormat));
+    public static string RecordCountPreviewFormat => Loc.Text(nameof(RecordCountPreviewFormat));
 
     // ── Grid filtering + aggregation (shared across all data grids) ──
     // Operator labels (filter condition rows).
-    public const string FilterOpEquals = "=";
-    public const string FilterOpNotEquals = "≠";
-    public const string FilterOpLessThan = "<";
-    public const string FilterOpLessOrEqual = "≤";
-    public const string FilterOpGreaterThan = ">";
-    public const string FilterOpGreaterOrEqual = "≥";
-    public const string FilterOpContains = "contains";
-    public const string FilterOpStartsWith = "starts with";
-    public const string FilterOpEndsWith = "ends with";
-    public const string FilterOpIsNull = "is null";
-    public const string FilterOpIsNotNull = "is not null";
+    public static string FilterOpEquals => Loc.Text(nameof(FilterOpEquals));
+    public static string FilterOpNotEquals => Loc.Text(nameof(FilterOpNotEquals));
+    public static string FilterOpLessThan => Loc.Text(nameof(FilterOpLessThan));
+    public static string FilterOpLessOrEqual => Loc.Text(nameof(FilterOpLessOrEqual));
+    public static string FilterOpGreaterThan => Loc.Text(nameof(FilterOpGreaterThan));
+    public static string FilterOpGreaterOrEqual => Loc.Text(nameof(FilterOpGreaterOrEqual));
+    public static string FilterOpContains => Loc.Text(nameof(FilterOpContains));
+    public static string FilterOpStartsWith => Loc.Text(nameof(FilterOpStartsWith));
+    public static string FilterOpEndsWith => Loc.Text(nameof(FilterOpEndsWith));
+    public static string FilterOpIsNull => Loc.Text(nameof(FilterOpIsNull));
+    public static string FilterOpIsNotNull => Loc.Text(nameof(FilterOpIsNotNull));
     // Aggregate labels.
-    public const string AggregateSum = "SUM";
-    public const string AggregateAvg = "AVG";
-    public const string AggregateCount = "COUNT";
-    public const string AggregateCountDistinct = "COUNT DISTINCT";
-    public const string AggregateMin = "MIN";
-    public const string AggregateMax = "MAX";
+    public static string AggregateSum => Loc.Text(nameof(AggregateSum));
+    public static string AggregateAvg => Loc.Text(nameof(AggregateAvg));
+    public static string AggregateCount => Loc.Text(nameof(AggregateCount));
+    public static string AggregateCountDistinct => Loc.Text(nameof(AggregateCountDistinct));
+    public static string AggregateMin => Loc.Text(nameof(AggregateMin));
+    public static string AggregateMax => Loc.Text(nameof(AggregateMax));
     // Filter panel chrome.
-    public const string FilterToggleTooltip = "Filter";
-    public const string FilterPanelTitle = "Filter";
-    public const string FilterAddCondition = "Add condition";
-    public const string FilterApply = "Apply";
-    public const string FilterClear = "Clear";
-    public const string FilterMatchAll = "Match all (AND)";
-    public const string FilterMatchAny = "Match any (OR)";
-    public const string FilterEmptyHint = "No conditions — add one to filter the results.";
-    public const string FilterRemoveConditionTooltip = "Remove condition";
+    public static string FilterToggleTooltip => Loc.Text(nameof(FilterToggleTooltip));
+    public static string FilterPanelTitle => Loc.Text(nameof(FilterPanelTitle));
+    public static string FilterAddCondition => Loc.Text(nameof(FilterAddCondition));
+    public static string FilterApply => Loc.Text(nameof(FilterApply));
+    public static string FilterClear => Loc.Text(nameof(FilterClear));
+    public static string FilterMatchAll => Loc.Text(nameof(FilterMatchAll));
+    public static string FilterMatchAny => Loc.Text(nameof(FilterMatchAny));
+    public static string FilterEmptyHint => Loc.Text(nameof(FilterEmptyHint));
+    public static string FilterRemoveConditionTooltip => Loc.Text(nameof(FilterRemoveConditionTooltip));
     // Filter-from-cell context menu.
-    public const string FilterByValue = "Filter by value";
-    public const string FilterExcludeValue = "Exclude value";
-    public const string FilterContainsValue = "Filter: contains…";
+    public static string FilterByValue => Loc.Text(nameof(FilterByValue));
+    public static string FilterExcludeValue => Loc.Text(nameof(FilterExcludeValue));
+    public static string FilterContainsValue => Loc.Text(nameof(FilterContainsValue));
     // Aggregation bar chrome.
-    public const string AggregationToggleTooltip = "Aggregations";
-    public const string AggregationBarTitle = "Aggregations";
-    public const string AggregationAddLine = "Add aggregate";
+    public static string AggregationToggleTooltip => Loc.Text(nameof(AggregationToggleTooltip));
+    public static string AggregationBarTitle => Loc.Text(nameof(AggregationBarTitle));
+    public static string AggregationAddLine => Loc.Text(nameof(AggregationAddLine));
     // Placeholder on the function picker — picking a function adds the aggregate chip.
-    public const string AggregationFunctionPlaceholder = "Add aggregate…";
-    public const string AggregationEmptyHint = "No aggregates — add one to compute over the results.";
-    public const string AggregationRemoveLineTooltip = "Remove aggregate";
-    public const string AggregationRecomputeTooltip = "Recompute";
-    public const string AggregationNullResult = "∅";
-    public const string AggregationErrorResult = "error";
+    public static string AggregationFunctionPlaceholder => Loc.Text(nameof(AggregationFunctionPlaceholder));
+    public static string AggregationEmptyHint => Loc.Text(nameof(AggregationEmptyHint));
+    public static string AggregationRemoveLineTooltip => Loc.Text(nameof(AggregationRemoveLineTooltip));
+    public static string AggregationRecomputeTooltip => Loc.Text(nameof(AggregationRecomputeTooltip));
+    public static string AggregationNullResult => Loc.Text(nameof(AggregationNullResult));
+    public static string AggregationErrorResult => Loc.Text(nameof(AggregationErrorResult));
 
     // Main tab names — English (the app is English-language; the earlier
     // "keep Polish" choice was reversed 2026-07-02).
-    public const string TableDetailTabFields = "Fields";
-    public const string TableDetailTabConstraints = "Constraints";
-    public const string TableDetailTabIndexes = "Indexes";
-    public const string TableDetailTabDependencies = "Dependencies";
-    public const string TableDetailDependsOnHeader = "Depends on";
-    public const string TableDetailDependedOnByHeader = "Used by";
-    public const string TableDetailDependencyType = "Type";
-    public const string TableDetailDependencyName = "Name";
-    public const string TableDetailDependencyField = "Field";
-    public const string TableDetailTabData = "Data";
-    public const string TableDetailTabDescription = "Description";
-    public const string TableDetailTabDdl = "DDL";
-    public const string TableDetailConstraintSubTabPrimaryKey = "Primary Key";
-    public const string TableDetailConstraintSubTabForeignKey = "Foreign Keys";
-    public const string TableDetailConstraintSubTabCheck = "Check";
-    public const string TableDetailConstraintSubTabUnique = "Unique";
+    public static string TableDetailTabFields => Loc.Text(nameof(TableDetailTabFields));
+    public static string TableDetailTabConstraints => Loc.Text(nameof(TableDetailTabConstraints));
+    public static string TableDetailTabIndexes => Loc.Text(nameof(TableDetailTabIndexes));
+    public static string TableDetailTabDependencies => Loc.Text(nameof(TableDetailTabDependencies));
+    public static string TableDetailDependsOnHeader => Loc.Text(nameof(TableDetailDependsOnHeader));
+    public static string TableDetailDependedOnByHeader => Loc.Text(nameof(TableDetailDependedOnByHeader));
+    public static string TableDetailDependencyType => Loc.Text(nameof(TableDetailDependencyType));
+    public static string TableDetailDependencyName => Loc.Text(nameof(TableDetailDependencyName));
+    public static string TableDetailDependencyField => Loc.Text(nameof(TableDetailDependencyField));
+    public static string TableDetailTabData => Loc.Text(nameof(TableDetailTabData));
+    public static string TableDetailTabDescription => Loc.Text(nameof(TableDetailTabDescription));
+    public static string TableDetailTabDdl => Loc.Text(nameof(TableDetailTabDdl));
+    public static string TableDetailConstraintSubTabPrimaryKey => Loc.Text(nameof(TableDetailConstraintSubTabPrimaryKey));
+    public static string TableDetailConstraintSubTabForeignKey => Loc.Text(nameof(TableDetailConstraintSubTabForeignKey));
+    public static string TableDetailConstraintSubTabCheck => Loc.Text(nameof(TableDetailConstraintSubTabCheck));
+    public static string TableDetailConstraintSubTabUnique => Loc.Text(nameof(TableDetailConstraintSubTabUnique));
 
-    public const string TableDetailLoadingHint = "Loading table details…";
-    public const string TableDetailColumnPosition = "#";
-    public const string TableDetailColumnName = "Name";
-    public const string TableDetailColumnType = "Type";
-    public const string TableDetailColumnSize = "Size";
-    public const string TableDetailColumnScale = "Scale";
-    public const string TableDetailColumnNotNull = "Not Null";
-    public const string TableDetailColumnDefault = "Default";
-    public const string TableDetailColumnDescription = "Description";
-    public const string TableDetailColumnPrimaryKey = "Primary key";
-    public const string TableDetailColumnForeignKey = "Foreign key";
-    public const string TableDetailColumnUnique = "Unique";
-    public const string TableDetailColumnDomain = "Domain";
-    public const string TableDetailColumnForeignKeyTable = "FK Table";
-    public const string TableDetailColumnComputed = "Computed";
-    public const string TableDetailColumnCharset = "Charset";
-    public const string TableDetailColumnAutoIncrement = "AI";
-    public const string TableDetailColumnAutoIncrementTooltip = "Auto-increment (IDENTITY column or BEFORE INSERT trigger using GEN_ID)";
+    public static string TableDetailLoadingHint => Loc.Text(nameof(TableDetailLoadingHint));
+    public static string TableDetailColumnPosition => Loc.Text(nameof(TableDetailColumnPosition));
+    public static string TableDetailColumnName => Loc.Text(nameof(TableDetailColumnName));
+    public static string TableDetailColumnType => Loc.Text(nameof(TableDetailColumnType));
+    public static string TableDetailColumnSize => Loc.Text(nameof(TableDetailColumnSize));
+    public static string TableDetailColumnScale => Loc.Text(nameof(TableDetailColumnScale));
+    public static string TableDetailColumnNotNull => Loc.Text(nameof(TableDetailColumnNotNull));
+    public static string TableDetailColumnDefault => Loc.Text(nameof(TableDetailColumnDefault));
+    public static string TableDetailColumnDescription => Loc.Text(nameof(TableDetailColumnDescription));
+    public static string TableDetailColumnPrimaryKey => Loc.Text(nameof(TableDetailColumnPrimaryKey));
+    public static string TableDetailColumnForeignKey => Loc.Text(nameof(TableDetailColumnForeignKey));
+    public static string TableDetailColumnUnique => Loc.Text(nameof(TableDetailColumnUnique));
+    public static string TableDetailColumnDomain => Loc.Text(nameof(TableDetailColumnDomain));
+    public static string TableDetailColumnForeignKeyTable => Loc.Text(nameof(TableDetailColumnForeignKeyTable));
+    public static string TableDetailColumnComputed => Loc.Text(nameof(TableDetailColumnComputed));
+    public static string TableDetailColumnCharset => Loc.Text(nameof(TableDetailColumnCharset));
+    public static string TableDetailColumnAutoIncrement => Loc.Text(nameof(TableDetailColumnAutoIncrement));
+    public static string TableDetailColumnAutoIncrementTooltip => Loc.Text(nameof(TableDetailColumnAutoIncrementTooltip));
 
-    public const string TableDetailIndexType = "Type";
-    public const string TableDetailIndexFields = "Fields";
-    public const string TableDetailIndexExpression = "Expression";
-    public const string TableDetailIndexUnique = "Unique";
-    public const string TableDetailIndexDescending = "Descending";
-    public const string TableDetailIndexPrimary = "PK";
-    public const string TableDetailIndexActive = "Active";
-    public const string TableDetailIndexStatistics = "Statistics";
+    public static string TableDetailIndexType => Loc.Text(nameof(TableDetailIndexType));
+    public static string TableDetailIndexFields => Loc.Text(nameof(TableDetailIndexFields));
+    public static string TableDetailIndexExpression => Loc.Text(nameof(TableDetailIndexExpression));
+    public static string TableDetailIndexUnique => Loc.Text(nameof(TableDetailIndexUnique));
+    public static string TableDetailIndexDescending => Loc.Text(nameof(TableDetailIndexDescending));
+    public static string TableDetailIndexPrimary => Loc.Text(nameof(TableDetailIndexPrimary));
+    public static string TableDetailIndexActive => Loc.Text(nameof(TableDetailIndexActive));
+    public static string TableDetailIndexStatistics => Loc.Text(nameof(TableDetailIndexStatistics));
 
-    public const string TableDetailConstraintFields = "Fields";
-    public const string TableDetailConstraintRefTable = "Ref. table";
-    public const string TableDetailConstraintRefFields = "Ref. fields";
-    public const string TableDetailConstraintUpdateRule = "Update rule";
-    public const string TableDetailConstraintDeleteRule = "Delete rule";
-    public const string TableDetailConstraintSource = "Source";
-    public const string TableDetailConstraintIndexName = "Index name";
-    public const string TableDetailConstraintSort = "Sort";
-    public const string TableDetailConstraintSortAscending = "Ascending";
-    public const string TableDetailConstraintSortDescending = "Descending";
+    public static string TableDetailConstraintFields => Loc.Text(nameof(TableDetailConstraintFields));
+    public static string TableDetailConstraintRefTable => Loc.Text(nameof(TableDetailConstraintRefTable));
+    public static string TableDetailConstraintRefFields => Loc.Text(nameof(TableDetailConstraintRefFields));
+    public static string TableDetailConstraintUpdateRule => Loc.Text(nameof(TableDetailConstraintUpdateRule));
+    public static string TableDetailConstraintDeleteRule => Loc.Text(nameof(TableDetailConstraintDeleteRule));
+    public static string TableDetailConstraintSource => Loc.Text(nameof(TableDetailConstraintSource));
+    public static string TableDetailConstraintIndexName => Loc.Text(nameof(TableDetailConstraintIndexName));
+    public static string TableDetailConstraintSort => Loc.Text(nameof(TableDetailConstraintSort));
+    public static string TableDetailConstraintSortAscending => Loc.Text(nameof(TableDetailConstraintSortAscending));
+    public static string TableDetailConstraintSortDescending => Loc.Text(nameof(TableDetailConstraintSortDescending));
 
-    public const string TableDetailDataPagedHintFormat = "Page {0} · Showing {1} rows";
-    public const string TableDetailDataPreviewSortedByFormat = " · sorted by {0} {1}";
+    public static string TableDetailDataPagedHintFormat => Loc.Text(nameof(TableDetailDataPagedHintFormat));
+    public static string TableDetailDataPreviewSortedByFormat => Loc.Text(nameof(TableDetailDataPreviewSortedByFormat));
 
-    public const string TableDetailPaginationFirstIcon = "⏮";
-    public const string TableDetailPaginationPreviousIcon = "◀";
-    public const string TableDetailPaginationNextIcon = "▶";
-    public const string TableDetailPaginationLastIcon = "⏭";
-    public const string TableDetailPaginationFirstTooltip = "First page";
-    public const string TableDetailPaginationPreviousTooltip = "Previous page";
-    public const string TableDetailPaginationNextTooltip = "Next page";
-    public const string TableDetailPaginationLastTooltip = "Last page";
-    public const string TableDetailDataPreviewNullPlaceholder = "<null>";
-    public const string TableDetailDataLoadingHint = "Loading data…";
-    public const string TableDetailDescriptionEmpty = "No description.";
+    public static string TableDetailPaginationFirstIcon => Loc.Text(nameof(TableDetailPaginationFirstIcon));
+    public static string TableDetailPaginationPreviousIcon => Loc.Text(nameof(TableDetailPaginationPreviousIcon));
+    public static string TableDetailPaginationNextIcon => Loc.Text(nameof(TableDetailPaginationNextIcon));
+    public static string TableDetailPaginationLastIcon => Loc.Text(nameof(TableDetailPaginationLastIcon));
+    public static string TableDetailPaginationFirstTooltip => Loc.Text(nameof(TableDetailPaginationFirstTooltip));
+    public static string TableDetailPaginationPreviousTooltip => Loc.Text(nameof(TableDetailPaginationPreviousTooltip));
+    public static string TableDetailPaginationNextTooltip => Loc.Text(nameof(TableDetailPaginationNextTooltip));
+    public static string TableDetailPaginationLastTooltip => Loc.Text(nameof(TableDetailPaginationLastTooltip));
+    public static string TableDetailDataPreviewNullPlaceholder => Loc.Text(nameof(TableDetailDataPreviewNullPlaceholder));
+    public static string TableDetailDataLoadingHint => Loc.Text(nameof(TableDetailDataLoadingHint));
+    public static string TableDetailDescriptionEmpty => Loc.Text(nameof(TableDetailDescriptionEmpty));
 
-    public const string DataEditAddRowIcon = "+";
-    public const string DataEditAddRowTooltip = "Add row";
-    public const string DataEditDeleteRowIcon = "−";
-    public const string DataEditDeleteRowTooltip = "Delete selected row";
+    public static string DataEditAddRowIcon => Loc.Text(nameof(DataEditAddRowIcon));
+    public static string DataEditAddRowTooltip => Loc.Text(nameof(DataEditAddRowTooltip));
+    public static string DataEditDeleteRowIcon => Loc.Text(nameof(DataEditDeleteRowIcon));
+    public static string DataEditDeleteRowTooltip => Loc.Text(nameof(DataEditDeleteRowTooltip));
     // Context-menu labels for the same two commands, in the surface's New / Edit / Delete vocabulary.
-    public const string DataEditNewRow = "Add row";
-    public const string DataEditDeleteRow = "Delete row";
-    public const string DataEditDeleteConfirmTitle = "Delete row";
-    public const string DataEditDeleteConfirmMessage = "Delete the selected row? This becomes part of the current transaction — use Rollback to revert.";
-    public const string DataEditDeleteConfirmYes = "Delete";
-    public const string DataEditNoPrimaryKeyHint = "Table has no primary key — only INSERT is available.";
-    public const string DataEditNotConnectedHint = "Connect to a database to edit data.";
+    public static string DataEditNewRow => Loc.Text(nameof(DataEditNewRow));
+    public static string DataEditDeleteRow => Loc.Text(nameof(DataEditDeleteRow));
+    public static string DataEditDeleteConfirmTitle => Loc.Text(nameof(DataEditDeleteConfirmTitle));
+    public static string DataEditDeleteConfirmMessage => Loc.Text(nameof(DataEditDeleteConfirmMessage));
+    public static string DataEditDeleteConfirmYes => Loc.Text(nameof(DataEditDeleteConfirmYes));
+    public static string DataEditNoPrimaryKeyHint => Loc.Text(nameof(DataEditNoPrimaryKeyHint));
+    public static string DataEditNotConnectedHint => Loc.Text(nameof(DataEditNotConnectedHint));
     // Cell context-menu: set the right-clicked cell to NULL. Enabled only for
     // nullable, non-computed columns; routes through the same UpdateCellAsync
     // path as a manual edit.
-    public const string DataEditSetNull = "Set NULL";
+    public static string DataEditSetNull => Loc.Text(nameof(DataEditSetNull));
 
-    public const string BlobEditorTitle = "Edit BLOB";
-    public const string BlobEditorBinaryPlaceholder = "Binary BLOB ({0} bytes) — cannot be edited as text.";
-    public const string BlobEditorButtonIcon = "…";
-    public const string BlobEditorButtonTooltip = "Edit BLOB content";
-    public const string BlobEditorOk = "OK";
+    public static string BlobEditorTitle => Loc.Text(nameof(BlobEditorTitle));
+    public static string BlobEditorBinaryPlaceholder => Loc.Text(nameof(BlobEditorBinaryPlaceholder));
+    public static string BlobEditorButtonIcon => Loc.Text(nameof(BlobEditorButtonIcon));
+    public static string BlobEditorButtonTooltip => Loc.Text(nameof(BlobEditorButtonTooltip));
+    public static string BlobEditorOk => Loc.Text(nameof(BlobEditorOk));
 
-    public const string FolderNewTooltip = "New folder";
-    public const string FolderNewIcon = "📁";
-    public const string FolderNodeIcon = "📁";
-    public const string FolderDialogTitle = "New folder";
-    public const string FolderDialogNameLabel = "Folder name";
-    public const string FolderDialogCreate = "Create";
-    public const string FolderContextRename = "Rename";
-    public const string FolderContextDelete = "Delete folder";
-    public const string FolderDeleteConfirmTitle = "Delete folder";
-    public const string FolderDeleteConfirmFormat = "Delete folder \"{0}\"? Connections in this folder will move back to the tree root.";
-    public const string FolderDeleteConfirmYes = "Delete";
-    public const string FolderDefaultName = "New folder";
+    public static string FolderNewTooltip => Loc.Text(nameof(FolderNewTooltip));
+    public static string FolderNewIcon => Loc.Text(nameof(FolderNewIcon));
+    public static string FolderNodeIcon => Loc.Text(nameof(FolderNodeIcon));
+    public static string FolderDialogTitle => Loc.Text(nameof(FolderDialogTitle));
+    public static string FolderDialogNameLabel => Loc.Text(nameof(FolderDialogNameLabel));
+    public static string FolderDialogCreate => Loc.Text(nameof(FolderDialogCreate));
+    public static string FolderContextRename => Loc.Text(nameof(FolderContextRename));
+    public static string FolderContextDelete => Loc.Text(nameof(FolderContextDelete));
+    public static string FolderDeleteConfirmTitle => Loc.Text(nameof(FolderDeleteConfirmTitle));
+    public static string FolderDeleteConfirmFormat => Loc.Text(nameof(FolderDeleteConfirmFormat));
+    public static string FolderDeleteConfirmYes => Loc.Text(nameof(FolderDeleteConfirmYes));
+    public static string FolderDefaultName => Loc.Text(nameof(FolderDefaultName));
 
     // Connection deletion — HIGH risk (config + per-connection saved queries +
     // workspace state all gone, irreversible). Message phrased per the user's
     // spec; matches the English of the table-delete + saved-query confirms.
-    public const string ConnectionDeleteConfirmTitle = "Delete connection";
-    public const string ConnectionDeleteConfirmFormat =
-        "Are you sure you want to delete connection '{0}'?\n\n" +
-        "• Saved connection settings will be lost.\n" +
-        "• Saved queries linked to this connection will be removed.\n" +
-        "• This operation cannot be undone.";
-    public const string ConnectionDeleteConfirmYes = "Delete";
+    public static string ConnectionDeleteConfirmTitle => Loc.Text(nameof(ConnectionDeleteConfirmTitle));
+    public static string ConnectionDeleteConfirmFormat => Loc.Text(nameof(ConnectionDeleteConfirmFormat));
+    public static string ConnectionDeleteConfirmYes => Loc.Text(nameof(ConnectionDeleteConfirmYes));
 
     // Clear-editor confirmation (only shown when the editor has text to lose).
-    public const string ClearEditorConfirmTitle = "Clear editor";
-    public const string ClearEditorConfirmMessage =
-        "Clear the SQL editor? The current query text will be lost.";
-    public const string ClearEditorConfirmYes = "Clear";
+    public static string ClearEditorConfirmTitle => Loc.Text(nameof(ClearEditorConfirmTitle));
+    public static string ClearEditorConfirmMessage => Loc.Text(nameof(ClearEditorConfirmMessage));
+    public static string ClearEditorConfirmYes => Loc.Text(nameof(ClearEditorConfirmYes));
 
     // Closing a New Table tab with unsaved form content.
-    public const string NewTableCloseConfirmTitle = "Discard new table";
-    public const string NewTableCloseConfirmFormat =
-        "Discard the unsaved table '{0}'? The form has not been compiled.";
-    public const string NewTableCloseConfirmYes = "Discard";
+    public static string NewTableCloseConfirmTitle => Loc.Text(nameof(NewTableCloseConfirmTitle));
+    public static string NewTableCloseConfirmFormat => Loc.Text(nameof(NewTableCloseConfirmFormat));
+    public static string NewTableCloseConfirmYes => Loc.Text(nameof(NewTableCloseConfirmYes));
 
-    public const string ConnectionContextSort = "Sort nodes";
-    public const string ConnectionContextSortAscending = "Ascending (A→Z)";
-    public const string ConnectionContextSortDescending = "Descending (Z→A)";
+    public static string ConnectionContextSort => Loc.Text(nameof(ConnectionContextSort));
+    public static string ConnectionContextSortAscending => Loc.Text(nameof(ConnectionContextSortAscending));
+    public static string ConnectionContextSortDescending => Loc.Text(nameof(ConnectionContextSortDescending));
 
-    public const string FolderContextAddConnection = "New connection";
+    public static string FolderContextAddConnection => Loc.Text(nameof(FolderContextAddConnection));
 
-    public const string QueryContextRename = "Rename";
-    public const string QueryContextDelete = "Delete";
-    public const string QueryRenameIcon = "✎";
-    public const string QueryRenameTooltip = "Rename query";
+    public static string QueryContextRename => Loc.Text(nameof(QueryContextRename));
+    public static string QueryContextDelete => Loc.Text(nameof(QueryContextDelete));
+    public static string QueryRenameIcon => Loc.Text(nameof(QueryRenameIcon));
+    public static string QueryRenameTooltip => Loc.Text(nameof(QueryRenameTooltip));
 
     // ─── Table structure editing (New Table + Pola edit toolbar + AddFieldDialog) ───
     // Two glyphs: ▦ matches the metadata tree's Table icon (see MetadataNodeViewModel
     // IconFor) so the toolbar visually rhymes with the sidebar; ＋ signals "add".
-    public const string ToolbarNewTableIcon = "▦＋";
-    public const string ToolbarNewTableTooltip = "New table";
-    public const string ToolbarToggleFieldEditIcon = "▦✎";
-    public const string ToolbarToggleFieldEditTooltip = "Toggle inline field editing";
-    public const string NewTableDialogTitle = "New table";
-    public const string NewTableDialogTableNameLabel = "Table name";
-    public const string NewTableDialogTableKindLabel = "Table kind";
-    public const string NewTableKindPersistent = "Persistent";
-    public const string NewTableKindTempDelete = "Temp : DELETE ROWS";
-    public const string NewTableKindTempPreserve = "Temp : PRESERVE ROWS";
-    public const string NewTableTabFields = "Fields";
-    public const string NewTableTabDescription = "Description";
-    public const string NewTableDescriptionLabel = "Table description (COMMENT ON TABLE)";
-    public const string NewTableDdlLabel = "Live DDL preview";
-    public static readonly string NewTableDialogCompile = CommandTip.For(CommandId.Compile, "Compile");
-    public const string NewTableNamePlaceholder = "MY_TABLE";
-    public const string NewTableAddRowTooltip = "Add field";
-    public const string NewTableDeleteRowTooltip = "Remove selected field";
-    public const string NewTableMoveUpTooltip = "Move selected field up";
-    public const string NewTableMoveDownTooltip = "Move selected field down";
-    public const string NewTableValidationNameRequired = "Table name is required.";
-    public const string NewTableValidationAtLeastOneField = "At least one field is required.";
-    public const string NewTableFieldName = "Name";
-    public const string NewTableFieldType = "Type";
-    public const string NewTableFieldSize = "Size";
-    public const string NewTableFieldScale = "Scale";
-    public const string NewTableFieldNotNull = "Not Null";
-    public const string NewTableFieldDefault = "Default";
-    public const string NewTableFieldPk = "PK";
-    public const string NewTableFieldAi = "AI";
-    public const string NewTableFieldDescription = "Description";
-    public const string NewTableFieldDomain = "Domain";
-    public const string NewTableFieldComputed = "Computed";
-    public const string NewTableFieldCheck = "Check";
-    public const string NewTableFieldCharset = "Charset";
-    public const string NewTableTabDefaultTitle = "New Table";
-    public const string NewTableExecutedFormat = "CREATE TABLE \"{0}\" executed.";
+    public static string ToolbarNewTableIcon => Loc.Text(nameof(ToolbarNewTableIcon));
+    public static string ToolbarNewTableTooltip => Loc.Text(nameof(ToolbarNewTableTooltip));
+    public static string ToolbarToggleFieldEditIcon => Loc.Text(nameof(ToolbarToggleFieldEditIcon));
+    public static string ToolbarToggleFieldEditTooltip => Loc.Text(nameof(ToolbarToggleFieldEditTooltip));
+    public static string NewTableDialogTitle => Loc.Text(nameof(NewTableDialogTitle));
+    public static string NewTableDialogTableNameLabel => Loc.Text(nameof(NewTableDialogTableNameLabel));
+    public static string NewTableDialogTableKindLabel => Loc.Text(nameof(NewTableDialogTableKindLabel));
+    public static string NewTableKindPersistent => Loc.Text(nameof(NewTableKindPersistent));
+    public static string NewTableKindTempDelete => Loc.Text(nameof(NewTableKindTempDelete));
+    public static string NewTableKindTempPreserve => Loc.Text(nameof(NewTableKindTempPreserve));
+    public static string NewTableTabFields => Loc.Text(nameof(NewTableTabFields));
+    public static string NewTableTabDescription => Loc.Text(nameof(NewTableTabDescription));
+    public static string NewTableDescriptionLabel => Loc.Text(nameof(NewTableDescriptionLabel));
+    public static string NewTableDdlLabel => Loc.Text(nameof(NewTableDdlLabel));
+    public static string NewTableDialogCompile => CommandTip.For(CommandId.Compile, Loc.Text(nameof(NewTableDialogCompile)));
+    public static string NewTableNamePlaceholder => Loc.Text(nameof(NewTableNamePlaceholder));
+    public static string NewTableAddRowTooltip => Loc.Text(nameof(NewTableAddRowTooltip));
+    public static string NewTableDeleteRowTooltip => Loc.Text(nameof(NewTableDeleteRowTooltip));
+    public static string NewTableMoveUpTooltip => Loc.Text(nameof(NewTableMoveUpTooltip));
+    public static string NewTableMoveDownTooltip => Loc.Text(nameof(NewTableMoveDownTooltip));
+    public static string NewTableValidationNameRequired => Loc.Text(nameof(NewTableValidationNameRequired));
+    public static string NewTableValidationAtLeastOneField => Loc.Text(nameof(NewTableValidationAtLeastOneField));
+    public static string NewTableFieldName => Loc.Text(nameof(NewTableFieldName));
+    public static string NewTableFieldType => Loc.Text(nameof(NewTableFieldType));
+    public static string NewTableFieldSize => Loc.Text(nameof(NewTableFieldSize));
+    public static string NewTableFieldScale => Loc.Text(nameof(NewTableFieldScale));
+    public static string NewTableFieldNotNull => Loc.Text(nameof(NewTableFieldNotNull));
+    public static string NewTableFieldDefault => Loc.Text(nameof(NewTableFieldDefault));
+    public static string NewTableFieldPk => Loc.Text(nameof(NewTableFieldPk));
+    public static string NewTableFieldAi => Loc.Text(nameof(NewTableFieldAi));
+    public static string NewTableFieldDescription => Loc.Text(nameof(NewTableFieldDescription));
+    public static string NewTableFieldDomain => Loc.Text(nameof(NewTableFieldDomain));
+    public static string NewTableFieldComputed => Loc.Text(nameof(NewTableFieldComputed));
+    public static string NewTableFieldCheck => Loc.Text(nameof(NewTableFieldCheck));
+    public static string NewTableFieldCharset => Loc.Text(nameof(NewTableFieldCharset));
+    public static string NewTableTabDefaultTitle => Loc.Text(nameof(NewTableTabDefaultTitle));
+    public static string NewTableExecutedFormat => Loc.Text(nameof(NewTableExecutedFormat));
 
     // ─── View Detail (View Detail V1) ───────────────────────────────────────
-    public const string ViewDetailTabSql = "Editor";
-    public const string ViewDetailTabFields = "Fields";
-    public const string ViewDetailTabDependencies = "Dependencies";
-    public const string ViewDetailTabData = "Data";
-    public const string ViewDetailTabDescription = "Description";
-    public const string ViewDetailTabDdl = "DDL";
-    public const string ViewDetailDescriptionEmpty = "No description.";
-    public const string ViewDetailLoadingHint = "Loading view…";
-    public const string ToolbarNewViewTooltip = "New view";
-    public const string ViewCompileIcon = "⚡";
-    public static readonly string ViewCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile view (CREATE OR ALTER VIEW)");
-    public const string ViewCompileFailedFormat = "Compile failed: {0}";
-    public const string NewViewTabDefaultTitle = "New View";
-    public const string NewViewExecutedFormat = "View \"{0}\" created.";
+    public static string ViewDetailTabSql => Loc.Text(nameof(ViewDetailTabSql));
+    public static string ViewDetailTabFields => Loc.Text(nameof(ViewDetailTabFields));
+    public static string ViewDetailTabDependencies => Loc.Text(nameof(ViewDetailTabDependencies));
+    public static string ViewDetailTabData => Loc.Text(nameof(ViewDetailTabData));
+    public static string ViewDetailTabDescription => Loc.Text(nameof(ViewDetailTabDescription));
+    public static string ViewDetailTabDdl => Loc.Text(nameof(ViewDetailTabDdl));
+    public static string ViewDetailDescriptionEmpty => Loc.Text(nameof(ViewDetailDescriptionEmpty));
+    public static string ViewDetailLoadingHint => Loc.Text(nameof(ViewDetailLoadingHint));
+    public static string ToolbarNewViewTooltip => Loc.Text(nameof(ToolbarNewViewTooltip));
+    public static string ViewCompileIcon => Loc.Text(nameof(ViewCompileIcon));
+    public static string ViewCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(ViewCompileTooltip)));
+    public static string ViewCompileFailedFormat => Loc.Text(nameof(ViewCompileFailedFormat));
+    public static string NewViewTabDefaultTitle => Loc.Text(nameof(NewViewTabDefaultTitle));
+    public static string NewViewExecutedFormat => Loc.Text(nameof(NewViewExecutedFormat));
 
     // ─── Package Detail ─────────────────────────────────────────────────────
-    public const string PackageDetailTabPackage = "Package";
-    public const string PackageDetailTabBody = "Body";
-    public const string PackageDetailTabMembers = "Members";
-    public const string PackageDetailTabDependencies = "Dependencies";
-    public const string PackageDetailTabDescription = "Description";
-    public const string PackageDetailTabDdl = "DDL";
-    public const string PackageDetailDescriptionEmpty = "No description.";
-    public const string PackageDetailMembersEmpty = "This package has no members.";
+    public static string PackageDetailTabPackage => Loc.Text(nameof(PackageDetailTabPackage));
+    public static string PackageDetailTabBody => Loc.Text(nameof(PackageDetailTabBody));
+    public static string PackageDetailTabMembers => Loc.Text(nameof(PackageDetailTabMembers));
+    public static string PackageDetailTabDependencies => Loc.Text(nameof(PackageDetailTabDependencies));
+    public static string PackageDetailTabDescription => Loc.Text(nameof(PackageDetailTabDescription));
+    public static string PackageDetailTabDdl => Loc.Text(nameof(PackageDetailTabDdl));
+    public static string PackageDetailDescriptionEmpty => Loc.Text(nameof(PackageDetailDescriptionEmpty));
+    public static string PackageDetailMembersEmpty => Loc.Text(nameof(PackageDetailMembersEmpty));
     // Members Debug toolbar button (D15.3 Seam E) — an icon-only editor-toolbar action; the tooltip explains
     // availability (the button carries no text label, so there is no button-caption string).
-    public const string PackageDebugMemberTooltipReady = "Debug the selected member";
-    public const string PackageDebugMemberTooltipNotDebuggable = "The selected member cannot be debugged.";
-    public const string PackageDebugMemberTooltipNoSelection = "Select a procedure or function in the list to debug it.";
-    public const string PackageDetailLoadingHint = "Loading package…";
-    public const string PackageDetailDependsOnHeader = "Depends on";
-    public const string PackageDetailDependedOnByHeader = "Used by";
-    public const string ToolbarNewPackageTooltip = "New package";
-    public static readonly string PackageCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile package (header then body)");
-    public const string PackageCompileHeaderFailedFormat = "Header compile failed: {0}";
-    public const string PackageCompileBodyFailedFormat = "Body compile failed: {0}";
-    public const string NewPackageTabDefaultTitle = "New Package";
-    public const string NewPackageExecutedFormat = "Package \"{0}\" created.";
-    public const string PackageDeleteConfirmTitle = "Drop package";
-    public const string PackageDeleteConfirmFormat = "Are you sure you want to drop package {0}? This drops the header and its body.";
-    public const string PackageDeleteConfirmYes = "Drop";
+    public static string PackageDebugMemberTooltipReady => Loc.Text(nameof(PackageDebugMemberTooltipReady));
+    public static string PackageDebugMemberTooltipNotDebuggable => Loc.Text(nameof(PackageDebugMemberTooltipNotDebuggable));
+    public static string PackageDebugMemberTooltipNoSelection => Loc.Text(nameof(PackageDebugMemberTooltipNoSelection));
+    public static string PackageDetailLoadingHint => Loc.Text(nameof(PackageDetailLoadingHint));
+    public static string PackageDetailDependsOnHeader => Loc.Text(nameof(PackageDetailDependsOnHeader));
+    public static string PackageDetailDependedOnByHeader => Loc.Text(nameof(PackageDetailDependedOnByHeader));
+    public static string ToolbarNewPackageTooltip => Loc.Text(nameof(ToolbarNewPackageTooltip));
+    public static string PackageCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(PackageCompileTooltip)));
+    public static string PackageCompileHeaderFailedFormat => Loc.Text(nameof(PackageCompileHeaderFailedFormat));
+    public static string PackageCompileBodyFailedFormat => Loc.Text(nameof(PackageCompileBodyFailedFormat));
+    public static string NewPackageTabDefaultTitle => Loc.Text(nameof(NewPackageTabDefaultTitle));
+    public static string NewPackageExecutedFormat => Loc.Text(nameof(NewPackageExecutedFormat));
+    public static string PackageDeleteConfirmTitle => Loc.Text(nameof(PackageDeleteConfirmTitle));
+    public static string PackageDeleteConfirmFormat => Loc.Text(nameof(PackageDeleteConfirmFormat));
+    public static string PackageDeleteConfirmYes => Loc.Text(nameof(PackageDeleteConfirmYes));
 
     // View Detail Easy mode (mirrors the Procedure Detail Source/Easy toggle).
     // Unified toolbar Collection section (routes to the active editor's collection —
@@ -1951,252 +2006,248 @@ internal static class UiStrings
     // (`ALTER TABLE … DROP` → „Drop"), wiersz danych (`DELETE FROM` → „Delete") i pozycję bufora edytora
     // (żadnego DDL → „Remove"). ⚠ Wcześniej wszystkie mówiły „Delete {0}", czyli o polu tabeli twierdziły
     // coś, czego produkt nie robi. Powód i mechanizm: `MainWindowViewModel.CollectionCommands`.
-    public const string CollectionVerbDrop = "Drop";
-    public const string CollectionVerbDelete = "Delete";
-    public const string CollectionVerbRemove = "Remove";
-    public const string CollectionRemoveFormat = "{0} {1}";
-    public const string CollectionAddFormat = "Add {0}";
-    public const string CollectionEditFormat = "Edit {0}";
+    public static string CollectionVerbDrop => Loc.Text(nameof(CollectionVerbDrop));
+    public static string CollectionVerbDelete => Loc.Text(nameof(CollectionVerbDelete));
+    public static string CollectionVerbRemove => Loc.Text(nameof(CollectionVerbRemove));
+    public static string CollectionRemoveFormat => Loc.Text(nameof(CollectionRemoveFormat));
+    public static string CollectionAddFormat => Loc.Text(nameof(CollectionAddFormat));
+    public static string CollectionEditFormat => Loc.Text(nameof(CollectionEditFormat));
 
-    public const string CollectionNounField = "field";
-    public const string CollectionNounRow = "row";
-    public const string CollectionNounColumn = "column";
-    public const string CollectionNounVariable = "variable";
+    public static string CollectionNounField => Loc.Text(nameof(CollectionNounField));
+    public static string CollectionNounRow => Loc.Text(nameof(CollectionNounRow));
+    public static string CollectionNounColumn => Loc.Text(nameof(CollectionNounColumn));
+    public static string CollectionNounVariable => Loc.Text(nameof(CollectionNounVariable));
     // The fallback, and the honest name for the routed collections whose sub-tab decides what the items are
     // (a procedure's arguments / variables / cursors / subprograms all share one command pair).
-    public const string CollectionNounItem = "item";
+    public static string CollectionNounItem => Loc.Text(nameof(CollectionNounItem));
 
     // Menu labels for the collections whose grids are edited in place — a generic noun, but the same verbs.
     // (These are LABELS. They used to be the tooltip constants above, reused as MenuItem headers, which is
     // how "Add item" ended up as a menu entry.)
-    public const string CollectionMenuNew = "Add item";
-    public const string CollectionMenuDelete = "Remove item";
-    public const string CollectionMoveUpTooltip = "Move up";
-    public const string CollectionMoveDownTooltip = "Move down";
+    public static string CollectionMenuNew => Loc.Text(nameof(CollectionMenuNew));
+    public static string CollectionMenuDelete => Loc.Text(nameof(CollectionMenuDelete));
+    public static string CollectionMoveUpTooltip => Loc.Text(nameof(CollectionMoveUpTooltip));
+    public static string CollectionMoveDownTooltip => Loc.Text(nameof(CollectionMoveDownTooltip));
 
-    public const string ViewModeToggleTooltip = "Toggle Source / Easy mode";
-    public const string ViewParseFailedNotice =
-        "Could not parse the view source into the column list + SELECT body — staying on the last structured model. Switch to Source mode to edit the full statement.";
-    public const string ViewNameHeader = "View name";
-    public const string ViewColumnsHeader = "Columns";
-    public const string ViewColumnAddTooltip = "Add column";
-    public const string ViewColumnDeleteTooltip = "Remove column";
-    public const string ViewColumnMoveUpTooltip = "Move column up";
-    public const string ViewColumnMoveDownTooltip = "Move column down";
-    public const string ViewColumnName = "Name";
-    public const string ViewBodyHeader = "SELECT body";
+    public static string ViewModeToggleTooltip => Loc.Text(nameof(ViewModeToggleTooltip));
+    public static string ViewParseFailedNotice => Loc.Text(nameof(ViewParseFailedNotice));
+    public static string ViewNameHeader => Loc.Text(nameof(ViewNameHeader));
+    public static string ViewColumnsHeader => Loc.Text(nameof(ViewColumnsHeader));
+    public static string ViewColumnAddTooltip => Loc.Text(nameof(ViewColumnAddTooltip));
+    public static string ViewColumnDeleteTooltip => Loc.Text(nameof(ViewColumnDeleteTooltip));
+    public static string ViewColumnMoveUpTooltip => Loc.Text(nameof(ViewColumnMoveUpTooltip));
+    public static string ViewColumnMoveDownTooltip => Loc.Text(nameof(ViewColumnMoveDownTooltip));
+    public static string ViewColumnName => Loc.Text(nameof(ViewColumnName));
+    public static string ViewBodyHeader => Loc.Text(nameof(ViewBodyHeader));
 
     // ─── Generator Detail ──────────────────────────────────────────────────
-    public const string GeneratorDetailTabGenerator = "Generator";
-    public const string GeneratorDetailTabDependencies = "Dependencies";
-    public const string GeneratorDetailTabDdl = "DDL";
-    public const string GeneratorNameHeader = "Name";
-    public const string GeneratorCurrentValueHeader = "Current value";
-    public const string GeneratorInitialValueHeader = "Initial value";
-    public const string GeneratorIncrementHeader = "Increment";
-    public const string GeneratorDescriptionHeader = "Description";
-    public const string GeneratorLoadingHint = "Loading generator…";
-    public const string GeneratorRefreshCurrentValueTooltip = "Refresh current value (re-read from database)";
-    public const string ToolbarNewGeneratorTooltip = "New generator";
-    public static readonly string GeneratorCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile generator (CREATE / ALTER SEQUENCE)");
-    public const string GeneratorCompileFailedFormat = "Compile failed: {0}";
-    public const string GeneratorDeleteTooltip = "Drop generator";
-    public const string GeneratorDeleteConfirmTitle = "Drop generator";
-    public const string GeneratorDeleteConfirmFormat = "Drop generator \"{0}\"? This cannot be undone.";
-    public const string GeneratorDeleteConfirmYes = "Drop";
-    public const string NewGeneratorTabDefaultTitle = "New Generator";
-    public const string NewGeneratorExecutedFormat = "Generator \"{0}\" created.";
+    public static string GeneratorDetailTabGenerator => Loc.Text(nameof(GeneratorDetailTabGenerator));
+    public static string GeneratorDetailTabDependencies => Loc.Text(nameof(GeneratorDetailTabDependencies));
+    public static string GeneratorDetailTabDdl => Loc.Text(nameof(GeneratorDetailTabDdl));
+    public static string GeneratorNameHeader => Loc.Text(nameof(GeneratorNameHeader));
+    public static string GeneratorCurrentValueHeader => Loc.Text(nameof(GeneratorCurrentValueHeader));
+    public static string GeneratorInitialValueHeader => Loc.Text(nameof(GeneratorInitialValueHeader));
+    public static string GeneratorIncrementHeader => Loc.Text(nameof(GeneratorIncrementHeader));
+    public static string GeneratorDescriptionHeader => Loc.Text(nameof(GeneratorDescriptionHeader));
+    public static string GeneratorLoadingHint => Loc.Text(nameof(GeneratorLoadingHint));
+    public static string GeneratorRefreshCurrentValueTooltip => Loc.Text(nameof(GeneratorRefreshCurrentValueTooltip));
+    public static string ToolbarNewGeneratorTooltip => Loc.Text(nameof(ToolbarNewGeneratorTooltip));
+    public static string GeneratorCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(GeneratorCompileTooltip)));
+    public static string GeneratorCompileFailedFormat => Loc.Text(nameof(GeneratorCompileFailedFormat));
+    public static string GeneratorDeleteTooltip => Loc.Text(nameof(GeneratorDeleteTooltip));
+    public static string GeneratorDeleteConfirmTitle => Loc.Text(nameof(GeneratorDeleteConfirmTitle));
+    public static string GeneratorDeleteConfirmFormat => Loc.Text(nameof(GeneratorDeleteConfirmFormat));
+    public static string GeneratorDeleteConfirmYes => Loc.Text(nameof(GeneratorDeleteConfirmYes));
+    public static string NewGeneratorTabDefaultTitle => Loc.Text(nameof(NewGeneratorTabDefaultTitle));
+    public static string NewGeneratorExecutedFormat => Loc.Text(nameof(NewGeneratorExecutedFormat));
 
     // ─── Exception Detail ──────────────────────────────────────────────────
-    public const string ExceptionDetailTabException = "Exception";
-    public const string ExceptionDetailTabDescription = "Description";
-    public const string ExceptionDetailTabDependencies = "Dependencies";
-    public const string ExceptionDetailTabDdl = "DDL";
-    public const string ExceptionNameHeader = "Name";
-    public const string ExceptionMessageHeader = "Message";
-    public const string ExceptionDescriptionEditLabel = "Exception description";
-    public const string ExceptionLoadingHint = "Loading exception…";
-    public const string ToolbarNewExceptionTooltip = "New exception";
-    public static readonly string ExceptionCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile exception (CREATE / ALTER EXCEPTION)");
-    public const string ExceptionCompileFailedFormat = "Compile failed: {0}";
-    public const string ExceptionDeleteTooltip = "Drop exception";
-    public const string ExceptionDeleteConfirmTitle = "Drop exception";
-    public const string ExceptionDeleteConfirmFormat = "Drop exception \"{0}\"? This cannot be undone.";
-    public const string ExceptionDeleteConfirmYes = "Drop";
-    public const string NewExceptionTabDefaultTitle = "New Exception";
-    public const string NewExceptionExecutedFormat = "Exception \"{0}\" created.";
+    public static string ExceptionDetailTabException => Loc.Text(nameof(ExceptionDetailTabException));
+    public static string ExceptionDetailTabDescription => Loc.Text(nameof(ExceptionDetailTabDescription));
+    public static string ExceptionDetailTabDependencies => Loc.Text(nameof(ExceptionDetailTabDependencies));
+    public static string ExceptionDetailTabDdl => Loc.Text(nameof(ExceptionDetailTabDdl));
+    public static string ExceptionNameHeader => Loc.Text(nameof(ExceptionNameHeader));
+    public static string ExceptionMessageHeader => Loc.Text(nameof(ExceptionMessageHeader));
+    public static string ExceptionDescriptionEditLabel => Loc.Text(nameof(ExceptionDescriptionEditLabel));
+    public static string ExceptionLoadingHint => Loc.Text(nameof(ExceptionLoadingHint));
+    public static string ToolbarNewExceptionTooltip => Loc.Text(nameof(ToolbarNewExceptionTooltip));
+    public static string ExceptionCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(ExceptionCompileTooltip)));
+    public static string ExceptionCompileFailedFormat => Loc.Text(nameof(ExceptionCompileFailedFormat));
+    public static string ExceptionDeleteTooltip => Loc.Text(nameof(ExceptionDeleteTooltip));
+    public static string ExceptionDeleteConfirmTitle => Loc.Text(nameof(ExceptionDeleteConfirmTitle));
+    public static string ExceptionDeleteConfirmFormat => Loc.Text(nameof(ExceptionDeleteConfirmFormat));
+    public static string ExceptionDeleteConfirmYes => Loc.Text(nameof(ExceptionDeleteConfirmYes));
+    public static string NewExceptionTabDefaultTitle => Loc.Text(nameof(NewExceptionTabDefaultTitle));
+    public static string NewExceptionExecutedFormat => Loc.Text(nameof(NewExceptionExecutedFormat));
 
     // ─── Index Detail ──────────────────────────────────────────────────────
-    public const string IndexDetailTabIndex = "Index";
-    public const string IndexDetailTabDdl = "DDL";
-    public const string IndexNameHeader = "Name";
-    public const string IndexTableHeader = "Table";
-    public const string IndexConstraintTypeHeader = "Constraint type";
-    public const string IndexConstraintTypeNoneWatermark = "— (plain index)";
+    public static string IndexDetailTabIndex => Loc.Text(nameof(IndexDetailTabIndex));
+    public static string IndexDetailTabDdl => Loc.Text(nameof(IndexDetailTabDdl));
+    public static string IndexNameHeader => Loc.Text(nameof(IndexNameHeader));
+    public static string IndexTableHeader => Loc.Text(nameof(IndexTableHeader));
+    public static string IndexConstraintTypeHeader => Loc.Text(nameof(IndexConstraintTypeHeader));
+    public static string IndexConstraintTypeNoneWatermark => Loc.Text(nameof(IndexConstraintTypeNoneWatermark));
     // Shown when the index backs a constraint, so it's immediately obvious WHY the
     // Active toggle and Drop action are disabled. {0} = PRIMARY KEY / UNIQUE / FOREIGN KEY.
-    public const string IndexConstraintBackedNoteFormat =
-        "Backs a {0} constraint — Firebird manages it through the constraint, so it can't be deactivated or dropped directly. Use Table Detail → Constraints.";
-    public const string IndexFieldsHeader = "Fields";
-    public const string IndexUniqueHeader = "Unique";
-    public const string IndexSortDirectionHeader = "Sort direction";
-    public const string IndexStatisticsHeader = "Statistics";
-    public const string IndexStatisticsNoneWatermark = "(not computed)";
-    public const string IndexActiveHeader = "Active";
-    public const string IndexDescriptionHeader = "Description";
-    public const string IndexLoadingHint = "Loading index…";
-    public const string IndexNotFoundFormat = "Index \"{0}\" not found.";
-    public static readonly string IndexCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile index changes (ALTER INDEX / COMMENT ON INDEX)");
-    public const string IndexCompileFailedFormat = "Compile failed: {0}";
-    public const string IndexRecomputeStatisticsTooltip = "Recompute statistics (SET STATISTICS INDEX)";
-    public const string IndexDeleteTooltip = "Drop index";
-    public const string IndexDeleteConfirmTitle = "Drop index";
-    public const string IndexDeleteConfirmFormat = "Drop index \"{0}\"? This cannot be undone.";
-    public const string IndexDeleteConfirmYes = "Drop";
+    public static string IndexConstraintBackedNoteFormat => Loc.Text(nameof(IndexConstraintBackedNoteFormat));
+    public static string IndexFieldsHeader => Loc.Text(nameof(IndexFieldsHeader));
+    public static string IndexUniqueHeader => Loc.Text(nameof(IndexUniqueHeader));
+    public static string IndexSortDirectionHeader => Loc.Text(nameof(IndexSortDirectionHeader));
+    public static string IndexStatisticsHeader => Loc.Text(nameof(IndexStatisticsHeader));
+    public static string IndexStatisticsNoneWatermark => Loc.Text(nameof(IndexStatisticsNoneWatermark));
+    public static string IndexActiveHeader => Loc.Text(nameof(IndexActiveHeader));
+    public static string IndexDescriptionHeader => Loc.Text(nameof(IndexDescriptionHeader));
+    public static string IndexLoadingHint => Loc.Text(nameof(IndexLoadingHint));
+    public static string IndexNotFoundFormat => Loc.Text(nameof(IndexNotFoundFormat));
+    public static string IndexCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(IndexCompileTooltip)));
+    public static string IndexCompileFailedFormat => Loc.Text(nameof(IndexCompileFailedFormat));
+    public static string IndexRecomputeStatisticsTooltip => Loc.Text(nameof(IndexRecomputeStatisticsTooltip));
+    public static string IndexDeleteTooltip => Loc.Text(nameof(IndexDeleteTooltip));
+    public static string IndexDeleteConfirmTitle => Loc.Text(nameof(IndexDeleteConfirmTitle));
+    public static string IndexDeleteConfirmFormat => Loc.Text(nameof(IndexDeleteConfirmFormat));
+    public static string IndexDeleteConfirmYes => Loc.Text(nameof(IndexDeleteConfirmYes));
 
     // ─── Domain Detail ───────────────────────────────────────────────────────
-    public const string DomainDetailTabDomain = "Domain";
-    public const string DomainDetailTabDescription = "Description";
-    public const string DomainDetailTabUsedBy = "Used By";
-    public const string DomainDetailTabDdl = "DDL";
-    public const string DomainNameHeader = "Name";
-    public const string DomainDataTypeHeader = "Data type";
-    public const string DomainLengthHeader = "Length";
-    public const string DomainPrecisionHeader = "Precision";
-    public const string DomainScaleHeader = "Scale";
-    public const string DomainSubTypeHeader = "Sub type";
-    public const string DomainCharacterSetHeader = "Character set";
-    public const string DomainCollationHeader = "Collation";
-    public const string DomainDefaultHeader = "Default value";
-    public const string DomainCheckHeader = "Check constraint";
-    public const string DomainNotNullHeader = "Not null";
-    public const string DomainLoadingHint = "Loading domain…";
-    public const string ToolbarNewDomainTooltip = "New domain";
-    public static readonly string DomainCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile domain (CREATE / ALTER DOMAIN)");
-    public const string DomainCompileFailedFormat = "Compile failed: {0}";
-    public const string DomainRenamedFormat = "Domain renamed to \"{0}\".";
-    public const string DomainDeleteTooltip = "Drop domain";
-    public const string DomainDeleteConfirmTitle = "Drop domain";
-    public const string DomainDeleteConfirmFormat = "Drop domain \"{0}\"? This cannot be undone.";
-    public const string DomainDeleteConfirmYes = "Drop";
-    public const string NewDomainTabDefaultTitle = "New Domain";
-    public const string NewDomainExecutedFormat = "Domain \"{0}\" created.";
+    public static string DomainDetailTabDomain => Loc.Text(nameof(DomainDetailTabDomain));
+    public static string DomainDetailTabDescription => Loc.Text(nameof(DomainDetailTabDescription));
+    public static string DomainDetailTabUsedBy => Loc.Text(nameof(DomainDetailTabUsedBy));
+    public static string DomainDetailTabDdl => Loc.Text(nameof(DomainDetailTabDdl));
+    public static string DomainNameHeader => Loc.Text(nameof(DomainNameHeader));
+    public static string DomainDataTypeHeader => Loc.Text(nameof(DomainDataTypeHeader));
+    public static string DomainLengthHeader => Loc.Text(nameof(DomainLengthHeader));
+    public static string DomainPrecisionHeader => Loc.Text(nameof(DomainPrecisionHeader));
+    public static string DomainScaleHeader => Loc.Text(nameof(DomainScaleHeader));
+    public static string DomainSubTypeHeader => Loc.Text(nameof(DomainSubTypeHeader));
+    public static string DomainCharacterSetHeader => Loc.Text(nameof(DomainCharacterSetHeader));
+    public static string DomainCollationHeader => Loc.Text(nameof(DomainCollationHeader));
+    public static string DomainDefaultHeader => Loc.Text(nameof(DomainDefaultHeader));
+    public static string DomainCheckHeader => Loc.Text(nameof(DomainCheckHeader));
+    public static string DomainNotNullHeader => Loc.Text(nameof(DomainNotNullHeader));
+    public static string DomainLoadingHint => Loc.Text(nameof(DomainLoadingHint));
+    public static string ToolbarNewDomainTooltip => Loc.Text(nameof(ToolbarNewDomainTooltip));
+    public static string DomainCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(DomainCompileTooltip)));
+    public static string DomainCompileFailedFormat => Loc.Text(nameof(DomainCompileFailedFormat));
+    public static string DomainRenamedFormat => Loc.Text(nameof(DomainRenamedFormat));
+    public static string DomainDeleteTooltip => Loc.Text(nameof(DomainDeleteTooltip));
+    public static string DomainDeleteConfirmTitle => Loc.Text(nameof(DomainDeleteConfirmTitle));
+    public static string DomainDeleteConfirmFormat => Loc.Text(nameof(DomainDeleteConfirmFormat));
+    public static string DomainDeleteConfirmYes => Loc.Text(nameof(DomainDeleteConfirmYes));
+    public static string NewDomainTabDefaultTitle => Loc.Text(nameof(NewDomainTabDefaultTitle));
+    public static string NewDomainExecutedFormat => Loc.Text(nameof(NewDomainExecutedFormat));
 
     // ─── Procedure Detail (Procedure Detail V1) ─────────────────────────────
-    public const string ProcedureNameHeader = "Procedure name";
-    public const string ProcedureDetailTabEditor = "Editor";
-    public const string ProcedureDetailTabDescription = "Description";
-    public const string ProcedureDetailTabDependencies = "Dependencies";
-    public const string ProcedureDetailTabDdl = "DDL";
-    public const string ProcedureDetailParamInputFormat = "Input ({0})";
-    public const string ProcedureDetailParamOutputFormat = "Output ({0})";
-    public const string ProcedureDetailLoadingHint = "Loading procedure…";
-    public static readonly string ProcedureCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile procedure (CREATE OR ALTER PROCEDURE)");
-    public const string ProcedureCompileFailedFormat = "Compile failed: {0}";
-    public const string ToolbarNewProcedureTooltip = "New procedure";
-    public const string NewProcedureTabDefaultTitle = "New Procedure";
-    public const string NewProcedureExecutedFormat = "Procedure \"{0}\" created.";
+    public static string ProcedureNameHeader => Loc.Text(nameof(ProcedureNameHeader));
+    public static string ProcedureDetailTabEditor => Loc.Text(nameof(ProcedureDetailTabEditor));
+    public static string ProcedureDetailTabDescription => Loc.Text(nameof(ProcedureDetailTabDescription));
+    public static string ProcedureDetailTabDependencies => Loc.Text(nameof(ProcedureDetailTabDependencies));
+    public static string ProcedureDetailTabDdl => Loc.Text(nameof(ProcedureDetailTabDdl));
+    public static string ProcedureDetailParamInputFormat => Loc.Text(nameof(ProcedureDetailParamInputFormat));
+    public static string ProcedureDetailParamOutputFormat => Loc.Text(nameof(ProcedureDetailParamOutputFormat));
+    public static string ProcedureDetailLoadingHint => Loc.Text(nameof(ProcedureDetailLoadingHint));
+    public static string ProcedureCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(ProcedureCompileTooltip)));
+    public static string ProcedureCompileFailedFormat => Loc.Text(nameof(ProcedureCompileFailedFormat));
+    public static string ToolbarNewProcedureTooltip => Loc.Text(nameof(ToolbarNewProcedureTooltip));
+    public static string NewProcedureTabDefaultTitle => Loc.Text(nameof(NewProcedureTabDefaultTitle));
+    public static string NewProcedureExecutedFormat => Loc.Text(nameof(NewProcedureExecutedFormat));
 
     // ─── Procedure Detail V1.1 (modes, locals, execute, comment) ────────────
-    public const string ProcedureDetailTabResult = "Result";
+    public static string ProcedureDetailTabResult => Loc.Text(nameof(ProcedureDetailTabResult));
 
     // Performance sub-tab in Procedure/Function Detail — hosts the per-tab PerformancePanelView.
-    public const string DetailTabPerformance = "Performance";
+    public static string DetailTabPerformance => Loc.Text(nameof(DetailTabPerformance));
 
     // Heading above the per-table breakdown in the expanded exec-info panel.
-    public const string ExecutionSummaryHeader = "Execution summary";
+    public static string ExecutionSummaryHeader => Loc.Text(nameof(ExecutionSummaryHeader));
 
     // Clean styled line for a run that changed nothing (read-only) in the expanded exec-info panel
     // — reads/returned rows live in the collapsed header + the Performance tab, not here.
-    public const string ExecutionSummaryNoChanges = "No data was changed by this execution.";
-    public const string ProcedureDetailLocalsVariablesFormat = "Variables ({0})";
-    public const string ProcedureDetailLocalsCursorsFormat = "Cursors ({0})";
-    public const string ProcedureDetailLocalsSubprogramsFormat = "Subprograms ({0})";
-    public const string ProcedureDetailLocalsColumnDetail = "Detail";
-    public const string ProcedureParseFailedNotice =
-        "Couldn't parse the source into structured form — Easy mode is showing the last loaded state. Edit in Source mode, or fix the header.";
-    public const string ProcedureModeSourceLabel = "Source";
-    public const string ProcedureModeEasyLabel = "Easy";
-    public const string ProcedureModeToggleTooltip = "Toggle Source / Easy mode";
-    public const string ProcedureExecuteTooltip = "Execute procedure";
-    public const string ProcedureCommentTooltip = "Comment body — disable the procedure body (/* */)";
-    public const string ProcedureUncommentTooltip = "Uncomment body — re-enable the procedure body";
-    public const string ProcedureParamAddTooltip = "Add parameter";
-    public const string ProcedureParamDeleteTooltip = "Remove parameter";
-    public const string ProcedureParamMoveUpTooltip = "Move parameter up";
-    public const string ProcedureParamMoveDownTooltip = "Move parameter down";
-    public const string ProcedureExecRowsFormat = "{0} row(s) returned.";
-    public const string ProcedureExecCompleted = "Procedure executed.";
+    public static string ExecutionSummaryNoChanges => Loc.Text(nameof(ExecutionSummaryNoChanges));
+    public static string ProcedureDetailLocalsVariablesFormat => Loc.Text(nameof(ProcedureDetailLocalsVariablesFormat));
+    public static string ProcedureDetailLocalsCursorsFormat => Loc.Text(nameof(ProcedureDetailLocalsCursorsFormat));
+    public static string ProcedureDetailLocalsSubprogramsFormat => Loc.Text(nameof(ProcedureDetailLocalsSubprogramsFormat));
+    public static string ProcedureDetailLocalsColumnDetail => Loc.Text(nameof(ProcedureDetailLocalsColumnDetail));
+    public static string ProcedureParseFailedNotice => Loc.Text(nameof(ProcedureParseFailedNotice));
+    public static string ProcedureModeSourceLabel => Loc.Text(nameof(ProcedureModeSourceLabel));
+    public static string ProcedureModeEasyLabel => Loc.Text(nameof(ProcedureModeEasyLabel));
+    public static string ProcedureModeToggleTooltip => Loc.Text(nameof(ProcedureModeToggleTooltip));
+    public static string ProcedureExecuteTooltip => Loc.Text(nameof(ProcedureExecuteTooltip));
+    public static string ProcedureCommentTooltip => Loc.Text(nameof(ProcedureCommentTooltip));
+    public static string ProcedureUncommentTooltip => Loc.Text(nameof(ProcedureUncommentTooltip));
+    public static string ProcedureParamAddTooltip => Loc.Text(nameof(ProcedureParamAddTooltip));
+    public static string ProcedureParamDeleteTooltip => Loc.Text(nameof(ProcedureParamDeleteTooltip));
+    public static string ProcedureParamMoveUpTooltip => Loc.Text(nameof(ProcedureParamMoveUpTooltip));
+    public static string ProcedureParamMoveDownTooltip => Loc.Text(nameof(ProcedureParamMoveDownTooltip));
+    public static string ProcedureExecRowsFormat => Loc.Text(nameof(ProcedureExecRowsFormat));
+    public static string ProcedureExecCompleted => Loc.Text(nameof(ProcedureExecCompleted));
     // {0} = count, {1} = elapsed ms.
-    public const string ProcedureExecInfoRowsFormat = "Executed in {1} ms · {0} row(s) returned";
-    public const string ProcedureExecInfoAffectedFormat = "Executed in {1} ms · {0} row(s) affected";
-    public const string ProcedureExecInfoCompletedFormat = "Executed in {0} ms · completed";
-    public const string ProcedureExecutedViaDataProfile = "Executed procedure via Data profile.";
-    public const string ProcedureExecEmptyHint = "Execute to see results.";
+    public static string ProcedureExecInfoRowsFormat => Loc.Text(nameof(ProcedureExecInfoRowsFormat));
+    public static string ProcedureExecInfoAffectedFormat => Loc.Text(nameof(ProcedureExecInfoAffectedFormat));
+    public static string ProcedureExecInfoCompletedFormat => Loc.Text(nameof(ProcedureExecInfoCompletedFormat));
+    public static string ProcedureExecutedViaDataProfile => Loc.Text(nameof(ProcedureExecutedViaDataProfile));
+    public static string ProcedureExecEmptyHint => Loc.Text(nameof(ProcedureExecEmptyHint));
 
     // New-element templates (FB-valid PSQL) used when adding a cursor / subprogram.
-    public const string ProcedureSnippetVariable = "declare variable NewVariable integer;\n";
-    public const string ProcedureSnippetCursor = "DECLARE NEW_CURSOR CURSOR FOR (\n    SELECT /* columns */\n    FROM /* table */\n);";
-    public const string ProcedureSnippetSubprogram = "DECLARE PROCEDURE NEW_PROCEDURE\nAS\nBEGIN\n    /* body */\nEND";
-    public const string ProcedureSnippetFunction = "DECLARE FUNCTION NEW_FUNCTION\nRETURNS INTEGER\nAS\nBEGIN\n    /* body */\n    RETURN 0;\nEND";
-    public const string ProcedureLocalsSourceEmptyHint = "Select an item to edit its source.";
+    public static string ProcedureSnippetVariable => Loc.Text(nameof(ProcedureSnippetVariable));
+    public static string ProcedureSnippetCursor => Loc.Text(nameof(ProcedureSnippetCursor));
+    public static string ProcedureSnippetSubprogram => Loc.Text(nameof(ProcedureSnippetSubprogram));
+    public static string ProcedureSnippetFunction => Loc.Text(nameof(ProcedureSnippetFunction));
+    public static string ProcedureLocalsSourceEmptyHint => Loc.Text(nameof(ProcedureLocalsSourceEmptyHint));
 
     // ─── Function Detail ────────────────────────────────────────────────────
     // Reuses the Procedure strings for the shared surface (mode toggle, Variables/
     // Cursors/Subprograms headers, Comment/Uncomment, exec-info, snippets, Dependencies
     // / DDL tab labels). Only the function-specific differences live here.
-    public const string FunctionDetailArgumentsFormat = "Arguments ({0})";
-    public const string FunctionDetailTabResult = "Result";            // Easy-mode return-type metadata
-    public const string FunctionDetailExecuteResultTab = "Execute Result"; // runtime execution output
-    public const string FunctionDetailReturnTypeLabel = "Return type";
-    public const string FunctionDetailDeterministicLabel = "Deterministic";
-    public const string FunctionDetailLoadingHint = "Loading function…";
-    public static readonly string FunctionCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile function (CREATE OR ALTER FUNCTION)");
-    public const string FunctionCompileFailedFormat = "Compile failed: {0}";
-    public const string FunctionExecuteTooltip = "Execute function";
-    public const string FunctionExecutedViaDataProfile = "Executed function via Data profile.";
-    public const string FunctionResultRequiredNotice = "A function must declare a return type (Result).";
-    public const string FunctionParseFailedNotice =
-        "Couldn't parse the source into structured form — Easy mode is showing the last loaded state. Edit in Source mode, or fix the header.";
-    public const string ToolbarNewFunctionTooltip = "New function";
-    public const string NewFunctionTabDefaultTitle = "New Function";
-    public const string NewFunctionExecutedFormat = "Function \"{0}\" created.";
-    public const string FunctionArgumentAddTooltip = "Add argument";
-    public const string FunctionArgumentDeleteTooltip = "Remove argument";
-    public const string FunctionArgumentMoveUpTooltip = "Move argument up";
-    public const string FunctionArgumentMoveDownTooltip = "Move argument down";
+    public static string FunctionDetailArgumentsFormat => Loc.Text(nameof(FunctionDetailArgumentsFormat));
+    public static string FunctionDetailTabResult => Loc.Text(nameof(FunctionDetailTabResult));            // Easy-mode return-type metadata
+    public static string FunctionDetailExecuteResultTab => Loc.Text(nameof(FunctionDetailExecuteResultTab)); // runtime execution output
+    public static string FunctionDetailReturnTypeLabel => Loc.Text(nameof(FunctionDetailReturnTypeLabel));
+    public static string FunctionDetailDeterministicLabel => Loc.Text(nameof(FunctionDetailDeterministicLabel));
+    public static string FunctionDetailLoadingHint => Loc.Text(nameof(FunctionDetailLoadingHint));
+    public static string FunctionCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(FunctionCompileTooltip)));
+    public static string FunctionCompileFailedFormat => Loc.Text(nameof(FunctionCompileFailedFormat));
+    public static string FunctionExecuteTooltip => Loc.Text(nameof(FunctionExecuteTooltip));
+    public static string FunctionExecutedViaDataProfile => Loc.Text(nameof(FunctionExecutedViaDataProfile));
+    public static string FunctionResultRequiredNotice => Loc.Text(nameof(FunctionResultRequiredNotice));
+    public static string FunctionParseFailedNotice => Loc.Text(nameof(FunctionParseFailedNotice));
+    public static string ToolbarNewFunctionTooltip => Loc.Text(nameof(ToolbarNewFunctionTooltip));
+    public static string NewFunctionTabDefaultTitle => Loc.Text(nameof(NewFunctionTabDefaultTitle));
+    public static string NewFunctionExecutedFormat => Loc.Text(nameof(NewFunctionExecutedFormat));
+    public static string FunctionArgumentAddTooltip => Loc.Text(nameof(FunctionArgumentAddTooltip));
+    public static string FunctionArgumentDeleteTooltip => Loc.Text(nameof(FunctionArgumentDeleteTooltip));
+    public static string FunctionArgumentMoveUpTooltip => Loc.Text(nameof(FunctionArgumentMoveUpTooltip));
+    public static string FunctionArgumentMoveDownTooltip => Loc.Text(nameof(FunctionArgumentMoveDownTooltip));
 
     // New-subprogram kind prompt (Procedure / Function).
-    public const string SubprogramKindDialogTitle = "New Subprogram";
-    public const string SubprogramKindDialogPrompt = "Create a procedure or a function?";
-    public const string SubprogramKindProcedure = "Procedure";
-    public const string SubprogramKindFunction = "Function";
+    public static string SubprogramKindDialogTitle => Loc.Text(nameof(SubprogramKindDialogTitle));
+    public static string SubprogramKindDialogPrompt => Loc.Text(nameof(SubprogramKindDialogPrompt));
+    public static string SubprogramKindProcedure => Loc.Text(nameof(SubprogramKindProcedure));
+    public static string SubprogramKindFunction => Loc.Text(nameof(SubprogramKindFunction));
 
     // Merged Domain/Column picker (Faza 4) — one cell replacing the separate Domain +
     // TYPE OF columns. Tab 1 = the domain list; tab 2 = a table→column picker (TYPE OF COLUMN).
-    public const string FieldTypeSourceHeader = "Domain / Column";
-    public const string FieldTypeSourceDomainTab = "Domain";
-    public const string FieldTypeSourceColumnTab = "Column";
+    public static string FieldTypeSourceHeader => Loc.Text(nameof(FieldTypeSourceHeader));
+    public static string FieldTypeSourceDomainTab => Loc.Text(nameof(FieldTypeSourceDomainTab));
+    public static string FieldTypeSourceColumnTab => Loc.Text(nameof(FieldTypeSourceColumnTab));
 
     // Variable / parameter grid column headers not already present.
-    public const string ProcedureFieldTypeOf = "TYPE OF";
-    public const string ProcedureFieldSubType = "Sub Type";
-    public const string ProcedureFieldCharset = "Charset";
-    public const string ProcedureFieldCollate = "Collate";
-    public const string ProcedureFieldDescription = "Description";
-    public const string ProcedureCursorScroll = "Scroll";
+    public static string ProcedureFieldTypeOf => Loc.Text(nameof(ProcedureFieldTypeOf));
+    public static string ProcedureFieldSubType => Loc.Text(nameof(ProcedureFieldSubType));
+    public static string ProcedureFieldCharset => Loc.Text(nameof(ProcedureFieldCharset));
+    public static string ProcedureFieldCollate => Loc.Text(nameof(ProcedureFieldCollate));
+    public static string ProcedureFieldDescription => Loc.Text(nameof(ProcedureFieldDescription));
+    public static string ProcedureCursorScroll => Loc.Text(nameof(ProcedureCursorScroll));
 
     // Local-element editor toolbars (Variables / Cursors / Subprograms — model-backed).
-    public const string ProcedureLocalAddTooltip = "Add";
-    public const string ProcedureLocalDeleteTooltip = "Delete";
-    public const string ProcedureLocalMoveUpTooltip = "Move up";
-    public const string ProcedureLocalMoveDownTooltip = "Move down";
+    public static string ProcedureLocalAddTooltip => Loc.Text(nameof(ProcedureLocalAddTooltip));
+    public static string ProcedureLocalDeleteTooltip => Loc.Text(nameof(ProcedureLocalDeleteTooltip));
+    public static string ProcedureLocalMoveUpTooltip => Loc.Text(nameof(ProcedureLocalMoveUpTooltip));
+    public static string ProcedureLocalMoveDownTooltip => Loc.Text(nameof(ProcedureLocalMoveDownTooltip));
 
     // Execute Procedure parameter dialog
     // ⚠⚠ NEUTRAL ON PURPOSE (user decision, 2026-08-03). This dialog stopped being only about procedures long
@@ -2206,40 +2257,39 @@ internal static class UiStrings
     // mislabelled surface causes: the behaviour was correct and only the label lied.
     // ⛔ Do not narrow it back to a procedure-specific wording; the reuse is the design (one parameter editor, not
     // two), and the dialog is reached from procedure execution AND from F5 on parameterised SQL.
-    public const string ProcedureExecuteDialogTitle = "Execute";
-    public const string ProcedureExecuteDialogColumnName = "Parameter";
-    public const string ProcedureExecuteDialogColumnType = "Type";
-    public const string ProcedureExecuteDialogColumnValue = "Value";
-    public const string ProcedureExecuteDialogColumnNull = "NULL";
-    public const string ProcedureExecuteDialogRun = "Execute";
-    public const string ProcedureExecuteDialogCancel = "Cancel";
-    public const string ProcedureExecuteDialogHistoryLabel = "History";
-    public const string ProcedureExecuteDialogHistoryEmpty = "No previous executions";
-    public const string ProcedureExecuteDialogTimeWatermark = "HH:MM:SS";
-    public const string ProcedureExecuteDialogTimeInvalid = "Invalid time format — use HH:MM:SS (e.g. 08:00:00).";
+    public static string ProcedureExecuteDialogTitle => Loc.Text(nameof(ProcedureExecuteDialogTitle));
+    public static string ProcedureExecuteDialogColumnName => Loc.Text(nameof(ProcedureExecuteDialogColumnName));
+    public static string ProcedureExecuteDialogColumnType => Loc.Text(nameof(ProcedureExecuteDialogColumnType));
+    public static string ProcedureExecuteDialogColumnValue => Loc.Text(nameof(ProcedureExecuteDialogColumnValue));
+    public static string ProcedureExecuteDialogColumnNull => Loc.Text(nameof(ProcedureExecuteDialogColumnNull));
+    public static string ProcedureExecuteDialogRun => Loc.Text(nameof(ProcedureExecuteDialogRun));
+    public static string ProcedureExecuteDialogCancel => Loc.Text(nameof(ProcedureExecuteDialogCancel));
+    public static string ProcedureExecuteDialogHistoryLabel => Loc.Text(nameof(ProcedureExecuteDialogHistoryLabel));
+    public static string ProcedureExecuteDialogHistoryEmpty => Loc.Text(nameof(ProcedureExecuteDialogHistoryEmpty));
+    public static string ProcedureExecuteDialogTimeWatermark => Loc.Text(nameof(ProcedureExecuteDialogTimeWatermark));
+    public static string ProcedureExecuteDialogTimeInvalid => Loc.Text(nameof(ProcedureExecuteDialogTimeInvalid));
 
     // ─── Trigger Detail ─────────────────────────────────────────────────────
-    public const string TriggerNameHeader = "Trigger name";
-    public const string TriggerTableHeader = "Table";
-    public const string TriggerTimingHeader = "Timing";
-    public const string TriggerEventsHeader = "Events";
-    public const string TriggerEventInsert = "INSERT";
-    public const string TriggerEventUpdate = "UPDATE";
-    public const string TriggerEventDelete = "DELETE";
-    public const string TriggerPositionHeader = "Position";
-    public const string TriggerActive = "Active";
-    public const string TriggerDetailLoadingHint = "Loading trigger…";
-    public static readonly string TriggerCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile trigger (CREATE OR ALTER TRIGGER)");
-    public const string TriggerCompileFailedFormat = "Compile failed: {0}";
-    public const string TriggerModeToggleTooltip = "Toggle Source / Easy mode";
-    public const string TriggerParseFailedNotice =
-        "Couldn't parse the source into structured form — Easy mode is showing the last loaded state. Edit in Source mode, or fix the header.";
-    public const string TriggerTableRequiredNotice = "Select the table the trigger fires for before compiling.";
-    public const string TriggerEventRequiredNotice = "Select at least one event (INSERT / UPDATE / DELETE) before compiling.";
-    public const string ToolbarNewTriggerTooltip = "New trigger";
-    public const string NewTriggerTabDefaultTitle = "New Trigger";
-    public const string NewTriggerExecutedFormat = "Trigger \"{0}\" created.";
+    public static string TriggerNameHeader => Loc.Text(nameof(TriggerNameHeader));
+    public static string TriggerTableHeader => Loc.Text(nameof(TriggerTableHeader));
+    public static string TriggerTimingHeader => Loc.Text(nameof(TriggerTimingHeader));
+    public static string TriggerEventsHeader => Loc.Text(nameof(TriggerEventsHeader));
+    public static string TriggerEventInsert => Loc.Text(nameof(TriggerEventInsert));
+    public static string TriggerEventUpdate => Loc.Text(nameof(TriggerEventUpdate));
+    public static string TriggerEventDelete => Loc.Text(nameof(TriggerEventDelete));
+    public static string TriggerPositionHeader => Loc.Text(nameof(TriggerPositionHeader));
+    public static string TriggerActive => Loc.Text(nameof(TriggerActive));
+    public static string TriggerDetailLoadingHint => Loc.Text(nameof(TriggerDetailLoadingHint));
+    public static string TriggerCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(TriggerCompileTooltip)));
+    public static string TriggerCompileFailedFormat => Loc.Text(nameof(TriggerCompileFailedFormat));
+    public static string TriggerModeToggleTooltip => Loc.Text(nameof(TriggerModeToggleTooltip));
+    public static string TriggerParseFailedNotice => Loc.Text(nameof(TriggerParseFailedNotice));
+    public static string TriggerTableRequiredNotice => Loc.Text(nameof(TriggerTableRequiredNotice));
+    public static string TriggerEventRequiredNotice => Loc.Text(nameof(TriggerEventRequiredNotice));
+    public static string ToolbarNewTriggerTooltip => Loc.Text(nameof(ToolbarNewTriggerTooltip));
+    public static string NewTriggerTabDefaultTitle => Loc.Text(nameof(NewTriggerTabDefaultTitle));
+    public static string NewTriggerExecutedFormat => Loc.Text(nameof(NewTriggerExecutedFormat));
 
     /// <summary>
     /// The three facts a user must be told after compiling a renamed object, because Firebird has no rename
@@ -2247,295 +2297,291 @@ internal static class UiStrings
     /// <c>-104 Token unknown</c>). ⚠ The third sentence is the one that matters: an object they did not expect
     /// is now in their database, and nothing else will tell them.
     /// </summary>
-    public const string ObjectRenameNotSupportedTitle = "Renaming created a new object";
+    public static string ObjectRenameNotSupportedTitle => Loc.Text(nameof(ObjectRenameNotSupportedTitle));
 
     /// <summary>The acknowledge button of a dialog that reports rather than asks.</summary>
-    public const string DialogOk = "OK";
+    public static string DialogOk => Loc.Text(nameof(DialogOk));
 
-    public const string ObjectRenameNotSupportedFormat =
-        "Firebird cannot rename this kind of object, so the compile created a new one.\n\n"
-        + "• \"{0}\" has been created with the definition from this tab.\n"
-        + "• \"{1}\" still exists in the database and was NOT removed.\n\n"
-        + "Delete \"{1}\" yourself once you have checked that nothing depends on it.";
+    public static string ObjectRenameNotSupportedFormat => Loc.Text(nameof(ObjectRenameNotSupportedFormat));
 
-    public const string FieldEditCompileIcon = "⚡";
-    public static readonly string FieldEditCompileTooltip = CommandTip.For(
-        CommandId.Compile, "Compile pending changes (apply DDL + auto-commit)");
-    public const string FieldEditDiscardTooltip = "Discard pending changes";
+    public static string FieldEditCompileIcon => Loc.Text(nameof(FieldEditCompileIcon));
+    public static string FieldEditCompileTooltip => CommandTip.For(
+        CommandId.Compile, Loc.Text(nameof(FieldEditCompileTooltip)));
+    public static string FieldEditDiscardTooltip => Loc.Text(nameof(FieldEditDiscardTooltip));
     // Confirmation before discarding the table designer's buffered structural changes —
     // an accidental click must not silently throw away uncompiled work.
-    public const string FieldEditDiscardConfirmTitle = "Discard changes";
-    public const string FieldEditDiscardConfirmFormat = "Discard all pending structural changes to \"{0}\"? Uncompiled changes will be lost.";
-    public const string FieldEditDiscardConfirmYes = "Discard";
+    public static string FieldEditDiscardConfirmTitle => Loc.Text(nameof(FieldEditDiscardConfirmTitle));
+    public static string FieldEditDiscardConfirmFormat => Loc.Text(nameof(FieldEditDiscardConfirmFormat));
+    public static string FieldEditDiscardConfirmYes => Loc.Text(nameof(FieldEditDiscardConfirmYes));
 
     // ─── Revert (View / Procedure / Trigger source editors) ─────────────────
     // The source-editor analog of the table designer's "discard pending changes":
     // reload the object from the database, throwing away uncompiled edits. The
     // confirmation guards against an accidental click losing work. Every object
     // editor must expose this button — see the editor contract in CLAUDE.md.
-    public const string RevertChangesTooltip = "Revert changes (reload from database)";
-    public const string RevertChangesConfirmTitle = "Revert changes";
-    public const string RevertChangesConfirmFormat = "Discard your unsaved changes to \"{0}\" and reload it from the database? Uncompiled changes will be lost.";
-    public const string RevertChangesConfirmYes = "Revert";
-    public const string FieldEditAddIcon = "+";
-    public const string FieldEditAddTooltip = "Add field";
-    public const string FieldEditDropIcon = "−";
-    public const string FieldEditDropTooltip = "Drop selected field";
-    public const string FieldEditMoveUpIcon = "↑";
-    public const string FieldEditMoveUpTooltip = "Move field up";
-    public const string FieldEditMoveDownIcon = "↓";
-    public const string FieldEditMoveDownTooltip = "Move field down";
-    public const string FieldEditDropConfirmTitle = "Drop field";
-    public const string FieldEditDropConfirmFormat = "Drop field \"{0}\"? The ALTER TABLE … DROP runs immediately in the active transaction — use Rollback to undo.";
-    public const string FieldEditDropConfirmYes = "Drop";
-    public const string FieldEditPendingHeader = "-- Pending changes:";
-    public const string FieldEditCompileFailedFormat = "Compile failed: {0}";
-    public const string FieldEditDescriptionAddFormat = "Add field {0}";
-    public const string FieldEditDescriptionDropFormat = "Drop field {0}";
-    public const string FieldEditDescriptionMoveFormat = "Move field {0} to position {1}";
-    public const string FieldEditDescriptionRenameFormat = "Rename field {0} → {1}";
-    public const string FieldEditDescriptionSetNotNullFormat = "Set NOT NULL on {0}";
-    public const string FieldEditDescriptionDropNotNullFormat = "Drop NOT NULL on {0}";
-    public const string FieldEditDescriptionSetDefaultFormat = "Set DEFAULT on {0}";
-    public const string FieldEditDescriptionDropDefaultFormat = "Drop DEFAULT on {0}";
-    public const string FieldEditDescriptionAlterTypeFormat = "Alter type of {0} to {1}";
-    public const string FieldEditDescriptionCommentFormat = "Comment column {0}";
-    public const string FieldEditRenameBlockedFormat = "Cannot rename {0} — column is referenced by other database objects.";
+    public static string RevertChangesTooltip => Loc.Text(nameof(RevertChangesTooltip));
+    public static string RevertChangesConfirmTitle => Loc.Text(nameof(RevertChangesConfirmTitle));
+    public static string RevertChangesConfirmFormat => Loc.Text(nameof(RevertChangesConfirmFormat));
+    public static string RevertChangesConfirmYes => Loc.Text(nameof(RevertChangesConfirmYes));
+    public static string FieldEditAddIcon => Loc.Text(nameof(FieldEditAddIcon));
+    public static string FieldEditAddTooltip => Loc.Text(nameof(FieldEditAddTooltip));
+    public static string FieldEditDropIcon => Loc.Text(nameof(FieldEditDropIcon));
+    public static string FieldEditDropTooltip => Loc.Text(nameof(FieldEditDropTooltip));
+    public static string FieldEditMoveUpIcon => Loc.Text(nameof(FieldEditMoveUpIcon));
+    public static string FieldEditMoveUpTooltip => Loc.Text(nameof(FieldEditMoveUpTooltip));
+    public static string FieldEditMoveDownIcon => Loc.Text(nameof(FieldEditMoveDownIcon));
+    public static string FieldEditMoveDownTooltip => Loc.Text(nameof(FieldEditMoveDownTooltip));
+    public static string FieldEditDropConfirmTitle => Loc.Text(nameof(FieldEditDropConfirmTitle));
+    public static string FieldEditDropConfirmFormat => Loc.Text(nameof(FieldEditDropConfirmFormat));
+    public static string FieldEditDropConfirmYes => Loc.Text(nameof(FieldEditDropConfirmYes));
+    public static string FieldEditPendingHeader => Loc.Text(nameof(FieldEditPendingHeader));
+    public static string FieldEditCompileFailedFormat => Loc.Text(nameof(FieldEditCompileFailedFormat));
+    public static string FieldEditDescriptionAddFormat => Loc.Text(nameof(FieldEditDescriptionAddFormat));
+    public static string FieldEditDescriptionDropFormat => Loc.Text(nameof(FieldEditDescriptionDropFormat));
+    public static string FieldEditDescriptionMoveFormat => Loc.Text(nameof(FieldEditDescriptionMoveFormat));
+    public static string FieldEditDescriptionRenameFormat => Loc.Text(nameof(FieldEditDescriptionRenameFormat));
+    public static string FieldEditDescriptionSetNotNullFormat => Loc.Text(nameof(FieldEditDescriptionSetNotNullFormat));
+    public static string FieldEditDescriptionDropNotNullFormat => Loc.Text(nameof(FieldEditDescriptionDropNotNullFormat));
+    public static string FieldEditDescriptionSetDefaultFormat => Loc.Text(nameof(FieldEditDescriptionSetDefaultFormat));
+    public static string FieldEditDescriptionDropDefaultFormat => Loc.Text(nameof(FieldEditDescriptionDropDefaultFormat));
+    public static string FieldEditDescriptionAlterTypeFormat => Loc.Text(nameof(FieldEditDescriptionAlterTypeFormat));
+    public static string FieldEditDescriptionCommentFormat => Loc.Text(nameof(FieldEditDescriptionCommentFormat));
+    public static string FieldEditRenameBlockedFormat => Loc.Text(nameof(FieldEditRenameBlockedFormat));
 
-    public const string AddFieldDialogTitle = "Add Field";
-    public const string AddFieldDialogEditTitleFormat = "Edit Field — {0}";
-    public const string AddFieldRenameBlockedHint = "Renaming is disabled — this field has incoming dependencies (triggers / views / check constraints).";
+    public static string AddFieldDialogTitle => Loc.Text(nameof(AddFieldDialogTitle));
+    public static string AddFieldDialogEditTitleFormat => Loc.Text(nameof(AddFieldDialogEditTitleFormat));
+    public static string AddFieldRenameBlockedHint => Loc.Text(nameof(AddFieldRenameBlockedHint));
 
     // Pola context menu + shortcuts
-    public const string FieldsContextMenuAdd = "New field";
-    public const string FieldsContextMenuEdit = "Edit field";
-    public const string FieldsContextMenuDrop = "Drop field";
-    public const string FieldsContextMenuCreateForeignKey = "Create foreign key…";
-    public const string FieldEditEditIcon = "✎";
+    public static string FieldsContextMenuAdd => Loc.Text(nameof(FieldsContextMenuAdd));
+    public static string FieldsContextMenuEdit => Loc.Text(nameof(FieldsContextMenuEdit));
+    public static string FieldsContextMenuDrop => Loc.Text(nameof(FieldsContextMenuDrop));
+    public static string FieldsContextMenuCreateForeignKey => Loc.Text(nameof(FieldsContextMenuCreateForeignKey));
+    public static string FieldEditEditIcon => Loc.Text(nameof(FieldEditEditIcon));
     // (FieldEditEditTooltip — "Edit selected field · F2" — was removed in the UX Consistency Pass. It had no
     // consumer: the toolbar's Edit button it was written for never existed, which is exactly the gap the pass
     // closed. The button now uses MainWindowViewModel.CollectionEditTooltip, which names the active
     // collection's noun and takes its gesture from the catalog.)
-    public const string FieldEditForeignKeyIcon = "⛓";
-    public const string FieldEditForeignKeyTooltip = "Create foreign key…";
+    public static string FieldEditForeignKeyIcon => Loc.Text(nameof(FieldEditForeignKeyIcon));
+    public static string FieldEditForeignKeyTooltip => Loc.Text(nameof(FieldEditForeignKeyTooltip));
 
     // Field dependencies panel (Pola sub-tab, Session 4)
-    public const string FieldDependenciesHeader = "Field dependencies";
-    public const string FieldDependenciesNoSelection = "Select a field to see its dependencies.";
-    public const string FieldDependenciesEmpty = "This field has no dependencies.";
-    public const string FieldDependenciesColumnType = "Type";
-    public const string FieldDependenciesColumnName = "Name";
-    public const string FieldDependenciesColumnInsert = "Insert";
-    public const string FieldDependenciesColumnUpdate = "Update";
+    public static string FieldDependenciesHeader => Loc.Text(nameof(FieldDependenciesHeader));
+    public static string FieldDependenciesNoSelection => Loc.Text(nameof(FieldDependenciesNoSelection));
+    public static string FieldDependenciesEmpty => Loc.Text(nameof(FieldDependenciesEmpty));
+    public static string FieldDependenciesColumnType => Loc.Text(nameof(FieldDependenciesColumnType));
+    public static string FieldDependenciesColumnName => Loc.Text(nameof(FieldDependenciesColumnName));
+    public static string FieldDependenciesColumnInsert => Loc.Text(nameof(FieldDependenciesColumnInsert));
+    public static string FieldDependenciesColumnUpdate => Loc.Text(nameof(FieldDependenciesColumnUpdate));
 
     // Foreign Key wizard (Session 3 full implementation)
-    public const string ForeignKeyDialogTitle = "Create Foreign Key";
-    public const string ForeignKeyDialogHeader = "Create Foreign Key";
-    public const string ForeignKeyDialogClose = "Close";
-    public const string ForeignKeyDialogCreate = "Create";
-    public const string ForeignKeyConstraintNameLabel = "Constraint name";
-    public const string ForeignKeySourceTableLabel = "Source table";
-    public const string ForeignKeySourceFieldsLabel = "Source fields";
-    public const string ForeignKeyReferencedTableLabel = "Referenced table";
-    public const string ForeignKeyReferencedFieldsLabel = "Referenced fields";
-    public const string ForeignKeyReferencedFieldsHint = "Select fields in the same order as the source. Equal-named source fields are pre-selected automatically.";
-    public const string ForeignKeyOnUpdateLabel = "ON UPDATE";
-    public const string ForeignKeyOnDeleteLabel = "ON DELETE";
-    public const string ForeignKeyActionNoAction = "NO ACTION";
-    public const string ForeignKeyActionCascade = "CASCADE";
-    public const string ForeignKeyActionSetNull = "SET NULL";
-    public const string ForeignKeyDdlPreviewLabel = "DDL preview";
-    public const string ForeignKeyDdlPreviewIncomplete = "-- Pick a referenced table and at least one field on each side to preview the DDL.";
-    public const string ForeignKeyValidationConstraintNameRequired = "Constraint name is required.";
-    public const string ForeignKeyValidationReferencedTableRequired = "Pick a referenced table.";
-    public const string ForeignKeyValidationLocalFieldsRequired = "Pick at least one source field.";
-    public const string ForeignKeyValidationReferencedFieldsRequired = "Pick at least one referenced field.";
-    public const string ForeignKeyValidationFieldCountMismatch = "Source and referenced field counts must match.";
-    public const string ForeignKeyExecuteFailedFormat = "Failed to create foreign key: {0}";
+    public static string ForeignKeyDialogTitle => Loc.Text(nameof(ForeignKeyDialogTitle));
+    public static string ForeignKeyDialogHeader => Loc.Text(nameof(ForeignKeyDialogHeader));
+    public static string ForeignKeyDialogClose => Loc.Text(nameof(ForeignKeyDialogClose));
+    public static string ForeignKeyDialogCreate => Loc.Text(nameof(ForeignKeyDialogCreate));
+    public static string ForeignKeyConstraintNameLabel => Loc.Text(nameof(ForeignKeyConstraintNameLabel));
+    public static string ForeignKeySourceTableLabel => Loc.Text(nameof(ForeignKeySourceTableLabel));
+    public static string ForeignKeySourceFieldsLabel => Loc.Text(nameof(ForeignKeySourceFieldsLabel));
+    public static string ForeignKeyReferencedTableLabel => Loc.Text(nameof(ForeignKeyReferencedTableLabel));
+    public static string ForeignKeyReferencedFieldsLabel => Loc.Text(nameof(ForeignKeyReferencedFieldsLabel));
+    public static string ForeignKeyReferencedFieldsHint => Loc.Text(nameof(ForeignKeyReferencedFieldsHint));
+    public static string ForeignKeyOnUpdateLabel => Loc.Text(nameof(ForeignKeyOnUpdateLabel));
+    public static string ForeignKeyOnDeleteLabel => Loc.Text(nameof(ForeignKeyOnDeleteLabel));
+    public static string ForeignKeyActionNoAction => Loc.Text(nameof(ForeignKeyActionNoAction));
+    public static string ForeignKeyActionCascade => Loc.Text(nameof(ForeignKeyActionCascade));
+    public static string ForeignKeyActionSetNull => Loc.Text(nameof(ForeignKeyActionSetNull));
+    public static string ForeignKeyDdlPreviewLabel => Loc.Text(nameof(ForeignKeyDdlPreviewLabel));
+    public static string ForeignKeyDdlPreviewIncomplete => Loc.Text(nameof(ForeignKeyDdlPreviewIncomplete));
+    public static string ForeignKeyValidationConstraintNameRequired => Loc.Text(nameof(ForeignKeyValidationConstraintNameRequired));
+    public static string ForeignKeyValidationReferencedTableRequired => Loc.Text(nameof(ForeignKeyValidationReferencedTableRequired));
+    public static string ForeignKeyValidationLocalFieldsRequired => Loc.Text(nameof(ForeignKeyValidationLocalFieldsRequired));
+    public static string ForeignKeyValidationReferencedFieldsRequired => Loc.Text(nameof(ForeignKeyValidationReferencedFieldsRequired));
+    public static string ForeignKeyValidationFieldCountMismatch => Loc.Text(nameof(ForeignKeyValidationFieldCountMismatch));
+    public static string ForeignKeyExecuteFailedFormat => Loc.Text(nameof(ForeignKeyExecuteFailedFormat));
 
     // ─── Constraint management (Constraint Management Sprint V1) ──────────
     // Shared dialog chrome
-    public const string ConstraintNameLabel = "Constraint name";
-    public const string ConstraintFieldsLabel = "Fields";
-    public const string ConstraintDialogCreate = "Create";
-    public const string ConstraintDdlPreviewLabel = "DDL preview";
-    public const string ConstraintDdlPreviewIncomplete = "-- Fill in the constraint name and select at least one field to preview the DDL.";
-    public const string ConstraintValidationNameRequired = "Constraint name is required.";
-    public const string ConstraintValidationFieldsRequired = "Select at least one field.";
-    public const string ConstraintExecuteFailedFormat = "Failed to apply constraint change: {0}";
+    public static string ConstraintNameLabel => Loc.Text(nameof(ConstraintNameLabel));
+    public static string ConstraintFieldsLabel => Loc.Text(nameof(ConstraintFieldsLabel));
+    public static string ConstraintDialogCreate => Loc.Text(nameof(ConstraintDialogCreate));
+    public static string ConstraintDdlPreviewLabel => Loc.Text(nameof(ConstraintDdlPreviewLabel));
+    public static string ConstraintDdlPreviewIncomplete => Loc.Text(nameof(ConstraintDdlPreviewIncomplete));
+    public static string ConstraintValidationNameRequired => Loc.Text(nameof(ConstraintValidationNameRequired));
+    public static string ConstraintValidationFieldsRequired => Loc.Text(nameof(ConstraintValidationFieldsRequired));
+    public static string ConstraintExecuteFailedFormat => Loc.Text(nameof(ConstraintExecuteFailedFormat));
     // Primary Key / Unique field-picker dialog
-    public const string PrimaryKeyDialogTitle = "Add Primary Key";
-    public const string PrimaryKeyDialogHeader = "Add Primary Key";
-    public const string UniqueDialogTitle = "Add Unique Constraint";
-    public const string UniqueDialogHeader = "Add Unique Constraint";
+    public static string PrimaryKeyDialogTitle => Loc.Text(nameof(PrimaryKeyDialogTitle));
+    public static string PrimaryKeyDialogHeader => Loc.Text(nameof(PrimaryKeyDialogHeader));
+    public static string UniqueDialogTitle => Loc.Text(nameof(UniqueDialogTitle));
+    public static string UniqueDialogHeader => Loc.Text(nameof(UniqueDialogHeader));
     // Check dialog
-    public const string CheckConstraintDialogTitle = "Add Check Constraint";
-    public const string CheckConstraintDialogHeader = "Add Check Constraint";
-    public const string CheckConstraintExpressionLabel = "CHECK condition";
-    public const string CheckConstraintExpressionWatermark = "e.g. ID > 0  (or  CHECK (ID > 0))";
-    public const string CheckConstraintValidationExpressionRequired = "Check expression is required.";
+    public static string CheckConstraintDialogTitle => Loc.Text(nameof(CheckConstraintDialogTitle));
+    public static string CheckConstraintDialogHeader => Loc.Text(nameof(CheckConstraintDialogHeader));
+    public static string CheckConstraintExpressionLabel => Loc.Text(nameof(CheckConstraintExpressionLabel));
+    public static string CheckConstraintExpressionWatermark => Loc.Text(nameof(CheckConstraintExpressionWatermark));
+    public static string CheckConstraintValidationExpressionRequired => Loc.Text(nameof(CheckConstraintValidationExpressionRequired));
     // Context-menu actions
-    public const string ConstraintMenuAddPrimaryKey = "Add primary key";
-    public const string ConstraintMenuDropPrimaryKey = "Drop primary key";
-    public const string ConstraintMenuAddForeignKey = "Add foreign key";
-    public const string ConstraintMenuDropForeignKey = "Drop foreign key";
-    public const string ConstraintMenuAddCheck = "Add check constraint";
-    public const string ConstraintMenuDropCheck = "Drop check constraint";
-    public const string ConstraintMenuAddUnique = "Add unique constraint";
-    public const string ConstraintMenuDropUnique = "Drop unique constraint";
+    public static string ConstraintMenuAddPrimaryKey => Loc.Text(nameof(ConstraintMenuAddPrimaryKey));
+    public static string ConstraintMenuDropPrimaryKey => Loc.Text(nameof(ConstraintMenuDropPrimaryKey));
+    public static string ConstraintMenuAddForeignKey => Loc.Text(nameof(ConstraintMenuAddForeignKey));
+    public static string ConstraintMenuDropForeignKey => Loc.Text(nameof(ConstraintMenuDropForeignKey));
+    public static string ConstraintMenuAddCheck => Loc.Text(nameof(ConstraintMenuAddCheck));
+    public static string ConstraintMenuDropCheck => Loc.Text(nameof(ConstraintMenuDropCheck));
+    public static string ConstraintMenuAddUnique => Loc.Text(nameof(ConstraintMenuAddUnique));
+    public static string ConstraintMenuDropUnique => Loc.Text(nameof(ConstraintMenuDropUnique));
     // Drop confirmation
-    public const string ConstraintDropConfirmTitle = "Drop constraint";
-    public const string ConstraintDropConfirmFormat = "Are you sure you want to drop constraint '{0}'?";
-    public const string ConstraintDropConfirmYes = "Drop";
+    public static string ConstraintDropConfirmTitle => Loc.Text(nameof(ConstraintDropConfirmTitle));
+    public static string ConstraintDropConfirmFormat => Loc.Text(nameof(ConstraintDropConfirmFormat));
+    public static string ConstraintDropConfirmYes => Loc.Text(nameof(ConstraintDropConfirmYes));
 
     // Optional USING [ASC|DESC] INDEX clause for PK / UNIQUE (Constraint config).
-    public const string ConstraintIndexNameLabel = "Index name (optional)";
-    public const string ConstraintDescendingLabel = "Descending index";
+    public static string ConstraintIndexNameLabel => Loc.Text(nameof(ConstraintIndexNameLabel));
+    public static string ConstraintDescendingLabel => Loc.Text(nameof(ConstraintDescendingLabel));
 
     // Pola sub-tab: Drop Foreign Key context-menu entry (routes through the
     // shared Drop Constraint path; the FK constraint is resolved from the
     // selected field).
-    public const string FieldsContextMenuDropForeignKey = "Drop foreign key";
+    public static string FieldsContextMenuDropForeignKey => Loc.Text(nameof(FieldsContextMenuDropForeignKey));
 
     // ─── Index Management V1 ──────────────────────────────────────────────
-    public const string IndexDialogTitle = "Add Index";
-    public const string IndexDialogHeader = "Add Index";
-    public const string IndexDialogCreate = "Create";
-    public const string IndexNameLabel = "Index name";
-    public const string IndexFieldsLabel = "Fields";
-    public const string IndexUniqueLabel = "Unique";
-    public const string IndexDescendingLabel = "Descending";
-    public const string IndexComputedLabel = "Computed by (optional — expression index)";
-    public const string IndexDdlPreviewLabel = "DDL preview";
-    public const string IndexDdlPreviewIncomplete = "-- Fill in the index name and select at least one field (or enter a COMPUTED BY expression).";
-    public const string IndexValidationNameRequired = "Index name is required.";
-    public const string IndexValidationFieldsRequired = "Select at least one field, or enter a COMPUTED BY expression.";
-    public const string IndexMenuAdd = "Add index";
-    public const string IndexMenuDrop = "Drop index";
-    public const string IndexDropConfirmTitle = "Drop index";
-    public const string IndexDropConfirmFormat = "Are you sure you want to drop index '{0}'?";
-    public const string IndexDropConfirmYes = "Drop";
-    public const string IndexExecuteFailedFormat = "Failed to apply index change: {0}";
+    public static string IndexDialogTitle => Loc.Text(nameof(IndexDialogTitle));
+    public static string IndexDialogHeader => Loc.Text(nameof(IndexDialogHeader));
+    public static string IndexDialogCreate => Loc.Text(nameof(IndexDialogCreate));
+    public static string IndexNameLabel => Loc.Text(nameof(IndexNameLabel));
+    public static string IndexFieldsLabel => Loc.Text(nameof(IndexFieldsLabel));
+    public static string IndexUniqueLabel => Loc.Text(nameof(IndexUniqueLabel));
+    public static string IndexDescendingLabel => Loc.Text(nameof(IndexDescendingLabel));
+    public static string IndexComputedLabel => Loc.Text(nameof(IndexComputedLabel));
+    public static string IndexDdlPreviewLabel => Loc.Text(nameof(IndexDdlPreviewLabel));
+    public static string IndexDdlPreviewIncomplete => Loc.Text(nameof(IndexDdlPreviewIncomplete));
+    public static string IndexValidationNameRequired => Loc.Text(nameof(IndexValidationNameRequired));
+    public static string IndexValidationFieldsRequired => Loc.Text(nameof(IndexValidationFieldsRequired));
+    public static string IndexMenuAdd => Loc.Text(nameof(IndexMenuAdd));
+    public static string IndexMenuDrop => Loc.Text(nameof(IndexMenuDrop));
+    public static string IndexDropConfirmTitle => Loc.Text(nameof(IndexDropConfirmTitle));
+    public static string IndexDropConfirmFormat => Loc.Text(nameof(IndexDropConfirmFormat));
+    public static string IndexDropConfirmYes => Loc.Text(nameof(IndexDropConfirmYes));
+    public static string IndexExecuteFailedFormat => Loc.Text(nameof(IndexExecuteFailedFormat));
     // Shown when the user tries to drop an index that backs a PK / FK / UNIQUE
     // constraint — those are managed via the Ograniczenia tab.
-    public const string IndexConstraintBackedFormat = "Index '{0}' backs a constraint — drop the constraint from the Ograniczenia tab instead.";
+    public static string IndexConstraintBackedFormat => Loc.Text(nameof(IndexConstraintBackedFormat));
     // SET STATISTICS INDEX — recompute index selectivity (single + all).
-    public const string IndexMenuRecomputeStatistics = "Recompute statistics";
-    public const string IndexMenuRecomputeAllStatistics = "Recompute all statistics";
-    public const string IndexStatsRecomputedOneFormat = "Recomputed statistics for index '{0}'.";
-    public const string IndexStatsRecomputedAllFormat = "Recomputed statistics for {0} of {1} index(es).";
-    public const string IndexStatsRecomputeFailedFormat = "Failed to recompute statistics for: {0} ({1})";
+    public static string IndexMenuRecomputeStatistics => Loc.Text(nameof(IndexMenuRecomputeStatistics));
+    public static string IndexMenuRecomputeAllStatistics => Loc.Text(nameof(IndexMenuRecomputeAllStatistics));
+    public static string IndexStatsRecomputedOneFormat => Loc.Text(nameof(IndexStatsRecomputedOneFormat));
+    public static string IndexStatsRecomputedAllFormat => Loc.Text(nameof(IndexStatsRecomputedAllFormat));
+    public static string IndexStatsRecomputeFailedFormat => Loc.Text(nameof(IndexStatsRecomputeFailedFormat));
 
     // ─── Table description editing (Opis tab) ─────────────────────────────
-    public const string TableDescriptionEditLabel = "Table description";
+    public static string TableDescriptionEditLabel => Loc.Text(nameof(TableDescriptionEditLabel));
     // Per-object description-tab mini-headers — each editor names its own object type
     // (the shared TableDescriptionEditLabel said "Table description" everywhere, which
     // was wrong for the View/Procedure/Function/Trigger/Package editors).
-    public const string ViewDescriptionEditLabel = "View description";
-    public const string ProcedureDescriptionEditLabel = "Procedure description";
-    public const string FunctionDescriptionEditLabel = "Function description";
-    public const string TriggerDescriptionEditLabel = "Trigger description";
-    public const string PackageDescriptionEditLabel = "Package description";
-    public const string TableDescriptionSaveIcon = "💾";
-    public const string TableDescriptionSave = "Save";
-    public const string TableDescriptionClear = "Clear";
-    public const string TableDescriptionSaveFailedFormat = "Failed to save description: {0}";
+    public static string ViewDescriptionEditLabel => Loc.Text(nameof(ViewDescriptionEditLabel));
+    public static string ProcedureDescriptionEditLabel => Loc.Text(nameof(ProcedureDescriptionEditLabel));
+    public static string FunctionDescriptionEditLabel => Loc.Text(nameof(FunctionDescriptionEditLabel));
+    public static string TriggerDescriptionEditLabel => Loc.Text(nameof(TriggerDescriptionEditLabel));
+    public static string PackageDescriptionEditLabel => Loc.Text(nameof(PackageDescriptionEditLabel));
+    public static string TableDescriptionSaveIcon => Loc.Text(nameof(TableDescriptionSaveIcon));
+    public static string TableDescriptionSave => Loc.Text(nameof(TableDescriptionSave));
+    public static string TableDescriptionClear => Loc.Text(nameof(TableDescriptionClear));
+    public static string TableDescriptionSaveFailedFormat => Loc.Text(nameof(TableDescriptionSaveFailedFormat));
 
-    public const string AddFieldFieldName = "Field name";
-    public const string AddFieldNotNull = "Not Null";
-    public const string AddFieldPrimaryKey = "Primary Key";
-    public const string AddFieldTabDomain = "Domain";
-    public const string AddFieldTabBasicType = "Basic type";
-    public const string AddFieldTabDefault = "Default";
-    public const string AddFieldTabCheck = "Check";
-    public const string AddFieldTabComputed = "Computed by";
-    public const string AddFieldTabAutoinc = "Autoincrement";
-    public const string AddFieldTabDescription = "Description";
-    public const string AddFieldTabDdl = "DDL";
-    public const string AddFieldDomainLabel = "Existing domain";
-    public const string AddFieldDomainHint = "Leave blank to use a basic type instead.";
-    public const string AddFieldClearDomain = "Clear";
+    public static string AddFieldFieldName => Loc.Text(nameof(AddFieldFieldName));
+    public static string AddFieldNotNull => Loc.Text(nameof(AddFieldNotNull));
+    public static string AddFieldPrimaryKey => Loc.Text(nameof(AddFieldPrimaryKey));
+    public static string AddFieldTabDomain => Loc.Text(nameof(AddFieldTabDomain));
+    public static string AddFieldTabBasicType => Loc.Text(nameof(AddFieldTabBasicType));
+    public static string AddFieldTabDefault => Loc.Text(nameof(AddFieldTabDefault));
+    public static string AddFieldTabCheck => Loc.Text(nameof(AddFieldTabCheck));
+    public static string AddFieldTabComputed => Loc.Text(nameof(AddFieldTabComputed));
+    public static string AddFieldTabAutoinc => Loc.Text(nameof(AddFieldTabAutoinc));
+    public static string AddFieldTabDescription => Loc.Text(nameof(AddFieldTabDescription));
+    public static string AddFieldTabDdl => Loc.Text(nameof(AddFieldTabDdl));
+    public static string AddFieldDomainLabel => Loc.Text(nameof(AddFieldDomainLabel));
+    public static string AddFieldDomainHint => Loc.Text(nameof(AddFieldDomainHint));
+    public static string AddFieldClearDomain => Loc.Text(nameof(AddFieldClearDomain));
     // Sentinel label shown at the top of inline Domain combos so the user can
     // clear a previously-picked domain back to a basic type (#5). Real Firebird
     // domains can't be named with parentheses, so this never collides.
-    public const string DomainNoneOption = "(none)";
-    public const string AddFieldBasicTypeLabel = "SQL type";
-    public const string AddFieldSizeLabel = "Size";
-    public const string AddFieldPrecisionLabel = "Precision";
-    public const string AddFieldScaleLabel = "Scale";
-    public const string AddFieldBlobSubTypeLabel = "BLOB subtype";
-    public const string AddFieldDefaultLabel = "Default value (raw SQL — e.g. 0, 'text', CURRENT_TIMESTAMP)";
-    public const string AddFieldCheckLabel = "CHECK expression (e.g. VALUE > 0)";
-    public const string AddFieldComputedLabel = "COMPUTED BY expression (e.g. ILOSC * CENA)";
-    public const string AddFieldAutoincNone = "None";
-    public const string AddFieldAutoincIdentity = "Use internal sequence (GENERATED BY DEFAULT AS IDENTITY)";
-    public const string AddFieldAutoincExisting = "Use existing generator";
-    public const string AddFieldAutoincNew = "Create new generator";
-    public const string AddFieldGeneratorNameLabel = "Generator name";
-    public const string AddFieldTriggerNameLabel = "Trigger name (auto-named when blank)";
-    public const string AddFieldDescriptionLabel = "Column description";
-    public const string AddFieldDialogOk = "OK";
-    public const string AddFieldValidationNameRequired = "Field name is required.";
+    public static string DomainNoneOption => Loc.Text(nameof(DomainNoneOption));
+    public static string AddFieldBasicTypeLabel => Loc.Text(nameof(AddFieldBasicTypeLabel));
+    public static string AddFieldSizeLabel => Loc.Text(nameof(AddFieldSizeLabel));
+    public static string AddFieldPrecisionLabel => Loc.Text(nameof(AddFieldPrecisionLabel));
+    public static string AddFieldScaleLabel => Loc.Text(nameof(AddFieldScaleLabel));
+    public static string AddFieldBlobSubTypeLabel => Loc.Text(nameof(AddFieldBlobSubTypeLabel));
+    public static string AddFieldDefaultLabel => Loc.Text(nameof(AddFieldDefaultLabel));
+    public static string AddFieldCheckLabel => Loc.Text(nameof(AddFieldCheckLabel));
+    public static string AddFieldComputedLabel => Loc.Text(nameof(AddFieldComputedLabel));
+    public static string AddFieldAutoincNone => Loc.Text(nameof(AddFieldAutoincNone));
+    public static string AddFieldAutoincIdentity => Loc.Text(nameof(AddFieldAutoincIdentity));
+    public static string AddFieldAutoincExisting => Loc.Text(nameof(AddFieldAutoincExisting));
+    public static string AddFieldAutoincNew => Loc.Text(nameof(AddFieldAutoincNew));
+    public static string AddFieldGeneratorNameLabel => Loc.Text(nameof(AddFieldGeneratorNameLabel));
+    public static string AddFieldTriggerNameLabel => Loc.Text(nameof(AddFieldTriggerNameLabel));
+    public static string AddFieldDescriptionLabel => Loc.Text(nameof(AddFieldDescriptionLabel));
+    public static string AddFieldDialogOk => Loc.Text(nameof(AddFieldDialogOk));
+    public static string AddFieldValidationNameRequired => Loc.Text(nameof(AddFieldValidationNameRequired));
 
     // ─── Security Manager ──────────────────────────────────────────────────
-    public const string SecurityManagerTabTitle = "Security Manager";
-    public const string SecurityManagerTabTitleFormat = "Security · {0}";
-    public const string SecurityTabUsers = "Users";
-    public const string SecurityTabRoles = "Roles";
-    public const string SecurityTabMembership = "Membership";
-    public const string SecurityTabPrivileges = "Privileges";
-    public const string SecurityGranteeUser = "User";
-    public const string SecurityGranteeRole = "Role";
+    public static string SecurityManagerTabTitle => Loc.Text(nameof(SecurityManagerTabTitle));
+    public static string SecurityManagerTabTitleFormat => Loc.Text(nameof(SecurityManagerTabTitleFormat));
+    public static string SecurityTabUsers => Loc.Text(nameof(SecurityTabUsers));
+    public static string SecurityTabRoles => Loc.Text(nameof(SecurityTabRoles));
+    public static string SecurityTabMembership => Loc.Text(nameof(SecurityTabMembership));
+    public static string SecurityTabPrivileges => Loc.Text(nameof(SecurityTabPrivileges));
+    public static string SecurityGranteeUser => Loc.Text(nameof(SecurityGranteeUser));
+    public static string SecurityGranteeRole => Loc.Text(nameof(SecurityGranteeRole));
 
     // Common toolbar
-    public const string SecurityAdd = "Add";
-    public const string SecurityEdit = "Edit";
-    public const string SecurityDelete = "Delete";
-    public const string SecurityRefresh = "Refresh";
-    public const string SecurityDeleteConfirm = "Delete";
+    public static string SecurityAdd => Loc.Text(nameof(SecurityAdd));
+    public static string SecurityEdit => Loc.Text(nameof(SecurityEdit));
+    public static string SecurityDelete => Loc.Text(nameof(SecurityDelete));
+    public static string SecurityRefresh => Loc.Text(nameof(SecurityRefresh));
+    public static string SecurityDeleteConfirm => Loc.Text(nameof(SecurityDeleteConfirm));
 
     // Users pane
-    public const string SecurityUsersHeader = "Server users";
-    public const string SecurityUsersHint = "Users are global to the Firebird server (security database), not to this database.";
-    public const string SecurityColUserName = "User name";
-    public const string SecurityColFirstName = "First name";
-    public const string SecurityColMiddleName = "Middle name";
-    public const string SecurityColLastName = "Last name";
-    public const string SecurityColActive = "Active";
-    public const string SecurityColAdmin = "Admin";
-    public const string SecurityColDescription = "Description";
-    public const string SecurityColPlugin = "Plugin";
-    public const string SecurityAddUser = "Add user";
-    public const string SecurityEditUser = "Edit user";
-    public const string SecurityDeleteUser = "Drop user";
-    public const string SecurityDeleteUserTitle = "Drop user";
-    public const string SecurityDeleteUserMessage = "Drop server user '{0}'? This removes the login from the Firebird server.";
+    public static string SecurityUsersHeader => Loc.Text(nameof(SecurityUsersHeader));
+    public static string SecurityUsersHint => Loc.Text(nameof(SecurityUsersHint));
+    public static string SecurityColUserName => Loc.Text(nameof(SecurityColUserName));
+    public static string SecurityColFirstName => Loc.Text(nameof(SecurityColFirstName));
+    public static string SecurityColMiddleName => Loc.Text(nameof(SecurityColMiddleName));
+    public static string SecurityColLastName => Loc.Text(nameof(SecurityColLastName));
+    public static string SecurityColActive => Loc.Text(nameof(SecurityColActive));
+    public static string SecurityColAdmin => Loc.Text(nameof(SecurityColAdmin));
+    public static string SecurityColDescription => Loc.Text(nameof(SecurityColDescription));
+    public static string SecurityColPlugin => Loc.Text(nameof(SecurityColPlugin));
+    public static string SecurityAddUser => Loc.Text(nameof(SecurityAddUser));
+    public static string SecurityEditUser => Loc.Text(nameof(SecurityEditUser));
+    public static string SecurityDeleteUser => Loc.Text(nameof(SecurityDeleteUser));
+    public static string SecurityDeleteUserTitle => Loc.Text(nameof(SecurityDeleteUserTitle));
+    public static string SecurityDeleteUserMessage => Loc.Text(nameof(SecurityDeleteUserMessage));
 
     // Roles pane
-    public const string SecurityRolesHeader = "Roles";
-    public const string SecurityColRoleName = "Role name";
-    public const string SecurityColOwner = "Owner";
-    public const string SecurityAddRole = "Add role";
-    public const string SecurityDropRole = "Drop role";
-    public const string SecurityDropRoleTitle = "Drop role";
-    public const string SecurityDropRoleMessage = "Drop role '{0}'? Memberships and grants for this role are lost.";
-    public const string SecurityRoleDescriptionLabel = "Role description";
-    public const string SecuritySaveDescription = "Save description";
+    public static string SecurityRolesHeader => Loc.Text(nameof(SecurityRolesHeader));
+    public static string SecurityColRoleName => Loc.Text(nameof(SecurityColRoleName));
+    public static string SecurityColOwner => Loc.Text(nameof(SecurityColOwner));
+    public static string SecurityAddRole => Loc.Text(nameof(SecurityAddRole));
+    public static string SecurityDropRole => Loc.Text(nameof(SecurityDropRole));
+    public static string SecurityDropRoleTitle => Loc.Text(nameof(SecurityDropRoleTitle));
+    public static string SecurityDropRoleMessage => Loc.Text(nameof(SecurityDropRoleMessage));
+    public static string SecurityRoleDescriptionLabel => Loc.Text(nameof(SecurityRoleDescriptionLabel));
+    public static string SecuritySaveDescription => Loc.Text(nameof(SecuritySaveDescription));
 
     // Membership pane
-    public const string SecurityMembershipHeader = "Role membership";
-    public const string SecurityGranteeLabel = "Grantee";
-    public const string SecurityColMember = "Member";
-    public const string SecurityColAdminOption = "Admin option";
-    public const string SecurityMembershipHint = "Click a cell to cycle: not a member → member → member with admin option. Admin option lets the member grant the role onward.";
+    public static string SecurityMembershipHeader => Loc.Text(nameof(SecurityMembershipHeader));
+    public static string SecurityGranteeLabel => Loc.Text(nameof(SecurityGranteeLabel));
+    public static string SecurityColMember => Loc.Text(nameof(SecurityColMember));
+    public static string SecurityColAdminOption => Loc.Text(nameof(SecurityColAdminOption));
+    public static string SecurityMembershipHint => Loc.Text(nameof(SecurityMembershipHint));
     // Membership direction switch (feature A) + tri-state cell (feature B)
-    public const string SecurityDirectionLabel = "Show";
-    public const string SecurityDirectionMemberOf = "Member of";
-    public const string SecurityDirectionMembers = "Members";
-    public const string SecurityRolePickerLabel = "Role";
-    public const string SecurityColMembership = "Membership";
-    public const string SecurityColMemberName = "User / Role";
-    public const string SecurityMembershipLegend = "✓ member     ✓+ with admin option     ·     click a cell to cycle";
+    public static string SecurityDirectionLabel => Loc.Text(nameof(SecurityDirectionLabel));
+    public static string SecurityDirectionMemberOf => Loc.Text(nameof(SecurityDirectionMemberOf));
+    public static string SecurityDirectionMembers => Loc.Text(nameof(SecurityDirectionMembers));
+    public static string SecurityRolePickerLabel => Loc.Text(nameof(SecurityRolePickerLabel));
+    public static string SecurityColMembership => Loc.Text(nameof(SecurityColMembership));
+    public static string SecurityColMemberName => Loc.Text(nameof(SecurityColMemberName));
+    public static string SecurityMembershipLegend => Loc.Text(nameof(SecurityMembershipLegend));
 
     // ── Stany puste Security Managera (M5 / M‑3, B2 + B3) ────────────────────────────────────────
     //
@@ -2547,665 +2593,619 @@ internal static class UiStrings
     //    cichu przy pierwszej zmianie etykiety (ta sama lekcja co `CommandTip`, gotcha #284).
     // ⛔⛔ NIE WOLNO tu użyć treści mówiącej o filtrze — zmierzone: `FilterText` istnieje wyłącznie
     //    w panelu uprawnień, a listy użytkowników i ról filtra NIE MAJĄ.
-    public static readonly string SecurityRolesEmpty = $"No roles yet — use {SecurityAddRole} above.";
+    // ⚠ A FORMAT key, not a sentence with a hole punched in it: the referenced label is itself localized,
+    // and a translation must be free to place it elsewhere in the sentence.
+    public static string SecurityRolesEmpty => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture, SecurityRolesEmptyFormat, SecurityAddRole);
 
     // ⭐ DWA komunikaty, bo selektor kierunku zadaje DWA różne pytania — i produkt już to wie: nagłówek
     //    kolumny przełącza się „Role name" ↔ „Member name" dokładnie z tego powodu. Jeden komunikat na oba
     //    kierunki byłby nieprawdziwy w jednym z nich.
-    public const string SecurityMembershipEmptyMemberOf = "This user or role belongs to no roles.";
-    public const string SecurityMembershipEmptyMembers = "This role has no members.";
+    public static string SecurityMembershipEmptyMemberOf => Loc.Text(nameof(SecurityMembershipEmptyMemberOf));
+    public static string SecurityMembershipEmptyMembers => Loc.Text(nameof(SecurityMembershipEmptyMembers));
 
     // Privileges pane
-    public const string SecurityPrivilegesHeader = "Object privileges";
-    public const string SecurityCategoryLabel = "Objects";
-    public const string SecurityFilterWatermark = "Filter objects…";
-    public const string SecurityWithGrantOption = "Grant with GRANT OPTION";
-    public const string SecurityColObject = "Object";
-    public const string SecurityColAll = "All";
-    public const string SecurityColSelect = "Select";
-    public const string SecurityColInsert = "Insert";
-    public const string SecurityColUpdate = "Update";
-    public const string SecurityColDelete = "Delete";
-    public const string SecurityColReferences = "References";
-    public const string SecurityColExecute = "Execute";
-    public const string SecurityColUsage = "Usage";
+    public static string SecurityPrivilegesHeader => Loc.Text(nameof(SecurityPrivilegesHeader));
+    public static string SecurityCategoryLabel => Loc.Text(nameof(SecurityCategoryLabel));
+    public static string SecurityFilterWatermark => Loc.Text(nameof(SecurityFilterWatermark));
+    public static string SecurityWithGrantOption => Loc.Text(nameof(SecurityWithGrantOption));
+    public static string SecurityColObject => Loc.Text(nameof(SecurityColObject));
+    public static string SecurityColAll => Loc.Text(nameof(SecurityColAll));
+    public static string SecurityColSelect => Loc.Text(nameof(SecurityColSelect));
+    public static string SecurityColInsert => Loc.Text(nameof(SecurityColInsert));
+    public static string SecurityColUpdate => Loc.Text(nameof(SecurityColUpdate));
+    public static string SecurityColDelete => Loc.Text(nameof(SecurityColDelete));
+    public static string SecurityColReferences => Loc.Text(nameof(SecurityColReferences));
+    public static string SecurityColExecute => Loc.Text(nameof(SecurityColExecute));
+    public static string SecurityColUsage => Loc.Text(nameof(SecurityColUsage));
     // Per-column header trio (grant / grant + option / revoke this privilege for all visible rows).
-    public const string SecurityColGrantTip = "Grant to all visible objects";
-    public const string SecurityColGrantOptionTip = "Grant to all visible objects with grant option";
-    public const string SecurityColRevokeTip = "Revoke from all visible objects";
-    public const string SecurityColumnsHeader = "Columns";
-    public const string SecurityColumnsForFormat = "Columns — {0}";
-    public const string SecurityColColumn = "Column";
-    public const string SecurityColumnHint = "Select a table above to manage its column privileges.";
+    public static string SecurityColGrantTip => Loc.Text(nameof(SecurityColGrantTip));
+    public static string SecurityColGrantOptionTip => Loc.Text(nameof(SecurityColGrantOptionTip));
+    public static string SecurityColRevokeTip => Loc.Text(nameof(SecurityColRevokeTip));
+    public static string SecurityColumnsHeader => Loc.Text(nameof(SecurityColumnsHeader));
+    public static string SecurityColumnsForFormat => Loc.Text(nameof(SecurityColumnsForFormat));
+    public static string SecurityColColumn => Loc.Text(nameof(SecurityColColumn));
+    public static string SecurityColumnHint => Loc.Text(nameof(SecurityColumnHint));
 
     // Privileges — bulk operations (row / column / all visible) + tri-state legend.
     // The same three glyphs appear at every scope: ✓ grant, ✓+ grant with grant option, ✕ revoke.
-    public const string SecurityGrantGlyph = "✓";
-    public const string SecurityGrantOptionGlyph = "✓+";
-    public const string SecurityRevokeGlyph = "✕";
-    public const string SecurityPrivilegeLegend = "✓ granted     ✓+ with grant option     ·     click a cell to cycle";
+    public static string SecurityGrantGlyph => Loc.Text(nameof(SecurityGrantGlyph));
+    public static string SecurityGrantOptionGlyph => Loc.Text(nameof(SecurityGrantOptionGlyph));
+    public static string SecurityRevokeGlyph => Loc.Text(nameof(SecurityRevokeGlyph));
+    public static string SecurityPrivilegeLegend => Loc.Text(nameof(SecurityPrivilegeLegend));
     // All-visible toolbar
-    public const string SecurityBulkAllLabel = "All visible:";
-    public const string SecurityBulkGrantAll = "Grant all";
-    public const string SecurityBulkGrantAllOption = "Grant all + option";
-    public const string SecurityBulkRevokeAll = "Revoke all";
-    public const string SecurityBulkGrantAllTip = "Grant all privileges to every visible object";
-    public const string SecurityBulkGrantAllOptionTip = "Grant all privileges (with grant option) to every visible object";
-    public const string SecurityBulkRevokeAllTip = "Revoke all privileges from every visible object";
+    public static string SecurityBulkAllLabel => Loc.Text(nameof(SecurityBulkAllLabel));
+    public static string SecurityBulkGrantAll => Loc.Text(nameof(SecurityBulkGrantAll));
+    public static string SecurityBulkGrantAllOption => Loc.Text(nameof(SecurityBulkGrantAllOption));
+    public static string SecurityBulkRevokeAll => Loc.Text(nameof(SecurityBulkRevokeAll));
+    public static string SecurityBulkGrantAllTip => Loc.Text(nameof(SecurityBulkGrantAllTip));
+    public static string SecurityBulkGrantAllOptionTip => Loc.Text(nameof(SecurityBulkGrantAllOptionTip));
+    public static string SecurityBulkRevokeAllTip => Loc.Text(nameof(SecurityBulkRevokeAllTip));
     // Row scope (hover trio + right-click menu)
-    public const string SecurityRowGrantAll = "Grant all privileges";
-    public const string SecurityRowGrantAllOption = "Grant all privileges with grant option";
-    public const string SecurityRowRevokeAll = "Revoke all privileges";
-    public const string SecurityRowGrantTip = "Grant all privileges to this object";
-    public const string SecurityRowGrantOptionTip = "Grant all privileges (with grant option) to this object";
-    public const string SecurityRowRevokeTip = "Revoke all privileges from this object";
+    public static string SecurityRowGrantAll => Loc.Text(nameof(SecurityRowGrantAll));
+    public static string SecurityRowGrantAllOption => Loc.Text(nameof(SecurityRowGrantAllOption));
+    public static string SecurityRowRevokeAll => Loc.Text(nameof(SecurityRowRevokeAll));
+    public static string SecurityRowGrantTip => Loc.Text(nameof(SecurityRowGrantTip));
+    public static string SecurityRowGrantOptionTip => Loc.Text(nameof(SecurityRowGrantOptionTip));
+    public static string SecurityRowRevokeTip => Loc.Text(nameof(SecurityRowRevokeTip));
     // Confirmation for the broadest destructive op
-    public const string SecurityRevokeAllConfirmTitle = "Revoke all privileges";
-    public const string SecurityRevokeAllConfirmFormat = "Revoke all privileges from {0} on all {1} visible object(s)? You can re-grant them afterward.";
-    public const string SecurityRevokeAllConfirmYes = "Revoke all";
+    public static string SecurityRevokeAllConfirmTitle => Loc.Text(nameof(SecurityRevokeAllConfirmTitle));
+    public static string SecurityRevokeAllConfirmFormat => Loc.Text(nameof(SecurityRevokeAllConfirmFormat));
+    public static string SecurityRevokeAllConfirmYes => Loc.Text(nameof(SecurityRevokeAllConfirmYes));
 
     // User dialog
-    public const string SecurityUserDialogAddTitle = "Create user";
-    public const string SecurityUserDialogEditTitle = "Edit user — {0}";
-    public const string SecurityUserNameLabel = "User name";
-    public const string SecurityPasswordLabel = "Password";
-    public const string SecurityConfirmPasswordLabel = "Confirm password";
-    public const string SecurityPasswordEditHint = "Leave blank to keep the current password.";
-    public const string SecurityActiveLabel = "Active";
-    public const string SecurityAdministratorLabel = "Administrator";
-    public const string SecurityDialogOk = "OK";
-    public const string SecurityDialogCancel = "Cancel";
+    public static string SecurityUserDialogAddTitle => Loc.Text(nameof(SecurityUserDialogAddTitle));
+    public static string SecurityUserDialogEditTitle => Loc.Text(nameof(SecurityUserDialogEditTitle));
+    public static string SecurityUserNameLabel => Loc.Text(nameof(SecurityUserNameLabel));
+    public static string SecurityPasswordLabel => Loc.Text(nameof(SecurityPasswordLabel));
+    public static string SecurityConfirmPasswordLabel => Loc.Text(nameof(SecurityConfirmPasswordLabel));
+    public static string SecurityPasswordEditHint => Loc.Text(nameof(SecurityPasswordEditHint));
+    public static string SecurityActiveLabel => Loc.Text(nameof(SecurityActiveLabel));
+    public static string SecurityAdministratorLabel => Loc.Text(nameof(SecurityAdministratorLabel));
+    public static string SecurityDialogOk => Loc.Text(nameof(SecurityDialogOk));
+    public static string SecurityDialogCancel => Loc.Text(nameof(SecurityDialogCancel));
 
     // Role dialog
-    public const string SecurityRoleDialogTitle = "Create role";
-    public const string SecurityRoleNameLabel = "Role name";
-    public const string SecurityRoleNameWatermark = "Enter a new role name";
+    public static string SecurityRoleDialogTitle => Loc.Text(nameof(SecurityRoleDialogTitle));
+    public static string SecurityRoleNameLabel => Loc.Text(nameof(SecurityRoleNameLabel));
+    public static string SecurityRoleNameWatermark => Loc.Text(nameof(SecurityRoleNameWatermark));
 
     // Tree context menu
-    public const string MetadataContextNewUser = "Add user…";
-    public const string MetadataContextNewRole = "Add role…";
-    public const string MetadataContextOpenSecurity = "Open in Security Manager";
-    public const string MetadataContextDeleteUser = "Drop user";
-    public const string MetadataContextDropRole = "Drop role";
+    public static string MetadataContextNewUser => Loc.Text(nameof(MetadataContextNewUser));
+    public static string MetadataContextNewRole => Loc.Text(nameof(MetadataContextNewRole));
+    public static string MetadataContextOpenSecurity => Loc.Text(nameof(MetadataContextOpenSecurity));
+    public static string MetadataContextDeleteUser => Loc.Text(nameof(MetadataContextDeleteUser));
+    public static string MetadataContextDropRole => Loc.Text(nameof(MetadataContextDropRole));
 
     // Toolbar (New User / New Role buttons)
-    public const string ToolbarNewUserTooltip = "New user";
-    public const string ToolbarNewRoleTooltip = "New role";
-    public const string ToolbarSecurityManagerTooltip = "Security Manager (users, roles, privileges)";
-    public const string ToolbarActivityMonitorTooltip = "Activity Monitor — live database trace";
+    public static string ToolbarNewUserTooltip => Loc.Text(nameof(ToolbarNewUserTooltip));
+    public static string ToolbarNewRoleTooltip => Loc.Text(nameof(ToolbarNewRoleTooltip));
+    public static string ToolbarSecurityManagerTooltip => Loc.Text(nameof(ToolbarSecurityManagerTooltip));
+    public static string ToolbarActivityMonitorTooltip => Loc.Text(nameof(ToolbarActivityMonitorTooltip));
 
     // ── Activity Monitor (Database Trace) ──
-    public const string TraceMonitorTabTitle = "Activity Monitor";
-    public const string TraceStart = "Start";
-    public const string TraceStop = "Stop";
-    public const string TracePauseResume = "Pause / Resume";
-    public const string TracePause = "Pause";
-    public const string TraceResume = "Resume";
-    public const string TraceClear = "Clear";
-    public const string TraceGroupNone = "Events";
-    public const string TraceGroupTransaction = "Transactions";
-    public const string TraceGroupStatement = "Statements";
-    public const string TraceHideSelf = "Hide EmberTern's own activity";
-    public const string TraceFollowTail = "Follow tail";
-    public const string TraceShowOnlySelected = "Show only selected";
-    public const string TraceFilterWatermark = "Search rows…";
-    public const string TraceColSeq = "#";
-    public const string TraceColTime = "Time";
-    public const string TraceColDelta = "Δ ms";
-    public const string TraceColEvent = "Event";
-    public const string TraceColDuration = "Duration";
-    public const string TraceColObject = "Object";
-    public const string TraceColRows = "Rows";
-    public const string TraceColReads = "Reads";
-    public const string TraceColTx = "Tx";
+    public static string TraceMonitorTabTitle => Loc.Text(nameof(TraceMonitorTabTitle));
+    public static string TraceStart => Loc.Text(nameof(TraceStart));
+    public static string TraceStop => Loc.Text(nameof(TraceStop));
+    public static string TracePauseResume => Loc.Text(nameof(TracePauseResume));
+    public static string TracePause => Loc.Text(nameof(TracePause));
+    public static string TraceResume => Loc.Text(nameof(TraceResume));
+    public static string TraceClear => Loc.Text(nameof(TraceClear));
+    public static string TraceGroupNone => Loc.Text(nameof(TraceGroupNone));
+    public static string TraceGroupTransaction => Loc.Text(nameof(TraceGroupTransaction));
+    public static string TraceGroupStatement => Loc.Text(nameof(TraceGroupStatement));
+    public static string TraceHideSelf => Loc.Text(nameof(TraceHideSelf));
+    public static string TraceFollowTail => Loc.Text(nameof(TraceFollowTail));
+    public static string TraceShowOnlySelected => Loc.Text(nameof(TraceShowOnlySelected));
+    public static string TraceFilterWatermark => Loc.Text(nameof(TraceFilterWatermark));
+    public static string TraceColSeq => Loc.Text(nameof(TraceColSeq));
+    public static string TraceColTime => Loc.Text(nameof(TraceColTime));
+    public static string TraceColDelta => Loc.Text(nameof(TraceColDelta));
+    public static string TraceColEvent => Loc.Text(nameof(TraceColEvent));
+    public static string TraceColDuration => Loc.Text(nameof(TraceColDuration));
+    public static string TraceColObject => Loc.Text(nameof(TraceColObject));
+    public static string TraceColRows => Loc.Text(nameof(TraceColRows));
+    public static string TraceColReads => Loc.Text(nameof(TraceColReads));
+    public static string TraceColTx => Loc.Text(nameof(TraceColTx));
     // Quick filter chips (All / Errors / Slow)
-    public const string TraceFilterAll = "All";
-    public const string TraceFilterErrors = "Errors";
-    public const string TraceFilterSlow = "Slow";
+    public static string TraceFilterAll => Loc.Text(nameof(TraceFilterAll));
+    public static string TraceFilterErrors => Loc.Text(nameof(TraceFilterErrors));
+    public static string TraceFilterSlow => Loc.Text(nameof(TraceFilterSlow));
     // Toolbar toggle tooltips
-    public const string TraceHideSelfTip = "Hide EmberTern's own activity";
-    public const string TraceFollowTailTip = "Follow tail — auto-scroll to the newest event";
-    public const string TraceShowOnlySelectedTip = "Show only the selected transaction / statement";
-    public const string TraceIncludeFunctionsTip = "Include function calls (built-in + user) — floods the stream; applies on next Start";
-    public const string TraceDetailShowValuesTip = "Show parameter values inline in the SQL";
-    public const string TraceDetailMaximizeTip = "Maximize / restore the detail panel";
-    public const string TraceJumpLatest = "Jump to latest";
+    public static string TraceHideSelfTip => Loc.Text(nameof(TraceHideSelfTip));
+    public static string TraceFollowTailTip => Loc.Text(nameof(TraceFollowTailTip));
+    public static string TraceShowOnlySelectedTip => Loc.Text(nameof(TraceShowOnlySelectedTip));
+    public static string TraceIncludeFunctionsTip => Loc.Text(nameof(TraceIncludeFunctionsTip));
+    public static string TraceDetailShowValuesTip => Loc.Text(nameof(TraceDetailShowValuesTip));
+    public static string TraceDetailMaximizeTip => Loc.Text(nameof(TraceDetailMaximizeTip));
+    public static string TraceJumpLatest => Loc.Text(nameof(TraceJumpLatest));
     // Event filter flyout (display-level; distinct from the source-level Include-Functions capture toggle)
-    public const string TraceFilterEventsTip = "Filter events by type and operation";
-    public const string TraceGridFilterTip = "Filter rows by column conditions (Duration > 100, Object contains …)";
-    public const string TraceFilterSectionTypes = "Event types";
-    public const string TraceFilterSectionOperations = "Operations (statements)";
-    public const string TraceFilterStatements = "Statements";
-    public const string TraceFilterProcedures = "Procedures";
-    public const string TraceFilterTriggers = "Triggers";
-    public const string TraceFilterFunctions = "Functions";
-    public const string TraceFilterOpSelect = "SELECT";
-    public const string TraceFilterOpInsert = "INSERT";
-    public const string TraceFilterOpUpdate = "UPDATE";
-    public const string TraceFilterOpDelete = "DELETE";
-    public const string TraceFilterOpExecute = "EXECUTE";
-    public const string TraceFilterOpDdl = "DDL";
-    public const string TraceFilterReset = "Reset";
+    public static string TraceFilterEventsTip => Loc.Text(nameof(TraceFilterEventsTip));
+    public static string TraceGridFilterTip => Loc.Text(nameof(TraceGridFilterTip));
+    public static string TraceFilterSectionTypes => Loc.Text(nameof(TraceFilterSectionTypes));
+    public static string TraceFilterSectionOperations => Loc.Text(nameof(TraceFilterSectionOperations));
+    public static string TraceFilterStatements => Loc.Text(nameof(TraceFilterStatements));
+    public static string TraceFilterProcedures => Loc.Text(nameof(TraceFilterProcedures));
+    public static string TraceFilterTriggers => Loc.Text(nameof(TraceFilterTriggers));
+    public static string TraceFilterFunctions => Loc.Text(nameof(TraceFilterFunctions));
+    public static string TraceFilterOpSelect => Loc.Text(nameof(TraceFilterOpSelect));
+    public static string TraceFilterOpInsert => Loc.Text(nameof(TraceFilterOpInsert));
+    public static string TraceFilterOpUpdate => Loc.Text(nameof(TraceFilterOpUpdate));
+    public static string TraceFilterOpDelete => Loc.Text(nameof(TraceFilterOpDelete));
+    public static string TraceFilterOpExecute => Loc.Text(nameof(TraceFilterOpExecute));
+    public static string TraceFilterOpDdl => Loc.Text(nameof(TraceFilterOpDdl));
+    public static string TraceFilterReset => Loc.Text(nameof(TraceFilterReset));
     // Detail sections
-    public const string TraceDetailParameters = "Parameters";
-    public const string TraceDetailTableAccess = "Table access";
-    public const string TraceDetailTiming = "Timing";
-    public const string TraceDetailSession = "Session";
-    public const string TraceDetailCopySql = "Copy SQL";
-    public const string TraceDetailOpenInEditor = "Open in SQL Editor";
-    public const string TraceDetailNoSelection = "Select an event to see its detail.";
-    public const string TraceEmptyHint = "Press Start to begin monitoring database activity.";
-    public const string TraceEmptyWaiting = "Waiting for database activity…";
-    public const string TraceEmptyPaused = "Paused — press Start to resume monitoring.";
-    public const string TraceEmptyNoMatch = "No events match the current filter.";
+    public static string TraceDetailParameters => Loc.Text(nameof(TraceDetailParameters));
+    public static string TraceDetailTableAccess => Loc.Text(nameof(TraceDetailTableAccess));
+    public static string TraceDetailTiming => Loc.Text(nameof(TraceDetailTiming));
+    public static string TraceDetailSession => Loc.Text(nameof(TraceDetailSession));
+    public static string TraceDetailCopySql => Loc.Text(nameof(TraceDetailCopySql));
+    public static string TraceDetailOpenInEditor => Loc.Text(nameof(TraceDetailOpenInEditor));
+    public static string TraceDetailNoSelection => Loc.Text(nameof(TraceDetailNoSelection));
+    public static string TraceEmptyHint => Loc.Text(nameof(TraceEmptyHint));
+    public static string TraceEmptyWaiting => Loc.Text(nameof(TraceEmptyWaiting));
+    public static string TraceEmptyPaused => Loc.Text(nameof(TraceEmptyPaused));
+    public static string TraceEmptyNoMatch => Loc.Text(nameof(TraceEmptyNoMatch));
 
     // Performance Analysis (Phase 1 — plan + timings)
-    public const string PerformanceTabHeader = "Performance";
-    public const string PerformanceRefresh = "Refresh";
-    public const string PerformanceRefreshTooltip = "Re-analyze the last executed query (re-reads the plan; does not re-run the query)";
-    public const string PerformanceProfilingHint = "Analyzing…";
-    public const string PerformanceEmptyHint = "Execute a query, then open this tab to see its performance analysis.";
+    public static string PerformanceTabHeader => Loc.Text(nameof(PerformanceTabHeader));
+    public static string PerformanceRefresh => Loc.Text(nameof(PerformanceRefresh));
+    public static string PerformanceRefreshTooltip => Loc.Text(nameof(PerformanceRefreshTooltip));
+    public static string PerformanceProfilingHint => Loc.Text(nameof(PerformanceProfilingHint));
+    public static string PerformanceEmptyHint => Loc.Text(nameof(PerformanceEmptyHint));
     // Primary plain-language summary (interpolated in PerformanceInsight)
-    public const string PerformanceGradeFast = "Fast — this query ran in {0}.";
-    public const string PerformanceGradeAcceptable = "This query ran in {0}.";
-    public const string PerformanceGradeNeedsAttention = "Needs attention — this query took {0}.";
-    public const string PerformanceGradeSlow = "Slow — this query took {0}.";
-    public const string PerformanceGradeUnknown = "Executed.";
-    public const string PerformanceLeadFullScanSingle = "It reads table {0} in full (a full table scan). A full scan reads every row, which is often why a query is slow.";
-    public const string PerformanceLeadFullScanMultiple = "It reads tables {0} in full (full table scans). A full scan reads every row, which is often why a query is slow.";
-    public const string PerformanceLeadNoFullScan = "All table access in the plan uses indexes — no full table scans.";
+    public static string PerformanceGradeFast => Loc.Text(nameof(PerformanceGradeFast));
+    public static string PerformanceGradeAcceptable => Loc.Text(nameof(PerformanceGradeAcceptable));
+    public static string PerformanceGradeNeedsAttention => Loc.Text(nameof(PerformanceGradeNeedsAttention));
+    public static string PerformanceGradeSlow => Loc.Text(nameof(PerformanceGradeSlow));
+    public static string PerformanceGradeUnknown => Loc.Text(nameof(PerformanceGradeUnknown));
+    public static string PerformanceLeadFullScanSingle => Loc.Text(nameof(PerformanceLeadFullScanSingle));
+    public static string PerformanceLeadFullScanMultiple => Loc.Text(nameof(PerformanceLeadFullScanMultiple));
+    public static string PerformanceLeadNoFullScan => Loc.Text(nameof(PerformanceLeadNoFullScan));
     // Measurement-derived lead (used instead of the plan heuristic once per-table reads exist,
     // so the summary always agrees with the Findings zone).
-    public const string PerformanceMeasuredCostlyScanSingle = "It reads table {0} row by row (a full table scan) — the largest measured cost in this query.";
-    public const string PerformanceMeasuredCostlyScanMultiple = "It reads tables {0} row by row (full table scans) — the largest measured cost in this query.";
-    public const string PerformanceMeasuredNoCostlyScan = "No costly full table scans were measured — it read {0} rows to return {1}.";
-    public const string PerformanceMeasuredNoCostlyScanChanges = "No costly full table scans were measured — it read {0} rows to change {1}.";
-    public const string PerformanceNoiseSubqueriesSingle = "It also evaluates 1 sub-query (see the execution plan below).";
-    public const string PerformanceNoiseSubqueriesMultiple = "It also evaluates {0} sub-queries (see the execution plan below).";
-    public const string PerformanceForwardPointer = "Per-table read analysis — which confirms whether this is the cause — arrives in a later phase.";
+    public static string PerformanceMeasuredCostlyScanSingle => Loc.Text(nameof(PerformanceMeasuredCostlyScanSingle));
+    public static string PerformanceMeasuredCostlyScanMultiple => Loc.Text(nameof(PerformanceMeasuredCostlyScanMultiple));
+    public static string PerformanceMeasuredNoCostlyScan => Loc.Text(nameof(PerformanceMeasuredNoCostlyScan));
+    public static string PerformanceMeasuredNoCostlyScanChanges => Loc.Text(nameof(PerformanceMeasuredNoCostlyScanChanges));
+    public static string PerformanceNoiseSubqueriesSingle => Loc.Text(nameof(PerformanceNoiseSubqueriesSingle));
+    public static string PerformanceNoiseSubqueriesMultiple => Loc.Text(nameof(PerformanceNoiseSubqueriesMultiple));
+    public static string PerformanceForwardPointer => Loc.Text(nameof(PerformanceForwardPointer));
     // Advanced (execution plan)
-    public const string PerformancePlanAdvancedHeader = "Execution plan (advanced)";
-    public const string PerformanceTimingLabel = "Timing";
-    public const string PerformanceCaptureLabel = "Capture";
-    public const string PerformancePlanDialectLabel = "Plan form";
-    public const string PerformanceRawPlanLabel = "Raw plan";
-    public const string PerformanceCopy = "Copy";
+    public static string PerformancePlanAdvancedHeader => Loc.Text(nameof(PerformancePlanAdvancedHeader));
+    public static string PerformanceTimingLabel => Loc.Text(nameof(PerformanceTimingLabel));
+    public static string PerformanceCaptureLabel => Loc.Text(nameof(PerformanceCaptureLabel));
+    public static string PerformancePlanDialectLabel => Loc.Text(nameof(PerformancePlanDialectLabel));
+    public static string PerformanceRawPlanLabel => Loc.Text(nameof(PerformanceRawPlanLabel));
+    public static string PerformanceCopy => Loc.Text(nameof(PerformanceCopy));
     // Phase 2 — measured per-table reads (Findings + Table Access zones)
-    public const string PerformanceReadsNotMeasured = "This run wasn't measured for per-table reads. Re-run the query with this tab open to measure whether the full scan is actually costly.";
-    public const string PerformanceFindingsHeader = "Findings";
-    public const string PerformanceFindingsNone = "Per-table reads measured — no costly full scans found.";
-    public const string PerformanceFindingsFuture = "Index recommendations and fix suggestions arrive in a later phase.";
-    public const string PerformanceAccessHeader = "Table access";
-    public const string PerformanceAccessLegend = "Red = sequential (full scan) reads · Blue = indexed reads";
+    public static string PerformanceReadsNotMeasured => Loc.Text(nameof(PerformanceReadsNotMeasured));
+    public static string PerformanceFindingsHeader => Loc.Text(nameof(PerformanceFindingsHeader));
+    public static string PerformanceFindingsNone => Loc.Text(nameof(PerformanceFindingsNone));
+    public static string PerformanceFindingsFuture => Loc.Text(nameof(PerformanceFindingsFuture));
+    public static string PerformanceAccessHeader => Loc.Text(nameof(PerformanceAccessHeader));
+    public static string PerformanceAccessLegend => Loc.Text(nameof(PerformanceAccessLegend));
 
     // ── Session Manager (live sessions / transactions / health) ──
-    public const string SessionManagerTabTitle = "Session Manager";
-    public const string ToolbarSessionManagerTooltip = "Session Manager — live sessions, transactions & database health";
+    public static string SessionManagerTabTitle => Loc.Text(nameof(SessionManagerTabTitle));
+    public static string ToolbarSessionManagerTooltip => Loc.Text(nameof(ToolbarSessionManagerTooltip));
 
     // toolbar
-    public const string SessionManagerRefreshTip = "Refresh now";
-    public const string SessionManagerAutoRefreshTip = "Auto-refresh interval";
-    public const string SessionManagerDisconnectTip = "Disconnect session (hard — rolls back its work)";
-    public const string SessionManagerCopyTip = "Copy selected session";
-    public const string SessionManagerHideSelfTip = "Hide EmberTern's own sessions";
-    public const string SessionManagerFilterWatermark = "Filter user / app / host…";
-    public const string SessionManagerMaximizeTip = "Maximize / restore panel";
+    public static string SessionManagerRefreshTip => Loc.Text(nameof(SessionManagerRefreshTip));
+    public static string SessionManagerAutoRefreshTip => Loc.Text(nameof(SessionManagerAutoRefreshTip));
+    public static string SessionManagerDisconnectTip => Loc.Text(nameof(SessionManagerDisconnectTip));
+    public static string SessionManagerCopyTip => Loc.Text(nameof(SessionManagerCopyTip));
+    public static string SessionManagerHideSelfTip => Loc.Text(nameof(SessionManagerHideSelfTip));
+    public static string SessionManagerFilterWatermark => Loc.Text(nameof(SessionManagerFilterWatermark));
+    public static string SessionManagerMaximizeTip => Loc.Text(nameof(SessionManagerMaximizeTip));
 
     // health bar
-    public const string SessionManagerCountSessions = "Sessions";
-    public const string SessionManagerCountTransactions = "Transactions";
-    public const string SessionManagerCountLongTx = "Long Tx";
-    public const string SessionManagerCountGcRisk = "GC Risk";
-    public const string SessionManagerCountOatLag = "Tx Gap";
-    public const string SessionManagerPrivilegeBanner =
-        "Showing your own sessions only — connect as SYSDBA or a user with MONITOR ANY ATTACHMENT to see all sessions.";
-    public const string SessionManagerGradeHealthy = "Healthy";
-    public const string SessionManagerGradeWatch = "Watch";
-    public const string SessionManagerGradeAtRisk = "At risk";
+    public static string SessionManagerCountSessions => Loc.Text(nameof(SessionManagerCountSessions));
+    public static string SessionManagerCountTransactions => Loc.Text(nameof(SessionManagerCountTransactions));
+    public static string SessionManagerCountLongTx => Loc.Text(nameof(SessionManagerCountLongTx));
+    public static string SessionManagerCountGcRisk => Loc.Text(nameof(SessionManagerCountGcRisk));
+    public static string SessionManagerCountOatLag => Loc.Text(nameof(SessionManagerCountOatLag));
+    public static string SessionManagerPrivilegeBanner => Loc.Text(nameof(SessionManagerPrivilegeBanner));
+    public static string SessionManagerGradeHealthy => Loc.Text(nameof(SessionManagerGradeHealthy));
+    public static string SessionManagerGradeWatch => Loc.Text(nameof(SessionManagerGradeWatch));
+    public static string SessionManagerGradeAtRisk => Loc.Text(nameof(SessionManagerGradeAtRisk));
 
     // sessions grid
-    public const string SessionColHealth = "Health";
-    public const string SessionManagerHealthHealthy = "Healthy";
-    public const string SessionManagerHealthWarning = "Warning — long-running transaction";
-    public const string SessionManagerHealthGcRisk = "GC risk — blocking garbage collection";
-    public const string SessionManagerHealthSelf = "EmberTern (this tool)";
-    public const string SessionManagerHealthSystem = "System / internal (Firebird)";
-    public const string SessionColId = "ID";
-    public const string SessionColUser = "User";
-    public const string SessionColApplication = "Application";
-    public const string SessionColHost = "Host";
-    public const string SessionColState = "State";
-    public const string SessionColTx = "Tx";
-    public const string SessionColOldestTx = "Oldest Tx";
-    public const string SessionColLoad = "Load";
-    public const string SessionsEmpty = "No sessions match the current filter.";
+    public static string SessionColHealth => Loc.Text(nameof(SessionColHealth));
+    public static string SessionManagerHealthHealthy => Loc.Text(nameof(SessionManagerHealthHealthy));
+    public static string SessionManagerHealthWarning => Loc.Text(nameof(SessionManagerHealthWarning));
+    public static string SessionManagerHealthGcRisk => Loc.Text(nameof(SessionManagerHealthGcRisk));
+    public static string SessionManagerHealthSelf => Loc.Text(nameof(SessionManagerHealthSelf));
+    public static string SessionManagerHealthSystem => Loc.Text(nameof(SessionManagerHealthSystem));
+    public static string SessionColId => Loc.Text(nameof(SessionColId));
+    public static string SessionColUser => Loc.Text(nameof(SessionColUser));
+    public static string SessionColApplication => Loc.Text(nameof(SessionColApplication));
+    public static string SessionColHost => Loc.Text(nameof(SessionColHost));
+    public static string SessionColState => Loc.Text(nameof(SessionColState));
+    public static string SessionColTx => Loc.Text(nameof(SessionColTx));
+    public static string SessionColOldestTx => Loc.Text(nameof(SessionColOldestTx));
+    public static string SessionColLoad => Loc.Text(nameof(SessionColLoad));
+    public static string SessionsEmpty => Loc.Text(nameof(SessionsEmpty));
 
     // transactions tab
-    public const string SessionManagerTabTransactions = "Transactions";
-    public const string SessionManagerTransactionsFilteredFormat = "Filtered by session {0}";
-    public const string TxColId = "Tx ID";
-    public const string TxColSession = "Session";
-    public const string TxColState = "State";
-    public const string TxColAge = "Age";
-    public const string TxColIsolation = "Isolation";
-    public const string TxColReadOnly = "Read only";
-    public const string TxColGcImpact = "GC impact";
+    public static string SessionManagerTabTransactions => Loc.Text(nameof(SessionManagerTabTransactions));
+    public static string SessionManagerTransactionsFilteredFormat => Loc.Text(nameof(SessionManagerTransactionsFilteredFormat));
+    public static string TxColId => Loc.Text(nameof(TxColId));
+    public static string TxColSession => Loc.Text(nameof(TxColSession));
+    public static string TxColState => Loc.Text(nameof(TxColState));
+    public static string TxColAge => Loc.Text(nameof(TxColAge));
+    public static string TxColIsolation => Loc.Text(nameof(TxColIsolation));
+    public static string TxColReadOnly => Loc.Text(nameof(TxColReadOnly));
+    public static string TxColGcImpact => Loc.Text(nameof(TxColGcImpact));
 
     // session details tab (lightweight in M3)
-    public const string SessionManagerTabDetails = "Session Details";
-    public const string SessionManagerDetailsNoSelection = "Select a session to see its details.";
-    public const string SessionManagerDetailStatement = "Current statement";
-    public const string SessionManagerDetailNoStatement = "No active statement.";
+    public static string SessionManagerTabDetails => Loc.Text(nameof(SessionManagerTabDetails));
+    public static string SessionManagerDetailsNoSelection => Loc.Text(nameof(SessionManagerDetailsNoSelection));
+    public static string SessionManagerDetailStatement => Loc.Text(nameof(SessionManagerDetailStatement));
+    public static string SessionManagerDetailNoStatement => Loc.Text(nameof(SessionManagerDetailNoStatement));
 
     // warnings tab
-    public const string SessionManagerTabWarnings = "Warnings";
-    public const string SessionManagerNoWarnings = "No health issues detected.";
-    public const string SessionManagerWarningWhatToCheck = "What to check";
+    public static string SessionManagerTabWarnings => Loc.Text(nameof(SessionManagerTabWarnings));
+    public static string SessionManagerNoWarnings => Loc.Text(nameof(SessionManagerNoWarnings));
+    public static string SessionManagerWarningWhatToCheck => Loc.Text(nameof(SessionManagerWarningWhatToCheck));
 
     // session details (M4) — sections + plain-language diagnostics
-    public const string SessionManagerGeneralHeader = "General";
-    public const string SessionManagerActivityHeader = "Activity (since connect)";
-    public const string SessionManagerRoleLabel = "Role";
-    public const string SessionManagerConnectedLabel = "Connected";
-    public const string SessionManagerActivitySeqReads = "Sequential reads";
-    public const string SessionManagerActivityIdxReads = "Index reads";
-    public const string SessionManagerActivityInserts = "Inserts";
-    public const string SessionManagerActivityUpdates = "Updates";
-    public const string SessionManagerActivityDeletes = "Deletes";
-    public const string SessionManagerWhyHeader = "Why it matters";
-    public const string SessionManagerWhyGc =
-        "One of this session's transactions is the oldest active transaction in the database. Until it " +
-        "finishes, Firebird must keep every row version created since it started — so obsolete versions " +
-        "build up (database bloat) and reads gradually slow down. This is most often a reporting/BI " +
-        "connection, or a screen left open mid-edit. Committing or ending that transaction lets garbage " +
-        "collection catch up.";
-    public const string SessionManagerWhyLongTx =
-        "This session holds a transaction that has been open for a long time. A long-lived snapshot keeps " +
-        "a stable view of the data, which holds back garbage collection of newer row versions. Committing " +
-        "or restarting it releases that hold.";
+    public static string SessionManagerGeneralHeader => Loc.Text(nameof(SessionManagerGeneralHeader));
+    public static string SessionManagerActivityHeader => Loc.Text(nameof(SessionManagerActivityHeader));
+    public static string SessionManagerRoleLabel => Loc.Text(nameof(SessionManagerRoleLabel));
+    public static string SessionManagerConnectedLabel => Loc.Text(nameof(SessionManagerConnectedLabel));
+    public static string SessionManagerActivitySeqReads => Loc.Text(nameof(SessionManagerActivitySeqReads));
+    public static string SessionManagerActivityIdxReads => Loc.Text(nameof(SessionManagerActivityIdxReads));
+    public static string SessionManagerActivityInserts => Loc.Text(nameof(SessionManagerActivityInserts));
+    public static string SessionManagerActivityUpdates => Loc.Text(nameof(SessionManagerActivityUpdates));
+    public static string SessionManagerActivityDeletes => Loc.Text(nameof(SessionManagerActivityDeletes));
+    public static string SessionManagerWhyHeader => Loc.Text(nameof(SessionManagerWhyHeader));
+    public static string SessionManagerWhyGc => Loc.Text(nameof(SessionManagerWhyGc));
+    public static string SessionManagerWhyLongTx => Loc.Text(nameof(SessionManagerWhyLongTx));
 
     // integration bridges
-    public const string SessionManagerOpenInEditor = "Open in SQL Editor";
-    public const string SessionManagerOpenInEditorTip = "Open this statement in the SQL Editor as a new saved query";
-    public const string SessionManagerAnalyze = "Analyze in Performance";
-    public static readonly string SessionManagerAnalyzeTip = CommandTip.Sentence(
+    public static string SessionManagerOpenInEditor => Loc.Text(nameof(SessionManagerOpenInEditor));
+    public static string SessionManagerOpenInEditorTip => Loc.Text(nameof(SessionManagerOpenInEditorTip));
+    public static string SessionManagerAnalyze => Loc.Text(nameof(SessionManagerAnalyze));
+    public static string SessionManagerAnalyzeTip => CommandTip.Sentence(
         CommandId.Go,
-        "Open in the SQL Editor and reveal the Performance tab — run it ({0}) to analyze "
-        + "(it is not run automatically)");
-    public const string SessionManagerCurrentStatementHeader = "Current statement";
+        Loc.Text(nameof(SessionManagerAnalyzeTip)));
+    public static string SessionManagerCurrentStatementHeader => Loc.Text(nameof(SessionManagerCurrentStatementHeader));
 
     // transactions grid — always-on Health dot (mirrors the Sessions grid)
-    public const string SessionManagerTxHealthGcBlocker = "Blocking garbage collection — the oldest active transaction";
-    public const string SessionManagerTxHealthLong = "Long-running transaction";
-    public const string SessionManagerTxHealthNormal = "Normal transaction";
+    public static string SessionManagerTxHealthGcBlocker => Loc.Text(nameof(SessionManagerTxHealthGcBlocker));
+    public static string SessionManagerTxHealthLong => Loc.Text(nameof(SessionManagerTxHealthLong));
+    public static string SessionManagerTxHealthNormal => Loc.Text(nameof(SessionManagerTxHealthNormal));
 
     // transaction-gap gauge (measured against the GC-danger budget — educate, don't alarm)
-    public const string SessionManagerGapCaption = "Transaction gap";
-    public const string SessionManagerGapExplain =
-        "How far the oldest active transaction lags behind the newest — the record versions Firebird must keep from garbage collection. Shown against the point where it starts to matter.";
-    public const string SessionManagerGapScaleMin = "0";
-    public const string SessionManagerGapScaleMaxFormat = "GC risk near {0}";
-    public const string SessionManagerGapStatusHealthy = "Well within the safe range.";
-    public const string SessionManagerGapStatusWatch = "Getting large — check for a long-running transaction.";
-    public const string SessionManagerGapStatusCritical = "Very large — a transaction is blocking garbage collection.";
+    public static string SessionManagerGapCaption => Loc.Text(nameof(SessionManagerGapCaption));
+    public static string SessionManagerGapExplain => Loc.Text(nameof(SessionManagerGapExplain));
+    public static string SessionManagerGapScaleMin => Loc.Text(nameof(SessionManagerGapScaleMin));
+    public static string SessionManagerGapScaleMaxFormat => Loc.Text(nameof(SessionManagerGapScaleMaxFormat));
+    public static string SessionManagerGapStatusHealthy => Loc.Text(nameof(SessionManagerGapStatusHealthy));
+    public static string SessionManagerGapStatusWatch => Loc.Text(nameof(SessionManagerGapStatusWatch));
+    public static string SessionManagerGapStatusCritical => Loc.Text(nameof(SessionManagerGapStatusCritical));
 
     // context menu
-    public const string SessionManagerMenuDisconnect = "Disconnect session";
-    public const string SessionManagerMenuCopy = "Copy";
+    public static string SessionManagerMenuDisconnect => Loc.Text(nameof(SessionManagerMenuDisconnect));
+    public static string SessionManagerMenuCopy => Loc.Text(nameof(SessionManagerMenuCopy));
 
     // confirmations + status (VM)
-    public const string SessionManagerDisconnectConfirmTitle = "Disconnect session";
-    public const string SessionManagerDisconnectConfirmFormat =
-        "Disconnect session {0} ({1})? Its uncommitted work will be rolled back.";
-    public const string SessionManagerDisconnectConfirmYes = "Disconnect";
-    public const string SessionManagerDisconnectDone = "Disconnect requested for session {0}.";
-    public const string SessionManagerCopyHeaders = "ID\tUser\tApplication\tHost\tState\tTx\tOldest Tx\tLoad";
-    public const string SessionManagerLastRefreshFormat = "Last refresh {0:HH:mm:ss}";
+    public static string SessionManagerDisconnectConfirmTitle => Loc.Text(nameof(SessionManagerDisconnectConfirmTitle));
+    public static string SessionManagerDisconnectConfirmFormat => Loc.Text(nameof(SessionManagerDisconnectConfirmFormat));
+    public static string SessionManagerDisconnectConfirmYes => Loc.Text(nameof(SessionManagerDisconnectConfirmYes));
+    public static string SessionManagerDisconnectDone => Loc.Text(nameof(SessionManagerDisconnectDone));
+    public static string SessionManagerCopyHeaders => Loc.Text(nameof(SessionManagerCopyHeaders));
+    public static string SessionManagerLastRefreshFormat => Loc.Text(nameof(SessionManagerLastRefreshFormat));
 
     // Global Search (Etap 3 — Search Results)
-    public static readonly string ToolbarGlobalSearchTooltip = CommandTip.For(
-        CommandId.GlobalSearch, "Global Search");
+    public static string ToolbarGlobalSearchTooltip => CommandTip.For(
+        CommandId.GlobalSearch, Loc.Text(nameof(ToolbarGlobalSearchTooltip)));
 
     // Export DDL to .sql (portable object script — structure + comments, no grants).
-    public const string ToolbarExportDdlTooltip = "Export DDL to .sql";
-    public const string ExportDdlDialogTitle = "Export DDL to SQL file";
-    public const string ExportDdlFilterName = "SQL scripts";
-    public const string ExportDdlSucceededFormat = "Exported \"{0}\" to {1}.";
-    public const string ExportDdlFailedFormat = "Export of \"{0}\" failed: {1}";
+    public static string ToolbarExportDdlTooltip => Loc.Text(nameof(ToolbarExportDdlTooltip));
+    public static string ExportDdlDialogTitle => Loc.Text(nameof(ExportDdlDialogTitle));
+    public static string ExportDdlFilterName => Loc.Text(nameof(ExportDdlFilterName));
+    public static string ExportDdlSucceededFormat => Loc.Text(nameof(ExportDdlSucceededFormat));
+    public static string ExportDdlFailedFormat => Loc.Text(nameof(ExportDdlFailedFormat));
 
     // Data export (Export Framework) — the shared Export dialog + its entry points on the SQL
     // results grid (banner "Export all…", toolbar icon, right-click "Export…").
-    public const string ExportDialogTitle = "Export";
-    public const string ExportResultsMenuItem = "Export…";
-    public const string ExportResultsTooltip = "Export results…";
-    public const string ExportAllRowsButton = "Export all…";
-    public const string ExportFormatLabel = "Format";
-    public const string ExportFormatExcel = "Excel (.xlsx)";
-    public const string ExportFormatCsv = "CSV (.csv)";
-    public const string ExportFormatText = "Text (.txt)";
-    public const string ExportFormatClipboard = "Clipboard";
-    public const string ExportExcelFilterName = "Excel workbooks";
-    public const string ExportScopeLabel = "Rows to export";
-    public const string ExportScopeCurrentView = "Visible rows";
-    public const string ExportScopeAllRows = "All rows";
-    public const string ExportScopeSelected = "Selected";
-    public const string ExportScopeCountFormat = "({0:N0})";
-    public const string ExportScopeCountApproxFormat = "(~{0:N0})";
-    public const string ExportOptionsLabel = "Options";
-    public const string ExportDelimiterLabel = "Delimiter";
-    public const string ExportDelimiterSemicolon = "Semicolon ( ; )";
-    public const string ExportDelimiterComma = "Comma ( , )";
-    public const string ExportDelimiterPipe = "Pipe ( | )";
-    public const string ExportDelimiterTab = "Tab";
-    public const string ExportEncodingUtf8Bom = "UTF-8 with BOM (Excel)";
-    public const string ExportIncludeHeader = "Include header row";
-    public const string ExportCultureInvariant = "Use invariant number / date format";
-    public const string ExportButton = "Export";
-    public const string ExportPreparing = "Preparing…";
-    public const string ExportProgressFormat = "Exporting… {0:N0} rows";
-    public const string ExportErrorFormat = "Export failed: {0}";
-    public const string ExportCsvFilterName = "CSV files";
-    public const string ExportTextFilterName = "Text files";
-    public const string ExportDefaultFileName = "query_result";
-    public const string ExportSavedFormat = "Exported {0:N0} rows to {1}.";
-    public const string ExportCopiedFormat = "Copied {0:N0} rows to the clipboard.";
-    public const string GlobalSearchDialogTitle = "Global Search";
-    public const string GlobalSearchTermLabel = "Search for";
-    public const string GlobalSearchTermWatermark = "text to find in metadata…";
-    public const string GlobalSearchMatchNames = "In names";
-    public const string GlobalSearchMatchSource = "In source";
-    public const string GlobalSearchCaseSensitive = "Case sensitive";
-    public const string GlobalSearchWholeWord = "Whole word";
-    public const string GlobalSearchScopeHint =
-        "Searches procedures, functions, triggers, views, packages, tables (and their fields), domains, generators and exceptions in the active connection.";
-    public const string GlobalSearchDialogFind = "Find";
-    public const string GlobalSearchDialogCancel = "Cancel";
-    public const string GlobalSearchTabTitleFormat = "Search: {0}";
-    public const string GlobalSearchSearching = "Searching…";
-    public const string GlobalSearchNoResults = "No matches for '{0}'.";
-    public const string GlobalSearchResultCount = "{0} object(s) matched '{1}'.";
-    public const string GlobalSearchPreviewHint = "Select a result to preview its source.";
-    public const string GlobalSearchPreviewError = "Could not load source: {0}";
+    public static string ExportDialogTitle => Loc.Text(nameof(ExportDialogTitle));
+    public static string ExportResultsMenuItem => Loc.Text(nameof(ExportResultsMenuItem));
+    public static string ExportResultsTooltip => Loc.Text(nameof(ExportResultsTooltip));
+    public static string ExportAllRowsButton => Loc.Text(nameof(ExportAllRowsButton));
+    public static string ExportFormatLabel => Loc.Text(nameof(ExportFormatLabel));
+    public static string ExportFormatExcel => Loc.Text(nameof(ExportFormatExcel));
+    public static string ExportFormatCsv => Loc.Text(nameof(ExportFormatCsv));
+    public static string ExportFormatText => Loc.Text(nameof(ExportFormatText));
+    public static string ExportFormatClipboard => Loc.Text(nameof(ExportFormatClipboard));
+    public static string ExportExcelFilterName => Loc.Text(nameof(ExportExcelFilterName));
+    public static string ExportScopeLabel => Loc.Text(nameof(ExportScopeLabel));
+    public static string ExportScopeCurrentView => Loc.Text(nameof(ExportScopeCurrentView));
+    public static string ExportScopeAllRows => Loc.Text(nameof(ExportScopeAllRows));
+    public static string ExportScopeSelected => Loc.Text(nameof(ExportScopeSelected));
+    public static string ExportScopeCountFormat => Loc.Text(nameof(ExportScopeCountFormat));
+    public static string ExportScopeCountApproxFormat => Loc.Text(nameof(ExportScopeCountApproxFormat));
+    public static string ExportOptionsLabel => Loc.Text(nameof(ExportOptionsLabel));
+    public static string ExportDelimiterLabel => Loc.Text(nameof(ExportDelimiterLabel));
+    public static string ExportDelimiterSemicolon => Loc.Text(nameof(ExportDelimiterSemicolon));
+    public static string ExportDelimiterComma => Loc.Text(nameof(ExportDelimiterComma));
+    public static string ExportDelimiterPipe => Loc.Text(nameof(ExportDelimiterPipe));
+    public static string ExportDelimiterTab => Loc.Text(nameof(ExportDelimiterTab));
+    public static string ExportEncodingUtf8Bom => Loc.Text(nameof(ExportEncodingUtf8Bom));
+    public static string ExportIncludeHeader => Loc.Text(nameof(ExportIncludeHeader));
+    public static string ExportCultureInvariant => Loc.Text(nameof(ExportCultureInvariant));
+    public static string ExportButton => Loc.Text(nameof(ExportButton));
+    public static string ExportPreparing => Loc.Text(nameof(ExportPreparing));
+    public static string ExportProgressFormat => Loc.Text(nameof(ExportProgressFormat));
+    public static string ExportErrorFormat => Loc.Text(nameof(ExportErrorFormat));
+    public static string ExportCsvFilterName => Loc.Text(nameof(ExportCsvFilterName));
+    public static string ExportTextFilterName => Loc.Text(nameof(ExportTextFilterName));
+    public static string ExportDefaultFileName => Loc.Text(nameof(ExportDefaultFileName));
+    public static string ExportSavedFormat => Loc.Text(nameof(ExportSavedFormat));
+    public static string ExportCopiedFormat => Loc.Text(nameof(ExportCopiedFormat));
+    public static string GlobalSearchDialogTitle => Loc.Text(nameof(GlobalSearchDialogTitle));
+    public static string GlobalSearchTermLabel => Loc.Text(nameof(GlobalSearchTermLabel));
+    public static string GlobalSearchTermWatermark => Loc.Text(nameof(GlobalSearchTermWatermark));
+    public static string GlobalSearchMatchNames => Loc.Text(nameof(GlobalSearchMatchNames));
+    public static string GlobalSearchMatchSource => Loc.Text(nameof(GlobalSearchMatchSource));
+    public static string GlobalSearchCaseSensitive => Loc.Text(nameof(GlobalSearchCaseSensitive));
+    public static string GlobalSearchWholeWord => Loc.Text(nameof(GlobalSearchWholeWord));
+    public static string GlobalSearchScopeHint => Loc.Text(nameof(GlobalSearchScopeHint));
+    public static string GlobalSearchDialogFind => Loc.Text(nameof(GlobalSearchDialogFind));
+    public static string GlobalSearchDialogCancel => Loc.Text(nameof(GlobalSearchDialogCancel));
+    public static string GlobalSearchTabTitleFormat => Loc.Text(nameof(GlobalSearchTabTitleFormat));
+    public static string GlobalSearchSearching => Loc.Text(nameof(GlobalSearchSearching));
+    public static string GlobalSearchNoResults => Loc.Text(nameof(GlobalSearchNoResults));
+    public static string GlobalSearchResultCount => Loc.Text(nameof(GlobalSearchResultCount));
+    public static string GlobalSearchPreviewHint => Loc.Text(nameof(GlobalSearchPreviewHint));
+    public static string GlobalSearchPreviewError => Loc.Text(nameof(GlobalSearchPreviewError));
 
     // Editor context menu + Find/Replace (Etap 1 — Global Search / Editor Find)
-    public const string EditorMenuUndo = "Undo";
-    public const string EditorMenuRedo = "Redo";
-    public const string EditorMenuCut = "Cut";
-    public const string EditorMenuCopy = "Copy";
-    public const string EditorMenuPaste = "Paste";
-    public const string EditorMenuSelectAll = "Select All";
-    public const string EditorMenuFind = "Find…";
-    public const string EditorMenuReplace = "Replace…";
-    public const string EditorMenuComment = "Comment";
-    public const string EditorMenuUncomment = "Uncomment";
-    public const string EditorMenuFormat = "Format SQL";
+    public static string EditorMenuUndo => Loc.Text(nameof(EditorMenuUndo));
+    public static string EditorMenuRedo => Loc.Text(nameof(EditorMenuRedo));
+    public static string EditorMenuCut => Loc.Text(nameof(EditorMenuCut));
+    public static string EditorMenuCopy => Loc.Text(nameof(EditorMenuCopy));
+    public static string EditorMenuPaste => Loc.Text(nameof(EditorMenuPaste));
+    public static string EditorMenuSelectAll => Loc.Text(nameof(EditorMenuSelectAll));
+    public static string EditorMenuFind => Loc.Text(nameof(EditorMenuFind));
+    public static string EditorMenuReplace => Loc.Text(nameof(EditorMenuReplace));
+    public static string EditorMenuComment => Loc.Text(nameof(EditorMenuComment));
+    public static string EditorMenuUncomment => Loc.Text(nameof(EditorMenuUncomment));
+    public static string EditorMenuFormat => Loc.Text(nameof(EditorMenuFormat));
 
     // ─── Debugger (Stage X / D4 — Debugger tab MVP) ───────────────────────────
-    public const string MetadataContextDebugProcedure = "Debug procedure…";
-    public const string MetadataContextDebugTrigger = "Debug trigger…";
-    public const string MetadataContextDebugFunction = "Debug function…";
-    public const string DebuggerTabTitleFormat = "Debug: {0}";
+    public static string MetadataContextDebugProcedure => Loc.Text(nameof(MetadataContextDebugProcedure));
+    public static string MetadataContextDebugTrigger => Loc.Text(nameof(MetadataContextDebugTrigger));
+    public static string MetadataContextDebugFunction => Loc.Text(nameof(MetadataContextDebugFunction));
+    public static string DebuggerTabTitleFormat => Loc.Text(nameof(DebuggerTabTitleFormat));
     // Launch panel.
-    public const string DebuggerLaunchHeader = "Launch debug session";
-    public const string DebuggerLaunchParametersHeader = "Input parameters";
-    public const string DebuggerLaunchNoParameters = "This routine takes no input parameters.";
+    public static string DebuggerLaunchHeader => Loc.Text(nameof(DebuggerLaunchHeader));
+    public static string DebuggerLaunchParametersHeader => Loc.Text(nameof(DebuggerLaunchParametersHeader));
+    public static string DebuggerLaunchNoParameters => Loc.Text(nameof(DebuggerLaunchNoParameters));
     // Compact launch form (D15.3 Seam A) — the inline NULL toggle beside each value field.
-    public const string DebuggerParamNullLabel = "null";
-    public const string DebuggerParamNullTooltip = "Set this parameter to NULL";
+    public static string DebuggerParamNullLabel => Loc.Text(nameof(DebuggerParamNullLabel));
+    public static string DebuggerParamNullTooltip => Loc.Text(nameof(DebuggerParamNullTooltip));
     // The ONE marker for a value the app supplied rather than the user typing it here — used by every
     // automatic mechanism (parameter history, carry-over across a rebuilt panel, and whatever comes next), so
     // the user learns one convention instead of one per feature. The label says THAT it was filled in; the
     // tooltip says by which mechanism. It disappears the moment the value is edited.
     // Two words, not one word in two colours: Restored is the ordinary case and stays quiet, while Assumed is
     // the ONE inference the panel makes and has to be recognisable at a glance, without reading the tooltip.
-    public const string LaunchValueRestoredMarker = "auto";
-    public const string LaunchValueAssumedMarker = "assumed";
-    public const string LaunchValueRestoredTooltip =
-        "Filled in automatically — this value was kept because it provably still fits this parameter.";
-    public const string LaunchValueAssumedTooltip =
-        "Filled in automatically, on an assumption: after matching by name this was the only parameter left on "
-        + "each side with a matching type, so the value was carried over. Check it before running.";
+    public static string LaunchValueRestoredMarker => Loc.Text(nameof(LaunchValueRestoredMarker));
+    public static string LaunchValueAssumedMarker => Loc.Text(nameof(LaunchValueAssumedMarker));
+    public static string LaunchValueRestoredTooltip => Loc.Text(nameof(LaunchValueRestoredTooltip));
+    public static string LaunchValueAssumedTooltip => Loc.Text(nameof(LaunchValueAssumedTooltip));
     // Advanced section (D15.3 Seam B) — collapsed by default; transaction isolation lives here, out of the
     // main Launch flow (most users never change it). The note leads with WHAT the option changes, then names
     // the levels; the selector below shows the current level.
-    public const string DebuggerAdvancedSection = "Advanced options";
-    public const string DebuggerLaunchIsolationLabel = "Transaction isolation";
-    public const string DebuggerIsolationReadCommitted = "Read Committed";
-    public const string DebuggerIsolationSnapshot = "Snapshot";
-    public const string DebuggerIsolationNote =
-        "Controls which committed changes from other sessions you see while stepping. Read Committed shows " +
-        "changes other sessions commit during the run; Snapshot gives a consistent view from the moment you " +
-        "start, unchanged to the end. Either way the debug session runs in its own transaction and is rolled " +
-        "back when it ends.";
+    public static string DebuggerAdvancedSection => Loc.Text(nameof(DebuggerAdvancedSection));
+    public static string DebuggerLaunchIsolationLabel => Loc.Text(nameof(DebuggerLaunchIsolationLabel));
+    public static string DebuggerIsolationReadCommitted => Loc.Text(nameof(DebuggerIsolationReadCommitted));
+    public static string DebuggerIsolationSnapshot => Loc.Text(nameof(DebuggerIsolationSnapshot));
+    public static string DebuggerIsolationNote => Loc.Text(nameof(DebuggerIsolationNote));
     // The shortcut surfaces Seam C's keyboard-first launch — the whole operation is reachable from the keyboard.
     // The label carries no parenthesised shortcut; the key is rendered in the shared shortcut-chip beside it.
-    public const string DebuggerLaunchButton = "Start debugging";
+    public static string DebuggerLaunchButton => Loc.Text(nameof(DebuggerLaunchButton));
     // The shortcut chip on the launch button — F5 means Start Debugging here, which is CommandId.Go on a
     // debugger tab (the one ratified contradiction with the SQL editor's Execute).
-    public static readonly string DebuggerLaunchShortcut = CommandTip.Gesture(CommandId.Go);
-    public const string DebuggerLaunchPreparing = "Preparing…";
+    public static string DebuggerLaunchShortcut => CommandTip.Gesture(CommandId.Go);
+    public static string DebuggerLaunchPreparing => Loc.Text(nameof(DebuggerLaunchPreparing));
     // Pre-flight report (§9.2 / §4.6). D15.3 polish: the section is shown ONLY when it has something to say —
     // no header, and no "all clear" line when clean (a clean launch form stays maximally quiet). Each surfaced
     // item is a severity-striped row in the Error Bar visual language (warning = Alert Triangle / WarningBrush,
     // blocking = octagon / ErrorBrush), so there is no header/clean string here anymore.
-    public const string DebuggerPreflightAutonomousTx =
-        "Contains IN AUTONOMOUS TRANSACTION — work committed there is permanent and survives the debug rollback.";
-    public const string DebuggerPreflightGenerator =
-        "Uses a generator/sequence (GEN_ID / NEXT VALUE FOR) — generator values are consumed permanently and are not restored on rollback.";
-    public const string DebuggerPreflightUnsteppable =
-        "The routine source could not be parsed into step points — debugging cannot start.";
+    public static string DebuggerPreflightAutonomousTx => Loc.Text(nameof(DebuggerPreflightAutonomousTx));
+    public static string DebuggerPreflightGenerator => Loc.Text(nameof(DebuggerPreflightGenerator));
+    public static string DebuggerPreflightUnsteppable => Loc.Text(nameof(DebuggerPreflightUnsteppable));
     // Toolbar / commands. Every gesture below comes from CommandCatalog — the debugger's stepping keys are
     // declared there as CommandDispatch.Reserved (dispatched by DebuggerTabView, which owns the caret), and
     // being declared is exactly what lets them be shown here without being re-typed.
-    public static readonly string DebuggerContinueTooltip = CommandTip.For(CommandId.Go, "Continue");
-    public static readonly string DebuggerStepIntoTooltip =
-        CommandTip.For(CommandId.DebuggerStepInto, "Step Into");
-    public static readonly string DebuggerStepOverTooltip =
-        CommandTip.For(CommandId.DebuggerStepOver, "Step Over");
-    public static readonly string DebuggerStepOutTooltip =
-        CommandTip.For(CommandId.DebuggerStepOut, "Step Out");
-    public static readonly string DebuggerRunToCursorTooltip =
-        CommandTip.For(CommandId.DebuggerRunToCursor, "Run To Cursor");
-    public const string DebuggerRunToCursorMenu = "Run to Cursor";
-    public static readonly string DebuggerStopTooltip =
-        CommandTip.For(CommandId.DebuggerStop, "Stop debugging");
-    public static readonly string DebuggerRestartTooltip =
-        CommandTip.For(CommandId.DebuggerRestart, "Restart");
-    public static readonly string DebuggerToggleBreakpointTooltip =
-        CommandTip.For(CommandId.DebuggerToggleBreakpoint, "Toggle breakpoint");
+    // The button caption and the tooltip say the same word, so they read ONE entry — the tooltip composes
+    // from the label. Retiring this member's own resource entry is the dedup, not a text change.
+    public static string DebuggerContinueTooltip => CommandTip.For(CommandId.Go, DebuggerContinueLabel);
+    public static string DebuggerStepIntoTooltip => CommandTip.For(CommandId.DebuggerStepInto, Loc.Text(nameof(DebuggerStepIntoTooltip)));
+    public static string DebuggerStepOverTooltip => CommandTip.For(CommandId.DebuggerStepOver, Loc.Text(nameof(DebuggerStepOverTooltip)));
+    public static string DebuggerStepOutTooltip => CommandTip.For(CommandId.DebuggerStepOut, Loc.Text(nameof(DebuggerStepOutTooltip)));
+    public static string DebuggerRunToCursorTooltip => CommandTip.For(CommandId.DebuggerRunToCursor, Loc.Text(nameof(DebuggerRunToCursorTooltip)));
+    public static string DebuggerRunToCursorMenu => Loc.Text(nameof(DebuggerRunToCursorMenu));
+    public static string DebuggerStopTooltip => CommandTip.For(CommandId.DebuggerStop, Loc.Text(nameof(DebuggerStopTooltip)));
+    public static string DebuggerRestartTooltip => CommandTip.For(CommandId.DebuggerRestart, DebuggerRestartLabel);
+    public static string DebuggerToggleBreakpointTooltip => CommandTip.For(CommandId.DebuggerToggleBreakpoint, Loc.Text(nameof(DebuggerToggleBreakpointTooltip)));
     // Status line.
-    public const string DebuggerStatusReady = "Ready to launch.";
-    public const string DebuggerStatusPausedFormat = "Paused at line {0} — {1}";
-    public const string DebuggerStatusRunning = "Running…";
-    public const string DebuggerStatusCompleted = "Completed — transaction rolled back.";
+    public static string DebuggerStatusReady => Loc.Text(nameof(DebuggerStatusReady));
+    public static string DebuggerStatusPausedFormat => Loc.Text(nameof(DebuggerStatusPausedFormat));
+    public static string DebuggerStatusRunning => Loc.Text(nameof(DebuggerStatusRunning));
+    public static string DebuggerStatusCompleted => Loc.Text(nameof(DebuggerStatusCompleted));
     // Short, fixed-height headline; the full Firebird message goes to the Error Bar (D15.2 Seam C).
-    public const string DebuggerStatusFaulted = "Unhandled exception — transaction rolled back.";
-    public const string DebuggerStatusStopped = "Stopped — transaction rolled back.";
-    public const string DebuggerStatusLaunchFailedFormat = "Could not start the debug session: {0}";
-    public const string DebuggerStopReasonEntry = "entry";
-    public const string DebuggerStopReasonStep = "step";
-    public const string DebuggerStopReasonBreakpoint = "breakpoint";
+    public static string DebuggerStatusFaulted => Loc.Text(nameof(DebuggerStatusFaulted));
+    public static string DebuggerStatusStopped => Loc.Text(nameof(DebuggerStatusStopped));
+    public static string DebuggerStatusLaunchFailedFormat => Loc.Text(nameof(DebuggerStatusLaunchFailedFormat));
+    public static string DebuggerStopReasonEntry => Loc.Text(nameof(DebuggerStopReasonEntry));
+    public static string DebuggerStopReasonStep => Loc.Text(nameof(DebuggerStopReasonStep));
+    public static string DebuggerStopReasonBreakpoint => Loc.Text(nameof(DebuggerStopReasonBreakpoint));
     // Advanced-breakpoint stop reasons (D12, spec §9.8).
-    public const string DebuggerStopReasonException = "exception";
-    public const string DebuggerStopReasonSuspend = "suspended";
-    public const string DebuggerStopReasonDataBreakpoint = "data change";
-    public const string DebuggerStopReasonDataChangedFormat = "data breakpoint — {0} changed";
-    public const string DebuggerStopReasonConditionErrorFormat = "breakpoint condition error — {0}";
+    public static string DebuggerStopReasonException => Loc.Text(nameof(DebuggerStopReasonException));
+    public static string DebuggerStopReasonSuspend => Loc.Text(nameof(DebuggerStopReasonSuspend));
+    public static string DebuggerStopReasonDataBreakpoint => Loc.Text(nameof(DebuggerStopReasonDataBreakpoint));
+    public static string DebuggerStopReasonDataChangedFormat => Loc.Text(nameof(DebuggerStopReasonDataChangedFormat));
+    public static string DebuggerStopReasonConditionErrorFormat => Loc.Text(nameof(DebuggerStopReasonConditionErrorFormat));
     // Error Bar (D15.2 Seam C) — its own thin row below the toolbar; shows on a fault / Break-on-Exception pause.
-    public const string DebuggerErrorUnknown = "Unknown error";
+    public static string DebuggerErrorUnknown => Loc.Text(nameof(DebuggerErrorUnknown));
     // Friendly error text (D15.4 Seam B) — one short, categorised line per FriendlyErrorCategory, shown on the
     // three expression surfaces (Immediate result / Watch value / breakpoint-condition reason). The raw
     // Firebird message stays reachable (row tooltip, Executed SQL, Error Bar) — "friendly + raw available".
-    public const string DebuggerFriendlyUserExceptionFormat = "Exception raised: {0}";
-    public const string DebuggerFriendlyConstraint =
-        "A database constraint was violated (NOT NULL, CHECK, or unique key).";
-    public const string DebuggerFriendlySqlError =
-        "SQL error — check the expression's syntax and that all names exist.";
-    public const string DebuggerFriendlyRawTooltip = "Full Firebird message";
+    public static string DebuggerFriendlyUserExceptionFormat => Loc.Text(nameof(DebuggerFriendlyUserExceptionFormat));
+    public static string DebuggerFriendlyConstraint => Loc.Text(nameof(DebuggerFriendlyConstraint));
+    public static string DebuggerFriendlySqlError => Loc.Text(nameof(DebuggerFriendlySqlError));
+    public static string DebuggerFriendlyRawTooltip => Loc.Text(nameof(DebuggerFriendlyRawTooltip));
     // Save + compile from the debugger tab (UX Polish Seam 5b). Saving is a deliberate new work cycle: it
     // ends a live session (which was compiled from the old code) before recompiling the routine.
-    public const string DebuggerSave = "Save";
-    public static readonly string DebuggerSaveTooltip = CommandTip.For(
-        CommandId.DebuggerSaveSource, "Save and compile the routine");
-    public const string DebuggerSaveUnavailable = "This debugger tab cannot save (no connection).";
+    public static string DebuggerSave => Loc.Text(nameof(DebuggerSave));
+    public static string DebuggerSaveTooltip => CommandTip.For(
+        CommandId.DebuggerSaveSource, Loc.Text(nameof(DebuggerSaveTooltip)));
+    public static string DebuggerSaveUnavailable => Loc.Text(nameof(DebuggerSaveUnavailable));
     // (the empty-buffer refusal is the shared EditorNothingToCompile — one wording for every editor)
-    public const string DebuggerSaveEndsSessionTitle = "Save ends the debug session";
-    public const string DebuggerSaveEndsSessionMessage =
-        "Saving recompiles {0}, so the running debug session no longer matches the code.\n\n"
-        + "The session will be stopped and its transaction rolled back before compiling. "
-        + "You can start debugging again straight away with the new code.";
-    public const string DebuggerSaveEndsSessionConfirm = "Stop session and save";
-    public const string DebuggerSaveCompileFailedFormat = "Compile failed: {0}";
-    public const string DebuggerStatusSaved = "Saved and compiled.";
+    public static string DebuggerSaveEndsSessionTitle => Loc.Text(nameof(DebuggerSaveEndsSessionTitle));
+    public static string DebuggerSaveEndsSessionMessage => Loc.Text(nameof(DebuggerSaveEndsSessionMessage));
+    public static string DebuggerSaveEndsSessionConfirm => Loc.Text(nameof(DebuggerSaveEndsSessionConfirm));
+    public static string DebuggerSaveCompileFailedFormat => Loc.Text(nameof(DebuggerSaveCompileFailedFormat));
+    public static string DebuggerStatusSaved => Loc.Text(nameof(DebuggerStatusSaved));
     // Save during a debugging cycle: the session is rebuilt on the compiled code with the settings the user
     // already made, so they land back where they were instead of re-entering the launch form.
-    public const string DebuggerStatusSavedRestarting = "Saved — restarting the session…";
+    public static string DebuggerStatusSavedRestarting => Loc.Text(nameof(DebuggerStatusSavedRestarting));
     // The compile was refused: the tab stays on the source so the code can be fixed and saved again.
     // The server's own message is in the Error Bar — this is only the short status-line headline.
-    public const string DebuggerStatusSaveFailed = "Save failed — fix the code and save again.";
+    public static string DebuggerStatusSaveFailed => Loc.Text(nameof(DebuggerStatusSaveFailed));
     // The first edit during a live session ends it: the session was built from the text that just changed, so
     // stepping on would run code the user can no longer see. Says what happened AND what to do next — the
     // toolbar going grey is the visual cue, this is the reason. (Until Restart can run the edited text without
     // saving, Save is the way back into a session — hence naming it here.)
-    public static readonly string DebuggerStatusEndedByEdit = CommandTip.Sentence(
+    public static string DebuggerStatusEndedByEdit => CommandTip.Sentence(
         CommandId.DebuggerRestart,
-        "Session ended — the code changed. Restart ({0}) runs the current code without saving.");
+        Loc.Text(nameof(DebuggerStatusEndedByEdit)));
     // The routine's HEADER changed, so the parameter list the engine reads from the catalog no longer describes
     // this text and a draft-sourced session cannot be started from it yet. Names the one way forward.
-    public static readonly string DebuggerStatusEndedByHeaderEdit = CommandTip.Sentence(
+    public static string DebuggerStatusEndedByHeaderEdit => CommandTip.Sentence(
         CommandId.DebuggerSaveSource,
-        "Session ended — the routine header changed. Save ({0}) to compile and debug the new signature.");
-    public const string DebuggerUnsavedSourceFormat = "{0} — modified source (not compiled)";
+        Loc.Text(nameof(DebuggerStatusEndedByHeaderEdit)));
+    public static string DebuggerUnsavedSourceFormat => Loc.Text(nameof(DebuggerUnsavedSourceFormat));
     // Variables panel.
-    public const string DebuggerVariablesHeader = "Variables";
-    public const string DebuggerVariablesEmpty = "No variables in the current frame.";
-    public const string DebuggerVariablesColumnName = "Name";
-    public const string DebuggerVariablesColumnValue = "Value";
-    public const string DebuggerVariablesColumnKind = "Kind";
-    public const string DebuggerVariableNull = "<null>";
-    public const string DebuggerVariableKindParameter = "param";
-    public const string DebuggerVariableKindLocal = "local";
-    public const string DebuggerVariableKindIn = "IN";
-    public const string DebuggerVariableKindOut = "OUT";
-    public const string DebuggerVariableKindContextNew = "NEW record";
-    public const string DebuggerVariableKindContextOld = "OLD record";
-    public const string DebuggerVariableKindReturn = "return";
-    public const string DebuggerVariableGroupPinned = "Pinned";
-    public const string DebuggerVariableGroupContext = "Context";
-    public const string DebuggerVariableGroupParameters = "Parameters";
-    public const string DebuggerVariableGroupLocals = "Locals";
+    public static string DebuggerVariablesHeader => Loc.Text(nameof(DebuggerVariablesHeader));
+    public static string DebuggerVariablesEmpty => Loc.Text(nameof(DebuggerVariablesEmpty));
+    public static string DebuggerVariablesColumnName => Loc.Text(nameof(DebuggerVariablesColumnName));
+    public static string DebuggerVariablesColumnValue => Loc.Text(nameof(DebuggerVariablesColumnValue));
+    public static string DebuggerVariablesColumnKind => Loc.Text(nameof(DebuggerVariablesColumnKind));
+    public static string DebuggerVariableNull => Loc.Text(nameof(DebuggerVariableNull));
+    public static string DebuggerVariableKindParameter => Loc.Text(nameof(DebuggerVariableKindParameter));
+    public static string DebuggerVariableKindLocal => Loc.Text(nameof(DebuggerVariableKindLocal));
+    public static string DebuggerVariableKindIn => Loc.Text(nameof(DebuggerVariableKindIn));
+    public static string DebuggerVariableKindOut => Loc.Text(nameof(DebuggerVariableKindOut));
+    public static string DebuggerVariableKindContextNew => Loc.Text(nameof(DebuggerVariableKindContextNew));
+    public static string DebuggerVariableKindContextOld => Loc.Text(nameof(DebuggerVariableKindContextOld));
+    public static string DebuggerVariableKindReturn => Loc.Text(nameof(DebuggerVariableKindReturn));
+    public static string DebuggerVariableGroupPinned => Loc.Text(nameof(DebuggerVariableGroupPinned));
+    public static string DebuggerVariableGroupContext => Loc.Text(nameof(DebuggerVariableGroupContext));
+    public static string DebuggerVariableGroupParameters => Loc.Text(nameof(DebuggerVariableGroupParameters));
+    public static string DebuggerVariableGroupLocals => Loc.Text(nameof(DebuggerVariableGroupLocals));
     // D-function: the return-value row/group shown only when a function is the debug root. The row displays
     // "not returned yet" until RETURN runs (the session completes at RETURN), then the returned value.
-    public const string DebuggerVariableGroupReturn = "Return";
-    public const string DebuggerReturnRowName = "«return»";
-    public const string DebuggerReturnPending = "— (not returned yet)";
-    public const string DebuggerVariableFilterWatermark = "Filter variables…";
-    public const string DebuggerVariablePinTooltip = "Pin to top / unpin";
-    public const string DebuggerVariableEditTooltip = "Double-click to edit (Enter to apply, Esc to cancel)";
-    public const string DebuggerVariableBlobFormat = "[BLOB · {0} B]";
+    public static string DebuggerVariableGroupReturn => Loc.Text(nameof(DebuggerVariableGroupReturn));
+    public static string DebuggerReturnRowName => Loc.Text(nameof(DebuggerReturnRowName));
+    public static string DebuggerReturnPending => Loc.Text(nameof(DebuggerReturnPending));
+    public static string DebuggerVariableFilterWatermark => Loc.Text(nameof(DebuggerVariableFilterWatermark));
+    public static string DebuggerVariablePinTooltip => Loc.Text(nameof(DebuggerVariablePinTooltip));
+    public static string DebuggerVariableEditTooltip => Loc.Text(nameof(DebuggerVariableEditTooltip));
+    public static string DebuggerVariableBlobFormat => Loc.Text(nameof(DebuggerVariableBlobFormat));
     // Call stack (single-frame in D4, but the header exists).
-    public const string DebuggerCallStackHeader = "Call stack";
+    public static string DebuggerCallStackHeader => Loc.Text(nameof(DebuggerCallStackHeader));
     // Errors.
-    public const string DebuggerNoConnection = "Connect to a database before debugging.";
-    public const string ProcedureDebugTooltip = "Debug procedure";
-    public const string TriggerDebugTooltip = "Debug trigger";
-    public const string FunctionDebugTooltip = "Debug function";
-    public const string DebuggerSourceUnavailableFormat = "Could not load the source of {0}.";
+    public static string DebuggerNoConnection => Loc.Text(nameof(DebuggerNoConnection));
+    public static string ProcedureDebugTooltip => Loc.Text(nameof(ProcedureDebugTooltip));
+    public static string TriggerDebugTooltip => Loc.Text(nameof(TriggerDebugTooltip));
+    public static string FunctionDebugTooltip => Loc.Text(nameof(FunctionDebugTooltip));
+    public static string DebuggerSourceUnavailableFormat => Loc.Text(nameof(DebuggerSourceUnavailableFormat));
     // Trigger debugging (Stage X / D10) — the launch panel's NEW/OLD context editors + the out-of-scope refusal.
-    public const string DebuggerTriggerOutOfScope =
-        "Only relation triggers (BEFORE/AFTER INSERT/UPDATE/DELETE) can be debugged — database-level and DDL triggers are out of scope.";
-    public const string DebuggerTriggerActionLabel = "Fires for";
-    public const string DebuggerTriggerActionInsert = "INSERT";
-    public const string DebuggerTriggerActionUpdate = "UPDATE";
-    public const string DebuggerTriggerActionDelete = "DELETE";
-    public const string DebuggerTriggerNewHeader = "NEW values";
-    public const string DebuggerTriggerOldHeader = "OLD values";
-    public const string DebuggerTriggerNoColumns = "This trigger references no columns of this record.";
+    public static string DebuggerTriggerOutOfScope => Loc.Text(nameof(DebuggerTriggerOutOfScope));
+    public static string DebuggerTriggerActionLabel => Loc.Text(nameof(DebuggerTriggerActionLabel));
+    public static string DebuggerTriggerActionInsert => Loc.Text(nameof(DebuggerTriggerActionInsert));
+    public static string DebuggerTriggerActionUpdate => Loc.Text(nameof(DebuggerTriggerActionUpdate));
+    public static string DebuggerTriggerActionDelete => Loc.Text(nameof(DebuggerTriggerActionDelete));
+    public static string DebuggerTriggerNewHeader => Loc.Text(nameof(DebuggerTriggerNewHeader));
+    public static string DebuggerTriggerOldHeader => Loc.Text(nameof(DebuggerTriggerOldHeader));
+    public static string DebuggerTriggerNoColumns => Loc.Text(nameof(DebuggerTriggerNoColumns));
     // Bottom tabbed panel (D5 layout redesign) — extensible: Call Stack / Breakpoints / Output join later.
-    public const string DebuggerBottomTabImmediate = "Immediate";
-    public const string DebuggerBottomTabWatches = "Watches";
-    public const string DebuggerBottomTabCallStack = "Call Stack";
-    public const string DebuggerBottomTabBreakpoints = "Breakpoints";
-    public const string DebuggerBottomTabResults = "Results";
+    public static string DebuggerBottomTabImmediate => Loc.Text(nameof(DebuggerBottomTabImmediate));
+    public static string DebuggerBottomTabWatches => Loc.Text(nameof(DebuggerBottomTabWatches));
+    public static string DebuggerBottomTabCallStack => Loc.Text(nameof(DebuggerBottomTabCallStack));
+    public static string DebuggerBottomTabBreakpoints => Loc.Text(nameof(DebuggerBottomTabBreakpoints));
+    public static string DebuggerBottomTabResults => Loc.Text(nameof(DebuggerBottomTabResults));
     // Run to next SUSPEND + its result grid (D12 Seam E2, spec §9.8). The button label is now an
     // SvgIcon + text (D15.2 Seam A); only the tooltip remains here.
-    public const string DebuggerRunToSuspendTooltip =
-        "Run to next SUSPEND — produce the next result row of a selectable procedure (rows collect in the Results tab).";
+    public static string DebuggerRunToSuspendTooltip => Loc.Text(nameof(DebuggerRunToSuspendTooltip));
     // Loop fast-forward (D13) — enabled only while paused inside a WHILE / FOR loop.
-    public const string DebuggerRunToNextIterationTooltip =
-        "Next Iteration — finish the current loop iteration and pause at the start of the next (or after the loop if it exits). Available inside a loop.";
-    public const string DebuggerRunToLoopExitTooltip =
-        "Continue Until Loop Exit — run the rest of the current loop and pause just after it (any exit: condition, LEAVE/BREAK, EXIT). Available inside a loop.";
-    public const string DebuggerResultsEmpty =
-        "No rows yet. Use “Suspend” to run a selectable procedure to its next SUSPEND; each emitted row is collected here.";
+    public static string DebuggerRunToNextIterationTooltip => Loc.Text(nameof(DebuggerRunToNextIterationTooltip));
+    public static string DebuggerRunToLoopExitTooltip => Loc.Text(nameof(DebuggerRunToLoopExitTooltip));
+    public static string DebuggerResultsEmpty => Loc.Text(nameof(DebuggerResultsEmpty));
     // Breakpoints panel (D12 Seam E, spec §9.8) — a pure view of the Core Breakpoint / DataBreakpoint objects.
-    public const string DebuggerBreakpointsEmpty =
-        "No breakpoints. Click the editor gutter to add a line breakpoint; right-click a variable → " +
-        "\"Break when changes\" for a data breakpoint.";
-    public const string DebuggerBreakpointsLineHeader = "Line breakpoints";
-    public const string DebuggerBreakpointsDataHeader = "Data breakpoints (break on change)";
-    public const string DebuggerBreakpointLineFormat = "Line {0}";
-    public const string DebuggerBreakpointConditionWatermark = "condition, e.g. IDX = 3";
-    public const string DebuggerBreakpointWhenLabel = "when";
-    public const string DebuggerBreakpointHitsLabel = "hits";
-    public const string DebuggerBreakpointRemoveTooltip = "Remove breakpoint";
-    public const string DebuggerBreakOnException = "Break on exception";
-    public const string DebuggerBreakOnExceptionTooltip =
-        "Pause at the raising statement before the exception is routed to a WHEN … DO handler (spec §9.8.1).";
-    public const string DebuggerDataBreakpointMenu = "Break when changes";
+    public static string DebuggerBreakpointsEmpty => Loc.Text(nameof(DebuggerBreakpointsEmpty));
+    public static string DebuggerBreakpointsLineHeader => Loc.Text(nameof(DebuggerBreakpointsLineHeader));
+    public static string DebuggerBreakpointsDataHeader => Loc.Text(nameof(DebuggerBreakpointsDataHeader));
+    public static string DebuggerBreakpointLineFormat => Loc.Text(nameof(DebuggerBreakpointLineFormat));
+    public static string DebuggerBreakpointConditionWatermark => Loc.Text(nameof(DebuggerBreakpointConditionWatermark));
+    public static string DebuggerBreakpointWhenLabel => Loc.Text(nameof(DebuggerBreakpointWhenLabel));
+    public static string DebuggerBreakpointHitsLabel => Loc.Text(nameof(DebuggerBreakpointHitsLabel));
+    public static string DebuggerBreakpointRemoveTooltip => Loc.Text(nameof(DebuggerBreakpointRemoveTooltip));
+    public static string DebuggerBreakOnException => Loc.Text(nameof(DebuggerBreakOnException));
+    public static string DebuggerBreakOnExceptionTooltip => Loc.Text(nameof(DebuggerBreakOnExceptionTooltip));
+    public static string DebuggerDataBreakpointMenu => Loc.Text(nameof(DebuggerDataBreakpointMenu));
     // Hit-count kinds, in HitCountKind order (Always / Exactly / AtLeast / Multiple).
-    public const string DebuggerHitCountAlways = "always";
-    public const string DebuggerHitCountExactly = "= N";
-    public const string DebuggerHitCountAtLeast = "≥ N";
-    public const string DebuggerHitCountMultiple = "every N";
+    public static string DebuggerHitCountAlways => Loc.Text(nameof(DebuggerHitCountAlways));
+    public static string DebuggerHitCountExactly => Loc.Text(nameof(DebuggerHitCountExactly));
+    public static string DebuggerHitCountAtLeast => Loc.Text(nameof(DebuggerHitCountAtLeast));
+    public static string DebuggerHitCountMultiple => Loc.Text(nameof(DebuggerHitCountMultiple));
     // Harness Log (Sprint D10.5) — a DEBUG-only diagnostic surface for developing/diagnosing the debugger
     // itself. It is built in code-behind under #if DEBUG (DebuggerTabView.axaml.cs), so these strings are
     // referenced only in DEBUG builds; in RELEASE they are simply unused consts. It replaced the misnamed
     // "Executed SQL" tab (that name read as the user's SQL history, which it never was).
-    public const string DebuggerBottomTabHarnessLog = "Harness Log";
-    public const string DebuggerHarnessLogDescription =
-        "Diagnostic tool (debug builds only). Shows the EXECUTE BLOCK harnesses the debugger generates " +
-        "internally to evaluate expressions and statements on the server — this is how the debugger works " +
-        "under the hood, not a history of your SQL.";
-    public static readonly string DebuggerHarnessLogEmpty = CommandTip.Sentence(
+    public static string DebuggerBottomTabHarnessLog => Loc.Text(nameof(DebuggerBottomTabHarnessLog));
+    public static string DebuggerHarnessLogDescription => Loc.Text(nameof(DebuggerHarnessLogDescription));
+    public static string DebuggerHarnessLogEmpty => CommandTip.Sentence(
         CommandId.DebuggerEvaluateSelection,
-        "No harnesses generated yet. Evaluate an expression ({0}) or run an Immediate statement while "
-        + "the session is paused, and the generated harness SQL will appear here.");
-    public const string DebuggerBottomPanelCollapseTooltip = "Collapse / expand the panel";
+        Loc.Text(nameof(DebuggerHarnessLogEmpty)));
+    public static string DebuggerBottomPanelCollapseTooltip => Loc.Text(nameof(DebuggerBottomPanelCollapseTooltip));
     // Call Stack panel (D8, spec §5).
-    public const string DebuggerCallStackEmpty = "No call stack — not paused.";
-    public const string DebuggerCallStackLineFormat = "line {0}";
-    public const string DebuggerCallStackSimulatedGlyph = "△";
-    public const string DebuggerCallStackSimulatedTooltip =
-        "Simulated frame — reached by Step Into (interpreted), which can differ from real execution.";
-    public const string DebuggerCallStackPeekHeaderFormat = "{0} — line {1}";
+    public static string DebuggerCallStackEmpty => Loc.Text(nameof(DebuggerCallStackEmpty));
+    public static string DebuggerCallStackLineFormat => Loc.Text(nameof(DebuggerCallStackLineFormat));
+    public static string DebuggerCallStackSimulatedGlyph => Loc.Text(nameof(DebuggerCallStackSimulatedGlyph));
+    public static string DebuggerCallStackSimulatedTooltip => Loc.Text(nameof(DebuggerCallStackSimulatedTooltip));
+    public static string DebuggerCallStackPeekHeaderFormat => Loc.Text(nameof(DebuggerCallStackPeekHeaderFormat));
     // Expression evaluation — Evaluate / Immediate / Executed SQL (D5, spec §9.5 / §10.3).
-    public const string DebuggerImmediateHeader = "Immediate / Executed SQL";
-    public const string DebuggerImmediateWatermark = "Evaluate an expression, e.g. v_counter * 2";
+    public static string DebuggerImmediateHeader => Loc.Text(nameof(DebuggerImmediateHeader));
+    public static string DebuggerImmediateWatermark => Loc.Text(nameof(DebuggerImmediateWatermark));
     // A short line of valid-expression examples shown under the Immediate/Watches empty-state (D15.4 Seam A —
     // hints). Kept concise and separated by "·"; these are illustrative shapes, not references to real vars.
-    public const string DebuggerExpressionExamples =
-        "Examples: v_counter * 2 · v_status = 'OK' · char_length(v_text)";
-    public const string DebuggerImmediateAsStatement = "as statement";
-    public const string DebuggerImmediateAsStatementTooltip =
-        "Run the text as a PSQL statement against the live frame (may assign variables). Off: evaluate it as an expression.";
-    public const string DebuggerImmediateEvaluateButton = "Evaluate";
-    public const string DebuggerImmediateClearTooltip = "Clear";
-    public static readonly string DebuggerEvaluateSelectionTooltip = CommandTip.For(
-        CommandId.DebuggerEvaluateSelection, "Evaluate the selected expression");
-    public const string DebuggerImmediateEmpty = "No evaluations yet. Evaluate an expression, or select one in the source and press Shift+F9.";
-    public const string DebuggerEvalKindExpression = "expression";
-    public const string DebuggerEvalKindStatement = "statement";
-    public const string DebuggerEvalStatementOk = "(statement ran)";
-    public const string DebuggerEvalErrorUnknown = "evaluation failed";
+    public static string DebuggerExpressionExamples => Loc.Text(nameof(DebuggerExpressionExamples));
+    public static string DebuggerImmediateAsStatement => Loc.Text(nameof(DebuggerImmediateAsStatement));
+    public static string DebuggerImmediateAsStatementTooltip => Loc.Text(nameof(DebuggerImmediateAsStatementTooltip));
+    public static string DebuggerImmediateEvaluateButton => Loc.Text(nameof(DebuggerImmediateEvaluateButton));
+    public static string DebuggerImmediateClearTooltip => Loc.Text(nameof(DebuggerImmediateClearTooltip));
+    public static string DebuggerEvaluateSelectionTooltip => CommandTip.For(
+        CommandId.DebuggerEvaluateSelection, Loc.Text(nameof(DebuggerEvaluateSelectionTooltip)));
+    public static string DebuggerImmediateEmpty => Loc.Text(nameof(DebuggerImmediateEmpty));
+    public static string DebuggerEvalKindExpression => Loc.Text(nameof(DebuggerEvalKindExpression));
+    public static string DebuggerEvalKindStatement => Loc.Text(nameof(DebuggerEvalKindStatement));
+    public static string DebuggerEvalStatementOk => Loc.Text(nameof(DebuggerEvalStatementOk));
+    public static string DebuggerEvalErrorUnknown => Loc.Text(nameof(DebuggerEvalErrorUnknown));
     // Watches panel (D5 seam b, §9.5).
-    public const string DebuggerWatchesHeader = "Watches";
-    public const string DebuggerWatchWatermark = "Watch an expression, e.g. v_status = 'OK'";
-    public const string DebuggerWatchAddButton = "Add";
-    public const string DebuggerWatchAddTooltip = "Add a watch (re-evaluated after every step)";
-    public const string DebuggerWatchRemoveTooltip = "Remove watch";
-    public const string DebuggerWatchesEmpty = "No watches. Add an expression to re-evaluate after every step.";
-    public const string DebuggerWatchNotEvaluated = "—";
-    public const string DebuggerWatchSideEffectTooltip =
-        "This watch is not a pure expression — it runs real SQL in the debug transaction each time it is re-evaluated, and may have side effects.";
+    public static string DebuggerWatchesHeader => Loc.Text(nameof(DebuggerWatchesHeader));
+    public static string DebuggerWatchWatermark => Loc.Text(nameof(DebuggerWatchWatermark));
+    public static string DebuggerWatchAddButton => Loc.Text(nameof(DebuggerWatchAddButton));
+    public static string DebuggerWatchAddTooltip => Loc.Text(nameof(DebuggerWatchAddTooltip));
+    public static string DebuggerWatchRemoveTooltip => Loc.Text(nameof(DebuggerWatchRemoveTooltip));
+    public static string DebuggerWatchesEmpty => Loc.Text(nameof(DebuggerWatchesEmpty));
+    public static string DebuggerWatchNotEvaluated => Loc.Text(nameof(DebuggerWatchNotEvaluated));
+    public static string DebuggerWatchSideEffectTooltip => Loc.Text(nameof(DebuggerWatchSideEffectTooltip));
 }

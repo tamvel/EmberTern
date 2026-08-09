@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -35,10 +35,10 @@ public class DataGridCopyMenuTests
 
     private static readonly string[] CopyItems =
     {
-        "UiStrings.GridCopyCell",
-        "UiStrings.GridCopyRow}",            // ⚠ braced, or it also matches GridCopyRowWithHeaders
-        "UiStrings.GridCopyRowWithHeaders",
-        "UiStrings.GridCopyAllWithHeaders",
+        "{app:Loc GridCopyCell}",
+        "{app:Loc GridCopyRow}",            // ⚠ braced, or it also matches GridCopyRowWithHeaders
+        "{app:Loc GridCopyRowWithHeaders}",
+        "{app:Loc GridCopyAllWithHeaders}",
     };
 
     [Fact]
@@ -78,8 +78,8 @@ public class DataGridCopyMenuTests
             var menu = ContextMenuOf(view, grid);
             foreach (var item in new[]
                      {
-                         "UiStrings.FilterByValue", "UiStrings.FilterExcludeValue",
-                         "UiStrings.FilterContainsValue", "UiStrings.ExportResultsMenuItem",
+                         "{app:Loc FilterByValue}", "{app:Loc FilterExcludeValue}",
+                         "{app:Loc FilterContainsValue}", "{app:Loc ExportResultsMenuItem}",
                      })
             {
                 if (!menu.Contains(item, StringComparison.Ordinal)) missing.Add($"{view}.{grid} → {item}");
@@ -110,7 +110,7 @@ public class DataGridCopyMenuTests
         foreach (var (view, grid) in DataGrids)
         {
             var menu = ContextMenuOf(view, grid);
-            var offers = menu.Contains("UiStrings.GridCopyAsInsert", StringComparison.Ordinal);
+            var offers = menu.Contains("{app:Loc GridCopyAsInsert}", StringComparison.Ordinal);
             Assert.Equal(expected[$"{view}.{grid}"], offers);
         }
     }

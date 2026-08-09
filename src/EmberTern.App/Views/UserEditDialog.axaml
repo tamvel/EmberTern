@@ -24,48 +24,48 @@
 
     <StackPanel Grid.Row="1" Margin="20,16" Spacing="10">
       <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.SecurityUserNameLabel}" Classes="field-label" />
+        <TextBlock Text="{app:Loc SecurityUserNameLabel}" Classes="field-label" />
         <TextBox Text="{Binding UserName}" IsEnabled="{Binding CanEditName}" />
       </StackPanel>
 
       <Grid ColumnDefinitions="*,*" >
         <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,6,0">
-          <TextBlock Text="{x:Static app:UiStrings.SecurityPasswordLabel}" Classes="field-label" />
+          <TextBlock Text="{app:Loc SecurityPasswordLabel}" Classes="field-label" />
           <TextBox Text="{Binding Password}" PasswordChar="●" />
         </StackPanel>
         <StackPanel Grid.Column="1" Spacing="4" Margin="6,0,0,0">
-          <TextBlock Text="{x:Static app:UiStrings.SecurityConfirmPasswordLabel}" Classes="field-label" />
+          <TextBlock Text="{app:Loc SecurityConfirmPasswordLabel}" Classes="field-label" />
           <TextBox Text="{Binding ConfirmPassword}" PasswordChar="●" />
         </StackPanel>
       </Grid>
-      <TextBlock Text="{x:Static app:UiStrings.SecurityPasswordEditHint}"
+      <TextBlock Text="{app:Loc SecurityPasswordEditHint}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
                  FontSize="{DynamicResource Text.Compact.Size}"
                  IsVisible="{Binding !IsNew}" />
 
       <Grid ColumnDefinitions="*,*,*">
         <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,6,0">
-          <TextBlock Text="{x:Static app:UiStrings.SecurityColFirstName}" Classes="field-label" />
+          <TextBlock Text="{app:Loc SecurityColFirstName}" Classes="field-label" />
           <TextBox Text="{Binding FirstName}" />
         </StackPanel>
         <StackPanel Grid.Column="1" Spacing="4" Margin="3,0">
-          <TextBlock Text="{x:Static app:UiStrings.SecurityColMiddleName}" Classes="field-label" />
+          <TextBlock Text="{app:Loc SecurityColMiddleName}" Classes="field-label" />
           <TextBox Text="{Binding MiddleName}" />
         </StackPanel>
         <StackPanel Grid.Column="2" Spacing="4" Margin="6,0,0,0">
-          <TextBlock Text="{x:Static app:UiStrings.SecurityColLastName}" Classes="field-label" />
+          <TextBlock Text="{app:Loc SecurityColLastName}" Classes="field-label" />
           <TextBox Text="{Binding LastName}" />
         </StackPanel>
       </Grid>
 
       <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.SecurityColDescription}" Classes="field-label" />
+        <TextBlock Text="{app:Loc SecurityColDescription}" Classes="field-label" />
         <TextBox Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap" Height="56" />
       </StackPanel>
 
       <StackPanel Orientation="Horizontal" Spacing="20">
-        <CheckBox IsChecked="{Binding Active}" Content="{x:Static app:UiStrings.SecurityActiveLabel}" />
-        <CheckBox IsChecked="{Binding Admin}" Content="{x:Static app:UiStrings.SecurityAdministratorLabel}" />
+        <CheckBox IsChecked="{Binding Active}" Content="{app:Loc SecurityActiveLabel}" />
+        <CheckBox IsChecked="{Binding Admin}" Content="{app:Loc SecurityAdministratorLabel}" />
       </StackPanel>
     </StackPanel>
 
@@ -75,9 +75,9 @@
             BorderThickness="0,1,0,0"
             Padding="20,12">
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button Classes="flat" Content="{x:Static app:UiStrings.SecurityDialogCancel}"
+        <Button Classes="flat" Content="{app:Loc SecurityDialogCancel}"
                 Command="{Binding CancelCommand}" />
-        <Button Classes="primary" Content="{x:Static app:UiStrings.SecurityDialogOk}"
+        <Button Classes="primary" Content="{app:Loc SecurityDialogOk}"
                 Command="{Binding AcceptCommand}" IsDefault="True" />
       </StackPanel>
     </Border>

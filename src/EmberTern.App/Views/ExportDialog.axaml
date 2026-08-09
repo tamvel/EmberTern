@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.ExportDialog"
         x:DataType="vm:ExportDialogViewModel"
-        Title="{x:Static app:UiStrings.ExportDialogTitle}"
+        Title="{app:Loc ExportDialogTitle}"
         Width="440"
         SizeToContent="Height"
         CanResize="False"
@@ -24,7 +24,7 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,16">
-      <TextBlock Text="{x:Static app:UiStrings.ExportDialogTitle}" Classes="h1" />
+      <TextBlock Text="{app:Loc ExportDialogTitle}" Classes="h1" />
     </Border>
 
     <!-- Body: options (while configuring) OR progress (while exporting) -->
@@ -42,24 +42,24 @@
 
           <!-- Format -->
           <StackPanel Spacing="6">
-            <TextBlock Text="{x:Static app:UiStrings.ExportFormatLabel}" Classes="field-label" />
+            <TextBlock Text="{app:Loc ExportFormatLabel}" Classes="field-label" />
             <RadioButton GroupName="ExportFormat"
-                         Content="{x:Static app:UiStrings.ExportFormatExcel}"
+                         Content="{app:Loc ExportFormatExcel}"
                          IsChecked="{Binding IsFormatXlsx, Mode=TwoWay}" />
             <RadioButton GroupName="ExportFormat"
-                         Content="{x:Static app:UiStrings.ExportFormatCsv}"
+                         Content="{app:Loc ExportFormatCsv}"
                          IsChecked="{Binding IsFormatCsv, Mode=TwoWay}" />
             <RadioButton GroupName="ExportFormat"
-                         Content="{x:Static app:UiStrings.ExportFormatText}"
+                         Content="{app:Loc ExportFormatText}"
                          IsChecked="{Binding IsFormatText, Mode=TwoWay}" />
             <RadioButton GroupName="ExportFormat"
-                         Content="{x:Static app:UiStrings.ExportFormatClipboard}"
+                         Content="{app:Loc ExportFormatClipboard}"
                          IsChecked="{Binding IsFormatClipboard, Mode=TwoWay}" />
           </StackPanel>
 
           <!-- Scope -->
           <StackPanel Spacing="6">
-            <TextBlock Text="{x:Static app:UiStrings.ExportScopeLabel}" Classes="field-label" />
+            <TextBlock Text="{app:Loc ExportScopeLabel}" Classes="field-label" />
             <ItemsControl ItemsSource="{Binding ScopeOptions}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ExportScopeOptionViewModel">
@@ -74,12 +74,12 @@
 
           <!-- Options -->
           <StackPanel Spacing="8">
-            <TextBlock Text="{x:Static app:UiStrings.ExportOptionsLabel}" Classes="field-label" />
+            <TextBlock Text="{app:Loc ExportOptionsLabel}" Classes="field-label" />
 
             <!-- Delimiter + encoding + culture (CSV / Text only) -->
             <StackPanel Spacing="8" IsVisible="{Binding ShowDelimitedOptions}">
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="{x:Static app:UiStrings.ExportDelimiterLabel}"
+                <TextBlock Text="{app:Loc ExportDelimiterLabel}"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource SubtleForegroundBrush}"
                            FontSize="{DynamicResource Text.Application.Size}" Width="80" />
@@ -93,14 +93,14 @@
                   </ComboBox.ItemTemplate>
                 </ComboBox>
               </StackPanel>
-              <CheckBox Content="{x:Static app:UiStrings.ExportEncodingUtf8Bom}"
+              <CheckBox Content="{app:Loc ExportEncodingUtf8Bom}"
                         IsChecked="{Binding UseBom, Mode=TwoWay}"
                         IsVisible="{Binding ShowEncodingOption}" />
-              <CheckBox Content="{x:Static app:UiStrings.ExportCultureInvariant}"
+              <CheckBox Content="{app:Loc ExportCultureInvariant}"
                         IsChecked="{Binding UseInvariantCulture, Mode=TwoWay}" />
             </StackPanel>
 
-            <CheckBox Content="{x:Static app:UiStrings.ExportIncludeHeader}"
+            <CheckBox Content="{app:Loc ExportIncludeHeader}"
                       IsChecked="{Binding IncludeHeader, Mode=TwoWay}" />
           </StackPanel>
 
@@ -128,10 +128,10 @@
             Padding="20,12">
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.DialogCancel}"
+                Content="{app:Loc DialogCancel}"
                 Command="{Binding CancelCommand}" />
         <Button Classes="primary"
-                Content="{x:Static app:UiStrings.ExportButton}"
+                Content="{app:Loc ExportButton}"
                 Command="{Binding ExportCommand}"
                 IsVisible="{Binding IsConfiguring}"
                 IsDefault="True" />

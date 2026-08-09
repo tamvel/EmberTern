@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -359,8 +359,8 @@ public partial class AddFieldDialogViewModel : ViewModelBase
         {
             // Field name might still be empty while the user fills the form —
             // BuildDefinition still emits a meaningful preview using a placeholder
-            // name. We swap "" for "<field>" in the displayed DDL.
-            var name = string.IsNullOrWhiteSpace(FieldName) ? "<field>" : FieldName.Trim();
+            // name. We swap "" for UiStrings.PlaceholderFieldName in the displayed DDL.
+            var name = string.IsNullOrWhiteSpace(FieldName) ? UiStrings.PlaceholderFieldName : FieldName.Trim();
             var def = BuildDefinitionCore(name);
             return DdlGenerator.BuildAddField(TableName, def);
         }

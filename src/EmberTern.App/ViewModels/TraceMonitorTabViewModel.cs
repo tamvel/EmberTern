@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -210,14 +210,14 @@ public sealed partial class TraceMonitorTabViewModel : ViewModelBase, IAsyncDisp
         {
             var s = State switch
             {
-                TraceSessionState.Running => "Recording",
-                TraceSessionState.Paused => "Paused",
-                TraceSessionState.Starting => "Starting…",
-                TraceSessionState.Stopping => "Stopping…",
-                TraceSessionState.Faulted => "Error",
-                _ => "Stopped",
+                TraceSessionState.Running => UiStrings.TraceStateRecording,
+                TraceSessionState.Paused => UiStrings.TraceStatePaused,
+                TraceSessionState.Starting => UiStrings.TraceStateStarting,
+                TraceSessionState.Stopping => UiStrings.TraceStateStopping,
+                TraceSessionState.Faulted => UiStrings.TraceStateError,
+                _ => UiStrings.TraceStateStopped,
             };
-            var dropped = DroppedCount > 0 ? $" · {DroppedCount} dropped" : string.Empty;
+            var dropped = DroppedCount > 0 ? string.Format(CultureInfo.CurrentCulture, UiStrings.TraceDroppedSuffixFormat, DroppedCount) : string.Empty;
             return $"{s} · {DisplayedCount}/{TotalCount} events{dropped}";
         }
     }

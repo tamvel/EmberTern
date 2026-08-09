@@ -34,8 +34,14 @@ public sealed class UiStringsShortcutSourceTests
         RegexOptions.Compiled);
 
     /// <summary>
-    /// The only <c>const</c> members allowed to name a gesture, each because the gesture is deliberately NOT
-    /// a catalog command. Adding an entry here is a decision to be defended, not a way past the test.
+    /// The only resource entries allowed to name a gesture, each because the gesture is deliberately NOT a
+    /// catalog command. Adding an entry here is a decision to be defended, not a way past the test.
+    ///
+    /// <para>⭐ <b>Re-homed by the localization stage, and the new home is the right one.</b> This guard used
+    /// to read <c>const</c> declarations; the words now live in <c>Localization/Strings.resx</c>, so it reads
+    /// the ENGLISH RESOURCE VALUES — which is where a hand-typed gesture can actually be written today, and
+    /// what a translator will be handed. Scanning the C# would now scan nothing but <c>Loc.Text(nameof(X))</c>
+    /// calls: green, and blind.</para>
     /// </summary>
     private static readonly Dictionary<string, string> Allowed = new()
     {
@@ -45,26 +51,47 @@ public sealed class UiStringsShortcutSourceTests
         [nameof(UiStrings.ImportSourceUseClipboardTooltip)] =
             "Ctrl+V here means 're-read the clipboard SOURCE', i.e. paste semantics that must yield to a "
             + "focused text box, so it stayed a local handler and has no descriptor to read from.",
+        [nameof(UiStrings.ImportRefreshTooltipClipboardNote)] =
+            "The same local Ctrl+V as ImportSourceUseClipboardTooltip, named in prose rather than as a "
+            + "gesture chip. ⭐ This entry is NEW to the allowlist and its arrival is the guard working: the "
+            + "note used to be a fragment concatenated onto a `static readonly` member, and the old guard "
+            + "read only `const` fields, so it could not see it. Re-homing the guard onto the English "
+            + "resource values surfaced a standing exemption that had never been written down.",
         // (FieldEditEditTooltip was here — "Edit selected field · F2" — until the UX Consistency Pass found it
         //  had no consumer at all: the toolbar Edit button it described was never built. Removing the string
         //  and building the button retired the exemption, and F2 is now CommandId.CollectionEdit.)
     };
 
+    /// <summary>Every English entry, read from the shipped resource set — never a hand-written list.</summary>
+    private static IEnumerable<KeyValuePair<string, string>> EnglishEntries()
+    {
+        var resources = new System.Resources.ResourceManager(
+            "EmberTern.App.Localization.Strings", typeof(UiStrings).Assembly);
+        var set = resources.GetResourceSet(
+            System.Globalization.CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: true)!;
+        foreach (System.Collections.DictionaryEntry e in set)
+        {
+            if (e.Value is string v)
+            {
+                yield return new KeyValuePair<string, string>((string)e.Key, v);
+            }
+        }
+    }
+
     [Fact]
     public void NoConstantTypesAGestureByHand()
     {
-        var offenders = typeof(UiStrings)
-            .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
-            .Where(f => !Allowed.ContainsKey(f.Name))
-            .Where(f => f.GetRawConstantValue() is string s && GestureShaped.IsMatch(s))
-            .Select(f => $"{f.Name} = \"{f.GetRawConstantValue()}\"")
+        var offenders = EnglishEntries()
+            .Where(e => !Allowed.ContainsKey(e.Key))
+            .Where(e => GestureShaped.IsMatch(e.Value))
+            .Select(e => $"{e.Key} = \"{e.Value}\"")
             .ToArray();
 
         Assert.True(offenders.Length == 0,
-            "These UiStrings constants type a keyboard gesture by hand, so they will go stale the moment it "
-            + "is re-bound. Compose them with CommandTip.For / .Gesture / .Sentence, or add an allowlist "
-            + "entry stating why the gesture is not a catalog command:"
+            "These English resource entries type a keyboard gesture by hand, so they will go stale the moment "
+            + "it is re-bound — and a translator would be handed a key name to translate. Compose them with "
+            + "CommandTip.For / .Gesture / .Sentence, or add an allowlist entry stating why the gesture is "
+            + "not a catalog command:"
             + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
@@ -73,15 +100,12 @@ public sealed class UiStringsShortcutSourceTests
     [Fact]
     public void EveryAllowlistEntry_StillNamesAConstantThatStillNeedsIt()
     {
-        var constants = typeof(UiStrings)
-            .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
-            .ToDictionary(f => f.Name, f => (string)f.GetRawConstantValue()!);
+        var entries = EnglishEntries().ToDictionary(e => e.Key, e => e.Value, StringComparer.Ordinal);
 
         foreach (var (name, reason) in Allowed)
         {
-            Assert.True(constants.ContainsKey(name), $"Allowlisted '{name}' is no longer a UiStrings constant.");
-            Assert.True(GestureShaped.IsMatch(constants[name]),
+            Assert.True(entries.ContainsKey(name), $"Allowlisted '{name}' is no longer a resource entry.");
+            Assert.True(GestureShaped.IsMatch(entries[name]),
                 $"Allowlisted '{name}' no longer contains a gesture — drop the exemption.");
             Assert.False(string.IsNullOrWhiteSpace(reason), $"Allowlisted '{name}' has no reason.");
         }

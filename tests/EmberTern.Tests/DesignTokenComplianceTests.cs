@@ -1487,7 +1487,7 @@ public class DesignTokenComplianceTests
             File.ReadAllText(Path.Combine(AppRoot(), "Views", "TraceMonitorTabView.axaml")),
             "Views/TraceMonitorTabView.axaml");
 
-        var field = Regex.Match(trace, @"PlaceholderText=""\{x:Static app:UiStrings\.TraceFilterWatermark\}""");
+        var field = Regex.Match(trace, @"PlaceholderText=""\{app:Loc TraceFilterWatermark\}""");
         Assert.True(field.Success, "Nie znaleziono pola filtra w TraceMonitorTabView.axaml.");
 
         // ⚠⚠ Zakotwiczone w OTWIERAJĄCYM ZNACZNIKU ramki, a nie „ostatnia wysokość nad polem" — pierwsza

@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using System;
 using System.Text;
 using System.Threading;
@@ -58,7 +59,7 @@ public sealed class ExportService
         ExportFormat.Xlsx => new XlsxExporter(request.IncludeHeader),
         ExportFormat.Csv or ExportFormat.Text =>
             new DelimitedTextExporter(request.Delimited
-                ?? throw new InvalidOperationException("Delimited options are required for CSV/Text export.")),
+                ?? throw new InvalidOperationException(UiStrings.ExportDelimitedOptionsRequired)),
         ExportFormat.Clipboard => new ClipboardTextExporter(request.IncludeHeader),
 
         // The SQL formats need a PROVEN target, exactly as CSV/Text need their options. It is the
@@ -66,10 +67,10 @@ public sealed class ExportService
         // business — and by the time a request names a SQL format, the proof already exists (the menu
         // item would otherwise be disabled, with the reason).
         ExportFormat.InsertScript => new InsertScriptExporter(request.SqlTarget
-            ?? throw new InvalidOperationException("A resolved SQL target is required for INSERT export.")),
+            ?? throw new InvalidOperationException(UiStrings.ExportInsertTargetRequired)),
         ExportFormat.UpdateScript => new UpdateScriptExporter(request.SqlTarget
-            ?? throw new InvalidOperationException("A resolved SQL target is required for UPDATE export.")),
+            ?? throw new InvalidOperationException(UiStrings.ExportUpdateTargetRequired)),
 
-        _ => throw new NotSupportedException($"Export format '{request.Format}' is not supported."),
+        _ => throw new NotSupportedException(string.Format(CultureInfo.CurrentCulture, UiStrings.ExportFormatUnsupportedFormat, request.Format)),
     };
 }

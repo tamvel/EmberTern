@@ -4,7 +4,7 @@
         xmlns:vm="using:EmberTern.App.ViewModels"
         x:Class="EmberTern.App.Views.NewRoleDialog"
         x:DataType="vm:NewRoleDialogViewModel"
-        Title="{x:Static app:UiStrings.SecurityRoleDialogTitle}"
+        Title="{app:Loc SecurityRoleDialogTitle}"
         Width="400"
         SizeToContent="Height"
         CanResize="False"
@@ -18,13 +18,13 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,14">
-      <TextBlock Text="{x:Static app:UiStrings.SecurityRoleDialogTitle}" Classes="h1" />
+      <TextBlock Text="{app:Loc SecurityRoleDialogTitle}" Classes="h1" />
     </Border>
 
     <StackPanel Grid.Row="1" Margin="20,18" Spacing="6">
-      <TextBlock Text="{x:Static app:UiStrings.SecurityRoleNameLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc SecurityRoleNameLabel}" Classes="field-label" />
       <TextBox x:Name="NameBox" Text="{Binding RoleName}"
-               PlaceholderText="{x:Static app:UiStrings.SecurityRoleNameWatermark}"
+               PlaceholderText="{app:Loc SecurityRoleNameWatermark}"
                KeyDown="OnNameKeyDown" />
     </StackPanel>
 
@@ -34,9 +34,9 @@
             BorderThickness="0,1,0,0"
             Padding="20,12">
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button Classes="flat" Content="{x:Static app:UiStrings.SecurityDialogCancel}"
+        <Button Classes="flat" Content="{app:Loc SecurityDialogCancel}"
                 Command="{Binding CancelCommand}" />
-        <Button Classes="primary" Content="{x:Static app:UiStrings.SecurityDialogOk}"
+        <Button Classes="primary" Content="{app:Loc SecurityDialogOk}"
                 Command="{Binding AcceptCommand}" IsDefault="True" />
       </StackPanel>
     </Border>

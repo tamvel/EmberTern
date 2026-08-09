@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:perf="using:EmberTern.Core.Performance"
@@ -87,16 +87,16 @@
           </StackPanel>
 
           <!-- nudge to measure reads: a full scan, but this run wasn't profiled with reads -->
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceReadsNotMeasured}"
+          <TextBlock Text="{app:Loc PerformanceReadsNotMeasured}"
                      FontSize="{DynamicResource Text.Compact.Size}" FontStyle="Italic" TextWrapping="Wrap"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding ShowReadsNudge}" />
 
           <!-- empty / progress / error states -->
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceEmptyHint}" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap"
+          <TextBlock Text="{app:Loc PerformanceEmptyHint}" FontSize="{DynamicResource Text.Application.Size}" TextWrapping="Wrap"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding ShowEmptyState}" />
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceProfilingHint}" FontSize="{DynamicResource Text.Application.Size}"
+          <TextBlock Text="{app:Loc PerformanceProfilingHint}" FontSize="{DynamicResource Text.Application.Size}"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding IsProfiling}" />
           <controls:MessageBanner Severity="Error" Message="{Binding ErrorMessage}"
@@ -104,8 +104,8 @@
         </StackPanel>
 
         <Button Grid.Column="1" Classes="flat"
-                Content="{x:Static app:UiStrings.PerformanceRefresh}"
-                ToolTip.Tip="{x:Static app:UiStrings.PerformanceRefreshTooltip}"
+                Content="{app:Loc PerformanceRefresh}"
+                ToolTip.Tip="{app:Loc PerformanceRefreshTooltip}"
                 Command="{Binding RefreshCommand}"
                 VerticalAlignment="Top" />
       </Grid>
@@ -120,7 +120,7 @@
           <!-- ⭐ K3 ZAMKNIĘTA (M4, decyzja użytkownika A-2). Ten nagłówek trzymał 12 SemiBold lokalnie od M2c,
                bo rola `Text.SectionHeader` niosła 11 — a 11 SemiBold stało nad tekstem 12 i nie czytało się
                jako nadrzędne. Rola niesie teraz 12: wartość bez zmian, wyjątek znika. -->
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsHeader}"
+          <TextBlock Text="{app:Loc PerformanceFindingsHeader}"
                      FontWeight="{DynamicResource Text.SectionHeader.Weight}" FontSize="{DynamicResource Text.SectionHeader.Size}" Foreground="{DynamicResource ForegroundBrush}" />
 
           <ItemsControl ItemsSource="{Binding Findings}" IsVisible="{Binding HasFindings}">
@@ -199,10 +199,10 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsNone}" FontSize="{DynamicResource Text.Compact.Size}"
+          <TextBlock Text="{app:Loc PerformanceFindingsNone}" FontSize="{DynamicResource Text.Compact.Size}"
                      Foreground="{DynamicResource SuccessIconBrush}"
                      IsVisible="{Binding FindingsNoneVisible}" />
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceFindingsFuture}" FontSize="{DynamicResource Text.Compact.Size}" FontStyle="Italic"
+          <TextBlock Text="{app:Loc PerformanceFindingsFuture}" FontSize="{DynamicResource Text.Compact.Size}" FontStyle="Italic"
                      Foreground="{DynamicResource SubtleForegroundBrush}"
                      IsVisible="{Binding HasFindings}" />
         </StackPanel>
@@ -212,7 +212,7 @@
           <!-- ⭐ K3 ZAMKNIĘTA (M4, decyzja użytkownika A-2). Ten nagłówek trzymał 12 SemiBold lokalnie od M2c,
                bo rola `Text.SectionHeader` niosła 11 — a 11 SemiBold stało nad tekstem 12 i nie czytało się
                jako nadrzędne. Rola niesie teraz 12: wartość bez zmian, wyjątek znika. -->
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessHeader}"
+          <TextBlock Text="{app:Loc PerformanceAccessHeader}"
                      FontWeight="{DynamicResource Text.SectionHeader.Weight}" FontSize="{DynamicResource Text.SectionHeader.Size}" Foreground="{DynamicResource ForegroundBrush}" />
           <ItemsControl ItemsSource="{Binding TableAccess}">
             <ItemsControl.ItemTemplate>
@@ -249,7 +249,7 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <TextBlock Text="{x:Static app:UiStrings.PerformanceAccessLegend}" FontSize="{DynamicResource Text.Caption.Size}"
+          <TextBlock Text="{app:Loc PerformanceAccessLegend}" FontSize="{DynamicResource Text.Caption.Size}"
                      Foreground="{DynamicResource SubtleForegroundBrush}" />
         </StackPanel>
 
@@ -258,7 +258,7 @@
              whole section is hidden rather than showing an empty "no plan / MON$" placeholder.
              Compact chrome (a touch lighter than Execution Summary) so it reads as a Performance
              section without the Fluent Expander's default 48px header. -->
-        <Expander Header="{x:Static app:UiStrings.PerformancePlanAdvancedHeader}"
+        <Expander Header="{app:Loc PerformancePlanAdvancedHeader}"
                   IsExpanded="False" IsVisible="{Binding HasPlan}" MinHeight="34">
           <!-- ⚠ `ExpanderContentPadding` było ZEREM, przez co treść sekcji stała przy samych krawędziach,
                podczas gdy nagłówek miał wcięcie 10 — czyli jedyny element z oddechem był tym, który go nie
@@ -293,7 +293,7 @@
                     <TextBlock Text="●" FontSize="9" VerticalAlignment="Center"
                                Foreground="{DynamicResource WarningBrush}"
                                IsVisible="{Binding IsSequentialScan}"
-                               ToolTip.Tip="Sequential (full) table scan" />
+                               ToolTip.Tip="{app:Loc PerformanceLegendFullScanTooltip}" />
                     <!-- ⭐ Wiersz planu jako CIĄG KOLOROWYCH PRZEBIEGÓW zamiast jednego płaskiego napisu.
                          Podział pochodzi z klasyfikacji, którą parser planu już wykonywał, a widok wyrzucał
                          (`PlanNodeViewModel.DisplayText => Node.RawText`) — nie powstał żaden nowy parser.
@@ -338,11 +338,11 @@
             <!-- raw plan + provenance (folded-in Details) -->
             <DockPanel IsVisible="{Binding Details.HasPlanText}">
               <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-                <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.PerformanceRawPlanLabel}"
+                <TextBlock Grid.Column="0" Text="{app:Loc PerformanceRawPlanLabel}"
                            FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center"
                            Foreground="{DynamicResource SubtleForegroundBrush}" />
                 <Button Grid.Column="1" Classes="flat"
-                        Content="{x:Static app:UiStrings.PerformanceCopy}"
+                        Content="{app:Loc PerformanceCopy}"
                         Command="{Binding CopyDetailsCommand}" />
               </Grid>
               <Border Background="{DynamicResource PanelBrush}"
@@ -355,12 +355,12 @@
             </DockPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasReport}">
-              <TextBlock Text="{x:Static app:UiStrings.PerformanceCaptureLabel}" FontSize="{DynamicResource Text.Compact.Size}"
+              <TextBlock Text="{app:Loc PerformanceCaptureLabel}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource SubtleForegroundBrush}" />
               <TextBlock Text="{Binding Details.CaptureMethodText}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource ForegroundBrush}" />
               <TextBlock Text="·" FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" />
-              <TextBlock Text="{x:Static app:UiStrings.PerformancePlanDialectLabel}" FontSize="{DynamicResource Text.Compact.Size}"
+              <TextBlock Text="{app:Loc PerformancePlanDialectLabel}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource SubtleForegroundBrush}" />
               <TextBlock Text="{Binding Details.PlanDialectText}" FontSize="{DynamicResource Text.Compact.Size}"
                          Foreground="{DynamicResource ForegroundBrush}" />

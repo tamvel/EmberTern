@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -48,7 +48,11 @@ internal sealed class SqlCompletionData : ICompletionData
     /// <summary>Row text size — smaller than the editor default so the list reads light (P2).</summary>
     private const double RowFontSize = 12;
 
-    private readonly string _description;
+    // ⚠ The EXPLICIT description only. The per-kind fallback is deliberately NOT captured here: it is a
+    // localized word, and a completion row can outlive a language change (the list is built once per
+    // session and the popup is re-shown). Resolving it in the property keeps the row live for free —
+    // cheaper and more reliable than subscribing every row to Loc.LanguageChanged.
+    private readonly string? _description;
     private readonly string? _columnType;
     // Lazily builds the rich Quick Info detail pane (Etap 6 / M5) for THIS item when the
     // completion list selects it. Null → the plain string fallback. Built fresh on each
@@ -68,7 +72,7 @@ internal sealed class SqlCompletionData : ICompletionData
         Text = text;
         Kind = kind;
         _columnType = columnType;
-        _description = description ?? DescribeKind(kind);
+        _description = description;
         _detailFactory = detailFactory;
         // Modern (VS/Rider-style) row: a per-kind icon (reusing the tree/semantic palette) + the
         // name + a subtle ": TYPE : DOMAIN" for columns (P2). The icon conveys the kind, so no
@@ -142,7 +146,7 @@ internal sealed class SqlCompletionData : ICompletionData
     public object Content { get; }
     // The detail pane AvaloniaEdit shows beside the list for the selected item. The rich
     // Quick Info card when a factory is supplied and yields one; otherwise the plain string.
-    public object Description => _detailFactory?.Invoke() ?? _description;
+    public object Description => _detailFactory?.Invoke() ?? _description ?? DescribeKind(Kind);
     public SqlCompletionKind Kind { get; }
     // Required by ICompletionData, but INERT: AvaloniaEdit reads Priority only from its own filter/sort
     // (CompletionList.SelectItemFiltering), which SqlCompletionController switches off so the list renders
@@ -298,25 +302,25 @@ internal sealed class SqlCompletionData : ICompletionData
 
     private static string DescribeKind(SqlCompletionKind kind) => kind switch
     {
-        SqlCompletionKind.Keyword => "Keyword",
-        SqlCompletionKind.Table => "Table",
-        SqlCompletionKind.View => "View",
-        SqlCompletionKind.Procedure => "Procedure",
-        SqlCompletionKind.Function => "Function",
-        SqlCompletionKind.Trigger => "Trigger",
-        SqlCompletionKind.Generator => "Generator",
-        SqlCompletionKind.Domain => "Domain",
-        SqlCompletionKind.Exception => "Exception",
-        SqlCompletionKind.Package => "Package",
-        SqlCompletionKind.Role => "Role",
-        SqlCompletionKind.Index => "Index",
-        SqlCompletionKind.Column => "Field",
-        SqlCompletionKind.Alias => "Alias",
-        SqlCompletionKind.Variable => "Variable",
-        SqlCompletionKind.Parameter => "Parameter",
-        SqlCompletionKind.Cte => "CTE",
-        SqlCompletionKind.Cursor => "Cursor",
-        SqlCompletionKind.Record => "Record",
+        SqlCompletionKind.Keyword => UiStrings.ObjectKindKeyword,
+        SqlCompletionKind.Table => UiStrings.ObjectKindTable,
+        SqlCompletionKind.View => UiStrings.ObjectKindView,
+        SqlCompletionKind.Procedure => UiStrings.ObjectKindProcedure,
+        SqlCompletionKind.Function => UiStrings.ObjectKindFunction,
+        SqlCompletionKind.Trigger => UiStrings.ObjectKindTrigger,
+        SqlCompletionKind.Generator => UiStrings.ObjectKindGenerator,
+        SqlCompletionKind.Domain => UiStrings.ObjectKindDomain,
+        SqlCompletionKind.Exception => UiStrings.ObjectKindException,
+        SqlCompletionKind.Package => UiStrings.ObjectKindPackage,
+        SqlCompletionKind.Role => UiStrings.ObjectKindRole,
+        SqlCompletionKind.Index => UiStrings.ObjectKindIndex,
+        SqlCompletionKind.Column => UiStrings.ObjectKindField,
+        SqlCompletionKind.Alias => UiStrings.ObjectKindAlias,
+        SqlCompletionKind.Variable => UiStrings.ObjectKindVariable,
+        SqlCompletionKind.Parameter => UiStrings.ObjectKindParameter,
+        SqlCompletionKind.Cte => UiStrings.ObjectKindCteShort,
+        SqlCompletionKind.Cursor => UiStrings.ObjectKindCursor,
+        SqlCompletionKind.Record => UiStrings.ObjectKindRecord,
         _ => string.Empty,
     };
 }

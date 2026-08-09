@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.IndexDialog"
         x:DataType="vm:IndexDialogViewModel"
-        Title="{x:Static app:UiStrings.IndexDialogTitle}"
+        Title="{app:Loc IndexDialogTitle}"
         Width="460"
         Height="580"
         CanResize="True"
@@ -23,22 +23,22 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,16">
-      <TextBlock Text="{x:Static app:UiStrings.IndexDialogHeader}" Classes="h1" />
+      <TextBlock Text="{app:Loc IndexDialogHeader}" Classes="h1" />
     </Border>
 
     <!-- Index name -->
     <StackPanel Grid.Row="1" Margin="20,14,20,4" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.IndexNameLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc IndexNameLabel}" Classes="field-label" />
       <TextBox Text="{Binding ConstraintName, Mode=TwoWay}" />
     </StackPanel>
 
     <!-- Unique + Descending -->
     <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="20,4,20,8" Spacing="20">
       <CheckBox IsChecked="{Binding Unique, Mode=TwoWay}">
-        <TextBlock Text="{x:Static app:UiStrings.IndexUniqueLabel}" />
+        <TextBlock Text="{app:Loc IndexUniqueLabel}" />
       </CheckBox>
       <CheckBox IsChecked="{Binding Descending, Mode=TwoWay}">
-        <TextBlock Text="{x:Static app:UiStrings.IndexDescendingLabel}" />
+        <TextBlock Text="{app:Loc IndexDescendingLabel}" />
       </CheckBox>
     </StackPanel>
 
@@ -53,7 +53,7 @@
         <Border Grid.Row="0"
                 Background="{DynamicResource PanelBrush}"
                 Padding="8,4">
-          <TextBlock Text="{x:Static app:UiStrings.IndexFieldsLabel}"
+          <TextBlock Text="{app:Loc IndexFieldsLabel}"
                      FontSize="{DynamicResource Text.Compact.Size}"
                      FontWeight="SemiBold" />
         </Border>
@@ -74,7 +74,7 @@
 
     <!-- Optional COMPUTED BY expression -->
     <StackPanel Grid.Row="4" Margin="20,0,20,8" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.IndexComputedLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc IndexComputedLabel}" Classes="field-label" />
       <TextBox Text="{Binding ComputedExpression, Mode=TwoWay}"
                FontFamily="Cascadia Code,Consolas,Menlo,monospace"
  />
@@ -82,7 +82,7 @@
 
     <!-- Live DDL preview -->
     <StackPanel Grid.Row="5" Margin="20,4,20,4" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.IndexDdlPreviewLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc IndexDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
               CornerRadius="{DynamicResource Radius.Surface}">
@@ -120,10 +120,10 @@
                   HorizontalAlignment="Right"
                   Spacing="8">
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.DialogCancel}"
+                Content="{app:Loc DialogCancel}"
                 Command="{Binding CancelCommand}" />
         <Button Classes="primary"
-                Content="{x:Static app:UiStrings.IndexDialogCreate}"
+                Content="{app:Loc IndexDialogCreate}"
                 Command="{Binding AcceptCommand}"
                 IsDefault="True" />
       </StackPanel>

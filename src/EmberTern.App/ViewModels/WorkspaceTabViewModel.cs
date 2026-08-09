@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -33,6 +33,13 @@ public enum WorkspaceTabKind
 
 public partial class WorkspaceTabViewModel : ViewModelBase
 {
+    /// <summary>
+    /// Re-publishes every bound property. Called by <c>MainWindowViewModel</c> after a language change —
+    /// a tab header and its status are computed once and published, so nothing would otherwise re-read them.
+    /// ⛔ Not a general-purpose refresh: it exists for the localization seam and has no other caller.
+    /// </summary>
+    internal void RaiseAllPropertiesChanged() => OnPropertyChanged(string.Empty);
+
     private readonly MainWindowViewModel _owner;
 
     private WorkspaceTabViewModel(MainWindowViewModel owner)

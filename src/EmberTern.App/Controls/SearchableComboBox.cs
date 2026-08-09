@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -115,7 +115,7 @@ public sealed class SearchableComboBox : TemplatedControl
     }
 
     public static readonly StyledProperty<string?> FilterWatermarkProperty =
-        AvaloniaProperty.Register<SearchableComboBox, string?>(nameof(FilterWatermark), "Filter…");
+        AvaloniaProperty.Register<SearchableComboBox, string?>(nameof(FilterWatermark), UiStrings.FilterPlaceholder);
 
     /// <summary>Placeholder shown in the in-popup filter box.</summary>
     public string? FilterWatermark

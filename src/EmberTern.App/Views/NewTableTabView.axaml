@@ -31,14 +31,14 @@
     <Border Grid.Row="0" Padding="14,10">
       <Grid ColumnDefinitions="*,12,260" RowDefinitions="Auto,Auto">
         <TextBlock Grid.Row="0" Grid.Column="0"
-                   Text="{x:Static app:UiStrings.NewTableDialogTableNameLabel}"
+                   Text="{app:Loc NewTableDialogTableNameLabel}"
                    Classes="field-label" />
         <TextBlock Grid.Row="0" Grid.Column="2"
-                   Text="{x:Static app:UiStrings.NewTableDialogTableKindLabel}"
+                   Text="{app:Loc NewTableDialogTableKindLabel}"
                    Classes="field-label" />
         <TextBox Grid.Row="1" Grid.Column="0"
                  Text="{Binding TableName, Mode=TwoWay}"
-                 PlaceholderText="{x:Static app:UiStrings.NewTableNamePlaceholder}" />
+                 PlaceholderText="{app:Loc NewTableNamePlaceholder}" />
         <ComboBox Grid.Row="1" Grid.Column="2"
                   ItemsSource="{Binding TableKinds}"
                   SelectedItem="{Binding SelectedKind, Mode=TwoWay}"
@@ -54,7 +54,7 @@
 
     <!-- Fields grid + Description tabs -->
     <TabControl Grid.Row="1" Padding="0" Margin="10,0">
-      <TabItem Header="{x:Static app:UiStrings.NewTableTabFields}">
+      <TabItem Header="{app:Loc NewTableTabFields}">
         <!-- Add / Drop / Move buttons live in the main toolbar — see MainWindow.axaml,
              gated on IsNewTableTabActive — so this tab carries just the grid. -->
           <DataGrid x:Name="NewTableFieldsGrid"
@@ -73,11 +73,11 @@
                     Background="{DynamicResource BackgroundBrush}">
             <DataGrid.ContextMenu>
               <ContextMenu>
-                <MenuItem Header="{x:Static app:UiStrings.CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddFieldCommand}" />
-                <MenuItem Header="{x:Static app:UiStrings.CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding DeleteFieldCommand}" />
+                <MenuItem Header="{app:Loc CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddFieldCommand}" />
+                <MenuItem Header="{app:Loc CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding DeleteFieldCommand}" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveFieldUpCommand}" />
-                <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveFieldDownCommand}" />
+                <MenuItem Header="{app:Loc CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveFieldUpCommand}" />
+                <MenuItem Header="{app:Loc CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveFieldDownCommand}" />
               </ContextMenu>
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
@@ -88,7 +88,7 @@
                    DataGridTextColumn / DataGridCheckBoxColumn can't bind a
                    per-row IsEnabled, hence the templates. Name + Description are
                    always editable so they stay plain text columns. -->
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldPk}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldPk}"
                                       MinWidth="40" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -99,7 +99,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldName}"
+              <DataGridTextColumn Header="{app:Loc NewTableFieldName}"
                                   Binding="{Binding Name, Mode=TwoWay}"
                                   MinWidth="160" />
               <!-- Type — always-visible ComboBox in CellTemplate (no separate
@@ -108,7 +108,7 @@
                    pass, which both closes the dropdown immediately and (under
                    repeated clicks) hangs the cell-edit cycle. Always-visible
                    means the user clicks once and the dropdown opens natively. -->
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldType}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldType}"
                                       MinWidth="140"
                                       IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
@@ -136,7 +136,7 @@
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
               <!-- Domain — same always-visible CellTemplate ComboBox pattern as Type. -->
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldDomain}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldDomain}"
                                       MinWidth="140"
                                       IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
@@ -155,7 +155,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldSize}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldSize}"
                                       MinWidth="60" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -166,7 +166,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldScale}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldScale}"
                                       MinWidth="60" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -177,7 +177,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldNotNull}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldNotNull}"
                                       MinWidth="70" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -188,7 +188,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldDefault}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldDefault}"
                                       MinWidth="100" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -199,7 +199,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldComputed}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldComputed}"
                                       MinWidth="100" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -210,7 +210,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldCheck}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldCheck}"
                                       MinWidth="100" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -221,7 +221,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldCharset}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldCharset}"
                                       MinWidth="80" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -232,7 +232,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTemplateColumn Header="{x:Static app:UiStrings.NewTableFieldAi}"
+              <DataGridTemplateColumn Header="{app:Loc NewTableFieldAi}"
                                       MinWidth="50" IsReadOnly="True">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:NewTableFieldRowViewModel">
@@ -250,16 +250,16 @@
                    become unreachable (#1). With every column fixed/MinWidth the
                    grid's content width exceeds the viewport and its built-in
                    horizontal scrollbar engages. -->
-              <DataGridTextColumn Header="{x:Static app:UiStrings.NewTableFieldDescription}"
+              <DataGridTextColumn Header="{app:Loc NewTableFieldDescription}"
                                   Binding="{Binding Description, Mode=TwoWay}"
                                   MinWidth="160" />
             </DataGrid.Columns>
           </DataGrid>
       </TabItem>
 
-      <TabItem Header="{x:Static app:UiStrings.NewTableTabDescription}">
+      <TabItem Header="{app:Loc NewTableTabDescription}">
         <StackPanel Margin="8" Spacing="6">
-          <TextBlock Text="{x:Static app:UiStrings.NewTableDescriptionLabel}" Classes="field-label" />
+          <TextBlock Text="{app:Loc NewTableDescriptionLabel}" Classes="field-label" />
           <TextBox Text="{Binding Description, Mode=TwoWay}"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
@@ -274,7 +274,7 @@
          engages. The preview's own scrollbars handle long DDL (#5). -->
     <Border Grid.Row="2" Padding="14,4">
       <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.NewTableDdlLabel}" Classes="field-label" />
+        <TextBlock Text="{app:Loc NewTableDdlLabel}" Classes="field-label" />
         <!-- ⭐ THE SAME read-only SQL surface every other DDL preview uses — an AvaloniaEdit `TextEditor`
              wired by `SqlEditorBehavior.AttachReadOnlyPreview` (semantic accent layer + the shared XSHD
              lexical layer, from the one Lexer/Parser/SemanticModel front-end). Not a second renderer.

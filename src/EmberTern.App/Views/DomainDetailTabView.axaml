@@ -24,70 +24,70 @@
            (rename). ONLY the collation is read-only after create (no ALTER syntax —
            editable only in the New flow). Compile / Revert / Delete live in the main
            app toolbar; Compile assembles the minimum-set of ALTER statements. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DomainDetailTabDomain}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc DomainDetailTabDomain}">
         <ScrollViewer>
           <Grid ColumnDefinitions="Auto,*" Margin="12" VerticalAlignment="Top"
                 RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
 
             <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainNameHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc DomainNameHeader}" />
             <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
                      Text="{Binding EditableName, Mode=TwoWay}"
  HorizontalAlignment="Left" Width="280" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainDataTypeHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc DomainDataTypeHeader}" />
             <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                       ItemsSource="{x:Static vm:DomainDetailTabViewModel.AvailableDataTypes}"
                       SelectedItem="{Binding DataType, Mode=TwoWay}"
                       IsEnabled="{Binding IsTypeEditable}" />
 
             <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainLengthHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc DomainLengthHeader}" />
             <NumericUpDown Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                            Value="{Binding Length, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
                            Minimum="0" Maximum="32767" Increment="1" FormatString="0" />
 
             <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainPrecisionHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc DomainPrecisionHeader}" />
             <NumericUpDown Grid.Row="3" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                            Value="{Binding Precision, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
                            Minimum="0" Maximum="38" Increment="1" FormatString="0" />
 
             <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainScaleHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc DomainScaleHeader}" />
             <NumericUpDown Grid.Row="4" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                            Value="{Binding Scale, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
                            Minimum="0" Maximum="38" Increment="1" FormatString="0" />
 
             <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainSubTypeHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc DomainSubTypeHeader}" />
             <NumericUpDown Grid.Row="5" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                            Value="{Binding SubType, Mode=TwoWay}" IsEnabled="{Binding IsTypeEditable}"
                            Minimum="0" Maximum="32767" Increment="1" FormatString="0" />
 
             <TextBlock Grid.Row="6" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainCharacterSetHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc DomainCharacterSetHeader}" />
             <ComboBox Grid.Row="6" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                       ItemsSource="{x:Static vm:DomainDetailTabViewModel.AvailableCharsets}"
                       SelectedItem="{Binding CharacterSet, Mode=TwoWay}"
                       IsEnabled="{Binding IsCharsetEditable}" />
 
             <TextBlock Grid.Row="7" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.DomainCollationHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc DomainCollationHeader}" />
             <TextBox Grid.Row="7" Grid.Column="1" Margin="0,0,0,8" Width="280" HorizontalAlignment="Left"
                      Text="{Binding Collation, Mode=TwoWay}"
                      IsReadOnly="{Binding !IsCollationEditable}" />
 
             <CheckBox Grid.Row="8" Grid.Column="1" Margin="0,0,0,8"
                       IsChecked="{Binding NotNull, Mode=TwoWay}"
-                      Content="{x:Static app:UiStrings.DomainNotNullHeader}" />
+                      Content="{app:Loc DomainNotNullHeader}" />
 
             <!-- Default + Check are editable on both new and existing domains -->
             <StackPanel Grid.Row="9" Grid.Column="1" Orientation="Vertical" Spacing="8" Margin="0,4,0,0">
-              <TextBlock Classes="field-label" Text="{x:Static app:UiStrings.DomainDefaultHeader}" />
+              <TextBlock Classes="field-label" Text="{app:Loc DomainDefaultHeader}" />
               <TextBox Text="{Binding DefaultValue, Mode=TwoWay}" Width="280" HorizontalAlignment="Left" />
-              <TextBlock Classes="field-label" Text="{x:Static app:UiStrings.DomainCheckHeader}" />
+              <TextBlock Classes="field-label" Text="{app:Loc DomainCheckHeader}" />
               <TextBox Text="{Binding CheckConstraint, Mode=TwoWay}"
                        AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60"
                        Background="{DynamicResource BackgroundBrush}" />
@@ -98,7 +98,7 @@
 
       <!-- Description — editable COMMENT ON DOMAIN (same mechanism as the other
            Detail views' description tab; persisted on Save). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DomainDetailTabDescription}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc DomainDetailTabDescription}">
         <Grid Margin="12">
           <TextBox Text="{Binding EditableDescription, Mode=TwoWay}"
                    AcceptsReturn="True" TextWrapping="Wrap"
@@ -111,12 +111,12 @@
            panel): the table/view columns + PSQL objects that use the domain,
            grouped by object type. Reuses BuildDependencyTree + the dep-tree
            templates; double-click navigates via the shared OpenObjectRequested. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DomainDetailTabUsedBy}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc DomainDetailTabUsedBy}">
         <controls:DependencyTreeView ItemsSource="{Binding UsedByTree}" />
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE DOMAIN. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DomainDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc DomainDetailTabDdl}">
         <ae:TextEditor x:Name="DomainDdlEditor"
                        ShowLineNumbers="True"
                        IsReadOnly="True"
@@ -131,7 +131,7 @@
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">
-      <TextBlock Text="{x:Static app:UiStrings.DomainLoadingHint}"
+      <TextBlock Text="{app:Loc DomainLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
                  FontSize="{DynamicResource Text.Compact.Size}"

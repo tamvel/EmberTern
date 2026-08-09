@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using EmberTern.Core.Diagnostics;
 
@@ -55,7 +55,7 @@ public sealed class SessionRowViewModel
 
     // --- columns ---
     public string IdText => IsSelf
-        ? _s.AttachmentId.ToString(CultureInfo.InvariantCulture) + " · self"
+        ? _s.AttachmentId.ToString(CultureInfo.InvariantCulture) + UiStrings.SessionRowSelfSuffix
         : _s.AttachmentId.ToString(CultureInfo.InvariantCulture);
 
     public string User => _s.User;

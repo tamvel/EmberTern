@@ -1,4 +1,5 @@
-﻿using Avalonia;
+﻿using EmberTern.App.Localization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
@@ -46,33 +47,32 @@ internal static class FieldGridColumns
         grid.Columns.Clear();
         // The function Result is a single, unnamed return value — its grid omits Name.
         if (includeName)
-            grid.Columns.Add(TextCol(UiStrings.TableDetailColumnName, nameof(ProcedureFieldRowBase.Name), 130));
-        grid.Columns.Add(TypeComboCol(UiStrings.TableDetailColumnType, 110));
-        grid.Columns.Add(MergedTypeSourceColumn.Build(UiStrings.FieldTypeSourceHeader, 150));
-        grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnSize, nameof(ProcedureFieldRowBase.Size), 60, nameof(ProcedureFieldRowBase.IsSizeEnabled)));
-        grid.Columns.Add(TextEditCol(UiStrings.TableDetailColumnScale, nameof(ProcedureFieldRowBase.Scale), 60, nameof(ProcedureFieldRowBase.IsScaleEnabled)));
-        grid.Columns.Add(TextEditCol(UiStrings.ProcedureFieldSubType, nameof(ProcedureFieldRowBase.SubType), 80, nameof(ProcedureFieldRowBase.IsSubTypeEnabled)));
-        grid.Columns.Add(TextEditCol(UiStrings.ProcedureFieldCharset, nameof(ProcedureFieldRowBase.Charset), 90, nameof(ProcedureFieldRowBase.IsCharsetEnabled)));
-        grid.Columns.Add(CheckCol(UiStrings.TableDetailColumnNotNull, nameof(ProcedureFieldRowBase.NotNull), 70));
-        grid.Columns.Add(TextCol(UiStrings.ProcedureFieldCollate, nameof(ProcedureFieldRowBase.Collate), 90));
+            grid.Columns.Add(TextCol(nameof(UiStrings.TableDetailColumnName), nameof(ProcedureFieldRowBase.Name), 130));
+        grid.Columns.Add(TypeComboCol(nameof(UiStrings.TableDetailColumnType), 110));
+        grid.Columns.Add(MergedTypeSourceColumn.Build(nameof(UiStrings.FieldTypeSourceHeader), 150));
+        grid.Columns.Add(TextEditCol(nameof(UiStrings.TableDetailColumnSize), nameof(ProcedureFieldRowBase.Size), 60, nameof(ProcedureFieldRowBase.IsSizeEnabled)));
+        grid.Columns.Add(TextEditCol(nameof(UiStrings.TableDetailColumnScale), nameof(ProcedureFieldRowBase.Scale), 60, nameof(ProcedureFieldRowBase.IsScaleEnabled)));
+        grid.Columns.Add(TextEditCol(nameof(UiStrings.ProcedureFieldSubType), nameof(ProcedureFieldRowBase.SubType), 80, nameof(ProcedureFieldRowBase.IsSubTypeEnabled)));
+        grid.Columns.Add(TextEditCol(nameof(UiStrings.ProcedureFieldCharset), nameof(ProcedureFieldRowBase.Charset), 90, nameof(ProcedureFieldRowBase.IsCharsetEnabled)));
+        grid.Columns.Add(CheckCol(nameof(UiStrings.TableDetailColumnNotNull), nameof(ProcedureFieldRowBase.NotNull), 70));
+        grid.Columns.Add(TextCol(nameof(UiStrings.ProcedureFieldCollate), nameof(ProcedureFieldRowBase.Collate), 90));
         if (includeDefault)
-            grid.Columns.Add(TextCol(UiStrings.TableDetailColumnDefault, nameof(ProcedureFieldRowBase.DefaultValue), 110));
-        grid.Columns.Add(TextCol(UiStrings.ProcedureFieldDescription, nameof(ProcedureFieldRowBase.Description), 140));
+            grid.Columns.Add(TextCol(nameof(UiStrings.TableDetailColumnDefault), nameof(ProcedureFieldRowBase.DefaultValue), 110));
+        grid.Columns.Add(TextCol(nameof(UiStrings.ProcedureFieldDescription), nameof(ProcedureFieldRowBase.Description), 140));
     }
 
-    private static DataGridTextColumn TextCol(string header, string path, int min)
-        => new() { Header = header, Binding = new Binding(path) { Mode = BindingMode.TwoWay }, MinWidth = min };
+    private static DataGridTextColumn TextCol(string headerKey, string path, int min)
+        => LocalizedColumn.Header(new DataGridTextColumn { Binding = new Binding(path) { Mode = BindingMode.TwoWay }, MinWidth = min }, headerKey);
 
-    private static DataGridCheckBoxColumn CheckCol(string header, string path, int min)
-        => new() { Header = header, Binding = new Binding(path) { Mode = BindingMode.TwoWay }, MinWidth = min };
+    private static DataGridCheckBoxColumn CheckCol(string headerKey, string path, int min)
+        => LocalizedColumn.Header(new DataGridCheckBoxColumn { Binding = new Binding(path) { Mode = BindingMode.TwoWay }, MinWidth = min }, headerKey);
 
     // Always-visible TextBox in the cell (IsReadOnly column) so the per-row IsEnabled
     // gate can disable it — a DataGridTextColumn supports only per-COLUMN IsReadOnly
     // (gotcha #83/#124).
-    private static DataGridTemplateColumn TextEditCol(string header, string path, int min, string enabledPath)
-        => new()
+    private static DataGridTemplateColumn TextEditCol(string headerKey, string path, int min, string enabledPath)
+        => LocalizedColumn.Header(new DataGridTemplateColumn
         {
-            Header = header,
             MinWidth = min,
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<ProcedureFieldRowBase>((_, _) =>
@@ -91,15 +91,14 @@ internal static class FieldGridColumns
                 tb.Bind(InputElement.IsEnabledProperty, new Binding(enabledPath));
                 return tb;
             }),
-        };
+        }, headerKey);
 
     // Type: small closed dictionary → plain ComboBox with type-ahead (no filtering).
     // Always-visible in CellTemplate (gotcha #56), bound to the null-safe SelectedTypeItem
     // wrapper, disabled when a domain/TYPE OF governs the type (#4).
-    private static DataGridTemplateColumn TypeComboCol(string header, int min)
-        => new()
+    private static DataGridTemplateColumn TypeComboCol(string headerKey, int min)
+        => LocalizedColumn.Header(new DataGridTemplateColumn
         {
-            Header = header,
             MinWidth = min,
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<ProcedureFieldRowBase>((_, _) =>
@@ -117,6 +116,6 @@ internal static class FieldGridColumns
                 cb.Bind(InputElement.IsEnabledProperty, new Binding(nameof(ProcedureFieldRowBase.IsTypeEnabled)));
                 return cb;
             }),
-        };
+        }, headerKey);
 
 }

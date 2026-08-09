@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -96,7 +96,7 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
         AddRow("Role", e.RoleName);
         AddRow("Host", e.RemoteAddress);
         AddRow("Process", FormatProcess(e.ProcessName, e.ClientProcessId));
-        AddRow("Trigger event", e.TriggerEvent);   // "what fired" — only present for triggers
+        AddRow(UiStrings.TraceDetailTriggerEvent, e.TriggerEvent);   // UiStrings.TraceDetailWhatFired — only present for triggers
         AddRow("Attachment", e.AttachmentId is { } att ? "ATT " + att.ToString(CultureInfo.InvariantCulture) : null);
         AddRow("Transaction", FormatTransaction(e.TransactionId, e.TransactionParams)); // id · isolation/TPB
         HasSession = SessionRows.Count > 0;
@@ -119,7 +119,7 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
 
     private static string? FormatProcess(string? name, int? pid)
     {
-        if (string.IsNullOrWhiteSpace(name)) return pid is { } p ? "pid " + p.ToString(CultureInfo.InvariantCulture) : null;
+        if (string.IsNullOrWhiteSpace(name)) return pid is { } p ? UiStrings.TraceDetailPidPrefix + p.ToString(CultureInfo.InvariantCulture) : null;
         return pid is { } q ? $"{name} (pid {q.ToString(CultureInfo.InvariantCulture)})" : name;
     }
 
@@ -133,11 +133,11 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
     private static string BuildTiming(TraceEvent e)
     {
         var parts = new List<string>();
-        if (e.Duration is { } d) parts.Add($"{(long)d.TotalMilliseconds} ms");
-        if (e.RowsFetched is { } r) parts.Add($"{r} row{(r == 1 ? "" : "s")}");
-        if (e.Reads is { } reads) parts.Add($"{reads} reads");
-        if (e.Writes is { } w) parts.Add($"{w} writes");
-        if (e.Fetches is { } f) parts.Add($"{f} fetches");
+        if (e.Duration is { } d) parts.Add(string.Format(CultureInfo.CurrentCulture, UiStrings.TraceTimingMsFormat, (long)d.TotalMilliseconds));
+        if (e.RowsFetched is { } r) parts.Add(string.Format(CultureInfo.CurrentCulture, r == 1 ? UiStrings.TraceTimingRowsOneFormat : UiStrings.TraceTimingRowsManyFormat, r));
+        if (e.Reads is { } reads) parts.Add(string.Format(CultureInfo.CurrentCulture, UiStrings.TraceTimingReadsFormat, reads));
+        if (e.Writes is { } w) parts.Add(string.Format(CultureInfo.CurrentCulture, UiStrings.TraceTimingWritesFormat, w));
+        if (e.Fetches is { } f) parts.Add(string.Format(CultureInfo.CurrentCulture, UiStrings.TraceTimingFetchesFormat, f));
         return string.Join(" · ", parts);
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -50,11 +50,11 @@ public partial class NewConnectionDialog : Window
         var picker = StorageProvider;
         var result = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Select Firebird database file",
+            Title = UiStrings.FilePickerSelectDatabase,
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("Firebird databases")
+                new FilePickerFileType(UiStrings.FilePickerFirebirdDatabases)
                 {
                     // Real-world extensions seen in the field: .fb AND .fdb (Firebird),
                     // .gdb (legacy InterBase/FB), .ib (InterBase). .fb was the miss — the

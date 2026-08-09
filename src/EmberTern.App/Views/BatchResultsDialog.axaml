@@ -34,17 +34,17 @@
             Padding="20,8"
             IsVisible="{Binding !IsPreparing}">
       <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-        <TextBlock Text="{x:Static app:UiStrings.BatchResultsFilterLabel}"
+        <TextBlock Text="{app:Loc BatchResultsFilterLabel}"
                    VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}" />
         <ComboBox SelectedIndex="{Binding SelectedFilterIndex, Mode=TwoWay}" MinWidth="120">
-          <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterAll}" />
-          <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterSuccess}" />
-          <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterFailed}" />
+          <ComboBoxItem Content="{app:Loc BatchResultsFilterAll}" />
+          <ComboBoxItem Content="{app:Loc BatchResultsFilterSuccess}" />
+          <ComboBoxItem Content="{app:Loc BatchResultsFilterFailed}" />
         </ComboBox>
         <Border Width="1" Background="{DynamicResource BorderBrush}" Margin="4,2" />
-        <Button Classes="flat" Content="{x:Static app:UiStrings.BatchResultsCopyAll}"
+        <Button Classes="flat" Content="{app:Loc BatchResultsCopyAll}"
                 Command="{Binding CopyAllCommand}" />
-        <Button Classes="flat" Content="{x:Static app:UiStrings.BatchResultsCopyFailed}"
+        <Button Classes="flat" Content="{app:Loc BatchResultsCopyFailed}"
                 Command="{Binding CopyFailedCommand}" />
       </StackPanel>
     </Border>
@@ -91,11 +91,11 @@
         </Style>
       </DataGrid.Styles>
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{x:Static app:UiStrings.BatchResultsColumnObject}"
+        <DataGridTextColumn Header="{app:Loc BatchResultsColumnObject}"
                             Binding="{Binding Object}" SortMemberPath="Object" Width="220" />
-        <DataGridTextColumn Header="{x:Static app:UiStrings.BatchResultsColumnOperation}"
+        <DataGridTextColumn Header="{app:Loc BatchResultsColumnOperation}"
                             Binding="{Binding Operation}" SortMemberPath="Operation" Width="140" />
-        <DataGridTemplateColumn Header="{x:Static app:UiStrings.BatchResultsColumnResult}"
+        <DataGridTemplateColumn Header="{app:Loc BatchResultsColumnResult}"
                                 SortMemberPath="Result" Width="90">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:BatchResultRowViewModel">
@@ -110,7 +110,7 @@
         <!-- The message reads in ErrorBrush like every other error in the IDE (UX Polish Seam 4's one visual
              language). A template column because a DataGridTextColumn cannot carry the class; it reuses the
              result-failed style already defined above rather than introducing a second error tint. -->
-        <DataGridTemplateColumn Header="{x:Static app:UiStrings.BatchResultsColumnError}"
+        <DataGridTemplateColumn Header="{app:Loc BatchResultsColumnError}"
                                 SortMemberPath="Error" Width="*">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:BatchResultRowViewModel">
@@ -136,13 +136,13 @@
                    VerticalAlignment="Center" IsVisible="{Binding !IsPreparing}" />
         <Button Grid.Column="1"
                 Classes="flat"
-                Content="{x:Static app:UiStrings.BatchResultsCancel}"
+                Content="{app:Loc BatchResultsCancel}"
                 Command="{Binding CancelCommand}"
                 IsVisible="{Binding CanCancel}"
                 Margin="0,0,8,0" />
         <Button Grid.Column="2"
                 Classes="primary"
-                Content="{x:Static app:UiStrings.BatchResultsClose}"
+                Content="{app:Loc BatchResultsClose}"
                 IsDefault="True"
                 Click="OnCloseClick" />
       </Grid>

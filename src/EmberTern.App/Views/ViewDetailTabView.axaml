@@ -39,7 +39,7 @@
            list ABOVE a body-only AS SELECT editor; the CREATE VIEW header is hidden
            and regenerated on Compile). Compile / Format / the Source⇄Easy toggle live
            in the main app toolbar (gated on IsViewDetailTabActive). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabSql}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ViewDetailTabSql}">
         <Grid>
           <!-- Source mode -->
           <ae:TextEditor x:Name="ViewSqlEditor"
@@ -60,7 +60,7 @@
                  via the editor). In Source mode the name lives in the CREATE VIEW header. -->
             <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="8,6,8,2">
               <TextBlock Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                         Margin="0,0,8,0" Text="{x:Static app:UiStrings.ViewNameHeader}" />
+                         Margin="0,0,8,0" Text="{app:Loc ViewNameHeader}" />
               <TextBox Grid.Column="1" Text="{Binding EditableViewName, Mode=TwoWay}"
                        IsReadOnly="{Binding !IsNew}" />
             </Grid>
@@ -69,7 +69,7 @@
                  section), routed to this view — no in-content toolbar row. -->
             <Grid Grid.Row="1" RowDefinitions="Auto,*">
               <TextBlock Grid.Row="0" Classes="field-label" Margin="8,4,8,2"
-                         Text="{x:Static app:UiStrings.ViewColumnsHeader}" />
+                         Text="{app:Loc ViewColumnsHeader}" />
               <DataGrid Grid.Row="1" x:Name="ViewColumnsGrid"
                         ItemsSource="{Binding Columns}"
                         SelectedItem="{Binding SelectedColumn, Mode=TwoWay}"
@@ -81,7 +81,7 @@
                         VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                         Background="{DynamicResource BackgroundBrush}">
                 <DataGrid.Columns>
-                  <DataGridTextColumn Header="{x:Static app:UiStrings.ViewColumnName}"
+                  <DataGridTextColumn Header="{app:Loc ViewColumnName}"
                                       Binding="{Binding Name, Mode=TwoWay}"
                                       Width="*" />
                 </DataGrid.Columns>
@@ -94,7 +94,7 @@
 
             <Grid Grid.Row="3" RowDefinitions="Auto,*">
               <TextBlock Grid.Row="0" Classes="field-label" Margin="8,4,8,2"
-                         Text="{x:Static app:UiStrings.ViewBodyHeader}" />
+                         Text="{app:Loc ViewBodyHeader}" />
               <ae:TextEditor Grid.Row="1" x:Name="ViewBodyEditor"
                              ShowLineNumbers="True"
                              FontFamily="Cascadia Code,Consolas,Menlo,monospace"
@@ -111,7 +111,7 @@
       <!-- Fields — read-only view columns. Views expose name / type / nullability /
            charset; PK/FK/constraint metadata doesn't apply, so those columns are
            omitted (don't invent metadata Firebird doesn't provide for views). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabFields}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ViewDetailTabFields}">
         <DataGrid x:Name="FieldsGrid"
                   behaviors:GridLayoutBehavior.GridId="ViewDetail.Fields"
                   ItemsSource="{Binding Fields}"
@@ -128,27 +128,27 @@
                   VerticalGridLinesBrush="{DynamicResource BorderBrush}"
                   Background="{DynamicResource BackgroundBrush}">
           <DataGrid.Columns>
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnPosition}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnPosition}"
                                 Binding="{Binding DisplayPosition}"
                                 SortMemberPath="DisplayPosition"
                                 MinWidth="32" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnName}"
                                 Binding="{Binding Name}"
                                 SortMemberPath="Name"
                                 MinWidth="120" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnType}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnType}"
                                 Binding="{Binding Type}"
                                 SortMemberPath="Type"
                                 MinWidth="120" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnNotNull}"
                                 Binding="{Binding NotNull, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="NotNull"
                                 MinWidth="70" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnCharset}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnCharset}"
                                 Binding="{Binding Charset}"
                                 SortMemberPath="Charset"
                                 MinWidth="70" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDescription}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnDescription}"
                                 Binding="{Binding Description}"
                                 SortMemberPath="Description"
                                 MinWidth="120" />
@@ -158,11 +158,11 @@
 
       <!-- Dependencies — reuses the same dual-tree layout + templates as
            TableDetail (Used by / Depends on). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabDependencies}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ViewDetailTabDependencies}">
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+                       Text="{app:Loc TableDetailDependedOnByHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -177,7 +177,7 @@
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+                       Text="{app:Loc TableDetailDependsOnHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -189,27 +189,27 @@
       <!-- Data — read-only SELECT * preview, same paged infrastructure as
            TableDetail. Pagination controls are self-contained here (no inline
            data editing on a view). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabData}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ViewDetailTabData}">
         <!-- Rows: pagination+record+filter/agg toggles · filter panel · aggregation bar · error+grid. -->
         <Grid RowDefinitions="Auto,Auto,Auto,*">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="8,4">
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+                    ToolTip.Tip="{app:Loc TableDetailPaginationFirstTooltip}"
                     Command="{Binding GoToFirstPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+                    ToolTip.Tip="{app:Loc TableDetailPaginationPreviousTooltip}"
                     Command="{Binding GoToPreviousPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+                    ToolTip.Tip="{app:Loc TableDetailPaginationNextTooltip}"
                     Command="{Binding GoToNextPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+                    ToolTip.Tip="{app:Loc TableDetailPaginationLastTooltip}"
                     Command="{Binding GoToLastPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
@@ -224,7 +224,7 @@
                        VerticalAlignment="Center"
                        Margin="12,0,0,0" />
             <ToggleButton Classes="icon" Margin="12,0,0,0"
-                    ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                    ToolTip.Tip="{app:Loc FilterToggleTooltip}"
                     IsChecked="{Binding DataFilterPanel.IsPanelOpen, Mode=TwoWay}">
               <Panel>
                 <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
@@ -232,13 +232,13 @@
               </Panel>
             </ToggleButton>
             <ToggleButton Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                    ToolTip.Tip="{app:Loc AggregationToggleTooltip}"
                     IsChecked="{Binding DataAggregationBar.IsBarOpen, Mode=TwoWay}">
               <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </ToggleButton>
             <!-- Export the view data via the shared Export Framework (default = all rows). -->
             <Button Classes="icon" Click="OnViewDataExportClick" IsEnabled="{Binding CanExportData}"
-                    ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
+                    ToolTip.Tip="{app:Loc ExportResultsTooltip}">
               <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
           </StackPanel>
@@ -274,17 +274,17 @@
                    2026-08-07). ⚠ Copy as INSERT / UPDATE is absent by design, not omission: a view's rows have
                    no single table behind them, so there is no provenance to build a runnable statement from. -->
               <ContextMenu>
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyCellClick" />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyRowClick" />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyRowWithHeadersClick" />
+                <MenuItem Header="{app:Loc GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyCellClick" />
+                <MenuItem Header="{app:Loc GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyRowClick" />
+                <MenuItem Header="{app:Loc GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyRowWithHeadersClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyAllWithHeadersClick" />
-                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnViewDataExportClick" />
+                <MenuItem Header="{app:Loc GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnViewDataCopyAllWithHeadersClick" />
+                <MenuItem Header="{app:Loc ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnViewDataExportClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnViewDataFilterByValueClick" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnViewDataExcludeValueClick" />
+                <MenuItem Header="{app:Loc FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnViewDataFilterByValueClick" />
+                <MenuItem Header="{app:Loc FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnViewDataExcludeValueClick" />
                 <MenuItem x:Name="ViewDataFilterContainsItem"
-                          Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnViewDataFilterContainsClick" />
+                          Header="{app:Loc FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnViewDataFilterContainsClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>
@@ -294,22 +294,22 @@
       <!-- Description — editable COMMENT ON VIEW. Save/Clear run in the working
            (metadata) transaction via the same workflow as table descriptions;
            Commit/Rollback finalize. Reuses the table-description strings. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabDescription}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ViewDetailTabDescription}">
         <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
                       IsVisible="{Binding CanEditDescription}">
-            <TextBlock Text="{x:Static app:UiStrings.ViewDescriptionEditLabel}"
+            <TextBlock Text="{app:Loc ViewDescriptionEditLabel}"
                        Classes="subtle"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" />
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
+                    ToolTip.Tip="{app:Loc TableDescriptionSave}"
                     Command="{Binding SaveDescriptionCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.Save}" />
             </Button>
             <Button Classes="flat"
                     Padding="8,2"
-                    Content="{x:Static app:UiStrings.TableDescriptionClear}"
+                    Content="{app:Loc TableDescriptionClear}"
                     Command="{Binding ClearDescriptionCommand}" />
           </StackPanel>
           <TextBox Grid.Row="1"
@@ -324,7 +324,7 @@
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE VIEW. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ViewDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ViewDetailTabDdl}">
         <ae:TextEditor x:Name="ViewDdlEditor"
                        ShowLineNumbers="True"
                        IsReadOnly="True"
@@ -340,7 +340,7 @@
            hosted per object. Shows the ACTIVE SQL document's findings (the LastFocusedSqlDocument
            rule — see DiagnosticsPanelHost). Appended LAST so the persisted ActiveSubTabIndex and the
            SqlSubTabIndex / DataSubTabIndex constants never shift. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc BottomTabDiagnostics}">
         <views:DiagnosticsPanelView x:Name="ViewDiagnosticsPanel"
                                     DataContext="{Binding DiagnosticsPanel}" />
       </TabItem>
@@ -348,7 +348,7 @@
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">
-      <TextBlock Text="{x:Static app:UiStrings.ViewDetailLoadingHint}"
+      <TextBlock Text="{app:Loc ViewDetailLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
                  FontSize="{DynamicResource Text.Compact.Size}"

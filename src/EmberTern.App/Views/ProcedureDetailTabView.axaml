@@ -40,7 +40,7 @@
       <!-- Editor — Source mode (full text) OR Easy mode (metadata panels ABOVE a
            body-only editor). Compile / Format / Comment / Execute live in the main
            app toolbar (gated on IsProcedureDetailTabActive). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabEditor}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabEditor}">
         <Grid>
           <!-- Source mode -->
           <ae:TextEditor x:Name="ProcSqlEditor"
@@ -61,7 +61,7 @@
                  mode the name lives in the CREATE OR ALTER PROCEDURE header text. -->
             <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="8,6,8,2">
               <TextBlock Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                         Margin="0,0,8,0" Text="{x:Static app:UiStrings.ProcedureNameHeader}" />
+                         Margin="0,0,8,0" Text="{app:Loc ProcedureNameHeader}" />
               <TextBox Grid.Column="1" Text="{Binding EditableProcedureName, Mode=TwoWay}"
                        IsReadOnly="{Binding !IsNew}" />
             </Grid>
@@ -86,11 +86,11 @@
                           Background="{DynamicResource BackgroundBrush}">
                   <DataGrid.ContextMenu>
                     <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddCollectionItemCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding RemoveCollectionItemCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddCollectionItemCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding RemoveCollectionItemCommand}" />
                       <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveCollectionItemUpCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveCollectionItemDownCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveCollectionItemUpCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveCollectionItemDownCommand}" />
                     </ContextMenu>
                   </DataGrid.ContextMenu>
                 </DataGrid>
@@ -111,11 +111,11 @@
                           Background="{DynamicResource BackgroundBrush}">
                   <DataGrid.ContextMenu>
                     <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddCollectionItemCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding RemoveCollectionItemCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddCollectionItemCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding RemoveCollectionItemCommand}" />
                       <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveCollectionItemUpCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveCollectionItemDownCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveCollectionItemUpCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveCollectionItemDownCommand}" />
                     </ContextMenu>
                   </DataGrid.ContextMenu>
                 </DataGrid>
@@ -136,11 +136,11 @@
                           Background="{DynamicResource BackgroundBrush}">
                   <DataGrid.ContextMenu>
                     <ContextMenu>
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddCollectionItemCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding RemoveCollectionItemCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddCollectionItemCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding RemoveCollectionItemCommand}" />
                       <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveCollectionItemUpCommand}" />
-                      <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveCollectionItemDownCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveCollectionItemUpCommand}" />
+                      <MenuItem Header="{app:Loc CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveCollectionItemDownCommand}" />
                     </ContextMenu>
                   </DataGrid.ContextMenu>
                 </DataGrid>
@@ -158,9 +158,9 @@
                           <TextBox Grid.Column="0" Text="{Binding Name, Mode=TwoWay}" FontSize="{DynamicResource Text.Compact.Size}"
                                    BorderThickness="0" Background="Transparent" Padding="0" />
                           <CheckBox Grid.Column="1" IsChecked="{Binding Scroll, Mode=TwoWay}"
-                                    Content="{x:Static app:UiStrings.ProcedureCursorScroll}"
+                                    Content="{app:Loc ProcedureCursorScroll}"
                                     FontSize="{DynamicResource Text.Caption.Size}" VerticalAlignment="Center"
-                                    ToolTip.Tip="{x:Static app:UiStrings.ProcedureCursorScroll}" />
+                                    ToolTip.Tip="{app:Loc ProcedureCursorScroll}" />
                         </Grid>
                       </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -234,18 +234,18 @@
       </TabItem>
 
       <!-- Description — editable COMMENT ON PROCEDURE. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDescription}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabDescription}">
         <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
                       IsVisible="{Binding CanEditDescription}">
-            <TextBlock Text="{x:Static app:UiStrings.ProcedureDescriptionEditLabel}"
+            <TextBlock Text="{app:Loc ProcedureDescriptionEditLabel}"
                        Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
+            <Button Classes="icon" ToolTip.Tip="{app:Loc TableDescriptionSave}"
                     Command="{Binding SaveDescriptionCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.Save}" />
             </Button>
             <Button Classes="flat" Padding="8,2"
-                    Content="{x:Static app:UiStrings.TableDescriptionClear}"
+                    Content="{app:Loc TableDescriptionClear}"
                     Command="{Binding ClearDescriptionCommand}" />
           </StackPanel>
           <TextBox Grid.Row="1"
@@ -257,10 +257,10 @@
       </TabItem>
 
       <!-- Dependencies — dual tree (Used by / Depends on). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDependencies}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabDependencies}">
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+            <TextBlock Grid.Row="0" Text="{app:Loc TableDetailDependedOnByHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="{DynamicResource Margin.PanelCaption}" />
             <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}" />
           </Grid>
@@ -269,7 +269,7 @@
                         HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+            <TextBlock Grid.Row="0" Text="{app:Loc TableDetailDependsOnHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="{DynamicResource Margin.PanelCaption}" />
             <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}" />
           </Grid>
@@ -277,7 +277,7 @@
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE OR ALTER PROCEDURE. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabDdl}">
         <ae:TextEditor x:Name="ProcDdlEditor"
                        ShowLineNumbers="True" IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
@@ -290,24 +290,24 @@
       <!-- Result — read-only Execute Procedure output (self-contained) with paging
            that reuses the Table/View Data experience (First/Prev/Next/Last + hint).
            Client-side over the materialized result — never re-runs the proc. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabResult}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabResult}">
         <!-- Rows: pagination+filter/agg toggles · filter panel · aggregation bar · grid. -->
         <Grid RowDefinitions="Auto,Auto,Auto,*">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="8,4"
                       IsVisible="{Binding HasExecResult}">
-            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+            <Button Classes="icon" ToolTip.Tip="{app:Loc TableDetailPaginationFirstTooltip}"
                     Command="{Binding ExecFirstPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
-            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+            <Button Classes="icon" ToolTip.Tip="{app:Loc TableDetailPaginationPreviousTooltip}"
                     Command="{Binding ExecPreviousPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
-            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+            <Button Classes="icon" ToolTip.Tip="{app:Loc TableDetailPaginationNextTooltip}"
                     Command="{Binding ExecNextPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
-            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+            <Button Classes="icon" ToolTip.Tip="{app:Loc TableDetailPaginationLastTooltip}"
                     Command="{Binding ExecLastPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
@@ -316,7 +316,7 @@
             <TextBlock Text="{Binding ExecRecordInfo}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" Margin="12,0,0,0" />
             <ToggleButton Classes="icon" Margin="12,0,0,0"
-                    ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                    ToolTip.Tip="{app:Loc FilterToggleTooltip}"
                     IsChecked="{Binding ExecFilterPanel.IsPanelOpen, Mode=TwoWay}">
               <Panel>
                 <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
@@ -324,13 +324,13 @@
               </Panel>
             </ToggleButton>
             <ToggleButton Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                    ToolTip.Tip="{app:Loc AggregationToggleTooltip}"
                     IsChecked="{Binding ExecAggregationBar.IsBarOpen, Mode=TwoWay}">
               <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </ToggleButton>
             <!-- Export the procedure result via the shared Export Framework (default = all rows). -->
             <Button Classes="icon" Click="OnProcExportClick" IsEnabled="{Binding CanExportExecResult}"
-                    ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
+                    ToolTip.Tip="{app:Loc ExportResultsTooltip}">
               <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
           </StackPanel>
@@ -338,7 +338,7 @@
           <views:FilterPanelView Grid.Row="1" DataContext="{Binding ExecFilterPanel}" />
           <views:AggregationBarView Grid.Row="2" DataContext="{Binding ExecAggregationBar}" />
 
-          <TextBlock Grid.Row="3" Text="{x:Static app:UiStrings.ProcedureExecEmptyHint}" Classes="subtle"
+          <TextBlock Grid.Row="3" Text="{app:Loc ProcedureExecEmptyHint}" Classes="subtle"
                      FontSize="{DynamicResource Text.Compact.Size}" Margin="8,4" IsVisible="{Binding !HasExecInfo}" />
           <!-- Execute Procedure failure — the IDE's ONE message surface (UX Polish Seam 4). Top-aligned so
                it stays a bar over the (hidden) result grid rather than filling the whole results area. -->
@@ -362,17 +362,17 @@
                    2026-08-07). ⚠ Copy as INSERT / UPDATE is absent by design, not omission: a procedure's
                    result set is not a table, so there is no provenance to build a runnable statement from. -->
               <ContextMenu>
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnProcCopyCellClick" />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnProcCopyRowClick" />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnProcCopyRowWithHeadersClick" />
+                <MenuItem Header="{app:Loc GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnProcCopyCellClick" />
+                <MenuItem Header="{app:Loc GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnProcCopyRowClick" />
+                <MenuItem Header="{app:Loc GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnProcCopyRowWithHeadersClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnProcCopyAllWithHeadersClick" />
-                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnProcExportClick" />
+                <MenuItem Header="{app:Loc GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnProcCopyAllWithHeadersClick" />
+                <MenuItem Header="{app:Loc ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnProcExportClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnProcFilterByValueClick" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnProcExcludeValueClick" />
+                <MenuItem Header="{app:Loc FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnProcFilterByValueClick" />
+                <MenuItem Header="{app:Loc FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnProcExcludeValueClick" />
                 <MenuItem x:Name="ProcFilterContainsItem"
-                          Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnProcFilterContainsClick" />
+                          Header="{app:Loc FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnProcFilterContainsClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>
@@ -383,7 +383,7 @@
            PerformanceContext (fed by this procedure's last Execute via the unified metrics
            pipeline: reads / findings / table access / advisor / plan). Same view type as the
            SQL Editor's panel, but each host owns a separate context — no shared global state. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DetailTabPerformance}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc DetailTabPerformance}">
         <!-- DataContext set in code-behind to this tab's own PerformanceContext.Panel
              (the current ProcedureDetailTabViewModel.Performance). -->
         <views:PerformancePanelView x:Name="ProcPerformancePanel" />
@@ -394,7 +394,7 @@
            (the LastFocusedSqlDocument rule — see DiagnosticsPanelHost), never a merge of the four
            editors. Appended LAST: ActiveSubTabIndex is persisted AND PerformanceSubTabIndex = 5 is a
            hard-coded constant, so the existing indices must not shift. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc BottomTabDiagnostics}">
         <views:DiagnosticsPanelView x:Name="ProcDiagnosticsPanel"
                                     DataContext="{Binding DiagnosticsPanel}" />
       </TabItem>
@@ -430,7 +430,7 @@
               <TextBlock Text="{Binding ExecInfoCompact}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap" />
             </Expander.Header>
             <StackPanel Margin="6,6,10,8" Spacing="6">
-              <TextBlock Text="{x:Static app:UiStrings.ExecutionSummaryHeader}"
+              <TextBlock Text="{app:Loc ExecutionSummaryHeader}"
                          Foreground="{DynamicResource SubtleForegroundBrush}"
                          FontSize="{DynamicResource Text.Caption.Size}" FontWeight="SemiBold" />
               <!-- What was CHANGED, one distinct card per table (reads live in Performance). -->
@@ -508,7 +508,7 @@
                                   IsVisible="{Binding ExecInfoIsError}" />
         </Panel>
       </Border>
-      <TextBlock Text="{x:Static app:UiStrings.ProcedureDetailLoadingHint}" Classes="subtle"
+      <TextBlock Text="{app:Loc ProcedureDetailLoadingHint}" Classes="subtle"
                  Margin="10,4" FontSize="{DynamicResource Text.Compact.Size}" IsVisible="{Binding IsLoading}" />
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->

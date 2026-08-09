@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -530,9 +530,8 @@ public partial class DataImportTabView : UserControl
         if (this.FindControl<DataGrid>("ConvertedPreviewGrid") is not { } grid || _bound is null) return;
 
         grid.Columns.Clear();
-        grid.Columns.Add(new DataGridTemplateColumn
+        grid.Columns.Add(EmberTern.App.Localization.LocalizedColumn.Header(new DataGridTemplateColumn
         {
-            Header = UiStrings.ImportRowNumberColumn,
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<ImportConvertedRowViewModel>((_, _) =>
             {
@@ -557,7 +556,7 @@ public partial class DataImportTabView : UserControl
                 panel.Children.Add(number);
                 return panel;
             }, supportsRecycling: true),
-        });
+        }, nameof(UiStrings.ImportRowNumberColumn)));
 
         for (var i = 0; i < _bound.ConvertedPreview.Columns.Count; i++)
         {
@@ -588,9 +587,8 @@ public partial class DataImportTabView : UserControl
         if (this.FindControl<DataGrid>("SourcePreviewGrid") is not { } grid || _bound is null) return;
 
         grid.Columns.Clear();
-        grid.Columns.Add(new DataGridTemplateColumn
+        grid.Columns.Add(EmberTern.App.Localization.LocalizedColumn.Header(new DataGridTemplateColumn
         {
-            Header = UiStrings.ImportRowNumberColumn,
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<ImportSourceRecordRowViewModel>((_, _) =>
             {
@@ -615,7 +613,7 @@ public partial class DataImportTabView : UserControl
                 panel.Children.Add(number);
                 return panel;
             }, supportsRecycling: true),
-        });
+        }, nameof(UiStrings.ImportRowNumberColumn)));
 
         for (var i = 0; i < _bound.PreviewFields.Count; i++)
         {

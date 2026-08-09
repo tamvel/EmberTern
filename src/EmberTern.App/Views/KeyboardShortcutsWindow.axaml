@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.KeyboardShortcutsWindow"
         x:DataType="vm:KeyboardShortcutsViewModel"
-        Title="{x:Static app:UiStrings.KeyboardShortcutsTitle}"
+        Title="{app:Loc KeyboardShortcutsTitle}"
         Width="720" Height="560"
         MinWidth="480" MinHeight="320"
         ShowInTaskbar="False"
@@ -24,7 +24,7 @@
     <TextBox Grid.Row="0"
              x:Name="SearchBox"
              Text="{Binding SearchText}"
-             PlaceholderText="{x:Static app:UiStrings.KeyboardShortcutsSearchPlaceholder}"
+             PlaceholderText="{app:Loc KeyboardShortcutsSearchPlaceholder}"
              Margin="0,0,0,12" />
 
     <Panel Grid.Row="1">
@@ -44,22 +44,22 @@
              headless test asserted a descending sort changed the first row, and it did not until these were
              added. -->
         <DataGrid.Columns>
-          <DataGridTextColumn Header="{x:Static app:UiStrings.KeyboardShortcutsColumnCommand}"
+          <DataGridTextColumn Header="{app:Loc KeyboardShortcutsColumnCommand}"
                               Binding="{Binding Command}"
                               SortMemberPath="Command"
                               Width="*" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.KeyboardShortcutsColumnShortcut}"
+          <DataGridTextColumn Header="{app:Loc KeyboardShortcutsColumnShortcut}"
                               Binding="{Binding Shortcut}"
                               SortMemberPath="Shortcut"
                               Width="Auto" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.KeyboardShortcutsColumnScope}"
+          <DataGridTextColumn Header="{app:Loc KeyboardShortcutsColumnScope}"
                               Binding="{Binding Scope}"
                               SortMemberPath="Scope"
                               Width="Auto" />
         </DataGrid.Columns>
       </DataGrid>
 
-      <TextBlock Text="{x:Static app:UiStrings.KeyboardShortcutsEmpty}"
+      <TextBlock Text="{app:Loc KeyboardShortcutsEmpty}"
                  IsVisible="{Binding !HasRows}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
                  HorizontalAlignment="Center"
@@ -80,14 +80,14 @@
       <Button Grid.Column="1"
               x:Name="ResetOrderButton"
               Classes="flat"
-              Content="{x:Static app:UiStrings.KeyboardShortcutsResetOrder}"
-              ToolTip.Tip="{x:Static app:UiStrings.KeyboardShortcutsResetOrderTooltip}"
+              Content="{app:Loc KeyboardShortcutsResetOrder}"
+              ToolTip.Tip="{app:Loc KeyboardShortcutsResetOrderTooltip}"
               Click="OnResetOrderClick"
               Margin="0,0,8,0" />
 
       <Button Grid.Column="2"
               Classes="flat"
-              Content="{x:Static app:UiStrings.AboutClose}"
+              Content="{app:Loc AboutClose}"
               Click="OnCloseClick"
               IsCancel="True" />
     </Grid>

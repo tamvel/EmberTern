@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
@@ -79,7 +79,7 @@ public partial class ScriptExecutorTabView : UserControl
     }
 
     private static readonly FilePickerFileType SqlFileType =
-        new("SQL scripts") { Patterns = new[] { "*.sql" } };
+        new(UiStrings.FilePickerSqlScripts) { Patterns = new[] { "*.sql" } };
 
     // Open a .sql into the editor. .NET's default reader handles BOM'd or no-BOM UTF-8.
     private async Task OnOpenRequested()

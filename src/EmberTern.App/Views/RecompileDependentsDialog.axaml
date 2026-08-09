@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.RecompileDependentsDialog"
         x:DataType="vm:RecompileDependentsDialogViewModel"
-        Title="{x:Static app:UiStrings.RecompileDependentsTitle}"
+        Title="{app:Loc RecompileDependentsTitle}"
         Width="520"
         SizeToContent="Height"
         MaxHeight="640"
@@ -25,16 +25,16 @@
             Padding="20,14">
       <StackPanel Spacing="4">
         <TextBlock Text="{Binding HeaderText}" Classes="h1" TextWrapping="Wrap" />
-        <TextBlock Text="{x:Static app:UiStrings.RecompileDependentsHint}"
+        <TextBlock Text="{app:Loc RecompileDependentsHint}"
                    Foreground="{DynamicResource SubtleForegroundBrush}" TextWrapping="Wrap" />
       </StackPanel>
     </Border>
 
     <!-- Select all / none -->
     <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="20,10,20,4">
-      <Button Classes="flat" Content="{x:Static app:UiStrings.RecompileDependentsSelectAll}"
+      <Button Classes="flat" Content="{app:Loc RecompileDependentsSelectAll}"
               Command="{Binding SelectAllCommand}" />
-      <Button Classes="flat" Content="{x:Static app:UiStrings.RecompileDependentsSelectNone}"
+      <Button Classes="flat" Content="{app:Loc RecompileDependentsSelectNone}"
               Command="{Binding SelectNoneCommand}" />
     </StackPanel>
 
@@ -55,7 +55,7 @@
     </ScrollViewer>
 
     <CheckBox Grid.Row="3" Margin="20,12,20,4"
-              Content="{x:Static app:UiStrings.RecompileDependentsDontAskAgain}"
+              Content="{app:Loc RecompileDependentsDontAskAgain}"
               IsChecked="{Binding DontAskAgain, Mode=TwoWay}" />
 
     <Border Grid.Row="4"
@@ -64,9 +64,9 @@
             BorderThickness="0,1,0,0"
             Padding="20,12">
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button Classes="flat" Content="{x:Static app:UiStrings.RecompileDependentsSkip}"
+        <Button Classes="flat" Content="{app:Loc RecompileDependentsSkip}"
                 Command="{Binding SkipCommand}" />
-        <Button Classes="primary" Content="{x:Static app:UiStrings.RecompileDependentsRecompile}"
+        <Button Classes="primary" Content="{app:Loc RecompileDependentsRecompile}"
                 Command="{Binding RecompileCommand}" IsDefault="True" />
       </StackPanel>
     </Border>

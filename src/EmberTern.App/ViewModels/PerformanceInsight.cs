@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -121,7 +121,7 @@ internal static class PerformanceInsight
     }
 
     private static bool IsSubqueryRoot(PlanNode root)
-        => root.RawText.StartsWith("Sub-query", StringComparison.OrdinalIgnoreCase);
+        => root.RawText.StartsWith(UiStrings.PlanInsightSubquery, StringComparison.OrdinalIgnoreCase);
 
     private static string FormatDuration(double ms) => ms < 1000
         ? ms.ToString("0", CultureInfo.CurrentCulture) + " ms"

@@ -80,7 +80,7 @@
                      FontFamily="Cascadia Code,Consolas,Courier New,monospace"
                      FontSize="12"
                      IsVisible="{Binding HasSelection}" />
-      <TextBlock Text="{x:Static app:UiStrings.GlobalSearchPreviewHint}"
+      <TextBlock Text="{app:Loc GlobalSearchPreviewHint}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
                  HorizontalAlignment="Center" VerticalAlignment="Center"
                  IsVisible="{Binding !HasSelection}" />

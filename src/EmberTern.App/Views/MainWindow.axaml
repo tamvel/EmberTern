@@ -12,7 +12,7 @@
         x:Class="EmberTern.App.Views.MainWindow"
         x:Name="RootWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="EmberTern"
+        Title="{app:Loc AppTitle}"
         Width="1280" Height="800"
         MinWidth="900" MinHeight="600"
         ExtendClientAreaToDecorationsHint="True"
@@ -93,59 +93,59 @@
                MessageBanner six per-host variants. See docs/design/hamburger-navigation.md §2.2. -->
           <Button Classes="icon"
                   x:Name="AppMenuButton"
-                  ToolTip.Tip="{x:Static app:UiStrings.AppMenuTooltip}"
+                  ToolTip.Tip="{app:Loc AppMenuTooltip}"
                   Click="OnAppMenuClick">
             <controls:SvgIcon Data="{StaticResource Icon.Menu}" />
             <Button.ContextMenu>
               <!-- Under the button, left edges aligned — a menu button's menu belongs below it, not at the
                    pointer where a right-click menu belongs. -->
               <ContextMenu x:Name="AppMenu" Placement="BottomEdgeAlignedLeft">
-                <MenuItem Header="{x:Static app:UiStrings.AppMenuSettings}"
+                <MenuItem Header="{app:Loc AppMenuSettings}"
                           Icon="{app:MenuIcon Icon.Settings}"
                           Click="OnAppMenuSettingsClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.AppMenuKeyboardShortcuts}"
+                <MenuItem Header="{app:Loc AppMenuKeyboardShortcuts}"
                           Icon="{app:MenuIcon Icon.Keyboard}"
                           Click="OnAppMenuKeyboardShortcutsClick" />
-                <MenuItem Header="{x:Static app:UiStrings.AppMenuAbout}"
+                <MenuItem Header="{app:Loc AppMenuAbout}"
                           Icon="{app:MenuIcon Icon.Info}"
                           Click="OnAppMenuAboutClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.AppMenuExit}"
+                <MenuItem Header="{app:Loc AppMenuExit}"
                           Icon="{app:MenuIcon Icon.Exit}"
-                          ToolTip.Tip="{x:Static app:UiStrings.AppMenuExitTooltip}"
+                          ToolTip.Tip="{app:Loc AppMenuExitTooltip}"
                           Click="OnAppMenuExitClick" />
               </ContextMenu>
             </Button.ContextMenu>
           </Button>
           <!-- Sidebar collapse / restore toggle — immediately after the hamburger, no separator between. -->
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.SidebarToggleTooltip}"
+                  ToolTip.Tip="{app:Loc SidebarToggleTooltip}"
                   Click="OnToggleSidebarClick">
             <controls:SvgIcon Data="{StaticResource Icon.PanelLeft}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionNewTooltip}"
+                  ToolTip.Tip="{app:Loc ConnectionNewTooltip}"
                   Click="OnNewConnectionClick">
             <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.FolderNewTooltip}"
+                  ToolTip.Tip="{app:Loc FolderNewTooltip}"
                   Click="OnNewFolderClick">
             <controls:SvgIcon Data="{StaticResource Icon.FolderPlus}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionEditTooltip}"
+                  ToolTip.Tip="{app:Loc ConnectionEditTooltip}"
                   Command="{Binding Metadata.EditSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Pencil}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionCopyTooltip}"
+                  ToolTip.Tip="{app:Loc ConnectionCopyTooltip}"
                   Command="{Binding Metadata.CopySelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Copy}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionDeleteTooltip}"
+                  ToolTip.Tip="{app:Loc ConnectionDeleteTooltip}"
                   Command="{Binding Metadata.DeleteSelectedCommand}">
             <!-- ⭐ Rola R‑4 „Destrukcja" (`color-language.md` §3, krok K2). Żółty był resztką
                  PORZUCONEGO schematu („Warning=delete" z pierwotnej legendy Colors.axaml), a nie
@@ -159,7 +159,7 @@
           </Button>
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionConnectTooltip}"
+                  ToolTip.Tip="{app:Loc ConnectionConnectTooltip}"
                   Command="{Binding Metadata.ConnectSelectedCommand}">
             <!-- ⭐ Rola R‑7 (domknięcie K‑final, dawne O‑4 — §8.2 języka). ⚠⚠ WCZEŚNIEJ WSTRZYMANE
                  I TERAZ WYKONANE, bo kontekst wokół się zmienił: po K6 (Odśwież → neutralny) Connect
@@ -172,12 +172,12 @@
             <controls:SvgIcon Data="{StaticResource Icon.PlugZap}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionDisconnectTooltip}"
+                  ToolTip.Tip="{app:Loc ConnectionDisconnectTooltip}"
                   Command="{Binding Metadata.DisconnectSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Unplug}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ConnectionReconnectTooltip}"
+                  ToolTip.Tip="{app:Loc ConnectionReconnectTooltip}"
                   Command="{Binding Metadata.ReconnectSelectedCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.RotateCw}" />
           </Button>
@@ -199,7 +199,7 @@
                "new object" creator). -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarSecurityManagerTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarSecurityManagerTooltip}"
                   Command="{Binding OpenSecurityManagerCommand}">
             <!-- ⭐ Rola R‑6 „Wejście do narzędzia" (domknięcie K‑final, dawne O‑5). Security Manager
                  otwiera moduł dokładnie tak jak pięć przycisków obok — i był jedynym, który zamiast
@@ -211,27 +211,27 @@
           </Button>
           <!-- Monitoring section: live database Activity Monitor (trace) + Session Manager. -->
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarActivityMonitorTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarActivityMonitorTooltip}"
                   Command="{Binding OpenTraceMonitorCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Activity}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarSessionManagerTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarSessionManagerTooltip}"
                   Command="{Binding OpenSessionManagerCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Connection}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Global Search (metadata names + source bodies) — Ctrl+Shift+F. -->
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarGlobalSearchTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarGlobalSearchTooltip}"
                   Command="{Binding OpenGlobalSearchCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Search}"
                               Foreground="{DynamicResource AccentBrush}" />
           </Button>
           <!-- Script Executor: run a multi-statement / migration script in one transaction. -->
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarScriptExecutorTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarScriptExecutorTooltip}"
                   Command="{Binding OpenScriptExecutorCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.FileText}"
                               Foreground="{DynamicResource AccentBrush}" />
@@ -239,7 +239,7 @@
           <!-- Data Import: clipboard / TXT / CSV / XLSX into a table. Sits beside the Script Executor
                because it is its peer — a tools tab, near-singleton, active only while connected (D6). -->
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarDataImportTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarDataImportTooltip}"
                   Command="{Binding OpenDataImportCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Import}"
                               Foreground="{DynamicResource AccentBrush}" />
@@ -249,55 +249,55 @@
                visually rhymes with the sidebar where new tables will appear. -->
           <Border Width="1" Margin="4,6" Background="{DynamicResource BorderBrush}" />
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTableTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewTableTooltip}"
                   Command="{Binding NewTableCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.Table}"
                               Foreground="{DynamicResource IconColor_Table}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewViewTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewViewTooltip}"
                   Command="{Binding NewViewCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.View}"
                               Foreground="{DynamicResource IconColor_View}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewProcedureTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewProcedureTooltip}"
                   Command="{Binding NewProcedureCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.Procedure}"
                               Foreground="{DynamicResource IconColor_Procedure}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewTriggerTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewTriggerTooltip}"
                   Command="{Binding NewTriggerCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.Trigger}"
                               Foreground="{DynamicResource IconColor_Trigger}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewFunctionTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewFunctionTooltip}"
                   Command="{Binding NewFunctionCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.Function}"
                               Foreground="{DynamicResource IconColor_Function}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewGeneratorTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewGeneratorTooltip}"
                   Command="{Binding NewGeneratorCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.Generator}"
                               Foreground="{DynamicResource IconColor_Generator}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewDomainTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewDomainTooltip}"
                   Command="{Binding NewDomainCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.Domain}"
                               Foreground="{DynamicResource IconColor_Domain}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewPackageTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewPackageTooltip}"
                   Command="{Binding NewPackageCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.Package}"
                               Foreground="{DynamicResource IconColor_Package}" />
           </Button>
           <Button Classes="icon"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewExceptionTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarNewExceptionTooltip}"
                   Command="{Binding NewExceptionCommand}">
             <controls:CreateIcon Data="{StaticResource Icon.Exception}"
                               Foreground="{DynamicResource IconColor_Exception}" />
@@ -324,7 +324,7 @@
                   IsVisible="{Binding CanExportDdl}" />
           <Button Classes="icon"
                   IsVisible="{Binding CanExportDdl}"
-                  ToolTip.Tip="{x:Static app:UiStrings.ToolbarExportDdlTooltip}"
+                  ToolTip.Tip="{app:Loc ToolbarExportDdlTooltip}"
                   Command="{Binding ExportDdlCommand}">
             <controls:SvgIcon Data="{StaticResource Icon.Save}"
                               Foreground="{DynamicResource AccentBrush}" />
@@ -348,18 +348,18 @@
         <!-- Window controls -->
         <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch">
           <Button Classes="caption" Click="OnMinimizeClick"
-                  ToolTip.Tip="{x:Static app:UiStrings.WindowMinimizeTooltip}">
+                  ToolTip.Tip="{app:Loc WindowMinimizeTooltip}">
             <controls:SvgIcon Data="{StaticResource Icon.WindowMinimize}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
           </Button>
           <Button Classes="caption" Click="OnMaxRestoreClick"
-                  ToolTip.Tip="{x:Static app:UiStrings.WindowMaxRestoreTooltip}"
+                  ToolTip.Tip="{app:Loc WindowMaxRestoreTooltip}"
                   x:Name="MaxRestoreButton">
             <controls:SvgIcon x:Name="MaxRestoreGlyph"
                               Data="{StaticResource Icon.WindowMaximize}"
                               Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
           </Button>
           <Button Classes="caption close" Click="OnCloseClick"
-                  ToolTip.Tip="{x:Static app:UiStrings.WindowCloseTooltip}">
+                  ToolTip.Tip="{app:Loc WindowCloseTooltip}">
             <controls:SvgIcon Data="{StaticResource Icon.WindowClose}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
           </Button>
         </StackPanel>
@@ -545,43 +545,43 @@
                  ══════════════════════════════════════════════════════════════════════════════════ -->
             <ListBox.Resources>
               <ContextMenu x:Key="SidebarFolderMenu" x:DataType="vm:FolderNodeViewModel">
-                <MenuItem Header="{x:Static app:UiStrings.FolderContextAddConnection}"
+                <MenuItem Header="{app:Loc FolderContextAddConnection}"
                           Icon="{app:MenuIcon Icon.Plus}"
                           Command="{Binding AddConnectionCommand}" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.FolderContextRename}"
+                <MenuItem Header="{app:Loc FolderContextRename}"
                           Icon="{app:MenuIcon Icon.Pencil}"
                           Command="{Binding BeginRenameCommand}" />
-                <MenuItem Header="{x:Static app:UiStrings.FolderContextDelete}"
+                <MenuItem Header="{app:Loc FolderContextDelete}"
                           Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                           Command="{Binding DeleteCommand}" />
               </ContextMenu>
 
               <ContextMenu x:Key="SidebarConnectionMenu" x:DataType="vm:ConnectionNodeViewModel">
-                <MenuItem Header="Connect"
+                <MenuItem Header="{app:Loc ConnectionConnect}"
                           Icon="{app:MenuIcon Icon.PlugZap}"
                           Command="{Binding ConnectCommand}"
                           IsVisible="{Binding !IsConnected}" />
-                <MenuItem Header="Disconnect"
+                <MenuItem Header="{app:Loc ConnectionDisconnect}"
                           Icon="{app:MenuIcon Icon.Unplug}"
                           Command="{Binding DisconnectCommand}"
                           IsVisible="{Binding IsConnected}" />
-                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRefresh}"
+                <MenuItem Header="{app:Loc ConnectionContextRefresh}"
                           Icon="{app:MenuIcon Icon.RefreshCw}"
                           InputGesture="{app:CommandGesture RefreshMetadata}"
                           Command="{Binding RefreshMetadataCommand}"
                           IsVisible="{Binding IsConnected}" />
                 <Separator />
-                <MenuItem Header="Edit" Icon="{app:MenuIcon Icon.Pencil}" Command="{Binding EditCommand}" />
-                <MenuItem Header="Copy" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
-                <MenuItem Header="Delete" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                <MenuItem Header="{app:Loc ConnectionEdit}" Icon="{app:MenuIcon Icon.Pencil}" Command="{Binding EditCommand}" />
+                <MenuItem Header="{app:Loc ConnectionCopy}" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
+                <MenuItem Header="{app:Loc ConnectionDelete}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                           Command="{Binding DeleteCommand}" />
                 <Separator IsVisible="{Binding IsConnected}" />
-                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecomputeStats}"
+                <MenuItem Header="{app:Loc ConnectionContextRecomputeStats}"
                           Icon="{app:MenuIcon Icon.Sigma}"
                           Command="{Binding RecomputeAllStatisticsCommand}"
                           IsVisible="{Binding IsConnected}" />
-                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextRecompile}"
+                <MenuItem Header="{app:Loc ConnectionContextRecompile}"
                           Icon="{app:MenuIcon Icon.Hammer}"
                           Command="{Binding RecompileAllObjectsCommand}"
                           IsVisible="{Binding IsConnected}" />
@@ -591,16 +591,16 @@
                      sensu w ogóle; wyszarzaj, gdy operacja istnieje, ale jest chwilowo niedostępna. Baza ma
                      właściwości niezależnie od tego, czy jesteśmy podłączeni — po prostu nie da się ich teraz
                      odczytać. Bramkuje `CanExecute`, więc nie ma tu nic do dodania. -->
-                <MenuItem Header="{x:Static app:UiStrings.DatabasePropertiesMenuItem}"
+                <MenuItem Header="{app:Loc DatabasePropertiesMenuItem}"
                           Icon="{app:MenuIcon Icon.Info}"
                           Command="{Binding DatabasePropertiesCommand}" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}"
+                <MenuItem Header="{app:Loc ConnectionContextSort}"
                           Icon="{app:MenuIcon Icon.ListFilter}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"
+                  <MenuItem Header="{app:Loc ConnectionContextSortAscending}"
                             Icon="{app:MenuIcon Icon.ArrowUp}"
                             Command="{Binding SortAscendingCommand}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortDescending}"
+                  <MenuItem Header="{app:Loc ConnectionContextSortDescending}"
                             Icon="{app:MenuIcon Icon.ArrowDown}"
                             Command="{Binding SortDescendingCommand}" />
                 </MenuItem>
@@ -625,20 +625,20 @@
                 <!-- Trigger-GROUP bulk ops: Visible (current filter set) or All. The "Selected"
                      scope moved onto the selected trigger leaves (see below) so the user doesn't
                      scroll back to this header to act on a multi-selection. -->
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                <MenuItem Header="{app:Loc MetadataContextActivate}"
                           Icon="{app:MenuIcon Icon.Check}"
                           IsVisible="{Binding IsTriggerGroup}">
-                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
+                  <MenuItem Header="{app:Loc MetadataContextScopeVisible}"
                             Command="{Binding ActivateVisibleCommand}" />
-                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
+                  <MenuItem Header="{app:Loc MetadataContextScopeAll}"
                             Command="{Binding ActivateAllCommand}" />
                 </MenuItem>
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                <MenuItem Header="{app:Loc MetadataContextDeactivate}"
                           Icon="{app:MenuIcon Icon.Pause}"
                           IsVisible="{Binding IsTriggerGroup}">
-                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeVisible}"
+                  <MenuItem Header="{app:Loc MetadataContextScopeVisible}"
                             Command="{Binding DeactivateVisibleCommand}" />
-                  <MenuItem Header="{x:Static app:UiStrings.MetadataContextScopeAll}"
+                  <MenuItem Header="{app:Loc MetadataContextScopeAll}"
                             Command="{Binding DeactivateAllCommand}" />
                 </MenuItem>
                 <!-- Trigger-LEAF multi-select bulk ops — visible only when >1 trigger is
@@ -657,44 +657,44 @@
                           Icon="{app:MenuIcon Icon.Pencil}"
                           Command="{Binding OpenDdlCommand}"
                           IsVisible="{Binding CanEditLeaf}" />
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextExecuteProcedure}"
+                <MenuItem Header="{app:Loc MetadataContextExecuteProcedure}"
                           Icon="{app:MenuIcon Icon.Play}"
                           Command="{Binding ExecuteProcedureCommand}"
                           IsVisible="{Binding IsProcedureLeaf}" />
                 <!-- The debugger's identity mark is a two-colour composite control, not a single
                      stroked geometry, so it cannot come through {app:MenuIcon}. Set inline — reusing
                      the one existing mark rather than drawing a second, flatter debugger icon. -->
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
+                <MenuItem Header="{app:Loc MetadataContextDebugProcedure}"
                           Command="{Binding DebugProcedureCommand}"
                           IsVisible="{Binding IsProcedureLeaf}">
                   <MenuItem.Icon>
                     <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                   </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugTrigger}"
+                <MenuItem Header="{app:Loc MetadataContextDebugTrigger}"
                           Command="{Binding DebugTriggerCommand}"
                           IsVisible="{Binding IsTriggerLeaf}">
                   <MenuItem.Icon>
                     <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                   </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
+                <MenuItem Header="{app:Loc MetadataContextDebugFunction}"
                           Command="{Binding DebugFunctionCommand}"
                           IsVisible="{Binding IsFunctionLeaf}">
                   <MenuItem.Icon>
                     <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                   </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextActivate}"
+                <MenuItem Header="{app:Loc MetadataContextActivate}"
                           Icon="{app:MenuIcon Icon.Check}"
                           Command="{Binding ActivateCommand}"
                           IsVisible="{Binding ShowActivate}" />
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDeactivate}"
+                <MenuItem Header="{app:Loc MetadataContextDeactivate}"
                           Icon="{app:MenuIcon Icon.Pause}"
                           Command="{Binding DeactivateCommand}"
                           IsVisible="{Binding ShowDeactivate}" />
                 <Separator IsVisible="{Binding CanDeleteLeaf}" />
-                <MenuItem Header="{x:Static app:UiStrings.MetadataContextDelete}"
+                <MenuItem Header="{app:Loc MetadataContextDelete}"
                           Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                           InputGesture="{app:CommandGesture DeleteObject}"
                           Command="{Binding DeleteCommand}"
@@ -878,7 +878,7 @@
                         HorizontalAlignment="Center" VerticalAlignment="Center"
                         Margin="{DynamicResource Pad.Panel}"
                         Spacing="{DynamicResource Space.Sm}">
-              <TextBlock Text="{x:Static app:UiStrings.SidebarPlaceholderEmpty}"
+              <TextBlock Text="{app:Loc SidebarPlaceholderEmpty}"
                          Foreground="{DynamicResource SubtleForegroundBrush}"
                          FontSize="{DynamicResource Text.Application.Size}"
                          TextWrapping="Wrap" TextAlignment="Center" />
@@ -893,7 +893,7 @@
                                   Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
                                   Foreground="{DynamicResource SubtleForegroundBrush}"
                                   VerticalAlignment="Center" />
-                <TextBlock Text="{x:Static app:UiStrings.ConnectionsEmptyHint}"
+                <TextBlock Text="{app:Loc ConnectionsEmptyHint}"
                            Foreground="{DynamicResource SubtleForegroundBrush}"
                            FontSize="{DynamicResource Text.Compact.Size}"
                            VerticalAlignment="Center" TextWrapping="Wrap" />
@@ -927,7 +927,7 @@
               x:Name="SidebarRail"
               Classes="sidebar-rail"
               IsVisible="False"
-              ToolTip.Tip="{x:Static app:UiStrings.SidebarExpandTooltip}"
+              ToolTip.Tip="{app:Loc SidebarExpandTooltip}"
               PointerPressed="OnSidebarRailPointerPressed">
         <TextBlock Text="›"
                    FontSize="{DynamicResource Text.Compact.Size}"
@@ -1002,35 +1002,35 @@
                          `$parent[Window].DataContext` — DataContext tego szablonu to zakładka. -->
                     <Border.ContextMenu>
                       <ContextMenu>
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuClose}"
+                        <MenuItem Header="{app:Loc TabMenuClose}"
                                   Icon="{app:MenuIcon Icon.X}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuCloseCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseOthers}"
+                        <MenuItem Header="{app:Loc TabMenuCloseOthers}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuCloseOthersCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseToTheRight}"
+                        <MenuItem Header="{app:Loc TabMenuCloseToTheRight}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuCloseToTheRightCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseUnmodified}"
+                        <MenuItem Header="{app:Loc TabMenuCloseUnmodified}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuCloseUnmodifiedCommand}" />
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCloseAll}"
+                        <MenuItem Header="{app:Loc TabMenuCloseAll}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuCloseAllCommand}" />
                         <Separator />
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuRefresh}"
+                        <MenuItem Header="{app:Loc TabMenuRefresh}"
                                   Icon="{app:MenuIcon Icon.RefreshCw}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuRefreshCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuCopyObjectName}"
+                        <MenuItem Header="{app:Loc TabMenuCopyObjectName}"
                                   Icon="{app:MenuIcon Icon.Copy}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuCopyObjectNameCommand}"
                                   CommandParameter="{Binding}" />
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuRevealInExplorer}"
+                        <MenuItem Header="{app:Loc TabMenuRevealInExplorer}"
                                   Icon="{app:MenuIcon Icon.Crosshair}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuRevealInExplorerCommand}"
                                   CommandParameter="{Binding}" />
                         <Separator />
-                        <MenuItem Header="{x:Static app:UiStrings.TabMenuSettings}"
+                        <MenuItem Header="{app:Loc TabMenuSettings}"
                                   Icon="{app:MenuIcon Icon.Settings}"
                                   Command="{Binding $parent[Window].DataContext.TabMenuSettingsCommand}" />
                       </ContextMenu>
@@ -1117,7 +1117,7 @@
                               Padding="4,2"
                               Margin="0,0,3,0"
                               BorderThickness="0"
-                              ToolTip.Tip="{x:Static app:UiStrings.TabCloseTooltip}"
+                              ToolTip.Tip="{app:Loc TabCloseTooltip}"
                               IsVisible="{Binding IsClosable}"
                               Command="{Binding CloseCommand}">
                         <!-- `Size.Icon.Sm` (12) — rola „ikona inline przy tekście 11 px"; etykieta
@@ -1196,30 +1196,30 @@
                    ⛔ Nie przywracać slotu. Przesunięcie paska do lewej krawędzi na zakładkach bez trybu
                    (Generator, Domain, Package, Exception, Index, New Table, SQL) jest ŚWIADOMIE
                    ZAAKCEPTOWANE — zwarty układ wygrywa z nieruchomym. -->
-              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleFieldEditTooltip}"
+              <ToggleButton Classes="icon" ToolTip.Tip="{app:Loc ToolbarToggleFieldEditTooltip}"
                             IsChecked="{Binding ActiveTableDetail.IsFieldEditMode, Mode=TwoWay}"
                             IsVisible="{Binding ShowFieldEditTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
-              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ViewModeToggleTooltip}"
+              <ToggleButton Classes="icon" ToolTip.Tip="{app:Loc ViewModeToggleTooltip}"
                             IsChecked="{Binding ActiveViewDetail.EasyMode, Mode=TwoWay}"
                             IsEnabled="{Binding ActiveViewDetail.CanUseEasyMode}"
                             IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
-              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureModeToggleTooltip}"
+              <ToggleButton Classes="icon" ToolTip.Tip="{app:Loc ProcedureModeToggleTooltip}"
                             IsChecked="{Binding ActiveProcedureDetail.EasyMode, Mode=TwoWay}"
                             IsEnabled="{Binding ActiveProcedureDetail.CanUseEasyMode}"
                             IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
-              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TriggerModeToggleTooltip}"
+              <ToggleButton Classes="icon" ToolTip.Tip="{app:Loc TriggerModeToggleTooltip}"
                             IsChecked="{Binding ActiveTriggerDetail.EasyMode, Mode=TwoWay}"
                             IsEnabled="{Binding ActiveTriggerDetail.CanUseEasyMode}"
                             IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PencilRuler}" />
               </ToggleButton>
-              <ToggleButton Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureModeToggleTooltip}"
+              <ToggleButton Classes="icon" ToolTip.Tip="{app:Loc ProcedureModeToggleTooltip}"
                             IsChecked="{Binding ActiveFunctionDetail.EasyMode, Mode=TwoWay}"
                             IsEnabled="{Binding ActiveFunctionDetail.CanUseEasyMode}"
                             IsVisible="{Binding IsFunctionDetailTabActive}">
@@ -1249,7 +1249,7 @@
 
                    ⛔ Nie przywracać podłogi. Drganie 38 px przy F5 jest ŚWIADOMIE ZAAKCEPTOWANE. -->
               <Button Classes="primary"
-                      ToolTip.Tip="{x:Static app:UiStrings.ToolbarExecuteTooltip}"
+                      ToolTip.Tip="{app:Loc ToolbarExecuteTooltip}"
                       Command="{Binding ExecuteQueryCommand}" IsVisible="{Binding ShowExecuteButton}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <!-- ⭐ `Size.Icon` (14), nie `Size.Icon.Toolbar` (16): ikona stoi PRZY ETYKIECIE, więc
@@ -1274,122 +1274,122 @@
                   <TextBlock Text="{Binding CancelLabel}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.FieldEditCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc FieldEditCompileTooltip}"
                       Command="{Binding ActiveTableDetail.CompileCommand}" IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FieldEditDiscardTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc FieldEditDiscardTooltip}"
                       Command="{Binding ActiveTableDetail.DiscardPendingChangesCommand}" IsVisible="{Binding ShowStructureCompileTools}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.NewTableDialogCompile}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc NewTableDialogCompile}"
                       Command="{Binding ActiveNewTable.CompileCommand}" IsVisible="{Binding IsNewTableTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ViewCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc ViewCompileTooltip}"
                       Command="{Binding ActiveViewDetail.CompileCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActiveViewDetail.RevertChangesCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc ProcedureCompileTooltip}"
                       Command="{Binding ActiveProcedureDetail.CompileCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActiveProcedureDetail.RevertChangesCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.TriggerCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc TriggerCompileTooltip}"
                       Command="{Binding ActiveTriggerDetail.CompileCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActiveTriggerDetail.RevertChangesCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.FunctionCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc FunctionCompileTooltip}"
                       Command="{Binding ActiveFunctionDetail.CompileCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActiveFunctionDetail.RevertChangesCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
               <!-- Generator: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for a generator tab). -->
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.GeneratorCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc GeneratorCompileTooltip}"
                       Command="{Binding ActiveGeneratorDetail.CompileCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActiveGeneratorDetail.RevertChangesCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.GeneratorDeleteTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc GeneratorDeleteTooltip}"
                       Command="{Binding ActiveGeneratorDetail.DeleteCommand}" IsVisible="{Binding IsGeneratorDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <!-- Domain: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for a domain tab). -->
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.DomainCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc DomainCompileTooltip}"
                       Command="{Binding ActiveDomainDetail.CompileCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActiveDomainDetail.RevertChangesCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.DomainDeleteTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc DomainDeleteTooltip}"
                       Command="{Binding ActiveDomainDetail.DeleteCommand}" IsVisible="{Binding IsDomainDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <!-- Package: Compile (header then body) / Revert / Delete. Compile
                    auto-commits via the autonomous DDL path, so no Commit/Rollback pair. -->
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.PackageCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc PackageCompileTooltip}"
                       Command="{Binding ActivePackageDetail.CompileCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActivePackageDetail.RevertChangesCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.PackageDeleteConfirmYes}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc PackageDeleteConfirmYes}"
                       Command="{Binding ActivePackageDetail.DeleteCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <!-- Exception: Compile / Revert / Delete (Compile auto-commits via the
                    autonomous DDL path, so no Commit/Rollback pair is shown for an exception tab). -->
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.ExceptionCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc ExceptionCompileTooltip}"
                       Command="{Binding ActiveExceptionDetail.CompileCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActiveExceptionDetail.RevertChangesCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ExceptionDeleteTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ExceptionDeleteTooltip}"
                       Command="{Binding ActiveExceptionDetail.DeleteCommand}" IsVisible="{Binding IsExceptionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
               <!-- Index: Compile / Revert / Recompute statistics / Delete. Compile auto-commits
                    via the autonomous DDL path, so no Commit/Rollback pair. Delete greys out for
                    constraint-backed indexes (CanDelete = !IsConstraintBacked). -->
-              <Button Classes="primary" ToolTip.Tip="{x:Static app:UiStrings.IndexCompileTooltip}"
+              <Button Classes="primary" ToolTip.Tip="{app:Loc IndexCompileTooltip}"
                       Command="{Binding ActiveIndexDetail.CompileCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Hammer}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.RevertChangesTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc RevertChangesTooltip}"
                       Command="{Binding ActiveIndexDetail.RevertChangesCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.IndexRecomputeStatisticsTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc IndexRecomputeStatisticsTooltip}"
                       Command="{Binding ActiveIndexDetail.RecomputeStatisticsCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.IndexDeleteTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc IndexDeleteTooltip}"
                       Command="{Binding ActiveIndexDetail.DeleteCommand}" IsVisible="{Binding IsIndexDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Trash}" Foreground="{DynamicResource DangerIconBrush}" />
               </Button>
@@ -1414,7 +1414,7 @@
                    ⛔ Nie przenosić tej pary — ani na prawą krawędź, ani do paska statusu (§8.4.5:
                    chip transakcji nigdy nie jest przyciskiem). Przesuwanie się paska przy zmianie
                    rodzaju zakładki jest tu ŚWIADOMIE ZAAKCEPTOWANYM kompromisem. -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionCommitTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc TransactionCommitTooltip}"
                       Command="{Binding CommitAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
                 <!-- ⭐ Role R‑2 / R‑3 na własnych tokenach (decyzja DD, krok K7). Wartości tokenów są
                      równe dotychczasowym `Success`/`Danger`, więc wygląd się nie zmienia — zmienia się
@@ -1423,7 +1423,7 @@
                      ten wycofuje pracę ZATWIERDZALNĄ, tamten porzuca bufor i jest neutralny. -->
                 <controls:SvgIcon Data="{StaticResource Icon.Check}" Foreground="{DynamicResource CommitButtonBrush}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TransactionRollbackTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc TransactionRollbackTooltip}"
                       Command="{Binding RollbackAllCommand}" IsVisible="{Binding ShowTransactionButtons}">
                 <controls:SvgIcon Data="{StaticResource Icon.Undo}" Foreground="{DynamicResource RollbackButtonBrush}" />
               </Button>
@@ -1452,11 +1452,11 @@
               </Button>
               <Border Width="1" Margin="2,5" Opacity="0.45" Background="{DynamicResource BorderBrush}"
                       IsVisible="{Binding ShowCollectionReorder}" />
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionMoveUpTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc CollectionMoveUpTooltip}"
                       Command="{Binding MoveCollectionItemUpCommand}" IsVisible="{Binding ShowCollectionReorder}">
                 <controls:SvgIcon Data="{StaticResource Icon.ArrowUp}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.CollectionMoveDownTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc CollectionMoveDownTooltip}"
                       Command="{Binding MoveCollectionItemDownCommand}" IsVisible="{Binding ShowCollectionReorder}">
                 <controls:SvgIcon Data="{StaticResource Icon.ArrowDown}" />
               </Button>
@@ -1465,50 +1465,50 @@
 
               <!-- ── SECTION 4 · Helper actions ─────────────────────────────────────── -->
               <!-- SQL editor -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarNewQueryTooltip}"
                       Command="{Binding NewQueryCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarToggleQueryPanelTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarToggleQueryPanelTooltip}"
                       Command="{Binding ToggleQueryPanelCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.PanelRight}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarClearEditorTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarClearEditorTooltip}"
                       Command="{Binding ClearActiveEditorCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Eraser}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarFormatSqlTooltip}"
                       Command="{Binding FormatSqlCommand}" IsVisible="{Binding IsQueryTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
               <!-- Table Dane refresh + pagination live in the Dane sub-tab's own grid
                    toolbar (unified layout across all 5 data grids), not here. -->
               <!-- View: format -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveViewDetail.FormatSqlCommand}" IsVisible="{Binding IsViewDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
               <!-- Procedure: execute / debug / format / comment / uncomment -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureExecuteTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureExecuteTooltip}"
                       Command="{Binding ActiveProcedureDetail.ExecuteProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <!-- Rola R‑1 „Uruchom" (`color-language.md` §3). Ten sam odcień co dotąd — K1 podmienia
                      wyłącznie token, żeby „Uruchom" i „Zatwierdź" przestały dzielić jeden (W4). -->
                 <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource ActionRunBrush}" />
               </Button>
               <!-- Debugger entry point (Stage X / D5) — same launch as the sidebar "Debug procedure…". -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureDebugTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureDebugTooltip}"
                       Command="{Binding ActiveProcedureDetail.DebugProcedureCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:DebuggerIcon />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveProcedureDetail.FormatSqlCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureCommentTooltip}"
                       Command="{Binding ActiveProcedureDetail.CommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureUncommentTooltip}"
                       Command="{Binding ActiveProcedureDetail.UncommentBodyCommand}" IsVisible="{Binding IsProcedureDetailTabActive}">
                 <!-- ⭐⭐ Domknięcie K‑final, dawne O‑2 — i uważnie: WYJĄTEK W‑1 ZOSTAJE W MOCY.
                      Użytkownik zamówił, żeby Comment i Uncomment dało się rozróżnić kolorem, bo ikony
@@ -1525,43 +1525,43 @@
               </Button>
               <!-- Trigger: debug / format / comment / uncomment -->
               <!-- Debugger entry point (Stage X / D10) — same launch as the sidebar "Debug trigger…". -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TriggerDebugTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc TriggerDebugTooltip}"
                       Command="{Binding ActiveTriggerDetail.DebugTriggerCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:DebuggerIcon />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveTriggerDetail.FormatSqlCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureCommentTooltip}"
                       Command="{Binding ActiveTriggerDetail.CommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureUncommentTooltip}"
                       Command="{Binding ActiveTriggerDetail.UncommentBodyCommand}" IsVisible="{Binding IsTriggerDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
               <!-- Function: execute / debug / format / comment / uncomment -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionExecuteTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc FunctionExecuteTooltip}"
                       Command="{Binding ActiveFunctionDetail.ExecuteFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <!-- Rola R‑1 „Uruchom" — patrz Execute procedury wyżej. -->
                 <controls:SvgIcon Data="{StaticResource Icon.Play}" Foreground="{DynamicResource ActionRunBrush}" />
               </Button>
               <!-- Debugger entry point (D-function) — same launch as the sidebar "Debug function…"; the
                    function runs as the debug root (Return group in Variables). -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.FunctionDebugTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc FunctionDebugTooltip}"
                       Command="{Binding ActiveFunctionDetail.DebugFunctionCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:DebuggerIcon />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarFormatSqlTooltip}"
                       Command="{Binding ActiveFunctionDetail.FormatSqlCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureCommentTooltip}"
                       Command="{Binding ActiveFunctionDetail.CommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureUncommentTooltip}"
                       Command="{Binding ActiveFunctionDetail.UncommentBodyCommand}" IsVisible="{Binding IsFunctionDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
@@ -1581,15 +1581,15 @@
                 </Button>
               </Border>
               <!-- Package: format / comment / uncomment (act on the active Package/Body editor) -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarFormatSqlTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarFormatSqlTooltip}"
                       Command="{Binding ActivePackageDetail.FormatSqlCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Braces}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureCommentTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureCommentTooltip}"
                       Command="{Binding ActivePackageDetail.CommentBodyCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Comment}" Foreground="{DynamicResource InfoIconBrush}" />
               </Button>
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ProcedureUncommentTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ProcedureUncommentTooltip}"
                       Command="{Binding ActivePackageDetail.UncommentBodyCommand}" IsVisible="{Binding IsPackageDetailTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.Uncomment}" />
               </Button>
@@ -1597,7 +1597,7 @@
                       IsVisible="{Binding ToolbarSep4Visible}" />
 
               <!-- ── SECTION 5 · Close tab (always last) ────────────────────────────── -->
-              <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.ToolbarCloseTabTooltip}"
+              <Button Classes="icon" ToolTip.Tip="{app:Loc ToolbarCloseTabTooltip}"
                       Command="{Binding CloseActiveTabCommand}" IsVisible="{Binding IsClosableTabActive}">
                 <controls:SvgIcon Data="{StaticResource Icon.X}" />
               </Button>
@@ -1701,18 +1701,18 @@
                         BorderThickness="0,0,0,1">
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Grid.Column="0"
-                               Text="{x:Static app:UiStrings.QueryPanelHeader}"
+                               Text="{app:Loc QueryPanelHeader}"
                                FontWeight="SemiBold"
                                FontSize="{DynamicResource Text.Compact.Size}"
                                VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
                       <Button Classes="icon"
-                              ToolTip.Tip="{x:Static app:UiStrings.ToolbarNewQueryTooltip}"
+                              ToolTip.Tip="{app:Loc ToolbarNewQueryTooltip}"
                               Command="{Binding NewQueryCommand}">
                         <controls:SvgIcon Data="{StaticResource Icon.Plus}" />
                       </Button>
                       <Button Classes="icon"
-                              ToolTip.Tip="{x:Static app:UiStrings.QueryDeleteTooltip}"
+                              ToolTip.Tip="{app:Loc QueryDeleteTooltip}"
                               Command="{Binding DeleteSelectedQueryCommand}">
                         <!-- Rola R‑4 (K2) — patrz komentarz przy „Delete Connection". Ten sam wzorzec:
                              usunięcie zapytania z menu kontekstowego wiersza jest czerwone od zawsze,
@@ -1722,7 +1722,7 @@
                                           Foreground="{DynamicResource DangerIconBrush}" />
                       </Button>
                       <Button Classes="icon"
-                              ToolTip.Tip="{x:Static app:UiStrings.QueryClearAllTooltip}"
+                              ToolTip.Tip="{app:Loc QueryClearAllTooltip}"
                               Command="{Binding ClearAllQueriesCommand}">
                         <!-- ⚠ Rola R‑4 (K2), i tu zmiana naprawia nie tylko spójność: „wyczyść
                              wszystkie" jest z tej trójki NAJDALEJ idące (kasuje cały zbiór), a niosło
@@ -1740,7 +1740,7 @@
                 </Border>
 
                 <TextBlock Grid.Row="1"
-                           Text="{x:Static app:UiStrings.QueryPanelEmptyHint}"
+                           Text="{app:Loc QueryPanelEmptyHint}"
                            Classes="subtle"
                            FontSize="{DynamicResource Text.Compact.Size}"
                            Margin="10,8"
@@ -1774,10 +1774,10 @@
                               DoubleTapped="OnSavedQueryNameDoubleTapped">
                         <Border.ContextMenu>
                           <ContextMenu>
-                            <MenuItem Header="{x:Static app:UiStrings.QueryContextRename}"
+                            <MenuItem Header="{app:Loc QueryContextRename}"
                                       Icon="{app:MenuIcon Icon.Pencil}"
                                       Command="{Binding BeginRenameCommand}" />
-                            <MenuItem Header="{x:Static app:UiStrings.QueryContextDelete}"
+                            <MenuItem Header="{app:Loc QueryContextDelete}"
                                       Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                                       Command="{Binding DeleteCommand}" />
                           </ContextMenu>
@@ -1792,7 +1792,7 @@
                                        VerticalAlignment="Center" />
                             <Button Grid.Column="1"
                                     Classes="icon row-hover-icon"
-                                    ToolTip.Tip="{x:Static app:UiStrings.QueryRenameTooltip}"
+                                    ToolTip.Tip="{app:Loc QueryRenameTooltip}"
                                     Padding="3,1"
                                     Command="{Binding BeginRenameCommand}">
                               <controls:SvgIcon Data="{StaticResource Icon.Pencil}"
@@ -1861,7 +1861,7 @@
                   HorizontalAlignment="Right"
                   VerticalAlignment="Top"
                   Margin="0,2,6,0"
-                  ToolTip.Tip="{x:Static app:UiStrings.ResultsPanelMaximizeTooltip}"
+                  ToolTip.Tip="{app:Loc ResultsPanelMaximizeTooltip}"
                   Click="OnToggleResultsMaximizeClick">
             <Panel>
               <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
@@ -1890,12 +1890,12 @@
                       <Button Classes="flat" Padding="10,3"
                               Command="{Binding LoadAllRowsCommand}"
                               IsVisible="{Binding ShowLoadAllButton}"
-                              Content="{x:Static app:UiStrings.ToolbarLoadAllRows}" />
+                              Content="{app:Loc ToolbarLoadAllRows}" />
                       <!-- Export all… — opens the shared Export dialog (Scope pre-selected to All rows).
                            Shown for both the truncated-preview and ceiling-hit bars (A.6). -->
                       <Button Classes="flat" Padding="10,3"
                               Command="{Binding ExportResultsCommand}"
-                              Content="{x:Static app:UiStrings.ExportAllRowsButton}" />
+                              Content="{app:Loc ExportAllRowsButton}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                       <controls:SvgIcon Data="{StaticResource Icon.Exception}"
@@ -1918,22 +1918,22 @@
                         IsVisible="{Binding HasCurrentResult}">
                   <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                     <Button Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+                            ToolTip.Tip="{app:Loc TableDetailPaginationFirstTooltip}"
                             Command="{Binding ResultFirstPageCommand}">
                       <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+                            ToolTip.Tip="{app:Loc TableDetailPaginationPreviousTooltip}"
                             Command="{Binding ResultPreviousPageCommand}">
                       <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+                            ToolTip.Tip="{app:Loc TableDetailPaginationNextTooltip}"
                             Command="{Binding ResultNextPageCommand}">
                       <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
                     <Button Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+                            ToolTip.Tip="{app:Loc TableDetailPaginationLastTooltip}"
                             Command="{Binding ResultLastPageCommand}">
                       <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
@@ -1950,7 +1950,7 @@
                     <!-- Filter + aggregation toggles (right side of the pagination bar).
                          ToggleButtons so the "on" look tracks panel visibility, not focus. -->
                     <ToggleButton Classes="icon" Margin="12,0,0,0"
-                            ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                            ToolTip.Tip="{app:Loc FilterToggleTooltip}"
                             IsChecked="{Binding ResultFilterPanel.IsPanelOpen, Mode=TwoWay}">
                       <Panel>
                         <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
@@ -1958,13 +1958,13 @@
                       </Panel>
                     </ToggleButton>
                     <ToggleButton Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                            ToolTip.Tip="{app:Loc AggregationToggleTooltip}"
                             IsChecked="{Binding ResultAggregationBar.IsBarOpen, Mode=TwoWay}">
                       <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </ToggleButton>
                     <!-- Export the results (opens the shared Export dialog, default Scope = All rows). -->
                     <Button Classes="icon"
-                            ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}"
+                            ToolTip.Tip="{app:Loc ExportResultsTooltip}"
                             Command="{Binding ExportResultsCommand}">
                       <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                     </Button>
@@ -1994,13 +1994,13 @@
                           IsVisible="{Binding HasCurrentResult}">
                   <DataGrid.ContextMenu>
                     <ContextMenu Opening="OnResultContextMenuOpening">
-                      <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}"
+                      <MenuItem Header="{app:Loc GridCopyCell}"
                                 Icon="{app:MenuIcon Icon.Copy}"
                                 Click="OnCopyCellClick" />
-                      <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}"
+                      <MenuItem Header="{app:Loc GridCopyRow}"
                                 Icon="{app:MenuIcon Icon.Copy}"
                                 Click="OnCopyRowClick" />
-                      <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}"
+                      <MenuItem Header="{app:Loc GridCopyRowWithHeaders}"
                                 Icon="{app:MenuIcon Icon.Copy}"
                                 Click="OnCopyRowWithHeadersClick" />
                       <Separator />
@@ -2008,32 +2008,32 @@
                            the action is available, so a greyed item always says WHY. (The shared menu style
                            keeps a disabled row READABLE rather than fading it out — that reason has to be
                            legible for the affordance to work.) -->
-                      <MenuItem Header="{x:Static app:UiStrings.GridCopyAsInsert}"
+                      <MenuItem Header="{app:Loc GridCopyAsInsert}"
                                 Icon="{app:MenuIcon Icon.Query}"
                                 Click="OnCopyAsInsertClick"
                                 IsEnabled="{Binding SqlCopy.CanCopyAsInsert}"
                                 ToolTip.Tip="{Binding SqlCopy.CopyAsInsertTooltip}" />
-                      <MenuItem Header="{x:Static app:UiStrings.GridCopyAsUpdate}"
+                      <MenuItem Header="{app:Loc GridCopyAsUpdate}"
                                 Icon="{app:MenuIcon Icon.Query}"
                                 Click="OnCopyAsUpdateClick"
                                 IsEnabled="{Binding SqlCopy.CanCopyAsUpdate}"
                                 ToolTip.Tip="{Binding SqlCopy.CopyAsUpdateTooltip}" />
                       <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}"
+                      <MenuItem Header="{app:Loc GridCopyAllWithHeaders}"
                                 Icon="{app:MenuIcon Icon.Copy}"
                                 Click="OnCopyAllWithHeadersClick" />
-                      <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}"
+                      <MenuItem Header="{app:Loc ExportResultsMenuItem}"
                                 Icon="{app:MenuIcon Icon.Download}"
                                 Command="{Binding ExportResultsCommand}" />
                       <Separator />
-                      <MenuItem Header="{x:Static app:UiStrings.FilterByValue}"
+                      <MenuItem Header="{app:Loc FilterByValue}"
                                 Icon="{app:MenuIcon Icon.Filter}"
                                 Click="OnResultFilterByValueClick" />
-                      <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}"
+                      <MenuItem Header="{app:Loc FilterExcludeValue}"
                                 Icon="{app:MenuIcon Icon.ListX}"
                                 Click="OnResultExcludeValueClick" />
                       <MenuItem x:Name="ResultFilterContainsItem"
-                                Header="{x:Static app:UiStrings.FilterContainsValue}"
+                                Header="{app:Loc FilterContainsValue}"
                                 Icon="{app:MenuIcon Icon.Search}"
                                 Click="OnResultFilterContainsClick" />
                     </ContextMenu>
@@ -2045,10 +2045,10 @@
               <Grid Background="{DynamicResource BackgroundBrush}">
                 <Grid.ContextMenu>
                   <ContextMenu>
-                    <MenuItem Header="{x:Static app:UiStrings.MessagesCopyAll}"
+                    <MenuItem Header="{app:Loc MessagesCopyAll}"
                               Icon="{app:MenuIcon Icon.Copy}"
                               Command="{Binding CopyAllMessagesCommand}" />
-                    <MenuItem Header="{x:Static app:UiStrings.MessagesClear}"
+                    <MenuItem Header="{app:Loc MessagesClear}"
                               Icon="{app:MenuIcon Icon.Eraser}"
                               Command="{Binding ClearMessagesCommand}" />
                   </ContextMenu>
@@ -2110,13 +2110,13 @@
             <TabItem Classes="bottom-tab" Header="{Binding OutputLabel}">
               <Grid Background="{DynamicResource BackgroundBrush}" />
             </TabItem>
-            <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PerformanceTabHeader}">
+            <TabItem Classes="bottom-tab" Header="{app:Loc PerformanceTabHeader}">
               <views:PerformancePanelView DataContext="{Binding Performance}" />
             </TabItem>
             <!-- Diagnostics (Stage 7 / S4). Appended LAST on purpose: the bottom-tab index is
                  persisted in WorkspaceState and referenced by PerformanceBottomTabIndex, so
                  Results=0 / Messages=1 / Output=2 / Performance=3 must keep their positions. -->
-            <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+            <TabItem Classes="bottom-tab" Header="{app:Loc BottomTabDiagnostics}">
               <views:DiagnosticsPanelView x:Name="SqlDiagnosticsPanel"
                                           DataContext="{Binding DiagnosticsPanel}" />
             </TabItem>
@@ -2280,8 +2280,8 @@
                   CornerRadius="{DynamicResource Radius.Surface}" Padding="4,1"
                   VerticalAlignment="Center"
                   IsVisible="{Binding IsDeveloperModeActive}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DeveloperModeBadgeTooltip}">
-            <TextBlock Text="{x:Static app:UiStrings.DeveloperModeBadge}"
+                  ToolTip.Tip="{app:Loc DeveloperModeBadgeTooltip}">
+            <TextBlock Text="{app:Loc DeveloperModeBadge}"
                        FontSize="{DynamicResource Text.Caption.Size}" FontWeight="Bold"
                        Foreground="{DynamicResource DevModeBadgeForegroundBrush}" />
           </Border>
@@ -2399,7 +2399,7 @@
             <controls:DebuggerIcon Width="{DynamicResource Size.Icon.Sm}"
                                    Height="{DynamicResource Size.Icon.Sm}"
                                    VerticalAlignment="Center" />
-            <TextBlock Text="{x:Static app:UiStrings.StatusBarDebugChipLabel}"
+            <TextBlock Text="{app:Loc StatusBarDebugChipLabel}"
                        FontSize="{DynamicResource Text.Caption.Size}"
                        VerticalAlignment="Center"
                        Foreground="{DynamicResource AccentIconBrush}" />
@@ -2419,7 +2419,7 @@
                               VerticalAlignment="Center"
                               Data="{StaticResource Icon.Activity}"
                               Foreground="{DynamicResource IconColor_Query}" />
-            <TextBlock Text="{x:Static app:UiStrings.StatusBarTraceChipLabel}"
+            <TextBlock Text="{app:Loc StatusBarTraceChipLabel}"
                        FontSize="{DynamicResource Text.Caption.Size}"
                        VerticalAlignment="Center"
                        Foreground="{DynamicResource IconColor_Query}" />
@@ -2454,7 +2454,7 @@
           <Button Classes="icon"
                   Command="{Binding Progress.CancelCommand}"
                   IsVisible="{Binding Progress.HasCancel}"
-                  ToolTip.Tip="{x:Static app:UiStrings.StatusBarCancelOperationTooltip}">
+                  ToolTip.Tip="{app:Loc StatusBarCancelOperationTooltip}">
             <controls:SvgIcon Data="{StaticResource Icon.X}"
                               Width="{DynamicResource Size.Icon.Sm}"
                               Height="{DynamicResource Size.Icon.Sm}" />

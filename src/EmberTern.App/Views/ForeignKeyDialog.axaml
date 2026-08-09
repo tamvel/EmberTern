@@ -9,7 +9,7 @@
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.ForeignKeyDialog"
         x:DataType="vm:ForeignKeyDialogViewModel"
-        Title="{x:Static app:UiStrings.ForeignKeyDialogTitle}"
+        Title="{app:Loc ForeignKeyDialogTitle}"
         Width="780"
         Height="640"
         CanResize="True"
@@ -25,18 +25,18 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,16">
-      <TextBlock Text="{x:Static app:UiStrings.ForeignKeyDialogHeader}" Classes="h1" />
+      <TextBlock Text="{app:Loc ForeignKeyDialogHeader}" Classes="h1" />
     </Border>
 
     <!-- Constraint name + source table label -->
     <Border Grid.Row="1" Padding="20,14,20,10">
       <Grid ColumnDefinitions="*,20,Auto" RowDefinitions="Auto,Auto">
         <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
-          <TextBlock Text="{x:Static app:UiStrings.ForeignKeyConstraintNameLabel}" Classes="field-label" />
+          <TextBlock Text="{app:Loc ForeignKeyConstraintNameLabel}" Classes="field-label" />
           <TextBox Text="{Binding ConstraintName, Mode=TwoWay}" />
         </StackPanel>
         <StackPanel Grid.Row="0" Grid.Column="2" Spacing="4" MinWidth="220">
-          <TextBlock Text="{x:Static app:UiStrings.ForeignKeySourceTableLabel}" Classes="field-label" />
+          <TextBlock Text="{app:Loc ForeignKeySourceTableLabel}" Classes="field-label" />
           <!-- ⭐⭐ M4.4 — trzeci element grupy „TextBlock 13 px", i JEDYNY, w którym odziedziczony komentarz
                był nieprawdziwy: to nie jest „treść komunikatu", tylko nazwa obiektu bazy pisana monospace.
                Nasuwało to rolę Text.Code (niesie 13, wygląd bez zmiany) — i pomiar rodziny to ODRZUCIŁ.
@@ -68,7 +68,7 @@
           <Border Grid.Row="0"
                   Background="{DynamicResource PanelBrush}"
                   Padding="8,4">
-            <TextBlock Text="{x:Static app:UiStrings.ForeignKeySourceFieldsLabel}"
+            <TextBlock Text="{app:Loc ForeignKeySourceFieldsLabel}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        FontWeight="SemiBold" />
           </Border>
@@ -103,17 +103,17 @@
           <Border Grid.Row="0"
                   Background="{DynamicResource PanelBrush}"
                   Padding="8,4">
-            <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsLabel}"
+            <TextBlock Text="{app:Loc ForeignKeyReferencedFieldsLabel}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        FontWeight="SemiBold" />
           </Border>
           <StackPanel Grid.Row="1" Margin="8,6,8,4" Spacing="4">
-            <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedTableLabel}" Classes="field-label" />
+            <TextBlock Text="{app:Loc ForeignKeyReferencedTableLabel}" Classes="field-label" />
             <controls:SearchableComboBox ItemsSource="{Binding AvailableTables}"
                       SelectedItem="{Binding SelectedReferencedTable, Mode=TwoWay}"
                       Watermark=""
                       HorizontalAlignment="Stretch" />
-            <TextBlock Text="{x:Static app:UiStrings.ForeignKeyReferencedFieldsHint}"
+            <TextBlock Text="{app:Loc ForeignKeyReferencedFieldsHint}"
                        FontSize="{DynamicResource Text.Caption.Size}"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
@@ -141,7 +141,7 @@
          instead of an IValueConverter on the raw enum. -->
     <Grid Grid.Row="3" Margin="20,4,20,8" ColumnDefinitions="*,20,*">
       <StackPanel Grid.Column="0" Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.ForeignKeyOnUpdateLabel}" Classes="field-label" />
+        <TextBlock Text="{app:Loc ForeignKeyOnUpdateLabel}" Classes="field-label" />
         <ComboBox ItemsSource="{Binding AvailableActions}"
                   SelectedItem="{Binding OnUpdateAction, Mode=TwoWay}"
                   HorizontalAlignment="Stretch">
@@ -153,7 +153,7 @@
         </ComboBox>
       </StackPanel>
       <StackPanel Grid.Column="2" Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.ForeignKeyOnDeleteLabel}" Classes="field-label" />
+        <TextBlock Text="{app:Loc ForeignKeyOnDeleteLabel}" Classes="field-label" />
         <ComboBox ItemsSource="{Binding AvailableActions}"
                   SelectedItem="{Binding OnDeleteAction, Mode=TwoWay}"
                   HorizontalAlignment="Stretch">
@@ -168,7 +168,7 @@
 
     <!-- Live DDL preview -->
     <StackPanel Grid.Row="4" Margin="20,4,20,4" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.ForeignKeyDdlPreviewLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc ForeignKeyDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
               CornerRadius="{DynamicResource Radius.Surface}">
@@ -206,10 +206,10 @@
                   HorizontalAlignment="Right"
                   Spacing="8">
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.DialogCancel}"
+                Content="{app:Loc DialogCancel}"
                 Command="{Binding CancelCommand}" />
         <Button Classes="primary"
-                Content="{x:Static app:UiStrings.ForeignKeyDialogCreate}"
+                Content="{app:Loc ForeignKeyDialogCreate}"
                 Command="{Binding AcceptCommand}"
                 IsDefault="True" />
       </StackPanel>

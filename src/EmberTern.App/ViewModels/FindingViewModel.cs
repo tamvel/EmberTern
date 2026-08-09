@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using EmberTern.Core.Performance;
 
 namespace EmberTern.App.ViewModels;
@@ -42,9 +42,9 @@ public sealed class FindingViewModel
     /// <summary>"High/Medium/Low confidence" — surfaced so a questionable finding reads as such.</summary>
     public string ConfidenceText => Finding.Confidence switch
     {
-        FindingConfidence.High => "High confidence",
-        FindingConfidence.Medium => "Medium confidence",
-        _ => "Low confidence",
+        FindingConfidence.High => UiStrings.FindingConfidenceHigh,
+        FindingConfidence.Medium => UiStrings.FindingConfidenceMedium,
+        _ => UiStrings.FindingConfidenceLow,
     };
 
     public string Title => Finding.Title;

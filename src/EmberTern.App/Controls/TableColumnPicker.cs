@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -64,11 +64,11 @@ public sealed class TableColumnPicker : UserControl, ISearchableComboBoxContent
         // spoczynkowa ramka pola (dobrana do tła OKNA) ginie i pole pojawia się dopiero pod kursorem
         // (zgłoszenie użytkownika 2026-08-03). Dwie klasy, dwie niezależne role: `search` mówi o WIELKOŚCI
         // (pole samotne, celowane często), `on-raised` o TLE, na którym stoi.
-        _tableFilter = new TextBox { PlaceholderText = "Filter tables…", Margin = new Thickness(4) };
+        _tableFilter = new TextBox { PlaceholderText = UiStrings.TableColumnPickerFilterTables, Margin = new Thickness(4) };
         _tableFilter.Classes.Add("search");
         _tableFilter.Classes.Add("on-raised");
         _tableList = new ListBox { MaxHeight = 320 };
-        _columnFilter = new TextBox { PlaceholderText = "Filter columns…", Margin = new Thickness(4) };
+        _columnFilter = new TextBox { PlaceholderText = UiStrings.TableColumnPickerFilterColumns, Margin = new Thickness(4) };
         _columnFilter.Classes.Add("search");
         _columnFilter.Classes.Add("on-raised");
         _columnList = new ListBox { MaxHeight = 320, ItemTemplate = ColumnRowTemplate() };

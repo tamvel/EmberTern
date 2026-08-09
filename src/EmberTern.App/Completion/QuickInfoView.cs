@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
@@ -152,7 +153,7 @@ internal static class QuickInfoView
         int remaining = members.Count - shown;
         if (remaining > 0)
         {
-            box.Children.Add(Subtle($"… and {remaining} more", theme, size: 11, top: 2));
+            box.Children.Add(Subtle(string.Format(CultureInfo.CurrentCulture, UiStrings.QuickInfoMoreFormat, remaining), theme, size: 11, top: 2));
         }
 
         panel.Children.Add(box);
@@ -196,33 +197,33 @@ internal static class QuickInfoView
 
     private static string GroupLabel(QuickInfoMemberGroup group) => group switch
     {
-        QuickInfoMemberGroup.Column => "Columns",
-        QuickInfoMemberGroup.Parameter => "Parameters",
-        QuickInfoMemberGroup.Returns => "Returns",
+        QuickInfoMemberGroup.Column => UiStrings.QuickInfoGroupColumns,
+        QuickInfoMemberGroup.Parameter => UiStrings.QuickInfoGroupParameters,
+        QuickInfoMemberGroup.Returns => UiStrings.QuickInfoGroupReturns,
         _ => string.Empty,
     };
 
     private static string KindLabel(SymbolKind kind) => kind switch
     {
-        SymbolKind.Table => "Table",
-        SymbolKind.View => "View",
-        SymbolKind.SystemTable => "System table",
-        SymbolKind.Procedure => "Procedure",
-        SymbolKind.Function => "Function",
-        SymbolKind.Trigger => "Trigger",
-        SymbolKind.Domain => "Domain",
-        SymbolKind.Exception => "Exception",
-        SymbolKind.Sequence => "Generator",
-        SymbolKind.Role => "Role",
-        SymbolKind.Package => "Package",
-        SymbolKind.Index => "Index",
-        SymbolKind.Column => "Column",
-        SymbolKind.TableReference => "Table reference",
-        SymbolKind.Variable => "Variable",
-        SymbolKind.Parameter => "Parameter",
-        SymbolKind.Cte => "Common table expression",
-        SymbolKind.Cursor => "Cursor",
-        SymbolKind.RecordAlias => "Record alias",
+        SymbolKind.Table => UiStrings.ObjectKindTable,
+        SymbolKind.View => UiStrings.ObjectKindView,
+        SymbolKind.SystemTable => UiStrings.ObjectKindSystemTable,
+        SymbolKind.Procedure => UiStrings.ObjectKindProcedure,
+        SymbolKind.Function => UiStrings.ObjectKindFunction,
+        SymbolKind.Trigger => UiStrings.ObjectKindTrigger,
+        SymbolKind.Domain => UiStrings.ObjectKindDomain,
+        SymbolKind.Exception => UiStrings.ObjectKindException,
+        SymbolKind.Sequence => UiStrings.ObjectKindGenerator,
+        SymbolKind.Role => UiStrings.ObjectKindRole,
+        SymbolKind.Package => UiStrings.ObjectKindPackage,
+        SymbolKind.Index => UiStrings.ObjectKindIndex,
+        SymbolKind.Column => UiStrings.ObjectKindColumn,
+        SymbolKind.TableReference => UiStrings.ObjectKindTableReference,
+        SymbolKind.Variable => UiStrings.ObjectKindVariable,
+        SymbolKind.Parameter => UiStrings.ObjectKindParameter,
+        SymbolKind.Cte => UiStrings.ObjectKindCte,
+        SymbolKind.Cursor => UiStrings.ObjectKindCursor,
+        SymbolKind.RecordAlias => UiStrings.ObjectKindRecordAlias,
         _ => string.Empty,
     };
 }

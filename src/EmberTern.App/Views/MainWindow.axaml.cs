@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -916,8 +916,8 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("CSV / TXT") { Patterns = new[] { "*.csv", "*.txt", "*.tsv" } },
-                new FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx", "*.xls" } },
+                new FilePickerFileType(UiStrings.FilePickerCsvTxt) { Patterns = new[] { "*.csv", "*.txt", "*.tsv" } },
+                new FilePickerFileType(UiStrings.FilePickerExcel) { Patterns = new[] { "*.xlsx", "*.xls" } },
                 FilePickerFileTypes.All,
             },
         });

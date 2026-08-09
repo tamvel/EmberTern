@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.CheckConstraintDialog"
         x:DataType="vm:CheckConstraintDialogViewModel"
-        Title="{x:Static app:UiStrings.CheckConstraintDialogTitle}"
+        Title="{app:Loc CheckConstraintDialogTitle}"
         Width="460"
         SizeToContent="Height"
         CanResize="True"
@@ -24,30 +24,30 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,16">
-      <TextBlock Text="{x:Static app:UiStrings.CheckConstraintDialogHeader}" Classes="h1" />
+      <TextBlock Text="{app:Loc CheckConstraintDialogHeader}" Classes="h1" />
     </Border>
 
     <!-- Constraint name -->
     <StackPanel Grid.Row="1" Margin="20,14,20,8" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.ConstraintNameLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc ConstraintNameLabel}" Classes="field-label" />
       <TextBox Text="{Binding ConstraintName, Mode=TwoWay}" />
     </StackPanel>
 
     <!-- Check expression -->
     <StackPanel Grid.Row="2" Margin="20,4,20,8" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.CheckConstraintExpressionLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc CheckConstraintExpressionLabel}" Classes="field-label" />
       <TextBox Text="{Binding CheckExpression, Mode=TwoWay}"
                AcceptsReturn="True"
                TextWrapping="Wrap"
                MinHeight="64"
-               PlaceholderText="{x:Static app:UiStrings.CheckConstraintExpressionWatermark}"
+               PlaceholderText="{app:Loc CheckConstraintExpressionWatermark}"
                FontFamily="Cascadia Code,Consolas,Menlo,monospace"
  />
     </StackPanel>
 
     <!-- Live DDL preview -->
     <StackPanel Grid.Row="3" Margin="20,4,20,4" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.ConstraintDdlPreviewLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc ConstraintDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
               CornerRadius="{DynamicResource Radius.Surface}">
@@ -85,10 +85,10 @@
                   HorizontalAlignment="Right"
                   Spacing="8">
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.DialogCancel}"
+                Content="{app:Loc DialogCancel}"
                 Command="{Binding CancelCommand}" />
         <Button Classes="primary"
-                Content="{x:Static app:UiStrings.ConstraintDialogCreate}"
+                Content="{app:Loc ConstraintDialogCreate}"
                 Command="{Binding AcceptCommand}"
                 IsDefault="True" />
       </StackPanel>

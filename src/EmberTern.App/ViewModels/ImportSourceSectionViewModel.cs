@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -231,7 +231,7 @@ public sealed partial class ImportSourceSectionViewModel : ViewModelBase
         new ImportChoiceOption<DateFieldOrder>("DMY", DateFieldOrder.Dmy),
         new ImportChoiceOption<DateFieldOrder>("MDY", DateFieldOrder.Mdy),
         new ImportChoiceOption<DateFieldOrder>("YMD", DateFieldOrder.Ymd),
-        new ImportChoiceOption<DateFieldOrder>("ISO (yyyy-MM-dd)", DateFieldOrder.Iso),
+        new ImportChoiceOption<DateFieldOrder>(UiStrings.ImportDateOrderIso, DateFieldOrder.Iso),
     };
 
     public static IReadOnlyList<ImportCharOption> DecimalSeparatorOptions { get; } = new[]

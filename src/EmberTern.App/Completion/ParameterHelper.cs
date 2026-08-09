@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using System;
 using System.Threading.Tasks;
 using Avalonia;
@@ -231,7 +232,7 @@ internal sealed class ParameterHelper
         {
             var p = sig.Parameters[i];
             bool active = i == sig.ActiveParameter;
-            var text = string.IsNullOrEmpty(p.Type) ? p.Name : $"{p.Name} : {p.Type}";
+            var text = string.IsNullOrEmpty(p.Type) ? p.Name : string.Format(CultureInfo.CurrentCulture, UiStrings.ParameterHelperMemberFormat, p.Name, p.Type);
 
             var inner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             inner.Children.Add(new TextBlock
@@ -300,8 +301,8 @@ internal sealed class ParameterHelper
     {
         SignatureKind.Insert => $"INSERT INTO {sig.Label}",
         SignatureKind.Update => $"UPDATE {sig.Label}",
-        SignatureKind.Procedure => $"{sig.Label} (procedure)",
-        SignatureKind.Function => $"{sig.Label} (function)",
+        SignatureKind.Procedure => string.Format(CultureInfo.CurrentCulture, UiStrings.ParameterHelperProcedureSuffix, sig.Label),
+        SignatureKind.Function => string.Format(CultureInfo.CurrentCulture, UiStrings.ParameterHelperFunctionSuffix, sig.Label),
         _ => sig.Label,
     };
 

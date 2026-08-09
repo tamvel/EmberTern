@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.App.ViewModels"
         xmlns:app="using:EmberTern.App"
@@ -31,8 +31,8 @@
         <StackPanel Spacing="4">
           <TextBlock Text="{Binding NameLabel}" Classes="field-label" />
           <TextBox Text="{Binding Name, Mode=TwoWay}"
-                   MaxLength="{x:Static app:UiStrings.ConnectionNameMaxLength}"
-                   PlaceholderText="Local development" />
+                   MaxLength="{app:Loc ConnectionNameMaxLength}"
+                   PlaceholderText="{app:Loc NewConnectionNamePlaceholder}" />
         </StackPanel>
 
         <Grid ColumnDefinitions="*,12,110" RowDefinitions="Auto,Auto">
@@ -51,7 +51,7 @@
           <Grid ColumnDefinitions="*,8,Auto">
             <TextBox Grid.Column="0"
                      Text="{Binding DatabasePath, Mode=TwoWay}"
-                     PlaceholderText="C:\data\example.fdb" />
+                     PlaceholderText="{app:Loc NewConnectionPathPlaceholder}" />
             <Button Grid.Column="2"
                     Classes="flat"
                     Content="{Binding BrowseLabel}"
@@ -79,8 +79,8 @@
              pickers. No transaction terminology is shown to the user. -->
         <StackPanel Spacing="4">
           <CheckBox IsChecked="{Binding DeveloperMode, Mode=TwoWay}"
-                    Content="{x:Static app:UiStrings.DialogFieldDeveloperMode}" />
-          <TextBlock Text="{x:Static app:UiStrings.DeveloperModeDescription}"
+                    Content="{app:Loc DialogFieldDeveloperMode}" />
+          <TextBlock Text="{app:Loc DeveloperModeDescription}"
                      Classes="subtle"
                      FontSize="{DynamicResource Text.Compact.Size}"
                      TextWrapping="Wrap" />

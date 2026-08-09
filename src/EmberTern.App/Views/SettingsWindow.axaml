@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.SettingsWindow"
         x:DataType="vm:SettingsCenterViewModel"
-        Title="{x:Static app:UiStrings.SettingsCenterTitle}"
+        Title="{app:Loc SettingsCenterTitle}"
         Width="760" Height="560"
         MinWidth="560" MinHeight="360"
         ShowInTaskbar="False"
@@ -62,7 +62,7 @@
                    x:Name="SearchBox"
                    Classes="search"
                    Text="{Binding SearchText}"
-                   PlaceholderText="{x:Static app:UiStrings.SettingsSearchPlaceholder}"
+                   PlaceholderText="{app:Loc SettingsSearchPlaceholder}"
                    Margin="{DynamicResource Margin.FieldGap}" />
 
           <!-- ⚠ `Classes="settings-nav"` jest nośne, nie ozdobne: bazowy `ListBoxItem` opisuje gest „czytasz
@@ -134,7 +134,7 @@
                  each and every binding stays compiled and typed. -->
             <StackPanel Spacing="12" IsVisible="{Binding IsGeneralPageVisible}">
 
-              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryGeneral}" />
+              <TextBlock Classes="h1" Text="{app:Loc SettingsCategoryGeneral}" />
 
               <!-- Theme. The titlebar toggle writes the SAME preference through the same service, so the two
                    cannot disagree, and neither of them applies the variant itself — PreferencesService.Changed
@@ -209,19 +209,19 @@
                   <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
                     <Button x:Name="ExportSettingsButton"
                             Classes="flat"
-                            Content="{x:Static app:UiStrings.SettingsExportButton}"
+                            Content="{app:Loc SettingsExportButton}"
                             Command="{Binding ExportSettingsCommand}" />
                     <Button x:Name="ImportSettingsButton"
                             Classes="flat"
-                            Content="{x:Static app:UiStrings.SettingsImportButton}"
+                            Content="{app:Loc SettingsImportButton}"
                             Command="{Binding ImportSettingsCommand}" />
                     <!-- Cheap, and genuinely useful since the hardening sprint made settings.dat.bak and
                          settings.dat.unreadable-<stamp> real artifacts a user may need to reach — with no path
                          shown anywhere else in the UI. The pre-import copies land here too. -->
                     <Button x:Name="OpenSettingsFolderButton"
                             Classes="flat"
-                            Content="{x:Static app:UiStrings.SettingsOpenFolderButton}"
-                            ToolTip.Tip="{x:Static app:UiStrings.SettingsOpenFolderTooltip}"
+                            Content="{app:Loc SettingsOpenFolderButton}"
+                            ToolTip.Tip="{app:Loc SettingsOpenFolderTooltip}"
                             Command="{Binding OpenSettingsFolderCommand}" />
                   </StackPanel>
                 </StackPanel>
@@ -238,7 +238,7 @@
                  silently by whatever editor the user last toggled. -->
             <StackPanel Spacing="12" IsVisible="{Binding IsEditorPageVisible}">
 
-              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryEditor}" />
+              <TextBlock Classes="h1" Text="{app:Loc SettingsCategoryEditor}" />
 
               <!-- ⭐⭐ JEDNA KARTA NA CZTERY POZYCJE — wyłącznie prezentacja (pakiet UX po M5, punkt 5).
                    Cztery flagi zostają CZTEREMA wierszami katalogu: własne id, własny haystack, własna
@@ -254,7 +254,7 @@
               <Border Classes="settings-group" IsVisible="{Binding ShowEasyModeGroup}">
                 <StackPanel>
                   <TextBlock Classes="group-header"
-                             Text="{x:Static app:UiStrings.SettingsEasyModeGroupLabel}" />
+                             Text="{app:Loc SettingsEasyModeGroupLabel}" />
                   <TextBlock Classes="field-label"
                              Text="{Binding ProcedureEasyMode.Description}"
                              TextWrapping="Wrap"
@@ -335,7 +335,7 @@
                  hard-coded layout default in GridLayoutBehavior. -->
             <StackPanel Spacing="12" IsVisible="{Binding IsGridPageVisible}">
 
-              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryGrid}" />
+              <TextBlock Classes="h1" Text="{app:Loc SettingsCategoryGrid}" />
 
               <Border Classes="settings-group"
                       DataContext="{Binding DataPageSize}" x:DataType="vm:NumericSettingViewModel"
@@ -375,7 +375,7 @@
                  limit reads as its detail rather than as a peer. -->
             <StackPanel Spacing="12" IsVisible="{Binding IsTabsPageVisible}">
 
-              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryTabs}" />
+              <TextBlock Classes="h1" Text="{app:Loc SettingsCategoryTabs}" />
 
               <Border Classes="settings-group" IsVisible="{Binding TabStripMode.IsVisible}">
                 <StackPanel>
@@ -428,7 +428,7 @@
                  selector stays: this decides what a debug session OPENS with, not what it is limited to. -->
             <StackPanel Spacing="12" IsVisible="{Binding IsDebuggerPageVisible}">
 
-              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryDebugger}" />
+              <TextBlock Classes="h1" Text="{app:Loc SettingsCategoryDebugger}" />
 
               <Border Classes="settings-group" IsVisible="{Binding DebuggerIsolation.IsVisible}">
                 <StackPanel>
@@ -458,7 +458,7 @@
                  so "Upper" cannot come to mean one thing for keywords and another for identifiers. -->
             <StackPanel Spacing="12" IsVisible="{Binding IsFormatterPageVisible}">
 
-              <TextBlock Classes="h1" Text="{x:Static app:UiStrings.SettingsCategoryFormatter}" />
+              <TextBlock Classes="h1" Text="{app:Loc SettingsCategoryFormatter}" />
 
               <Border Classes="settings-group" IsVisible="{Binding FormatterKeywordCase.IsVisible}">
                 <StackPanel>
@@ -504,7 +504,7 @@
           </Panel>
         </ScrollViewer>
 
-        <TextBlock Text="{x:Static app:UiStrings.SettingsNoMatch}"
+        <TextBlock Text="{app:Loc SettingsNoMatch}"
                    IsVisible="{Binding !HasMatches}"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    HorizontalAlignment="Center"
@@ -514,14 +514,14 @@
 
     <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="16,12,16,16">
       <TextBlock Grid.Column="0"
-                 Text="{x:Static app:UiStrings.SettingsAppliedImmediately}"
+                 Text="{app:Loc SettingsAppliedImmediately}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
                  FontSize="{DynamicResource Text.Compact.Size}"
                  VerticalAlignment="Center" />
 
       <Button Grid.Column="1"
               Classes="flat"
-              Content="{x:Static app:UiStrings.SettingsClose}"
+              Content="{app:Loc SettingsClose}"
               Click="OnCloseClick"
               IsCancel="True" />
     </Grid>

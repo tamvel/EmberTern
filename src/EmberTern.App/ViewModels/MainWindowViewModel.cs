@@ -1,4 +1,5 @@
-﻿using System;
+﻿using EmberTern.App.Localization;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -191,6 +192,25 @@ public partial class MainWindowViewModel : ViewModelBase
         // co przy motywie: jedno miejsce zamienia preferencję na skutek. ⚠ Serwis żyje tak długo jak ten
         // VM (oba są własnością okna głównego), więc wypisanie się nie ma czego chronić.
         _preferences.Changed += (_, _) => RaiseTabStripPreferencesChanged();
+        // ⭐ THE SEAM FOR EVERYTHING A LOCALIZATION BINDING CANNOT REACH.
+        //
+        // `{app:Loc}` keeps XAML text live by itself, and `UiStrings` members are properties, so any C# read
+        // that happens AFTER a language change already returns the new language. What neither helps is text a
+        // view model COMPUTED ONCE and published as a property value — a tab header, a status line, a
+        // composed summary. Nothing re-reads those, so without this they would keep the previous language
+        // until something unrelated happened to touch them.
+        //
+        // ⚠ An empty property name is the framework's "every property changed" signal, and using it here is
+        // deliberate rather than lazy: the alternative is enumerating which of this view model's ~200
+        // properties happen to contain localized text, which is a list that would be wrong the first time
+        // someone added a property and forgot. The cost is one re-read of the bound properties, once, on an
+        // action the user takes at most a handful of times in a session.
+        //
+        // ⚠ It reaches the open TABS too, because each tab view model publishes its own header and status.
+        // ⛔ It does NOT reach text captured into a non-observable structure (a DataGrid column built in
+        // code-behind, a completion row already materialized). Those are listed in localization.md §7 as the
+        // remaining work; this seam is what they will subscribe to.
+        Loc.LanguageChanged += OnLanguageChanged;
         // Settings export / import (etap 5b). Same settings.dat + protector again, and the app version comes from
         // AppInfo because Core cannot see it and must not be able to branch on it (§15.3a). AfterImport is this
         // view model's own refresh: the import rewrites the file several in-memory holders were loaded from.
@@ -313,6 +333,19 @@ public partial class MainWindowViewModel : ViewModelBase
     internal ParameterHistoryStore ParameterHistory => _parameterHistory;
 
     public ObservableCollection<QueryMessageViewModel> Messages { get; }
+    /// <summary>
+    /// Re-publishes every bound property after a language change, for this view model and each open tab.
+    /// See the subscription in the constructor for why it is an empty property name.
+    /// </summary>
+    private void OnLanguageChanged(object? sender, System.EventArgs e)
+    {
+        OnPropertyChanged(string.Empty);
+        foreach (var tab in WorkspaceTabs)
+        {
+            tab.RaiseAllPropertiesChanged();
+        }
+    }
+
     public ObservableCollection<WorkspaceTabViewModel> WorkspaceTabs { get; }
     public ObservableCollection<SavedQueryViewModel> SavedQueries { get; }
     public MetadataExplorerViewModel Metadata { get; }
@@ -2086,7 +2119,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public FolderEntry CreateFolder(string name)
     {
         var trimmed = (name ?? string.Empty).Trim();
-        if (string.IsNullOrEmpty(trimmed)) trimmed = "New folder";
+        if (string.IsNullOrEmpty(trimmed)) trimmed = UiStrings.FolderDefaultName;
 
         var nextSort = 0;
         foreach (var f in _folderState.Folders)
@@ -3058,7 +3091,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var clone = new ConnectionProfile
         {
             Id = Guid.NewGuid().ToString("N"),
-            Name = profile.Name + " (Copy)",
+            Name = profile.Name + UiStrings.ConnectionCopySuffix,
             Host = profile.Host,
             Port = profile.Port,
             DatabasePath = profile.DatabasePath,
@@ -5177,7 +5210,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var flat = System.Text.RegularExpressions.Regex.Replace(sql.Trim(), @"\s+", " ");
         if (flat.Length > 40) flat = flat[..40] + "…";
-        return "Trace: " + flat;
+        return UiStrings.StatusTracePrefix + flat;
     }
 
     public bool CanOpenSecurityManager => _service.IsConnected;
@@ -5359,7 +5392,7 @@ public partial class MainWindowViewModel : ViewModelBase
             var domains = await _metadataReader.ListDomainsAsync().ConfigureAwait(true);
             detail.SetAvailableDomains(domains);
         }
-        catch (MetadataReadException) { /* best effort — combo just has "(none)" */ }
+        catch (MetadataReadException) { /* best effort — combo just has UiStrings.ValueNone */ }
         try
         {
             var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table).ConfigureAwait(true);
@@ -6512,19 +6545,19 @@ public partial class MainWindowViewModel : ViewModelBase
     // Singular lowercase noun for confirm/report messages.
     private static string KindNoun(MetadataObjectKind kind) => kind switch
     {
-        MetadataObjectKind.Table => "table",
-        MetadataObjectKind.View => "view",
-        MetadataObjectKind.Procedure => "procedure",
-        MetadataObjectKind.Trigger => "trigger",
-        MetadataObjectKind.Function => "function",
-        MetadataObjectKind.Generator => "generator",
-        MetadataObjectKind.Domain => "domain",
-        MetadataObjectKind.Package => "package",
-        MetadataObjectKind.Exception => "exception",
-        MetadataObjectKind.Role => "role",
-        MetadataObjectKind.User => "user",
-        MetadataObjectKind.Index => "index",
-        MetadataObjectKind.SystemTable => "system table",
+        MetadataObjectKind.Table => UiStrings.ObjectKindLowerTable,
+        MetadataObjectKind.View => UiStrings.ObjectKindLowerView,
+        MetadataObjectKind.Procedure => UiStrings.ObjectKindLowerProcedure,
+        MetadataObjectKind.Trigger => UiStrings.ObjectKindLowerTrigger,
+        MetadataObjectKind.Function => UiStrings.ObjectKindLowerFunction,
+        MetadataObjectKind.Generator => UiStrings.ObjectKindLowerGenerator,
+        MetadataObjectKind.Domain => UiStrings.ObjectKindLowerDomain,
+        MetadataObjectKind.Package => UiStrings.ObjectKindLowerPackage,
+        MetadataObjectKind.Exception => UiStrings.ObjectKindLowerException,
+        MetadataObjectKind.Role => UiStrings.ObjectKindLowerRole,
+        MetadataObjectKind.User => UiStrings.ObjectKindLowerUser,
+        MetadataObjectKind.Index => UiStrings.ObjectKindLowerIndex,
+        MetadataObjectKind.SystemTable => UiStrings.ObjectKindLowerSystemTable,
         _ => kind.ToString().ToLowerInvariant(),
     };
 
@@ -7931,7 +7964,13 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             // Parse trailing digits off "Query N" — anything renamed by the user is
             // skipped, so the next number is "max-existing-Query-N + 1".
-            const string prefix = "Query ";
+            // ⚠ `var`, not `const`: a localized string is resolved at read time and cannot be a constant.
+            // ⚠⚠ And this is the one place where that matters for BEHAVIOUR, not just for compilation — the
+            // prefix is used to PARSE names the app generated earlier ("Query 3"). A saved query named in
+            // English keeps its English name, so after a language change the numbering restarts rather than
+            // continuing. That is the correct trade: renaming the user's saved queries behind their back
+            // would be worse, and rule #11 forbids rewriting what the user named.
+            var prefix = UiStrings.StatusQueryPrefix;
             if (sq.Name.StartsWith(prefix, StringComparison.Ordinal)
                 && int.TryParse(sq.Name.AsSpan(prefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
                 && n > max)

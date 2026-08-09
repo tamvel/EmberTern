@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -473,7 +473,7 @@ public partial class NewTableTabViewModel : ViewModelBase, IUnsavedWorkSource, I
     {
         get
         {
-            var name = string.IsNullOrWhiteSpace(TableName) ? "<table>" : TableName.Trim();
+            var name = string.IsNullOrWhiteSpace(TableName) ? UiStrings.PlaceholderTableName : TableName.Trim();
             return DdlGenerator.BuildCreateTable(name, BuildSpec());
         }
     }

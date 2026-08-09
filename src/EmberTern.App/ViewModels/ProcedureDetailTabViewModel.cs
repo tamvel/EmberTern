@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -743,7 +743,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
             var line = string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoRowsFormat, r.Rows.Count, ms);
             if (outcome.Summary is { ReadsMeasured: true, RowsRead: > 0 } s)
             {
-                line += "\n\n" + string.Format(CultureInfo.InvariantCulture, "{0} rows read", s.RowsRead);
+                line += "\n\n" + string.Format(CultureInfo.InvariantCulture, UiStrings.ExecRowsReadFormat, s.RowsRead);
             }
             return line;
         }
@@ -767,7 +767,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
             var line = string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoRowsFormat, r.Rows.Count, ms);
             if (outcome.Summary is { ReadsMeasured: true, RowsRead: > 0 } s)
             {
-                line += string.Format(CultureInfo.InvariantCulture, " · {0} read", s.RowsRead);
+                line += string.Format(CultureInfo.InvariantCulture, UiStrings.ExecRowsReadSuffixFormat, s.RowsRead);
             }
             return line;
         }

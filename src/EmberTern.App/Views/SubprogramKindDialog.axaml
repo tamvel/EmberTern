@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.SubprogramKindDialog"
-        Title="{x:Static app:UiStrings.SubprogramKindDialogTitle}"
+        Title="{app:Loc SubprogramKindDialogTitle}"
         Width="380"
         SizeToContent="Height"
         CanResize="False"
@@ -20,11 +20,11 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,16">
-      <TextBlock Text="{x:Static app:UiStrings.SubprogramKindDialogTitle}" Classes="h1" />
+      <TextBlock Text="{app:Loc SubprogramKindDialogTitle}" Classes="h1" />
     </Border>
 
     <TextBlock Grid.Row="1" Margin="20,18,20,18"
-               Text="{x:Static app:UiStrings.SubprogramKindDialogPrompt}"
+               Text="{app:Loc SubprogramKindDialogPrompt}"
                TextWrapping="Wrap" FontSize="{DynamicResource Text.Application.Size}" />
 
     <Border Grid.Row="2"
@@ -34,13 +34,13 @@
             Padding="20,12">
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.DialogCancel}"
+                Content="{app:Loc DialogCancel}"
                 Click="OnCancelClick" />
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.SubprogramKindFunction}"
+                Content="{app:Loc SubprogramKindFunction}"
                 Click="OnFunctionClick" />
         <Button Classes="primary"
-                Content="{x:Static app:UiStrings.SubprogramKindProcedure}"
+                Content="{app:Loc SubprogramKindProcedure}"
                 Click="OnProcedureClick"
                 IsDefault="True" />
       </StackPanel>
