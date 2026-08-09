@@ -1,5 +1,24 @@
 # Product Polish — prompt startowy PO ZAMKNIĘCIU M4
 
+> ## ⚠⚠ STAN AKTUALNY (2026-08-10): **M5 WYSTARTOWAŁ — ten dokument jest częściowo wykonany**
+>
+> Użytkownik wybrał **M5 — Final Polish** (§3.1) i zlecił kolejność: najpierw §10, potem dalsze punkty M5.
+>
+> ✅ **§10 / kontrast severity — ZAIMPLEMENTOWANE, ⏸ CZEKA NA QA WIZUALNE UŻYTKOWNIKA.**
+> Commit `feat(m5): kontrast severity…`. Wariant **B** ratyfikowany; trzy wartości w `Colors.axaml`;
+> §10 sprostowane (próg 3:1 to **wymóg własny**, nie „WCAG AA Large"); trzy strażniki
+> (`SeverityText_*`, `SeveritySignal_*`) zweryfikowane podsadzeniem.
+> Zapis: `product-polish.md` **§19.45** · decyzja: **`product-polish-m5-severity-contrast-decision.md`**.
+>
+> ⛔ **NASTĘPNY KROK TO QA UŻYTKOWNIKA, NIE KOLEJNY TEMAT.** Dopiero po nim rusza kolejna pozycja M5
+> (kandydaci w §3.1: DPI 100/125/150/200 · empty states M‑3 · terminologia M‑4 · focus L‑1 · animacje §9).
+> ⭐ Zmierzone przy okazji inwentaryzacji, przydatne do planowania kolejnego kroku:
+> **§9 nie ma ani jednego naruszenia** (zero `Transitions` w całym `EmberTern.App`), **L‑1 potwierdzone
+> otwarte** (`Button.primary`/`.caption` bez `:focus`), a **M‑3 jest znacznie mniejsze, niż mówi audyt**
+> (nie „3 z 48", tylko ~12 widoków + kilka ViewModeli; do tego **8 osieroconych stałych `*Empty*`**).
+>
+> ⚠ Liczby w §1 i §3 niżej pochodzą sprzed M5 — suite to teraz **8351** (8193 + **103** + 55).
+
 > **Do wklejenia na początku następnej sesji.** Zastępuje `product-polish-m4-migration-next-session.md`,
 > który jest od 2026-08-09 **historyczny** — czytaj go tylko dla „dlaczego", nigdy dla „co dalej".
 >

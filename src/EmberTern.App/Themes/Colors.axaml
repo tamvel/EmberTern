@@ -43,7 +43,14 @@
       <!-- Avalonia color hex is ARGB (alpha-first). #FFFFFF12 = opaque yellow-white;
            #12FFFFFF = 7% white overlay. We meant the latter. -->
       <Color x:Key="HoverOverlayColor">#12FFFFFF</Color>
-      <Color x:Key="ErrorColor">#F44747</Color>
+      <!-- ⭐ M5 / §10: #F44747 → #F55252. `ErrorBrush` maluje TEKST komunikatu 12 px (MessageBanner
+           i log Messages), a na `PanelBrush` dawał 4,26:1 przy progu 4,5:1 dla tekstu < 14 px.
+           Kandydat policzony PRZY PROGU przez rozjaśnienie (mieszanie z bielą — odcień zachowany,
+           ⚠ nasycenie minimalnie niższe): Panel 4,26 → 4,53, Background 4,64 → 4,93.
+           ⚠ Zmiana jest WIZUALNIE NIEROZRÓŻNIALNA (delta 0,27) — jej jedynym zyskiem jest zgodność
+           z progiem; potwierdzone na renderze `m5c-text-Dark.png`. Pasek i ikona banera miały zapas
+           już wcześniej, więc sygnał severity się nie zmienia. -->
+      <Color x:Key="ErrorColor">#F55252</Color>
       <Color x:Key="WarningColor">#E8A020</Color>
       <!-- The part of a completion row that MATCHED what the user typed (the IBExpert cue). Red on
            purpose, by user request. Deliberately its own token rather than ErrorColor, which it sits
@@ -191,7 +198,12 @@
            ⛔ To NIE jest alias przez `{StaticResource SuccessIconColor}`, i to jest istota W4: alias
            znaczyłby „Uruchom to kolor sukcesu", więc przestrojenie zieleni Commita przesunęłoby
            po cichu także Execute — czyli dokładnie to zlanie ról, które W4 kończy. Rozdzielenie
-           odcieni w przyszłości jest zmianą JEDNEJ linijki i nie dotyka drugiej roli. -->
+           odcieni w przyszłości jest zmianą JEDNEJ linijki i nie dotyka drugiej roli.
+           ⭐ I TA PRZYSZŁOŚĆ JUŻ NASTAŁA — w motywie JASNYM para rozeszła się w M5 (§10): tam
+           `SuccessIconColor` zszedł na #2A7E48 pod próg tekstowy, a `ActionRunColor` został na
+           #2E8B4F, bo maluje wyłącznie ikony. W TYM motywie wartości są nadal identyczne, bo Dark
+           nie wymagał korekty. Dowód, że rozdzielenie tokenów zadziałało dokładnie tak, jak W4
+           zapowiadał: zmiana jednej roli nie ruszyła drugiej. -->
       <Color x:Key="ActionRunColor">#6DBE7E</Color>
       <Color x:Key="DangerIconColor">#D77373</Color>
       <Color x:Key="WarningIconColor">#DBA13C</Color>
@@ -416,7 +428,17 @@
       <SolidColorBrush x:Key="DevModeBadgeForegroundBrush" Color="{StaticResource DevModeBadgeForegroundColor}" />
       <Color x:Key="HoverOverlayColor">#10000000</Color>
       <Color x:Key="ErrorColor">#CC2929</Color>
-      <Color x:Key="WarningColor">#C77800</Color>
+      <!-- ⭐⭐ M5 / §10: #C77800 → #A16100 — NAJWIĘKSZA zmiana w tym etapie i jedyna, którą widać.
+           `WarningBrush` maluje TEKST komunikatu 12 px, a na `PanelBrush` dawał 3,12:1 przy progu
+           4,5:1 — deficyt 1,38, największy w całej palecie. Kandydat policzony PRZY PROGU przez
+           mnożenie kanałów RGB, co zachowuje odcień i nasycenie HSV DOKŁADNIE (ta sama barwa,
+           ciemniejsza): Panel 3,12 → 4,52, Background 3,35 → 4,85.
+           ⚠ Koszt przyjęty świadomie (decyzja użytkownika 2026-08-10, wariant B): bursztyn ciemnieje
+           w stronę bursztynowo-brązowego. Render: `m5c-text-Light.png` kolumna B.
+           ⛔ To NIE jest poprawka `MessageBanner` — ten pędzel maluje mały tekst w ~9 miejscach
+           (Data Import, Debugger, Index Detail, Performance…), więc poprawka lokalna byłaby
+           naruszeniem R7. Ikony ostrzeżeń mają WŁASNY token `WarningIconColor` i są nietknięte. -->
+      <Color x:Key="WarningColor">#A16100</Color>
       <!-- Matched fragment of a completion row — see the Dark dictionary for why this is its own token
            and not ErrorColor. Darker/denser than the dark theme's red so it carries on the near-white
            popup and on the pale SelectionColor of the selected row. -->
@@ -508,9 +530,21 @@
            variants so icons stay legible on the near-white surfaces. Same semantic
            keys; see the Dark dictionary for the mapping. -->
       <Color x:Key="AccentIconColor">#2D6BBF</Color>
-      <Color x:Key="SuccessIconColor">#2E8B4F</Color>
-      <!-- Rola R‑1 „Uruchom" — patrz komentarz w słowniku Dark. Wartość dziś celowo identyczna
-           z `SuccessIconColor` motywu jasnego (krok K1 nie zmienia niczego na ekranie). -->
+      <!-- ⭐ M5 / §10: #2E8B4F → #2A7E48. `SuccessIconBrush` jest — jako jedyny w rodzinie severity —
+           tokenem IKONOWYM użytym przez `MessageBanner.BrushKeyFor` także do TEKSTU (nie istnieje
+           `SuccessBrush`), a na `PanelBrush` dawał 3,88:1 przy progu 4,5:1 dla tekstu < 14 px.
+           Kandydat policzony PRZY PROGU przez mnożenie kanałów RGB: Panel 3,88 → 4,57,
+           Background 4,16 → 4,90. ⚠ Zmiana ledwie zauważalna (render `m5c-text-Light.png`).
+           ⏸ Brak `SuccessBrush` jest zapisany jako otwarta asymetria — patrz
+           `product-polish-m5-severity-contrast-decision.md` §2.3; ⛔ nie tworzymy go tutaj. -->
+      <Color x:Key="SuccessIconColor">#2A7E48</Color>
+      <!-- Rola R‑1 „Uruchom" — patrz komentarz w słowniku Dark.
+           ⚠⚠ OD M5 TA WARTOŚĆ ROZESZŁA SIĘ Z `SuccessIconColor` W TYM MOTYWIE (2E8B4F vs 2A7E48),
+           i to jest projekt działający zgodnie z zamysłem, nie dryf: to dwa tokeny właśnie po to,
+           żeby mogły się rozejść. Powód rozejścia jest MERYTORYCZNY — `SuccessIconColor` musiał
+           zejść pod próg tekstowy 4,5:1, a R‑1 maluje WYŁĄCZNIE ikony (zmierzone: wszystkie cztery
+           wystąpienia to `SvgIcon`), więc obowiązuje ją próg 3:1, który #2E8B4F spełnia z zapasem
+           (3,88:1 na Panel). ⛔ Nie „naprawiać" tego przez zrównanie wartości. -->
       <Color x:Key="ActionRunColor">#2E8B4F</Color>
       <Color x:Key="DangerIconColor">#C23B3B</Color>
       <Color x:Key="WarningIconColor">#B5790E</Color>

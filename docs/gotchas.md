@@ -1548,3 +1548,50 @@ every emit path to be individually perfect.**
      at all, which made the ceiling actively harmful there and turned a wiring change into a structural one.
      The behavior's own doc had said so; nobody had checked the hosts against it.
      (Product Polish M4.4 — `product-polish.md` §19.44.)
+
+344. **A rule in your own design document can cite a norm it does not actually satisfy — and the label,
+     not the number, is what a future decision will lean on.** Product Polish §10 carried a threshold
+     table whose second row read *"Large text (≥ 14 px or ≥ 12 px SemiBold) → ≥ 3:1 — **WCAG AA Large**"*.
+     The number was a defensible in-house choice; the **attribution was false**. WCAG 2.1 defines
+     large-scale text as 18 pt (**24 px**) or 14 pt bold (**18.7 px**), and this application's largest
+     typography role is 23 px — so **not one role in the product qualifies**, and the row could never
+     have been "WCAG AA Large" for anything.
+     ⭐⭐ **Why this is a gotcha and not a typo: it nearly decided a product change.** One of the
+     candidate fixes for a measured contrast defect was *"make the message text SemiBold and drop to the
+     3:1 row"*. That variant **satisfies the document as written** while satisfying no external standard
+     — and it would have changed the visual weight of every message in the application, justified by a
+     citation that did not hold. The error was caught only because the variant list was written out and
+     each option's norm was checked against the actual specification text.
+     ⚠ The failure mode is specific: a **number** in a design doc invites scrutiny, a **norm label**
+     invites deference. Nobody re-derives "WCAG AA" — they assume someone already did. So the label is
+     exactly the part that rots unnoticed, and it rots in the direction of *more* confidence, not less.
+     ⭐ The fix is not to delete the threshold — the in-house value was fine — but to say **whose rule it
+     is**: the row now reads "own requirement", like the row beside it that always did. A threshold with
+     an honest provenance can still be argued with; one wearing a borrowed badge cannot.
+     ⚠ Generalises past accessibility: any place a document says "per RFC-x", "per the spec", "per the
+     driver docs". **Check the citation before you check the number** — a wrong number produces a wrong
+     screen, a wrong citation produces a wrong argument, and the second survives review.
+     (Product Polish M5 / §10 — `product-polish.md` §19.45.3 and
+     `product-polish-m5-severity-contrast-decision.md` §3.)
+
+345. **Measuring a token instead of the thing that paints answers a question nobody asked — and the
+     error hides until something forces you to name a concrete producer.** Auditing severity-colour
+     contrast, I built the matrix from `BrushKeyFor(severity)` × surface and reported that the SQL
+     editor's Messages log rendered Success at 4.16:1 in Light, under the 4.5:1 floor. **That pairing
+     never renders.** The log's row view model gates the severity colour behind
+     `ShowSeverityMarker => Severity is Warning or Error`; Success and Info read `ForegroundBrush`
+     (16.49:1). I had measured a combination the product cannot produce.
+     ⭐ **What exposed it was writing the guard, not re-reading the code.** The test had to point at a
+     *production property* (`QueryMessageViewModel.MessageBrushKey`) rather than a transcribed mapping,
+     and the moment the mapping came from the real object the impossible row disappeared by itself.
+     ⚠⚠ This is the same shape as the sibling rule already recorded for the checkbox outline guard —
+     *read from the element that paints, not from the token* — but arriving one layer earlier, at
+     **measurement** rather than at **assertion**. A wrong assertion goes red; a wrong measurement goes
+     into a decision document and reads as evidence.
+     ⭐ Practical form: when a matrix is the product of two enumerations, ask which cells the code can
+     actually reach **before** costing them. A gate like `ShowSeverityMarker` makes half the grid
+     unreachable, and nothing about the enumeration says so.
+     ⛔ Note what it did **not** change: the same colour genuinely was under the floor on the *banner*,
+     where it does render — so the fix stood. A measurement can be wrong in a way that does not reverse
+     the conclusion, which is precisely why it survives unchallenged.
+     (Product Polish M5 / §10 — `product-polish.md` §19.45.6.)

@@ -14,6 +14,8 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using EmberTern.App.Controls;
+using EmberTern.App.ViewModels;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -1689,6 +1691,165 @@ public sealed class DesignTokenApplicationTests
     /// (<c>Tokens</c>/<c>Typography</c>: one value, no variant) and <c>Colors.axaml</c> (one value per theme).
     /// Two kinds of resource, two lookups.
     /// </summary>
+    // ─── M5 / §10 — kontrast całej mapy severity ──────────────────────────────────────────────────────
+    //
+    // ⭐⭐ POWÓD ISTNIENIA: przed M5 trzy z ośmiu kombinacji (severity × motyw) malowały TEKST 12 px pod
+    //   progiem 4,5:1 — Light/Warning 3,12 · Light/Success 3,88 · Dark/Error 4,26 — i nic tego nie
+    //   wykrywało, bo katalog bez strażnika odrasta (gotcha #284, precedens `Alt+F`).
+    //
+    // ⭐ DWA RÓŻNE PROGI, BO TO DWA RÓŻNE PYTANIA (§10): ten sam pędzel maluje w banerze TEKST (12 px,
+    //   więc 4,5:1) ORAZ pasek i ikonę (element nietekstowy niosący znaczenie, więc 3:1). Rozdzielenie
+    //   ich jest warunkiem poprawności: wspólny próg 4,5 zgłaszałby paski, które są w porządku,
+    //   a wspólny próg 3,0 przepuściłby dokładnie ten defekt, dla którego ten test powstał.
+    //
+    // ⚠⚠ §10 wiersz „≥ 12 px SemiBold → 3:1" to WYMÓG WŁASNY EmberTerna, NIE „WCAG AA Large"
+    //   (sprostowane w M5: WCAG wymaga 24 px albo 18,7 px bold, a najwyższa rola to 23 px). Dlatego
+    //   tekst banera — 12 px Normal — podlega tu 4,5:1 BEZ WYJĄTKU i nie wolno go obniżyć powołując
+    //   się na tamten wiersz.
+
+    public static TheoryData<string> Themes => new() { "Dark", "Light" };
+
+    /// <summary>
+    /// TEKST komunikatu w <see cref="MessageBanner"/> trzyma próg 4,5:1 wobec własnego tła — dla KAŻDEJ
+    /// z czterech wartości <see cref="MessageSeverity"/> i w OBU motywach.
+    /// <para>⚠⚠ Odczyt jest Z ELEMENTU, KTÓRY MALUJE, nie z tokenu — ta sama reguła, którą zapisał
+    /// <see cref="UncheckedControlOutline_ClearsTheContrastFloor"/>. Test czytający `ErrorBrush` z zasobów
+    /// przechodziłby na zielono, gdyby ktoś przepiął `BrushKeyFor` na inny klucz albo gdyby styl przestał
+    /// nadawać banerowi `PanelBrush`: token miałby nadal dobrą wartość, tylko nikt by go nie używał.
+    /// Pinowane są więc trzy rzeczy naraz — mapowanie, tło ze stylu i wartość pędzla.</para>
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Themes))]
+    public async Task SeverityText_OnTheBanner_ClearsTheTextContrastFloor(string variantName)
+    {
+        var variant = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        var failures = await _session.Dispatch(() =>
+        {
+            var bad = new List<string>();
+            foreach (var severity in Enum.GetValues<MessageSeverity>())
+            {
+                var banner = new MessageBanner { Severity = severity, Message = "Komunikat kontrolny." };
+                var window = new Window { Content = banner, RequestedThemeVariant = variant };
+                window.Show();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+                // Baner pokazuje treść w SelectableTextBlock (IsExpanded domyślnie), a w stanie zwiniętym
+                // w TextBlock. `SelectableTextBlock` dziedziczy po `TextBlock`, więc jedno zapytanie łapie
+                // oba; wybieramy element niosący TREŚĆ, a nie etykiety przycisków.
+                var body = banner.GetVisualDescendants()
+                    .OfType<TextBlock>()
+                    .FirstOrDefault(t => t.Text == "Komunikat kontrolny.");
+                Assert.NotNull(body);
+
+                var painted = Assert.IsAssignableFrom<ISolidColorBrush>(body!.Foreground);
+                var surface = Assert.IsAssignableFrom<ISolidColorBrush>(banner.Background);
+                var ratio = ContrastRatio(painted.Color, surface.Color);
+                window.Close();
+
+                if (ratio < 4.5)
+                {
+                    bad.Add($"{severity} = {ratio:0.00}:1 ({painted.Color} na {surface.Color})");
+                }
+            }
+
+            return bad;
+        }, default);
+
+        Assert.True(failures.Count == 0,
+            $"Tekst komunikatu w motywie {variantName} nie trzyma progu 4,5:1 z §10:\n  "
+            + string.Join("\n  ", failures)
+            + "\n\nTo NIE jest test wartości — hex wolno stroić. Testem jest to, że tekst 12 px pozostaje "
+            + "czytelny na własnym tle. ⚠ Próg 3:1 z wiersza 'tekst większy' NIE ma tu zastosowania: to "
+            + "wymóg własny EmberTerna dla ≥ 14 px albo ≥ 12 px SemiBold, a treść banera jest 12 px Normal.");
+    }
+
+    /// <summary>
+    /// SYGNAŁ severity (pasek 3 px) trzyma próg 3:1 — inny próg niż tekst, bo to element nietekstowy
+    /// niosący znaczenie (§10 / WCAG 2.1 SC 1.4.11).
+    /// <para>⭐ Pasek i ikona czytają TEN SAM klucz (<c>SeverityBrushKey</c>), więc asercja na pasku
+    /// pokrywa oba; pasek jest wybrany, bo jest jednoznaczny strukturalnie (kolumna 0), a ikon w banerze
+    /// jest kilka — severity, Kopiuj, Zamknij — i tylko pierwsza niesie barwę stanu.</para>
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Themes))]
+    public async Task SeveritySignal_OnTheBanner_ClearsTheNonTextFloor(string variantName)
+    {
+        var variant = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        var failures = await _session.Dispatch(() =>
+        {
+            var bad = new List<string>();
+            foreach (var severity in Enum.GetValues<MessageSeverity>())
+            {
+                var banner = new MessageBanner { Severity = severity, Message = "x" };
+                var window = new Window { Content = banner, RequestedThemeVariant = variant };
+                window.Show();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+                var stripe = banner.GetVisualDescendants()
+                    .OfType<Border>()
+                    .FirstOrDefault(b => Grid.GetColumn(b) == 0 && b.Background is ISolidColorBrush);
+                Assert.NotNull(stripe);
+
+                var painted = Assert.IsAssignableFrom<ISolidColorBrush>(stripe!.Background);
+                var surface = Assert.IsAssignableFrom<ISolidColorBrush>(banner.Background);
+                var ratio = ContrastRatio(painted.Color, surface.Color);
+                window.Close();
+
+                if (ratio < 3.0)
+                {
+                    bad.Add($"{severity} = {ratio:0.00}:1");
+                }
+            }
+
+            return bad;
+        }, default);
+
+        Assert.True(failures.Count == 0,
+            $"Pasek severity w motywie {variantName} nie trzyma progu 3:1 z §10:\n  "
+            + string.Join("\n  ", failures));
+    }
+
+    /// <summary>
+    /// Log Messages w edytorze SQL czyta TĘ SAMĄ mapę co baner, ale na INNEJ powierzchni
+    /// (<c>BackgroundBrush</c>), więc jest osobnym przypadkiem — i jego różnica wobec `PanelBrush` to
+    /// tylko ~0,3, czyli dokładnie tyle, ile dzieli „przechodzi" od „nie przechodzi".
+    /// <para>⭐ Mapowanie brane jest z PRODUKCYJNEJ właściwości <see cref="QueryMessageViewModel.MessageBrushKey"/>,
+    /// nie przepisane do testu — więc test przewraca się także wtedy, gdy ktoś zmieni regułę „który wiersz
+    /// niesie barwę stanu". ⚠ Konstruowanie `MainWindow` jest tu ZAKAZANE (kształt zawieszający suite,
+    /// §13.1), a ta właściwość daje tę samą wiedzę bez okna.</para>
+    /// <para>⚠ Zmierzone i celowe: w logu tylko Warning i Error niosą barwę severity
+    /// (<c>ShowSeverityMarker</c>); Info i Success czytają <c>ForegroundBrush</c>, bo log jest
+    /// w większości informacyjny. Test sprawdza więc to, co realnie się maluje, a nie całą mapę.</para>
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Themes))]
+    public async Task SeverityText_InTheMessagesLog_ClearsTheTextContrastFloor(string variantName)
+    {
+        var variant = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        var failures = await _session.Dispatch(() =>
+        {
+            var bad = new List<string>();
+            var surface = ThemeToken<SolidColorBrush>("BackgroundBrush", variant);
+
+            foreach (var severity in Enum.GetValues<MessageSeverity>())
+            {
+                var row = new QueryMessageViewModel(severity, "Komunikat kontrolny.");
+                var painted = ThemeToken<SolidColorBrush>(row.MessageBrushKey, variant);
+                var ratio = ContrastRatio(painted.Color, surface.Color);
+                if (ratio < 4.5)
+                {
+                    bad.Add($"{severity} → {row.MessageBrushKey} = {ratio:0.00}:1");
+                }
+            }
+
+            return bad;
+        }, default);
+
+        Assert.True(failures.Count == 0,
+            $"Tekst wiersza logu Messages w motywie {variantName} nie trzyma progu 4,5:1 z §10:\n  "
+            + string.Join("\n  ", failures));
+    }
+
     private static T ThemeToken<T>(string key, ThemeVariant variant)
     {
         var app = Application.Current;

@@ -1113,13 +1113,36 @@ oceny. Bez liczby motywy rozjadą się ponownie.
 | Element | Próg | Norma |
 |---|---|---|
 | Tekst treści (< 14 px) | **≥ 4,5:1** | WCAG AA |
-| Tekst duży (≥ 14 px lub ≥ 12 px SemiBold) | **≥ 3:1** | WCAG AA Large |
+| Tekst większy (≥ 14 px lub ≥ 12 px SemiBold) | **≥ 3:1** | ⚠ **wymóg własny** — patrz niżej |
 | Obramowania i elementy UI niosące znaczenie | **≥ 3:1** | WCAG 2.1 SC 1.4.11 |
 | Stan aktywny vs nieaktywny (zakładki, przełączniki) | **≥ 3:1 między sobą** | wymóg własny |
+
+⚠⚠ **SPROSTOWANIE (M5, 2026-08-10 — ratyfikowane przez użytkownika).** Wiersz drugi był tu opisany
+jako **„WCAG AA Large"** i **to było nieprawdziwe**. WCAG 2.1 definiuje duży tekst jako **18 pt
+(24 px)** albo **14 pt bold (18,7 px)**; najwyższa rola typograficzna EmberTerna to `Text.Display`
+= **23 px**, więc **żadna rola się nie kwalifikuje** i norma WCAG AA Large nie ma tu zastosowania.
+
+⭐ Próg 3:1 dla „≥ 14 px lub ≥ 12 px SemiBold" **zostaje** — ale jako **wewnętrzny wymóg
+EmberTerna**, inspirowany zasadami kontrastu, a **nie** jako próg WCAG. ⛔ Nie wolno się nim
+zasłaniać w sporze o zgodność z WCAG: tekst poniżej 14 px podlega **4,5:1 bez wyjątku**, i to jest
+próg, którego pilnuje strażnik (§10.1).
+
+⚠ **Dlaczego to ma znaczenie praktyczne, a nie tylko redakcyjne:** przy decyzji M5/§10 jednym
+z rozważanych wariantów było „zrób tekst komunikatu SemiBold i zejdź na próg 3:1". Wariant został
+**odrzucony przez użytkownika** właśnie dlatego, że spełniałby §10 *jak napisane*, a nie spełniał
+WCAG — czyli błędna etykieta normy o mało nie uzasadniła decyzji produktowej.
 
 Ostatni wiersz jest wymogiem EmberTerna, nie WCAG: różnica **między** stanem aktywnym
 a nieaktywnym musi być odczytywalna, a nie tylko każdy z nich wobec tła. To właśnie ten warunek
 łamie dziś Light Theme (§7.1).
+
+### §10.1 ⭐ Egzekwowanie — `SeverityContrast_*` (M5)
+
+Progi z tej tabeli są pilnowane maszynowo dla **całej mapy `MessageBanner.BrushKeyFor`**:
+4 severity × 2 powierzchnie (`PanelBrush` — baner, `BackgroundBrush` — log Messages) × 2 motywy,
+osobno dla **tekstu 12 px** (4,5:1) i dla **paska + ikony** (3:1). Test czyta pędzle z żywych
+zasobów aplikacji, więc łapie zarówno zmianę wartości, jak i przepięcie klucza w `BrushKeyFor`.
+⚠ Nie zastępuje oceny na ekranie (R16) — jest podłogą, poniżej której nie wolno zejść.
 
 ⚠ Kolor **nigdy nie jest jedyną informacją** (§8.5 specyfikacji) — stan niesie także ikona,
 tekst lub waga pisma.
@@ -9474,3 +9497,105 @@ odziedziczy przewijanie, zamiast wymagać, żeby ktoś pamiętał go opakować.
    ⚠ to jedyna zmiana strukturalna iteracji.
 4. **Zachowanie sufitu na małym ekranie** — jeżeli jest pod ręką monitor 768 albo skala 150 %: procedura
    o wielu parametrach i długi błąd testu połączenia.
+
+---
+
+## §19.45 Iteracja 33 (M5 · §10) — kontrast severity: defekt, który znalazłem w banerze, a który nie był defektem banera (2026-08-10)
+
+> **Status: zaimplementowane 2026-08-10, ⏸ oczekuje na QA wizualne użytkownika w obu motywach.**
+> Build 0/0 · suite **8351** (8193 + 103 + 55, +6) · smoke czysty · trzy nowe strażniki
+> **zweryfikowane podsadzeniem naruszenia**.
+> Materiał decyzyjny + pełny pomiar: **`product-polish-m5-severity-contrast-decision.md`**.
+
+### §19.45.1 Co weszło
+
+Trzy wartości w `Themes/Colors.axaml`, każda policzona **przy progu** 4,5:1 na `PanelBrush`
+(trudniejszej z dwóch powierzchni), z zachowaniem odcienia:
+
+| motyw | token | z | na | Panel | Background |
+|---|---|---|---|---|---|
+| LIGHT | `WarningColor` | `#C77800` | `#A16100` | 3,12 → **4,52** | 3,35 → 4,85 |
+| LIGHT | `SuccessIconColor` | `#2E8B4F` | `#2A7E48` | 3,88 → **4,57** | 4,16 → 4,90 |
+| DARK | `ErrorColor` | `#F44747` | `#F55252` | 4,26 → **4,53** | 4,64 → 4,93 |
+
+⚠ **Widać wyłącznie jedną z nich** — Light/Warning ciemnieje w stronę bursztynowo-brązowego.
+Light/Success jest ledwie zauważalna, a Dark/Error **wizualnie nierozróżnialna** (delta 0,27):
+jej jedynym zyskiem jest zgodność liczby z progiem, co użytkownik zaakceptował świadomie,
+odrzucając wariant „zostawmy Dark, bo i tak nie widać".
+
+### §19.45.2 ⭐⭐ Znalezisko główne: to NIE był defekt `MessageBanner`
+
+Defekt znalazłem, mierząc baner, i tak go nazwałem w inwentaryzacji. **Pomiar zasięgu obalił tę
+nazwę:** `ErrorBrush` ma 30 konsumentów, `WarningBrush` 36, `SuccessIconBrush` 25 — a każdy z nich
+maluje mały tekst w ~8–13 miejscach poza banerem (Script Executor, Batch Results, Data Import,
+Performance, Debugger). Poprawka lokalna w banerze zostawiłaby resztę: **R7 w czystej postaci.**
+
+⭐ Druga połowa tego samego znaleziska jest równie ważna i poszła w drugą stronę: **pasek i ikona
+przechodzą próg 3:1 we WSZYSTKICH ośmiu kombinacjach**. Czyli sygnał severity — to, po czym
+użytkownik rozpoznaje rodzaj komunikatu — był poprawny od początku, a wadliwy był wyłącznie
+**tekst**. To przesądziło o odrzuceniu wariantu D (tekst neutralny): on rozwiązywał problem,
+którego w sygnale nie było, a przy okazji odwracał ratyfikowaną decyzję z rundy QA Seam 4.
+
+### §19.45.3 ⚠⚠ §10 cytowało normę, której nie spełnia — i o mało nie uzasadniło decyzji
+
+Wiersz *„Tekst duży (≥ 14 px lub ≥ 12 px SemiBold) → ≥ 3:1"* był opisany jako **„WCAG AA Large"**.
+WCAG 2.1 definiuje duży tekst jako **24 px** albo **18,7 px bold**; najwyższa rola EmberTerna to
+`Text.Display` = **23 px**, więc **żadna rola się nie kwalifikuje**.
+
+⭐⭐ To nie była usterka redakcyjna. Jeden z rozważanych wariantów (C) brzmiał *„zrób tekst
+komunikatu SemiBold i zejdź na próg 3:1"* — i **spełniałby §10 jak napisane**, nie spełniając WCAG.
+Gdyby etykieta normy nie została sprawdzona, produkt dostałby zmianę wagi każdego komunikatu
+w aplikacji, uzasadnioną cytatem z normy, której ta zmiana nie realizuje.
+🔒 Ratyfikowane: próg 3:1 **zostaje jako wymóg własny EmberTerna**, jawnie nie jako WCAG (§10 + §10.1).
+
+### §19.45.4 ⚠ `ActionRunColor` — rzecz, której nie było w żadnym wariancie
+
+W Light `ActionRunColor` (rola R‑1 „Uruchom") miał wartość **celowo identyczną** z `SuccessIconColor`
+i komentarz, który to stwierdzał — więc zmiana Success rozjeżdżała parę i unieważniała komentarz.
+
+🔒 Rozstrzygnięte **pomiarem**: wszystkie cztery wystąpienia `ActionRunBrush` to `SvgIcon`, czyli
+próg 3:1, spełniony z zapasem (3,88:1). **`ActionRunColor` zostaje.**
+⭐ Para rozchodzi się świadomie — i to jest **projekt działający zgodnie z zamysłem**, nie dryf:
+decyzja W4 rozdzieliła te tokeny dokładnie po to, żeby przestrojenie jednej roli nie ruszało drugiej,
+a ten etap jest pierwszym dowodem, że mechanizm działa. Komentarze w **obu** słownikach zapisują
+rozejście z powodem, więc żaden nie stał się nieprawdziwy (trap 21).
+
+### §19.45.5 ⭐ Strażnik: dwa progi, bo to dwa pytania
+
+`SeverityText_OnTheBanner_*` (4,5:1) · `SeveritySignal_OnTheBanner_*` (3:1) ·
+`SeverityText_InTheMessagesLog_*` (4,5:1), każdy × oba motywy.
+
+* ⭐ **Odczyt Z ELEMENTU, KTÓRY MALUJE** — test buduje prawdziwy `MessageBanner`, znajduje element
+  niosący treść i czyta jego `Foreground` oraz `Background` kontrolki. Test czytający token
+  przechodziłby na zielono, gdyby ktoś przepiął `BrushKeyFor` albo gdyby styl przestał nadawać
+  banerowi `PanelBrush`. Ta sama reguła, którą zapisał strażnik konturu `CheckBoxa` w M3.5.
+* ⭐ Log Messages bierze mapowanie z **produkcyjnej** właściwości `QueryMessageViewModel.MessageBrushKey`,
+  a nie z przepisanej tablicy — więc test przewróci się także wtedy, gdy zmieni się reguła „który
+  wiersz niesie barwę stanu". ⚠ `MainWindow` nie jest konstruowany (kształt zawieszający suite, §13.1).
+* ⭐⭐ **Podsadzenie dało wynik mocniejszy niż samo „test świeci na czerwono":** po cofnięciu
+  `#C77800` **oba testy tekstu padły, a test sygnału został ZIELONY** (3,12 > 3,0). To jest dowód,
+  że dwa progi są w strażniku naprawdę rozdzielone — wspólny próg 4,5 zgłaszałby paski, które są
+  w porządku, a wspólny 3,0 przepuściłby dokładnie ten defekt, dla którego strażnik powstał.
+* ⭐ Liczby z podsadzenia (3,12 · 3,35) są **identyczne** z pomiarem statycznym sprzed wdrożenia —
+  dwie niezależne metody potwierdziły się nawzajem.
+
+### §19.45.6 ⚠⚠ Sprostowanie mojej własnej tabeli — i moment, w którym wyszło
+
+Pierwsza wersja materiału decyzyjnego podawała, że w logu Messages **Success w Light ma 4,16:1
+i jest pod progiem**. Nieprawda: `ShowSeverityMarker` jest prawdziwe **tylko dla Warning i Error**,
+więc Success czyta tam `ForegroundBrush` (16,49:1) i ta para **nigdy się nie renderuje**.
+
+⭐ Wyszło to dopiero wtedy, gdy strażnik musiał wskazać **konkretną właściwość produkcyjną** zamiast
+przepisanej mapy — czyli ten sam mechanizm, który §19.45.5 opisuje jako regułę: liczyłem kontrast
+tokenu, a nie tego, co element faktycznie maluje. ⛔ Decyzji to nie zmienia — Success wymagał
+korekty **z powodu banera**, gdzie renderuje się naprawdę.
+
+### §19.45.7 ⏸ Otwarte po tej iteracji
+
+* **QA wizualne użytkownika** w obu motywach — jedyne, co zamyka iterację (§0.1.1).
+* ⚠ **Brak `SuccessBrush`** — Success jest jedynym severity, którego `BrushKeyFor` odsyła do tokenu
+  **ikonowego** (`SuccessIconBrush`), przez co jego korekta „dla tekstu" pociągnęła 25 konsumentów
+  ikonowych. ⛔ Nowego tokenu **nie tworzono** (jeden konsument to legalizacja wartości, nie rola);
+  zapisane jako asymetria do rozstrzygnięcia, jeśli kiedyś zacznie przeszkadzać.
+* ⚠ **`AccentBrush` na railu w Dark = 2,89:1** (znane **P‑2**) — poza zakresem tej iteracji, bo
+  `AccentColor` jest współdzielony; żyje w `color-language.md` §9.2.

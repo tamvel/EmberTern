@@ -165,6 +165,18 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "severity")
+        {
+            Severity.Run(outDir);
+            foreach (var file in Directory.GetFiles(outDir, "m5c-*.png").OrderBy(f => f))
+            {
+                Console.WriteLine(file);
+            }
+
+            Console.WriteLine("OK");
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "typo")
         {
             Typography.Run(outDir);
