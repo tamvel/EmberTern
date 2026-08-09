@@ -435,6 +435,10 @@
                tego samego jest tu zbędny i szkodliwy.
                ⛔ Świadomie BEZ warunków typu „przewijaj, jeżeli cel jest blisko" i bez własnego
                algorytmu przewijania (decyzja użytkownika) — najmniejsza zmiana, która usuwa przyczynę. -->
+          <!-- ⭐ `Panel`, żeby stan pusty leżał NA obszarze listy, a nie zabierał jej wiersz: pusta lista
+               ma zerową wysokość treści, więc nakładka nic nie przesuwa, a przy pierwszym połączeniu
+               znika bez ruchu układu (§13.3 Zero Layout Shift). -->
+          <Panel>
           <ListBox ItemsSource="{Binding SidebarRows}"
                    x:Name="SidebarList"
                    Classes="sidebar-list"
@@ -844,6 +848,49 @@
               </DataTemplate>
             </ListBox.DataTemplates>
           </ListBox>
+
+            <!-- ══ STAN PUSTY PASKA BOCZNEGO — M5 / M‑3 klasa A, wariant W4 ═══════════════════════════
+                 Pierwsze uruchomienie EmberTerna: zero profili ⇒ pod polem filtra nie było NIC, a jedyna
+                 akcja „nowe połączenie" żyje w pasku tytułu jako SAM GLIF `Icon.Plus` (drugie miejsce to
+                 menu kontekstowe folderu — którego przy pustej liście też nie ma czym otworzyć).
+
+                 ⭐⭐ DLACZEGO GLIF, A NIE SAM TEKST (ratyfikowane na renderze, wariant W4 z sześciu):
+                 przycisk nie ma podpisu, więc każdy wariant czysto tekstowy każe użytkownikowi przetłumaczyć
+                 słowa „New Connection" na kształt, którego jeszcze nie zna. Tu widzi TEN SAM kształt.
+                 ⛔ Świadomie BEZ własnego przycisku akcji w panelu (wariant W5, odrzucony): dawałby drugą
+                 afordancję tej samej akcji, a ta ma dziś jednego właściciela.
+
+                 ⚠ Bramka to `ShowEmptyState` (korzeń pusty), a NIE „lista wierszy pusta" — filtr bez trafień
+                 to inny stan pusty i celowo nie jest tu obsługiwany. Powód przy właściwości w ViewModelu.
+                 ⚠ `IsHitTestVisible=False`, bo to komunikat, nie cel: bez tego nakładka przechwytywałaby
+                 kliknięcia na obszarze listy. -->
+            <StackPanel IsVisible="{Binding ShowEmptyState}"
+                        IsHitTestVisible="False"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Margin="{DynamicResource Pad.Panel}"
+                        Spacing="{DynamicResource Space.Sm}">
+              <TextBlock Text="{x:Static app:UiStrings.SidebarPlaceholderEmpty}"
+                         Foreground="{DynamicResource SubtleForegroundBrush}"
+                         FontSize="{DynamicResource Text.Application.Size}"
+                         TextWrapping="Wrap" TextAlignment="Center" />
+              <!-- ⚠ ODSTĘPSTWO OD ZATWIERDZONEGO RENDERU, zapisane świadomie: render miał glif 14 px przy
+                   tekście 10 px, tutaj jest 12 przy 11. Powodem jest UDOKUMENTOWANA PARA z katalogu —
+                   komentarz przy `Size.Icon.Sm` mówi wprost, że „ikona 14 px obok tekstu 11 px optycznie go
+                   przerasta", a nasz tekst był jeszcze mniejszy niż te 11. Zmiana idzie więc w stronę reguły,
+                   którą katalog już ma, i przy okazji podnosi czytelność drugiej linii (10 → 11 px). -->
+              <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}"
+                          HorizontalAlignment="Center">
+                <controls:SvgIcon Data="{StaticResource Icon.Plus}"
+                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
+                                  Foreground="{DynamicResource SubtleForegroundBrush}"
+                                  VerticalAlignment="Center" />
+                <TextBlock Text="{x:Static app:UiStrings.ConnectionsEmptyHint}"
+                           Foreground="{DynamicResource SubtleForegroundBrush}"
+                           FontSize="{DynamicResource Text.Compact.Size}"
+                           VerticalAlignment="Center" TextWrapping="Wrap" />
+              </StackPanel>
+            </StackPanel>
+          </Panel>
         </DockPanel>
       </Border>
 

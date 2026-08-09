@@ -43,6 +43,14 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         _executor = executor;
         _transactionService = transactionService;
         Rows = new ObservableCollection<ScriptResultRowViewModel>();
+        // ⚠ Oba stany puste zależą od kolekcji, którą wiąże siatka — a `RebuildRows` (zmiana filtra) nie
+        // przechodzi przez żadną właściwość obserwowaną. Bez tego przełączenie filtra zmieniałoby zawartość
+        // siatki, nie zmieniając komunikatu.
+        Rows.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(ShowNoResults));
+            OnPropertyChanged(nameof(ShowNoFilterMatch));
+        };
         StatusText = UiStrings.ScriptStatusReady;
         _transactionService.TransactionStateChanged += OnTransactionStateChanged;
     }
@@ -109,6 +117,21 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
     partial void OnSelectedFilterIndexChanged(int value) => RebuildRows();
 
     public bool HasResults => _allRows.Count > 0;
+
+    /// <summary>
+    /// Stan pusty siatki wyników PRZED pierwszym uruchomieniem (M5 / M‑3, B6).
+    /// </summary>
+    public bool ShowNoResults => !HasResults;
+
+    /// <summary>
+    /// Drugi, ODRĘBNY stan pusty: przebieg był, ale filtr (All / Success / Failed) ukrył wszystko.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ To rozróżnienie nie jest nasze — model już je niósł w <see cref="HasResults"/>, liczonym z
+    /// <c>_allRows</c> (przed filtrem), podczas gdy siatka wiąże się z <c>Rows</c> (po filtrze). Jeden
+    /// komunikat na oba stany mówiłby „uruchom skrypt" komuś, kto właśnie go uruchomił.
+    /// </remarks>
+    public bool ShowNoFilterMatch => HasResults && Rows.Count == 0;
 
     private ScriptTransactionMode Mode => ResolveMode(TransactionModeIndex);
 
@@ -355,6 +378,8 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         if (result.Success) SuccessCount++; else FailedCount++;
         if (PassesFilter(row)) Rows.Add(row);
         OnPropertyChanged(nameof(HasResults));
+        OnPropertyChanged(nameof(ShowNoResults));
+        OnPropertyChanged(nameof(ShowNoFilterMatch));
     }
 
     private void ClearRows()
@@ -364,6 +389,8 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
         SuccessCount = 0;
         FailedCount = 0;
         OnPropertyChanged(nameof(HasResults));
+        OnPropertyChanged(nameof(ShowNoResults));
+        OnPropertyChanged(nameof(ShowNoFilterMatch));
     }
 
     // Appends a synthesized "not run" row for every statement a Sequenced stop-on-error / cancellation
@@ -385,6 +412,8 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
             if (PassesFilter(row)) Rows.Add(row);
         }
         OnPropertyChanged(nameof(HasResults));
+        OnPropertyChanged(nameof(ShowNoResults));
+        OnPropertyChanged(nameof(ShowNoFilterMatch));
     }
 
     private bool PassesFilter(ScriptResultRowViewModel row) => SelectedFilterIndex switch

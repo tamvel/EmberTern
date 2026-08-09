@@ -26,6 +26,11 @@ public partial class MetadataExplorerViewModel : ViewModelBase
         _reader = reader;
         Connections = new ObservableCollection<ConnectionNodeViewModel>();
         RootNodes = new ObservableCollection<object>();
+        // ⚠⚠ SAMA POPRAWNA WARTOŚĆ TO NIE JEST ODŚWIEŻONY EKRAN. `ShowEmptyState` liczy się z `RootNodes`,
+        // a wiązanie odpytuje właściwość WYŁĄCZNIE po `PropertyChanged` — bez tej subskrypcji stan pusty
+        // zniknąłby dopiero przy następnej zmianie czegoś innego. Ten sam błąd złapały testy w M3.3b i M3b.2,
+        // za każdym razem dopiero po podsadzeniu naruszenia; asercją jest tu POWIADOMIENIE, nie wartość.
+        RootNodes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(ShowEmptyState));
         // Flat projection of RootNodes for the single-VSP sidebar ListBox (replaces the
         // nested-VSP TreeView). Created once; it tracks RootNodes.CollectionChanged so it
         // survives ReloadConnections (which clears + refills the same instance).
@@ -60,6 +65,20 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     // The flattened, single-level projection the sidebar ListBox binds to. Same nodes,
     // same order, only the currently-visible (expanded) rows — a stable-extent single VSP.
     public ObservableCollection<SidebarRow> SidebarRows => _sidebar.Rows;
+
+    /// <summary>
+    /// Stan pusty paska bocznego (M5 / M‑3 klasa A): panel nie ma NICZEGO w korzeniu, czyli pierwsze
+    /// uruchomienie albo usunięcie wszystkiego.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ Liczy się z <see cref="RootNodes"/>, a NIE z <see cref="SidebarRows"/> — i to jest różnica
+    /// merytoryczna, nie stylistyczna. `SidebarRows` jest projekcją FILTROWANĄ, więc bramka na niej
+    /// pokazywałaby „dodaj połączenie" użytkownikowi, który ma połączenia i tylko wpisał filtr bez
+    /// trafień. To są dwa różne stany puste i tylko pierwszy jest w zakresie M‑3.
+    /// ⚠ Świadomie NIE liczy się z <see cref="Connections"/>: użytkownik z samymi folderami i zerem
+    /// połączeń widzi foldery, więc panel nie jest pusty i podpowiedź pierwszego kroku byłaby szumem.
+    /// </remarks>
+    public bool ShowEmptyState => RootNodes.Count == 0;
 
     // Chevron click → flip the underlying node's expansion (drives the projection).
     public void ToggleSidebarRow(SidebarRow? row) => _sidebar.Toggle(row);

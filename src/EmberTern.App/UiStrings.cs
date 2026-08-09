@@ -27,7 +27,19 @@ internal static class UiStrings
 
     public const string SidebarMetadataHeader = "Metadata";
     public const string SidebarConnectionsHeader = "Connections";
-    public const string SidebarPlaceholderEmpty = "No connection yet";
+    // ── Pusty pasek boczny (M5 / M‑3 klasa A) ────────────────────────────────────────────────────
+    // Pierwsze uruchomienie: zero profili ⇒ pod polem filtra nie ma NIC. Wariant W4, ratyfikowany na
+    // renderze: najpierw KROK, potem miejsce akcji — i miejsce pokazane GLIFEM, nie tylko słowem, bo
+    // przycisk „New Connection" jest w pasku tytułu wyłącznie ikoną `Icon.Plus`.
+    //
+    // ⚠⚠ POPRZEDNIA TREŚĆ TEJ PARY STAŁYCH BYŁA WADLIWA I NIE WOLNO JEJ PRZYWRACAĆ. `ConnectionsEmptyHint`
+    //    brzmiało „Click “+ New Connection” to add one." i CYTOWAŁO ETYKIETĘ, KTÓREJ W PRODUKCIE NIE MA —
+    //    przycisk nie ma podpisu, a jego tooltip brzmi „New Connection" (bez plusa w treści). Użytkownik
+    //    dostawał polecenie znalezienia napisu, który nigdzie nie występuje: kształt gotchy #311, gdzie
+    //    kłamiąca etykieta jest nieodróżnialna od awarii. Obie stałe były przy tym OSIEROCONE — nigdy nie
+    //    wpięte — więc defekt nigdy się nie ujawnił, tylko czekał na kogoś, kto „wpnie gotowy tekst".
+    // ⛔ Zmieniając te napisy, sprawdź w `MainWindow.axaml`, jak akcja NAPRAWDĘ nazywa się na ekranie.
+    public const string SidebarPlaceholderEmpty = "Add a connection to get started.";
     public const string SidebarTabMetadata = "Metadata";
     public const string SidebarTabConnections = "Connections";
 
@@ -683,6 +695,16 @@ internal static class UiStrings
     public const string ScriptColumnError = "Error";
     // Status line.
     public const string ScriptStatusReady = "Ready. Paste or type a script, then Run.";
+
+    // ── Stany puste siatki wyników (M5 / M‑3, B6) ────────────────────────────────────────────────
+    // ⭐ DWA, bo model niósł to rozróżnienie na długo przed M‑3: `HasResults` liczy się z `_allRows`
+    //    (przed filtrem), a siatka wiąże się z `Rows` (po filtrze). Jeden komunikat mówiłby „uruchom
+    //    skrypt" komuś, kto właśnie go uruchomił i tylko przełączył filtr na „Failed".
+    // ⚠ Druga treść świadomie powtarza język, którym mówią już Session Manager i Trace Monitor
+    //    („No sessions match the current filter." / „No events match the current filter.") — ta sama
+    //    sytuacja ma brzmieć tak samo, niezależnie od ekranu.
+    public const string ScriptResultsEmpty = "Run the script — each statement and its result appear here.";
+    public const string ScriptResultsNoFilterMatch = "No statements match the current filter.";
     public const string ScriptStatusRunning = "Running…";
     public const string ScriptStatusNothingToRun = "Nothing to run — the script has no statements.";
     public const string ScriptStatusCancelled = "Cancelled. The transaction is still open — Commit or Rollback.";
@@ -726,7 +748,10 @@ internal static class UiStrings
     public const string ConnectionDisconnect = "Disconnect";
     public const string ConnectionDelete = "Delete";
     public const string ConnectionNew = "+ New Connection";
-    public const string ConnectionsEmptyHint = "No connections yet.\nClick “+ New Connection” to add one.";
+    // Druga linia stanu pustego paska bocznego — stoi obok glifu `Icon.Plus` i nazywa akcję dokładnie tak,
+    // jak nazywa ją jej własny tooltip (`ConnectionNewTooltip`). ⚠ Powód i historia poprzedniej treści:
+    // przy `SidebarPlaceholderEmpty`.
+    public const string ConnectionsEmptyHint = "New Connection — in the toolbar above";
 
     public const string WorkspaceTabUntitled = "SQL Editor";
     public const string WorkspaceEditorPlaceholder = "-- Connect to a database to start writing SQL";
@@ -2446,6 +2471,24 @@ internal static class UiStrings
     public const string SecurityColMembership = "Membership";
     public const string SecurityColMemberName = "User / Role";
     public const string SecurityMembershipLegend = "✓ member     ✓+ with admin option     ·     click a cell to cycle";
+
+    // ── Stany puste Security Managera (M5 / M‑3, B2 + B3) ────────────────────────────────────────
+    //
+    // ⚠ „Brak ról" to stan ZWYCZAJNY, nie awaryjny: `RDB$ROLES` po odfiltrowaniu systemowych jest pusta
+    //    na świeżo utworzonej bazie. ⭐ Treść wskazuje następny krok, bo przycisk „Add role" stoi tuż nad
+    //    siatką i MA WIDOCZNĄ ETYKIETĘ — inaczej niż „+" w pasku tytułu, przez które stan pusty paska
+    //    bocznego musiał pokazać glif.
+    // ⛔ Nazwa akcji jest SKŁADANA ze stałej przycisku, nie przepisana: przepisany napis rozjeżdża się po
+    //    cichu przy pierwszej zmianie etykiety (ta sama lekcja co `CommandTip`, gotcha #284).
+    // ⛔⛔ NIE WOLNO tu użyć treści mówiącej o filtrze — zmierzone: `FilterText` istnieje wyłącznie
+    //    w panelu uprawnień, a listy użytkowników i ról filtra NIE MAJĄ.
+    public static readonly string SecurityRolesEmpty = $"No roles yet — use {SecurityAddRole} above.";
+
+    // ⭐ DWA komunikaty, bo selektor kierunku zadaje DWA różne pytania — i produkt już to wie: nagłówek
+    //    kolumny przełącza się „Role name" ↔ „Member name" dokładnie z tego powodu. Jeden komunikat na oba
+    //    kierunki byłby nieprawdziwy w jednym z nich.
+    public const string SecurityMembershipEmptyMemberOf = "This user or role belongs to no roles.";
+    public const string SecurityMembershipEmptyMembers = "This role has no members.";
 
     // Privileges pane
     public const string SecurityPrivilegesHeader = "Object privileges";

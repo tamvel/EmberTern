@@ -136,16 +136,30 @@
               <Button Classes="flat" Content="{x:Static app:UiStrings.SecurityRefresh}"
                       Command="{Binding Roles.RefreshCommand}" />
             </StackPanel>
-            <DataGrid Grid.Row="1" ItemsSource="{Binding Roles.Items}"
-                      SelectedItem="{Binding Roles.SelectedRole, Mode=TwoWay}"
-                      IsReadOnly="True" CanUserResizeColumns="True" GridLinesVisibility="Horizontal"
-                      AutoGenerateColumns="False">
-              <DataGrid.Columns>
-                <DataGridTextColumn Header="{x:Static app:UiStrings.SecurityColRoleName}" Binding="{Binding Name}" Width="200" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.SecurityColOwner}" Binding="{Binding Owner}" Width="140" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.SecurityColDescription}" Binding="{Binding Description}" Width="*" />
-              </DataGrid.Columns>
-            </DataGrid>
+            <!-- ⭐ `Panel`, żeby stan pusty leżał NA siatce: nagłówki kolumn zostają widoczne (są informacją
+                 o tym, co się tu pojawi), a komunikat nie zabiera wiersza i nie przesuwa układu. -->
+            <Panel Grid.Row="1">
+              <DataGrid ItemsSource="{Binding Roles.Items}"
+                        SelectedItem="{Binding Roles.SelectedRole, Mode=TwoWay}"
+                        IsReadOnly="True" CanUserResizeColumns="True" GridLinesVisibility="Horizontal"
+                        AutoGenerateColumns="False">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="{x:Static app:UiStrings.SecurityColRoleName}" Binding="{Binding Name}" Width="200" />
+                  <DataGridTextColumn Header="{x:Static app:UiStrings.SecurityColOwner}" Binding="{Binding Owner}" Width="140" />
+                  <DataGridTextColumn Header="{x:Static app:UiStrings.SecurityColDescription}" Binding="{Binding Description}" Width="*" />
+                </DataGrid.Columns>
+              </DataGrid>
+              <!-- Stan pusty (M5 / M‑3, B2). ⚠ Baza bez ról niesystemowych to stan ZWYCZAJNY — treść wskazuje
+                   następny krok, bo przycisk „Add role" stoi nad siatką i ma widoczną etykietę. -->
+              <TextBlock Text="{x:Static app:UiStrings.SecurityRolesEmpty}"
+                         IsVisible="{Binding Roles.ShowEmptyState}"
+                         IsHitTestVisible="False"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Margin="{DynamicResource Pad.Panel}"
+                         TextWrapping="Wrap" TextAlignment="Center"
+                         Foreground="{DynamicResource SubtleForegroundBrush}"
+                         FontSize="{DynamicResource Text.Application.Size}" />
+            </Panel>
           </Grid>
           <StackPanel Grid.Column="1" Spacing="6" IsEnabled="{Binding Roles.HasSelectedRole}">
             <TextBlock Text="{x:Static app:UiStrings.SecurityRoleDescriptionLabel}" Classes="field-label" />
@@ -183,7 +197,8 @@
           </DockPanel>
           <TextBlock Grid.Row="1" Text="{x:Static app:UiStrings.SecurityMembershipHint}"
                      Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Compact.Size}" Margin="0,0,0,6" />
-          <DataGrid Grid.Row="2" ItemsSource="{Binding Membership.Rows}"
+          <Panel Grid.Row="2">
+          <DataGrid ItemsSource="{Binding Membership.Rows}"
                     IsReadOnly="True" CanUserResizeColumns="True" CanUserSortColumns="False"
                     GridLinesVisibility="Horizontal" AutoGenerateColumns="False">
             <DataGrid.Columns>
@@ -236,6 +251,23 @@
               </DataGridTemplateColumn>
             </DataGrid.Columns>
           </DataGrid>
+            <!-- Stan pusty przynależności (M5 / M‑3, B3).
+                 ⭐⭐ TREŚĆ ZALEŻY OD KIERUNKU i to nie jest ozdoba: „Member of" pyta, do jakich ról należy
+                 wybrany grantee, a „Members" — kto należy do wybranej roli. Jeden komunikat na oba byłby
+                 nieprawdziwy w jednym z nich; że to dwa różne pytania, produkt wie od dawna — nagłówek
+                 kolumny wyżej przełącza się „Role name" ↔ „Member name" dokładnie z tego powodu.
+                 ⚠ Bramka wymaga WYBRANEGO elementu: picker autowybiera pierwszą pozycję, więc pusty picker
+                 znaczy „w bazie nie ma ról" — ten sam fakt, który komunikuje już zakładka Roles, i decyzją
+                 użytkownika NIE dostaje tu drugiego komunikatu. -->
+            <TextBlock Text="{Binding Membership.EmptyText}"
+                       IsVisible="{Binding Membership.ShowEmptyState}"
+                       IsHitTestVisible="False"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Margin="{DynamicResource Pad.Panel}"
+                       TextWrapping="Wrap" TextAlignment="Center"
+                       Foreground="{DynamicResource SubtleForegroundBrush}"
+                       FontSize="{DynamicResource Text.Application.Size}" />
+          </Panel>
         </Grid>
       </TabItem>
 

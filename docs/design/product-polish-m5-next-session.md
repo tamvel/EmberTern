@@ -14,22 +14,31 @@
 >
 > ✅ **§10 ODEBRANE PRZEZ UŻYTKOWNIKA (QA wizualne zaliczone).** Iteracja zamknięta, ⛔ nie wracać.
 >
-> ✅ **L‑1 / focus — ZAIMPLEMENTOWANE, ⏸ CZEKA NA QA WIZUALNE.** Wariant **1** ratyfikowany: jedna
-> konwencja **`:focus-visible`** dla `Button.icon`/`.flat`/`.primary`/`.caption` **+ `ToggleButton.icon`**.
+> ✅ **L‑1 / focus — ODEBRANE PO QA UŻYTKOWNIKA (2026-08-10).** Wariant **1**: jedna konwencja
+> **`:focus-visible`** dla `Button.icon`/`.flat`/`.primary`/`.caption` **+ `ToggleButton.icon`**.
 > `primary` → ramka `OnAccentBrush` (5,29:1); `caption` → tło `FocusBorderBrush` + glif `OnAccentBrush`.
-> Zapis: `product-polish.md` **§19.46** · decyzja: **`product-polish-m5-focus-decision.md`**.
-> ⚠ **Do sprawdzenia w QA to, czego render pokazać nie może:** obwódka **NIE** pojawia się po kliknięciu
-> myszą, a **pojawia** po przejściu Tabem. Plus: pasek tytułu (min/max/zamknij) pod Tabem, stopka dialogu
-> (Wykonaj/Anuluj) pod Tabem, w obu motywach.
+> Zapis: `product-polish.md` **§19.46** · decyzja: **`product-polish-m5-focus-decision.md`**. ⛔ Nie wracać.
 >
-> ⛔ **NASTĘPNY KROK TO QA UŻYTKOWNIKA, NIE KOLEJNY TEMAT.** Dopiero po nim rusza kolejna pozycja M5.
-> **Pozostały w M5:** empty states **M‑3** · animacje **§9** · DPI 100/125/150/200 · terminologia **M‑4**.
-> ⭐ Zmierzone przy okazji inwentaryzacji, przydatne do planowania kolejnego kroku:
-> **§9 nie ma ani jednego naruszenia** (zero `Transitions` w całym `EmberTern.App`), **L‑1 potwierdzone
-> otwarte** (`Button.primary`/`.caption` bez `:focus`), a **M‑3 jest znacznie mniejsze, niż mówi audyt**
-> (nie „3 z 48", tylko ~12 widoków + kilka ViewModeli; do tego **8 osieroconych stałych `*Empty*`**).
+> ✅ **M‑3 / empty states — ZAMKNIĘTE I ODEBRANE PO QA UŻYTKOWNIKA (2026-08-10).** Zapis:
+> `product-polish.md` **§19.47** · nowa gotcha **#346**.
+> ⭐⭐ **Wynik wart przeniesienia dalej: audyt wskazał realną lukę, ale zbiór do zrobienia był ~3× mniejszy,
+> i zawęziło go pytanie, którego inwentarz nie zadawał — nie „czy jest komunikat", tylko „czy ten stan jest
+> OSIĄGALNY".** Z 13 zgłoszonych luk zostały 4; dwie odpadły, bo stan **nie może zajść**. ⚠ Trzy razy pomiar
+> obalił treść, którą sam zaproponowałem, i zawsze z tego samego powodu: **nazwa kolekcji sugerowała, co
+> siatka pokazuje, a kod mówił co innego**.
+> **Weszło:** pusty pasek boczny (W4, z glifem) · Roles · Membership ×2 kierunki · Script Executor ×2 stany.
+> ⛔ **Wycofane jako nieosiągalne:** Users · View → Fields · klasa D. ⛔ **Wycofane jako treść nieprawdziwa:**
+> Privileges. ⏸ **Odłożone:** Session → Transactions · Table → Indeksy. ⛔⛔ **Nazwany wyjątek:** 17 drzew
+> „Zależności" **zostaje bez stanu pustego** (parytet z IBExpertem) — pilnowane **testem**, nie tylko zapisem.
 >
-> ⚠ Liczby w §1 i §3 niżej pochodzą sprzed M5 — suite to teraz **8351** (8193 + **103** + 55).
+> ⏭ **POZOSTAŁO W M5 — trzy pozycje, każda wymaga decyzji przed startem:**
+> **§9 animacje** · **DPI 100/125/150/200** · **terminologia M‑4**.
+> ⭐ Zmierzone przy inwentaryzacji M5 i nadal aktualne: **§9 nie ma ani jednego naruszenia** (zero
+> `Transitions` w całym `EmberTern.App`), więc jest to wyłącznie decyzja „strażnik czy nie";
+> **DPI** to czyste QA i nie da się go przygotować kodem (⚠ **R‑6 jest zaległe od dwóch bloków M4**);
+> **M‑4** wymaga najpierw inwentarza i słownika (R‑8), więc jest najdroższe.
+>
+> ⚠ Liczby w §1 i §3 niżej pochodzą sprzed M5 — suite to teraz **8385** (8207 + 123 + 55).
 >
 > ### Co konkretnie obejrzeć w QA (oba motywy)
 >

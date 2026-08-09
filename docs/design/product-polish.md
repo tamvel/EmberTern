@@ -9694,3 +9694,119 @@ literówkę w `{DynamicResource}` — a ta nie zgłasza błędu, tylko po cichu 
 * ⚠ **Poza zakresem L‑1, zmierzone i zapisane:** `TextBox` ma własną ścieżkę focusu przez most
   (`TextControlBorderBrushFocused`), a `DataGrid` własną (`DataGridCellFocusVisual*`). Ujednolicanie
   ich **nie było** częścią tej decyzji.
+
+---
+
+## §19.47 As-built — M5 / M‑3 (stany puste)
+
+> **Status: zaimplementowane 2026-08-10, ODEBRANE PO QA WIZUALNYM UŻYTKOWNIKA w obu motywach.**
+> Build 0/0 · suite **8385** (8207 + 123 + 55, **+14**) · smoke czysty.
+> Materiał decyzyjny: `VisualCandidateProbe -- empty` (`m5e-sidebar-*`, `m5e-shipped-*`, `m5e-states-*`).
+
+### §19.47.1 ⭐⭐ Znalezisko główne: audyt wskazał realną lukę, ale zbiór do zrobienia był ~3× mniejszy
+
+Audyt §1.1 mówił *„Widoki z jawnym empty state: **3 z 48**"*. Zmierzone: **12 plików widoków + 5 ViewModeli**
+już je miało. ⭐ I nawet ta liczba jest zaniżona, bo pochodzi z licznika po **nazwie stałej** (`*Empty*`):
+**Global Search ma poprawny, pełny stan pusty** — pasek `StatusText` z „No results for X" i „Searching…" —
+i jest dla takiego licznika **niewidoczny**, bo jego stałe nazywają się `GlobalSearchNoResults`. To **#337
+trzeci raz**: zero z licznika znaczy „zbudowano to inaczej", nie „brak".
+
+⭐⭐ **Ale prawdziwe zawężenie przyszło z innego pytania niż „czy jest komunikat": z pytania, czy stan JEST
+OSIĄGALNY.** Z trzynastu powierzchni zgłoszonych jako luki zostały **cztery**:
+
+| odpadło | ile | powód, ZMIERZONY |
+|---|---|---|
+| Table → Ograniczenia ×4 | 4 | nagłówek zakładki niesie licznik (`FormatHeader` → `"Klucz główny (0)"`) — pustka jest ogłoszona, zanim użytkownik kliknie |
+| Trace → panel Detail | 1 | **ma już** stan „nic nie zaznaczono" (`!Detail.HasSelection`) |
+| B1 Security → Users | 1 | ⛔ **stan nieosiągalny**: `SEC$USERS` zawsze zawiera SYSDBA, a błąd odczytu ląduje w banerze (`SafeLoadAsync` → `HasError`) |
+| B8 View → Fields | 1 | ⛔ **stan nieosiągalny**: widok zawsze ma ≥1 kolumnę |
+| B4 Security → Privileges | 1 | ⛔ **treść nieprawdziwa** — patrz §19.47.3 |
+| D edytor kursorów/podprogramów | 1 (×4 miejsca) | ⛔ w istocie **klasa C**: zaznaczenie jest null praktycznie tylko wtedy, gdy lista jest pusta |
+
+### §19.47.2 ⛔⛔ Wpięcie gotowego tekstu bywa wpięciem defektu — `ConnectionsEmptyHint`
+
+Osieroconych stałych `*Empty*` było **8** (43 zadeklarowane, 35 użytych; każda z ósemki miała w całym repo
+dokładnie jedno wystąpienie — własną deklarację). Sześć okazało się martwych po przebudowach; dwie opisywały
+stan wciąż osiągalny — **pusty pasek boczny przy zerze połączeń**.
+
+⚠⚠ I właśnie ta „gotowa" para była **wadliwa**: `ConnectionsEmptyHint` brzmiało *„Click «+ New Connection»
+to add one."* i **cytowało etykietę, której w produkcie nie ma** — przycisk to sam glif `Icon.Plus`, a jego
+tooltip brzmi „New Connection". Użytkownik dostawał polecenie znalezienia napisu nieistniejącego: kształt
+gotchy **#311**. ⭐ Defekt nigdy się nie ujawnił **dlatego, że stała była osierocona** — czekał na kogoś, kto
+„wpnie gotowy tekst, bo już jest". Pilnuje tego teraz
+`SidebarEmptyState_NeverQuotesALabelTheProductDoesNotShow`.
+
+### §19.47.3 ⛔ B4 — nazwa kolekcji mówiła co innego niż jej zawartość
+
+Proponowana (i wstępnie ratyfikowana) treść brzmiała *„No privileges in this category."* Zmierzone
+w `RebuildRows`: siatka **nie wypisuje uprawnień — wypisuje OBIEKTY** wybranej kategorii
+(`MetadataReader.ListAsync(category.ListKind)`), a uprawnienia są *komórkami*. ⭐ Konsekwencja: grantee bez
+ani jednego uprawnienia do 200 tabel widzi **200 wierszy**. Pusta siatka znaczy „brak obiektów tej kategorii"
+albo „filtr nic nie dopasował" — **nigdy** „brak uprawnień". 🔒 Wycofane decyzją użytkownika; projektowanie
+komunikatu „brak obiektów kategorii" świadomie NIE weszło do M‑3.
+
+### §19.47.4 Co weszło
+
+**A — pusty pasek boczny (wariant W4, ratyfikowany na renderze z sześciu).** Najpierw KROK, potem miejsce
+akcji, a miejsce pokazane **glifem** — bo przycisk nie ma na ekranie podpisu, więc każdy wariant czysto
+tekstowy kazałby przetłumaczyć słowa na kształt, którego użytkownik jeszcze nie zna.
+⛔ Wariant z własnym przyciskiem w panelu (W5) **odrzucony**: dawałby drugą afordancję tej samej akcji.
+⚠ **Odstępstwo od renderu, zaakceptowane przez użytkownika:** glif **12** i podpis **11**, nie 14 i 10 —
+bo komentarz roli `Size.Icon.Sm` mówi wprost, że *„ikona 14 px obok tekstu 11 px optycznie go przerasta"*.
+⭐ Bramka to **`RootNodes.Count == 0`**, a nie „lista wierszy pusta": `SidebarRows` jest projekcją
+**filtrowaną**, więc bramka na niej pokazywałaby podpowiedź komuś, kto ma połączenia i tylko wpisał filtr
+bez trafień. To dwa różne stany puste i tylko pierwszy jest w zakresie M‑3.
+
+**B2 — Security → Roles.** ⭐ Baza bez ról niesystemowych to stan **zwyczajny** (`RDB$ROLES` z odfiltrowanymi
+systemowymi jest pusta na świeżej bazie). Treść wskazuje krok, bo przycisk „Add role" stoi nad siatką i **ma
+widoczną etykietę** — i jest z tej etykiety **składana**, nie przepisana (#284).
+⛔⛔ **Nie wolno tu użyć treści o filtrze** — zmierzone: `FilterText` istnieje wyłącznie w panelu uprawnień;
+listy użytkowników i ról filtra **nie mają**. (Pierwsza propozycja treści mówiła o filtrze — obalone pomiarem
+przed wpięciem.)
+
+**B3 — Security → Membership, DWA komunikaty kluczowane kierunkiem.** *„This user or role belongs to no
+roles."* (Member of) · *„This role has no members."* (Members). ⭐ Że to dwa różne pytania, produkt wiedział
+przed M‑3: `RowHeader` przełącza się „Role name" ↔ „Member name" dokładnie z tego powodu.
+⚠ Bramka wymaga **wybranego** elementu — picker autowybiera pierwszą pozycję, więc pusty picker znaczy
+„w bazie nie ma ról", czyli ten sam fakt, który komunikuje B2. 🔒 Decyzja użytkownika: **bez drugiego
+komunikatu** dla tego stanu.
+
+**B6 — Script Executor, DWA stany.** *„Run the script — …"* (przed przebiegiem) · *„No statements match the
+current filter."* (filtr ukrył wyniki). ⭐ Rozróżnienie **nie jest nasze** — model niósł je w `HasResults`,
+liczonym z `_allRows` (przed filtrem), podczas gdy siatka wiąże się z `Rows` (po filtrze). Drugi tekst
+świadomie powtarza język Session Managera i Trace'a: ta sama sytuacja ma brzmieć tak samo.
+
+### §19.47.5 ⛔⛔ NAZWANY WYJĄTEK: 17 drzew „Zależności" ZOSTAJE bez stanu pustego
+
+`BuildDependencyTree` wypisuje **każdą z dziesięciu kategorii również pustą** — `DependencyTreeView.axaml.cs`
+niesie zapisany powód: *„Kategoria PUSTA nie dostaje chevronu, ale nadal jest wierszem… (parytet
+z IBExpertem)"*. Obiekt bez zależności pokazuje więc dziesięć wierszy `… (0)`: **pustka jest ogłoszona,
+a ekran nie jest pusty**. 🔒 Decyzja użytkownika (2026-08-10): **bez zmian** — nie ukrywamy pustych kategorii
+i nie dodajemy komunikatu zbiorczego. ⭐ To **pułapka 17** w czystej postaci: element niezgodny z regułą,
+który DZIAŁA.
+
+⭐⭐ **Wyjątek jest pilnowany TESTEM, a nie tylko zapisem w dokumencie** —
+`DependencyTree_DeliberatelyHasNoEmptyState` — i to jest **#340 przełożone na strażnika**: decyzja żyjąca
+wyłącznie w dokumencie wypada między etapami, bo zamykany bywa tylko dokument. ⚠ Test pilnuje **PRZESŁANKI**
+(że pusta kategoria nadal jest wierszem), nie polityki — gdyby to się zmieniło, wyjątek traci uzasadnienie
+i decyzję trzeba podjąć od nowa (#322).
+
+### §19.47.6 ⏸ Odłożone decyzją użytkownika — NIE przeoczenia
+
+* **B5 Session → Transactions** — licznik stoi już w pasku podsumowania, więc komunikat byłby redundantny.
+* **B7 Table → Indeksy** — jedyna afordancja to **menu kontekstowe**; ⛔ użytkownik nie chce budować stanu
+  pustego wokół akcji ukrytej pod prawym przyciskiem myszy.
+* **klasa C** (siatki definicji z „+"): pusto to normalny stan początkowy, a przycisk stoi obok.
+* **klasa E** (Table Data / View Data bez rekordów): nagłówki kolumn już sygnalizują „wczytane".
+
+### §19.47.7 ⚠ Trzy razy pomiar obalił treść, którą sam zaproponowałem
+
+I za każdym razem z tego samego powodu: **nazwa kolekcji sugerowała, co siatka pokazuje, a kod mówił co
+innego** — `Privileges.Rows` to obiekty, nie uprawnienia; `Membership.Rows` zależy od kierunku; „nic nie
+zaznaczono" w edytorze lokalnych rutyn to naprawdę „lista jest pusta". ⭐ Wniosek na następne etapy:
+**przy stanie pustym pytaj najpierw, KIEDY on zachodzi, a nie jak go nazwać** — bo dopiero to pokazuje, czy
+zachodzi w ogóle.
+
+⚠ Dwa z moich własnych testów były w pierwszej wersji błędne i wykrył to **przebieg, nie czytanie**: strażnik
+drzewa zapalił się na `StringConverters.IsNotNullOrEmpty` (szukałem podciągu „Empty"), a test przynależności
+dodawał użytkownika do listy `Users.Items`, podczas gdy picker buduje się z grantee'ów **właściciela**.

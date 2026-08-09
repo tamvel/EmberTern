@@ -1595,3 +1595,36 @@ every emit path to be individually perfect.**
      where it does render — so the fix stood. A measurement can be wrong in a way that does not reverse
      the conclusion, which is precisely why it survives unchallenged.
      (Product Polish M5 / §10 — `product-polish.md` §19.45.6.)
+
+346. **An inventory of missing UI answers "is there a message here?" — it never asks "can this state
+     occur?", and those two questions produce different worklists.** Working M‑3 (empty states), an
+     audit row said *"explicit empty state in 3 of 48 views"*. Measured: 12 views and 5 view models
+     already had one. Then the list of thirteen apparent gaps was checked a second way — not *does a
+     message exist* but *is the state the message would describe reachable* — and it collapsed to four.
+     ⭐ Four fell because the emptiness was **already announced elsewhere** (a tab header carrying
+     `"(0)"`, a counter strip, a no-selection state built without the word "Empty" in its constant).
+     ⛔ Two fell because the state **cannot happen**: a users grid whose source is `SEC$USERS`, which
+     always contains SYSDBA and whose read failure surfaces as a banner; a view's column list, when a
+     view always projects at least one column. **Building an empty state for either would have shipped
+     UI nobody can ever see** — the same dead-branch shape as a guard for an unreachable case, which
+     reads to the next author as a real safety net (#233).
+     ⭐⭐ **The sharpest single finding, and the one that generalises furthest: a collection's NAME is
+     not evidence of what its grid shows.** `Privileges.Rows` sounds like a list of privileges, so
+     "No privileges in this category." sounded obviously right — and was false. The grid enumerates the
+     *objects* of the selected category with privileges as **cells**, so a grantee with no privileges on
+     200 tables still sees 200 rows, and an empty grid means *no objects of that kind* or *the filter
+     matched nothing*. Three proposed texts in a row were refuted the same way: `Membership.Rows`
+     depends on a direction selector the wording ignored, and "nothing is selected" in a local-routine
+     editor really means "the list is empty", because the selection auto-restores to the first item.
+     ⚠ Note the failure mode is **not** a wrong number. It is a message that is grammatical, plausible,
+     and describes something other than what the user is looking at — indistinguishable from a
+     malfunction once shipped (#311's shape).
+     ⭐ Practical order, and it is the reverse of the intuitive one: **first establish WHEN the state
+     occurs, only then decide what it says.** Deciding the wording first hides the question of whether
+     the state occurs at all, because a sentence about an absence always reads as sensible.
+     ⚠⚠ A corollary worth its own line: **a ready-made constant is not a ready-made answer.** Eight
+     orphaned `*Empty*` constants sat in `UiStrings`, and the pair that described a still-reachable
+     state carried text quoting a button label — *"+ New Connection"* — that **does not exist on
+     screen**; the button is a bare glyph. The defect had survived the product's whole life *because*
+     the constant was orphaned, waiting for someone to wire in "the text that is already written".
+     (Product Polish M5 / M‑3 — `product-polish.md` §19.47.)
