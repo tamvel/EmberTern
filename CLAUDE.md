@@ -467,6 +467,38 @@ noted.
 
 ## Current state
 
+- **🖥🔒 M5 · DPI 100–175 % — ZAMKNIĘTE PO QA UŻYTKOWNIKA (2026-08-10). ⭐ ZERO ZMIAN PRODUKCYJNYCH; R‑6
+  SPŁACONE.** As-built: `product-polish.md` **§19.49**; checklista + wynik:
+  **[product-polish-m5-dpi-checklist.md](docs/design/product-polish-m5-dpi-checklist.md)**; pomiar:
+  `VisualCandidateProbe -- fit` → `out/m5-dpi-fit.txt`.
+  ⭐ **100 % i 125 % czyste; przystanki 1–7, 9 i 10 przeszły bez uwag** — czyli **żadna zmiana metryki
+  z M4 ani M5 nie okazała się defektem DPI**, a to był właściwy przedmiot R‑6. ⚠ Checklista była celowana:
+  dziesięć przystanków, każdy przypięty do iteracji, która go ruszył, a wszystkie liczby **policzone
+  z tokenów** — stąd priorytet: **125 % jest arytmetycznie najgorsze** (15 z 28 tokenów na ułamku piksela),
+  150 % ma 5, **200 % jest czyste dla wszystkiego**.
+  ⛔⛔ **ZNALEZISKO PRZY 150 % / 175 %: Activity Monitor i Data Import nie mieszczą się w szerokości,
+  bez możliwości przewinięcia.** 🔒 Ratyfikowane jako **DŁUG TECHNICZNY poza zakresem M5** — layout nie
+  jest zmieniany.
+  ⭐⭐ **To ograniczenie KONSTRUKCYJNE, nie defekt skalowania.** Pasek poleceń obu widoków to **goły poziomy
+  `StackPanel`** żądający **~1130 DIP** (18 i 20 dzieci), **bez `ScrollViewera`** — taki panel mierzy dzieci
+  przy nieskończoności i **nie kompresuje się, tylko przycina**. ⭐ Kontrolą jest Script Executor: żąda
+  *więcej* (1554 DIP) i problemu nie ma, bo jego nadmiar siedzi w siatce, która **umie się przewijać**.
+  ⛔ **Dowód, że to nie DPI:** na **1366×768 przy 100 %** dla treści zakładki zostaje **1082 DIP** (ekran −
+  pasek boczny 280 − splitter 4), czyli oba widoki nie mieszczą się **bez żadnego skalowania**; skalowanie
+  nie zmienia liczby DIP-ów, których żąda kontrolka, tylko liczbę, którą ma ekran. ⭐ Przewidywanie z pomiaru
+  **odtwarza obserwację co do skali** (mieści się przy 100/125, nie mieści przy 150/175) — to dowód, że
+  diagnoza trafia w mechanizm, a nie w objaw.
+  ⚠ **To nie regresja M4/M5, tylko dług, który M4 ZMNIEJSZYŁ** — mechanizm opisało już **§19.33** (M3b.1d),
+  licząc wtedy 520 px samych podłóg combo; blok gęstości M4 te podłogi zdjął (~154 px odzyskane).
+  ⚠ **Wysokość to osobny objaw i tylko Data Import** (żąda 739 DIP przy 688 dostępnych na 150 % i 590 na
+  175 %). ⚠ **Hipoteza dla znikającego paska statusu przy 175 % świadomie NIEDOWIEDZIONA** — `MainWindow`
+  nie daje się zbudować w sesji headless.
+  ⛔ **NIE implementować przewijania, `WrapPanela` ani redukcji toolbaru przy okazji innego etapu** — każdy
+  z tych kierunków to osobna decyzja UX (⚠ `WrapPanel` narusza §13.3 Zero Layout Shift). ⭐ Pomiar w §19.49
+  jest kompletny: **przy powrocie do tematu nie trzeba go powtarzać**.
+  ⚠ **175 % to obserwacja, nie cel projektowy**; skale >175 % nietestowane (Windows ich nie udostępnia na
+  konfiguracji użytkownika).
+
 - **🎬🔒 M5 · §9 RUCH I ANIMACJA — ZAMKNIĘTE (2026-08-10). ⭐ ZERO ZMIAN PRODUKCYJNYCH — iteracja
   dostarczyła POMIAR, KOREKTĘ DOKUMENTU i JEDNEGO STRAŻNIKA.** Build 0/0; suite **8386** (8208 + 123 + 55,
   +1); smoke czysty. As-built: `product-polish.md` **§19.48**; korekta: **§9 + nowe §9.1**; pomiar:

@@ -9946,3 +9946,110 @@ podobnej sondy: `ITransition.Property` i `Popup.Host` **nie są publiczne** w Av
 refleksją), `TransformOperations.ToString()` zwraca **samą nazwę typu** — przez co pierwsza wersja
 „pokazała", że spoczynek i wciśnięcie są identyczne, porównując dwie takie same etykiety — a otwarcie
 popupu **mutuje drzewo w trakcie leniwej enumeracji** (`Walk` wymaga `.ToList()` przed otwieraniem).
+
+---
+
+## §19.49 As-built — M5 / DPI 100–175 %
+
+> **Status: ZAMKNIĘTE 2026-08-10 po QA użytkownika. ⭐ ZERO ZMIAN PRODUKCYJNYCH.**
+> Iteracja dostarczyła **celowaną checklistę**, **wynik QA** i **diagnozę znaleziska**, które zostało
+> ratyfikowane jako **dług techniczny poza zakresem M5**.
+> Checklista + wynik: **[product-polish-m5-dpi-checklist.md](product-polish-m5-dpi-checklist.md)**.
+> Pomiar: `VisualCandidateProbe -- fit` → `out/m5-dpi-fit.txt`.
+
+### §19.49.1 Zakres — dlaczego to nie był przegląd całej aplikacji
+
+**R‑6 było zaległe od dwóch bloków M4** (oba ruszały metryki, a QA użytkownika ich nie obejmowało), a M5
+dołożyło trzecią iterację metryk przez **L‑1**. Checklista jest więc przypięta do **rzeczywistych zmian
+metryk M4/M5** — dziesięć przystanków, każdy z nazwaną iteracją, która go ruszyła.
+
+⭐ **Wszystkie liczby w checkliście są policzone z tokenów**, nie przepisane: każdy token metryczny
+i każda interlinia przeliczone przez 1,25 / 1,5 / 2. Wynik ukształtował priorytety: **125 % jest
+arytmetycznie najgorsze** (15 z 28 tokenów na ułamku piksela urządzenia), **150 %** ma 5, a **200 %** jest
+czyste dla wszystkiego. ⚠ Użytkownik pracuje właśnie na 125 %, więc 100 % i 200 % są dla niego stanami
+nietypowymi — i tam najłatwiej przeoczyć regresję.
+
+### §19.49.2 Wynik QA
+
+| skala | werdykt |
+|---|---|
+| 100 % · 125 % | ✅ OK |
+| 150 % | ⛔ Activity Monitor i Data Import nie mieszczą się; brak możliwości przewinięcia |
+| 175 % | ⛔ to samo + znika dolny pasek aplikacji |
+| > 175 % | nie testowane — Windows nie udostępnia tych skal na konfiguracji użytkownika |
+
+⭐ **Przystanki 1–7, 9 i 10 przeszły bez uwag** — wiersze, ikony, focus (L‑1), dialogi (M4.4) i stany puste
+(M‑3) są czyste. ⭐ Czyli **żadna zmiana metryki z M4 ani M5 nie okazała się defektem DPI** — a to był
+właściwy przedmiot R‑6.
+
+### §19.49.3 ⭐⭐ Diagnoza: ograniczenie KONSTRUKCYJNE, które DPI tylko ujawnia wcześniej
+
+Zmierzone na **prawdziwych widokach z prawdziwymi ViewModelami** (bez bazy), nie na odtworzonych kopiach:
+
+| widok | żąda szerokości | najszerszy poziomy panel | przewijalny w poziomie? |
+|---|---|---|---|
+| Activity Monitor | **1143 DIP** | **1130 DIP**, 18 dzieci | ⛔ **NIE** |
+| Data Import | **1155 DIP** | **1131 DIP**, 20 dzieci | ⛔ **NIE** |
+| Script Executor *(odniesienie)* | 1554 DIP | 841 DIP, 13 dzieci | nie — ale 841 mieści się wszędzie |
+
+**Przyczyna jest jedna i wspólna:** pasek poleceń obu widoków to **goły poziomy `StackPanel`**, który mierzy
+dzieci przy nieskończonej szerokości i **nie kompresuje się — przycina**. Nad nim nie ma `ScrollViewera`,
+więc nie ma czym doscrollować.
+
+⭐ **Script Executor jest kontrolą, która to potwierdza od drugiej strony:** żąda *więcej* (1554 DIP)
+i problemu nie ma, bo jego nadmiar siedzi w siatce, która **umie się przewijać**. Sama „żądana szerokość"
+niczego nie przesądza — przesądza, czy nadmiar da się **skompresować albo przewinąć**.
+
+**Dostępna szerokość dla treści zakładki** = ekran / skala − pasek boczny 280 − splitter 4:
+
+| skala | 1920 | **1366** | 2560 |
+|---|---|---|---|
+| 100 % | 1636 ✅ | **1082 ⛔** | 2276 ✅ |
+| 125 % | 1252 ✅ | 809 ⛔ | 1764 ✅ |
+| 150 % | **996 ⛔** | 627 ⛔ | 1423 ✅ |
+| 175 % | **813 ⛔** | 497 ⛔ | 1179 ✅ |
+| 200 % | 676 ⛔ | 399 ⛔ | 996 ⛔ |
+
+⭐ **Przewidywanie z pomiaru odtwarza obserwację co do skali** — mieści się przy 100 % i 125 %, nie mieści
+przy 150 % i 175 %. To jest dowód, że diagnoza trafia w mechanizm, a nie w objaw.
+
+⛔⛔ **I to samo wyliczenie pokazuje, że problem NIE JEST o DPI:** na laptopie **1366×768 przy 100 %**
+zostaje **1082 DIP**, czyli oba widoki nie mieszczą się **bez żadnego skalowania**. ⚠ Nie jest to przypadek
+hipotetyczny — 1366×768 to rozdzielczość, wobec której **M4.4 świadomie liczyło sufity dialogów**.
+⭐ Skalowanie DPI **nie zmienia liczby DIP-ów, których żąda kontrolka** — zmienia liczbę DIP-ów, które MA
+ekran. Dlatego 150 % na 1920 jest arytmetycznie tym samym co 100 % na 1280.
+
+**Wysokość** to osobny objaw i dotyczy **wyłącznie Data Importu**: żąda **739 DIP**, podczas gdy cały obszar
+roboczy to **688** przy 150 % i **590** przy 175 %, jeszcze przed odjęciem chromy okna. Activity Monitor
+żąda 332 i w pionie jest czysty.
+⚠ **Hipoteza dla znikającego paska statusu przy 175 %, ŚWIADOMIE NIEDOWIEDZIONA:** treść żąda więcej
+wysokości, niż zostaje, więc wiersz treści rozpycha siatkę `MainWindow` poniżej dolnej krawędzi i ostatni
+wiersz wychodzi poza ekran. ⛔ Nie zmierzone wprost, bo **`MainWindow` nie daje się zbudować w sesji
+headless** (udokumentowany kształt wieszający suite) — zapisane jako hipoteza, nie jako ustalenie.
+
+### §19.49.4 ⚠ To nie jest regresja M4/M5 — to dług, który M4 ZMNIEJSZYŁ
+
+Mechanizm **jest już opisany w tym dokumencie**: **M3b.1d (§19.33)** zapisał o pasku Data Importu, że
+*„right-docked children take their size FIRST… a horizontal `StackPanel`, which does not compress, it
+CLIPS"*, i liczył wtedy **520 px samych podłóg combo**. ⭐ **M4 (blok gęstości, decyzja D) te podłogi
+zdjął** — ~154 px wróciło przyciskom. Stan jest więc dziś *lepszy* niż wtedy, a mimo to nadal za wąski.
+
+### §19.49.5 🔒 Decyzja: DŁUG, nie naprawa w M5
+
+🔒 **Ratyfikowane przez użytkownika:** znalezisko zostaje **istniejącym ograniczeniem / długiem
+technicznym**; layout Activity Monitora i Data Importu **nie jest zmieniany w M5**. Uzasadnienie:
+*„żaden z trzech kierunków nie jest drobną poprawką DPI, tylko osobną decyzją UX"*.
+
+| kierunek | dlaczego nie teraz |
+|---|---|
+| przewijanie poziome paska | najtańsze, ale **pasek narzędzi, który trzeba przewijać, jest sam w sobie kiepskim UX** |
+| `WrapPanel` (drugi wiersz) | ⚠ **narusza §13.3 Zero Layout Shift** — wysokość paska zależałaby od szerokości okna |
+| redukcja zawartości paska | jedyne, które usuwa PRZYCZYNĘ, i **najdroższe**: przeprojektowanie dwóch pasków poleceń |
+
+⛔ **Nie implementować żadnego z nich przy okazji innego etapu.** Rozwiązanie wymaga **osobnego etapu**
+z własną decyzją produktową. ⭐ Pomiar wyżej jest kompletny — **przy powrocie do tematu nie trzeba go
+powtarzać**.
+
+⚠ **175 % zapisane jako OBSERWACJA, nie jako cel projektowy** (decyzja użytkownika): nie projektujemy
+osobnej obsługi tej skali. ⛔ Nie znaczy to jednak „do zignorowania, bo użytkownik tego nie używa" —
+to jest **rzeczywiste znalezisko QA** i jako takie zostaje zapisane.

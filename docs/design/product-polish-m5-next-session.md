@@ -44,12 +44,20 @@
 > `EmberTernDeclaresNoMotionOfItsOwn` pilnuje **naszego źródła**, nie cudzych szablonów.
 > ⚠ **Granica pomiaru zapisana:** `ToolTip` i stany niewymuszone przez sondę są NIEZMIERZONE.
 >
-> ⏭ **POZOSTAŁY W M5 — dwie pozycje, obie wymagają decyzji przed startem:**
-> **DPI 100/125/150/200** · **terminologia M‑4**.
-> ⭐ **DPI** to czyste QA i nie da się go przygotować kodem (⚠ **R‑6 zaległe od dwóch bloków M4**, a M5
-> dołożyło trzecią iterację metryk przez L‑1); zmierzona powierzchnia ryzyka: **51 tokenów niekolorowych**
-> + **21 ról typograficznych** + **451 literalnych `Width`/`Height`** w widokach. Mogę przygotować celowaną
-> listę kontrolną „co się ruszyło w M4/M5".
+> ✅ **DPI 100–175 % — ZAMKNIĘTE (2026-08-10), ZERO ZMIAN PRODUKCYJNYCH.** Zapis: `product-polish.md`
+> **§19.49**; checklista + wynik QA: **[product-polish-m5-dpi-checklist.md](product-polish-m5-dpi-checklist.md)**.
+> **R‑6 spłacone.** 100 % i 125 % czyste; **przystanki 1–7, 9 i 10 przeszły bez uwag** — czyli **żadna zmiana
+> metryki z M4 ani M5 nie okazała się defektem DPI**, a to był właściwy przedmiot R‑6.
+> ⛔⛔ **Znalezisko przy 150 % / 175 %: Activity Monitor i Data Import nie mieszczą się w szerokości.**
+> Zdiagnozowane i 🔒 **ratyfikowane jako DŁUG TECHNICZNY poza zakresem M5** — layout nie jest zmieniany.
+> ⭐ **To ograniczenie KONSTRUKCYJNE, nie defekt skalowania:** pasek poleceń obu widoków to goły poziomy
+> `StackPanel` żądający **~1130 DIP**, bez `ScrollViewera` — nie kompresuje się, tylko przycina. Dowód, że
+> nie chodzi o DPI: na **1366×768 przy 100 %** zostaje **1082 DIP**, czyli nie mieści się **bez żadnego
+> skalowania**. ⭐ Pomiar w §19.49 jest kompletny — **przy powrocie nie trzeba go powtarzać**.
+> ⛔ **Nie implementować** przewijania, `WrapPanela` ani redukcji toolbaru przy okazji innego etapu;
+> to osobny etap z własną decyzją UX. ⚠ 175 % to obserwacja, nie cel projektowy; >175 % nietestowane.
+>
+> ⏭ **POZOSTAŁA W M5 JEDNA POZYCJA: terminologia M‑4.**
 > ⚠⚠ **M‑4: audyt opisuje MNIEJSZY problem, niż jest.** Mówi o parze `Execute`/`Run`; zmierzone
 > w `UiStrings`: **Delete 59 · Drop 29 · Compile 22 · Save 21 · Execute 15 · Run 13 · Refresh 10 ·
 > Remove 6 · Apply 1**. Największy rozjazd to **Delete/Drop/Remove**, z konkretną kolizją — drzewo

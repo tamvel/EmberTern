@@ -189,6 +189,13 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "fit")
+        {
+            Fit.Run(outDir);
+            Console.WriteLine("OK");
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "motion")
         {
             Motion.Run(outDir);
