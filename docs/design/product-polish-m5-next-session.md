@@ -5,7 +5,9 @@
 > Użytkownik wybrał **M5 — Final Polish** (§3.1) i zlecił kolejność: najpierw §10, potem dalsze punkty M5.
 >
 > ✅ **§10 / kontrast severity — ZAIMPLEMENTOWANE, ⏸ CZEKA NA QA WIZUALNE UŻYTKOWNIKA.**
-> Commit `feat(m5): kontrast severity…`. Wariant **B** ratyfikowany; trzy wartości w `Colors.axaml`;
+> **Commit `6223045`** (`feat(m5): kontrast severity…`), na `feat/product-polish`, wypchnięty na **oba**
+> remote'y i zweryfikowany (`origin` == `private` == lokalne `6223045`), drzewo czyste.
+> Wariant **B** ratyfikowany; trzy wartości w `Colors.axaml`;
 > §10 sprostowane (próg 3:1 to **wymóg własny**, nie „WCAG AA Large"); trzy strażniki
 > (`SeverityText_*`, `SeveritySignal_*`) zweryfikowane podsadzeniem.
 > Zapis: `product-polish.md` **§19.45** · decyzja: **`product-polish-m5-severity-contrast-decision.md`**.
@@ -18,6 +20,26 @@
 > (nie „3 z 48", tylko ~12 widoków + kilka ViewModeli; do tego **8 osieroconych stałych `*Empty*`**).
 >
 > ⚠ Liczby w §1 i §3 niżej pochodzą sprzed M5 — suite to teraz **8351** (8193 + **103** + 55).
+>
+> ### Co konkretnie obejrzeć w QA (oba motywy)
+>
+> 1. ⭐ **Motyw JASNY, komunikat ostrzegawczy** — to jedyna realnie widoczna zmiana: bursztyn
+>    `#C77800` → `#A16100`. Powierzchnie: baner `MessageBanner` (m.in. edytory obiektów, Execute
+>    Procedure, Data Import, Security Manager) **oraz** log Messages w edytorze SQL.
+> 2. Motyw jasny, komunikat sukcesu — zmiana ledwie zauważalna (`#2E8B4F` → `#2A7E48`).
+> 3. Motyw ciemny, komunikat błędu — **powinno nie być widać różnicy** (delta 0,27); jeżeli coś
+>    rzuca się w oczy, to jest znalezisko.
+> 4. ⚠ **Ikony „Uruchom" (Play) w motywie jasnym mają zostać BEZ ZMIAN** — `ActionRunColor` celowo
+>    nie ruszony. Jeżeli zzieleniały inaczej niż wcześniej, to regresja.
+>
+> ### Następny krok po QA
+>
+> ⛔ Dopiero po Twojej akceptacji rusza kolejna pozycja M5. Rekomendowana kolejność wynika z pomiaru,
+> **nie z planu**: **L‑1 (focus)** jest najmniejsze i w pełni zmierzone · **M‑3 (empty states)**
+> ma gotowy pierwszy przypadek (8 osieroconych stałych + trójka `*DescriptionEmpty`) · **§9**
+> to wyłącznie decyzja „strażnik czy nie" (zero naruszeń) · **DPI** jest czystym QA i nie da się go
+> przygotować kodem · **M‑4 (terminologia)** wymaga najpierw inwentarza i słownika (R‑8), więc jest
+> najdroższe.
 
 > **Do wklejenia na początku następnej sesji.** Zastępuje `product-polish-m4-migration-next-session.md`,
 > który jest od 2026-08-09 **historyczny** — czytaj go tylko dla „dlaczego", nigdy dla „co dalej".
