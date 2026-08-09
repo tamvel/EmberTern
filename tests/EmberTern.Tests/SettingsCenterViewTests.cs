@@ -139,13 +139,22 @@ public sealed class SettingsCenterViewTests
                 // IsVisible == true (its search filter matched), so IsVisible alone would count every page's
                 // rows and this test would stop measuring what it is named for.
                 //
-                // ⭐ Both counts are DERIVED from the catalog rather than written down. That is the assertion
-                // etap 6 wanted: "every catalog row has a rendered group, and exactly the selected category's
-                // are on screen" — which also catches a row that was added to the catalog and never given its
-                // XAML block, the one drift a hard-coded number would have hidden behind a passing update.
-                var generalRows = SettingsCatalog.SettingsIn(SettingsCatalog.CategoryGeneral).Count();
-                Assert.Equal(SettingsCatalog.Settings.Count, groups.Count);
-                Assert.Equal(generalRows, groups.Count(g => g.IsEffectivelyVisible));
+                // ⚠⚠ TA ASERCJA ZOSTAŁA PRZEFORMUŁOWANA (pakiet UX po M5, punkt 5) — i to jest #333.
+                // Wcześniej brzmiała `Settings.Count == groups.Count`, czyli PRZEPISYWAŁA PRZESŁANKĘ
+                // „jeden wiersz katalogu = jedna karta". Ta przesłanka przestała obowiązywać, gdy cztery
+                // wiersze Easy-mode dostały JEDNĄ kartę — bo są jednym tematem. Test padał wtedy na
+                // POPRAWNYM produkcie (17 vs 14), dokładnie tak jak strażnik z §3.3 tego samego pakietu.
+                //
+                // ⭐ Jego CEL zapisany we własnym komentarzu — „złapać wiersz dodany do katalogu, któremu
+                // nikt nie dał bloku XAML" — jest nadal słuszny, więc zmieniona jest FORMA, nie surowość:
+                //   (a) każdy wiersz kategorii musi mieć na ekranie SWOJĄ ETYKIETĘ (identyczność, nie licznik),
+                //   (b) kart nie może być WIĘCEJ niż wierszy (karta może grupować, nie może osierocić).
+                // Razem: ani wiersz bez UI, ani karta bez wiersza. Żadna z nich nie zakłada, ile kart jest.
+                var generalRows = SettingsCatalog.SettingsIn(SettingsCatalog.CategoryGeneral).ToList();
+                AssertEveryRowIsOnScreen(window, SettingsCatalog.CategoryGeneral);
+                Assert.True(
+                    groups.Count(g => g.IsEffectivelyVisible) <= generalRows.Count,
+                    "więcej kart niż wierszy katalogu na stronie — karta bez pokrycia w katalogu");
 
                 var search = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");
                 var categories = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "CategoryList");
@@ -165,7 +174,7 @@ public sealed class SettingsCenterViewTests
 
                 search.Text = string.Empty;
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(generalRows, groups.Count(g => g.IsEffectivelyVisible));
+                AssertEveryRowIsOnScreen(window, SettingsCatalog.CategoryGeneral);
                 Assert.False(empty.IsVisible);
 
                 window.Close();
@@ -462,6 +471,11 @@ public sealed class SettingsCenterViewTests
 
                 // Each page shows exactly its own catalog rows — the same catalog-derived assertion the search
                 // test makes, applied per page, so a row added without its XAML block fails here.
+                //
+                // ⚠ Przeformułowane razem z tamtą (pakiet UX po M5, punkt 5): licznik kart przepisywał
+                // przesłankę „wiersz = karta", którą złamało zgrupowanie czterech pozycji Easy-mode w jedną
+                // kartę — test padał na poprawnym produkcie (6 vs 3). Sprawdzana jest teraz OBECNOŚĆ każdego
+                // wiersza plus brak karty bez pokrycia; powód i pełne uzasadnienie przy `AssertEveryRowIsOnScreen`.
                 foreach (var id in new[]
                          {
                              SettingsCatalog.CategoryEditor,
@@ -470,9 +484,13 @@ public sealed class SettingsCenterViewTests
                          })
                 {
                     SelectCategory(window, id);
-                    var rendered = window.GetVisualDescendants().OfType<Border>()
+                    AssertEveryRowIsOnScreen(window, id);
+
+                    var cards = window.GetVisualDescendants().OfType<Border>()
                         .Count(b => b.Classes.Contains("settings-group") && b.IsEffectivelyVisible);
-                    Assert.Equal(SettingsCatalog.SettingsIn(id).Count(), rendered);
+                    Assert.True(
+                        cards <= SettingsCatalog.SettingsIn(id).Count(),
+                        $"strona '{id}': więcej kart niż wierszy katalogu — karta bez pokrycia w katalogu");
                 }
 
                 SelectCategory(window, SettingsCatalog.CategoryGrid);
@@ -493,6 +511,39 @@ public sealed class SettingsCenterViewTests
                 if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
             }
         }, System.Threading.CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Every catalog row of <paramref name="categoryId"/> has its LABEL on screen.
+    ///
+    /// <para>⭐ Sprawdza TOŻSAMOŚĆ, nie liczbę — i to jest cała różnica wobec asercji, którą zastąpiła.
+    /// Licznik kart odpowiadał na pytanie „ile jest pojemników"; to pytanie o pojemniki, a nie o ustawienia,
+    /// i przestało być prawdziwe w chwili, gdy jedna karta objęła cztery wiersze. Ta wersja odpowiada na
+    /// pytanie, o które chodziło od początku: <i>czy użytkownik widzi każde ustawienie tej kategorii</i> —
+    /// niezależnie od tego, ile kart je niesie.</para>
+    ///
+    /// <para>⚠ Etykieta wiersza trafia na ekran dwoma drogami — jako <c>TextBlock.Text</c> (nagłówek karty)
+    /// albo jako <c>Content</c> pola wyboru — więc zbierane są obie. Pominięcie drugiej dałoby test, który
+    /// czerwieni się na poprawnym produkcie dla każdego przełącznika.</para>
+    /// </summary>
+    private static void AssertEveryRowIsOnScreen(SettingsWindow window, string categoryId)
+    {
+        var rendered = window.GetVisualDescendants()
+            .Where(v => v is Control { IsEffectivelyVisible: true })
+            .SelectMany(v => v switch
+            {
+                TextBlock { Text: { } t } => new[] { t },
+                ContentControl { Content: string c } => new[] { c },
+                _ => Array.Empty<string>(),
+            })
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var setting in SettingsCatalog.SettingsIn(categoryId))
+        {
+            Assert.True(
+                rendered.Contains(setting.Label),
+                $"wiersz katalogu '{setting.Id}' nie ma etykiety na ekranie — dodany do katalogu bez bloku XAML?");
+        }
     }
 
     // Selects a category by its catalog id, the way the user clicks it — never by a written index, so adding a

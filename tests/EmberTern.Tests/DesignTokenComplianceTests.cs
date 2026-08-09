@@ -423,6 +423,10 @@ public class DesignTokenComplianceTests
     private static readonly Dictionary<string, int> MarginBaseline = new(StringComparer.Ordinal)
     {
         // Margin — odstęp wokół elementu. Zmierzone 2026-08-09: 474 deklaracje lokalne w 55 plikach.
+        // ⚠ Skorygowane 2026-08-10 (pakiet UX po M5, punkt 5): 471 w 55 plikach. Trzy wartości zniknęły
+        //   z `SettingsWindow.axaml` przy przebudowie powierzchni — dwie zeszły na role (`Margin.FieldGap`),
+        //   jedna zniknęła razem z marginesem siatki, którą zastąpiły paddingi paneli. Strażnik ZAŻĄDAŁ tej
+        //   korekty sam („progress that was not written down") — ratchet działający zgodnie z zamysłem.
         ["Views/DebuggerTabView.axaml"] = 49,
         ["Views/DataImportTabView.axaml"] = 40,
         ["Views/MainWindow.axaml"] = 29,
@@ -438,7 +442,7 @@ public class DesignTokenComplianceTests
         ["Views/TableDetailTabView.axaml"] = 14,
         ["Views/ViewDetailTabView.axaml"] = 12,
         ["Views/GeneratorDetailTabView.axaml"] = 11,
-        ["Views/SettingsWindow.axaml"] = 11,
+        ["Views/SettingsWindow.axaml"] = 8,
         ["Views/ScriptExecutorTabView.axaml"] = 10,
         ["Views/ExceptionDetailTabView.axaml"] = 7,
         ["Views/SettingsImportDialog.axaml"] = 9,

@@ -11,7 +11,7 @@ Zakres całego pakietu, w kolejności ratyfikowanej przez użytkownika:
 | 2 | `Button.primary` — tekst w stanach | ✅ zamknięte, odebrane |
 | 3 | Live DDL — kolorowanie na pięciu powierzchniach | ✅ zamknięte, odebrane |
 | 4 | Performance — Execution plan (layout + kolorowanie drzewa) | ✅ zamknięte, odebrane |
-| 5 | Settings UX | ⏸ |
+| 5 | Settings UX | ✅ zamknięte, odebrane |
 | 6 | Database Properties (nowa funkcja) | ⏸ osobny mini-etap |
 
 ---
@@ -397,3 +397,139 @@ całego punktu*. Stan odtworzono z dosłownego zapisu sesji.
 ⚠ **`Lab/EmberTern_Lab.fdb` bywa modyfikowany przez SMOKE TESTY** — aplikacja podłącza się do laba,
 a Firebird dotyka nagłówka pliku. To zacommitowany artefakt binarny, który zmienia się „sam"; sprawdzaj
 `git status Lab/` przed każdym commitem po smoke. Nie ma to związku z żadną zmianą w kodzie.
+
+---
+
+## §9 Punkt 5 — Settings UX
+
+Zgłoszenie: okno ustawień jest funkcjonalne, ale wygląda surowo — mała lista kategorii bez ikon, brak
+separacji lewej i prawej strony, wszystko stłoczone, całość czyta się jak techniczny formularz.
+
+### §9.1 ⭐⭐ Rozpoznanie: cztery przyczyny, a największa jest defektem HOSTA, nie stylu
+
+**(1) Przesłanka stylu karty nie obowiązywała w tym jednym oknie.** `Border.settings-group` maluje się
+`BackgroundBrush` i opisuje siebie jako *„a recessed BackgroundBrush surface inside the **PanelBrush** chrome
+that hosts it"*. Zmierzone u wszystkich czterech konsumentów:
+
+| plik | kontener karty | działa? |
+|---|---|---|
+| `SettingsExportDialog.axaml:29` | `PanelBrush` | ✓ |
+| `SettingsImportDialog.axaml:38` | `PanelBrush` | ✓ |
+| `DataImportTabView.axaml:61` | `PanelBrush` | ✓ |
+| **`SettingsWindow.axaml`** | **żaden** | ⛔ |
+
+Karta stała wprost na tle okna: `#1E1E1E` na `#1E1E1E` (Dark), `#FCFCFD` na `#FCFCFD` (Light) — **różnica
+zerowa**, całą separację 17 kart niosła kreska 1 px. ⛔ Naprawiony jest HOST; styl **nietknięty**, bo u tamtych
+trzech działa poprawnie. Gotcha **#351**.
+
+**(2) Panel nawigacji nie był powierzchnią** (`Background="Transparent"` na oknie `BackgroundBrush`).
+**(3) Wiersz kategorii stał na roli opisującej inny gest** — `Size.Row.Menu` (22) to *„czytasz w pionowej serii
+i wybierasz jednym kliknięciem"*, a nawigacja Settings to sześć pozycji, na których się LĄDUJE.
+**(4) Wewnątrz strony brak grupowania** — Editor to był płaski ciąg sześciu równorzędnych kart.
+
+### §9.2 Ratyfikowane decyzje
+
+🔒 **T‑1** — trzy tony, zero nowych tokenów: nawigacja `ChromeStrongBrush` › treść `PanelBrush` › karta
+`BackgroundBrush`. Monotonicznie w obu motywach; każdy krok to adjacencja, której aplikacja już używa
+(pasek tytułu › panel › edytor).
+⛔ Wariant „karta = `SurfaceRaisedBrush`" **odrzucony POMIAREM**: w Light dałby `#FFFFFF` na `#FCFCFD` = trzy
+jednostki, czyli dokładnie defekt opisany przy `TextBox` na powierzchni unoszącej się (#308).
+
+🔒 **Ikony** — sześć, wszystkie ISTNIEJĄCE, żadnej nowej geometrii: `Icon.Settings` · `Icon.Braces` ·
+`Icon.Table` · `Icon.PanelLeft` · `Icon.Crosshair` · `Icon.PencilRuler`. ⛔ Debugger bierze `Icon.Crosshair`,
+a nie kompozytu `DebuggerIcon` z paska — kompozyt to osobna kontrolka o dwóch barwach i własnym
+`ControlTheme`, więc byłby wyjątkiem w szablonie wiersza i drugim mechanizmem rysowania ikony kategorii.
+
+🔒 **`Size.Row.Tree` (24)** — bez tworzenia roli `Size.Row.Nav`.
+🔒 **Bez ikon przy 17 parametrach** i **bez podnoszenia wysokości `TextBox`/`ComboBox`** — pierwsze nie
+przechodzi bramki `color-language.md` §0.5 („nie wiem" = odmowa), drugie to rola app-wide i backlogowany
+sprint gęstości (R7 + R18).
+
+### §9.3 ⭐ Wskaźnik aktywnej kategorii — zero zmiany geometrii Z KONSTRUKCJI
+
+Pasek `Size.TabIndicator` (2) stoi w szablonie wiersza **zawsze**; zaznaczenie zmienia wyłącznie jego BARWĘ.
+⛔ Odrzucony wariant `BorderThickness` na `ContentPresenter` wiersza: ramka wchodzi w desired size, a presenter
+Fluenta jest o nią wcinany, więc pasek dokładany przy zaznaczeniu rozpychałby wiersz przy **każdym kliknięciu**
+— §13.3 Zero Layout Shift złamane dokładnie tam, gdzie zmiana działa (pomiar z M5 / L‑1). To ten sam wzorzec,
+który L‑1 ratyfikowało dla `Button.primary`.
+⛔ Świadomie **bez pogrubienia** etykiety w stanie aktywnym: `SemiBold` zmienia szerokość tekstu, czyli wnosi
+ruch, którego pasek został tak skonstruowany, żeby uniknąć.
+
+### §9.4 ⭐⭐ B4 — cztery pozycje Easy-mode w jednej karcie, wyłącznie prezentacja
+
+Cztery flagi zostają **czterema wierszami katalogu**: własne id, haystack, wartość i `IsVisible`. Zmienia się
+tylko to, że widok rysuje wokół nich JEDNĄ ramkę — bo to jeden temat („w jakim trybie otwiera się edytor
+obiektu"), a cztery równorzędne karty mówiły cztery tematy. ⛔ Zero zmian w `SettingsCatalog`, zero nowych
+abstrakcji; jedyny dodatek to `ShowEasyModeGroup` (OR czterech `IsVisible`) w **dokładnym kształcie
+istniejącego `ShowTabStripMaxRows`**.
+⚠ Każdy checkbox zachowuje SWOJE `IsVisible`, więc wyszukanie „procedure" pokazuje kartę z jednym wierszem —
+znaczenie filtra nietknięte, zmienił się wyłącznie pojemnik.
+⭐ Skutek uboczny: strona Editor **zmieściła się w całości** (6 kart → 3); wcześniej przewijała się i ucinała
+ostatni opis w połowie zdania.
+
+### §9.5 ⭐⭐ Dwie rzeczy złapał POMIAR PIKSELI, nie oko
+
+**(a) Wskaźnik w ogóle nie działał, a render wyglądał wiarygodnie.** Zmierzone x=12..24 → `#094771`
+(wypełnienie zaznaczenia) zamiast `#2D6BBF`. Przyczyna to **#342**: `Background="Transparent"` zadeklarowane
+lokalnie w szablonie **bije każdy setter stylu**, więc `:selected` nie miał czego pomalować. ⚠ Brak 2 px paska
+na obrazku wygląda po prostu jak brak paska — bez pomiaru odebrałbym to jako „działa".
+
+**(b) Zgłosiłem defekt, którego nie ma — i wycofałem go przed zmianą kodu.** Pierwszy pomiar dał „panel treści
+= `#1E1E1E`, czyli `PanelBrush` nie dochodzi". Przekrój pionowy pokazał, że punkt trafił w **stopkę**. Panel
+treści jest `#252526`. ⚠ Zły punkt pomiarowy, nie zły kod — i to jest ta sama lekcja co §6.5: pomiar rozstrzyga
+także wtedy, gdy rozstrzyga na moją niekorzyść.
+
+### §9.6 ⚠⚠ Trzy istniejące strażniki padły na POPRAWNYM produkcie
+
+**(a) Dwa testy przepisywały przesłankę „jeden wiersz katalogu = jedna karta"** (`17 vs 14`, `6 vs 3`) — **#333**.
+Zgrupowanie Easy-mode tę przesłankę łamie z założenia. ⛔ Asercji nie osłabiono i grupowania nie cofnięto:
+przeformułowano ją na to, o co jej własny komentarz mówi, że chodzi (*„złapać wiersz dodany do katalogu bez
+bloku XAML"*) — każdy wiersz musi mieć **swoją etykietę na ekranie** (tożsamość, nie licznik) **plus** kart nie
+może być więcej niż wierszy (brak karty-sieroty). Razem: ani wiersz bez UI, ani karta bez wiersza, i żadna
+z tych asercji nie zakłada, ILE kart jest. Zweryfikowane podsadzeniem (usunięcie jednego checkboxa →
+`wiersz katalogu 'editor.functionEasyMode' nie ma etykiety na ekranie`).
+
+**(b) `TheCatalogTableContainsNoStringLiterals` padł i MIAŁ RACJĘ.** Klucze ikon to ciągi w tablicy katalogu.
+⛔ Strażnika nie ruszono — klucze dostały nazwy jako `const` obok istniejących `CategoryGeneral`/`SettingTheme`,
+czyli tam, gdzie ten plik już trzyma swoje wartości.
+⭐ Do tego nowy strażnik **`EveryCategoryIcon_ResolvesToARealGeometry`**, bo ryzyko jest realne:
+`IconGeometryConverter` na nieznanym kluczu zwraca `null`, więc literówka **usuwa ikonę po cichu przy zielonym
+buildzie** — #348 w kształcie ikony. Czyta ŹRÓDŁO `IconGeometries.axaml`, nie przepisaną listę (#333);
+zweryfikowany podsadzeniem literówki.
+
+**(c) Ratchet odstępów zażądał korekty w drugą stronę** — `Margin` w `SettingsWindow.axaml` 11 → 8 (dwie
+wartości zeszły na rolę `Margin.FieldGap`, jedna zniknęła z marginesem siatki zastąpionym paddingami paneli),
+suma 474 → 471. To samo zachowanie co przy 4a (§6.1): „progress that was not written down".
+
+### §9.7 ⚠ Granice zapisane świadomie
+
+- **`Pad.Dialog` (20,16) dostał pierwszego konsumenta** jako padding panelu treści. ⚠ CLAUDE.md notuje tę rolę
+  jako „zero konsumentów" przy **odłożonym pytaniu o padding NAGŁÓWKÓW dialogów** — to inne miejsce, ale
+  zapisane, żeby tamta decyzja zastała stan zgodny z opisem.
+- **Kreska pionowa zostaje** mimo różnicy tonalnej: krok Chrome→Panel to 8 jednostek w Dark i 11 w Light, czyli
+  separacja czytelna, ale miękka. Szerokość z roli `Stroke.Hairline` — katalog **nie ma** roli `Thickness` dla
+  krawędzi prawej, a wymyślanie jej dla jednego elementu byłoby otwarciem etapu odstępów tylnymi drzwiami.
+- **Stopka zostaje na tle okna**, jako osobne pasmo pod obiema powierzchniami.
+- ⛔ **Dwunastu innych powierzchni nie ruszano** — zakres to jedno okno.
+
+### §9.8 Sonda
+
+`tools/probes/VisualCandidateProbe/SettingsUx.cs` (`-- settings before|after`) renderuje **prawdziwe okno
+`SettingsWindow`** z prawdziwym `PreferencesService`, wszystkie sześć kategorii × oba motywy.
+⭐ To odwrotność pozostałych modułów tej sondy: tam kandydat żyje w sondzie i nic się nie wdraża przez samo
+uruchomienie, tu sonda pokazuje stan WDROŻONY — więc kolumnę „przed" trzeba było wyrenderować **przed** zmianą
+kodu i zachować jako pliki. Obie kolumny pochodzą z tego samego kodu sondy, więc różnica może pochodzić
+wyłącznie z produktu. Powód jest wprost lekcją **#348**: obrazek zbudowany z atrap wygląda wiarygodnie
+i odpowiada na inne pytanie, niż zadano.
+
+### §9.9 Weryfikacja
+
+- Build **0/0**, zero ostrzeżeń
+- Suite **8430** = 8243 (główna) + 132 (headless zgrupowana) + 55 (headless izolowana), wszystkie
+  `--blame-hang`, wszystkie zielone
+- ⭐ Krucha ręczna lista nazw w filtrze partycji headless **nie urosła** — nowy strażnik ikon czyta ŹRÓDŁO,
+  więc trafił do partycji głównej
+- Smoke czysty; `git status Lab/` pusty (sesja nie łączyła się z labem)
+- Render: `dotnet run --project tools/probes/VisualCandidateProbe -- settings after`, 12 plików
+- Wszystkie trzy zmienione/nowe strażniki **zweryfikowane podsadzeniem**
+- QA wizualne użytkownika (oba motywy): **przyjęte bez uwag**

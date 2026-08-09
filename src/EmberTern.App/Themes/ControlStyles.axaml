@@ -346,6 +346,49 @@
   </Style>
 
   <!-- ================================================================================================
+       NAWIGACJA SETTINGS CENTER — pakiet UX po M5, punkt 5.
+
+       ⭐ Własna klasa, a nie zmiana bazowego `ListBoxItem`, bo to INNY GEST. Komentarz przy stylu bazowym
+       opisuje go dokładnie: „pozycja listy, pozycja listy rozwijanej i wiersz menu to ten sam gest —
+       czytasz w pionowej serii i wybierasz jednym kliknięciem". Nawigacja Settings to sześć pozycji,
+       na których się LĄDUJE i przebywa, a nie seria do przebiegnięcia wzrokiem. Stąd wiersz `Size.Row.Tree`
+       (24) zamiast `Size.Row.Menu` (22) — ratyfikowane, bez tworzenia roli `Size.Row.Nav`.
+
+       ⚠ Zawężenie klasą jest wymagane, nie kosmetyczne: bazowy `ListBoxItem` obsługuje Saved Queries
+       i każdą inną listę w aplikacji. Bezpieczne mechanicznie z pomiaru #342 — Avalonia rozstrzyga między
+       stylami SPECYFICZNOŚCIĄ SELEKTORA, nie kolejnością, więc selektor z klasą bije goły selektor typu
+       niezależnie od tego, gdzie w pliku stoi.
+
+       ⭐⭐ WSKAŹNIK AKTYWNEJ KATEGORII NIE ZMIENIA GEOMETRII — i to jest cała jego konstrukcja.
+       Pasek stoi w szablonie wiersza ZAWSZE (szerokość `Size.TabIndicator`), a zaznaczenie zmienia
+       wyłącznie jego BARWĘ z przezroczystej na akcent. To jest wprost wzorzec ratyfikowany w M5 / L‑1
+       dla `Button.primary`: „ramka już tam była, tylko niosła barwę własnego tła, więc była niewidoczna
+       z konstrukcji" — przy zerowej zmianie geometrii.
+
+       ⚠⚠ Odrzucony wariant, żeby nikt go nie wracał: `BorderThickness` na `ContentPresenter` wiersza.
+       Ramka WCHODZI W DESIRED SIZE, a presenter Fluenta jest o nią wcinany, więc pasek dokładany przy
+       zaznaczeniu rozpychałby wiersz przy KAŻDYM kliknięciu — §13.3 Zero Layout Shift złamane dokładnie
+       tam, gdzie zmiana działa (pomiar z M5 / L‑1). Wariant szablonowy nie ma tego problemu Z KONSTRUKCJI,
+       a nie przez dobraną liczbę — i nie potrzebuje roli `Thickness`, której katalog nie ma.
+
+       ⚠ `Padding` wiersza jest ZEROWY, a odstęp niesie kontener w szablonie — inaczej pasek stałby
+       w środku wcięcia zamiast przy krawędzi panelu i przestałby być wskaźnikiem krawędziowym.
+       ================================================================================================ -->
+  <Style Selector="ListBox.settings-nav ListBoxItem">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Tree}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ListBox.settings-nav ListBoxItem:selected Border#NavIndicator">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <!-- ⛔ Świadomie BEZ pogrubienia etykiety w stanie aktywnym: pasek i wypełnienie zaznaczenia już niosą
+       ten stan, a `SemiBold` zmienia SZEROKOŚĆ tekstu, czyli dokładnie ten rodzaj ruchu, którego pasek
+       został tak skonstruowany, żeby uniknąć. Trzeci sygnał na jeden stan to nie wzmocnienie, tylko szum. -->
+
+  <!-- ================================================================================================
        Pole WYSZUKIWANIA — Product Polish M2b krok 9, zgłoszenie QA.
 
        ⭐ To jest drugi konsument `Size.ControlProminent` i powód, dla którego ta rola jest ROLĄ,

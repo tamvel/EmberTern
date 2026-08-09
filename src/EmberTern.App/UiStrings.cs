@@ -1059,6 +1059,10 @@ internal static class UiStrings
     public const string SettingsEditorModeKeywords =
         "editor mode easy source default open procedure view trigger function structured";
 
+    // Nagłówek karty, która grupuje te cztery wiersze (pakiet UX po M5, punkt 5). ⚠ Nazywa TEMAT, a nie
+    // sumę pozycji — cztery flagi odpowiadają na jedno pytanie, i dopiero to czyni z nich jedną kartę.
+    public const string SettingsEasyModeGroupLabel = "Default editor mode";
+
     public const string SettingsProcedureEasyModeLabel = "Open procedures in Easy mode";
     public const string SettingsViewEasyModeLabel = "Open views in Easy mode";
     public const string SettingsTriggerEasyModeLabel = "Open triggers in Easy mode";

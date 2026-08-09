@@ -134,6 +134,42 @@ public class SettingsCenterVmTests
             "SettingsCatalog's table must name no strings of its own. Found: " + string.Join(" | ", offenders));
     }
 
+    /// <summary>
+    /// Każda kategoria niesie ikonę, a jej klucz wskazuje na GEOMETRIĘ, KTÓRA ISTNIEJE.
+    ///
+    /// <para>⭐⭐ To jest kompensacja za jedyny rodzaj ciągu, jaki tablica katalogu wpuszcza z zewnątrz —
+    /// klucz zasobu. Literówka w nim nie zawodzi: <c>IconGeometryConverter</c> zwraca na nieznanym kluczu
+    /// <c>null</c>, <c>SvgIcon</c> nie ma czego narysować i w nawigacji zostaje pusty slot — <b>przy zielonym
+    /// buildzie i zielonym całym suite</b>. To dokładnie kształt #348 z tego samego pakietu: brak
+    /// rejestracji/zasobu nie krzyczy, tylko po cichu zabiera element, a ekran wygląda wiarygodnie.</para>
+    ///
+    /// <para>⚠ Czytane ze ŹRÓDŁA <c>IconGeometries.axaml</c>, nie z przepisanej listy nazw (#333): lista
+    /// w teście rozjechałaby się z katalogiem geometrii w tę stronę, w którą nikt nie patrzy.</para>
+    /// </summary>
+    [Fact]
+    public void EveryCategoryIcon_ResolvesToARealGeometry()
+    {
+        var geometries = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "Themes", "IconGeometries.axaml"));
+
+        var declared = Regex.Matches(geometries, @"x:Key=""(Icon\.[A-Za-z0-9]+)""")
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.NotEmpty(declared);
+
+        foreach (var category in SettingsCatalog.Categories)
+        {
+            Assert.False(
+                string.IsNullOrWhiteSpace(category.IconKey),
+                $"kategoria '{category.Id}' nie deklaruje ikony");
+            Assert.True(
+                declared.Contains(category.IconKey),
+                $"kategoria '{category.Id}' wskazuje na nieistniejącą geometrię '{category.IconKey}' — "
+                + "ikona zniknęłaby po cichu");
+        }
+    }
+
     // ─── OPTIONS COME FROM CORE ─────────────────────────────────────────────────────────────
 
     /// <summary>

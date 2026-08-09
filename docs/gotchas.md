@@ -1696,3 +1696,21 @@ every emit path to be individually perfect.**
      harmful once the feature stayed — and the person holding the dependency (here: that the colour change was
      what kept the feature above its contrast floor) is the one who has to say so BEFORE executing.
      (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §6a.)
+
+351. **A shared style can carry an unstated premise about its HOST, and at the one site that violates it the
+     style looks broken — so the natural fix is the wrong one.** `Border.settings-group` documents itself as
+     *"a recessed BackgroundBrush surface inside the PanelBrush chrome that hosts it"*. Measured across its
+     four consumers: three (both settings dialogs and Data Import) really do wrap it in a `PanelBrush`
+     container; **Settings Center wrapped it in nothing**, so the card painted `BackgroundBrush` directly onto
+     a `BackgroundBrush` window — **card and host identical to the byte** (`#1E1E1E` on `#1E1E1E` in Dark,
+     `#FCFCFD` on `#FCFCFD` in Light), and all 17 cards were carried by a 1 px hairline. ⭐ On screen that
+     reads as *"the card style is too weak"*, and the tempting repair — give the style a stronger background —
+     would have been applied at the one place the style is innocent and would have **broken the three sites
+     that were correct** (R7 in reverse). ⚠ The rule: **when a shared style looks wrong at one site, first
+     check whether that site satisfies the premise the style states about its container.** A style that
+     describes its own figure/ground pair is making a claim about something it does not own, and nothing
+     enforces it — the premise lives in the style's prose while the container lives in each host's XAML, which
+     is #340's split of custody applied to appearance instead of to decisions. ⭐ Corollary worth keeping: a
+     style whose correctness depends on its host should say so in its own comment (this one did — which is
+     exactly why the diagnosis took one measurement rather than an afternoon).
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §9.)

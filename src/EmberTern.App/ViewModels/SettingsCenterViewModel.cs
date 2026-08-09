@@ -388,11 +388,16 @@ public sealed class SettingsCategoryViewModel
     {
         Id = descriptor.Id;
         Title = descriptor.Title;
+        IconKey = descriptor.IconKey;
     }
 
     public string Id { get; }
 
     public string Title { get; }
+
+    /// <summary>The category's icon as a geometry KEY — a string, never a <c>Geometry</c> or a brush
+    /// (architecture rule #1). Resolved in the view by <c>IconGeometryConverter</c>.</summary>
+    public string IconKey { get; }
 }
 
 /// <summary>
@@ -570,6 +575,25 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
                PreferenceOptions.TabStripModeMultiRow,
                StringComparison.Ordinal);
 
+    /// <summary>
+    /// Whether the Easy-mode card is shown at all — it is not, when the search excludes all four of its rows.
+    ///
+    /// <para>⭐ <b>This is presentation only, and deliberately so.</b> The four flags stay four independent
+    /// catalog rows with four independent ids, four haystacks and four stored values; nothing about
+    /// <see cref="SettingsCatalog"/> or the meaning of a category changes. What changes is that the view draws
+    /// ONE card around them, because they are one subject — "which mode does an object editor open in" — and
+    /// four equal cards said four subjects.</para>
+    ///
+    /// <para>⚠ It is an OR, and each checkbox keeps its OWN <c>IsVisible</c> inside the card. So searching
+    /// "procedure" shows the card with one row in it, not the card with four: the filter's meaning is
+    /// unchanged, only its container is. Same shape as <see cref="ShowTabStripMaxRows"/>.</para>
+    /// </summary>
+    public bool ShowEasyModeGroup
+        => ProcedureEasyMode.IsVisible
+           || ViewEasyMode.IsVisible
+           || TriggerEasyMode.IsVisible
+           || FunctionEasyMode.IsVisible;
+
     public PreferenceSettingViewModel DebuggerIsolation
         => Preference(SettingsCatalog.SettingDebuggerIsolation);
 
@@ -670,6 +694,9 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
         //   muszą ogłaszać zmianę — inaczej wpisanie frazy w wyszukiwarkę zostawiłoby wiersz w poprzednim
         //   stanie widoczności.
         OnPropertyChanged(nameof(ShowTabStripMaxRows));
+        // ⚠ Ten sam powód co wiersz wyżej: karta Easy-mode jest widoczna, dopóki filtr zostawia w niej
+        //   choć jeden wiersz, więc jej widoczność musi być ogłaszana przy każdej zmianie filtra.
+        OnPropertyChanged(nameof(ShowEasyModeGroup));
     }
 
     /// <summary>
