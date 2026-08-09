@@ -935,13 +935,38 @@
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
+  <!-- ⭐⭐ `Foreground` MUSI STAĆ NA `ContentPresenter`, A NIE TYLKO NA PRZYCISKU — i to jest przyczyna
+       zgłoszenia „w Light theme tekst na przycisku Save robi się przy najechaniu prawie czarny”.
+
+       ⚠⚠ ZMIERZONE headless, oba motywy, cztery stany. Wariant `.primary` nadpisuje `Foreground`
+       na PRZYCISKU (dziedziczenie) oraz na jawnych dzieciach `TextBlock`/`SvgIcon` — ale nigdy na
+       `ContentPresenter` w szablonie. Fluent ustawia `ButtonForegroundPointerOver` / `…Pressed` /
+       `…Disabled` właśnie NA PRESENTERZE, a `FluentBridge` mapuje pierwsze dwa na `ForegroundColor`.
+       Skutek: przycisk, którego `Content` jest ZWYKŁYM STRINGIEM (tekst rysuje sam presenter), traci
+       biały tekst; przycisk z jawnym `<TextBlock>` — nie. Stąd Execute/Start debugging wyglądały
+       poprawnie, a Save/OK w dialogach nie. Zmierzony zasięg: **22 przyciski `.primary` deklarują
+       `Content=`** wobec 18 z dziećmi.
+
+       Liczby (tekst na tle `AccentMutedBrush` #1A4F8F):
+         Light, string-content : #1B1D1F → **2,04:1**  ⛔ (przy 4,5:1 wymaganym przez §10)
+         Dark,  string-content : #D4D4D4 → 5,62:1  ⚠ przechodzi PRZYPADKIEM
+         po poprawce (OnAccentBrush)   : #FFFFFF → **8,33:1**
+       ⭐ Mechanizm był zepsuty w OBU motywach — tylko Light przekraczał próg, bo `ForegroundColor`
+       w Dark jest prawie biały. „W Dark wygląda dobrze” było zbiegiem okoliczności, nie regułą.
+
+       ⛔⛔ NIE NAPRAWIAĆ TEGO W `FluentBridge.axaml`. `ButtonForegroundPointerOver` obsługuje każdy
+       zwykły przycisk, gdzie ciemny tekst na jasnej chromie jest POPRAWNY — podniesienie go zepsułoby
+       wszystkie pozostałe. To ta sama racja, którą ten plik zapisuje już przy `ButtonBackgroundDisabled`:
+       przezroczystość/barwa jest wyjątkiem WARIANTU, nie regułą Bridge'a. -->
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
   <Style Selector="Button.primary:pressed /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
     <Setter Property="Opacity" Value="0.85" />
   </Style>
 
@@ -976,9 +1001,13 @@
   <Style Selector="Button.primary:disabled">
     <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
   </Style>
+  <!-- ⚠ `Foreground` tu z tego samego powodu co przy `:pointerover` wyżej — bez niego string-content
+       malował `ButtonForegroundDisabled` (Light **#5F6570**) obok TextBlock-content na `OnAccentDisabledBrush`
+       (**#8A9199**), czyli dwa wyłączone przyciski główne w jednej stopce różniły się barwą tekstu. -->
   <Style Selector="Button.primary:disabled /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentDisabledBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentDisabledBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />
   </Style>
   <Style Selector="Button.primary:disabled TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource OnAccentDisabledBrush}" />

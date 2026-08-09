@@ -19,7 +19,7 @@ public sealed record CheckConstraintSpec(string Name, string Expression);
 /// <see cref="DdlPreview"/>; Accept / Cancel close returning a
 /// <see cref="CheckConstraintSpec"/> or null.
 /// </summary>
-public partial class CheckConstraintDialogViewModel : ViewModelBase
+public partial class CheckConstraintDialogViewModel : ViewModelBase, IDdlPreviewSource
 {
     public CheckConstraintDialogViewModel(string tableName, IReadOnlyList<string>? existingNames = null)
     {

@@ -52,7 +52,7 @@ public sealed record NamedForeignKeyAction(ForeignKeyAction Action, string Label
 /// Both are best-effort: dialog still works with empty fields (user picks
 /// manually) but auto-mapping degrades to stage 3 (no proposal).
 /// </summary>
-public partial class ForeignKeyDialogViewModel : ViewModelBase
+public partial class ForeignKeyDialogViewModel : ViewModelBase, IDdlPreviewSource
 {
     public ForeignKeyDialogViewModel(
         string sourceTableName,

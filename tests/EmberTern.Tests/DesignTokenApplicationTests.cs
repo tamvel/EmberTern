@@ -1996,5 +1996,202 @@ public sealed class DesignTokenApplicationTests
             $"Theme token `{key}` is not in the application's {variant} resources.");
         return Assert.IsType<T>(value);
     }
+
+    // ================================================================================================
+    // Button.primary — TEKST ZOSTAJE JASNY WE WSZYSTKICH STANACH (zgłoszenie 2026-08-09)
+    // ================================================================================================
+
+    /// <summary>
+    /// ⭐⭐ ETYKIETA PRZYCISKU GŁÓWNEGO CZYTA SIĘ NA AKCENCIE W KAŻDYM STANIE — mierzone na ELEMENCIE,
+    /// KTÓRY MALUJE, nie na tokenie (#345).
+    ///
+    /// <para>⚠⚠ Defekt, który to pinuje, był NIEWIDOCZNY dla testu czytającego rolę: `AccentBrush`
+    /// i `OnAccentBrush` były przez cały czas poprawne, a wariant `.primary` ustawiał `Foreground`
+    /// na PRZYCISKU i na jawnych dzieciach. Malował co innego `ContentPresenter`, bo Fluent stawia
+    /// `ButtonForegroundPointerOver`/`…Pressed`/`…Disabled` właśnie na nim — a treść będąca ZWYKŁYM
+    /// STRINGIEM jest rysowana przez sam presenter. Zmierzone w Light: **#1B1D1F na #1A4F8F = 2,04:1**.</para>
+    ///
+    /// <para>⭐ Dlatego `Content` jest tu stringiem, i to jest cała siła tego testu: gdyby użyć jawnego
+    /// `&lt;TextBlock&gt;`, test przechodziłby PRZED poprawką — bo tamta ścieżka nigdy nie była zepsuta.
+    /// To jest rozróżnienie, którego zgłoszenie nie mogło zawierać, a które decyduje o zasięgu (22 przyciski
+    /// z `Content=` wobec 18 z dziećmi).</para>
+    ///
+    /// <para>⚠ Próg 4,5:1 to wymóg WŁASNY EmberTerna dla małego tekstu (§10 + §10.1) — jawnie nie „WCAG AA
+    /// Large”, którego żadna rola typograficzna w tej aplikacji nie spełnia (#344).</para>
+    ///
+    /// <para>⚠⚠ ZAKRES: stany AKCYJNE (spoczynek / najechanie / wciśnięcie). Stan NIEAKTYWNY jest świadomie
+    /// PRZYGASZONY — ratyfikowana decyzja z 2026-08-03 („stan nieaktywny to przygaszone wypełnienie, nie
+    /// przezroczystość”) — i zmierzone daje **2,43:1 w Light / 4,02:1 w Dark**. Pierwsza wersja tego testu
+    /// obejmowała go progiem 4,5:1 i **zaświeciła na czerwono na poprawnym produkcie**; „naprawa” oznaczałaby
+    /// cofnięcie tamtej decyzji, żeby zadowolić próg, który nigdy nie miał dotyczyć wyłączonej kontrolki.
+    /// ⭐ To #322 popełnione WEWNĄTRZ strażnika pisanego przeciwko temu błędowi: reguła wypowiedziana o KLASIE
+    /// („każdy stan”) była fałszywa o jednym jej członku. Stan nieaktywny pilnuje asercja WIĄZANIA niżej
+    /// oraz `PrimaryButtonLabel_ReadsTheSame_WhateverShapeTheContentIs`.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task PrimaryButtonLabel_StaysLegibleOnTheAccent_InEveryActionableState(string variantName)
+    {
+        var theme = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        await _session.Dispatch(() =>
+        {
+            // Treść jako STRING — dokładnie kształt Save/OK/Cancel w każdym dialogu (patrz doc powyżej).
+            var button = new Button { Classes = { "primary" }, Content = "Zapisz" };
+            var window = new Window { Content = button, RequestedThemeVariant = theme, Width = 300, Height = 200 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            var centre = new Point(button.Bounds.X + button.Bounds.Width / 2,
+                                   button.Bounds.Y + button.Bounds.Height / 2);
+
+            foreach (var state in new[] { "rest", "pointerover", "pressed" })
+            {
+                switch (state)
+                {
+                    case "pointerover":
+                        window.MouseMove(centre);
+                        break;
+                    case "pressed":
+                        window.MouseDown(centre, MouseButton.Left);
+                        break;
+                }
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+                var presenter = button.GetVisualDescendants().OfType<ContentPresenter>().First();
+                var text = (presenter.Foreground as ISolidColorBrush)?.Color;
+                var fill = (presenter.Background as ISolidColorBrush)?.Color;
+                Assert.True(text is not null && fill is not null,
+                    $"[{variantName}/{state}] presenter nie maluje jednolitym pędzlem — pomiar nie ma przedmiotu.");
+
+                var ratio = ContrastRatio(text!.Value, fill!.Value);
+                Assert.True(ratio >= 4.5, $"""
+                    [{variantName}/{state}] etykieta przycisku głównego ma kontrast {ratio:F2}:1 (próg 4,5:1).
+                      tekst = {text}   tło = {fill}
+                    `Foreground` musi być ustawiony NA `ContentPresenter` dla tego stanu — wartość na samym
+                    przycisku nie dosięga treści będącej zwykłym stringiem, bo rysuje ją presenter.
+                    ⛔ Nie naprawiać w `FluentBridge` — `ButtonForeground*` obsługuje wszystkie zwykłe przyciski,
+                    gdzie ciemny tekst na jasnej chromie jest poprawny.
+                    """);
+            }
+
+            // Stan nieaktywny: nie kontrast (jest świadomie przygaszony), tylko WIĄZANIE — presenter musi
+            // czytać rolę „tekst na przygaszonym akcencie”, a nie `ButtonForegroundDisabled` Fluenta. To jest
+            // dokładnie ta połowa defektu, która była niewidoczna gołym okiem.
+            window.MouseUp(centre, MouseButton.Left);
+            window.MouseMove(new Point(1, 190));
+            button.IsEnabled = false;
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            var disabledPresenter = button.GetVisualDescendants().OfType<ContentPresenter>().First();
+            var painted = (disabledPresenter.Foreground as ISolidColorBrush)?.Color;
+            // ⚠ `SolidColorBrush`, nie `ISolidColorBrush` — `ThemeToken<T>` porównuje typ DOKŁADNIE.
+            var expected = ThemeToken<SolidColorBrush>("OnAccentDisabledBrush", theme).Color;
+            Assert.True(painted == expected, $"""
+                [{variantName}/disabled] presenter maluje etykietę {painted}, a rola „tekst na przygaszonym
+                akcencie” (OnAccentDisabledBrush) to {expected}. Bez settera `Foreground` na presenterze
+                string-content spada na `ButtonForegroundDisabled` Fluenta i różni się od sąsiada w tej samej stopce.
+                """);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// Druga połowa, bo pierwsza sama by nie wystarczyła: etykieta ma być jasna niezależnie od tego, CZY
+    /// autor widoku napisał `Content="Zapisz"` czy `&lt;TextBlock Text="Zapisz"/&gt;`. Dwa przyciski główne
+    /// obok siebie w jednej stopce nie mogą różnić się barwą tekstu — a właśnie tak było w stanie
+    /// nieaktywnym (Light: **#5F6570** wobec **#8A9199**).
+    /// </summary>
+    [Theory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task PrimaryButtonLabel_ReadsTheSame_WhateverShapeTheContentIs(string variantName)
+    {
+        var theme = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        await _session.Dispatch(() =>
+        {
+            var stringContent = new Button { Classes = { "primary" }, Content = "Zapisz" };
+            var childContent = new Button { Classes = { "primary" }, Content = new TextBlock { Text = "Zapisz" } };
+            var window = new Window
+            {
+                Content = new StackPanel { Spacing = 12, Children = { stringContent, childContent } },
+                RequestedThemeVariant = theme,
+                Width = 300,
+                Height = 200,
+            };
+            window.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            foreach (var enabled in new[] { true, false })
+            {
+                stringContent.IsEnabled = childContent.IsEnabled = enabled;
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+                var a = PaintedLabelColour(stringContent);
+                var b = PaintedLabelColour(childContent);
+                Assert.True(a == b, $"""
+                    [{variantName}/{(enabled ? "enabled" : "disabled")}] dwa przyciski `.primary` malują etykietę
+                    różnymi barwami zależnie od KSZTAŁTU treści: string={a}, TextBlock={b}.
+                    W jednej stopce dialogu czyta się to jako niedbałość, nie jako hierarchia.
+                    """);
+            }
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>
+    /// ⭐ Podgląd DDL DOSTAJE PALETĘ SWOJEGO MOTYWU — i podąża za jej zmianą.
+    ///
+    /// <para>To behawioralna połowa reguły, której źródłową pilnuje <c>DdlPreviewSurfaceTests</c>. Sam fakt,
+    /// że w XAML-u stoi `TextEditor`, nie maluje NICZEGO: bez definicji składni kontrolka pokazuje czarny
+    /// tekst i wygląda dokładnie jak `TextBox`, który zastąpiła. Dlatego asercja czyta `SyntaxHighlighting`
+    /// ZREALIZOWANEJ kontrolki, a nie obecność wywołania.</para>
+    ///
+    /// <para>⚠ Druga połowa jest ważniejsza od pierwszej: subskrypcja `ActualThemeVariantChanged` siedzi na
+    /// EDYTORZE, więc przełączenie motywu przy otwartym oknie musi przemalować podgląd. Wersja, która ustawia
+    /// paletę raz w konstruktorze, przechodzi połowę tego testu i zostawia podgląd w barwach poprzedniego
+    /// motywu — usterkę widoczną wyłącznie po przełączeniu.</para>
+    /// </summary>
+    [Fact]
+    public async Task ReadOnlyPreview_TakesTheThemeSyntaxDefinition_AndFollowsAThemeChange()
+    {
+        await _session.Dispatch(() =>
+        {
+            var editor = new AvaloniaEdit.TextEditor { IsReadOnly = true };
+            var window = new Window { Content = editor, RequestedThemeVariant = ThemeVariant.Dark };
+            window.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            EmberTern.App.Completion.SqlEditorBehavior.AttachReadOnlyPreview(editor);
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            Assert.True(editor.SyntaxHighlighting is not null,
+                "Podgląd DDL nie dostał definicji składni — malowałby czarny tekst, czyli dokładnie to, "
+                + "co miał przestać robić.");
+            Assert.Equal(EmberTern.App.App.FirebirdSyntaxName, editor.SyntaxHighlighting!.Name);
+
+            window.RequestedThemeVariant = ThemeVariant.Light;
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            Assert.Equal(EmberTern.App.App.FirebirdSyntaxLightName, editor.SyntaxHighlighting!.Name);
+
+            window.Close();
+        }, default);
+    }
+
+    /// <summary>Barwa, którą FAKTYCZNIE dostaje etykieta: jawny `TextBlock` w treści, jeśli jest, w przeciwnym
+    /// razie `Foreground` presentera, bo to on rysuje string.</summary>
+    private static Color? PaintedLabelColour(Button button)
+    {
+        var explicitLabel = button.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault();
+        if (explicitLabel is not null)
+        {
+            return (explicitLabel.Foreground as ISolidColorBrush)?.Color;
+        }
+        var presenter = button.GetVisualDescendants().OfType<ContentPresenter>().First();
+        return (presenter.Foreground as ISolidColorBrush)?.Color;
+    }
 }
 

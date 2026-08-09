@@ -141,6 +141,13 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "qa123")
+        {
+            Qa123.Run(outDir);
+            Console.WriteLine("OK");
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "radius")
         {
             Radius.Run(outDir);
@@ -678,8 +685,14 @@ internal sealed class ProbeApp : Application
         // ⚠ DOPISANE W M4: bez motywu `DataGrid` siatka nie ma szablonu i renderuje się jako NIC — a to
         //   jest dokładnie ta cicha awaria, którą opisuje reguła wyżej. Kolejność jak w `App.axaml`:
         //   Fluent → DataGrid → nasze style, żeby `ControlStyles.axaml` mogło nadpisać oba.
-        //   `AvaloniaEdit` świadomie pominięty — żaden render tej sondy nie zawiera edytora tekstu.
+        //   `AvaloniaEdit` dołączony niżej — patrz komentarz przy jego `StyleInclude`.
         Styles.Add(new StyleInclude((Uri?)null) { Source = new Uri("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml") });
+        // ⚠ DOPISANE 2026-08-09 (QA pakietu 1–3): zdanie wyżej mówiło, że `AvaloniaEdit` jest ŚWIADOMIE
+        //   pominięty, „bo żaden render tej sondy nie zawiera edytora tekstu" — i przestało być prawdziwe
+        //   w chwili, gdy `Qa123` zaczął renderować podgląd Live DDL. Bez tego motywu `TextEditor` nie ma
+        //   szablonu i renderuje się jako NIC, czyli dokładnie ta cicha awaria, przed którą ostrzega reguła
+        //   o słownikach kilka linii wyżej. (#284 w kształcie komentarza: uzasadnienie przeżyło swój powód.)
+        Styles.Add(new StyleInclude((Uri?)null) { Source = new Uri("avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml") });
         Styles.Add(new StyleInclude((Uri?)null) { Source = new Uri("avares://EmberTern/Themes/ControlStyles.axaml") });
     }
 }

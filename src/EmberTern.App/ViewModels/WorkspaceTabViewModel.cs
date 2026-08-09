@@ -287,7 +287,16 @@ public partial class WorkspaceTabViewModel : ViewModelBase
             ObjectName = context?.Name ?? string.Empty,
             ConnectionProfileId = connectionProfileId,
             Icon = MetadataNodeViewModel.IconFor(iconKind),
-            IconResourceKey = MetadataNodeViewModel.ResourceKeyFor(iconKind),
+            // ⭐ KOLOR NIESIE ROLĘ (S2 „wejście do narzędzia”, R‑6), GEOMETRIA NIESIE KONTEKST (S1).
+            // Ten przycisk na pasku modułów przeszedł na `AccentBrush` przy domknięciu K‑final — z zapisanym
+            // uzasadnieniem, że gdy element miałby nieść i rodzaj, i skutek, **wygrywa skutek**. Zakładka
+            // została wtedy pominięta i przez to była JEDYNĄ z sześciu zakładek narzędziowych (Trace, Session,
+            // Global Search, Script Executor, Data Import, Security) na kolorze RODZAJU: `IconColor_Role`
+            // = #90A4AE, który przy 14 px czyta się jak biały. To nie był błąd renderowania, tylko połowa
+            // wykonanej decyzji — ten sam kształt co #340 (decyzja żyje w jednym miejscu, rejestr w drugim).
+            // ⚠ Geometria ZOSTAJE zależna od kontekstu otwarcia (User vs Role) i to jest świadome: kolor
+            // mówi „to jest narzędzie”, glif mówi „otwarte na użytkowniku/roli”. Dwie osie, dwie odpowiedzi.
+            IconResourceKey = "AccentBrush",
             IconGeometryKey = MetadataNodeViewModel.GeometryKeyFor(iconKind),
             SecurityManager = manager,
         };

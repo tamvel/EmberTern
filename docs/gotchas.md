@@ -1628,3 +1628,40 @@ every emit path to be individually perfect.**
      screen**; the button is a bare glyph. The defect had survived the product's whole life *because*
      the constant was orphaned, waiting for someone to wire in "the text that is already written".
      (Product Polish M5 / M‑3 — `product-polish.md` §19.47.)
+
+347. **A style variant that overrides `Foreground` on the CONTROL and on its explicit children still loses
+     to the template's own setter on the `ContentPresenter` — and it loses only for plain-STRING content,
+     so the same variant looks correct on one button and wrong on the next.** Measured headless in both
+     themes and four states: `Button.primary` set `Foreground` on the button (inheritance), on
+     `Button.primary TextBlock` and on `Button.primary SvgIcon`, but never on `/template/
+     ContentPresenter` — where Fluent puts `ButtonForegroundPointerOver` / `…Pressed` / `…Disabled`. A
+     `ContentPresenter` given a **string** renders the text itself, so it painted `ForegroundColor`:
+     **`#1B1D1F` on `#1A4F8F` = 2,04:1** in Light against a 4,5:1 floor, i.e. Save/OK went nearly black on
+     hover while Execute (an explicit `<TextBlock>` + icon) stayed white. Population: 22 primary buttons
+     declare `Content=` against 18 with element children.
+     ⭐⭐ **The mechanism was broken in BOTH themes; only Light crossed the threshold** — Dark measured
+     5,62:1 purely because its `ForegroundColor` is near-white. "It looks fine in Dark" was a coincidence,
+     and reading it as correctness turns one variant defect into a per-theme patch that can never finish.
+     ⛔ **Do not fix it in the theme bridge.** `ButtonForeground*` serves every ordinary button, where dark
+     text on light chrome is *right*; the fix is a variant-scoped setter on the presenter. Same reasoning
+     the codebase already records for `ButtonBackgroundDisabled`.
+     ⚠ The disabled state has the same shape but is NOT a contrast question — it is deliberately dimmed,
+     so its guard must assert the **binding** (the presenter reads the on-accent-disabled role), never a
+     ratio. Writing the obvious "every state clears 4,5:1" test turns a correct product red and invites
+     you to undo a ratified decision to make a test pass — #322 committed inside the guard written to
+     prevent it. (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §3.)
+
+348. **A missing REGISTRATION fails as silently as a missing resource dictionary, one layer further out —
+     and a render made without it looks entirely plausible.** A visual probe rendered the "after" column of
+     a syntax-highlighting change with no colour at all, identical to "before", because the XSHD
+     definitions are registered by the application's own `App` startup and the probe runs a minimal
+     `ProbeApp`: `HighlightingManager.GetDefinition(name)` simply returned `null`. Nothing threw, no
+     control was missing, and the image was a perfectly reasonable picture answering a different question
+     than the one asked — read casually it says *"the highlighting does not work"*.
+     ⭐ This is the general form of the probe rule already recorded for merged dictionaries: **anything the
+     real app does at startup and the probe does not is invisible in the output, not in an error.** Before
+     trusting a render that shows "no change", check what the app initialises that the probe skips.
+     ⚠ Its companion, found in the same step: the probe's own comment said `AvaloniaEdit` was *"deliberately
+     omitted — no render of this probe contains a text editor"*, which stopped being true the moment a
+     render did. #284 in the shape of a comment — the justification outlived its reason.
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §5.)

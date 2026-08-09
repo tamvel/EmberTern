@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:app="using:EmberTern.App"
         xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:ae="using:AvaloniaEdit"
         xmlns:controls="using:EmberTern.App.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -171,17 +172,17 @@
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
               CornerRadius="{DynamicResource Radius.Surface}">
-        <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
-                 IsReadOnly="True"
-                 AcceptsReturn="True"
-                 TextWrapping="NoWrap"
-                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 FontSize="{DynamicResource Text.Compact.Size}"
-                 BorderThickness="0"
-                 Padding="8,6"
-                 MinHeight="80"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+        <ae:TextEditor x:Name="DdlEditor"
+                       ShowLineNumbers="False"
+                       IsReadOnly="True"
+                       FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                       FontSize="{DynamicResource Text.Compact.Size}"
+                       Padding="8,6"
+                       MinHeight="80"
+                       HorizontalScrollBarVisibility="Auto"
+                       VerticalScrollBarVisibility="Auto"
+                       Background="{DynamicResource BackgroundBrush}"
+                       Foreground="{DynamicResource ForegroundBrush}" />
       </Border>
     </StackPanel>
 

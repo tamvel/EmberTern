@@ -38,7 +38,7 @@ public sealed record ConstraintFieldSpec(
 /// dialog returning a <see cref="ConstraintFieldSpec"/> or null. Field
 /// selection reuses <see cref="SelectableFieldViewModel"/>.
 /// </summary>
-public partial class ConstraintFieldDialogViewModel : ViewModelBase
+public partial class ConstraintFieldDialogViewModel : ViewModelBase, IDdlPreviewSource
 {
     public ConstraintFieldDialogViewModel(
         ConstraintFieldKind kind,

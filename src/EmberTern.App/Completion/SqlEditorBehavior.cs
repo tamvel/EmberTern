@@ -1,8 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
+using AvaloniaEdit.Highlighting;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Sql.Language.Semantics;
 
@@ -194,5 +199,93 @@ internal static class SqlEditorBehavior
         {
             if (vm is not null) vm.Metadata.ObjectsChanged -= OnObjectsChanged;
         };
+    }
+
+    /// <summary>
+    /// The COMPLETE read-only SQL preview wiring: the semantic accent layer
+    /// (<see cref="AttachReadOnlyHighlighting"/>) <b>plus</b> the XSHD lexical palette and the shared
+    /// selection brush, re-applied on every theme change.
+    ///
+    /// <para>⭐ It exists because <see cref="AttachReadOnlyHighlighting"/> wires only HALF of what a preview
+    /// needs, and the other half — pick the light/dark XSHD definition, set <c>SelectionBrush</c>, re-run both
+    /// on <c>ActualThemeVariantChanged</c> — was copied by hand into <b>twelve</b> views as an identical
+    /// ~15-line <c>ApplyEditorTheme</c>. Five more previews were about to become copies 13–17, which is the
+    /// point at which the duplication stops being a coincidence and becomes the mechanism.</para>
+    ///
+    /// <para>⚠ The theme subscription is on the EDITOR, not on the host view, so the wiring needs nothing
+    /// from the caller and cannot outlive the control it decorates. That is also why this is one call rather
+    /// than a base class: a preview appears inside a tab, a dialog and a panel, which share no host type.</para>
+    ///
+    /// <para>⚠⚠ SCOPE OF THE SEMANTIC LAYER, MEASURED NOT ASSUMED: <see cref="AttachReadOnlyHighlighting"/>
+    /// resolves its metadata from <c>editor.FindAncestorOfType&lt;Window&gt;()?.DataContext as
+    /// MainWindowViewModel</c>. In a DIALOG that DataContext is the dialog's own view model, so the model
+    /// stays null and only the LEXICAL layer paints. That is a real limit, not a bug to chase here: a dialog
+    /// preview shows keywords, types, literals and comments in the app's colours, and the object accents it
+    /// cannot resolve are exactly the ones a not-yet-created object would not have anyway.</para>
+    /// </summary>
+    public static void AttachReadOnlyPreview(TextEditor editor)
+    {
+        if (editor is null) return;
+
+        AttachReadOnlyHighlighting(editor);
+        ApplyPreviewTheme(editor);
+        editor.ActualThemeVariantChanged += (_, _) => ApplyPreviewTheme(editor);
+    }
+
+    /// <summary>
+    /// The whole Live-DDL-preview wiring in one call: <see cref="AttachReadOnlyPreview"/> plus the text push
+    /// from the host's <see cref="IDdlPreviewSource"/>, re-bound whenever the host's DataContext changes.
+    ///
+    /// <para>⚠ The text is PUSHED, never bound: a two-way <c>TextEditor.Text</c> binding is flaky, which is
+    /// the gotcha all twelve existing DDL previews already work around by hand. The unchanged-value guard is
+    /// not an optimisation — the DDL is recomputed on every keystroke in the form, and re-assigning identical
+    /// text resets the caret and any selection while the user is reading it.</para>
+    /// </summary>
+    public static void AttachDdlPreview(TextEditor editor, StyledElement host)
+    {
+        if (editor is null || host is null) return;
+
+        AttachReadOnlyPreview(editor);
+
+        IDdlPreviewSource? bound = null;
+
+        void Push()
+        {
+            var text = bound?.DdlPreview ?? string.Empty;
+            if (editor.Text != text) editor.Text = text;
+        }
+
+        void OnSourcePropertyChanged(object? _, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is null or nameof(IDdlPreviewSource.DdlPreview)) Push();
+        }
+
+        void Rebind()
+        {
+            if (bound is not null) bound.PropertyChanged -= OnSourcePropertyChanged;
+            bound = host.DataContext as IDdlPreviewSource;
+            if (bound is not null) bound.PropertyChanged += OnSourcePropertyChanged;
+            Push();
+        }
+
+        host.DataContextChanged += (_, _) => Rebind();
+        Rebind();
+    }
+
+    /// <summary>The palette half: the XSHD definition for the current theme plus the shared selection brush.
+    /// ⛔ Never a hard-coded colour — both come from the app's one catalog, which is what makes a preview
+    /// recolour live with the rest of the window.</summary>
+    private static void ApplyPreviewTheme(TextEditor editor)
+    {
+        var theme = editor.ActualThemeVariant;
+
+        editor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition(
+            theme == ThemeVariant.Light ? App.FirebirdSyntaxLightName : App.FirebirdSyntaxName);
+
+        if (Application.Current?.Resources.TryGetResource("SelectionBrush", theme, out var resource) == true
+            && resource is IBrush brush)
+        {
+            editor.TextArea.SelectionBrush = brush;
+        }
     }
 }

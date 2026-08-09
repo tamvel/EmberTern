@@ -4,6 +4,7 @@
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:controls="using:EmberTern.App.Controls"
              xmlns:m="using:EmberTern.Core.Metadata"
+             xmlns:ae="using:AvaloniaEdit"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
@@ -274,14 +275,25 @@
     <Border Grid.Row="2" Padding="14,4">
       <StackPanel Spacing="4">
         <TextBlock Text="{x:Static app:UiStrings.NewTableDdlLabel}" Classes="field-label" />
-        <TextBox Text="{Binding DdlPreview, Mode=OneWay}"
-                 IsReadOnly="True"
-                 AcceptsReturn="True"
-                 TextWrapping="NoWrap"
-                 FontFamily="Cascadia Code,Consolas,Menlo,monospace"
-                 MaxHeight="140"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+        <!-- ⭐ THE SAME read-only SQL surface every other DDL preview uses — an AvaloniaEdit `TextEditor`
+             wired by `SqlEditorBehavior.AttachReadOnlyPreview` (semantic accent layer + the shared XSHD
+             lexical layer, from the one Lexer/Parser/SemanticModel front-end). Not a second renderer.
+             ⚠ Read-only in the strict sense that seam guarantees: no completion, no squiggles, no typing
+             ergonomics — a preview must not offer to edit what it is only showing. Line numbers off: this
+             is one statement, not a document. `Text` is PUSHED from the VM in code-behind, because a
+             two-way `TextEditor.Text` binding is flaky (the gotcha every DDL preview works around). -->
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="{DynamicResource Border.All}"
+                CornerRadius="{DynamicResource Radius.Surface}" MaxHeight="140">
+          <ae:TextEditor x:Name="DdlEditor"
+                         ShowLineNumbers="False"
+                         IsReadOnly="True"
+                         FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                         FontSize="{DynamicResource Text.Code.Size}"
+                         HorizontalScrollBarVisibility="Auto"
+                         VerticalScrollBarVisibility="Auto"
+                         Background="{DynamicResource BackgroundBrush}"
+                         Foreground="{DynamicResource ForegroundBrush}" />
+        </Border>
       </StackPanel>
     </Border>
 
