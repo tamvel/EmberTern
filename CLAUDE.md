@@ -467,6 +467,54 @@ noted.
 
 ## Current state
 
+- **🏁🔒 M5 · PRODUCT POLISH — ETAP ZAMKNIĘTY W CAŁOŚCI I ODEBRANY (2026-08-10). ⭐ WRAZ Z NIM ZAMKNIĘTY
+  JEST CAŁY PLAN §13 — po M5 nie ma kolejnej pozycji.** Build 0/0; suite **8392** (8214 + 123 + 55); smoke
+  czysty. Podsumowanie: `product-polish.md` **§19.51**; startowy dokument:
+  **[product-polish-m5-next-session.md](docs/design/product-polish-m5-next-session.md)**.
+  ⛔ **`feat/product-polish` NIE jest scalona do `master`** — ratyfikowana decyzja użytkownika (2026-08-05)
+  nadal obowiązuje.
+  **Sześć pozycji:** kontrast **§10** (§19.45) · focus **L‑1** (§19.46) · empty states **M‑3** (§19.47) ·
+  animacje **§9** (§19.48) · **DPI** (§19.49) · terminologia **M‑4** (§19.50). „Oba motywy" to kryterium
+  przekrojowe każdego QA, nie osobna pozycja.
+  ⭐⭐ **WYNIK METODOLOGICZNY CAŁEGO M5: w CZTERECH z sześciu pozycji pomiar obalił zapis, na którym pozycja
+  stała — i za każdym razem zmieniło to kształt pracy, nie tylko liczbę.** §10 cytowało normę, której nie
+  spełnia (żadna rola typograficzna nie kwalifikuje się jako „duży tekst" WCAG) · L‑1 opisywał objaw, a
+  produkt miał **dwie konwencje focusu naraz** · §9 „zero naruszeń" pochodziło z licznika na źródłach, gdy
+  framework wnosi **16 przejść** · M‑4 „Drop wyłącznie w Data Import" opisywało **2 z 26** wystąpień, i to
+  na tej przesłance zapadła decyzja projektowa, zanim pomiar ją obalił. ⭐ Wspólny wniosek: **zapis
+  w dokumencie starzeje się ciszej niż kod, a najgroźniej wtedy, gdy brzmi konkretnie** — norma z nazwą,
+  liczba wystąpień, „zero". ⛔ Mierz przed planowaniem, nie cytuj.
+  ⭐ **Dwie pozycje (§9 i DPI) zamknięto BEZ zmiany produktu i to jest wynik, nie brak** — ich produktem był
+  pomiar i korekta zapisu. ⚠ Odwrotnie **M‑4 wymusiło zmianę KODU** (`CollectionCommands.RemoveVerb`), choć
+  wyglądało na etap czysto tekstowy: wspólny router kolekcji opisywał **jedną etykietą** trzy różne
+  operacje — `ALTER TABLE … DROP` na polu, `DELETE FROM` na wierszu i wyjęcie pozycji z bufora.
+  ⛔ **Świadomie odłożone po M5 (żadne NIE jest niedokończonym M5)** — pełna tabela z powodami w §19.51.3:
+  szerokość Activity Monitora i Data Importu przy 150 %/175 % (dług konstrukcyjny) · **etap odstępów**
+  (969 wartości lokalnych) · **app-wide UX sprint** (gęstość + czcionka monospace) · **B1** · **Z‑3** ·
+  ogon literałów ikon 10/11/13/15 · nazwane wyjątki terminologii · skale DPI > 175 % · `ToolTip` w §9.
+  ⏭ **Następny temat wymaga decyzji użytkownika.**
+
+- **🔤🔒 M5 · M‑4 TERMINOLOGIA — ZAMKNIĘTE I ODEBRANE PO QA (2026-08-10).** As-built: `product-polish.md`
+  **§19.50**; norma: **[terminology.md](docs/design/terminology.md)**; strażnik `TerminologyTests` (**R‑8**),
+  zweryfikowany podsadzeniem.
+  ⛔⛔ **INWENTARZ BYŁ BŁĘDNY I DECYZJA ZAPADŁA NA FAŁSZYWEJ PRZESŁANCE.** Raportowałem, że `Drop` występuje
+  **wyłącznie w Data Import**; zmierzone — **26 etykiet w sześciu modułach**, z czego import to **2**
+  (niecałe 8 %). Przyczyna: podgląd ucięty na `head -45`, czyli **uogólnienie z tego, co się wydrukowało**.
+  ⭐ Zgłoszone użytkownikowi **przed jakąkolwiek zmianą tekstu**; decyzja podjęta od nowa.
+  🔒 **Ratyfikowany wariant B: `Drop` = operacja DDL generująca `DROP`, `Delete` = pozostałe usuwanie,
+  `Remove` = element edytowanej kolekcji.** Uzasadnienie użytkownika: *„EmberTern jest narzędziem dla
+  developerów baz danych, więc chcę zachować informację o tym, jaka operacja DDL zostanie wykonana"*.
+  ⭐ Reguła **istniała utajona** i była łamana w połowie przypadków — M‑4 ją **dokończyło**: indeks miał
+  **cztery etykiety w dwóch słowach**, a generator kłócił się z własnym potwierdzeniem.
+  ⭐⭐ **To wymusiło zmianę kodu:** czasownik usunięcia stał się własnością **kolekcji**
+  (`CollectionCommands.RemoveVerb`), bo jedna etykieta nie może być poprawna dla pola tabeli (`DROP`),
+  wiersza danych (`DELETE FROM`) i pozycji bufora naraz.
+  ⭐ **Strażnik M‑3 złapał kaskadę** — zmiana tooltipa wymusiła synchronizację podpowiedzi w pustym pasku
+  bocznym. ⚠ **Dwa istniejące testy przepisywały starą treść** i padły (#333). ⚠ **Pułapka polskiego
+  cudzysłowu po raz TRZECI** (M4.3, M4.4, tutaj).
+  ⏸ **Nazwane wyjątki:** debuggerowe „Save" (kompiluje, ale „Save" opisuje akcję użytkownika —
+  `terminology.md` §2.1) · `FolderDialogCreate` · tytuły okien i zakładek · proza z „run".
+
 - **🖥🔒 M5 · DPI 100–175 % — ZAMKNIĘTE PO QA UŻYTKOWNIKA (2026-08-10). ⭐ ZERO ZMIAN PRODUKCYJNYCH; R‑6
   SPŁACONE.** As-built: `product-polish.md` **§19.49**; checklista + wynik:
   **[product-polish-m5-dpi-checklist.md](docs/design/product-polish-m5-dpi-checklist.md)**; pomiar:
@@ -4820,11 +4868,11 @@ noted.
   (Product Polish through **M4.4** + M4's density decision + typography block + the stabilization sprint
   S-1…S-6 + the grid consistency sprint + the Firebird language completeness sprint incl. its QA round).
   Green in the three documented partitions (**8193 + 97 + 55**).
-  ⚠⚠ **NIEAKTUALNE OD 2026-08-10 — po czterech iteracjach M5 (§10 · L‑1 · M‑3 · §9) suma to 8386
-  (8208 + 123 + 55).** Zdanie wyżej zostaje jako zapis stanu po M4; ⛔ nie cytuj go jako bieżącego.
-  ⭐ **M‑3 (+14) i §9 (+1) trafiły w całości do partycji GŁÓWNEJ** (8193 → 8208), bo żaden z tych testów
-  nie konstruuje kontrolek Avalonii — czytają ViewModele i ŹRÓDŁA. Krucha ręczna lista nazw w filtrze
-  partycji headless **nie urosła w M5 ani razu**, przez cztery iteracje z rzędu.
+  ⚠⚠ **NIEAKTUALNE OD 2026-08-10 — po ZAMKNIĘCIU CAŁEGO M5 suma to 8392
+  (8214 + 123 + 55).** Zdanie wyżej zostaje jako zapis stanu po M4; ⛔ nie cytuj go jako bieżącego.
+  ⭐ **M‑3 (+14), §9 (+1) i M‑4 (+6) trafiły w całości do partycji GŁÓWNEJ** (8193 → 8214), bo żaden z tych
+  testów nie konstruuje kontrolek Avalonii — czytają ViewModele i ŹRÓDŁA. ⭐⭐ Krucha ręczna lista nazw
+  w filtrze partycji headless **nie urosła przez CAŁY M5 ani razu**, przez sześć iteracji z rzędu.
   ⭐ Wcześniej: §10 i L‑1 dołożyły **26**
   testów i **wszystkie** wylądowały w partycji ZGRUPOWANEJ (97 → 123), bo obie dopisały się do
   **istniejącej** klasy `DesignTokenApplicationTests` — krucha ręczna lista nazw w filtrze partycji

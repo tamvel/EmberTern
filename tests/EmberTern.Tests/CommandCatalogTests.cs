@@ -266,9 +266,13 @@ public sealed class CommandCatalogTests
 
         // With no editable collection active the strip is hidden; the tooltip still has to be a sentence
         // rather than "New " with a hole in it.
-        Assert.Equal("New item · F3", h.Main.CollectionAddTooltip);
+        // ⚠ Czasowniki wg `docs/design/terminology.md` §1 (M‑4, 2026-08-10): dodanie pozycji do kolekcji to
+        //   „Add", a jej usunięcie z BUFORA edytora to „Remove". Fallback bez aktywnej kolekcji jest właśnie
+        //   buforowy, więc „Remove item". ⭐ Na siatce pól tabeli ten sam przycisk mówi „Drop field", bo tam
+        //   naprawdę wykonuje się `ALTER TABLE … DROP` — czasownik jest własnością kolekcji, nie formatu.
+        Assert.Equal("Add item · F3", h.Main.CollectionAddTooltip);
         Assert.Equal("Edit item · F2", h.Main.CollectionEditTooltip);
-        Assert.Equal("Delete item · F8", h.Main.CollectionRemoveTooltip);
+        Assert.Equal("Remove item · F8", h.Main.CollectionRemoveTooltip);
 
         // Every gesture shown comes from the catalog, so re-binding one moves the toolbar and the menu together.
         Assert.EndsWith(CommandTip.Gesture(CommandId.CollectionAdd), h.Main.CollectionAddTooltip, StringComparison.Ordinal);

@@ -736,13 +736,23 @@ public partial class MainWindowViewModel : ViewModelBase
     /// such action — a grid whose rows are edited in place needs no Edit dialog, and an unordered collection
     /// no reorder. The toolbar hides what is null rather than greying it.</para>
     /// </summary>
+    /// <summary>
+    /// ⭐⭐ <b><c>RemoveVerb</c> stoi obok <c>Noun</c>, bo JEDNA etykieta nie może być poprawna dla wszystkich
+    /// kolekcji tego routera</b> — a to jest znalezisko M‑4, nie ozdoba. Ten sam przycisk obsługuje pole
+    /// tabeli (generuje <c>ALTER TABLE … DROP</c>, więc „Drop"), wiersz danych (<c>DELETE FROM</c>, więc
+    /// „Delete") i pozycję bufora edytora (żadnego DDL, więc „Remove"). Słownik
+    /// (<c>docs/design/terminology.md</c> §1) rozcina ten router w poprzek, więc czasownik musi być
+    /// własnością KOLEKCJI, nie wspólnego formatu.
+    /// ⚠ Wcześniej wszystkie mówiły „Delete {0}" — czyli o polu tabeli twierdziły coś, czego produkt nie robi.
+    /// </summary>
     private sealed record CollectionCommands(
         string Noun,
         System.Windows.Input.ICommand Add,
         System.Windows.Input.ICommand Remove,
         System.Windows.Input.ICommand? Edit = null,
         System.Windows.Input.ICommand? Up = null,
-        System.Windows.Input.ICommand? Down = null);
+        System.Windows.Input.ICommand? Down = null,
+        string RemoveVerb = "Remove");
 
     // Section 3 — collection-edit router. Resolves the active editor's New/Edit/Delete/Move commands and the
     // noun its items go by. null when no editable collection is active (SQL editor, read-only system table,
@@ -754,10 +764,12 @@ public partial class MainWindowViewModel : ViewModelBase
             case WorkspaceTabKind.TableDetail when SelectedWorkspaceTab.TableDetail is { } t:
                 if (ShowFieldEditTools)
                     return new(UiStrings.CollectionNounField, t.AddFieldCommand, t.DropFieldCommand,
-                        t.EditFieldCommand, t.MoveFieldUpCommand, t.MoveFieldDownCommand);
+                        t.EditFieldCommand, t.MoveFieldUpCommand, t.MoveFieldDownCommand,
+                        RemoveVerb: UiStrings.CollectionVerbDrop);
                 if (ShowDataEditTools)
                     // Rows are edited in the grid itself and have no natural order, so no Edit and no ↑↓.
-                    return new(UiStrings.CollectionNounRow, t.AddRowCommand, t.DeleteRowCommand);
+                    return new(UiStrings.CollectionNounRow, t.AddRowCommand, t.DeleteRowCommand,
+                        RemoveVerb: UiStrings.CollectionVerbDelete);
                 return null;
             case WorkspaceTabKind.NewTable when SelectedWorkspaceTab.NewTable is { } n:
                 return new(UiStrings.CollectionNounField, n.AddFieldCommand, n.DeleteFieldCommand,
@@ -795,9 +807,25 @@ public partial class MainWindowViewModel : ViewModelBase
     // noun AND carry the gesture from the catalog: "New field · F3" on the fields grid, "New parameter · F3"
     // on a procedure's arguments. Before this the toolbar said "Add item" while the menu beside it said
     // "New field" — the same command described two ways on one surface.
-    public string CollectionAddTooltip => CollectionTip(CommandId.CollectionAdd, UiStrings.CollectionNewFormat);
+    public string CollectionAddTooltip => CollectionTip(CommandId.CollectionAdd, UiStrings.CollectionAddFormat);
     public string CollectionEditTooltip => CollectionTip(CommandId.CollectionEdit, UiStrings.CollectionEditFormat);
-    public string CollectionRemoveTooltip => CollectionTip(CommandId.CollectionRemove, UiStrings.CollectionDeleteFormat);
+
+    /// <summary>
+    /// ⭐ Czasownik bierze się z KOLEKCJI, nie ze wspólnego formatu — patrz <see cref="CollectionCommands"/>.
+    /// „Drop field" na siatce pól tabeli, „Delete row" na danych, „Remove item" w buforze edytora.
+    /// </summary>
+    public string CollectionRemoveTooltip
+    {
+        get
+        {
+            var active = ActiveCollection();
+            var noun = active?.Noun ?? UiStrings.CollectionNounItem;
+            var verb = active?.RemoveVerb ?? UiStrings.CollectionVerbRemove;
+            return CommandTip.For(
+                CommandId.CollectionRemove,
+                string.Format(CultureInfo.CurrentCulture, UiStrings.CollectionRemoveFormat, verb, noun));
+        }
+    }
 
     private string CollectionTip(CommandId id, string format)
     {

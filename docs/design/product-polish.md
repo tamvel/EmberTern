@@ -10053,3 +10053,133 @@ powtarzać**.
 ⚠ **175 % zapisane jako OBSERWACJA, nie jako cel projektowy** (decyzja użytkownika): nie projektujemy
 osobnej obsługi tej skali. ⛔ Nie znaczy to jednak „do zignorowania, bo użytkownik tego nie używa" —
 to jest **rzeczywiste znalezisko QA** i jako takie zostaje zapisane.
+
+---
+
+## §19.50 As-built — M5 / M‑4 (terminologia i słownik)
+
+> **Status: ZAMKNIĘTE 2026-08-10, ODEBRANE PO QA UŻYTKOWNIKA.**
+> Build 0/0 · suite **8392** (8214 + 123 + 55, **+6**) · smoke czysty · strażnik zweryfikowany podsadzeniem.
+> Norma: **[terminology.md](terminology.md)** · strażnik: `TerminologyTests` (ryzyko **R‑8**).
+
+### §19.50.1 ⛔⛔ Inwentarz był błędny i decyzja zapadła na fałszywej przesłance
+
+Pierwszy inwentarz raportował, że `Drop` występuje **wyłącznie w Data Import**, i na tej podstawie
+użytkownik ratyfikował „Drop jako nazwany wyjątek importu". **Zmierzone ponownie: 26 etykiet w sześciu
+modułach** — Table pola (7), ograniczenia (6), Index (4), Security (2), **Data Import (2)**, plus po jednej
+w Metadata/Generator/Exception/Domain/Fields. **Import to niecałe 8 %.**
+
+⭐ Błąd wziął się z podglądu uciętego na `head -45`, który nie doszedł do wpisów Table/Index/Security —
+czyli **uogólnienia z tego, co się akurat wydrukowało** (#335 jeszcze raz, §19.47.7 jeszcze raz).
+⚠ Zgłoszone użytkownikowi **przed jakąkolwiek zmianą tekstu**; decyzja została podjęta od nowa.
+
+⭐⭐ **I to nie była tylko poprawka liczby — zmieniła kształt pytania.** Ta sama operacja nosiła oba
+czasowniki naraz, czasem w obrębie jednego obiektu: **indeks miał cztery etykiety w dwóch słowach**
+(`IndexMenuDrop` / `IndexDeleteTooltip` / `IndexDropConfirmTitle` / `IndexDeleteConfirmTitle`), generator
+kłócił się z własnym potwierdzeniem (`GeneratorDeleteTooltip` = „Delete generator" vs
+`GeneratorDeleteConfirmFormat` = „Drop generator…"), a `FieldsContextMenuDrop` niósł tekst „Delete field".
+
+### §19.50.2 🔒 Ratyfikowana reguła: `Drop` = operacja DDL `DROP`
+
+🔒 **Wariant B, decyzja użytkownika:** *„EmberTern jest narzędziem dla developerów baz danych, więc chcę
+zachować informację o tym, jaka operacja DDL zostanie wykonana. Nie sprowadzaj Drop do Delete tylko dla
+jednolitości języka."*
+
+⭐ Rozróżnienie **niesie informację**, nie styl: „Drop index" mówi, że wykona się `DROP INDEX`, a „Delete
+connection" — że baza nie zostanie ruszona. ⚠ Reguła **istniała w produkcie utajona** i była łamana mniej
+więcej w połowie przypadków — M‑4 jej nie wprowadziło, tylko **dokończyło**.
+
+### §19.50.3 ⭐⭐ Znalezisko, które wymusiło zmianę KODU, nie tylko tekstów
+
+**Wspólny router kolekcji obsługiwał trzy różne rodzaje usunięcia JEDNĄ etykietą „Delete {0}".** Ten sam
+przycisk wykonuje `ALTER TABLE … DROP` na polu tabeli, `DELETE FROM` na wierszu danych i zwykłe wyjęcie
+pozycji z bufora edytora. **Słownik rozcina ten router w poprzek**, więc czasownik musiał stać się
+własnością **kolekcji**, a nie wspólnego formatu — `CollectionCommands.RemoveVerb`.
+
+⚠ Dotąd tooltip nad siatką pól mówił „Delete field", czyli **twierdził o operacji coś, czego produkt nie
+robi**. ⭐ Dziś: **„Drop field"** na polach, **„Delete row"** na danych, **„Remove item"** w buforze.
+
+### §19.50.4 Zakres wykonany
+
+`Drop` — drzewo metadanych (obiekt, tabela, użytkownik), edytory generatora/wyjątku/indeksu/domeny/pakietu,
+pola i ograniczenia tabeli, indeks, role, Data Import. `Delete` — połączenia, foldery, zapisane zapytania,
+profile importu, **wiersz danych** (`DELETE FROM` — zgodne i ze słownikiem, i z SQL-em). `Remove` — bufory
+edytorów. `Execute` — Script Executor („Run" → „Execute"), puste stany wyników. `Rollback` — cztery etykiety
+z „Roll back". `Add`/`New` — router kolekcji, wiersz danych, dialog nowej tabeli, „Add connection" →
+„New connection". **Wielkość liter** — etykiety akcji na zdaniową; ⛔ nazwy własne („Activity Monitor",
+„Data Import") nietknięte.
+
+⭐ **Strażnik M‑3 złapał kaskadę:** zmiana tooltipa na „New connection" zerwała podpowiedź w pustym pasku
+bocznym, która **musi nazywać akcję tak, jak ona sama się nazywa**. To jest ten strażnik pracujący zgodnie
+z przeznaczeniem, a nie fałszywy alarm.
+
+⚠ **Dwa istniejące testy przepisywały starą treść** (`CommandCatalogTests`, `UiStringsShortcutSourceTests`)
+i padły przy zmianie — **#333 w czystej postaci**. Zaktualizowane wraz z powodem.
+
+⚠ **Pułapka polskiego cudzysłowu wystąpiła po raz TRZECI** (M4.3, M4.4, M‑4): `„X"` wewnątrz interpolowanego
+stringa zamyka literał. Komunikaty strażnika są dlatego bez polskich cudzysłowów, z zapisanym powodem.
+
+### §19.50.5 ⏸ Świadomie niezmienione
+
+`FolderDialogCreate = "Create"` · tytuły okien i zakładek w Title Case (trzecia kategoria, poza §1.3) ·
+proza zawierająca „run" · `Delete rule` (rzeczownik) · **debuggerowe „Save"** — 🔒 nazwany wyjątek
+(`terminology.md` §2.1): *„«Save» opisuje akcję użytkownika, «Compile» operację techniczną"*.
+Pełna lista z powodami: `terminology.md` §3.
+
+---
+
+## §19.51 🏁 M5 — PODSUMOWANIE ZAMKNIĘCIA CAŁEGO ETAPU
+
+> **M5 ZAMKNIĘTY W CAŁOŚCI 2026-08-10.** Wszystkie sześć pozycji z planu §13 wykonane i odebrane po QA
+> użytkownika. Build 0/0 · suite **8392** (8214 + 123 + 55) · smoke czysty.
+
+| pozycja planu §13 | as-built | wynik |
+|---|---|---|
+| kontrast **§10** | §19.45 | trzy wartości policzone **przy progu**; ⚠ §10 cytowało normę, której nie spełnia — sprostowane |
+| focus **L‑1** | §19.46 | jedna konwencja `:focus-visible`; audyt opisywał objaw, nie defekt |
+| empty states **M‑3** | §19.47 | z 13 zgłoszonych luk zostały **4** — reszta nieosiągalna albo już obsłużona |
+| animacje **§9** | §19.48 | **zero zmian produkcyjnych**; korekta dokumentu + strażnik |
+| **DPI** 100/125/150/200 | §19.49 | **zero zmian produkcyjnych**; R‑6 spłacone, znalezisko zapisane jako dług |
+| terminologia **M‑4** | §19.50 | słownik + strażnik R‑8 + ujednolicenie |
+| „oba motywy" | — | kryterium **przekrojowe**, stosowane w QA każdej iteracji |
+
+### §19.51.1 ⭐⭐ Wynik metodologiczny całego M5
+
+**W czterech z sześciu pozycji pomiar obalił zapis, na którym pozycja stała** — i za każdym razem
+**zmieniło to kształt pracy, nie tylko liczbę**:
+
+* **§10** — próg opisany jako „WCAG AA Large" **nie jest** progiem WCAG (żadna rola typograficzna nie
+  kwalifikuje się jako duży tekst). Jeden z wariantów spełniałby dokument *jak napisany* i żadnej normy.
+* **L‑1** — audyt mówił „brak `:focus`"; naprawdę produkt miał **dwie konwencje focusu naraz**, a obie
+  „brakujące" pozycje zawiodłyby przy dosłownym wykonaniu zalecenia, z dwóch różnych powodów.
+* **§9** — „zero naruszeń" pochodziło z licznika na źródłach i odpowiadało na pytanie *„czego MY nie
+  napisaliśmy"*; framework wnosi **16 przejść**.
+* **M‑4** — „Drop wyłącznie w Data Import" opisywało **2 z 26** wystąpień, a decyzja projektowa zapadła na
+  tej przesłance, zanim pomiar ją obalił.
+
+⭐ **Wspólny wniosek, przenoszalny poza Product Polish: zapis w dokumencie starzeje się ciszej niż kod,
+a najgroźniej starzeje się wtedy, gdy brzmi konkretnie** — norma z nazwą, liczba wystąpień, „zero".
+⛔ **Mierz przed planowaniem, nie cytuj.**
+
+### §19.51.2 ⭐ Dwie pozycje zamknięto BEZ zmiany produktu — i to jest wynik, nie brak
+
+**§9** i **DPI** nie zmieniły ani jednej linii kodu produkcyjnego. W obu przypadkach właściwym produktem
+iteracji był **pomiar i korekta zapisu**: §9 dostało zakres reguł i nazwany baseline Fluenta, DPI —
+checklistę, wynik QA i diagnozę długu. ⚠ Odwrotność też się zdarzyła: **M‑4 wymusiło zmianę kodu**
+(`CollectionCommands.RemoveVerb`), choć wyglądało na etap czysto tekstowy.
+
+### §19.51.3 ⏸ Co zostaje świadomie odłożone po M5
+
+⛔ **Żadna z tych pozycji nie jest niedokończonym M5** — każda ma zapisany powód i własne miejsce.
+
+| pozycja | gdzie zapisane | powód |
+|---|---|---|
+| **Szerokość Activity Monitora i Data Importu** przy 150 %/175 % | §19.49 + checklista DPI | ograniczenie **konstrukcyjne** (poziomy `StackPanel` ~1130 DIP bez przewijania), nie defekt skalowania; trzy kierunki naprawy to trzy **osobne decyzje UX** |
+| **Etap odstępów** (`Spacing`/`Padding`/`Margin`) | handover M5 §3.2 | ratyfikowany jako osobny etap po M4.4; **969 wartości lokalnych**, `Padding` czyta rolę **zero** razy |
+| **App-wide UX sprint** (gęstość formularzy + czcionka monospace) | CLAUDE.md backlog | decyduje `Cascadia Code` vs `Cascadia Mono` dla wszystkich powierzchni naraz |
+| **B1** — prywatne ikony PK/FK/Unique na siatce 14 | §19.40.3 | przeniesienie do systemu = **zmiana wyglądu**, czeka na decyzję wizualną |
+| **Z‑3** — wiersz Table Data | §13.3a | ⛔ **najpierw PRZYCZYNA**: liczby 40 px nie ma w `src/` |
+| ogon literałów ikon 10/11/13/15 | §19.37.7 | pytanie o **role**, nie o gęstość |
+| `FolderDialogCreate`, tytuły okien, debuggerowe „Save" | `terminology.md` §2–§3 | nazwane wyjątki i miejsca semantycznie niepewne |
+| **skale DPI > 175 %** | checklista DPI §F | Windows ich nie udostępnia na konfiguracji użytkownika |
+| **`ToolTip`** i stany niewymuszone przez sondę (§9) | §19.48.5 / §9.1 | granica pomiaru, zapisana wprost |

@@ -142,7 +142,8 @@ public sealed class UiStringsShortcutSourceTests
         Assert.EndsWith("· F7", UiStrings.ProcedureCompileTooltip, StringComparison.Ordinal);
         Assert.EndsWith("· F7", UiStrings.IndexCompileTooltip, StringComparison.Ordinal);
         Assert.Equal("Commit · F6", UiStrings.TransactionCommitTooltip);
-        Assert.Equal("Roll back · Shift+F6", UiStrings.TransactionRollbackTooltip);
+        // ⚠ „Rollback” jednym słowem — `docs/design/terminology.md` §1 (M‑4, 2026-08-10).
+        Assert.Equal("Rollback · Shift+F6", UiStrings.TransactionRollbackTooltip);
         Assert.Equal("Close active tab · Ctrl+W", UiStrings.ToolbarCloseTabTooltip);
         Assert.Equal("Continue · F5", UiStrings.DebuggerContinueTooltip);
         Assert.Equal("Step Out · Shift+F11", UiStrings.DebuggerStepOutTooltip);

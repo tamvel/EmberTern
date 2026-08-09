@@ -1,6 +1,40 @@
 # Product Polish — prompt startowy PO ZAMKNIĘCIU M4
 
-> ## ⚠⚠ STAN AKTUALNY (2026-08-10): **M5 WYSTARTOWAŁ — ten dokument jest częściowo wykonany**
+> # 🏁🔒 M5 ZAMKNIĘTY W CAŁOŚCI (2026-08-10) — A WRAZ Z NIM CAŁY PLAN §13
+>
+> **Wszystkie sześć pozycji M5 wykonane i odebrane po QA użytkownika**, a **M5 był ostatnim wierszem
+> planu §13**. Podsumowanie zamknięcia: `product-polish.md` **§19.51**.
+> Build 0/0 · suite **8392** (8214 + 123 + 55) · smoke czysty · `feat/product-polish` na obu remote'ach.
+> ⛔ **Gałąź NIE jest scalona do `master`** — ratyfikowana decyzja użytkownika z 2026-08-05 nadal obowiązuje.
+>
+> | pozycja | as-built | wynik |
+> |---|---|---|
+> | kontrast **§10** | §19.45 | trzy wartości policzone przy progu; §10 sprostowane (cytowało normę, której nie spełnia) |
+> | focus **L‑1** | §19.46 | jedna konwencja `:focus-visible`; audyt opisywał objaw, nie defekt |
+> | empty states **M‑3** | §19.47 | z 13 zgłoszonych luk zostały **4** |
+> | animacje **§9** | §19.48 | **zero zmian produkcyjnych** — korekta dokumentu + strażnik |
+> | **DPI** 100–175 % | §19.49 | **zero zmian produkcyjnych** — R‑6 spłacone, znalezisko zapisane jako dług |
+> | terminologia **M‑4** | §19.50 | `terminology.md` + strażnik R‑8 + ujednolicenie |
+>
+> ### ⛔ Wynik QA DPI — przyjęty jako DŁUG, nie regresja
+>
+> **100 % i 125 % — OK.** **150 %** — Activity Monitor i Data Import **nie mieszczą się poziomo**, bo ich
+> paski poleceń to poziome `StackPanel`e **bez przewijania** (~1130 DIP, nie kompresują się, tylko
+> przycinają). **175 %** — dochodzi problem z **dolnym paskiem aplikacji**. Skale > 175 % nietestowane.
+> ⭐ **To istniejące ograniczenie layoutu, NIE regresja M4/M5** — dowód: na **1366×768 przy 100 %** zostaje
+> **1082 DIP**, czyli nie mieści się **bez żadnego skalowania**. ⛔ **Nie naprawiane w M5**; trzy kierunki
+> naprawy to trzy osobne decyzje UX. ⭐ Pomiar w §19.49 jest kompletny — **przy powrocie nie trzeba go
+> powtarzać**.
+>
+> ### ⏭ Co dalej — ⛔ WYMAGA DECYZJI UŻYTKOWNIKA
+>
+> Po M5 **nie ma kolejnej pozycji planu**. Kandydatury i świadomie odłożone tematy: `product-polish.md`
+> **§19.51.3** oraz §3.2 / §3.3 tego dokumentu (etap odstępów · app-wide UX sprint · B1 · Z‑3 · ogon ikon).
+> ⛔ Nie zaczynać żadnej z nich bez wskazania.
+>
+> ---
+>
+> ## ⚠ ZAPIS HISTORYCZNY — poniższa treść opisuje WEJŚCIE w M5 i jest już wykonana
 >
 > Użytkownik wybrał **M5 — Final Polish** (§3.1) i zlecił kolejność: najpierw §10, potem dalsze punkty M5.
 >
