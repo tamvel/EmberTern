@@ -300,14 +300,20 @@ public class DesignTokenComplianceTests
     /// </remarks>
     private static readonly Dictionary<string, int> SpacingBaseline = new(StringComparer.Ordinal)
     {
-        // Spacing — odstęp między dziećmi `StackPanel`. Zmierzone 2026-08-08: 309 deklaracji lokalnych w 46 plikach.
+        // Spacing — odstęp między dziećmi `StackPanel`. Zmierzone 2026-08-09: 308 deklaracji lokalnych w 46 plikach.
+        //
+        // ⚠⚠ TA LICZBA JEST PROZĄ OBOK TABLICY, KTÓRA JEST EGZEKWOWANA — i przy korekcie z 2026-08-09 dwie
+        //    z trzech takich linii OKAZAŁY SIĘ JUŻ NIEAKTUALNE, każda inaczej: `Margin` miał **491 wobec 474**
+        //    w tablicy, `Padding` zgadzał się co do liczby i mylił co do liczby PLIKÓW (49 wobec 50).
+        //    Nikt tego nie zauważył, bo strażnik czyta TABLICĘ, a nie zdanie nad nią. #284 dokładnie tutaj.
+        //    ⭐ Praktycznie: zmieniając wpis, przelicz sumę tablicy, nie przepisuj poprzedniego zdania.
         ["Views/DebuggerTabView.axaml"] = 35,
         ["Views/DataImportTabView.axaml"] = 29,
         ["Views/SecurityManagerTabView.axaml"] = 27,
         ["Views/SessionManagerTabView.axaml"] = 25,
         ["Views/AddFieldDialog.axaml"] = 18,
         ["Views/MainWindow.axaml"] = 16,
-        ["Views/PerformancePanelView.axaml"] = 14,
+        ["Views/PerformancePanelView.axaml"] = 13,
         ["Views/TraceMonitorTabView.axaml"] = 10,
         ["Views/UserEditDialog.axaml"] = 10,
         ["Views/FunctionDetailTabView.axaml"] = 9,
@@ -351,7 +357,7 @@ public class DesignTokenComplianceTests
 
     private static readonly Dictionary<string, int> PaddingBaseline = new(StringComparer.Ordinal)
     {
-        // Padding — wnętrze kontrolki lub panelu. Zmierzone 2026-08-08: 185 deklaracji lokalnych w 49 plikach.
+        // Padding — wnętrze kontrolki lub panelu. Zmierzone 2026-08-09: 185 deklaracji lokalnych w 50 plikach.
         //
         // ⭐ M4.2b: `Controls/DependencyTreeView.axaml` = 2 — wpis NOWY i podniesiony ŚWIADOMIE, drogą, którą
         // ten strażnik sam wskazuje („zmiana jest decyzją projektową ⇒ podnieś sufit I zapisz powód").
@@ -416,7 +422,7 @@ public class DesignTokenComplianceTests
 
     private static readonly Dictionary<string, int> MarginBaseline = new(StringComparer.Ordinal)
     {
-        // Margin — odstęp wokół elementu. Zmierzone 2026-08-08: 491 deklaracji lokalnych w 55 plikach.
+        // Margin — odstęp wokół elementu. Zmierzone 2026-08-09: 474 deklaracje lokalne w 55 plikach.
         ["Views/DebuggerTabView.axaml"] = 49,
         ["Views/DataImportTabView.axaml"] = 40,
         ["Views/MainWindow.axaml"] = 29,
@@ -427,7 +433,7 @@ public class DesignTokenComplianceTests
         ["Views/SessionManagerTabView.axaml"] = 19,
         ["Views/TraceMonitorTabView.axaml"] = 19,
         ["Views/AddFieldDialog.axaml"] = 16,
-        ["Views/PerformancePanelView.axaml"] = 16,
+        ["Views/PerformancePanelView.axaml"] = 15,
         ["Views/SecurityManagerTabView.axaml"] = 16,
         ["Views/TableDetailTabView.axaml"] = 14,
         ["Views/ViewDetailTabView.axaml"] = 12,

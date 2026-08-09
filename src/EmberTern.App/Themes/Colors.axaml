@@ -642,7 +642,29 @@
       <SolidColorBrush x:Key="DataGridCellForegroundBrushFocused" Color="{StaticResource ForegroundColor}" />
 
       <!-- Per-kind metadata icon brushes (light theme: Material 700/800 — darker and
-           more saturated so glyphs stay legible against the near-white editor background). -->
+           more saturated so glyphs stay legible against the near-white editor background).
+
+           ⭐⭐ DWIE Z NICH PRZELICZONO PRZY PROGU MAŁEGO TEKSTU (2026-08-09, pakiet po M5 / punkt 4b) —
+           `IconColor_Index` #558B2F → #4F812C i `IconColor_Procedure` #E65100 → #CE4800.
+
+           POWÓD: te role zaprojektowano dla IKON, a ikona podlega progowi **3:1** (element nietekstowy).
+           Drzewo planu wykonania maluje nimi **TEKST 11 px**, czyli ta sama wartość zmieniła rolę — a wraz
+           z rolą zmienił się obowiązujący próg na **4,5:1** (§10 + §10.1: wymóg WŁASNY EmberTerna, jawnie
+           nie „WCAG AA Large"). Zmierzone na `BackgroundColor`: Index **4,00:1**, Procedure **3,70:1** —
+           obie pod progiem, przy czym Dark przechodził w całości (10,03:1 / ~8:1). ⚠ Render wyglądał dobrze;
+           to jest przypadek, w którym oko nie wystarcza.
+
+           ⭐ METODA jest ta sama, którą ratyfikowano w M5 §10: policzyć **przy progu, zachowując odcień**
+           (HSL: H i S bez zmian, opada wyłącznie L). Stąd 4,54:1 i 4,50:1 — nie „ładniejszy zielony",
+           tylko najmniejsza zmiana, która spełnia wymóg.
+
+           ⛔ ŚWIADOMIE JEDNA BARWA NA RODZAJ W CAŁEJ APLIKACJI — to korekta TYCH tokenów, nigdy osobna
+           paleta dla planu (ratyfikowane). Dlatego zmiana dotyczy też ikon w Metadata Explorerze i na pasku:
+           jako ikony trzymają teraz **4,23:1 / 4,19:1** wobec wymaganych 3:1, więc nic nie tracą.
+           ⚠ Dark NIETKNIĘTY — tam próg był spełniony z zapasem i zmiana byłaby zmianą bez powodu.
+           ⚠⚠ TA KOREKTA JEST WARUNKIEM POPRAWNOŚCI KOLOROWANIA PLANU, nie osobną decyzją estetyczną:
+           cofnięcie jej przy zachowanym kolorowaniu wraca pod próg. Pilnuje tego
+           `EveryColourThePlanTreePaintsTextWith_ClearsTheSmallTextFloor`. -->
       <SolidColorBrush x:Key="IconColor_Table"       Color="#0277BD" />
       <SolidColorBrush x:Key="IconColor_View"        Color="#2E7D32" />
 
@@ -650,7 +672,7 @@
            Deeper on light so white chip text stays legible. -->
       <SolidColorBrush x:Key="DataLaneChipBrush"     Color="#1F5BAA" />
       <SolidColorBrush x:Key="MetadataLaneChipBrush" Color="#6A3DB5" />
-      <SolidColorBrush x:Key="IconColor_Procedure"   Color="#E65100" />
+      <SolidColorBrush x:Key="IconColor_Procedure"   Color="#CE4800" />
       <SolidColorBrush x:Key="IconColor_Trigger"     Color="#C62828" />
       <SolidColorBrush x:Key="IconColor_Function"    Color="#F9A825" />
       <SolidColorBrush x:Key="IconColor_Generator"   Color="#00838F" />
@@ -659,7 +681,7 @@
       <SolidColorBrush x:Key="IconColor_Exception"   Color="#B71C1C" />
       <SolidColorBrush x:Key="IconColor_Role"        Color="#37474F" />
       <SolidColorBrush x:Key="IconColor_User"        Color="#37474F" />
-      <SolidColorBrush x:Key="IconColor_Index"       Color="#558B2F" />
+      <SolidColorBrush x:Key="IconColor_Index"       Color="#4F812C" />
       <SolidColorBrush x:Key="IconColor_SystemTable" Color="#424242" />
       <SolidColorBrush x:Key="IconColor_Query"       Color="#455A64" />
 

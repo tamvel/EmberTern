@@ -10,7 +10,7 @@ Zakres całego pakietu, w kolejności ratyfikowanej przez użytkownika:
 | 1 | Security Manager — ikona zakładki | ✅ zamknięte, odebrane |
 | 2 | `Button.primary` — tekst w stanach | ✅ zamknięte, odebrane |
 | 3 | Live DDL — kolorowanie na pięciu powierzchniach | ✅ zamknięte, odebrane |
-| 4 | Performance — Execution plan (layout + kolorowanie drzewa) | ⏭ następne |
+| 4 | Performance — Execution plan (layout + kolorowanie drzewa) | ✅ zamknięte, odebrane |
 | 5 | Settings UX | ⏸ |
 | 6 | Database Properties (nowa funkcja) | ⏸ osobny mini-etap |
 
@@ -217,7 +217,157 @@ powód.**
 
 ---
 
-## §6 Weryfikacja (pakiet 1–3)
+## §6 Punkt 4 — Performance / Execution plan (advanced)
+
+Zakres zamknięty i odebrany: **4a (layout) + 4b (kolorowanie nazw)**. ⛔ Warianty **W1/W2 zostały
+zbudowane, wyrenderowane i ODRZUCONE** — §6.5 zapisuje je tak, żeby nikt ich nie projektował po raz drugi.
+
+### §6.1 4a — odstęp treści sekcji
+
+`ExpanderContentPadding` był **zerem**, przy `ExpanderHeaderPadding` = `10,0,0,0`. Czyli jedyny element
+z oddechem był tym, który go nie potrzebował — nagłówek — a treść (etykieta „Raw plan", przycisk Copy,
+drzewo, ramka planu) stała przy krawędziach sekcji.
+
+`Pad.Group` (10,8) pasuje **rolą, nie tylko liczbą**: jej pozioma składowa to ta sama dziesiątka, którą ma
+nagłówek, więc treść ustawia się w jednej linii pionowej z tytułem. Pionowy `Margin="0,6,0,4"` zdjęty —
+dawał go ten sam brak paddingu, a zostawiony dokładałby się do 8 z roli.
+
+⚠ To obniżyło sufity odstępów w strażniku (`Spacing` 14 → 13, `Margin` 16 → 15) i **strażnik tego
+zażądał**: usunięcie wartości lokalnych czyni wpis nieaktualnym w drugą stronę („progress that was not
+written down"). Ratchet działający zgodnie z zamysłem.
+
+### §6.2 ⭐⭐ 4b — parser już istniał, a widok wyrzucał jego wynik
+
+To jest główne znalezisko punktu 4 i wyszło z Fazy 0, nie z implementacji.
+
+`PlanNode` niesie **`Method` / `TableName` / `Alias` / `IndexName` / `Detail`**, klasyfikowane przez
+`PlanNodeDescriptor.Parse` dla **każdego** węzła. A widok renderował:
+
+```csharp
+PlanNodeViewModel.DisplayText => Node.RawText;   // cała klasyfikacja wyrzucona
+```
+
+⇒ Kolorowanie planu **nie potrzebowało nowej gramatyki** — potrzebowało, żeby widok przestał spłaszczać.
+
+⛔ **Hipoteza „użyć syntax highlightingu SQL" była złym narzędziem, i to mierzalnie:** plan Firebirda nie
+jest SQL-em. `Table`, `Bitmap`, `Access By ID`, `Range Scan` nie są słowami kluczowymi SQL, a XSHD
+pokolorowałby słowa przypadkowe, mijając każdą nazwę, która ma znaczenie.
+
+### §6.3 ⚠⚠ Podział bierze się z ROZCIĘCIA tekstu surowego, nigdy ze składania
+
+To decyzja **poprawnościowa**, nie stylistyczna. Składanie (`"Table " + nazwa + " as " + alias`) postawiłoby
+`PlanTextSegments` w roli odtwarzacza wypowiedzi silnika, a każdy rozjazd **po cichu pokazałby użytkownikowi
+plan, którego serwer nie wydrukował**. Rozcinanie oryginału czyni *„tekst renderowany == tekst surowy"*
+prawdą **z konstrukcji** — ta sama dyscyplina §0, którą formater stosuje do źródła.
+
+⭐ Granicę podziału wyprowadzono z faktu, że **`Detail` jest SUFIKSEM `RawText`** (parser produkuje go
+przez wycięcie reszty i `Trim`). Dzięki temu **nie ma tu drugiej kopii listy słów kluczowych parsera** —
+a gdyby ten niezmiennik przestał obowiązywać, `EndsWith` go wyłapuje i węzeł renderuje się w całości,
+zamiast zostać przecięty w złym miejscu.
+
+Pilnuje tego teoria nad **16 realnymi liniami × 6 klasyfikacji**; podsadzenie (zgubienie cudzysłowów)
+zapala ją na każdej linii z nazwą.
+
+### §6.4 ⚠⚠ Zmiana ROLI tokenu zmienia obowiązujący PRÓG — i to wymusiło korektę dwóch barw
+
+`IconColor_*` to role rodzaju zaprojektowane dla **IKON**, a ikona podlega progowi **3:1** (element
+nietekstowy). Plan maluje nimi **TEKST 11 px**, czyli ta sama wartość zmieniła rolę — a wraz z rolą próg na
+**4,5:1** (§10 + §10.1, wymóg własny EmberTerna, jawnie nie „WCAG AA Large").
+
+Zmierzone na `BackgroundColor`:
+
+| token | Dark | Light |
+|---|---|---|
+| `IconColor_Table` | 8,27:1 ✓ | 4,68:1 ✓ |
+| `IconColor_Index` | 10,03:1 ✓ | **4,00:1** ⛔ |
+| `IconColor_Procedure` | ~8:1 ✓ | **3,70:1** ⛔ |
+
+🔒 Ratyfikowany **wariant A**: przeliczyć **przy progu, zachowując odcień** (HSL — H i S bez zmian, opada
+wyłącznie L). `IconColor_Index` `#558B2F` → **`#4F812C`** (4,54:1), `IconColor_Procedure` `#E65100` →
+**`#CE4800`** (4,50:1). Metoda ta sama, co ratyfikowana w M5 §10.
+
+⭐ **Jedna barwa na rodzaj w całej aplikacji** — to korekta TYCH tokenów, nigdy osobna paleta dla planu.
+Zmiana dotyczy więc też ikon w Metadata Explorerze i na pasku: jako ikony trzymają **4,23:1 / 4,19:1**
+wobec wymaganych 3:1, więc nic nie tracą. ⚠ Dark nietknięty — próg był tam spełniony z zapasem.
+
+⛔⛔ **Korekta NIE jest osobną decyzją estetyczną, tylko warunkiem poprawności kolorowania.** Cofnięcie
+jej przy zachowanym kolorowaniu wraca pod próg i zapala `EveryColourThePlanTreePaintsTextWith_…`.
+⚠ Zapisane, bo w trakcie sprzątania po W1/W2 padła instrukcja „wycofaj wariant A" — słuszna pod
+założeniem, że całe kolorowanie znika, i myląca, gdy kolorowanie zostaje.
+
+### §6.5 ⛔⛔ W1/W2 — ZBUDOWANE, WYRENDEROWANE, ODRZUCONE. Nie projektować ponownie.
+
+Po odbiorze 4b padło pytanie, czy nie pokolorować także **reszty** wiersza. Zbudowano cztery warianty
+i wyrenderowano w obu motywach:
+
+| wariant | struktura | czasownik Table/Index | nazwa | metoda dostępu |
+|---|---|---|---|---|
+| **W0 = wdrożone** | tekst | tekst | rodzaj | wycofana |
+| W1 | wycofana | wycofany | rodzaj | tekst |
+| W2 | tekst | wycofany | rodzaj | tekst |
+| W3 | **nowy token** | wycofany | rodzaj | tekst |
+
+**Powód odrzucenia, zmierzony:** katalog ma **dokładnie DWA** neutralne poziomy tekstu
+(`ForegroundBrush`, `SubtleForegroundBrush`) — trzeciego nie ma. `IconColor_Query` jest optycznie
+neutralny, ale to kolor **rodzaju**; użycie go dla „metody dostępu" nazwałoby rolę, której ten token nie ma.
+
+⭐⭐ **A te dwa poziomy dzieli w Dark zaledwie 1,78:1** (Light: 2,88:1). Czyli „pełna siła" i „wycofane"
+to w Dark dwie bliskie szarości — przy 11 px monospace czytają się jak ta sama barwa. **W2 zostało
+wdrożone, obejrzane i wycofane właśnie dlatego**, że deklarowane rozróżnienie nie było wiarygodnie widoczne.
+
+⚠⚠ **Droga do tego wniosku jest warta więcej niż wniosek**: QA zgłosiło, że „metoda dostępu nadal jest
+szara", co brzmiało jak defekt implementacji. Pomiar rozstrzygnął inaczej — segment **miał** właściwy klucz
+(`[Access By ID] -> ForegroundBrush`), klucz **rozwiązywał się** poprawnie, a piksele renderu pokazały
+`#D4D4D4` w Dark i `#1B1D1F` w Light, czyli **dokładnie pełną siłę**. Kod był poprawny; niewidoczna była
+RÓŻNICA. ⭐ Bez pomiaru pikseli „naprawiałbym" działający mechanizm.
+
+⛔ **Nie wracać do tego bez NOWEGO pomiaru.** W3 (trzeci poziom) jest odrzucony podwójnie: wymaga nowej
+wartości i wydaje ją na to, żeby uczynić strukturę *pół-cichą*, gdy pytanie projektowe jest binarne.
+
+### §6.6 Co zostało nietknięte
+
+- **Raw plan** — wierny monospace bez kolorowania; to escape hatch dla węzła, którego parser nie rozpoznał
+- **Copy** — bez zmian. ⚠ Zmierzone i warte zapisania: przycisk obok etykiety „Raw plan" **nie kopiuje
+  samego planu**, tylko ładunek „expert drawer" (timings + capture + plan pod nagłówkiem), zgodnie z własnym
+  docstringiem. Zachowanie zastane, świadomie nieruszone; test pinuje, że surowy plan przechodzi przez nie
+  **bez zmian**
+- **`PlanParser` / `PlanNode` / `PlanNodeDescriptor`** — ani jednej linii; punkt 4 wyłącznie *konsumuje* to,
+  co już produkowały
+
+### §6.7 Strażniki
+
+`PlanTextSegmentTests` (10, czyste — bez sesji headless, bo `PlanTextSegments` zwraca KLUCZE, nie pędzle)
++ dwa w `DesignTokenApplicationTests`: próg kontrastu na barwach, którymi plan maluje tekst, oraz
+rozwiązywalność każdego klucza **przez `IconBrushConverter`, którego używa widok**.
+
+⭐ Ten drugi nie jest zbędny wobec pierwszego: konwerter czyta wyłącznie `Application.Resources`, czyli
+**węższą ścieżkę niż `FindResource`**. Klucz spoza tego słownika zwróciłby `UnsetValue`, a `UnsetValue` na
+`Foreground` **nie zawodzi** — element po cichu dziedziczy barwę rodzica i wygląda jak „segment się nie
+pokolorował". Sonda renderująca używa szerszej ścieżki, więc mogłaby pokazać poprawny obraz dla wiązania,
+które w aplikacji by nie zadziałało.
+
+---
+
+## §6a ⚠⚠ Lekcja procesowa z tego punktu — sprzątanie skasowało zaakceptowaną pracę
+
+Po odrzuceniu W1/W2 padła instrukcja sprzątnięcia eksperymentu. Zinterpretowałem ją **za szeroko**
+i usunąłem **cały 4b** — mechanizm, który był już odebrany — zamiast wyłącznie nadbudowy W1/W2.
+
+⛔⛔ **Odzysk z gita był niemożliwy i to jest sedno:** te pliki **nigdy nie były commitowane**
+(`git log --all` → pusto, brak dangling blobów, DLL sondy przebudowany). **Plik nieśledzony i usunięty
+nie ma w gicie żadnej siatki bezpieczeństwa** — `git checkout` przywraca do HEAD, czyli do stanu *sprzed
+całego punktu*. Stan odtworzono z dosłownego zapisu sesji.
+
+⭐ Dwa wnioski na przyszłość:
+1. **Commituj odebrany etap, zanim zaczniesz na nim eksperymentować.** 4b było zaakceptowane i przez cały
+   eksperyment pozostawało nieskommitowane — dlatego „wycofaj eksperyment" nie miało do czego wrócić.
+2. **Instrukcja sprzątająca wydana pod błędną przesłanką jest błędna w tym samym stopniu.** Polecenie
+   „wycofaj wariant A" było słuszne, gdy znikało całe kolorowanie, i szkodliwe, gdy zostawało — a to ja
+   miałem to zauważyć, bo to ja znałem zależność między wariantem A a progiem §10.
+
+---
+
+## §7 Weryfikacja (pakiet 1–3)
 
 - Build **0/0**
 - Suite **8401** = 8218 (główna) + 128 (headless zgrupowana) + 55 (headless izolowana), wszystkie
@@ -228,3 +378,22 @@ powód.**
 - Render QA obu motywów: `tools/probes/VisualCandidateProbe -- qa123`
 - **Wszystkie pięć nowych strażników zweryfikowane podsadzeniem**
 - QA wizualne użytkownika: **przyjęte bez uwag**
+
+---
+
+## §8 Weryfikacja (punkt 4)
+
+- Build **0/0**, zero ostrzeżeń
+- Suite **8429** = 8242 (główna) + 132 (headless zgrupowana) + 55 (headless izolowana), wszystkie
+  `--blame-hang`, wszystkie zielone
+- ⭐ Krucha ręczna lista nazw w filtrze partycji headless **nie urosła** — oba nowe strażniki dołączyły do
+  istniejącej klasy `DesignTokenApplicationTests`, a `PlanTextSegmentTests` są CZYSTE (bez Avalonii)
+- Smoke czysty
+- Render: `dotnet run --project tools/probes/VisualCandidateProbe -- plan` (oba motywy)
+- Strażniki zweryfikowane podsadzeniem: niezmiennik tekstu (zgubienie cudzysłowów), próg kontrastu
+  (przywrócenie `#558B2F`), ścieżka konwertera (usunięcie klucza z `Application.Resources`)
+- QA wizualne użytkownika: **przyjęte**
+
+⚠ **`Lab/EmberTern_Lab.fdb` bywa modyfikowany przez SMOKE TESTY** — aplikacja podłącza się do laba,
+a Firebird dotyka nagłówka pliku. To zacommitowany artefakt binarny, który zmienia się „sam"; sprawdzaj
+`git status Lab/` przed każdym commitem po smoke. Nie ma to związku z żadną zmianą w kodzie.

@@ -2181,6 +2181,100 @@ public sealed class DesignTokenApplicationTests
         }, default);
     }
 
+    /// <summary>
+    /// ⭐⭐ KAŻDA BARWA, KTÓRĄ DRZEWO PLANU MALUJE TEKST, MUSI TRZYMAĆ PRÓG MAŁEGO TEKSTU (4,5:1).
+    ///
+    /// <para>⚠⚠ Powód, dla którego ten test w ogóle istnieje: `IconColor_*` to role rodzaju zaprojektowane
+    /// dla IKON, a ikona ma próg **3:1** (element nietekstowy). Plan wykonania używa ich do malowania
+    /// **TEKSTU 11 px**, czyli zmienia rolę tej samej wartości — a wraz z rolą zmienia się próg. To jest
+    /// dokładnie kształt, który M5 kazał mierzyć na elemencie, nie na tokenie: token się nie zmienił,
+    /// zmieniło się to, czym maluje.</para>
+    ///
+    /// <para>⚠ To ten test wymusił korektę dwóch barw w Light (`IconColor_Index` 4,00:1,
+    /// `IconColor_Procedure` 3,70:1). ⛔ Cofnięcie tamtej korekty przy zachowanym kolorowaniu planu zapali
+    /// go z powrotem — i to jest zamierzone: korekta nie jest osobną decyzją estetyczną, tylko warunkiem
+    /// poprawności kolorowania.</para>
+    ///
+    /// <para>⚠ Tło jest `BackgroundBrush`, bo `TreeView` planu jest `Transparent` i pokazuje tło panelu.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task EveryColourThePlanTreePaintsTextWith_ClearsTheSmallTextFloor(string variantName)
+    {
+        var theme = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        await _session.Dispatch(() =>
+        {
+            var surface = ThemeToken<SolidColorBrush>("BackgroundBrush", theme).Color;
+
+            // Klucze czytane z PRODUKCJI — te same, które zwraca PlanTextSegments dla realnych węzłów planu.
+            var keys = new[]
+            {
+                EmberTern.App.ViewModels.PlanTextSegments.KeywordBrushKey,
+                EmberTern.App.ViewModels.PlanTextSegments.DetailBrushKey,
+                EmberTern.App.ViewModels.PlanTextSegments.SequentialScanBrushKey,
+                "IconColor_Table",
+                "IconColor_Index",
+                "IconColor_Procedure",
+            };
+
+            var failures = new List<string>();
+            foreach (var key in keys)
+            {
+                var painted = ThemeToken<SolidColorBrush>(key, theme).Color;
+                var ratio = ContrastRatio(painted, surface);
+                if (ratio < 4.5) failures.Add($"{key} = {painted} → {ratio:F2}:1");
+            }
+
+            Assert.True(failures.Count == 0, $"""
+                [{variantName}] drzewo planu maluje TEKST barwami, które nie trzymają progu 4,5:1 na {surface}:
+                  {string.Join("\n  ", failures)}
+                ⚠ Te role zaprojektowano dla IKON (próg 3:1). Użyte jako tekst 11 px podlegają progowi małego
+                tekstu (§10 + §10.1 — wymóg własny EmberTerna, jawnie nie „WCAG AA Large").
+                """);
+        }, default);
+    }
+
+    /// <summary>
+    /// ⭐ Druga połowa, i NIE jest zbędna wobec pierwszej: klucz musi rozwiązać się przez konwerter, którego
+    /// używa WIDOK — a `IconBrushConverter` czyta wyłącznie <c>Application.Resources</c>, czyli węższą
+    /// ścieżkę niż `FindResource`.
+    ///
+    /// <para>⚠⚠ Klucz spoza tego słownika zwróciłby `UnsetValue`, a `UnsetValue` na `Foreground` NIE zawodzi:
+    /// element po cichu dziedziczy barwę rodzica i wygląda jak „segment się nie pokolorował". Sonda
+    /// renderująca używa szerszej ścieżki, więc mogłaby pokazać poprawny obraz dla wiązania, które
+    /// w aplikacji by nie zadziałało — ten test zamyka tę lukę.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task EveryPlanSegmentKey_ResolvesThroughTheConverterTheViewUses(string variantName)
+    {
+        var theme = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        await _session.Dispatch(() =>
+        {
+            var keys = new[]
+            {
+                EmberTern.App.ViewModels.PlanTextSegments.KeywordBrushKey,
+                EmberTern.App.ViewModels.PlanTextSegments.DetailBrushKey,
+                EmberTern.App.ViewModels.PlanTextSegments.SequentialScanBrushKey,
+                "IconColor_Table", "IconColor_Index", "IconColor_Procedure",
+            };
+
+            foreach (var key in keys)
+            {
+                var resolved = EmberTern.App.IconBrushConverter.Instance.Convert(
+                    [key, theme], typeof(IBrush), null, System.Globalization.CultureInfo.InvariantCulture);
+
+                Assert.True(resolved is ISolidColorBrush, $"""
+                    [{variantName}] `{key}` nie rozwiązuje się przez IconBrushConverter (dostano: {resolved}).
+                    Konwerter czyta wyłącznie Application.Resources — klucz spoza tego słownika daje UnsetValue,
+                    a to na `Foreground` nie zawodzi, tylko po cichu dziedziczy barwę rodzica.
+                    """);
+            }
+        }, default);
+    }
+
     /// <summary>Barwa, którą FAKTYCZNIE dostaje etykieta: jawny `TextBlock` w treści, jeśli jest, w przeciwnym
     /// razie `Foreground` presentera, bo to on rysuje string.</summary>
     private static Color? PaintedLabelColour(Button button)

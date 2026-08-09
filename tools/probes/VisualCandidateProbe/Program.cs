@@ -141,6 +141,13 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "plan")
+        {
+            Plan.Run(outDir);
+            Console.WriteLine("OK");
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "qa123")
         {
             Qa123.Run(outDir);

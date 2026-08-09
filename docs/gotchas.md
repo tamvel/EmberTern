@@ -1665,3 +1665,34 @@ every emit path to be individually perfect.**
      omitted — no render of this probe contains a text editor"*, which stopped being true the moment a
      render did. #284 in the shape of a comment — the justification outlived its reason.
      (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §5.)
+
+349. **A token's ROLE decides which contrast threshold applies to it — so re-using an icon colour as TEXT
+     silently moves the goalposts, and the render still looks fine.** The `IconColor_*` family is designed
+     for ICONS, where the floor is **3:1** (a non-text element). The execution-plan tree began painting
+     11 px TEXT with them, which puts the same values under the **small-text floor of 4,5:1** — and two of
+     them failed it: Light `IconColor_Index` **4,00:1**, `IconColor_Procedure` **3,70:1**, while Dark passed
+     everything comfortably (10,03:1 / ~8:1). ⚠ Nothing about the token changed; what changed is what it
+     paints. That is #345 one step further out: measuring the element rather than the token is necessary but
+     not sufficient — you also have to ask which RULE that element is now subject to.
+     ⭐ The fix follows M5 §10's ratified method: recompute **at the threshold, preserving hue** (HSL, only L
+     moves), so the change is the smallest one that satisfies the requirement rather than a nicer colour. Both
+     values keep serving icons at 4,2:1 against a 3:1 requirement, so nothing regresses.
+     ⛔ **And the correction is then a PRECONDITION of the feature, not a separate aesthetic decision** —
+     reverting it while keeping the colouring puts the app back under its own floor. Record that link where
+     the values live, because a later cleanup instruction ("revert the colour change") can be perfectly
+     reasonable under one premise and destructive under another.
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §6.4.)
+
+350. **An UNTRACKED file that is deleted has no safety net in git — `git checkout` restores it to HEAD, which
+     means the state BEFORE the whole unmerged stage.** Cleaning up after a rejected experiment removed an
+     already-ACCEPTED mechanism along with it, and recovery was impossible: `git log --all` on the path was
+     empty, `git fsck` showed no matching dangling blob, and the compiled assembly had been rebuilt. The work
+     existed only in the working tree, and "revert the experiment" had nothing to revert TO.
+     ⭐ **The rule this yields: commit an accepted stage before experimenting on top of it.** The accepted
+     mechanism had been reviewed and signed off, yet stayed uncommitted for the whole experiment — which is
+     exactly the window in which a cleanup cannot tell "the part you approved" from "the part you rejected".
+     ⚠ Its second half is about the instruction, not the tooling: a cleanup instruction inherits the premise
+     it was written under. "Revert the colour change" was correct while the whole feature was going away and
+     harmful once the feature stayed — and the person holding the dependency (here: that the colour change was
+     what kept the feature above its contrast floor) is the one who has to say so BEFORE executing.
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §6a.)

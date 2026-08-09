@@ -260,11 +260,18 @@
              section without the Fluent Expander's default 48px header. -->
         <Expander Header="{x:Static app:UiStrings.PerformancePlanAdvancedHeader}"
                   IsExpanded="False" IsVisible="{Binding HasPlan}" MinHeight="34">
+          <!-- ⚠ `ExpanderContentPadding` było ZEREM, przez co treść sekcji stała przy samych krawędziach,
+               podczas gdy nagłówek miał wcięcie 10 — czyli jedyny element z oddechem był tym, który go nie
+               potrzebował. `Pad.Group` (10,8) pasuje ROLĄ, nie tylko liczbą: jej pozioma składowa jest tą samą
+               dziesiątką, którą ma nagłówek, więc etykieta „Raw plan" i drzewo planu ustawiają się w jednej
+               linii pionowej z tytułem sekcji, zamiast wisieć 10 px na lewo od niego. -->
           <Expander.Resources>
             <Thickness x:Key="ExpanderHeaderPadding">10,0,0,0</Thickness>
-            <Thickness x:Key="ExpanderContentPadding">0</Thickness>
+            <StaticResource x:Key="ExpanderContentPadding" ResourceKey="Pad.Group" />
           </Expander.Resources>
-          <StackPanel Spacing="8" Margin="0,6,0,4">
+          <!-- ⚠ Pionowy margines zdjęty — dawał go ten sam brak paddingu, który wyżej naprawiono; zostawiony
+               dokładałby się do 8 z `Pad.Group` i sekcja rozjechałaby się w drugą stronę. -->
+          <StackPanel Spacing="{DynamicResource Space.Md}">
 
             <TreeView ItemsSource="{Binding PlanRoots}"
                       Background="Transparent" BorderThickness="0" MaxHeight="320">
@@ -272,8 +279,9 @@
                 <Style Selector="TreeViewItem">
                   <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
                 </Style>
-                <Style Selector="TextBlock.seq">
-                  <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+                <!-- Skan sekwencyjny nadal pogrubia CAŁY wiersz — barwę niesie już segment
+                     (`PlanTextSegments.SequentialScanBrushKey`), więc tutaj zostaje sama waga. -->
+                <Style Selector="ItemsControl.seq TextBlock">
                   <Setter Property="FontWeight" Value="SemiBold" />
                 </Style>
               </TreeView.Styles>
@@ -286,11 +294,42 @@
                                Foreground="{DynamicResource WarningBrush}"
                                IsVisible="{Binding IsSequentialScan}"
                                ToolTip.Tip="Sequential (full) table scan" />
-                    <TextBlock Text="{Binding DisplayText}" FontSize="{DynamicResource Text.Compact.Size}"
-                               FontFamily="Consolas,Cascadia Code,monospace"
-                               Classes.seq="{Binding IsSequentialScan}"
-                               Foreground="{DynamicResource ForegroundBrush}"
-                               VerticalAlignment="Center" />
+                    <!-- ⭐ Wiersz planu jako CIĄG KOLOROWYCH PRZEBIEGÓW zamiast jednego płaskiego napisu.
+                         Podział pochodzi z klasyfikacji, którą parser planu już wykonywał, a widok wyrzucał
+                         (`PlanNodeViewModel.DisplayText => Node.RawText`) — nie powstał żaden nowy parser.
+                         Nazwy obiektów niosą te same barwy rodzaju, co Metadata Explorer, więc tabela w planie
+                         wygląda jak ta sama tabela w drzewie.
+                         ⚠ `DisplayText` zostaje jako `ToolTip` — pełny, niepodzielony wiersz w jednym kawałku
+                         do przeczytania, gdy segmenty są wąskie. -->
+                    <ItemsControl ItemsSource="{Binding Segments}"
+                                  Classes.seq="{Binding IsSequentialScan}"
+                                  VerticalAlignment="Center"
+                                  ToolTip.Tip="{Binding DisplayText}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PlanTextSegment">
+                          <!-- ⚠ `MultiBinding` z `ActualThemeVariant`, nie zwykłe wiązanie — `IconBrushConverter`
+                               rozwiązuje KLUCZ motywu, więc bez drugiego źródła przełączenie motywu nie
+                               przemalowałoby już zbudowanego drzewa. To ten sam wzorzec, którym idą wszystkie
+                               ikony rodzaju w aplikacji. -->
+                          <TextBlock Text="{Binding Text}"
+                                     FontSize="{DynamicResource Text.Compact.Size}"
+                                     FontFamily="Consolas,Cascadia Code,monospace"
+                                     VerticalAlignment="Center">
+                            <TextBlock.Foreground>
+                              <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                                <Binding Path="BrushKey" />
+                                <Binding ElementName="RootControl" Path="ActualThemeVariant" />
+                              </MultiBinding>
+                            </TextBlock.Foreground>
+                          </TextBlock>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                   </StackPanel>
                 </TreeDataTemplate>
               </TreeView.ItemTemplate>
