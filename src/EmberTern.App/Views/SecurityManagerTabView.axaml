@@ -212,8 +212,15 @@
                   <DataTemplate x:DataType="vm:MembershipRowViewModel">
                     <Button Classes="priv-cell" Command="{Binding CycleCommand}"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityMembershipLegend}">
-                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+                      <!-- ⭐ Q3/C ZAMKNIĘTE (M4.3): 13 px ZOSTAJE, ale POWÓD BYŁ ZAPISANY BŁĘDNIE i to jest
+                           tu jedyna zmiana. Dawny komentarz twierdził „a to jest tekst" i zaliczał tę pozycję
+                           do grupy „TextBlock 13 px" z §18.0.5/3 — ⚠ zmierzone: to NIE jest tekst. `Text` jest
+                           bindowany do `PrivilegeStateGlyphConverter`, który zwraca „✓" albo „✓+", wewnątrz
+                           przycisku `Button.priv-cell` o `Width=20` / `Height=18`. To GLIF strojony do
+                           KONTENERA, czyli reguła #10 działająca poprawnie — dokładnie ta sama zasada, którą
+                           komentarz przy `Button.bulk-glyph` w tym samym pliku stosuje do swoich 12 px.
+                           ⭐ R12: wartość miała powód, powód był nieprawdziwy — i to on wymagał naprawy,
+                           a nie wartość. Grupa z §18.0.5/3 opisywała pod jedną nazwą dwie różne rzeczy. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding State, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -365,8 +372,15 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanSelect}"
                             Command="{Binding CycleCommand}" CommandParameter="S"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
-                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+                      <!-- ⭐ Q3/C ZAMKNIĘTE (M4.3): 13 px ZOSTAJE, ale POWÓD BYŁ ZAPISANY BŁĘDNIE i to jest
+                           tu jedyna zmiana. Dawny komentarz twierdził „a to jest tekst" i zaliczał tę pozycję
+                           do grupy „TextBlock 13 px" z §18.0.5/3 — ⚠ zmierzone: to NIE jest tekst. `Text` jest
+                           bindowany do `PrivilegeStateGlyphConverter`, który zwraca „✓" albo „✓+", wewnątrz
+                           przycisku `Button.priv-cell` o `Width=20` / `Height=18`. To GLIF strojony do
+                           KONTENERA, czyli reguła #10 działająca poprawnie — dokładnie ta sama zasada, którą
+                           komentarz przy `Button.bulk-glyph` w tym samym pliku stosuje do swoich 12 px.
+                           ⭐ R12: wartość miała powód, powód był nieprawdziwy — i to on wymagał naprawy,
+                           a nie wartość. Grupa z §18.0.5/3 opisywała pod jedną nazwą dwie różne rzeczy. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding SelectState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -406,8 +420,15 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanInsert}"
                             Command="{Binding CycleCommand}" CommandParameter="I"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
-                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+                      <!-- ⭐ Q3/C ZAMKNIĘTE (M4.3): 13 px ZOSTAJE, ale POWÓD BYŁ ZAPISANY BŁĘDNIE i to jest
+                           tu jedyna zmiana. Dawny komentarz twierdził „a to jest tekst" i zaliczał tę pozycję
+                           do grupy „TextBlock 13 px" z §18.0.5/3 — ⚠ zmierzone: to NIE jest tekst. `Text` jest
+                           bindowany do `PrivilegeStateGlyphConverter`, który zwraca „✓" albo „✓+", wewnątrz
+                           przycisku `Button.priv-cell` o `Width=20` / `Height=18`. To GLIF strojony do
+                           KONTENERA, czyli reguła #10 działająca poprawnie — dokładnie ta sama zasada, którą
+                           komentarz przy `Button.bulk-glyph` w tym samym pliku stosuje do swoich 12 px.
+                           ⭐ R12: wartość miała powód, powód był nieprawdziwy — i to on wymagał naprawy,
+                           a nie wartość. Grupa z §18.0.5/3 opisywała pod jedną nazwą dwie różne rzeczy. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding InsertState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -447,8 +468,15 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanUpdate}"
                             Command="{Binding CycleCommand}" CommandParameter="U"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
-                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+                      <!-- ⭐ Q3/C ZAMKNIĘTE (M4.3): 13 px ZOSTAJE, ale POWÓD BYŁ ZAPISANY BŁĘDNIE i to jest
+                           tu jedyna zmiana. Dawny komentarz twierdził „a to jest tekst" i zaliczał tę pozycję
+                           do grupy „TextBlock 13 px" z §18.0.5/3 — ⚠ zmierzone: to NIE jest tekst. `Text` jest
+                           bindowany do `PrivilegeStateGlyphConverter`, który zwraca „✓" albo „✓+", wewnątrz
+                           przycisku `Button.priv-cell` o `Width=20` / `Height=18`. To GLIF strojony do
+                           KONTENERA, czyli reguła #10 działająca poprawnie — dokładnie ta sama zasada, którą
+                           komentarz przy `Button.bulk-glyph` w tym samym pliku stosuje do swoich 12 px.
+                           ⭐ R12: wartość miała powód, powód był nieprawdziwy — i to on wymagał naprawy,
+                           a nie wartość. Grupa z §18.0.5/3 opisywała pod jedną nazwą dwie różne rzeczy. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding UpdateState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -488,8 +516,15 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanDelete}"
                             Command="{Binding CycleCommand}" CommandParameter="D"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
-                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+                      <!-- ⭐ Q3/C ZAMKNIĘTE (M4.3): 13 px ZOSTAJE, ale POWÓD BYŁ ZAPISANY BŁĘDNIE i to jest
+                           tu jedyna zmiana. Dawny komentarz twierdził „a to jest tekst" i zaliczał tę pozycję
+                           do grupy „TextBlock 13 px" z §18.0.5/3 — ⚠ zmierzone: to NIE jest tekst. `Text` jest
+                           bindowany do `PrivilegeStateGlyphConverter`, który zwraca „✓" albo „✓+", wewnątrz
+                           przycisku `Button.priv-cell` o `Width=20` / `Height=18`. To GLIF strojony do
+                           KONTENERA, czyli reguła #10 działająca poprawnie — dokładnie ta sama zasada, którą
+                           komentarz przy `Button.bulk-glyph` w tym samym pliku stosuje do swoich 12 px.
+                           ⭐ R12: wartość miała powód, powód był nieprawdziwy — i to on wymagał naprawy,
+                           a nie wartość. Grupa z §18.0.5/3 opisywała pod jedną nazwą dwie różne rzeczy. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding DeleteState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -529,8 +564,15 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanReferences}"
                             Command="{Binding CycleCommand}" CommandParameter="R"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
-                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+                      <!-- ⭐ Q3/C ZAMKNIĘTE (M4.3): 13 px ZOSTAJE, ale POWÓD BYŁ ZAPISANY BŁĘDNIE i to jest
+                           tu jedyna zmiana. Dawny komentarz twierdził „a to jest tekst" i zaliczał tę pozycję
+                           do grupy „TextBlock 13 px" z §18.0.5/3 — ⚠ zmierzone: to NIE jest tekst. `Text` jest
+                           bindowany do `PrivilegeStateGlyphConverter`, który zwraca „✓" albo „✓+", wewnątrz
+                           przycisku `Button.priv-cell` o `Width=20` / `Height=18`. To GLIF strojony do
+                           KONTENERA, czyli reguła #10 działająca poprawnie — dokładnie ta sama zasada, którą
+                           komentarz przy `Button.bulk-glyph` w tym samym pliku stosuje do swoich 12 px.
+                           ⭐ R12: wartość miała powód, powód był nieprawdziwy — i to on wymagał naprawy,
+                           a nie wartość. Grupa z §18.0.5/3 opisywała pod jedną nazwą dwie różne rzeczy. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding ReferencesState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -570,8 +612,15 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanExecute}"
                             Command="{Binding CycleCommand}" CommandParameter="X"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
-                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+                      <!-- ⭐ Q3/C ZAMKNIĘTE (M4.3): 13 px ZOSTAJE, ale POWÓD BYŁ ZAPISANY BŁĘDNIE i to jest
+                           tu jedyna zmiana. Dawny komentarz twierdził „a to jest tekst" i zaliczał tę pozycję
+                           do grupy „TextBlock 13 px" z §18.0.5/3 — ⚠ zmierzone: to NIE jest tekst. `Text` jest
+                           bindowany do `PrivilegeStateGlyphConverter`, który zwraca „✓" albo „✓+", wewnątrz
+                           przycisku `Button.priv-cell` o `Width=20` / `Height=18`. To GLIF strojony do
+                           KONTENERA, czyli reguła #10 działająca poprawnie — dokładnie ta sama zasada, którą
+                           komentarz przy `Button.bulk-glyph` w tym samym pliku stosuje do swoich 12 px.
+                           ⭐ R12: wartość miała powód, powód był nieprawdziwy — i to on wymagał naprawy,
+                           a nie wartość. Grupa z §18.0.5/3 opisywała pod jedną nazwą dwie różne rzeczy. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding ExecuteState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>
@@ -611,8 +660,15 @@
                     <Button Classes="priv-cell" IsVisible="{Binding CanUsage}"
                             Command="{Binding CycleCommand}" CommandParameter="G"
                             ToolTip.Tip="{x:Static app:UiStrings.SecurityPrivilegeLegend}">
-                      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-                           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+                      <!-- ⭐ Q3/C ZAMKNIĘTE (M4.3): 13 px ZOSTAJE, ale POWÓD BYŁ ZAPISANY BŁĘDNIE i to jest
+                           tu jedyna zmiana. Dawny komentarz twierdził „a to jest tekst" i zaliczał tę pozycję
+                           do grupy „TextBlock 13 px" z §18.0.5/3 — ⚠ zmierzone: to NIE jest tekst. `Text` jest
+                           bindowany do `PrivilegeStateGlyphConverter`, który zwraca „✓" albo „✓+", wewnątrz
+                           przycisku `Button.priv-cell` o `Width=20` / `Height=18`. To GLIF strojony do
+                           KONTENERA, czyli reguła #10 działająca poprawnie — dokładnie ta sama zasada, którą
+                           komentarz przy `Button.bulk-glyph` w tym samym pliku stosuje do swoich 12 px.
+                           ⭐ R12: wartość miała powód, powód był nieprawdziwy — i to on wymagał naprawy,
+                           a nie wartość. Grupa z §18.0.5/3 opisywała pod jedną nazwą dwie różne rzeczy. -->
                       <TextBlock FontWeight="Bold" FontSize="13"
                                  Text="{Binding UsageState, Converter={x:Static conv:PrivilegeStateGlyphConverter.Instance}}">
                         <TextBlock.Foreground>

@@ -11,25 +11,11 @@
              Foreground="{DynamicResource ForegroundBrush}">
 
   <UserControl.Styles>
-    <!-- Health-Bar filter chips: same segmented language as the Activity Monitor toolbar -->
-    <Style Selector="Button.seg">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-      <Setter Property="BorderThickness" Value="0" />
-      <!-- ⚠ Promień 0 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to RESET, a nie rola — krok 0
-           ratyfikował, że zeru token nie jest potrzebny (§3.6 handovera). -->
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="Padding" Value="8,3" />
-      <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
-    </Style>
-    <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
-    </Style>
-    <Style Selector="Button.seg.active">
-      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
+    <!-- ⭐ M4.3c: styl `Button.seg` przeniesiony do `Themes/ControlStyles.axaml` — JEDEN styl na dziewięć
+         segmentów w dwóch ekranach. Ten widok deklarował go lokalnie razem z Trace Monitorem, a kopie
+         RÓŻNIŁY SIĘ jedną wartością (`Padding` 8,3 vs 10,3) — mimo że komentarz stojący tutaj deklarował
+         wprost „same segmented language as the Activity Monitor toolbar". ⚠ Powód przeniesienia i powód
+         wyboru poziomu 8 stoją przy stylu; ⛔ nie przywracać kopii lokalnej. -->
     <!-- Detail-panel section header (matches the trace detail) -->
     <Style Selector="TextBlock.section">
       <!-- ⭐ K8 ZAMKNIĘTA (M4, decyzja użytkownika A-2): rola `Text.SectionHeader` niesie teraz 12 SemiBold,
@@ -57,11 +43,14 @@
     <!-- Shared warning card (Performance-findings shape) — ONE definition, used by the Warnings
          tab AND the scoped warnings in Session Details. -->
     <DataTemplate x:Key="SessionWarningCard" x:DataType="vm:SessionWarningViewModel">
-      <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-           (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-           i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
+      <!-- ⭐ Q1 ZAMKNIĘTE (M4.3, decyzja użytkownika na renderze): karta bierze `Radius.Surface` (4 → 3).
+           M2c iteracja 6 zostawiła tu literał i oddała decyzję „karta: 3 czy 4" bramie §13.3 — ⚠ która
+           NIGDY jej nie podjęła (Z‑1…Z‑6 tego nie dotyczą) i pozycja nie dostała numeru K, więc przeżyła
+           zamknięcie rejestru kolizji „w całości". To ten sam mechanizm co przy B2 w M4.2, tylko że B2
+           nie było wyjątkiem — w M4.3 takich sierot po §13.3 było dziewiętnaście.
+           ⭐ Rola opisywała ten element od zawsze: jej komentarz w `Tokens.axaml` zaczyna się od „Karta". -->
       <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-              BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+              BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}" Padding="10,8" Margin="0,0,0,8">
         <StackPanel Spacing="4">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <controls:SvgIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" VerticalAlignment="Center"
@@ -154,9 +143,11 @@
       <StackPanel Spacing="4">
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <!-- verdict dot (theme brush resolved from the grade key) -->
-          <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-               (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-               i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
+          <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+               (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+               ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
           <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center">
             <Border.Background>
               <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
@@ -184,10 +175,13 @@
           <Border Width="1" Margin="6,1" Background="{DynamicResource BorderBrush}" />
 
           <!-- filter chips (segmented) -->
-          <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-               (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-               i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
-          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+          <!-- ⭐ Q1 ZAMKNIĘTE (M4.3): ramka przełącznika bierze `Radius.Surface` (4 → 3). ⚠ Argument jest tu
+               INNY niż przy karcie i mocniejszy: ten element UDAJE obramowaną kontrolkę, a `ControlCornerRadius`
+               Fluenta = 3 i jest świadomie NIENADPISANY w `FluentBridge` (pokrywa się z `Radius.Surface`) —
+               więc każda PRAWDZIWA obramowana kontrolka w aplikacji renderuje się przy 3. Render postawił
+               obok niej prawdziwy `TextBox` i to on rozstrzygnął. -->
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                  CornerRadius="{DynamicResource Radius.Surface}" ClipToBounds="True">
             <StackPanel Orientation="Horizontal">
               <Button Classes="seg" Classes.active="{Binding IsFilterAll}" Command="{Binding FilterAllCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="4">
@@ -253,9 +247,11 @@
                                   CanUserResize="False" CanUserReorder="False" CanUserSort="False">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:SessionRowViewModel">
-                <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-                     (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-                     i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
+                <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+                     (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+                     ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
                 <Border Width="10" Height="10" CornerRadius="5" HorizontalAlignment="Center" VerticalAlignment="Center"
                         ToolTip.Tip="{Binding HealthTooltip}">
                   <Border.Background>
@@ -289,11 +285,16 @@
         </DataGrid.Columns>
       </DataGrid>
 
-      <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-           a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+      <!-- ⭐ Q3/A ZAMKNIĘTE (M4.3): komunikat pustego stanu bierze `Text.Application` (13 → 12). Dawny
+           komentarz był trafny w diagnozie („katalog ma przy 13 wyłącznie rolę kodu, a to jest tekst")
+           i tylko oddawał wniosek bramie, która go nie podjęła.
+           ⚠ Ten sam element żyje w Trace Monitorze i jest tam KONSTRUKCYJNIE IDENTYCZNY (ten sam pędzel,
+           ten sam `Margin`, to samo centrowanie), więc to była JEDNA decyzja na dwa ekrany, nie dwie —
+           i pilnuje tego test relacyjny `BothEmptyStates_ShareOneTextRole` (#335: ta sama kontrolka na
+           dwóch ekranach musi zgadzać się sama ze sobą). -->
       <TextBlock IsVisible="{Binding ShowSessionsEmpty}" Text="{x:Static app:UiStrings.SessionsEmpty}"
                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
-                 Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="13" />
+                 Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Application.Size}" />
     </Panel>
 
     <!-- splitter: double-tap to maximize/restore (identical to the Activity Monitor bottom panel) -->
@@ -328,9 +329,11 @@
                              Foreground="{DynamicResource SubtleForegroundBrush}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the fill -->
-                <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-                     (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-                     i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
+                <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+                     (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+                     ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
                 <Border Width="280" Height="10" HorizontalAlignment="Left" CornerRadius="5" ClipToBounds="True"
                         Background="{DynamicResource RowAlternateBrush}">
                   <Border Width="{Binding GapFillWidth}" HorizontalAlignment="Left">
@@ -343,27 +346,35 @@
                   </Border>
                 </Border>
                 <Grid Width="280" HorizontalAlignment="Left">
-                  <!-- ⚠ 9 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): katalog nie ma roli o tej wartości. -->
-                  <TextBlock HorizontalAlignment="Left" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
+                  <!-- ⭐ Q3/B ZAMKNIĘTE (M4.3): podpis skali bierze `Text.Caption` (9 → 10). To jest TEKST,
+                       a nie znak strojony do kontenera — więc trafia na najbliższą rolę tekstową zamiast
+                       zostawać przy wartości, której katalog nie zna. -->
+                  <TextBlock HorizontalAlignment="Left" FontSize="{DynamicResource Text.Caption.Size}"
+                             Foreground="{DynamicResource SubtleForegroundBrush}"
                              Text="{x:Static app:UiStrings.SessionManagerGapScaleMin}" />
-                  <!-- ⚠ 9 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): katalog nie ma roli o tej wartości. -->
-                  <TextBlock HorizontalAlignment="Right" FontSize="9" Foreground="{DynamicResource SubtleForegroundBrush}"
+                  <!-- ⭐ Q3/B ZAMKNIĘTE (M4.3): jak wyżej — `Text.Caption` (9 → 10). -->
+                  <TextBlock HorizontalAlignment="Right" FontSize="{DynamicResource Text.Caption.Size}"
+                             Foreground="{DynamicResource SubtleForegroundBrush}"
                              Text="{Binding GapScaleMaxText, StringFormat='GC risk near {0}'}" />
                 </Grid>
               </StackPanel>
             </Border>
 
             <!-- "Filtered by session N ✕" chip -->
-            <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-                 (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-                 i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
-            <Border Grid.Row="1" Background="{DynamicResource SelectionBrush}" CornerRadius="4"
+            <!-- ⭐ M4.3: ten element NAZYWA SIĘ chipem we własnym komentarzu, a rola `Radius.Chip` nazywa się
+                 „Odznaka i chip" — więc migracja jest wyłącznie nazwaniem decyzji, którą autor już podjął
+                 (R12). Wartość 4 → 4, wygląd bez zmiany; to jedyna pozycja Q1 bez pytania. -->
+            <Border Grid.Row="1" Background="{DynamicResource SelectionBrush}" CornerRadius="{DynamicResource Radius.Chip}"
                     Padding="8,3" Margin="6,6,6,0" HorizontalAlignment="Left"
                     IsVisible="{Binding IsSessionFilterActive}">
               <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                 <TextBlock Text="{Binding SessionFilterText}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                 <Button Classes="icon" Padding="2" Command="{Binding ClearSessionFilterCommand}">
-                  <controls:SvgIcon Width="11" Height="11" Data="{StaticResource Icon.X}" />
+                  <!-- ⭐ Q2 (M4.3): inline ✕ na `Size.Icon.Sm` (11 → 12). Rola opisuje wprost ten host —
+                       „ikona inline w tekście 11 px (chip, wiersz siatki)" — a obok stoi `Text.Compact` (11).
+                       Ten sam ✕ w debuggerze niósł 12 i 11 w jednym pliku; pięć wystąpień, jedna rola. -->
+                  <controls:SvgIcon Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}"
+                                    Data="{StaticResource Icon.X}" />
                 </Button>
               </StackPanel>
             </Border>
@@ -381,9 +392,11 @@
                                         CanUserResize="False" CanUserReorder="False" CanUserSort="False">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="vm:TransactionRowViewModel">
-                      <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-                           (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-                           i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
+                      <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+                           (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+                           ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
                       <Border Width="10" Height="10" CornerRadius="5" HorizontalAlignment="Center" VerticalAlignment="Center"
                               ToolTip.Tip="{Binding HealthTooltip}">
                         <Border.Background>
@@ -430,9 +443,11 @@
                 <StackPanel Spacing="4">
                   <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerGeneralHeader}" />
                   <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-                         (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-                         i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
+                    <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
+                         (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
+                         ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4"
+               zniknęło w M4.3: karty, ramki kontrolek i chip zeszły na role, więc poza tą geometrią
+               nie ma już w tym pliku ani jednego promienia zapisanego liczbą. -->
                     <Border Width="9" Height="9" CornerRadius="4.5" VerticalAlignment="Center">
                       <Border.Background>
                         <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">

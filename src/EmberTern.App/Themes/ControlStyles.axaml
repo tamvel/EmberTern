@@ -1032,6 +1032,70 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
+  <!-- ⭐⭐ PRZEŁĄCZNIK SEGMENTOWY (M4.3c) — JEDEN styl na dziewięć segmentów w dwóch ekranach.
+       Konsumenci: Session Manager (filtry Health-Bara, 3) + Trace Monitor (grupowanie i szybki filtr, 6).
+       Segment jest przyciskiem BEZ własnej geometrii: ramkę i promień niesie otaczający `Border`
+       z `ClipToBounds`, więc segment kasuje oba (`CornerRadius` 0, `BorderThickness` 0) i rysuje
+       wyłącznie tło + etykietę.
+
+       ⚠⚠ CZEGO NIE TRZEBA SIĘ TU BAĆ — I JEST TO WYNIK POMIARU, KTÓRY OBALIŁ MOJĄ WŁASNĄ PRZESŁANKĘ.
+       Wchodząc w ten etap zakładałem, że po przeniesieniu `.seg` na poziom aplikacji o zwycięstwie
+       z bazowym `<Style Selector="Button">` (nadaje `Radius.Surface` + `Border.All`) zacznie decydować
+       KOLEJNOŚĆ w pliku, więc blok musi stać poniżej. ⭐ ZMIERZONE (M4.3c, podsadzenie): bazowy
+       `Button` ustawiający `Padding="99,99"` i postawiony PO tym bloku **nie nadpisał** `8,3`.
+       Avalonia rozstrzyga między stylami **SPECYFICZNOŚCIĄ SELEKTORA, nie pozycją** — selektor
+       z klasą (`Button.seg`) bije goły selektor typu (`Button`) niezależnie od kolejności.
+       ⚠ Mechanizm regresji §19.2 to co innego: tam styl przegrał z WARTOŚCIĄ LOKALNĄ ustawioną
+       na elemencie (`Background` wprost na `Border`), a wartość lokalna bije KAŻDY setter stylu
+       niezależnie od tego, gdzie styl mieszka. ⭐ Dlatego warunkiem bezpieczeństwa tego przeniesienia
+       nie jest pozycja bloku, tylko to, że **żaden z dziewięciu segmentów nie niesie wartości lokalnej**
+       dla ustawianych tu właściwości — sprawdzone.
+
+       ⛔ Mimo to blok zostaje tutaj, przy rodzinie `Button.*`: to porządek, a nie zabezpieczenie —
+       i nie należy opisywać go jako zabezpieczenie.
+
+       Test BEHAWIORALNY
+       `DesignTokenApplicationTests.SegmentedButton_TakesItsGeometryFromTheSharedStyle_NotFromTheBaseButton`
+       mierzy ZREALIZOWANY przycisk, bo realnym ryzykiem przeniesienia jest to, że styl **przestanie
+       docierać** (M4.2b: pięciu zielonych strażników źródłowych opisywało pusty ekran). Towarzyszy mu
+       `NoView_DeclaresItsOwnSegmentedButtonStyle` — kopia lokalna w widoku wygrałaby ze wspólnym stylem
+       przez bliskość w drzewie i przywróciłaby rozjazd.
+
+       ⚠ Czego ten styl świadomie NIE ustawia: `MinHeight`. Segment stoi w pasku `Border.chrome`,
+       a `Border.chrome Button` nadaje mu `Size.ControlToolbar` (22) — czyli WYSOKOŚĆ ROZSTRZYGA
+       KONTENER (reguła #10), tak samo jak dla pozostałych przycisków paska. Zmierzone, nie założone.
+
+       ⭐ POZIOM 8, NIE 10 — rozstrzygnięcie rozjazdu, który ten etap zastał. Dwie lokalne kopie tego
+       stylu różniły się jedną wartością: Session `8,3`, Trace `10,3`, przy komentarzu Session
+       deklarującym wprost „same segmented language as the Activity Monitor toolbar" — czyli autor
+       ZAPISAŁ INTENCJĘ, a kod jej nie dotrzymywał (kształt #335 ze świadkiem w postaci komentarza).
+       Pion był w obu identyczny, więc sporny był wyłącznie poziom. Wybrano gęstszy wariant na
+       podstawie R18 („przy równej czytelności wygrywa gęstszy"), a czytelność jest tu równa: różnica
+       to 2 px odstępu poziomego na etykiecie w pasku narzędzi.
+       ⚠ Wartość jest LITERAŁEM celowo: `Pad.Cell` (8,3) i `Pad.MenuItem` (10,3) niosą dokładnie te
+       dwie liczby, ale opisują KOMÓRKĘ SIATKI i WIERSZ MENU — segment nie jest ani jednym, ani drugim,
+       a rola, która do elementu nie pasuje, jest gorsza od wartości lokalnej z powodem (R12).
+       ⛔ Nie tworzono też roli `Pad.Segment`: miałaby jednego konsumenta, czyli legalizowałaby wartość
+       zamiast opisywać element — wariant odrzucony z tego samego powodu co `Radius.Card` w M4.2 (B2). -->
+  <Style Selector="Button.seg">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <!-- ⚠ Promień 0 zostaje literałem, ŚWIADOMIE: to RESET, a nie rola — krok 0 M2c ratyfikował,
+         że zeru token nie jest potrzebny (§3.6 handovera). -->
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+  <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+  <Style Selector="Button.seg.active">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
   <!-- ⭐ PASEK ZAKŁADEK ROZSTRZYGA WIELKOŚĆ SWOICH DZIECI — szóste wystąpienie decyzji architektonicznej
        §17.2/2, w kształcie identycznym z regułą `DataGridCell Button` i z tego samego powodu.
 

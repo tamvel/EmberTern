@@ -9095,3 +9095,253 @@ SUMA, nie brak błędów**. Oryginał odtworzony z HEAD, strażniki przeniesione
 do `ControlStyles.axaml` (M3.4a) · ⛔ zmiana kolejności w drzewie połączenia · ⛔ migracja odstępów ·
 ⛔ **B1** z M4.2 (prywatne ikony `TableDetailTabView` — nadal czeka na decyzję wizualną) · ⛔ **Z‑3** ·
 ⛔ M4.3–M4.4.
+
+---
+
+## §19.42 Iteracja 30 (M4.3) — Debugger · Trace · Session · Security · Performance: etap, który okazał się ODBIOREM ZALEGŁYCH DECYZJI (2026-08-09)
+
+> **🔒 Status: ZAMKNIĘTE — ODEBRANE PO QA WIZUALNYM UŻYTKOWNIKA (2026-08-09).** Build 0/0; suite **8332**
+> (8182 + 95 + 55, +3); smoke czysty. Nowe gotchy **#340–#341**. Zakres z §13: Debugger · Trace ·
+> Session Manager · Security Manager · Performance.
+>
+> Decyzje ratyfikowane przez użytkownika na renderze (2026-08-09): **Q1 · Q2 · Q3 · Q4 — wszystkie zgodnie
+> z rekomendacją**. Materiał decyzyjny: `tools/probes/VisualCandidateProbe/Monitors.cs`
+> (`dotnet run --project tools/probes/VisualCandidateProbe -- m43`) → `out/m43-q{1..4}-*-{Dark,Light}.png`.
+
+### §19.42.1 ⭐⭐ Znalezisko główne: to nie był sweep literałów, tylko sierocy backlog bramy §13.3
+
+Pomiar wejściowy (regeksy strażników odtworzone 1:1) dał 48 pozycji w zakresie — ale kształt tej pracy
+rozstrzygnęła inna liczba: **w pięciu plikach etapu stało 19 komentarzy „rozstrzyga §13.3"**, pokrywających
+praktycznie **każdą** pozostałą tam wartość lokalną.
+
+| plik | odesłań do §13.3 | pozostałych `FontSize` |
+|---|---|---|
+| SecurityManagerTabView | 9 | 9 |
+| DebuggerTabView (+ `.cs`) | 4 | 5 |
+| PerformancePanelView | 3 | 3 |
+| TraceMonitorTabView | 2 | 2 |
+| SessionManagerTabView | 1 | 3 |
+
+⛔ Brama §13.3a nie podjęła **ani jednej** z nich (Z‑1…Z‑6 dotyczą czego innego), żadna nie dostała numeru K,
+a blok typografii ogłosił rejestr kolizji **„zamknięty w całości"**.
+
+⭐⭐ **§19.40.5 opisało dokładnie ten mechanizm przy B2 — ale jako pojedynczą pozycję, która „wypadła między
+etapami".** Zmierzone: B2 nie było wyjątkiem, tylko pierwszym napotkanym egzemplarzem. Przyczyną jest
+**rozdzielenie kustodii**: odesłanie żyje w ŹRÓDLE, rejestr żyje w DOKUMENCIE, a zamykany bywa wyłącznie
+dokument. Zapisane jako gotcha **#340**.
+
+⚠ Praktyczny wniosek na przyszłe etapy: sieroty **nie są rozłożone losowo** — skupiają się dokładnie tam,
+gdzie liczniki migracji pokazują resztę, bo wartość sparkowana to wartość niezmigrowana. Pytania *„czemu ten
+plik wciąż ma wartości lokalne?"* i *„których decyzji nigdy nie podjęto?"* są więc tym samym pytaniem.
+
+### §19.42.2 Q1 — promień: jedna liczba, ale DWA różne argumenty
+
+Siedem promieni `4` → **`Radius.Surface` (3)**, plus chip Session → `Radius.Chip` (4 → 4, wygląd bez zmiany).
+
+* **Trzy KARTY** (ostrzeżenie Session · błąd Trace · finding Performance) — dziedziczą argument **B2**:
+  komentarz roli w `Tokens.axaml` zaczyna się od słowa „Karta", więc rola opisywała je od zawsze.
+* **Cztery RAMKI KONTROLEK** (dwa przełączniki segmentowe Trace, jeden Session, pole filtra Trace) —
+  ⭐ argument **inny i mocniejszy**: `ControlCornerRadius` Fluenta = **3** i jest świadomie **NIENADPISANY**
+  w `FluentBridge` (bo pokrywa się z `Radius.Surface`), więc **każda prawdziwa obramowana kontrolka renderuje
+  się przy 3**, a te cztery ją tylko udawały. Render postawił obok nich prawdziwy `TextBox` i to on zamknął
+  pytanie — dlatego wiersz odniesienia jest w sondzie, a nie w opisie.
+
+⛔ Zostaje 9 promieni i wszystkie mają ten sam powód: koła (`10×10` r=5, `9×9` r=4.5), kapsuły (`Height=10`
+r=5) i dwa resety `Value="0"` — **arytmetyka i reset, nie role** (§18.0.5/2).
+
+### §19.42.3 Q2 — inline ✕: rozjazd, który siedział W JEDNYM PLIKU
+
+Pięć ikon `Icon.X` → **`Size.Icon.Sm`**. Dla użytkownika to jeden element (✕ czyszczące albo usuwające to,
+w czym stoi), a renderowały się przy **12** (czyszczenie pola Immediate) i **11** (trzy razy usuwanie wiersza
+w debuggerze, raz czyszczenie chipa w Session).
+
+⚠ Rozjazd był **wewnątrz jednego pliku**, więc nie opisywała go żadna reguła sformułowana per ekran — #335
+czytane o poziom niżej. ⭐ Pomiar dorzucił argument, którego nie było w rekomendacji: **`MainWindow` już
+używał `Size.Icon.Sm` dla dwóch takich ✕**, więc M4.3 nie wprowadziło roli, tylko **dokończyło regułę, którą
+produkt już miał** — dokładnie jak M4.1 z paskiem paginacji.
+
+⚠ Koszt zaakceptowany świadomie: cztery ikony **rosną** 11 → 12, co idzie pod prąd **R18**. Wariant odwrotny
+(„rola na 11") nie był wariantem, tylko cofnięciem odebranej już decyzji M4.2.
+
+### §19.42.4 ⭐⭐ Q3 — grupa „TextBlock 13 px" opisywała pod jedną nazwą DWIE różne rzeczy
+
+To jest drugie znalezisko merytoryczne etapu. §18.0.5/3 trzymała wspólną grupę „TextBlock 13 px"; pomiar ją
+rozdzielił:
+
+* **TEKST bez roli** → migruje: komunikat pustego stanu Session + Trace (13 → `Text.Application` 12, bo 13 to
+  rola **KODU**, a to nie jest kod) i podpisy przy 9 px (→ `Text.Caption` 10).
+  ⭐ Oba puste stany są **konstrukcyjnie identyczne** (ten sam pędzel, ten sam `Margin="0,40,0,0"`, to samo
+  centrowanie) — jeden element na dwóch ekranach, więc **jedna decyzja**, nie dwie.
+* **GLIFY strojone do kontenera** → zostają: osiem „Bold 13" w Security Managerze jest bindowanych do
+  `PrivilegeStateGlyphConverter`, który zwraca `✓` / `✓+`, wewnątrz przycisku **20×18**.
+  ⛔ To **nie jest tekst** — to reguła #10 („kontener rozstrzyga wielkość") działająca poprawnie.
+
+⭐ **Zmieniony został POWÓD, nie wartość.** Komentarz twierdził *„a to jest tekst"* i to on był nieprawdziwy;
+R12 chroni wartość lokalną, która ma powód — nie wartość, której powód kłamie. Ten sam plik 140 linii wyżej
+stosuje właściwą zasadę do swoich 12 px („ELEMENT UKŁADU… dobrany do przycisku o `Height=18`").
+
+### §19.42.5 Q4 — pole filtra Trace: pytanie o SĄSIADÓW, nie o liczbę
+
+`Height="26"` → **`Size.Control` (24)**. ⭐ Rozstrzygnął pomiar, nie render: `TextBox` i `ComboBox` biorą
+`MinHeight = Size.Control` = 24, więc pole stało **2 px wyżej niż każdy prawdziwy sąsiad w tym samym pasku**
+— i to ono wyznaczało jego wysokość. ⚠ Liczby 26 nie było nigdzie indziej w `src/`; drugie `MinHeight="26"`
+zdjął blok typografii (decyzja D), więc to był ostatni egzemplarz tego samego kształtu.
+
+⭐ Jedno zdanie w istniejącym komentarzu nad tym elementem — *„reads clearly as a text input"* — jest
+argumentem za **obiema** zmianami naraz (promień i wysokość). Autor zapisał intencję; kod jej nie dotrzymywał.
+
+### §19.42.6 Liczby
+
+| licznik | przed | po |
+|---|---|---|
+| `FontSize` app-wide | 36 / 13 plików | **31 / 12** |
+| `FontSize` w zakresie M4.3 | 22 | **17** (Session zdjęty w całości) |
+| `CornerRadius` app-wide | 17 / 3 pliki | **9 / 3** |
+| literały rozmiaru ikony | 19 / 7 plików | **14 / 6** (Debugger zdjęty w całości) |
+
+⚠⚠ **SPROSTOWANIE POMIARU:** §19.40.4 i „Current state" w `CLAUDE.md` mówiły *„sufit rośnie 20 → 25"*.
+Ta liczba **nigdy nie zgadzała się z kodem**: do dwudziestki z M4.1 dodano +5 za `TableDetailTabView`, ale nie
+odjęto **−6** zdjętych w tej samej iteracji z bliźniaków. Rzeczywisty sufit po M4.2 wynosił **19** — i tyle
+sumowała tablica bazowa, więc strażnik był zielony; rozjeżdżała się wyłącznie **proza**.
+
+### §19.42.7 Strażniki — trzy nowe, wszystkie RELACYJNE i wszystkie zweryfikowane podsadzeniem
+
+* `BothEmptyStates_ShareOneTextRole` — Session i Trace muszą czytać **tę samą** rolę (nie „rolę o wartości 12").
+* `TheTraceFilterField_TakesTheHeightOfTheControlsBesideIt` — czyta rolę z `ControlStyles.axaml` (skąd bierze
+  ją prawdziwy `TextBox`) i wymaga, żeby pole deklarowało dokładnie ją. **Pilnuje PRZESŁANKI, nie POLITYKI**
+  (#322): gdy zmieni się rola kontrolek, test powie, że pole ma pójść za nimi.
+* `EveryInlineClearIcon_SharesOneSizeRole` — wszystkie ✕ deklarujące rozmiar deklarują tę samą rolę.
+
+⚠⚠ **DWA Z TRZECH STRAŻNIKÓW BYŁY W PIERWSZEJ WERSJI BŁĘDNE I WYKRYŁ TO DOPIERO PRZEBIEG** — czytanie kodu
+by ich nie złapało:
+
+1. **Strażnik ✕ grupował po NAZWIE GEOMETRII.** `MainWindow` ma trzeci `Icon.X` — przycisk „Zamknij zakładkę"
+   w pasku narzędzi — czyli samodzielną AKCJĘ, która **poprawnie nie deklaruje nic** i bierze
+   `Size.Icon.Toolbar` (16) z `ControlTheme`. ⭐⭐ To jest §19.39.2a popełnione **wewnątrz strażnika napisanego,
+   żeby temu zapobiec**, w tej samej sesji, w której ta lekcja była cytowana. Gotcha **#341**; reguła
+   przeformułowana na DEKLARACJĘ („ikona, która deklaruje rozmiar, deklaruje tę samą rolę"), plus asercja,
+   że przypadek bez deklaracji nadal istnieje.
+2. **Strażnik wysokości łapał ogon `MinHeight="0"`** z `TextBox`a w środku ramki i porównywał rolę z zerem
+   („ostatnia wysokość nad polem"). Naprawione zakotwiczeniem w **otwierającym znaczniku ramki** + `(?<![A-Za-z])`.
+
+⚠⚠ **I znów zadziałała pułapka §19.31, na mnie:** przebieg zaraz po tych poprawkach raportował „2 niepowodzenia"
+przy buildzie, który skończył się **4 błędami** — testy biegły na starym binarium. Przyczyną był polski
+cudzysłów otwierający sparowany z ASCII zamykającym w komunikacie asercji (ten sam błąd wystąpił wcześniej
+w module sondy). ⭐ Złapane wyłącznie dlatego, że `Liczba błędów` czyta się **przed** listą niepowodzeń.
+
+### §19.42.8 ⛔ Czego ta iteracja NIE zrobiła
+
+* ⛔ **`Button.seg`** — 🔒 decyzja użytkownika: **osobne M4.3c z własnym QA behawioralnym**. Zmierzone: styl
+  jest zadeklarowany **dwa razy lokalnie** (Session i Trace) i kopie **różnią się jedną wartością** —
+  `Padding` 8,3 vs 10,3 — przy komentarzu autora deklarującym *„same segmented language as the Activity
+  Monitor toolbar"*. ⚠⚠ Konsolidacja do `ControlStyles.axaml` **zmienia priorytet stylu** wobec wartości
+  lokalnych — mechanizm regresji §19.2, z powodu którego M3.4a **odmówiło** takiego przeniesienia dla wiersza
+  paska bocznego. Dlatego to nie jest doklejka do migracji.
+* ⛔ **B1** (prywatne ikony `TableDetailTabView`) · ⛔ **Z‑3** · ⛔ migracja odstępów (osobny etap po M4.4) ·
+  ⛔ ogon literałów ikon 10/11/13/15 · ⛔ `FontFamily` (monospace → sprint UX) · ⛔ `GridSplitter` (B3 z M4.2,
+  element chromy dzielony z M4.4) · ⛔ **M4.4**.
+* ⏸ **Nie dodano testu behawioralnego i to jest świadome:** M4.3b zmienia wyłącznie METRYKI i ROLE na
+  `Border`/`TextBlock`/`SvgIcon` — zero obsługi zdarzeń, klawiatury, zaznaczenia i szablonowania, więc
+  przesłanka reguły z M4.2b („iteracja rusza KONTROLKĘ") nie zachodzi. ⚠ Gdyby ruszyć `Button.seg`, zachodzi —
+  i stąd M4.3c ma je mieć.
+* ⏸ **Obserwacja poza zakresem:** po M4.3 rodzina inline ✕ czyta `Size.Icon.Sm` wszędzie **poza
+  `AggregationBarView`** (10 px), który należy do sparkowanego ogona 10/11/13/15. Nie ruszane.
+
+---
+
+## §19.43 Iteracja 31 (M4.3c) — `Button.seg`: konsolidacja, w której POMIAR OBALIŁ UZASADNIENIE CAŁEGO ETAPU (2026-08-09)
+
+> **🔒 Status: ZAMKNIĘTE — ODEBRANE PO QA WIZUALNYM UŻYTKOWNIKA (2026-08-09). Tym samym M4.3 jest zamknięty
+> w całości (M4.3b §19.42 + M4.3c §19.43) i wchodzi JEDNYM commitem.** Build 0/0; suite **8334**
+> (8182 + 97 + 55, +2); smoke czysty. Nowa gotcha **#342**.
+>
+> Zakres: przełącznik segmentowy — 9 segmentów w dwóch ekranach (Session Manager 3, Trace Monitor 6),
+> wydzielony z M4.3b jako osobna iteracja **z powodu ryzyka priorytetu stylu**.
+
+### §19.43.1 ⭐⭐ Znalezisko główne: przesłanka, dla której ta iteracja była osobna, JEST NIEPRAWDZIWA
+
+M4.3b odłożyło `Button.seg` na osobno z uzasadnieniem, które brzmiało solidnie i było cytowane trzy razy:
+*„konsolidacja do `ControlStyles.axaml` zmienia priorytet stylu — mechanizm regresji §19.2, z powodu którego
+M3.4a odmówiło analogicznego przeniesienia"*. Z tego wynikało, że wspólny styl **musi** stać poniżej bazowego
+`<Style Selector="Button">`, bo inaczej segmenty dostaną `Radius.Surface` + `Border.All`.
+
+⭐ **Zmierzone podsadzeniem (i to podsadzenie NIE zapaliło testu, co było całym sygnałem):** bazowy
+`<Style Selector="Button">` z `Padding` 99,99 postawiony **PO** bloku `.seg` **nie nadpisał** wartości 8,3.
+
+**Avalonia rozstrzyga między stylami SPECYFICZNOŚCIĄ SELEKTORA, nie pozycją w pliku** — selektor z klasą
+(`Button.seg`) bije goły selektor typu (`Button`) niezależnie od kolejności.
+
+⚠⚠ **Mechanizm §19.2 to co INNEGO, i na tym polegało zlepienie dwóch różnych rzeczy w jedną obawę:** tam
+przeniesiony styl przegrał z **WARTOŚCIĄ LOKALNĄ** ustawioną wprost na elemencie (`Background` na `Border`),
+a wartość lokalna bije każdy setter stylu niezależnie od tego, gdzie styl mieszka. ⭐ Warunkiem bezpieczeństwa
+tego przeniesienia nie jest więc pozycja bloku, tylko to, że **żaden z dziewięciu segmentów nie niesie
+wartości lokalnej** dla ustawianych właściwości — sprawdzone i prawdziwe.
+
+⛔ **Czego to NIE znaczy:** że M3.4a pomyliło się, odmawiając przeniesienia stylu wiersza paska bocznego.
+Tamta odmowa dotyczyła innych elementów i nie była tu weryfikowana. Zapisane jest wyłącznie to, co zmierzono:
+**dla pary „styl z klasą vs styl typu" kolejność nie decyduje.** Gotcha **#342**.
+
+### §19.43.2 Co jest w produkcie
+
+Jeden `Button.seg` (+ `:pointerover` + `.active`) w `Themes/ControlStyles.axaml`, przy rodzinie `Button.*`.
+Dwie kopie lokalne usunięte. ⛔ Blok stoi tam, gdzie stoi, dla **porządku, a nie jako zabezpieczenie** —
+i jest tak opisany, bo opisanie go jako zabezpieczenia byłoby powtórzeniem obalonej przesłanki.
+
+**Rozjazd, który to usunęło:** kopie różniły się **jedną wartością** — poziomym odstępem wewnętrznym
+(Session 8, Trace 10) — przy komentarzu Session deklarującym wprost *„same segmented language as the Activity
+Monitor toolbar"*. ⭐ To #335 ze świadkiem: **autor zapisał intencję, a kod jej nie dotrzymywał.** Pion był
+w obu identyczny, więc sporny był wyłącznie poziom.
+
+**🔒 Wybrano 8** — R18 („przy równej czytelności wygrywa gęstszy"), a czytelność jest tu równa: różnica to
+2 px odstępu poziomego przy etykiecie w pasku narzędzi. ⚠ Widoczna konsekwencja: **sześć segmentów Trace
+zwęża się o 2 px z każdej strony**; trzy segmenty Session bez zmiany.
+
+⚠ **Wartość jest LITERAŁEM celowo.** `Pad.Cell` (8,3) i `Pad.MenuItem` (10,3) niosą dokładnie te dwie liczby,
+ale opisują KOMÓRKĘ SIATKI i WIERSZ MENU — segment nie jest ani jednym, ani drugim, a rola, która do elementu
+nie pasuje, jest gorsza od wartości lokalnej z powodem (**R12**). ⛔ Nie utworzono też roli `Pad.Segment`:
+miałaby jednego konsumenta, czyli legalizowałaby wartość zamiast opisywać element — wariant odrzucony
+z tego samego powodu co `Radius.Card` w M4.2 (B2).
+
+⭐ **Pytanie o wysokość segmentu w ogóle nie powstało, i to też jest pomiar:** styl celowo nie deklaruje
+`MinHeight`, bo `Border.chrome Button` nadaje mu `Size.ControlToolbar` (22) — **wysokość rozstrzyga
+KONTENER** (reguła #10), tak samo jak dla pozostałych przycisków paska.
+
+### §19.43.3 Testy — jeden behawioralny, jeden źródłowy, oba zweryfikowane podsadzeniem
+
+* **`SegmentedButton_TakesItsGeometryFromTheSharedStyle_NotFromTheBaseButton`** (behawioralny, headless):
+  buduje pasek `Border.chrome` → ramka z `ClipToBounds` → dwa segmenty (spoczynkowy + aktywny), pokazuje okno
+  i mierzy **ZREALIZOWANY** przycisk: kasowanie geometrii bazowego `Button` (podwójnie — „jest 0" **oraz**
+  „NIE jest `Radius.Surface`"), identyczność obu segmentów, ratyfikowane 8,3, `MinHeight` z kontenera, stan
+  aktywny (waga + `SelectionBrush`) i na końcu — że kontrolka **zajęła miejsce w układzie** (H > 0, W > 0).
+  ⭐ Ostatnia asercja istnieje, bo w M4.2b pięciu zielonych strażników opisywało pusty ekran (#338).
+* **`NoView_DeclaresItsOwnSegmentedButtonStyle`** (źródłowy): kopia lokalna wygrałaby ze wspólnym stylem przez
+  bliskość w drzewie — a test behawioralny by tego nie zauważył, bo buduje segment **bez widoku**. Dwa testy,
+  dwa różne pytania.
+
+⭐ Oba dołączyły do **istniejącej** klasy headless, zamiast zakładać nową — lista nazw w filtrze partycji jest
+krucha i utrzymywana ręcznie (#94/#226/#286, precedens M3.5).
+
+### §19.43.4 ⚠⚠ Dwa razy pomiar poprawił mnie w trakcie
+
+1. **Podsadzenie „reguła bazowa po `.seg`" nie zapaliło testu** — i to nie test był zły, tylko przesłanka
+   (§19.43.1). ⭐ Gdyby podsadzenia zabrakło, do repozytorium trafiłby komentarz twierdzący nieprawdę
+   o mechanizmie Avalonii, w miejscu, w którym następny autor by go zacytował.
+2. **Mój komentarz podniósł licznik wartości lokalnych o 1.** Zdanie wyjaśniające zmianę cytowało składnię
+   atrybutu (`Nazwa="wartość"`), a `Measure` czyta plik regeksem i **nie pomija komentarzy** — więc proza
+   policzyła się jak deklaracja. ⚠ Kwirk jest udokumentowany przy `FontSize` od M2c iteracji 2, która
+   zapłaciła dokładnie to samo; ⭐ naprawa jest ta sama i właściwa: **przeredagować komentarz**, a nie
+   podnosić sufit.
+   ⚠ Przy okazji: `sed`, którym cofałem podsadzenie, trafiłby też w `MenuItem` (ta sama liczba, inny styl) —
+   złapane przed wykonaniem, przez wypisanie numerów linii zamiast ślepej zamiany.
+
+### §19.43.5 ⚠ Spadek liczników jest częściowo PRZENIESIENIEM, nie migracją
+
+`CornerRadius` 9 → **7**, `Padding` (w zakresie) 38 → **37**. ⭐ Te wartości **istnieją dalej** — wyszły
+z `Views/` do `Themes/ControlStyles.axaml`, którego `Measure` nie skanuje. Zapisane przy obu wpisach bazowych,
+żeby spadek nie udawał postępu, którego nie było.
+
+### §19.43.6 ⛔ Czego ta iteracja NIE zrobiła
+
+⛔ Nie ruszono ramek przełączników (to Q1 z M4.3b, już zamknięte) · ⛔ nie tworzono roli `Pad.Segment` ·
+⛔ nie rewidowano odmowy M3.4a dla wiersza paska bocznego · ⛔ **B1** · ⛔ **Z‑3** · ⛔ migracja odstępów ·
+⛔ ogon literałów ikon 10/11/13/15 · ⛔ `FontFamily` · ⛔ `GridSplitter` · ⛔ **M4.4**.

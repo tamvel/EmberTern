@@ -1471,3 +1471,58 @@ every emit path to be individually perfect.**
      ⭐ Practical rule: for anything keyboard-driven, one test must send a REAL key through the full event
      pipeline and press **at least twice**, because single-shot input hides every state-loss defect.
      (Product Polish M4.2b — `product-polish.md` §19.41.)
+
+340. **A decision DEFERRED in a code comment is not an entry in any register — so when the register is later
+     closed "in full", the deferral survives it, silently, and reads to the next author as a settled state.**
+     M4.2 found one such orphan (the twins' card radius, B2) and diagnosed it as a stray that "fell between
+     stages". M4.3 measured the population: **19 comments saying „rozstrzyga §13.3" in its five files alone**,
+     covering essentially every local value left there — plus ~43 more across `src/`. The §13.3 gate produced
+     six findings (Z‑1…Z‑6) and decided **none** of them; none received a K number; and the next stage then
+     declared the collision register **closed in full** and moved on to migration.
+     ⭐⭐ The mechanism is a **split of custody**: the deferral lives in the SOURCE, the register lives in a
+     DOCUMENT, and only the document ever gets closed. Nothing is wrong with either half — which is why this
+     is invisible to a build, a test suite and a document review alike.
+     ⚠ The practical tell is that the orphans are **not** distributed randomly: they cluster exactly where the
+     migration counters still show a remainder, because a value that was parked is a value that was not
+     migrated. So *"why does this file still have local values?"* and *"which decisions were never taken?"*
+     turn out to be the same question, and reading the comments answers both faster than reading the counters.
+     ⭐ Rule: when a stage hands a decision to a later review, the decision needs an **entry with an
+     identifier** in the register that review will close — a sentence in a comment is a reminder, not a
+     backlog item. And before declaring any register closed, grep the source for deferrals pointing at it.
+     (Product Polish M4.3 — `product-polish.md` §19.42; the B2 precedent is §19.40.5.)
+
+341. **One glyph can carry two different roles, so a rule grouped by the geometry's NAME is grouped by the
+     wrong thing — and this is easy to commit while quoting the rule against it.** M4.3 unified the inline ✕
+     (clear/remove what it sits in) onto `Size.Icon.Sm`, and the guard written to pin that swept every
+     `Icon.X` in the hosting views. It failed immediately on `MainWindow`, and correctly: the toolbar's
+     **"close tab"** button is also an `Icon.X`, but it is a standalone ACTION and rightly declares no size at
+     all, taking `Size.Icon.Toolbar` (16) from its `ControlTheme` (#332). The same shape as `Icon.RefreshCw`
+     (16 as a toolbar button, 14 when it refreshes a grid).
+     ⭐ The workable formulation is about the DECLARATION, not the glyph: *an icon that declares a size
+     declares the shared role; declaring nothing is a separate, correct path.* A guard should then also assert
+     the unsized case still exists, or the rule quietly stops describing reality.
+     ⚠⚠ Worth recording for the method, not the icon: this is #335 / §19.39.2a committed **inside the guard
+     written to prevent it**, in the same session in which that very lesson was quoted back to the user. The
+     error is not ignorance of the rule — it is that grouping by name is the path of least resistance when
+     writing the regex, and only running it against the whole codebase exposes the second role.
+     (Product Polish M4.3 — `product-polish.md` §19.42.)
+
+342. **Avalonia resolves two competing STYLES by selector specificity, not by document order — so "moving a
+     style changes its priority" is true only against a LOCAL VALUE, and conflating the two produces a rule
+     that sounds rigorous and is false.** M4.3c was split into its own iteration on the premise that hoisting
+     `Button.seg` from two `UserControl.Styles` blocks into the application sheet would put it in an
+     order-decided race with the base `<Style Selector="Button">` (which sets `CornerRadius` and
+     `BorderThickness`), so the block "must" sit below it. ⭐ **Measured by planting: a base
+     `<Style Selector="Button">` setting `Padding` to 99,99 and placed AFTER the `.seg` block did not
+     override 8,3.** A class-qualified selector beats a bare type selector wherever it sits.
+     ⚠⚠ The regression that started this fear (§19.2) was a different mechanism: a relocated style lost to a
+     **local value set directly on the element**, and a local value outranks every style setter regardless of
+     where the style lives. So the real precondition for hoisting a style is *do the target elements carry
+     local values for these properties?* — a question about the ELEMENTS, not about the file.
+     ⭐⭐ The transferable part is how this surfaced: **the plant did not fail the test, and that silence was
+     the finding.** A plant is usually described as proving the guard works; here it disproved the reasoning
+     the whole iteration was scoped on. Without it, a comment asserting a false mechanism would have shipped
+     into the one file every future author consults for styling rules.
+     ⛔ It does NOT follow that the earlier refusal (M3.4a, sidebar row style) was wrong — different elements,
+     never re-measured. Record what was measured, not what it seems to imply.
+     (Product Polish M4.3c — `product-polish.md` §19.43.)

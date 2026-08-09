@@ -153,6 +153,18 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "m43")
+        {
+            Monitors.Run(outDir);
+            foreach (var file in Directory.GetFiles(outDir, "m43-*.png").OrderBy(f => f))
+            {
+                Console.WriteLine(file);
+            }
+
+            Console.WriteLine("OK");
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "typo")
         {
             Typography.Run(outDir);

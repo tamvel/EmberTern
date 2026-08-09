@@ -52,13 +52,16 @@
                single inference the panel makes — takes the accent and loses the italic, so it is recognisable
                without reading the tooltip. The brush arrives as a KEY through IconBrushConverter (with the
                theme variant, gotcha #250), never as a brush on the VM. -->
-          <!-- ⚠ 9 px lokalnie, ŚWIADOMIE (M2c iteracja 1; product-polish.md §18.0.5/3 + §18.1). Katalog nie
-               ma roli o tej wartości — najbliższa, `Text.Caption`, niesie 10, więc podmiana zmieniłaby wygląd,
-               a reguła R12 zabrania wpisywania roli, która do wartości nie pasuje, żeby licznik spadł.
-               Decyzja „9 → 10" należy do przeglądu §13.3. -->
+          <!-- ⭐ Q3/B ZAMKNIĘTE (M4.3, decyzja użytkownika): znacznik pochodzenia bierze `Text.Caption`
+               (9 → 10). M2c postawiło pytanie dokładnie w tych słowach („decyzja «9 → 10»") i oddało je
+               bramie §13.3, która go nie podjęła. ⚠ Rozstrzygnęło rozdzielenie: to jest TEKST (słowo
+               „odtworzone" / „założone"), a nie znak strojony do kontenera — więc trafia na najbliższą
+               rolę tekstową, zamiast zostawać przy wartości, której katalog nie zna. -->
+          <!-- ⛔ To rozstrzygnięcie NIE dotyczy znaków 9 px stojących niżej w tym pliku (marker ▶ w kolumnie
+               14 px) ani ★/☆ przy 12 — tam rozmiar jest strojony do KONTENERA, czyli reguła #10, i zostaje. -->
           <TextBlock Text="{Binding OriginLabel}"
                      IsVisible="{Binding IsAutoFilled}" ToolTip.Tip="{Binding OriginTooltip}"
-                     FontSize="9" VerticalAlignment="Center"
+                     FontSize="{DynamicResource Text.Caption.Size}" VerticalAlignment="Center"
                      Classes.assumed-value="{Binding IsAssumed}">
             <TextBlock.Styles>
               <Style Selector="TextBlock">
@@ -636,7 +639,10 @@
                               IsVisible="{Binding HasImmediateInput}"
                               ToolTip.Tip="{x:Static app:UiStrings.DebuggerImmediateClearTooltip}"
                               Command="{Binding ClearImmediateCommand}">
-                        <controls:SvgIcon Data="{StaticResource Icon.X}" Width="12" Height="12" />
+                        <!-- ⭐ Q2 (M4.3): inline ✕ na `Size.Icon.Sm`. Wartość 12 → 12, wygląd bez zmiany —
+                             to ten sam element użytkowy co trzy ✕ niżej, które niosły 11 w TYM SAMYM pliku. -->
+                        <controls:SvgIcon Data="{StaticResource Icon.X}"
+                                          Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" />
                       </Button>
                     </Panel>
                     <CheckBox Grid.Column="1" Margin="8,0"
@@ -742,7 +748,8 @@
                                   ToolTip.Tip="{x:Static app:UiStrings.DebuggerWatchRemoveTooltip}"
                                   Command="{Binding $parent[ListBox].((vm:DebuggerTabViewModel)DataContext).RemoveWatchCommand}"
                                   CommandParameter="{Binding}">
-                            <controls:SvgIcon Data="{StaticResource Icon.X}" Width="11" Height="11" />
+                            <controls:SvgIcon Data="{StaticResource Icon.X}"
+                                                    Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" />
                           </Button>
                         </Grid>
                       </DataTemplate>
@@ -833,7 +840,8 @@
                                         ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakpointRemoveTooltip}"
                                         Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).RemoveBreakpointCommand}"
                                         CommandParameter="{Binding}">
-                                  <controls:SvgIcon Data="{StaticResource Icon.X}" Width="11" Height="11" />
+                                  <controls:SvgIcon Data="{StaticResource Icon.X}"
+                                                    Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" />
                                 </Button>
                               </Grid>
                             </DataTemplate>
@@ -856,7 +864,8 @@
                                         ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakpointRemoveTooltip}"
                                         Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).RemoveDataBreakpointCommand}"
                                         CommandParameter="{Binding}">
-                                  <controls:SvgIcon Data="{StaticResource Icon.X}" Width="11" Height="11" />
+                                  <controls:SvgIcon Data="{StaticResource Icon.X}"
+                                                    Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" />
                                 </Button>
                               </Grid>
                             </DataTemplate>

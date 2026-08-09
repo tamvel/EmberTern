@@ -22,25 +22,15 @@
     <Style Selector="TextBlock.trace-error">
       <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
     </Style>
-    <!-- Segmented control (grouping + quick filter): flat segments, active one raised -->
-    <Style Selector="Button.seg">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
-      <Setter Property="BorderThickness" Value="0" />
-      <!-- ⚠ Promień 0 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to RESET, a nie rola — krok 0
-           ratyfikował, że zeru token nie jest potrzebny (§3.6 handovera). -->
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="Padding" Value="10,3" />
-      <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
-    </Style>
-    <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
-    </Style>
-    <Style Selector="Button.seg.active">
-      <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
-      <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
+    <!-- ⭐ M4.3c: styl `Button.seg` przeniesiony do `Themes/ControlStyles.axaml` — jeden styl na oba ekrany.
+         ⚠ To TEN widok niósł szerszy wariant odstępu wewnętrznego (poziom 10); wspólny styl bierze 8
+         (R18 — przy równej czytelności wygrywa gęstszy), więc sześć segmentów tego paska zwęża się
+         o 2 px z każdej strony. Powód i odrzucone warianty stoją przy stylu; ⛔ nie przywracać kopii lokalnej.
+         ⚠⚠ Powyższe zdanie CELOWO nie zapisuje składni atrybutu: licznik wartości lokalnych czyta plik
+         regeksem i nie pomija komentarzy, więc proza cytująca `Nazwa="wartość"` liczy się jak deklaracja.
+         Ten komentarz w pierwszej wersji cytował ją i podniósł licznik tego pliku o 1 (M2c iteracja 2
+         zapłaciła dokładnie to samo). -->
+
     <!-- Detail-panel section header -->
     <Style Selector="TextBlock.section">
       <!-- ⭐ K8 ZAMKNIĘTA (M4, decyzja użytkownika A-2): rola `Text.SectionHeader` niesie teraz 12 SemiBold,
@@ -87,10 +77,11 @@
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <!-- Grouping / lens selector (segmented) -->
-        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-             (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-             i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
-        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+        <!-- ⭐ Q1 ZAMKNIĘTE (M4.3): ramka przełącznika bierze `Radius.Surface` (4 → 3). Ten element UDAJE
+             obramowaną kontrolkę, a `ControlCornerRadius` Fluenta = 3 i jest świadomie NIENADPISANY
+             w `FluentBridge`, więc każda prawdziwa obramowana kontrolka renderuje się przy 3. -->
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource Radius.Surface}" ClipToBounds="True">
           <StackPanel Orientation="Horizontal">
             <Button Classes="seg" Classes.active="{Binding IsGroupNone}"
                     Content="{x:Static app:UiStrings.TraceGroupNone}" Command="{Binding ShowChronologicalCommand}" />
@@ -104,10 +95,10 @@
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <!-- Quick filter chips (segmented) -->
-        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-             (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-             i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
-        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+        <!-- ⭐ Q1 ZAMKNIĘTE (M4.3): jak przełącznik wyżej — `Radius.Surface` (4 → 3). Oba stoją w jednym
+             pasku, więc rozstrzygały się razem, na komplecie wystąpień (R7). -->
+        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource Radius.Surface}" ClipToBounds="True">
           <StackPanel Orientation="Horizontal">
             <Button Classes="seg" Classes.active="{Binding IsQuickFilterAll}"
                     Content="{x:Static app:UiStrings.TraceFilterAll}" Command="{Binding ShowAllCommand}" />
@@ -153,11 +144,18 @@
              search field (BackgroundBrush contrasts the ChromeStrong toolbar) so it reads clearly
              as a text input, not another segmented button group. Grouped with the quick chips +
              funnel as the one "filter" zone; distinct from the funnel (structured). -->
-        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-             (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-             i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
+        <!-- ⭐⭐ Q1 + Q4 ZAMKNIĘTE (M4.3), i oba wynikają z JEDNEGO zdania, które stoi w komentarzu wyżej:
+             ten element ma czytać się „as a text input". Skoro tak, bierze metryki pola tekstowego:
+               • promień → `Radius.Surface` (4 → 3), bo `ControlCornerRadius` Fluenta = 3 i prawdziwy
+                 `TextBox` renderuje się właśnie przy 3;
+               • wysokość → `Size.Control` (26 → 24), bo ZMIERZONE: `TextBox` i `ComboBox` biorą
+                 `MinHeight = Size.Control` = 24, więc przy 26 to pole stało 2 px wyżej niż każdy prawdziwy
+                 sąsiad w tym samym pasku — i to ono wyznaczało wysokość paska.
+             ⚠ 26 nie występowało nigdzie indziej w `src/`; drugie `MinHeight="26"` zdjął blok typografii
+             (decyzja D), więc to był ostatni egzemplarz tego samego kształtu. -->
         <Border Background="{DynamicResource BackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="1" CornerRadius="4" Height="26" Padding="7,0,6,0" VerticalAlignment="Center">
+                BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}"
+                Height="{DynamicResource Size.Control}" Padding="7,0,6,0" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
             <controls:SvgIcon Data="{StaticResource Icon.Search}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
@@ -341,11 +339,12 @@
         </DataGrid>
 
         <!-- Empty state (no session / waiting / no match) -->
-        <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6). Katalog ma przy 13 wyłącznie rolę kodu,
-             a to jest tekst. Grupa „TextBlock 13 px" z §18.0.5/3 — rozstrzyga §13.3. -->
+        <!-- ⭐ Q3/A ZAMKNIĘTE (M4.3): komunikat pustego stanu bierze `Text.Application` (13 → 12).
+             ⚠ Bliźniak tego elementu stoi w Session Managerze i jest konstrukcyjnie identyczny, więc to
+             była JEDNA decyzja na dwa ekrany; pilnuje jej `BothEmptyStates_ShareOneTextRole`. -->
         <TextBlock IsVisible="{Binding ShowEmptyState}" Text="{Binding EmptyStateText}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
-                   Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="13" />
+                   Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Application.Size}" />
 
         <!-- Resume follow-tail (appears when follow is paused, e.g. after a manual scroll-up) -->
         <Button Classes="primary" Command="{Binding JumpToLatestCommand}" IsVisible="{Binding !FollowTail}"
@@ -426,10 +425,10 @@
             <StackPanel Spacing="10">
 
               <!-- error -->
-              <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-                   (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-                   i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
-              <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="4" Padding="8,6"
+              <!-- ⭐ Q1 ZAMKNIĘTE (M4.3): karta błędu bierze `Radius.Surface` (4 → 3) — ta sama decyzja
+                   co karta ostrzeżenia w Session i karta findingu w Performance, rozstrzygnięta raz,
+                   na komplecie wystąpień (R7). -->
+              <Border Background="{DynamicResource RowAlternateBrush}" CornerRadius="{DynamicResource Radius.Surface}" Padding="8,6"
                       IsVisible="{Binding Detail.HasError}">
                 <TextBlock Text="{Binding Detail.ErrorText}" Foreground="{DynamicResource ErrorBrush}"
                            TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}" />
@@ -469,9 +468,10 @@
                                    FontFamily="Consolas,Cascadia Code,monospace" TextTrimming="CharacterEllipsis"
                                    ToolTip.Tip="{Binding Table}" Margin="0,0,8,0" VerticalAlignment="Center" />
                         <!-- One rounded, clipped pill track so BOTH ends stay rounded regardless of the seq/idx split -->
-                        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): GEOMETRIA albo KARTA. Koła
-                             (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy połowie boku, a karty
-                             i kontenery przy 4 wymagałyby zmiany na 3. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). -->
+                        <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA —
+                             kapsuła (`Height=10`) ma promień równy POŁOWIE BOKU. ⛔ Nie tokenizujemy
+                             arytmetyki (§18.0.5/2). ⚠ Zdanie „a karty i kontenery przy 4" zniknęło w M4.3:
+                             obie ramki przełączników, pole filtra i karta błędu zeszły na `Radius.Surface`. -->
                         <Border Grid.Column="1" Width="160" Height="10" CornerRadius="5" ClipToBounds="True"
                                 Background="{DynamicResource RowAlternateBrush}" VerticalAlignment="Center" HorizontalAlignment="Left">
                           <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">

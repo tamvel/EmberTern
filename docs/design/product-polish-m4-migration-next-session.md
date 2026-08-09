@@ -8,26 +8,41 @@
 > ⛔ **Nie otwieraj sesji od raportowania stanu ani od pytań, czy coś zostało domknięte** — jeżeli
 > `git status` jest czysty, to jest cała odpowiedź.
 >
-> ⏭ **Następny krok: M4.3 — Debugger · Trace · Session Manager · Security Manager · Performance.**
+> ⏭ **Następny krok: M4.4 — 16 dialogów + okna + `GrowingDialogBehavior` (M‑5). To OSTATNI etap migracji M4.**
 >
-> ✅ **ZROBIONE I ODEBRANE (2026-08-08):** **M4.1** (SQL Editor · Script Executor · Data Import, §19.39) ·
-> **M4.2** (edytory obiektów, §19.40) · **M4.2b** (drzewa „Zależności", §19.41).
+> ✅ **ZROBIONE I ODEBRANE:** **M4.1** (SQL Editor · Script Executor · Data Import, §19.39) · **M4.2**
+> (edytory obiektów, §19.40) · **M4.2b** (drzewa „Zależności", §19.41) · **M4.3b** (Debugger · Trace ·
+> Session · Security · Performance, §19.42) · **M4.3c** (`Button.seg`, §19.43).
 >
-> ⚠⚠ **PRZECZYTAJ TO PRZED M4.3 — trzy defekty M4.2b przeszły przez ZIELONY suite i wyłapało je dopiero QA
-> użytkownika.** M4.3 rusza Debugger i monitory, czyli powierzchnie z własnymi kontrolkami, więc ten sam
-> kształt jest tam bardzo prawdopodobny:
-> * **strażnik czytający ŹRÓDŁO nie wie, czy rzecz DZIAŁA** — pięć zielonych strażników przy pustym ekranie;
-> * **„reguła poprawna" + „wpięcie istnieje" ≠ „działa"** — zdarzenie może nie docierać do handlera (#339);
-> * **podklasa kontrolki nie dziedziczy `ControlTheme`** — pusty ekran zamiast wyjątku (#338).
-> ⭐ **Wniosek operacyjny: każda iteracja M4.3 ruszająca KONTROLKĘ (a nie samą wartość tokenu) potrzebuje
-> co najmniej jednego testu BEHAWIORALNEGO** — asercja na zrealizowanym elemencie, a przy klawiaturze
-> **realny klawisz naciśnięty DWA razy** (jeden przechodzi mimo utraty stanu).
+> ⚠⚠ **PRZECZYTAJ TO PRZED M4.4 — DWIE LEKCJE Z M4.3, KTÓRE ZMIENIAJĄ SPOSÓB PLANOWANIA ETAPU.**
+>
+> **(1) ⭐⭐ M4.3 nie był sweepem literałów, tylko ODBIOREM DECYZJI, KTÓRYCH NIKT NIE PODJĄŁ — i M4.4
+> najprawdopodobniej też nim będzie.** W pięciu plikach M4.3 stało **19 komentarzy „rozstrzyga §13.3"**,
+> pokrywających praktycznie każdą pozostałą tam wartość lokalną; brama §13.3a nie podjęła ani jednej, żadna
+> nie dostała numeru K, a rejestr został ogłoszony „zamkniętym w całości" (#340).
+> ⭐ **Pierwszy ruch w M4.4: `grep -rn "13\.3" src/EmberTern.App/Views/*Dialog*.axaml` i pokrewne** — sieroty
+> skupiają się dokładnie tam, gdzie liczniki pokazują resztę, bo wartość sparkowana to wartość niezmigrowana.
+> ⚠ Zmierzone w M4.3: `ChoiceDialog`, `ConfirmDialog` i `ForeignKeyDialog` **już mają takie odesłania**
+> (grupa „TextBlock 13 px"), więc w M4.4 to nie jest hipoteza.
+>
+> **(2) ⚠⚠ POMIAR OBALIŁ TRZY MOJE WŁASNE PRZESŁANKI W JEDNYM ETAPIE — dwie w strażnikach, jedną w zakresie.**
+> Strażnik grupował ikony po NAZWIE GEOMETRII i padł na przycisku, który ma inną rolę (#341); drugi łapał ogon
+> `MinHeight` zamiast wysokości ramki; a cała iteracja M4.3c była wydzielona na przesłance o priorytecie stylu,
+> którą podsadzenie **obaliło** (#342 — Avalonia rozstrzyga specyficznością selektora, nie kolejnością).
+> ⭐ **Wniosek operacyjny: podsadzenie, które NIE zapala testu, jest wynikiem, a nie usterką procedury** —
+> to wtedy dowiadujesz się, że mierzysz co innego, niż deklarujesz.
+>
+> **(3) ⭐ Test BEHAWIORALNY nadal obowiązuje, ale ze zmierzoną granicą.** M4.3b świadomie go nie dodał
+> (zmieniał wyłącznie metryki i role na `Border`/`TextBlock`/`SvgIcon` — zero zdarzeń, klawiatury, zaznaczenia
+> i szablonowania); M4.3c dodał, bo ruszał STYL KONTROLKI. ⚠ Kryterium brzmi więc: *czy iteracja może
+> sprawić, że reguła przestanie DOCIERAĆ do kontrolki* — a nie „czy plik jest duży".
+> ⚠ Nowa klasa headless **dołącza do istniejącej** (lista nazw w filtrze partycji jest krucha i ręczna).
 
 ---
 
 ## 1. Punkt odniesienia
 
-**`feat/product-polish`**, build 0/0, suite **8304** w trzech partycjach (**8158 + 91 + 55**), smoke czysty.
+**`feat/product-polish`**, build 0/0, suite **8334** w trzech partycjach (**8182 + 97 + 55**), smoke czysty.
 ⚠ Liczbę testów **zmierz, nie przepisuj** — ta linia dryfowała w projekcie wielokrotnie; stoi tu tylko po to,
 żeby rozpoznać stan „nic się nie zmieniło od zamknięcia".
 
@@ -111,20 +126,30 @@ Zakres z §13:
 | ~~M4.1~~ ✅ | SQL Editor · Script Executor · Data Import — as-built §19.39 |
 | ~~M4.2~~ ✅ | edytory obiektów (10) — as-built §19.40 |
 | ~~M4.2b~~ ✅ | drzewa „Zależności" — as-built §19.41. ⚠ **17, nie 18** (18. to `MemberGroups`, inne drzewo), i **nie na `TreeListView`, tylko na `SidebarFlatController`** — §13.2 odrzucało tę drogę przesłanką, którą pomiar obalił |
-| **M4.3** ⏭ | **Debugger · Trace · Session Manager · Security Manager · Performance** ← TU ZACZYNASZ |
-| **M4.4** | 16 dialogów + okna + `GrowingDialogBehavior` (M‑5) |
+| ~~M4.3b~~ ✅ | Debugger · Trace · Session · Security · Performance — as-built §19.42. ⚠ **Nie sweep, tylko odbiór 19 sparkowanych decyzji** (#340) |
+| ~~M4.3c~~ ✅ | `Button.seg` — as-built §19.43. ⚠ Przesłanka o priorytecie stylu **obalona pomiarem** (#342) |
+| **M4.4** ⏭ | **16 dialogów + okna + `GrowingDialogBehavior` (M‑5)** ← TU ZACZYNASZ. **Ostatni etap migracji M4** |
 
 ### 5.1 ⭐ Co migracja ekranów realnie oznacza po zamknięciu rejestru
 
 Rama jest przyjęta, więc **M4.x nie projektuje — konsumuje**. Praktycznie na każdym ekranie:
 
 1. wartości lokalne, które mają rolę → na rolę; wartości bez roli → **zostają z zapisanym powodem** (R12);
-2. **sweep literałów**, dla którego istnieją już DWA sufity z liczbami, i to jest cała pozostała robota
-   ilościowa tego etapu:
-   * **95 literałów rozmiaru ikony w 19 plikach** (`IconSizeLiteralBaseline`),
-   * **36 literałów `FontSize` w 13 plikach** w oknie licznika (`FontSizeBaseline`);
+2. **sweep literałów**, dla którego istnieją już DWA sufity z liczbami — ⚠ **stan po M4.3 (zmierzony
+   2026-08-09), nie z początku M4**:
+   * **14 literałów rozmiaru ikony w 6 plikach** (`IconSizeLiteralBaseline`) — z czego **5 to B1**
+     (`TableDetailTabView`, prywatne PK/FK/Unique, czeka na decyzję wizualną) i **3 to Trace** (ogon 13 px),
+     więc **w zasięgu M4.4 nie ma ani jednego**;
+   * **31 literałów `FontSize` w 12 plikach** w oknie licznika (`FontSizeBaseline`) — **w dialogach
+     zostają 3** (`ChoiceDialog`, `ConfirmDialog`, `ForeignKeyDialog`, wszystkie z grupy „TextBlock 13 px");
 3. ⚠ sufit **schodzi razem z pracą** — strażnik `…HasNoStaleEntries` wymaga obniżenia wpisu, a nie
    wyzerowania go, więc „ile zostało" pozostaje liczbą, a nie opinią.
+4. ⚠⚠ **Spadek licznika bywa PRZENIESIENIEM, nie migracją** (zmierzone w M4.3c): `Measure` skanuje wyłącznie
+   `Views/` + `Controls/`, więc wartość przeniesiona do `Themes/ControlStyles.axaml` **znika z licznika,
+   choć istnieje dalej**. ⭐ Zapisuj to przy wpisie bazowym, inaczej spadek udaje postęp.
+5. ⚠ **Komentarz cytujący składnię atrybutu LICZY SIĘ jak deklaracja** — `Measure` czyta plik regeksem i nie
+   pomija komentarzy. W M4.3c moje własne zdanie wyjaśniające podniosło licznik pliku o 1. Naprawa:
+   przeredagować komentarz (nie pisz `Nazwa="wartość"` w prozie), **nie** podnosić sufit.
 
 ### 5.2 ⚠⚠ Trzy rzeczy, które zaskoczą, jeśli się o nich nie wie
 
@@ -143,10 +168,22 @@ Rama jest przyjęta, więc **M4.x nie projektuje — konsumuje**. Praktycznie na
 
 ### 5.3 ⛔ Kolejność i granice
 
-* **M4.2b po M4.2** i **po M3.4** (zależność Z‑5: Metadata Explorer ustala język wiersza drzewa,
-  `TreeListView` go EKSTRAHUJE, a nie wymyśla drugi raz). ⛔ Drzewa zależności **nie migrują na
-  `SidebarFlatController`** (§13.2) — ⚠ pamiętaj o odtworzeniu nawigacji ←/→, której `ListBox` nie ma.
-* **`Size.Icon` obsługuje wiersz drzewa**, więc M4.2b dziedziczy tę rolę — nie wprowadzać drugiej.
+* ⚠ **Ten punkt opisywał kolejność M4.2b i jest już HISTORIĄ** — zostaje jako zapis, nie jako instrukcja:
+  wymagał, żeby drzewa zależności **nie** migrowały na `SidebarFlatController` (§13.2), a pomiar tę przesłankę
+  **obalił** i migracja poszła właśnie tam (§19.41.2). ⛔ Nie planować z niego.
+* ⏸ **OTWARTE PO M4.3 — żadna z tych pozycji nie jest częścią M4.4, każda ma własny powód:**
+  * **B1** — prywatne ikony PK/FK/Unique w `TableDetailTabView` na siatce 14 zamiast 24; przeniesienie do
+    systemu = **zmiana wyglądu**, więc czeka na decyzję wizualną użytkownika (§19.40.3). To 5 z 14 literałów
+    sufitu ikon.
+  * **ogon literałów ikon 10/11/13/15** — pytanie o ROLE, nie o gęstość (§19.37.7).
+  * **migracja odstępów** (`Spacing`/`Padding`/`Margin`) — **osobny etap PO M4.4**, ratyfikowany; dziś działa
+    wyłącznie zapadka, **⛔ nie zmieniać wartości, żeby ją zadowolić** (§19.39.4).
+  * **`FontFamily`** (7 stringów / 95 wystąpień / 33 pliki) — backlog sprintu UX, nie M4.
+  * **`GridSplitter Height="4"` ×5** — element chromy dzielony z M4.4; rozstrzyga się raz, na komplecie (R7).
+    ⭐ **To jedyna z tych pozycji, którą M4.4 może naturalnie napotkać** — wtedy decyzja w kontekście zmiany
+    (D‑M4‑3), a nie z góry.
+  * **sieroty po §13.3 poza M4.3** — ~43 wystąpienia w `src/`, częściowo już rozstrzygnięte i zapisane
+    historycznie; przed ogłoszeniem czegokolwiek „zamkniętym" trzeba je rozdzielić na żywe i historyczne (#340).
 * **Z‑3 (wiersz Table Data)** — ⛔ najpierw PRZYCZYNA. Zmierzone: `data-edit` deklaruje stałe
   `{DynamicResource Size.Row.GridEdit}` (30), a **liczby 40 px nie ma nigdzie w `src/`**; wymaga pomiaru na
   żywej aplikacji (skala DPI? inny element?), nie projektowania.

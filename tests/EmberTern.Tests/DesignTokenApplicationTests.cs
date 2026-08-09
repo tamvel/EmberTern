@@ -1,4 +1,7 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -1529,6 +1532,148 @@ public sealed class DesignTokenApplicationTests
                 + "bo `IconGeometries.axaml` nie jest scalony — wtedy kontrolka nie zawodzi, tylko "
                 + "renderuje NIC.");
         }, default);
+    }
+
+    /// <summary>
+    /// ⭐⭐ M4.3c — przełącznik segmentowy. To jest test <b>BEHAWIORALNY</b> w sensie, w jakim wymaga go
+    /// lekcja M4.2b: mierzy <b>ZREALIZOWANY</b> przycisk, a nie źródło.
+    ///
+    /// <para>⚠⚠ POWÓD, DLA KTÓREGO STRAŻNIK ŹRÓDŁOWY BY TU NIE WYSTARCZYŁ: M4.3c przeniosło `Button.seg`
+    /// z dwóch bloków `UserControl.Styles` do `ControlStyles.axaml`, a realnym ryzykiem przeniesienia jest
+    /// to, że styl <b>przestanie docierać do kontrolki</b> — a tego źródło nie pokazuje. Strażnik czytający
+    /// tekst potwierdzi „styl istnieje, selektor się zgadza" również wtedy, gdy na ekranie nie działa;
+    /// w M4.2b pięciu takich zielonych strażników opisywało PUSTY EKRAN (#338).</para>
+    ///
+    /// <para>⚠⚠ <b>SPROSTOWANIE WŁASNEJ PRZESŁANKI — zmierzone w M4.3c podsadzeniem.</b> Ten test powstał
+    /// z założeniem, że po przeniesieniu o zwycięstwie `.seg` z bazowym `<Style Selector="Button">`
+    /// decyduje KOLEJNOŚĆ w pliku. <b>Nieprawda:</b> bazowy `Button` z `Padding="99,99"` postawiony PO bloku
+    /// `.seg` nie nadpisał `8,3`. Avalonia rozstrzyga między stylami <b>specyficznością selektora</b> —
+    /// selektor z klasą bije goły selektor typu niezależnie od pozycji. ⚠ Mechanizm regresji §19.2 to co
+    /// innego: tam styl przegrał z WARTOŚCIĄ LOKALNĄ na elemencie, a ta bije każdy setter niezależnie od
+    /// tego, gdzie styl mieszka. Warunkiem bezpieczeństwa tego przeniesienia jest więc brak wartości
+    /// lokalnych na segmentach, a nie pozycja bloku.</para>
+    ///
+    /// <para>⭐ Asercje geometrii ZOSTAJĄ mimo obalenia tamtej przesłanki, bo pilnują czego innego i nadal
+    /// realnego: że segment kasuje geometrię bazowego przycisku. Gdyby `.seg` przestał docierać, segmenty
+    /// dostałyby `Radius.Surface` + `Border.All`, czyli własny zaokrąglony obrys wewnątrz wspólnej ramki —
+    /// i to jest defekt, który te dwie pary asercji nazywają po imieniu.</para>
+    ///
+    /// <para>⚠ Test dokłada się do klasy JUŻ obecnej w filtrze partycji headless, zamiast zakładać nową —
+    /// ta lista nazw jest krucha i utrzymywana ręcznie (#94/#226/#286, precedens M3.5).</para>
+    /// </summary>
+    [Fact]
+    public async Task SegmentedButton_TakesItsGeometryFromTheSharedStyle_NotFromTheBaseButton()
+    {
+        await _session.Dispatch(() =>
+        {
+            var rest = new Button { Content = "Chronologia", Classes = { "seg" } };
+            var active = new Button { Content = "Transakcje", Classes = { "seg", "active" } };
+
+            // Odtworzona STRUKTURA z obu ekranów: pasek chromy → ramka z `ClipToBounds` → segmenty.
+            // ⚠ Pasek jest częścią przypadku, a nie dekoracją: to `Border.chrome Button` nadaje segmentowi
+            //   wysokość, więc bez niego test mierzyłby inną kontrolkę niż ta w produkcie.
+            var frame = new Border
+            {
+                ClipToBounds = true,
+                BorderThickness = new Thickness(1),
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Children = { rest, active },
+                },
+            };
+            var window = new Window { Content = new Border { Classes = { "chrome" }, Child = frame } };
+            window.Show();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+            var variant = window.ActualThemeVariant;
+
+            // ── (1) PRIORYTET: segment kasuje geometrię bazowego `Button`. Ta para asercji jest całym
+            //        powodem istnienia tego testu.
+            Assert.Equal(new CornerRadius(0), rest.CornerRadius);
+            Assert.NotEqual(Token<CornerRadius>("Radius.Surface"), rest.CornerRadius);
+            Assert.Equal(new Thickness(0), rest.BorderThickness);
+            Assert.NotEqual(Token<Thickness>("Border.All"), rest.BorderThickness);
+
+            // ── (2) Obie kopie stylu zniknęły, więc oba segmenty MUSZĄ być identyczne geometrycznie.
+            //        Asercja relacyjna — to rozjazd 8,3 vs 10,3 był defektem, nie konkretna liczba.
+            Assert.Equal(rest.Padding, active.Padding);
+            Assert.Equal(rest.CornerRadius, active.CornerRadius);
+            // ⚠ A to jest już ratyfikowana DECYZJA (R18 — przy równej czytelności wygrywa gęstszy),
+            //   więc zasługuje na własną asercję: gdyby ktoś wrócił do 10, ma się dowiedzieć.
+            Assert.Equal(new Thickness(8, 3), rest.Padding);
+
+            // ── (3) WYSOKOŚĆ ROZSTRZYGA KONTENER (reguła #10) — zmierzone, nie założone: styl segmentu
+            //        celowo nie deklaruje `MinHeight`, bierze ją z `Border.chrome Button`.
+            Assert.Equal(Token<double>("Size.ControlToolbar"), rest.MinHeight);
+
+            // ── (4) Stan aktywny naprawdę się odróżnia — i to jest jedyna rzecz, którą użytkownik czyta
+            //        z tej kontrolki („który segment jest wybrany").
+            Assert.Equal(FontWeight.SemiBold, active.FontWeight);
+            Assert.NotEqual(active.FontWeight, rest.FontWeight);
+            Assert.Equal(
+                Describe(ThemeToken<SolidColorBrush>("SelectionBrush", variant)),
+                Describe(active.Background));
+            Assert.Equal(
+                Describe(ThemeToken<SolidColorBrush>("SubtleForegroundBrush", variant)),
+                Describe(rest.Foreground));
+
+            // ── (5) I ostatecznie: kontrolka SIĘ ZREALIZOWAŁA. W M4.2b pięciu zielonych strażników
+            //        opisywało pusty ekran, więc „ma poprawne właściwości" i „w ogóle się narysowało"
+            //        są dwiema różnymi asercjami.
+            var height = rest.Bounds.Height;
+            var width = rest.Bounds.Width;
+            window.Close();
+
+            Assert.True(height > 0 && width > 0,
+                $"Segment nie zajal miejsca w ukladzie (H={height}, W={width}) — kontrolka o poprawnych "
+                + "wlasciwosciach, ktora sie nie renderuje, jest dokladnie przypadkiem z M4.2b (#338).");
+        }, default);
+    }
+
+    /// <summary>
+    /// ⭐ Druga połowa M4.3c: styl ma ZOSTAĆ jeden. Strażnik źródłowy jest tu na miejscu, bo pilnuje
+    /// nie tego, jak coś wygląda, tylko ILU jest właścicieli — a to jest fakt o tekście, nie o renderze.
+    /// <para>⚠ Kopia lokalna w widoku wygrywałaby ze wspólnym stylem przez bliskość w drzewie i przywróciła
+    /// dokładnie ten rozjazd, który ten etap usunął — przy zielonym teście behawioralnym powyżej, bo tamten
+    /// buduje segment BEZ widoku.</para>
+    /// </summary>
+    [Fact]
+    public void NoView_DeclaresItsOwnSegmentedButtonStyle()
+    {
+        var appRoot = System.IO.Path.Combine(RepositoryRoot(), "src", "EmberTern.App");
+        var offenders = new List<string>();
+
+        foreach (var folder in new[] { "Views", "Controls" })
+        {
+            var root = System.IO.Path.Combine(appRoot, folder);
+            foreach (var file in System.IO.Directory.EnumerateFiles(root, "*.axaml", System.IO.SearchOption.AllDirectories))
+            {
+                var text = Regex.Replace(System.IO.File.ReadAllText(file), "<!--.*?-->", " ", RegexOptions.Singleline);
+                if (Regex.IsMatch(text, @"<Style\s+Selector=""Button\.seg"))
+                {
+                    offenders.Add(System.IO.Path.GetRelativePath(appRoot, file).Replace('\\', '/'));
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Widok deklaruje wlasny styl `Button.seg`:\n  " + string.Join("\n  ", offenders)
+            + "\n\nPo M4.3c jest JEDEN wspolny styl w `Themes/ControlStyles.axaml`. Kopia lokalna wygrywa "
+            + "z nim przez bliskosc w drzewie, wiec przywraca rozjazd, ktory ten etap usunal (Session 8,3 "
+            + "vs Trace 10,3 — przy komentarzu deklarujacym, ze oba ekrany mowia tym samym jezykiem).");
+    }
+
+    private static string RepositoryRoot()
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "EmberTern.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 
     private static bool IsTransparent(IBrush? brush)

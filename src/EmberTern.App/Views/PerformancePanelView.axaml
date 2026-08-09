@@ -126,11 +126,12 @@
           <ItemsControl ItemsSource="{Binding Findings}" IsVisible="{Binding HasFindings}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:FindingViewModel">
-                <!-- ⚠ Promień 4 zostaje lokalnie, ŚWIADOMIE (M2c iteracja 3, §18.3). To KARTA (obrys + padding),
-                     a nie chip: `Radius.Surface` niesie 3, więc migracja zmieniłaby wygląd. Krok 0 oddał decyzję
-                     „karta: 3 czy 4” przeglądowi §13.3 (§18.0.5/2). -->
+                <!-- ⭐ Q1 ZAMKNIĘTE (M4.3, decyzja użytkownika na renderze): karta findingu bierze
+                     `Radius.Surface` (4 → 3). Diagnoza z M2c była trafna („to KARTA, a nie chip") i tylko
+                     oddawała wniosek bramie §13.3 — ⚠ która go NIGDY nie podjęła. ⭐ Rola wymienia „Kartę"
+                     jako pierwszego konsumenta we własnym komentarzu, więc opisywała ten element od zawsze. -->
                 <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}"
-                        BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
+                        BorderThickness="1" CornerRadius="{DynamicResource Radius.Surface}" Padding="8,6" Margin="0,0,0,6">
                   <StackPanel Spacing="3">
                     <DockPanel LastChildFill="True">
                       <Border DockPanel.Dock="Left" CornerRadius="{DynamicResource Radius.Surface}" Padding="4,0" VerticalAlignment="Center" Margin="0,0,6,0">

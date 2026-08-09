@@ -109,9 +109,17 @@ public class DesignTokenComplianceTests
         // rolę kodu) i podgląd Global Search — edytor w wierszu siatki przy 12 px. 24 wpisy zdjęte
         // w całości. ⭐ `AggregationBarView` oddał swój promień na **`Radius.Chip`** — jedyny prawdziwy
         // chip w aplikacji (§18.0.5/2), wartość i funkcja zgodne, więc bez wyjątku.
-        ["Views/SessionManagerTabView.axaml"] = 3,
+        // ⭐ M4.3: Session ZDJĘTY W CAŁOŚCI (3 → 0), Trace 2 → 1, Debugger 4 → 3. Zeszły dwie grupy,
+        // obie ratyfikowane na renderze: komunikat pustego stanu (13 → `Text.Application`, bo 13 to rola
+        // KODU, a to nie jest kod) i podpisy przy 9 px (→ `Text.Caption` 10, bo to TEKST, a nie znak
+        // strojony do kontenera).
+        // ⛔ SECURITY MANAGER ZOSTAJE PRZY 9 I TO JEST DECYZJA, NIE DŁUG. Osiem z tych dziewięciu to
+        // `FontWeight="Bold" FontSize="13"` bindowane do `PrivilegeStateGlyphConverter`, który zwraca
+        // „✓" / „✓+" — czyli GLIFY w przycisku 20×18, strojone do KONTENERA (reguła #10), a nie tekst.
+        // ⚠ Dawny komentarz w widoku twierdził „a to jest tekst" i zaliczał je do grupy „TextBlock 13 px"
+        // z §18.0.5/3; M4.3 poprawiło POWÓD, nie wartość — bo to powód był nieprawdziwy (R12).
         ["Views/SecurityManagerTabView.axaml"] = 9,
-        ["Views/TraceMonitorTabView.axaml"] = 2,
+        ["Views/TraceMonitorTabView.axaml"] = 1,
         // ⭐ POWIERZCHNIA TRWAŁA (§0.1) — `MainWindow` 26 → 0 + 1 promień, `BreadcrumbBar` 2 → 0,
         // `MessageBanner` 2 → 0, `TableColumnPicker` 3 → 0 (M2c iteracja 7). Zero wyjątków mimo
         // największej różnorodności ról w jednym pliku: pasek statusu dostał `Text.Status` (cztery
@@ -146,7 +154,11 @@ public class DesignTokenComplianceTests
         // (element układu, nie tekst). To jest kształt, do którego zmierza całe M2c wg reguły R12: nie zero,
         // tylko uzasadniona reszta. ⚠ Koszyk A był tu PUSTY — cały debugger stoi o stopień gęściej (11 px)
         // niż domyślny styl M2b (12), więc żadnej wartości nie dało się po prostu usunąć.
-        ["Views/DebuggerTabView.axaml"] = 4,
+        // ⭐ M4.3: 4 → 3. Znacznik pochodzenia wartości zszedł z 9 na `Text.Caption` (10) — to TEKST
+        // („odtworzone" / „założone"). ⛔ Zostają trzy pozycje, wszystkie z tego samego powodu i wszystkie
+        // ratyfikowane: marker ▶ przy 9 w kolumnie o stałej szerokości 14 px oraz ★/☆ przy 12 — znaki
+        // strojone do KONTENERA, czyli reguła #10, a nie dryf typograficzny.
+        ["Views/DebuggerTabView.axaml"] = 3,
         ["Views/GlobalSearchTabView.axaml"] = 1,
         ["Views/ChoiceDialog.axaml"] = 1,
         ["Views/ConfirmDialog.axaml"] = 1,
@@ -214,15 +226,29 @@ public class DesignTokenComplianceTests
         // M2c iteracja 6: bez zmian — wszystkie dziewięć to GEOMETRIA albo KARTA. Koła (10×10 r=5,
         // 9×9 r=4.5), kapsuła (Height 10, r=5), karty i kontenery przy 4 (`Radius.Surface` niesie 3)
         // oraz jeden setter resetów przy 0. ⛔ Nie tokenizujemy arytmetyki (§18.0.5/2). Powody w miejscu.
-        ["Views/SessionManagerTabView.axaml"] = 9,
-        ["Views/TraceMonitorTabView.axaml"] = 6,
+        // ⭐⭐ M4.3 / Q1 — Session 9 → 6, Trace 6 → 2, Performance 2 → 1. Siedem promieni `4` zeszło na
+        // `Radius.Surface` (3), a chip Session na `Radius.Chip` (4 → 4, wygląd bez zmiany).
+        // ⚠ Decyzja ma DWIE POŁOWY i tylko jedna była nowa: trzy KARTY dziedziczą argument B2 z M4.2
+        // („rola `Radius.Surface` wymienia «Kartę» we własnym komentarzu"), natomiast cztery RAMKI
+        // KONTROLEK — dwa przełączniki segmentowe, jeden w Session, oraz pole filtra Trace — rozstrzygnął
+        // argument mocniejszy: `ControlCornerRadius` Fluenta = 3 i jest świadomie NIENADPISANY
+        // w `FluentBridge`, więc każda PRAWDZIWA obramowana kontrolka renderuje się przy 3, a te cztery
+        // ją tylko udawały. Render postawił obok nich prawdziwy `TextBox` i to on zamknął pytanie.
+        // ⛔ Co zostaje i dlaczego: same koła (`10×10` r=5, `9×9` r=4.5), kapsuły (`Height=10` r=5)
+        // i dwa resety `Value="0"`. To ARYTMETYKA i RESET, nie role (§18.0.5/2).
+        // ⚠ M4.3c: Session 6 → 5, Trace 2 → 1. To NIE jest migracja, tylko PRZENIESIENIE: styl
+        // `Button.seg` (z `CornerRadius="0"` — resetem) przeszedł do `Themes/ControlStyles.axaml`,
+        // a `Measure` skanuje wyłącznie `Views/` + `Controls/`. ⭐ Wartość istnieje dalej, tyle że poza
+        // zasięgiem licznika — i tak trzeba to czytać, żeby spadek nie udawał postępu, którego nie było.
+        ["Views/SessionManagerTabView.axaml"] = 5,
+        ["Views/TraceMonitorTabView.axaml"] = 1,
         // M2c iteracja 2: 4 → 0. Wszystkie cztery to `CornerRadius="3"` na kontenerach (siatka typów,
         // siatka mapowania, ramka podglądu, ramka podglądu DDL) — czyli dokładnie `Radius.Surface`,
         // jedyna grupa, którą krok 0 dopuścił do migracji (§18.0.5/2). Wpis usunięty.
         // M2c iteracja 3: 4 → 2. Dwa promienie 3 przeszły na `Radius.Surface`; zostają KARTA przy 4
         // (`Radius.Surface` niesie 3 — decyzja produktowa oddana §13.3) i KAPSUŁA przy 6, gdzie promień
         // jest połową wysokości, czyli arytmetyką, a nie rolą (§18.0.5/2).
-        ["Views/PerformancePanelView.axaml"] = 2,
+        ["Views/PerformancePanelView.axaml"] = 1,
         // ⭐ M4.2 / B2: bliźniaki ZDJĘTE (1 + 1 → 0). Karta aktywności wzięła `Radius.Surface` (4 → 3) po
         // decyzji użytkownika podjętej NA RENDERZE (`VisualCandidateProbe -- radius`, oba motywy, 1:1 i ×4).
         // ⚠ Wpis stał tu od M2c iteracji 4 z adnotacją „decyzja należy do przeglądu §13.3" — a przegląd
@@ -327,9 +353,11 @@ public class DesignTokenComplianceTests
         ["Views/DataImportTabView.axaml"] = 10,
         ["Views/FunctionDetailTabView.axaml"] = 9,
         ["Views/ProcedureDetailTabView.axaml"] = 9,
-        ["Views/SessionManagerTabView.axaml"] = 8,
+        // ⚠ M4.3c: 8 → 7 (Session) i 7 → 6 (Trace niżej) — PRZENIESIENIE, nie migracja. `Padding` stylu
+        // `Button.seg` wyszedł z widoku do `Themes/ControlStyles.axaml`, którego ten licznik nie skanuje.
+        ["Views/SessionManagerTabView.axaml"] = 7,
         ["Views/ForeignKeyDialog.axaml"] = 7,
-        ["Views/TraceMonitorTabView.axaml"] = 7,
+        ["Views/TraceMonitorTabView.axaml"] = 6,
         ["Views/TableDetailTabView.axaml"] = 6,
         ["Views/AddFieldDialog.axaml"] = 5,
         ["Views/ConstraintFieldDialog.axaml"] = 5,
@@ -1153,12 +1181,29 @@ public class DesignTokenComplianceTests
         // przeniesienie ich do `IconGeometries.axaml` ZMIENIA WYGLĄD i wymaga QA wizualnego użytkownika.
         // ⛔ Decyzja użytkownika (2026-08-08): B1 zostaje przygotowane jako osobny przypadek, wygląd NIE jest
         // rozstrzygany w M4.2. Do tego czasu wpis stoi tu po to, żeby dług był widoczny (R12), a nie zerowany.
+        //
+        // ⭐⭐ M4.3 / Q2: 19 → 14. Debugger ZDJĘTY W CAŁOŚCI (4 → 0), Session 2 → 1. Pięć ikon `Icon.X`
+        // przeszło na `Size.Icon.Sm`, bo dla użytkownika są JEDNYM elementem — inline ✕, które czyści albo
+        // usuwa to, w czym stoi — a renderowały się przy 12 (czyszczenie pola Immediate) i 11 (trzy razy
+        // usuwanie wiersza w debuggerze, raz czyszczenie chipa w Session). ⚠ Rozjazd siedział W JEDNYM
+        // PLIKU, więc nie opisywała go żadna reguła per ekran (#335).
+        // ⭐ Rola trafia własnym opisem — „ikona inline w tekście 11 px (chip, wiersz siatki)" — i tym samym
+        // argumentem M4.2 zmigrowało sześć ikon karty aktywności.
+        // ⚠ Koszt zaakceptowany świadomie: cztery ikony ROSNĄ 11 → 12, co idzie pod prąd R18. Wariant
+        // odwrotny („rola na 11") nie był wariantem, tylko cofnięciem odebranej już decyzji M4.2.
+        //
+        // ⚠⚠ SPROSTOWANIE POMIARU (M4.3): as-built M4.2 (§19.40.4) i „Current state" w CLAUDE.md mówiły
+        // „sufit rośnie 20 → 25". Ta liczba NIGDY nie zgadzała się z kodem: do dwudziestki z M4.1 dodano
+        // +5 za `TableDetailTabView`, ale nie odjęto −6 zdjętych w tej samej iteracji z bliźniaków.
+        // Rzeczywisty sufit po M4.2 wynosił 19 (i tyle sumowała ta tablica, więc strażnik był zielony —
+        // rozjeżdżała się wyłącznie PROZA). Po M4.3 jest 14.
         ["Views/TableDetailTabView.axaml"] = 5,
-        ["Views/DebuggerTabView.axaml"] = 4,
         ["Views/TraceMonitorTabView.axaml"] = 3,
         ["Views/DataImportTabView.axaml"] = 2,
         ["Views/MainWindow.axaml"] = 2,
-        ["Views/SessionManagerTabView.axaml"] = 2,
+        // ⛔ Zostaje 1: `Icon.Check` przy 15 px w komórce siatki — jedna z trzech ikon 15 px świadomie
+        // wyłączonych z B‑1 w bloku gęstości (§19.37.3: „żadna nie jest wierszem drzewa").
+        ["Views/SessionManagerTabView.axaml"] = 1,
         ["Views/AggregationBarView.axaml"] = 1,
     };
 
@@ -1309,6 +1354,158 @@ public class DesignTokenComplianceTests
     /// bezpieczeństwa (§15.7), a gdyby szablon systemu ikon kiedyś dostał literał, to też jest warte spojrzenia.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// ⭐⭐ M4.3 / Q3‑A — komunikat pustego stanu w Session Managerze i w Trace Monitorze musi czytać
+    /// JEDNĄ rolę. To jest strażnik <b>relacyjny</b>, a nie przepisujący liczbę (wzorzec §19.41.4): nie
+    /// interesuje go, ILE wynosi rola, tylko czy oba ekrany mówią to samo.
+    /// <para>
+    /// ⚠ Powód, dla którego w ogóle powstał, jest zmierzony, nie wyobrażony: te dwa elementy są
+    /// konstrukcyjnie identyczne (ten sam pędzel, ten sam <c>Margin="0,40,0,0"</c>, to samo centrowanie)
+    /// i przez cały czas niosły tę samą wartość 13 — czyli były JEDNYM elementem na dwóch ekranach.
+    /// Dokładnie taka para rozjechała się w M4.1 (pasek paginacji, #335), i rozjechała się dlatego,
+    /// że nikt nie pilnował ich RAZEM.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void BothEmptyStates_ShareOneTextRole()
+    {
+        var session = EmptyStateFontSize("Views/SessionManagerTabView.axaml", "ShowSessionsEmpty");
+        var trace = EmptyStateFontSize("Views/TraceMonitorTabView.axaml", "ShowEmptyState");
+
+        Assert.StartsWith("{DynamicResource ", session, StringComparison.Ordinal);
+        Assert.Equal(session, trace);
+    }
+
+    private static string EmptyStateFontSize(string relative, string visibilityBinding)
+    {
+        var text = WithoutComments(File.ReadAllText(Path.Combine(AppRoot(), relative.Replace('/', Path.DirectorySeparatorChar))), relative);
+
+        var block = Regex.Match(
+            text,
+            @"<TextBlock\s+IsVisible=""\{Binding " + visibilityBinding + @"\}""(?<body>(?:(?!/>)[\s\S])*?)FontSize=""(?<size>[^""]+)""");
+
+        // Test, który przechodzi, bo NICZEGO nie dopasował, jest gorszy niż brak testu (R16).
+        Assert.True(block.Success,
+            $"Nie znaleziono komunikatu pustego stanu (`{visibilityBinding}`) w {relative}. Jeżeli ten element "
+            + "przeniósł się albo zmienił nazwę wiązania, strażnik musi pójść za nim — a nie zniknąć.");
+
+        return block.Groups["size"].Value;
+    }
+
+    /// <summary>
+    /// ⭐⭐ M4.3 / Q4 — pole filtra Trace ma brać wysokość TĄ SAMĄ rolą, którą biorą pola tekstowe i listy
+    /// stojące obok niego w tym samym pasku. Strażnik pilnuje <b>PRZESŁANKI, a nie POLITYKI</b> (#322):
+    /// czyta rolę z <c>ControlStyles.axaml</c> (skąd bierze ją prawdziwy <c>TextBox</c>) i wymaga, żeby
+    /// widok deklarował dokładnie ją — więc gdy kiedyś zmieni się rola kontrolek, ten test powie, że pole
+    /// filtra ma pójść za nimi, zamiast pilnować liczby 24, która by się rozjechała w ciszy.
+    /// <para>
+    /// ⚠ Zmierzone w M4.3: pole stało przy <c>Height="26"</c>, czyli 2 px wyżej niż każdy prawdziwy sąsiad,
+    /// i to ono wyznaczało wysokość paska. Liczby 26 nie było nigdzie indziej w <c>src/</c>.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void TheTraceFilterField_TakesTheHeightOfTheControlsBesideIt()
+    {
+        var styles = File.ReadAllText(Path.Combine(AppRoot(), "Themes", "ControlStyles.axaml"));
+        var textBoxRole = Regex.Match(
+            styles,
+            @"<Style Selector=""TextBox"">\s*<Setter Property=""MinHeight"" Value=""(?<role>[^""]+)""");
+
+        Assert.True(textBoxRole.Success,
+            "Nie znaleziono wysokości `TextBox` w ControlStyles.axaml — bez niej ten strażnik nie ma "
+            + "z czym porównywać i pilnowałby wyłącznie liczby przepisanej z widoku (#333).");
+
+        var trace = WithoutComments(
+            File.ReadAllText(Path.Combine(AppRoot(), "Views", "TraceMonitorTabView.axaml")),
+            "Views/TraceMonitorTabView.axaml");
+
+        var field = Regex.Match(trace, @"PlaceholderText=""\{x:Static app:UiStrings\.TraceFilterWatermark\}""");
+        Assert.True(field.Success, "Nie znaleziono pola filtra w TraceMonitorTabView.axaml.");
+
+        // ⚠⚠ Zakotwiczone w OTWIERAJĄCYM ZNACZNIKU ramki, a nie „ostatnia wysokość nad polem" — pierwsza
+        //   wersja szukała tak i złapała ogon `MinHeight="0"` z `TextBox`a w środku, po czym porównywała
+        //   rolę z zerem. Stąd też `(?<![A-Za-z])`: `MinHeight` kończy się na „Height".
+        var start = trace[..field.Index].LastIndexOf("<Border", StringComparison.Ordinal);
+        Assert.True(start >= 0, "Nie znaleziono ramki otaczającej pole filtra.");
+
+        var openingTag = Regex.Match(trace[start..], @"<Border\b[^>]*>");
+        Assert.True(openingTag.Success, "Ramka pola filtra nie ma domkniętego znacznika otwierającego.");
+
+        var height = Regex.Match(openingTag.Value, @"(?<![A-Za-z])Height=""(?<h>[^""]+)""");
+        Assert.True(height.Success,
+            "Ramka pola filtra nie deklaruje wysokości. Jeżeli ma ją brać od kontenera, ten strażnik musi "
+            + "zostać przepisany na tę przesłankę — a nie usunięty.");
+
+        Assert.Equal(textBoxRole.Groups["role"].Value, height.Groups["h"].Value);
+    }
+
+    /// <summary>
+    /// ⭐ M4.3 / Q2 — inline ✕ (czyszczące albo usuwające to, w czym stoi) ma jeden rozmiar w całej
+    /// aplikacji. ⚠ Strażnik jest <b>relacyjny</b>: wymaga, żeby wszystkie takie ikony deklarowały tę samą
+    /// rolę, a nie żeby deklarowały konkretną liczbę — bo pytanie brzmiało „czy to jest jeden element",
+    /// a nie „ile ma pikseli".
+    /// <para>
+    /// ⚠⚠ Rozjazd, który to wywołał, siedział W JEDNYM PLIKU (debugger: 12 i trzy razy 11), więc nie
+    /// opisywała go żadna reguła sformułowana per ekran — to jest #335 czytane o poziom niżej.
+    /// ⛔ <c>AggregationBarView</c> jest świadomie poza tą regułą: jego ✕ niesie 10 px i należy do ogona
+    /// 10/11/13/15, sparkowanego jako osobne pytanie o ROLE (§19.37.7).
+    /// </para>
+    /// <para>
+    /// ⚠⚠ <b>PIERWSZA WERSJA TEGO STRAŻNIKA BYŁA BŁĘDNA I ZŁAPAŁ TO DOPIERO PRZEBIEG — grupowała po NAZWIE
+    /// GEOMETRII, a nie po tym, CZYM RZECZ JEST DLA UŻYTKOWNIKA</b> (§19.39.2a, ten sam błąd o poziom dalej).
+    /// <c>MainWindow.axaml</c> ma trzeci <c>Icon.X</c> — przycisk „Zamknij zakładkę" w pasku narzędzi —
+    /// czyli samodzielną AKCJĘ, która <b>poprawnie nie deklaruje nic</b> i bierze <c>Size.Icon.Toolbar</c>
+    /// (16) z <c>ControlTheme</c> (#332, A‑3). Ten sam glif pełni więc dwie role, dokładnie jak
+    /// <c>Icon.RefreshCw</c> (16 w pasku, 14 gdy odświeża siatkę).
+    /// ⭐ Dlatego reguła brzmi: <b>ikona, która DEKLARUJE rozmiar, deklaruje tę samą rolę</b> — a brak
+    /// deklaracji jest osobną, poprawną drogą, nie brakiem decyzji.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void EveryInlineClearIcon_SharesOneSizeRole()
+    {
+        string[] hosts = ["Views/DebuggerTabView.axaml", "Views/SessionManagerTabView.axaml", "Views/MainWindow.axaml"];
+        var sized = new List<string>();
+        var unsized = 0;
+
+        foreach (var relative in hosts)
+        {
+            var text = WithoutComments(
+                File.ReadAllText(Path.Combine(AppRoot(), relative.Replace('/', Path.DirectorySeparatorChar))),
+                relative);
+
+            foreach (Match icon in Regex.Matches(text, @"<controls:SvgIcon\b(?:(?!/?>)[\s\S])*?/>"))
+            {
+                if (!icon.Value.Contains("Icon.X", StringComparison.Ordinal)) continue;
+
+                var size = Regex.Match(icon.Value, @"(?<![A-Za-z])Width=""(?<w>[^""]+)""");
+                if (size.Success)
+                {
+                    sized.Add(size.Groups["w"].Value);
+                }
+                else
+                {
+                    unsized++;
+                }
+            }
+        }
+
+        Assert.True(sized.Count >= 6,
+            $"Znaleziono tylko {sized.Count} ikon `Icon.X` deklarujących rozmiar — po M4.3 jest ich sześć "
+            + "(4 debugger + 1 Session + 1 MainWindow). Test, który przechodzi, bo niczego nie dopasował, "
+            + "jest gorszy niż brak testu (R16).");
+
+        // ⚠ Ta asercja jest tu po to, żeby przypadek „samodzielna akcja bez deklaracji" nie zniknął
+        //   w ciszy — gdyby ktoś dopisał mu rozmiar, reguła wyżej przestałaby opisywać rzeczywistość.
+        Assert.True(unsized >= 1,
+            "Zniknal `Icon.X`, ktory swiadomie NIE deklaruje rozmiaru (przycisk zamkniecia zakladki w pasku "
+            + "narzedzi bierze `Size.Icon.Toolbar` z `ControlTheme`). Jezeli to celowa zmiana, popraw ten "
+            + "straznik i jego uzasadnienie — a nie tylko liczbe.");
+
+        Assert.Single(sized.Distinct(StringComparer.Ordinal));
+        Assert.Equal("{DynamicResource Size.Icon.Sm}", sized[0]);
+    }
+
     private static Dictionary<string, int> MeasureIconSizeLiterals()
     {
         var appRoot = AppRoot();
