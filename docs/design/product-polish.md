@@ -1092,16 +1092,69 @@ ViewModeli w całej aplikacji i jest pracą funkcjonalną, nie stylistyczną.
 
 Specyfikacja mówi „calm" (§3.4), ale nie stawia liczby. Fluent wnosi własne przejścia.
 
-| Reguła | Wartość |
-|---|---|
-| Maksymalny czas przejścia | **120 ms** |
-| Dozwolone właściwości | **wyłącznie `Opacity` i kolory** (`Background`, `Foreground`, `BorderBrush`) |
-| Zakazane | **każde przejście na właściwości wpływającej na układ** — `Width`, `Height`, `Margin`, `Padding` |
-| Krzywa | `CubicEaseOut` |
+| Reguła | Wartość | Zakres |
+|---|---|---|
+| Zakazane | **każde przejście na właściwości wpływającej na układ** — `Width`, `Height`, `Margin`, `Padding`, `BorderThickness`, `FontSize` | ⛔ **BEZWZGLĘDNY — dotyczy każdego ruchu w aplikacji** |
+| Maksymalny czas przejścia | **120 ms** | ruch, który EmberTern **deklaruje sam** |
+| Dozwolone właściwości | **wyłącznie `Opacity` i kolory** (`Background`, `Foreground`, `BorderBrush`) | ruch, który EmberTern **deklaruje sam** |
+| Krzywa | `CubicEaseOut` | ruch, który EmberTern **deklaruje sam** |
 
 **Powód zakazu:** animacja na wymiarze to §13.3 specyfikacji (*Zero Layout Shift*) rozłożony
 w czasie. Element, który „dojeżdża" do swojego rozmiaru, przesuwa sąsiadów przez 120 ms —
 subiektywnie to dokładnie ten sam defekt.
+
+⚠⚠ **KOLUMNA „ZAKRES" JEST WYNIKIEM POMIARU Z M5 I ZOSTAŁA DOPISANA, BO JEJ BRAK CZYNIŁ TĘ TABELĘ
+NIEPRAWDZIWĄ (2026-08-10, ratyfikowane).** Pierwotnie reguły stały bez zakresu, a zdanie „Fluent wnosi
+własne przejścia" nie miało konsekwencji — więc tabela czytała się jak opis stanu aplikacji, którym nie
+była. Pomiar (§9.1) pokazał **16 przejść pochodzących z Fluenta**, z których część łamie sufit czasu
+i krzywą. ⭐ Rozstrzygnięcie: **zakaz właściwości układu zostaje bezwzględny** (ma zapisane uzasadnienie
+i jest spełniony), a **czas, krzywa i lista dozwolonych właściwości dotyczą ruchu, który piszemy sami** —
+bo tylko ten możemy egzekwować, nie przejmując cudzych szablonów na własność.
+
+---
+
+## §9.1 Zmierzony baseline Fluenta 12.1.1 — NAZWANY WYJĄTEK
+
+> **Pomiar 2026-08-10** (`VisualCandidateProbe -- motion`, wynik: `out/m5-motion.txt`).
+> **350 elementów na motyw**, zrealizowanych w prawdziwym oknie, z wnętrzem szablonów i otwartymi
+> popupami. **Wynik identyczny w Dark i Light.**
+
+**EmberTern deklaruje ZERO własnego ruchu** — i to jest od M5 **egzekwowane** przez
+`DesignTokenComplianceTests.EmberTernDeclaresNoMotionOfItsOwn`. Wszystkie przejścia w aplikacji pochodzą
+z Fluenta:
+
+| rodzina | ile | właściwość | czas | krzywa | status |
+|---|---|---|---|---|---|
+| `Button` ×6 + `ToggleButton` | 7 | `RenderTransform` | 75 ms | Linear | ⚠ **BEZCZYNNE** — patrz niżej |
+| separator pasków przewijania (`TextBox` ×2, `ScrollViewer`, `ListBox`, `TreeView`, `NumericUpDown`, lista `ComboBox`a) | 7 | `Opacity` | 100 ms | Linear | przyjęte |
+| `ProgressBar` (Determinate + Indeterminate) | 2 | `Opacity` | **197 ms** | Linear | przyjęte mimo sufitu 120 ms |
+
+⭐ **Zero przejść na właściwości układu.** Reguła z zapisanym uzasadnieniem jest spełniona — i to ona
+była właściwym przedmiotem §9.
+
+⭐⭐ **`RenderTransform` jest wyjątkiem TYLKO W ZAKRESIE ZMIERZONEGO ZACHOWANIA, i to zachowanie jest
+żadne.** Macierz odczytana z przycisku jest **jednostkowa w spoczynku i po wymuszeniu `:pressed`** —
+również na **gołym `Button`**, więc to nie nasze warianty kasują efekt, tylko **Fluent 12.1.1 nie ustawia
+transformacji wciśnięcia**. Przejście istnieje i nie ma czego animować. ⛔ Wyjątek nie obejmuje sytuacji,
+w której przyszła wersja Fluenta zacznie tę wartość zmieniać — wtedy trzeba go podjąć od nowa.
+
+🔒 **Decyzja użytkownika (2026-08-10): nie nadpisujemy i nie przejmujemy przejść Fluenta** — ani czasu,
+ani krzywej, ani `ProgressBar`. ⭐ Powód: alternatywa oznacza przejście z **0 własnych przejść na 16**
+i utrzymywanie ich na zawsze, żeby zmienić zanikanie separatora paska przewijania ze 100 ms liniowo na
+100 ms kubicznie — zmianę dla użytkownika niewidoczną. ⛔ Nie „poprawiać" tego przy okazji innego etapu.
+
+⚠⚠ **GRANICA POMIARU — powiedziana wprost, bo bez niej „zero" znaczyłoby więcej, niż zmierzono.**
+Sprawdzone zostały kontrolki, których aplikacja używa, instancjonowane od nowa, w stanie spoczynku plus
+wymuszone `:pressed` na przycisku i otwarte popupy. **NIE zmierzono:** `ToolTip` (wymaga prawdziwego
+najechania) ani przejść, które `ControlTheme` włącza wyłącznie w stanie niewymuszonym przez sondę.
+Zdanie „zero przejść na właściwościach układu" jest więc **mocne, ale nie wyczerpujące**. ⛔ Świadomie
+nie naprawiano niczego w tych obszarach — najpierw pomiar, potem decyzja.
+
+⚠ **Znalezisko o samym dokumencie, warte zapamiętania poza §9:** tabela miała **listę dozwolonych**
+i **listę zakazanych**, które **nie pokrywają tej samej przestrzeni** — `RenderTransform` nie jest ani
+dozwolony, ani objęty uzasadnieniem zakazu (nie wpływa na układ). ⭐ To ten sam kształt co sprostowanie
+§10: **litera reguły i jej powód się rozjechały**, i w obu przypadkach ujawnił to dopiero pomiar, nie
+lektura.
 
 ---
 
@@ -9810,3 +9863,86 @@ zachodzi w ogóle.
 ⚠ Dwa z moich własnych testów były w pierwszej wersji błędne i wykrył to **przebieg, nie czytanie**: strażnik
 drzewa zapalił się na `StringConverters.IsNotNullOrEmpty` (szukałem podciągu „Empty"), a test przynależności
 dodawał użytkownika do listy `Users.Items`, podczas gdy picker buduje się z grantee'ów **właściciela**.
+
+---
+
+## §19.48 As-built — M5 / §9 (ruch i animacja)
+
+> **Status: zamknięte 2026-08-10.** Build 0/0 · suite **8386** (8208 + 123 + 55, **+1**) · smoke czysty.
+> ⭐ **Zero zmian produkcyjnych** — iteracja dostarczyła POMIAR, KOREKTĘ DOKUMENTU i JEDNEGO STRAŻNIKA.
+> Pomiar: `VisualCandidateProbe -- motion` → `out/m5-motion.txt`. Korekta: **§9 + nowe §9.1**.
+
+### §19.48.1 ⭐⭐ Znalezisko: „zero w liczniku" znaczyło coś innego, niż wyglądało
+
+Inwentaryzacja M5 zapisała, że **§9 nie ma ani jednego naruszenia** — bo licznik na źródłach dawał zero
+`Transitions`, zero `<Animation>`, zero `Storyboard` w całym `EmberTern.App`. ⚠⚠ To odpowiadało wyłącznie
+na pytanie **„czego MY nie napisaliśmy"**, podczas gdy §9 zakazuje przejść na właściwościach układu
+**niezależnie od tego, kto je wniósł** — i sam §9 pisał, że *„Fluent wnosi własne przejścia"*, bez żadnej
+konsekwencji.
+
+⭐ Pomiar z ELEMENTU, KTÓRY MALUJE (#345): **350 elementów na motyw**, zrealizowanych w prawdziwym oknie,
+z wnętrzem szablonów i **otwartymi popupami** — bo lista `ComboBox`a i podmenu dostają własny `PopupRoot`
+i nie leżą w drzewie okna. **Wynik: 16 przejść, wszystkie z Fluenta, wynik identyczny w obu motywach.**
+
+### §19.48.2 Co pokazał pomiar wobec czterech reguł §9
+
+| reguła | werdykt |
+|---|---|
+| zakaz przejść na właściwości UKŁADU | ✅ **zero** — jedyna reguła §9 z zapisanym uzasadnieniem, i jest spełniona |
+| sufit 120 ms | ⛔ `ProgressBar` **197 ms** (2 przejścia) |
+| dozwolone wyłącznie `Opacity` i kolory | ⚠ `RenderTransform` (7) poza listą — ale **bezczynny** |
+| krzywa `CubicEaseOut` | ⛔ wszystkie 16 na `LinearEasing` |
+
+⭐⭐ **`RenderTransform` zmierzony osobno, i to zmieniło jego status z naruszenia na nieistotność.**
+Macierz jest **jednostkowa w spoczynku i po wymuszeniu `:pressed`** — również na **gołym `Button`**, więc
+to nie nasze warianty kasują efekt, tylko **Fluent 12.1.1 nie ustawia transformacji wciśnięcia**.
+Przejście istnieje i nie ma czego animować. ⚠ Ten sam kształt co „martwy setter" z L‑1: deklaracja bez
+skutku czyta się jak działający mechanizm.
+
+### §19.48.3 🔒 Decyzja: W‑A — korygujemy DOKUMENT, nie produkt
+
+Ratyfikowane przez użytkownika: **nie nadpisujemy i nie przejmujemy przejść Fluenta** — ani czasu, ani
+krzywej, ani `ProgressBar`.
+
+⭐ Powód jest rachunkowy, nie estetyczny: alternatywa oznacza przejście z **0 własnych przejść na 16**
+i utrzymywanie ich na zawsze, żeby zmienić zanikanie separatora paska przewijania ze 100 ms liniowo na
+100 ms kubicznie — zmianę dla użytkownika niewidoczną. To **R12 na poziomie reguły**: zła reguła jest
+gorsza od wartości, którą miała opisać.
+
+**Co weszło do §9:** kolumna **„Zakres"**. Zakaz właściwości układu **zostaje bezwzględny**; czas, krzywa
+i lista dozwolonych właściwości dotyczą **ruchu, który EmberTern deklaruje sam**. Nowe **§9.1** zapisuje
+zmierzony baseline Fluenta jako **nazwany wyjątek z liczbami**, wraz z zastrzeżeniem, że wyjątek dla
+`RenderTransform` obejmuje **wyłącznie zmierzone zachowanie** — gdy przyszły Fluent zacznie tę wartość
+zmieniać, decyzję trzeba podjąć od nowa.
+
+⚠ **Precedens: §10.** Tam też litera reguły rozjechała się z jej powodem (próg opisany jako „WCAG AA
+Large", którego nie spełniał), i tam też odpowiedzią była korekta dokumentu przy zachowaniu liczby.
+⭐ §9 dokłada do tego wariant: tabela miała **listę dozwolonych i listę zakazanych, które nie pokrywają
+tej samej przestrzeni** — `RenderTransform` nie jest ani dozwolony, ani objęty uzasadnieniem zakazu.
+
+### §19.48.4 Strażnik — celowo o naszym źródle, nie o Fluencie
+
+`DesignTokenComplianceTests.EmberTernDeclaresNoMotionOfItsOwn`: `EmberTern.App` ma **zero** `Transitions`
+/ `Animation` / `Storyboard`.
+
+⭐ **Nie próbuje kontrolować szablonów Fluenta i to jest decyzja, nie oszczędność.** Taki test wymagałby
+uruchomienia aplikacji i zmieniałby kolor przy każdej aktualizacji frameworka — czyli byłby strażnikiem
+opisującym co innego, niż mówi jego nazwa (#333). ⭐ To, co realnie chroni, jest węższe i prawdziwe:
+dziś zero nie wynika z ostrożności, tylko z tego, że nikt żadnego przejścia nie napisał — a test zamienia
+ten **przypadkowy** stan w **egzekwowany**, żeby pierwsze `<Transitions>` na `Width` musiało być świadomą
+decyzją, a nie linijką, która przeszła w recenzji.
+
+⚠ Zweryfikowany podsadzeniem w wariancie, który §9 zakazuje bezwzględnie — przejście na `Width` —
+i strażnik wskazał plik po nazwie.
+
+### §19.48.5 ⚠⚠ Granica pomiaru — zapisana, bo bez niej „zero" znaczy więcej, niż zmierzono
+
+**NIE zmierzono:** `ToolTip` (wymaga prawdziwego najechania) ani przejść, które `ControlTheme` włącza
+wyłącznie w stanie niewymuszonym przez sondę. Zdanie „zero przejść na właściwościach układu" jest
+**mocne, ale nie wyczerpujące**. ⛔ Świadomie nie naprawiano niczego w tych obszarach.
+
+⚠ **Trzy rzeczy w samym pomiarze dawały początkowo fałszywą odpowiedź** i warto je znać przed pisaniem
+podobnej sondy: `ITransition.Property` i `Popup.Host` **nie są publiczne** w Avalonii 12.1.1 (odczyt
+refleksją), `TransformOperations.ToString()` zwraca **samą nazwę typu** — przez co pierwsza wersja
+„pokazała", że spoczynek i wciśnięcie są identyczne, porównując dwie takie same etykiety — a otwarcie
+popupu **mutuje drzewo w trakcie leniwej enumeracji** (`Walk` wymaga `.ToList()` przed otwieraniem).

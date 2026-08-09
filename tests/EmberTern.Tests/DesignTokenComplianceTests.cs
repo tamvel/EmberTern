@@ -1644,6 +1644,63 @@ public class DesignTokenComplianceTests
         return counts;
     }
 
+    // ══ §9 — RUCH. EmberTern nie deklaruje WŁASNYCH przejść ani animacji ═══════════════════════════
+    //
+    // ⭐⭐ Strażnik pilnuje NASZEGO ŹRÓDŁA i celowo NIE PRÓBUJE kontrolować szablonów Fluenta. Powód jest
+    // rzeczowy, nie oszczędnościowy: przejścia Fluenta są zmierzone i **nazwane wyjątkiem** (§9.1), a jedyne,
+    // co możemy realnie egzekwować w teście źródłowym, to czy sami czegoś nie dokładamy. Próba pilnowania
+    // cudzych szablonów wymagałaby uruchomienia aplikacji i skończyłaby się testem, który zmienia kolor przy
+    // każdej aktualizacji frameworka — czyli strażnikiem opisującym coś innego, niż mówi jego nazwa (#333).
+    //
+    // ⚠ Co ten test NAPRAWDĘ chroni: §9 zakazuje przejść na właściwościach UKŁADU, bo to §13.3 (Zero Layout
+    // Shift) rozłożone w czasie. Dziś nie ma ich zero „z ostrożności" — nie ma ich, bo nikt żadnego nie
+    // napisał. Ten test zamienia ten przypadkowy stan w egzekwowany, żeby pierwsze `<Transitions>` na
+    // `Width` musiało być świadomą decyzją, a nie linijką, która przeszła w recenzji.
+    //
+    // ⛔ Gdy kiedyś świadomie dodamy własne przejście, ten test ma ZAPALIĆ i wymusić decyzję: wtedy wpisuje
+    // się je tutaj razem z powodem, dokładnie tak, jak `DatePresentationTests` prowadzi listę plików wolno
+    // formatujących invariantnie. ⛔ Nie osłabiać go przez podniesienie progu bez zapisanego powodu.
+    [Fact]
+    public void EmberTernDeclaresNoMotionOfItsOwn()
+    {
+        // `Transitions` (kolekcja przejść), `<Animation>`/`KeyFrame` (animacje jawne), `Storyboard`.
+        var patterns = new (string Name, Regex Rx)[]
+        {
+            ("Transitions", new Regex(@"<Transitions|Transitions\s*=|\bnew\s+Transitions\b", RegexOptions.Compiled)),
+            ("Animation", new Regex(@"<Animation\b|\bnew\s+Animation\b|<KeyFrame\b", RegexOptions.Compiled)),
+            ("Storyboard", new Regex(@"Storyboard", RegexOptions.Compiled)),
+        };
+
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(AppRoot(), "*", SearchOption.AllDirectories))
+        {
+            var ext = Path.GetExtension(file);
+            if (ext is not (".axaml" or ".cs")) continue;
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var text = File.ReadAllText(file);
+            foreach (var (name, rx) in patterns)
+            {
+                if (rx.IsMatch(text))
+                {
+                    offenders.Add($"{Path.GetRelativePath(AppRoot(), file).Replace('\\', '/')} — {name}");
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "§9: EmberTern nie deklaruje własnego ruchu. Znaleziono deklaracje przejść/animacji:\n  "
+            + string.Join("\n  ", offenders)
+            + "\n\nJeżeli to świadoma decyzja, dopisz ją tutaj RAZEM Z POWODEM i sprawdź §9: przejście na "
+            + "właściwości wpływającej na układ (Width/Height/Margin/Padding/BorderThickness/FontSize) jest "
+            + "zakazane bezwzględnie, a dla pozostałych obowiązuje sufit 120 ms i krzywa CubicEaseOut.");
+    }
+
     private static string AppRoot() => Path.Combine(RepositoryRoot(), "src", "EmberTern.App");
 
     // Walks up from the test binary to the directory holding EmberTern.slnx. The test reads SOURCE, so it needs

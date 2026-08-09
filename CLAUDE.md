@@ -467,6 +467,47 @@ noted.
 
 ## Current state
 
+- **🎬🔒 M5 · §9 RUCH I ANIMACJA — ZAMKNIĘTE (2026-08-10). ⭐ ZERO ZMIAN PRODUKCYJNYCH — iteracja
+  dostarczyła POMIAR, KOREKTĘ DOKUMENTU i JEDNEGO STRAŻNIKA.** Build 0/0; suite **8386** (8208 + 123 + 55,
+  +1); smoke czysty. As-built: `product-polish.md` **§19.48**; korekta: **§9 + nowe §9.1**; pomiar:
+  `VisualCandidateProbe -- motion` → `out/m5-motion.txt`.
+  ⭐⭐ **ZNALEZISKO: „§9 nie ma ani jednego naruszenia" opisywało coś innego, niż wyglądało.** Ten zapis
+  pochodził z licznika na źródłach (zero `Transitions`/`Animation`/`Storyboard` w `EmberTern.App`) — czyli
+  odpowiadał wyłącznie na pytanie **„czego MY nie napisaliśmy"**, podczas gdy §9 zakazuje przejść na
+  właściwościach układu **niezależnie od tego, kto je wniósł**, a sam §9 pisał *„Fluent wnosi własne
+  przejścia"* bez żadnej konsekwencji. **#337 jeszcze raz, o poziom wyżej.**
+  **Pomiar** z elementu, który maluje: **350 elementów na motyw**, zrealizowanych w prawdziwym oknie,
+  z wnętrzem szablonów i **otwartymi popupami** (lista `ComboBox`a i podmenu mają własny `PopupRoot`).
+  **16 przejść, wszystkie z Fluenta, wynik IDENTYCZNY w obu motywach.**
+  ⭐ **Zero przejść na właściwości UKŁADU** — jedyna reguła §9 z zapisanym uzasadnieniem jest spełniona.
+  ⛔ Naruszone są za to: **sufit 120 ms** (`ProgressBar` **197 ms**) i **krzywa** (wszystkie 16 na
+  `LinearEasing` zamiast `CubicEaseOut`).
+  ⭐⭐ **`RenderTransform` na przyciskach (7) jest BEZCZYNNY i zmierzenie tego zmieniło jego status:**
+  macierz jest **jednostkowa w spoczynku i po wymuszeniu `:pressed`**, również na **gołym `Button`** —
+  czyli to nie nasze warianty kasują efekt, tylko **Fluent 12.1.1 nie ustawia transformacji wciśnięcia**.
+  🔒 **DECYZJA UŻYTKOWNIKA (W‑A): korygujemy DOKUMENT, nie produkt.** ⛔ Nie nadpisujemy i nie przejmujemy
+  przejść Fluenta — ani czasu, ani krzywej, ani `ProgressBar`. ⭐ Powód rachunkowy: alternatywa to przejście
+  z **0 własnych przejść na 16** i utrzymywanie ich na zawsze, żeby zmienić zanikanie separatora paska
+  przewijania ze 100 ms liniowo na 100 ms kubicznie — zmiana dla użytkownika niewidoczna.
+  **§9 dostało kolumnę „Zakres"**: zakaz właściwości układu **bezwzględny**, a czas / krzywa / lista
+  dozwolonych właściwości dotyczą **ruchu, który EmberTern deklaruje sam**. Nowe **§9.1** zapisuje baseline
+  Fluenta jako **nazwany wyjątek z liczbami**; ⚠ wyjątek dla `RenderTransform` obejmuje **wyłącznie
+  zmierzone zachowanie** — gdy przyszły Fluent zacznie tę wartość zmieniać, decyzję trzeba podjąć od nowa.
+  ⭐ **Strażnik `EmberTernDeclaresNoMotionOfItsOwn`** (w `DesignTokenComplianceTests`): `EmberTern.App` ma
+  zero własnych `Transitions`/`Animation`/`Storyboard`. ⛔ **Celowo NIE próbuje kontrolować szablonów
+  Fluenta** — taki test wymagałby uruchomienia aplikacji i zmieniałby kolor przy każdej aktualizacji
+  frameworka (#333). ⭐ Zamienia stan **przypadkowy** („nikt nie napisał") w **egzekwowany**, żeby pierwsze
+  `<Transitions>` na `Width` było świadomą decyzją. Zweryfikowany podsadzeniem właśnie takiego przejścia.
+  ⚠⚠ **GRANICA POMIARU, zapisana świadomie:** **nie zmierzono `ToolTip`** (wymaga prawdziwego najechania)
+  ani przejść włączanych przez `ControlTheme` w stanie niewymuszonym przez sondę. „Zero na właściwościach
+  układu" jest **mocne, ale nie wyczerpujące**; ⛔ niczego w tych obszarach nie naprawiano.
+  ⚠ **Trzy rzeczy w samym pomiarze dawały fałszywą odpowiedź** — `ITransition.Property` i `Popup.Host`
+  **nie są publiczne** w Avalonii 12.1.1, `TransformOperations.ToString()` zwraca **samą nazwę typu**
+  (pierwsza wersja „pokazała" identyczny spoczynek i wciśnięcie, porównując dwie takie same etykiety),
+  a otwarcie popupu **mutuje drzewo w trakcie leniwej enumeracji**.
+  ⚠ **Jeden przebieg partycji głównej zaświecił raz na czerwono i NIE jest ogłaszany naprawionym ani
+  powiązanym** — trzy kolejne przebiegi po nim dały 8208 zielonych, nazwy nie udało się przechwycić.
+
 - **📭🔒 M5 · M‑3 STANY PUSTE — ZAMKNIĘTE I ODEBRANE PO QA WIZUALNYM UŻYTKOWNIKA W OBU MOTYWACH
   (2026-08-10).** Trzecia iteracja M5. Build 0/0; suite **8385** (8207 + 123 + 55, +14); smoke czysty;
   **wszystkie trzy podsadzenia złapane, każde przez swój i tylko swój test**. As-built:
@@ -4747,11 +4788,11 @@ noted.
   (Product Polish through **M4.4** + M4's density decision + typography block + the stabilization sprint
   S-1…S-6 + the grid consistency sprint + the Firebird language completeness sprint incl. its QA round).
   Green in the three documented partitions (**8193 + 97 + 55**).
-  ⚠⚠ **NIEAKTUALNE OD 2026-08-10 — po trzech iteracjach M5 (§10 · L‑1 · M‑3) suma to 8385
-  (8207 + 123 + 55).** Zdanie wyżej zostaje jako zapis stanu po M4; ⛔ nie cytuj go jako bieżącego.
-  ⭐ **M‑3 dołożyło 14 testów i WSZYSTKIE trafiły do partycji GŁÓWNEJ** (8193 → 8207), bo żaden nie
-  konstruuje kontrolek Avalonii — czyta ViewModele i ŹRÓDŁA widoków. Krucha ręczna lista nazw w filtrze
-  partycji headless **nie urosła w M5 ani razu**, przez trzy iteracje z rzędu.
+  ⚠⚠ **NIEAKTUALNE OD 2026-08-10 — po czterech iteracjach M5 (§10 · L‑1 · M‑3 · §9) suma to 8386
+  (8208 + 123 + 55).** Zdanie wyżej zostaje jako zapis stanu po M4; ⛔ nie cytuj go jako bieżącego.
+  ⭐ **M‑3 (+14) i §9 (+1) trafiły w całości do partycji GŁÓWNEJ** (8193 → 8208), bo żaden z tych testów
+  nie konstruuje kontrolek Avalonii — czytają ViewModele i ŹRÓDŁA. Krucha ręczna lista nazw w filtrze
+  partycji headless **nie urosła w M5 ani razu**, przez cztery iteracje z rzędu.
   ⭐ Wcześniej: §10 i L‑1 dołożyły **26**
   testów i **wszystkie** wylądowały w partycji ZGRUPOWANEJ (97 → 123), bo obie dopisały się do
   **istniejącej** klasy `DesignTokenApplicationTests` — krucha ręczna lista nazw w filtrze partycji

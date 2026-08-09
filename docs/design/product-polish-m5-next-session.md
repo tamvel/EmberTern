@@ -31,14 +31,32 @@
 > Privileges. ⏸ **Odłożone:** Session → Transactions · Table → Indeksy. ⛔⛔ **Nazwany wyjątek:** 17 drzew
 > „Zależności" **zostaje bez stanu pustego** (parytet z IBExpertem) — pilnowane **testem**, nie tylko zapisem.
 >
-> ⏭ **POZOSTAŁO W M5 — trzy pozycje, każda wymaga decyzji przed startem:**
-> **§9 animacje** · **DPI 100/125/150/200** · **terminologia M‑4**.
-> ⭐ Zmierzone przy inwentaryzacji M5 i nadal aktualne: **§9 nie ma ani jednego naruszenia** (zero
-> `Transitions` w całym `EmberTern.App`), więc jest to wyłącznie decyzja „strażnik czy nie";
-> **DPI** to czyste QA i nie da się go przygotować kodem (⚠ **R‑6 jest zaległe od dwóch bloków M4**);
-> **M‑4** wymaga najpierw inwentarza i słownika (R‑8), więc jest najdroższe.
+> ✅ **§9 / ruch i animacja — ZAMKNIĘTE (2026-08-10), ZERO ZMIAN PRODUKCYJNYCH.** Zapis:
+> `product-polish.md` **§19.48**; korekta: **§9 + nowe §9.1**; pomiar: `VisualCandidateProbe -- motion`.
+> ⭐⭐ **Zapis „§9 nie ma ani jednego naruszenia" (z inwentaryzacji M5, cytowany też w tym dokumencie)
+> BYŁ MYLĄCY i został zastąpiony pomiarem.** Pochodził z licznika na źródłach, więc odpowiadał wyłącznie
+> na pytanie „czego MY nie napisaliśmy". Zmierzone z elementów, które malują: **16 przejść z Fluenta**,
+> identycznie w obu motywach. **Zero na właściwościach układu** (jedyna reguła §9 z uzasadnieniem — jest
+> spełniona), ale sufit 120 ms i krzywa są łamane przez framework, a `RenderTransform` na przyciskach jest
+> **bezczynny** (macierz jednostkowa również na gołym `Button`).
+> 🔒 **Decyzja W‑A:** korygujemy dokument, nie produkt — ⛔ nie przejmujemy przejść Fluenta. §9 dostało
+> kolumnę „Zakres", §9.1 zapisuje baseline jako nazwany wyjątek, a strażnik
+> `EmberTernDeclaresNoMotionOfItsOwn` pilnuje **naszego źródła**, nie cudzych szablonów.
+> ⚠ **Granica pomiaru zapisana:** `ToolTip` i stany niewymuszone przez sondę są NIEZMIERZONE.
 >
-> ⚠ Liczby w §1 i §3 niżej pochodzą sprzed M5 — suite to teraz **8385** (8207 + 123 + 55).
+> ⏭ **POZOSTAŁY W M5 — dwie pozycje, obie wymagają decyzji przed startem:**
+> **DPI 100/125/150/200** · **terminologia M‑4**.
+> ⭐ **DPI** to czyste QA i nie da się go przygotować kodem (⚠ **R‑6 zaległe od dwóch bloków M4**, a M5
+> dołożyło trzecią iterację metryk przez L‑1); zmierzona powierzchnia ryzyka: **51 tokenów niekolorowych**
+> + **21 ról typograficznych** + **451 literalnych `Width`/`Height`** w widokach. Mogę przygotować celowaną
+> listę kontrolną „co się ruszyło w M4/M5".
+> ⚠⚠ **M‑4: audyt opisuje MNIEJSZY problem, niż jest.** Mówi o parze `Execute`/`Run`; zmierzone
+> w `UiStrings`: **Delete 59 · Drop 29 · Compile 22 · Save 21 · Execute 15 · Run 13 · Refresh 10 ·
+> Remove 6 · Apply 1**. Największy rozjazd to **Delete/Drop/Remove**, z konkretną kolizją — drzewo
+> metadanych mówi **„Delete Table"**, import **„Drop table"** o tej samej operacji DDL. Wymaga inwentarza
+> i słownika (R‑8), więc jest najdroższe.
+>
+> ⚠ Liczby w §1 i §3 niżej pochodzą sprzed M5 — suite to teraz **8386** (8208 + 123 + 55).
 >
 > ### Co konkretnie obejrzeć w QA (oba motywy)
 >
