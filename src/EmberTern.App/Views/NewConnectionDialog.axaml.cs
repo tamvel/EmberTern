@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using EmberTern.App.Behaviors;
 using EmberTern.App.ViewModels;
 
 namespace EmberTern.App.Views;
@@ -12,6 +13,15 @@ public partial class NewConnectionDialog : Window
     public NewConnectionDialog()
     {
         InitializeComponent();
+
+        // ⭐ M4.4 / M‑5. JEDYNY z czterech kandydatów z prawdziwym wzrostem treści PO otwarciu: komunikat
+        // testu połączenia stoi w wierszu 2, czyli POZA `ScrollViewerem`, i się zawija — długi błąd
+        // Firebirda to kilka linii. Okno nie miało dotąd żadnego ograniczenia wysokości, więc rosło w dół
+        // od pozycji wyśrodkowanej (#295) i spychało stopkę pod krawędź ekranu.
+        // ⚠ Formularz ma własne ograniczenie 520 na `ScrollViewerze`; to ogranicza PRZEWIJANĄ część, a nie
+        // okno, więc nie zastępuje sufitu — dlatego oba mechanizmy są tu potrzebne, a nie duplikują się.
+        GrowingDialogBehavior.Attach(this);
+
         DataContextChanged += OnDataContextChanged;
     }
 

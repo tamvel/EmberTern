@@ -9345,3 +9345,132 @@ z `Views/` do `Themes/ControlStyles.axaml`, którego `Measure` nie skanuje. Zapi
 ⛔ Nie ruszono ramek przełączników (to Q1 z M4.3b, już zamknięte) · ⛔ nie tworzono roli `Pad.Segment` ·
 ⛔ nie rewidowano odmowy M3.4a dla wiersza paska bocznego · ⛔ **B1** · ⛔ **Z‑3** · ⛔ migracja odstępów ·
 ⛔ ogon literałów ikon 10/11/13/15 · ⛔ `FontFamily` · ⛔ `GridSplitter` · ⛔ **M4.4**.
+
+---
+
+## §19.44 Iteracja 32 (M4.4) — dialogi i okna: etap, w którym migracja była trywialna, a MECHANIZM nie (2026-08-09)
+
+> **🔒 Status: ZAMKNIĘTY — ODEBRANY PO QA WIZUALNYM UŻYTKOWNIKA (2026-08-09). ⭐⭐ TYM SAMYM M4 JEST
+> ZAMKNIĘTY W CAŁOŚCI** — oba bloki decyzyjne (gęstość §19.37, typografia §19.38) i wszystkie pięć etapów
+> migracji (M4.1 §19.39 · M4.2 §19.40 · M4.2b §19.41 · M4.3b §19.42 + M4.3c §19.43 · M4.4 §19.44).
+> Build 0/0; suite **8345** (8193 + 97 + 55, +11); smoke czysty. Nowa gotcha **#343**.
+> Zakres z §13: 16 dialogów + okna + `GrowingDialogBehavior` (**M‑5**). To OSTATNI etap migracji M4.
+>
+> Decyzje użytkownika (2026-08-09): punkt 1 **TAK** · `ApplyCeiling` = **`min`** · `ExecuteProcedureDialog`
+> **TAK** · `NewConnectionDialog` **TAK** · `ExportDialog` **TAK, ale najpierw struktura** ·
+> `RecompileDependentsDialog` **WYKLUCZONY** · nagłówki 20,16 vs 20,14 **NIE TERAZ**.
+
+### §19.44.1 ⭐ Zakres to 25 okien, a „16 dialogów" z audytu to co innego
+
+Plików z rootem `<Window>` (bez `MainWindow`, który należy do Application Chrome) jest **25**. Liczba 16
+z **M‑5** to okna z `SizeToContent` — potwierdzona co do sztuki i to ona wyznaczyła zakres drugiej połowy.
+
+### §19.44.2 ⭐⭐ Migracja była PRAKTYCZNIE ZROBIONA — trzeci raz z rzędu ten sam kształt
+
+Liczniki odtworzone regeksami strażnika 1:1, w zakresie M4.4: **`FontSize` = 3 · `CornerRadius` = 0 ·
+literały rozmiaru ikony = 0**. Po §19.40.1 (M4.2 „już wykonane") i §19.42.1 (M4.3 = odbiór decyzji) to
+**trzeci etap z rzędu**, w którym praca nie polegała na przebiegu. ⭐ Zgodnie z prognozą dokumentu
+startowego trzy pozostałe `FontSize` siedziały w **tych samych trzech plikach**, co trzy żywe odesłania
+„Rozstrzyga §13.3" — sierocy backlog bramy, dokładnie jak #340.
+
+**Zeszły wszystkie trzy** (`ChoiceDialog`, `ConfirmDialog`, `ForeignKeyDialog` → `Text.Application`), czyli
+grupa „TextBlock 13 px" z §18.0.5/3 przestała istnieć w dialogach. `FontSize` app-wide: **31/12 → 28/9**.
+
+### §19.44.3 ⚠⚠ Trzeci przypadek nie był tym samym co dwa pierwsze — i pomiar odwrócił moją diagnozę
+
+Wszystkie trzy niosły **identyczny odziedziczony komentarz** („treść komunikatu, a katalog ma przy 13
+wyłącznie rolę kodu"). W `ForeignKeyDialog` to nieprawda: to nazwa obiektu bazy pisana **monospace**.
+Nasuwało to `Text.Code` — rola niesie 13, więc migracja byłaby wizualnie zerowa — i tak zamierzałem zrobić.
+
+⭐ **Pomiar rodziny to odrzucił:** wszystkie **25** konsumentów `Text.Code` to pełnowymiarowe **edytory**,
+a wśród **~48** elementów monospace spoza edytora ten był **jedynym z literałem**; reszta czyta role tekstu
+interfejsu, w tym bliźniaczy `AddFieldDialog` (nazwa typu bazy, monospace, ta sama rola `Text.Application`).
+⭐ Czyli reguła *„`Text.Code` opisuje EDYTOR, monospace poza edytorem bierze rolę tekstu"* **już w produkcie
+była** — M4.4 ją dokończyło, zamiast wprowadzać nową. Ten sam kształt argumentu co Q2 w M4.3.
+⏸ Widoczny skutek do QA: nazwa tabeli maleje o 1 px i zrównuje się z podpisem pola nad nią.
+
+### §19.44.4 ⭐⭐ M‑5 — znalezisko, które zmieniło kształt całego punktu
+
+Kryterium z dokumentacji samego zachowania brzmi *„treść może UROSNĄĆ po otwarciu"*. Zmierzone na czterech
+kandydatach wskazanych przez pomiar — i **grupa 16 okazała się złym predyktorem**:
+
+| dialog | wzrost po otwarciu? | werdykt |
+|---|---|---|
+| `NewConnectionDialog` | **TAK** — komunikat testu połączenia, wiersz 2, **poza** `ScrollViewerem`, zawijany | ✅ wpięty |
+| `ExportDialog` | **TAK** — CSV odsłania opcje, baner błędu, podmiana paneli | ✅ wpięty **po** zmianie struktury |
+| `ExecuteProcedureDialog` | **NIE** (parametry znane przed `ShowDialog`) — ale własny limit **720 stoi POWYŻEJ obszaru roboczego 696** na 1366×768 | ✅ wpięty |
+| `RecompileDependentsDialog` | **NIE** — zero wiązań `IsVisible`, lista gotowa przed otwarciem, `ScrollViewer` 380 | ⛔ wykluczony |
+
+⭐ `ExecuteProcedureDialog` jest tu pouczający: objaw jest ten sam (stopka pod krawędzią ekranu), ale
+przyczyną nie jest wzrost, tylko **rozmiar startowy**. Kryterium „czy rośnie" trafnie wyklucza
+`RecompileDependents`, a samo nie wystarczyłoby, żeby ten dialog objąć.
+
+### §19.44.5 ⛔⛔ `ApplyCeiling` nadpisywał — czyli mechanizm kasował decyzję, o której nie wiedział
+
+`ApplyCeiling` przypisywał `window.MaxHeight` **bezwarunkowo**. Zmierzone konsekwencje podpięcia:
+
+| ekran | sufit z ekranu | `ExecuteProcedureDialog` (720) | `RecompileDependents` (640) |
+|---|---|---|---|
+| 1920×1080, pasek 48 | 1008 | 720 → **1008** (+288) | 640 → **1008** (+368) |
+| 1366×768, pasek 48 | 696 | 720 → **696** (poprawnie) | — |
+| 1080 @150 % | 664 DIP | → **664** | — |
+
+⭐ **Ręczny `MaxHeight` wykonuje DWIE prace, a mechanizm znał tylko jedną:** (A) „nie przekraczaj ekranu"
+i (B) „nie rośnij ponad wygodny rozmiar nawet na dużym monitorze". 🔒 Ratyfikowane: sufit to
+**`Math.Min(zadeklarowany, ekran)`**. ⭐ **Zmiana jest dowodliwie NO-OP dla obu dotychczasowych konsumentów** —
+ani `SettingsExportDialog`, ani `SettingsImportDialog` nie deklaruje własnego limitu, a nieustawiony
+`MaxHeight` to `PositiveInfinity`, więc minimum degeneruje się do dokładnie starego zachowania. Gotcha **#343**.
+
+### §19.44.6 `ExportDialog` — kolejność jest treścią decyzji, nie szczegółem
+
+Ten dialog **nie miał `ScrollViewera` w ogóle**, a jego wiersz gwiazdkowy to `Panel` z dwoma wykluczającymi
+się stanami. Sam sufit **przyciąłby** treść zamiast ją udostępnić — mówi to o sobie wprost dokumentacja
+`GrowingDialogBehavior`. ⭐ Dlatego najpierw **JEDEN `ScrollViewer` obejmujący `Panel`**, a więc **oba stany
+naraz**, a nie po jednym na stan: opakowanie tylko konfiguracji zostawiłoby panel postępu w dokładnie tej
+samej pułapce, a różnicy nie widać do pierwszego długiego błędu.
+⚠ Wybór „wokół `Panelu`, nie wokół każdego `StackPanelu`" jest też odporny na przyszłość — trzeci stan
+odziedziczy przewijanie, zamiast wymagać, żeby ktoś pamiętał go opakować.
+
+### §19.44.7 Strażniki — 11 nowych, wszystkie zweryfikowane podsadzeniem
+
+* **`BothMessageDialogs_ShareOneTextRole`** — `ChoiceDialog` i `ConfirmDialog` muszą czytać JEDNĄ rolę.
+  ⭐ Powód jest konkretny: `FontSizeBaseline` zatrzymuje powrót **literału** (oba mają tam zero), ale jest
+  ślepy na rozjazd **ról**. ⛔ `ForeignKeyDialog` celowo poza tą parą — to inny element, a wciągnięcie go
+  grupowałoby po WYKONANEJ MIGRACJI zamiast po tym, czym element jest (**#341**).
+* **8 przypadków `CeilingFor`** — reguła `min` w obie strony, degeneracja do sufitu ekranu (dowód no-op),
+  jednostki DIP vs piksele fizyczne przy 150 %, idempotencja, oraz zdegenerowany ekran, który **nie może
+  skasować** zadeklarowanego limitu.
+* **`EveryDialogWithTheCeiling_CanScrollItsBody`** — sufit bez przewijania jest zabroniony.
+* **`EverySizeToContentDialog_HasARecordedDecisionAboutGrowth`** — tablica **16 okien → decyzja + powód**,
+  egzekwowana w OBIE strony: nowe okno `SizeToContent` bez zapisanej decyzji zapala test, a wpis niezgodny
+  z kodem zapala go z komunikatem *„jedno z nich kłamie"*. ⭐ To jest **#340 przełożone na strażnika** —
+  odesłanie żyjące w źródle nie może już wypaść między etapami, bo tablica jest w teście, a nie w dokumencie.
+
+⚠ **I znów zapłaciłem pułapkę §19.42.7:** polski cudzysłów otwierający sparowany z ASCII zamykającym
+**wewnątrz interpolowanego stringa** — literał zamknął się w środku komunikatu asercji, 7 błędów kompilacji.
+⭐ Złapane od razu, bo `Liczba błędów` czyta się **przed** listą niepowodzeń.
+
+### §19.44.8 ⛔ Czego ta iteracja NIE zrobiła
+
+* ⛔ **Nagłówki dialogu `20,16` (15 plików) vs `20,14` (5 plików)** — 🔒 decyzja użytkownika: **zostaje na
+  etap odstępów po M4.4**, bez tworzenia teraz nowej decyzji projektowej. ⚠ Zmierzone i warte zapisania:
+  **stopka jest w pełni spójna (19/19 przy `20,12`)**, rozjazd dotyczy wyłącznie nagłówka, a rola
+  **`Pad.Dialog` = `20,16`** opisuje większość dokładnie i ma **zero konsumentów** (w całym zakresie:
+  0 odczytów roli odstępu, 272 literały).
+* ⛔ **`RecompileDependentsDialog`** — wykluczony pomiarem, jego 640 nietknięte.
+* ⛔ **`GridSplitter`** — ⚠⚠ **przesłanka dokumentu startowego OBALONA**: pisał, że to *„jedyna z odłożonych
+  pozycji, którą M4.4 może naturalnie napotkać"*. Zmierzone: wszystkie **15** deklaracji (w tym dokładnie
+  5 × `Height="4"`) stoi w **widokach zakładek**, a **w 25 oknach nie ma ani jednego**. Czwarta przesłanka
+  M4, która nie przeżyła zderzenia z kodem.
+* ⛔ **B1** · ⛔ **Z‑3** · ⛔ migracja odstępów · ⛔ ogon literałów ikon 10/11/13/15 · ⛔ `FontFamily`.
+* ⏸ **Nie poszerzono okna licznika `FontSize`** o `Completion/`, `Sql/` i `Themes/` — wciąż wymaga osobnej
+  decyzji, bo ten sam `Measure` obsługuje `FontFamily` (§19.38.7).
+
+### §19.44.9 ⏸ Co czeka na QA wizualne użytkownika
+
+1. **Treść `ConfirmDialog` i `ChoiceDialog`** — 13 → 12; okna oglądane przy każdej destrukcyjnej akcji.
+2. **Nazwa tabeli w `ForeignKeyDialog`** — 13 → 12, zrównana z podpisem pola nad nią.
+3. **`ExportDialog` w OBU stanach** — konfiguracja i postęp, po opakowaniu wspólnym `ScrollViewerem`;
+   ⚠ to jedyna zmiana strukturalna iteracji.
+4. **Zachowanie sufitu na małym ekranie** — jeżeli jest pod ręką monitor 768 albo skala 150 %: procedura
+   o wielu parametrach i długi błąd testu połączenia.

@@ -1526,3 +1526,25 @@ every emit path to be individually perfect.**
      ⛔ It does NOT follow that the earlier refusal (M3.4a, sidebar row style) was wrong — different elements,
      never re-measured. Record what was measured, not what it seems to imply.
      (Product Polish M4.3c — `product-polish.md` §19.43.)
+
+343. **A hand-set value can be doing TWO jobs, and a mechanism that "takes over" the property silently
+     discards the one it never knew about — so a generalization must MERGE with the local decision, not
+     replace it.** M‑5's whole point was to retire guessed `MaxHeight` literals in favour of
+     `GrowingDialogBehavior`, which computes a ceiling from the screen's working area. ⭐ **Measured before
+     implementing: `ApplyCeiling` assigned `window.MaxHeight` unconditionally, so attaching it to
+     `ExecuteProcedureDialog` would have raised its deliberate 720 to 1008 on an ordinary 1080-tall screen —
+     288 px taller than its author intended, as a side effect of adding protection that dialog did not need
+     on that screen.** The literal answered *both* "never exceed the screen" (which the behavior does better)
+     **and** "do not grow past a comfortable reading size even on a huge monitor" (which the behavior does not
+     do at all). ⭐ The fix is one word — the ceiling is `Math.Min(declared, screen)` — and it is provably a
+     no-op for the mechanism's existing consumers, because neither declares a cap of its own; an unset
+     `MaxHeight` is `PositiveInfinity`, so the minimum degenerates to exactly the old behaviour.
+     ⚠⚠ The general shape, and it is wider than layout: **before replacing N local answers with one
+     mechanism, ask what each local answer was FOR.** "They are all guessed constants" is a hypothesis about
+     their origin, not a measurement of their purpose — and here it was true of the number and false of the
+     intent. A migration that passes every test can still delete a decision.
+     ⚠ Its companion, from the same iteration: a ceiling **without** a scroll surface does not bound content,
+     it CLIPS it — so "attach the behavior" is not a portable one-liner. `ExportDialog` had no `ScrollViewer`
+     at all, which made the ceiling actively harmful there and turned a wiring change into a structural one.
+     The behavior's own doc had said so; nobody had checked the hosts against it.
+     (Product Polish M4.4 — `product-polish.md` §19.44.)

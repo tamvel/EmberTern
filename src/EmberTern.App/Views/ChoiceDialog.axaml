@@ -25,12 +25,16 @@
       <TextBlock Text="{Binding Title}" Classes="h1" />
     </Border>
 
-    <!-- ⚠ 13 px lokalnie, ŚWIADOMIE (M2c iteracja 8, §18.8). Treść komunikatu, a katalog ma przy 13
-         wyłącznie rolę kodu — grupa „TextBlock 13 px" z §18.0.5/3. Rozstrzyga §13.3. -->
+    <!-- ⭐ M4.4: treść komunikatu na rolę Text.Application. Grupa „TextBlock 13 px" z §18.0.5/3 czekała
+         na bramę §13.3, która jej nigdy nie podjęła; rozstrzygnięcie jest to samo, które M4.3 podjęło dla
+         pustych stanów Session i Trace — przy 13 katalog ma WYŁĄCZNIE rolę kodu, a to jest proza, nie kod.
+         ⭐ Rola nazywa dialog jako pierwszego konsumenta we własnym komentarzu w Typography.
+         ⚠ Migruje sam rozmiar: interlinii nie czyta żaden z 53 konsumentów tej roli, więc dopisanie jej
+         tutaj zmieniłoby odstęp między wierszami zawiniętego komunikatu. -->
     <TextBlock Grid.Row="1"
                Text="{Binding Message}"
                TextWrapping="Wrap"
-               FontSize="13"
+               FontSize="{DynamicResource Text.Application.Size}"
                Margin="20,18,20,18" />
 
     <Border Grid.Row="2"

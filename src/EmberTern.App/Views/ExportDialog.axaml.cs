@@ -6,6 +6,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
+using EmberTern.App.Behaviors;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Export;
 
@@ -22,6 +23,15 @@ public partial class ExportDialog : Window
     public ExportDialog()
     {
         InitializeComponent();
+
+        // ⭐ M4.4 / M‑5. Kolejność jest tu treścią decyzji, a nie szczegółem: ten dialog dostał najpierw
+        // wspólny `ScrollViewer` wokół obu stanów, a DOPIERO potem sufit. Sam sufit bez przewijania nie
+        // rozwiązuje problemu — przycina treść zamiast ją udostępnić — co ta klasa mówi o sobie wprost.
+        // ⚠ Zakres wzrostu jest zmierzony, nie założony: wybór CSV odsłania opcje separatora i kodowania,
+        // baner błędu pojawia się po nieudanym eksporcie, a panel konfiguracji podmienia się na panel
+        // postępu. Okno nie ma własnego `MaxHeight`, więc reguła `min` degeneruje się tu do sufitu ekranu.
+        GrowingDialogBehavior.Attach(this);
+
         DataContextChanged += OnDataContextChanged;
     }
 

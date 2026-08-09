@@ -28,89 +28,97 @@
     </Border>
 
     <!-- Body: options (while configuring) OR progress (while exporting) -->
-    <Panel Grid.Row="1">
-
-      <!-- Options -->
-      <StackPanel Margin="20,18" Spacing="16" IsVisible="{Binding IsConfiguring}">
-
-        <!-- Format -->
-        <StackPanel Spacing="6">
-          <TextBlock Text="{x:Static app:UiStrings.ExportFormatLabel}" Classes="field-label" />
-          <RadioButton GroupName="ExportFormat"
-                       Content="{x:Static app:UiStrings.ExportFormatExcel}"
-                       IsChecked="{Binding IsFormatXlsx, Mode=TwoWay}" />
-          <RadioButton GroupName="ExportFormat"
-                       Content="{x:Static app:UiStrings.ExportFormatCsv}"
-                       IsChecked="{Binding IsFormatCsv, Mode=TwoWay}" />
-          <RadioButton GroupName="ExportFormat"
-                       Content="{x:Static app:UiStrings.ExportFormatText}"
-                       IsChecked="{Binding IsFormatText, Mode=TwoWay}" />
-          <RadioButton GroupName="ExportFormat"
-                       Content="{x:Static app:UiStrings.ExportFormatClipboard}"
-                       IsChecked="{Binding IsFormatClipboard, Mode=TwoWay}" />
-        </StackPanel>
-
-        <!-- Scope -->
-        <StackPanel Spacing="6">
-          <TextBlock Text="{x:Static app:UiStrings.ExportScopeLabel}" Classes="field-label" />
-          <ItemsControl ItemsSource="{Binding ScopeOptions}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:ExportScopeOptionViewModel">
-                <RadioButton GroupName="ExportScope"
-                             Margin="0,2,0,0"
-                             Content="{Binding Label}"
-                             IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
+    <!-- ⭐ M4.4 / M‑5: JEDEN ScrollViewer obejmujacy OBA stany, nie po jednym na stan.
+         Sufit wysokosci bez przewijania tylko PRZYCINA tresc (mowi to wprost dokumentacja
+         GrowingDialogBehavior), a ten dialog rosnie po otwarciu: wybor CSV odslania opcje
+         separatora i kodowania, dochodzi baner bledu, i podmieniaja sie panele konfiguracji
+         oraz postepu. Wspolny ScrollViewer sprawia, ze po osiagnieciu limitu przewija sie
+         kazdy z tych wariantow, a nie tylko ten, ktory ktos pamietal opakowac. -->
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <Panel>
 
         <!-- Options -->
-        <StackPanel Spacing="8">
-          <TextBlock Text="{x:Static app:UiStrings.ExportOptionsLabel}" Classes="field-label" />
+        <StackPanel Margin="20,18" Spacing="16" IsVisible="{Binding IsConfiguring}">
 
-          <!-- Delimiter + encoding + culture (CSV / Text only) -->
-          <StackPanel Spacing="8" IsVisible="{Binding ShowDelimitedOptions}">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="{x:Static app:UiStrings.ExportDelimiterLabel}"
-                         VerticalAlignment="Center"
-                         Foreground="{DynamicResource SubtleForegroundBrush}"
-                         FontSize="{DynamicResource Text.Application.Size}" Width="80" />
-              <ComboBox MinWidth="180"
-                        ItemsSource="{Binding DelimiterOptions}"
-                        SelectedItem="{Binding SelectedDelimiterOption, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:DelimiterOption">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </StackPanel>
-            <CheckBox Content="{x:Static app:UiStrings.ExportEncodingUtf8Bom}"
-                      IsChecked="{Binding UseBom, Mode=TwoWay}"
-                      IsVisible="{Binding ShowEncodingOption}" />
-            <CheckBox Content="{x:Static app:UiStrings.ExportCultureInvariant}"
-                      IsChecked="{Binding UseInvariantCulture, Mode=TwoWay}" />
+          <!-- Format -->
+          <StackPanel Spacing="6">
+            <TextBlock Text="{x:Static app:UiStrings.ExportFormatLabel}" Classes="field-label" />
+            <RadioButton GroupName="ExportFormat"
+                         Content="{x:Static app:UiStrings.ExportFormatExcel}"
+                         IsChecked="{Binding IsFormatXlsx, Mode=TwoWay}" />
+            <RadioButton GroupName="ExportFormat"
+                         Content="{x:Static app:UiStrings.ExportFormatCsv}"
+                         IsChecked="{Binding IsFormatCsv, Mode=TwoWay}" />
+            <RadioButton GroupName="ExportFormat"
+                         Content="{x:Static app:UiStrings.ExportFormatText}"
+                         IsChecked="{Binding IsFormatText, Mode=TwoWay}" />
+            <RadioButton GroupName="ExportFormat"
+                         Content="{x:Static app:UiStrings.ExportFormatClipboard}"
+                         IsChecked="{Binding IsFormatClipboard, Mode=TwoWay}" />
           </StackPanel>
 
-          <CheckBox Content="{x:Static app:UiStrings.ExportIncludeHeader}"
-                    IsChecked="{Binding IncludeHeader, Mode=TwoWay}" />
+          <!-- Scope -->
+          <StackPanel Spacing="6">
+            <TextBlock Text="{x:Static app:UiStrings.ExportScopeLabel}" Classes="field-label" />
+            <ItemsControl ItemsSource="{Binding ScopeOptions}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ExportScopeOptionViewModel">
+                  <RadioButton GroupName="ExportScope"
+                               Margin="0,2,0,0"
+                               Content="{Binding Label}"
+                               IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <!-- Options -->
+          <StackPanel Spacing="8">
+            <TextBlock Text="{x:Static app:UiStrings.ExportOptionsLabel}" Classes="field-label" />
+
+            <!-- Delimiter + encoding + culture (CSV / Text only) -->
+            <StackPanel Spacing="8" IsVisible="{Binding ShowDelimitedOptions}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{x:Static app:UiStrings.ExportDelimiterLabel}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource SubtleForegroundBrush}"
+                           FontSize="{DynamicResource Text.Application.Size}" Width="80" />
+                <ComboBox MinWidth="180"
+                          ItemsSource="{Binding DelimiterOptions}"
+                          SelectedItem="{Binding SelectedDelimiterOption, Mode=TwoWay}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DelimiterOption">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+              <CheckBox Content="{x:Static app:UiStrings.ExportEncodingUtf8Bom}"
+                        IsChecked="{Binding UseBom, Mode=TwoWay}"
+                        IsVisible="{Binding ShowEncodingOption}" />
+              <CheckBox Content="{x:Static app:UiStrings.ExportCultureInvariant}"
+                        IsChecked="{Binding UseInvariantCulture, Mode=TwoWay}" />
+            </StackPanel>
+
+            <CheckBox Content="{x:Static app:UiStrings.ExportIncludeHeader}"
+                      IsChecked="{Binding IncludeHeader, Mode=TwoWay}" />
+          </StackPanel>
+
+          <!-- Error (stays in the options view so the user can retry) -->
+          <controls:MessageBanner Severity="Error" Message="{Binding ErrorMessage}"
+                                  IsVisible="{Binding HasError}" />
         </StackPanel>
 
-        <!-- Error (stays in the options view so the user can retry) -->
-        <controls:MessageBanner Severity="Error" Message="{Binding ErrorMessage}"
-                                IsVisible="{Binding HasError}" />
-      </StackPanel>
-
-      <!-- Progress -->
-      <StackPanel Margin="20,28" Spacing="14" IsVisible="{Binding IsExporting}"
-                  VerticalAlignment="Center">
-        <ProgressBar IsIndeterminate="True" />
-        <TextBlock Text="{Binding ProgressText}"
-                   HorizontalAlignment="Center"
-                   Foreground="{DynamicResource SubtleForegroundBrush}" />
-      </StackPanel>
-    </Panel>
+        <!-- Progress -->
+        <StackPanel Margin="20,28" Spacing="14" IsVisible="{Binding IsExporting}"
+                    VerticalAlignment="Center">
+          <ProgressBar IsIndeterminate="True" />
+          <TextBlock Text="{Binding ProgressText}"
+                     HorizontalAlignment="Center"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" />
+        </StackPanel>
+      </Panel>
+    </ScrollViewer>
 
     <!-- Footer -->
     <Border Grid.Row="2"

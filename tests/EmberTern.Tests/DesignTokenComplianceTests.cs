@@ -106,7 +106,8 @@ public class DesignTokenComplianceTests
         // trzyma OSIEM nagłówków przy 13 px, dla których katalog ma wyłącznie rolę kodu (§18.0.5/3).
         // ⭐ OGON DIALOGÓW — 28 plików, 78 → 4 (M2c iteracja 8). 8 usunięć, 70 na role, 4 wyjątki:
         // treść `ConfirmDialog`/`ChoiceDialog`/`ForeignKeyDialog` przy 13 px (katalog ma przy 13 wyłącznie
-        // rolę kodu) i podgląd Global Search — edytor w wierszu siatki przy 12 px. 24 wpisy zdjęte
+        // rolę kodu — ⚠ trzy z tych czterech zdjęło M4.4, patrz niżej) i podgląd Global Search — edytor
+        // w wierszu siatki przy 12 px. 24 wpisy zdjęte
         // w całości. ⭐ `AggregationBarView` oddał swój promień na **`Radius.Chip`** — jedyny prawdziwy
         // chip w aplikacji (§18.0.5/2), wartość i funkcja zgodne, więc bez wyjątku.
         // ⭐ M4.3: Session ZDJĘTY W CAŁOŚCI (3 → 0), Trace 2 → 1, Debugger 4 → 3. Zeszły dwie grupy,
@@ -126,7 +127,7 @@ public class DesignTokenComplianceTests
         // elementy — pierwszy realny konsument tej roli poza Data Import), nazwa połączenia
         // `Text.Title`, plakietka DEV MODE `Text.Caption`, dwa edytory `Text.Code`, log komunikatów
         // `Text.Application`, reszta `Text.Compact`.
-        ["Views/ForeignKeyDialog.axaml"] = 1,
+        // ⭐ M4.4: wpis `ForeignKeyDialog` USUNIĘTY (1 → 0) — uzasadnienie przy zdjętej trójce niżej.
         // ⭐ 41 → 4 i 40 → 4 (M2c iteracja 4). Bliźniaki, migrowane RAZEM — mają tę samą strukturę,
         // więc osobno rozjechałyby się na pierwszej niejednoznacznej roli. Po jednym usunięciu (koszyk A),
         // reszta na role. Cztery wyjątki w każdym, identyczne co do rodzaju: dwa edytory w WIERSZU SIATKI
@@ -160,8 +161,20 @@ public class DesignTokenComplianceTests
         // strojone do KONTENERA, czyli reguła #10, a nie dryf typograficzny.
         ["Views/DebuggerTabView.axaml"] = 3,
         ["Views/GlobalSearchTabView.axaml"] = 1,
-        ["Views/ChoiceDialog.axaml"] = 1,
-        ["Views/ConfirmDialog.axaml"] = 1,
+        // ⭐⭐ M4.4: `ChoiceDialog`, `ConfirmDialog` i `ForeignKeyDialog` ZDJĘTE (1 + 1 + 1 → 0), czyli
+        // grupa „TextBlock 13 px" z §18.0.5/3 przestała istnieć w dialogach. Wszystkie trzy niosły ten sam
+        // odziedziczony komentarz („treść komunikatu, a katalog ma przy 13 wyłącznie rolę kodu") i wszystkie
+        // trzy odsyłały do bramy §13.3, która ich NIGDY nie podjęła — ten sam sierocy kształt co #340.
+        // ⭐ Rozstrzygnięcie jest to samo, które M4.3 podjęło dla pustych stanów Session i Trace: przy 13
+        // katalog ma wyłącznie rolę KODU, a to jest proza ⇒ `Text.Application` (13 → 12).
+        // ⚠⚠ Trzeci przypadek NIE był tym samym co dwa pierwsze i pomiar odwrócił moją pierwszą diagnozę:
+        // `ForeignKeyDialog` pokazuje nazwę tabeli MONOSPACE, więc odziedziczony komentarz był o nim
+        // nieprawdziwy, a `Text.Code` (niesie 13, zero zmiany wyglądu) wyglądał na właściwą odpowiedź.
+        // Zmierzona rodzina to wykluczyła: wszystkie 25 konsumentów `Text.Code` to pełnowymiarowe EDYTORY,
+        // a wśród ~48 elementów monospace spoza edytora ten był JEDYNYM z literałem — reszta czyta role
+        // tekstu interfejsu, w tym bliźniaczy `AddFieldDialog` (nazwa typu bazy, monospace, ta sama rola).
+        // ⭐ Czyli reguła „`Text.Code` opisuje edytor, monospace poza edytorem bierze rolę tekstu" już
+        // w produkcie była; M4.4 ją dokończyło, zamiast wprowadzać nową.
         // 6 → 1 (M2c iteracja 1). Pięć wywołań czyta rolę przez `BindFontSize` (odpowiednik
         // `{DynamicResource}` po stronie C#, bliźniak istniejącego `BindBrush`); zostaje ciało karty Peek —
         // powierzchnia KODU przy 12 px, gdy rola `Text.Code` niesie 13.
@@ -1374,6 +1387,51 @@ public class DesignTokenComplianceTests
 
         Assert.StartsWith("{DynamicResource ", session, StringComparison.Ordinal);
         Assert.Equal(session, trace);
+    }
+
+    /// <summary>
+    /// ⭐⭐ M4.4 — treść komunikatu w <c>ChoiceDialog</c> i <c>ConfirmDialog</c> musi czytać JEDNĄ rolę.
+    /// Ten sam kształt co <see cref="BothEmptyStates_ShareOneTextRole"/> i z tego samego powodu: oba
+    /// elementy są konstrukcyjnie identyczne — ten sam wiersz, to samo wiązanie treści, to samo zawijanie,
+    /// ten sam margines — czyli są JEDNYM elementem w dwóch oknach.
+    /// <para>
+    /// ⚠ <b>Czego NIE pilnuje istniejący licznik, a pilnuje ten test.</b> <c>FontSizeBaseline</c> zatrzymuje
+    /// powrót LITERAŁU (oba pliki mają tam dziś zero), ale jest ślepy na rozjazd RÓL: gdyby jeden dialog
+    /// zszedł na <c>Text.Compact</c>, a drugi został przy <c>Text.Application</c>, oba liczniki nadal
+    /// pokazywałyby zero i rozjazd byłby niewidoczny. Dokładnie tak rozjechał się pasek paginacji (#335) —
+    /// obie strony były „poprawne", nikt nie pilnował ich RAZEM.
+    /// </para>
+    /// <para>
+    /// ⛔ <c>ForeignKeyDialog</c> celowo NIE należy do tej pary, mimo że migrował w tej samej iteracji na tę
+    /// samą rolę: tam elementem jest nazwa obiektu bazy pisana monospace, a nie proza komunikatu. Wciągnięcie
+    /// go tutaj grupowałoby po WYKONANEJ MIGRACJI zamiast po tym, czym element jest — czyli popełniałoby
+    /// wewnątrz strażnika błąd, który #341 opisuje.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void BothMessageDialogs_ShareOneTextRole()
+    {
+        var choice = DialogMessageFontSize("Views/ChoiceDialog.axaml");
+        var confirm = DialogMessageFontSize("Views/ConfirmDialog.axaml");
+
+        Assert.StartsWith("{DynamicResource ", choice, StringComparison.Ordinal);
+        Assert.Equal(choice, confirm);
+    }
+
+    private static string DialogMessageFontSize(string relative)
+    {
+        var text = WithoutComments(File.ReadAllText(Path.Combine(AppRoot(), relative.Replace('/', Path.DirectorySeparatorChar))), relative);
+
+        var block = Regex.Match(
+            text,
+            @"<TextBlock(?<body>(?:(?!/>)[\s\S])*?)Text=""\{Binding Message\}""(?:(?!/>)[\s\S])*?FontSize=""(?<size>[^""]+)""");
+
+        // Test, który przechodzi, bo NICZEGO nie dopasował, jest gorszy niż brak testu (R16).
+        Assert.True(block.Success,
+            $"Nie znaleziono treści komunikatu (TextBlock wiązany do `Message`) w {relative}. Jeżeli ten "
+            + "element przeniósł się albo zmienił wiązanie, strażnik musi pójść za nim — a nie zniknąć.");
+
+        return block.Groups["size"].Value;
     }
 
     private static string EmptyStateFontSize(string relative, string visibilityBinding)

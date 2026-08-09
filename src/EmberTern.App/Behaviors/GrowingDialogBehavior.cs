@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
@@ -64,11 +65,45 @@ public static class GrowingDialogBehavior
     {
         if (ScreenFor(window) is not { } screen) return;
 
-        var available = screen.WorkingArea.Height / screen.Scaling - ScreenMargin;
-        if (available > 0)
+        var ceiling = CeilingFor(window.MaxHeight, screen.WorkingArea.Height, screen.Scaling);
+        if (!double.IsPositiveInfinity(ceiling))
         {
-            window.MaxHeight = available;
+            window.MaxHeight = ceiling;
         }
+    }
+
+    /// <summary>
+    /// ⭐⭐ The ceiling is the SMALLER of the dialog's own cap and what the screen allows — never a
+    /// replacement for the first. Ratified 2026-08-09 (M4.4).
+    ///
+    /// <para><b>Why a plain assignment was wrong.</b> A hand-set <c>MaxHeight</c> in a dialog does TWO jobs:
+    /// (a) "never exceed the screen", and (b) "do not grow past a comfortable reading size even on a huge
+    /// monitor". This class only ever knew about (a), so overwriting the value silently discarded (b) —
+    /// measured: on a 1080-tall screen the Execute Procedure dialog's deliberate 720 would have become 1008,
+    /// i.e. 288 px taller than its author intended, as a side effect of adding screen protection it did not
+    /// previously need.</para>
+    ///
+    /// <para>⚠ An unset <c>MaxHeight</c> is <see cref="double.PositiveInfinity"/>, so the minimum naturally
+    /// degenerates to the screen ceiling for a dialog that declares no cap of its own — which is why both
+    /// pre-existing consumers (the settings export/import dialogs, neither of which sets one) are unaffected
+    /// to the pixel.</para>
+    ///
+    /// <para>⚠ Consequently the ceiling only ever moves DOWN: applying it twice is a no-op rather than a
+    /// recomputation. That is the safe direction, and it is not a limitation in practice because
+    /// <see cref="Attach"/> subscribes it to <c>Opened</c>, which fires once per window.</para>
+    /// </summary>
+    /// <param name="currentMax">The window's declared cap, or <see cref="double.PositiveInfinity"/> if none.</param>
+    /// <param name="workingAreaHeight">The screen's working-area height, in PHYSICAL pixels.</param>
+    /// <param name="scaling">The screen's scaling factor, used to reach DIPs.</param>
+    /// <returns>The cap to apply, or <see cref="double.PositiveInfinity"/> when there is nothing to apply.</returns>
+    public static double CeilingFor(double currentMax, double workingAreaHeight, double scaling)
+    {
+        if (scaling <= 0) return currentMax;
+
+        var available = workingAreaHeight / scaling - ScreenMargin;
+        if (available <= 0) return currentMax;
+
+        return Math.Min(currentMax, available);
     }
 
     /// <summary>Pushes the window back inside the working area if its current size has taken it outside.</summary>

@@ -1,5 +1,21 @@
 # Product Polish M4 — prompt startowy na MIGRACJĘ EKRANÓW (M4.1–M4.4)
 
+> # 🔒 HISTORYCZNY — od 2026-08-09
+>
+> **⛔ NIE PLANUJ Z TEGO DOKUMENTU.** Cały M4 (oba bloki decyzyjne + M4.1 · M4.2 · M4.2b · M4.3b+c · M4.4)
+> jest **zamknięty i odebrany**. Ten plik zostaje jako zapis **„dlaczego"**, nigdy „co dalej".
+>
+> ⏭ **Żywy punkt startowy: [`product-polish-m5-next-session.md`](product-polish-m5-next-session.md).**
+>
+> ⚠⚠ **Czytając go, wiedz, że CZTERY jego przesłanki zostały obalone pomiarem** — to jest główna lekcja M4
+> i powód, dla którego ten plik nie może służyć do planowania: §5.3 twierdził, że `GridSplitter` to *„jedyna
+> z odłożonych pozycji, którą M4.4 może naturalnie napotkać"* (w 25 oknach nie ma go ani razu); §5.1 podawał
+> sufity, które w trakcie przestały się zgadzać; a dwie dalsze przesłanki padły w M4.2b i M4.3c.
+> ⭐ Trafna okazała się natomiast jego prognoza główna: **M4.4 był odbiorem sierocych decyzji §13.3, nie
+> sweepem literałów** — dokładnie w trzech plikach, które wskazywał.
+
+---
+
 > **Do wklejenia na początku następnej sesji.** Zastępuje `product-polish-m4-next-session.md`, który opisywał
 > wejście do M4 i pracę już wykonaną — czytaj go tylko dla „dlaczego", nigdy dla „co dalej".
 >
