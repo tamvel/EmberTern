@@ -744,7 +744,14 @@
     <Setter Property="Background" Value="{DynamicResource IconHoverBrush}" />
   </Style>
 
-  <Style Selector="Button.icon:focus /template/ ContentPresenter">
+  <!-- ⭐⭐ M5 / L‑1 — `:focus-visible`, NIE `:focus`, i to jest zmiana ZACHOWANIA, nie barwy.
+       Zmierzone headlessowo: po `Focus(NavigationMethod.Pointer)` klasa `:focus` JEST obecna
+       (`:focus-visible` nie), więc na `:focus` ten przycisk pokazywał niebieską obwódkę
+       **po kliknięciu myszą** i trzymał ją, aż fokus odszedł.
+       ⚠ `CheckBox` i `RadioButton` w `ControlThemes.axaml` używały `:focus-visible` od początku —
+       aplikacja miała więc DWIE konwencje focusu naraz, spotykane w jednym oknie dialogowym.
+       Ta zmiana nie wprowadza nowej reguły, tylko dokańcza tę, którą produkt już miał w połowie. -->
+  <Style Selector="Button.icon:focus-visible /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
@@ -815,7 +822,13 @@
   <Style Selector="ToggleButton.icon:checked:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
   </Style>
-  <Style Selector="ToggleButton.icon:focus /template/ ContentPresenter">
+  <!-- ⚠ M5 / L‑1 — ŚWIADOME ROZSZERZENIE POZA DOSŁOWNY ZAKRES DECYZJI. Użytkownik ratyfikował jedną
+       konwencję focusu „dla wszystkich wariantów Button: icon, flat, primary i caption"; `ToggleButton`
+       nie padł z nazwy. Objęty mimo to, bo pozostawienie go na `:focus` odtwarzałoby dokładnie tę
+       niespójność, którą ten etap usuwa: przełącznik ikonowy trzymałby obwódkę po kliknięciu myszą,
+       stojąc W TYM SAMYM PASKU obok zwykłego przycisku ikonowego, który już jej nie trzyma.
+       Zmierzone: **22 wystąpienia** `ToggleButton Classes="icon"` w widokach. -->
+  <Style Selector="ToggleButton.icon:focus-visible /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
@@ -872,7 +885,8 @@
     <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
   </Style>
 
-  <Style Selector="Button.flat:focus /template/ ContentPresenter">
+  <!-- M5 / L‑1 — `:focus-visible`; uzasadnienie przy `Button.icon` wyżej. -->
+  <Style Selector="Button.flat:focus-visible /template/ ContentPresenter">
     <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
   </Style>
 
@@ -929,6 +943,24 @@
   <Style Selector="Button.primary:pressed /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
     <Setter Property="Opacity" Value="0.85" />
+  </Style>
+
+  <!-- ⭐⭐ M5 / L‑1 — PIERŚCIEŃ FOCUSU DLA PRZYCISKU AKCJI, i NIE jest to `FocusBorderBrush`.
+       Zmierzone: `FocusBorderBrush` na tle akcentu daje **1,26:1 w Dark i 1,17:1 w Light** przy progu
+       3:1 — skopiowanie settera z `Button.flat` wyglądałoby jak naprawa i nie naprawiłoby niczego.
+       ⭐ `OnAccentBrush` to barwa WŁASNEGO TEKSTU tego przycisku, więc nie jest nową barwą w palecie,
+       a na akcencie daje **5,29:1**.
+
+       ⚠⚠ GRUBOŚĆ ZOSTAJE 1 I TO JEST DECYZJA, NIE NIEDOPATRZENIE. Render kandydata pokazywał 2 px
+       i tak został odebrany, ale grubość ramki wchodzi w desired size przycisku — a `ContentPresenter`
+       w szablonie Fluenta jest wcinany o `BorderThickness`, więc 1 → 2 przesuwa treść i rozpycha
+       przycisk o 2 px. To jest **§13.3 Zero Layout Shift** złamane w momencie przejścia Tabem, czyli
+       dokładnie ten defekt, którego §9 zabrania nawet rozłożonego w czasie.
+       ⭐ Nic nie tracimy: ramka o grubości 1 już TAM JEST — niesie `AccentBrush`, czyli barwę własnego
+       tła, więc jest niewidoczna z konstrukcji. Zmiana jej barwy odsłania pierścień, który istniał,
+       przy ZEROWEJ zmianie geometrii. -->
+  <Style Selector="Button.primary:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
   <!-- ⭐⭐ STAN NIEAKTYWNY TO PRZYGASZONE WYPEŁNIENIE, NIE PRZEZROCZYSTOŚĆ (zgłoszenie użytkownika 2026-08-03:
@@ -1029,6 +1061,28 @@
 
   <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource CloseButtonHoverBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <!-- ⭐⭐ M5 / L‑1 — FOCUS PRZYCISKU PASKA TYTUŁU SYGNALIZUJE TŁO, NIE RAMKA, i to nie jest wybór
+       estetyczny. Ten wariant ma `BorderThickness="0"` jako świadomy RESET (przyciski systemowe okna),
+       więc setter `BorderBrush` nie namalowałby **niczego** — powstałby styl bezczynny, który dla
+       następnej osoby czyta się jak działające zabezpieczenie (pułapka settings-center §15.7).
+       ⭐ Tło jest też językiem, którym ten wariant JUŻ mówi o stanie: tak działa jego hover.
+
+       ⚠⚠ DWA SETTERY, NIE JEDEN — i wyszło to dopiero z renderu. Samo tło zostawia glif
+       w `ForegroundBrush`, co na niebieskim daje **2,84:1 w Dark**, czyli pod progiem 3:1.
+       `OnAccentBrush` podnosi to do 4,21 (Dark) / 4,53 (Light).
+       ⭐ `TextElement.Foreground` na prezenterze, a nie `Foreground` na przycisku — to wzorzec, który
+       działa dla tych konkretnych przycisków, sprawdzony przez sąsiedni `.close:pointerover` wyżej.
+       ⚠⚠ O PIERWSZEŃSTWIE WOBEC `.close:pointerover` DECYDUJE SPECYFICZNOŚĆ, NIE KOLEJNOŚĆ — pierwsza
+       wersja tego komentarza twierdziła inaczej i była nieprawdziwa. Avalonia rozstrzyga dwa
+       konkurujące STYLE specyficznością selektora (zmierzone w M4.3c, gotcha **#342**), a
+       `Button.caption.close:pointerover` ma dwie klasy wobec jednej tutaj — więc przy jednoczesnym
+       najechaniu i fokusie wygrywa czerwień zamknięcia niezależnie od tego, gdzie ten blok stoi.
+       ⭐ I jest to zachowanie właściwe: hover jest stanem chwilowym i bardziej konkretnym. -->
+  <Style Selector="Button.caption:focus-visible /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource FocusBorderBrush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 

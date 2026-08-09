@@ -12,8 +12,18 @@
 > (`SeverityText_*`, `SeveritySignal_*`) zweryfikowane podsadzeniem.
 > Zapis: `product-polish.md` **§19.45** · decyzja: **`product-polish-m5-severity-contrast-decision.md`**.
 >
-> ⛔ **NASTĘPNY KROK TO QA UŻYTKOWNIKA, NIE KOLEJNY TEMAT.** Dopiero po nim rusza kolejna pozycja M5
-> (kandydaci w §3.1: DPI 100/125/150/200 · empty states M‑3 · terminologia M‑4 · focus L‑1 · animacje §9).
+> ✅ **§10 ODEBRANE PRZEZ UŻYTKOWNIKA (QA wizualne zaliczone).** Iteracja zamknięta, ⛔ nie wracać.
+>
+> ✅ **L‑1 / focus — ZAIMPLEMENTOWANE, ⏸ CZEKA NA QA WIZUALNE.** Wariant **1** ratyfikowany: jedna
+> konwencja **`:focus-visible`** dla `Button.icon`/`.flat`/`.primary`/`.caption` **+ `ToggleButton.icon`**.
+> `primary` → ramka `OnAccentBrush` (5,29:1); `caption` → tło `FocusBorderBrush` + glif `OnAccentBrush`.
+> Zapis: `product-polish.md` **§19.46** · decyzja: **`product-polish-m5-focus-decision.md`**.
+> ⚠ **Do sprawdzenia w QA to, czego render pokazać nie może:** obwódka **NIE** pojawia się po kliknięciu
+> myszą, a **pojawia** po przejściu Tabem. Plus: pasek tytułu (min/max/zamknij) pod Tabem, stopka dialogu
+> (Wykonaj/Anuluj) pod Tabem, w obu motywach.
+>
+> ⛔ **NASTĘPNY KROK TO QA UŻYTKOWNIKA, NIE KOLEJNY TEMAT.** Dopiero po nim rusza kolejna pozycja M5.
+> **Pozostały w M5:** empty states **M‑3** · animacje **§9** · DPI 100/125/150/200 · terminologia **M‑4**.
 > ⭐ Zmierzone przy okazji inwentaryzacji, przydatne do planowania kolejnego kroku:
 > **§9 nie ma ani jednego naruszenia** (zero `Transitions` w całym `EmberTern.App`), **L‑1 potwierdzone
 > otwarte** (`Button.primary`/`.caption` bez `:focus`), a **M‑3 jest znacznie mniejsze, niż mówi audyt**

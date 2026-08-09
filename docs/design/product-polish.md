@@ -9599,3 +9599,98 @@ korekty **z powodu banera**, gdzie renderuje się naprawdę.
   zapisane jako asymetria do rozstrzygnięcia, jeśli kiedyś zacznie przeszkadzać.
 * ⚠ **`AccentBrush` na railu w Dark = 2,89:1** (znane **P‑2**) — poza zakresem tej iteracji, bo
   `AccentColor` jest współdzielony; żyje w `color-language.md` §9.2.
+
+---
+
+## §19.46 Iteracja 34 (M5 · L‑1) — focus: audyt opisał brakujący selektor, pomiar znalazł DWIE KONWENCJE (2026-08-10)
+
+> **Status: zaimplementowane 2026-08-10, ⏸ oczekuje na QA wizualne użytkownika w obu motywach.**
+> Build 0/0 · suite **8371** (8193 + 123 + 55, +20) · smoke czysty · dwa nowe strażniki ×5 wariantów
+> ×2 motywy, **każdy wariant zweryfikowany podsadzeniem**.
+> Materiał decyzyjny + pomiar: **`product-polish-m5-focus-decision.md`**.
+
+### §19.46.1 ⭐⭐ Znalezisko główne: L‑1 opisywał objaw, nie defekt
+
+L‑1 brzmiał *„`Button.icon`/`.flat` mają `:focus`, `.primary`/`.caption` nie"*. Pomiar headless
+(`Focus(NavigationMethod)` + odczyt ze zrealizowanego `ContentPresentera`) dał **trzy** ustalenia:
+
+1. ⛔ **`:focus` zapala się także od MYSZY** — po `NavigationMethod.Pointer` klasa `:focus` jest obecna,
+   `:focus-visible` nie. Więc `Button.icon`/`.flat` trzymały niebieską obwódkę **po kliknięciu**.
+   ⚠ A `CheckBox`/`RadioButton` (`ControlThemes.axaml`) używały `:focus-visible` **od początku** —
+   produkt miał **dwie konwencje focusu naraz**, spotykane w jednym oknie dialogowym.
+2. ⛔ **Naiwna poprawka dla `primary` dałaby pierścień NIEWIDOCZNY**: `FocusBorderBrush` na akcencie
+   to **1,26:1 (Dark) / 1,17:1 (Light)** przy progu 3:1.
+3. ⛔ **Naiwna poprawka dla `caption` byłaby MARTWA**: `BorderThickness="0"` to świadomy reset, więc
+   setter `BorderBrush` nie namalowałby niczego — styl bezczynny czytający się jak zabezpieczenie.
+
+⭐ Czyli obie „brakujące" pozycje z audytu zawiodłyby przy dosłownym wykonaniu jego zalecenia,
+i to **z dwóch różnych powodów**. To jest ta sama rodzina co #340: zapis w rejestrze opisuje, gdzie
+coś zauważono, nie czym to jest.
+
+### §19.46.2 Co weszło
+
+| wariant | wskazanie focusu | kontrast |
+|---|---|---|
+| `icon`, `flat` | `FocusBorderBrush` na ramce — **bez zmiany wyglądu**, zmienił się WYZWALACZ | — |
+| `primary` | ramka na **`OnAccentBrush`** (barwa własnego tekstu), grubość **bez zmian** | **5,29:1** |
+| `caption` | **tło** `FocusBorderBrush` + glif `OnAccentBrush` | tło 3,27/3,76 · glif 4,21/4,53 |
+| `ToggleButton.icon` | jak `icon` | — |
+
+⛔ **Żadnej nowej barwy** — każdy nośnik to token, który dany wariant już znał.
+
+### §19.46.3 ⚠⚠ Odstępstwo od zatwierdzonego renderu: grubość 1, nie 2
+
+Render kandydata `primary` pokazywał pierścień **2 px** i tak został odebrany. Przy wdrożeniu:
+grubość ramki wchodzi w desired size, a `ContentPresenter` Fluenta jest wcinany o `BorderThickness`,
+więc 1 → 2 przesuwa treść i rozpycha przycisk **przy każdym przejściu Tabem** — czyli **§13.3 Zero
+Layout Shift** złamane dokładnie w tym momencie, którego zmiana dotyczy (a §9 zabrania nawet
+rozłożenia takiej zmiany w czasie).
+
+⭐ **Odstępstwo nic nie kosztuje:** ramka grubości 1 **już tam była**, tylko niosła `AccentBrush` —
+barwę własnego tła — więc była niewidoczna z konstrukcji. Zmiana samej barwy **odsłania pierścień,
+który istniał**, przy zerowej zmianie geometrii i tym samym kontraście 5,29:1.
+
+### §19.46.4 ⚠ `caption` wymaga DWÓCH setterów — i wyszło to z renderu, nie z kodu
+
+Samo tło zostawia glif w `ForegroundBrush`, co na niebieskim daje **2,84:1 w Dark** — pod progiem.
+Kandydat „tylko tło" został **odrzucony pomiarem, zanim trafił do materiału decyzyjnego**; render
+przygotowany dla użytkownika pokazywał już wersję z `OnAccentBrush`.
+⭐ Nośnikiem jest `TextElement.Foreground` na prezenterze, nie `Foreground` na przycisku — bo to
+wzorzec **sprawdzony dla tych konkretnych przycisków** przez sąsiedni `.close:pointerover`.
+
+### §19.46.5 ⚠ Rozszerzenie poza dosłowny zakres decyzji: `ToggleButton.icon`
+
+Decyzja wymieniała warianty `Button`. `ToggleButton.icon` (**22 wystąpienia**) objęty mimo to, bo
+pozostawienie go na `:focus` odtwarzałoby usuwaną niespójność **w tym samym pasku narzędzi**.
+⚠⚠ Uczciwie: zmiana weszła najpierw **przypadkiem** — `sed` przywracający `Button.icon:focus`
+trafił w `ToggleButton.icon:focus` jako podciąg. Została **rozstrzygnięta świadomie po fakcie**
+(sprawdzona, uzasadniona w kodzie, objęta strażnikiem), a nie przepuszczona.
+
+### §19.46.6 ⭐ Strażnik: dwie asercje, bo dwa braki zawiodły inaczej
+
+`EveryButtonVariant_ShowsAKeyboardFocusIndication_AboveTheContrastFloor` żąda, żeby focus
+(a) **cokolwiek zmienił** i (b) to coś **trzymało 3:1**.
+⭐ **Jedna bez drugiej nie wystarcza:** sama (b) przepuściłaby martwy styl `caption` (nie ma czego
+mierzyć, więc nie ma co oblać), a sama (a) przepuściłaby niewidoczny pierścień `primary`.
+`ButtonFocusIndication_DoesNotAppearOnPointerFocus` pilnuje drugiej połowy decyzji — wskazania **nie
+ma** po fokusie wskaźnikiem.
+
+**Podsadzenia — każdy wariant osobno, wszystkie złapane:**
+
+| podsadzenie | zapaliło |
+|---|---|
+| `primary` ← `FocusBorderBrush` (kopia settera z `flat`) | próg kontrastu: **1,17 / 1,26** |
+| `caption` ← nieistniejący klucz zasobu | „NIE ZMIENIA NICZEGO WIDOCZNEGO" |
+| `icon`, `flat` ← powrót na `:focus` | test wskaźnika, oba warianty × oba motywy |
+| `ToggleButton.icon` ← powrót na `:focus` | test wskaźnika |
+
+⭐ Podsadzenie `caption` użyło **nieistniejącego klucza**, więc dowodzi przy okazji, że strażnik łapie
+literówkę w `{DynamicResource}` — a ta nie zgłasza błędu, tylko po cichu zachowuje wartość odziedziczoną.
+⭐ Liczby z podsadzenia `primary` (1,17 / 1,26) są **identyczne** z pomiarem statycznym sprzed decyzji.
+
+### §19.46.7 ⏸ Otwarte
+
+* **QA wizualne** — w tym część, której render pokazać nie może: obwódka **nie** po myszy, **tak** po Tabie.
+* ⚠ **Poza zakresem L‑1, zmierzone i zapisane:** `TextBox` ma własną ścieżkę focusu przez most
+  (`TextControlBorderBrushFocused`), a `DataGrid` własną (`DataGridCellFocusVisual*`). Ujednolicanie
+  ich **nie było** częścią tej decyzji.

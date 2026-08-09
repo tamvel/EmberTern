@@ -1,7 +1,24 @@
 # M5 / L‑1 — pierścień focus. Materiał decyzyjny
 
-> **Status: POMIAR ZAKOŃCZONY, DECYZJA OTWARTA (2026-08-10).** Nic nie zostało wdrożone.
-> Kandydaci żyją wyłącznie w `tools/probes/VisualCandidateProbe/Focus.cs`.
+> **🔒 STATUS: DECYZJA RATYFIKOWANA I WDROŻONA (2026-08-10). Wariant 1.** Ten dokument jest odtąd
+> **ZAPISEM, nie planem**.
+>
+> **Ratyfikowane przez użytkownika:** wariant **1** (jedna konwencja `:focus-visible` dla wszystkich
+> wariantów + uzupełnienie obu braków) · pierścień `primary` = **`OnAccentBrush`** · strażnik
+> w **pełnym** zakresie (wskazanie musi istnieć **i** trzymać próg), zweryfikowany podsadzeniem
+> dla każdego wariantu.
+>
+> ⚠⚠ **JEDNO ODSTĘPSTWO OD ZATWIERDZONEGO RENDERU, wykryte przy wdrożeniu — grubość pierścienia
+> `primary` to 1, nie 2.** Render pokazywał 2 px i tak został odebrany, ale grubość ramki wchodzi
+> w desired size przycisku, a `ContentPresenter` Fluenta jest wcinany o `BorderThickness` — więc
+> 1 → 2 przesuwa treść i rozpycha przycisk o 2 px przy każdym przejściu Tabem. To jest **§13.3 Zero
+> Layout Shift** złamane dokładnie w momencie, którego zmiana dotyczy.
+> ⭐ **Nic nie tracimy:** ramka o grubości 1 **już tam była** — niosła `AccentBrush`, czyli barwę
+> własnego tła, więc była niewidoczna z konstrukcji. Zmiana samej barwy odsłania pierścień, który
+> istniał, przy **zerowej** zmianie geometrii. Kontrast 5,29:1 jest ten sam.
+>
+> ⏸ **Pozostaje QA wizualne użytkownika** — w tym część, której render pokazać nie może: że obwódka
+> **nie** pojawia się po kliknięciu myszą, a pojawia po Tabie.
 >
 > Rendery: `tools/probes/VisualCandidateProbe/out/m5f-focus-{Dark,Light}.png`
 > (`dotnet run --project tools/probes/VisualCandidateProbe -- focus`).

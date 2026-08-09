@@ -467,6 +467,43 @@ noted.
 
 ## Current state
 
+- **⌨ M5 · L‑1 FOCUS — ZAIMPLEMENTOWANE 2026-08-10, ⏸ CZEKA NA QA WIZUALNE UŻYTKOWNIKA.** Druga
+  iteracja M5. Build 0/0; suite **8371** (8193 + 123 + 55, +20); smoke czysty; **każdy z pięciu
+  wariantów zweryfikowany podsadzeniem**. As-built: `product-polish.md` **§19.46**; decyzja + pomiar:
+  **[product-polish-m5-focus-decision.md](docs/design/product-polish-m5-focus-decision.md)**.
+  🔒 **Ratyfikowany wariant 1** (użytkownik, 2026-08-10): **jedna konwencja `:focus-visible`** dla
+  wszystkich wariantów przycisku + uzupełnienie obu braków.
+  ⭐⭐ **ZNALEZISKO GŁÓWNE: L‑1 OPISYWAŁ OBJAW, NIE DEFEKT.** Audyt mówił *„`primary`/`caption` nie mają
+  `:focus`"*; pomiar headless dał trzy ustalenia: (1) ⛔ **`:focus` zapala się TAKŻE OD MYSZY** — więc
+  `Button.icon`/`.flat` trzymały obwódkę **po kliknięciu**, podczas gdy `CheckBox`/`RadioButton` używały
+  `:focus-visible` **od początku**, czyli produkt miał **dwie konwencje focusu naraz, w jednym oknie
+  dialogowym**; (2) ⛔ naiwna poprawka dla `primary` dałaby pierścień **niewidoczny** (`FocusBorderBrush`
+  na akcencie = **1,26:1 / 1,17:1** przy progu 3:1); (3) ⛔ naiwna poprawka dla `caption` byłaby **martwa**
+  (`BorderThickness=0` to świadomy reset, więc setter `BorderBrush` nie ma czego malować).
+  ⭐ Czyli **obie „brakujące" pozycje zawiodłyby przy dosłownym wykonaniu zalecenia audytu — i to
+  z dwóch różnych powodów.**
+  **Co weszło:** `icon`/`flat` — bez zmiany wyglądu, zmienił się WYZWALACZ · `primary` — ramka na
+  **`OnAccentBrush`** (barwa własnego tekstu), **5,29:1** · `caption` — **tło** `FocusBorderBrush`
+  + glif `OnAccentBrush` (3,27/3,76 i 4,21/4,53) · `ToggleButton.icon`. ⛔ **Żadnej nowej barwy.**
+  ⚠⚠ **ODSTĘPSTWO OD ZATWIERDZONEGO RENDERU: grubość pierścienia `primary` to 1, nie 2.** Render
+  pokazywał 2 px i tak został odebrany, ale grubość ramki wchodzi w desired size, a `ContentPresenter`
+  Fluenta jest wcinany o `BorderThickness` — więc 1 → 2 rozpycha przycisk **przy każdym Tabie**, czyli
+  łamie **§13.3 Zero Layout Shift** dokładnie tam, gdzie zmiana działa. ⭐ Odstępstwo **nic nie kosztuje**:
+  ramka grubości 1 **już tam była**, tylko niosła `AccentBrush` (barwę własnego tła), więc była
+  niewidoczna z konstrukcji — zmiana samej barwy **odsłania pierścień, który istniał**, przy zerowej
+  zmianie geometrii i tym samym kontraście.
+  ⚠ **`caption` wymaga DWÓCH setterów** — samo tło zostawia glif w `ForegroundBrush` = **2,84:1 w Dark**,
+  pod progiem; wariant „tylko tło" odrzucony pomiarem **zanim trafił do materiału decyzyjnego**.
+  ⚠ **`ToggleButton.icon` (22 wystąpienia) objęty poza dosłownym zakresem decyzji**, bo pozostawienie go
+  na `:focus` odtwarzałoby usuwaną niespójność w tym samym pasku. ⚠⚠ Uczciwie: weszło najpierw
+  **przypadkiem** (`sed` trafił w podciąg), zostało **rozstrzygnięte świadomie po fakcie** i objęte
+  strażnikiem — nie przepuszczone.
+  ⭐ **Strażnik ma DWIE asercje, bo dwa braki zawiodły inaczej:** focus musi **cokolwiek zmienić** i to
+  coś musi **trzymać 3:1**. Sama druga przepuściłaby martwy styl `caption`, sama pierwsza — niewidoczny
+  pierścień `primary`. Drugi test pilnuje, że wskazania **NIE MA** po fokusie wskaźnikiem.
+  ⏸ **Otwarte:** QA wizualne (w tym część, której render pokazać nie może — obwódka **nie** po myszy,
+  **tak** po Tabie) · ⚠ `TextBox` i `DataGrid` mają własne ścieżki focusu, **poza** zakresem L‑1.
+
 - **🎨 M5 · §10 KONTRAST SEVERITY — ZAIMPLEMENTOWANE 2026-08-10, ⏸ CZEKA NA QA WIZUALNE UŻYTKOWNIKA
   w obu motywach.** Pierwsza iteracja M5. Build 0/0; suite **8351** (8193 + 103 + 55, +6); smoke czysty;
   trzy nowe strażniki **zweryfikowane podsadzeniem**. As-built: `product-polish.md` **§19.45**; materiał
@@ -4667,8 +4704,11 @@ noted.
   (Product Polish through **M4.4** + M4's density decision + typography block + the stabilization sprint
   S-1…S-6 + the grid consistency sprint + the Firebird language completeness sprint incl. its QA round).
   Green in the three documented partitions (**8193 + 97 + 55**).
-  ⚠⚠ **NIEAKTUALNE OD 2026-08-10 — M5/§10 podniosło sumę do 8351 (8193 + 103 + 55).** Zdanie wyżej zostaje
-  jako zapis stanu po M4; ⛔ nie cytuj go jako bieżącego. ⭐ +6 to trzy teorie kontrastu × dwa motywy,
+  ⚠⚠ **NIEAKTUALNE OD 2026-08-10 — po M5/§10 i M5/L‑1 suma to 8371 (8193 + 123 + 55).** Zdanie wyżej
+  zostaje jako zapis stanu po M4; ⛔ nie cytuj go jako bieżącego. ⭐ Obie iteracje M5 dołożyły **26**
+  testów i **wszystkie** wylądowały w partycji ZGRUPOWANEJ (97 → 123), bo obie dopisały się do
+  **istniejącej** klasy `DesignTokenApplicationTests` — krucha ręczna lista nazw w filtrze partycji
+  headless **nie urosła ani o jedną pozycję**. ⭐ +6 to trzy teorie kontrastu × dwa motywy,
   wszystkie dołączone do **istniejącej** klasy `DesignTokenApplicationTests`, więc krucha ręczna lista nazw
   w filtrze partycji headless **nie urosła** — a rosnąca jest wyłącznie partycja ZGRUPOWANA (97 → 103).
   ⚠ M4.4: +11, wszystkie w partycji GŁÓWNEJ — 8 przypadków arytmetyki sufitu (`CeilingFor`, czysta statyka,

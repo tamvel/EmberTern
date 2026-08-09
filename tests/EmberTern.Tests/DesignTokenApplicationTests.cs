@@ -9,6 +9,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -1848,6 +1849,143 @@ public sealed class DesignTokenApplicationTests
         Assert.True(failures.Count == 0,
             $"Tekst wiersza logu Messages w motywie {variantName} nie trzyma progu 4,5:1 z §10:\n  "
             + string.Join("\n  ", failures));
+    }
+
+    // ─── M5 / L‑1 — wskazanie focusu dla każdego wariantu przycisku ────────────────────────────────────
+    //
+    // ⭐⭐ DWIE ASERCJE, BO PRZED M5 KAŻDY Z DWÓCH BRAKÓW ZAWIÓDŁ INACZEJ — i test pilnujący tylko jednej
+    //   z nich przepuściłby ten drugi:
+    //     `Button.caption` miał `BorderThickness=0`, więc setter `BorderBrush` **nic by nie namalował**
+    //       → łapie to asercja „focus musi COKOLWIEK zmienić";
+    //     `Button.primary` dostałby pierścień `FocusBorderBrush` o kontraście **1,26:1** na akcencie
+    //       → łapie to asercja „to, co się zmieniło, musi trzymać 3:1".
+    //   Pierwsza bez drugiej przepuszcza pierścień niewidoczny; druga bez pierwszej przepuszcza styl
+    //   bezczynny (bo nie ma czego mierzyć, więc nie ma co oblać).
+    //
+    // ⚠ Wyzwalaczem jest `NavigationMethod.Tab`, czyli `:focus-visible` — to JEST przedmiot decyzji L‑1
+    //   i test przewróci się, gdy ktoś wróci na `:focus`… **nie**, i to trzeba powiedzieć wprost: NIE
+    //   przewróci się, bo `:focus` też zapala się przy Tabie. Zachowania „mysz nie pokazuje obwódki"
+    //   pilnuje osobny test niżej, który fokusuje wskaźnikiem i wymaga BRAKU zmiany.
+
+    public static TheoryData<string, string> ButtonVariantsAndThemes
+    {
+        get
+        {
+            var data = new TheoryData<string, string>();
+            // ⚠ „toggle-icon" to `ToggleButton Classes="icon"` — objęty świadomie, mimo że decyzja
+            //    wymieniała tylko warianty `Button`; powód przy jego stylu w `ControlStyles.axaml`.
+            foreach (var variant in new[] { "icon", "flat", "primary", "caption", "toggle-icon" })
+            {
+                foreach (var theme in new[] { "Dark", "Light" })
+                {
+                    data.Add(variant, theme);
+                }
+            }
+
+            return data;
+        }
+    }
+
+    /// <summary>
+    /// Każdy wariant przycisku daje przy nawigacji klawiaturą wskazanie focusu, które (a) realnie coś
+    /// zmienia i (b) trzyma wewnętrzny próg 3:1 (§10 — znaczący element nietekstowy).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ButtonVariantsAndThemes))]
+    public async Task EveryButtonVariant_ShowsAKeyboardFocusIndication_AboveTheContrastFloor(
+        string variantName, string themeName)
+    {
+        var theme = themeName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        var (changed, ratio, detail) = await _session.Dispatch(() =>
+        {
+            var rest = Snapshot(variantName, theme, focus: null);
+            var focused = Snapshot(variantName, theme, focus: NavigationMethod.Tab);
+
+            // „Cokolwiek się zmieniło" to obramowanie ALBO wypełnienie — oba są legalnymi nośnikami
+            // wskazania i produkt używa obu (ramka na icon/flat/primary, tło na caption).
+            var borderMoved = rest.Border != focused.Border;
+            var backMoved = rest.Background != focused.Background;
+
+            // Kontrast liczymy dla tego nośnika, który się ZMIENIŁ, wobec tego, na czym leży.
+            double r = 0;
+            var what = "nic";
+            if (backMoved)
+            {
+                r = ContrastRatio(focused.Background, rest.Background);
+                what = $"tło {rest.Background} → {focused.Background}";
+            }
+            else if (borderMoved)
+            {
+                r = ContrastRatio(focused.Border, focused.Background);
+                what = $"ramka {rest.Border} → {focused.Border} na {focused.Background}";
+            }
+
+            return (borderMoved || backMoved, r, what);
+        }, default);
+
+        Assert.True(changed,
+            $"`Button.{variantName}` ({themeName}) NIE ZMIENIA NICZEGO WIDOCZNEGO przy fokusie z klawiatury. "
+            + "Przed M5 tak właśnie zachowywały się `primary` (ramka zostawała w barwie własnego tła) "
+            + "i `caption` (BorderThickness=0, więc setter BorderBrush nie miał czego malować).");
+
+        Assert.True(ratio >= 3.0,
+            $"`Button.{variantName}` ({themeName}) pokazuje wskazanie focusu o kontraście {ratio:0.00}:1, "
+            + $"a §10 wymaga 3:1 dla znaczącego elementu nietekstowego. Zmierzone: {detail}.\n"
+            + "⚠ To jest ta asercja, która odrzuca 'skopiuj setter z Button.flat' dla `primary`: "
+            + "FocusBorderBrush na akcencie to 1,26:1 w Dark i 1,17:1 w Light.");
+    }
+
+    /// <summary>
+    /// ⭐⭐ Druga połowa decyzji L‑1, i ta, której poprzedni test NIE pilnuje: wskazanie pojawia się
+    /// przy nawigacji KLAWIATURĄ, a <b>nie</b> po kliknięciu myszą.
+    /// <para>Przed M5 `Button.icon`/`.flat` używały <c>:focus</c>, która zapala się także po
+    /// <c>NavigationMethod.Pointer</c> — więc kliknięty przycisk zostawał obwiedziony, podczas gdy
+    /// `CheckBox`/`RadioButton` (na <c>:focus-visible</c>) już wtedy zachowywały się poprawnie.
+    /// Ten test pinuje jedną konwencję dla obu rodzin.</para>
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ButtonVariantsAndThemes))]
+    public async Task ButtonFocusIndication_DoesNotAppearOnPointerFocus(string variantName, string themeName)
+    {
+        var theme = themeName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        var same = await _session.Dispatch(() =>
+        {
+            var rest = Snapshot(variantName, theme, focus: null);
+            var pointed = Snapshot(variantName, theme, focus: NavigationMethod.Pointer);
+            return rest.Border == pointed.Border && rest.Background == pointed.Background;
+        }, default);
+
+        Assert.True(same,
+            $"`Button.{variantName}` ({themeName}) zmienia wygląd po fokusie WSKAŹNIKIEM. "
+            + "L‑1 ratyfikowało jedną konwencję: wskazanie focusu należy do nawigacji klawiaturą "
+            + "(`:focus-visible`), bo obwódka zostająca po kliknięciu myszą jest szumem, a nie sygnałem. "
+            + "⚠ Najczęstsza przyczyna: selektor wrócił na `:focus`, która zapala się także od wskaźnika.");
+    }
+
+    /// <summary>Odczyt Z ELEMENTU, KTÓRY MALUJE — obramowanie i wypełnienie zrealizowanego prezentera.</summary>
+    private static (Color Border, Color Background) Snapshot(string variant, ThemeVariant theme, NavigationMethod? focus)
+    {
+        // `ToggleButton` nie dziedziczy po `Button`, więc wariant przełącznika trzeba zbudować jego
+        // własnym typem — inaczej selektor `ToggleButton.icon` nigdy by się nie zastosował i test
+        // mierzyłby zwykły przycisk, meldując zgodność wariantu, którego nie dotknął.
+        TemplatedControl button = variant == "toggle-icon"
+            ? new ToggleButton { Classes = { "icon" }, Content = "Wykonaj" }
+            : new Button { Classes = { variant }, Content = "Wykonaj" };
+        var window = new Window { Content = button, RequestedThemeVariant = theme };
+        window.Show();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+
+        if (focus is { } method)
+        {
+            button.Focus(method);
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+        }
+
+        var presenter = button.GetVisualDescendants().OfType<ContentPresenter>().First();
+        var border = (presenter.BorderBrush as ISolidColorBrush)?.Color ?? Colors.Transparent;
+        var background = (presenter.Background as ISolidColorBrush)?.Color ?? Colors.Transparent;
+        window.Close();
+        return (border, background);
     }
 
     private static T ThemeToken<T>(string key, ThemeVariant variant)
