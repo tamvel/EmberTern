@@ -533,3 +533,141 @@ i odpowiada na inne pytanie, niż zadano.
 - Render: `dotnet run --project tools/probes/VisualCandidateProbe -- settings after`, 12 plików
 - Wszystkie trzy zmienione/nowe strażniki **zweryfikowane podsadzeniem**
 - QA wizualne użytkownika (oba motywy): **przyjęte bez uwag**
+
+---
+
+## §10 Punkt 6 — Database Properties · KROK 0 (sonda pomiarowa)
+
+⛔ **Krok 0 nie dostarczył ani jednej linii kodu produkcyjnego** — żadnego dialogu, VM, pozycji menu ani
+writera. Jego produktem jest POMIAR, a narzędziem `tools/probes/DatabasePropertiesProbe` (sonda
+diagnostyczna, świadomie poza solucją; opis i uzasadnienie: `tools/probes/README.md`).
+
+Środowisko: **Firebird 5.0.3** (`WI-V5.0.3.1683`), **ODS 13.1**, sterownik **10.3.4**, baza scratch
+WIN1250 / dialect 3 pod ścieżką ASCII. ⚠ `Lab/EmberTern_Lab.fdb` **nietknięty** — sonda z definicji zmienia
+nagłówek bazy, a lab jest zacommitowanym artefaktem binarnym.
+
+### §10.1 Źródła odczytu
+
+`MON$DATABASE` ma na FB5 **28 kolumn** — wszystkie z wcześniejszego rozpoznania potwierdzone, plus
+`MON$GUID`, `MON$FILE_ID`, `MON$SEC_DATABASE`, `MON$CRYPT_STATE`, `MON$BACKUP_STATE`, `MON$REPLICA_MODE`,
+`MON$NEXT_ATTACHMENT`, `MON$NEXT_STATEMENT`. `RDB$DATABASE` ma **6**, w tym nieprzewidziane
+`RDB$SQL_SECURITY`.
+
+⚠ Dwie pułapki prezentacyjne, obie zmierzone, nie przewidziane:
+- **`RDB$LINGER` na bazie, która go nie ustawiała, czyta się jako NULL, nie `0`** — „nie ustawione" i „0 s"
+  to dwa różne stany.
+- **`MON$OWNER` wraca dopełniony spacjami** (CHAR 252) — wymaga `TRIM`.
+
+⚠ `MON$DATABASE_NAME` zwraca ścieżkę **wielkimi literami** (`C:\TEMP\…`), czyli formę silnika, a nie tę
+z profilu połączenia.
+
+**⭐⭐ `ENGINE_VERSION` NIE jest zamiennikiem `ServerVersion` — i to wycofuje moją własną rekomendację
+z rozpoznania.** W reconie zalecałem „reuse before create: wersję silnika już mamy w
+`FbConnection.ServerVersion`, nie dodawajmy zapytania". Zmierzone:
+
+| źródło | wartość |
+|---|---|
+| `RDB$GET_CONTEXT('SYSTEM','ENGINE_VERSION')` | `5.0.3` |
+| `FbConnection.ServerVersion` | `WI-V5.0.3.1683 Firebird 5.0/tcp (STREAMSOFT-0089)/P16:C` |
+
+To nie są te same dane: banner sterownika niesie **nazwę maszyny serwera** i protokół. ⇒ zapytanie
+kontekstowe **nie jest redundantne**, a „reuse before create" zastosowane bez pomiaru pokazałoby
+użytkownikowi nazwę hosta w polu „wersja silnika".
+
+### §10.2 Kontrakt `FbConfiguration` — symbol to nie zachowanie
+
+Rozpoznanie potwierdziło jedynie, że nazwy sześciu metod **istnieją w binarce 10.3.4**. To dowód
+o SYMBOLU, nigdy o działaniu ani o sygnaturze — ten sam kształt co **#321** (*brak błędu restore jest
+dowodem o metadanych, nigdy o zgodności*). Refleksja w działającym procesie:
+
+```
+FirebirdSql.Data.Services.FbConfiguration : FbService
+ctor(String connectionString)                     ← jedyny konstruktor, brak właściwości Database
+
+Task SetAccessModeAsync   (Boolean readOnly,      CancellationToken)
+Task SetForcedWritesAsync (Boolean forcedWrites,  CancellationToken)
+Task SetPageBuffersAsync  (Int32   pageBuffers,   CancellationToken)
+Task SetReserveSpaceAsync (Boolean reserveSpace,  CancellationToken)
+Task SetSqlDialectAsync   (Int32   sqlDialect,    CancellationToken)
+Task SetSweepIntervalAsync(Int32   sweepInterval, CancellationToken)
+```
+
+⚠ **`SetAccessMode` bierze `bool`, nie enum** — projekt zakładał `FbAccessMode`; obalił to kompilator.
+⚠ Refleksja statyczna (poza procesem) **nie dała odpowiedzi w ogóle**: z assembly rozwiązało się 7 typów,
+bo graf zależności wymaga prawdziwego hosta. Pomiar musiał być URUCHOMIONY, nie odczytany.
+
+### §10.3 Zapis — wyłączność i moment zadziałania
+
+| Właściwość | Zapis | Wymaga wyłączności | Kiedy efekt |
+|---|---|---|---|
+| Sweep interval | ✅ | nie | natychmiast |
+| Forced writes | ✅ | nie | natychmiast |
+| Reserve space | ✅ | nie | natychmiast |
+| SQL dialect | ✅ | nie | natychmiast |
+| **Page buffers** | ✅ (bez wyjątku) | nie | ⛔ dopiero po **pełnym zwolnieniu** bazy |
+| **Read only** | ⛔ odrzucony | **TAK** | — |
+
+**Read Only** odrzucony przy jednym otwartym attachmencie: SQLSTATE `40001`, GDS `335544510` (lock timeout)
++ `335544453` (object in use) — *„lock time-out on wait transaction / object … is in use"*. Po zamknięciu
+wszystkich attachmentów ta sama operacja **przeszła**. ⇒ wymaganie wyłączności jest zmierzone, nie założone.
+⚠ EmberTern trzyma **2–3 attachmenty na profil**, więc z poziomu połączonej aplikacji ta operacja nie ma jak
+się powieść.
+
+**SQL dialect zadziałał ONLINE** (3 → 1 → 3, przy otwartym attachmencie) i został przywrócony. ⇒ jego
+pozostawienie do odczytu jest decyzją PRODUKTOWĄ (zmiana dialektu wpływa na SQL, którego używa sam
+EmberTern), a nie ograniczeniem technicznym — i tak trzeba to zapisywać, żeby nikt nie „naprawił" tego
+później jako rzekomego braku.
+
+### §10.4 ⭐⭐ Page buffers — odczyt i zapis NIE dotyczą tej samej rzeczy
+
+Zwykła sekwencja odczyt → zapis → odczyt **nie rozstrzyga** tego przypadku, więc dostał własny scenariusz
+z trzymanym attachmentem („keeper"):
+
+| krok | wynik |
+|---|---|
+| świeża baza, odczyt | **51200** (domyślna serwera) |
+| zapis `1024` przy otwartym attachmencie | OK |
+| odczyt na **nowym attachmencie**, baza wciąż w użyciu | **51200** — bez zmiany |
+| po **pełnym zwolnieniu** bazy | **1024** |
+
+⇒ **`MON$PAGE_BUFFERS` raportuje CACHE DZIAŁAJĄCEJ INSTANCJI, a nie zapisany nagłówek**, a zmiana obowiązuje
+przy następnym **pełnym otwarciu bazy** — nie przy następnym attachmencie. Rozróżnienie „nowy attachment" vs
+„pełne zwolnienie" było niewidoczne bez izolacji.
+
+⚠⚠ **Konsekwencja, którą ujawnił dopiero osobny pomiar:** pole edycji zasiane z `MON$PAGE_BUFFERS`
+pokazałoby **51200 — wartość DZIEDZICZONĄ z serwera** — a zapis bez żadnej edycji przypiąłby ją do tej bazy
+na stałe. Samo otwarcie okna i kliknięcie Apply zamieniłoby „dziedzicz" w „przypięte", cicho.
+⭐ Zmierzone osobno: **`SetPageBuffersAsync(0)` jest zapisywalne** i po zwolnieniu przywraca 51200, więc 0
+znaczy „dziedzicz" i operacja **jest odwracalna** — ale „dziedziczone" i „przypięte 51200" są przez `MON$`
+**nierozróżnialne**.
+
+### §10.5 Services API i uprawnienia
+
+| Przypadek | Wynik |
+|---|---|
+| poprawne hasło | OK |
+| **puste hasło** (profil bez zapisanego hasła) | `No user password was specified.` — błąd sterownika, bez SQLSTATE/GDS |
+| **błędne hasło** | ⚠⚠ `Not supported plugin 'Legacy_Auth'.` |
+| bez `Database` w connection stringu | `Action should be executed against a specific database.` |
+| zapis jako użytkownik bez uprawnień | SQLSTATE `28000`, GDS `335544788/335545112`: **`System privilege USE_GFIX_UTILITY is missing`** |
+| odczyt `MON$DATABASE` jako użytkownik bez uprawnień | **działa** |
+
+⚠⚠ **Błędne hasło NIE mówi „błędne hasło".** Sterownik jest Srp-only, więc po odrzuceniu poświadczeń serwer
+schodzi do Legacy_Auth i użytkownik dostaje komunikat o **pluginie**. To rozszerza istniejący zapis
+w CLAUDE.md (*„connection errors show the raw server message"*) na Services API i jest dokładnie tym
+rodzajem komunikatu, który wygląda na defekt konfiguracji, a opisuje literówkę w haśle.
+
+⛔ **`Database` jest w connection stringu WYMAGANE**, a `FirebirdTraceService.BuildServiceConnectionString`
+buduje string **bez bazy** (Services „no-database"). ⇒ nie da się go użyć wprost; potrzebny jest wariant
+z bazą, co jest faktem o kształcie API, nie o naszym kodzie.
+
+⭐ Bramka uprawnień daje **konkretny, cytowalny komunikat**, więc własny pre-check jest zbędny — zgodnie
+z dyrektywą użytkownika, żeby go nie budować.
+
+### §10.6 Czego krok 0 świadomie NIE rozstrzygnął
+
+⛔ Zakresu pól edytowalnych, kształtu dialogu, wiązania z menu ani sposobu zapisu — na wyraźne polecenie
+użytkownika propozycja powstaje **po** pomiarze i osobno.
+⚠ Niezmierzone i zapisane jako takie: zachowanie przy bazie na **serwerze zdalnym** (mierzone na
+`localhost`), zachowanie przy **Firebirdzie 3/4** (sonda uruchomiona wyłącznie na FB5) oraz `RDB$LINGER`
+jako wartość zapisywalna (`ALTER DATABASE SET LINGER` — nie było przedmiotem kroku 0).

@@ -505,6 +505,40 @@ noted.
   ⏭ **Następny: punkt 6 (Database Properties), od KROKU 0 — wyłącznie sonda pomiarowa na żywym FB5**, bez
   projektowania UX i bez implementacji, dopóki zachowanie API i bazy nie zostanie potwierdzone.
 
+- **🔬 PAKIET UX PO M5 · PUNKT 6 · KROK 0 — SONDA POMIAROWA ZAKOŃCZONA (2026-08-10).** ⛔ **Zero kodu
+  produkcyjnego** — bez dialogu, VM, menu i writerów; produktem kroku jest POMIAR. Narzędzie:
+  `tools/probes/DatabasePropertiesProbe` (⭐ **sonda diagnostyczna, świadomie poza solucją, ZOSTAJE w repo**
+  decyzją użytkownika — jej wartość odtworzeniowa jest realna, bo każde ustalenie jest własnością WERSJI
+  silnika i sterownika). Pełny zapis: **[docs/history/27-post-m5-ux-package.md](docs/history/27-post-m5-ux-package.md) §10**;
+  opis sondy: `tools/probes/README.md`. FB **5.0.3**, ODS **13.1**, sterownik **10.3.4**, baza scratch;
+  ⚠ `Lab/` nietknięty (sonda z definicji zmienia nagłówek bazy).
+  ⭐⭐ **TRZY USTALENIA OBALIŁY TO, CO SUGEROWAŁA LEKTURA KODU I BINARKI.** (1) **`ENGINE_VERSION` NIE jest
+  zamiennikiem `FbConnection.ServerVersion`** — kontekst daje `5.0.3`, sterownik pełny banner **z nazwą
+  maszyny serwera**; moja własna rekomendacja „reuse before create, nie dodawaj zapytania" **wycofana**.
+  (2) **`SetAccessModeAsync` bierze `bool`, nie enum** — a refleksja STATYCZNA nie odpowiedziała w ogóle
+  (7 typów z całego assembly; graf zależności wymaga prawdziwego hosta), więc pomiar musiał być
+  URUCHOMIONY. Znalezienie nazwy metody w binarce to dowód o SYMBOLU, nigdy o zachowaniu — **#321**
+  w tym samym kształcie. (3) **Błędne hasło do Services API zgłasza się jako `Not supported plugin
+  'Legacy_Auth'`**, a nie jako błąd poświadczeń.
+  ⭐⭐ **NAJWAŻNIEJSZE DLA PROJEKTU: `Page buffers` ODCZYT I ZAPIS NIE DOTYCZĄ TEJ SAMEJ RZECZY.**
+  `MON$PAGE_BUFFERS` raportuje **cache DZIAŁAJĄCEJ instancji**, nie zapisany nagłówek; zmiana obowiązuje
+  dopiero po **PEŁNYM ZWOLNIENIU** bazy, nie przy następnym attachmencie (rozdzielone osobnym scenariuszem
+  z trzymanym attachmentem — zwykła sekwencja odczyt→zapis→odczyt tego nie rozróżnia). ⚠⚠ Konsekwencja:
+  pole zasiane z `MON$` pokazuje **wartość dziedziczoną z serwera** (51200), a Apply bez żadnej edycji
+  **przypiąłby ją do bazy na stałe**. ⭐ `SetPageBuffersAsync(0)` = „dziedzicz" i jest odwracalne, ale
+  „dziedziczone" i „przypięte 51200" są przez `MON$` **nierozróżnialne**.
+  ⭐ **`Read Only` wymaga WYŁĄCZNOŚCI — zmierzone**: SQLSTATE `40001` przy jednym otwartym attachmencie,
+  sukces po zamknięciu wszystkich. EmberTern trzyma 2–3 attachmenty na profil.
+  ⭐ **`SQL dialect` działa ONLINE** (3→1→3 przy otwartym attachmencie) — pozostawienie go do odczytu jest
+  decyzją PRODUKTOWĄ (wpływa na SQL samego EmberTerna), nie ograniczeniem technicznym.
+  ⭐ Bramka uprawnień to **`USE_GFIX_UTILITY`** (SQLSTATE `28000`) z cytowalnym komunikatem ⇒ własny
+  pre-check zbędny. ⛔ `Database` w connection stringu Services jest **wymagane**, a
+  `FirebirdTraceService.BuildServiceConnectionString` buduje string **bez bazy**.
+  ⚠ Pułapki odczytu: `RDB$LINGER` czyta się **NULL, nie 0**; `MON$OWNER` wraca **dopełniony spacjami**.
+  ⚠ Niezmierzone i zapisane jako takie: serwer zdalny (mierzone na `localhost`), FB3/FB4, `RDB$LINGER`
+  jako wartość zapisywalna.
+  ⏭ **Następny krok: propozycja zakresu, wyłącznie na podstawie pomiarów — bez implementacji.**
+
 - **🧰 PAKIET UX PO M5 — W TOKU. Punkty 1–5 ZAMKNIĘTE I ODEBRANE PO QA UŻYTKOWNIKA; ⏭ został wyłącznie
   punkt 6 (Database Properties).** Gałąź `feat/product-polish`; ⛔ **nadal NIE
   scalona do `master`.** Sześć zgłoszeń ze zwykłego używania: 1 ikona zakładki Security · 2 `Button.primary`

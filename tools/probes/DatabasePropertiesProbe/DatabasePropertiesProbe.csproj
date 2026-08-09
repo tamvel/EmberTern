@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER MEASUREMENT TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Pakiet UX po M5, punkt 6 (Database Properties) — KROK 0. Mierzy, czego Firebird 5 i sterownik
+    RZECZYWIŚCIE dostarczają, ZANIM powstanie jakikolwiek dialog, VM czy writer. Nic produkcyjnego.
+
+    ⭐ Referencja WYŁĄCZNIE do NuGeta `FirebirdSql.Data.FirebirdClient`, celowo BEZ `EmberTern.*`.
+       Dwa powody: (1) pytanie brzmi „co robi silnik i sterownik", więc pomiar przez nasze opakowania
+       odpowiadałby na inne pytanie (wzorzec `Fb3ClosureProbe`: raw driver, zero EmberTerna);
+       (2) sonda poza solucją, która referencuje projekty aplikacji, gnije w ciszy przy zielonym
+       buildzie — `DataImportProbe` przestał się kompilować i nikt tego nie zauważył, bo
+       `dotnet build EmberTern.slnx` nigdy go nie budował.
+
+    ⚠ Wersja pakietu MUSI być ta sama, co w `src/EmberTern.Firebird/EmberTern.Firebird.csproj` (10.3.4),
+      inaczej sonda mierzy inny sterownik niż ten, który wysyłamy.
+
+    ⚠ Pracuje na WŁASNEJ bazie scratch pod ścieżką ASCII (#149). `Lab/EmberTern_Lab.fdb` nie jest
+      dotykany — to zacommitowany artefakt binarny, a ta sonda ZMIENIA nagłówek bazy z definicji.
+
+    ⚠ Deliberately NOT in EmberTern.slnx.
+
+    Uruchomienie: patrz nagłówek Program.cs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
+  </ItemGroup>
+
+</Project>
