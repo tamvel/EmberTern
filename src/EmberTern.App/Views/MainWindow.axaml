@@ -586,6 +586,15 @@
                           Command="{Binding RecompileAllObjectsCommand}"
                           IsVisible="{Binding IsConnected}" />
                 <Separator />
+                <!-- ⚠ WYŁĄCZANE, nie ukrywane — inaczej niż sąsiedzi w tym samym menu, i to jest reguła
+                     ratyfikowana w M3.4b część 2, a nie rozjazd: ukrywaj, gdy pozycja w danym stanie nie ma
+                     sensu w ogóle; wyszarzaj, gdy operacja istnieje, ale jest chwilowo niedostępna. Baza ma
+                     właściwości niezależnie od tego, czy jesteśmy podłączeni — po prostu nie da się ich teraz
+                     odczytać. Bramkuje `CanExecute`, więc nie ma tu nic do dodania. -->
+                <MenuItem Header="{x:Static app:UiStrings.DatabasePropertiesMenuItem}"
+                          Icon="{app:MenuIcon Icon.Info}"
+                          Command="{Binding DatabasePropertiesCommand}" />
+                <Separator />
                 <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSort}"
                           Icon="{app:MenuIcon Icon.ListFilter}">
                   <MenuItem Header="{x:Static app:UiStrings.ConnectionContextSortAscending}"

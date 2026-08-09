@@ -6416,6 +6416,46 @@ public partial class MainWindowViewModel : ViewModelBase
         => kind is MetadataObjectKind.Procedure or MetadataObjectKind.Function
             or MetadataObjectKind.Trigger or MetadataObjectKind.Package or MetadataObjectKind.View;
 
+    /// <summary>
+    /// Raised to open the Database Properties window. Same shape as every other dialog hook here — the view
+    /// model builds the content, the view owns the window.
+    /// </summary>
+    public event Func<DatabasePropertiesViewModel, Task>? DatabasePropertiesRequested;
+
+    /// <summary>
+    /// Builds the Database Properties content for the ACTIVE profile and asks the view to show it.
+    ///
+    /// <para>⚠ The reader and the writer are handed over as delegates rather than as objects, which keeps the
+    /// window's view model free of Firebird types and — the part that matters — testable with no server.</para>
+    ///
+    /// <para>⚠ Reading rides the <b>Metadata</b> lane (read-only, implicit per-command transactions); writing
+    /// goes through the <b>Services API</b>, which is its own connection outside all three lanes. So nothing
+    /// this window does can touch the user's working transaction.</para>
+    /// </summary>
+    internal async Task ShowDatabasePropertiesAsync()
+    {
+        if (DatabasePropertiesRequested is not { } request)
+        {
+            return;
+        }
+
+        if (Service.ActiveProfile is not { } profile)
+        {
+            return;
+        }
+
+        var reader = new FirebirdDatabasePropertiesReader(Service);
+        var writer = new FirebirdDatabaseConfigurationWriter();
+
+        var vm = new DatabasePropertiesViewModel(
+            profile.Name,
+            FirebirdDatabaseConfigurationWriter.CanAttempt(profile),
+            ct => reader.ReadAsync(profile, ct),
+            (change, ct) => writer.ApplyAsync(profile, change, ct));
+
+        await request(vm).ConfigureAwait(true);
+    }
+
     // ─── Connection-node (database-wide) bulk ops ─────────────────────────────
     // Recompute selectivity statistics for every index (SET STATISTICS INDEX).
     internal Task RecomputeAllIndexStatisticsAsync()

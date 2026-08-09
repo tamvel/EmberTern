@@ -1063,6 +1063,59 @@ internal static class UiStrings
     // sumę pozycji — cztery flagi odpowiadają na jedno pytanie, i dopiero to czyni z nich jedną kartę.
     public const string SettingsEasyModeGroupLabel = "Default editor mode";
 
+    // ── Database Properties (pakiet UX po M5, punkt 6) ────────────────────────────────────────────────
+    public const string DatabasePropertiesMenuItem = "Properties…";
+    public const string DatabasePropertiesTitle = "Database Properties";
+    public const string DatabasePropertiesGroupIdentity = "Identity";
+    public const string DatabasePropertiesGroupStorage = "Storage";
+    public const string DatabasePropertiesGroupConfiguration = "Configuration";
+
+    public const string DatabasePropertiesDatabase = "Database";
+    public const string DatabasePropertiesOwner = "Owner";
+    public const string DatabasePropertiesEngine = "Engine version";
+    public const string DatabasePropertiesOds = "ODS";
+    public const string DatabasePropertiesDialect = "SQL dialect";
+    public const string DatabasePropertiesCharset = "Charset";
+    public const string DatabasePropertiesCreated = "Created";
+    public const string DatabasePropertiesPageSize = "Page size";
+    public const string DatabasePropertiesPages = "Pages";
+    public const string DatabasePropertiesSize = "Size";
+    public const string DatabasePropertiesPageBuffers = "Page buffers";
+    public const string DatabasePropertiesLinger = "Linger";
+
+    public const string DatabasePropertiesSweepInterval = "Sweep interval";
+    public const string DatabasePropertiesForcedWrites = "Forced writes";
+    public const string DatabasePropertiesReserveSpace = "Reserve space";
+
+    // ⚠ Mówi o CACHE DZIAŁAJĄCEJ INSTANCJI, a nie o wartości zapisanej w nagłówku — bo dokładnie to
+    // raportuje MON$PAGE_BUFFERS (zmierzone). Bez tego zdania liczba wyglądałaby na ustawienie bazy.
+    public const string DatabasePropertiesPageBuffersNote =
+        "Cache of the running database instance. A stored value takes effect when the database is next "
+        + "fully released.";
+
+    public const string DatabasePropertiesLingerNotSet = "not set";
+    public const string DatabasePropertiesLingerSeconds = "{0} s";
+
+    public const string DatabasePropertiesApply = "Apply";
+    public const string DatabasePropertiesClose = "Close";
+    public const string DatabasePropertiesApplied = "Changes applied.";
+    public const string DatabasePropertiesNothingToApply = "Nothing to apply.";
+
+    // ⚠ Wymienia to, co SIĘ UDAŁO — Apply nie jest atomowy, więc bez tej listy użytkownik nie wie, które
+    // zmiany są już w bazie.
+    public const string DatabasePropertiesPartial = "Applied: {0}. The rest failed:";
+
+    public const string DatabasePropertiesNoPassword =
+        "This connection profile has no stored password, so these settings cannot be changed. Firebird's "
+        + "Services API needs one.";
+
+    // ⭐ Dwa jedyne wyjaśnienia, jakie wolno dodać — bo tylko te dwa przypadki są rozpoznawalne po
+    // SQLSTATE/GDS. ⛔ Komunikat serwera jest ZAWSZE pokazywany obok; to jest lead, nie zamiennik.
+    public const string DatabasePropertiesMissingPrivilege =
+        "Your account is missing the system privilege these operations require.";
+    public const string DatabasePropertiesInUse =
+        "The database is in use and this operation needs exclusive access.";
+
     public const string SettingsProcedureEasyModeLabel = "Open procedures in Easy mode";
     public const string SettingsViewEasyModeLabel = "Open views in Easy mode";
     public const string SettingsTriggerEasyModeLabel = "Open triggers in Easy mode";

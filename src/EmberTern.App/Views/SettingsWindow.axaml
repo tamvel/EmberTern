@@ -37,9 +37,13 @@
                             IsVisible="{Binding ShowSaveRefusal}" />
 
     <!-- ⭐⭐ TRZY POWIERZCHNIE, ZERO NOWYCH TOKENÓW — ratyfikowany wariant T‑1 (pakiet UX po M5, punkt 5).
-         Nawigacja `ChromeStrong` › treść `Panel` › karta `Background`, monotonicznie w OBU motywach
-         (Dark 2D2D2D › 252526 › 1E1E1E; Light E8EAED › F3F4F6 › FCFCFD). Każdy krok to adjacencja, której
-         aplikacja już używa (pasek tytułu › panel › edytor), więc nic nie jest perceptualnie nowe.
+         ⚠⚠ KOREKTA PO QA UŻYTKOWNIKA: nawigacja niosła `ChromeStrongBrush` i czytała się jako ZA JASNA wobec
+         głównego paska bocznego z listą połączeń. Zmierzone: `MainWindow.axaml` maluje `SidebarPanel`
+         `PanelBrush` — więc nawigacja ustawień bierze DOKŁADNIE ten sam zasób, a nie barwę do niego dobraną.
+         Powód jest rodzinowy, nie estetyczny: oba panele to ta sama rzecz w aplikacji — lewa nawigacja okna.
+         ⚠ Konsekwencja, świadoma: nawigacja i treść mają teraz ten sam ton, więc granicę niesie wyłącznie
+         kreska 1 px (tak robi VS Code). Karta zostaje `BackgroundBrush`, czyli zagłębienie w chromie —
+         para figura/tło, dla której `settings-group` napisano, obowiązuje bez zmian.
 
          ⚠⚠ POWÓD, DLA KTÓREGO TO JEST POPRAWKA, A NIE UPIĘKSZENIE: `Border.settings-group` maluje się
          `BackgroundBrush` i jego własny komentarz opisuje siebie jako „a recessed BackgroundBrush surface
@@ -51,7 +55,7 @@
     <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*">
 
       <Border Grid.Column="0"
-              Background="{DynamicResource ChromeStrongBrush}"
+              Background="{DynamicResource PanelBrush}"
               Padding="{DynamicResource Pad.Panel}">
         <Grid RowDefinitions="Auto,*">
           <TextBox Grid.Row="0"

@@ -1714,3 +1714,22 @@ every emit path to be individually perfect.**
      style whose correctness depends on its host should say so in its own comment (this one did — which is
      exactly why the diagnosis took one measurement rather than an afternoon).
      (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §9.)
+
+352. **A hint that ASSERTS a cause is unsafe; one that ENUMERATES what to check is safe — and that distinction
+     is why a hint removed once can legitimately come back.** Firebird's managed driver reports a rejected
+     connection as **`Not supported plugin 'Legacy_Auth'`**, and the same text is produced by a wrong
+     password and by a missing user as well as by a genuinely non-SRP account. EmberTern once carried a hint
+     for it, and that hint was **removed for misfiring** — correctly, because it named a culprit (*"this
+     account is not an SRP user"*) and was wrong whenever the cause was one of the other two. ⭐ The
+     replacement is safe for the opposite reason: it says the server rejected authentication, that the client
+     speaks SRP only, and asks the reader to check the credentials **and** the account's SRP support — every
+     clause of which is **true for all three causes**. So the failure mode the removal was protecting against
+     cannot occur. ⚠ The rule to carry: before rejecting a hint because "we tried that and it misfired",
+     check whether the old one **asserted** and the new one **enumerates** — those are different artefacts
+     with different truth conditions, and treating them as the same thing preserves a misleading raw message
+     forever. ⚠⚠ Its second half is a boundary worth stating: recognition here **must** be by message TEXT,
+     which this codebase otherwise bans (`DebugErrorClassifier`, `DatabaseConfigurationDiagnosis` both key on
+     SQLSTATE/GDS only) — measured, this refusal arrives with **no SQLSTATE and no GDS codes at all**, so
+     there is nothing else to key on. That is tolerable *only* because a false positive costs guidance that
+     remains true; ⛔ it is not a licence to classify by text where codes exist.
+     (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §11.7b.)

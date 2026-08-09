@@ -746,6 +746,7 @@ public partial class MainWindow : Window
             _currentVm.ExportRequested -= OnExportRequested;
             _currentVm.AddConnectionRequested -= OnAddConnectionRequested;
             _currentVm.BatchResultsRequested -= OnBatchResultsRequested;
+            _currentVm.DatabasePropertiesRequested -= OnDatabasePropertiesRequested;
             _currentVm.GlobalSearchRequested -= OnGlobalSearchRequested;
             _currentVm.ImportFilePickRequested -= OnImportFilePickRequested;
             _currentVm.ImportClipboardReadRequested -= OnImportClipboardReadRequested;
@@ -773,6 +774,7 @@ public partial class MainWindow : Window
             _currentVm.ExportRequested += OnExportRequested;
             _currentVm.AddConnectionRequested += OnAddConnectionRequested;
             _currentVm.BatchResultsRequested += OnBatchResultsRequested;
+            _currentVm.DatabasePropertiesRequested += OnDatabasePropertiesRequested;
             _currentVm.GlobalSearchRequested += OnGlobalSearchRequested;
             _currentVm.ImportFilePickRequested += OnImportFilePickRequested;
             _currentVm.ImportClipboardReadRequested += OnImportClipboardReadRequested;
@@ -1344,6 +1346,9 @@ public partial class MainWindow : Window
         var dialog = new ChoiceDialog { DataContext = new ChoiceDialogViewModel(request) };
         return await dialog.ShowDialog<string?>(this);
     }
+
+    private System.Threading.Tasks.Task OnDatabasePropertiesRequested(DatabasePropertiesViewModel vm)
+        => new DatabasePropertiesDialog(vm).ShowDialog(this);
 
     private async System.Threading.Tasks.Task OnBatchResultsRequested(BatchResultsViewModel vm)
     {

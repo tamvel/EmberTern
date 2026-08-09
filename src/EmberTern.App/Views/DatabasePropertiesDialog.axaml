@@ -1,0 +1,194 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EmberTern.App"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:controls="using:EmberTern.App.Controls"
+        x:Class="EmberTern.App.Views.DatabasePropertiesDialog"
+        x:DataType="vm:DatabasePropertiesViewModel"
+        Title="{x:Static app:UiStrings.DatabasePropertiesTitle}"
+        Width="560"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- Struktura wzięta z istniejącego szkieletu dialogów (NewRoleDialog): pasmo nagłówka `PanelBrush`,
+       treść, pasmo stopki `PanelBrush`. Nic tu nie jest nowym wzorcem.
+
+       ⭐⭐ SEKCJE DZIELĄ PO EDYTOWALNOŚCI, NIE PO TEMACIE — i to jest decyzja merytoryczna. Zasada brzmi
+       „wartość READ ONLY ma wyglądać jak informacja, wartość EDITABLE jak pole edycji"; przy podziale
+       tematycznym `Page size` (tylko odczyt) stałby obok `Page buffers` w tej samej sekcji „Storage",
+       a użytkownik musiałby rozpoznawać różnicę PER WIERSZ. Tak rozpoznaje ją PER SEKCJA, raz.
+
+       ⚠ Wszystkie metryki z ról; zero nowych tokenów. -->
+  <Grid RowDefinitions="Auto,*,Auto,Auto">
+
+    <Border Grid.Row="0"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="{DynamicResource Border.Bottom}"
+            Padding="{DynamicResource Pad.Dialog}">
+      <StackPanel Spacing="{DynamicResource Space.Hair}">
+        <TextBlock Text="{x:Static app:UiStrings.DatabasePropertiesTitle}" Classes="h1" />
+        <TextBlock Text="{Binding ConnectionName}" Classes="field-label" />
+      </StackPanel>
+    </Border>
+
+    <!-- ⚠⚠ Kontener `PanelBrush` jest WYMAGANY, nie ozdobny — i został dodany po POMIARZE PIKSELI renderu,
+         który pokazał karty `#1E1E1E` na tle `#1E1E1E`. `Border.settings-group` maluje się `BackgroundBrush`
+         i deklaruje w swoim komentarzu, że jest powierzchnią ZAGŁĘBIONĄ w chromie `PanelBrush`; bez tego
+         kontenera karta i host mają identyczną barwę i całą separację niesie kreska 1 px.
+         To jest gotcha #351 odtworzona w nowym oknie — dlatego naprawiony jest HOST, a ⛔ styl karty jest
+         nietknięty (u czterech pozostałych konsumentów działa poprawnie). -->
+    <!-- ⚠⚠ `ScrollViewer` jest WARUNKIEM działania sufitu z `GrowingDialogBehavior`, nie dodatkiem:
+         sufit BEZ powierzchni przewijania nie ogranicza treści, tylko ją PRZYCINA (M4.4, towarzysz #343).
+         Nagłówek, baner wyniku i stopka stoją POZA nim — przycisk Apply nie może odjechać z treścią. -->
+    <ScrollViewer Grid.Row="1"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+    <Border Background="{DynamicResource PanelBrush}"
+            Padding="{DynamicResource Pad.Dialog}">
+      <StackPanel Spacing="{DynamicResource Space.Lg}">
+
+      <!-- ── Informacja ─────────────────────────────────────────────────────────────────────────── -->
+      <Border Classes="settings-group">
+        <StackPanel>
+          <TextBlock Classes="group-header" Text="{x:Static app:UiStrings.DatabasePropertiesGroupIdentity}" />
+          <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesDatabase}" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DatabasePath}" TextWrapping="Wrap" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesOwner}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Owner}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesEngine}" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EngineVersion}" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesOds}" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Ods}" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesDialect}" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Dialect}" />
+
+            <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesCharset}" />
+            <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Charset}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="settings-group">
+        <StackPanel>
+          <TextBlock Classes="group-header" Text="{x:Static app:UiStrings.DatabasePropertiesGroupStorage}" />
+          <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesCreated}" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CreatedAt}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesPageSize}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PageSize}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesPages}" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Pages}" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesSize}" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Size}" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesLinger}" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Linger}" />
+
+            <!-- ⚠ Page buffers jest INFORMACJĄ (ratyfikowane): MON$ raportuje cache DZIAŁAJĄCEJ instancji,
+                 a „dziedziczone 51200" i „jawnie ustawione 51200" są przez katalog nierozróżnialne. Nota
+                 mówi to wprost, żeby liczba nie czytała się jak ustawienie tej bazy. -->
+            <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesPageBuffers}" />
+            <StackPanel Grid.Row="5" Grid.Column="1">
+              <TextBlock Text="{Binding PageBuffers}" />
+              <TextBlock Classes="field-label"
+                         Text="{x:Static app:UiStrings.DatabasePropertiesPageBuffersNote}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ── Jedyna sekcja z polami ─────────────────────────────────────────────────────────────── -->
+      <Border Classes="settings-group">
+        <StackPanel>
+          <TextBlock Classes="group-header" Text="{x:Static app:UiStrings.DatabasePropertiesGroupConfiguration}" />
+
+          <!-- Powód niedostępności stoi PRZY kontrolkach, nie w banerze: wyłączone pole bez powodu jest
+               defektem UX, a ten powód jest znany z góry (profil bez hasła), więc nie ma na co czekać. -->
+          <controls:MessageBanner Severity="Info"
+                                  Message="{Binding WriteBlockedReason}"
+                                  ShowCopy="False"
+                                  IsVisible="{Binding ShowWriteBlockedReason}"
+                                  Margin="{DynamicResource Margin.FieldGap}" />
+
+          <!-- ⚠ Wiersz pola i blok przełączników są ROZDZIELONE, a nie ułożone w jedną trzywierszową siatkę,
+               i to jest powód odstępów: w siatce sąsiadowały bezpośrednio, więc pole i pierwszy checkbox
+               stykały się i całość czytała się jak jeden blok. Teraz odstęp niesie `Margin.FieldGap` (przerwa
+               PO polu — dokładnie rola tego tokenu), a przełączniki `Space.Sm` między sobą.
+               ⛔ Zero nowych tokenów, zero zmian w globalnych wysokościach kontrolek i w `settings-group`. -->
+          <Grid ColumnDefinitions="150,*" Margin="{DynamicResource Margin.FieldGap}">
+            <TextBlock Grid.Column="0" Classes="field-label"
+                       Text="{x:Static app:UiStrings.DatabasePropertiesSweepInterval}"
+                       VerticalAlignment="Center" />
+            <TextBox Grid.Column="1"
+                     x:Name="SweepIntervalBox"
+                     Text="{Binding SweepIntervalText, Mode=TwoWay}"
+                     IsEnabled="{Binding CanAttemptWrite}"
+                     MinWidth="140"
+                     HorizontalAlignment="Left" />
+          </Grid>
+
+          <StackPanel Spacing="{DynamicResource Space.Sm}">
+            <CheckBox x:Name="ForcedWritesCheck"
+                      Content="{x:Static app:UiStrings.DatabasePropertiesForcedWrites}"
+                      IsChecked="{Binding ForcedWrites, Mode=TwoWay}"
+                      IsEnabled="{Binding CanAttemptWrite}" />
+
+            <CheckBox x:Name="ReserveSpaceCheck"
+                      Content="{x:Static app:UiStrings.DatabasePropertiesReserveSpace}"
+                      IsChecked="{Binding ReserveSpace, Mode=TwoWay}"
+                      IsEnabled="{Binding CanAttemptWrite}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- ⛔ NIE MA sekcji „Requires exclusive access" i to jest ratyfikowane USUNIĘCIE, nie przeoczenie.
+           Zmierzone: `SetAccessModeAsync` wymaga wyłącznego dostępu (SQLSTATE 40001 przy jednym otwartym
+           attachmencie, sukces przy zerze), a EmberTern trzyma 2–3 attachmenty na profil i to okno jest
+           osiągalne WYŁĄCZNIE po połączeniu — więc kontrolka nigdy nie dałaby się użyć.
+           ⛔ Nie przywracać jej „jako informacji" i nie budować workflow rozłączania bazy pod tę jedną
+           właściwość. Kolumna `MON$READ_ONLY` została też usunięta z zapytania czytnika: nie czytamy tego,
+           czego nie pokazujemy. -->
+      </StackPanel>
+    </Border>
+    </ScrollViewer>
+
+    <controls:MessageBanner Grid.Row="2"
+                            Classes="docked"
+                            Severity="{Binding MessageSeverity}"
+                            Message="{Binding Message}"
+                            IsVisible="{Binding HasMessage}" />
+
+    <Border Grid.Row="3"
+            Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="{DynamicResource Border.Top}"
+            Padding="{DynamicResource Pad.Dialog}">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{DynamicResource Space.Md}">
+        <Button Classes="flat"
+                Content="{x:Static app:UiStrings.DatabasePropertiesClose}"
+                Click="OnCloseClick"
+                IsCancel="True" />
+        <!-- ⚠ Jawny Apply, świadomie ODWROTNIE niż ratyfikowany apply-on-change w Settings Center:
+             tam zapisujemy lokalny plik, tutaj współdzieloną bazę produkcyjną, bezpowrotnie. -->
+        <Button x:Name="ApplyButton"
+                Classes="primary"
+                Content="{x:Static app:UiStrings.DatabasePropertiesApply}"
+                Command="{Binding ApplyCommand}"
+                IsDefault="True" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>

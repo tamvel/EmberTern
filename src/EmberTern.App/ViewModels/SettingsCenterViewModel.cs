@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Settings;
+using EmberTern.Core.Formatting;
 using EmberTern.Core.Settings;
 
 namespace EmberTern.App.ViewModels;
@@ -59,12 +60,18 @@ public abstract partial class SettingRowViewModel : ObservableObject
         Id = descriptor.Id;
         CategoryId = descriptor.CategoryId;
         Label = descriptor.Label;
-        Description = descriptor.Description;
+
+        // ⭐ Applied HERE, in the one place every row's description passes through, so it covers the texts that
+        // exist and the ones nobody has written yet — a description with a grouped number cannot wrap in the
+        // middle of it. See ProseNumbers: a space between two digits is a separator, never a word gap.
+        Description = ProseNumbers.KeepNumbersWhole(descriptor.Description);
 
         // Searching matches what is DISPLAYED plus the keywords that lead to it — and the category's own
         // title, so typing "general" keeps the whole page rather than emptying it.
+        // ⚠ Built from the RAW description on purpose: the displayed one carries non-breaking spaces, so a
+        // user typing "1 000 000" with ordinary spaces would stop matching a row that plainly contains it.
         Haystack = string.Join('\n',
-            Label, Description, categoryTitle, string.Join(' ', descriptor.Keywords));
+            Label, descriptor.Description, categoryTitle, string.Join(' ', descriptor.Keywords));
     }
 
     public string Id { get; }

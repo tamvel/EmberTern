@@ -48,19 +48,34 @@ public class FirebirdConnectionServiceTests
         Assert.StartsWith("Could not connect to this-host-does-not-exist-embertern.invalid:3050:", ex.Message);
     }
 
-    // No special-casing: a Legacy_Auth message now returns the raw server message
-    // like everything else — no hint, no interpretation.
+    /// <summary>
+    /// ⚠⚠ <b>THIS TEST WAS REVERSED, deliberately and on the user's ratified call (2026-08-10).</b> It used to
+    /// assert that a Legacy_Auth failure returns the RAW server message with no hint — the guard written when
+    /// an earlier hint was removed for misfiring. That removal is respected, not undone: the hint it forbade
+    /// <i>asserted a cause</i> ("this account is not an SRP user") and was wrong whenever the same text came
+    /// from a bad password or a missing user.
+    ///
+    /// <para>⭐ The replacement asserts NOTHING. It says the server rejected authentication, that EmberTern
+    /// speaks SRP only, and asks the user to check the credentials and the account's SRP support — all of
+    /// which is true for <b>every</b> cause the message covers. The reason the old guard existed (a hint that
+    /// can be wrong) therefore does not apply to it, and <c>PostPointSixUxFixTests</c> pins the
+    /// "guides, never asserts" property directly.</para>
+    ///
+    /// <para>⚠ What this test still protects is the half that did NOT change: the rewrite is scoped to this
+    /// one refusal, so the raw server text survives for everything else (the sibling test below).</para>
+    /// </summary>
     [Fact]
-    public void MapErrorMessage_LegacyAuthInMessage_ReturnsRawServerMessage()
+    public void MapErrorMessage_LegacyAuth_ExplainsSrpWithoutClaimingACause()
     {
         var profile = new ConnectionProfile { Username = "SYSDBA", Host = "localhost", Port = 3050 };
         var ex = new System.Exception("Not supported plugin 'Legacy_Auth' from server");
 
         var result = FirebirdConnectionService.MapErrorMessage(ex, profile);
 
-        Assert.Equal("Could not connect to localhost:3050: Not supported plugin 'Legacy_Auth' from server", result);
-        Assert.DoesNotContain("CREATE USER", result);
-        Assert.DoesNotContain("USING PLUGIN", result);
+        Assert.StartsWith("Could not connect to localhost:3050:", result);
+        Assert.Contains("SRP", result);
+        // ⛔ The driver's misleading wording must not reach the user for this case — it is what the change is for.
+        Assert.DoesNotContain("Legacy_Auth", result);
     }
 
     // Wrong password / missing user / anything else: raw server message, no hint.

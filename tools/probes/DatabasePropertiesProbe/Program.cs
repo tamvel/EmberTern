@@ -430,6 +430,74 @@ catch (Exception ex)
     Console.WriteLine("    ⇒ powrót do „dziedzicz domyślną serwera\" NIE jest dostępny przez to API");
 }
 
+// ═════ H. FB3 — czy zestaw kolumn V1 istnieje na CAŁYM wspieranym zakresie ═══════════════════════════
+Section("H. FB3 — dostępność kolumn V1 na najstarszym wspieranym serwerze");
+Console.WriteLine("⚠ EmberTern deklaruje wsparcie FB3+, a sekcje A–G mierzyły WYŁĄCZNIE FB5. Część kolumn");
+Console.WriteLine("  MON$DATABASE to dodatki FB4/FB5, więc zapytanie wymieniające je z nazwy padłoby na FB3 —");
+Console.WriteLine("  gotcha #146 w nowym miejscu. Poniżej sprawdzone są DOKŁADNIE te kolumny, których używa");
+Console.WriteLine("  czytnik V1, na instancji FB3 (localhost:4050).");
+
+// Dokładnie zestaw V1 — nic więcej. Gdyby ktoś dopisał kolumnę do czytnika, musi ją dopisać tutaj
+// i zobaczyć wynik na FB3, zamiast zakładać.
+string[] v1MonColumns =
+[
+    "MON$PAGE_SIZE", "MON$ODS_MAJOR", "MON$ODS_MINOR", "MON$PAGE_BUFFERS", "MON$SQL_DIALECT",
+    "MON$SWEEP_INTERVAL", "MON$READ_ONLY", "MON$FORCED_WRITES", "MON$RESERVE_SPACE",
+    "MON$CREATION_DATE", "MON$PAGES", "MON$OWNER",
+];
+string[] v1RdbColumns = ["RDB$CHARACTER_SET_NAME", "RDB$LINGER"];
+
+async Task CheckInstance(string label, int port)
+{
+    Console.WriteLine();
+    Console.WriteLine($"--- {label} (port {port}) ---");
+    var path = $@"C:\Temp\embertern_dbprops_p{port}.fdb";
+    var b = new FbConnectionStringBuilder
+    {
+        DataSource = "localhost", Port = port, Database = path, UserID = "SYSDBA",
+        Password = password, Charset = "WIN1250", Dialect = 3,
+        ServerType = FbServerType.Default, Pooling = false,
+    };
+
+    try
+    {
+        FbConnection.CreateDatabase(b.ToString(), overwrite: true);
+        await using var c = new FbConnection(b.ToString());
+        await c.OpenAsync();
+        Console.WriteLine($"    ServerVersion : {c.ServerVersion}");
+        Console.WriteLine($"    ENGINE_VERSION: {await ScalarAsync(c, "SELECT RDB$GET_CONTEXT('SYSTEM','ENGINE_VERSION') FROM RDB$DATABASE")}");
+
+        foreach (var (rel, cols) in new[] { ("MON$DATABASE", v1MonColumns), ("RDB$DATABASE", v1RdbColumns) })
+        {
+            foreach (var col in cols)
+            {
+                try
+                {
+                    var v = await ScalarAsync(c, $"SELECT {col} FROM {rel}");
+                    Console.WriteLine($"    [OK  ] {rel}.{col,-24} = {(v is null or DBNull ? "<null>" : v)}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"    [BRAK] {rel}.{col,-24} ⛔ {Short(ex)}");
+                }
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"    ⛔ instancja niedostępna — {Short(ex)}");
+        Console.WriteLine("    (pomiar NIEWYKONANY dla tej wersji — zgłoszone jako niezmierzone)");
+        return;
+    }
+    finally
+    {
+        try { File.Delete(path); } catch { /* scratch */ }
+    }
+}
+
+await CheckInstance("Firebird 3", 4050);
+await CheckInstance("Firebird 5 (kontrola)", 3050);
+
 // ═════ STAN KOŃCOWY ══════════════════════════════════════════════════════════════════════════════════
 Section("STAN KOŃCOWY bazy scratch (dowód, że nic nie zostało zmienione na trwałe)");
 await using (var c = new FbConnection(Db().ToString()))

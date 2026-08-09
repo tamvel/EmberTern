@@ -158,6 +158,13 @@ internal static class Program
         // Pakiet UX po M5, punkt 5. ⚠ Drugi argument to znacznik pliku: „before" renderuje się na kodzie
         //   SPRZED zmiany, „after" po niej — inaczej porównania nie da się zrobić w ogóle, bo obie kolumny
         //   pochodzą z produktu, a nie z kandydatów zdefiniowanych w sondzie.
+        if (args.Length > 0 && args[0] == "dbprops")
+        {
+            DatabaseProps.Run(outDir);
+            Console.WriteLine("OK");
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "settings")
         {
             SettingsUx.Run(outDir, args.Length > 1 ? args[1] : "after");

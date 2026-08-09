@@ -1,4 +1,4 @@
-# 27 — Pakiet UX po M5 (2026-08-09 →)
+# 27 — Pakiet UX po M5 (2026-08-09 → 2026-08-10) — ZAMKNIĘTY W CAŁOŚCI
 
 Sześć zgłoszeń ze zwykłego używania aplikacji, zebranych po zamknięciu Product Polish M5.
 Gałąź `feat/product-polish` (⛔ nadal **nie** scalona do `master`).
@@ -12,7 +12,7 @@ Zakres całego pakietu, w kolejności ratyfikowanej przez użytkownika:
 | 3 | Live DDL — kolorowanie na pięciu powierzchniach | ✅ zamknięte, odebrane |
 | 4 | Performance — Execution plan (layout + kolorowanie drzewa) | ✅ zamknięte, odebrane |
 | 5 | Settings UX | ✅ zamknięte, odebrane |
-| 6 | Database Properties (nowa funkcja) | ⏸ osobny mini-etap |
+| 6 | Database Properties (nowa funkcja) | ✅ zamknięte, odebrane |
 
 ---
 
@@ -671,3 +671,174 @@ użytkownika propozycja powstaje **po** pomiarze i osobno.
 ⚠ Niezmierzone i zapisane jako takie: zachowanie przy bazie na **serwerze zdalnym** (mierzone na
 `localhost`), zachowanie przy **Firebirdzie 3/4** (sonda uruchomiona wyłącznie na FB5) oraz `RDB$LINGER`
 jako wartość zapisywalna (`ALTER DATABASE SET LINGER` — nie było przedmiotem kroku 0).
+
+---
+
+## §11 Punkt 6 — Database Properties (implementacja + domknięcie)
+
+Krok 0 (§10) dostarczył pomiar; ten rozdział opisuje to, co z niego zbudowano. Zakres ratyfikowany przez
+użytkownika **po** obejrzeniu tabeli pomiarowej — żadna pozycja nie została wybrana z analizy.
+
+### §11.1 Ratyfikowany zakres V1
+
+**Edytowalne** — wyłącznie te, które pomiar wykazał jako zapisywalne ONLINE, bez wyłączności, widoczne
+natychmiast: **Sweep interval · Forced writes · Reserve space**.
+
+**Informacyjne:** Database · Owner · Engine version · ODS · Dialect · Charset · Created · Page size ·
+Pages · Size · Page buffers · Linger.
+
+⛔ **Poza V1, każde z powodem:**
+- **SQL dialect** — zmierzony jako zapisywalny ONLINE (3 → 1 → 3 przy otwartym attachmencie), więc jego
+  „tylko odczyt" jest **decyzją produktową, nie ograniczeniem**: zmiana dialektu wpływa na SQL, którego
+  używa sam EmberTern.
+- **Page buffers** — patrz §11.3.
+- **Read Only** — usunięty **w całości** przy domykaniu etapu, patrz §11.6.
+- `MON$GUID`, `MON$FILE_ID`, `MON$SEC_DATABASE`, `MON$CRYPT_STATE`, `MON$BACKUP_STATE`, `MON$REPLICA_MODE`,
+  `MON$NEXT_*`, `RDB$SQL_SECURITY` — sonda potwierdziła, że istnieją; ⛔ nie dodajemy pola dlatego, że
+  katalog je udostępnia.
+
+### §11.2 ⭐⭐ Jedna obietnica, na której stoi bezpieczeństwo funkcji
+
+**Otwarcie okna i naciśnięcie Apply musi nie wysłać NICZEGO.** To okno pisze do współdzielonej bazy
+produkcyjnej, przez API bez możliwości wycofania, poza wszystkimi trzema lane'ami i poza transakcją
+użytkownika — więc Apply wysyłający pełny snapshot przepchnąłby wartości, na które użytkownik nawet nie
+spojrzał.
+
+Realizacja: `DatabaseConfigurationChange` ma wszystkie składowe **nullowalne**, a `null` znaczy *nie ruszaj*.
+Obietnica jest więc prawdziwa **z konstrukcji**, nie przez staranność. Pilnują jej trzy testy (Apply bez
+edycji nic nie wysyła · edytowana wartość cofnięta do pierwotnej nie jest wysyłana · niepoprawna liczba nie
+wysyła nic) oraz — mocniej — **weryfikacja na żywym FB5**: wysłano `sweep=4321 forced=<nic> reserve=False`,
+a po zapisie `ForcedWrites` pozostało `True`.
+
+⚠ **Apply NIE jest atomowy i to jest fakt o API, nie wybór projektowy** — każde ustawienie to osobne
+wywołanie Services. Stąd LISTA wyników per ustawienie zamiast jednej flagi: po częściowym sukcesie
+użytkownik musi wiedzieć, **które** zmiany są już w bazie. Komunikat wymienia to, co się udało, i dopiero
+potem awarie.
+
+### §11.3 ⭐⭐ Page buffers — odczyt i zapis nie dotyczą tej samej rzeczy
+
+`MON$PAGE_BUFFERS` raportuje **cache działającej instancji**, a nie zapisany nagłówek (§10.4). W praktyce:
+pole edycji zasiane tą wartością pokazałoby **51200 — liczbę DZIEDZICZONĄ z serwera** — a Apply bez żadnej
+edycji **przypiąłby ją do tej bazy na stałe**.
+
+🔒 Ratyfikowane: **informacja, bez pola edycji**, z notą mówiącą wprost, że to cache instancji, a zapisana
+wartość zaczyna obowiązywać po pełnym zwolnieniu bazy. Bez tej noty liczba czytałaby się jak ustawienie.
+⛔ Zaprojektowany i **odrzucony** przez użytkownika wariant „Current + Set to + Use server default": nie
+wprowadzamy w V1 osobnego modelu *wartość bieżąca vs intencja vs dziedziczenie*, zwłaszcza gdy `MON$` nie
+odróżnia „dziedziczone 51200" od „jawnie ustawione 51200".
+
+### §11.4 Architektura
+
+- **Odczyt** → lane **Metadata** (read-only, implicit per-command transaction), wzorzec
+  `FirebirdSessionReader`. ⭐ **Bez bramkowania wersją** — cały zestaw kolumn zmierzono na **FB3.0.13
+  (ODS 12.0)** i **FB5.0.3 (ODS 13.1)**; to pomiar, nie założenie.
+- **Zapis** → **Services API**, własne połączenie poza lane'ami ⇒ zero ekspozycji na transakcję użytkownika.
+  ⛔ `FirebirdTraceService.BuildServiceConnectionString` **nie nadaje się wprost** — buduje string *bez bazy*,
+  a operacje konfiguracyjne wymagają `Database` (zmierzone).
+- **VM bierze czytnik i writer jako DELEGATY**, nie jako typy Firebirda — to nie ceremonia warstw, tylko
+  powód, dla którego każda reguła tej funkcji jest testowalna **bez serwera**, czyli dokładnie tam, gdzie
+  leży ryzyko.
+- **Menu**: `Properties…` w istniejącym `SidebarConnectionMenu`, ⚠ **wyszarzane, nie ukrywane** — inaczej
+  niż sąsiedzi w tym samym menu. To ratyfikowana reguła z M3.4b część 2 (ukrywaj, gdy pozycja nie ma sensu
+  w ogóle; wyszarzaj, gdy operacja istnieje, ale jest chwilowo niedostępna), a nie dryf. Zero nowej
+  maszynerii: `CanDisconnect` już znaczy „wymaga połączenia".
+
+### §11.5 Błędy
+
+⭐ **Surowy komunikat serwera ZAWSZE**, a krótki lead **wyłącznie** dla przypadków rozpoznanych po
+**SQLSTATE/GDS** — wzorzec `DebugErrorClassifier`.
+⛔⛔ Zmierzony komunikat przy błędnym haśle (`Not supported plugin 'Legacy_Auth'`) **nie jest tu tłumaczony**:
+przychodzi **bez SQLSTATE i bez GDS**, więc rozpoznać go dałoby się wyłącznie po tekście. Osobny strażnik
+pilnuje, że **pozostaje nieklasyfikowany**. (Odrębna sprawa: sam komunikat POŁĄCZENIA został poprawiony —
+§11.7.)
+⚠ **Apply jest niedostępny z góry tylko w jednym przypadku** — profil bez zapisanego hasła, bo sterownik
+odmawia zanim dojdzie do serwera. ⛔ Uprawnienie `USE_GFIX_UTILITY` **nie jest pre-sprawdzane** (dyrektywa
+użytkownika): nie da się go poznać bez próby, a komunikat serwera jest konkretny i cytowalny.
+
+### §11.6 ⭐ Read Only usunięty przy domykaniu — i to jest USUNIĘCIE, nie przeoczenie
+
+Pierwsza wersja pokazywała stan Read Only jako wyłączony przełącznik z wyjaśnieniem. 🔒 Decyzja
+użytkownika przy odbiorze: **usunąć całą sekcję**, bo *„pokazywanie kontrolki, której użytkownik nigdy nie
+może użyć, nie ma wartości w V1"*. Zmierzone tło: operacja wymaga wyłączności (SQLSTATE 40001 przy jednym
+otwartym attachmencie, sukces przy zerze), EmberTern trzyma 2–3 attachmenty na profil, a okno jest osiągalne
+**wyłącznie po połączeniu**. ⛔ Bez workflow „rozłącz i spróbuj".
+
+⭐ Usunięta została **cała ścieżka**, nie tylko widok: pole z DTO, **kolumna `MON$READ_ONLY` z zapytania**,
+własność z VM i **trzy osierocone stałe** z `UiStrings` — bo osierocona stała przeżywa całe życie produktu
+właśnie dlatego, że nikt jej nie używa (lekcja M‑3). Zasada: **nie czytamy z bazy tego, czego nie pokazujemy.**
+
+⚠⚠ Usunięcie kolumny **przesunęło indeksy wszystkich kolumn za nią** — zmiana, która kompiluje się,
+przechodzi testy i myli dane. Dlatego czytnik został **ponownie zweryfikowany na żywym FB5** po
+przenumerowaniu.
+
+⏸ Zapisane, nie rozstrzygnięte: `DatabaseApplyFailure.DatabaseInUse` straciło swoje zmierzone uzasadnienie
+(było nim Read Only) i **nie jest już dowodliwie osiągalne**. Zostawione z jawnym zastrzeżeniem przy
+definicji — usunięcie go jest osobną decyzją, nie konsekwencją tej zmiany.
+
+### §11.7 Trzy poprawki UX przy domykaniu etapu
+
+**(a) Odstępy w sekcji Configuration.** Pole `Sweep interval` i oba przełączniki stykały się i czytały jak
+jeden blok. ⭐ Przyczyną była **struktura, nie brak marginesu**: siedziały w jednej trzywierszowej siatce,
+więc sąsiadowały bezpośrednio. Rozdzielone na wiersz pola + blok przełączników; odstęp niesie
+`Margin.FieldGap` (rola „przerwa po polu"), przełączniki `Space.Sm`. ⛔ Zero nowych tokenów, zero zmian
+w globalnych wysokościach kontrolek, `settings-group` nietknięty.
+
+**(b) ⭐⭐ Komunikat uwierzytelniania — i to jest ODWRÓCENIE zapisanej decyzji.** Surowy
+`Not supported plugin 'Legacy_Auth'` jest dla użytkownika mylący: ten sam tekst niesie brak SRP, **złe
+hasło** i nieistniejącego użytkownika. Nowy komunikat mówi, że serwer odrzucił uwierzytelnienie, że
+EmberTern mówi wyłącznie SRP, prosi o sprawdzenie loginu i hasła oraz konfiguracji konta pod SRP i podaje
+adminowi `CREATE USER … USING PLUGIN Srp`.
+
+⚠⚠ **Podpowiedź do Legacy_Auth już raz istniała i została usunięta** — bo *orzekała o przyczynie* i myliła
+się, gdy tekst pochodził od złego hasła. ⭐ Nowa jest bezpieczna dokładnie tam, gdzie tamta nie była:
+**nie orzeka niczego**, więc jest prawdziwa dla każdej przyczyny, którą ten błąd obejmuje. Rozróżnienie
+*naprowadza vs orzeka* pilnuje osobny strażnik.
+⚠⚠ Rozpoznanie idzie **po TEKŚCIE**, czyli po tym, czego ten kod zakazuje gdzie indziej — musi, bo ten błąd
+przychodzi **bez SQLSTATE i bez GDS**. Zapisane przy kodzie, nie ukryte. ⚠ Istniejący strażnik
+`MapErrorMessage_LegacyAuthInMessage_ReturnsRawServerMessage` **odwrócono z uzasadnieniem**, zachowując
+połowę, która nadal obowiązuje: podmiana dotyczy **wyłącznie tego jednego przypadku**.
+
+**(c) Tło nawigacji Settings.** Panel niósł `ChromeStrongBrush` i czytał się jako za jasny wobec głównego
+paska bocznego. Zmierzone: `MainWindow` maluje `SidebarPanel` **`PanelBrush`** — nawigacja ustawień bierze
+**dokładnie ten zasób**, bo oba panele to ta sama rzecz: lewa nawigacja okna. ⚠ Konsekwencja świadoma:
+nawigacja i treść mają teraz ten sam ton, więc granicę niesie kreska 1 px.
+
+**(d) ⭐ Niełamliwe separatory liczb.** `Between 1 and 1 000 000.` łamało się na `…1` / `000 000.`, czyli
+jedna liczba czytała się jak dwie. Nowy `EmberTern.Core.Formatting.ProseNumbers` zamienia na U+00A0
+**spację mającą cyfrę po obu stronach** — reguła o KSZTAŁCIE, więc obejmuje teksty istniejące i przyszłe.
+Wpięta w **jednym miejscu** (`SettingRowViewModel.Description`). ⭐ Odstępy międzywyrazowe zostają zwykłe, więc
+opis nadal się zawija. ⚠ Wyszukiwanie czyta tekst **surowy**, żeby wpisanie „1 000 000" zwykłymi spacjami
+nadal trafiało. Strażnik przebiega **cały katalog**, nie trzy wybrane zdania.
+
+### §11.8 Strażniki zakresu — przeciw rozrostowi, nie przeciw błędom
+
+- `TheWriterNeverCallsASetterRatifiedOutOfV1` — `SetSqlDialectAsync` · `SetPageBuffersAsync` ·
+  `SetAccessModeAsync`. ⚠ **Wszystkie trzy działają technicznie**, więc przyszły czytelnik sterownika uznałby
+  ich brak za przeoczenie. Strażnik mówi, że nim nie jest.
+- `TheReaderNamesNoColumnOutsideTheRatifiedScope` — osiem kolumn FB4/FB5, asercja **negatywna** (lista
+  dozwolonych byłaby przepisaniem katalogu FB3, #333).
+
+⚠ Przy dopisywaniu okna zapaliły się **dwa istniejące strażniki z M4.4** i oba miały rację: nowe okno
+`SizeToContent` musi mieć **zapisaną decyzję** o wzroście (#340 przełożone na strażnika), a okno z sufitem
+musi mieć **`ScrollViewer`**, bo sufit bez przewijania nie ogranicza treści, tylko ją **przycina**. ⛔ Żadnego
+nie osłabiono.
+
+### §11.9 ⭐ Gotcha #351 odtworzona przez autora w tej samej sesji
+
+Nowy dialog użył `Border.settings-group` na hoście `BackgroundBrush` — czyli dokładnie defekt opisany
+godzinę wcześniej przy punkcie 5. Render wyglądał wiarygodnie; **pomiar pikseli** pokazał kartę `#1E1E1E`
+na tle `#1E1E1E`. Naprawione **hostem**, styl karty nietknięty.
+⭐ To jest argument za tym, że wpis był wart zapisania: pierwszym, który w niego wdepnął, był jego autor.
+
+### §11.10 Weryfikacja
+
+- Build **0/0**, zero ostrzeżeń
+- Suite **8467** = 8280 (główna) + 132 (headless zgrupowana) + 55 (headless izolowana), `--blame-hang`
+- ⭐ Krucha ręczna lista nazw w filtrze partycji headless **nie urosła** — nowe testy czytają ViewModele
+  i źródła, więc trafiły do partycji głównej
+- Smoke czysty; `Lab/` nietknięty
+- Render: `dotnet run --project tools/probes/VisualCandidateProbe -- dbprops` (3 stany × 2 motywy)
+- ⭐ **Czytnik i writer zweryfikowane NA ŻYWO** — pełny cykl odczyt → zapis → ponowny odczyt na FB5, na bazie
+  scratch; program weryfikacyjny skasowany po przebiegu
+- Strażniki zweryfikowane podsadzeniem: kolumna FB4 w czytniku · heurystyka tekstowa `Legacy_Auth` ·
+  martwy NBSP · komunikat orzekający o przyczynie

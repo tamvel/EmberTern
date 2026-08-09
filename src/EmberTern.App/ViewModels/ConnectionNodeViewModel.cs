@@ -49,6 +49,7 @@ public partial class ConnectionNodeViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(RefreshMetadataCommand))]
     [NotifyCanExecuteChangedFor(nameof(RecomputeAllStatisticsCommand))]
     [NotifyCanExecuteChangedFor(nameof(RecompileAllObjectsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DatabasePropertiesCommand))]
     private bool _isConnected;
 
     [ObservableProperty]
@@ -231,6 +232,21 @@ public partial class ConnectionNodeViewModel : ViewModelBase
 
     [RelayCommand(CanExecute = nameof(CanDisconnect))]
     private Task RecompileAllObjectsAsync() => _owner?.RecompileAllObjectsAsync() ?? Task.CompletedTask;
+
+    /// <summary>
+    /// Opens the Database Properties window for this connection.
+    ///
+    /// <para>⚠ <b>Gated by DISABLING, where its neighbours in the same menu HIDE</b> (they use
+    /// <c>IsVisible="{Binding IsConnected}"</c>) — and that is the ratified rule rather than drift: hide when
+    /// the item makes no sense in that state at all, disable when the operation exists but is momentarily
+    /// unavailable (M3.4b part 2). A database has properties whether or not EmberTern is attached; it just
+    /// cannot read them right now.</para>
+    ///
+    /// <para>⭐ It needs no new mechanism: <c>CanDisconnect</c> is already "requires a connection", and
+    /// <see cref="IsConnected"/> already re-evaluates every command listed on it.</para>
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDisconnect))]
+    private Task DatabasePropertiesAsync() => _owner?.ShowDatabasePropertiesAsync() ?? Task.CompletedTask;
 
     private bool CanConnect() => !IsConnected;
     private bool CanDisconnect() => IsConnected;
