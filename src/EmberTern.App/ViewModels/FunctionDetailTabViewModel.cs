@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Localization;
 using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
@@ -472,7 +473,7 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
 
     /// <summary>Per-table CHANGE breakdown for the exec-info Expander's expanded body, built from
     /// the MON$ delta. Reads are NOT here — they live in the Performance tab.</summary>
-    public ObservableCollection<TableActivityLine> ExecTableActivity { get; } = new();
+    public ObservableCollection<ExecActivityLineViewModel> ExecTableActivity { get; } = new();
 
     public bool HasExecTableActivity => ExecTableActivity.Count > 0;
 
@@ -639,6 +640,7 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
             ExecResult = outcome.Result;
             ExecError = string.Empty;
             _execChangesMeasured = outcome.Summary?.ChangesMeasured ?? (outcome.Reads is not null);
+            _lastExecOutcome = outcome;
             ExecInfo = BuildExecInfo(outcome);
             ExecInfoCompact = BuildExecInfoCompact(outcome);
             ExecInfoIsError = false;
@@ -651,14 +653,38 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     }
 
     // Rebuild the per-table exec breakdown (expanded exec-info body) from the MON$ delta.
+    // ⚠ The delta is KEPT so a language change can rebuild the rows — see RefreshLocalizedText.
     private void ApplyExecTableActivity(IReadOnlyList<PerTableReadRow>? reads)
     {
+        _lastExecReads = reads;
         ExecTableActivity.Clear();
         foreach (var line in ExecutionActivity.Build(reads))
         {
-            ExecTableActivity.Add(line);
+            ExecTableActivity.Add(new ExecActivityLineViewModel(line));
         }
         OnPropertyChanged(nameof(HasExecTableActivity));
+    }
+
+    private IReadOnlyList<PerTableReadRow>? _lastExecReads;
+    private ProcedureExecOutcome? _lastExecOutcome;
+
+    /// <inheritdoc cref="ProcedureDetailTabViewModel.RefreshLocalizedText"/>
+    internal void RefreshLocalizedText()
+    {
+        OnPropertyChanged(string.Empty);
+
+        if (_lastExecOutcome is { } outcome)
+        {
+            ExecInfo = BuildExecInfo(outcome);
+            ExecInfoCompact = BuildExecInfoCompact(outcome);
+        }
+
+        if (_lastExecReads is not null || ExecTableActivity.Count > 0)
+        {
+            ApplyExecTableActivity(_lastExecReads);
+        }
+
+        OnPropertyChanged(nameof(ExecSummaryFallbackText));
     }
 
     // A function is usually read-only: a scalar result shows "1 row in T ms" (+ rows read);
@@ -680,7 +706,7 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         }
         if (outcome.Summary is { } summary)
         {
-            return summary.BuildDetailedMessage();
+            return summary.BuildDetailedMessage(Loc.Format);
         }
         return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
     }
@@ -704,7 +730,7 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         }
         if (outcome.Summary is { } summary)
         {
-            return summary.BuildCompactLine();
+            return summary.BuildCompactLine(Loc.Format);
         }
         return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
     }

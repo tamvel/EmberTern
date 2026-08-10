@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Core.Settings.Export;
 
@@ -27,11 +28,13 @@ public sealed class SettingsImportApplyResult
     internal SettingsImportApplyResult(
         SettingsImportApplyStatus status,
         string message,
+        LocalizableMessage? localized,
         string? preservedAt,
         IReadOnlyList<string> appliedSections)
     {
         Status = status;
         Message = message;
+        Localized = localized;
         PreservedAt = preservedAt;
         AppliedSections = appliedSections;
     }
@@ -40,6 +43,16 @@ public sealed class SettingsImportApplyResult
 
     /// <summary>A message fit to show the user, or empty on success.</summary>
     public string Message { get; }
+
+    /// <summary>
+    /// <inheritdoc cref="SettingsImportInspection.Localized" path="/summary/para[1]"/>
+    ///
+    /// <para>⚠ For <see cref="SettingsImportApplyStatus.Refused"/> this may be the settings <b>store's</b> own
+    /// refusal, forwarded whole from <c>ApplicationSettingsStore</c> (C4a's keys) rather than restated here:
+    /// one sentence, one producer. ⛔ It can also be null on that status — a store from a build older than
+    /// C4a would supply English only, and the caller must fall back to <see cref="Message"/>.</para>
+    /// </summary>
+    public LocalizableMessage? Localized { get; }
 
     /// <summary>Where the previous <c>settings.dat</c> was copied to, or null when there was none (a first run)
     /// or the import never got that far.</summary>
@@ -179,16 +192,19 @@ public static class SettingsImportApplier
             return new SettingsImportApplyResult(
                 SettingsImportApplyStatus.NothingSelected,
                 "Nothing was selected to import, so nothing was changed.",
+                LocalizableMessage.Of(SettingsExportMessages.NothingSelected),
                 null,
                 Array.Empty<string>());
         }
 
         // Asked BEFORE the copy: see ApplicationSettingsStore.CanSave for why the ordering matters here rather
         // than relying on Save's own refusal.
-        if (!store.CanSave(out var blocked))
+        // ⭐ The two-out overload exists for exactly this: the store's refusal is FORWARDED in both forms, so the
+        // import surfaces the store's own sentence instead of a second one saying the same thing (D‑3, C4a).
+        if (!store.CanSave(out var blocked, out var blockedMessage))
         {
             return new SettingsImportApplyResult(
-                SettingsImportApplyStatus.Refused, blocked, null, Array.Empty<string>());
+                SettingsImportApplyStatus.Refused, blocked, blockedMessage, null, Array.Empty<string>());
         }
 
         string? preservedAt;
@@ -204,6 +220,7 @@ public static class SettingsImportApplier
             return new SettingsImportApplyResult(
                 SettingsImportApplyStatus.Refused,
                 "The current settings could not be copied aside, so nothing was imported: " + ex.Message,
+                LocalizableMessage.Of(SettingsExportMessages.CouldNotCopyAside, ex.Message),
                 null,
                 Array.Empty<string>());
         }
@@ -215,12 +232,14 @@ public static class SettingsImportApplier
         if (store.LastSaveDiagnostic is { } diagnostic)
         {
             // Save re-checks the file it is about to replace, so this is reachable even after CanSave agreed.
+            // ⚠ Forwarded in both forms, from the same setter that recorded them — never recomposed here.
             return new SettingsImportApplyResult(
-                SettingsImportApplyStatus.Refused, diagnostic, preservedAt, Array.Empty<string>());
+                SettingsImportApplyStatus.Refused, diagnostic, store.LastSaveMessage, preservedAt,
+                Array.Empty<string>());
         }
 
         return new SettingsImportApplyResult(
-            SettingsImportApplyStatus.Applied, string.Empty, preservedAt, effective.Sections());
+            SettingsImportApplyStatus.Applied, string.Empty, null, preservedAt, effective.Sections());
     }
 
     private static void MergeFolders(ApplicationSettings current, ApplicationSettings incoming)

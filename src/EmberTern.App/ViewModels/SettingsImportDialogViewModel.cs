@@ -3,7 +3,9 @@ using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EmberTern.App.Controls;
+using EmberTern.App.Localization;
 using EmberTern.App.Settings;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Settings.Export;
 
 namespace EmberTern.App.ViewModels;
@@ -23,6 +25,11 @@ namespace EmberTern.App.ViewModels;
 /// <para>⚠ Failure text comes from Core and is shown as-is. The <c>SettingsImportStatus</c> is the stable half
 /// this class switches on; duplicating the words in <c>UiStrings</c> would be two answers to one question
 /// (§15.8).</para>
+///
+/// <para>⭐ <b>Since C4b that text arrives as a <c>LocalizableMessage</c> and is resolved HERE, at the moment of
+/// display</b> (D‑3) — never captured earlier. One helper, <see cref="Say"/>, does it for all three surfaces and
+/// falls back to Core's English when a producer has none, so an unmigrated path degrades to exactly today's
+/// behaviour rather than to a blank bar.</para>
 /// </summary>
 public sealed partial class SettingsImportDialogViewModel : ObservableObject
 {
@@ -153,7 +160,7 @@ public sealed partial class SettingsImportDialogViewModel : ObservableObject
         // Core's own words for its own status — one of the six distinct outcomes of §6.3.3, and the reason the
         // ordered checks were worth building.
         CanEnterPassphrase = false;
-        Message = inspection.Message;
+        Message = Say(inspection.Localized, inspection.Message);
         MessageSeverity = MessageSeverity.Error;
         ShowMessage = true;
     }
@@ -169,7 +176,7 @@ public sealed partial class SettingsImportDialogViewModel : ObservableObject
         var result = _portability.Open(inspection, Passphrase);
         if (!result.IsUsable || result.Content is null)
         {
-            Message = result.Message;
+            Message = Say(result.Localized, result.Message);
             MessageSeverity = MessageSeverity.Error;
             ShowMessage = true;
             return;
@@ -195,8 +202,9 @@ public sealed partial class SettingsImportDialogViewModel : ObservableObject
         {
             // ⚠ Includes the store's refusal (§2.5 / audit A-03), which an import must surface for exactly the
             // reason Settings Center must: a surface that accepts the instruction and writes nothing is the worst
-            // possible place for that silence.
-            Message = result.Message;
+            // possible place for that silence. ⭐ That refusal arrives as the STORE's own localizable message,
+            // forwarded through the applier — the same sentence Settings Center shows, from the same key.
+            Message = Say(result.Localized, result.Message);
             MessageSeverity = MessageSeverity.Warning;
             ShowMessage = true;
             return;
@@ -212,6 +220,26 @@ public sealed partial class SettingsImportDialogViewModel : ObservableObject
         ShowMessage = true;
         Completed = true;
     }
+
+    /// <summary>
+    /// Core's verdict in the reader's language, resolved at the moment of display (D‑3).
+    ///
+    /// <para>⚠ The English half is the fallback, not the source: a producer that has no key yet still shows
+    /// today's sentence instead of nothing. ⛔ Do not invert this — resolving the key first is what makes a new
+    /// language reach this dialog with no change here.</para>
+    ///
+    /// <para>⭐ <b>Why the composed text may be stored in <c>Message</c> without freezing in one language, which
+    /// is the #353 trap this would otherwise walk into — measured, not assumed:</b> the language preference has
+    /// exactly one writer in the app (Settings Center's Language row), this dialog is opened with
+    /// <c>ShowDialog</c> over that very window, so <b>the language cannot change while it is on screen</b>. And
+    /// in the one case where an import itself changes it — a file whose Preferences carry another language —
+    /// <c>SettingsPortability.Apply</c> reloads the preferences (which switches <c>Loc</c>) <i>before</i>
+    /// returning, so composition already happens in the new language. Same "correct by ordering" as Settings
+    /// Center's save-refusal banner. ⛔ If this dialog ever becomes non-modal, that reasoning lapses and the
+    /// message needs recomposing from a language hook.</para>
+    /// </summary>
+    private static string Say(LocalizableMessage? localized, string english)
+        => localized is { } message ? Loc.Format(message) : english;
 
     private void Offer(SettingsExportContent content)
     {

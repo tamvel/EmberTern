@@ -37,8 +37,21 @@ public partial class WorkspaceTabViewModel : ViewModelBase
     /// Re-publishes every bound property. Called by <c>MainWindowViewModel</c> after a language change —
     /// a tab header and its status are computed once and published, so nothing would otherwise re-read them.
     /// ⛔ Not a general-purpose refresh: it exists for the localization seam and has no other caller.
+    ///
+    /// <para>⚠⚠ <b>A tab's own properties are not the whole tab.</b> Each kind hangs its real content off a
+    /// separate view model (<see cref="SessionManager"/>, <c>Debugger</c>, …), and raising here reaches the
+    /// tab only — the child's bindings are on the child object. So a child holding text it resolved once
+    /// must be forwarded to explicitly; this is the fourth member of the per-kind family beside
+    /// <c>UnsavedWork</c> / <c>SavableEditor</c> / <c>ResolveCommand</c>, and it grows one line per module as
+    /// Core producers migrate onto D‑3.</para>
     /// </summary>
-    internal void RaiseAllPropertiesChanged() => OnPropertyChanged(string.Empty);
+    internal void RaiseAllPropertiesChanged()
+    {
+        OnPropertyChanged(string.Empty);
+        SessionManager?.RefreshLocalizedText();
+        ProcedureDetail?.RefreshLocalizedText();
+        FunctionDetail?.RefreshLocalizedText();
+    }
 
     private readonly MainWindowViewModel _owner;
 

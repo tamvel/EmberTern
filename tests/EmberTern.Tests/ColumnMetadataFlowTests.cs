@@ -99,8 +99,8 @@ public class ColumnMetadataFlowTests
         Assert.Equal(SymbolKind.Column, qi!.Kind);
         Assert.Equal("NAZWA : VARCHAR(50)", qi.Header);
         Assert.Equal("Customer name", qi.Description);
-        Assert.Equal("T_NAME", qi.Facts.First(f => f.Label == "Domain").Value);
-        Assert.Equal("NOT NULL", qi.Facts.First(f => f.Label == "Nullability").Value);
+        Assert.Equal("T_NAME", qi.Facts.First(f => f.Label == QuickInfoMessages.Domain).Value);
+        Assert.Equal("NOT NULL", qi.Facts.First(f => f.Label == QuickInfoMessages.Nullability).Value);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class ColumnMetadataFlowTests
         var qi = QuickInfoEngine.GetQuickInfo(model, sql.IndexOf("id_kontrahent", StringComparison.Ordinal) + 1);
 
         Assert.NotNull(qi);
-        Assert.Equal("FOREIGN KEY → KONTRAHENT", qi!.Facts.First(f => f.Label == "Key").Value);
+        Assert.Equal("FOREIGN KEY → KONTRAHENT", qi!.Facts.First(f => f.Label == QuickInfoMessages.Key).Value);
     }
 
     // ── Stage B/C: warmed object detail flows through the snapshot into Quick Info ────────────────
@@ -181,7 +181,7 @@ public class ColumnMetadataFlowTests
         Assert.NotNull(qi);
         Assert.Equal(SymbolKind.Function, qi!.Kind);
         Assert.Equal("Computes a value", qi.Description);
-        Assert.Equal("NUMERIC(15,2)", qi.Facts.First(f => f.Label == "Returns").Value);
+        Assert.Equal("NUMERIC(15,2)", qi.Facts.First(f => f.Label == QuickInfoMessages.Returns).Value);
     }
 
     [Fact]
@@ -206,8 +206,8 @@ public class ColumnMetadataFlowTests
 
         Assert.NotNull(qi);
         Assert.Equal(SymbolKind.Trigger, qi!.Kind);
-        Assert.Equal("KONTRAHENT", qi.Facts.First(f => f.Label == "Table").Value);
-        Assert.Equal("AFTER INSERT OR UPDATE OR DELETE", qi.Facts.First(f => f.Label == "Fires").Value);
+        Assert.Equal("KONTRAHENT", qi.Facts.First(f => f.Label == QuickInfoMessages.Table).Value);
+        Assert.Equal("AFTER INSERT OR UPDATE OR DELETE", qi.Facts.First(f => f.Label == QuickInfoMessages.Fires).Value);
     }
 
     // ══ Column readiness (S-2, 2026-08-05) ═══════════════════════════════════════════════════════

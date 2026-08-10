@@ -1,5 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Core.Settings.Export;
 
@@ -44,14 +46,21 @@ internal static class SettingsExportMigration
     /// <see cref="SettingsExportFormat.CurrentFormatVersion"/>.
     /// </summary>
     /// <returns><c>true</c> when the payload is now current; <c>false</c> when a step is missing, with the reason
-    /// in <paramref name="diagnostic"/>.</returns>
-    internal static bool TryMigrateToCurrent(JsonObject payload, int fromVersion, out string diagnostic)
+    /// in <paramref name="diagnostic"/> and its localizable twin in <paramref name="localized"/> (D‑3).</returns>
+    /// <remarks>⚠ <c>[NotNullWhen(false)]</c> states the real contract — a refusal always carries BOTH halves —
+    /// and the compiler checks it here rather than leaving the caller to guess.</remarks>
+    internal static bool TryMigrateToCurrent(
+        JsonObject payload,
+        int fromVersion,
+        out string diagnostic,
+        [NotNullWhen(false)] out LocalizableMessage? localized)
     {
         diagnostic = string.Empty;
+        localized = null;
 
         for (var version = fromVersion; version < SettingsExportFormat.CurrentFormatVersion; version++)
         {
-            if (!TryApplyStep(payload, version, fromVersion, out diagnostic))
+            if (!TryApplyStep(payload, version, fromVersion, out diagnostic, out localized))
             {
                 return false;
             }
@@ -63,9 +72,12 @@ internal static class SettingsExportMigration
     // ONE version's worth of upgrade. Split out from the loop only so that a ladder whose steps all return
     // (which is the state while there are none) does not make the loop's increment unreachable code — with
     // TreatWarningsAsErrors that is a build failure, and shaping the ladder around it beats suppressing it.
-    private static bool TryApplyStep(JsonObject payload, int version, int declaredVersion, out string diagnostic)
+    private static bool TryApplyStep(
+        JsonObject payload, int version, int declaredVersion,
+        out string diagnostic, [NotNullWhen(false)] out LocalizableMessage? localized)
     {
         diagnostic = string.Empty;
+        localized = null;
 
         switch (version)
         {
@@ -81,6 +93,11 @@ internal static class SettingsExportMigration
                     "This settings export declares format version {0}, which this build has no migration step "
                     + "for. It cannot be imported.",
                     declaredVersion);
+                // ⚠ The version travels as an invariant STRING, like every other echoed header field — see the
+                // remarks on SettingsExportMessages and gotcha #357.
+                localized = LocalizableMessage.Of(
+                    SettingsExportMessages.NoMigrationStep,
+                    declaredVersion.ToString(CultureInfo.InvariantCulture));
                 return false;
         }
     }

@@ -1,4 +1,4 @@
-using System.Globalization;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Core.Diagnostics;
 
@@ -216,24 +216,25 @@ public static class SessionHealthAnalyzer
             Severity = severity,
             AttachmentId = holder.AttachmentId,
             TransactionId = holder.TransactionId,
-            Title = "Garbage collection is blocked",
-            Explanation = holder.IsSnapshot
-                ? "A snapshot transaction is the oldest active transaction in the database."
-                : "This transaction is the oldest active transaction in the database.",
-            Impact = string.Format(
-                CultureInfo.InvariantCulture,
-                "Firebird cannot garbage-collect record versions from ~{0:N0} later transactions while it stays open — expect growing page reads and file size.",
-                lag),
+            Title = LocalizableMessage.Of(SessionHealthMessages.GcBlockedTitle),
+            Explanation = LocalizableMessage.Of(holder.IsSnapshot
+                ? SessionHealthMessages.GcBlockedExplanationSnapshot
+                : SessionHealthMessages.GcBlockedExplanationTransaction),
+            Impact = LocalizableMessage.Of(SessionHealthMessages.GcBlockedImpact, lag),
             Evidence = new[]
             {
-                $"Tx {holder.TransactionId} · {IsolationLabel(holder)}",
-                age is { } a ? $"Age {FormatAge(a)}" : "Age unknown",
-                $"OAT lag {lag:N0} · OST {db.OldestSnapshot:N0} · Next {db.NextTransaction:N0}",
+                LocalizableMessage.Of(
+                    SessionHealthMessages.EvidenceTransaction, holder.TransactionId, IsolationLabel(holder)),
+                age is { } a
+                    ? LocalizableMessage.Of(SessionHealthMessages.EvidenceAge, FormatAge(a))
+                    : LocalizableMessage.Of(SessionHealthMessages.EvidenceAgeUnknown),
+                LocalizableMessage.Of(
+                    SessionHealthMessages.EvidenceGap, lag, db.OldestSnapshot, db.NextTransaction),
             },
             WhatToCheck = new[]
             {
-                "Is this a reporting/BI connection that could run read-committed?",
-                "Was a UI screen left open on a snapshot mid-edit?",
+                LocalizableMessage.Of(SessionHealthMessages.GcBlockedCheckReporting),
+                LocalizableMessage.Of(SessionHealthMessages.GcBlockedCheckLeftOpen),
             },
         };
     }
@@ -246,20 +247,21 @@ public static class SessionHealthAnalyzer
             Severity = severity,
             AttachmentId = tx.AttachmentId,
             TransactionId = tx.TransactionId,
-            Title = "Long-running transaction",
-            Explanation = tx.IsSnapshot
-                ? "A snapshot transaction has stayed open for a long time."
-                : "A transaction has stayed open for a long time.",
-            Impact = "While it lives it holds a stable view — contributing to record-version retention and delaying garbage collection.",
+            Title = LocalizableMessage.Of(SessionHealthMessages.LongTransactionTitle),
+            Explanation = LocalizableMessage.Of(tx.IsSnapshot
+                ? SessionHealthMessages.LongTransactionExplanationSnapshot
+                : SessionHealthMessages.LongTransactionExplanationTransaction),
+            Impact = LocalizableMessage.Of(SessionHealthMessages.LongTransactionImpact),
             Evidence = new[]
             {
-                $"Tx {tx.TransactionId} · {IsolationLabel(tx)}",
-                $"Age {FormatAge(ageSeconds)}",
+                LocalizableMessage.Of(
+                    SessionHealthMessages.EvidenceTransaction, tx.TransactionId, IsolationLabel(tx)),
+                LocalizableMessage.Of(SessionHealthMessages.EvidenceAge, FormatAge(ageSeconds)),
             },
             WhatToCheck = new[]
             {
-                "Is the owning session idle with the transaction left open?",
-                "Can it commit or switch to read-committed?",
+                LocalizableMessage.Of(SessionHealthMessages.LongTransactionCheckIdle),
+                LocalizableMessage.Of(SessionHealthMessages.LongTransactionCheckCommit),
             },
         };
 
@@ -293,6 +295,11 @@ public static class SessionHealthAnalyzer
         return new SessionHealthVerdict(grade, headline);
     }
 
+    // ⚠ Deliberately still a raw string, and it travels as an ARGUMENT rather than as a key: the value is
+    // either MON$ISOLATION_MODE as the engine reported it, or a Firebird term of art ("Snapshot", "Read
+    // Committed") that a Firebird developer reads in English in every other tool. Keying it would invite a
+    // translator to rename an engine concept; leaving it as data keeps the sentence around it translatable
+    // and the term itself intact (decision D‑3: our wrapper is localizable, the engine's vocabulary is data).
     private static string IsolationLabel(TransactionInfo tx)
         => string.IsNullOrWhiteSpace(tx.IsolationMode)
             ? (tx.IsSnapshot ? "Snapshot" : "Read Committed")

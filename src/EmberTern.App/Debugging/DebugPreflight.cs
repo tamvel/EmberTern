@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using EmberTern.App.Controls;
+using EmberTern.App.Localization;
 using EmberTern.Core.Sql.Language;
 using EmberTern.Core.Sql.Language.Semantics;
 
@@ -59,7 +60,13 @@ internal static class DebugPreflight
         {
             if (d.Severity == DiagnosticSeverity.Error)
             {
-                items.Add(new DebugPreflightItem(DebugPreflightSeverity.Warning, d.Message));
+                // ⭐ THE THIRD surface that shows a diagnostic's text — the debugger's launch pre-flight, which a
+                // C5 inventory keyed on the word "diagnostic" did not see (the loop variable is `d`). Resolved
+                // here, at the moment the item is built, like the other two. ⚠ No language hook and that is
+                // measured, not overlooked: the launch panel's items are rebuilt by PrepareAsync on every launch
+                // and Restart, and the panel is replaced by the session's surfaces once a run starts — so a
+                // pre-flight list never outlives the operation that produced it.
+                items.Add(new DebugPreflightItem(DebugPreflightSeverity.Warning, Loc.Format(d.Message)));
             }
         }
 

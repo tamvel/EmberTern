@@ -6,6 +6,7 @@ using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using EmberTern.App.Localization;
 using EmberTern.Core.Sql.Language.QuickInfo;
 using EmberTern.Core.Sql.Language.Semantics;
 
@@ -110,7 +111,12 @@ internal static class QuickInfoView
         foreach (var fact in facts)
         {
             var line = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, MaxWidth = MaxWidth };
-            line.Inlines!.Add(new Run(fact.Label + "  ") { Foreground = subtle });
+            // ⚠⚠ `Loc.Text(fact.Label)`, never `fact.Label` — the label is a MessageKey (D‑3), and a
+            // MessageKey in a string concatenation compiles happily via ToString() and puts the raw KEY on
+            // screen. That is how this line looked when the type changed, and nothing failed to build.
+            line.Inlines!.Add(new Run(Loc.Text(fact.Label) + "  ") { Foreground = subtle });
+            // ⚠ The VALUE is deliberately NOT resolved: it is Firebird's vocabulary (NOT NULL, PRIMARY KEY,
+            // BEFORE INSERT), a domain, a type or a count — it must match the DDL the card describes.
             line.Inlines!.Add(new Run(fact.Value) { Foreground = fg });
             box.Children.Add(line);
         }

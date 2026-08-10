@@ -340,9 +340,35 @@ public partial class MainWindowViewModel : ViewModelBase
     private void OnLanguageChanged(object? sender, System.EventArgs e)
     {
         OnPropertyChanged(string.Empty);
+
+        // ⚠ A stored [ObservableProperty] is not re-read by the line above — its VALUE has to be rebuilt.
+        // The settings-health banner is the one such text on this view model that survives a language change
+        // on screen (gotcha #353).
+        ComposeSettingsHealthMessage();
+        ComposeExecutionStatus();
+
         foreach (var tab in WorkspaceTabs)
         {
             tab.RaiseAllPropertiesChanged();
+        }
+    }
+
+    /// <summary>
+    /// Re-renders the SQL Editor's execution status line in the current language (etap C6).
+    ///
+    /// <para>⭐ It recomposes from the kept <see cref="ExecutionSummary"/> rather than editing the text,
+    /// because the text is a composition of up to five sentences and a separator — there is nothing in it to
+    /// translate after the fact. This is the shape <c>ComposeSettingsHealthMessage</c> established in C4a.</para>
+    ///
+    /// <para>⚠ A null summary means the status line is showing something else (a row count, a cancellation,
+    /// an empty state) or nothing at all, and is left exactly as it is. ⛔ Widening this to those texts would
+    /// reach outside C6 — they are App strings with their own migration state.</para>
+    /// </summary>
+    private void ComposeExecutionStatus()
+    {
+        if (_lastExecutionSummary is { } summary)
+        {
+            QueryStatsText = summary.BuildMessage(Loc.Format);
         }
     }
 
@@ -2988,6 +3014,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ClearMessagesCommand.NotifyCanExecuteChanged();
 
         QueryStatsText = string.Empty;
+        _lastExecutionSummary = null;
 
         // Drop the SQL Editor's last profiled run so its Performance panel doesn't show a stale
         // report from a previous connection. (Procedure/Function contexts are discarded when
@@ -3033,7 +3060,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             // Faza 2 ani 3 już nie nastąpią, więc to jedyne miejsce, które może tu zgasić pasek.
             IsConnecting = false;
-            SetError(ex.Message);
+            SetError(Loc.Format(ex.Localized));
         }
     }
 
@@ -5043,7 +5070,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (ConnectionFailedException ex)
         {
-            SetError(ex.Message);
+            SetError(Loc.Format(ex.Localized));
             return;
         }
 
@@ -7083,6 +7110,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // Tutaj CZYŚCIMY wynik poprzedniego wykonania — zostawiony wisiałby jako „143 rows in 46 ms"
         // obok paska mówiącego, że trwa coś innego, czyli kłamałby o bieżącej chwili.
         QueryStatsText = string.Empty;
+        _lastExecutionSummary = null;
         ClearError();
         _executionCts = new CancellationTokenSource();
 
@@ -7139,8 +7167,14 @@ public partial class MainWindowViewModel : ViewModelBase
                 // Status bar stays the concise aggregate; the Messages entry adds the SAME
                 // per-table breakdown the Procedure/Function panels show (one shared model —
                 // ExecutionActivity), so the detail level is consistent wherever a run is launched.
-                QueryStatsText = BuildExecutionSummary(result, reads).BuildMessage();
-                var perTable = ExecutionActivity.BuildLogLines(reads);
+                // ⭐ C6: the summary is KEPT, not just rendered — a language change has to recompose this
+                // line, and the only way to recompose it is from the data it was composed from.
+                _lastExecutionSummary = BuildExecutionSummary(result, reads);
+                QueryStatsText = _lastExecutionSummary.BuildMessage(Loc.Format);
+                // ⛔ The Messages entry is deliberately NOT recomposed on a language change: it is a
+                // timestamped record of what was said at that moment, and rewriting history is worse than
+                // leaving one line in the previous language (the same call as "Query N" in §5.2).
+                var perTable = ExecutionActivity.BuildLogLines(reads, Loc.Format);
                 var messageText = perTable.Count > 0
                     ? QueryStatsText + "\n" + string.Join("\n", perTable)
                     : QueryStatsText;
@@ -7278,6 +7312,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ClearError();
         _executionCts = new CancellationTokenSource();
         QueryStatsText = string.Empty;   // wynik poprzedniego wykonania — patrz komentarz w ExecuteQueryAsync
+        _lastExecutionSummary = null;
         try
         {
             var (result, reads) = await ExecuteWithMetricsAsync(
@@ -8440,12 +8475,33 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (!health.NeedsAttention) return;
 
+        // ⚠ Kept so the banner can be re-composed after a language change. The store's diagnostic is a
+        // LocalizableMessage (D‑3); resolving it once here would freeze THIS sentence in the startup language
+        // while every label around it followed — the shape gotcha #353 describes.
+        _settingsHealthPath = store.FilePath;
+        _settingsHealthDiagnostic = store.SettingsMessage;
+        ComposeSettingsHealthMessage();
+        ShowSettingsHealthWarning = true;
+    }
+
+    private string? _settingsHealthPath;
+    private Core.Localization.LocalizableMessage? _settingsHealthDiagnostic;
+
+    // ⚠ Etap C6, same reasoning one module along: the execution status line is a COMPOSITION of localized
+    // sentences, so re-rendering it after a language change needs the data, not the text. Null whenever the
+    // status line is showing anything else — see ComposeExecutionStatus.
+    private ExecutionSummary? _lastExecutionSummary;
+
+    // ONE composer, read at capture time and again on every language change.
+    private void ComposeSettingsHealthMessage()
+    {
+        if (_settingsHealthPath is null) return;
+
         SettingsHealthMessage = string.Format(
             CultureInfo.CurrentCulture,
             UiStrings.SettingsUnreadableWarningFormat,
-            store.FilePath,
-            health.Diagnostic ?? string.Empty);
-        ShowSettingsHealthWarning = true;
+            _settingsHealthPath,
+            _settingsHealthDiagnostic is { } m ? Loc.Format(m) : string.Empty);
     }
 
     // ⚠ Nie pisze już żadnego tekstu — sekcja 1 czyta stan wprost z serwisu. Zadaniem tej metody jest

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Sql.Language.Ast;
 using EmberTern.Core.Sql.Language.Semantics;
 using EmberTern.Core.Sql.Language.Signatures;
@@ -109,7 +110,7 @@ public static class DiagnosticsEngine
                 case ReferenceRole.SchemaObject when hasMetadata:
                     results.Add(new Diagnostic(
                         r.Span.Start, r.Span.Length, DiagnosticSeverity.Warning,
-                        $"Unknown object '{r.Text}'.", CodeUnknownObject, DiagnosticCategory.UnknownObject));
+                        LocalizableMessage.Of(DiagnosticsMessages.UnknownObject, r.Text), CodeUnknownObject, DiagnosticCategory.UnknownObject));
                     break;
 
                 case ReferenceRole.Column when hasMetadata:
@@ -119,13 +120,13 @@ public static class DiagnosticsEngine
                 case ReferenceRole.Variable when IsInRoutineBody(model, r.Span.Start):
                     results.Add(new Diagnostic(
                         r.Span.Start, r.Span.Length, DiagnosticSeverity.Warning,
-                        $"Unresolved variable '{r.Text}'.", CodeUnresolvedVariable, DiagnosticCategory.UnresolvedVariable));
+                        LocalizableMessage.Of(DiagnosticsMessages.UnresolvedVariable, r.Text), CodeUnresolvedVariable, DiagnosticCategory.UnresolvedVariable));
                     break;
 
                 case ReferenceRole.Parameter when IsInRoutineBody(model, r.Span.Start):
                     results.Add(new Diagnostic(
                         r.Span.Start, r.Span.Length, DiagnosticSeverity.Warning,
-                        $"Unresolved parameter '{r.Text}'.", CodeUnresolvedParameter, DiagnosticCategory.UnresolvedParameter));
+                        LocalizableMessage.Of(DiagnosticsMessages.UnresolvedParameter, r.Text), CodeUnresolvedParameter, DiagnosticCategory.UnresolvedParameter));
                     break;
 
                 case ReferenceRole.Cursor:
@@ -137,7 +138,7 @@ public static class DiagnosticsEngine
                     {
                         results.Add(new Diagnostic(
                             r.Span.Start, r.Span.Length, DiagnosticSeverity.Warning,
-                            $"Unknown cursor '{r.Text}'.", CodeUnknownCursor, DiagnosticCategory.UnknownCursor));
+                            LocalizableMessage.Of(DiagnosticsMessages.UnknownCursor, r.Text), CodeUnknownCursor, DiagnosticCategory.UnknownCursor));
                     }
                     break;
             }
@@ -162,7 +163,7 @@ public static class DiagnosticsEngine
             {
                 results.Add(new Diagnostic(
                     column.Span.Start, column.Span.Length, DiagnosticSeverity.Warning,
-                    $"Unknown column '{column.Text}'.", CodeUnknownColumn, DiagnosticCategory.UnknownColumn));
+                    LocalizableMessage.Of(DiagnosticsMessages.UnknownColumn, column.Text), CodeUnknownColumn, DiagnosticCategory.UnknownColumn));
             }
             // else: qualified on an unknown table, or on one whose columns are not loaded yet — stay silent.
             return;
@@ -171,7 +172,7 @@ public static class DiagnosticsEngine
         // Bare unresolved column ⇒ ambiguous (the only way the binder records one).
         results.Add(new Diagnostic(
             column.Span.Start, column.Span.Length, DiagnosticSeverity.Warning,
-            $"Ambiguous column '{column.Text}'.", CodeAmbiguousColumn, DiagnosticCategory.AmbiguousColumn));
+            LocalizableMessage.Of(DiagnosticsMessages.AmbiguousColumn, column.Text), CodeAmbiguousColumn, DiagnosticCategory.AmbiguousColumn));
     }
 
     // The column reference is a qualified access (alias.col / NEW.col): its predecessor is a resolved
@@ -270,9 +271,12 @@ public static class DiagnosticsEngine
                 if (SignatureHelpEngine.InsertColumnAndValueCounts(insert.Tokens) is not { } counts) continue;
                 if (counts.Columns == counts.Values) continue;
 
+                // ⚠ Two COUNTS, handed over as numbers so the App formats them for the reader (#354). This is
+                // the one message in the module with more than one argument.
                 results.Add(new Diagnostic(
                     counts.ValuesStart, counts.ValuesLength, DiagnosticSeverity.Error,
-                    $"INSERT column/value count mismatch: {counts.Columns} column(s), {counts.Values} value(s).",
+                    LocalizableMessage.Of(
+                        DiagnosticsMessages.InsertCountMismatch, counts.Columns, counts.Values),
                     CodeInsertCountMismatch, DiagnosticCategory.InsertCountMismatch));
             }
         }
@@ -290,14 +294,21 @@ public static class DiagnosticsEngine
             if (stmt is not DdlStatement { ObjectKind: DdlObjectKind.Trigger or DdlObjectKind.Function } ddl)
                 continue;
 
-            var context = ddl.ObjectKind == DdlObjectKind.Trigger ? "trigger" : "function";
+            // ⛔ TWO KEYS, not one key with the context as an argument. The word "trigger"/"function" is
+            // EmberTern's own, and substituting a noun into a sentence works in English and breaks in a
+            // language that inflects — the argument cannot know which case the sentence needs (ratified in C3).
+            // So the CONTEXT picks the sentence here, and the message carries no arguments at all.
+            var message = ddl.ObjectKind == DdlObjectKind.Trigger
+                ? DiagnosticsMessages.SuspendInTrigger
+                : DiagnosticsMessages.SuspendInFunction;
+
             foreach (var node in ddl.DescendantNodes())
             {
                 if (node is not PsqlLeafStatement { Kind: PsqlLeafKind.Suspend } leaf) continue;
                 ct.ThrowIfCancellationRequested();
                 results.Add(new Diagnostic(
                     leaf.Start, leaf.Length, DiagnosticSeverity.Warning,
-                    $"SUSPEND is not valid in a {context}.",
+                    LocalizableMessage.Of(message),
                     CodeSuspendOutsideSelectable, DiagnosticCategory.SuspendOutsideSelectable));
             }
         }

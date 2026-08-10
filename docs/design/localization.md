@@ -135,9 +135,123 @@ zdanie nie jest legalnym kluczem. Strażnik sprawdza już tylko, czy konstruktor
 zamierzone i jest właśnie sposobem, w jaki granica z D‑3 jest utrzymywana: nasze zdanie jest kluczem,
 wypowiedź serwera jest argumentem.
 
-⏸ **Seam ma konsumenta (`Loc.Format`), ale nie ma jeszcze PRODUCENTA w Core** — świadomy wyjątek od zasady
-„żadnego komponentu bez konsumenta" (#233), zgłoszony wprost w komentarzu typu. ⛔ Nie usuwać jako martwego
-kodu; ~250–300 miejsc w Core czeka na osobny etap.
+✅ **Seam ma PRODUCENTA od etapu C1** (`SessionHealthMessages` — 16 kluczy; narracja:
+[../history/28-localization-core-stage.md](../history/28-localization-core-stage.md)). Wcześniejszy zapis
+„brak producenta, świadomy wyjątek od #233" jest historyczny.
+
+### 4.1 ⚠ Katalog ma DWÓCH właścicieli — i strażnik jest przez to PODZIELONY, nie osłabiony
+
+Od C1 wpis w `Strings.resx` należy albo do App (nazwa = property `UiStrings`), albo do Core (klucz
+`MessageKey`, rozwiązywany przez `Loc.Format`). ⛔ Klucz Core **nie może** mieć składowej o swojej nazwie —
+zawiera kropki, więc nie jest legalnym identyfikatorem C#.
+
+Dyskryminatorem jest **refleksja po zadeklarowanych polach `MessageKey`** (w assembly Core **i** Firebird),
+nigdy konwencja kropki — konwencja byłaby drugim źródłem prawdy o tym, kto jest właścicielem klucza. Obie
+partycje zachowują ochronę przed sierotami **w obu kierunkach**:
+
+| Partycja | Asercja |
+|---|---|
+| App | musi mieć property `UiStrings` (`EveryLocalizedMember_MatchesItsEnglishEntry`) |
+| Core | musi mieć wpis angielski (`EveryCoreMessageKey_HasAnEnglishEntry`) **+** wpis, którego nikt nie deklaruje, jest sierotą (`EveryCoreShapedEntry_IsDeclaredByCore`) |
+
+⭐ Podsadzenie przemianowanego klucza zapala **trzy** strażniki: źle napisany klucz Core wpada do partycji App
+i tam też jest łapany — **między połówkami nie ma szczeliny**.
+
+### 4.0 ⭐⭐ `LocalizableMessage` ma RÓWNOŚĆ STRUKTURALNĄ (od C5) — i to jest warunek, nie ozdoba
+
+Równość generowana przez rekord porównywała `IReadOnlyList<object?>` **po referencji**, więc dwa komunikaty
+o tym samym kluczu i tych samych danych były nierówne. Nieszkodliwe przez cztery etapy (nikt ich nie porównywał)
+i **defekt w chwili, gdy jeden z nich trafia do typu wartościowego**: `Diagnostic` to `readonly record struct`,
+a `DiagnosticsPanelViewModel.Update` używa jego równości, żeby **nie** przebudowywać kolekcji i **nie** gubić
+zaznaczenia użytkownika.
+
+⭐ Naprawione u **nośnika**, nie u konsumenta: `Equals`/`GetHashCode` porównują klucz i argumenty element po
+elemencie. Jedna zmiana obsługuje każdego przyszłego osadzającego; wariant „nośnik o stałej arności w `Diagnostic`"
+odrzucony (sufit arności to defekt zaplanowany na później).
+
+⚠ **Przesłanka, którą to wnosi i którą PILNUJEMY:** argument musi sam być wartościowo porównywalny (`string`,
+liczba — `int` zaboksowany porównuje się wartościowo). ⛔ `byte[]`/`char[]` po cichu przywraca porównanie
+referencji. Strażnik: `DiagnosticsLocalizationTests.NoProducerPassesAnArgumentWithoutValueEquality`.
+Gotcha **#358**.
+
+### 4.2 🔒 Liczby idą za kulturą CZYTELNIKA — zachowanie OCZEKIWANE, nie regresja
+
+`Loc.Format` formatuje argumenty pod `CurrentCulture`, podczas gdy słowa wybiera `Loc.Culture`. To jest
+ratyfikowana konwencja aplikacji (ta sama, co `DateTimeDisplay` i ~30 istniejących wywołań
+`string.Format(CultureInfo.CurrentCulture, …)`).
+
+⚠ **Skutek przy migracji producenta, który wcześniej formatował invariantnie:** licznik w `SessionHealth`
+renderuje się jako **`48 102`** na maszynie polskiej tam, gdzie wcześniej było `48,102` — przy **zerowej**
+zmianie znaków w kodzie i w wartości zasobu.
+
+🔒 **Ratyfikowane przez użytkownika (2026-08-10) jako zachowanie oczekiwane.** ⛔ Nie „naprawiać" z powrotem do
+grupowania invariantnego i nie zgłaszać jako regresji. ⚠ Każdy kolejny migrowany producent dziedziczy tę samą
+zmianę — gotcha **#354** opisuje ogólny kształt (przeniesienie miejsca wywołania na wspólny formater
+przenosi też decyzję o kulturze).
+
+⚠ **Konsekwencja dla testów:** asercja na **argument** (`Arguments[0] == 48102L`) jest mocniejsza i przenośna;
+asercja na `"48,102"` jest przypięta do maszyny, na której powstała.
+
+### 4.3 ⭐⭐ Liczba mnoga — RODZINA KLUCZY + nazwany ZESTAW REGUŁ (etap C6)
+
+Klucz niosący liczbę może rozwiązywać się do **rodziny wariantów** o sufiksach kategorii CLDR:
+
+```
+Strings.resx        Localization.PluralRuleSet = one-other
+                    Query.Exec.RowsInserted.one   = {0} row inserted
+                    Query.Exec.RowsInserted.other = {0} rows inserted
+Strings.pl.resx     Localization.PluralRuleSet = one-few-many
+                    Query.Exec.RowsInserted.one / .few / .many
+```
+
+⭐⭐ **O tym, czy zdanie POTRZEBUJE form liczby, decyduje JĘZYK, nie producent.** `Loc.Format` sonduje warianty
+**w katalogu renderowanej kultury**, więc angielski może trzymać wpis płaski tam, gdzie polski deklaruje trzy
+warianty tego samego klucza, i żadna ze stron nie musi wiedzieć, co zrobiła druga. ⛔ Flaga „to jest komunikat
+liczbowy" na `LocalizableMessage` byłaby twierdzeniem Core o gramatyce, której Core nie zna — i zamroziłaby
+angielski podział dwuelementowy w kontrakcie.
+
+⛔ **Zestaw reguł nazywa GRAMATYKĘ, nigdy języka** (`one-other`, `one-few-many`): kilka języków dzieli jeden
+kształt (francuski i hiszpański to `one-other`, rosyjski i czeski to `one-few-many`), więc nazwa językowa
+byłaby fałszywa przy drugim konsumencie — i odtwarzałaby rozgałęzienie per-język, którego zakazuje
+`NoCode_BranchesOnAParticularLanguage`, o warstwę dalej, niż ten strażnik sięga. Pilnuje tego
+`NoRuleSet_IsNamedAfterALanguage`.
+
+⚠ **Co dokładnie znaczy „nowy język nie wymaga kodu" — powiedziane ściśle, nie hojnie.** Język o gramatyce już
+zamodelowanej nie wymaga nic poza wierszem w katalogu i plikiem `.resx`. Język o gramatyce genuinnie nowej
+(arabski — sześć kategorii, irlandzki — pięć) wymaga nowego zestawu reguł, czyli **kodu**. To jest uczciwe:
+nowy ALGORYTM nie jest tłumaczeniem. ⛔ Alternatywa — reguła jako WYRAŻENIE parsowane z zasobu w runtime —
+została rozważona i **odrzucona**: repozytorium zapłaciło już raz za mini-język ewaluowany na ścieżce, która
+nie ma prawa rzucić (`TreeDiagnostics` — narzędzie napisane, żeby aplikacja nie padła, stało się tym, co ją
+zabiło).
+
+⚠ **Liczba jest ZAWSZE argumentem {0}** (ratyfikowane R3), czytanym w jednym miejscu —
+`LocalizableMessage.TryGetCount`. To METODA, nie składowa, więc równość strukturalna z §4.0 jest nietknięta.
+Dwóch czytelników pytających „gdzie jest liczba" na dwa sposoby to sposób, w jaki rozjeżdża się forma dualna
+(#357).
+
+⚠ Trzy poziomy degradacji i żaden nie rzuca: dokładna kategoria → `other` (własny catch-all CLDR) → klucz
+płaski. Odpowiedzią build-time jest `EveryPluralFamily_IsCompleteInEveryShippedCulture`; to jest odpowiedź
+runtime, z tego samego powodu, dla którego `Loc.Text` zwraca klucz zamiast rzucać.
+
+⭐ **`Loc.FormatParts`** rozcina rozwiązane zdanie wokół jego liczby, żeby powierzchnia mogła wyróżnić DANĄ,
+nie wiedząc, gdzie w zdaniu ta dana stoi. ⛔ Powstało z konkretnego defektu: karta aktywności bindowała
+`Count` i `Verb` obok siebie, czyli miała **angielski szyk zapisany w UKŁADZIE**.
+
+### 4.2a ⚠⚠ Mechanizm §4.2 to SPECYFIKATOR w wartości zasobu, nie kultura gołego podstawienia (zmierzone w C4b)
+
+⭐ **Zmierzone przez podsadzenie, i koryguje intuicję:** `string.Format(pl-PL, "{0}", 2000000000)` **NIE stawia
+separatorów grup**. Kultura rządzi separatorem dziesiętnym i znakiem minus, nie grupowaniem liczby całkowitej
+w formacie `G`. Rozjazd `48,102` → `48 102` z §4.2 pochodzi z **`{0:N0}`** w wartości zasobu
+(`SessionHealth.Evidence.Gap` = `OAT lag {0:N0} · OST {1:N0} · Next {2:N0}`).
+
+⚠ **To przenosi zagrożenie z MASZYNY na TŁUMACZA** — i dotyczy wyłącznie wzorca dualnego (angielski literał
+u producenta + wpis zasobu obok). Tłumacz, który dopisze `:N0` do dziewięciocyfrowej liczby, rozjedzie obie
+połówki i zapali strażnik równości z powodu niemającego nic wspólnego ze zdaniem.
+
+🔒 **Reguła z C4b:** liczba, która jest **ECHEM pola technicznego** (zadeklarowana wersja formatu, licznik
+iteracji KDF), jedzie jako **string sformatowany invariantnie** — specyfikator jest wtedy bezczynny, a obie
+połówki są identyczne z konstrukcji. ⛔ Liczba, którą czytelnik **liczy** (sesje, wiersze), nadal idzie za jego
+kulturą — §4.2 stoi. Gotcha **#357**.
 
 ---
 
@@ -259,6 +373,16 @@ jednym języku: żywy i zamrożony binding renderują identyczny tekst. ⛔ Seam
 
 | Pozycja | Rozmiar | Dlaczego |
 |---|---|---|
-| **Core / Firebird** | ≈280 user-visible | ⛔ **Odłożone decyzją użytkownika.** Seam D‑3 gotowy i przetestowany end-to-end, ale migracja zmienia publiczne kontrakty ZAMKNIĘTYCH modułów (Performance, Data Import) — obszar reguły #11. Osobny krok po przeglądzie. |
+| **Core / Firebird** | ⚠ **~170–190**, nie 280 | 🚧 **W TRAKCIE — etap Core/Firebird; po C4b zadeklarowanych kluczy Core jest 76.** ⭐ Liczba 280 **nie przetrwała pomiaru** (C0): `CharsetCatalog` 8→**0**, Data Import ~20→**0** (już poprawny, enum), `FirebirdDiagnostics` 24→**0** (klasa E, log deweloperski). Kolejność i klasyfikacja: [../history/28-localization-core-stage.md](../history/28-localization-core-stage.md) |
+| ↳ ✅ `SessionHealthAnalyzer` | 20 z 22 | **C1 ZROBIONE** i odebrane |
+| ↳ ✅ `QuickInfoEngine` | 18 etykiet | **C2 ZROBIONE** i odebrane. ⭐ Migracja to **PODZIAŁ**: etykieta jest nasza (klucz), **wartość zostaje dosłowna** (słownictwo Firebirda — `NOT NULL`, `PRIMARY KEY`, `BEFORE INSERT`) |
+| ↳ ✅ `ApplicationSettingsStore` | 18 kluczy | **C4a ZROBIONE**. ⭐ Wzorzec dualny z C3 (angielski + bliźniak lokalizowalny), bo ~20 istniejących testów przypina DOKŁADNE brzmienie odmowy na powierzchni reguły #11 — dzięki temu dowód zerowej zmiany treści to **nietknięte** testy |
+| ↳ ✅ **`Settings/Export`** | **20 kluczy** | **C4b ZROBIONE** — tym samym całe C4 domknięte. ⭐ Rodzina `Damaged*` to **CZTERY CAŁE ZDANIA**, nie prefiks + fragment; angielska połowa nadal SKŁADANA, żeby strażnik równości był dowodem, a nie porównaniem przepisanego zdania. ⭐ Dwie odmowy store'a **przewleczone**, nie powtórzone (`CanSave(out,out)` + `LastSaveMessage` z C4a). ⛔ Strona EKSPORTU świadomie poza zakresem — jej dwa `ArgumentException` są nieosiągalne za bramką `CanExport`. ⚠ Jeden klucz (`NoMigrationStep`) jest dziś **nieosiągalny** i ma nazwany wyjątek z **przypiętą przesłanką**. Znalezisko: §4.2a + gotcha #357 |
+| ↳ ✅ `FirebirdConnectionService` | 4 klucze | **C3 ZROBIONE** i odebrane. ⭐ Wzorcowy D‑3: nasze zdanie = klucz, **surowy komunikat serwera = argument**. ⛔ `Legacy_Auth` rozpoznawany po tekście SERWERA, przypięte pod zmianą języka |
+| ↳ ✅ **`ExecutionSummary` / `ExecutionActivity`** | **18 kluczy** | **C6 DOSTARCZONE, czeka na odbiór.** ⭐ Migracja to **RE-CIĘCIE ZDAŃ**, nie podmiana słów: szyk i sklejanie fragmentów rozwiązuje zwykła reguła D‑3 w rozdzielczości ZDANIA, a mechanizmu wymagała wyłącznie KATEGORIA liczby (§4.3). ⭐⭐ Dowodem zerowej zmiany treści są **NIETKNIĘTE** `ExecutionSummaryTests` / `ExecutionActivityTests` — forma dualna przez `ExecutionEnglish`. ⚠ Jedna wartość angielska zmieniona świadomie i zgłoszona przed akceptacją kontraktu: fallback sterownika nie miał liczby pojedynczej i renderował `"1 rows affected"`. ⛔ `TableChange.Verb` nie jest już bindowane w XAML — dwa sąsiadujące bindingi (`Count`, `Verb`) zapisywały angielski szyk w UKŁADZIE |
+| ↳ ✅ **`DiagnosticsEngine` (ET0001–8)** | **9 kluczy** | **C5 ZROBIONE.** ⭐ Kształt kontraktu **ratyfikowany przed kodem**, bo `Diagnostic` to `readonly record struct`. ⭐ `string Message` → `LocalizableMessage` **bez bliźniaka angielskiego** (zmierzone: `DiagnosticsEngineTests` nigdy nie asertuje treści) ⇒ kształt C2. ⭐⭐ Warunkiem było nadanie `LocalizableMessage` równości strukturalnej — §4.0, gotcha **#358**. ⛔ `ET0008` = **dwa klucze** (rzeczownik nie jedzie jako argument), a klucz mieszka w strukturze właśnie dlatego, że jedna kategoria daje dwa zdania. ⛔ **`ET0004` jest NIEOSIĄGALNE** (żadna ścieżka bindera nie tworzy nierozwiązanej referencji o roli `Parameter`) — nazwany wyjątek z przypiętą przesłanką. ⭐ Live switching: **jedna** subskrypcja na panel odświeża tekst wierszy bez przebudowy (W3) |
+| ↳ ⏸ **`KindLabel` / `SymbolKind` — TEMAT ODŁOŻONY** | ~8 wartości | 🔒 **Decyzja użytkownika (2026-08-10): NIE otwierać teraz.** To osobna decyzja **kontraktowa**, nie sprzątanie. Fakty: `QuickInfoEngine.KindLabel` jest **piątą kopią** słownictwa, które etap App skonsolidował i już lokalizuje (`QuickInfoView.KindLabel` → `ObjectKind*`); ⛔ właściwym kształtem **nie jest** zadeklarowanie kluczy rodzajów w Core (druga kopia słów App), tylko oddanie `SymbolKind` jako DANEJ — co zmienia kontrakt `QuickInfoFact`. ⚠ Koszt bieżący: polski czytelnik zobaczy *„Rodzaj: Table"*, gdy drzewo metadanych mówi *„Tabela"*. Dotyczy też `"Active"/"Inactive"`, `"Identity"/"Computed"`, `"Input parameter"` |
+| ↳ ✅ **Formy liczby mnogiej — MECHANIZM ZBUDOWANY (C6)** | zmierzone **7** rozgałęzień w kodzie + **30** hedge'ów `(s)` | ⭐ §4.3. ⛔ Odziedziczony licznik „5" **nie przetrwał pomiaru**. Zmigrowane w C6 są WYŁĄCZNIE `Query.Exec.*`; SessionHealth, QuickInfo, Performance i 30 hedge'ów App zostają — każde osobną decyzją. **Zapis historyczny:** Zebrane dotąd: 2 nagłówki `SessionHealthVerdict.Headline` (C1) · QuickInfo `"1 column"`/`"N columns"` (C2) · `ExecutionSummary` „1 row"/„N rows". Mechanizm projektujemy na **pełnym** zestawie. ⚠ Ograniczenie zmierzone: strażnik `NoCode_BranchesOnAParticularLanguage` skanuje `App/Localization/**`, więc tablica reguł per-język zapali go |
+| ↳ ⛔ **Performance** | ~70 | moduł ZAMKNIĘTY — otwierany dopiero po osobnej decyzji, po zdobyciu wzorca na modułach otwartych |
 | **Polskie tłumaczenie** | 2 186 wpisów | świadomie po uporządkowaniu tekstów |
 | **QA wzrokowe na żywym oknie** | — | ⚠ niewykonalne przed tłumaczeniem: przy jednym języku żywy i zamrożony binding renderują ten sam tekst |

@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Resources;
+using System.Text.RegularExpressions;
 using EmberTern.Core.Localization;
 
 namespace EmberTern.App.Localization;
@@ -47,6 +48,10 @@ internal static class Loc
     private static ResourceManager _catalog = ShippedCatalog;
     private static CultureInfo _culture = CultureInfo.InvariantCulture;
 
+    // The current language's plural rule set (etap C6). Resolved lazily and dropped whenever the culture or
+    // the catalog moves — see RuleSet.
+    private static string? _ruleSet;
+
     /// <summary>
     /// The language rendered right now. <see cref="CultureInfo.InvariantCulture"/> until <see cref="Apply"/>
     /// runs, which reads the neutral (English) resources — so the untouched state is English rather than
@@ -82,6 +87,7 @@ internal static class Loc
         }
 
         _culture = culture;
+        _ruleSet = null;
         // Order matters: repaint the bound surfaces first, then let the capture-once consumers rebuild, so a
         // rebuild that reads a bound control cannot read the previous language.
         LocalizationSource.InvalidateAll();
@@ -119,7 +125,7 @@ internal static class Loc
     public static string Format(LocalizableMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
-        var format = Text(message.Key);
+        var format = ResolveFormat(message);
         if (message.Arguments.Count == 0)
         {
             return format;
@@ -133,6 +139,96 @@ internal static class Loc
 
         return string.Format(CultureInfo.CurrentCulture, format, arguments);
     }
+
+    /// <summary>
+    /// A resolved message split around its first substitution — <c>(before, value, after)</c> — so a surface
+    /// can style the DATA differently from the words without knowing where in the sentence the data sits.
+    ///
+    /// <para>⭐ <b>Why this exists at all.</b> The per-table execution card draws the row count in the colour
+    /// of its change kind and the rest of the line subdued. Before C6 it did that by binding two properties,
+    /// <c>Count</c> and <c>Verb</c>, side by side — which silently froze English word order into the LAYOUT:
+    /// Polish says "wstawiono 14 wierszy", with the number in the middle. Splitting the resolved sentence
+    /// instead lets the translator put the number wherever the language wants it and still have it
+    /// highlighted.</para>
+    ///
+    /// <para>⚠ <b>It degrades rather than fails.</b> If the format does not contain exactly one <c>{0}</c>
+    /// placeholder — a translation that dropped it, or a message with a different shape — the whole resolved
+    /// sentence comes back as <c>before</c> with an empty value and suffix. The line then renders correctly
+    /// and simply loses its accent, which is the right trade on a status surface.</para>
+    /// </summary>
+    public static (string Before, string Value, string After) FormatParts(LocalizableMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var format = ResolveFormat(message);
+        var placeholders = FirstArgumentPlaceholder.Matches(format);
+        if (placeholders.Count != 1 || message.Arguments.Count == 0)
+        {
+            return (Format(message), string.Empty, string.Empty);
+        }
+
+        var slot = placeholders[0];
+        var value = string.Format(CultureInfo.CurrentCulture, slot.Value, message.Arguments[0]);
+        return (Unescape(format[..slot.Index]), value, Unescape(format[(slot.Index + slot.Length)..]));
+
+        // A composite format string escapes a literal brace by doubling it; the two halves are no longer
+        // format strings once split, so the escapes have to come out or the user sees "{{".
+        static string Unescape(string part)
+            => part.Replace("{{", "{", StringComparison.Ordinal).Replace("}}", "}", StringComparison.Ordinal);
+    }
+
+    // `{0}` with an optional format specifier, e.g. `{0:N0}`. ⚠ Alignment (`{0,8}`) is deliberately NOT
+    // matched: it pads the VALUE, so honouring it here would put the padding inside the coloured run.
+    private static readonly Regex FirstArgumentPlaceholder = new(@"\{0(?::[^}]*)?\}", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The format string for a message: its plural VARIANT when the current language declares one, otherwise
+    /// the key itself.
+    ///
+    /// <para>⭐⭐ <b>Whether a sentence needs plural forms is asked of the LANGUAGE, never of the producer.</b>
+    /// Core hands up a key and a count (ratified R3 — the count is argument {0}); this looks for
+    /// <c>key.one</c> / <c>key.few</c> / … <i>in the catalog of the language being rendered</i>. So English can
+    /// keep <c>"inserted {0}"</c> as a single flat entry while Polish declares three variants of the very same
+    /// key, and neither side has to know what the other did. ⛔ A "this key is plural" flag on the message
+    /// would have made Core assert a fact about grammar it cannot know, and would have frozen English's
+    /// two-way split into the contract.</para>
+    ///
+    /// <para>⚠ <b>Three fallbacks, in order, and none of them throws:</b> the exact category → <c>other</c>
+    /// (CLDR's own catch-all, so a translation missing one band still renders a sentence) → the flat key.
+    /// The build-time answer to a missing variant is
+    /// <c>EveryPluralFamily_IsCompleteInEveryShippedCulture</c>; this is the runtime one, and it exists for
+    /// the same reason <see cref="Text(string)"/> returns the key rather than throwing.</para>
+    ///
+    /// <para>⚠ The probe runs for any message whose first argument is an integer, including ones that carry
+    /// an id or a version rather than a count. That costs two dictionary misses and resolves flat, which is
+    /// correct — but it is also why a key that gains a plural family must genuinely take a COUNT first
+    /// (<c>EveryProducerOfAPluralKey_PassesACount</c>).</para>
+    /// </summary>
+    private static string ResolveFormat(LocalizableMessage message)
+    {
+        if (!message.TryGetCount(out var count))
+        {
+            return Text(message.Key);
+        }
+
+        var key = message.Key.Value;
+        var category = PluralRules.CategoryFor(RuleSet, count);
+
+        return _catalog.GetString(key + "." + PluralRules.SuffixFor(category), _culture)
+            ?? _catalog.GetString(key + "." + PluralRules.SuffixFor(PluralCategory.Other), _culture)
+            ?? Text(key);
+    }
+
+    /// <summary>
+    /// The plural rule set the current language declares, resolved once per language rather than per message.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ The cache is invalidated wherever <see cref="_culture"/> moves — both places, and there are only
+    /// two. A stale rule set would be the quietest possible defect: every sentence still renders, in the
+    /// previous language's grammar.
+    /// </remarks>
+    private static string RuleSet =>
+        _ruleSet ??= _catalog.GetString(PluralRules.RuleSetKey, _culture) ?? PluralRules.Fallback;
 
     /// <summary>
     /// ⚠ <b>Verification seam — swaps the catalog and the culture, and nothing in the product calls it.</b>
@@ -152,6 +248,7 @@ internal static class Loc
     {
         _catalog = catalog ?? ShippedCatalog;
         _culture = culture ?? CultureInfo.InvariantCulture;
+        _ruleSet = null;
         LocalizationSource.InvalidateAll();
         LanguageChanged?.Invoke(null, EventArgs.Empty);
     }

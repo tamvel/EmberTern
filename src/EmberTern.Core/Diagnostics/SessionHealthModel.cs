@@ -1,3 +1,5 @@
+using EmberTern.Core.Localization;
+
 namespace EmberTern.Core.Diagnostics;
 
 /// <summary>Two levels only in V1 — no confidence scoring (deferred to V2).</summary>
@@ -45,6 +47,12 @@ public enum SessionRisk
 /// <summary>
 /// One health observation, shaped like the Performance <c>Finding</c> (severity + evidence +
 /// investigation-oriented text), minus V1-deferred confidence. Pure.
+///
+/// <para>⭐ <b>Every text member is a <see cref="LocalizableMessage"/>, not a <c>string</c> (decision
+/// D‑3).</b> Core cannot know the reader's language, so it names the sentence and hands over the data that
+/// belongs in it; the App resolves both at the moment it renders. Resolving here — even once, into a field —
+/// would freeze the words in whatever language was current when the analysis ran, which is precisely the
+/// failure the live-switching design exists to prevent.</para>
 /// </summary>
 public sealed record SessionHealthFinding
 {
@@ -57,18 +65,18 @@ public sealed record SessionHealthFinding
     /// <summary>The transaction the finding is about, when applicable.</summary>
     public long? TransactionId { get; init; }
 
-    public required string Title { get; init; }
+    public required LocalizableMessage Title { get; init; }
 
-    public required string Explanation { get; init; }
+    public required LocalizableMessage Explanation { get; init; }
 
-    /// <summary>Plain-language consequence — the "why it matters" line.</summary>
-    public string Impact { get; init; } = string.Empty;
+    /// <summary>Plain-language consequence — the "why it matters" line. Null when the finding has none.</summary>
+    public LocalizableMessage? Impact { get; init; }
 
     /// <summary>Compact factual evidence rows (isolation, age, gap, …).</summary>
-    public IReadOnlyList<string> Evidence { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<LocalizableMessage> Evidence { get; init; } = Array.Empty<LocalizableMessage>();
 
     /// <summary>Investigation prompts — never imperative.</summary>
-    public IReadOnlyList<string> WhatToCheck { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<LocalizableMessage> WhatToCheck { get; init; } = Array.Empty<LocalizableMessage>();
 }
 
 /// <summary>Per-session derived health for the grid (risk stripe + counts).</summary>
@@ -86,7 +94,16 @@ public sealed record TransactionHealthEntry(
     bool IsLong,
     SessionHealthSeverity? Severity);
 
-/// <summary>The one-line verdict for the Health Bar (mirrors the Performance verdict shape).</summary>
+/// <summary>The one-line verdict for the Health Bar (mirrors the Performance verdict shape).
+///
+/// <para>⛔ <b><see cref="Headline"/> is deliberately still a <c>string</c> while every other message in this
+/// file is a <see cref="LocalizableMessage"/>, and that is a recorded boundary rather than an omission.</b>
+/// Its wording is chosen by a COUNT — <c>"1 transaction is blocking…"</c> versus <c>"3 transactions are
+/// blocking…"</c> — so migrating it as it stands would put English's two-way singular/plural split into the
+/// catalog as if it were universal. A language with more plural categories (Polish has three for this shape)
+/// cannot be served by two keys, and Core must not be the layer that decides which category applies. It
+/// migrates when the plural mechanism is chosen; ⛔ do not "finish the job" by adding two keys.</para>
+/// </summary>
 public sealed record SessionHealthVerdict(HealthGrade Grade, string Headline);
 
 /// <summary>Health-Bar counters — the risk ones are clickable filter chips in the UI.</summary>

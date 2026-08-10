@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Security;
 
 namespace EmberTern.Core.Settings.Export;
@@ -61,10 +62,15 @@ public enum SettingsImportStatus
 public sealed class SettingsImportInspection
 {
     internal SettingsImportInspection(
-        SettingsImportStatus status, string message, SettingsExportHeader header, string payload)
+        SettingsImportStatus status,
+        string message,
+        LocalizableMessage? localized,
+        SettingsExportHeader header,
+        string payload)
     {
         Status = status;
         Message = message;
+        Localized = localized;
         Header = header;
         Payload = payload;
     }
@@ -74,6 +80,19 @@ public sealed class SettingsImportInspection
     /// <summary>A message fit to show the user, or empty when <see cref="Status"/> is
     /// <see cref="SettingsImportStatus.Ok"/>.</summary>
     public string Message { get; }
+
+    /// <summary>
+    /// The same message as a <see cref="LocalizableMessage"/> (decision <b>D‑3</b>), or null on success.
+    ///
+    /// <para>⭐ Both forms exist for the reason recorded on <c>ConnectionFailedException</c> and repeated for the
+    /// settings store: <see cref="Message"/> is what existing tests pin character for character and what an
+    /// unmigrated path would show, so leaving English there means such a path degrades to <b>exactly today's
+    /// behaviour</b> rather than to a raw key. ⚠ The duplication is guarded, not tolerated — the two must
+    /// render identically in English, and a test pins it.</para>
+    ///
+    /// <para>⭐ Resolve with <c>Loc.Format</c> at the moment of display, never earlier.</para>
+    /// </summary>
+    public LocalizableMessage? Localized { get; }
 
     /// <summary>The cleartext header. Meaningful once the magic matched; <c>default</c> otherwise.</summary>
     public SettingsExportHeader Header { get; }
@@ -87,16 +106,24 @@ public sealed class SettingsImportInspection
 /// <summary>The result of phase two: the decrypted, migrated content, or why it could not be produced.</summary>
 public sealed class SettingsImportResult
 {
-    internal SettingsImportResult(SettingsImportStatus status, string message, SettingsExportContent? content)
+    internal SettingsImportResult(
+        SettingsImportStatus status,
+        string message,
+        LocalizableMessage? localized,
+        SettingsExportContent? content)
     {
         Status = status;
         Message = message;
+        Localized = localized;
         Content = content;
     }
 
     public SettingsImportStatus Status { get; }
 
     public string Message { get; }
+
+    /// <inheritdoc cref="SettingsImportInspection.Localized"/>
+    public LocalizableMessage? Localized { get; }
 
     /// <summary>The imported content, or null on any failure.</summary>
     public SettingsExportContent? Content { get; }
@@ -135,8 +162,12 @@ public sealed class SettingsImportResult
 ///
 /// <para><b>Why the messages live in Core rather than <c>UiStrings</c>:</b> the same reason Firebird
 /// connection-failure text does — Core cannot reference <c>EmberTern.App</c>, and a status whose meaning is
-/// decided here should not have its explanation decided somewhere else. A future localization milestone will map
-/// the <see cref="SettingsImportStatus"/>, which is the stable half.</para>
+/// decided here should not have its explanation decided somewhere else.</para>
+///
+/// <para>⭐ <b>Since C4b each message exists twice</b>: in English, for logs and for the tests that pin the exact
+/// wording, and as a <see cref="LocalizableMessage"/> keyed in <see cref="SettingsExportMessages"/> for the
+/// dialog to resolve in the reader's language (D‑3). ⚠ Every producer goes through <see cref="Failed"/> or
+/// <see cref="Failure"/>, which take both halves together — so the pair cannot be set apart at a call site.</para>
 /// </summary>
 public static class SettingsImportReader
 {
@@ -152,7 +183,8 @@ public static class SettingsImportReader
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                                       or ArgumentException or NotSupportedException)
         {
-            return Failed(SettingsImportStatus.Unreadable, $"The file could not be read: {ex.Message}");
+            return Failed(SettingsImportStatus.Unreadable, $"The file could not be read: {ex.Message}",
+                LocalizableMessage.Of(SettingsExportMessages.FileCouldNotBeRead, ex.Message));
         }
     }
 
@@ -170,12 +202,14 @@ public static class SettingsImportReader
             var outcome = SettingsExportEnvelope.TryReadHeader(stream, out header);
             if (outcome == SettingsExportHeaderOutcome.NotAnExportFile)
             {
-                return Failed(SettingsImportStatus.NotAnExportFile, "This is not an EmberTern settings file.");
+                return Failed(SettingsImportStatus.NotAnExportFile, "This is not an EmberTern settings file.",
+                    LocalizableMessage.Of(SettingsExportMessages.NotAnExportFile));
             }
             if (outcome == SettingsExportHeaderOutcome.MalformedHeader)
             {
                 return Failed(SettingsImportStatus.Damaged,
-                    "This EmberTern settings file's header is damaged and cannot be read.");
+                    "This EmberTern settings file's header is damaged and cannot be read.",
+                    LocalizableMessage.Of(SettingsExportMessages.HeaderDamaged));
             }
 
             payload = SettingsExportEnvelope.ReadPayload(stream);
@@ -183,7 +217,8 @@ public static class SettingsImportReader
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
                                       or ObjectDisposedException)
         {
-            return Failed(SettingsImportStatus.Unreadable, $"The file could not be read: {ex.Message}");
+            return Failed(SettingsImportStatus.Unreadable, $"The file could not be read: {ex.Message}",
+                LocalizableMessage.Of(SettingsExportMessages.FileCouldNotBeRead, ex.Message));
         }
 
         // CHECK 2 — a newer format version. Same downgrade protection, and the same reason, as settings.dat's:
@@ -191,10 +226,12 @@ public static class SettingsImportReader
         if (header.FormatVersion > SettingsExportFormat.CurrentFormatVersion)
         {
             return Failed(SettingsImportStatus.FutureFormatVersion, string.Format(
-                CultureInfo.InvariantCulture,
-                "This settings export was written by a newer EmberTern build (format v{0}; this build supports "
-                + "up to v{1}).",
-                header.FormatVersion, SettingsExportFormat.CurrentFormatVersion));
+                    CultureInfo.InvariantCulture,
+                    "This settings export was written by a newer EmberTern build (format v{0}; this build supports "
+                    + "up to v{1}).",
+                    header.FormatVersion, SettingsExportFormat.CurrentFormatVersion),
+                LocalizableMessage.Of(SettingsExportMessages.FutureFormatVersion,
+                    Echo(header.FormatVersion), Echo(SettingsExportFormat.CurrentFormatVersion)));
         }
 
         // CHECK 3 — older than the oldest version we hold a migration path for. Knowable from the version alone,
@@ -202,10 +239,12 @@ public static class SettingsImportReader
         if (header.FormatVersion < SettingsExportFormat.OldestSupportedFormatVersion)
         {
             return Failed(SettingsImportStatus.UnsupportedFormatVersion, string.Format(
-                CultureInfo.InvariantCulture,
-                "This settings export declares format v{0}, which this build cannot migrate from (the oldest "
-                + "supported is v{1}).",
-                header.FormatVersion, SettingsExportFormat.OldestSupportedFormatVersion));
+                    CultureInfo.InvariantCulture,
+                    "This settings export declares format v{0}, which this build cannot migrate from (the oldest "
+                    + "supported is v{1}).",
+                    header.FormatVersion, SettingsExportFormat.OldestSupportedFormatVersion),
+                LocalizableMessage.Of(SettingsExportMessages.UnsupportedFormatVersion,
+                    Echo(header.FormatVersion), Echo(SettingsExportFormat.OldestSupportedFormatVersion)));
         }
 
         // CHECK 4 — can this build decrypt it at all? Scheme, KDF and KDF parameters are all "capability" facts,
@@ -214,24 +253,27 @@ public static class SettingsImportReader
                 StringComparison.OrdinalIgnoreCase))
         {
             return Failed(SettingsImportStatus.UnsupportedEncryption,
-                $"Unsupported encryption scheme '{header.EncryptionScheme}'.");
+                $"Unsupported encryption scheme '{header.EncryptionScheme}'.",
+                LocalizableMessage.Of(SettingsExportMessages.UnsupportedScheme, header.EncryptionScheme));
         }
         if (!PassphraseProtector.IsSupportedKdf(header.Kdf))
         {
             return Failed(SettingsImportStatus.UnsupportedEncryption,
-                $"Unsupported key-derivation function '{header.Kdf}'.");
+                $"Unsupported key-derivation function '{header.Kdf}'.",
+                LocalizableMessage.Of(SettingsExportMessages.UnsupportedKdf, header.Kdf));
         }
         if (!PassphraseProtector.IsSupportedIterations(header.Iterations))
         {
             // ⚠ Also a denial-of-service guard: the iteration count sits in a cleartext header anyone can edit,
             // and honouring a claimed two billion would hang inside the KDF with no way out.
             return Failed(SettingsImportStatus.UnsupportedEncryption, string.Format(
-                CultureInfo.InvariantCulture,
-                "This settings export declares an unsupported key-derivation iteration count ({0}).",
-                header.Iterations));
+                    CultureInfo.InvariantCulture,
+                    "This settings export declares an unsupported key-derivation iteration count ({0}).",
+                    header.Iterations),
+                LocalizableMessage.Of(SettingsExportMessages.UnsupportedIterations, Echo(header.Iterations)));
         }
 
-        return new SettingsImportInspection(SettingsImportStatus.Ok, string.Empty, header, payload);
+        return new SettingsImportInspection(SettingsImportStatus.Ok, string.Empty, null, header, payload);
     }
 
     /// <summary>
@@ -246,13 +288,17 @@ public static class SettingsImportReader
         // braces for the ordering the two-phase shape already makes natural.
         if (!inspection.CanBeOpened)
         {
-            return new SettingsImportResult(inspection.Status, inspection.Message, null);
+            // ⚠ Phase one's own pair, forwarded whole — never restated. Restating it here would make one
+            // sentence have two producers that could drift.
+            return new SettingsImportResult(
+                inspection.Status, inspection.Message, inspection.Localized, null);
         }
 
         if (string.IsNullOrEmpty(passphrase))
         {
-            return new SettingsImportResult(SettingsImportStatus.WrongPassphrase,
-                "A passphrase is required to open this settings export.", null);
+            return Failure(SettingsImportStatus.WrongPassphrase,
+                "A passphrase is required to open this settings export.",
+                LocalizableMessage.Of(SettingsExportMessages.PassphraseRequired));
         }
 
         string json;
@@ -266,19 +312,22 @@ public static class SettingsImportReader
         // tampered payload both land here, and neither is reported as "corrupt file".
         catch (AuthenticationTagMismatchException)
         {
-            return new SettingsImportResult(SettingsImportStatus.WrongPassphrase,
-                "Wrong passphrase (or the file has been modified since it was exported).", null);
+            return Failure(SettingsImportStatus.WrongPassphrase,
+                "Wrong passphrase (or the file has been modified since it was exported).",
+                LocalizableMessage.Of(SettingsExportMessages.WrongPassphrase));
         }
         catch (CryptographicException ex)
         {
-            return new SettingsImportResult(SettingsImportStatus.Damaged,
-                $"This settings export's payload is damaged: {ex.Message}", null);
+            return Failure(SettingsImportStatus.Damaged,
+                $"This settings export's payload is damaged: {ex.Message}",
+                LocalizableMessage.Of(SettingsExportMessages.PayloadDamaged, ex.Message));
         }
         catch (ArgumentException ex)
         {
             // The header passed check 4, so this is a genuinely malformed parameter (an empty salt, say).
-            return new SettingsImportResult(SettingsImportStatus.Damaged,
-                $"This settings export's header is damaged: {ex.Message}", null);
+            return Failure(SettingsImportStatus.Damaged,
+                $"This settings export's header is damaged: {ex.Message}",
+                LocalizableMessage.Of(SettingsExportMessages.HeaderParametersDamaged, ex.Message));
         }
 
         JsonObject payload;
@@ -286,19 +335,22 @@ public static class SettingsImportReader
         {
             if (JsonNode.Parse(json) is not JsonObject parsed)
             {
-                return Damaged("its payload is not a settings export.");
+                return Damaged("its payload is not a settings export.",
+                    LocalizableMessage.Of(SettingsExportMessages.DamagedNotAnExport));
             }
             payload = parsed;
         }
         catch (JsonException ex)
         {
-            return Damaged($"its payload is not valid JSON ({ex.Message}).");
+            return Damaged($"its payload is not valid JSON ({ex.Message}).",
+                LocalizableMessage.Of(SettingsExportMessages.DamagedInvalidJson, ex.Message));
         }
 
         // AXIS 1 — the ENVELOPE's format version: migrate stepwise up to the current one.
-        if (!SettingsExportMigration.TryMigrateToCurrent(payload, inspection.Header.FormatVersion, out var reason))
+        if (!SettingsExportMigration.TryMigrateToCurrent(
+                payload, inspection.Header.FormatVersion, out var reason, out var reasonMessage))
         {
-            return new SettingsImportResult(SettingsImportStatus.UnsupportedFormatVersion, reason, null);
+            return Failure(SettingsImportStatus.UnsupportedFormatVersion, reason, reasonMessage);
         }
 
         SettingsExportContent? content;
@@ -308,12 +360,14 @@ public static class SettingsImportReader
         }
         catch (JsonException ex)
         {
-            return Damaged($"its payload could not be read ({ex.Message}).");
+            return Damaged($"its payload could not be read ({ex.Message}).",
+                LocalizableMessage.Of(SettingsExportMessages.DamagedUnreadablePayload, ex.Message));
         }
 
         if (content?.Settings is null)
         {
-            return Damaged("its payload contains no settings.");
+            return Damaged("its payload contains no settings.",
+                LocalizableMessage.Of(SettingsExportMessages.DamagedNoSettings));
         }
 
         // AXIS 2 — the SETTINGS SHAPE's version. A separate axis with a separate ladder, and deliberately not
@@ -321,11 +375,13 @@ public static class SettingsImportReader
         // shape changed", forcing a schema bump that makes older builds refuse the whole settings.dat.
         if (content.Settings.SchemaVersion > ApplicationSettingsStore.CurrentSchemaVersion)
         {
-            return new SettingsImportResult(SettingsImportStatus.FutureSettingsSchema, string.Format(
-                CultureInfo.InvariantCulture,
-                "This settings export holds settings in a newer shape (schema v{0}; this build supports up to "
-                + "v{1}).",
-                content.Settings.SchemaVersion, ApplicationSettingsStore.CurrentSchemaVersion), null);
+            return Failure(SettingsImportStatus.FutureSettingsSchema, string.Format(
+                    CultureInfo.InvariantCulture,
+                    "This settings export holds settings in a newer shape (schema v{0}; this build supports up to "
+                    + "v{1}).",
+                    content.Settings.SchemaVersion, ApplicationSettingsStore.CurrentSchemaVersion),
+                LocalizableMessage.Of(SettingsExportMessages.FutureSettingsSchema,
+                    Echo(content.Settings.SchemaVersion), Echo(ApplicationSettingsStore.CurrentSchemaVersion)));
         }
 
         // ⭐ THE EXISTING LADDER, called — not re-implemented. This is the same method LoadWithStatus calls, which
@@ -339,12 +395,36 @@ public static class SettingsImportReader
         content.Settings.UserSettings.Preferences =
             PreferencesStore.Validate(content.Settings.UserSettings.Preferences);
 
-        return new SettingsImportResult(SettingsImportStatus.Ok, string.Empty, content);
+        return new SettingsImportResult(SettingsImportStatus.Ok, string.Empty, null, content);
     }
 
-    private static SettingsImportInspection Failed(SettingsImportStatus status, string message)
-        => new(status, message, default, string.Empty);
+    // ── The two producers ────────────────────────────────────────────────────────────────────────────
+    // ⚠ Both halves are parameters of ONE call, so a call site cannot supply the English and forget the key.
 
-    private static SettingsImportResult Damaged(string detail)
-        => new(SettingsImportStatus.Damaged, "This settings export is damaged: " + detail, null);
+    private static SettingsImportInspection Failed(
+        SettingsImportStatus status, string message, LocalizableMessage localized)
+        => new(status, message, localized, default, string.Empty);
+
+    private static SettingsImportResult Failure(
+        SettingsImportStatus status, string message, LocalizableMessage localized)
+        => new(status, message, localized, null);
+
+    /// <summary>
+    /// The four "damaged payload" cases: the English half is still COMPOSED from the shipped prefix and its
+    /// fragment, while the localized half is a WHOLE SENTENCE key.
+    ///
+    /// <para>⭐ Keeping the composition for English is deliberate and is what makes the equality guard a proof:
+    /// the resource value must reproduce the concatenation this method builds, rather than a sentence someone
+    /// retyped. ⛔ The prefix itself is never a key — glued to a fragment it cannot translate into a language
+    /// that inflects, and the fragment is not a sentence in any language.</para>
+    /// </summary>
+    private static SettingsImportResult Damaged(string detail, LocalizableMessage localized)
+        => new(SettingsImportStatus.Damaged, "This settings export is damaged: " + detail, localized, null);
+
+    /// <summary>
+    /// A number echoed from the file's own header or payload, formatted <b>invariantly</b> so both halves of the
+    /// pair render identically on every machine. ⛔ Do not pass these as numbers — gotcha #357 and the remarks on
+    /// <see cref="SettingsExportMessages"/>.
+    /// </summary>
+    private static string Echo(int value) => value.ToString(CultureInfo.InvariantCulture);
 }

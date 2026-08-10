@@ -1,3 +1,4 @@
+using EmberTern.App.Localization;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -801,6 +802,9 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
             : string.Format(
                 CultureInfo.CurrentCulture,
                 UiStrings.SettingsSaveRefusedFormat,
-                _preferences.LastSaveDiagnostic ?? string.Empty);
+                // ⭐ Composed AFTER PreferencesService.Apply raised Changed, which is what applies a new language —
+                // so this line already renders in the language the user just chose. Pinned by a test, because the
+                // ordering is what makes it correct and a refactor could reverse it silently.
+                _preferences.LastSaveMessage is { } m ? Loc.Format(m) : string.Empty);
     }
 }

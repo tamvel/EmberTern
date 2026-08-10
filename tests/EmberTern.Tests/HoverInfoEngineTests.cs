@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Sql.Language;
 using EmberTern.Core.Sql.Language.Hover;
 using EmberTern.Core.Sql.Language.Semantics;
@@ -269,7 +270,7 @@ public class HoverInfoEngineTests
         var model = SemanticModel.Build("select k.x from t k", new FakeMetadata().Col("T", "X", "INTEGER"));
         Assert.Empty(DiagnosticsEngine.Analyze(model));   // the real engine finds nothing here
 
-        var injected = new[] { new Diagnostic(0, 6, DiagnosticSeverity.Error, "injected", "ZZ9999") };
+        var injected = new[] { new Diagnostic(0, 6, DiagnosticSeverity.Error, LocalizableMessage.Of(DiagnosticsMessages.UnknownObject, "injected"), "ZZ9999") };
         var hover = HoverInfoEngine.GetHover(model, injected, 2);
 
         Assert.Equal("ZZ9999", Assert.Single(hover!.Diagnostics).Code);
@@ -283,8 +284,8 @@ public class HoverInfoEngineTests
         var model = SemanticModel.Build("select 1 from t");
         var ordered = new[]
         {
-            new Diagnostic(0, 20, DiagnosticSeverity.Error, "first", "ET0006"),
-            new Diagnostic(0, 20, DiagnosticSeverity.Warning, "second", "ET0009"),
+            new Diagnostic(0, 20, DiagnosticSeverity.Error, LocalizableMessage.Of(DiagnosticsMessages.UnknownObject, "first"), "ET0006"),
+            new Diagnostic(0, 20, DiagnosticSeverity.Warning, LocalizableMessage.Of(DiagnosticsMessages.UnknownObject, "second"), "ET0009"),
         };
 
         var hover = HoverInfoEngine.GetHover(model, ordered, 3);

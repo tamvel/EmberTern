@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EmberTern.App.ViewModels"
              xmlns:app="using:EmberTern.App"
@@ -460,38 +460,32 @@
                              `Text.Compact.Size` (11) w tym samym wierszu. Wartość 12 → 12, wygląd bez zmiany;
                              migracja nazywa decyzję, którą autor już podjął (R12). -->
                         <ItemsControl ItemsSource="{Binding Changes}" Margin="2,0,0,0">
-                          <ItemsControl.DataTemplates>
-                            <DataTemplate x:DataType="core:InsertChange">
+                          <ItemsControl.ItemTemplate>
+                            <!-- ⭐ C6: ONE template over an App row view model, where there used to be three
+                                 keyed on Core's record subtypes. The old shape drew `Count` and `Verb` as two
+                                 adjacent bindings, which pinned ENGLISH WORD ORDER into the layout — Polish
+                                 says "wstawiono 14 wierszy", with the number in the middle. The row now
+                                 carries one localized sentence split around its number (`Loc.FormatParts`),
+                                 so the translator chooses the order and the number keeps its kind colour
+                                 wherever it lands. ⛔ Do not bind `TableChange.Verb` again. -->
+                            <DataTemplate x:DataType="vm:ExecActivityChangeViewModel">
                               <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
-                                <controls:SvgIcon Data="{StaticResource Icon.Plus}"
-                                                  Foreground="{DynamicResource SuccessIconBrush}"
-                                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Count}" Foreground="{DynamicResource SuccessIconBrush}"
-                                           FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+                                <controls:SvgIcon Data="{Binding IconGeometryKey, Converter={x:Static app:IconGeometryConverter.Instance}}"
+                                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" VerticalAlignment="Center">
+                                  <controls:SvgIcon.Foreground>
+                                    <MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}">
+                                      <Binding Path="IconResourceKey" />
+                                      <Binding Path="ActualThemeVariant" ElementName="RootControl" />
+                                    </MultiBinding>
+                                  </controls:SvgIcon.Foreground>
+                                </controls:SvgIcon>
+                                <!-- ⚠ The three runs sit on ONE line on purpose: whitespace between inline
+                                     elements is content, and a newline here renders as a stray space inside
+                                     the sentence. ExecActivityCardTests reads the realized text back. -->
+                                <TextBlock Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center"><Run Text="{Binding Before}" /><Run Text="{Binding Value}" FontWeight="SemiBold"><Run.Foreground><MultiBinding Converter="{x:Static app:IconBrushConverter.Instance}"><Binding Path="IconResourceKey" /><Binding Path="ActualThemeVariant" ElementName="RootControl" /></MultiBinding></Run.Foreground></Run><Run Text="{Binding After}" /></TextBlock>
                               </StackPanel>
                             </DataTemplate>
-                            <DataTemplate x:DataType="core:UpdateChange">
-                              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
-                                <controls:SvgIcon Data="{StaticResource Icon.Pencil}"
-                                                  Foreground="{DynamicResource WarningIconBrush}"
-                                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Count}" Foreground="{DynamicResource WarningIconBrush}"
-                                           FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                              </StackPanel>
-                            </DataTemplate>
-                            <DataTemplate x:DataType="core:DeleteChange">
-                              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
-                                <controls:SvgIcon Data="{StaticResource Icon.Trash}"
-                                                  Foreground="{DynamicResource DangerIconBrush}"
-                                                  Width="{DynamicResource Size.Icon.Sm}" Height="{DynamicResource Size.Icon.Sm}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Count}" Foreground="{DynamicResource DangerIconBrush}"
-                                           FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Verb}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-                              </StackPanel>
-                            </DataTemplate>
-                          </ItemsControl.DataTemplates>
+                          </ItemsControl.ItemTemplate>
                         </ItemsControl>
                       </StackPanel>
                     </Border>

@@ -55,18 +55,18 @@ public static class QuickInfoEngine
         var header = string.IsNullOrEmpty(c.DataType) ? c.Name : $"{c.Name} : {c.DataType}";
 
         var facts = new List<QuickInfoFact>();
-        if (!string.IsNullOrEmpty(c.OwningTable)) facts.Add(new QuickInfoFact("Table", c.OwningTable!));
-        if (!string.IsNullOrEmpty(c.Domain)) facts.Add(new QuickInfoFact("Domain", c.Domain!));
-        if (c.Nullable is { } nn) facts.Add(new QuickInfoFact("Nullability", nn ? "NULL" : "NOT NULL"));
-        if (!string.IsNullOrEmpty(c.DefaultValue)) facts.Add(new QuickInfoFact("Default", c.DefaultValue!));
-        if (c.IsPrimaryKey) facts.Add(new QuickInfoFact("Key", "PRIMARY KEY"));
+        if (!string.IsNullOrEmpty(c.OwningTable)) facts.Add(new QuickInfoFact(QuickInfoMessages.Table, c.OwningTable!));
+        if (!string.IsNullOrEmpty(c.Domain)) facts.Add(new QuickInfoFact(QuickInfoMessages.Domain, c.Domain!));
+        if (c.Nullable is { } nn) facts.Add(new QuickInfoFact(QuickInfoMessages.Nullability, nn ? "NULL" : "NOT NULL"));
+        if (!string.IsNullOrEmpty(c.DefaultValue)) facts.Add(new QuickInfoFact(QuickInfoMessages.Default, c.DefaultValue!));
+        if (c.IsPrimaryKey) facts.Add(new QuickInfoFact(QuickInfoMessages.Key, "PRIMARY KEY"));
         if (c.IsForeignKey)
         {
-            facts.Add(new QuickInfoFact("Key",
+            facts.Add(new QuickInfoFact(QuickInfoMessages.Key,
                 string.IsNullOrEmpty(c.ForeignKeyTable) ? "FOREIGN KEY" : $"FOREIGN KEY → {c.ForeignKeyTable}"));
         }
-        if (c.IsIdentity) facts.Add(new QuickInfoFact("Generated", "Identity"));
-        if (c.IsComputed) facts.Add(new QuickInfoFact("Generated", "Computed"));
+        if (c.IsIdentity) facts.Add(new QuickInfoFact(QuickInfoMessages.Generated, "Identity"));
+        if (c.IsComputed) facts.Add(new QuickInfoFact(QuickInfoMessages.Generated, "Computed"));
 
         return new QuickInfo(SymbolKind.Column, header, c.Description, facts);
     }
@@ -82,7 +82,7 @@ public static class QuickInfoEngine
         var owner = string.IsNullOrEmpty(meta?.Owner) ? o.Owner : meta!.Owner;
 
         var facts = new List<QuickInfoFact>();
-        if (!string.IsNullOrEmpty(owner)) facts.Add(new QuickInfoFact("Owner", owner!));
+        if (!string.IsNullOrEmpty(owner)) facts.Add(new QuickInfoFact(QuickInfoMessages.Owner, owner!));
 
         var members = new List<QuickInfoMember>();
         switch (o.Kind)
@@ -102,7 +102,7 @@ public static class QuickInfoEngine
             case SymbolKind.Function:
                 AddRoutineParameters(members, metadata, o.Name);
                 AddRoutineCounts(facts, metadata, o.Name, isFunction: true);
-                if (!string.IsNullOrEmpty(meta?.ReturnType)) facts.Add(new QuickInfoFact("Returns", meta!.ReturnType!));
+                if (!string.IsNullOrEmpty(meta?.ReturnType)) facts.Add(new QuickInfoFact(QuickInfoMessages.Returns, meta!.ReturnType!));
                 break;
 
             case SymbolKind.Trigger:
@@ -129,9 +129,9 @@ public static class QuickInfoEngine
             if (c.IsPrimaryKey) pk++;
             if (c.IsForeignKey) fk++;
         }
-        facts.Add(new QuickInfoFact("Columns", Num(cols.Count)));
-        if (pk > 0) facts.Add(new QuickInfoFact("Primary key", pk == 1 ? "1 column" : $"{Num(pk)} columns"));
-        if (fk > 0) facts.Add(new QuickInfoFact("Foreign keys", Num(fk)));
+        facts.Add(new QuickInfoFact(QuickInfoMessages.Columns, Num(cols.Count)));
+        if (pk > 0) facts.Add(new QuickInfoFact(QuickInfoMessages.PrimaryKey, pk == 1 ? "1 column" : $"{Num(pk)} columns"));
+        if (fk > 0) facts.Add(new QuickInfoFact(QuickInfoMessages.ForeignKeys, Num(fk)));
     }
 
     // Routine parameter summary. Functions count only inputs (the output is the return type, shown
@@ -148,11 +148,11 @@ public static class QuickInfoEngine
         }
         if (isFunction)
         {
-            facts.Add(new QuickInfoFact("Parameters", Num(inputs)));
+            facts.Add(new QuickInfoFact(QuickInfoMessages.Parameters, Num(inputs)));
         }
         else
         {
-            facts.Add(new QuickInfoFact("Parameters", outputs > 0 ? $"{Num(inputs)} in, {Num(outputs)} out" : $"{Num(inputs)} in"));
+            facts.Add(new QuickInfoFact(QuickInfoMessages.Parameters, outputs > 0 ? $"{Num(inputs)} in, {Num(outputs)} out" : $"{Num(inputs)} in"));
         }
     }
 
@@ -160,17 +160,17 @@ public static class QuickInfoEngine
     private static void AddTriggerFacts(List<QuickInfoFact> facts, TriggerDetail? trigger)
     {
         if (trigger is null) return;
-        if (!string.IsNullOrEmpty(trigger.Table)) facts.Add(new QuickInfoFact("Table", trigger.Table!));
+        if (!string.IsNullOrEmpty(trigger.Table)) facts.Add(new QuickInfoFact(QuickInfoMessages.Table, trigger.Table!));
 
         var events = new List<string>(3);
         if (trigger.FiresInsert) events.Add("INSERT");
         if (trigger.FiresUpdate) events.Add("UPDATE");
         if (trigger.FiresDelete) events.Add("DELETE");
         var timing = trigger.IsBefore ? "BEFORE" : "AFTER";
-        facts.Add(new QuickInfoFact("Fires", events.Count > 0 ? $"{timing} {string.Join(" OR ", events)}" : timing));
+        facts.Add(new QuickInfoFact(QuickInfoMessages.Fires, events.Count > 0 ? $"{timing} {string.Join(" OR ", events)}" : timing));
 
-        facts.Add(new QuickInfoFact("Position", Num(trigger.Position)));
-        facts.Add(new QuickInfoFact("State", trigger.Active ? "Active" : "Inactive"));
+        facts.Add(new QuickInfoFact(QuickInfoMessages.Position, Num(trigger.Position)));
+        facts.Add(new QuickInfoFact(QuickInfoMessages.State, trigger.Active ? "Active" : "Inactive"));
     }
 
     // Generator/sequence static facts (Package 5): the defining increment and start value. Shown only
@@ -179,8 +179,8 @@ public static class QuickInfoEngine
     private static void AddGeneratorFacts(List<QuickInfoFact> facts, GeneratorDetail? generator)
     {
         if (generator is null) return;
-        if (generator.Increment != 1) facts.Add(new QuickInfoFact("Increment", Num(generator.Increment)));
-        if (generator.StartValue != 0) facts.Add(new QuickInfoFact("Start", Num(generator.StartValue)));
+        if (generator.Increment != 1) facts.Add(new QuickInfoFact(QuickInfoMessages.Increment, Num(generator.Increment)));
+        if (generator.StartValue != 0) facts.Add(new QuickInfoFact(QuickInfoMessages.Start, Num(generator.StartValue)));
     }
 
     private static string Num(long n) => n.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -203,8 +203,8 @@ public static class QuickInfoEngine
         var facts = new List<QuickInfoFact>();
         if (t.Target is { } tgt)
         {
-            facts.Add(new QuickInfoFact("Kind", KindLabel(tgt.Kind)));
-            if (!string.IsNullOrEmpty(tgt.Owner)) facts.Add(new QuickInfoFact("Owner", tgt.Owner!));
+            facts.Add(new QuickInfoFact(QuickInfoMessages.Kind, KindLabel(tgt.Kind)));
+            if (!string.IsNullOrEmpty(tgt.Owner)) facts.Add(new QuickInfoFact(QuickInfoMessages.Owner, tgt.Owner!));
         }
 
         var members = new List<QuickInfoMember>();
@@ -230,7 +230,7 @@ public static class QuickInfoEngine
     {
         var members = new List<QuickInfoMember>();
         foreach (var col in cte.Columns) members.Add(new QuickInfoMember(col, QuickInfoMemberGroup.Column));
-        var facts = new[] { new QuickInfoFact("Kind", "Common table expression") };
+        var facts = new[] { new QuickInfoFact(QuickInfoMessages.Kind, "Common table expression") };
         return new QuickInfo(SymbolKind.Cte, cte.Name, description: null, facts, members);
     }
 
@@ -239,8 +239,8 @@ public static class QuickInfoEngine
     private static QuickInfo ForVariable(VariableSymbol v)
     {
         var header = string.IsNullOrEmpty(v.DataType) ? v.Name : $"{v.Name} : {v.DataType}";
-        var facts = new List<QuickInfoFact> { new("Kind", "Variable") };
-        if (!string.IsNullOrEmpty(v.DefaultValue)) facts.Add(new QuickInfoFact("Default", v.DefaultValue!));
+        var facts = new List<QuickInfoFact> { new(QuickInfoMessages.Kind, "Variable") };
+        if (!string.IsNullOrEmpty(v.DefaultValue)) facts.Add(new QuickInfoFact(QuickInfoMessages.Default, v.DefaultValue!));
         return new QuickInfo(SymbolKind.Variable, header, v.Description, facts);
     }
 
@@ -249,22 +249,22 @@ public static class QuickInfoEngine
         var header = string.IsNullOrEmpty(p.DataType) ? p.Name : $"{p.Name} : {p.DataType}";
         var facts = new List<QuickInfoFact>
         {
-            new("Kind", p.Direction == ParameterDirection.Output ? "Output parameter" : "Input parameter"),
+            new(QuickInfoMessages.Kind, p.Direction == ParameterDirection.Output ? "Output parameter" : "Input parameter"),
         };
-        if (p.Nullable == false) facts.Add(new QuickInfoFact("Nullability", "NOT NULL"));
-        if (!string.IsNullOrEmpty(p.DefaultValue)) facts.Add(new QuickInfoFact("Default", p.DefaultValue!));
+        if (p.Nullable == false) facts.Add(new QuickInfoFact(QuickInfoMessages.Nullability, "NOT NULL"));
+        if (!string.IsNullOrEmpty(p.DefaultValue)) facts.Add(new QuickInfoFact(QuickInfoMessages.Default, p.DefaultValue!));
         return new QuickInfo(SymbolKind.Parameter, header, p.Description, facts);
     }
 
     private static QuickInfo ForLocal(Symbol symbol, string kindLabel)
     {
-        var facts = new[] { new QuickInfoFact("Kind", kindLabel) };
+        var facts = new[] { new QuickInfoFact(QuickInfoMessages.Kind, kindLabel) };
         return new QuickInfo(symbol.Kind, symbol.Name, symbol.Description, facts);
     }
 
     private static QuickInfo ForGeneric(Symbol symbol)
     {
-        var facts = new[] { new QuickInfoFact("Kind", KindLabel(symbol.Kind)) };
+        var facts = new[] { new QuickInfoFact(QuickInfoMessages.Kind, KindLabel(symbol.Kind)) };
         return new QuickInfo(symbol.Kind, symbol.Name, symbol.Description, facts);
     }
 

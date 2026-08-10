@@ -335,12 +335,7 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         }
 
         // verdict + counters
-        GradeText = report.Verdict.Grade switch
-        {
-            HealthGrade.Healthy => UiStrings.SessionManagerGradeHealthy,
-            HealthGrade.Watch => UiStrings.SessionManagerGradeWatch,
-            _ => UiStrings.SessionManagerGradeAtRisk,
-        };
+        GradeText = GradeTextFor(report.Verdict.Grade);
         GradeBrushKey = report.Verdict.Grade switch
         {
             HealthGrade.Healthy => "SuccessIconBrush",
@@ -435,6 +430,52 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     // workflow produces a tiny lag (e.g. 59) that is nowhere near the 10,000-transaction danger
     // line, so it renders as a barely-there calm sliver — consistent with the "Healthy / GC Risk 0"
     // verdict. Colour only escalates (grey → orange → red) as the lag approaches / crosses the line.
+    // One owner for the grade wording — read both when a report arrives and when the language changes.
+    private static string GradeTextFor(HealthGrade grade) => grade switch
+    {
+        HealthGrade.Healthy => UiStrings.SessionManagerGradeHealthy,
+        HealthGrade.Watch => UiStrings.SessionManagerGradeWatch,
+        _ => UiStrings.SessionManagerGradeAtRisk,
+    };
+
+    /// <summary>
+    /// Re-derives every piece of displayed text that was resolved once and stored, after the language
+    /// changed. Called through <c>WorkspaceTabViewModel.RaiseAllPropertiesChanged</c>, which is the app's one
+    /// language-change entry point.
+    ///
+    /// <para>⭐ <b>Why the warning cards are REBUILT rather than notified.</b> A card's evidence rows are
+    /// bound with <c>Text="{Binding}"</c> — the bound object <i>is</i> the string, so there is no property on
+    /// it to re-read and no notification that could reach it. Replacing the view models replaces the bound
+    /// objects, which is the same reasoning that made a binding beat a subscription elsewhere in this stage:
+    /// nothing to unregister, no ordering, and no per-row subscription to leak.</para>
+    ///
+    /// <para>⚠ The transient status lines (last refresh, "session N disconnected") are deliberately NOT
+    /// re-derived: each describes a past event, and re-rendering one would need that event's data, not the
+    /// current state. They correct themselves on the next action.</para>
+    /// </summary>
+    internal void RefreshLocalizedText()
+    {
+        // Computed properties (SessionFilterText and friends) only need a nudge.
+        OnPropertyChanged(string.Empty);
+
+        if (_report is null)
+        {
+            return;
+        }
+
+        GradeText = GradeTextFor(_report.Verdict.Grade);
+        BuildGapBar(_report.Database);
+
+        Warnings.Clear();
+        foreach (var f in _report.Findings)
+        {
+            Warnings.Add(new SessionWarningViewModel(f));
+        }
+        OnPropertyChanged(nameof(HasWarnings));
+
+        RebuildSelectedSessionDetail();
+    }
+
     private void BuildGapBar(DatabaseTransactionState db)
     {
         HasGap = db.OldestTransaction > 0 && db.NextTransaction > 0

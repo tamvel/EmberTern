@@ -8,6 +8,7 @@ using System.Resources;
 using System.Text.RegularExpressions;
 using EmberTern.App;
 using EmberTern.App.Localization;
+using EmberTern.App.ViewModels;
 using EmberTern.Core.Localization;
 using EmberTern.Core.Settings;
 using Xunit;
@@ -109,6 +110,14 @@ public sealed class LocalizationMechanismTests
             var extra = set.Cast<System.Collections.DictionaryEntry>()
                 .Select(e => (string)e.Key)
                 .Where(k => !english.Contains(k))
+                // ⭐ Etap C6 WIDENED this too, and this is the case it was widened FOR: a language may need
+                // more plural forms than English has. Polish declares `X.few` where English declares only
+                // `X.one`/`X.other`, or even where English has a single flat `X` — a translation adding a
+                // grammatical category is not "introducing a key", it is answering the same key in its own
+                // grammar. ⛔ Still a real fence: the BASE key must exist in English, so a typo in a
+                // translated key is caught exactly as before.
+                .Where(k => BaseKeyOf(k) is not { } b
+                    || !(english.Contains(b) || HasPluralFamily(english, b)))
                 .ToList();
 
             Assert.True(extra.Count == 0,
@@ -129,7 +138,21 @@ public sealed class LocalizationMechanismTests
     [Fact]
     public void EveryLocalizedMember_MatchesItsEnglishEntry()
     {
-        foreach (var key in EnglishKeys())
+        // ⚠⚠ The catalog has TWO owners since the first Core producer migrated (D‑3). An App key is the name
+        // of a UiStrings property; a Core key is a MessageKey declared in Core/Firebird and resolved through
+        // Loc.Format, and it CANNOT have a member of that name — it contains dots, so it is not a legal C#
+        // identifier. Skipping those here is a partition, not a relaxation: their own orphan check is
+        // EveryCoreShapedEntry_IsDeclaredByCore, so both halves stay guarded in both directions.
+        var coreKeys = DeclaredCoreMessageKeys().ToHashSet(StringComparer.Ordinal);
+
+        foreach (var key in EnglishKeys()
+            .Where(k => !coreKeys.Contains(k))
+            // ⭐ C6: a plural VARIANT belongs to its base key, and the mechanism's own metadata belongs to
+            // nobody's sentence — neither can have a UiStrings property. Both partitions keep their orphan
+            // protection through EveryCoreShapedEntry_IsDeclaredByCore, which checks the same two shapes from
+            // the other side, so there is still no gap between the halves.
+            .Where(k => BaseKeyOf(k) is not { } b || !coreKeys.Contains(b))
+            .Where(k => !MechanismMetadataKeys.Contains(k)))
         {
             var member = typeof(UiStrings).GetProperty(key, BindingFlags.Public | BindingFlags.Static);
             Assert.True(member is not null,
@@ -386,11 +409,11 @@ public sealed class LocalizationMechanismTests
     }
 
     /// <summary>
-    /// ⭐ <b>A guard that arms itself.</b> Vacuous today because Core declares no keys yet (stage L4 does), and
-    /// live the moment the first one appears: a key with no English entry would resolve to itself and put a
-    /// raw identifier on screen.
+    /// ⭐ <b>A guard that arms itself.</b> It was vacuous while Core declared no keys, and went live with the
+    /// first producer (<c>SessionHealthMessages</c>): a key with no English entry resolves to itself and puts
+    /// a raw identifier on screen.
     ///
-    /// <para>⚠ Justification for adding it now rather than with L4: the failure it prevents is silent, and the
+    /// <para>⚠ Justification for adding it before it had a subject: the failure it prevents is silent, and the
     /// convention it encodes — Core owns the KEY, App's resource file owns the WORDS — is exactly the thing a
     /// future session would otherwise have to rediscover from prose.</para>
     /// </summary>
@@ -399,18 +422,332 @@ public sealed class LocalizationMechanismTests
     {
         var english = EnglishKeys().ToHashSet(StringComparer.Ordinal);
 
-        var declared = typeof(MessageKey).Assembly.GetTypes()
-            .SelectMany(t => t.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic))
-            .Where(f => f.FieldType == typeof(MessageKey) && f.IsInitOnly)
-            .Select(f => ((MessageKey)f.GetValue(null)!).Value)
+        // ⭐ Etap C6 WIDENED this, it did not weaken it. A key now resolves either to a flat entry or to a
+        // complete family of plural variants (`key.one`, `key.other`, …) — the second shape is what lets a
+        // language declare more forms than English needs. The premise "a declared key resolves to a sentence"
+        // is unchanged; only the number of ways to satisfy it grew. ⛔ Do not turn this into "flat OR
+        // anything with a dot after it": a family with no variants at all would then pass.
+        var missing = DeclaredCoreMessageKeys()
+            .Where(k => !english.Contains(k) && !HasPluralFamily(english, k))
             .ToList();
 
-        var missing = declared.Where(k => !english.Contains(k)).ToList();
-
         Assert.True(missing.Count == 0,
-            "Core declares these message keys with no English entry in Localization/Strings.resx: "
-            + string.Join(", ", missing));
+            "Core declares these message keys with no English entry in Localization/Strings.resx (neither a "
+            + "flat entry nor a plural family): " + string.Join(", ", missing));
     }
+
+    /// <summary>Whether <paramref name="key"/> is served by category variants rather than a flat entry.</summary>
+    private static bool HasPluralFamily(IReadOnlySet<string> entries, string key)
+        => PluralRules.KnownRuleSets
+            .SelectMany(PluralRules.CategoriesOf)
+            .Distinct()
+            .Any(c => entries.Contains(key + "." + PluralRules.SuffixFor(c)));
+
+    /// <summary>Every category variant of <paramref name="key"/> present in <paramref name="entries"/>.</summary>
+    private static IEnumerable<string> PluralVariantsOf(IReadOnlySet<string> entries, string key)
+        => AllCategories()
+            .Select(c => key + "." + PluralRules.SuffixFor(c))
+            .Where(entries.Contains);
+
+    private static IEnumerable<PluralCategory> AllCategories()
+        => Enum.GetValues<PluralCategory>();
+
+    /// <summary>
+    /// The other direction, and the reason the catalog can be split by owner at all: <b>a Core-shaped entry
+    /// nobody declares is an orphan</b>, exactly as an App entry with no <c>UiStrings</c> member is.
+    ///
+    /// <para>⚠ This exists because <see cref="EveryLocalizedMember_MatchesItsEnglishEntry"/> had to stop
+    /// demanding a <c>UiStrings</c> property for <i>every</i> key: a Core key contains dots and therefore
+    /// cannot be a C# identifier, so no member of that name can exist. ⛔ That is a PARTITION, not a
+    /// relaxation — orphan protection had to keep holding on both sides of it, and this is the half that
+    /// covers Core. Without it, a typo in a resource name would simply be a key nothing reads.</para>
+    /// </summary>
+    [Fact]
+    public void EveryCoreShapedEntry_IsDeclaredByCore()
+    {
+        var declared = DeclaredCoreMessageKeys().ToHashSet(StringComparer.Ordinal);
+
+        // The App partition is "has a UiStrings property"; anything else must be a declared Core key. The
+        // discriminator is reflection over the real declarations, never a naming convention — a convention
+        // would be a second source of truth about which layer owns a key.
+        var orphans = EnglishKeys()
+            .Where(k => typeof(UiStrings).GetProperty(k, BindingFlags.Public | BindingFlags.Static) is null)
+            .Where(k => !declared.Contains(k))
+            // ⭐ C6: a plural VARIANT is declared by its base key, not by a field of its own — Core says
+            // `Query.Exec.RowsInserted` and the catalog answers with `.one` / `.other`. Stripping the
+            // category suffix is the only way to ask who owns it, and it is exact rather than a
+            // "contains a dot" heuristic: the suffix must be one this build's rule sets can actually
+            // produce, so `Settings.Import.PayloadDamaged` is not mistaken for a variant of
+            // `Settings.Import`.
+            .Where(k => BaseKeyOf(k) is not { } b || !declared.Contains(b))
+            .Where(k => !MechanismMetadataKeys.Contains(k))
+            .ToList();
+
+        Assert.True(orphans.Count == 0,
+            "These resource entries belong to neither partition — no UiStrings property and no MessageKey "
+            + "declared in Core/Firebird: " + string.Join(", ", orphans));
+    }
+
+    /// <summary>
+    /// Entries that are the MECHANISM's own data rather than anybody's message.
+    ///
+    /// <para>⚠ A named exception with its reason written down, the shape C4b's <c>NoMigrationStep</c>
+    /// established. <c>Localization.PluralRuleSet</c> holds a rule-set name, not a sentence, so it can have
+    /// neither a <c>UiStrings</c> property (it is not user-visible text) nor a <c>MessageKey</c> (Core must
+    /// not know that plural rules exist). It lives in the catalog because that is the one file a translator
+    /// edits, and its correctness is pinned by
+    /// <see cref="EveryShippedCulture_NamesAKnownRuleSet"/>.</para>
+    /// </summary>
+    private static readonly HashSet<string> MechanismMetadataKeys =
+        new(StringComparer.Ordinal) { PluralRules.RuleSetKey };
+
+    /// <summary>The key a category variant belongs to, or null when the entry is not a variant.</summary>
+    private static string? BaseKeyOf(string entry)
+    {
+        foreach (var category in AllCategories())
+        {
+            var suffix = "." + PluralRules.SuffixFor(category);
+            if (entry.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                return entry[..^suffix.Length];
+            }
+        }
+
+        return null;
+    }
+
+    // ── Etap C6 — the plural mechanism ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>Each rule set puts every count in the category its grammar says.</b> The Slavic band is the
+    /// interesting one and the numbers are chosen to hit the part that is easy to get wrong: 12, 13 and 14
+    /// end in 2/3/4 yet are <c>many</c>, while 22, 23 and 24 are <c>few</c>. Dropping that exclusion renders
+    /// "12 wiersze" instead of "12 wierszy" — grammatically wrong and completely invisible to anyone reading
+    /// the English build.
+    /// </summary>
+    /// <remarks>⚠ The expectation is the catalog SUFFIX rather than the enum, because the suffix is what a
+    /// translator writes in the resource — and because <c>PluralCategory</c> is internal to the App, which a
+    /// public test signature cannot name.</remarks>
+    [Theory]
+    // one-other: singular at exactly one, everything else plural — including zero.
+    [InlineData(PluralRules.OneOther, 0, "other")]
+    [InlineData(PluralRules.OneOther, 1, "one")]
+    [InlineData(PluralRules.OneOther, 2, "other")]
+    [InlineData(PluralRules.OneOther, 5, "other")]
+    [InlineData(PluralRules.OneOther, 21, "other")]
+    [InlineData(PluralRules.OneOther, 101, "other")]
+    // one-few-many.
+    [InlineData(PluralRules.OneFewMany, 1, "one")]
+    [InlineData(PluralRules.OneFewMany, 2, "few")]
+    [InlineData(PluralRules.OneFewMany, 3, "few")]
+    [InlineData(PluralRules.OneFewMany, 4, "few")]
+    [InlineData(PluralRules.OneFewMany, 5, "many")]
+    [InlineData(PluralRules.OneFewMany, 0, "many")]
+    [InlineData(PluralRules.OneFewMany, 11, "many")]
+    [InlineData(PluralRules.OneFewMany, 12, "many")]   // the teen exclusion …
+    [InlineData(PluralRules.OneFewMany, 13, "many")]
+    [InlineData(PluralRules.OneFewMany, 14, "many")]
+    [InlineData(PluralRules.OneFewMany, 21, "many")]
+    [InlineData(PluralRules.OneFewMany, 22, "few")]    // … and the band it does not touch
+    [InlineData(PluralRules.OneFewMany, 24, "few")]
+    [InlineData(PluralRules.OneFewMany, 25, "many")]
+    [InlineData(PluralRules.OneFewMany, 112, "many")]
+    [InlineData(PluralRules.OneFewMany, 122, "few")]
+    public void EveryRuleSet_AssignsACategoryToEveryCount(string ruleSet, long count, string expected)
+        => Assert.Equal(expected, PluralRules.SuffixFor(PluralRules.CategoryFor(ruleSet, count)));
+
+    /// <summary>
+    /// <b>Every language the catalog offers declares a plural rule set this build implements.</b>
+    ///
+    /// <para>⭐ Arms itself off <c>PreferenceOptions.Language</c>, so adding a language extends this test
+    /// automatically — the same construction as
+    /// <see cref="EveryLanguageInTheCatalog_ResolvesToItsOwnCultureWithNoCodeChange"/>. Without it, a
+    /// translation that forgot the declaration (or misspelt it) would silently fall back to the two-form
+    /// rule and render every Slavic sentence in the wrong grammatical form, with every test green.</para>
+    /// </summary>
+    [Fact]
+    public void EveryShippedCulture_NamesAKnownRuleSet()
+    {
+        foreach (var key in PreferenceOptions.Language.Values)
+        {
+            var culture = LanguagePreference.CultureFor(key);
+            var declared = Resources.GetString(PluralRules.RuleSetKey, culture);
+
+            Assert.True(declared is not null,
+                $"Language '{key}' declares no {PluralRules.RuleSetKey}. Every culture must name its plural "
+                + "grammar; the neutral set carries the default and a satellite overrides it.");
+            Assert.True(PluralRules.IsKnown(declared),
+                $"Language '{key}' names plural rule set '{declared}', which this build does not implement. "
+                + $"Known: {string.Join(", ", PluralRules.KnownRuleSets)}.");
+        }
+    }
+
+    /// <summary>
+    /// <b>An unknown or missing rule set degrades; it never throws.</b>
+    ///
+    /// <para>⚠ Same reasoning as <c>Loc.Text</c> returning the key rather than throwing: failing to choose a
+    /// grammatical form must not be the thing that ends a session. The build-time answer is
+    /// <see cref="EveryShippedCulture_NamesAKnownRuleSet"/>; this is the runtime one.</para>
+    /// </summary>
+    [Fact]
+    public void AnUnknownRuleSet_FallsBackToOther_AndNeverThrows()
+    {
+        Assert.Equal(PluralCategory.Other, PluralRules.CategoryFor("no-such-rule-set", 5));
+        Assert.Equal(PluralCategory.Other, PluralRules.CategoryFor(null, 5));
+        Assert.Equal(PluralCategory.One, PluralRules.CategoryFor(string.Empty, 1));
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The premise behind R2, pinned: no rule set is named after a language.</b>
+    ///
+    /// <para>A rule set names the GRAMMAR it implements, because several languages share one — French and
+    /// Spanish are both <c>one-other</c>, Russian and Czech are both <c>one-few-many</c>. A set called
+    /// "polish" would be false at its second consumer, and it would re-create the per-language branch
+    /// <see cref="NoCode_BranchesOnAParticularLanguage"/> forbids, one layer out where that guard cannot see
+    /// it: its regex looks for two-letter codes in comparisons, not for a dictionary key.</para>
+    /// </summary>
+    [Fact]
+    public void NoRuleSet_IsNamedAfterALanguage()
+    {
+        var languageWord = new Regex(
+            @"(?i)\b(polish|english|german|french|spanish|italian|czech|ukrainian|russian|slavic|"
+            + @"pl|en|de|fr|es|it|cs|uk|ru)\b");
+
+        foreach (var name in PluralRules.KnownRuleSets)
+        {
+            var hit = languageWord.Match(name);
+            Assert.False(hit.Success,
+                $"Plural rule set '{name}' is named after a language ('{hit.Value}'). Name it after the "
+                + "grammar it implements — several languages share one rule set, so a language name is "
+                + "false the moment a second one uses it.");
+        }
+    }
+
+    /// <summary>
+    /// ⭐ <b>A plural family is complete in every culture that ships it</b> — every category that culture's
+    /// own rule set can produce has an entry.
+    ///
+    /// <para>⚠ This is the guard that turns "the translator forgot <c>few</c>" from a quietly wrong sentence
+    /// into a red build. At run time such a gap falls back to <c>other</c>, which renders readable text in
+    /// the wrong grammatical form — the failure mode nobody reading the English build can see.</para>
+    /// </summary>
+    [Fact]
+    public void EveryPluralFamily_IsCompleteInEveryShippedCulture()
+    {
+        foreach (var key in PreferenceOptions.Language.Values)
+        {
+            var culture = LanguagePreference.CultureFor(key);
+            var set = Resources.GetResourceSet(culture, createIfNotExists: true, tryParents: true);
+            if (set is null) continue;
+
+            var entries = set.Cast<System.Collections.DictionaryEntry>()
+                .Select(e => (string)e.Key)
+                .ToHashSet(StringComparer.Ordinal);
+
+            var ruleSet = Resources.GetString(PluralRules.RuleSetKey, culture) ?? PluralRules.Fallback;
+            var required = PluralRules.CategoriesOf(ruleSet)
+                .Select(PluralRules.SuffixFor)
+                .ToList();
+
+            var families = entries
+                .Select(BaseKeyOf)
+                .Where(b => b is not null)
+                .Select(b => b!)
+                .Distinct(StringComparer.Ordinal)
+                .Where(b => !entries.Contains(b));
+
+            foreach (var family in families)
+            {
+                var missing = required.Where(c => !entries.Contains(family + "." + c)).ToList();
+                Assert.True(missing.Count == 0,
+                    $"Culture '{culture.Name}' declares plural family '{family}' but is missing "
+                    + $"{string.Join(", ", missing)} — its rule set '{ruleSet}' can produce those categories, "
+                    + "so a count landing in one would silently render the wrong form.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// ⛔ <b>A key is EITHER flat OR a family, never both.</b>
+    ///
+    /// <para>Two representations of one sentence are two things to keep in step, and the flat one would win
+    /// only when the count is missing — so a divergence would show up for some counts and not others. That is
+    /// the shape §B.11 rejected for duplicate values, applied to the same key rather than to two keys.</para>
+    /// </summary>
+    [Fact]
+    public void NoPluralFamily_AlsoDeclaresAFlatEntry()
+    {
+        var english = EnglishKeys().ToHashSet(StringComparer.Ordinal);
+
+        var both = english
+            .Select(BaseKeyOf)
+            .Where(b => b is not null && english.Contains(b))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(both.Count == 0,
+            "These keys have BOTH a flat entry and plural variants: " + string.Join(", ", both!));
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>Every view model that can re-render itself is actually ASKED to.</b>
+    ///
+    /// <para>A tab hangs its real content off a child view model, and the language broadcast reaches the tab
+    /// only — so a child that resolved text once keeps showing the old language unless
+    /// <c>WorkspaceTabViewModel.RaiseAllPropertiesChanged</c> forwards to it. That is gotcha #353, and it has
+    /// now cost two etaps (C1's Session Manager, C6's exec-info panels), which is exactly the shape that
+    /// deserves a guard rather than a third discovery.</para>
+    ///
+    /// <para>⭐ Self-arming, and that is the point: it enumerates the TYPES that declare
+    /// <c>RefreshLocalizedText</c>, so the next Core module to migrate a child view model fails this test the
+    /// moment it adds the method and forgets the one line. ⚠ It reads the SOURCE because the forwarding is a
+    /// call, not a property — there is nothing on the object to reflect over. The C5 lesson stands: "the rule
+    /// is correct" and "the wiring exists" are two different claims, and this is the second one.</para>
+    /// </summary>
+    [Fact]
+    public void EveryViewModelThatCanRefreshItsText_IsForwardedFromTheTab()
+    {
+        var refreshable = typeof(UiStrings).Assembly.GetTypes()
+            .Where(t => t.GetMethod(
+                "RefreshLocalizedText",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                Type.EmptyTypes) is not null)
+            .ToList();
+
+        Assert.NotEmpty(refreshable);
+
+        var tab = typeof(WorkspaceTabViewModel);
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "ViewModels", "WorkspaceTabViewModel.cs"));
+        var body = source[source.IndexOf("RaiseAllPropertiesChanged()", StringComparison.Ordinal)..];
+        body = body[..body.IndexOf("\n    }", StringComparison.Ordinal)];
+
+        foreach (var type in refreshable)
+        {
+            // Only children a tab actually owns; a refreshable view model reached some other way (a row in a
+            // collection, a dialog) is not this method's business.
+            var held = tab.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.PropertyType == type)
+                .ToList();
+
+            foreach (var property in held)
+            {
+                Assert.True(
+                    body.Contains(property.Name + "?.RefreshLocalizedText()", StringComparison.Ordinal),
+                    $"WorkspaceTabViewModel.RaiseAllPropertiesChanged does not forward to {property.Name} "
+                    + $"({type.Name}), so its text stays in the previous language after a switch (#353).");
+            }
+        }
+    }
+
+    /// <summary>Every <c>MessageKey</c> declared as a static readonly field anywhere in Core or Firebird.</summary>
+    private static IEnumerable<string> DeclaredCoreMessageKeys()
+        => new[] { typeof(MessageKey).Assembly, typeof(Firebird.FirebirdConnectionService).Assembly }
+            .Distinct()
+            .SelectMany(a => a.GetTypes())
+            .SelectMany(t => t.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic))
+            .Where(f => f.FieldType == typeof(MessageKey) && f.IsInitOnly)
+            .Select(f => ((MessageKey)f.GetValue(null)!).Value);
 
     // ── Guard 6b — new hardcoded user text cannot come back ──────────────────────────────────────────────
 

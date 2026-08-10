@@ -1806,6 +1806,159 @@ Disconnect anyway?</value>
   <data name="ExportUpdateTargetRequired" xml:space="preserve">
     <value>A resolved SQL target is required for UPDATE export.</value>
   </data>
+  <data name="Settings.Load.ExportInPlaceOfSettings" xml:space="preserve">
+    <value>this looks like an exported EmberTern settings file (.etsettings), not settings.dat. An export is a separate, passphrase-encrypted format — import it from Settings instead of copying it over settings.dat.</value>
+  </data>
+  <data name="Settings.Load.ContainerVersionNewer" xml:space="preserve">
+    <value>settings.dat container version {0} is newer than supported {1}; refusing to read or overwrite (written by a newer EmberTern build).</value>
+  </data>
+  <data name="Settings.Load.UnknownEncryptionScheme" xml:space="preserve">
+    <value>settings.dat uses encryption scheme '{0}' which this build cannot handle; refusing to read or overwrite (likely written by a newer EmberTern build).</value>
+  </data>
+  <data name="Settings.Load.DecryptedButEmpty" xml:space="preserve">
+    <value>settings.dat decrypted but contained no settings.</value>
+  </data>
+  <data name="Settings.Load.SchemaVersionNewer" xml:space="preserve">
+    <value>settings.dat schema version {0} is newer than supported {1}; refusing to migrate or overwrite (written by a newer EmberTern build).</value>
+  </data>
+  <data name="Settings.Load.CouldNotBeParsed" xml:space="preserve">
+    <value>settings.dat could not be parsed: {0}</value>
+  </data>
+  <data name="Settings.Load.CouldNotBeRead" xml:space="preserve">
+    <value>settings.dat could not be read: {0}</value>
+  </data>
+  <data name="Settings.Load.CouldNotBeDecrypted" xml:space="preserve">
+    <value>settings.dat could not be decrypted: {0}. This usually means the file was written by a different Windows account or on a different machine; it is intact and will decrypt there.</value>
+  </data>
+  <data name="Settings.Refuse.CouldNotBeRead" xml:space="preserve">
+    <value>Refusing to overwrite settings.dat: it could not be read ({0}).</value>
+  </data>
+  <data name="Settings.Refuse.ExportInPlace" xml:space="preserve">
+    <value>Refusing to overwrite settings.dat: this looks like an exported EmberTern settings file (.etsettings), not settings.dat. An export is a separate, passphrase-encrypted format — import it from Settings instead of copying it over settings.dat.</value>
+  </data>
+  <data name="Settings.Refuse.ContainerVersion" xml:space="preserve">
+    <value>Refusing to overwrite settings.dat: container version {0} is newer than supported {1}.</value>
+  </data>
+  <data name="Settings.Refuse.UnknownScheme" xml:space="preserve">
+    <value>Refusing to overwrite settings.dat: unknown encryption scheme '{0}' (written by a newer EmberTern build).</value>
+  </data>
+  <data name="Settings.Refuse.DecryptedButEmpty" xml:space="preserve">
+    <value>Refusing to overwrite settings.dat: it decrypted but contained no settings.</value>
+  </data>
+  <data name="Settings.Refuse.SchemaVersion" xml:space="preserve">
+    <value>Refusing to overwrite settings.dat: schema version {0} is newer than supported {1}.</value>
+  </data>
+  <data name="Settings.Refuse.CouldNotBeParsed" xml:space="preserve">
+    <value>Refusing to overwrite settings.dat: it could not be parsed ({0}).</value>
+  </data>
+  <data name="Settings.Refuse.CouldNotBeDecrypted" xml:space="preserve">
+    <value>Refusing to overwrite settings.dat: it could not be decrypted ({0}). The existing file may be valid for a different Windows account or machine.</value>
+  </data>
+  <data name="Settings.Write.CouldNotBeWritten" xml:space="preserve">
+    <value>settings.dat could not be written: {0}. The previous file is unchanged.</value>
+  </data>
+  <data name="Settings.Write.LockedByAnotherInstance" xml:space="preserve">
+    <value>settings.dat is being written by another EmberTern instance and did not become available; nothing was saved. The previous file is unchanged.</value>
+  </data>
+  <data name="Settings.Import.FileCouldNotBeRead" xml:space="preserve">
+    <value>The file could not be read: {0}</value>
+  </data>
+  <data name="Settings.Import.NotAnExportFile" xml:space="preserve">
+    <value>This is not an EmberTern settings file.</value>
+  </data>
+  <data name="Settings.Import.HeaderDamaged" xml:space="preserve">
+    <value>This EmberTern settings file's header is damaged and cannot be read.</value>
+  </data>
+  <data name="Settings.Import.FutureFormatVersion" xml:space="preserve">
+    <value>This settings export was written by a newer EmberTern build (format v{0}; this build supports up to v{1}).</value>
+  </data>
+  <data name="Settings.Import.UnsupportedFormatVersion" xml:space="preserve">
+    <value>This settings export declares format v{0}, which this build cannot migrate from (the oldest supported is v{1}).</value>
+  </data>
+  <data name="Settings.Import.UnsupportedScheme" xml:space="preserve">
+    <value>Unsupported encryption scheme '{0}'.</value>
+  </data>
+  <data name="Settings.Import.UnsupportedKdf" xml:space="preserve">
+    <value>Unsupported key-derivation function '{0}'.</value>
+  </data>
+  <data name="Settings.Import.UnsupportedIterations" xml:space="preserve">
+    <value>This settings export declares an unsupported key-derivation iteration count ({0}).</value>
+  </data>
+  <data name="Settings.Import.PassphraseRequired" xml:space="preserve">
+    <value>A passphrase is required to open this settings export.</value>
+  </data>
+  <data name="Settings.Import.WrongPassphrase" xml:space="preserve">
+    <value>Wrong passphrase (or the file has been modified since it was exported).</value>
+  </data>
+  <data name="Settings.Import.PayloadDamaged" xml:space="preserve">
+    <value>This settings export's payload is damaged: {0}</value>
+  </data>
+  <data name="Settings.Import.HeaderParametersDamaged" xml:space="preserve">
+    <value>This settings export's header is damaged: {0}</value>
+  </data>
+  <data name="Settings.Import.DamagedNotAnExport" xml:space="preserve">
+    <value>This settings export is damaged: its payload is not a settings export.</value>
+  </data>
+  <data name="Settings.Import.DamagedInvalidJson" xml:space="preserve">
+    <value>This settings export is damaged: its payload is not valid JSON ({0}).</value>
+  </data>
+  <data name="Settings.Import.DamagedUnreadablePayload" xml:space="preserve">
+    <value>This settings export is damaged: its payload could not be read ({0}).</value>
+  </data>
+  <data name="Settings.Import.DamagedNoSettings" xml:space="preserve">
+    <value>This settings export is damaged: its payload contains no settings.</value>
+  </data>
+  <data name="Settings.Import.FutureSettingsSchema" xml:space="preserve">
+    <value>This settings export holds settings in a newer shape (schema v{0}; this build supports up to v{1}).</value>
+  </data>
+  <data name="Settings.Import.NoMigrationStep" xml:space="preserve">
+    <value>This settings export declares format version {0}, which this build has no migration step for. It cannot be imported.</value>
+  </data>
+  <data name="Settings.Import.NothingSelected" xml:space="preserve">
+    <value>Nothing was selected to import, so nothing was changed.</value>
+  </data>
+  <data name="Settings.Import.CouldNotCopyAside" xml:space="preserve">
+    <value>The current settings could not be copied aside, so nothing was imported: {0}</value>
+  </data>
+  <data name="Sql.Diagnostics.UnknownObject" xml:space="preserve">
+    <value>Unknown object '{0}'.</value>
+  </data>
+  <data name="Sql.Diagnostics.UnknownColumn" xml:space="preserve">
+    <value>Unknown column '{0}'.</value>
+  </data>
+  <data name="Sql.Diagnostics.UnresolvedVariable" xml:space="preserve">
+    <value>Unresolved variable '{0}'.</value>
+  </data>
+  <data name="Sql.Diagnostics.UnresolvedParameter" xml:space="preserve">
+    <value>Unresolved parameter '{0}'.</value>
+  </data>
+  <data name="Sql.Diagnostics.AmbiguousColumn" xml:space="preserve">
+    <value>Ambiguous column '{0}'.</value>
+  </data>
+  <data name="Sql.Diagnostics.InsertCountMismatch" xml:space="preserve">
+    <value>INSERT column/value count mismatch: {0} column(s), {1} value(s).</value>
+  </data>
+  <data name="Sql.Diagnostics.UnknownCursor" xml:space="preserve">
+    <value>Unknown cursor '{0}'.</value>
+  </data>
+  <data name="Sql.Diagnostics.SuspendInTrigger" xml:space="preserve">
+    <value>SUSPEND is not valid in a trigger.</value>
+  </data>
+  <data name="Sql.Diagnostics.SuspendInFunction" xml:space="preserve">
+    <value>SUSPEND is not valid in a function.</value>
+  </data>
+  <data name="Firebird.Connection.Failed" xml:space="preserve">
+    <value>Could not connect to {0}: {1}</value>
+  </data>
+  <data name="Firebird.Connection.SrpAuthentication" xml:space="preserve">
+    <value>Could not connect to {0}: the server rejected the connection during authentication. EmberTern authenticates with SRP only. Check the username and password, and make sure the account is set up with SRP support. An administrator can create such an account with: CREATE USER &lt;name&gt; PASSWORD '&lt;password&gt;' USING PLUGIN Srp;</value>
+  </data>
+  <data name="Firebird.Connection.UnsupportedServer" xml:space="preserve">
+    <value>Unsupported Firebird server ({0}). EmberTern requires Firebird 3.0 or later.</value>
+  </data>
+  <data name="Firebird.Connection.UnsupportedServerUnknownVersion" xml:space="preserve">
+    <value>Unsupported Firebird server (unknown). EmberTern requires Firebird 3.0 or later.</value>
+  </data>
   <data name="FieldDependenciesColumnInsert" xml:space="preserve">
     <value>Insert</value>
   </data>
@@ -4310,6 +4463,60 @@ END</value>
   <data name="QueryRenameTooltip" xml:space="preserve">
     <value>Rename query</value>
   </data>
+  <data name="QuickInfo.Fact.Columns" xml:space="preserve">
+    <value>Columns</value>
+  </data>
+  <data name="QuickInfo.Fact.Default" xml:space="preserve">
+    <value>Default</value>
+  </data>
+  <data name="QuickInfo.Fact.Domain" xml:space="preserve">
+    <value>Domain</value>
+  </data>
+  <data name="QuickInfo.Fact.Fires" xml:space="preserve">
+    <value>Fires</value>
+  </data>
+  <data name="QuickInfo.Fact.ForeignKeys" xml:space="preserve">
+    <value>Foreign keys</value>
+  </data>
+  <data name="QuickInfo.Fact.Generated" xml:space="preserve">
+    <value>Generated</value>
+  </data>
+  <data name="QuickInfo.Fact.Increment" xml:space="preserve">
+    <value>Increment</value>
+  </data>
+  <data name="QuickInfo.Fact.Key" xml:space="preserve">
+    <value>Key</value>
+  </data>
+  <data name="QuickInfo.Fact.Kind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="QuickInfo.Fact.Nullability" xml:space="preserve">
+    <value>Nullability</value>
+  </data>
+  <data name="QuickInfo.Fact.Owner" xml:space="preserve">
+    <value>Owner</value>
+  </data>
+  <data name="QuickInfo.Fact.Parameters" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="QuickInfo.Fact.Position" xml:space="preserve">
+    <value>Position</value>
+  </data>
+  <data name="QuickInfo.Fact.PrimaryKey" xml:space="preserve">
+    <value>Primary key</value>
+  </data>
+  <data name="QuickInfo.Fact.Returns" xml:space="preserve">
+    <value>Returns</value>
+  </data>
+  <data name="QuickInfo.Fact.Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="QuickInfo.Fact.State" xml:space="preserve">
+    <value>State</value>
+  </data>
+  <data name="QuickInfo.Fact.Table" xml:space="preserve">
+    <value>Table</value>
+  </data>
   <data name="QuickInfoGroupColumns" xml:space="preserve">
     <value>Columns</value>
   </data>
@@ -4903,6 +5110,54 @@ END</value>
   </data>
   <data name="SessionColUser" xml:space="preserve">
     <value>User</value>
+  </data>
+  <data name="SessionHealth.Evidence.Age" xml:space="preserve">
+    <value>Age {0}</value>
+  </data>
+  <data name="SessionHealth.Evidence.AgeUnknown" xml:space="preserve">
+    <value>Age unknown</value>
+  </data>
+  <data name="SessionHealth.Evidence.Gap" xml:space="preserve">
+    <value>OAT lag {0:N0} · OST {1:N0} · Next {2:N0}</value>
+  </data>
+  <data name="SessionHealth.Evidence.Transaction" xml:space="preserve">
+    <value>Tx {0} · {1}</value>
+  </data>
+  <data name="SessionHealth.GcBlocked.Check.LeftOpen" xml:space="preserve">
+    <value>Was a UI screen left open on a snapshot mid-edit?</value>
+  </data>
+  <data name="SessionHealth.GcBlocked.Check.Reporting" xml:space="preserve">
+    <value>Is this a reporting/BI connection that could run read-committed?</value>
+  </data>
+  <data name="SessionHealth.GcBlocked.Explanation.Snapshot" xml:space="preserve">
+    <value>A snapshot transaction is the oldest active transaction in the database.</value>
+  </data>
+  <data name="SessionHealth.GcBlocked.Explanation.Transaction" xml:space="preserve">
+    <value>This transaction is the oldest active transaction in the database.</value>
+  </data>
+  <data name="SessionHealth.GcBlocked.Impact" xml:space="preserve">
+    <value>Firebird cannot garbage-collect record versions from ~{0:N0} later transactions while it stays open — expect growing page reads and file size.</value>
+  </data>
+  <data name="SessionHealth.GcBlocked.Title" xml:space="preserve">
+    <value>Garbage collection is blocked</value>
+  </data>
+  <data name="SessionHealth.LongTransaction.Check.Commit" xml:space="preserve">
+    <value>Can it commit or switch to read-committed?</value>
+  </data>
+  <data name="SessionHealth.LongTransaction.Check.Idle" xml:space="preserve">
+    <value>Is the owning session idle with the transaction left open?</value>
+  </data>
+  <data name="SessionHealth.LongTransaction.Explanation.Snapshot" xml:space="preserve">
+    <value>A snapshot transaction has stayed open for a long time.</value>
+  </data>
+  <data name="SessionHealth.LongTransaction.Explanation.Transaction" xml:space="preserve">
+    <value>A transaction has stayed open for a long time.</value>
+  </data>
+  <data name="SessionHealth.LongTransaction.Impact" xml:space="preserve">
+    <value>While it lives it holds a stable view — contributing to record-version retention and delaying garbage collection.</value>
+  </data>
+  <data name="SessionHealth.LongTransaction.Title" xml:space="preserve">
+    <value>Long-running transaction</value>
   </data>
   <data name="SessionManagerActivityDeletes" xml:space="preserve">
     <value>Deletes</value>
@@ -6623,5 +6878,77 @@ Save them before closing?</value>
   </data>
   <data name="WorkspaceTabUntitled" xml:space="preserve">
     <value>SQL Editor</value>
+  </data>
+  <data name="Localization.PluralRuleSet" xml:space="preserve">
+    <value>one-other</value>
+  </data>
+  <data name="Query.Exec.RowsInserted.one" xml:space="preserve">
+    <value>{0} row inserted</value>
+  </data>
+  <data name="Query.Exec.RowsInserted.other" xml:space="preserve">
+    <value>{0} rows inserted</value>
+  </data>
+  <data name="Query.Exec.RowsUpdated.one" xml:space="preserve">
+    <value>{0} row updated</value>
+  </data>
+  <data name="Query.Exec.RowsUpdated.other" xml:space="preserve">
+    <value>{0} rows updated</value>
+  </data>
+  <data name="Query.Exec.RowsDeleted.one" xml:space="preserve">
+    <value>{0} row deleted</value>
+  </data>
+  <data name="Query.Exec.RowsDeleted.other" xml:space="preserve">
+    <value>{0} rows deleted</value>
+  </data>
+  <data name="Query.Exec.RowsRead.one" xml:space="preserve">
+    <value>{0} row read</value>
+  </data>
+  <data name="Query.Exec.RowsRead.other" xml:space="preserve">
+    <value>{0} rows read</value>
+  </data>
+  <data name="Query.Exec.RowsAffected.one" xml:space="preserve">
+    <value>{0} row affected</value>
+  </data>
+  <data name="Query.Exec.RowsAffected.other" xml:space="preserve">
+    <value>{0} rows affected</value>
+  </data>
+  <data name="Query.Exec.ExecutedIn" xml:space="preserve">
+    <value>Executed in {0} ms</value>
+  </data>
+  <data name="Query.Exec.NoModifications" xml:space="preserve">
+    <value>No data modifications detected.</value>
+  </data>
+  <data name="Query.Exec.Status.Format" xml:space="preserve">
+    <value>{0} in {1} ms</value>
+  </data>
+  <data name="Query.Exec.Status.Inserted" xml:space="preserve">
+    <value>inserted {0}</value>
+  </data>
+  <data name="Query.Exec.Status.Updated" xml:space="preserve">
+    <value>updated {0}</value>
+  </data>
+  <data name="Query.Exec.Status.Deleted" xml:space="preserve">
+    <value>deleted {0}</value>
+  </data>
+  <data name="Query.Exec.Term.Inserted" xml:space="preserve">
+    <value>{0} inserted</value>
+  </data>
+  <data name="Query.Exec.Term.Updated" xml:space="preserve">
+    <value>{0} updated</value>
+  </data>
+  <data name="Query.Exec.Term.Deleted" xml:space="preserve">
+    <value>{0} deleted</value>
+  </data>
+  <data name="Query.Exec.Term.Read" xml:space="preserve">
+    <value>{0} read</value>
+  </data>
+  <data name="Query.Exec.Table.Inserted" xml:space="preserve">
+    <value>{0} inserted into {1}</value>
+  </data>
+  <data name="Query.Exec.Table.Updated" xml:space="preserve">
+    <value>{0} updated in {1}</value>
+  </data>
+  <data name="Query.Exec.Table.Deleted" xml:space="preserve">
+    <value>{0} deleted from {1}</value>
   </data>
 </root>

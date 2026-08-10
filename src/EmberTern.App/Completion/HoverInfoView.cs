@@ -128,7 +128,10 @@ internal static class HoverInfoView
             });
             row.Children.Add(new TextBlock
             {
-                Text = d.Message,
+                // Resolved here, at the moment of display (D‑3). ⭐ No language hook: the card is dismissed by
+                // PointerExited on the TextView AND by any click, and reaching the Language radio needs both —
+                // so "the language changes while this card is open" is unreachable (measured, etap C5).
+                Text = Localization.Loc.Format(d.Message),
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = QuickInfoView.ContentMaxWidth,

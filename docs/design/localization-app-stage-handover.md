@@ -3,6 +3,16 @@
 ⭐⭐ **To jest jedyny punkt startowy kolejnej sesji.** Przeczytaj go w całości i zacznij od §D.
 ⛔ Nie audytuj ponownie tego, co §B opisuje jako zamknięte.
 
+> ⚠⚠ **AKTUALIZACJA 2026-08-10 — etap Core/Firebird RUSZYŁ; §D jest już częściowo WYKONANE.**
+> **C0 (audyt), C1 (`SessionHealthAnalyzer`), C2 (`QuickInfoEngine`) C3 (`FirebirdConnectionService`) i **C4a** (`ApplicationSettingsStore`) są odebrane.** ⛔ Nie powtarzaj audytu
+> i nie projektuj od nowa kolejności migracji — jedno i drugie jest ratyfikowane.
+> Bieżący stan, klasyfikacja A–F, zmierzony zakres i as-built:
+> **[../history/28-localization-core-stage.md](../history/28-localization-core-stage.md)**.
+> ⭐ Najważniejsza korekta do §C.1 tego dokumentu: **inwentarz „≈280" był zawyżony i w trzech pozycjach
+> nieprawdziwy** (`CharsetCatalog` 8→0, Data Import ~20→0, `FirebirdDiagnostics` 24→0). Realny zakres to
+> **~170–190**. ⛔ Nie planuj z tabeli §C.1 — planuj z pliku historii.
+> ⏭ Następny: **C4b — `Settings/Export`** (~20 komunikatów). ⚠⚠ C4 było w zakresie „Settings + Settings/Export"; dostarczona jest WYŁĄCZNIE pierwsza połowa. Zmierzony zakres i pułapki C4b: plik historii, sekcja C4a.
+
 ---
 
 ## A. Stan wejściowy
@@ -22,8 +32,8 @@
 ⚠⚠ **PARTYCJE TESTOWE ZMIENIŁY SIĘ W TYM ETAPIE — filtr ma dwie nazwy więcej.** Powód w §B.7.
 
 ```
-partycja GŁÓWNA      8 280   (wyklucz 12 nazw niżej)
-partycja ZGRUPOWANA    164   (te same 10 nazw bez ConnectionExpandBindingProbe/BrandingPresentationTests)
+partycja GŁÓWNA      8 280   (wyklucz 16 nazw niżej)
+partycja ZGRUPOWANA    185   (te same 14 nazw bez ConnectionExpandBindingProbe/BrandingPresentationTests)
 partycja IZOLOWANA      55   (ConnectionExpandBindingProbe | BrandingPresentationTests)
 ```
 
@@ -31,9 +41,17 @@ Nazwy do wykluczenia w partycji głównej: `ConnectionExpandBindingProbe`, `Sett
 `BrandingPresentationTests`, `DesignTokenApplicationTests`, `TabStripPresentationTests`,
 `MetadataTreeVirtualizationProbe`, `SharedContextMenuFeasibilityProbe`, `EditableGridEnterTests`,
 `GridDateEditorTests`, `DependencyTreeRenderTests`, **`LocalizationMechanismTests`**,
-**`LocalizationLivenessTests`**.
+**`LocalizationLivenessTests`**, **`SessionHealthLocalizationTests`**, **`QuickInfoLocalizationTests`**, **`FirebirdConnectionLocalizationTests`**, **`SettingsStoreLocalizationTests`**.
 
-⛔ **Nie „posprzątaj" ostatnich dwóch z filtra** — §B.7 wyjaśnia, dlaczego tam są.
+⛔ **Nie „posprzątaj" ostatnich sześciu z filtra** — §B.7 wyjaśnia, dlaczego tam są.
+
+⚠⚠ **Filtr rośnie o nazwę na moduł — trzynasta w C1, czternasta w C2, piętnasta w C3, szesnasta w C4a — i to jest KOSZT, nie
+szczegół.** Każdy
+migrowany moduł Core, którego test dotyka `Loc.UseCatalogForVerification`, musi dołączyć do
+`HeadlessCollection` **i** do tego filtra — a filtr jest ręczną listą nazw, więc starzeje się cicho
+dokładnie tak, jak licznik w prozie. ⭐ Objaw pominięcia jest **utajony**: test poza kolekcją podmienia
+globalny katalog `Loc` równolegle z testami czytającymi `UiStrings`, co daje rzadki, mylący rozjazd
+(§B.7), nie czerwony test w tym samym przebiegu. **Suma po C4a: 8 280 + 185 + 55 = 8 520.**
 
 ---
 

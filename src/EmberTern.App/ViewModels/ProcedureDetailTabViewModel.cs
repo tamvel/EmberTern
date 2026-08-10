@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Localization;
 using EmberTern.App.Export;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
@@ -526,7 +527,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     /// <summary>Per-table CHANGE breakdown for the exec-info Expander's expanded body (table name
     /// + inserted/updated/deleted), built from the MON$ delta. Reads are NOT here — they live in
     /// the Performance tab.</summary>
-    public ObservableCollection<TableActivityLine> ExecTableActivity { get; } = new();
+    public ObservableCollection<ExecActivityLineViewModel> ExecTableActivity { get; } = new();
 
     public bool HasExecTableActivity => ExecTableActivity.Count > 0;
 
@@ -705,6 +706,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
             ExecResult = outcome.Result;
             ExecError = string.Empty;
             _execChangesMeasured = outcome.Summary?.ChangesMeasured ?? (outcome.Reads is not null);
+            _lastExecOutcome = outcome;
             ExecInfo = BuildExecInfo(outcome);
             ExecInfoCompact = BuildExecInfoCompact(outcome);
             ExecInfoIsError = false;
@@ -720,14 +722,49 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     }
 
     // Rebuild the per-table exec breakdown (expanded exec-info body) from the MON$ delta.
+    // ⚠ The delta is KEPT so a language change can rebuild the rows — see RefreshLocalizedText.
     private void ApplyExecTableActivity(IReadOnlyList<PerTableReadRow>? reads)
     {
+        _lastExecReads = reads;
         ExecTableActivity.Clear();
         foreach (var line in ExecutionActivity.Build(reads))
         {
-            ExecTableActivity.Add(line);
+            ExecTableActivity.Add(new ExecActivityLineViewModel(line));
         }
         OnPropertyChanged(nameof(HasExecTableActivity));
+    }
+
+    private IReadOnlyList<PerTableReadRow>? _lastExecReads;
+    private ProcedureExecOutcome? _lastExecOutcome;
+
+    /// <summary>
+    /// Re-renders every text this view model composed once, in the language selected now (etap C6).
+    ///
+    /// <para>⚠ <b>Why the exec-info lines need this and the rest of the tab does not.</b> They are stored
+    /// <c>[ObservableProperty]</c> values built by joining several resolved sentences; a
+    /// <c>PropertyChanged</c> alone re-reads the same finished English string. Gotcha #353, one module along —
+    /// and the reason this is the fifth member of the per-kind family on <c>WorkspaceTabViewModel</c>.</para>
+    ///
+    /// <para>⭐ The per-table cards are REBUILT rather than notified: their bindings are on the row objects,
+    /// so replacing the objects is what reaches them. Same answer as the Session Manager's warning cards, and
+    /// it is why those rows need no subscription of their own.</para>
+    /// </summary>
+    internal void RefreshLocalizedText()
+    {
+        OnPropertyChanged(string.Empty);
+
+        if (_lastExecOutcome is { } outcome)
+        {
+            ExecInfo = BuildExecInfo(outcome);
+            ExecInfoCompact = BuildExecInfoCompact(outcome);
+        }
+
+        if (_lastExecReads is not null || ExecTableActivity.Count > 0)
+        {
+            ApplyExecTableActivity(_lastExecReads);
+        }
+
+        OnPropertyChanged(nameof(ExecSummaryFallbackText));
     }
 
     // Execution Metrics: a result-returning proc shows "N rows in T ms" (+ rows read); a
@@ -749,7 +786,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         }
         if (outcome.Summary is { } summary)
         {
-            return summary.BuildDetailedMessage();
+            return summary.BuildDetailedMessage(Loc.Format);
         }
         return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
     }
@@ -773,7 +810,7 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         }
         if (outcome.Summary is { } summary)
         {
-            return summary.BuildCompactLine();
+            return summary.BuildCompactLine(Loc.Format);
         }
         return string.Format(CultureInfo.CurrentCulture, UiStrings.ProcedureExecInfoCompletedFormat, ms);
     }
