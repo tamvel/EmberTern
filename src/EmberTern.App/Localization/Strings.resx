@@ -7164,4 +7164,10 @@ Save them before closing?</value>
   <data name="FindingSeverityInfo" xml:space="preserve">
     <value>INFO</value>
   </data>
+  <data name="Import.Source.NotReadableXlsx" xml:space="preserve">
+    <value>'{0}' is not a readable .xlsx workbook. A file saved in the older Excel format keeps working under an .xlsx name, but it cannot be read as one — rename it to .xls, which EmberTern imports, or open it in Excel and use Save As.</value>
+  </data>
+  <data name="Import.Source.NotReadableXls" xml:space="preserve">
+    <value>'{0}' is not a readable .xls workbook. A file saved in the newer Excel format keeps working under an .xls name, but it cannot be read as one — rename it to .xlsx, or open it in Excel and use Save As.</value>
+  </data>
 </root>

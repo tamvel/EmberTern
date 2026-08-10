@@ -807,9 +807,32 @@ public sealed class LocalizationMechanismTests
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
         Type.EmptyTypes) is not null;
 
-    /// <summary>Every <c>MessageKey</c> declared as a static readonly field anywhere in Core or Firebird.</summary>
+    /// <summary>
+    /// Every <c>MessageKey</c> declared as a static readonly field in any assembly that produces one.
+    ///
+    /// <para>⚠⚠ <b>The set is the load-bearing part, and it has been wrong once already.</b> The C0 audit found
+    /// this scanning only Core, so a key declared in <c>EmberTern.Firebird</c> would never have been checked;
+    /// C1 added Firebird before there was a producer there. Etap C8 adds <c>EmberTern.Office</c> for the same
+    /// reason and it was again latent rather than theoretical — measured before the migration, an Office key
+    /// with no English entry would have sailed past <see cref="EveryCoreMessageKey_HasAnEnglishEntry"/> and put
+    /// a raw identifier on screen.</para>
+    ///
+    /// <para>⭐ Note the ASYMMETRY that made it worth closing rather than discovering later: of the three guards
+    /// that read this, two (<see cref="EveryCoreShapedEntry_IsDeclaredByCore"/> and
+    /// <see cref="EveryLocalizedMember_MatchesItsEnglishEntry"/>) go RED when an assembly is missing, because
+    /// its resource entries become orphans in both partitions — but the one whose failure is silent is the one
+    /// that simply stops looking.</para>
+    ///
+    /// <para>⛔ Add the assembly in the same change that adds the producer. A type reference is used rather than
+    /// a name so the list cannot point at an assembly that no longer exists.</para>
+    /// </summary>
     private static IEnumerable<string> DeclaredCoreMessageKeys()
-        => new[] { typeof(MessageKey).Assembly, typeof(Firebird.FirebirdConnectionService).Assembly }
+        => new[]
+            {
+                typeof(MessageKey).Assembly,
+                typeof(Firebird.FirebirdConnectionService).Assembly,
+                typeof(Office.ImportSourceMessages).Assembly,
+            }
             .Distinct()
             .SelectMany(a => a.GetTypes())
             .SelectMany(t => t.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic))

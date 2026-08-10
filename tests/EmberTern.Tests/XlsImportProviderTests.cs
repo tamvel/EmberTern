@@ -293,13 +293,19 @@ public class XlsImportProviderTests : IDisposable
     /// <c>Invalid file signature</c>, which tells the user nothing; the provider turns it into the sentence that
     /// names the actual situation and the cheap way out of it.
     /// </summary>
+    /// <remarks>
+    /// ⚠ Etap C8 changed the thrown type from <c>InvalidDataException</c> to <see cref="ImportSourceException"/>
+    /// so the refusal can carry a key beside its English text (D‑3). The assertions below are unchanged —
+    /// <see cref="Exception.Message"/> still renders exactly the sentence it rendered before, which is the
+    /// migration's whole claim; <c>ImportSourceLocalizationTests</c> is what pins the localized half.
+    /// </remarks>
     [Fact]
     public async Task AnOoxmlFileUnderAnXlsName_IsRefusedWithAnActionableMessage()
     {
         var path = Path.Combine(_directory, "przebrany.xls");
         await File.WriteAllBytesAsync(path, new byte[] { 0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0 }); // a ZIP header
 
-        var error = await Assert.ThrowsAsync<InvalidDataException>(
+        var error = await Assert.ThrowsAsync<ImportSourceException>(
             () => new XlsImportProvider().ReadSchemaAsync(
                 new FileImportSource(path), SpreadsheetConfiguration(), CancellationToken.None));
 

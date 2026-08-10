@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Controls;
+using EmberTern.App.Localization;
 using EmberTern.Core.Import;
 using EmberTern.Core.Import.Providers;
 using EmberTern.Office;
@@ -900,7 +901,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         ProgressRowsRead = 0;
         IsProgressIndeterminate = true;
 
-        SetStatus(ex.Message, MessageSeverity.Error);
+        SetStatus(Describe(ex), MessageSeverity.Error);
         PublishReadiness();
     }
 
@@ -1009,7 +1010,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
             // the target and the transaction all arrive as delegates, so their exceptions are not this VM's to
             // enumerate (see RunGuardedAsync).
             clock.Stop();
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
             await DropCreatedTableIfFailedAsync(configuration, createdTable, failed: true).ConfigureAwait(true);
         }
         finally
@@ -1098,7 +1099,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             // Degrading to the projection is fine — it describes the table we just asked for. Failing the whole
             // run because the catalog read stumbled would not be.
-            SetStatus(ex.Message, MessageSeverity.Warning);
+            SetStatus(Describe(ex), MessageSeverity.Warning);
             return null;
         }
     }
@@ -1193,7 +1194,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
                 // without the number. ⚠ This is the line the I8 crash came out of: the target did not exist
                 // yet, the engine said so with an FbException, and an allow-list that did not name that type
                 // let the exception escape the command and take the process down.
-                SetStatus(ex.Message, MessageSeverity.Warning);
+                SetStatus(Describe(ex), MessageSeverity.Warning);
             }
         }
 
@@ -1258,7 +1259,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
         }
         finally
         {
@@ -1279,7 +1280,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
         }
         finally
         {
@@ -1586,7 +1587,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
         }
         finally
         {
@@ -1702,7 +1703,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         catch (Exception ex)
         {
             ConvertedPreview.Clear();
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
         }
         finally
         {
@@ -1810,7 +1811,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
         }
         finally
         {
@@ -1895,7 +1896,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             // The clipboard is outside this module (rule #1: it reaches it through a delegate), so the failures
             // it can raise cannot be enumerated here — caught by POSITION, as every other seam is (#265).
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
             return;
         }
 
@@ -1978,7 +1979,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
         }
     }
 
@@ -2032,7 +2033,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             _target = null;
             Target.ShowFacts(null);
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
         }
         finally
         {
@@ -2195,7 +2196,7 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         {
             _schema = null;
             _sourceReadable = false;
-            SetStatus(ex.Message, MessageSeverity.Error);
+            SetStatus(Describe(ex), MessageSeverity.Error);
         }
         finally
         {
@@ -2529,6 +2530,32 @@ public sealed partial class DataImportTabViewModel : ViewModelBase
         StatusMessage = message;
         StatusSeverity = severity;
     }
+
+    /// <summary>
+    /// The text an exception should show, in the reader's language when it has one.
+    ///
+    /// <para>⭐ <b>Etap C8's whole App-side change, and it is a TYPE test, not a call-site list.</b> The two
+    /// workbook readers hand up an <see cref="ImportSourceException"/> carrying a key plus its data (D‑3);
+    /// everything else keeps rendering <see cref="Exception.Message"/> exactly as before. Keying the decision
+    /// to the exception's own type is what lets this be applied uniformly at the catch-all channel: for every
+    /// other exception the result is provably the same string this module rendered yesterday.</para>
+    ///
+    /// <para>⚠ The alternative — a <c>catch (ImportSourceException)</c> arm at each of the paths that can
+    /// actually raise one — was rejected because it encodes a REACHABILITY ANALYSIS into the code. Measured
+    /// today, five of the thirteen catch-alls can carry it (source read, inference, converted preview, the run,
+    /// and the run's backstop) and the source read carries it in practice, because <c>Open</c> fails on the
+    /// provider's first call. That set will move, nobody will re-measure it, and the failure mode is silent:
+    /// an English sentence in a Polish window (#337's shape).</para>
+    ///
+    /// <para>⛔ It does not resolve early and it does not cache. <c>Loc.Format</c> runs here, at the moment of
+    /// display. ⚠ The banner still does not survive a later language change — <c>SetStatus</c> stores settled
+    /// text and this module has no <c>RefreshLocalizedText</c> — which is #353 and is deliberately OUT of C8's
+    /// scope: measured, <c>SetStatus</c> has 31 call sites of which 18 pass already-settled <c>UiStrings</c>
+    /// text, so making the exception path live would leave eighteen frozen statuses beside one that moves.
+    /// That is a whole-module decision about <c>SetStatus</c>, not a consequence of migrating two sentences.</para>
+    /// </summary>
+    private static string Describe(Exception ex)
+        => ex is ImportSourceException source ? Loc.Format(source.Localized) : ex.Message;
 
     /// <summary>The transaction mode in one word, for band H — the line that says where the rows land and what
     /// then happens to them.</summary>

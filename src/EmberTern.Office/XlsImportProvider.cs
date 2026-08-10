@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using EmberTern.Core.Import;
+using EmberTern.Core.Localization;
 using ExcelDataReader;
 
 namespace EmberTern.Office;
@@ -197,7 +198,10 @@ public sealed class XlsImportProvider : IImportProvider
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new InvalidDataException(
+            // ⭐ Etap C8 (D‑3) — see the mirror in `XlsxImportProvider.Open` for why the English form stays
+            // beside the key rather than being replaced by it.
+            throw new ImportSourceException(
+                LocalizableMessage.Of(ImportSourceMessages.NotReadableXls, source.DisplayName),
                 $"'{source.DisplayName}' is not a readable .xls workbook. A file saved in the newer Excel " +
                 "format keeps working under an .xls name, but it cannot be read as one — rename it to .xlsx, " +
                 "or open it in Excel and use Save As.",
