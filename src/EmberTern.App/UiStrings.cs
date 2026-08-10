@@ -99,6 +99,13 @@ internal static class UiStrings
     public static string FilePickerSqlScripts => Loc.Text(nameof(FilePickerSqlScripts));
     public static string FilterPlaceholder => Loc.Text(nameof(FilterPlaceholder));
     public static string FindingConfidenceHigh => Loc.Text(nameof(FindingConfidenceHigh));
+    // ⭐ C7 (D‑7): the Performance findings' severity chip. It was four hardcoded literals in
+    // `FindingViewModel` — invisible to `NoViewCarriesAHardcodedUserVisibleString`, which scans .axaml only
+    // (#337), while its twin `DiagnosticRowViewModel` had read `UiStrings.DiagnosticSeverity*` all along.
+    public static string FindingSeverityHigh => Loc.Text(nameof(FindingSeverityHigh));
+    public static string FindingSeverityInfo => Loc.Text(nameof(FindingSeverityInfo));
+    public static string FindingSeverityLow => Loc.Text(nameof(FindingSeverityLow));
+    public static string FindingSeverityMedium => Loc.Text(nameof(FindingSeverityMedium));
     public static string FindingConfidenceLow => Loc.Text(nameof(FindingConfidenceLow));
     public static string FindingConfidenceMedium => Loc.Text(nameof(FindingConfidenceMedium));
     public static string ImportDateOrderIso => Loc.Text(nameof(ImportDateOrderIso));
@@ -107,7 +114,10 @@ internal static class UiStrings
     public static string PeekLoading => Loc.Text(nameof(PeekLoading));
     public static string PlaceholderFieldName => Loc.Text(nameof(PlaceholderFieldName));
     public static string PlaceholderTableName => Loc.Text(nameof(PlaceholderTableName));
-    public static string PlanInsightSubquery => Loc.Text(nameof(PlanInsightSubquery));
+    // ⛔⛔ `PlanInsightSubquery` was REMOVED in etap C7, and it must not come back. Its value ("Sub-query") was
+    // FIREBIRD's word, matched with StartsWith against the engine's own plan text — so translating this entry
+    // would have switched the sub-query summary off, silently, and invisibly in English (#356). The predicate
+    // now has one owner in Core: `PlanNode.IsSubqueryRoot`.
     public static string QuickInfoMoreFormat => Loc.Text(nameof(QuickInfoMoreFormat));
     public static string ScriptDurationSecondsFormat => Loc.Text(nameof(ScriptDurationSecondsFormat));
     public static string SessionManagerWhatItMeans => Loc.Text(nameof(SessionManagerWhatItMeans));

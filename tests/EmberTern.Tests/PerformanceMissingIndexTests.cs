@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EmberTern.App.Localization;
 using System.Linq;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Performance.Rules;
@@ -38,9 +39,15 @@ public class PerformanceMissingIndexTests
         Assert.Equal(FindingKind.MissingIndexCandidate, f.Kind);
         Assert.Equal("R2", f.RuleId);
         Assert.Equal(FindingConfidence.Medium, f.Confidence);
-        Assert.Contains("T.ID", f.Title);
-        Assert.DoesNotContain("Create", f.Explanation);
-        Assert.DoesNotContain("Add index", f.Explanation);
+        // ⭐ The title composes "{table}.{column}"; asserting the two DATA is stronger than asserting the
+        // string they render into, and it survives translation.
+        Assert.Contains("T", f.Title.Arguments);
+        Assert.Contains("ID", f.Title.Arguments);
+        // ⚠ The "no imperative / no DDL" product rule, kept here on the rendered sentence AND widened in C7
+        // to every Performance entry in the catalog by NoPerfSentence_UsesImperativeOrDdlVocabulary — this
+        // was one finding's worth of coverage for a rule the whole module claims.
+        Assert.DoesNotContain("Create", Loc.Format(f.Explanation!));
+        Assert.DoesNotContain("Add index", Loc.Format(f.Explanation!));
     }
 
     [Fact]
@@ -93,6 +100,6 @@ public class PerformanceMissingIndexTests
     public void RangePredicate_AlsoFires()
     {
         var f = Assert.Single(Run(Access(seq: 50_000), 100, Catalog(500_000), "SELECT * FROM T WHERE DATA >= '2020-01-01'"));
-        Assert.Contains("T.DATA", f.Title);
+        Assert.Contains("DATA", f.Title.Arguments);
     }
 }

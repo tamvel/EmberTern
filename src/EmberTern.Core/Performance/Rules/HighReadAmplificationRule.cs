@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Core.Performance.Rules;
 
@@ -37,19 +38,23 @@ public sealed class HighReadAmplificationRule : IPerformanceRule
         }
 
         int subqueries = context.SubqueryCount;
-        string spread = subqueries > 0
-            ? string.Format(CultureInfo.CurrentCulture, " and {0} sub-quer{1}", subqueries, subqueries == 1 ? "y" : "ies")
-            : string.Empty;
+        string amplificationText = amplification.ToString("0.#", CultureInfo.CurrentCulture);
 
         var evidence = new List<FindingEvidence>
         {
-            new("Rows read", N(read)),
-            new(context.OutputRowsLabel, N(context.OutputRows)),
-            new("Read amplification", amplification.ToString("0.#", CultureInfo.CurrentCulture) + "×"),
+            // ⛔ `.Statement`, not `.Table`: this is every row the STATEMENT read, not one table's. The two
+            // read identically in English and are different measurements — see PerfMessages' remarks.
+            new(PerfMessages.EvidenceRowsReadStatement, N(read)),
+            new(context.HasResultSet
+                    ? PerfMessages.EvidenceRowsReturned
+                    : PerfMessages.EvidenceRowsChanged,
+                N(context.OutputRows)),
+            new(PerfMessages.EvidenceReadAmplificationStatement, amplificationText + "×"),
         };
         if (subqueries > 0)
         {
-            evidence.Add(new FindingEvidence("Sub-queries", subqueries.ToString(CultureInfo.CurrentCulture)));
+            evidence.Add(new FindingEvidence(PerfMessages.EvidenceSubqueries,
+                subqueries.ToString(CultureInfo.CurrentCulture)));
         }
 
         return new List<Finding>
@@ -60,16 +65,42 @@ public sealed class HighReadAmplificationRule : IPerformanceRule
                 Severity = amplification >= 100 ? FindingSeverity.High : FindingSeverity.Medium,
                 Confidence = FindingConfidence.Medium,
                 RuleId = Id,
-                Title = string.Format(CultureInfo.CurrentCulture,
-                    "Query reads {0}× more rows than it {1}s", amplification.ToString("0.#", CultureInfo.CurrentCulture), context.OutputVerb),
-                Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "This statement read {0} rows to {4} {1} ({2}×). No single full table scan dominates — the cost "
-                    + "is spread across index reads{3}. Likely cause: it touches far more rows than it {4}s "
-                    + "(broad joins or many sub-queries). Investigate the sub-queries and join breadth.",
-                    N(read), N(context.OutputRows), amplification.ToString("0.#", CultureInfo.CurrentCulture), spread, context.OutputVerb),
+                // ⭐ The verb is no longer a word with an English "s" glued on — it is which key we produce.
+                Title = LocalizableMessage.Of(
+                    context.HasResultSet
+                        ? PerfMessages.HighAmplificationTitleSelect
+                        : PerfMessages.HighAmplificationTitleChange,
+                    amplificationText),
+                Explanation = Explanation(context, subqueries, read, amplificationText),
                 Evidence = evidence,
             },
         };
+    }
+
+    /// <summary>
+    /// Four whole sentences where there used to be one with two holes punched in it: the output verb (twice,
+    /// once conjugated) and a <c>" and N sub-quer{y|ies}"</c> tail that glued a MORPHEME on.
+    /// <para>⚠ In the sub-query variants the count at <c>{0}</c> is the SUB-QUERY count, not the rows read —
+    /// the argument rule takes the number the sentence's grammar depends on. Those two keys are plural
+    /// families; the other two carry no inflected noun and stay flat.</para>
+    /// </summary>
+    private static LocalizableMessage Explanation(
+        PerformanceContext context, int subqueries, long read, string amplificationText)
+    {
+        if (subqueries > 0)
+        {
+            return LocalizableMessage.Of(
+                context.HasResultSet
+                    ? PerfMessages.HighAmplificationExplanationSelectWithSubqueries
+                    : PerfMessages.HighAmplificationExplanationChangeWithSubqueries,
+                subqueries, read, context.OutputRows, amplificationText);
+        }
+
+        return LocalizableMessage.Of(
+            context.HasResultSet
+                ? PerfMessages.HighAmplificationExplanationSelect
+                : PerfMessages.HighAmplificationExplanationChange,
+            read, context.OutputRows, amplificationText);
     }
 
     private static string N(long value) => value.ToString("N0", CultureInfo.CurrentCulture);

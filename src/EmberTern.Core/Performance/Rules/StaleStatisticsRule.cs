@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Core.Performance.Rules;
 
@@ -52,17 +53,23 @@ public sealed class StaleStatisticsRule : IPerformanceRule
                 Confidence = corroborated ? FindingConfidence.Medium : FindingConfidence.Low,
                 RuleId = Id,
                 Table = table.Table,
-                Title = string.Format(CultureInfo.CurrentCulture,
-                    "Index statistics on {0} may be out of date", table.Table),
-                Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "Index {0} on {1} {2} no computed selectivity statistics, so the optimizer may misestimate "
-                    + "and choose a poor plan{3}. Investigate whether this table's index statistics are up to date.",
-                    string.Join(", ", stale), table.Table, stale.Count == 1 ? "has" : "have",
-                    corroborated ? "; this table was also read sequentially" : string.Empty),
+                Title = LocalizableMessage.Of(PerfMessages.StaleStatisticsTitle, table.Table),
+                // ⭐ Two things stopped being glued together here. The `has`/`have` choice was English VERB
+                // agreement decided by a `?:` in Core — it is now a plural FAMILY the reader's own culture
+                // resolves. The corroboration clause was a tail welded onto the sentence — it is now its own
+                // whole-sentence key. ⚠ The count is argument {0} (ratified R3), which is what lets the
+                // family work at all.
+                Explanation = LocalizableMessage.Of(
+                    corroborated
+                        ? PerfMessages.StaleStatisticsExplanationCorroborated
+                        : PerfMessages.StaleStatisticsExplanation,
+                    (long)stale.Count, string.Join(", ", stale), table.Table),
                 Evidence = new List<FindingEvidence>
                 {
-                    new("Indexes without statistics", string.Join(", ", stale)),
-                    new("Rows read", N(table.TotalReads)),
+                    new(PerfMessages.EvidenceIndexesWithoutStatistics, string.Join(", ", stale)),
+                    // ⛔ `.Table`, not `.Statement`: this is THIS table's reads. R6's identically-worded row
+                    // is the whole statement's.
+                    new(PerfMessages.EvidenceRowsReadTable, N(table.TotalReads)),
                 },
             });
         }

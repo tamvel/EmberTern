@@ -685,6 +685,9 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
         }
 
         OnPropertyChanged(nameof(ExecSummaryFallbackText));
+
+        // ⚠ C7 — see ProcedureDetailTabViewModel: the Performance panel is a grandchild of the tab.
+        Performance?.RefreshLocalizedText();
     }
 
     // A function is usually read-only: a scalar result shows "1 row in T ms" (+ rows read);

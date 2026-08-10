@@ -40,11 +40,15 @@ public sealed record PerformanceContext
     /// around "returned 0" for a statement that did its work by changing rows.</summary>
     public long OutputRows => HasResultSet ? RowsReturned : RowsChanged;
 
-    /// <summary>Infinitive for "reading N rows to {verb} M rows" — "return" or "change".</summary>
-    public string OutputVerb => HasResultSet ? "return" : "change";
-
-    /// <summary>Evidence label for <see cref="OutputRows"/> — "Rows returned" / "Rows changed".</summary>
-    public string OutputRowsLabel => HasResultSet ? "Rows returned" : "Rows changed";
+    // ⛔⛔ `OutputVerb` and `OutputRowsLabel` were REMOVED in etap C7 (ratified D‑3), and this note is here so
+    // nobody reinstates them as a convenience. They returned EmberTern's own WORDS — "return"/"change" and
+    // "Rows returned"/"Rows changed" — which the rules then wove into sentences, one of them gluing an
+    // English "s" onto the verb (`"…than it {verb}s"`). That is Core deciding both vocabulary and morphology,
+    // which no language but English survives.
+    //
+    // ⭐ What replaced them is not a mechanism: a rule now branches on `HasResultSet` to pick which KEY it
+    // produces (`…Explanation.Select` / `…Explanation.Change`), exactly as C1's analyzer picks between
+    // `GcBlockedExplanationSnapshot` and `…Transaction`. `OutputRows` stays, because a count is data.
 
     public IReadOnlyList<QueryPredicate> Predicates { get; init; } = Array.Empty<QueryPredicate>();
 
@@ -78,7 +82,9 @@ public sealed record PerformanceContext
         }
     }
 
-    /// <summary>Number of sub-query roots in the plan (the "spread cost" signal for R6).</summary>
-    public int SubqueryCount
-        => Plan?.Roots.Count(r => r.RawText.StartsWith("Sub-query", StringComparison.OrdinalIgnoreCase)) ?? 0;
+    /// <summary>Number of sub-query roots in the plan (the "spread cost" signal for R6).
+    /// <para>⭐ Reads <see cref="PlanNode.IsSubqueryRoot"/> — the ONE owner of that predicate since C7. It used
+    /// to spell the engine's word out here and, separately and wrongly, out of the App's translatable
+    /// catalog.</para></summary>
+    public int SubqueryCount => Plan?.Roots.Count(r => r.IsSubqueryRoot) ?? 0;
 }

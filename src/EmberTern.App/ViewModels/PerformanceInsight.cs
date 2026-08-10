@@ -120,8 +120,13 @@ internal static class PerformanceInsight
         return seen;
     }
 
-    private static bool IsSubqueryRoot(PlanNode root)
-        => root.RawText.StartsWith(UiStrings.PlanInsightSubquery, StringComparison.OrdinalIgnoreCase);
+    // ⛔⛔ Reads Core's predicate, NOT a catalog entry. Until etap C7 this matched the engine's plan text
+    // against a TRANSLATABLE resource entry, which is #356 exactly: the day that entry was translated the
+    // sub-query summary would have stopped appearing, silently, and invisibly in English. `PlanNode`'s
+    // predicate is now the one owner of the engine's word.
+    // ⚠ The retired entry is not named here on purpose — the guard for this is a text scan of this file, so
+    // quoting the identifier would make the warning trip the check it describes.
+    private static bool IsSubqueryRoot(PlanNode root) => root.IsSubqueryRoot;
 
     private static string FormatDuration(double ms) => ms < 1000
         ? ms.ToString("0", CultureInfo.CurrentCulture) + " ms"

@@ -4209,9 +4209,6 @@ Delete "{1}" yourself once you have checked that nothing depends on it.</value>
   <data name="PlaceholderTableName" xml:space="preserve">
     <value>&lt;table&gt;</value>
   </data>
-  <data name="PlanInsightSubquery" xml:space="preserve">
-    <value>Sub-query</value>
-  </data>
   <data name="PrimaryKeyDialogHeader" xml:space="preserve">
     <value>Add Primary Key</value>
   </data>
@@ -6950,5 +6947,221 @@ Save them before closing?</value>
   </data>
   <data name="Query.Exec.Table.Deleted" xml:space="preserve">
     <value>{0} deleted from {1}</value>
+  </data>
+  <data name="Perf.CostlyFullScan.Title" xml:space="preserve">
+    <value>Table {1} was scanned sequentially — {0:N0} rows read</value>
+  </data>
+  <data name="Perf.MissingIndex.Title" xml:space="preserve">
+    <value>Candidate index opportunity on {0}.{1}</value>
+  </data>
+  <data name="Perf.NonSargable.Title" xml:space="preserve">
+    <value>Condition on {0}.{1} can't use index {2}</value>
+  </data>
+  <data name="Perf.LowSelectivity.Title" xml:space="preserve">
+    <value>Index {0} on {1} has low selectivity</value>
+  </data>
+  <data name="Perf.StaleStatistics.Title" xml:space="preserve">
+    <value>Index statistics on {0} may be out of date</value>
+  </data>
+  <data name="Perf.HighAmplification.Title.Select" xml:space="preserve">
+    <value>Query reads {0}× more rows than it returns</value>
+  </data>
+  <data name="Perf.HighAmplification.Title.Change" xml:space="preserve">
+    <value>Query reads {0}× more rows than it changes</value>
+  </data>
+  <data name="Perf.CostlyFullScan.Explanation.Select" xml:space="preserve">
+    <value>This table was read row-by-row (a full table scan), reading {0:N0} rows to return {1:N0}. A sequential scan reads every row, so it is often the largest cost in a slow query. Likely cause: no index served the filter on this table.</value>
+  </data>
+  <data name="Perf.CostlyFullScan.Explanation.Change" xml:space="preserve">
+    <value>This table was read row-by-row (a full table scan), reading {0:N0} rows to change {1:N0}. A sequential scan reads every row, so it is often the largest cost in a slow query. Likely cause: no index served the filter on this table.</value>
+  </data>
+  <data name="Perf.MissingIndex.Explanation.Select" xml:space="preserve">
+    <value>Potential contributor: {1} was read sequentially ({0:N0} rows) to return {2:N0}, and the filter on {3} ({4}) had no usable index to seek. This is a candidate index opportunity — investigate whether {3}'s selectivity and this query's frequency would justify one. No change is applied here.</value>
+  </data>
+  <data name="Perf.MissingIndex.Explanation.Change" xml:space="preserve">
+    <value>Potential contributor: {1} was read sequentially ({0:N0} rows) to change {2:N0}, and the filter on {3} ({4}) had no usable index to seek. This is a candidate index opportunity — investigate whether {3}'s selectivity and this query's frequency would justify one. No change is applied here.</value>
+  </data>
+  <data name="Perf.NonSargable.Explanation.FunctionOnColumn" xml:space="preserve">
+    <value>Potential contributor: the column is wrapped in a function/expression, so a plain index can't be used. Index {1} on {2} exists but the condition ({3}) prevents its use, and {4} was read sequentially ({0:N0} rows). Investigate rewriting the condition to reference {2} directly.</value>
+  </data>
+  <data name="Perf.NonSargable.Explanation.LeadingWildcardLike" xml:space="preserve">
+    <value>Potential contributor: a leading-wildcard LIKE can't seek an index. Index {1} on {2} exists but the condition ({3}) prevents its use, and {4} was read sequentially ({0:N0} rows). Investigate rewriting the condition to reference {2} directly.</value>
+  </data>
+  <data name="Perf.LowSelectivity.Explanation.Select" xml:space="preserve">
+    <value>Likely cause: {1} was read through index {2}, but that index has low selectivity ({3}), so it read {0:N0} index entries to return {4:N0} rows — a low-selectivity index reads many rows the query then discards. Investigate whether a more selective access path fits this query.</value>
+  </data>
+  <data name="Perf.LowSelectivity.Explanation.Change" xml:space="preserve">
+    <value>Likely cause: {1} was read through index {2}, but that index has low selectivity ({3}), so it read {0:N0} index entries to change {4:N0} rows — a low-selectivity index reads many rows the query then discards. Investigate whether a more selective access path fits this query.</value>
+  </data>
+  <data name="Perf.StaleStatistics.Explanation.other" xml:space="preserve">
+    <value>Index {1} on {2} have no computed selectivity statistics, so the optimizer may misestimate and choose a poor plan. Investigate whether this table's index statistics are up to date.</value>
+  </data>
+  <data name="Perf.StaleStatistics.Explanation.one" xml:space="preserve">
+    <value>Index {1} on {2} has no computed selectivity statistics, so the optimizer may misestimate and choose a poor plan. Investigate whether this table's index statistics are up to date.</value>
+  </data>
+  <data name="Perf.StaleStatistics.Explanation.Corroborated.one" xml:space="preserve">
+    <value>Index {1} on {2} has no computed selectivity statistics, so the optimizer may misestimate and choose a poor plan; this table was also read sequentially. Investigate whether this table's index statistics are up to date.</value>
+  </data>
+  <data name="Perf.StaleStatistics.Explanation.Corroborated.other" xml:space="preserve">
+    <value>Index {1} on {2} have no computed selectivity statistics, so the optimizer may misestimate and choose a poor plan; this table was also read sequentially. Investigate whether this table's index statistics are up to date.</value>
+  </data>
+  <data name="Perf.HighAmplification.Explanation.Select" xml:space="preserve">
+    <value>This statement read {0:N0} rows to return {1:N0} ({2}×). No single full table scan dominates — the cost is spread across index reads. Likely cause: it touches far more rows than it returns (broad joins or many sub-queries). Investigate the sub-queries and join breadth.</value>
+  </data>
+  <data name="Perf.HighAmplification.Explanation.Change" xml:space="preserve">
+    <value>This statement read {0:N0} rows to change {1:N0} ({2}×). No single full table scan dominates — the cost is spread across index reads. Likely cause: it touches far more rows than it changes (broad joins or many sub-queries). Investigate the sub-queries and join breadth.</value>
+  </data>
+  <data name="Perf.HighAmplification.Explanation.Select.WithSubqueries.one" xml:space="preserve">
+    <value>This statement read {1:N0} rows to return {2:N0} ({3}×). No single full table scan dominates — the cost is spread across index reads and {0} sub-query. Likely cause: it touches far more rows than it returns (broad joins or many sub-queries). Investigate the sub-queries and join breadth.</value>
+  </data>
+  <data name="Perf.HighAmplification.Explanation.Select.WithSubqueries.other" xml:space="preserve">
+    <value>This statement read {1:N0} rows to return {2:N0} ({3}×). No single full table scan dominates — the cost is spread across index reads and {0} sub-queries. Likely cause: it touches far more rows than it returns (broad joins or many sub-queries). Investigate the sub-queries and join breadth.</value>
+  </data>
+  <data name="Perf.HighAmplification.Explanation.Change.WithSubqueries.one" xml:space="preserve">
+    <value>This statement read {1:N0} rows to change {2:N0} ({3}×). No single full table scan dominates — the cost is spread across index reads and {0} sub-query. Likely cause: it touches far more rows than it changes (broad joins or many sub-queries). Investigate the sub-queries and join breadth.</value>
+  </data>
+  <data name="Perf.HighAmplification.Explanation.Change.WithSubqueries.other" xml:space="preserve">
+    <value>This statement read {1:N0} rows to change {2:N0} ({3}×). No single full table scan dominates — the cost is spread across index reads and {0} sub-queries. Likely cause: it touches far more rows than it changes (broad joins or many sub-queries). Investigate the sub-queries and join breadth.</value>
+  </data>
+  <data name="Perf.Evidence.SequentialReads" xml:space="preserve">
+    <value>Sequential reads</value>
+  </data>
+  <data name="Perf.Evidence.IndexReads" xml:space="preserve">
+    <value>Index reads</value>
+  </data>
+  <data name="Perf.Evidence.ApproxRowsInTable" xml:space="preserve">
+    <value>Approx. rows in table</value>
+  </data>
+  <data name="Perf.Evidence.ReadAmplification.Table" xml:space="preserve">
+    <value>Read amplification</value>
+  </data>
+  <data name="Perf.Evidence.ReadAmplification.Statement" xml:space="preserve">
+    <value>Read amplification</value>
+  </data>
+  <data name="Perf.Evidence.RowsRead.Table" xml:space="preserve">
+    <value>Rows read</value>
+  </data>
+  <data name="Perf.Evidence.RowsRead.Statement" xml:space="preserve">
+    <value>Rows read</value>
+  </data>
+  <data name="Perf.Evidence.PercentOfTableScanned" xml:space="preserve">
+    <value>% of table scanned</value>
+  </data>
+  <data name="Perf.Evidence.Subqueries" xml:space="preserve">
+    <value>Sub-queries</value>
+  </data>
+  <data name="Perf.Evidence.IndexAmplification" xml:space="preserve">
+    <value>Index amplification</value>
+  </data>
+  <data name="Perf.Evidence.IndexSelectivity" xml:space="preserve">
+    <value>Index selectivity</value>
+  </data>
+  <data name="Perf.Evidence.Filter" xml:space="preserve">
+    <value>Filter</value>
+  </data>
+  <data name="Perf.Evidence.Condition" xml:space="preserve">
+    <value>Condition</value>
+  </data>
+  <data name="Perf.Evidence.ExistingIndex" xml:space="preserve">
+    <value>Existing index</value>
+  </data>
+  <data name="Perf.Evidence.IndexesWithoutStatistics" xml:space="preserve">
+    <value>Indexes without statistics</value>
+  </data>
+  <data name="Perf.Evidence.RowsReturned" xml:space="preserve">
+    <value>Rows returned</value>
+  </data>
+  <data name="Perf.Evidence.RowsChanged" xml:space="preserve">
+    <value>Rows changed</value>
+  </data>
+  <data name="Perf.Guidance.Heading" xml:space="preserve">
+    <value>What to investigate</value>
+  </data>
+  <data name="Perf.CostlyFullScan.Guidance.1" xml:space="preserve">
+    <value>Check the filter's selectivity — how many rows it actually keeps.</value>
+  </data>
+  <data name="Perf.CostlyFullScan.Guidance.2" xml:space="preserve">
+    <value>Check whether a suitable index exists on the filtered column(s).</value>
+  </data>
+  <data name="Perf.CostlyFullScan.Guidance.3" xml:space="preserve">
+    <value>Review the table size and the query's access pattern.</value>
+  </data>
+  <data name="Perf.MissingIndex.Guidance.1" xml:space="preserve">
+    <value>Review the filtered columns and the order they're used in.</value>
+  </data>
+  <data name="Perf.MissingIndex.Guidance.2" xml:space="preserve">
+    <value>Review existing index coverage for those columns.</value>
+  </data>
+  <data name="Perf.MissingIndex.Guidance.3" xml:space="preserve">
+    <value>Verify the query runs often enough to justify a new index.</value>
+  </data>
+  <data name="Perf.NonSargable.Guidance.1" xml:space="preserve">
+    <value>Review the expression applied to the indexed column.</value>
+  </data>
+  <data name="Perf.NonSargable.Guidance.2" xml:space="preserve">
+    <value>Check whether the condition can reference the column directly.</value>
+  </data>
+  <data name="Perf.NonSargable.Guidance.3" xml:space="preserve">
+    <value>Consider whether a computed (expression) index would be appropriate.</value>
+  </data>
+  <data name="Perf.LowSelectivity.Guidance.1" xml:space="preserve">
+    <value>Review the column's value distribution (how many distinct values).</value>
+  </data>
+  <data name="Perf.LowSelectivity.Guidance.2" xml:space="preserve">
+    <value>Review composite-index opportunities with a more selective leading column.</value>
+  </data>
+  <data name="Perf.LowSelectivity.Guidance.3" xml:space="preserve">
+    <value>Check whether a different access path suits this query.</value>
+  </data>
+  <data name="Perf.StaleStatistics.Guidance.1" xml:space="preserve">
+    <value>Review the index statistics for this table.</value>
+  </data>
+  <data name="Perf.StaleStatistics.Guidance.2" xml:space="preserve">
+    <value>Verify whether the statistics are up to date.</value>
+  </data>
+  <data name="Perf.HighAmplification.Guidance.1" xml:space="preserve">
+    <value>Review the join breadth — how many rows the joins expand to.</value>
+  </data>
+  <data name="Perf.HighAmplification.Guidance.2" xml:space="preserve">
+    <value>Review the sub-queries the plan evaluates.</value>
+  </data>
+  <data name="Perf.HighAmplification.Guidance.3" xml:space="preserve">
+    <value>Review the filtering effectiveness — where rows are read but discarded.</value>
+  </data>
+  <data name="Perf.Recommendation.Heading" xml:space="preserve">
+    <value>Potential improvement</value>
+  </data>
+  <data name="Perf.CostlyFullScan.Recommendation" xml:space="preserve">
+    <value>Review whether an index on the filtered column would reduce this scan.</value>
+  </data>
+  <data name="Perf.MissingIndex.Recommendation.OnColumn" xml:space="preserve">
+    <value>Review whether an index on {0} would benefit this workload.</value>
+  </data>
+  <data name="Perf.MissingIndex.Recommendation.OnFilteredColumn" xml:space="preserve">
+    <value>Review whether an index on the filtered column would benefit this workload.</value>
+  </data>
+  <data name="Perf.NonSargable.Recommendation" xml:space="preserve">
+    <value>Review whether the expression can be removed from the indexed column so an index can be used.</value>
+  </data>
+  <data name="Perf.LowSelectivity.Recommendation" xml:space="preserve">
+    <value>Review whether a more selective leading column exists for this index.</value>
+  </data>
+  <data name="Perf.StaleStatistics.Recommendation" xml:space="preserve">
+    <value>Review whether the index statistics should be refreshed.</value>
+  </data>
+  <data name="Perf.HighAmplification.Recommendation" xml:space="preserve">
+    <value>Review the join breadth and sub-query strategy.</value>
+  </data>
+  <data name="FindingSeverityHigh" xml:space="preserve">
+    <value>HIGH</value>
+  </data>
+  <data name="FindingSeverityMedium" xml:space="preserve">
+    <value>MED</value>
+  </data>
+  <data name="FindingSeverityLow" xml:space="preserve">
+    <value>LOW</value>
+  </data>
+  <data name="FindingSeverityInfo" xml:space="preserve">
+    <value>INFO</value>
   </data>
 </root>

@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using EmberTern.App.Localization;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Diagnostics;
 using Xunit;
@@ -27,8 +29,10 @@ public class PerformanceNonResultTests
         Assert.False(ctx.HasResultSet);
         Assert.Equal(8, ctx.RowsChanged);
         Assert.Equal(8, ctx.OutputRows);
-        Assert.Equal("change", ctx.OutputVerb);
-        Assert.Equal("Rows changed", ctx.OutputRowsLabel);
+        // ⚠ C7 (D‑3): `OutputVerb` / `OutputRowsLabel` no longer exist — the context stopped choosing
+        // EmberTern's WORDS. What it still decides is the FACT the rules branch on, and that is what is
+        // asserted here; which sentence follows from it is asserted below and in
+        // TheDmlAndSelectVariants_AreTheSameSentenceWithADifferentVerb.
         Assert.Equal(100_000d / 8d, ctx.Amplification!.Value, 3); // reads ÷ changes, not ÷ 0
     }
 
@@ -45,10 +49,17 @@ public class PerformanceNonResultTests
         Assert.Equal(100_000d / 8d, report.Verdict.Amplification!.Value, 3);
 
         var scan = Assert.Single(report.Findings, f => f.Kind == FindingKind.CostlyFullScan);
-        Assert.Contains("to change 8", scan.Explanation);
-        Assert.DoesNotContain("to return", scan.Explanation);
-        Assert.Contains(scan.Evidence, e => e.Label == "Rows changed");
-        Assert.DoesNotContain(scan.Evidence, e => e.Label == "Rows returned");
+
+        // ⭐ The rule now picks a KEY instead of weaving a verb into a sentence, so the assertion is on the
+        // choice, not on the English that follows from it.
+        Assert.Equal(PerfMessages.CostlyFullScanExplanationChange, scan.Explanation!.Key);
+        Assert.Equal(PerfMessages.EvidenceRowsChanged, Assert.Single(
+            scan.Evidence, e => e.Label.Value.EndsWith("RowsChanged", StringComparison.Ordinal)).Label);
+        Assert.DoesNotContain(scan.Evidence, e => e.Label == PerfMessages.EvidenceRowsReturned);
+
+        // ⚠ …and the rendered English still says it, which is what the pre-C7 assertion measured.
+        Assert.Contains("to change 8", Loc.Format(scan.Explanation));
+        Assert.DoesNotContain("to return", Loc.Format(scan.Explanation));
     }
 
     [Fact]
@@ -65,7 +76,28 @@ public class PerformanceNonResultTests
         };
         var report = new PerformanceReportBuilder().Build(capture);
         var scan = Assert.Single(report.Findings, f => f.Kind == FindingKind.CostlyFullScan);
-        Assert.Contains("to return 285", scan.Explanation);
-        Assert.Contains(scan.Evidence, e => e.Label == "Rows returned");
+
+        Assert.Equal(PerfMessages.CostlyFullScanExplanationSelect, scan.Explanation!.Key);
+        Assert.Contains(scan.Evidence, e => e.Label == PerfMessages.EvidenceRowsReturned);
+        Assert.Contains("to return 285", Loc.Format(scan.Explanation));
+    }
+
+    /// <summary>
+    /// ⭐ <b>G7's per-sentence half: the two variants are the SAME sentence with a different verb.</b> The
+    /// point of removing <c>OutputVerb</c> was that one sentence could no longer serve both — so the guard
+    /// that matters is that the pair still says the same thing about the same numbers, and differs only where
+    /// the verb sits. Comparing the rendered halves catches a translator (or a careless edit) turning one of
+    /// them into a different sentence, which no key-level check can see.
+    /// </summary>
+    [Fact]
+    public void TheDmlAndSelectVariants_AreTheSameSentenceWithADifferentVerb()
+    {
+        var change = Loc.Format(LocalizableMessage.Of(
+            PerfMessages.CostlyFullScanExplanationChange, 100_000L, 8L));
+        var select = Loc.Format(LocalizableMessage.Of(
+            PerfMessages.CostlyFullScanExplanationSelect, 100_000L, 8L));
+
+        Assert.NotEqual(select, change);
+        Assert.Equal(select.Replace(" to return ", " to change "), change);
     }
 }

@@ -765,6 +765,11 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
         }
 
         OnPropertyChanged(nameof(ExecSummaryFallbackText));
+
+        // ⚠ C7: this tab's OWN Performance panel is a grandchild of the tab, so neither the notification
+        // above nor WorkspaceTabViewModel's forwarding reaches it. Guarded by
+        // EveryRefreshableGrandchild_IsForwarded.
+        Performance?.RefreshLocalizedText();
     }
 
     // Execution Metrics: a result-returning proc shows "N rows in T ms" (+ rows read); a

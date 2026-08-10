@@ -347,6 +347,11 @@ public partial class MainWindowViewModel : ViewModelBase
         ComposeSettingsHealthMessage();
         ComposeExecutionStatus();
 
+        // ⚠ C7: the SQL Editor's Performance panel is a CHILD view model, so the line above does not reach
+        // it — and its findings, grade line and lead are all stored values. Each Procedure / Function tab
+        // owns its own panel and forwards to it from its own RefreshLocalizedText.
+        Performance.RefreshLocalizedText();
+
         foreach (var tab in WorkspaceTabs)
         {
             tab.RaiseAllPropertiesChanged();

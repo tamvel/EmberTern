@@ -104,8 +104,11 @@ public class PerformanceReadsTests
         Assert.Equal(FindingKind.CostlyFullScan, f.Kind);
         Assert.Equal(FindingSeverity.High, f.Severity);
         Assert.Equal("INVOICE", f.Table);
-        Assert.Contains("INVOICE", f.Title);
-        Assert.Contains(f.Evidence, e => e.Label == "Read amplification");
+        // ⭐ The DATUM, not the sentence around it (the portable form localization.md §4.2 recommends, and
+        // the shape C5 strengthened its own assertions into).
+        Assert.Contains("INVOICE", f.Title.Arguments);
+        // ⛔ `.Table`, not `.Statement` — R1 measures ONE table. The two labels read identically in English.
+        Assert.Contains(f.Evidence, e => e.Label == PerfMessages.EvidenceReadAmplificationTable);
     }
 
     [Fact]

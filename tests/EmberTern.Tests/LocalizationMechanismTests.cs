@@ -740,6 +740,73 @@ public sealed class LocalizationMechanismTests
         }
     }
 
+    /// <summary>
+    /// ⭐⭐ <b>G9 — the same rule ONE LEVEL DOWN, and etap C7 is what proved the level was missing.</b>
+    ///
+    /// <para>The guard above walks types held as properties of <c>WorkspaceTabViewModel</c>. It is
+    /// self-arming for CHILDREN and blind to GRANDCHILDREN — and <c>PerformancePanelViewModel</c> is one:
+    /// the tab owns a Procedure / Function detail view model, which owns the panel. So declaring
+    /// <c>RefreshLocalizedText</c> on the panel would have armed nothing, and forgetting to forward to it
+    /// would have been silent, which is exactly the failure mode #353 keeps producing.</para>
+    ///
+    /// <para>⛔ This is a WIDENING, not a relaxation: the premise ("a refreshable view model must actually be
+    /// called") is unchanged; only the search depth grew. ⚠ Its reach is stated honestly — one level, over
+    /// types a refreshable type exposes as properties. A great-grandchild would need the next widening, and
+    /// this comment is where that would be noticed.</para>
+    /// </summary>
+    [Fact]
+    public void EveryRefreshableGrandchild_IsForwarded()
+    {
+        var assembly = typeof(UiStrings).Assembly;
+        var refreshable = assembly.GetTypes()
+            .Where(t => Refreshes(t))
+            .ToList();
+
+        Assert.NotEmpty(refreshable);
+
+        var missing = new List<string>();
+        foreach (var parent in refreshable)
+        {
+            var file = Path.Combine(RepositoryRoot(), "src", "EmberTern.App", "ViewModels", parent.Name + ".cs");
+            if (!File.Exists(file))
+            {
+                continue;
+            }
+
+            var source = File.ReadAllText(file);
+            var marker = "RefreshLocalizedText()";
+            var start = source.IndexOf("void " + marker, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                continue;
+            }
+            var body = source[start..];
+            var end = body.IndexOf("\n    }", StringComparison.Ordinal);
+            body = end > 0 ? body[..end] : body;
+
+            foreach (var property in parent.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                         .Where(p => Refreshes(p.PropertyType) && p.PropertyType != parent))
+            {
+                if (!body.Contains(property.Name + "?.RefreshLocalizedText()", StringComparison.Ordinal)
+                    && !body.Contains(property.Name + ".RefreshLocalizedText()", StringComparison.Ordinal))
+                {
+                    missing.Add($"{parent.Name}.RefreshLocalizedText does not forward to {property.Name} "
+                        + $"({property.PropertyType.Name})");
+                }
+            }
+        }
+
+        Assert.True(missing.Count == 0,
+            "A refreshable view model owns another one and never asks it to re-read its text, so the "
+            + "grandchild stays in the previous language (#353):" + Environment.NewLine
+            + string.Join(Environment.NewLine, missing));
+    }
+
+    private static bool Refreshes(Type type) => type.GetMethod(
+        "RefreshLocalizedText",
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+        Type.EmptyTypes) is not null;
+
     /// <summary>Every <c>MessageKey</c> declared as a static readonly field anywhere in Core or Firebird.</summary>
     private static IEnumerable<string> DeclaredCoreMessageKeys()
         => new[] { typeof(MessageKey).Assembly, typeof(Firebird.FirebirdConnectionService).Assembly }

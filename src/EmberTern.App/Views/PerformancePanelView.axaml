@@ -157,7 +157,10 @@
                                Foreground="{DynamicResource SubtleForegroundBrush}" />
                     <ItemsControl ItemsSource="{Binding Evidence}" IsVisible="{Binding HasEvidence}" Margin="0,2,0,0">
                       <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="perf:FindingEvidence">
+                        <!-- ⚠ C7: the row is an App projection now, because its LABEL is a Core message key
+                             that only the App can resolve. The bound property names (Label / Value) are
+                             unchanged; this one attribute is the whole XAML delta of the etap. -->
+                        <DataTemplate x:DataType="vm:FindingEvidenceViewModel">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="{Binding Label}" FontSize="{DynamicResource Text.Caption.Size}" Width="120"
                                        Foreground="{DynamicResource SubtleForegroundBrush}" />

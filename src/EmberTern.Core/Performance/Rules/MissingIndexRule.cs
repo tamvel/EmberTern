@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Sql;
 
 namespace EmberTern.Core.Performance.Rules;
@@ -103,14 +104,18 @@ public sealed class MissingIndexRule : IPerformanceRule
 
             var evidence = new List<FindingEvidence>
             {
-                new("Filter", Condition(p)),
-                new("Sequential reads", N(access.SequentialReads)),
-                new(context.OutputRowsLabel, N(context.OutputRows)),
-                new("Read amplification", amplification.ToString("0.#", CultureInfo.CurrentCulture) + "×"),
+                new(PerfMessages.EvidenceFilter, Condition(p)),
+                new(PerfMessages.EvidenceSequentialReads, N(access.SequentialReads)),
+                new(context.HasResultSet
+                        ? PerfMessages.EvidenceRowsReturned
+                        : PerfMessages.EvidenceRowsChanged,
+                    N(context.OutputRows)),
+                new(PerfMessages.EvidenceReadAmplificationTable,
+                    amplification.ToString("0.#", CultureInfo.CurrentCulture) + "×"),
             };
             if (catalog?.RowCountEstimate is { } card)
             {
-                evidence.Add(new FindingEvidence("Approx. rows in table", N(card)));
+                evidence.Add(new FindingEvidence(PerfMessages.EvidenceApproxRowsInTable, N(card)));
             }
 
             findings.Add(new Finding
@@ -121,13 +126,12 @@ public sealed class MissingIndexRule : IPerformanceRule
                 RuleId = Id,
                 Table = p.Table,
                 Column = p.Column,
-                Title = string.Format(CultureInfo.CurrentCulture,
-                    "Candidate index opportunity on {0}.{1}", p.Table, p.Column),
-                Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "Potential contributor: {0} was read sequentially ({1} rows) to {5} {2}, and the filter on "
-                    + "{3} ({4}) had no usable index to seek. This is a candidate index opportunity — investigate "
-                    + "whether {3}'s selectivity and this query's frequency would justify one. No change is applied here.",
-                    p.Table, N(access.SequentialReads), N(context.OutputRows), p.Column, Condition(p), context.OutputVerb),
+                Title = LocalizableMessage.Of(PerfMessages.MissingIndexTitle, p.Table, p.Column),
+                Explanation = LocalizableMessage.Of(
+                    context.HasResultSet
+                        ? PerfMessages.MissingIndexExplanationSelect
+                        : PerfMessages.MissingIndexExplanationChange,
+                    access.SequentialReads, p.Table, context.OutputRows, p.Column, Condition(p)),
                 Evidence = evidence,
             });
         }

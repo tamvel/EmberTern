@@ -46,7 +46,7 @@ public class PerformanceRulesTests
         var f = Assert.Single(new LowSelectivityIndexRule().Evaluate(ctx));
         Assert.Equal(FindingKind.LowSelectivityIndex, f.Kind);
         Assert.Equal("R4", f.RuleId);
-        Assert.Contains("IX_T", f.Title);
+        Assert.Contains("IX_T", f.Title.Arguments);
     }
 
     [Fact]
@@ -71,8 +71,8 @@ public class PerformanceRulesTests
             sql: "SELECT * FROM T WHERE UPPER(NAZWA) = 'X'");
         var f = Assert.Single(new NonSargablePredicateRule().Evaluate(ctx));
         Assert.Equal(FindingKind.NonSargablePredicate, f.Kind);
-        Assert.Contains("IX_NAZWA", f.Title);
-        Assert.Contains("NAZWA", f.Title);
+        Assert.Contains("IX_NAZWA", f.Title.Arguments);
+        Assert.Contains("NAZWA", f.Title.Arguments);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class PerformanceRulesTests
         var ctx = Ctx(Access(("T", 0, 2000)), returned: 100, catalog: Catalog(Ix("IX_T", "C", selectivity: null)));
         var f = Assert.Single(new StaleStatisticsRule().Evaluate(ctx));
         Assert.Equal(FindingKind.StaleStatistics, f.Kind);
-        Assert.Contains("IX_T", f.Explanation);
+        Assert.Contains("IX_T", f.Explanation!.Arguments);
     }
 
     [Fact]
@@ -156,6 +156,6 @@ public class PerformanceRulesTests
         };
         var report = new PerformanceReportBuilder().Build(capture, catalog);
         var scan = Assert.Single(report.Findings, f => f.Kind == FindingKind.CostlyFullScan);
-        Assert.Contains(scan.Evidence, e => e.Label == "% of table scanned");
+        Assert.Contains(scan.Evidence, e => e.Label == PerfMessages.EvidencePercentOfTableScanned);
     }
 }
