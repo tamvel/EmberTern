@@ -810,3 +810,169 @@ The handover says *any test touching `Loc` must join `HeadlessCollection`*. Meas
 never been enforceable, and adding two more classes to the filter would have been arbitrary. What actually
 holds is narrower and is what C6 followed: **a test that SWAPS the catalog joins the collection and undoes the
 swap in a `finally`.** ⛔ Recorded, not fixed — widening the filter to forty classes is its own decision.
+
+---
+
+## C8 — `EmberTern.Office` ×2 (2026-08-10, `45829a5`)
+
+The eighth producer on D‑3 and the **first outside Core/Firebird**. Two keys, two sentences — and the two
+things worth carrying out of it were both produced by plants, not by writing the migration.
+
+⚠ **A gap in this file, recorded rather than filled: C7 (`Performance`, `d620cc8`) has no section here and no
+entry in CLAUDE.md.** Its contract is described in its own commit message. This section does not invent it.
+
+### The contract
+
+| | |
+|---|---|
+| `ImportSourceMessages` | `Import.Source.NotReadableXlsx` · `Import.Source.NotReadableXls` |
+| `ImportSourceException` | dual form — `Localized` (key + data) beside an English `Message` |
+| `InnerException` | the reader library's own words, **kept technical and shown to nobody** |
+| `DataImportTabViewModel.Describe(ex)` | a TYPE test ahead of the catch-all; no shared resolver |
+| `SetStatus` | **untouched** (ratified D‑3 variant (a)) |
+
+Keys and exception both live in **Office**, following the stage's standing rule *a key lives with its
+producer* — and that decision is what forced the guard work below.
+
+### ⭐⭐ The boundary is the opposite of C3's, and it is a measurement
+
+C3 established that the server's own message travels as an **argument**, because it is authoritative. Here the
+library's message is **kept out of every user-facing form**, and the reason is not style:
+
+- `DocumentFormat.OpenXml` answers `File contains corrupted data` for a workbook that is **not corrupted** —
+  it is merely older than the format its name claims.
+- `ExcelDataReader` answers `Invalid file signature`.
+
+The first is not unhelpful, it is **false**. So the rule that generalises is narrower than "wrap foreign
+messages": *a foreign message travels as data when it is authoritative, and is suppressed when it is wrong.*
+The providers already said so in their own comments — *"Saying so is the honest refusal §0 asks for; passing
+the raw message on is not."* C8 only moved the sentence onto a key.
+
+⚠ `InnerException` is asserted **present** by a guard: dropping it would make the same diagnosis unreachable
+a second time.
+
+### ⭐⭐ The catalog guard did not see `EmberTern.Office` — and it failed ASYMMETRICALLY
+
+`DeclaredCoreMessageKeys()` scanned Core + Firebird. This is C0 §4's finding for the second time, for a third
+assembly — but the shape of the failure is the part worth knowing. Planted (Office removed from the set):
+
+| Guard | Result |
+|---|---|
+| `EveryCoreShapedEntry_IsDeclaredByCore` | 🔴 red |
+| `EveryLocalizedMember_MatchesItsEnglishEntry` | 🔴 red |
+| **`EveryCoreMessageKey_HasAnEnglishEntry`** | 🟢 **green** |
+
+The inverse plant (a renamed key, with Office in the set) turns **six** tests red including that third one.
+So the guards that go red are the ones whose failure is *visible anyway* — an orphaned resource entry — while
+the one whose failure is **silent** (a declared key with no English entry resolves to itself, putting a raw
+identifier on screen) is exactly the one that simply stops looking.
+
+⛔ The trap this leaves for a future author: had C8 declared the keys without touching the guard, two red
+tests would have demanded attention — and the *obvious* fix is to exempt those two, not to widen the scan.
+That would have closed the symptom and left the silent guard blind, in a state that looks resolved.
+
+### ⭐⭐ The surface test was green for two reasons and pinned neither
+
+C8's App-side change is one helper. To pin that it reaches the user, a test pointed the real
+`DataImportTabViewModel` at a BIFF workbook wearing an `.xlsx` name and compared the banner with
+`Loc.Format(...)`.
+
+**Plant: revert the consumer to `SetStatus(ex.Message, …)`. All nine tests stayed GREEN.**
+
+English is the only shipped language, so `Loc.Format(localized)` and `ex.Message` render the same characters —
+*by the dual form's own guarantee*. The test could not tell **"the App resolved the key"** from **"the App
+printed the English fallback"**. Same shape as **#357**, and as C6's
+`SwitchingLanguage_RebuildsTheActivityCards`.
+
+The fix is to **swap the catalog** (`Loc.UseCatalogForVerification`, undone in `finally`) for one whose answer
+no producer's literal can match. After rewriting, the same plant fires exactly that one test.
+
+⭐ Side effect worth naming: the class's membership of `HeadlessCollection` stopped being precautionary and
+became **load-bearing** — it is now a test that swaps process-global state, which is the rule C6 measured as
+the one the suite actually follows.
+
+### ⚠⚠ A rationale written into the test was FALSE, and the plant disproved it
+
+The comment on `EachProvider_RaisesItsOwnKey` claimed a key swap between the two providers is invisible to the
+dual-form check, *"because both halves would still agree with each other"*. Measured: swapping the keys turns
+**both** tests red — the English literal stays at the producer while the resolved entry moves, so they
+disagree.
+
+The dual-form check sees it **only because these two sentences happen to differ in English**. That is a
+property of today's wording, not of the mechanism. So what the per-provider test actually earns is a **correct
+diagnosis** — it fails with *"expected `Import.Source.NotReadableXls`"*, naming the defect, where its sibling
+reports an English mismatch and sends the reader to the resource file, the one place that is innocent. The
+comment was corrected in place rather than deleted.
+
+### The plants — five, and two of them changed the work
+
+| # | Plant | Result |
+|---|---|---|
+| 1 | renamed key | 6 red (3 mechanism + 3 C8) |
+| 2 | Office removed from the guard's scan set | 2 red, ⭐ the third **green** — the asymmetry |
+| 3 | resource wording drift (`workbook`→`spreadsheet`) | **exactly 1** red; ⚠ the existing `.xls` pin **passed**, confirming it could never have caught this |
+| 4 | keys swapped between providers | 2 red — **disproved the written rationale** |
+| 5 | consumer reverted to `ex.Message` | **0 → 1 after the test was rewritten** |
+
+### ⭐ `Describe` is wired at all thirteen bare renders, not at the five reachable ones
+
+Measured: five of the thirteen catch-alls can carry an `ImportSourceException` (source read, inference,
+converted preview, the run, the run's backstop), and in practice the source read carries it, because `Open`
+fails on the provider's **first** call so the chain never reaches the others.
+
+It is still wired at all thirteen. Keying the decision to a call-site list would encode a **reachability
+analysis into the code**: the set will move, nobody will re-measure it, and the failure is silent — an English
+sentence in a Polish window (#337's shape). The discriminator is the exception's **type**, so for every other
+exception the result is provably the string this module rendered yesterday. The two
+`string.Format(…, ex.Message)` composites on Firebird DDL paths are deliberately unchanged.
+
+### ⚠ Proving zero change to the English needed a different instrument than C4a's
+
+C4a and C6 could prove it by leaving existing tests untouched. Here the pre-migration pins were **two
+`Assert.Contains` calls on one of the two sentences and nothing at all on the other**, so no existing test
+could carry the proof. Mechanically instead:
+
+1. `git diff` of both providers shows the English literals as **context lines**, not `+`/`-`.
+2. The dual-form guard chains that literal to the resource entry — read off a **really thrown** exception,
+   not a re-derived string.
+
+### The missing pin, added
+
+`.xlsx` had **no test for its refusal at all**, while `.xls` had been pinned since I10. The asymmetry sat in
+the *more common* case: I0 §3.5 found the `.xlsx` case on the machine's real spreadsheets. Added.
+
+### ⛔ #353 left standing, deliberately
+
+The banner does not survive a later language change: `SetStatus` stores settled text and the module has no
+`RefreshLocalizedText`. Measured scope of fixing it: **31 call sites, 18 of them passing already-settled
+`UiStrings` text**, so making the exception path live would leave eighteen frozen statuses beside one that
+moves — an inconsistency worse than a uniform absence (R7). That is a decision about `SetStatus`, not a
+consequence of migrating two sentences.
+
+### ⚠ Inventory corrections
+
+| Claim | Measured |
+|---|---|
+| "Office ×2" (C0) | ⭐ **survived** — exactly 2 user-visible literals in 6 production files. The first C0 inventory row that matched. |
+| "`ex.Message` … in **eight** places" (C0 §3) | **15** sites read it; **5** reachable from Office; **1** dominant |
+
+### ⚠⚠ A tooling defect paid for on the way
+
+`sed -i` in Git Bash silently rewrote **CRLF → LF across a whole 2 581-line file**, and `git diff --stat`
+reported only the intended 39/13 because the repository normalises line endings — **git masked a whole-file
+rewrite**. Same family as the App stage's Python `\r\n` damage. Repaired and proved by round trip
+(`tr -d '\r'` both sides, inverse substitution, byte-identical apart from the 13 intended tokens); every
+touched file re-verified as fully CRLF. ⛔ `sed` is unusable for verification here too — its output stream
+drops CR as well. See gotcha **#366**.
+
+### Numbers
+
+| | |
+|---|---|
+| Build | 0 errors / 0 warnings |
+| Suite | **8 730** = 8 389 main + **286** grouped + 55 isolated |
+| Growth | +10 (1 main — the `.xlsx` pin; 9 grouped) |
+| Headless filter | +1 name (**22**) |
+| Smoke | clean, no `FATAL` |
+| `Lab/` | untouched |
+| Commit | `45829a5` — ⛔ not pushed, not merged |
