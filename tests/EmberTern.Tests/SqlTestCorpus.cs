@@ -136,6 +136,17 @@ public static class SqlTestCorpus
         // condition (recognised), plus excluded shapes that must stay token fragments (round-trip unaffected).
         "create procedure p as declare function f (a integer) returns integer as begin return f(a - 1); end begin r = f(1); if (f(r)) then suspend; while (f(r)) do r = f(r); end",
         "begin r = f(g(x)); r = f(x) + 1; if (f(x) and g(x)) then r = 1; end",
+        // ⭐ COMMENTS IN EVERY POSITION a query can carry one (2026-08-10). Added because this corpus had
+        // almost none — which is exactly why a dropped comment survived: §0's net reverts the statement, so
+        // the round-trip invariants stayed green while a real procedure silently refused to format. A
+        // comment between a query's last CLAUSE and whatever CLOSES it (';' / INTO / DO) is the gap.
+        "select a from t where a = 1 --before the terminator\n",
+        "create view v as select a from t where a = 1 --before the terminator\n",
+        "create procedure p as declare variable i integer; begin select a from t where a = 1 --before into\n into :i; end",
+        "create procedure p as declare variable i integer; begin for select a from t where a = 1 --before into\n into :i do suspend; end",
+        "create procedure p as begin for select a from t where a = 1 --before do\n do suspend; end",
+        "update t set a = 1 --a commented-out tail\n where b = 2",
+        "select a, --after a column\n b from t --after the table\n where a = 1 --after the predicate\n",
     };
 
     /// <summary>
