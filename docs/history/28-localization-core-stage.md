@@ -813,13 +813,121 @@ swap in a `finally`.** ⛔ Recorded, not fixed — widening the filter to forty 
 
 ---
 
+## C7 — `Performance` (2026-08-10, `d620cc8`)
+
+⚠⚠ **This section was written AFTER C8, reconstructed from `d620cc8`'s commit message and its diff, because
+the etap shipped without one.** Everything below is derivable from those two sources or from the code they
+produced; the counts were re-measured rather than transcribed (`64` declared `Perf.*` keys, `68` English
+entries, `4` plural families — all confirmed against the shipped files). ⛔ What is **not** recoverable and is
+therefore absent: the audit conversation that preceded it, and any plant beyond the five the commit message
+records by letter.
+
+The seventh Core producer on D‑3 — and the module the stage had been deferring since C0, where it was listed
+as *"a decision about **Performance**, which stays closed"*. The contract was opened by an explicit user
+decision after the audit.
+
+### The contract
+
+| | |
+|---|---|
+| `Finding.Title` | `string` → `LocalizableMessage` |
+| `Finding.Explanation` | `string` → `LocalizableMessage?` — ⭐ nullable **because `MessageKey` refuses an empty token**, so "no explanation" cannot be spelled as an empty key |
+| `FindingEvidence.Label` | `string` → `MessageKey`; ⚠ **`Value` stays a `string` — it is DATA** |
+| `FindingGuidance` | `MessageKey` + `IReadOnlyList<MessageKey>` |
+| `Recommendation` | `MessageKey` + `LocalizableMessage?` |
+| `PerformanceContext` | ⛔ `OutputVerb` and `OutputRowsLabel` **removed** |
+| `PlanNode.IsSubqueryRoot` | new — one owner for the predicate |
+
+⭐ **The migration invented nothing — it carried C1's contract across.** `Finding` and `SessionHealthFinding`
+are structural twins, and `SessionWarningViewModel` was already a working consumer pattern. ⚠ `Finding` is a
+`record` (a class), so **C5's trap does not apply**: the reference-equality hazard that forced structural
+equality onto `LocalizableMessage` needs a value type to bite.
+
+### ⭐⭐ Nine concatenations disappeared, and the plural mechanism took them without a change
+
+Counted in the commit message: the `issue` clause (2), the `" and N sub-quer{y|ies}"` tail (1) plus its
+morpheme (2), `has`/`have` (2), the corroboration tail (1), and the noun *"the filtered column"* (1).
+
+C6's rule held exactly as designed: **the LANGUAGE decides whether a sentence needs plural forms.** English
+declares **four** families and every other numeric sentence stays flat; Polish can add `.one`/`.few`/`.many`
+to any of them **without touching code**.
+
+### The ratified decisions, each with its reason
+
+| | |
+|---|---|
+| **D‑3** | The output verb stopped being a WORD Core picks and inflects (rule R6 was gluing an English `"s"`) and became a **KEY chosen by a rule on `HasResultSet`** |
+| **D‑6** | *"the filtered column"* stopped being a noun substituted into a sentence — **two whole keys**, both English wordings unchanged |
+| **D‑4** | `PerformanceVerdict.Headline` **not migrated** — measured that no surface binds it; a named exception with a **pinned premise** (`TheHeadline_IsStillBoundByNoSurface`) |
+| **D‑7** | `FindingSeverityHigh/Medium/Low/Info` — four literals in a **view model**, invisible to a guard that scans only `.axaml` (**#337**); ⚠ the twin `DiagnosticRowViewModel` had been localized since the App stage |
+| **D‑8** | `PlanInsightSubquery` **deleted from the catalog** — it was a *translatable* entry matched against the ENGINE's text, i.e. **#356 living in the product** |
+| **R‑1** (user) | Four separate keys with identical English values — `ReadAmplification.{Table,Statement}`, `RowsRead.{Table,Statement}`. **Different measurement scope, so they are not deduplicated by spelling** |
+| **R‑2** (user) | The inherited *"Index A, B have no…"* kept verbatim |
+
+### Zero change to the English — four different proofs for four different shapes
+
+- **Guidance / evidence labels / `SeverityText`** — the diff is **byte-empty**.
+- **`Recommendation`** — 7/7 identical.
+- **Titles and explanations** — normalised diff, **7 deltas and every one is a placeholder replaced by the
+  word it was being substituted with**, with the surrounding text identical to the character.
+- **`Headline`** — the proof is the **UNTOUCHED `PerformanceReportTests`**.
+
+⚠ One mechanical detail worth keeping: **the number travels as a raw `long`** (so `TryGetCount` can see it,
+per C6's rule R3) and the `N0` grouping moved into the resource value as `{0:N0}` — render byte-identical.
+⭐ That is #357's lever used deliberately rather than met by accident.
+
+### ⚠⚠ The plants — 13 runs, and three of the five recorded outcomes were not what the plan expected
+
+| Plant | Outcome |
+|---|---|
+| **H** | ⭐⭐ **The first G6 did NOT fire.** It transcribed the NAME of the withdrawn entry and asserted a **Core** counter instead of the **App** consumer — **#333 committed inside the guard written against #356.** The guard now drives `NoiseSummary` under a swapped catalog. |
+| **B** | ⭐ **Fired nothing, and that is correct.** Under a REPLACEMENT pattern there is no second representation, so a label drift is a legal catalog edit. ⚠ The plant table had inherited the **dual-form** premise from C4b, where it does not apply. |
+| **F** | Does not compile — deleting a key is caught by the **compiler**; the orphaned twin (**F′**) is G7's subject instead. |
+| **A** | ⭐ Compiles with **0 errors** (**#355**) and fires **G5 + G8**. |
+| — | A comment quoting the withdrawn identifier fired the source-scanning guard **twice**; the comments were reworded and **no guard was weakened**. |
+
+⭐ The transferable half is B and H together: **a plant that does not fire is a measurement of the guard's
+premise, not a formality** — one showed a guard testing the wrong layer, the other showed a plant written
+against a pattern the etap was not using.
+
+### ⚠ What the audit measured wrongly, found by the compiler
+
+`x:DataType` in `PerformancePanelView.axaml` changed by one attribute: a **compiled binding forces it when the
+row type changes**. The audit had counted bindings **by name** and therefore did not measure it — the same
+shape as C5, where a type change enumerated its own call sites.
+
+### ⭐ #353 for the FOURTH time, fixed in passing
+
+`GradeLine`, `PlanLead`, `NoiseSummary` and `TimingText` were frozen in the startup language **before C7** —
+inherited, not introduced. **G9 widens the existing self-arming guard to the GRANDCHILD level**: the panel
+hangs under the procedure detail, so declaring `RefreshLocalizedText` on it armed nothing.
+
+### Numbers
+
+| | |
+|---|---|
+| Keys | **64** declared · **68** English entries (4 plural families) |
+| Build | 0 errors / 0 warnings |
+| Suite | **8 720** = 8 388 main + **277** grouped + 55 isolated |
+| Headless filter | **21** names — ⛔ derive it from the code, do not transcribe |
+| Smoke | clean |
+| `Lab/` | untouched |
+
+### ⛔ Out of scope and deliberately untouched
+
+5 `Single`/`Multiple` pairs in App · 30 `(s)` hedges · `SessionHealth`/`QuickInfo` plurals · Office (which
+became **C8**) · Data Import · the duplicated SQL operator tables · the dead `PerformanceProfiler`.
+
+---
+
 ## C8 — `EmberTern.Office` ×2 (2026-08-10, `45829a5`)
 
 The eighth producer on D‑3 and the **first outside Core/Firebird**. Two keys, two sentences — and the two
 things worth carrying out of it were both produced by plants, not by writing the migration.
 
-⚠ **A gap in this file, recorded rather than filled: C7 (`Performance`, `d620cc8`) has no section here and no
-entry in CLAUDE.md.** Its contract is described in its own commit message. This section does not invent it.
+⚠ *Historical note: this section originally recorded that **C7 had no section here and no entry in
+CLAUDE.md** — a gap left standing rather than filled with an invented narrative. ⭐ It was closed by a
+separate documentation commit, reconstructed only from `d620cc8`; the C7 section is immediately above.*
 
 ### The contract
 

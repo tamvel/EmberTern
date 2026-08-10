@@ -549,13 +549,77 @@ noted.
   `tr -d '\r'` po obu stronach + `grep -c $'\r$' f` == `wc -l < f`.
   ⚠ **Filtr partycji headless ma 22 nazwy** — ⛔⛔ **wyprowadzaj go, nie przepisuj:**
   `grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs`.
-  ⚠⚠ **LUKA W DOKUMENTACJI, ZAPISANA A NIE WYPEŁNIONA: C7 (`Performance`, `d620cc8`) NIE MA sekcji
-  w `docs/history/28-…` ANI wpisu w CLAUDE.md.** Jego kontrakt opisuje wyłącznie komunikat commita. ⛔ C8 tego
-  nie zmyśla — jeżeli narracja C7 ma powstać, jest to osobne zadanie.
+  ⚠ *Zapis historyczny: ten wpis notował, że **C7 nie ma sekcji ani wpisu** — luka zapisana świadomie, a nie
+  wypełniona zmyśloną narracją. ⭐ Została **domknięta osobnym commitem dokumentacyjnym**, zrekonstruowanym
+  wyłącznie z `d620cc8`; wpis C7 stoi bezpośrednio pod tym.*
   ⏭ **Ratyfikowana kolejność C0 jest WYCZERPANA** (`Office` był ostatnią pozycją przed „decyzją o Performance",
   a Performance zamknęło C7). Następny krok wymaga decyzji użytkownika. ⏸ Otwarte tematy etapu, każdy z powodem:
   **`KindLabel`/`SymbolKind`** (decyzja kontraktowa, odłożona) · **30 hedge'ów `(s)` w katalogu App** ·
   **#353 w Data Imporcie** · **≈430 zaszytych stringów** i **polskie tłumaczenie** z §7 `localization.md`.
+
+- **🔢🌍 LOCALIZATION / CORE — C7 (`Performance`) — ODEBRANE i ZACOMMITOWANE 2026-08-10 (`d620cc8`).**
+  ⚠⚠ *Ten wpis powstał PO C8 — etap został zacommitowany bez dokumentacji, więc jest zrekonstruowany
+  z komunikatu commita i jego diffu; liczby przemierzone, nie przepisane.* ⛔ Czego odtworzyć się nie da i
+  czego tu nie ma: audytu, który go poprzedził, oraz podsadzeń poza pięcioma zapisanymi w commicie. Build 0/0;
+  suite **8 720** (8 388 + 277 + 55); smoke czysty; `Lab/` nietknięty. Narracja:
+  **[docs/history/28-…](docs/history/28-localization-core-stage.md)** (sekcja C7).
+  ⭐ Siódmy producent Core — i **moduł, który C0 wykluczyło** („*decyzja o Performance, który zostaje
+  ZAMKNIĘTY*"); kontrakt otwarto **świadomą decyzją użytkownika po audycie**.
+  **Kontrakt:** `Finding.Title` → `LocalizableMessage` · `Finding.Explanation` → `LocalizableMessage?`
+  (⭐ nullowalne, bo **`MessageKey` odmawia pustego tokenu**, więc „brak wyjaśnienia" nie da się zapisać pustym
+  kluczem) · `FindingEvidence.Label` → `MessageKey` (⚠ **`Value` ZOSTAJE `string`iem — to dana**) ·
+  `FindingGuidance` = `MessageKey` + lista `MessageKey` · `Recommendation` = `MessageKey` +
+  `LocalizableMessage?` · ⛔ `PerformanceContext.OutputVerb` i `OutputRowsLabel` **USUNIĘTE** ·
+  `PlanNode.IsSubqueryRoot` — nowy, **jeden właściciel predykatu**.
+  ⭐⭐ **Migracja niczego nie wymyśliła — przeniosła kontrakt z C1:** `Finding` i `SessionHealthFinding` są
+  **bliźniakami strukturalnymi**, a `SessionWarningViewModel` był gotowym wzorcem konsumenta. ⚠ `Finding` to
+  `record` (klasa), więc **pułapka C5 nie zachodzi** — zagrożenie równości referencyjnej wymaga typu wartościowego.
+  ⭐⭐ **Zniknęło DZIEWIĘĆ sklejeń** (klauzula `issue` ×2 · ogon `" and N sub-quer{y|ies}"` ×1 z morfemem ×2 ·
+  `has`/`have` ×2 · ogon korroboracji ×1 · rzeczownik „the filtered column" ×1), a **mechanizm liczby mnogiej
+  z C6 przyjął je bez zmiany**: angielski deklaruje **cztery rodziny**, każde inne zdanie z liczbą zostaje
+  płaskie, a polski może dopisać `.one`/`.few`/`.many` **bez zmiany kodu**.
+  **Ratyfikowane, każde z powodem:** **D‑3** czasownik wyjścia przestał być SŁOWEM, które Core wybiera
+  i odmienia (R6 doklejało angielskie `"s"`), a stał się **KLUCZEM wybieranym regułą po `HasResultSet`** ·
+  **D‑6** „the filtered column" przestało być rzeczownikiem wstawianym w zdanie — **dwa pełne klucze**,
+  brzmienie obu bez zmiany · **D‑4** `PerformanceVerdict.Headline` **NIE migrowany** (zmierzone: żadna
+  powierzchnia go nie binduje) — nazwany wyjątek z **przypiętą przesłanką**
+  (`TheHeadline_IsStillBoundByNoSurface`) · **D‑7** `FindingSeverityHigh/Medium/Low/Info` — cztery literały
+  w **ViewModelu**, niewidoczne dla strażnika skanującego wyłącznie `.axaml` (**#337**); ⚠ bliźniak
+  `DiagnosticRowViewModel` był zlokalizowany od etapu App · **D‑8** `PlanInsightSubquery` **USUNIĘTY
+  z katalogu** — był *tłumaczalnym* wpisem dopasowywanym do tekstu SILNIKA, czyli **#356 żyjące w produkcie** ·
+  **R‑1** (użytkownik) cztery osobne klucze o identycznej wartości EN (`ReadAmplification.{Table,Statement}`,
+  `RowsRead.{Table,Statement}`) — **różny zakres pomiaru, więc nie deduplikujemy po pisowni** · **R‑2**
+  (użytkownik) zastane „Index A, B have no…" zachowane dosłownie.
+  ⭐ **Zerowa zmiana treści angielskiej — cztery różne dowody dla czterech kształtów:** Guidance / etykiety
+  dowodów / `SeverityText` → **diff BAJTOWO pusty**; `Recommendation` → 7/7 identyczne; tytuły i wyjaśnienia →
+  znormalizowany diff, **7 delt i każda to placeholder zamieniony w słowo, którym był podstawiany**, tekst
+  wokół identyczny co do znaku; `Headline` → dowodem są **NIETKNIĘTE `PerformanceReportTests`**.
+  ⚠ Liczba jedzie jako **surowy `long`** (żeby `TryGetCount` ją widział — reguła R3 z C6), a grupowanie `N0`
+  przeniosło się **do wartości zasobu** jako `{0:N0}`; render bajtowo ten sam. ⭐ To dźwignia z #357 użyta
+  świadomie, a nie napotkana przypadkiem.
+  ⚠⚠ **PODSADZENIA (13 przebiegów) — trzy z pięciu zapisanych wyników nie były tym, czego oczekiwał plan.**
+  **H** — ⭐⭐ pierwszy **G6 NIE zapalił się**: przepisywał NAZWĘ wycofanego wpisu i asertował licznik **Core**
+  zamiast konsumenta w **App** — **#333 popełnione wewnątrz strażnika pisanego przeciwko #356**; prowadzi
+  teraz `NoiseSummary` pod podmienionym katalogiem. **B** — ⭐ nie zapaliło niczego **i to poprawne**: przy
+  wzorcu ZASTĄPIENIA nie ma drugiej reprezentacji, więc dryf etykiety jest legalną edycją katalogu (⚠ tabela
+  podsadzeń odziedziczyła przesłankę **dualną** z C4b, gdzie nie obowiązuje). **F** — nie kompiluje się,
+  bo usunięcie klucza łapie **kompilator**; przedmiotem G7 jest osierocony bliźniak (**F′**). **A** —
+  kompiluje się z **0 błędów** (**#355**) i zapala **G5+G8**. Plus: komentarz cytujący wycofany identyfikator
+  zapalił strażnika źródłowego **dwa razy** — komentarze przeredagowano, **strażników nie osłabiono**.
+  ⭐ Wniosek przenośny z B i H razem: **podsadzenie, które NIE zapala, jest pomiarem przesłanki strażnika**,
+  a nie formalnością.
+  ⚠ **Audyt zmierzył jedną rzecz źle i znalazł to dopiero kompilator:** `x:DataType`
+  w `PerformancePanelView.axaml` zmienione o jeden atrybut — **wiązanie kompilowane wymusza to przy zmianie
+  typu wiersza**, a audyt liczył bindingi **po nazwie**. Ten sam kształt co w C5.
+  ⭐ **Naprawione przy okazji: #353 po raz CZWARTY** — `GradeLine`, `PlanLead`, `NoiseSummary` i `TimingText`
+  były zamrożone w języku startowym **już przed C7**. **G9 rozszerza istniejącego samo-uzbrajającego się
+  strażnika o poziom WNUKA**: panel wisi pod detalem procedury, więc deklaracja `RefreshLocalizedText`
+  nie uzbrajała niczego.
+  **Liczby:** **64** zadeklarowane klucze · **68** wpisów EN (4 rodziny liczby mnogiej) · filtr partycji
+  headless **21** nazw.
+  ⛔ **Poza zakresem i nieruszone:** 5 par `Single`/`Multiple` w App · 30 hedge'ów `(s)` ·
+  SessionHealth/QuickInfo plurals · Office (który stał się **C8**) · Data Import · duplikacja tabel operatorów
+  SQL · martwy `PerformanceProfiler`.
 
 - **🔢🌍 LOCALIZATION / CORE — C6 (`ExecutionSummary` / `ExecutionActivity` + MECHANIZM LICZBY MNOGIEJ) —
   ODEBRANE; ZACOMMITOWANE w `96cc758` (C1–C6 razem).** ⚠ *Zapis historyczny: ten wpis mówił „nadal NIE
