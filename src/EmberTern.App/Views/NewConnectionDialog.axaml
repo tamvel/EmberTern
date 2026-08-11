@@ -31,7 +31,7 @@
         <StackPanel Spacing="4">
           <TextBlock Text="{Binding NameLabel}" Classes="field-label" />
           <TextBox Text="{Binding Name, Mode=TwoWay}"
-                   MaxLength="{app:Loc ConnectionNameMaxLength}"
+                   MaxLength="{x:Static app:UiStrings.ConnectionNameMaxLength}"
                    PlaceholderText="{app:Loc NewConnectionNamePlaceholder}" />
         </StackPanel>
 

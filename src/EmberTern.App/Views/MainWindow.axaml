@@ -1607,8 +1607,27 @@
 
           <!-- Editor area: SQL editor for Query tabs, DDL editor for DDL tabs.
                Right-side saved-queries panel collapses to zero width when toggled off. -->
-          <Grid Grid.Row="2" Background="{DynamicResource BackgroundBrush}"
-                ColumnDefinitions="*,Auto">
+          <!-- ⭐ Three columns since the PL QA round: the saved-queries panel used to be a Border with a
+               hard `Width="200"` in an Auto column, so its header clipped and the user could do nothing about
+               it. It now sits in a PIXEL column driven by a GridSplitter — the same shape the sidebar has
+               used since V1 (MainBodyGrid: pixel column · Auto splitter · star content), including reaching
+               the ColumnDefinition from code-behind because Avalonia does not allow x:Name on grid
+               definitions. ⚠ The column is collapsed to 0 when the panel hides, which is what the Auto
+               column used to do for free. -->
+          <Grid Grid.Row="2" x:Name="EditorAreaGrid" Background="{DynamicResource BackgroundBrush}">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+              <!-- QueryPanelColumn: EditorAreaGrid.ColumnDefinitions[2] in code-behind. -->
+              <ColumnDefinition Width="200" MinWidth="160" MaxWidth="600" />
+            </Grid.ColumnDefinitions>
+
+            <GridSplitter Grid.Column="1"
+                          Width="4"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          Background="{DynamicResource BorderBrush}"
+                          IsVisible="{Binding ShowQueryPanel}" />
             <Grid Grid.Column="0">
               <ae:TextEditor x:Name="SqlEditor"
                              ShowLineNumbers="True"
@@ -1688,8 +1707,7 @@
             <!-- Saved queries panel (IBExpert-style) — visible only when the Query
                  tab is active AND the user hasn't toggled it off. ShowQueryPanel
                  combines both gates so DDL / TableDetail tabs hide the panel. -->
-            <Border Grid.Column="1"
-                    Width="200"
+            <Border Grid.Column="2"
                     Background="{DynamicResource PanelBrush}"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1,0,0,0"
@@ -2080,11 +2098,19 @@
                                 </MultiBinding>
                               </Border.Background>
                             </Border>
+                            <!-- ⚠ The same LineHeight as the message beside it, and that is what makes the two
+                                 line up. The column already gave the timestamp a fixed width and a fixed start
+                                 (80 px, monospace), so the reported misalignment was never horizontal — it was
+                                 the BASELINE: two different font sizes in two independently sized line boxes
+                                 put the time visibly higher than the sentence it belongs to. Sharing the line
+                                 box makes both texts sit on one baseline, and it costs no height, because the
+                                 row was already 18 px tall for the message. -->
                             <TextBlock Grid.Column="1"
                                        Text="{Binding TimestampLabel}"
                                        Classes="subtle"
                                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                                        FontSize="{DynamicResource Text.Compact.Size}"
+                                       LineHeight="18"
                                        Margin="14,0,0,0"
                                        VerticalAlignment="Top" />
                             <SelectableTextBlock Grid.Column="2"

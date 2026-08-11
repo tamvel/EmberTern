@@ -18,11 +18,11 @@ namespace EmberTern.Core.Diagnostics;
 /// case the argument cannot know. So each sentence the analyzer can utter is its own key, and only genuine
 /// data (counts, ids, ages) travels as an argument.</para>
 ///
-/// <para>⛔ <b>What is deliberately NOT here: the verdict headline.</b> Its two forms differ by a COUNT
-/// (<c>"1 transaction is blocking…"</c> / <c>"3 transactions are blocking…"</c>), and English's two-way
-/// singular/plural split does not carry to a language with more plural categories. Keying it as it stands
-/// would bake an English grammar rule into the catalog. It stays a <c>string</c> in
-/// <c>SessionHealthVerdict</c> until the plural mechanism is decided.</para>
+/// <para>⚠ <b>HISTORICAL — this paragraph used to say the verdict headline was deliberately absent</b>, because
+/// its forms differ by a COUNT and English's two-way singular/plural split does not carry to a language with
+/// more plural categories. The reasoning stands; its stated precondition — <i>"until the plural mechanism is
+/// decided"</i> — was met by etap C6, so the three <c>Verdict*</c> keys below now exist and the count travels
+/// as argument <c>{0}</c> like every other counted sentence.</para>
 /// </summary>
 public static class SessionHealthMessages
 {
@@ -78,4 +78,26 @@ public static class SessionHealthMessages
 
     /// <summary>OAT lag <c>{0}</c>, oldest snapshot <c>{1}</c>, next transaction <c>{2}</c>.</summary>
     public static readonly MessageKey EvidenceGap = new("SessionHealth.Evidence.Gap");
+
+    // ── The verdict headline ─────────────────────────────────────────────────────────────────────────
+    //
+    // ⭐⭐ These are the keys the class comment above says are "deliberately NOT here", and the note was right
+    // when it was written: the headline's wording is chosen by a COUNT, and in C1 there was no mechanism that
+    // could let English keep a two-way split while Polish declares three. ⚠ The deferral had a stated
+    // precondition — "until the plural mechanism is decided" — and C6 decided it. Declaring them now is
+    // USING that mechanism, not designing one: the count travels as argument {0} (ratified R3), and each
+    // language declares in its own catalog how many forms the sentence has.
+    //
+    // ⚠ Which is why the PL QA round found "All sessions healthy." still in English on a Polish screen: it was
+    // never migrated, so there was no key to translate.
+
+    /// <summary>Garbage collection is blocked. Takes the count as <c>{0}</c>. Plural family.</summary>
+    public static readonly MessageKey VerdictGcBlocked = new("SessionHealth.Verdict.GcBlocked");
+
+    /// <summary>Long-running transactions detected. Takes the count as <c>{0}</c>. Plural family.</summary>
+    public static readonly MessageKey VerdictLongTransaction = new("SessionHealth.Verdict.LongTransaction");
+
+    /// <summary>Nothing to report. ⚠ Flat — it carries no count, so it has no plural family and must not
+    /// grow one.</summary>
+    public static readonly MessageKey VerdictHealthy = new("SessionHealth.Verdict.Healthy");
 }

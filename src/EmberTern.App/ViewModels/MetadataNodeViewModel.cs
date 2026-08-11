@@ -509,6 +509,39 @@ public partial class MetadataNodeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Re-derives this node's caption in the current language, and every descendant's.
+    ///
+    /// <para>⭐⭐ <b>Only a node whose label is a WORD is touched.</b> A group's caption ("Tables") and the
+    /// loading placeholder come from <see cref="UiStrings"/>; a LEAF's caption is
+    /// <see cref="MetadataObject.Name"/> — the user's own identifier, which rule #11 says we never rewrite.
+    /// The node is the only place that distinction is known, which is why the walk lives here rather than in
+    /// the explorer.</para>
+    ///
+    /// <para>⚠ <c>GroupLabel</c> is a STORED <c>[ObservableProperty]</c>, so a blanket
+    /// <c>OnPropertyChanged(string.Empty)</c> from above cannot fix it — the value itself has to be rebuilt
+    /// (gotcha #353). That is why the tree kept its English category names until a restart.</para>
+    /// </summary>
+    internal void RefreshLocalizedText()
+    {
+        if (IsPlaceholder)
+        {
+            GroupLabel = UiStrings.MetadataLoadingPlaceholder;
+        }
+        else if (IsGroup)
+        {
+            GroupLabel = LabelFor(Kind);
+        }
+
+        // Computed captions (the context-menu labels, DisplayLabel and the count suffix) only need a nudge.
+        OnPropertyChanged(string.Empty);
+
+        foreach (var child in Children)
+        {
+            child.RefreshLocalizedText();
+        }
+    }
+
     private static string LabelFor(MetadataObjectKind kind) => kind switch
     {
         MetadataObjectKind.Table => UiStrings.MetadataGroupTables,

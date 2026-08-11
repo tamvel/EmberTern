@@ -1540,6 +1540,13 @@ internal static class UiStrings
     // Max length for a connection profile name. 60 chars comfortably holds
     // "ENV - Client - Database"-style names while keeping the titlebar chip and
     // sidebar rows from being pushed off-screen by an abusive name.
+    //
+    // ⚠⚠ A NUMBER, not a word — and the App localization stage nearly cost it. That sweep rewrote every
+    // `{x:Static app:UiStrings.X}` into `{app:Loc X}`, and NewConnectionDialog's MaxLength went with the
+    // strings: the binding then asked the CATALOG for a key that cannot exist, `Loc.Text` returned the key
+    // name, and handing `MaxLength` a string failed conversion silently — so the limit was simply not
+    // applied. ⛔ It is read with `{x:Static}` on purpose; `EveryLocBindingKey_ResolvesToSomething` fails
+    // the build if it is ever asked of the catalog again.
     public const int ConnectionNameMaxLength = 60;
 
     public static string DialogNewConnectionTitle => Loc.Text(nameof(DialogNewConnectionTitle));
@@ -2779,6 +2786,16 @@ internal static class UiStrings
     public static string TraceDetailTableAccess => Loc.Text(nameof(TraceDetailTableAccess));
     public static string TraceDetailTiming => Loc.Text(nameof(TraceDetailTiming));
     public static string TraceDetailSession => Loc.Text(nameof(TraceDetailSession));
+    // ⚠ The captions of the Session facts under that header. They were English LITERALS in
+    // TraceEventDetailViewModel until the PL QA round — beside a sibling row that already read UiStrings,
+    // which is what makes the miss legible: the pattern was right there. ⭐ Single WORDS are why no audit
+    // caught them; every sweep so far has looked for sentence-shaped literals.
+    public static string TraceDetailUser => Loc.Text(nameof(TraceDetailUser));
+    public static string TraceDetailRole => Loc.Text(nameof(TraceDetailRole));
+    public static string TraceDetailHost => Loc.Text(nameof(TraceDetailHost));
+    public static string TraceDetailProcess => Loc.Text(nameof(TraceDetailProcess));
+    public static string TraceDetailAttachment => Loc.Text(nameof(TraceDetailAttachment));
+    public static string TraceDetailTransaction => Loc.Text(nameof(TraceDetailTransaction));
     public static string TraceDetailCopySql => Loc.Text(nameof(TraceDetailCopySql));
     public static string TraceDetailOpenInEditor => Loc.Text(nameof(TraceDetailOpenInEditor));
     public static string TraceDetailNoSelection => Loc.Text(nameof(TraceDetailNoSelection));

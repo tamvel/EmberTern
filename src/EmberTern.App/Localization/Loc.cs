@@ -110,6 +110,22 @@ internal static class Loc
         return _catalog.GetString(key, _culture) ?? key;
     }
 
+    /// <summary>
+    /// The catalog entry for <paramref name="key"/>, or <c>null</c> when the catalog has none — the same
+    /// lookup <see cref="Text(string)"/> performs, without its key-echo fallback.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ It exists for exactly one caller: <see cref="LocalizedString"/> has to tell "no entry" from "an
+    /// entry whose text happens to equal its key", because a missing entry is where it falls through to a
+    /// composed <c>UiStrings</c> member. ⛔ Not for general use — a consumer that wants text wants
+    /// <see cref="Text(string)"/>, whose fallback is deliberate.
+    /// </remarks>
+    internal static string? Find(string key)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        return _catalog.GetString(key, _culture);
+    }
+
     /// <summary>The text for a key produced by Core or Firebird (decision D‑3).</summary>
     public static string Text(MessageKey key) => Text(key.Value);
 

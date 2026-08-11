@@ -5156,6 +5156,21 @@ END</value>
   <data name="SessionHealth.Evidence.Transaction" xml:space="preserve">
     <value>Tx {0} · {1}</value>
   </data>
+  <data name="SessionHealth.Verdict.GcBlocked.one" xml:space="preserve">
+    <value>{0} transaction is blocking garbage collection.</value>
+  </data>
+  <data name="SessionHealth.Verdict.GcBlocked.other" xml:space="preserve">
+    <value>{0} transactions are blocking garbage collection.</value>
+  </data>
+  <data name="SessionHealth.Verdict.Healthy" xml:space="preserve">
+    <value>All sessions healthy.</value>
+  </data>
+  <data name="SessionHealth.Verdict.LongTransaction.one" xml:space="preserve">
+    <value>{0} long-running transaction detected.</value>
+  </data>
+  <data name="SessionHealth.Verdict.LongTransaction.other" xml:space="preserve">
+    <value>{0} long-running transactions detected.</value>
+  </data>
   <data name="SessionHealth.GcBlocked.Check.LeftOpen" xml:space="preserve">
     <value>Was a UI screen left open on a snapshot mid-edit?</value>
   </data>
@@ -6368,6 +6383,24 @@ Save them before closing?</value>
   </data>
   <data name="TraceDetailTableAccess" xml:space="preserve">
     <value>Table access</value>
+  </data>
+  <data name="TraceDetailAttachment" xml:space="preserve">
+    <value>Attachment</value>
+  </data>
+  <data name="TraceDetailHost" xml:space="preserve">
+    <value>Host</value>
+  </data>
+  <data name="TraceDetailProcess" xml:space="preserve">
+    <value>Process</value>
+  </data>
+  <data name="TraceDetailRole" xml:space="preserve">
+    <value>Role</value>
+  </data>
+  <data name="TraceDetailTransaction" xml:space="preserve">
+    <value>Transaction</value>
+  </data>
+  <data name="TraceDetailUser" xml:space="preserve">
+    <value>User</value>
   </data>
   <data name="TraceDetailTiming" xml:space="preserve">
     <value>Timing</value>

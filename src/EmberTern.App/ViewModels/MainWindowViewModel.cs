@@ -352,6 +352,11 @@ public partial class MainWindowViewModel : ViewModelBase
         // owns its own panel and forwards to it from its own RefreshLocalizedText.
         Performance.RefreshLocalizedText();
 
+        // ⚠ PL QA: the sidebar is held by the WINDOW, not by a tab, so the loop below never reached it —
+        // the filter placeholder and every category name ("Tables", "Views", …) stayed in the previous
+        // language until a restart. EveryWindowChildThatCanRefreshItsText_IsForwarded pins this line.
+        Metadata.RefreshLocalizedText();
+
         foreach (var tab in WorkspaceTabs)
         {
             tab.RaiseAllPropertiesChanged();

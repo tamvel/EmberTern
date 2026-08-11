@@ -185,6 +185,50 @@ public partial class MetadataExplorerViewModel : ViewModelBase
     public string FilterPlaceholder => UiStrings.MetadataFilterPlaceholder;
     public string RefreshTooltip => UiStrings.MetadataRefreshTooltip;
 
+    /// <summary>
+    /// Re-renders every caption the sidebar owns in the current language.
+    ///
+    /// <para>⚠⚠ <b>The whole tree was outside the language-change chain.</b>
+    /// <c>MainWindowViewModel.OnLanguageChanged</c> re-published itself, its Performance panel and every open
+    /// TAB — the metadata explorer is held by the window, not by a tab, so nothing reached it. Two visible
+    /// symptoms, one cause: the filter's placeholder (a computed property nobody notified) and the category
+    /// names (stored values on the nodes), both correct only after a restart.</para>
+    ///
+    /// <para>⭐ Two halves, deliberately: a nudge for what this view model computes, and a walk for what the
+    /// NODES store — the node decides which of its captions is a word and which is the user's own object
+    /// name.</para>
+    /// </summary>
+    internal void RefreshLocalizedText()
+    {
+        OnPropertyChanged(string.Empty);
+
+        foreach (var node in RootNodes)
+        {
+            switch (node)
+            {
+                case FolderNodeViewModel folder:
+                    foreach (var connection in folder.Connections)
+                    {
+                        RefreshConnection(connection);
+                    }
+
+                    break;
+
+                case ConnectionNodeViewModel connection:
+                    RefreshConnection(connection);
+                    break;
+            }
+        }
+
+        static void RefreshConnection(ConnectionNodeViewModel connection)
+        {
+            foreach (var category in connection.Children)
+            {
+                category.RefreshLocalizedText();
+            }
+        }
+    }
+
     public event Action<MetadataObject>? OpenDdlRequested;
     public event Action<string>? CopyNameRequested;
     public event Action<string>? StatusReported;

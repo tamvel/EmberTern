@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Localization;
 using EmberTern.Core.Diagnostics;
 using EmberTern.Firebird;
 
@@ -110,7 +111,24 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     [ObservableProperty] private string _gapValueText = "0";         // the gap count (severity-coloured)
     [ObservableProperty] private string _gapSeverityBrushKey = "SubtleForegroundBrush";
     [ObservableProperty] private string _gapStatusText = string.Empty; // plain-language UiStrings.SessionManagerWhatItMeans
-    [ObservableProperty] private string _gapScaleMaxText = "0";      // right-hand scale label (the danger line)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GapScaleMaxLabel))]
+    private string _gapScaleMaxText = "0";      // right-hand scale label (the danger line)
+
+    /// <summary>
+    /// The right-hand scale label as the user reads it — the whole sentence, not the number.
+    ///
+    /// <para>⚠⚠ The view used to write it as <c>StringFormat='GC risk near {0}'</c>, i.e. a user-visible
+    /// English sentence living in XAML where no localization guard could see it: the hardcoded-string guard
+    /// skips any value starting with <c>{</c>, because that is normally a binding. Meanwhile
+    /// <c>SessionManagerGapScaleMaxFormat</c> — the catalog entry for this exact sentence — sat ORPHANED,
+    /// which is gotcha #346's shape: the string nothing reads is the one that keeps the defect alive.</para>
+    ///
+    /// <para>⭐ Computed rather than stored, so <see cref="RefreshLocalizedText"/>'s blanket notification
+    /// already re-renders it on a language change.</para>
+    /// </summary>
+    public string GapScaleMaxLabel =>
+        string.Format(CultureInfo.CurrentCulture, UiStrings.SessionManagerGapScaleMaxFormat, GapScaleMaxText);
 
     // --- Session Details: plain-language "why it matters" ---
     [ObservableProperty] private string _selectedSessionWhyItMatters = string.Empty;
@@ -342,7 +360,7 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
             HealthGrade.Watch => "WarningBrush",
             _ => "DangerIconBrush",
         };
-        Headline = report.Verdict.Headline;
+        Headline = Loc.Format(report.Verdict.Headline);
         SessionCount = report.Counters.Sessions;
         TransactionCount = report.Counters.Transactions;
         LongTransactionCount = report.Counters.LongTransactions;
@@ -464,6 +482,13 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         }
 
         GradeText = GradeTextFor(_report.Verdict.Grade);
+
+        // ⚠ A stored value, so the blanket notification above cannot fix it — the text itself has to be
+        // re-composed (#353). It stayed English on a Polish screen for a simpler reason than the others,
+        // though: until this round the verdict headline was not localized AT ALL (the C1 deferral), so there
+        // was nothing to re-render. Both halves had to land together.
+        Headline = Loc.Format(_report.Verdict.Headline);
+
         BuildGapBar(_report.Database);
 
         Warnings.Clear();

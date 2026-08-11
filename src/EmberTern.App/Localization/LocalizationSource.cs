@@ -46,10 +46,54 @@ public sealed class LocalizedString : INotifyPropertyChanged
 {
     private readonly string _key;
 
-    internal LocalizedString(string key) => _key = key;
+    /// <summary>
+    /// The <see cref="UiStrings"/> property of the same name, when the key names a COMPOSED member rather
+    /// than a catalog entry. Resolved once — whether a name is a member is a fact about the type, not about
+    /// the language.
+    /// </summary>
+    private readonly System.Reflection.PropertyInfo? _member;
 
-    /// <summary>The text in the current language, resolved at read time.</summary>
-    public string Value => Loc.Text(_key);
+    internal LocalizedString(string key)
+    {
+        _key = key;
+        var member = typeof(UiStrings).GetProperty(
+            key, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        _member = member?.PropertyType == typeof(string) ? member : null;
+    }
+
+    /// <summary>
+    /// The text in the current language, resolved at read time.
+    ///
+    /// <para>⭐⭐ <b>The catalog first, then the member — because a <c>UiStrings</c> member has TWO legal
+    /// forms and only one of them is an entry.</b> Most are <c>Loc.Text(nameof(X))</c>, so the catalog answers.
+    /// A handful are COMPOSED at read time — <c>CommandTip.For(…)</c> glues a localized label to a keyboard
+    /// gesture, <c>SecurityRolesEmpty</c> formats one localized string into another — and
+    /// <c>UiStringsShortcutSourceTests</c> positively FORBIDS storing those in the catalog, because a stored
+    /// gesture is the stale-by-construction defect gotcha #284 describes.</para>
+    ///
+    /// <para>⚠⚠ So the two mechanisms were mutually exclusive and nothing said so: <c>{app:Loc X}</c> asked the
+    /// catalog, the catalog had no entry, and <see cref="Loc.Text(string)"/> did what it promises — returned
+    /// the key. Six views rendered <c>ToolbarExecuteHint</c> / <c>DebuggerContinueTooltip</c> as literal
+    /// identifiers, in ENGLISH too; the Polish stage only made it easy to notice. <c>EveryLocalizedMember_…</c>
+    /// walks resource keys → members and therefore cannot see a member with no entry, which is the same
+    /// asymmetry as gotcha #367 one layer out. <c>EveryLocBindingKey_ResolvesToSomething</c> is the guard.</para>
+    ///
+    /// <para>⭐ Liveness is unchanged and free: a composed member re-reads its own parts, and
+    /// <see cref="Invalidate"/> already tells the binding to ask again.</para>
+    /// </summary>
+    public string Value
+    {
+        get
+        {
+            var text = Loc.Find(_key);
+            if (text is not null)
+            {
+                return text;
+            }
+
+            return _member is not null ? (string?)_member.GetValue(null) ?? _key : _key;
+        }
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

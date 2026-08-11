@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Resources;
+using EmberTern.App;
 using EmberTern.App.Localization;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Diagnostics;
@@ -180,6 +183,141 @@ public sealed class SessionHealthLocalizationTests
         finally
         {
             Loc.UseCatalogForVerification(null, null);
+        }
+    }
+
+    // ── The verdict headline (the C1 deferral, closed) ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>The headline is a message, not a sentence Core wrote.</b> It was the last hardcoded English text
+    /// in this module — the PL QA round found "All sessions healthy." on a fully Polish screen — because C1
+    /// deliberately left it a <c>string</c> "until the plural mechanism is decided". C6 decided it.
+    ///
+    /// <para>⚠ All three shapes, because they fail differently: two are counted (so they must resolve through
+    /// a plural family) and the healthy one is flat (so it must NOT grow one).</para>
+    /// </summary>
+    [Fact]
+    public void TheVerdictHeadline_IsAKeyWithItsCountAsAnArgument()
+    {
+        var db = new DatabaseTransactionState { OldestTransaction = 1, NextTransaction = 2 };
+
+        var gc = Report().Verdict.Headline;
+        Assert.Equal(SessionHealthMessages.VerdictGcBlocked, gc.Key);
+        Assert.Equal(1, Assert.Single(gc.Arguments));
+
+        var healthy = SessionHealthAnalyzer.Analyze(
+            Array.Empty<SessionInfo>(), Array.Empty<TransactionInfo>(), db, Now).Verdict.Headline;
+        Assert.Equal(SessionHealthMessages.VerdictHealthy, healthy.Key);
+        Assert.Empty(healthy.Arguments);
+    }
+
+    /// <summary>
+    /// ⭐ The headline resolves through the shipped catalogs and moves with the language — measured on the
+    /// real analyzer output, with the expected values READ from the two resource sets. ⛔ Never transcribe
+    /// "Wszystkie sesje są zdrowe." here: that would make this a test of today's wording (#333).
+    ///
+    /// <para>⚠ It stops at the composition. <see cref="SessionManagerTabViewModel"/> cannot be constructed
+    /// without a live <c>FirebirdSessionReader</c> (its constructor starts a poll timer), so the view model's
+    /// own half — that a STORED property is re-composed rather than merely notified — is pinned by the source
+    /// guard below instead of by driving it.</para>
+    /// </summary>
+    [Fact]
+    public void TheHeadline_ResolvesInBothShippedLanguages()
+    {
+        var catalog = new ResourceManager("EmberTern.App.Localization.Strings", typeof(UiStrings).Assembly);
+        const string Key = "SessionHealth.Verdict.Healthy";
+        var english = catalog.GetString(Key, CultureInfo.InvariantCulture);
+        var polish = catalog.GetString(Key, CultureInfo.GetCultureInfo("pl"));
+
+        Assert.False(string.IsNullOrEmpty(polish), Key + " has no Polish entry.");
+        Assert.NotEqual(english, polish);
+
+        var db = new DatabaseTransactionState { OldestTransaction = 1, NextTransaction = 2 };
+        var headline = SessionHealthAnalyzer.Analyze(
+            Array.Empty<SessionInfo>(), Array.Empty<TransactionInfo>(), db, Now).Verdict.Headline;
+
+        var previous = Loc.Culture;
+        try
+        {
+            Loc.Apply(Core.Settings.PreferenceOptions.LanguageEnglish);
+            Assert.Equal(english, Loc.Format(headline));
+
+            Loc.Apply(Core.Settings.PreferenceOptions.LanguagePolish);
+            Assert.Equal(polish, Loc.Format(headline));
+
+            Loc.Apply(Core.Settings.PreferenceOptions.LanguageEnglish);
+            Assert.Equal(english, Loc.Format(headline));
+        }
+        finally
+        {
+            Loc.Apply(previous.Name.Length == 0
+                ? Core.Settings.PreferenceOptions.LanguageEnglish
+                : previous.Name);
+        }
+    }
+
+    /// <summary>
+    /// ⚠ <c>Headline</c> is a stored <c>[ObservableProperty]</c>, so the blanket notification in
+    /// <c>RefreshLocalizedText</c> cannot fix it — the text has to be re-composed from the kept report
+    /// (#353). This is the half the test above cannot reach, and its failure mode is precisely the reported
+    /// defect: a headline frozen in the language the tab was opened in.
+    /// </summary>
+    [Fact]
+    public void TheSessionManagerRefresh_RecomposesTheHeadline_RatherThanOnlyNotifying()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "ViewModels", "SessionManagerTabViewModel.cs"));
+
+        var start = source.IndexOf("internal void RefreshLocalizedText()", StringComparison.Ordinal);
+        Assert.True(start >= 0, "RefreshLocalizedText no longer exists — this guard has lost its subject.");
+
+        var body = source[start..];
+        body = body[..body.IndexOf("\n    private ", StringComparison.Ordinal)];
+
+        Assert.Contains("Headline = Loc.Format(_report.Verdict.Headline)", body, StringComparison.Ordinal);
+    }
+
+    private static string RepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "EmberTern.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new InvalidOperationException("Repository root not found.");
+    }
+
+    /// <summary>
+    /// ⭐ The counted shapes really do go through a plural family — including the Polish teen band, which is
+    /// the case a two-form language has no reason to have and a translator cannot check by eye.
+    /// </summary>
+    [Theory]
+    [InlineData(1, "one")]
+    [InlineData(2, "few")]
+    [InlineData(5, "many")]
+    [InlineData(12, "many")]
+    [InlineData(22, "few")]
+    public void ThePolishHeadline_PicksTheBandTheCountBelongsTo(long count, string suffix)
+    {
+        var catalog = new ResourceManager("EmberTern.App.Localization.Strings", typeof(UiStrings).Assembly);
+        var expected = string.Format(
+            CultureInfo.GetCultureInfo("pl"),
+            catalog.GetString("SessionHealth.Verdict.GcBlocked." + suffix, CultureInfo.GetCultureInfo("pl"))!,
+            count);
+
+        var previous = Loc.Culture;
+        try
+        {
+            Loc.Apply(Core.Settings.PreferenceOptions.LanguagePolish);
+            var message = LocalizableMessage.Of(SessionHealthMessages.VerdictGcBlocked, count);
+            Assert.Equal(expected, Loc.Format(message));
+        }
+        finally
+        {
+            Loc.Apply(previous.Name.Length == 0
+                ? Core.Settings.PreferenceOptions.LanguageEnglish
+                : previous.Name);
         }
     }
 }

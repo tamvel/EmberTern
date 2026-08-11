@@ -21,6 +21,20 @@
     <Style Selector="Button.crumb:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
     </Style>
+    <!-- ⭐⭐ A crumb carries a DATABASE OBJECT NAME, and Firebird names are full of underscores. A
+         ContentPresenter with string content builds an AccessText, which reads `_` as the access-key marker:
+         it is not drawn, it underlines the next letter instead. So `XXX_ZESTAWIENIE` reached the user as
+         `XXXZESTAWIENIE` — a name that does not exist, in the one panel whose job is to say where you are.
+         ⚠ It looked like a debugger defect and is a generic-control one: this bar has no idea what it shows,
+         and nothing else about it is name-aware. ⛔ Do not "fix" this by escaping underscores in the text
+         (`__`) — that corrupts the value for tooltips and copy, and every future consumer would have to
+         remember to do it. There are no access keys anywhere in this bar to lose.
+         ⚠ Setting it on the presenter, not by wrapping the content in a TextBlock: an explicit child changes
+         which element the Foreground setters above reach (gotcha #347), and the crumb's whole appearance
+         depends on them. -->
+    <Style Selector="Button.crumb /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="RecognizesAccessKey" Value="False" />
+    </Style>
     <Style Selector="Button.crumb.selected">
       <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
       <Setter Property="FontWeight" Value="SemiBold" />

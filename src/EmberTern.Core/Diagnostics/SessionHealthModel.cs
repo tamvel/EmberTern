@@ -99,12 +99,17 @@ public sealed record TransactionHealthEntry(
 /// <para>⛔ <b><see cref="Headline"/> is deliberately still a <c>string</c> while every other message in this
 /// file is a <see cref="LocalizableMessage"/>, and that is a recorded boundary rather than an omission.</b>
 /// Its wording is chosen by a COUNT — <c>"1 transaction is blocking…"</c> versus <c>"3 transactions are
-/// blocking…"</c> — so migrating it as it stands would put English's two-way singular/plural split into the
-/// catalog as if it were universal. A language with more plural categories (Polish has three for this shape)
-/// cannot be served by two keys, and Core must not be the layer that decides which category applies. It
-/// migrates when the plural mechanism is chosen; ⛔ do not "finish the job" by adding two keys.</para>
+/// blocking…"</c> — so migrating it as it stood would have put English's two-way singular/plural split into
+/// the catalog as if it were universal.</para>
+///
+/// <para>⭐ <b>RESOLVED.</b> The deferral named its own precondition — "until the plural mechanism is chosen" —
+/// and etap C6 chose it: the count travels as argument <c>{0}</c> and each language declares how many forms
+/// the sentence has, in its own catalog. So the headline is a <see cref="LocalizableMessage"/> like every
+/// other sentence Core produces, and Core still decides nothing about grammar. ⚠ Until this landed, the
+/// Session Manager showed "All sessions healthy." in English on a fully Polish screen — the last hardcoded
+/// sentence in this module.</para>
 /// </summary>
-public sealed record SessionHealthVerdict(HealthGrade Grade, string Headline);
+public sealed record SessionHealthVerdict(HealthGrade Grade, LocalizableMessage Headline);
 
 /// <summary>Health-Bar counters — the risk ones are clickable filter chips in the UI.</summary>
 public sealed record SessionHealthCounters(

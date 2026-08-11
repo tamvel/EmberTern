@@ -8,8 +8,10 @@ using System.Resources;
 using System.Text.RegularExpressions;
 using EmberTern.App;
 using EmberTern.App.Localization;
+using EmberTern.App.Settings;
 using EmberTern.App.ViewModels;
 using EmberTern.Core.Localization;
+using EmberTern.Core.Security;
 using EmberTern.Core.Settings;
 using Xunit;
 
@@ -308,12 +310,22 @@ public sealed class LocalizationMechanismTests
     /// <summary>
     /// Guard 5, the half that names the real risk: <b>no view, view model or converter reads the language.</b>
     /// If one did, a second language would mean editing UI code — the outcome D‑2 exists to prevent.
+    ///
+    /// <para>⚠⚠ <b>Subscribing to <c>Loc.LanguageChanged</c> is NOT reading the language</b>, and the match had
+    /// to learn the difference: <c>.LanguageChanged</c> starts with <c>.Language</c>, so a view that takes the
+    /// capture-once seam — the mechanism decision D‑1 <i>requires</i> for text a binding cannot reach — was
+    /// reported as the very thing this forbids. One reads a VALUE and would have to branch on it; the other
+    /// subscribes to a NOTIFICATION and cannot tell one language from another. ⛔ This is a narrowing of the
+    /// pattern, not of the rule: reading <c>Preferences.Language</c> anywhere here still fails.</para>
     /// </summary>
     [Fact]
     public void NoViewOrViewModel_ReadsTheLanguagePreference()
     {
         var offenders = new List<string>();
         var root = RepositoryRoot();
+
+        // `.Language` not followed by another identifier character — so `.LanguageChanged` is not a match.
+        var readsTheValue = new Regex(@"\.Language(?![A-Za-z0-9_])");
 
         foreach (var dir in new[] { "Views", "ViewModels", "Converters", "Controls", "Behaviors" })
         {
@@ -323,7 +335,7 @@ public sealed class LocalizationMechanismTests
             foreach (var file in Directory.EnumerateFiles(full, "*.cs", SearchOption.AllDirectories))
             {
                 var text = File.ReadAllText(file);
-                if (text.Contains(".Language", StringComparison.Ordinal) &&
+                if (readsTheValue.IsMatch(text) &&
                     !text.Contains("Sql.Language", StringComparison.Ordinal))
                 {
                     offenders.Add(Path.GetFileName(file));
@@ -753,6 +765,20 @@ public sealed class LocalizationMechanismTests
     /// called") is unchanged; only the search depth grew. ⚠ Its reach is stated honestly — one level, over
     /// types a refreshable type exposes as properties. A great-grandchild would need the next widening, and
     /// this comment is where that would be noticed.</para>
+    ///
+    /// <para>⚠⚠ <b>A BULK forward counts, and refusing it would have made this guard demand the weaker
+    /// design.</b> <c>SettingsCenterViewModel</c> holds ~15 rows and exposes each as a convenience property
+    /// (<c>Theme</c>, <c>Language</c>, …) that merely indexes the one dictionary it iterates — so its
+    /// <c>foreach</c> covers every row, including rows nobody has added yet. Demanding each of those 15 names
+    /// as well would ask for a duplicate call and hand the next author a list to keep in step with the
+    /// catalog, which is the drift this file is otherwise full of warnings about. It is the same partition
+    /// <see cref="EveryWindowChildThatCanRefreshItsText_IsForwarded"/> already makes for the tab loop.</para>
+    ///
+    /// <para>⛔ The escape is NOT blind: a bulk forward is only accepted when the body actually contains a
+    /// loop that calls <c>RefreshLocalizedText</c>, so "forwards to nothing at all" still fails — and the
+    /// outcome for these particular rows is pinned behaviourally by
+    /// <see cref="SettingsCenter_FollowsALanguageChange_WithoutBeingReopened"/>, which reads a row's label
+    /// across a real language switch.</para>
     /// </summary>
     [Fact]
     public void EveryRefreshableGrandchild_IsForwarded()
@@ -775,7 +801,19 @@ public sealed class LocalizationMechanismTests
 
             var source = File.ReadAllText(file);
             var marker = "RefreshLocalizedText()";
-            var start = source.IndexOf("void " + marker, StringComparison.Ordinal);
+
+            // ⚠ Scoped to the type's OWN class block. A file may declare several classes — SettingsCenterViewModel.cs
+            // declares seven, and four of them now refresh their text — so taking the first match in the file
+            // read a DIFFERENT type's method and reported the owner as not forwarding. Silent in both
+            // directions, which is the worse half: it would just as happily have found a forward that was not
+            // there.
+            var classStart = source.IndexOf("class " + parent.Name, StringComparison.Ordinal);
+            if (classStart < 0)
+            {
+                continue;
+            }
+
+            var start = source.IndexOf("void " + marker, classStart, StringComparison.Ordinal);
             if (start < 0)
             {
                 continue;
@@ -784,15 +822,32 @@ public sealed class LocalizationMechanismTests
             var end = body.IndexOf("\n    }", StringComparison.Ordinal);
             body = end > 0 ? body[..end] : body;
 
+            // ⭐ The element types this method refreshes WHOLESALE. ⚠⚠ It resolves the loop's source to a real
+            // field and reads its element type — deliberately, because "the body contains some foreach that
+            // calls RefreshLocalizedText" would let ONE loop vouch for every property, which is an exemption
+            // wearing a rule's clothes: measured, a body that refreshed only its categories then satisfied the
+            // guard for all fifteen setting rows (#367 — the plausible fix that leaves the net blind).
+            var refreshedInBulk = Regex.Matches(
+                    body, @"foreach\s*\(\s*var\s+\w+\s+in\s+([A-Za-z_][A-Za-z0-9_]*)[^)]*\)\s*\{[^}]*\.RefreshLocalizedText\(\)",
+                    RegexOptions.Singleline)
+                .Select(m => parent.GetField(m.Groups[1].Value,
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public))
+                .Where(f => f is not null)
+                .SelectMany(f => ElementTypesOf(f!.FieldType))
+                .ToList();
+
             foreach (var property in parent.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                          .Where(p => Refreshes(p.PropertyType) && p.PropertyType != parent))
             {
-                if (!body.Contains(property.Name + "?.RefreshLocalizedText()", StringComparison.Ordinal)
-                    && !body.Contains(property.Name + ".RefreshLocalizedText()", StringComparison.Ordinal))
+                if (body.Contains(property.Name + "?.RefreshLocalizedText()", StringComparison.Ordinal)
+                    || body.Contains(property.Name + ".RefreshLocalizedText()", StringComparison.Ordinal)
+                    || refreshedInBulk.Any(e => e.IsAssignableFrom(property.PropertyType)))
                 {
-                    missing.Add($"{parent.Name}.RefreshLocalizedText does not forward to {property.Name} "
-                        + $"({property.PropertyType.Name})");
+                    continue;
                 }
+
+                missing.Add($"{parent.Name}.RefreshLocalizedText does not forward to {property.Name} "
+                    + $"({property.PropertyType.Name})");
             }
         }
 
@@ -801,6 +856,17 @@ public sealed class LocalizationMechanismTests
             + "grandchild stays in the previous language (#353):" + Environment.NewLine
             + string.Join(Environment.NewLine, missing));
     }
+
+    /// <summary>What a <c>foreach</c> over this field hands out, one item at a time — the value type for a
+    /// dictionary, the element type for anything else enumerable.</summary>
+    private static IEnumerable<Type> ElementTypesOf(Type fieldType)
+        => fieldType.GetInterfaces()
+            .Concat(new[] { fieldType })
+            .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            .Select(i => i.GetGenericArguments()[0])
+            .SelectMany(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(KeyValuePair<,>)
+                ? t.GetGenericArguments().Skip(1)
+                : new[] { t });
 
     private static bool Refreshes(Type type) => type.GetMethod(
         "RefreshLocalizedText",
@@ -993,6 +1059,166 @@ public sealed class LocalizationMechanismTests
         return dir?.FullName ?? throw new InvalidOperationException("Repository root not found.");
     }
 
+    // ── The XAML side of the catalog ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>Every <c>{app:Loc X}</c> must resolve to SOMETHING.</b> <c>X</c> is a <c>UiStrings</c> name, and
+    /// such a name has two legal forms: a catalog entry, or a member COMPOSED at read time (a
+    /// <c>CommandTip</c> tooltip, a string formatted out of two other localized strings). Anything else
+    /// renders the identifier itself on screen, because <c>Loc.Text</c> returns the key when it finds nothing.
+    ///
+    /// <para>⚠⚠ This is the guard that was missing, and the gap is an ASYMMETRY, not an oversight:
+    /// <see cref="EveryLocalizedMember_MatchesItsEnglishEntry"/> walks resource keys → members, so a member
+    /// with no entry is outside its reach by construction — the same shape as gotcha #367. Six views shipped
+    /// with a raw identifier where a tooltip belonged, in English as well as Polish; nothing failed, and the
+    /// Polish stage only made it easy to SEE.</para>
+    ///
+    /// <para>⚠ It also catches the opposite mistake: asking the catalog for something that was never a word.
+    /// <c>MaxLength="{app:Loc ConnectionNameMaxLength}"</c> handed a TextBox a string where an int belongs, so
+    /// the 60-character limit silently stopped applying.</para>
+    /// </summary>
+    [Fact]
+    public void EveryLocBindingKey_ResolvesToSomething()
+    {
+        var entries = EnglishKeys().ToHashSet(StringComparer.Ordinal);
+        var reference = new Regex(@"\{app:Loc\s+([A-Za-z0-9_\.]+)\s*\}");
+        var offenders = new List<string>();
+        var root = Path.Combine(RepositoryRoot(), "src", "EmberTern.App");
+
+        foreach (var file in Directory.EnumerateFiles(root, "*.axaml", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (Match m in reference.Matches(lines[i]))
+                {
+                    var key = m.Groups[1].Value;
+                    if (entries.Contains(key)) continue;
+
+                    var member = typeof(UiStrings).GetProperty(key, BindingFlags.Public | BindingFlags.Static);
+                    if (member?.PropertyType == typeof(string)) continue;
+
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}  {{app:Loc {key}}}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These bindings ask the catalog for a name that is neither an entry nor a composed UiStrings "
+            + "string property, so the control renders the identifier:" + Environment.NewLine
+            + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The behavioural half of the guard above, and it is the one that can fail.</b>
+    /// <see cref="EveryLocBindingKey_ResolvesToSomething"/> reads SOURCE — it would stay green if the member
+    /// fallback were deleted from <c>LocalizedString</c> tomorrow, because the name would still be a member.
+    /// This drives the binding's actual source object and requires it to produce the composed text.
+    /// </summary>
+    [Fact]
+    public void ALocBinding_ReachesAComposedMember_NotItsOwnKey()
+    {
+        const string ComposedKey = nameof(UiStrings.ToolbarExecuteHint);
+
+        // The premise: this member deliberately has NO catalog entry, because it composes a keyboard gesture
+        // and UiStringsShortcutSourceTests forbids storing one. If that ever changes the test is vacuous.
+        Assert.Null(Resources.GetString(ComposedKey, CultureInfo.InvariantCulture));
+
+        var bound = LocalizationSource.For(ComposedKey).Value;
+
+        Assert.Equal(UiStrings.ToolbarExecuteHint, bound);
+        Assert.NotEqual(ComposedKey, bound);
+    }
+
+    /// <summary>
+    /// ⭐ <b>A <c>StringFormat</c> is a sentence too.</b> <see cref="NoViewCarriesAHardcodedUserVisibleString"/>
+    /// skips any attribute value starting with <c>{</c> — correctly, because that is normally a binding — and
+    /// <c>Text="{Binding X, StringFormat='GC risk near {0}'}"</c> hides English prose inside exactly that
+    /// shape. One shipped that way while <c>SessionManagerGapScaleMaxFormat</c>, the catalog entry for the
+    /// very same sentence, sat unused (gotcha #346: the orphaned string is what keeps the defect alive).
+    /// </summary>
+    [Fact]
+    public void NoStringFormat_CarriesUserVisibleProse()
+    {
+        // Words, not symbols: "GC {0}" is an abbreviation beside a value, "{0:N0} %" is a unit.
+        var prose = new Regex(@"StringFormat\s*=\s*'([^']*[A-Za-z]{2,}[^']*)'");
+        var offenders = new List<string>();
+        var root = Path.Combine(RepositoryRoot(), "src", "EmberTern.App");
+
+        foreach (var file in Directory.EnumerateFiles(root, "*.axaml", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (Match m in prose.Matches(lines[i]))
+                {
+                    var value = m.Groups[1].Value;
+                    // A single all-caps token is an abbreviation or a unit ("GC {0}", "MB"), not a sentence.
+                    var words = Regex.Matches(value, "[A-Za-z]{2,}").Select(w => w.Value).ToList();
+                    if (words.Count == 1 && words[0].All(char.IsUpper)) continue;
+
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}  StringFormat='{value}'");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These carry user-visible text inside a StringFormat, where the hardcoded-string guard cannot "
+            + "see it — compose the sentence in the view model from a catalog key instead:" + Environment.NewLine
+            + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// ⭐ The window-level counterpart of
+    /// <c>EveryViewModelThatCanRefreshItsText_IsForwardedFromTheTab</c>. That guard only looks at children a
+    /// TAB owns, so a refreshable view model held by <see cref="MainWindowViewModel"/> — the metadata
+    /// explorer, the SQL editor's Performance panel — was outside every net. The sidebar proved it: its
+    /// filter placeholder and every category name stayed in the previous language until a restart.
+    /// </summary>
+    [Fact]
+    public void EveryWindowChildThatCanRefreshItsText_IsForwarded()
+    {
+        var window = typeof(MainWindowViewModel);
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "ViewModels", "MainWindowViewModel.cs"));
+        var body = source[source.IndexOf("private void OnLanguageChanged", StringComparison.Ordinal)..];
+        body = body[..body.IndexOf("\n    }", StringComparison.Ordinal)];
+
+        var refreshable = typeof(UiStrings).Assembly.GetTypes()
+            .Where(t => t.GetMethod(
+                "RefreshLocalizedText",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                Type.EmptyTypes) is not null)
+            .ToHashSet();
+
+        // ⚠ The two guards PARTITION the refreshables between their owners; this is not a relaxation.
+        // MainWindowViewModel also exposes the active tab's children (ActiveProcedureDetail and friends) as
+        // convenience projections — those are reached through the `foreach (var tab in WorkspaceTabs)` loop,
+        // and EveryViewModelThatCanRefreshItsText_IsForwardedFromTheTab is the half that checks them.
+        // Demanding a second forward here would ask for a duplicate call, so what is left is exactly the set
+        // no tab owns.
+        var tabChildren = typeof(WorkspaceTabViewModel)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => p.PropertyType)
+            .ToHashSet();
+
+        var held = window.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => refreshable.Contains(p.PropertyType) && !tabChildren.Contains(p.PropertyType))
+            .ToList();
+
+        Assert.NotEmpty(held);
+
+        foreach (var property in held)
+        {
+            Assert.True(
+                body.Contains(property.Name + ".RefreshLocalizedText()", StringComparison.Ordinal),
+                $"MainWindowViewModel.OnLanguageChanged does not forward to {property.Name} "
+                + $"({property.PropertyType.Name}), so its text stays in the previous language (#353).");
+        }
+    }
+
     // ── The shipped Polish translation ───────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1056,5 +1282,232 @@ public sealed class LocalizationMechanismTests
         {
             Loc.Apply(previous.Name.Length == 0 ? PreferenceOptions.LanguageEnglish : previous.Name);
         }
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>A leading or trailing space in a catalog value is a SEPARATOR the code depends on, and a
+    /// translator cannot see it.</b> Twenty English entries are fragments a view model concatenates —
+    /// <c>"prepare "</c> + <c>"0 ms"</c>, <c>"Add index "</c> + the name, <c>" · fetch "</c> — and the space
+    /// that keeps the two words apart lives inside the resource value, invisible in every editor and easy for
+    /// a round-trip through one to strip.
+    ///
+    /// <para>⚠⚠ The Polish translation dropped it in <b>eleven</b> of them, which reached the user as
+    /// <c>przygotowanie0 ms</c>. The reported symptom named two; the other nine — the copy payload's
+    /// <c>Czasy:</c>/<c>Pomiar:</c>, the status bar's <c>Query</c>/<c>Śledzenie:</c>, the Table editor's
+    /// pending-change descriptions, the trace lens' <c>pid</c>/<c>Transakcja</c> — are the same defect nobody
+    /// had looked at yet.</para>
+    ///
+    /// <para>⚠ It is a guard about the MECHANISM, not about wording: it compares only the edge whitespace, so
+    /// a translator may rewrite any value freely. ⛔ If a future language genuinely needs no separator there,
+    /// the answer is to move the space to the concatenation site for that key — never to exempt the key here,
+    /// which would restore exactly the silence this exists to remove.</para>
+    /// </summary>
+    [Fact]
+    public void EveryTranslation_KeepsTheEdgeSpacesItsEnglishFragmentDependsOn()
+    {
+        var english = ReadResx("Strings.resx");
+        var polish = ReadResx("Strings.pl.resx");
+
+        var fragments = english.Where(kv => kv.Value.Length > 0
+                                            && (kv.Value[0] == ' ' || kv.Value[^1] == ' ')).ToList();
+
+        // If this ever reaches zero the guard has no subject and would pass vacuously — say so instead.
+        Assert.NotEmpty(fragments);
+
+        var offenders = new List<string>();
+        foreach (var (key, value) in fragments)
+        {
+            if (!polish.TryGetValue(key, out var translated)) continue;
+
+            var wantsLeading = value[0] == ' ';
+            var wantsTrailing = value[^1] == ' ';
+            var hasLeading = translated.Length > 0 && translated[0] == ' ';
+            var hasTrailing = translated.Length > 0 && translated[^1] == ' ';
+
+            if (wantsLeading != hasLeading || wantsTrailing != hasTrailing)
+            {
+                offenders.Add($"{key}: EN=[{value}] PL=[{translated}]");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These translations dropped (or added) the separator space their English fragment carries, so the "
+            + "concatenated line renders without a gap:" + Environment.NewLine
+            + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// ⭐ <b>The debugger's Harness Log tab is built in CODE, so its captions must be BOUND rather than
+    /// assigned.</b> It is DEBUG-only and therefore has no XAML at all, which is why it was the one debugger
+    /// surface that kept the previous language while every other tab followed.
+    ///
+    /// <para>⚠ The rule is structural, not a transcription: inside that builder a <c>UiStrings</c> member may
+    /// only appear under <c>nameof</c> — i.e. as a key handed to <c>LocExtension</c> — never as a value read
+    /// once at construction. ⛔ The log ROWS are outside this: they are a timestamped record of what was said
+    /// at the time, and a log is not rewritten in hindsight (the ratified rule the SQL editor's Messages panel
+    /// follows too).</para>
+    /// </summary>
+    [Fact]
+    public void TheHarnessLogTab_BindsItsCaptions_RatherThanCapturingThem()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "EmberTern.App", "Views", "DebuggerTabView.axaml.cs"));
+
+        var start = source.IndexOf("private TabItem BuildHarnessLogTab()", StringComparison.Ordinal);
+        Assert.True(start >= 0, "BuildHarnessLogTab no longer exists — this guard has lost its subject.");
+
+        var body = source[start..];
+        body = body[..body.IndexOf("\n    // ", StringComparison.Ordinal)];
+
+        // Every UiStrings mention in the builder must be a KEY (nameof), never a resolved value.
+        var captured = Regex.Matches(body, @"(?<!nameof\()\bUiStrings\.[A-Za-z0-9_]+")
+            .Select(m => m.Value)
+            .ToArray();
+
+        Assert.True(captured.Length == 0,
+            "These read a UiStrings value at construction time, so the Harness Log freezes in whatever language "
+            + "the tab was built in — hand the key to LocExtension instead: " + string.Join(", ", captured));
+
+        // …and the positive half: it really does bind. Without this the guard above is satisfied by a builder
+        // that shows no text at all.
+        Assert.Contains("LocExtension(nameof(UiStrings.DebuggerBottomTabHarnessLog))", body, StringComparison.Ordinal);
+    }
+
+    // ── Settings Center, the one window the language is changed FROM ─────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>The Settings window follows the language it is used to choose.</b>
+    ///
+    /// <para>⚠⚠ It did not, and the way it failed is the point: <c>SettingsCatalog</c> assigned its tables in a
+    /// STATIC CONSTRUCTOR that reads <c>UiStrings</c>, so the whole settings vocabulary was captured once per
+    /// PROCESS. The General page proved it on screen — its heading is <c>{app:Loc SettingsCategoryGeneral}</c>
+    /// and rendered "Ogólne" while the category list beside it, bound to the captured title, still rendered
+    /// "General". Closing and reopening the window changed nothing, because the capture outlived it; only a
+    /// restart did.</para>
+    ///
+    /// <para>⭐ This drives the real view model over a real store and asserts the three holders that were
+    /// frozen — the category list, a row's label, and an option's label — against values READ from the two
+    /// resource sets. ⛔ Never transcribe the Polish here: that would turn a mechanism test into a test of
+    /// today's wording (#333).</para>
+    /// </summary>
+    [Fact]
+    public void SettingsCenter_FollowsALanguageChange_WithoutBeingReopened()
+    {
+        var catalog = new ResourceManager("EmberTern.App.Localization.Strings", typeof(UiStrings).Assembly);
+        string English(string key) => catalog.GetString(key, CultureInfo.InvariantCulture)!;
+        string Polish(string key) => catalog.GetString(key, CultureInfo.GetCultureInfo("pl"))!;
+
+        // The premise: these three must genuinely differ between the two sets, or the test proves nothing.
+        foreach (var key in new[]
+                 {
+                     nameof(UiStrings.SettingsCategoryGeneral),
+                     nameof(UiStrings.SettingsThemeLabel),
+                     nameof(UiStrings.SettingsThemeDark),
+                 })
+        {
+            Assert.NotEqual(English(key), Polish(key));
+        }
+
+        var previous = Loc.Culture;
+        var dir = Path.Combine(Path.GetTempPath(), "EmberTern-loc-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Loc.Apply(PreferenceOptions.LanguageEnglish);
+
+            var service = new PreferencesService(new PreferencesStore(dir, null));
+            var vm = new SettingsCenterViewModel(
+                service, new SettingsPortability(new ApplicationSettingsStore(dir, null), service, "9.9.9-test"));
+
+            var general = vm.Categories.First(
+                c => string.Equals(c.Id, SettingsCatalog.CategoryGeneral, StringComparison.Ordinal));
+            var theme = vm.Theme;
+            var dark = theme.Options.First(
+                o => string.Equals(o.Key, PreferenceOptions.ThemeDark, StringComparison.Ordinal));
+
+            Assert.Equal(English(nameof(UiStrings.SettingsCategoryGeneral)), general.Title);
+            Assert.Equal(English(nameof(UiStrings.SettingsThemeLabel)), theme.Label);
+            Assert.Equal(English(nameof(UiStrings.SettingsThemeDark)), dark.Label);
+
+            // ⚠⚠ The NOTIFICATION is an assertion in its own right, and without it this test measures almost
+            // nothing: every text here is now a computed property, so reading it after the switch returns the
+            // new language even if the view model told nobody. A binding re-queries only on PropertyChanged —
+            // so a version that forgets to notify renders the OLD language on screen and passes a
+            // value-reading test happily (#353, and the same trap M3.3b's third round paid for).
+            var notified = new List<string>();
+            void Watch(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+                => notified.Add(sender!.GetType().Name);
+
+            general.PropertyChanged += Watch;
+            theme.PropertyChanged += Watch;
+            dark.PropertyChanged += Watch;
+
+            // The user picks Polish in this very window — no reopening, no restart.
+            Loc.Apply(PreferenceOptions.LanguagePolish);
+
+            Assert.Contains(nameof(SettingsCategoryViewModel), notified);
+            Assert.Contains(nameof(PreferenceSettingViewModel), notified);
+            Assert.Contains(nameof(PreferenceOptionViewModel), notified);
+
+            general.PropertyChanged -= Watch;
+            theme.PropertyChanged -= Watch;
+            dark.PropertyChanged -= Watch;
+
+            Assert.Equal(Polish(nameof(UiStrings.SettingsCategoryGeneral)), general.Title);
+            Assert.Equal(Polish(nameof(UiStrings.SettingsThemeLabel)), theme.Label);
+            Assert.Equal(Polish(nameof(UiStrings.SettingsThemeDark)), dark.Label);
+
+            // …and back, because a one-way switch would satisfy the assertions above.
+            Loc.Apply(PreferenceOptions.LanguageEnglish);
+            Assert.Equal(English(nameof(UiStrings.SettingsCategoryGeneral)), general.Title);
+
+            vm.Dispose();
+        }
+        finally
+        {
+            Loc.Apply(previous.Name.Length == 0 ? PreferenceOptions.LanguageEnglish : previous.Name);
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// ⭐ The other half of the same defect, and the one the user reported directly: <b>reopening the window
+    /// used to keep showing the old language.</b> A window opened after the change reads the catalog fresh, so
+    /// this is a statement about <see cref="SettingsCatalog"/> rather than about any view model — which is
+    /// exactly where the capture lived.
+    /// </summary>
+    [Fact]
+    public void TheSettingsCatalog_IsReadInTheCurrentLanguage_NotTheOneItWasFirstTouchedIn()
+    {
+        var previous = Loc.Culture;
+        try
+        {
+            Loc.Apply(PreferenceOptions.LanguageEnglish);
+            var english = SettingsCatalog.Category(SettingsCatalog.CategoryGeneral).Title;
+            var englishRow = SettingsCatalog.Descriptor(SettingsCatalog.SettingTheme).Label;
+
+            Loc.Apply(PreferenceOptions.LanguagePolish);
+            var polish = SettingsCatalog.Category(SettingsCatalog.CategoryGeneral).Title;
+            var polishRow = SettingsCatalog.Descriptor(SettingsCatalog.SettingTheme).Label;
+
+            Assert.NotEqual(english, polish);
+            Assert.NotEqual(englishRow, polishRow);
+            Assert.Equal(UiStrings.SettingsCategoryGeneral, polish);
+            Assert.Equal(UiStrings.SettingsThemeLabel, polishRow);
+        }
+        finally
+        {
+            Loc.Apply(previous.Name.Length == 0 ? PreferenceOptions.LanguageEnglish : previous.Name);
+        }
+    }
+
+    /// <summary>Every <c>name</c> → <c>value</c> pair of a resource file, read as XML so whitespace survives
+    /// exactly as stored (which is the entire subject of the guard above).</summary>
+    private static Dictionary<string, string> ReadResx(string fileName)
+    {
+        var path = Path.Combine(RepositoryRoot(), "src", "EmberTern.App", "Localization", fileName);
+        return System.Xml.Linq.XDocument.Load(path).Root!
+            .Elements("data")
+            .Where(d => d.Attribute("name") is not null && d.Element("value") is not null)
+            .ToDictionary(d => d.Attribute("name")!.Value, d => d.Element("value")!.Value, StringComparer.Ordinal);
     }
 }

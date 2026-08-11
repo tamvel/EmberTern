@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Resources;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using EmberTern.App;
 using EmberTern.App.Localization;
 using EmberTern.Core.Settings;
@@ -24,10 +25,23 @@ namespace EmberTern.Tests;
 ///
 /// <para>⚠ Constructs Avalonia controls, so this class joins the headless collection — never its own class
 /// fixture (gotchas #94 / #226 / #286).</para>
+///
+/// <para>⚠⚠ <b>And it must RUN them on the session's dispatcher, which is what every other class in the
+/// collection does and this one did not.</b> Creating the control on xunit's own thread made the binding's
+/// initial delivery a POST rather than a synchronous write, so the assertion on the next line read
+/// <c>block.Text == null</c> — intermittently, roughly one run in six. The failure looked like a liveness
+/// defect (it named the two tests that switch languages) and was purely a test-harness one: both failed on
+/// their FIRST assertion, before any language change had happened. ⛔ Do not "fix" a future flake here by
+/// relaxing an assertion; the subject is a real binding on a real control, and it has to be exercised on the
+/// thread the product binds on.</para>
 /// </summary>
 [Collection(HeadlessCollection.Name)]
 public sealed class LocalizationLivenessTests
 {
+    private readonly HeadlessUnitTestSession _session;
+
+    public LocalizationLivenessTests(HeadlessSessionFixture fixture) => _session = fixture.Session;
+
     // A two-culture catalog built in memory: the neutral set is English, "qps-ploc" (a real pseudo-locale
     // Windows recognises, so CultureInfo accepts it) carries a distinguishable value for the same key.
     private const string Key = "SidebarPlaceholderEmpty";
@@ -43,26 +57,29 @@ public sealed class LocalizationLivenessTests
     }
 
     [Fact]
-    public void ABoundString_RereadsWhenTheLanguageChanges()
+    public async System.Threading.Tasks.Task ABoundString_RereadsWhenTheLanguageChanges()
     {
-        try
+        await _session.Dispatch(() =>
         {
-            Loc.UseCatalogForVerification(new TwoLanguageCatalog(), CultureInfo.InvariantCulture);
+            try
+            {
+                Loc.UseCatalogForVerification(new TwoLanguageCatalog(), CultureInfo.InvariantCulture);
 
-            var block = new TextBlock();
-            block.Bind(TextBlock.TextProperty, new LocExtension(Key).ProvideValue());
+                var block = new TextBlock();
+                block.Bind(TextBlock.TextProperty, new LocExtension(Key).ProvideValue());
 
-            Assert.Equal(English, block.Text);
+                Assert.Equal(English, block.Text);
 
-            // The whole mechanism, exercised the way the product exercises it.
-            Loc.UseCatalogForVerification(new TwoLanguageCatalog(), Pseudo);
+                // The whole mechanism, exercised the way the product exercises it.
+                Loc.UseCatalogForVerification(new TwoLanguageCatalog(), Pseudo);
 
-            Assert.Equal(Other, block.Text);
-        }
-        finally
-        {
-            Loc.UseCatalogForVerification(null, null);
-        }
+                Assert.Equal(Other, block.Text);
+            }
+            finally
+            {
+                Loc.UseCatalogForVerification(null, null);
+            }
+        }, default);
     }
 
     /// <summary>
@@ -77,7 +94,7 @@ public sealed class LocalizationLivenessTests
     /// label, for a reason that has nothing to do with the mechanism it is named after (#333).</para>
     /// </summary>
     [Fact]
-    public void ABoundString_SwitchesToTheShippedPolish_AndBack()
+    public async System.Threading.Tasks.Task ABoundString_SwitchesToTheShippedPolish_AndBack()
     {
         const string ProbeKey = nameof(UiStrings.DialogCancel);
         var catalog = new ResourceManager("EmberTern.App.Localization.Strings", typeof(UiStrings).Assembly);
@@ -88,26 +105,29 @@ public sealed class LocalizationLivenessTests
         Assert.False(string.IsNullOrEmpty(polish), $"{ProbeKey} has no Polish entry.");
         Assert.NotEqual(english, polish);
 
-        var previous = Loc.Culture;
-        try
+        await _session.Dispatch(() =>
         {
-            Loc.Apply(PreferenceOptions.LanguageEnglish);
+            var previous = Loc.Culture;
+            try
+            {
+                Loc.Apply(PreferenceOptions.LanguageEnglish);
 
-            var block = new TextBlock();
-            block.Bind(TextBlock.TextProperty, new LocExtension(ProbeKey).ProvideValue());
-            Assert.Equal(english, block.Text);
+                var block = new TextBlock();
+                block.Bind(TextBlock.TextProperty, new LocExtension(ProbeKey).ProvideValue());
+                Assert.Equal(english, block.Text);
 
-            Loc.Apply(PreferenceOptions.LanguagePolish);
-            Assert.Equal(polish, block.Text);
+                Loc.Apply(PreferenceOptions.LanguagePolish);
+                Assert.Equal(polish, block.Text);
 
-            // Back again — a one-way switch would still satisfy the assertion above.
-            Loc.Apply(PreferenceOptions.LanguageEnglish);
-            Assert.Equal(english, block.Text);
-        }
-        finally
-        {
-            Loc.Apply(previous.Name.Length == 0 ? PreferenceOptions.LanguageEnglish : previous.Name);
-        }
+                // Back again — a one-way switch would still satisfy the assertion above.
+                Loc.Apply(PreferenceOptions.LanguageEnglish);
+                Assert.Equal(english, block.Text);
+            }
+            finally
+            {
+                Loc.Apply(previous.Name.Length == 0 ? PreferenceOptions.LanguageEnglish : previous.Name);
+            }
+        }, default);
     }
 
     /// <summary>

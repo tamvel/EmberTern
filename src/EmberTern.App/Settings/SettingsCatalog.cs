@@ -221,7 +221,45 @@ public static class SettingsCatalog
     private const string IconDebugger = "Icon.Crosshair";
     private const string IconFormatter = "Icon.PencilRuler";
 
-    static SettingsCatalog()
+    // ── The tables, and why they are REBUILT rather than built once ────────────────────────────────────────
+    //
+    // ⚠⚠ These used to be assigned in a static constructor, which made the whole settings vocabulary a
+    // PROCESS-LIFETIME capture of whatever language happened to be in force when the type was first touched.
+    // The Polish QA round is what made it visible: the General page's heading is `{app:Loc
+    // SettingsCategoryGeneral}` — a live binding — and rendered "Ogólne", while the category LIST beside it
+    // bound the captured `Title` and rendered "General". The same word, two paths, one of them frozen. It is
+    // also exactly why closing and reopening the window did not help, and only a restart did.
+    //
+    // ⭐ This is the `static readonly` form the localization stage banned for a MEMBER (a property resolves,
+    // a field freezes) — the same defect one level out, on a TABLE built from members. The sweep migrated
+    // members and never asked what reads them at type-init.
+    //
+    // ⭐ Rebuilding on a culture change keeps every consumer's shape: the tables are still ordinary lists of
+    // records holding plain strings, so nothing downstream has to learn about keys or resolution. The cost is
+    // ~20 record allocations on the rare occasion a user switches language.
+    // ⛔ Do not "optimise" this back into a static constructor.
+    private static readonly object Gate = new();
+    private static System.Globalization.CultureInfo? _builtFor;
+    private static IReadOnlyList<SettingsCategoryDescriptor> _categories = [];
+    private static IReadOnlyList<SettingDescriptor> _settings = [];
+    private static IReadOnlyDictionary<string, SettingDescriptor> _byId =
+        new Dictionary<string, SettingDescriptor>(StringComparer.Ordinal);
+
+    private static void EnsureCurrentLanguage()
+    {
+        lock (Gate)
+        {
+            if (Equals(_builtFor, Localization.Loc.Culture))
+            {
+                return;
+            }
+
+            Build();
+            _builtFor = Localization.Loc.Culture;
+        }
+    }
+
+    private static void Build()
     {
         // ⭐ Ikony kategorii — WYŁĄCZNIE istniejące geometrie (decyzja użytkownika, pakiet UX po M5 / punkt 5).
         //   Żadna nie powstała na tę potrzebę; każda jest już w katalogu i już coś znaczy w aplikacji.
@@ -229,7 +267,17 @@ public static class SettingsCatalog
         //   wprost: kompozyt to osobna kontrolka o dwóch barwach i własnym `ControlTheme`, więc wpuszczenie go
         //   tutaj oznaczałoby wyjątek w szablonie wiersza i DWA mechanizmy rysowania ikony kategorii zamiast
         //   jednego. Spójność nawigacji wygrywa z wiernością wobec paska.
-        Categories =
+        //
+        // ⚠ Local, not a static readonly field: a field initializer runs at type-init, which is precisely the
+        // capture EnsureCurrentLanguage exists to undo — the labels would freeze while everything around them
+        // moved. Both formatter rows still share the ONE dictionary, which was its whole point.
+        var casingLabels = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [PreferenceOptions.CaseLower] = UiStrings.SettingsCaseLower,
+            [PreferenceOptions.CaseUpper] = UiStrings.SettingsCaseUpper,
+        };
+
+        _categories =
         [
             new SettingsCategoryDescriptor(CategoryGeneral, UiStrings.SettingsCategoryGeneral, IconGeneral),
             new SettingsCategoryDescriptor(CategoryEditor, UiStrings.SettingsCategoryEditor, IconEditor),
@@ -239,7 +287,7 @@ public static class SettingsCatalog
             new SettingsCategoryDescriptor(CategoryFormatter, UiStrings.SettingsCategoryFormatter, IconFormatter),
         ];
 
-        Settings =
+        _settings =
         [
             new SettingDescriptor(
                 SettingTheme,
@@ -434,7 +482,7 @@ public static class SettingsCatalog
                 UiStrings.SettingsFormatterKeywordCaseDescription,
                 UiStrings.SettingsFormatterKeywordCaseKeywords,
                 PreferenceOptions.Casing,
-                CasingLabels),
+                casingLabels),
 
             new SettingDescriptor(
                 SettingFormatterIdentifierCase,
@@ -443,23 +491,50 @@ public static class SettingsCatalog
                 UiStrings.SettingsFormatterIdentifierCaseDescription,
                 UiStrings.SettingsFormatterIdentifierCaseKeywords,
                 PreferenceOptions.Casing,
-                CasingLabels),
+                casingLabels),
         ];
+
+        _byId = _settings.ToDictionary(s => s.Id, StringComparer.Ordinal);
     }
 
-    /// <summary>The labels for <c>PreferenceOptions.Casing</c>, shared by both formatter rows. ⚠ Rendered as
-    /// <c>lower case</c> / <c>UPPER CASE</c> deliberately: the label demonstrates the option instead of merely
-    /// naming it, which is the shortest possible explanation of what the setting does.</summary>
-    private static readonly IReadOnlyDictionary<string, string> CasingLabels =
-        new Dictionary<string, string>(StringComparer.Ordinal)
+    /// <summary>The categories, in the current language. ⚠ Reading rebuilds them when the language moved
+    /// since the last read — see the note on <see cref="EnsureCurrentLanguage"/>.</summary>
+    public static IReadOnlyList<SettingsCategoryDescriptor> Categories
+    {
+        get
         {
-            [PreferenceOptions.CaseLower] = UiStrings.SettingsCaseLower,
-            [PreferenceOptions.CaseUpper] = UiStrings.SettingsCaseUpper,
-        };
+            EnsureCurrentLanguage();
+            return _categories;
+        }
+    }
 
-    public static IReadOnlyList<SettingsCategoryDescriptor> Categories { get; }
+    /// <summary>The rows, in the current language.</summary>
+    public static IReadOnlyList<SettingDescriptor> Settings
+    {
+        get
+        {
+            EnsureCurrentLanguage();
+            return _settings;
+        }
+    }
 
-    public static IReadOnlyList<SettingDescriptor> Settings { get; }
+    /// <summary>
+    /// The row with this id, in the current language.
+    ///
+    /// <para>⭐ It exists so a view model can hold an <b>id</b> instead of a copied label: a copy is a second
+    /// representation, and the moment the catalog can be rebuilt a copy is a STALE one. Every text a settings
+    /// row shows is resolved through here at read time.</para>
+    /// </summary>
+    public static SettingDescriptor Descriptor(string id)
+    {
+        EnsureCurrentLanguage();
+        return _byId[id];
+    }
+
+    /// <summary>The category with this id, in the current language. Same reasoning as
+    /// <see cref="Descriptor"/>.</summary>
+    public static SettingsCategoryDescriptor Category(string id)
+        => Categories.First(c => string.Equals(c.Id, id, StringComparison.Ordinal));
 
     public static IEnumerable<SettingDescriptor> SettingsIn(string categoryId)
         => Settings.Where(s => string.Equals(s.CategoryId, categoryId, StringComparison.Ordinal));

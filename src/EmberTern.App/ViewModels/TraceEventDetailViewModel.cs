@@ -92,13 +92,13 @@ public sealed partial class TraceEventDetailViewModel : ObservableObject
         HasTableAccess = TableAccess.Count > 0;
 
         SessionRows.Clear();
-        AddRow("User", e.UserName);
-        AddRow("Role", e.RoleName);
-        AddRow("Host", e.RemoteAddress);
-        AddRow("Process", FormatProcess(e.ProcessName, e.ClientProcessId));
+        AddRow(UiStrings.TraceDetailUser, e.UserName);
+        AddRow(UiStrings.TraceDetailRole, e.RoleName);
+        AddRow(UiStrings.TraceDetailHost, e.RemoteAddress);
+        AddRow(UiStrings.TraceDetailProcess, FormatProcess(e.ProcessName, e.ClientProcessId));
         AddRow(UiStrings.TraceDetailTriggerEvent, e.TriggerEvent);   // UiStrings.TraceDetailWhatFired — only present for triggers
-        AddRow("Attachment", e.AttachmentId is { } att ? "ATT " + att.ToString(CultureInfo.InvariantCulture) : null);
-        AddRow("Transaction", FormatTransaction(e.TransactionId, e.TransactionParams)); // id · isolation/TPB
+        AddRow(UiStrings.TraceDetailAttachment, e.AttachmentId is { } att ? "ATT " + att.ToString(CultureInfo.InvariantCulture) : null);
+        AddRow(UiStrings.TraceDetailTransaction, FormatTransaction(e.TransactionId, e.TransactionParams)); // id · isolation/TPB
         HasSession = SessionRows.Count > 0;
     }
 

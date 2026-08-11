@@ -274,23 +274,14 @@ public static class SessionHealthAnalyzer
                 ? HealthGrade.Watch
                 : HealthGrade.Healthy;
 
-        string headline;
-        if (gcCount > 0)
-        {
-            headline = gcCount == 1
-                ? "1 transaction is blocking garbage collection."
-                : $"{gcCount} transactions are blocking garbage collection.";
-        }
-        else if (longCount > 0)
-        {
-            headline = longCount == 1
-                ? "1 long-running transaction detected."
-                : $"{longCount} long-running transactions detected.";
-        }
-        else
-        {
-            headline = "All sessions healthy.";
-        }
+        // ⭐ The count is an ARGUMENT and the language picks the form (C6 / ratified R3). Core no longer chooses
+        // between "transaction" and "transactions" — it says how many there are and which sentence applies.
+        // ⚠ The count is passed as a raw int so Loc.Format's plural probe can see it (a pre-formatted string
+        // would resolve flat, in whatever form the catalog's fallback happens to be).
+        var headline =
+            gcCount > 0 ? LocalizableMessage.Of(SessionHealthMessages.VerdictGcBlocked, gcCount)
+            : longCount > 0 ? LocalizableMessage.Of(SessionHealthMessages.VerdictLongTransaction, longCount)
+            : LocalizableMessage.Of(SessionHealthMessages.VerdictHealthy);
 
         return new SessionHealthVerdict(grade, headline);
     }

@@ -1651,16 +1651,16 @@ Rozłączyć mimo to?</value>
     <value>Plan + czasy</value>
   </data>
   <data name="ExecutionCaptureTrace" xml:space="preserve">
-    <value>Ślad</value>
+    <value>Trace</value>
   </data>
   <data name="ExecutionCopyCaptureLabel" xml:space="preserve">
-    <value>Pomiar:</value>
+    <value>Pomiar: </value>
   </data>
   <data name="ExecutionCopyPlanLabelFormat" xml:space="preserve">
     <value>Plan ({0}):</value>
   </data>
   <data name="ExecutionCopyTimingsLabel" xml:space="preserve">
-    <value>Czasy:</value>
+    <value>Czasy: </value>
   </data>
   <data name="ExecutionElapsedFormat" xml:space="preserve">
     <value>Czas: {0}</value>
@@ -1678,13 +1678,13 @@ Rozłączyć mimo to?</value>
     <value>To wykonanie nie zmieniło żadnych danych.</value>
   </data>
   <data name="ExecutionTimingsExecute" xml:space="preserve">
-    <value>wykonanie</value>
+    <value>wykonanie </value>
   </data>
   <data name="ExecutionTimingsFetch" xml:space="preserve">
-    <value> · pobranie</value>
+    <value> · pobranie </value>
   </data>
   <data name="ExecutionTimingsPrepare" xml:space="preserve">
-    <value>przygotowanie</value>
+    <value>przygotowanie </value>
   </data>
   <data name="ExitUnsavedCancel" xml:space="preserve">
     <value>Anuluj</value>
@@ -4881,7 +4881,7 @@ END</value>
     <value>{0:0.00} s</value>
   </data>
   <data name="ScriptExecutorTabTitle" xml:space="preserve">
-    <value>Wykonywacz skryptów</value>
+    <value>Wykonywanie skryptów</value>
   </data>
   <data name="ScriptModeAutoCommit" xml:space="preserve">
     <value>Zatwierdź po sukcesie</value>
@@ -5353,6 +5353,27 @@ END</value>
   </data>
   <data name="SessionHealth.Evidence.Transaction" xml:space="preserve">
     <value>Tx {0} · {1}</value>
+  </data>
+  <data name="SessionHealth.Verdict.GcBlocked.few" xml:space="preserve">
+    <value>{0} transakcje blokują odśmiecanie.</value>
+  </data>
+  <data name="SessionHealth.Verdict.GcBlocked.many" xml:space="preserve">
+    <value>{0} transakcji blokuje odśmiecanie.</value>
+  </data>
+  <data name="SessionHealth.Verdict.GcBlocked.one" xml:space="preserve">
+    <value>{0} transakcja blokuje odśmiecanie.</value>
+  </data>
+  <data name="SessionHealth.Verdict.Healthy" xml:space="preserve">
+    <value>Wszystkie sesje są zdrowe.</value>
+  </data>
+  <data name="SessionHealth.Verdict.LongTransaction.few" xml:space="preserve">
+    <value>Wykryto {0} długo trwające transakcje.</value>
+  </data>
+  <data name="SessionHealth.Verdict.LongTransaction.many" xml:space="preserve">
+    <value>Wykryto {0} długo trwających transakcji.</value>
+  </data>
+  <data name="SessionHealth.Verdict.LongTransaction.one" xml:space="preserve">
+    <value>Wykryto {0} długo trwającą transakcję.</value>
   </data>
   <data name="SessionHealth.GcBlocked.Check.LeftOpen" xml:space="preserve">
     <value>Czy jakiś ekran został zostawiony otwarty na snapshocie w trakcie edycji?</value>
@@ -6177,7 +6198,7 @@ END</value>
     <value>Rozłączono</value>
   </data>
   <data name="StatusBarTraceChipLabel" xml:space="preserve">
-    <value>Ślad</value>
+    <value>Śledzenie</value>
   </data>
   <data name="StatusBarTransactionChipBare" xml:space="preserve">
     <value>Transakcja</value>
@@ -6207,10 +6228,10 @@ END</value>
     <value>Wykonywanie skryptu… {0:N0} / {1:N0}</value>
   </data>
   <data name="StatusQueryPrefix" xml:space="preserve">
-    <value>Query</value>
+    <value>Query </value>
   </data>
   <data name="StatusTracePrefix" xml:space="preserve">
-    <value>Ślad:</value>
+    <value>Śledzenie: </value>
   </data>
   <data name="SubprogramKindDialogPrompt" xml:space="preserve">
     <value>Utworzyć procedurę czy funkcję?</value>
@@ -6267,10 +6288,10 @@ END</value>
     <value>Dodaj {0} {1}</value>
   </data>
   <data name="TableDetailAddForeignKeyPrefix" xml:space="preserve">
-    <value>Dodaj FOREIGN KEY</value>
+    <value>Dodaj FOREIGN KEY </value>
   </data>
   <data name="TableDetailAddIndexPrefix" xml:space="preserve">
-    <value>Dodaj indeks</value>
+    <value>Dodaj indeks </value>
   </data>
   <data name="TableDetailColumnAutoIncrement" xml:space="preserve">
     <value>AI</value>
@@ -6625,7 +6646,7 @@ Zapisać je przed zamknięciem?</value>
     <value>Odśwież podgląd danych</value>
   </data>
   <data name="ToolbarScriptExecutorTooltip" xml:space="preserve">
-    <value>Wykonywacz skryptów (migracje i DDL wielu obiektów)</value>
+    <value>Wykonywanie skryptów (migracje i DDL wielu obiektów)</value>
   </data>
   <data name="ToolbarSecurityManagerTooltip" xml:space="preserve">
     <value>Menedżer uprawnień (użytkownicy, role, uprawnienia)</value>
@@ -6694,7 +6715,7 @@ Zapisać je przed zamknięciem?</value>
     <value>Parametry</value>
   </data>
   <data name="TraceDetailPidPrefix" xml:space="preserve">
-    <value>pid</value>
+    <value>pid </value>
   </data>
   <data name="TraceDetailReadsFormat" xml:space="preserve">
     <value>odczytów: {0}</value>
@@ -6707,6 +6728,24 @@ Zapisać je przed zamknięciem?</value>
   </data>
   <data name="TraceDetailTableAccess" xml:space="preserve">
     <value>Dostęp do tabel</value>
+  </data>
+  <data name="TraceDetailAttachment" xml:space="preserve">
+    <value>Podłączenie</value>
+  </data>
+  <data name="TraceDetailHost" xml:space="preserve">
+    <value>Host</value>
+  </data>
+  <data name="TraceDetailProcess" xml:space="preserve">
+    <value>Proces</value>
+  </data>
+  <data name="TraceDetailRole" xml:space="preserve">
+    <value>Rola</value>
+  </data>
+  <data name="TraceDetailTransaction" xml:space="preserve">
+    <value>Transakcja</value>
+  </data>
+  <data name="TraceDetailUser" xml:space="preserve">
+    <value>Użytkownik</value>
   </data>
   <data name="TraceDetailTiming" xml:space="preserve">
     <value>Czasy</value>
@@ -6838,7 +6877,7 @@ Zapisać je przed zamknięciem?</value>
     <value>Zdarzenia systemowe</value>
   </data>
   <data name="TraceLensTransactionPrefix" xml:space="preserve">
-    <value>Transakcja</value>
+    <value>Transakcja </value>
   </data>
   <data name="TraceLensTransactionSummaryFormat" xml:space="preserve">
     <value>{0} · instrukcji: {1} · {2}</value>

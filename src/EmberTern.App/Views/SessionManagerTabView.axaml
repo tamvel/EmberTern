@@ -355,7 +355,7 @@
                   <!-- ⭐ Q3/B ZAMKNIĘTE (M4.3): jak wyżej — `Text.Caption` (9 → 10). -->
                   <TextBlock HorizontalAlignment="Right" FontSize="{DynamicResource Text.Caption.Size}"
                              Foreground="{DynamicResource SubtleForegroundBrush}"
-                             Text="{Binding GapScaleMaxText, StringFormat='GC risk near {0}'}" />
+                             Text="{Binding GapScaleMaxLabel}" />
                 </Grid>
               </StackPanel>
             </Border>
