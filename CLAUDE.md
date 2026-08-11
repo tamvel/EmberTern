@@ -45,7 +45,11 @@ verbatim, in the archive below.
 | **`docs/design/product-polish-m3-handover.md`** | ⭐⭐ **The self-contained entry point into M3**, read right after the prompt above. State · scope M3.1–M3.4 + M3b · rules **R1–R17** · collision register K1–K11 · the per-iteration procedure · **21 traps** · the iteration plan §10. | At the start of every M3 session, in full. |
 | **`docs/design/product-polish-m2c-handover.md`** | **🔒 CLOSED — historical**, like the M2a/M2b ones. Was the entry point into M2c (the de-localization sweep). Its durable lessons live on in `product-polish.md` §18 and in the M3 handover’s rules and traps. ⛔ Do not plan from it. | Historical only. |
 | **`docs/design/product-polish-m2a-handover.md`** | **🔒 CLOSED** — the M2a entry document, kept as the record of entering that etap. ⚠ Its §6 describes M2b in one line written *before* M2b existed; do not plan from it. | Historical only. |
-| **`docs/gotchas.md`** | The **complete** gotcha catalog (**339 entries, #1–#352** — re-measured 2026-08-10; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — see the note under "Current state"), organized thematically. ⭐ **#351 came out of the post-M5 package's point 5 and is the one to read before "fixing" a shared style that looks wrong at ONE site** — `Border.settings-group` states in its own comment that it is a recessed surface *inside PanelBrush chrome*; three of its four consumers really do provide that chrome and the fourth provided none, so the card painted itself onto an identically-coloured host and read as *"the style is too weak"*. ⚠ Strengthening the style would have been applied at the only site where the style is innocent and would have broken the three that were correct. ⭐ The rule: **a style that describes its own figure/ground pair is making a claim about something it does not own**, so check the host's container before touching the style — #340's split of custody, applied to appearance instead of to decisions. ⭐⭐ **#349–#350 came out of the post-M5 UX package's point 4, and #350 is the one to read before cleaning up after ANY rejected experiment** — an untracked file that is deleted has **no safety net in git** (`git checkout` restores to HEAD, i.e. the state before the whole unmerged stage), so a cleanup removed an already-ACCEPTED mechanism and recovery was impossible: empty `git log --all`, no dangling blob, assembly rebuilt. ⭐ The rule: **commit an accepted stage before experimenting on top of it** — an uncommitted approval is exactly the window in which a cleanup cannot tell what you approved from what you rejected; and a cleanup instruction inherits the premise it was written under, so whoever holds the dependency must say so BEFORE executing. **#349** is its design-side companion: **a token's ROLE decides which contrast threshold applies**, so re-using an icon colour (floor 3:1) as 11 px TEXT (floor 4,5:1) silently moves the goalposts while the render still looks fine — #345 one step further out, because measuring the element is necessary but you must also ask which RULE it is now subject to. ⭐⭐ **#347 came out of the post-M5 UX package and is the one to read before trusting that a style variant's colour reaches its content** — a variant that overrides `Foreground` on the CONTROL and on its explicit `TextBlock`/`SvgIcon` children still loses to the template's setter on the `ContentPresenter`, and it loses **only for plain-STRING content**, so the same variant looked correct on Execute and painted Save nearly black on hover (**2,04:1** in Light); ⭐ the mechanism was broken in **both** themes and Dark passed at 5,62:1 purely because its `ForegroundColor` is near-white, so "it looks fine in Dark" was a coincidence that would have turned one variant defect into an endless per-theme patch. ⚠ Its second half is about the guard: the disabled state has the same shape but is **deliberately dimmed**, so the obvious "every state clears 4,5:1" test turns a correct product red and invites undoing a ratified decision — #322 committed inside the guard written to prevent it. **#348** is its companion from the same package: **a missing REGISTRATION fails as silently as a missing resource dictionary, one layer further out** — a probe rendered the "after" column with no colour because the XSHD definitions are registered by `App` and the probe runs `ProbeApp`, producing a perfectly plausible image that answers a different question. ⭐⭐ **#346 came out of M5/M‑3 and is the one to read before acting on ANY inventory of missing UI** — such an inventory answers *„is there a message here?"* and never *„can this state occur?"*, and the two produce different worklists: thirteen apparent gaps collapsed to four, two of them because the state CANNOT HAPPEN (a users grid over `SEC$USERS`, which always holds SYSDBA; a view's column list, when a view always projects a column), so building them would have shipped UI nobody can see. ⭐⭐ Its sharpest half: **a collection's NAME is not evidence of what its grid shows** — „No privileges in this category." sounded obviously right and was false, because that grid enumerates OBJECTS with privileges as cells; three proposed texts in a row were refuted the same way. ⚠ The failure mode is not a wrong number but a grammatical, plausible sentence describing something other than what the user is looking at. ⭐ Practical order, the reverse of the intuitive one: **establish WHEN the state occurs, only then decide what it says.** ⚠⚠ And a ready-made constant is not a ready-made answer: an orphaned `*Empty*` string quoted a button label that does not exist on screen, and had survived the product's whole life precisely BECAUSE nothing used it. ⭐⭐ **#344–#345 came out of M5/§10 and #344 is the one to read before leaning on ANY norm cited in our own docs** — a threshold row read *"≥ 3:1 — WCAG AA Large"*, and the **number was a defensible in-house choice while the attribution was false** (WCAG means 24 px or 18,7 px bold; the largest role here is 23 px, so nothing qualified). ⚠ It nearly decided a product change: one candidate fix satisfied the document *as written* and no external standard, and would have re-weighted every message in the app on a citation that did not hold. ⭐ The asymmetry is the lesson — **a number invites scrutiny, a norm label invites deference**, so the label is exactly the part that rots unnoticed, and it rots toward *more* confidence. #345 is its companion at one layer earlier: **measuring a token instead of the thing that paints** produced a reported failure for a pairing the product cannot render (a `ShowSeverityMarker` gate makes half the severity × surface grid unreachable) — and it surfaced only when the guard had to name a production property instead of a transcribed map. ⭐⭐ **#343 came out of M4.4 and is the one to read before replacing N local values with one mechanism** — a hand-set value can be doing TWO jobs, and a mechanism that takes over the property silently discards the one it never knew about: `GrowingDialogBehavior` assigned `MaxHeight` unconditionally, so attaching it would have raised a dialog’s deliberate 720 to 1008 on an ordinary 1080-tall screen, because the literal meant both „never exceed the screen” (which the mechanism does better) and „do not grow past a comfortable size on a huge monitor” (which it does not do at all); the fix is `Math.Min(declared, screen)` and it is provably a no-op for the existing consumers. ⚠⚠ Its general half: **before generalizing N local answers, ask what each was FOR** — „they are all guessed constants” is a hypothesis about their origin, not a measurement of their purpose. ⭐ Its companion, same iteration: a ceiling WITHOUT a scroll surface does not bound content, it CLIPS it, so „attach the behavior” is not a portable one-liner. ⭐⭐ **#342 came out of M4.3c and is the one to read before hoisting a style into the shared sheet — or before trusting a rule about style priority** — Avalonia resolves two competing STYLES by selector specificity, **not** by document order (measured: a base `Button` style setting `Padding` and placed AFTER `Button.seg` did not override it), so „moving a style changes its priority" is true only against a **local value on the element**; conflating the two produced a rigorous-sounding premise that scoped a whole iteration and was false. ⭐ Its transferable half is how it surfaced: **the plant did NOT fail the test, and that silence was the finding** — a plant usually proves a guard works; here it disproved the reasoning. ⭐⭐ **#340–#341 came out of M4.3, and #340 is the one to read before declaring ANY register closed** — a decision deferred in a CODE COMMENT is not an entry in the register, so closing the register „in full" leaves it standing, and it then reads to the next author as a settled state: the §13.3 gate decided **none** of the ~19 deferrals sitting in M4.3's five files (nor ~43 more across `src/`), because the deferral lives in the SOURCE while the register lives in a DOCUMENT and only the document ever gets closed; ⚠ the orphans are not scattered randomly — they cluster exactly where the migration counters still show a remainder, so *„why does this file still have local values?"* and *„which decisions were never taken?"* are the same question. #341 is its companion: one glyph can carry two roles (`Icon.X` is both an inline ✕ **and** the toolbar's close-tab ACTION, which correctly declares no size at all), so a rule grouped by the geometry's NAME is grouped by the wrong thing — an error committed **inside the guard written to prevent it**. ⭐⭐ **#338–#339 came out of M4.2b and both are about the gap between „the code is right" and „the feature works"** — a subclass of a templated control does NOT inherit its `ControlTheme` (Avalonia resolves it by CONCRETE type), so it renders an EMPTY surface while `ItemCount` and `DataTemplates` both look healthy; and „the rule is correct" + „the wiring exists" still leaves the question nobody asked — whether the event REACHES the handler, and whether there is still selection for it to act on (one keypress passed, two in a row did not). ⭐⭐ **#337 came out of M4.2 and is the one to read before trusting any "this file is clean"** — a counter keyed to the NAME OF A CONTROL cannot see the same thing built another way, so its zero means *"not built like that here"*, never *"clean"*: one editor drew PK/FK/Unique with a raw `<Path>` over locally declared geometries and thereby hid from the size counter, the `ControlTheme` default AND the centring audit at once; the failure mode is the friendly one — not a wrong number but an **absent row**, and an absent row reads as compliance. ⭐⭐ **#336 came out of M4.1's QA round and is the one to read before writing any guard that COMPUTES** — a guard must compute with the engine the product renders with; the headless test platform ignores an arc's bulge, so a geometry guard ran there was RED with precise numbers naming six icons that render perfectly, and acting on it would have shipped six new defects. ⭐⭐ **#335 came out of M4.1 and is the one to read before any value-keyed cleanup** — neither the VALUE nor the GEOMETRY NAME identifies a control, so a sweep keyed to either reports progress while the thing a user looks at stays inconsistent (one pagination bar carried two sizes across five screens through two prior sweeps); its practical half is *group the same control across screens and check it agrees with itself*, its second half was paid for by committing the error inside the entry itself (one geometry name serving two controls produced a false claim, retracted before any code changed), and its sibling finding is that `Spacing`/`Padding`/`Margin` had no counter at all, so files reporting zero debt held 985 local values app-wide. ⭐⭐ **#334 came out of M4's typography block and is the one to read before migrating exceptions onto a role** — when several independent authors refuse the same role, that is a MEASUREMENT of the role, not several oversights: the tell is the DISTRIBUTION (19 headers at one size against 17 at another, in an identical context), and a register that records only the deviating side makes a symmetrical disagreement look like one-sided drift. ⭐⭐ **#332–#333 came out of M4's density decision and both are about a value that lives OUTSIDE the place that claims to govern it** — a `ControlTheme` default is what 191 of 355 icons actually render at while the catalog's role describes two of them, and an unmeasured property is not "clean" but unmeasured (seven icon sizes, green build throughout); #333 is its mirror in the test suite — a guard that TRANSCRIBES a premise breaks when that premise moves onto a role, and reports something its own name does not describe. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
+| **`docs/design/localization.md`** | **🔒 LOCALIZATION / APP — STAGE CLOSED (2026-08-09). ⛔ Nothing translated yet; Core/Firebird (~280 user-visible) deliberately OUT of scope and is the NEXT stage.** Ratified **D‑1 (language changes LIVE, no restart — reversed mid-stage from "restart required")**, **D‑2 (`.resx`/`ResourceManager`; architecture rule #6's "no resx" half deliberately lifted)**, **D‑3 (Core/Firebird hand up `MessageKey` + arguments; raw *server* messages may stay raw, our own wrappers may not)**. ⭐⭐ §2.1 is the one to read before touching the binding: the standard single-object **indexer** design was built and MEASURED DEAD — neither `"Item[]"` nor `string.Empty` reaches an indexer binding in Avalonia 12.1.1, and it renders correctly on first load, so the failure hides. Hence one notifying object **per key**. ⭐ §5 records the as-built (2 030 catalog entries · 2 026 members migrated · 1 242 XAML sites · **0 of 2 033 values changed**, proven against a COMPILER-produced snapshot, not a re-parse) and §5.1 the two findings it produced. §7 lists what is still open (≈430 hardcoded strings, the `LanguageChanged` wiring, the Polish translation). | **Before any localization work.** |
+| **`docs/design/localization-app-stage-handover.md`** | ⭐⭐ **THE STARTUP DOCUMENT for the Core/Firebird stage — read it first.** Entry state (branch/HEAD/remotes/build/test/smoke), what the App stage closed, what was deliberately left, the exact D‑3 recipe for migrating a Core producer, the binding rules, and the open user decisions. ⚠ Its §A partition filter now names **13** classes — it grows with every migrated module. | **First, at the start of every localization session.** |
+| **`docs/history/28-localization-core-stage.md`** | ⭐ **The Core/Firebird stage's narrative, etap by etap (C0 audit, C1 `SessionHealthAnalyzer`, …).** Read it for the C0 result — the inherited *"≈280 messages"* was **~170–190**, because three of ten inventory rows described something other than what they claimed — and for the four measured constraints that shape every later module (`Diagnostic`'s value equality · sentence concatenation vs plural · `ex.Message` as a catch-all channel · the guard that scanned only one assembly). | When migrating a Core/Firebird producer. |
+| **`docs/design/localization-readiness-audit.md`** | The pre-stage audit that scoped it: what was hardcoded and where, measured four ways. ⚠ Its §6 recommends "restart is enough" — **superseded by the ratified D‑1**; read it for the inventory, not for the decision. | On demand. |
+| **`docs/gotchas.md`** | The **complete** gotcha catalog (**357 entries, #1–#368** — re-measured 2026-08-10 after Localization C8 with `grep -cE "^[0-9]+\. \*\*" docs/gotchas.md`; ⚠ the count is *not* max−1, because **numbers 303 and 304 are each used TWICE**, in different thematic sections, so a bare "#303" is ambiguous — 357 entry LINES over 355 distinct numbers; ⛔ re-measure with that command rather than copying this figure forward, it has disagreed with itself before), organized thematically. ⭐⭐ **#366–#368 came out of Localization C8, and #368 is the one to read before trusting ANY localization test while one language ships** — the dual form guarantees `ex.Message` renders exactly what the key resolves to in English, so a test asserting *"the surface equals `Loc.Format(...)`"* passes identically for a consumer that resolves the key and one that prints the fallback; measured by reverting the consumer and watching all nine tests stay **green**, and only a SWAPPED CATALOG separates them. **#367** is its guard-side companion: **a guard whose scope is a list of ASSEMBLIES fails asymmetrically** — the two guards that go red are the ones whose failure was visible anyway, while the one that simply *stops looking* (a declared key with no English entry → raw identifier on screen) stays green, and the plausible fix for the two red ones is to exempt them, which leaves the silent one blind in a state that looks resolved. **#366** is the tooling half: `sed -i` in Git Bash rewrote CRLF→LF across a whole file and `git diff --stat` hid it, because the repo normalises line endings — and `sed` cannot verify the repair either, since its output stream drops CR too. ⭐⭐ **#359–#360 came out of a user bug report on one routine, and #359 is the one to read before trusting a green formatter suite** — a formatter that DROPS a lexeme does not present as a formatting bug: §0's net reverts the statement to verbatim, so the feature merely appears to do nothing, and **every lexeme-preservation test stays green** (reverting preserves lexemes perfectly), which is why one `--` comment could freeze a 30-line procedure unnoticed; the assertion that can fail is *"the net did NOT fire"*. ⚠ Its companion cause: the shared corpus had **almost no comments**, so 2 000 corpus-driven assertions said nothing about a shape absent from the corpus. **#360** is the binder half: **a consistency suite that varies ONE dimension while holding another fixed reads as exhaustive and is not** — the suite written for *"coloured in FROM but not in UPDATE"* pinned all five DML kinds at the top level and pinned the routine body with a QUERY, so the crossing (kind × nesting) was never tested, and there sat a second dispatch that bound subqueries and **never declared the target** ⇒ DML in a procedure resolved no table at all. ⭐⭐ **#358 came out of Localization C5 and is the one to read before embedding ANY reference type in a value type** — a record's synthesized equality compares a COLLECTION member by reference, so `LocalizableMessage` (key + `IReadOnlyList<object?>`) was *not* value-equal, harmlessly for four etaps because nothing compared it, and dangerously the moment it was to live inside `Diagnostic`, whose value equality the diagnostics panel uses to skip rebuilding its collection and keep the user's selection — the panel would have churned on every debounce tick with a green build. ⭐ The transferable half is WHERE to fix it: give the CARRIER structural equality (one change, at the type that owns the property, serving every future embedder) rather than contorting the consumer with a fixed-arity field, which is an arity ceiling — a defect scheduled for later. ⚠ And structural equality has a precondition worth guarding: every element must itself be value-equatable, or a `char[]` silently restores reference comparison one layer down. ⭐⭐ **#357 came out of Localization C4b and is the one to read before writing a guard against a hazard you have not reproduced** — the dual-form pattern's equality guard has an unstated precondition (both halves must format each argument the same way), and the mechanism written down for how it breaks was **false**: a bare `{0}` does NOT group an `int` under `pl-PL`, so planting the numeric argument left every guard green. ⭐ The real lever is a **`{0:N0}` specifier in the resource value** — which is where #354's `48 102` actually came from — so the hazard lives with the TRANSLATOR, not the machine. ⚠⚠ Its transferable half is about the test rather than the number: `TheEnglishAndLocalizedForms_AgreeOnAnyCulture` looked rigorous (four cultures × every message) and measured nothing of what it promised; only a plant revealed it, and the replacement had to measure the MECHANISM (serve a hostile `{0:N0}` template and require the argument verbatim) instead of restating the rule. Same shape as **#342**, where a plant that did not fire disproved the premise scoping a whole iteration. ⭐ **#351 came out of the post-M5 package's point 5 and is the one to read before "fixing" a shared style that looks wrong at ONE site** — `Border.settings-group` states in its own comment that it is a recessed surface *inside PanelBrush chrome*; three of its four consumers really do provide that chrome and the fourth provided none, so the card painted itself onto an identically-coloured host and read as *"the style is too weak"*. ⚠ Strengthening the style would have been applied at the only site where the style is innocent and would have broken the three that were correct. ⭐ The rule: **a style that describes its own figure/ground pair is making a claim about something it does not own**, so check the host's container before touching the style — #340's split of custody, applied to appearance instead of to decisions. ⭐⭐ **#349–#350 came out of the post-M5 UX package's point 4, and #350 is the one to read before cleaning up after ANY rejected experiment** — an untracked file that is deleted has **no safety net in git** (`git checkout` restores to HEAD, i.e. the state before the whole unmerged stage), so a cleanup removed an already-ACCEPTED mechanism and recovery was impossible: empty `git log --all`, no dangling blob, assembly rebuilt. ⭐ The rule: **commit an accepted stage before experimenting on top of it** — an uncommitted approval is exactly the window in which a cleanup cannot tell what you approved from what you rejected; and a cleanup instruction inherits the premise it was written under, so whoever holds the dependency must say so BEFORE executing. **#349** is its design-side companion: **a token's ROLE decides which contrast threshold applies**, so re-using an icon colour (floor 3:1) as 11 px TEXT (floor 4,5:1) silently moves the goalposts while the render still looks fine — #345 one step further out, because measuring the element is necessary but you must also ask which RULE it is now subject to. ⭐⭐ **#347 came out of the post-M5 UX package and is the one to read before trusting that a style variant's colour reaches its content** — a variant that overrides `Foreground` on the CONTROL and on its explicit `TextBlock`/`SvgIcon` children still loses to the template's setter on the `ContentPresenter`, and it loses **only for plain-STRING content**, so the same variant looked correct on Execute and painted Save nearly black on hover (**2,04:1** in Light); ⭐ the mechanism was broken in **both** themes and Dark passed at 5,62:1 purely because its `ForegroundColor` is near-white, so "it looks fine in Dark" was a coincidence that would have turned one variant defect into an endless per-theme patch. ⚠ Its second half is about the guard: the disabled state has the same shape but is **deliberately dimmed**, so the obvious "every state clears 4,5:1" test turns a correct product red and invites undoing a ratified decision — #322 committed inside the guard written to prevent it. **#348** is its companion from the same package: **a missing REGISTRATION fails as silently as a missing resource dictionary, one layer further out** — a probe rendered the "after" column with no colour because the XSHD definitions are registered by `App` and the probe runs `ProbeApp`, producing a perfectly plausible image that answers a different question. ⭐⭐ **#346 came out of M5/M‑3 and is the one to read before acting on ANY inventory of missing UI** — such an inventory answers *„is there a message here?"* and never *„can this state occur?"*, and the two produce different worklists: thirteen apparent gaps collapsed to four, two of them because the state CANNOT HAPPEN (a users grid over `SEC$USERS`, which always holds SYSDBA; a view's column list, when a view always projects a column), so building them would have shipped UI nobody can see. ⭐⭐ Its sharpest half: **a collection's NAME is not evidence of what its grid shows** — „No privileges in this category." sounded obviously right and was false, because that grid enumerates OBJECTS with privileges as cells; three proposed texts in a row were refuted the same way. ⚠ The failure mode is not a wrong number but a grammatical, plausible sentence describing something other than what the user is looking at. ⭐ Practical order, the reverse of the intuitive one: **establish WHEN the state occurs, only then decide what it says.** ⚠⚠ And a ready-made constant is not a ready-made answer: an orphaned `*Empty*` string quoted a button label that does not exist on screen, and had survived the product's whole life precisely BECAUSE nothing used it. ⭐⭐ **#344–#345 came out of M5/§10 and #344 is the one to read before leaning on ANY norm cited in our own docs** — a threshold row read *"≥ 3:1 — WCAG AA Large"*, and the **number was a defensible in-house choice while the attribution was false** (WCAG means 24 px or 18,7 px bold; the largest role here is 23 px, so nothing qualified). ⚠ It nearly decided a product change: one candidate fix satisfied the document *as written* and no external standard, and would have re-weighted every message in the app on a citation that did not hold. ⭐ The asymmetry is the lesson — **a number invites scrutiny, a norm label invites deference**, so the label is exactly the part that rots unnoticed, and it rots toward *more* confidence. #345 is its companion at one layer earlier: **measuring a token instead of the thing that paints** produced a reported failure for a pairing the product cannot render (a `ShowSeverityMarker` gate makes half the severity × surface grid unreachable) — and it surfaced only when the guard had to name a production property instead of a transcribed map. ⭐⭐ **#343 came out of M4.4 and is the one to read before replacing N local values with one mechanism** — a hand-set value can be doing TWO jobs, and a mechanism that takes over the property silently discards the one it never knew about: `GrowingDialogBehavior` assigned `MaxHeight` unconditionally, so attaching it would have raised a dialog’s deliberate 720 to 1008 on an ordinary 1080-tall screen, because the literal meant both „never exceed the screen” (which the mechanism does better) and „do not grow past a comfortable size on a huge monitor” (which it does not do at all); the fix is `Math.Min(declared, screen)` and it is provably a no-op for the existing consumers. ⚠⚠ Its general half: **before generalizing N local answers, ask what each was FOR** — „they are all guessed constants” is a hypothesis about their origin, not a measurement of their purpose. ⭐ Its companion, same iteration: a ceiling WITHOUT a scroll surface does not bound content, it CLIPS it, so „attach the behavior” is not a portable one-liner. ⭐⭐ **#342 came out of M4.3c and is the one to read before hoisting a style into the shared sheet — or before trusting a rule about style priority** — Avalonia resolves two competing STYLES by selector specificity, **not** by document order (measured: a base `Button` style setting `Padding` and placed AFTER `Button.seg` did not override it), so „moving a style changes its priority" is true only against a **local value on the element**; conflating the two produced a rigorous-sounding premise that scoped a whole iteration and was false. ⭐ Its transferable half is how it surfaced: **the plant did NOT fail the test, and that silence was the finding** — a plant usually proves a guard works; here it disproved the reasoning. ⭐⭐ **#340–#341 came out of M4.3, and #340 is the one to read before declaring ANY register closed** — a decision deferred in a CODE COMMENT is not an entry in the register, so closing the register „in full" leaves it standing, and it then reads to the next author as a settled state: the §13.3 gate decided **none** of the ~19 deferrals sitting in M4.3's five files (nor ~43 more across `src/`), because the deferral lives in the SOURCE while the register lives in a DOCUMENT and only the document ever gets closed; ⚠ the orphans are not scattered randomly — they cluster exactly where the migration counters still show a remainder, so *„why does this file still have local values?"* and *„which decisions were never taken?"* are the same question. #341 is its companion: one glyph can carry two roles (`Icon.X` is both an inline ✕ **and** the toolbar's close-tab ACTION, which correctly declares no size at all), so a rule grouped by the geometry's NAME is grouped by the wrong thing — an error committed **inside the guard written to prevent it**. ⭐⭐ **#338–#339 came out of M4.2b and both are about the gap between „the code is right" and „the feature works"** — a subclass of a templated control does NOT inherit its `ControlTheme` (Avalonia resolves it by CONCRETE type), so it renders an EMPTY surface while `ItemCount` and `DataTemplates` both look healthy; and „the rule is correct" + „the wiring exists" still leaves the question nobody asked — whether the event REACHES the handler, and whether there is still selection for it to act on (one keypress passed, two in a row did not). ⭐⭐ **#337 came out of M4.2 and is the one to read before trusting any "this file is clean"** — a counter keyed to the NAME OF A CONTROL cannot see the same thing built another way, so its zero means *"not built like that here"*, never *"clean"*: one editor drew PK/FK/Unique with a raw `<Path>` over locally declared geometries and thereby hid from the size counter, the `ControlTheme` default AND the centring audit at once; the failure mode is the friendly one — not a wrong number but an **absent row**, and an absent row reads as compliance. ⭐⭐ **#336 came out of M4.1's QA round and is the one to read before writing any guard that COMPUTES** — a guard must compute with the engine the product renders with; the headless test platform ignores an arc's bulge, so a geometry guard ran there was RED with precise numbers naming six icons that render perfectly, and acting on it would have shipped six new defects. ⭐⭐ **#335 came out of M4.1 and is the one to read before any value-keyed cleanup** — neither the VALUE nor the GEOMETRY NAME identifies a control, so a sweep keyed to either reports progress while the thing a user looks at stays inconsistent (one pagination bar carried two sizes across five screens through two prior sweeps); its practical half is *group the same control across screens and check it agrees with itself*, its second half was paid for by committing the error inside the entry itself (one geometry name serving two controls produced a false claim, retracted before any code changed), and its sibling finding is that `Spacing`/`Padding`/`Margin` had no counter at all, so files reporting zero debt held 985 local values app-wide. ⭐⭐ **#334 came out of M4's typography block and is the one to read before migrating exceptions onto a role** — when several independent authors refuse the same role, that is a MEASUREMENT of the role, not several oversights: the tell is the DISTRIBUTION (19 headers at one size against 17 at another, in an identical context), and a register that records only the deviating side makes a symmetrical disagreement look like one-sided drift. ⭐⭐ **#332–#333 came out of M4's density decision and both are about a value that lives OUTSIDE the place that claims to govern it** — a `ControlTheme` default is what 191 of 355 icons actually render at while the catalog's role describes two of them, and an unmeasured property is not "clean" but unmeasured (seven icon sizes, green build throughout); #333 is its mirror in the test suite — a guard that TRANSCRIBES a premise breaks when that premise moves onto a role, and reports something its own name does not describe. ⭐⭐ **#329–#331 came out of the language-sprint QA round (2026-08-08) and all three are about a UI element that speaks for a value it cannot fully express** — an editor showing only part of a type OVERWRITES the rest on commit; a display rule written against the CLR type cannot express the DECLARED type (and the tempting repair, "hide midnight", trades a visible defect for an invisible one); and a seed that deliberately shows less than the value holds turns a mere focus change into a write. ⭐⭐ **#322–#323 came out of the 2026-08-07 grid consistency sprint, and #322 is the one worth reading whatever you are working on** — a safety rule stated about a CLASS of things ("a data grid") can be false for every actual member of that class, and the test that pins it will look rigorous while protecting nothing, because a guard asserting a POLICY inherits every unchecked premise of that policy; #323 is a source guard whose fallback answered "yes" for exactly the thing it was written to catch. ⭐ **#321 came out of the Avalonia 12.1.1 update sprint** — a `>=` dependency range makes an untested combination look supported, and restore/build/tests are all silent about it. CLAUDE.md keeps only the ~20 most load-bearing ones inline; this is where the rest live. ⭐ **#316–#320 came out of the 2026-08-05 stabilization sprint** — a catalog read that resolves a domain destroys it on the next compile (and byte-identity passes while the catalog is wrong); an empty result meaning both "absent" and "not loaded yet"; the three measured `DataGrid` facts about Enter; a setting for a mode the product never selects; and a reported correlation whose variable was wrong. ⭐ **#313–#315 came out of the §13.3 gate and M3.5** — a variant's chrome cancellation losing to Fluent's `:disabled`; the two hard limits on a 24-unit icon box; and why a guard that reads a token instead of the painting element is green while the product is broken. | On demand — search it when a bug "feels familiar". |
 | **`docs/history/`** | The full narrative archive — every milestone, session, and investigation, split into ~27 thematic files with an index (`docs/history/README.md`). This is the "diary" that CLAUDE.md used to be. ⭐ **`27-post-m5-ux-package.md` is the newest and is the one in progress** — the six post-M5 UX reports; read it for the phase-0 result (three of six described something other than what they looked like, and each time that changed the SHAPE of the work), and for #347/#348. ⭐ `24-stabilization-sprint.md` remains the sharpest on method: two of six reports were not what they described, plus the three shared causes and the fix that changed the debugger as a side effect. | On demand — read a file when you need the backstory on a specific feature or bug. |
 | **`docs/design/*.md`** (other files) | Frozen feature-specific design docs (Script Executor, Execution Modes + Export Framework, the Etap-1 tokenization audit) — mostly already implemented; kept as reference. | On demand. |
 | **`memory/*.md`** (Claude's persistent memory, outside the repo) | Cross-session recall — rules, gotchas, and project facts Claude chose to remember. `memory/MEMORY.md` is the always-loaded index; the individual files load only when relevant. | Index only, every session; files on demand. |
@@ -476,6 +480,548 @@ noted.
   [docs/design/keyboard-manager.md](docs/design/keyboard-manager.md))*
 
 ## Current state
+
+- **🔢🌍 LOCALIZATION / CORE — C8 (`EmberTern.Office` ×2) — ODEBRANE i ZACOMMITOWANE 2026-08-10 (`45829a5`).**
+  Gałąź `feat/localization`; ⛔ **NIE pushowana, NIE scalona** — `origin/feat/localization` stoi wciąż na
+  `8f861ce` (etap App), więc **osiem odebranych etapów Core czeka lokalnie na wypchnięcie**. Build 0/0; suite
+  **8 730** (8 389 + 286 + 55); smoke czysty; `Lab/` nietknięty. Narracja:
+  **[docs/history/28-…](docs/history/28-localization-core-stage.md)** (sekcja C8). Nowe gotchy **#366–#368**.
+  🔒 Ratyfikowane po audycie: **D‑1/D‑2** klucze i wyjątek w `Office` · **D‑3 (a)** live switching poza C8 ·
+  **D‑4** brakujący pin `.xlsx` dodany.
+  **Kontrakt:** `ImportSourceMessages` (2 klucze) · `ImportSourceException` (forma dualna: `Localized` +
+  angielski `Message`) · `InnerException` **techniczny, niepokazywany nikomu** ·
+  `DataImportTabViewModel.Describe(ex)` — test TYPU przed catch-allem, **bez resolvera** · `SetStatus`
+  **nietknięty**.
+  ⭐⭐ **GRANICA JEST ODWROTNA NIŻ W C3 I TO POMIAR, NIE STYL.** Tam słowa serwera jadą jako **argument**, bo są
+  autorytatywne. Tu `DocumentFormat.OpenXml` odpowiada `File contains corrupted data` na plik, który **NIE jest
+  uszkodzony** — jest tylko starszym formatem pod nową nazwą, a `ExcelDataReader` mówi `Invalid file signature`.
+  Pierwszy komunikat jest nie tyle nieprzydatny, co **FAŁSZYWY**. ⭐ Reguła, która się z tego uogólnia, jest
+  węższa niż „opakuj obcy komunikat": **obcy komunikat jedzie jako dana, gdy jest autorytatywny, i jest
+  tłumiony, gdy jest nieprawdziwy.** ⚠ `InnerException` jest **przypięty jako OBECNY** — usunięcie go
+  uniemożliwiłoby postawienie tej samej diagnozy drugi raz.
+  ⭐⭐ **ZNALEZISKO 1 — strażnik katalogu nie widział assembly `Office`, i zawodził ASYMETRYCZNIE.**
+  `DeclaredCoreMessageKeys()` skanowało Core + Firebird (to samo, co C0 §4 znalazł dla Firebirda — **po raz
+  drugi**). Podsadzenie: `EveryCoreShapedEntry_IsDeclaredByCore` 🔴 · `EveryLocalizedMember_…` 🔴 ·
+  **`EveryCoreMessageKey_HasAnEnglishEntry` 🟢** — czyli czerwone są te, których awaria i tak jest widoczna
+  (sierocy wpis w zasobie), a **cichy** (klucz bez wpisu rozwiązuje się do siebie ⇒ surowy identyfikator na
+  ekranie) po prostu przestaje patrzeć. Podsadzenie odwrotne zapala **sześć** testów, w tym ten trzeci.
+  ⛔⛔ **Pułapka dla następnego autora: gdyby C8 zadeklarowało klucze bez ruszania strażnika, dwa czerwone testy
+  zażądałyby uwagi — a „oczywistą" naprawą jest DOPISANIE ICH DO WYJĄTKÓW, nie rozszerzenie skanu.** To zamyka
+  objaw i zostawia cichego strażnika ślepym, w stanie wyglądającym na rozwiązany.
+  ⭐⭐ **ZNALEZISKO 2 — mój test powierzchniowy był ZIELONY Z DWÓCH POWODÓW i nie przypinał żadnego.**
+  Cofnięcie konsumenta do `SetStatus(ex.Message, …)` **nie zapaliło go** (9/9 zielonych): angielski jest jedynym
+  wysyłanym językiem, więc `Loc.Format(localized)` i `ex.Message` renderują te same znaki — **z gwarancji formy
+  dualnej**. Test nie odróżniał *„App rozwiązał klucz"* od *„App wypisał fallback"*. Kształt **#357** i C6-owego
+  `SwitchingLanguage_…`. ⭐ Jedynym instrumentem, który je rozdziela, jest **PODMIANA KATALOGU**
+  (`Loc.UseCatalogForVerification`, cofana w `finally`); po przepisaniu to samo podsadzenie zapala dokładnie ten
+  jeden test. ⚠ Skutek: przynależność klasy do `HeadlessCollection` przestała być ostrożnościowa i stała się
+  **nośna**.
+  ⚠⚠ **UZASADNIENIE, KTÓRE SAM ZAPISAŁEM W TEŚCIE, BYŁO FAŁSZYWE.** Twierdziłem, że zamiana kluczy między
+  providerami jest niewidoczna dla sprawdzenia formy dualnej; zmierzone — zapala **oba** testy, bo literał EN
+  zostaje u producenta, a rozwiązany wpis się przesuwa. Forma dualna widzi to **tylko dlatego, że te dwa zdania
+  różnią się po angielsku** — własność dzisiejszego brzmienia, nie mechanizmu. ⭐ Test per provider wnosi więc
+  **poprawną DIAGNOZĘ** (`expected Import.Source.NotReadableXls`), a nie widoczność; komentarz poprawiony
+  w miejscu.
+  ⭐ **`Describe` wpięte we wszystkie 13 gołych renderów `ex.Message`, nie w 5 osiągalnych** — lista miejsc
+  byłaby **analizą osiągalności zaszytą w kodzie**, która się zdezaktualizuje, a jej awaria jest cicha
+  (angielskie zdanie w polskim oknie, #337). Dyskryminatorem jest **TYP** wyjątku, więc dla każdego innego
+  wynikiem jest dowodliwie ten sam łańcuch co wcześniej. Dwa `string.Format(…, ex.Message)` na ścieżkach DDL
+  Firebirda świadomie nietknięte.
+  ⚠ **Dowód zerowej zmiany treści NIE mógł oprzeć się na nietkniętych testach** (jak C4a/C6) — pinów
+  praktycznie nie było: dwa `Assert.Contains` na jednym z dwóch zdań, **zero na drugim**. Mechanicznie:
+  `git diff` obu providerów pokazuje literały jako **linie KONTEKSTU**, a strażnik formy dualnej wiąże literał
+  z wpisem w zasobie, czytając zdanie z **prawdziwie rzuconego** wyjątku.
+  ⚠ **Pięć podsadzeń, każde zapala swojego strażnika**; ⭐ dwa z nich **zmieniły pracę** (asymetria strażnika ·
+  fałszywie zielony test). Dryf słowa w zasobie zapala **dokładnie jeden** test, a istniejący pin `.xls`
+  **przechodzi** — potwierdza, że nigdy nie mógł tego złapać.
+  ⛔ **#353 świadomie zostawione jako DŁUG poza zakresem:** baner nie przeżywa zmiany języka, bo `SetStatus`
+  zapisuje gotowy tekst, a moduł nie ma `RefreshLocalizedText`. Zmierzony koszt: **31 wywołań, 18 z gotowym
+  tekstem `UiStrings`**, więc ożywienie ścieżki wyjątku zostawiłoby osiemnaście zamrożonych statusów obok
+  jednego ruchomego (R7). To decyzja o `SetStatus`, nie konsekwencja migracji dwóch zdań.
+  ⚠ **Sprostowania inwentarza:** ⭐ *„Office ×2" PRZETRWAŁO pomiar* — dokładnie 2 literały user-visible w 6
+  plikach produkcyjnych, **pierwszy wiersz inwentarza C0, który się zgadza**; natomiast C0 §3 *„renders it in
+  eight places"* → zmierzone **15** miejsc czyta `ex.Message`, z czego **5 osiągalnych** z Office i **1
+  dominujące** (`Open` zawodzi na pierwszym wywołaniu providera, więc łańcuch nie dochodzi dalej).
+  ⚠⚠ **Defekt narzędziowy zapłacony po drodze (#366): `sed -i` w Git Bash przepisało CRLF → LF w CAŁYM pliku
+  2 581-liniowym, a `git diff --stat` pokazało tylko zamierzone 39/13**, bo repo normalizuje końce linii —
+  **git zamaskował przepisanie całego pliku**. Ta sama rodzina co uszkodzenie Pythonem w etapie App.
+  ⛔ `sed` nie nadaje się też do WERYFIKACJI, bo jego strumień wyjściowy również gubi CR; sprawdzaj
+  `tr -d '\r'` po obu stronach + `grep -c $'\r$' f` == `wc -l < f`.
+  ⚠ **Filtr partycji headless ma 22 nazwy** — ⛔⛔ **wyprowadzaj go, nie przepisuj:**
+  `grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs`.
+  ⚠ *Zapis historyczny: ten wpis notował, że **C7 nie ma sekcji ani wpisu** — luka zapisana świadomie, a nie
+  wypełniona zmyśloną narracją. ⭐ Została **domknięta osobnym commitem dokumentacyjnym**, zrekonstruowanym
+  wyłącznie z `d620cc8`; wpis C7 stoi bezpośrednio pod tym.*
+  ⏭ **Ratyfikowana kolejność C0 jest WYCZERPANA** (`Office` był ostatnią pozycją przed „decyzją o Performance",
+  a Performance zamknęło C7). Następny krok wymaga decyzji użytkownika. ⏸ Otwarte tematy etapu, każdy z powodem:
+  **`KindLabel`/`SymbolKind`** (decyzja kontraktowa, odłożona) · **30 hedge'ów `(s)` w katalogu App** ·
+  **#353 w Data Imporcie** · **≈430 zaszytych stringów** i **polskie tłumaczenie** z §7 `localization.md`.
+
+- **🔢🌍 LOCALIZATION / CORE — C7 (`Performance`) — ODEBRANE i ZACOMMITOWANE 2026-08-10 (`d620cc8`).**
+  ⚠⚠ *Ten wpis powstał PO C8 — etap został zacommitowany bez dokumentacji, więc jest zrekonstruowany
+  z komunikatu commita i jego diffu; liczby przemierzone, nie przepisane.* ⛔ Czego odtworzyć się nie da i
+  czego tu nie ma: audytu, który go poprzedził, oraz podsadzeń poza pięcioma zapisanymi w commicie. Build 0/0;
+  suite **8 720** (8 388 + 277 + 55); smoke czysty; `Lab/` nietknięty. Narracja:
+  **[docs/history/28-…](docs/history/28-localization-core-stage.md)** (sekcja C7).
+  ⭐ Siódmy producent Core — i **moduł, który C0 wykluczyło** („*decyzja o Performance, który zostaje
+  ZAMKNIĘTY*"); kontrakt otwarto **świadomą decyzją użytkownika po audycie**.
+  **Kontrakt:** `Finding.Title` → `LocalizableMessage` · `Finding.Explanation` → `LocalizableMessage?`
+  (⭐ nullowalne, bo **`MessageKey` odmawia pustego tokenu**, więc „brak wyjaśnienia" nie da się zapisać pustym
+  kluczem) · `FindingEvidence.Label` → `MessageKey` (⚠ **`Value` ZOSTAJE `string`iem — to dana**) ·
+  `FindingGuidance` = `MessageKey` + lista `MessageKey` · `Recommendation` = `MessageKey` +
+  `LocalizableMessage?` · ⛔ `PerformanceContext.OutputVerb` i `OutputRowsLabel` **USUNIĘTE** ·
+  `PlanNode.IsSubqueryRoot` — nowy, **jeden właściciel predykatu**.
+  ⭐⭐ **Migracja niczego nie wymyśliła — przeniosła kontrakt z C1:** `Finding` i `SessionHealthFinding` są
+  **bliźniakami strukturalnymi**, a `SessionWarningViewModel` był gotowym wzorcem konsumenta. ⚠ `Finding` to
+  `record` (klasa), więc **pułapka C5 nie zachodzi** — zagrożenie równości referencyjnej wymaga typu wartościowego.
+  ⭐⭐ **Zniknęło DZIEWIĘĆ sklejeń** (klauzula `issue` ×2 · ogon `" and N sub-quer{y|ies}"` ×1 z morfemem ×2 ·
+  `has`/`have` ×2 · ogon korroboracji ×1 · rzeczownik „the filtered column" ×1), a **mechanizm liczby mnogiej
+  z C6 przyjął je bez zmiany**: angielski deklaruje **cztery rodziny**, każde inne zdanie z liczbą zostaje
+  płaskie, a polski może dopisać `.one`/`.few`/`.many` **bez zmiany kodu**.
+  **Ratyfikowane, każde z powodem:** **D‑3** czasownik wyjścia przestał być SŁOWEM, które Core wybiera
+  i odmienia (R6 doklejało angielskie `"s"`), a stał się **KLUCZEM wybieranym regułą po `HasResultSet`** ·
+  **D‑6** „the filtered column" przestało być rzeczownikiem wstawianym w zdanie — **dwa pełne klucze**,
+  brzmienie obu bez zmiany · **D‑4** `PerformanceVerdict.Headline` **NIE migrowany** (zmierzone: żadna
+  powierzchnia go nie binduje) — nazwany wyjątek z **przypiętą przesłanką**
+  (`TheHeadline_IsStillBoundByNoSurface`) · **D‑7** `FindingSeverityHigh/Medium/Low/Info` — cztery literały
+  w **ViewModelu**, niewidoczne dla strażnika skanującego wyłącznie `.axaml` (**#337**); ⚠ bliźniak
+  `DiagnosticRowViewModel` był zlokalizowany od etapu App · **D‑8** `PlanInsightSubquery` **USUNIĘTY
+  z katalogu** — był *tłumaczalnym* wpisem dopasowywanym do tekstu SILNIKA, czyli **#356 żyjące w produkcie** ·
+  **R‑1** (użytkownik) cztery osobne klucze o identycznej wartości EN (`ReadAmplification.{Table,Statement}`,
+  `RowsRead.{Table,Statement}`) — **różny zakres pomiaru, więc nie deduplikujemy po pisowni** · **R‑2**
+  (użytkownik) zastane „Index A, B have no…" zachowane dosłownie.
+  ⭐ **Zerowa zmiana treści angielskiej — cztery różne dowody dla czterech kształtów:** Guidance / etykiety
+  dowodów / `SeverityText` → **diff BAJTOWO pusty**; `Recommendation` → 7/7 identyczne; tytuły i wyjaśnienia →
+  znormalizowany diff, **7 delt i każda to placeholder zamieniony w słowo, którym był podstawiany**, tekst
+  wokół identyczny co do znaku; `Headline` → dowodem są **NIETKNIĘTE `PerformanceReportTests`**.
+  ⚠ Liczba jedzie jako **surowy `long`** (żeby `TryGetCount` ją widział — reguła R3 z C6), a grupowanie `N0`
+  przeniosło się **do wartości zasobu** jako `{0:N0}`; render bajtowo ten sam. ⭐ To dźwignia z #357 użyta
+  świadomie, a nie napotkana przypadkiem.
+  ⚠⚠ **PODSADZENIA (13 przebiegów) — trzy z pięciu zapisanych wyników nie były tym, czego oczekiwał plan.**
+  **H** — ⭐⭐ pierwszy **G6 NIE zapalił się**: przepisywał NAZWĘ wycofanego wpisu i asertował licznik **Core**
+  zamiast konsumenta w **App** — **#333 popełnione wewnątrz strażnika pisanego przeciwko #356**; prowadzi
+  teraz `NoiseSummary` pod podmienionym katalogiem. **B** — ⭐ nie zapaliło niczego **i to poprawne**: przy
+  wzorcu ZASTĄPIENIA nie ma drugiej reprezentacji, więc dryf etykiety jest legalną edycją katalogu (⚠ tabela
+  podsadzeń odziedziczyła przesłankę **dualną** z C4b, gdzie nie obowiązuje). **F** — nie kompiluje się,
+  bo usunięcie klucza łapie **kompilator**; przedmiotem G7 jest osierocony bliźniak (**F′**). **A** —
+  kompiluje się z **0 błędów** (**#355**) i zapala **G5+G8**. Plus: komentarz cytujący wycofany identyfikator
+  zapalił strażnika źródłowego **dwa razy** — komentarze przeredagowano, **strażników nie osłabiono**.
+  ⭐ Wniosek przenośny z B i H razem: **podsadzenie, które NIE zapala, jest pomiarem przesłanki strażnika**,
+  a nie formalnością.
+  ⚠ **Audyt zmierzył jedną rzecz źle i znalazł to dopiero kompilator:** `x:DataType`
+  w `PerformancePanelView.axaml` zmienione o jeden atrybut — **wiązanie kompilowane wymusza to przy zmianie
+  typu wiersza**, a audyt liczył bindingi **po nazwie**. Ten sam kształt co w C5.
+  ⭐ **Naprawione przy okazji: #353 po raz CZWARTY** — `GradeLine`, `PlanLead`, `NoiseSummary` i `TimingText`
+  były zamrożone w języku startowym **już przed C7**. **G9 rozszerza istniejącego samo-uzbrajającego się
+  strażnika o poziom WNUKA**: panel wisi pod detalem procedury, więc deklaracja `RefreshLocalizedText`
+  nie uzbrajała niczego.
+  **Liczby:** **64** zadeklarowane klucze · **68** wpisów EN (4 rodziny liczby mnogiej) · filtr partycji
+  headless **21** nazw.
+  ⛔ **Poza zakresem i nieruszone:** 5 par `Single`/`Multiple` w App · 30 hedge'ów `(s)` ·
+  SessionHealth/QuickInfo plurals · Office (który stał się **C8**) · Data Import · duplikacja tabel operatorów
+  SQL · martwy `PerformanceProfiler`.
+
+- **🔢🌍 LOCALIZATION / CORE — C6 (`ExecutionSummary` / `ExecutionActivity` + MECHANIZM LICZBY MNOGIEJ) —
+  ODEBRANE; ZACOMMITOWANE w `96cc758` (C1–C6 razem).** ⚠ *Zapis historyczny: ten wpis mówił „nadal NIE
+  scalona, nic nie commitowane … SIEDEM etapów bez commita (#350)" i było to prawdą, gdy powstawał. C1–C6
+  poszły jako `96cc758`, C7 jako `d620cc8`, C8 jako `45829a5`; ⛔ gałąź nadal NIE jest pushowana ani scalona —
+  bieżący stan trzyma wpis C8 na górze tej sekcji.* Gałąź `feat/localization`. Build 0/0;
+  suite **8 709** (8 387 + 267 + 55) — ⚠ liczba z chwili C6, nieaktualna; smoke czysty; `Lab/` nietknięty.
+  Narracja:
+  **[docs/history/28-…](docs/history/28-localization-core-stage.md)** (sekcja C6); architektura mechanizmu:
+  **[localization.md](docs/design/localization.md) §4.3**. Nowe gotchy **#362–#365**.
+  🔒 **Ratyfikowany wariant W‑B** + R1(a) reguła w `.resx` kultury · R2(a) nazwy opisują GRAMATYKĘ ·
+  R3(a) liczba zawsze jako argument {0} · R4(a) **bez `Count` w `LocalizableMessage`** · R5(b) kolorowane
+  `Run`-y · R6(a) zakres tylko `Query.Exec.*` · R7 status i panele reagują, log Messages nie.
+  ⭐⭐ **ZNALEZISKO GŁÓWNE: to były TRZY problemy, a mechanizmu wymagał tylko JEDEN.** Szyk zdania
+  (`"{n} {row|rows} {inserted}"`) i sklejanie fragmentów (`Join(" · ")`) rozwiązuje **zwykła reguła D‑3
+  w rozdzielczości ZDANIA** — jedno całe zdanie, jeden klucz, dane jako argumenty; tłumacz przejmuje
+  kolejność. Mechanizmu wymagała wyłącznie **KATEGORIA liczby**, więc cały mechanizm to jeden plik
+  (`PluralRules`) i jedno rozgałęzienie w `Loc.Format`.
+  ⭐⭐ **O tym, czy zdanie potrzebuje form liczby, decyduje JĘZYK, nie producent** — `Loc.Format` sonduje
+  warianty **w katalogu renderowanej kultury**, więc angielski trzyma wpis płaski tam, gdzie polski deklaruje
+  trzy. ⛔ Flaga „to jest komunikat liczbowy" na `LocalizableMessage` byłaby twierdzeniem Core o gramatyce,
+  której Core nie zna — i zamroziłaby angielski podział dwuelementowy w kontrakcie (**#363**).
+  ⛔ **Zestaw reguł nazywa GRAMATYKĘ, nigdy języka** (`one-other`, `one-few-many`) — kilka języków dzieli
+  jeden kształt, więc nazwa językowa jest fałszywa przy drugim konsumencie. ⛔ Reguła jako WYRAŻENIE
+  parsowane z zasobu **odrzucona**: mini-język na ścieżce, która nie ma prawa rzucić, został już raz opłacony
+  (`TreeDiagnostics`). ⚠ Granica powiedziana wprost: „nowy język bez kodu" obowiązuje dla gramatyki już
+  zamodelowanej; genuinnie nowy algorytm liczby mnogiej **JEST kodem**.
+  ⭐⭐ **ODZIEDZICZONY LICZNIK „5 PRZYPADKÓW" NIE PRZETRWAŁ POMIARU — trzeci taki inwentarz w tym etapie,
+  i pierwszy błędny w stronę ZANIŻENIA:** zmierzone **7** rozgałęzień w kodzie (4 w modułach otwartych,
+  3 w zamkniętym Performance) **+ 30 hedge'ów `(s)` w katalogu App** — ta sama klasa problemu, rozwiązana
+  angielską konwencją, której polski nie ma (`„8 wiersz(y)"` jest błędne dla 1 i 2). ⛔ C6 ich NIE migruje
+  (R6), ale mechanizm zaprojektowany na 5 przypadków byłby niedowymiarowany o rząd wielkości. ⭐ Siódmy
+  przypadek to inna gramatyka — `"has"/"have"` to zgodność CZASOWNIKA — i obsługuje go ten sam kształt,
+  bo mechanizm wybiera WARIANT ZDANIA, a nie odmienia rzeczownik.
+  ⭐⭐ **Dowodem zerowej zmiany treści są NIETKNIĘTE testy:** `ExecutionSummaryTests` (14) i
+  `ExecutionActivityTests` (8) przypinają angielskie brzmienie dosłownie i wołają przeciążenia BEZ resolvera,
+  renderowane przez nowe `ExecutionEnglish` (forma dualna). Osobny strażnik żąda, żeby KATALOG odtworzył te
+  same zdania dla każdego kształtu × każdej liczby — dwa niezależne zbiory danych przez jeden wspólny
+  składacz, więc rozjechać je może wyłącznie różnica SŁÓW (i to samo łapie dopisane przez tłumacza `{0:N0}`,
+  czyli zagrożenie #357, bez testu, który musi je powtarzać).
+  ⚠ **Jedna wartość angielska zmieniona świadomie i zgłoszona PRZED akceptacją kontraktu:** fallback
+  sterownika nie miał liczby pojedynczej i renderował **`"1 rows affected"`** (osiągalne). Nadanie kluczowi
+  rodziny jest tym, co czyni go przetłumaczalnym; korekta angielskiego jest konsekwencją.
+  ⛔⛔ **`TableChange.Verb` NIE JEST JUŻ BINDOWANE W XAML i nie wolno tego cofnąć** — karta rysowała `Count`
+  i `Verb` jako dwa sąsiadujące, różnie pokolorowane bindingi, czyli miała **angielski szyk zapisany
+  w UKŁADZIE**; polski stawia liczbę w środku. Karta renderuje teraz jedno zlokalizowane zdanie rozcięte
+  wokół liczby (`Loc.FormatParts`, trzy `Run`-y), więc akcent na liczbie przeżywa tłumaczenie (**#362**).
+  ⭐ Skutek uboczny: trzy `DataTemplate` kluczowane po podtypach rekordu Core → **jeden** nad wierszem App,
+  i ratchet odstępów **ZAŻĄDAŁ obniżenia** swoich baseline'ów — mechanizm działający zgodnie z zamysłem.
+  ⚠ **Live switching to #353 po raz TRZECI** (`RaiseAllPropertiesChanged` dociera do ZAKŁADKI, nie do VM
+  treści, a `ExecInfo`/`QueryStatsText` to wartości zapisane). Zamiast odkrywać to po raz czwarty:
+  `EveryViewModelThatCanRefreshItsText_IsForwardedFromTheTab` **uzbraja się sam z TYPÓW** deklarujących
+  `RefreshLocalizedText`. ⛔ Log Messages świadomie NIE jest przepisywany — to timestampowany zapis tego, co
+  powiedziano wtedy (ta sama decyzja co „Query N").
+  ⚠⚠ **Test, który przechodził z DWÓCH powodów, złapany przed zaraportowaniem:**
+  `SwitchingLanguage_RebuildsTheActivityCards` był zielony niezależnie od tego, czy wiersz rozwiązuje tekst
+  przy odczycie, czy jest przebudowywany — oba są zaimplementowane, więc nie przypinał żadnego. Rozbity na
+  dwie nazwane asercje, każda z własnym podsadzeniem.
+  ⭐ **Dziesięć podsadzeń, każde zapala swojego strażnika** (m.in. zdjęta reguła nastolatków → 5 przypadków;
+  dryf wartości w zasobie; brakująca kategoria rodziny; wpis płaski obok rodziny; usunięte przekazanie do VM
+  dziecka; argument niebędący liczbą → 9 testów, w tym **NIETKNIĘTY** `ExecutionSummaryTests`; zestaw reguł
+  nazwany językiem; spacja między `Run`-ami w dostarczonym XAML; cache w wierszu; brak przebudowy).
+  ⚠⚠ **Dwa defekty PROCESOWE zapłacone przy podsadzeniach, oba warte zapamiętania:** `git checkout` **nie
+  przywraca pliku nieśledzonego** (dokładnie #350 — rewert podsadzenia w `PluralRules.cs` zawiódł), a rewert
+  z PUSTYM łańcuchem zastępującym **wstawia linię na pozycji 0** (wylądowała nad blokiem `using`). Dalsze
+  podsadzenia rewertowane odwrotną łatką, pliki nieśledzone skopiowane do scratchpada (**#365**).
+  ⚠ **Wzrost +53 trafił W CAŁOŚCI do partycji ZGRUPOWANEJ** (214 → 267); partycja główna stoi na 8 387.
+  Filtr headless ma **20** nazw — ⛔⛔ **wyprowadzaj go, nie przepisuj**:
+  `grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs`.
+  ⚠ **Zmierzone przy okazji, zapisane i NIENAPRAWIONE:** reguła §B.7 („każdy test dotykający `Loc` należy do
+  `HeadlessCollection`") nigdy nie była egzekwowalna — **~40 klas testowych czyta `UiStrings` spoza kolekcji**,
+  w tym `ProcedureDetailTests` od etapu App. To, co faktycznie obowiązuje i czego C6 przestrzegało: **test,
+  który PODMIENIA katalog, dołącza do kolekcji i cofa podmianę w `finally`**.
+  ⏭ **Następny: `Office` ×2** (`ex.Message` jako klasa A pod postacią `throw`). ⛔ Nie otwierać przy okazji
+  SessionHealth, QuickInfo ani Performance; 30 hedge'ów `(s)` w App to osobny zakres.
+
+- **🃏🔧 KARTA PARAMETER HELPER PRZEŻYWAŁA ZMIANĘ ZAKŁADKI — NAPRAWIONE 2026-08-10, ⏸ czeka na QA
+  użytkownika.** Zgłoszenie: *„jak klikam dwa razy na funkcję, okienko zostaje, gdy przechodzę na inną
+  zakładkę; przy quickinfo była poprawka, ale tutaj nie działa"*. Build 0/0; suite **8656** (8387 + 214 + 55);
+  smoke czysty. As-built: **[docs/history/29-…](docs/history/29-formatter-and-psql-dml-binding-fix.md) §6**.
+  Nowa gotcha **#361**.
+  ⭐⭐ **`Hide()` NIGDY nie było zepsutą połową — brakowało WYZWALACZA, a komentarz w `Hide()` czytał się jak
+  naprawiony błąd i ukrywał to.** Twierdził: *„po zmianie zakładki edytor jest odczepiony, `GetOverlayLayer`
+  zwraca null, karta jest osierocona"*. Zmierzone — **każda klauzula fałszywa**: MainWindow trzyma zakładki
+  jako **współistniejące widoki bramkowane `IsVisible`**, więc `DetachedFromVisualTree` fires **0×**,
+  `GetOverlayLayer` nadal rozwiązuje, a **wszystkie zakładki dzielą JEDNĄ warstwę overlay okna** — dlatego
+  karta jest fizycznie nad nową zakładką. Cyklem życia karty rządzi **karetka** (#210), a zmiana zakładki nie
+  rusza karetki, więc żadna reguła nigdy nie odpaliła.
+  ⭐ **Bliźniacza karta hovera tylko WYGLĄDAŁA na odporną:** zdejmuje ją `PointerExited`, które odpala, bo
+  myszka odjeżdża do paska zakładek — gest, którego karta karetkowa nie ma. Czyli *„tam była poprawka"* było
+  prawdą o USUWANIU i nic nie mówiło o wyzwalaczu.
+  ⚠⚠ **Trzy oczywiste sygnały padły po kolei:** `Visual` **nie ma `IsEffectivelyVisibleProperty`** w Avalonii
+  12.1.1 · `DetachedFromVisualTree` 0× · `EffectiveViewportChanged` **niemierzalne stabilnie** (0× w sondzie,
+  1× w teście — pierwsza dostawa jest asynchroniczna), więc **ani nie użyte, ani nie twierdzone**, zamiast
+  dostrojone pod zielone. Zostają **`LayoutUpdated`** i **`LostFocus`** — to drugie podnoszone **przez samą
+  zmianę widoczności** (ukrycie przodka zabiera fokus), więc nie zależy od tego, czy pasek zakładek jest
+  fokusowalny.
+  ⭐ **Kształt poprawki wart skopiowania: DWA niezależne wyzwalacze, JEDNA decyzja, a decyzją jest
+  NIEZMIENNICZOŚĆ** (`karta otwarta && !editor.IsEffectivelyVisible`), nie proxy — więc wyciszenie jednego
+  wyzwalacza degraduje, a nie psuje, a przejście fokusu na inną kontrolkę **tej samej widocznej zakładki**
+  karty nie zamyka. ⛔ Bezwarunkowe „hide on LostFocus" (kuszący jednolinijkowiec) świadomie odrzucone.
+  ⚠ Ta sama niezmienniczość bramkuje drogę **DO ŚRODKA** — `ShowAt` ma asynchroniczne dogrzanie metadanych,
+  które może wrócić już po przełączeniu, do tej samej wspólnej warstwy.
+  ⛔⛔ **NIE ruszaliśmy `SignatureHelpEngine` — decyzja użytkownika.** Zmierzone i **wycofane w całości**:
+  kliknięcie NAZWY funkcji rozwiązuje wywołanie **otaczające** (a przy jednym poziomie zagnieżdżenia — nic),
+  bo regułą silnika jest *„wygrywa najgłębszy OTACZAJĄCY nawias"*, a nazwa leży poza własnymi nawiasami.
+  Użytkownik ratyfikował istniejące zachowanie. ⛔ Nie wyprowadzać tego ponownie jako defektu.
+  ⛔ **QA end-to-end należy do użytkownika** — `ParameterHelper` wymaga prawdziwego `TextEditor`, którego
+  statyczna inicjalizacja keymapy rzuca w sesji headless (#226, zmierzone ponownie), więc testy przypinają
+  **PRZESŁANKI** (jedna warstwa · brak detach · niezmienniczość się przełącza · oba wyzwalacze odpalają ·
+  `IsEffectivelyVisibleProperty` nadal nieobecne), nie zachowanie.
+
+- **🐞🔧 DWA DEFEKTY Z JEDNEGO ZGŁOSZENIA — NAPRAWIONE 2026-08-10, ⏸ czeka na potwierdzenie użytkownika
+  w działającej aplikacji.** Zgłoszenie: *„autoformater sobie nie radzi"* + *„jedna `zasobtechcrp` nie ma
+  koloru"* na jednej procedurze. **Oba okazały się szersze niż zgłoszenie.** Build 0/0; suite **8649**
+  (8387 + 207 + 55, +107); smoke czysty; `Lab/` nietknięty. Narracja:
+  **[docs/history/29-formatter-and-psql-dml-binding-fix.md](docs/history/29-formatter-and-psql-dml-binding-fix.md)**.
+  Nowe gotchy **#359–#360**.
+  ⭐⭐ **DEFEKT A — w ciele PSQL ŻADEN cel DML nie był wiązany.** `BindBodyStatement` był **drugą, równoległą
+  ścieżką** nad tymi samymi pięcioma rodzajami instrukcji: wiązał podzapytania i **nigdy nie deklarował CELU**.
+  Zmierzone: na top-level wiąże się `update`/`insert`/`delete`/`update or insert`/`merge`, w ciele procedury
+  **ani jeden** — czyli **większość kodu w bazie ERP**. Jedno słowo wyglądało źle tylko dlatego, że w tej
+  procedurze jedynie ta instrukcja nazywa tabelę występującą też gdzie indziej.
+  ⭐ **Gorsza połowa jest niewidoczna:** bez zadeklarowanego aliasu `BindDottedReference` świadomie milczy na
+  nierozwiązanym kwalifikatorze, więc CAŁA instrukcja traciła referencje `alias.kolumna` — brak koloru, Quick
+  Info, Ctrl+Click, find-references **i** kontroli nieznanej kolumny. ⚠ Skutek: ET0002 może się teraz pojawić
+  w DML wewnątrz procedury, gdzie wcześniej było cicho — to wiązanie działające poprawnie.
+  ⭐ **Naprawa likwiduje równoległą ścieżkę, nie dopisuje brakującej połowy:** jeden właściciel
+  `BindDmlTablesAndQueries`, pięć ramion w binderze PSQL → jedno. ⛔ Nie dodawać tam ramion per rodzaj —
+  pozycja celu (`UPDATE t` / `INSERT INTO t` / `DELETE FROM t` / `MERGE INTO t USING src`) to jedna reguła.
+  ⚠ Instrukcja dostaje **własny scope potomny** (alias nie wycieka do sąsiada), którego **rodzicem jest scope
+  ciała** (dzięki temu `:zmienne` nadal się rozwiązują) — jedno i drugie przypięte.
+  ⭐⭐ **NAJMOCNIEJSZE ZNALEZISKO (#360): suita, która to miała pilnować, ISTNIEJE DOKŁADNIE DLA TEGO OBJAWU**
+  (*„obiekt kolorowany w FROM, ale nie w UPDATE"*) i pilnuje wszystkich pięciu rodzajów DML — **tylko na
+  top-level**; sąsiednie wiersze dla ciała procedury pilnują **ZAPYTANIA**. Dwie niezależne osie (rodzaj ×
+  zagnieżdżenie), każda zmieniana przy ustalonej drugiej ⇒ skrzyżowania nigdy nie było, i tam mieszkał defekt.
+  Słowo *„position"* w jej dokumentacji po cichu znaczyło *pozycję klauzuli*, nigdy *zagnieżdżenie*.
+  Podsadzenie: **8 nowych skrzyżowanych przypadków czerwonych, 14 istniejących zielonych.**
+  ⭐⭐ **DEFEKT B — formater gubił komentarz, a §0 zamieniało to w „nic nie robi" (#359).** `EmitSelectQuery`
+  renderuje zapytanie z **KLAUZUL**, a komentarz materializuje się z **triwii tokenu, który poprzedza** — więc
+  komentarz między ostatnią klauzulą a tym, co zapytanie **ZAMYKA** (`;` / `INTO` / `DO`), nie należał do
+  nikogo. Siatka §0 wykrywała stratę i zostawiała instrukcję dosłowną — poprawnie, i to właśnie ukrywało
+  defekt: **jeden `--` przed `into` zamrażał 30-linijkową procedurę**, a wyglądało to na bezczynność.
+  ⚠⚠ **Każdy test zachowania leksemów był zielony przez całe życie defektu**, bo cofnięcie do dosłownej
+  zachowuje leksemy idealnie. Asercją, która potrafi zapalić, jest **„siatka NIE zadziałała"** (wejście
+  niekanoniczne ⇒ wyjście MUSI się zmienić) — ten sam kształt co
+  `UpperKeywords_ActuallyReCase_AndDoNotTripTheSafetyNet`.
+  ⚠ Drugi powód przeżycia: wspólny `SqlTestCorpus` **nie miał prawie żadnych komentarzy** — dopisano 8
+  kształtów, więc teoria round-trip/idempotencji/casingu pilnuje ich już na stałe.
+  ⚠ **Pierwsza hipoteza („`EmitQuery` gubi komentarze") została OBALONA pomiarem** — komentarz wewnątrz
+  klauzuli zawsze przechodził; trzeba było odczytać wyjście **przed** siatką (prywatne `FormatStatement` jest
+  czystą funkcją właśnie po to).
+  ⭐ **Czwarte miejsce z tym samym defektem znalazł KOMPILATOR** (ciało `CREATE VIEW`), gdy jednozadaniowe
+  `WithSemicolon` zostało zastąpione wspólnym `EmitQueryTail` — zmiana KSZTAŁTU wylicza swoje miejsca użycia.
+  ⚠ **Widoczna zmiana zachowania:** taki komentarz trafia teraz na **własną linię** nad `into`, nie na koniec
+  linii `where` (klauzula `WHERE` sama się łamie, więc „koniec where" nie jest stabilnym miejscem). Komentarze,
+  które działały (w klauzuli, w liście `SET`, po `;`), są nietknięte — przypięte w obie strony.
+  ⚠⚠ **Nota procesowa: pierwszy pełny przebieg dał 13 niepowodzeń i ŻADNE nie było moje** — ręcznie przepisany
+  filtr partycji miał **12** nazw klas headless, a kod ma **18**, więc sześć klas wyciekło do partycji głównej
+  i trafiło w udokumentowany wyścig o globalny katalog `Loc`. ⭐ **Filtr wyprowadzaj z kodu, nie przepisuj:**
+  `grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs`.
+
+- **🌍🚧 LOCALIZATION / CORE + FIREBIRD — ETAP W TOKU. C0 (audyt), C1 (`SessionHealthAnalyzer`),
+  C2 (`QuickInfoEngine`), C3 (`FirebirdConnectionService`), **C4a** (`ApplicationSettingsStore`) i **C4b**
+  (`Settings/Export`, ⭐ tym samym CAŁE C4) i **C5** (`DiagnosticsEngine`) — ODEBRANE (2026-08-10).** Gałąź
+  `feat/localization`; ⛔ **nadal NIE scalona do `master`.** Build 0/0; suite **8 542** (8 280 + 207 + 55);
+  smoke czysty; `Lab/` nietknięty. ⏭ **Następny: C6 — `ExecutionSummary` / `ExecutionActivity`**, i ⛔⛔ **znów
+  od PROPOZYCJI KSZTAŁTU KONTRAKTU, nie od kodu**: te zdania są **SKLEJANE** (`"{0} {1} {2}"` z liczbą,
+  `"row"/"rows"` i czasownikiem), więc migracja klucz-za-klucz jest niemożliwa i to ten moduł **wymusza
+  mechanizm liczby mnogiej** (licznik przypadków: **5** — C5 nie dodało żadnego). Narracja:
+  **[docs/history/28-localization-core-stage.md](docs/history/28-localization-core-stage.md)**. Nowe gotchy
+  **#353–#358**.
+  ⭐⭐ **C5 — pierwszy moduł, którego KSZTAŁT KONTRAKTU był ratyfikowany PRZED napisaniem linii kodu**, i to
+  była właściwa kolejność: warunkiem migracji było nadanie `LocalizableMessage` **równości strukturalnej**.
+  Równość generowana rekordu porównywała `IReadOnlyList<object?>` **po referencji**, więc dwa identyczne
+  komunikaty były nierówne — nieszkodliwie przez cztery etapy, bo **nikt ich nie porównywał**, i groźnie
+  w chwili osadzenia w `Diagnostic` (`readonly record struct`, którego równość `DiagnosticsPanelViewModel.Update`
+  używa, żeby NIE przebudowywać kolekcji i NIE gubić zaznaczenia). Panel churnowałby przy **każdym ticku
+  debounce**, przy zielonym buildzie. Gotcha **#358**.
+  ⭐ **Naprawione u NOŚNIKA, nie u konsumenta** — wariant „nośnik o stałej arności w `Diagnostic`" odrzucony
+  (sufit arności to defekt zaplanowany na później). ⭐⭐ Bezpieczne, bo **zmierzone**: grep dał **zero**
+  konsumentów równości tego typu, więc zmiana mogła tylko zrównać więcej rzeczy, nigdy mniej.
+  ⚠ Przesłanka nowej równości jest **pilnowana**: argument musi być wartościowo porównywalny (`string`, liczba);
+  podsadzenie `char[]` zapala strażnika.
+  ⭐⭐ **PODSADZENIE A jest najmocniejszym wynikiem etapu: przywrócenie równości referencyjnej zapala 7 testów,
+  w tym DWA ISTNIEJĄCE** (`Update_WithUnchangedDiagnostics_DoesNotRebuildTheCollection`, `…_KeepsTheSelection`)
+  — czyli ochrona nie jest czymś, co C5 wymyśliło, tylko czymś, co C5 **zachowało**.
+  ⭐ **Bez bliźniaka angielskiego, i to POMIAR:** `DiagnosticsEngineTests` asertuje `Category`, `Code`,
+  `Severity`, `Start`, `Length` i **ani razu treści** ⇒ nie było czego przypinać. Kształt **C2** (zmienia się
+  typ), nie C4a. Dowód zerowej zmiany: **diff pusty, 9 == 9**, mechanicznie.
+  ⛔ **`ET0008` = DWA klucze** (rzeczownik „trigger"/„function" nie jedzie jako argument — reguła C3), i to
+  właśnie dlatego klucz **mieszka w strukturze**, a nie jest wyprowadzany z `Category`: jedna kategoria daje dwa
+  zdania, więc mapa nie jest 1:1. ⭐ Rozstrzyga to projekt: `Category` mówi *jakiego RODZAJU* to problem (na tym
+  rozgałęzia się `QuickFixEngine`), klucz mówi *które ZDANIE*.
+  ⛔ **`ET0004` jest NIEOSIĄGALNE — zmierzone znalezisko, nie luka:** żadna ścieżka bindera nie tworzy
+  nierozwiązanej referencji o roli `Parameter` (wszystkie oddają `Variable`). ⭐ Potwierdzone niezależnie:
+  **w całym suite nie ma testu ET0004** — tak wygląda nieosiągalna kategoria z zewnątrz i nikt tego nie zauważył.
+  Nazwany wyjątek z **przypiętą przesłanką** (sześć kształtów PSQL).
+  ⭐⭐ **Live switching W3 i pułapka, dla której istnieje:** panel ma **jedną** subskrypcję i odświeża `Message`
+  istniejących wierszy. ⛔ Oczywista naprawa — przebudowa i republikacja — jest **POŻERANA przez `Unchanged()`**,
+  bo po zmianie języka znaleziska są te same; optymalizacja chroniąca zaznaczenie zjadłaby odświeżenie.
+  Podsadzenie tej wersji zapala test z komunikatem *„the row was never told its text changed"*.
+  ⭐ **Hover bez mechanizmu — NIEOSIĄGALNE (zmierzone, #346):** kartę zdejmuje `PointerExited` na `TextView`
+  **oraz** dowolne kliknięcie, a dotarcie do wiersza Language wymaga obu.
+  ⚠⚠ **Inwentarz z mojej propozycji pominął DWÓCH konsumentów** (`DebugPreflight`, `FirebirdGrammarCorpusTests`)
+  — oba znalazł **kompilator**, bo zmiana TYPU wylicza swoje miejsca użycia. ⭐ To ukryta zaleta zastąpienia nad
+  formą dualną: dodanie właściwości obok zostawiłoby oba cicho po angielsku na zawsze.
+  ⭐⭐ **C4b — 20 kluczy, i najważniejsza linia jest o tym, czego NIE dodano: dwie odmowy store'a są
+  PRZEWLECZONE, nie powtórzone.** `CanSave(out,out)` i `LastSaveMessage` — jedno i drugie dodane w C4a
+  dokładnie na to — niosą odmowę przez applier, więc dialog importu pokazuje **zdanie store'a z klucza
+  store'a**. Drugi klucz o tej samej treści byłby dwiema odpowiedziami na jedno pytanie i rozjechałby się przy
+  pierwszym przeredagowaniu.
+  ⭐ **Rodzina `Damaged*` to CZTERY CAŁE ZDANIA**, nie prefiks + fragment (prefiks przyklejony do fragmentu nie
+  przetłumaczy się na język fleksyjny). ⭐ Angielska połowa **nadal jest SKŁADANA** tym samym prefiksem — celowo:
+  dzięki temu strażnik równości dowodzi, że wpis zasobu **odtwarza konkatenację**, a nie że ktoś poprawnie
+  przepisał zdanie. Przepisanie byłoby jedynym sposobem zmienić treść niewidocznie.
+  ⛔ **Strona EKSPORTU jest poza zakresem i to POMIAR, nie pominięcie:** `SettingsExporter` ma dwa komunikaty,
+  oba `ArgumentException`, a `CanExport` bramkuje oba warunki ⇒ nieosiągalne z UI; opakowanie błędu jest już
+  zlokalizowane w App, a treść wewnętrzna należy do platformy.
+  ⚠ **Jeden klucz jest dziś NIEOSIĄGALNY** (`NoMigrationStep` — ladder wymaga `Oldest < Current`, oba = 1) i ma
+  **nazwany wyjątek z PRZYPIĘTĄ PRZESŁANKĄ**: `TheOnlyUnreachableKey_IsStillUnreachable` pilnuje równości wersji,
+  więc dzień, w którym powstanie format v2, zapala ten test i każe dopisać scenariusz (#322 — pilnuj przesłanki,
+  nie polityki).
+  ⭐ **Live switching NIE dostał haka — i to jest ustalenie, nie brak.** Zmierzone: preferencja języka ma
+  **jednego pisarza** (wiersz Language w Settings Center), a dialog importu jest `ShowDialog` **nad tym właśnie
+  oknem**, więc język nie może się zmienić, gdy dialog jest otwarty; a gdy sam import niesie inny język,
+  `SettingsPortability.Apply` przełącza go **przed zwróceniem wyniku**, czyli komunikat składa się już po
+  przełączeniu (ta sama „poprawność przez kolejność" co baner Settings Center w C4a). ⛔ Zapisane w miejscu:
+  gdyby dialog przestał być modalny, rozumowanie wygasa.
+  ⚠⚠ **ZNALEZISKO #357 — strażnik równości wzorca dualnego ma NIEUŚWIADOMIONĄ PRZESŁANKĘ, a wersja mechanizmu,
+  którą zapisałem najpierw, była BŁĘDNA.** Twierdziłem (i zaraportowałem jako pomiar), że `CurrentCulture`
+  pogrupuje argument `2000000000` i strażnik będzie czerwony na maszynie polskiej. ⭐ **Podsadzenie argumentu
+  liczbowego nie zapaliło NICZEGO**: `{0}` z `int` **nie** stawia separatorów grup — kultura rządzi separatorem
+  dziesiętnym i minusem, nie grupowaniem liczby w formacie `G`. Prawdziwą dźwignią (i źródłem `48 102` z #354)
+  jest **`{0:N0}` w wartości zasobu**. ⚠ To przenosi zagrożenie z MASZYNY na TŁUMACZA: angielska połowa jest
+  literałem u producenta, zlokalizowana jest wpisem, który ktoś będzie edytować. Stąd: liczba będąca **ECHEM
+  pola technicznego** jedzie jako **string invariantny** (specyfikator staje się bezczynny); ⛔ liczba, którą
+  czytelnik **liczy**, nadal idzie za jego kulturą — #354 stoi.
+  ⭐⭐ **I test musiał się zmienić razem z historią:** `TheEnglishAndLocalizedForms_AgreeOnAnyCulture` wyglądał
+  rygorystycznie (4 kultury × wszystkie komunikaty) i **nie mierzył tego, co obiecywał**; został z uczciwą
+  etykietą „szeroki test niezmienności", a przypadek liczbowy pilnuje
+  `EveryArgument_IsAlreadyFormatted_SoNoFormatSpecifierCanChangeIt`, który podaje **wrogi szablon `{0:N0}`** pod
+  `pl-PL` i wymaga, żeby argument przeszedł dosłownie. Po ponownym podsadzeniu: **dokładnie jeden test czerwony,
+  dziewięć zielonych.**
+  ⭐ **Dowód zerowej zmiany treści jest znów NIETKNIĘTYMI TESTAMI** (`SettingsExportFormatTests`,
+  `SettingsImportApplyTests` — w tym `Assert.Contains("Refusing to overwrite", result.Message)`, czyli
+  przewleczona odmowa store'a).
+  ⚠ **Siedem podsadzeń, każde zapala swojego i tylko swojego strażnika** (numeryczny argument · dryf słowa
+  w zasobie · zdjęty prefiks `Damaged` · dwa zdania na jednym kluczu · `CurrentFormatVersion = 2` · przemianowany
+  klucz bez wpisu · dialog pokazujący nierozwiązany angielski).
+  ⚠ **Znany flake zapalił się w 3 z 6 przebiegów partycji głównej** (`SettingsLoadHealthTests.ConcurrentSaves_…`,
+  `Assert.Empty`), przy 3/3 zielonych solo i trzech przebiegach z pełnym 8 280. ⛔ Nie ogłaszany naprawionym ani
+  powiązanym: ślad C4b to 7 plików i **nie ma wśród nich `ApplicationSettingsStore`, `AtomicWrite` ani blokady
+  międzyprocesowej** — czyli dokładnie tego, co ten test ćwiczy. ⚠⚠ Częstotliwość wygląda wyżej niż wcześniej
+  notowana; jeśli się utrzyma, zasługuje na własne zadanie, nie na kolejny przypis.
+  ⭐ **Jedna korekta prawdy poza migracją:** doc `LocalizableMessage` twierdził *„seam nie ma jeszcze PRODUCENTA
+  w Core … ⛔ nie zaczynaj migrować"* — prawda, gdy powstał, i fałsz od C1. Zostawiony mówiłby następnemu
+  autorowi coś odwrotnego niż zrobiły cztery odebrane etapy, i to na typie, którego właśnie by używał (#284
+  w kształcie komentarza przy samym seamie).
+  ⭐⭐ **C3 — wzorcowy D‑3, cała granica w jednej linii: nasze zdanie to KLUCZ, zdanie serwera to ARGUMENT.**
+  `Firebird.Connection.Failed` = *„Could not connect to {0}: {1}"*, gdzie **`{1}` to dosłownie to, co
+  powiedział Firebird**. ⭐ `ConnectionFailedException` niesie **oba** kształty: `Localized` dla trzech
+  powierzchni App, `Message` po angielsku dla logów i nieprzemigrowanych ścieżek — dzięki czemu nieznana
+  ścieżka degraduje się do **dokładnie dzisiejszego zachowania**, nigdy do gorszego. ⚠ Duplikacja jest
+  **pilnowana**, nie tolerowana (strażnik wymaga zgodności obu po angielsku) — i ten sam strażnik jest
+  **dowodem zerowej zmiany treści, mocniejszym niż diff tekstowy**, bo porównuje z NIETKNIĘTYM producentem.
+  ⛔⛔ **`Legacy_Auth` nadal rozpoznawany po tekście SERWERA** — przypięte **pod zmianą języka**, bo objaw
+  przepięcia na nasz zlokalizowany tekst jest w angielskim **niewidoczny**. Podsadzenie kompiluje się
+  z **0 błędów** i zapala trzy testy.
+  ⭐ **Rozszerzenie strażnika o assembly Firebird, zrobione prewencyjnie w C1, zadziałało bez żadnej zmiany**
+  — C3 jest pierwszym producentem w tym assembly i podsadzenie przemianowanego klucza zapala wszystkie trzy
+  strażniki katalogu.
+  ⭐⭐ **C2 — migracja okazała się PODZIAŁEM, nie sweepem:** fakt Quick Info to para `etykieta : wartość`
+  o **dwóch różnych właścicielach** — etykieta (18 kluczy) jest nasza, **wartość zostaje dosłowna**, bo to
+  słownictwo Firebirda (`NOT NULL`, `PRIMARY KEY`, `BEFORE INSERT`), a karta, która by je przetłumaczyła,
+  **nie zgadzałaby się z DDL-em, który opisuje**. Zero zmiany treści: 18 starych literałów == 18 wartości
+  w katalogu, **diff pusty**.
+  ⭐⭐ **Znalezisko C2 (#355): zmiana typu `string` → `MessageKey` NIE zepsuła miejsca, które go SKLEJAŁO.**
+  `new Run(fact.Label + "  ")` kompilowało się dalej (konkatenacja bierze `ToString()`) i wypisałoby
+  `QuickInfo.Fact.Nullability` na karcie hover. ⚠ **Żaden strażnik kluczowy tego nie widzi** — wszystkie
+  rozwiązują klucz same, więc testują katalog, nie ekran; łapie to dopiero strażnik czytający
+  **zrealizowaną kontrolkę**. Podsadzenie: build **0 błędów**, 4 z 5 testów zielone, ten jeden czerwony.
+  ⭐ **C2 nie potrzebowało instalacji live switchingu i to jest ZMIERZONE**: karta Quick Info jest budowana
+  od nowa przy każdym najechaniu i każdym wyborze wiersza uzupełniania (inaczej niż karty SessionHealth,
+  które żyją w kolekcji).
+  ⛔⛔ **OTWARTE PYTANIE Z C2 — wartości faktów będące NASZYMI słowami** (`KindLabel` ×3, `"Variable"`,
+  `"Active"/"Inactive"`, `"Identity"/"Computed"`, `"Input parameter"`). ⭐ `QuickInfoEngine.KindLabel` to
+  **PIĄTA kopia słownictwa, które etap App już skonsolidował** (`QuickInfoView.KindLabel` → `ObjectKind*`,
+  już zlokalizowane). ⛔ **Nie deklarować kluczy rodzajów w Core** — to byłaby druga kopia słów, które App
+  już ma; właściwy kształt to oddać `SymbolKind` jako daną (reguła enum-vs-`MessageKey`). ⚠ Zmienia kontrakt
+  `QuickInfoFact`, więc **decyzja użytkownika**. ⚠ Koszt bieżący: polski czytelnik zobaczy *„Rodzaj: Table"*,
+  **podczas gdy drzewo metadanych nazywa to samo „Tabela"**.
+  ⭐⭐ **WYNIK C0, wart więcej niż sam etap: odziedziczone „≈280 komunikatów" NIE PRZETRWAŁO POMIARU — trzy
+  z dziesięciu pozycji inwentarza opisywały coś innego, niż twierdziły.** `CharsetCatalog` „8 opisów
+  zestawów znaków" → **0** (to NAZWY charsetów Firebirda, klasa D) · Data Import „~20 błędów wierszy" → **0**
+  (moduł **był już zbudowany poprawnie**: `ImportRowError` niesie enum, a komentarz mówi wprost *„as a code —
+  **never a message**"*) · `FirebirdDiagnostics` „24" → **0** klasy A (klasa deklaruje o sobie *„No UI"*,
+  wszyscy konsumenci piszą do `%TEMP%`). ⭐ Realny zakres: **~170–190**, i za każdym razem korekta zmieniała
+  KSZTAŁT pracy, nie tylko liczbę.
+  ⭐ **Drugi, ratyfikowany mechanizm na ten sam problem JUŻ istniał** (`ExportUnavailableReason`,
+  `ImportDiagnosticCode` — enum kodu → `UiStrings`). 🔒 Reguła: **enum**, gdy zbiór jest zamknięty i App może
+  chcieć się rozgałęzić; **`MessageKey` + argumenty**, gdy komunikat niesie dane dynamiczne. ⛔ Istniejących
+  poprawnych enumów NIE migrujemy.
+  🔒 **Kolejność ratyfikowana:** `SessionHealthAnalyzer` ✅ → `QuickInfoEngine` → `FirebirdConnectionService` →
+  `Settings/Export` → `DiagnosticsEngine` → `ExecutionSummary`/`ExecutionActivity` → `Office ×2` → dopiero
+  potem decyzja o **Performance** (moduł ZAMKNIĘTY, nieotwierany).
+  **C1 as-built:** `SessionHealthFinding` → `LocalizableMessage` (16 kluczy w `SessionHealthMessages`), dane
+  jako argumenty. ⭐⭐ **Zero zmiany treści DOWIEDZIONE** porównaniem z `git show HEAD`: jedyne różnice to pięć
+  niemigrowanych nagłówków werdyktu i trzy przekształcenia interpolacji w placeholder, gdzie **tekst dosłowny
+  wokół nich jest niezmieniony co do znaku**.
+  ⛔⛔ **`SessionHealthVerdict.Headline` ŚWIADOMIE zostaje `string`iem — decyzja użytkownika: NIE projektować
+  mechanizmu liczby mnogiej dla dwóch komunikatów.** Zbieramy przypadki z kolejnych modułów
+  (`ExecutionSummary`, QuickInfo „1 column"), potem **jeden wspólny** mechanizm. ⚠ Zmierzone ograniczenie:
+  strażnik `NoCode_BranchesOnAParticularLanguage` skanuje `App/Localization/**`, więc tablica reguł
+  per-język **go zapali**. Powód zapisany w kodzie, przy typie, razem z zakazem „dokończenia".
+  🔒 **`48,102` → `48 102` jest ZACHOWANIEM OCZEKIWANYM, nie regresją** (ratyfikowane): `Loc.Format` formatuje
+  pod `CurrentCulture` z założenia. ⛔ Nie cofać do grupowania invariantnego. Każdy kolejny migrowany
+  producent dziedziczy tę zmianę — **#354**.
+  ⭐ **Defekt WCZEŚNIEJSZY ujawniony przez migrację (#353): łańcuch zmiany języka kończył się na
+  `WorkspaceTabViewModel`** — treść każdego rodzaju wisi na osobnym VM, którego bindingi są na DZIECKU, więc
+  `GradeText` i `GapStatusText` były zamrożone w języku startowym **już przed tym etapem**. ⚠ Naprawa rośnie
+  o linię na moduł.
+  ⚠ **Katalog ma teraz DWÓCH właścicieli, więc strażnik jest PODZIELONY, nie osłabiony** (klucz Core zawiera
+  kropki, więc nie może mieć składowej `UiStrings`). Dyskryminatorem jest **refleksja**, nie konwencja kropki;
+  obie partycje strzeżone w OBU kierunkach + nowy `EveryCoreShapedEntry_IsDeclaredByCore`. ⭐ Podsadzenie
+  zapaliło **trzy** strażniki — źle napisany klucz Core wpada do partycji App i tam też jest łapany, więc
+  **między połówkami nie ma szczeliny**. Skan kluczy objął też assembly **Firebird** (luka z audytu).
+  ⚠ **Filtr partycji headless ma 13. nazwę** (`SessionHealthLocalizationTests`) — rośnie z każdym modułem,
+  a objaw pominięcia jest **utajony** (wyścig o globalny katalog `Loc`), nie czerwony test.
+  ⭐⭐ **C4a — wzorzec DUALNY z C3, ale tu z innego, zmierzonego powodu:** komunikaty odmowy zapisu to
+  user-visible połowa powierzchni **reguły #11** (odmowa nadpisania pliku, który może trzymać jedyną kopię
+  wszystkich połączeń i haseł), a ich DOKŁADNE brzmienie przypina ~20 istniejących testów. Przepisanie typu
+  zamieniłoby strażnik dowodzący, że *użytkownik dostaje właściwe zdanie*, na taki, który dowodzi, że
+  *wybrano klucz*. ⭐⭐ Skutek: **dowodem zerowej zmiany treści są NIETKNIĘTE testy** — najmocniejszy w całym
+  etapie.
+  ⛔ **`SettingsLoadResult` świadomie NIE dostał komunikatu** — to `readonly record struct`, więc
+  `LocalizableMessage` zdegradowałby jego równość wartościową do porównania referencji listy argumentów
+  (dokładnie pułapka zmierzona w C0 §3.1). App czyta `ConnectionProfileStore.SettingsMessage`.
+  ⭐ **Live switching: jedna powierzchnia była JUŻ poprawna — przez KOLEJNOŚĆ.** Baner odmowy w Settings
+  Center składa się PO tym, jak `Apply()` podniosło `Changed`, czyli po przełączeniu języka; baner
+  settings-health w `MainWindow` był zamrożony (#353) i dostał jeden składacz wołany z haka języka.
+  ⚠ *(Zapis historyczny: po C4a zakres C4 był zrealizowany w POŁOWIE — `Settings/Export` był nie zaczęty.
+  ⭐ Ujawnił to samo-uzbrajający się strażnik: plik kluczy dla eksportu bez wpisów i producentów zapalił
+  `EveryCoreMessageKey_HasAnEnglishEntry`, więc został usunięty zamiast zostawiony jako półprodukt — i to jest
+  reguła, nie epizod: **nie twórz pliku kluczy, dopóki nie migrujesz producentów w tym samym kroku**. Druga
+  połowa weszła jako **C4b**, opisane wyżej.)*
+  ⛔ **Licznik przypadków liczby mnogiej: 5** (2 nagłówki werdyktu · `"1 column"/"N columns"` w QuickInfo ·
+  `ExecutionSummary`). Mechanizm projektujemy dopiero na pełnym zestawie.
+  ⏸ **TEMAT ODŁOŻONY decyzją użytkownika (2026-08-10): `KindLabel` / `SymbolKind`** — ~8 wartości faktów
+  QuickInfo będących NASZYMI słowami. ⛔ **Nie otwierać przy okazji innego etapu**: to decyzja
+  **kontraktowa** (`QuickInfoFact`), nie sprzątanie. ⭐ Kierunek jest znany — Core przestaje produkować SŁOWO
+  i oddaje `SymbolKind` jako daną; ⛔ **nie** deklarować kluczy rodzajów w Core (byłaby to druga kopia
+  słownictwa `ObjectKind*`, które App już ma).
+
+- **🔒🌍 LOCALIZATION / APP — ETAP ZAMKNIĘTY I ODEBRANY (2026-08-09).** Gałąź
+  `feat/localization`; ⛔ **NIE scalona do `master`.** Build 0/0; suite **8 499** (8 280 + 164 + 55); smoke
+  czysty; `Lab/` nietknięty. Dokument etapu: **[docs/design/localization.md](docs/design/localization.md)**;
+  ⭐⭐ punkt startowy następnej sesji:
+  **[docs/design/localization-app-stage-handover.md](docs/design/localization-app-stage-handover.md)**.
+  🔒 **Ratyfikowane:** **D‑1** język zmienia się **NA ŻYWO**, bez restartu · **D‑2** `.resx`/`ResourceManager`,
+  angielski jako zestaw neutralny (⛔ połowa reguły #6 zakazująca `.resx` **świadomie uchylona**, reszta stoi) ·
+  **D‑3** Core/Firebird oddają `MessageKey` + argumenty, słowa rozwiązuje App.
+  **Liczby:** katalog **2 186** wpisów · `UiStrings` **2 186 property, ZERO pól** · **1 263** miejsc
+  `{app:Loc}` · ⭐ **0 zaszytych user-visible w XAML i w App C#** · ⭐ **0 zmienionych wartości angielskich**.
+  ⭐⭐ **Zerowa zmiana wartości jest DOWIEDZIONA, nie deklarowana** — zrzut wszystkich wartości **tak, jak
+  wyliczył je KOMPILATOR**, katalog wygenerowany z tego zrzutu, po migracji porównanie każdej składowej
+  z powrotem. Parsowanie źródła dałoby dowód okrężny. ⚠ Pierwszy przebieg dał **22 rozjazdy i wszystkie były
+  błędami NARZĘDZIA**: Python w trybie tekstowym przepisał `
+`→`
+` w 11 stringach, `unicode_escape`
+  zamienił 4 półpauzy w mojibake, 4 klucze wypadły — **żadnego nie było widać w diffie źródła**.
+  ⭐⭐ **ZNALEZISKO ARCHITEKTONICZNE: standardowy wzorzec z INDEKSEREM jest w Avalonii 12.1.1 MARTWY.** Jeden
+  obiekt z `this[key]` zbudowano i **zmierzono na prawdziwym `TextBlock`**: wartość początkowa binduje się
+  poprawnie, a po zmianie języka kontrolka pokazuje **stary tekst**; ani `"Item[]"`, ani `string.Empty` nie
+  docierają do bindingu po indekserze. ⛔ **Nie upraszczać z powrotem** — wersja z indekserem renderuje się
+  poprawnie przy pierwszym załadowaniu, więc awaria się chowa. Stąd **jeden mały obiekt powiadamiający na
+  KLUCZ** (`LocalizedString.Value`).
+  ⭐ **Trzy formy składowej, tylko jedna dopuszczalna:** `const` (inline'owana — nie ma czego rozwiązywać) ·
+  `static readonly` (raz, potem **zamarza w pierwszym języku**) · **property** ✅. W XAML analogicznie:
+  `{x:Static}` **nie jest bindingiem**, obowiązuje `{app:Loc}`. ⚠ Koszt zamiany powiedziany wprost: **utrata
+  sprawdzania klucza przez kompilator**, rekompensowana strażnikiem.
+  ⭐ **Powierzchnie „capture-once" rozwiązano DWOMA sposobami, i binding jest lepszy od subskrypcji:** kolumny
+  `DataGrid` budowane w kodzie **bindują** `HeaderProperty` (`LocalizedColumn.Header`), wiersz IntelliSense
+  **przestał cache'ować** opis rodzaju; `Loc.LanguageChanged` obsługuje tylko to, czego binding nie dosięga
+  (tekst, który VM wylicza raz i publikuje — `MainWindowViewModel` + wszystkie zakładki).
+  ⛔⛔ **188 wartości z wieloma kluczami ŚWIADOMIE NIE SCALONO — decyzja użytkownika.** `"Delete"` ma 12
+  właścicieli, `"Cancel"` 11. To w większości **różne pojęcia dzielące angielskie słowo**, a język fleksyjny
+  odmieni je różnie; scalenie byłoby **defektem lokalizacyjnym udającym sprzątanie**. ⭐ Zasada:
+  **w lokalizacji kontekst jest ważniejszy niż mechaniczna deduplikacja.**
+  ⚠⚠ **DODANIE JĘZYKA MA TRZY KROKI, NIE DWA — i to koryguje mój własny wcześniejszy zapis.** Dokument
+  twierdził „wiersz w katalogu + plik `.resx`". Zmierzone przez faktyczne dodanie `pl`: **36 testów padło,
+  wszystkie z jednej przyczyny** — wiersz `SettingLanguage` w `SettingsCatalog` ma mapę `klucz → etykieta`
+  indeksowaną wprost, więc język bez ETYKIETY rzuca `KeyNotFoundException` przy budowaniu strony Settings.
+  ⭐ Złapał to **istniejący** strażnik `EveryEnumeratedOptionHasALabel` — mechanizm zadziałał, nieprawdziwy
+  był opis.
+  ⚠⚠ **UTAJONY WYŚCIG O GLOBALNY STAN `Loc`:** sonda liveness podmienia katalog procesowo, a xunit
+  zrównolegla kolekcje — uruchomienie obu filtrów naraz dało `AboutAuthorFormat` renderujące tekst pustego
+  paska bocznego. W udokumentowanych partycjach nie zachodziło. Naprawa: `LocalizationMechanismTests`
+  w `HeadlessCollection`. ⚠ **Filtr partycji headless ma przez to dwie nazwy więcej.**
+  ⏸ **Świadomie poza zakresem:** Core/Firebird (≈280 user-visible; seam D‑3 zbudowany i przetestowany
+  end-to-end, **zero producentów przeniesionych**) · polskie tłumaczenie · QA wzrokowe na żywym oknie
+  (⚠ niewykonalne przy jednym języku — żywy i zamrożony binding renderują ten sam tekst).
 
 - **⚙🔒 PAKIET UX PO M5 · PUNKT 5 — SETTINGS UX — ZAMKNIĘTY I ODEBRANY PO QA WIZUALNYM W OBU MOTYWACH
   (2026-08-10).** Build 0/0; suite **8430** (8243 + 132 + 55); smoke czysty; `Lab/` nietknięty. As-built:
@@ -5066,6 +5612,11 @@ noted.
   (8280 + 132 + 55), zmierzone 2026-08-10.** ⭐ Trzeci warstwowy dopisek do jednej linii w ciągu dwóch dni jest sam w sobie
   pomiarem: **licznik trzymany w prozie starzeje się co etap**. Zmierz przed cytowaniem; nie kopiuj żadnej
   z tych liczb w przód.
+  ⏭ **Żywa liczba jest w pierwszym wpisie „Current state" (etap Localization) — po C8: 8 730
+  (8 389 + 286 + 55), a filtr partycji headless ma 22 nazwy.** ⛔ Nie cytuj liczb z tego akapitu; to zapis
+  historyczny pięciu kolejnych etapów, zostawiony jako dowód, że licznik w prozie starzeje się co etap.
+  ⛔⛔ **I filtru też nie przepisuj — WYPROWADZAJ go:**
+  `grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs`.
   ⭐ **M‑3 (+14), §9 (+1) i M‑4 (+6) trafiły w całości do partycji GŁÓWNEJ** (8193 → 8214), bo żaden z tych
   testów nie konstruuje kontrolek Avalonii — czytają ViewModele i ŹRÓDŁA. ⭐⭐ Krucha ręczna lista nazw
   w filtrze partycji headless **nie urosła przez CAŁY M5 ani razu**, przez sześć iteracji z rzędu.
@@ -5137,7 +5688,20 @@ noted.
   `SharedContextMenuFeasibilityProbe` + `EditableGridEnterTests` + `GridDateEditorTests` +
   `DependencyTreeRenderTests`), all in
   `HeadlessCollection` — a new headless test **joins that collection**, never adds its own `IClassFixture`
-  (#94/#226/#286). The partition filter is those class names excluded / included:
+  (#94/#226/#286).
+  ⛔⛔ **THE „ten classes" ABOVE AND THE HAND-TYPED FILTER BELOW ARE BOTH STALE — measured 2026-08-10 there are
+  EIGHTEEN, and transcribing them is what makes this rot. DERIVE the list, never copy it:**
+  ```bash
+  grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs | xargs -n1 basename | sed 's/\.cs$//'
+  ```
+  ⚠ Cost of ignoring this, paid on 2026-08-10: a run with the 12-name filter below reported **13 failures, none
+  of them the session's change** — six headless classes ran inside the main partition and hit the documented
+  latent race over the global `Loc` catalog. With the derived filter: 0. ⭐ Same shape as the stale COUNT this
+  paragraph already warns about, one layer out — and note the direction it fails in: a *missing* exclusion is
+  invisible (the class simply runs in the wrong partition), while a *surplus* one matches nothing and is
+  harmless, so the list only ever rots toward false red. The lines below are kept as the record of what was
+  transcribed, not as the filter to use.
+  The partition filter is those class names excluded / included:
   `--filter "FullyQualifiedName!~ConnectionExpandBindingProbe&FullyQualifiedName!~SettingsCenterViewTests&FullyQualifiedName!~BrandingPresentationTests&FullyQualifiedName!~DesignTokenApplicationTests&FullyQualifiedName!~TabStripPresentationTests&FullyQualifiedName!~MetadataTreeVirtualizationProbe&FullyQualifiedName!~SharedContextMenuFeasibilityProbe&FullyQualifiedName!~EditableGridEnterTests&FullyQualifiedName!~GridDateEditorTests&FullyQualifiedName!~DependencyTreeRenderTests"`
   and its inverse with `|` — ⚠ **except that `BrandingPresentationTests` now belongs to the ISOLATED partition,
   so the grouped inverse must NOT include it** (grouped = the other eight; isolated =
@@ -5965,7 +6529,7 @@ long ago — the surviving, still-true boundary is kept below):
 3. **No autocommit. Ever.** Auto-*begin* exists (matches IBExpert workflow); auto-*commit* doesn't. There's no toggle, no setting.
 4. **Virtualized grid is mandatory.** Avalonia DataGrid handles this — don't replace it with a plain `ItemsControl`.
 5. **No `Utils/` or `Helpers/` folders.** If something has no clear home, the structure is wrong.
-6. **No `AppResources.resx`.** Use `UiStrings` (static const class). Add new strings there, in both spots if light/dark variants are needed.
+6. **`UiStrings` is the ONE way code reaches a user-visible string** — never a literal in a view or a view model, never a `ResourceManager` read of your own. ⚠⚠ **AMENDED by the Localization stage (decision D‑2), and the amendment is only about the NOSNIK:** the "no `.resx`" half of this rule is **deliberately lifted** — the words now live in `Localization/Strings.resx` (English = the base/neutral set, satellites per language) and `UiStrings` members are thin **properties** reading them through `Loc`. ⛔ A localized member must never be a `const` (the compiler inlines it, so nothing is left to resolve) nor a `static readonly` (resolved once, then frozen in the first language). ⛔ In XAML the form is `{app:Loc Key}`, never `{x:Static app:UiStrings.Key}` — `x:Static` is not a binding and never re-evaluates, so with it the language could not change without a restart. Read [docs/design/localization.md](docs/design/localization.md) before touching any of this.
 7. **No event bus / IMessenger** until 3+ components need to communicate. Currently events on services (`ActiveConnectionChanged`, `TransactionStateChanged`) wire VM directly — that's fine.
 8. **Async only where the user waits**: query execution + connection. Not async everywhere.
 9. **Dark + Light from day one.** Every new color → both dictionaries in `Themes/Colors.axaml`. Zero hardcoded colors in views — only `{DynamicResource}`.

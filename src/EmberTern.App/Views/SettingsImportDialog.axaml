@@ -9,7 +9,7 @@
         x:Class="EmberTern.App.Views.SettingsImportDialog"
         x:Name="ImportDialogRoot"
         x:DataType="vm:SettingsImportDialogViewModel"
-        Title="{x:Static app:UiStrings.SettingsImportTitle}"
+        Title="{app:Loc SettingsImportTitle}"
         Width="560"
         SizeToContent="Height"
         CanResize="False"
@@ -40,8 +40,8 @@
             BorderThickness="0,0,0,1"
             Padding="20,16">
       <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.SettingsImportTitle}" Classes="h1" />
-        <TextBlock Text="{x:Static app:UiStrings.SettingsImportIntro}"
+        <TextBlock Text="{app:Loc SettingsImportTitle}" Classes="h1" />
+        <TextBlock Text="{app:Loc SettingsImportIntro}"
                    Classes="field-label"
                    TextWrapping="Wrap" />
       </StackPanel>
@@ -64,7 +64,7 @@
         <Button Grid.Column="0"
                 x:Name="PickFileButton"
                 Classes="flat"
-                Content="{x:Static app:UiStrings.SettingsImportPickFile}"
+                Content="{app:Loc SettingsImportPickFile}"
                 Click="OnPickFileClick" />
         <TextBlock Grid.Column="1"
                    Text="{Binding FileName}"
@@ -76,7 +76,7 @@
       <!-- Step 2 — the passphrase, shown ONLY once the file has passed phase one. -->
       <Border Classes="settings-group" x:Name="PassphraseGroup" IsVisible="{Binding CanEnterPassphrase}">
         <StackPanel Spacing="6">
-          <TextBlock Text="{x:Static app:UiStrings.SettingsImportPassphraseLabel}" Classes="group-header" />
+          <TextBlock Text="{app:Loc SettingsImportPassphraseLabel}" Classes="group-header" />
           <Grid ColumnDefinitions="*,Auto">
             <TextBox Grid.Column="0"
                      x:Name="PassphraseBox"
@@ -84,7 +84,7 @@
                      Text="{Binding Passphrase, Mode=TwoWay}" />
             <Button Grid.Column="1"
                     Classes="primary"
-                    Content="{x:Static app:UiStrings.SettingsImportOpen}"
+                    Content="{app:Loc SettingsImportOpen}"
                     IsEnabled="{Binding CanOpen}"
                     Click="OnOpenClick"
                     Margin="8,0,0,0" />
@@ -95,34 +95,34 @@
       <!-- Step 3 — what the file holds, and what to take. Each row appears only when the file carries it. -->
       <Border Classes="settings-group" x:Name="ContentsGroup" IsVisible="{Binding IsOpened}">
         <StackPanel Spacing="4">
-          <TextBlock Text="{x:Static app:UiStrings.SettingsImportContentsHeader}" Classes="group-header" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionPreferences}"
+          <TextBlock Text="{app:Loc SettingsImportContentsHeader}" Classes="group-header" />
+          <CheckBox Content="{app:Loc SettingsSectionPreferences}"
                     IsVisible="{Binding OffersPreferences}"
                     IsChecked="{Binding TakePreferences, Mode=TwoWay}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionGridProfiles}"
+          <CheckBox Content="{app:Loc SettingsSectionGridProfiles}"
                     IsVisible="{Binding OffersGridProfiles}"
                     IsChecked="{Binding TakeGridProfiles, Mode=TwoWay}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionFolders}"
+          <CheckBox Content="{app:Loc SettingsSectionFolders}"
                     IsVisible="{Binding OffersFolders}"
                     IsChecked="{Binding TakeFolders, Mode=TwoWay}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionConnections}"
+          <CheckBox Content="{app:Loc SettingsSectionConnections}"
                     IsVisible="{Binding OffersConnections}"
                     IsChecked="{Binding TakeConnections, Mode=TwoWay}" />
           <CheckBox x:Name="TakePasswordsBox"
                     Margin="20,0,0,0"
-                    Content="{x:Static app:UiStrings.SettingsSectionPasswords}"
+                    Content="{app:Loc SettingsSectionPasswords}"
                     IsVisible="{Binding OffersPasswords}"
                     IsEnabled="{Binding TakeConnections}"
                     IsChecked="{Binding TakePasswords, Mode=TwoWay}" />
-          <TextBlock Text="{x:Static app:UiStrings.SettingsImportPasswordsNote}"
+          <TextBlock Text="{app:Loc SettingsImportPasswordsNote}"
                      Classes="field-label"
                      TextWrapping="Wrap"
                      Margin="20,0,0,0"
                      IsVisible="{Binding ShowPasswordNote}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionWorkspaces}"
+          <CheckBox Content="{app:Loc SettingsSectionWorkspaces}"
                     IsVisible="{Binding OffersWorkspaces}"
                     IsChecked="{Binding TakeWorkspaces, Mode=TwoWay}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionImportProfiles}"
+          <CheckBox Content="{app:Loc SettingsSectionImportProfiles}"
                     IsVisible="{Binding OffersImportProfiles}"
                     IsChecked="{Binding TakeImportProfiles, Mode=TwoWay}" />
 
@@ -130,7 +130,7 @@
                Nothing is blocked — EmberTern discloses rather than forbids — so this has to be true, and it is:
                theme/formatter through the one apply point, folders + connections through ReloadConnections, a
                connected profile on its next connect, and workspaces on the next start. -->
-          <TextBlock Text="{x:Static app:UiStrings.SettingsImportLiveSessionNote}"
+          <TextBlock Text="{app:Loc SettingsImportLiveSessionNote}"
                      Classes="field-label"
                      TextWrapping="Wrap"
                      Margin="0,8,0,0" />
@@ -171,14 +171,14 @@
       </StackPanel>
       <Button Grid.Column="1"
               Classes="flat"
-              Content="{x:Static app:UiStrings.SettingsImportCancel}"
+              Content="{app:Loc SettingsImportCancel}"
               Click="OnCloseClick"
               IsCancel="True"
               Margin="0,0,8,0" />
       <Button Grid.Column="2"
               x:Name="ImportButton"
               Classes="primary"
-              Content="{x:Static app:UiStrings.SettingsImportRun}"
+              Content="{app:Loc SettingsImportRun}"
               IsEnabled="{Binding CanImport}"
               Click="OnImportClick" />
     </Grid>

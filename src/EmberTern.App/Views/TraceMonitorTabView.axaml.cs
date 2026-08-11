@@ -81,17 +81,24 @@ public partial class TraceMonitorTabView : UserControl
     {
         foreach (var col in EventsGrid.Columns)
         {
-            int? idx = col.Header?.ToString() switch
-            {
-                UiStrings.TraceColTime => 0,
-                UiStrings.TraceColEvent => 1,
-                UiStrings.TraceColDuration => 4,
-                UiStrings.TraceColObject => 3,
-                UiStrings.TraceColRows => 5,
-                UiStrings.TraceColReads => 6,
-                UiStrings.TraceColTx => 7,
-                _ => (int?)null,
-            };
+            // ⚠ An if-chain, not a switch expression, and the reason is localization: a switch pattern must be
+            // a compile-time CONSTANT, and a localized string is a property resolved at call time. This was the
+            // only place in the app where a UiStrings member was used in a const-only position.
+            //
+            // ⚠ Matching a column by its DISPLAYED text stays correct under translation only because both
+            // sides read the same key — the header is set from UiStrings and compared to UiStrings, so they
+            // move together. ⛔ Do not "optimise" either side into a literal; that is what would break the
+            // moment a language is added, silently, by leaving every Tag null and the filter verbs inert.
+            var header = col.Header?.ToString();
+            int? idx =
+                header == UiStrings.TraceColTime ? 0 :
+                header == UiStrings.TraceColEvent ? 1 :
+                header == UiStrings.TraceColDuration ? 4 :
+                header == UiStrings.TraceColObject ? 3 :
+                header == UiStrings.TraceColRows ? 5 :
+                header == UiStrings.TraceColReads ? 6 :
+                header == UiStrings.TraceColTx ? 7 :
+                null;
             if (idx is { } i) col.Tag = i;
         }
     }

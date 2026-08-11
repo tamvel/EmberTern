@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using EmberTern.App.Localization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -123,7 +124,7 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
         catch (ConnectionFailedException ex)
         {
             TestStatus = TestConnectionStatus.Failure;
-            TestMessage = ex.Message;
+            TestMessage = Loc.Format(ex.Localized);
         }
     }
 

@@ -30,17 +30,17 @@
     <!-- Constraint name + optional backing-index config (name + sort) -->
     <StackPanel Grid.Row="1" Margin="20,14,20,8" Spacing="6">
       <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.ConstraintNameLabel}" Classes="field-label" />
+        <TextBlock Text="{app:Loc ConstraintNameLabel}" Classes="field-label" />
         <TextBox Text="{Binding ConstraintName, Mode=TwoWay}" />
       </StackPanel>
       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
         <StackPanel Grid.Column="0" Spacing="4">
-          <TextBlock Text="{x:Static app:UiStrings.ConstraintIndexNameLabel}" Classes="field-label" />
+          <TextBlock Text="{app:Loc ConstraintIndexNameLabel}" Classes="field-label" />
           <TextBox Text="{Binding IndexName, Mode=TwoWay}" />
         </StackPanel>
         <CheckBox Grid.Column="1" VerticalAlignment="Bottom"
                   IsChecked="{Binding Descending, Mode=TwoWay}">
-          <TextBlock Text="{x:Static app:UiStrings.ConstraintDescendingLabel}" />
+          <TextBlock Text="{app:Loc ConstraintDescendingLabel}" />
         </CheckBox>
       </Grid>
     </StackPanel>
@@ -55,7 +55,7 @@
         <Border Grid.Row="0"
                 Background="{DynamicResource PanelBrush}"
                 Padding="8,4">
-          <TextBlock Text="{x:Static app:UiStrings.ConstraintFieldsLabel}"
+          <TextBlock Text="{app:Loc ConstraintFieldsLabel}"
                      FontSize="{DynamicResource Text.Compact.Size}"
                      FontWeight="SemiBold" />
         </Border>
@@ -78,7 +78,7 @@
 
     <!-- Live DDL preview -->
     <StackPanel Grid.Row="3" Margin="20,4,20,4" Spacing="4">
-      <TextBlock Text="{x:Static app:UiStrings.ConstraintDdlPreviewLabel}" Classes="field-label" />
+      <TextBlock Text="{app:Loc ConstraintDdlPreviewLabel}" Classes="field-label" />
       <Border BorderBrush="{DynamicResource BorderBrush}"
               BorderThickness="1"
               CornerRadius="{DynamicResource Radius.Surface}">
@@ -116,10 +116,10 @@
                   HorizontalAlignment="Right"
                   Spacing="8">
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.DialogCancel}"
+                Content="{app:Loc DialogCancel}"
                 Command="{Binding CancelCommand}" />
         <Button Classes="primary"
-                Content="{x:Static app:UiStrings.ConstraintDialogCreate}"
+                Content="{app:Loc ConstraintDialogCreate}"
                 Command="{Binding AcceptCommand}"
                 IsDefault="True" />
       </StackPanel>

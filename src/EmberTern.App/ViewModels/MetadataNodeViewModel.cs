@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -290,19 +290,19 @@ public partial class MetadataNodeViewModel : ViewModelBase
     // Title-cased singular noun for menu labels ("New View", "Recompile all functions").
     private string KindNounTitle => Kind switch
     {
-        MetadataObjectKind.Table => "Table",
-        MetadataObjectKind.View => "View",
-        MetadataObjectKind.Procedure => "Procedure",
-        MetadataObjectKind.Trigger => "Trigger",
-        MetadataObjectKind.Function => "Function",
-        MetadataObjectKind.Generator => "Generator",
-        MetadataObjectKind.Domain => "Domain",
-        MetadataObjectKind.Package => "Package",
-        MetadataObjectKind.Exception => "Exception",
-        MetadataObjectKind.Role => "Role",
-        MetadataObjectKind.User => "User",
-        MetadataObjectKind.Index => "Index",
-        MetadataObjectKind.SystemTable => "System table",
+        MetadataObjectKind.Table => UiStrings.ObjectKindTable,
+        MetadataObjectKind.View => UiStrings.ObjectKindView,
+        MetadataObjectKind.Procedure => UiStrings.ObjectKindProcedure,
+        MetadataObjectKind.Trigger => UiStrings.ObjectKindTrigger,
+        MetadataObjectKind.Function => UiStrings.ObjectKindFunction,
+        MetadataObjectKind.Generator => UiStrings.ObjectKindGenerator,
+        MetadataObjectKind.Domain => UiStrings.ObjectKindDomain,
+        MetadataObjectKind.Package => UiStrings.ObjectKindPackage,
+        MetadataObjectKind.Exception => UiStrings.ObjectKindException,
+        MetadataObjectKind.Role => UiStrings.ObjectKindRole,
+        MetadataObjectKind.User => UiStrings.ObjectKindUser,
+        MetadataObjectKind.Index => UiStrings.ObjectKindIndex,
+        MetadataObjectKind.SystemTable => UiStrings.ObjectKindSystemTable,
         _ => Kind.ToString(),
     };
 
@@ -506,6 +506,39 @@ public partial class MetadataNodeViewModel : ViewModelBase
         if (IsRecompilableGroup)
         {
             _owner.RequestRecompileGroup(Kind);
+        }
+    }
+
+    /// <summary>
+    /// Re-derives this node's caption in the current language, and every descendant's.
+    ///
+    /// <para>⭐⭐ <b>Only a node whose label is a WORD is touched.</b> A group's caption ("Tables") and the
+    /// loading placeholder come from <see cref="UiStrings"/>; a LEAF's caption is
+    /// <see cref="MetadataObject.Name"/> — the user's own identifier, which rule #11 says we never rewrite.
+    /// The node is the only place that distinction is known, which is why the walk lives here rather than in
+    /// the explorer.</para>
+    ///
+    /// <para>⚠ <c>GroupLabel</c> is a STORED <c>[ObservableProperty]</c>, so a blanket
+    /// <c>OnPropertyChanged(string.Empty)</c> from above cannot fix it — the value itself has to be rebuilt
+    /// (gotcha #353). That is why the tree kept its English category names until a restart.</para>
+    /// </summary>
+    internal void RefreshLocalizedText()
+    {
+        if (IsPlaceholder)
+        {
+            GroupLabel = UiStrings.MetadataLoadingPlaceholder;
+        }
+        else if (IsGroup)
+        {
+            GroupLabel = LabelFor(Kind);
+        }
+
+        // Computed captions (the context-menu labels, DisplayLabel and the count suffix) only need a nudge.
+        OnPropertyChanged(string.Empty);
+
+        foreach (var child in Children)
+        {
+            child.RefreshLocalizedText();
         }
     }
 

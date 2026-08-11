@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -2073,7 +2074,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         PendingChanges.Add(new PendingDdlChange
         {
             Kind = PendingDdlChangeKind.Other,
-            Description = "Add FOREIGN KEY " + spec.ConstraintName,
+            Description = UiStrings.TableDetailAddForeignKeyPrefix + spec.ConstraintName,
             Sql = sql,
         });
         Constraints.Add(new ConstraintInfo
@@ -2325,7 +2326,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         PendingChanges.Add(new PendingDdlChange
         {
             Kind = PendingDdlChangeKind.Other,
-            Description = $"Add {pendingRow.ConstraintType} {pendingRow.Name}",
+            Description = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDetailAddConstraintFormat, pendingRow.ConstraintType, pendingRow.Name),
             Sql = sql,
         });
         Constraints.Add(pendingRow);
@@ -2489,7 +2490,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         PendingChanges.Add(new PendingDdlChange
         {
             Kind = PendingDdlChangeKind.Other,
-            Description = "Add index " + spec.Name,
+            Description = UiStrings.TableDetailAddIndexPrefix + spec.Name,
             Sql = sql,
         });
         Indexes.Add(new IndexInfo

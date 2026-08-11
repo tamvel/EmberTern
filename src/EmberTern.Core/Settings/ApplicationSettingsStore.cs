@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using EmberTern.Core.Connections;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Security;
 using EmberTern.Core.Workspace;
 
@@ -99,6 +100,34 @@ public sealed class ApplicationSettingsStore
     public string? LastSaveDiagnostic { get; private set; }
 
     /// <summary>
+    /// The same two diagnostics as a <see cref="LocalizableMessage"/> (decision D‑3), for the surfaces that
+    /// SHOW them; the <c>string</c> forms above stay English, for logs and for the tests that pin the exact
+    /// refusal wording.
+    ///
+    /// <para>⭐ <b>Both, rather than a replacement — the shape ratified for
+    /// <c>ConnectionFailedException</c>.</b> These sentences are the user-facing half of a rule #11 surface
+    /// (a refusal to overwrite settings that may hold the only copy of every connection and password), and
+    /// their exact English is asserted by ~20 existing tests. Retyping them would force those assertions to
+    /// be rewritten as key comparisons, which would trade the guard that proves *the user is told the right
+    /// thing* for one that proves *a key was chosen*.</para>
+    ///
+    /// <para>⚠ The duplication is guarded, not tolerated: a test requires each localized form to resolve, in
+    /// English, to exactly the string form beside it. Edit one without the other and it goes red.</para>
+    /// </summary>
+    public LocalizableMessage? LastLoadMessage { get; private set; }
+
+    /// <inheritdoc cref="LastLoadMessage"/>
+    public LocalizableMessage? LastSaveMessage { get; private set; }
+
+    // ONE place each diagnostic is recorded, so the English and the localized form cannot be set apart.
+    private string SetLoadDiagnostic(string english, LocalizableMessage localized)
+    {
+        LastLoadDiagnostic = english;
+        LastLoadMessage = localized;
+        return english;
+    }
+
+    /// <summary>
     /// Returns the persisted settings, or null when there is nothing usable to load. Retained as the
     /// convenience every section facade uses — it deliberately keeps the old signature so none of them had to
     /// change.
@@ -119,6 +148,8 @@ public sealed class ApplicationSettingsStore
     public SettingsLoadResult LoadWithStatus()
     {
         LastLoadDiagnostic = null;
+
+        LastLoadMessage = null;
 
         if (!File.Exists(_filePath))
         {
@@ -154,8 +185,9 @@ public sealed class ApplicationSettingsStore
             // cannot interpret in this position, and emphatically not safe to overwrite.
             if (LooksLikeASettingsExport(raw))
             {
-                LastLoadDiagnostic = ExportInPlaceOfSettingsDiagnostic;
-                return SettingsLoadResult.Unreadable(LastLoadDiagnostic);
+                return SettingsLoadResult.Unreadable(SetLoadDiagnostic(
+                    ExportInPlaceOfSettingsDiagnostic,
+                    LocalizableMessage.Of(SettingsStoreMessages.ExportInPlaceOfSettings)));
             }
 
             string payload;
@@ -167,11 +199,13 @@ public sealed class ApplicationSettingsStore
                 // Save refuses to overwrite it) so the newer file is left intact.
                 if (header.ContainerVersion > SettingsFileContainer.CurrentContainerVersion)
                 {
-                    LastLoadDiagnostic =
+                    return SettingsLoadResult.Future(SetLoadDiagnostic(
                         $"settings.dat container version {header.ContainerVersion} is newer than supported " +
                         $"{SettingsFileContainer.CurrentContainerVersion}; refusing to read or overwrite " +
-                        "(written by a newer EmberTern build).";
-                    return SettingsLoadResult.Future(LastLoadDiagnostic);
+                        "(written by a newer EmberTern build).",
+                        LocalizableMessage.Of(
+                            SettingsStoreMessages.ContainerVersionNewer,
+                            header.ContainerVersion, SettingsFileContainer.CurrentContainerVersion)));
                 }
 
                 scheme = header.EncryptionScheme;
@@ -191,10 +225,10 @@ public sealed class ApplicationSettingsStore
             {
                 // DOWNGRADE PROTECTION (encryption axis): a scheme we have no protector for
                 // — typically a newer encryption algorithm. We can't decrypt it; leave it.
-                LastLoadDiagnostic =
+                return SettingsLoadResult.Future(SetLoadDiagnostic(
                     $"settings.dat uses encryption scheme '{scheme}' which this build cannot handle; " +
-                    "refusing to read or overwrite (likely written by a newer EmberTern build).";
-                return SettingsLoadResult.Future(LastLoadDiagnostic);
+                    "refusing to read or overwrite (likely written by a newer EmberTern build).",
+                    LocalizableMessage.Of(SettingsStoreMessages.UnknownEncryptionScheme, scheme)));
             }
 
             var json = protector.Unprotect(payload);
@@ -203,8 +237,9 @@ public sealed class ApplicationSettingsStore
             {
                 // Valid JSON that deserialized to nothing — a literal "null" payload. The file holds no
                 // settings, but it also is not what this build writes, so it is not safe to assume it is junk.
-                LastLoadDiagnostic = "settings.dat decrypted but contained no settings.";
-                return SettingsLoadResult.Corrupt(LastLoadDiagnostic);
+                return SettingsLoadResult.Corrupt(SetLoadDiagnostic(
+                    "settings.dat decrypted but contained no settings.",
+                    LocalizableMessage.Of(SettingsStoreMessages.DecryptedButEmpty)));
             }
 
             // DOWNGRADE PROTECTION (data axis): the payload decrypted fine but its data
@@ -212,11 +247,13 @@ public sealed class ApplicationSettingsStore
             // would silently drop them — refuse so the newer build's file stays intact.
             if (settings.SchemaVersion > CurrentSchemaVersion)
             {
-                LastLoadDiagnostic =
+                return SettingsLoadResult.Future(SetLoadDiagnostic(
                     $"settings.dat schema version {settings.SchemaVersion} is newer than supported " +
                     $"{CurrentSchemaVersion}; refusing to migrate or overwrite " +
-                    "(written by a newer EmberTern build).";
-                return SettingsLoadResult.Future(LastLoadDiagnostic);
+                    "(written by a newer EmberTern build).",
+                    LocalizableMessage.Of(
+                        SettingsStoreMessages.SchemaVersionNewer,
+                        settings.SchemaVersion, CurrentSchemaVersion)));
             }
 
             MigrateToCurrentVersion(settings);
@@ -231,28 +268,31 @@ public sealed class ApplicationSettingsStore
         // that wrote it, so replacing it destroys recoverable data.
         catch (JsonException ex)
         {
-            LastLoadDiagnostic = $"settings.dat could not be parsed: {ex.Message}";
-            return SettingsLoadResult.Corrupt(LastLoadDiagnostic);
+            return SettingsLoadResult.Corrupt(SetLoadDiagnostic(
+                $"settings.dat could not be parsed: {ex.Message}",
+                LocalizableMessage.Of(SettingsStoreMessages.CouldNotBeParsed, ex.Message)));
         }
         catch (IOException ex)
         {
             // Locked or unreadable right now (another process, a network path). Emphatically not junk.
-            LastLoadDiagnostic = $"settings.dat could not be read: {ex.Message}";
-            return SettingsLoadResult.Unreadable(LastLoadDiagnostic);
+            return SettingsLoadResult.Unreadable(SetLoadDiagnostic(
+                $"settings.dat could not be read: {ex.Message}",
+                LocalizableMessage.Of(SettingsStoreMessages.CouldNotBeRead, ex.Message)));
         }
         catch (UnauthorizedAccessException ex)
         {
-            LastLoadDiagnostic = $"settings.dat could not be read: {ex.Message}";
-            return SettingsLoadResult.Unreadable(LastLoadDiagnostic);
+            return SettingsLoadResult.Unreadable(SetLoadDiagnostic(
+                $"settings.dat could not be read: {ex.Message}",
+                LocalizableMessage.Of(SettingsStoreMessages.CouldNotBeRead, ex.Message)));
         }
         catch (Exception ex)
         {
             // SecretProtector.Unprotect throws arbitrary crypto/format exceptions. This is the DPAPI case —
             // the one that motivated the whole distinction, and the one where the file is most likely intact.
-            LastLoadDiagnostic =
+            return SettingsLoadResult.Unreadable(SetLoadDiagnostic(
                 $"settings.dat could not be decrypted: {ex.Message}. This usually means the file was written " +
-                "by a different Windows account or on a different machine; it is intact and will decrypt there.";
-            return SettingsLoadResult.Unreadable(LastLoadDiagnostic);
+                "by a different Windows account or on a different machine; it is intact and will decrypt there.",
+                LocalizableMessage.Of(SettingsStoreMessages.CouldNotBeDecrypted, ex.Message)));
         }
     }
 
@@ -321,18 +361,21 @@ public sealed class ApplicationSettingsStore
         // ⭐ The read-and-judge and the write are ONE operation, and it has to be one operation across
         // PROCESSES too — see TryAcquireFileLock. Without this, two EmberTern instances interleave inside the
         // gap between ExistingFileBlocksSave and the write.
-        using var fileLock = TryAcquireFileLock(out var lockDiagnostic);
+        using var fileLock = TryAcquireFileLock(out var lockDiagnostic, out var lockMessage);
         if (fileLock is null)
         {
             LastSaveDiagnostic = lockDiagnostic;
+
+            LastSaveMessage = lockMessage;
             return;
         }
 
         // Never clobber a settings.dat this build could not interpret — whether because a NEWER build wrote it
         // (downgrade protection) or because it could not be decrypted or parsed (audit A-03).
-        if (ExistingFileBlocksSave(out var diagnostic))
+        if (ExistingFileBlocksSave(out var diagnostic, out var blockedMessage))
         {
             LastSaveDiagnostic = diagnostic;
+            LastSaveMessage = blockedMessage;
             return;
         }
 
@@ -341,9 +384,11 @@ public sealed class ApplicationSettingsStore
         var payload = _protector.Protect(json);
         var container = SettingsFileContainer.Wrap(
             SettingsFileContainer.CurrentContainerVersion, _protector.Scheme, payload);
-        if (!TryAtomicWrite(_filePath, container, out var writeDiagnostic))
+        if (!TryAtomicWrite(_filePath, container, out var writeDiagnostic, out var writeMessage))
         {
             LastSaveDiagnostic = writeDiagnostic;
+
+            LastSaveMessage = writeMessage;
         }
     }
 
@@ -360,7 +405,14 @@ public sealed class ApplicationSettingsStore
     /// </summary>
     /// <returns>True when the file on disk is one this build may replace; otherwise false, with
     /// <paramref name="diagnostic"/> saying why in the words <see cref="LastSaveDiagnostic"/> would use.</returns>
-    public bool CanSave(out string diagnostic) => !ExistingFileBlocksSave(out diagnostic);
+    public bool CanSave(out string diagnostic) => CanSave(out diagnostic, out _);
+
+    /// <summary>
+    /// The same answer with the refusal ALSO as a <see cref="LocalizableMessage"/> (D‑3), for the import
+    /// surface that shows it. ⚠ Both forms come from one decision, so they cannot disagree.
+    /// </summary>
+    public bool CanSave(out string diagnostic, out LocalizableMessage? message)
+        => !ExistingFileBlocksSave(out diagnostic, out message);
 
     /// <summary>
     /// Copies the current <c>settings.dat</c> aside as <c>settings.dat.pre-import-&lt;stamp&gt;</c>, returning the
@@ -380,7 +432,7 @@ public sealed class ApplicationSettingsStore
         // Under the same cross-process lock as Save: a rescue copy taken while another instance is publishing a
         // new settings.dat would preserve neither generation cleanly. A lock we cannot get is not a reason to
         // skip the copy — the caller treats a failed copy as a refusal, which is the safe answer either way.
-        using var fileLock = TryAcquireFileLock(out _);
+        using var fileLock = TryAcquireFileLock(out _, out _);
 
         if (!File.Exists(_filePath))
         {
@@ -410,7 +462,7 @@ public sealed class ApplicationSettingsStore
         // Same cross-process lock as Save. This path is an explicit human decision, so it does NOT abandon the
         // write when the lock is unavailable — it proceeds, because the alternative (refusing the escape hatch)
         // is the dead end the method exists to remove. TryAtomicWrite still reports a genuine I/O failure.
-        using var fileLock = TryAcquireFileLock(out _);
+        using var fileLock = TryAcquireFileLock(out _, out _);
 
         if (File.Exists(_filePath))
         {
@@ -425,9 +477,11 @@ public sealed class ApplicationSettingsStore
         var payload = _protector.Protect(json);
         var container = SettingsFileContainer.Wrap(
             SettingsFileContainer.CurrentContainerVersion, _protector.Scheme, payload);
-        if (!TryAtomicWrite(_filePath, container, out var writeDiagnostic))
+        if (!TryAtomicWrite(_filePath, container, out var writeDiagnostic, out var writeMessage))
         {
             LastSaveDiagnostic = writeDiagnostic;
+
+            LastSaveMessage = writeMessage;
         }
 
         return preservedAt;
@@ -442,9 +496,10 @@ public sealed class ApplicationSettingsStore
     // broken file". That reasoning had the trade-off backwards — being stranded is recoverable and visible,
     // whereas the overwrite it permitted was silent and final (audit A-03). SaveOverUnreadableFile is the
     // answer to being stranded; permitting the overwrite never was.
-    private bool ExistingFileBlocksSave(out string diagnostic)
+    private bool ExistingFileBlocksSave(out string diagnostic, out LocalizableMessage? localized)
     {
         diagnostic = string.Empty;
+        localized = null;
         if (!File.Exists(_filePath))
         {
             return false;
@@ -459,11 +514,15 @@ public sealed class ApplicationSettingsStore
         {
             // We cannot even read it, so we certainly cannot judge it safe to destroy.
             diagnostic = $"Refusing to overwrite settings.dat: it could not be read ({ex.Message}).";
+
+            localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseCouldNotBeRead, ex.Message);
             return true;
         }
         catch (UnauthorizedAccessException ex)
         {
             diagnostic = $"Refusing to overwrite settings.dat: it could not be read ({ex.Message}).";
+
+            localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseCouldNotBeRead, ex.Message);
             return true;
         }
 
@@ -478,6 +537,8 @@ public sealed class ApplicationSettingsStore
         if (LooksLikeASettingsExport(raw))
         {
             diagnostic = "Refusing to overwrite settings.dat: " + ExportInPlaceOfSettingsDiagnostic;
+
+            localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseExportInPlace);
             return true;
         }
 
@@ -488,7 +549,12 @@ public sealed class ApplicationSettingsStore
             if (header.ContainerVersion > SettingsFileContainer.CurrentContainerVersion)
             {
                 diagnostic = $"Refusing to overwrite settings.dat: container version {header.ContainerVersion} " +
+
                              $"is newer than supported {SettingsFileContainer.CurrentContainerVersion}.";
+
+                localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseContainerVersion,
+
+                    header.ContainerVersion, SettingsFileContainer.CurrentContainerVersion);
                 return true;
             }
             scheme = header.EncryptionScheme;
@@ -504,7 +570,10 @@ public sealed class ApplicationSettingsStore
         if (protector is null)
         {
             diagnostic = $"Refusing to overwrite settings.dat: unknown encryption scheme '{scheme}' " +
+
                          "(written by a newer EmberTern build).";
+
+            localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseUnknownScheme, scheme);
             return true;
         }
 
@@ -515,18 +584,27 @@ public sealed class ApplicationSettingsStore
             if (existing is null)
             {
                 diagnostic = "Refusing to overwrite settings.dat: it decrypted but contained no settings.";
+
+                localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseDecryptedButEmpty);
                 return true;
             }
             if (existing.SchemaVersion > CurrentSchemaVersion)
             {
                 diagnostic = $"Refusing to overwrite settings.dat: schema version {existing.SchemaVersion} " +
+
                              $"is newer than supported {CurrentSchemaVersion}.";
+
+                localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseSchemaVersion,
+
+                    existing.SchemaVersion, CurrentSchemaVersion);
                 return true;
             }
         }
         catch (JsonException ex)
         {
             diagnostic = $"Refusing to overwrite settings.dat: it could not be parsed ({ex.Message}).";
+
+            localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseCouldNotBeParsed, ex.Message);
             return true;
         }
         catch (Exception ex)
@@ -534,7 +612,10 @@ public sealed class ApplicationSettingsStore
             // THE audit A-03 case. Overwhelmingly a DPAPI mismatch — the file is intact and belongs to another
             // Windows account or machine, so it is exactly the file most worth not destroying.
             diagnostic = $"Refusing to overwrite settings.dat: it could not be decrypted ({ex.Message}). " +
+
                          "The existing file may be valid for a different Windows account or machine.";
+
+            localized = LocalizableMessage.Of(SettingsStoreMessages.RefuseCouldNotBeDecrypted, ex.Message);
             return true;
         }
 
@@ -830,9 +911,10 @@ public sealed class ApplicationSettingsStore
     // most sharply MainWindow's Closing handler, where an escaping IOException would abandon the remainder of
     // the shutdown sequence. The caller reports the reason through LastSaveDiagnostic, which is the channel the
     // App already surfaces in its docked MessageBanner.
-    private static bool TryAtomicWrite(string path, string content, out string diagnostic)
+    private static bool TryAtomicWrite(string path, string content, out string diagnostic, out LocalizableMessage? localized)
     {
         diagnostic = string.Empty;
+        localized = null;
         var directory = Path.GetDirectoryName(path)!;
         var tempPath = Path.Combine(
             directory,
@@ -856,6 +938,8 @@ public sealed class ApplicationSettingsStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             diagnostic = $"settings.dat could not be written: {ex.Message}. The previous file is unchanged.";
+
+            localized = LocalizableMessage.Of(SettingsStoreMessages.CouldNotBeWritten, ex.Message);
             return false;
         }
         finally
@@ -901,9 +985,10 @@ public sealed class ApplicationSettingsStore
     /// <para>⚠ A timeout rather than an unbounded wait, and a failure to acquire is reported, never ignored:
     /// blocking the UI thread forever on a stuck peer would be a worse defect than the one being fixed.</para>
     /// </summary>
-    private IDisposable? TryAcquireFileLock(out string diagnostic)
+    private IDisposable? TryAcquireFileLock(out string diagnostic, out LocalizableMessage? localized)
     {
         diagnostic = string.Empty;
+        localized = null;
         try
         {
             var mutex = new Mutex(initiallyOwned: false, FileLockName(_filePath));
@@ -915,6 +1000,7 @@ public sealed class ApplicationSettingsStore
                     diagnostic =
                         "settings.dat is being written by another EmberTern instance and did not become "
                         + "available; nothing was saved. The previous file is unchanged.";
+                    localized = LocalizableMessage.Of(SettingsStoreMessages.LockedByAnotherInstance);
                     return null;
                 }
             }

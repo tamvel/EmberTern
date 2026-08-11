@@ -32,7 +32,7 @@
       <!-- Editor — Source mode (full text) OR Easy mode (metadata + Variables grid
            ABOVE a body-only editor). Compile / Format / Comment live in the main app
            toolbar (gated on IsTriggerDetailTabActive). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabEditor}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabEditor}">
         <Grid>
           <!-- Source mode -->
           <ae:TextEditor x:Name="TriggerSqlEditor"
@@ -52,11 +52,11 @@
             <StackPanel Grid.Row="0" Orientation="Vertical" Spacing="4" Margin="8,6,8,4">
               <Grid ColumnDefinitions="Auto,2*,Auto,3*">
                 <TextBlock Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                           Margin="0,0,8,0" Text="{x:Static app:UiStrings.TriggerNameHeader}" />
+                           Margin="0,0,8,0" Text="{app:Loc TriggerNameHeader}" />
                 <TextBox Grid.Column="1" Text="{Binding EditableTriggerName, Mode=TwoWay}"
                          IsReadOnly="{Binding !IsNew}" />
                 <TextBlock Grid.Column="2" Classes="field-label" VerticalAlignment="Center"
-                           Margin="12,0,8,0" Text="{x:Static app:UiStrings.TriggerTableHeader}" />
+                           Margin="12,0,8,0" Text="{app:Loc TriggerTableHeader}" />
                 <controls:SearchableComboBox Grid.Column="3" ItemsSource="{Binding AvailableTables}"
                           SelectedItem="{Binding SelectedTable, Mode=TwoWay}"
                           Watermark=""
@@ -65,30 +65,30 @@
               <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <TextBlock Classes="field-label" VerticalAlignment="Center"
-                             Text="{x:Static app:UiStrings.TriggerTimingHeader}" />
+                             Text="{app:Loc TriggerTimingHeader}" />
                   <ComboBox ItemsSource="{Binding TimingOptions}"
                             SelectedItem="{Binding SelectedTiming, Mode=TwoWay}"
  MinWidth="100" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                   <TextBlock Classes="field-label" VerticalAlignment="Center"
-                             Text="{x:Static app:UiStrings.TriggerEventsHeader}" />
+                             Text="{app:Loc TriggerEventsHeader}" />
                   <CheckBox IsChecked="{Binding FiresInsert, Mode=TwoWay}"
-                            Content="{x:Static app:UiStrings.TriggerEventInsert}" FontSize="{DynamicResource Text.Compact.Size}" />
+                            Content="{app:Loc TriggerEventInsert}" FontSize="{DynamicResource Text.Compact.Size}" />
                   <CheckBox IsChecked="{Binding FiresUpdate, Mode=TwoWay}"
-                            Content="{x:Static app:UiStrings.TriggerEventUpdate}" FontSize="{DynamicResource Text.Compact.Size}" />
+                            Content="{app:Loc TriggerEventUpdate}" FontSize="{DynamicResource Text.Compact.Size}" />
                   <CheckBox IsChecked="{Binding FiresDelete, Mode=TwoWay}"
-                            Content="{x:Static app:UiStrings.TriggerEventDelete}" FontSize="{DynamicResource Text.Compact.Size}" />
+                            Content="{app:Loc TriggerEventDelete}" FontSize="{DynamicResource Text.Compact.Size}" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <TextBlock Classes="field-label" VerticalAlignment="Center"
-                             Text="{x:Static app:UiStrings.TriggerPositionHeader}" />
+                             Text="{app:Loc TriggerPositionHeader}" />
                   <NumericUpDown Value="{Binding PositionValue, Mode=TwoWay}"
                                  Minimum="0" Maximum="32767" Increment="1" FormatString="0"
  MinWidth="110" />
                 </StackPanel>
                 <CheckBox IsChecked="{Binding Active, Mode=TwoWay}"
-                          Content="{x:Static app:UiStrings.TriggerActive}" FontSize="{DynamicResource Text.Compact.Size}"
+                          Content="{app:Loc TriggerActive}" FontSize="{DynamicResource Text.Compact.Size}"
                           VerticalAlignment="Center" />
               </StackPanel>
             </StackPanel>
@@ -108,11 +108,11 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu>
-                  <MenuItem Header="{x:Static app:UiStrings.CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddVariableCommand}" />
-                  <MenuItem Header="{x:Static app:UiStrings.CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding DeleteVariableCommand}" />
+                  <MenuItem Header="{app:Loc CollectionMenuNew}" Icon="{app:MenuIcon Icon.Plus}" InputGesture="{app:CommandGesture CollectionAdd}" Command="{Binding AddVariableCommand}" />
+                  <MenuItem Header="{app:Loc CollectionMenuDelete}" Icon="{app:MenuIcon Icon.Minus}" InputGesture="{app:CommandGesture CollectionRemove}" Command="{Binding DeleteVariableCommand}" />
                   <Separator />
-                  <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveVariableUpCommand}" />
-                  <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveVariableDownCommand}" />
+                  <MenuItem Header="{app:Loc CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}" Command="{Binding MoveVariableUpCommand}" />
+                  <MenuItem Header="{app:Loc CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}" Command="{Binding MoveVariableDownCommand}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
             </DataGrid>
@@ -135,18 +135,18 @@
       </TabItem>
 
       <!-- Description — editable COMMENT ON TRIGGER. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDescription}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabDescription}">
         <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
                       IsVisible="{Binding CanEditDescription}">
-            <TextBlock Text="{x:Static app:UiStrings.TriggerDescriptionEditLabel}"
+            <TextBlock Text="{app:Loc TriggerDescriptionEditLabel}"
                        Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
-            <Button Classes="icon" ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
+            <Button Classes="icon" ToolTip.Tip="{app:Loc TableDescriptionSave}"
                     Command="{Binding SaveDescriptionCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.Save}" />
             </Button>
             <Button Classes="flat" Padding="8,2"
-                    Content="{x:Static app:UiStrings.TableDescriptionClear}"
+                    Content="{app:Loc TableDescriptionClear}"
                     Command="{Binding ClearDescriptionCommand}" />
           </StackPanel>
           <TextBox Grid.Row="1"
@@ -158,10 +158,10 @@
       </TabItem>
 
       <!-- Dependencies — dual tree (Used by / Depends on). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDependencies}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabDependencies}">
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+            <TextBlock Grid.Row="0" Text="{app:Loc TableDetailDependedOnByHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="{DynamicResource Margin.PanelCaption}" />
             <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependedOnByTree}" />
           </Grid>
@@ -170,7 +170,7 @@
                         HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+            <TextBlock Grid.Row="0" Text="{app:Loc TableDetailDependsOnHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="{DynamicResource Margin.PanelCaption}" />
             <controls:DependencyTreeView Grid.Row="1" ItemsSource="{Binding DependsOnTree}" />
           </Grid>
@@ -178,7 +178,7 @@
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE OR ALTER TRIGGER. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.ProcedureDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc ProcedureDetailTabDdl}">
         <ae:TextEditor x:Name="TriggerDdlEditor"
                        ShowLineNumbers="True" IsReadOnly="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
@@ -192,7 +192,7 @@
            hosted per object. Shows the ACTIVE SQL document's findings (the LastFocusedSqlDocument
            rule — see DiagnosticsPanelHost). Appended LAST so the persisted ActiveSubTabIndex and the
            existing sub-tab indices never shift. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc BottomTabDiagnostics}">
         <views:DiagnosticsPanelView x:Name="TriggerDiagnosticsPanel"
                                     DataContext="{Binding DiagnosticsPanel}" />
       </TabItem>
@@ -201,7 +201,7 @@
 
     <!-- Status panel — loading hint + error (consistent with Procedure Detail). -->
     <StackPanel Grid.Row="1" Orientation="Vertical">
-      <TextBlock Text="{x:Static app:UiStrings.TriggerDetailLoadingHint}" Classes="subtle"
+      <TextBlock Text="{app:Loc TriggerDetailLoadingHint}" Classes="subtle"
                  Margin="10,4" FontSize="{DynamicResource Text.Compact.Size}" IsVisible="{Binding IsLoading}" />
       <!-- Compile / load errors go through the IDE's ONE message surface (UX Polish Seam 4) —
            same severity stripe, icon, wrapping and Copy affordance on every editor. -->

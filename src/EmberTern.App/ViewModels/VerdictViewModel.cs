@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using EmberTern.Core.Performance;
 
 namespace EmberTern.App.ViewModels;
@@ -18,11 +18,11 @@ public sealed class VerdictViewModel
 
     public string GradeText => Verdict.Grade switch
     {
-        PerformanceGrade.Fast => "Fast",
-        PerformanceGrade.Acceptable => "Acceptable",
-        PerformanceGrade.NeedsAttention => "Needs attention",
-        PerformanceGrade.Slow => "Slow",
-        _ => "Analyzed",
+        PerformanceGrade.Fast => UiStrings.VerdictGradeFast,
+        PerformanceGrade.Acceptable => UiStrings.VerdictGradeAcceptable,
+        PerformanceGrade.NeedsAttention => UiStrings.VerdictGradeNeedsAttention,
+        PerformanceGrade.Slow => UiStrings.VerdictGradeSlow,
+        _ => UiStrings.VerdictGradeAnalyzed,
     };
 
     /// <summary>Theme brush key for the grade dot, resolved via DynamicResource in XAML.</summary>
@@ -47,19 +47,19 @@ public sealed class VerdictViewModel
             if (Verdict.HasResultSet)
             {
                 return Verdict.RowsReturned == 1
-                    ? "1 row"
-                    : Verdict.RowsReturned.ToString("N0", CultureInfo.CurrentCulture) + " rows";
+                    ? UiStrings.VerdictRowsOne
+                    : string.Format(CultureInfo.CurrentCulture, UiStrings.VerdictRowsManyFormat, Verdict.RowsReturned);
             }
             return Verdict.RowsChanged == 1
-                ? "1 row changed"
-                : Verdict.RowsChanged.ToString("N0", CultureInfo.CurrentCulture) + " rows changed";
+                ? UiStrings.VerdictRowsChangedOne
+                : string.Format(CultureInfo.CurrentCulture, UiStrings.VerdictRowsChangedManyFormat, Verdict.RowsChanged);
         }
     }
 
     public bool HasRowsRead => Verdict.RowsRead is not null;
 
     public string RowsReadText => Verdict.RowsRead is { } read
-        ? read.ToString("N0", CultureInfo.CurrentCulture) + " read"
+        ? string.Format(CultureInfo.CurrentCulture, UiStrings.VerdictRowsReadFormat, read)
         : string.Empty;
 
     public bool HasAmplification => Verdict.Amplification is not null;

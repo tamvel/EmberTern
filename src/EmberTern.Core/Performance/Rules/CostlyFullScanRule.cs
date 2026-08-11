@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Core.Performance.Rules;
 
@@ -45,10 +46,14 @@ public sealed class CostlyFullScanRule : IPerformanceRule
 
             var evidence = new List<FindingEvidence>
             {
-                new("Sequential reads", N(table.SequentialReads)),
-                new("Index reads", N(table.IndexReads)),
-                new(context.OutputRowsLabel, N(context.OutputRows)),
-                new("Read amplification", AmplificationText(table.SequentialReads, returned)),
+                new(PerfMessages.EvidenceSequentialReads, N(table.SequentialReads)),
+                new(PerfMessages.EvidenceIndexReads, N(table.IndexReads)),
+                new(context.HasResultSet
+                        ? PerfMessages.EvidenceRowsReturned
+                        : PerfMessages.EvidenceRowsChanged,
+                    N(context.OutputRows)),
+                new(PerfMessages.EvidenceReadAmplificationTable,
+                    AmplificationText(table.SequentialReads, returned)),
             };
 
             // Scale context (never a gate): what fraction of the table the scan actually read.
@@ -56,8 +61,9 @@ public sealed class CostlyFullScanRule : IPerformanceRule
             if (cardinality is { } rows && rows > 0)
             {
                 double pct = Math.Min(100.0, (double)table.SequentialReads / rows * 100.0);
-                evidence.Add(new FindingEvidence("Approx. rows in table", N(rows)));
-                evidence.Add(new FindingEvidence("% of table scanned", pct.ToString("0.#", CultureInfo.CurrentCulture) + "%"));
+                evidence.Add(new FindingEvidence(PerfMessages.EvidenceApproxRowsInTable, N(rows)));
+                evidence.Add(new FindingEvidence(PerfMessages.EvidencePercentOfTableScanned,
+                    pct.ToString("0.#", CultureInfo.CurrentCulture) + "%"));
             }
 
             findings.Add(new Finding
@@ -67,13 +73,15 @@ public sealed class CostlyFullScanRule : IPerformanceRule
                 Confidence = FindingConfidence.High,
                 RuleId = Id,
                 Table = table.Table,
-                Title = string.Format(CultureInfo.CurrentCulture,
-                    "Table {0} was scanned sequentially — {1} rows read", table.Table, N(table.SequentialReads)),
-                Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "This table was read row-by-row (a full table scan), reading {0} rows to {1} {2}. "
-                    + "A sequential scan reads every row, so it is often the largest cost in a slow query. "
-                    + "Likely cause: no index served the filter on this table.",
-                    N(table.SequentialReads), context.OutputVerb, N(context.OutputRows)),
+                // ⚠ The count is argument {0} and the table {1} (ratified R3) — the English format references
+                // them out of order and renders exactly as before.
+                Title = LocalizableMessage.Of(
+                    PerfMessages.CostlyFullScanTitle, table.SequentialReads, table.Table),
+                Explanation = LocalizableMessage.Of(
+                    context.HasResultSet
+                        ? PerfMessages.CostlyFullScanExplanationSelect
+                        : PerfMessages.CostlyFullScanExplanationChange,
+                    table.SequentialReads, context.OutputRows),
                 Evidence = evidence,
             });
         }
@@ -98,6 +106,9 @@ public sealed class CostlyFullScanRule : IPerformanceRule
         return FindingSeverity.Info;
     }
 
+    // ⚠ Evidence VALUES stay pre-formatted here (`N0` under the reader's culture), exactly as before — they
+    // are data. A count that a SENTENCE carries travels raw instead, so `LocalizableMessage.TryGetCount` can
+    // read it; its `N0` grouping moves into the resource value as `{0:N0}` and renders identically.
     private static string AmplificationText(long read, long returned)
         => (read == returned)
             ? "1×"

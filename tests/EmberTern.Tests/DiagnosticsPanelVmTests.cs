@@ -3,7 +3,9 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using EmberTern.App;
+using EmberTern.App.Localization;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Sql.Language;
 using EmberTern.Core.Sql.Language.Semantics;
 using Xunit;
@@ -23,10 +25,16 @@ namespace EmberTern.Tests;
 /// </summary>
 public class DiagnosticsPanelVmTests
 {
+    // ⚠ The fixture's message is a KEY plus data since C5, not a sentence. The default resolves to nothing
+    // real, which is correct for a fixture: these cases are about severity, order and churn — never text.
     private static DiagnosticRowViewModel Row(
         string code, DiagnosticSeverity severity = DiagnosticSeverity.Warning,
-        int start = 0, int length = 4, string message = "msg", int line = 1, int column = 1)
-        => new(new Diagnostic(start, length, severity, message, code), line, column);
+        int start = 0, int length = 4, string? name = null, int line = 1, int column = 1)
+        => new(
+            new Diagnostic(
+                start, length, severity,
+                LocalizableMessage.Of(DiagnosticsMessages.UnknownObject, name ?? "msg"), code),
+            line, column);
 
     // ── Empty state ──────────────────────────────────────────────────────────────────────────
 
@@ -157,12 +165,16 @@ public class DiagnosticsPanelVmTests
     [Fact]
     public void Row_ProjectsTheEngineFindingVerbatim()
     {
-        var diagnostic = new Diagnostic(42, 7, DiagnosticSeverity.Error, "count mismatch", "ET0006");
+        var diagnostic = new Diagnostic(
+            42, 7, DiagnosticSeverity.Error,
+            LocalizableMessage.Of(DiagnosticsMessages.InsertCountMismatch, 3, 2), "ET0006");
 
         var row = new DiagnosticRowViewModel(diagnostic, line: 12, column: 5);
 
         Assert.Equal("ET0006", row.Code);
-        Assert.Equal("count mismatch", row.Message);
+        // ⭐ The row RESOLVES the key rather than carrying a sentence — so this asserts the real catalog entry
+        // with the engine's own data, which the pre-C5 fixture string could not.
+        Assert.Equal("INSERT column/value count mismatch: 3 column(s), 2 value(s).", row.Message);
         Assert.Equal(DiagnosticSeverity.Error, row.Severity);
         Assert.Equal(UiStrings.DiagnosticSeverityError, row.SeverityText);
         // The source record is kept whole — S5 navigation jumps to its span without a second projection.
@@ -328,8 +340,10 @@ public class DiagnosticsPanelVmTests
         var vm = new DiagnosticsPanelViewModel();
         vm.Update(diagnostics.Select(d => new DiagnosticRowViewModel(d, line: 1, column: d.Start + 1)).ToList());
 
+        // ⭐ The panel's text must be the engine's finding RESOLVED — comparing the row's rendered string with
+        // Loc.Format of the engine's own message keeps this a projection check rather than a text pin.
         Assert.Equal(
-            diagnostics.Select(d => (d.Code, d.Message, d.Severity)),
+            diagnostics.Select(d => (d.Code, Loc.Format(d.Message), d.Severity)),
             vm.Diagnostics.Select(r => (r.Code, r.Message, r.Severity)));
     }
 

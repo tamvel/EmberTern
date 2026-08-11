@@ -301,6 +301,10 @@ public class DesignTokenComplianceTests
     private static readonly Dictionary<string, int> SpacingBaseline = new(StringComparer.Ordinal)
     {
         // Spacing — odstęp między dziećmi `StackPanel`. Zmierzone 2026-08-09: 308 deklaracji lokalnych w 46 plikach.
+        // ⚠ Skorygowane 2026-08-10 (Localization C6): 304 w 46 plikach. Cztery wartości zniknęły z widoków
+        //   Procedure/Function — trzy szablony karty aktywności, klucowane po podtypach rekordu Core, zastąpił
+        //   JEDEN nad wierszem App. To nie migracja odstępów, tylko usunięcie dwóch KOPII szablonu; strażnik
+        //   zażądał korekty sam („progress that was not written down") — ratchet działający zgodnie z zamysłem.
         //
         // ⚠⚠ TA LICZBA JEST PROZĄ OBOK TABLICY, KTÓRA JEST EGZEKWOWANA — i przy korekcie z 2026-08-09 dwie
         //    z trzech takich linii OKAZAŁY SIĘ JUŻ NIEAKTUALNE, każda inaczej: `Margin` miał **491 wobec 474**
@@ -316,9 +320,9 @@ public class DesignTokenComplianceTests
         ["Views/PerformancePanelView.axaml"] = 13,
         ["Views/TraceMonitorTabView.axaml"] = 10,
         ["Views/UserEditDialog.axaml"] = 10,
-        ["Views/FunctionDetailTabView.axaml"] = 9,
+        ["Views/FunctionDetailTabView.axaml"] = 7,
         ["Views/ExportDialog.axaml"] = 8,
-        ["Views/ProcedureDetailTabView.axaml"] = 8,
+        ["Views/ProcedureDetailTabView.axaml"] = 6,
         ["Views/ForeignKeyDialog.axaml"] = 7,
         ["Views/SettingsWindow.axaml"] = 7,
         ["Views/TriggerDetailTabView.axaml"] = 6,
@@ -427,13 +431,15 @@ public class DesignTokenComplianceTests
         //   z `SettingsWindow.axaml` przy przebudowie powierzchni — dwie zeszły na role (`Margin.FieldGap`),
         //   jedna zniknęła razem z marginesem siatki, którą zastąpiły paddingi paneli. Strażnik ZAŻĄDAŁ tej
         //   korekty sam („progress that was not written down") — ratchet działający zgodnie z zamysłem.
+        // ⚠ Skorygowane ponownie 2026-08-10 (Localization C6): 467 w 55 plikach — te same dwie usunięte kopie
+        //   szablonu karty aktywności co przy `Spacing`.
         ["Views/DebuggerTabView.axaml"] = 49,
         ["Views/DataImportTabView.axaml"] = 40,
         ["Views/MainWindow.axaml"] = 29,
         ["Views/DomainDetailTabView.axaml"] = 21,
-        ["Views/FunctionDetailTabView.axaml"] = 19,
+        ["Views/FunctionDetailTabView.axaml"] = 17,
         ["Views/IndexDetailTabView.axaml"] = 20,
-        ["Views/ProcedureDetailTabView.axaml"] = 18,
+        ["Views/ProcedureDetailTabView.axaml"] = 16,
         ["Views/SessionManagerTabView.axaml"] = 19,
         ["Views/TraceMonitorTabView.axaml"] = 19,
         ["Views/AddFieldDialog.axaml"] = 16,
@@ -1487,7 +1493,7 @@ public class DesignTokenComplianceTests
             File.ReadAllText(Path.Combine(AppRoot(), "Views", "TraceMonitorTabView.axaml")),
             "Views/TraceMonitorTabView.axaml");
 
-        var field = Regex.Match(trace, @"PlaceholderText=""\{x:Static app:UiStrings\.TraceFilterWatermark\}""");
+        var field = Regex.Match(trace, @"PlaceholderText=""\{app:Loc TraceFilterWatermark\}""");
         Assert.True(field.Success, "Nie znaleziono pola filtra w TraceMonitorTabView.axaml.");
 
         // ⚠⚠ Zakotwiczone w OTWIERAJĄCYM ZNACZNIKU ramki, a nie „ostatnia wysokość nad polem" — pierwsza

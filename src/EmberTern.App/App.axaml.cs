@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
+using EmberTern.App.Localization;
 using EmberTern.App.Security;
 using EmberTern.App.Settings;
 using EmberTern.App.ViewModels;
@@ -59,12 +60,32 @@ public class App : Application
             // fresh install and the XAML fallback agree.
             ThemePreference.Apply(viewModel.Preferences.Current.Theme);
 
+            // ⭐ The language is applied HERE for the same reason and by the same rule as the theme: one apply
+            // point, fed by the one PreferencesService, with every other surface only WRITING the preference.
+            // Applied before the window is built so the first frame is already in the chosen language — there
+            // is no English flash to hide.
+            //
+            // ⭐⭐ Note what this position is NOT: it is not an ordering hazard. The restart-only design that
+            // preceded the live decision had to settle the language in Program.Main, before Avalonia started,
+            // because a `static readonly` string resolves on first touch and one early read would have frozen
+            // the session in English. Reading live removed that constraint entirely — anything rendered before
+            // this line simply re-reads when it runs.
+            Loc.Apply(viewModel.Preferences.Current.Language);
+
             // ⭐ ONE application point for the theme, for the whole app. The titlebar toggle and the Settings
             // Center radio both only WRITE the preference; this is what paints it. Two apply sites would be two
             // answers to "what does Light mean", and the divergence would show up as a theme that applies from
             // one surface and not the other.
+            //
+            // ⚠ Both preferences are re-applied on every Changed notification, not only on their own. That is
+            // safe by construction — each Apply is a no-op when the value has not moved (Loc.Apply compares the
+            // resolved culture and returns without raising anything), so an unrelated save cannot make a
+            // capture-once surface rebuild.
             viewModel.Preferences.Changed += (_, _) =>
+            {
                 ThemePreference.Apply(viewModel.Preferences.Current.Theme);
+                Loc.Apply(viewModel.Preferences.Current.Language);
+            };
 
             desktop.MainWindow = new MainWindow
             {

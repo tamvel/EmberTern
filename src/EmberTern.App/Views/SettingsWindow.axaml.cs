@@ -82,6 +82,11 @@ public partial class SettingsWindow : Window
         vm.RequestRevealFolder = RevealFolderAsync;
 
         DataContext = vm;
+
+        // ⚠ The view model subscribes to the static Loc.LanguageChanged so this window repaints the moment the
+        // Language row is used. It is created per opening, so the subscription has to be released with the
+        // window — otherwise every Settings window ever opened stays alive and answers the next change.
+        Closed += (_, _) => vm.Dispose();
     }
 
     /// <summary>Opens the settings folder in the shell. Best-effort: a failure to open a file manager must never

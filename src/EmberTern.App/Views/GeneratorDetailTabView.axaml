@@ -21,18 +21,18 @@
       <!-- Generator — the editable form. Name is read-only for an existing generator
            (editable only in the New flow); Current / Initial / Increment / Description
            are all editable. Save / Revert / Delete live in the main app toolbar. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.GeneratorDetailTabGenerator}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc GeneratorDetailTabGenerator}">
         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,*"
               Margin="12" VerticalAlignment="Top">
 
           <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                     Margin="0,0,12,8" Text="{x:Static app:UiStrings.GeneratorNameHeader}" />
+                     Margin="0,0,12,8" Text="{app:Loc GeneratorNameHeader}" />
           <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
                    Text="{Binding EditableName, Mode=TwoWay}"
                    IsReadOnly="{Binding !IsNew}" />
 
           <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                     Margin="0,0,12,8" Text="{x:Static app:UiStrings.GeneratorCurrentValueHeader}" />
+                     Margin="0,0,12,8" Text="{app:Loc GeneratorCurrentValueHeader}" />
           <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
             <NumericUpDown Value="{Binding CurrentValue, Mode=TwoWay}"
                            IsEnabled="{Binding IsCurrentValueEditable}"
@@ -42,14 +42,14 @@
             <!-- Refresh Current Value: re-reads ONLY the live runtime counter (the
                  generator may be in active ERP use) — no full reload, no dirty change. -->
             <Button Classes="icon" VerticalAlignment="Center"
-                    ToolTip.Tip="{x:Static app:UiStrings.GeneratorRefreshCurrentValueTooltip}"
+                    ToolTip.Tip="{app:Loc GeneratorRefreshCurrentValueTooltip}"
                     Command="{Binding RefreshCurrentValueCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
             </Button>
           </StackPanel>
 
           <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                     Margin="0,0,12,8" Text="{x:Static app:UiStrings.GeneratorInitialValueHeader}" />
+                     Margin="0,0,12,8" Text="{app:Loc GeneratorInitialValueHeader}" />
           <NumericUpDown Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
                          Value="{Binding InitialValue, Mode=TwoWay}"
                          IsEnabled="{Binding IsDefinitionEditable}"
@@ -58,7 +58,7 @@
                          HorizontalAlignment="Left" Width="240" />
 
           <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                     Margin="0,0,12,8" Text="{x:Static app:UiStrings.GeneratorIncrementHeader}" />
+                     Margin="0,0,12,8" Text="{app:Loc GeneratorIncrementHeader}" />
           <NumericUpDown Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"
                          Value="{Binding Increment, Mode=TwoWay}"
                          IsEnabled="{Binding IsDefinitionEditable}"
@@ -67,7 +67,7 @@
                          HorizontalAlignment="Left" Width="240" />
 
           <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label"
-                     Margin="0,0,12,0" Text="{x:Static app:UiStrings.GeneratorDescriptionHeader}" />
+                     Margin="0,0,12,0" Text="{app:Loc GeneratorDescriptionHeader}" />
           <TextBox Grid.Row="4" Grid.Column="1"
                    Text="{Binding EditableDescription, Mode=TwoWay}"
                    AcceptsReturn="True" TextWrapping="Wrap"
@@ -78,11 +78,11 @@
 
       <!-- Dependencies — reuses the same dual-tree layout + templates as
            TableDetail / ViewDetail (Used by / Depends on). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.GeneratorDetailTabDependencies}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc GeneratorDetailTabDependencies}">
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+                       Text="{app:Loc TableDetailDependedOnByHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -97,7 +97,7 @@
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+                       Text="{app:Loc TableDetailDependsOnHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -107,7 +107,7 @@
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE SEQUENCE. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.GeneratorDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc GeneratorDetailTabDdl}">
         <ae:TextEditor x:Name="GeneratorDdlEditor"
                        ShowLineNumbers="True"
                        IsReadOnly="True"
@@ -122,7 +122,7 @@
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">
-      <TextBlock Text="{x:Static app:UiStrings.GeneratorLoadingHint}"
+      <TextBlock Text="{app:Loc GeneratorLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
                  FontSize="{DynamicResource Text.Compact.Size}"

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using EmberTern.Core.Performance;
 using EmberTern.Core.Diagnostics;
@@ -38,13 +38,13 @@ public sealed class TableAccessBarViewModel
         {
             if (Stat.SequentialReads > 0 && Stat.IndexReads > 0)
             {
-                return $"{N(Stat.SequentialReads)} seq · {N(Stat.IndexReads)} idx";
+                return string.Format(CultureInfo.CurrentCulture, UiStrings.TableAccessSeqFormat, N(Stat.SequentialReads)) + " · " + string.Format(CultureInfo.CurrentCulture, UiStrings.TableAccessIdxFormat, N(Stat.IndexReads));
             }
             if (Stat.SequentialReads > 0)
             {
-                return $"{N(Stat.SequentialReads)} seq";
+                return string.Format(CultureInfo.CurrentCulture, UiStrings.TableAccessSeqFormat, N(Stat.SequentialReads));
             }
-            return Stat.IndexReads > 0 ? $"{N(Stat.IndexReads)} idx" : string.Empty;
+            return Stat.IndexReads > 0 ? string.Format(CultureInfo.CurrentCulture, UiStrings.TableAccessIdxFormat, N(Stat.IndexReads)) : string.Empty;
         }
     }
 
@@ -57,9 +57,9 @@ public sealed class TableAccessBarViewModel
         get
         {
             var parts = new System.Collections.Generic.List<string>(3);
-            if (Stat.Inserts > 0) parts.Add($"{N(Stat.Inserts)} ins");
-            if (Stat.Updates > 0) parts.Add($"{N(Stat.Updates)} upd");
-            if (Stat.Deletes > 0) parts.Add($"{N(Stat.Deletes)} del");
+            if (Stat.Inserts > 0) parts.Add(string.Format(CultureInfo.CurrentCulture, UiStrings.TableAccessInsFormat, N(Stat.Inserts)));
+            if (Stat.Updates > 0) parts.Add(string.Format(CultureInfo.CurrentCulture, UiStrings.TableAccessUpdFormat, N(Stat.Updates)));
+            if (Stat.Deletes > 0) parts.Add(string.Format(CultureInfo.CurrentCulture, UiStrings.TableAccessDelFormat, N(Stat.Deletes)));
             return string.Join(" · ", parts);
         }
     }

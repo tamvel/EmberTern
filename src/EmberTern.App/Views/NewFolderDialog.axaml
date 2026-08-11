@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.NewFolderDialog"
-        Title="{x:Static app:UiStrings.FolderDialogTitle}"
+        Title="{app:Loc FolderDialogTitle}"
         Width="400"
         SizeToContent="Height"
         CanResize="False"
@@ -20,11 +20,11 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,16">
-      <TextBlock Text="{x:Static app:UiStrings.FolderDialogTitle}" Classes="h1" />
+      <TextBlock Text="{app:Loc FolderDialogTitle}" Classes="h1" />
     </Border>
 
     <StackPanel Grid.Row="1" Margin="20,18,20,18" Spacing="6">
-      <TextBlock Text="{x:Static app:UiStrings.FolderDialogNameLabel}"
+      <TextBlock Text="{app:Loc FolderDialogNameLabel}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
                  FontSize="{DynamicResource Text.Application.Size}" />
       <TextBox x:Name="NameBox"
@@ -41,10 +41,10 @@
                   HorizontalAlignment="Right"
                   Spacing="8">
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.DialogCancel}"
+                Content="{app:Loc DialogCancel}"
                 Click="OnCancelClick" />
         <Button Classes="primary"
-                Content="{x:Static app:UiStrings.FolderDialogCreate}"
+                Content="{app:Loc FolderDialogCreate}"
                 Click="OnCreateClick"
                 IsDefault="True" />
       </StackPanel>

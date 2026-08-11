@@ -4,7 +4,7 @@
         xmlns:vm="using:EmberTern.App.ViewModels"
         x:Class="EmberTern.App.Views.GlobalSearchDialog"
         x:DataType="vm:GlobalSearchDialogViewModel"
-        Title="{x:Static app:UiStrings.GlobalSearchDialogTitle}"
+        Title="{app:Loc GlobalSearchDialogTitle}"
         Width="460"
         SizeToContent="Height"
         CanResize="False"
@@ -18,29 +18,29 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="20,14">
-      <TextBlock Text="{x:Static app:UiStrings.GlobalSearchDialogTitle}" Classes="h1" />
+      <TextBlock Text="{app:Loc GlobalSearchDialogTitle}" Classes="h1" />
     </Border>
 
     <StackPanel Grid.Row="1" Margin="20,18" Spacing="10">
       <!-- ⚠ Podpis i jego pole są JEDNYM dzieckiem kontenera — inaczej `Spacing` rodzica wchodzi
            MIĘDZY nie i odstęp podpis→pole staje się większy niż pole→pole (zgłoszenie QA). -->
       <StackPanel>
-        <TextBlock Text="{x:Static app:UiStrings.GlobalSearchTermLabel}" Classes="field-label" />
+        <TextBlock Text="{app:Loc GlobalSearchTermLabel}" Classes="field-label" />
         <TextBox x:Name="TermBox" Classes="search" Text="{Binding Term}"
-                 PlaceholderText="{x:Static app:UiStrings.GlobalSearchTermWatermark}"
+                 PlaceholderText="{app:Loc GlobalSearchTermWatermark}"
                  KeyDown="OnTermKeyDown" />
       </StackPanel>
 
       <StackPanel Orientation="Horizontal" Spacing="18">
-        <CheckBox Content="{x:Static app:UiStrings.GlobalSearchMatchNames}" IsChecked="{Binding MatchNames}" />
-        <CheckBox Content="{x:Static app:UiStrings.GlobalSearchMatchSource}" IsChecked="{Binding MatchSource}" />
+        <CheckBox Content="{app:Loc GlobalSearchMatchNames}" IsChecked="{Binding MatchNames}" />
+        <CheckBox Content="{app:Loc GlobalSearchMatchSource}" IsChecked="{Binding MatchSource}" />
       </StackPanel>
       <StackPanel Orientation="Horizontal" Spacing="18">
-        <CheckBox Content="{x:Static app:UiStrings.GlobalSearchCaseSensitive}" IsChecked="{Binding CaseSensitive}" />
-        <CheckBox Content="{x:Static app:UiStrings.GlobalSearchWholeWord}" IsChecked="{Binding WholeWord}" />
+        <CheckBox Content="{app:Loc GlobalSearchCaseSensitive}" IsChecked="{Binding CaseSensitive}" />
+        <CheckBox Content="{app:Loc GlobalSearchWholeWord}" IsChecked="{Binding WholeWord}" />
       </StackPanel>
 
-      <TextBlock Text="{x:Static app:UiStrings.GlobalSearchScopeHint}"
+      <TextBlock Text="{app:Loc GlobalSearchScopeHint}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
                  FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap" />
     </StackPanel>
@@ -51,9 +51,9 @@
             BorderThickness="0,1,0,0"
             Padding="20,12">
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button Classes="flat" Content="{x:Static app:UiStrings.GlobalSearchDialogCancel}"
+        <Button Classes="flat" Content="{app:Loc GlobalSearchDialogCancel}"
                 Command="{Binding CancelCommand}" />
-        <Button Classes="primary" Content="{x:Static app:UiStrings.GlobalSearchDialogFind}"
+        <Button Classes="primary" Content="{app:Loc GlobalSearchDialogFind}"
                 Command="{Binding AcceptCommand}" IsDefault="True" />
       </StackPanel>
     </Border>

@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -1177,7 +1178,7 @@ internal sealed class NavigationController
 
         if (target is { Kind: NavigationTargetKind.LocalDefinition, DefinitionSpan: { } def })
         {
-            ShowPeek($"{KindLabel(target.Symbol.Kind)} — {target.Symbol.Name}", DeclarationText(def), monospace: true);
+            ShowPeek(string.Format(CultureInfo.CurrentCulture, UiStrings.PeekHeaderFormat, KindLabel(target.Symbol.Kind), target.Symbol.Name), DeclarationText(def), monospace: true);
             return true;
         }
 
@@ -1204,7 +1205,7 @@ internal sealed class NavigationController
     {
         if (_fetchDefinition is null) return;
         int gen = ++_peekGeneration;
-        ShowPeek(name, "Loading…", monospace: false);
+        ShowPeek(name, UiStrings.PeekLoading, monospace: false);
         _ = FetchAndShowPeekAsync(name, kind, gen);
     }
 
@@ -1378,13 +1379,13 @@ internal sealed class NavigationController
 
     private static string KindLabel(SymbolKind kind) => kind switch
     {
-        SymbolKind.Variable => "Variable",
-        SymbolKind.Parameter => "Parameter",
-        SymbolKind.Cursor => "Cursor",
-        SymbolKind.Cte => "Common table expression",
-        SymbolKind.TableReference => "Alias",
-        SymbolKind.RecordAlias => "Record",
-        _ => "Definition",
+        SymbolKind.Variable => UiStrings.ObjectKindVariable,
+        SymbolKind.Parameter => UiStrings.ObjectKindParameter,
+        SymbolKind.Cursor => UiStrings.ObjectKindCursor,
+        SymbolKind.Cte => UiStrings.ObjectKindCte,
+        SymbolKind.TableReference => UiStrings.ObjectKindAlias,
+        SymbolKind.RecordAlias => UiStrings.ObjectKindRecord,
+        _ => UiStrings.ObjectKindDefinition,
     };
 
     private static readonly FontFamily MonoFont = new("Cascadia Mono, Consolas, Menlo, monospace");

@@ -9,7 +9,7 @@
         x:Class="EmberTern.App.Views.SettingsExportDialog"
         x:Name="ExportDialogRoot"
         x:DataType="vm:SettingsExportDialogViewModel"
-        Title="{x:Static app:UiStrings.SettingsExportTitle}"
+        Title="{app:Loc SettingsExportTitle}"
         Width="520"
         SizeToContent="Height"
         CanResize="False"
@@ -31,8 +31,8 @@
             BorderThickness="0,0,0,1"
             Padding="20,16">
       <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static app:UiStrings.SettingsExportTitle}" Classes="h1" />
-        <TextBlock Text="{x:Static app:UiStrings.SettingsExportIntro}"
+        <TextBlock Text="{app:Loc SettingsExportTitle}" Classes="h1" />
+        <TextBlock Text="{app:Loc SettingsExportIntro}"
                    Classes="field-label"
                    TextWrapping="Wrap" />
       </StackPanel>
@@ -52,47 +52,47 @@
 
       <Border Classes="settings-group">
         <StackPanel Spacing="4">
-          <TextBlock Text="{x:Static app:UiStrings.SettingsExportSectionsHeader}" Classes="group-header" />
+          <TextBlock Text="{app:Loc SettingsExportSectionsHeader}" Classes="group-header" />
           <CheckBox x:Name="ExportPreferences"
-                    Content="{x:Static app:UiStrings.SettingsSectionPreferences}"
+                    Content="{app:Loc SettingsSectionPreferences}"
                     IsChecked="{Binding Preferences, Mode=TwoWay}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionGridProfiles}"
+          <CheckBox Content="{app:Loc SettingsSectionGridProfiles}"
                     IsChecked="{Binding GridProfiles, Mode=TwoWay}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionFolders}"
+          <CheckBox Content="{app:Loc SettingsSectionFolders}"
                     IsChecked="{Binding Folders, Mode=TwoWay}" />
           <CheckBox x:Name="ExportConnections"
-                    Content="{x:Static app:UiStrings.SettingsSectionConnections}"
+                    Content="{app:Loc SettingsSectionConnections}"
                     IsChecked="{Binding Connections, Mode=TwoWay}" />
           <!-- ⚠ Ratified Q2: off by default, and the label states that the file will hold database credentials.
                Disabled without the connections it would belong to. -->
           <CheckBox x:Name="ExportPasswords"
                     Margin="20,0,0,0"
-                    Content="{x:Static app:UiStrings.SettingsSectionPasswords}"
+                    Content="{app:Loc SettingsSectionPasswords}"
                     IsEnabled="{Binding CanIncludePasswords}"
                     IsChecked="{Binding Passwords, Mode=TwoWay}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionWorkspaces}"
+          <CheckBox Content="{app:Loc SettingsSectionWorkspaces}"
                     IsChecked="{Binding Workspaces, Mode=TwoWay}" />
-          <CheckBox Content="{x:Static app:UiStrings.SettingsSectionImportProfiles}"
+          <CheckBox Content="{app:Loc SettingsSectionImportProfiles}"
                     IsChecked="{Binding ImportProfiles, Mode=TwoWay}" />
         </StackPanel>
       </Border>
 
       <Border Classes="settings-group">
         <StackPanel Spacing="6">
-          <TextBlock Text="{x:Static app:UiStrings.SettingsExportPassphraseHeader}" Classes="group-header" />
+          <TextBlock Text="{app:Loc SettingsExportPassphraseHeader}" Classes="group-header" />
           <!-- ⚠ The irreversibility is stated HERE, where the passphrase is typed — not in a help page and not
                after the file exists. A passphrase-derived key means a forgotten passphrase makes the file
                permanently unreadable, with no reset (§6.3.1). -->
-          <TextBlock Text="{x:Static app:UiStrings.SettingsExportPassphraseWarning}"
+          <TextBlock Text="{app:Loc SettingsExportPassphraseWarning}"
                      Classes="field-label"
                      TextWrapping="Wrap" />
-          <TextBlock Text="{x:Static app:UiStrings.SettingsExportPassphraseLabel}" Classes="field-label" />
+          <TextBlock Text="{app:Loc SettingsExportPassphraseLabel}" Classes="field-label" />
           <TextBox x:Name="PassphraseBox"
                    PasswordChar="•"
                    Text="{Binding Passphrase, Mode=TwoWay}" />
           <!-- ⭐ The confirmation is part of the gate, not a courtesy: a typo produces a file nobody can ever
                open, and the error is undetectable afterwards. This is the only moment it can be caught. -->
-          <TextBlock Text="{x:Static app:UiStrings.SettingsExportPassphraseConfirmLabel}" Classes="field-label" />
+          <TextBlock Text="{app:Loc SettingsExportPassphraseConfirmLabel}" Classes="field-label" />
           <TextBox x:Name="PassphraseConfirmBox"
                    PasswordChar="•"
                    Text="{Binding PassphraseConfirmation, Mode=TwoWay}" />
@@ -133,14 +133,14 @@
       </StackPanel>
       <Button Grid.Column="1"
               Classes="flat"
-              Content="{x:Static app:UiStrings.SettingsExportCancel}"
+              Content="{app:Loc SettingsExportCancel}"
               Click="OnCloseClick"
               IsCancel="True"
               Margin="0,0,8,0" />
       <Button Grid.Column="2"
               x:Name="ExportButton"
               Classes="primary"
-              Content="{x:Static app:UiStrings.SettingsExportRun}"
+              Content="{app:Loc SettingsExportRun}"
               IsEnabled="{Binding CanExport}"
               Click="OnExportClick"
               IsDefault="True" />

@@ -1,3 +1,4 @@
+using EmberTern.Core.Localization;
 using System;
 using EmberTern.Core.Settings;
 
@@ -45,6 +46,10 @@ public sealed class PreferencesService
     /// so there is no second health mechanism beside <c>ApplicationSettingsStore</c>'s.
     /// </summary>
     public string? LastSaveDiagnostic => _store.LastSaveDiagnostic;
+
+    /// <summary>The same refusal as a <see cref="LocalizableMessage"/> (D‑3), for the surface that shows it.
+    /// ⚠ Forwarded, never re-derived — one health mechanism, as with the string form above.</summary>
+    public LocalizableMessage? LastSaveMessage => _store.LastSaveMessage;
 
     /// <summary>Raised after <see cref="Current"/> changes — including when the write was refused, because the
     /// session honours the choice either way (see <see cref="Apply"/>).</summary>

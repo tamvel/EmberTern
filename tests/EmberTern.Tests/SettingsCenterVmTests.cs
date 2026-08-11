@@ -112,8 +112,13 @@ public class SettingsCenterVmTests
     /// <summary>
     /// ⛔ The same condition <c>CommandCatalog</c>'s descriptor table is held to: the words live in
     /// <c>UiStrings</c> and the option keys in <c>PreferenceOptions</c>, so the table itself names no strings.
-    /// Scoped to the table (the static constructor) — the file's prose and its <c>Matches</c> helper are
-    /// documentation and code, not values the app renders.
+    /// Scoped to the table (<c>Build</c>) — the file's prose and its <c>Matches</c> helper are documentation
+    /// and code, not values the app renders.
+    ///
+    /// <para>⚠ The anchor was <c>static SettingsCatalog()</c> until the PL QA round, when the table stopped
+    /// being built once at type-init and became a rebuild driven by the current language. The regex is the
+    /// only thing that had to move — and it moved rather than being relaxed, because a guard that cannot find
+    /// its subject reports "could not locate" instead of quietly passing, which is how this was noticed.</para>
     /// </summary>
     [Fact]
     public void TheCatalogTableContainsNoStringLiterals()
@@ -121,7 +126,8 @@ public class SettingsCenterVmTests
         var source = File.ReadAllText(Path.Combine(
             RepositoryRoot(), "src", "EmberTern.App", "Settings", "SettingsCatalog.cs"));
 
-        var table = Regex.Match(source, @"static SettingsCatalog\(\)\s*\{(.*?)\n    \}", RegexOptions.Singleline);
+        var table = Regex.Match(
+            source, @"private static void Build\(\)\s*\{(.*?)\n    \}", RegexOptions.Singleline);
         Assert.True(table.Success, "could not locate the SettingsCatalog table");
 
         var offenders = table.Groups[1].Value

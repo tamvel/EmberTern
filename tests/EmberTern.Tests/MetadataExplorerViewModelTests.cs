@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using EmberTern.App;
@@ -193,8 +193,8 @@ public class MetadataExplorerViewModelTests
         var xaml = File.ReadAllText(Path.Combine(RepoRoot(), "src", "EmberTern.App", "Views", "MainWindow.axaml"));
 
         Assert.Contains("IsVisible=\"{Binding ShowEmptyState}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("UiStrings.SidebarPlaceholderEmpty", xaml, StringComparison.Ordinal);
-        Assert.Contains("UiStrings.ConnectionsEmptyHint", xaml, StringComparison.Ordinal);
+        Assert.Contains("{app:Loc SidebarPlaceholderEmpty}", xaml, StringComparison.Ordinal);
+        Assert.Contains("{app:Loc ConnectionsEmptyHint}", xaml, StringComparison.Ordinal);
         Assert.Contains("Icon.Plus", xaml, StringComparison.Ordinal);
     }
 

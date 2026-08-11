@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -168,15 +168,15 @@ public class EmptyStatePresentationTests
     {
         var security = View("SecurityManagerTabView.axaml");
         Assert.Contains("{Binding Roles.ShowEmptyState}", security, StringComparison.Ordinal);
-        Assert.Contains("UiStrings.SecurityRolesEmpty", security, StringComparison.Ordinal);
+        Assert.Contains("{app:Loc SecurityRolesEmpty}", security, StringComparison.Ordinal);
         Assert.Contains("{Binding Membership.ShowEmptyState}", security, StringComparison.Ordinal);
         Assert.Contains("{Binding Membership.EmptyText}", security, StringComparison.Ordinal);
 
         var script = View("ScriptExecutorTabView.axaml");
         Assert.Contains("{Binding ShowNoResults}", script, StringComparison.Ordinal);
         Assert.Contains("{Binding ShowNoFilterMatch}", script, StringComparison.Ordinal);
-        Assert.Contains("UiStrings.ScriptResultsEmpty", script, StringComparison.Ordinal);
-        Assert.Contains("UiStrings.ScriptResultsNoFilterMatch", script, StringComparison.Ordinal);
+        Assert.Contains("{app:Loc ScriptResultsEmpty}", script, StringComparison.Ordinal);
+        Assert.Contains("{app:Loc ScriptResultsNoFilterMatch}", script, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -196,7 +196,7 @@ public class EmptyStatePresentationTests
         // ⚠ Sprawdzane jest ODWOŁANIE DO STAŁEJ, nie samo słowo „Empty": pierwsza wersja szukała podciągu
         //   i zapaliła się na `StringConverters.IsNotNullOrEmpty` — czyli raportowała stan pusty tam, gdzie
         //   stoi zwykły konwerter widoczności. Wykrył to przebieg, nie czytanie.
-        Assert.DoesNotContain("UiStrings.", tree, StringComparison.Ordinal);
+        Assert.DoesNotContain("{app:Loc ", tree, StringComparison.Ordinal);
 
         // Przesłanka wyjątku: pusta kategoria nadal jest wierszem. Gdyby to się zmieniło, wyjątek traci
         // uzasadnienie i decyzję trzeba podjąć od nowa — dlatego pilnowana jest PRZESŁANKA, nie polityka.

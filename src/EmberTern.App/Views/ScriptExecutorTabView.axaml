@@ -31,7 +31,7 @@
       <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
 
         <Button Classes="primary" Command="{Binding RunCommand}"
-                ToolTip.Tip="{x:Static app:UiStrings.ScriptRunTooltip}">
+                ToolTip.Tip="{app:Loc ScriptRunTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <!-- ⭐ `Size.Icon` (14), nie `Size.Icon.Toolbar` (16): ta ikona stoi PRZY ETYKIECIE, więc
                  celem myszy jest przycisk, a nie ona. Dokładnie ta różnica, którą A‑3 nazwało w M4 —
@@ -39,70 +39,70 @@
             <controls:SvgIcon Data="{StaticResource Icon.Play}"
                               Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource OnAccentBrush}" />
-            <TextBlock Text="{x:Static app:UiStrings.ScriptRun}" VerticalAlignment="Center" />
+            <TextBlock Text="{app:Loc ScriptRun}" VerticalAlignment="Center" />
             <!-- ⭐ TA SAMA AKCJA, TEN SAM SKRÓT, TO SAMO ŹRÓDŁO. Run w Script Executorze to `CommandId.Go`
                  — dokładnie ta, którą pasek SQL Editora pokazuje jako „Execute F5". Chip czyta ten sam
                  `ToolbarExecuteHint` (czyli katalog komend), więc nie da się ich rozjechać: gest jest
                  zapisany w JEDNYM miejscu (gotcha #284). Zgłoszenie QA: „jeżeli Execute pokazuje F5,
                  Run również powinien — to jest ta sama akcja". -->
-            <TextBlock Classes="shortcut-chip" Text="{x:Static app:UiStrings.ToolbarExecuteHint}" />
+            <TextBlock Classes="shortcut-chip" Text="{app:Loc ToolbarExecuteHint}" />
           </StackPanel>
         </Button>
 
         <Button Classes="icon" Command="{Binding StopCommand}"
                 IsVisible="{Binding IsRunning}"
-                ToolTip.Tip="{x:Static app:UiStrings.ScriptStopTooltip}">
+                ToolTip.Tip="{app:Loc ScriptStopTooltip}">
           <controls:SvgIcon Data="{StaticResource Icon.Stop}" Foreground="{DynamicResource DangerIconBrush}" />
         </Button>
 
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
-        <TextBlock Text="{x:Static app:UiStrings.ScriptTransactionLabel}"
+        <TextBlock Text="{app:Loc ScriptTransactionLabel}"
                    VerticalAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}" />
         <ComboBox SelectedIndex="{Binding TransactionModeIndex, Mode=TwoWay}" MinWidth="200"
                   VerticalAlignment="Center"
                   ToolTip.Tip="{Binding SelectedModeDescription}">
-          <ComboBoxItem Content="{x:Static app:UiStrings.ScriptModeManual}" />
-          <ComboBoxItem Content="{x:Static app:UiStrings.ScriptModeAutoCommit}" />
-          <ComboBoxItem Content="{x:Static app:UiStrings.ScriptModeSequenced}" />
+          <ComboBoxItem Content="{app:Loc ScriptModeManual}" />
+          <ComboBoxItem Content="{app:Loc ScriptModeAutoCommit}" />
+          <ComboBoxItem Content="{app:Loc ScriptModeSequenced}" />
         </ComboBox>
-        <CheckBox Content="{x:Static app:UiStrings.ScriptStopOnError}"
+        <CheckBox Content="{app:Loc ScriptStopOnError}"
                   IsChecked="{Binding StopOnError, Mode=TwoWay}" VerticalAlignment="Center" />
 
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <Button Classes="flat" Command="{Binding CommitScriptCommand}"
-                ToolTip.Tip="{x:Static app:UiStrings.ScriptCommitTooltip}">
+                ToolTip.Tip="{app:Loc ScriptCommitTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <!-- Role R‑2 / R‑3 na własnych tokenach (K7) — patrz MainWindow. Wygląd bez zmiany. -->
             <controls:SvgIcon Data="{StaticResource Icon.Check}"
                               Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource CommitButtonBrush}" />
-            <TextBlock Text="{x:Static app:UiStrings.ScriptCommit}" />
+            <TextBlock Text="{app:Loc ScriptCommit}" />
           </StackPanel>
         </Button>
         <Button Classes="flat" Command="{Binding RollbackScriptCommand}"
-                ToolTip.Tip="{x:Static app:UiStrings.ScriptRollbackTooltip}">
+                ToolTip.Tip="{app:Loc ScriptRollbackTooltip}">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <controls:SvgIcon Data="{StaticResource Icon.Undo}"
                               Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                               Foreground="{DynamicResource RollbackButtonBrush}" />
-            <TextBlock Text="{x:Static app:UiStrings.ScriptRollback}" />
+            <TextBlock Text="{app:Loc ScriptRollback}" />
           </StackPanel>
         </Button>
 
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <Button Classes="icon" Command="{Binding OpenScriptCommand}"
-                ToolTip.Tip="{x:Static app:UiStrings.ScriptOpenTooltip}">
+                ToolTip.Tip="{app:Loc ScriptOpenTooltip}">
           <controls:SvgIcon Data="{StaticResource Icon.Folder}" Foreground="{DynamicResource AccentBrush}" />
         </Button>
         <Button Classes="icon" Command="{Binding SaveScriptCommand}"
-                ToolTip.Tip="{x:Static app:UiStrings.ScriptSaveTooltip}">
+                ToolTip.Tip="{app:Loc ScriptSaveTooltip}">
           <controls:SvgIcon Data="{StaticResource Icon.Save}" Foreground="{DynamicResource AccentBrush}" />
         </Button>
 
-        <TextBlock Text="{x:Static app:UiStrings.ScriptTransactionOpenMarker}"
+        <TextBlock Text="{app:Loc ScriptTransactionOpenMarker}"
                    Margin="6,0,0,0" VerticalAlignment="Center"
                    Foreground="{DynamicResource WarningBrush}"
                    IsVisible="{Binding TransactionOpen}" />
@@ -132,20 +132,20 @@
               BorderThickness="0,1,0,0"
               Padding="10,6">
         <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*">
-          <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.BatchResultsFilterLabel}"
+          <TextBlock Grid.Column="0" Text="{app:Loc BatchResultsFilterLabel}"
                      VerticalAlignment="Center" Margin="0,0,6,0"
                      Foreground="{DynamicResource SubtleForegroundBrush}" />
           <ComboBox Grid.Column="1" SelectedIndex="{Binding SelectedFilterIndex, Mode=TwoWay}"
                     MinWidth="110" VerticalAlignment="Center">
-            <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterAll}" />
-            <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterSuccess}" />
-            <ComboBoxItem Content="{x:Static app:UiStrings.BatchResultsFilterFailed}" />
+            <ComboBoxItem Content="{app:Loc BatchResultsFilterAll}" />
+            <ComboBoxItem Content="{app:Loc BatchResultsFilterSuccess}" />
+            <ComboBoxItem Content="{app:Loc BatchResultsFilterFailed}" />
           </ComboBox>
           <Button Grid.Column="2" Classes="flat" Margin="8,0,0,0"
-                  Content="{x:Static app:UiStrings.BatchResultsCopyAll}"
+                  Content="{app:Loc BatchResultsCopyAll}"
                   Command="{Binding CopyAllCommand}" IsEnabled="{Binding HasResults}" />
           <Button Grid.Column="3" Classes="flat"
-                  Content="{x:Static app:UiStrings.BatchResultsCopyFailed}"
+                  Content="{app:Loc BatchResultsCopyFailed}"
                   Command="{Binding CopyFailedCommand}" IsEnabled="{Binding HasResults}" />
           <TextBlock Grid.Column="4" Text="{Binding StatusText}"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -189,9 +189,9 @@
           </Style>
         </DataGrid.Styles>
         <DataGrid.Columns>
-          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnLine}"
+          <DataGridTextColumn Header="{app:Loc ScriptColumnLine}"
                               Binding="{Binding Line}" Width="46" />
-          <DataGridTemplateColumn Header="{x:Static app:UiStrings.ScriptColumnStep}" Width="52">
+          <DataGridTemplateColumn Header="{app:Loc ScriptColumnStep}" Width="52">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:ScriptResultRowViewModel">
                 <TextBlock Text="{Binding StepText}" VerticalAlignment="Center" Margin="8,0"
@@ -201,12 +201,12 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnStatement}"
+          <DataGridTextColumn Header="{app:Loc ScriptColumnStatement}"
                               Binding="{Binding Statement}" Width="2*" MinWidth="220"
                               FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnType}"
+          <DataGridTextColumn Header="{app:Loc ScriptColumnType}"
                               Binding="{Binding TypeText}" Width="140" />
-          <DataGridTemplateColumn Header="{x:Static app:UiStrings.ScriptColumnResult}" Width="80">
+          <DataGridTemplateColumn Header="{app:Loc ScriptColumnResult}" Width="80">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:ScriptResultRowViewModel">
                 <TextBlock Text="{Binding Result}" VerticalAlignment="Center" Margin="8,0"
@@ -217,11 +217,11 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnRows}"
+          <DataGridTextColumn Header="{app:Loc ScriptColumnRows}"
                               Binding="{Binding RowsText}" Width="70" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnDuration}"
+          <DataGridTextColumn Header="{app:Loc ScriptColumnDuration}"
                               Binding="{Binding Duration}" Width="90" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.ScriptColumnError}"
+          <DataGridTextColumn Header="{app:Loc ScriptColumnError}"
                               Binding="{Binding Error}" Width="2*" MinWidth="160" />
         </DataGrid.Columns>
       </DataGrid>
@@ -233,7 +233,7 @@
              na „Failed".
              ⚠ Druga treść świadomie powtarza język Session Managera i Trace Monitora — ta sama sytuacja
              ma brzmieć tak samo niezależnie od ekranu. -->
-        <TextBlock Text="{x:Static app:UiStrings.ScriptResultsEmpty}"
+        <TextBlock Text="{app:Loc ScriptResultsEmpty}"
                    IsVisible="{Binding ShowNoResults}"
                    IsHitTestVisible="False"
                    HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -241,7 +241,7 @@
                    TextWrapping="Wrap" TextAlignment="Center"
                    Foreground="{DynamicResource SubtleForegroundBrush}"
                    FontSize="{DynamicResource Text.Application.Size}" />
-        <TextBlock Text="{x:Static app:UiStrings.ScriptResultsNoFilterMatch}"
+        <TextBlock Text="{app:Loc ScriptResultsNoFilterMatch}"
                    IsVisible="{Binding ShowNoFilterMatch}"
                    IsHitTestVisible="False"
                    HorizontalAlignment="Center" VerticalAlignment="Center"

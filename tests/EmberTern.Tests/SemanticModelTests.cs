@@ -1054,4 +1054,128 @@ public class SemanticModelTests
         Assert.Equal(ReferenceRole.Variable, bodyRef!.Role);
         Assert.True(bodyRef.IsResolved);
     }
+
+    // ══ A DML statement inside a PSQL body binds the SAME tables as at the top level ══════════════
+    //
+    // Reported 2026-08-10 as "one `zasobtechcrp` has no colour" in a procedure. Measured cause: the PSQL
+    // body binder was a SECOND dispatch over the five DML kinds that bound their embedded subqueries and
+    // never declared the statement's TARGET — so in a routine body no UPDATE / INSERT / DELETE /
+    // UPDATE OR INSERT / MERGE resolved any table at all, while the identical statement at the top level
+    // resolved fine. Both now go through BindDmlTablesAndQueries.
+    //
+    // ⚠ The visible half was the missing colour; the half worth testing is the CONSEQUENCE — with the alias
+    // undeclared, BindDottedReference stays silent on an unresolved qualifier, so the whole statement's
+    // `alias.column` pairs had no reference either (no hover, no Ctrl+Click, no find-references, no
+    // unknown-column check). Hence every case below asserts the qualifier/column pair, not just the table.
+
+    private static FakeMetadata TwoTables() => new FakeMetadata()
+        .Col("ZASOBTECHCRP", "CZAS", "TIMESTAMP")
+        .Col("ZASOBTECHCRP", "ID_ZASOBTECHCRP", "INTEGER")
+        .Col("OPERACJATECH", "ID_OPERACJATECH", "INTEGER");
+
+    // The target table resolves, and so does the alias-qualified column that depends on it.
+    private static void AssertTargetBinds(string sql, string tableNeedle, string qualifiedNeedle, string column)
+    {
+        var m = BuildStrict(sql, TwoTables());
+
+        var table = RefAt(m, sql, tableNeedle);
+        Assert.NotNull(table);
+        Assert.Equal(ReferenceRole.SchemaObject, table!.Role);
+        var sym = Assert.IsType<SchemaObjectSymbol>(table.Symbol);
+        Assert.Equal("ZASOBTECHCRP", sym.Name);
+
+        int q = sql.IndexOf(qualifiedNeedle, StringComparison.Ordinal);
+        var qualifier = m.ReferenceAt(q);
+        Assert.NotNull(qualifier);
+        Assert.Equal(ReferenceRole.Qualifier, qualifier!.Role);
+        Assert.True(qualifier.IsResolved, "the target's alias must be in scope for its columns to bind");
+
+        var col = m.ReferenceAt(sql.IndexOf(column, q, StringComparison.Ordinal));
+        Assert.NotNull(col);
+        Assert.Equal(ReferenceRole.Column, col!.Role);
+        Assert.True(col.IsResolved, "the qualified column must resolve against the target table");
+    }
+
+    [Fact]
+    public void UpdateInsideARoutineBody_BindsItsTargetTableAndAlias()
+        => AssertTargetBinds(
+            "create procedure p as declare variable v timestamp; begin "
+            + "update zasobtechcrp zc set zc.czas = :v where zc.id_zasobtechcrp = 1; end",
+            "zasobtechcrp zc", "zc.czas", "czas");
+
+    [Fact]
+    public void DeleteInsideARoutineBody_BindsItsTargetTableAndAlias()
+        => AssertTargetBinds(
+            "create procedure p as begin delete from zasobtechcrp zc where zc.id_zasobtechcrp = 1; end",
+            "zasobtechcrp zc", "zc.id_zasobtechcrp", "id_zasobtechcrp");
+
+    [Fact]
+    public void MergeInsideARoutineBody_BindsItsTargetTableAndAlias()
+        => AssertTargetBinds(
+            "create procedure p as begin merge into zasobtechcrp zc using operacjatech o "
+            + "on (zc.id_zasobtechcrp = o.id_operacjatech) when matched then update set zc.czas = null; end",
+            "zasobtechcrp zc", "zc.id_zasobtechcrp", "id_zasobtechcrp");
+
+    [Fact]
+    public void InsertInsideARoutineBody_BindsItsTargetTable()
+    {
+        const string sql = "create procedure p as begin insert into zasobtechcrp (czas) values (null); end";
+        var m = BuildStrict(sql, TwoTables());
+        var table = RefAt(m, sql, "zasobtechcrp");
+        Assert.NotNull(table);
+        Assert.Equal(ReferenceRole.SchemaObject, table!.Role);
+        Assert.True(table.IsResolved);
+    }
+
+    [Fact]
+    public void UpdateOrInsertInsideARoutineBody_BindsItsTargetTable()
+    {
+        const string sql = "create procedure p as begin "
+            + "update or insert into zasobtechcrp (czas) values (null) matching (czas); end";
+        var m = BuildStrict(sql, TwoTables());
+        var table = RefAt(m, sql, "zasobtechcrp");
+        Assert.NotNull(table);
+        Assert.Equal(ReferenceRole.SchemaObject, table!.Role);
+        Assert.True(table.IsResolved);
+    }
+
+    [Fact]
+    public void ADmlTargetAlias_DoesNotLeakToTheNextStatementInTheSameBody()
+    {
+        // ⚠ Why the statement gets its OWN child scope rather than declaring into the body scope: two
+        // statements may reuse one alias for DIFFERENT tables, and a leaked alias would resolve the second
+        // statement's columns against the first statement's table — a wrong answer, which is worse than
+        // none. Here the second statement's `zc` must be the second target.
+        const string sql = "create procedure p as begin "
+            + "update zasobtechcrp zc set zc.czas = null where zc.id_zasobtechcrp = 1; "
+            + "update operacjatech zc set zc.id_operacjatech = 2; end";
+        var m = BuildStrict(sql, TwoTables());
+
+        int second = sql.IndexOf("update operacjatech", StringComparison.Ordinal);
+        var qualifier = m.ReferenceAt(sql.IndexOf("zc.id_operacjatech", second, StringComparison.Ordinal));
+        Assert.NotNull(qualifier);
+        var tref = Assert.IsType<TableReferenceSymbol>(qualifier!.Symbol);
+        Assert.Equal("OPERACJATECH", tref.TargetName);
+    }
+
+    [Fact]
+    public void AVariableStillResolves_InsideADmlStatementInARoutineBody()
+    {
+        // The statement's own scope is a CHILD of the body scope, so :variables and parameters keep
+        // resolving up the chain. Pinned because giving the statement a scope rooted at _root would have
+        // silently unbound every local a DML statement in a routine uses.
+        const string sql = "create procedure p (a integer) as declare variable v timestamp; begin "
+            + "update zasobtechcrp zc set zc.czas = :v where zc.id_zasobtechcrp = :a; end";
+        var m = BuildStrict(sql, TwoTables());
+
+        var v = RefAt(m, sql, ":v");
+        Assert.NotNull(v);
+        Assert.Equal(ReferenceRole.Variable, v!.Role);
+        Assert.True(v.IsResolved);
+
+        var a = RefAt(m, sql, ":a");
+        Assert.NotNull(a);
+        Assert.Equal(ReferenceRole.Parameter, a!.Role);
+        Assert.True(a.IsResolved);
+    }
 }

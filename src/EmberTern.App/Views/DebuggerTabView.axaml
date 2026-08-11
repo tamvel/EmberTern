@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:app="using:EmberTern.App"
              xmlns:vm="using:EmberTern.App.ViewModels"
@@ -103,8 +103,8 @@
           </Panel>
           <CheckBox Grid.Column="1" IsChecked="{Binding IsNull, Mode=TwoWay}"
                     Margin="10,0,0,0" VerticalAlignment="Center" FontSize="{DynamicResource Text.Caption.Size}"
-                    Content="{x:Static app:UiStrings.DebuggerParamNullLabel}"
-                    ToolTip.Tip="{x:Static app:UiStrings.DebuggerParamNullTooltip}"
+                    Content="{app:Loc DebuggerParamNullLabel}"
+                    ToolTip.Tip="{app:Loc DebuggerParamNullTooltip}"
                     Foreground="{DynamicResource SubtleForegroundBrush}" />
         </Grid>
       </Grid>
@@ -131,7 +131,7 @@
                accent; Stop = danger; Restart = neutral; Break on exception = a warning-toned toggle (a mode,
                not a destructive action). Labels stay neutral text so only the icon carries the category. -->
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerContinueTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerContinueTooltip}"
                   Command="{Binding ContinueCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <!-- ⭐⭐ Rola R‑1 „Uruchom" (domknięcie K‑final, dawne O‑1). Wyglądało to na kolizję
@@ -146,112 +146,112 @@
                    statusu), a §4/W6 zabrania malować nim PRZYCISK AKCJI. -->
               <controls:SvgIcon Data="{StaticResource Icon.Play}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource ActionRunBrush}" />
-              <TextBlock Text="Continue" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerContinueLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepIntoTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerStepIntoTooltip}"
                   Command="{Binding StepIntoCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.StepInto}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
-              <TextBlock Text="Into" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerStepIntoLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepOverTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerStepOverTooltip}"
                   Command="{Binding StepOverCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.StepOver}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
-              <TextBlock Text="Over" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerStepOverLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerStepOutTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerStepOutTooltip}"
                   Command="{Binding StepOutCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.StepOut}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
-              <TextBlock Text="Out" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerStepOutLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
                   IsEnabled="{Binding IsPaused}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToCursorTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerRunToCursorTooltip}"
                   Click="OnRunToCursorClick">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.RunToCursor}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
-              <TextBlock Text="To cursor" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerRunToCursorLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <!-- Run to next SUSPEND (D12, §9.8) — a selectable procedure's "give me the next row"; rows collect
                in the Results tab. A run mode delegated straight to the engine (DebugSession.RunToSuspend). -->
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToSuspendTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerRunToSuspendTooltip}"
                   Command="{Binding RunToSuspendCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.RunToSuspend}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
-              <TextBlock Text="Suspend" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerRunToSuspendLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <!-- Loop fast-forward (D13) — run modes delegated straight to the engine (DebugSession.RunToNextIteration
                / RunToLoopExit); the commands' CanExecute uses DebugSession.IsInsideLoop, so the buttons enable
                only while paused inside a WHILE / FOR loop. Both share the teal "loop operations" accent. -->
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToNextIterationTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerRunToNextIterationTooltip}"
                   Command="{Binding RunToNextIterationCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.NextIteration}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource DebugLoopIconBrush}" />
-              <TextBlock Text="Next iter" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerNextIterationLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRunToLoopExitTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerRunToLoopExitTooltip}"
                   Command="{Binding RunToLoopExitCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.LoopExit}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource DebugLoopIconBrush}" />
-              <TextBlock Text="Loop exit" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerLoopExitLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerStopTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerStopTooltip}"
                   Command="{Binding StopCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.Stop}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource DangerIconBrush}" />
-              <TextBlock Text="Stop" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerStopLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerRestartTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerRestartTooltip}"
                   Command="{Binding RestartCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.Restart}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
-              <TextBlock Text="Restart" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerRestartLabel}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
           <!-- Save + compile (Seam 5b). Enabled only when there is unsaved work; saving a live session warns
                first, then ends it. Neutral icon: saving is not a debugger run command. -->
           <Button Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerSaveTooltip}"
+                  ToolTip.Tip="{app:Loc DebuggerSaveTooltip}"
                   Command="{Binding SaveSourceCommand}">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.Save}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
-              <TextBlock Text="{x:Static app:UiStrings.DebuggerSave}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
+              <TextBlock Text="{app:Loc DebuggerSave}" FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
           <!-- Break on exception (D12, §9.8.1) — a pure toggle of DebugSession.BreakOnException; all pause +
                routing logic is in Core. A behaviour MODE, so a warning tone, not the destructive danger. -->
           <CheckBox IsChecked="{Binding BreakOnException, Mode=TwoWay}"
-                    ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakOnExceptionTooltip}"
+                    ToolTip.Tip="{app:Loc DebuggerBreakOnExceptionTooltip}"
                     VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <controls:SvgIcon Data="{StaticResource Icon.BreakException}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
                                 Foreground="{DynamicResource WarningIconBrush}" />
-              <TextBlock Text="{x:Static app:UiStrings.DebuggerBreakOnException}" FontSize="{DynamicResource Text.Compact.Size}"
+              <TextBlock Text="{app:Loc DebuggerBreakOnException}" FontSize="{DynamicResource Text.Compact.Size}"
                          VerticalAlignment="Center" />
             </StackPanel>
           </CheckBox>
@@ -281,19 +281,19 @@
       <ScrollViewer x:Name="LaunchPanel" IsVisible="{Binding IsLaunchPanelVisible}" VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="16,14" Spacing="10" MaxWidth="720" HorizontalAlignment="Left">
 
-          <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchHeader}" Classes="h1" />
+          <TextBlock Text="{app:Loc DebuggerLaunchHeader}" Classes="h1" />
 
           <!-- Parameters (procedure / function) — hidden in trigger mode. -->
           <StackPanel IsVisible="{Binding !IsTriggerMode}">
             <StackPanel Spacing="6" DataContext="{Binding Parameters}">
-              <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchParametersHeader}" Classes="field-label" />
-              <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchNoParameters}"
+              <TextBlock Text="{app:Loc DebuggerLaunchParametersHeader}" Classes="field-label" />
+              <TextBlock Text="{app:Loc DebuggerLaunchNoParameters}"
                          Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                          IsVisible="{Binding !Params.Count}" />
 
               <!-- History dropdown (only when there is a saved set for this routine). -->
               <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding HasHistory}" Margin="0,2">
-                <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.ProcedureExecuteDialogHistoryLabel}"
+                <TextBlock Grid.Column="0" Text="{app:Loc ProcedureExecuteDialogHistoryLabel}"
                            Classes="field-label" VerticalAlignment="Center" Margin="0,0,10,0" />
                 <ComboBox Grid.Column="1" ItemsSource="{Binding History}"
                           SelectedItem="{Binding SelectedHistory, Mode=TwoWay}"
@@ -322,7 +322,7 @@
             <StackPanel Spacing="10" DataContext="{Binding TriggerEditor}">
               <!-- Action selector — only when the trigger declares more than one action. -->
               <StackPanel Spacing="6" IsVisible="{Binding HasMultipleActions}">
-                <TextBlock Text="{x:Static app:UiStrings.DebuggerTriggerActionLabel}" Classes="field-label" />
+                <TextBlock Text="{app:Loc DebuggerTriggerActionLabel}" Classes="field-label" />
                 <ComboBox ItemsSource="{Binding Actions}"
                           SelectedIndex="{Binding SelectedActionIndex, Mode=TwoWay}"
                           Width="200" HorizontalAlignment="Left" FontSize="{DynamicResource Text.Compact.Size}" />
@@ -330,8 +330,8 @@
 
               <!-- NEW values (available for INSERT / UPDATE). -->
               <StackPanel Spacing="6" IsVisible="{Binding NewAvailable}">
-                <TextBlock Text="{x:Static app:UiStrings.DebuggerTriggerNewHeader}" Classes="field-label" />
-                <TextBlock Text="{x:Static app:UiStrings.DebuggerTriggerNoColumns}"
+                <TextBlock Text="{app:Loc DebuggerTriggerNewHeader}" Classes="field-label" />
+                <TextBlock Text="{app:Loc DebuggerTriggerNoColumns}"
                            Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                            IsVisible="{Binding !NewParameters.Params.Count}" />
                 <ItemsControl ItemsSource="{Binding NewParameters.Params}"
@@ -340,8 +340,8 @@
 
               <!-- OLD values (available for UPDATE / DELETE). -->
               <StackPanel Spacing="6" IsVisible="{Binding OldAvailable}">
-                <TextBlock Text="{x:Static app:UiStrings.DebuggerTriggerOldHeader}" Classes="field-label" />
-                <TextBlock Text="{x:Static app:UiStrings.DebuggerTriggerNoColumns}"
+                <TextBlock Text="{app:Loc DebuggerTriggerOldHeader}" Classes="field-label" />
+                <TextBlock Text="{app:Loc DebuggerTriggerNoColumns}"
                            Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                            IsVisible="{Binding !OldParameters.Params.Count}" />
                 <ItemsControl ItemsSource="{Binding OldParameters.Params}"
@@ -364,13 +364,13 @@
                                   VerticalAlignment="Center" IsVisible="{Binding !IsAdvancedExpanded}" />
                 <controls:SvgIcon Data="{StaticResource Icon.ChevronDown}" Width="{DynamicResource Size.Icon.Toolbar}" Height="{DynamicResource Size.Icon.Toolbar}"
                                   VerticalAlignment="Center" IsVisible="{Binding IsAdvancedExpanded}" />
-                <TextBlock Text="{x:Static app:UiStrings.DebuggerAdvancedSection}" FontSize="{DynamicResource Text.Application.Size}"
+                <TextBlock Text="{app:Loc DebuggerAdvancedSection}" FontSize="{DynamicResource Text.Application.Size}"
                            Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
             <StackPanel Spacing="6" Margin="18,0,0,0" IsVisible="{Binding IsAdvancedExpanded}">
-              <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchIsolationLabel}" Classes="field-label" />
-              <TextBlock Text="{x:Static app:UiStrings.DebuggerIsolationNote}"
+              <TextBlock Text="{app:Loc DebuggerLaunchIsolationLabel}" Classes="field-label" />
+              <TextBlock Text="{app:Loc DebuggerIsolationNote}"
                          Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap" MaxWidth="600" />
               <ComboBox ItemsSource="{Binding IsolationOptions}"
                         SelectedIndex="{Binding SelectedIsolationIndex, Mode=TwoWay}"
@@ -396,8 +396,8 @@
           <Button x:Name="LaunchButton" Classes="primary" HorizontalAlignment="Left"
                   Command="{Binding LaunchCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="{x:Static app:UiStrings.DebuggerLaunchButton}" VerticalAlignment="Center" />
-              <TextBlock Classes="shortcut-chip" Text="{x:Static app:UiStrings.DebuggerLaunchShortcut}" />
+              <TextBlock Text="{app:Loc DebuggerLaunchButton}" VerticalAlignment="Center" />
+              <TextBlock Classes="shortcut-chip" Text="{app:Loc DebuggerLaunchShortcut}" />
             </StackPanel>
           </Button>
         </StackPanel>
@@ -433,7 +433,7 @@
                            Foreground="{DynamicResource ForegroundBrush}">
               <ae:TextEditor.ContextMenu>
                 <ContextMenu>
-                  <MenuItem Header="{x:Static app:UiStrings.DebuggerRunToCursorMenu}" Icon="{app:MenuIcon Icon.RunToCursor}" InputGesture="{app:CommandGesture DebuggerRunToCursor}"
+                  <MenuItem Header="{app:Loc DebuggerRunToCursorMenu}" Icon="{app:MenuIcon Icon.RunToCursor}" InputGesture="{app:CommandGesture DebuggerRunToCursor}"
                             IsEnabled="{Binding IsPaused}"
                             Click="OnRunToCursorClick" />
                 </ContextMenu>
@@ -450,18 +450,18 @@
             <Grid RowDefinitions="Auto,Auto,*">
               <Border Grid.Row="0" Padding="8,6"
                       BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-                <TextBlock Text="{x:Static app:UiStrings.DebuggerVariablesHeader}"
+                <TextBlock Text="{app:Loc DebuggerVariablesHeader}"
                            FontWeight="SemiBold" FontSize="{DynamicResource Text.SectionHeader.Size}" />
               </Border>
 
               <!-- Type-to-filter (by name; mirrors the sidebar). Shown only when there are variables. -->
               <TextBox Grid.Row="1" Margin="6,6,6,2" FontSize="{DynamicResource Text.Compact.Size}"
                        Text="{Binding VariableFilter, Mode=TwoWay}"
-                       PlaceholderText="{x:Static app:UiStrings.DebuggerVariableFilterWatermark}"
+                       PlaceholderText="{app:Loc DebuggerVariableFilterWatermark}"
                        IsVisible="{Binding HasVariables}" />
 
               <TextBlock Grid.Row="2" Margin="10,8"
-                         Text="{x:Static app:UiStrings.DebuggerVariablesEmpty}"
+                         Text="{app:Loc DebuggerVariablesEmpty}"
                          Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                          IsVisible="{Binding !HasVariables}" />
 
@@ -499,7 +499,7 @@
                                      ContextMenu's popup namescope) to the VM's AddDataBreakpointCommand. -->
                                 <Border.ContextMenu>
                                   <ContextMenu>
-                                    <MenuItem Header="{x:Static app:UiStrings.DebuggerDataBreakpointMenu}" Icon="{app:MenuIcon Icon.BreakException}"
+                                    <MenuItem Header="{app:Loc DebuggerDataBreakpointMenu}" Icon="{app:MenuIcon Icon.BreakException}"
                                               Click="OnBreakWhenChangesClick" />
                                   </ContextMenu>
                                 </Border.ContextMenu>
@@ -508,7 +508,7 @@
                                        the kind glyph beside it. Not a Watch (§9.5). -->
                                   <Button Grid.Column="0" Classes="icon" Width="18" Height="18" Padding="0"
                                           VerticalAlignment="Center" Margin="0,0,4,0"
-                                          ToolTip.Tip="{x:Static app:UiStrings.DebuggerVariablePinTooltip}"
+                                          ToolTip.Tip="{app:Loc DebuggerVariablePinTooltip}"
                                           Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).TogglePinCommand}"
                                           CommandParameter="{Binding}">
                                     <!-- ⚠ 12 px lokalnie, ŚWIADOMIE (M2c iteracja 1, §18.1). Te dwa znaki są
@@ -554,7 +554,7 @@
                                     <TextBlock Text="{Binding ValueText}" FontSize="{DynamicResource Text.Compact.Size}"
                                                IsVisible="{Binding !IsEditing}"
                                                Classes.var-null="{Binding IsNull}"
-                                               ToolTip.Tip="{x:Static app:UiStrings.DebuggerVariableEditTooltip}"
+                                               ToolTip.Tip="{app:Loc DebuggerVariableEditTooltip}"
                                                FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
                                     <TextBox Text="{Binding EditText, Mode=TwoWay}" FontSize="{DynamicResource Text.Compact.Size}"
                                              IsVisible="{Binding IsEditing}" MinWidth="80"
@@ -608,7 +608,7 @@
           <Grid>
             <Button Classes="icon" ZIndex="1"
                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0"
-                    ToolTip.Tip="{x:Static app:UiStrings.DebuggerBottomPanelCollapseTooltip}"
+                    ToolTip.Tip="{app:Loc DebuggerBottomPanelCollapseTooltip}"
                     Command="{Binding ToggleBottomPanelCommand}">
               <Panel>
                 <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}"
@@ -621,12 +621,12 @@
             <TabControl x:Name="BottomTabs" Padding="0">
 
               <!-- Immediate — the interactive REPL: input + the latest result inline. -->
-              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabImmediate}">
+              <TabItem Classes="bottom-tab" Header="{app:Loc DebuggerBottomTabImmediate}">
                 <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" RowDefinitions="Auto,*" Margin="0,2,0,0">
                   <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="8,6">
                     <Panel Grid.Column="0">
                       <TextBox Text="{Binding ImmediateInput, Mode=TwoWay}"
-                               PlaceholderText="{x:Static app:UiStrings.DebuggerImmediateWatermark}"
+                               PlaceholderText="{app:Loc DebuggerImmediateWatermark}"
                                Padding="6,4,26,4"
                                FontSize="{DynamicResource Text.Compact.Size}" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                                VerticalContentAlignment="Center">
@@ -637,7 +637,7 @@
                       <Button Classes="icon" Width="18" Height="18" Padding="0" Margin="0,0,4,0"
                               HorizontalAlignment="Right" VerticalAlignment="Center"
                               IsVisible="{Binding HasImmediateInput}"
-                              ToolTip.Tip="{x:Static app:UiStrings.DebuggerImmediateClearTooltip}"
+                              ToolTip.Tip="{app:Loc DebuggerImmediateClearTooltip}"
                               Command="{Binding ClearImmediateCommand}">
                         <!-- ⭐ Q2 (M4.3): inline ✕ na `Size.Icon.Sm`. Wartość 12 → 12, wygląd bez zmiany —
                              to ten sam element użytkowy co trzy ✕ niżej, które niosły 11 w TYM SAMYM pliku. -->
@@ -647,19 +647,19 @@
                     </Panel>
                     <CheckBox Grid.Column="1" Margin="8,0"
                               IsChecked="{Binding ImmediateAsStatement, Mode=TwoWay}"
-                              Content="{x:Static app:UiStrings.DebuggerImmediateAsStatement}"
-                              ToolTip.Tip="{x:Static app:UiStrings.DebuggerImmediateAsStatementTooltip}"
+                              Content="{app:Loc DebuggerImmediateAsStatement}"
+                              ToolTip.Tip="{app:Loc DebuggerImmediateAsStatementTooltip}"
                               FontSize="{DynamicResource Text.Compact.Size}" VerticalAlignment="Center" />
                     <Button Grid.Column="2" Classes="flat" FontSize="{DynamicResource Text.Compact.Size}"
-                            Content="{x:Static app:UiStrings.DebuggerImmediateEvaluateButton}"
+                            Content="{app:Loc DebuggerImmediateEvaluateButton}"
                             Command="{Binding EvaluateImmediateCommand}" />
                   </Grid>
 
                   <StackPanel Grid.Row="1" Margin="10,4" Spacing="4"
                               IsVisible="{Binding !HasLatestEvaluation}">
-                    <TextBlock Text="{x:Static app:UiStrings.DebuggerImmediateEmpty}"
+                    <TextBlock Text="{app:Loc DebuggerImmediateEmpty}"
                                Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap" />
-                    <TextBlock Text="{x:Static app:UiStrings.DebuggerExpressionExamples}"
+                    <TextBlock Text="{app:Loc DebuggerExpressionExamples}"
                                Classes="subtle" FontSize="{DynamicResource Text.Caption.Size}" TextWrapping="Wrap"
                                FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
                   </StackPanel>
@@ -689,12 +689,12 @@
                    Immediate tab's inline result — only the UI that exposes the harnesses is DEBUG-only. -->
 
               <!-- Watches — expressions re-evaluated after every step (D5, §9.5). -->
-              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabWatches}">
+              <TabItem Classes="bottom-tab" Header="{app:Loc DebuggerBottomTabWatches}">
                 <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" RowDefinitions="Auto,*" Margin="0,2,0,0">
                   <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="8,6">
                     <TextBox Grid.Column="0"
                              Text="{Binding WatchInput, Mode=TwoWay}"
-                             PlaceholderText="{x:Static app:UiStrings.DebuggerWatchWatermark}"
+                             PlaceholderText="{app:Loc DebuggerWatchWatermark}"
                              FontSize="{DynamicResource Text.Compact.Size}" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                              VerticalContentAlignment="Center">
                       <TextBox.KeyBindings>
@@ -702,16 +702,16 @@
                       </TextBox.KeyBindings>
                     </TextBox>
                     <Button Grid.Column="1" Classes="flat" Margin="6,0,0,0" FontSize="{DynamicResource Text.Compact.Size}"
-                            Content="{x:Static app:UiStrings.DebuggerWatchAddButton}"
-                            ToolTip.Tip="{x:Static app:UiStrings.DebuggerWatchAddTooltip}"
+                            Content="{app:Loc DebuggerWatchAddButton}"
+                            ToolTip.Tip="{app:Loc DebuggerWatchAddTooltip}"
                             Command="{Binding AddWatchCommand}" />
                   </Grid>
 
                   <StackPanel Grid.Row="1" Margin="10,6" Spacing="4"
                               IsVisible="{Binding !HasWatches}">
-                    <TextBlock Text="{x:Static app:UiStrings.DebuggerWatchesEmpty}"
+                    <TextBlock Text="{app:Loc DebuggerWatchesEmpty}"
                                Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap" />
-                    <TextBlock Text="{x:Static app:UiStrings.DebuggerExpressionExamples}"
+                    <TextBlock Text="{app:Loc DebuggerExpressionExamples}"
                                Classes="subtle" FontSize="{DynamicResource Text.Caption.Size}" TextWrapping="Wrap"
                                FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
                   </StackPanel>
@@ -723,7 +723,7 @@
                         <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,1">
                           <TextBlock Grid.Column="0" Text="{Binding SideEffectGlyph}" FontSize="{DynamicResource Text.Compact.Size}"
                                      Foreground="{DynamicResource WarningBrush}"
-                                     ToolTip.Tip="{x:Static app:UiStrings.DebuggerWatchSideEffectTooltip}"
+                                     ToolTip.Tip="{app:Loc DebuggerWatchSideEffectTooltip}"
                                      Margin="0,0,4,0" VerticalAlignment="Center" />
                           <StackPanel Grid.Column="1" Spacing="0">
                             <TextBlock Text="{Binding Expression}" FontSize="{DynamicResource Text.Compact.Size}"
@@ -745,7 +745,7 @@
                           </StackPanel>
                           <Button Grid.Column="2" Classes="icon" Width="18" Height="18" Padding="0"
                                   VerticalAlignment="Center"
-                                  ToolTip.Tip="{x:Static app:UiStrings.DebuggerWatchRemoveTooltip}"
+                                  ToolTip.Tip="{app:Loc DebuggerWatchRemoveTooltip}"
                                   Command="{Binding $parent[ListBox].((vm:DebuggerTabViewModel)DataContext).RemoveWatchCommand}"
                                   CommandParameter="{Binding}">
                             <controls:SvgIcon Data="{StaticResource Icon.X}"
@@ -761,10 +761,10 @@
               <!-- Call Stack (D8, spec §5) — frames innermost-first; the current frame is marked, a
                    Step-Into (simulated) frame carries the △ indicator (§5.3). Selecting a row repoints the
                    editor + Variables to that frame; double-click peeks its source inline (Peek Frame). -->
-              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabCallStack}">
+              <TabItem Classes="bottom-tab" Header="{app:Loc DebuggerBottomTabCallStack}">
                 <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" Margin="0,2,0,0">
                   <TextBlock Margin="10,6"
-                             Text="{x:Static app:UiStrings.DebuggerCallStackEmpty}"
+                             Text="{app:Loc DebuggerCallStackEmpty}"
                              Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                              IsVisible="{Binding !HasCallStack}" />
                   <ListBox ItemsSource="{Binding CallStack}"
@@ -789,10 +789,10 @@
                           <TextBlock Grid.Column="2" Text="{Binding LineText}" FontSize="{DynamicResource Text.Caption.Size}"
                                      Foreground="{DynamicResource SubtleForegroundBrush}"
                                      Margin="8,0,0,0" VerticalAlignment="Center" />
-                          <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.DebuggerCallStackSimulatedGlyph}"
+                          <TextBlock Grid.Column="3" Text="{app:Loc DebuggerCallStackSimulatedGlyph}"
                                      FontSize="{DynamicResource Text.Caption.Size}" Foreground="{DynamicResource SubtleForegroundBrush}"
                                      Margin="8,0,2,0" VerticalAlignment="Center"
-                                     ToolTip.Tip="{x:Static app:UiStrings.DebuggerCallStackSimulatedTooltip}"
+                                     ToolTip.Tip="{app:Loc DebuggerCallStackSimulatedTooltip}"
                                      IsVisible="{Binding IsSimulated}" />
                         </Grid>
                       </DataTemplate>
@@ -805,10 +805,10 @@
                    objects. Line breakpoints: edit the condition + hit-count policy (forwarded straight to the
                    Core object; the engine evaluates + counts). Data breakpoints: added via the Variables
                    "Break when changes" gesture, removed here. No breakpoint logic lives in the view/VM. -->
-              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabBreakpoints}">
+              <TabItem Classes="bottom-tab" Header="{app:Loc DebuggerBottomTabBreakpoints}">
                 <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" Margin="0,2,0,0">
                   <TextBlock Margin="10,6"
-                             Text="{x:Static app:UiStrings.DebuggerBreakpointsEmpty}"
+                             Text="{app:Loc DebuggerBreakpointsEmpty}"
                              Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                              IsVisible="{Binding !HasAnyBreakpoints}" />
                   <ScrollViewer VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasAnyBreakpoints}">
@@ -816,7 +816,7 @@
 
                       <!-- Line breakpoints -->
                       <StackPanel Spacing="2" IsVisible="{Binding HasBreakpoints}">
-                        <TextBlock Text="{x:Static app:UiStrings.DebuggerBreakpointsLineHeader}" Classes="field-label" />
+                        <TextBlock Text="{app:Loc DebuggerBreakpointsLineHeader}" Classes="field-label" />
                         <ItemsControl ItemsSource="{Binding BreakpointRows}">
                           <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:BreakpointRowViewModel">
@@ -825,19 +825,19 @@
                                            VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="56"
                                            FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
                                 <TextBox Grid.Column="1" Text="{Binding Condition, Mode=TwoWay}"
-                                         PlaceholderText="{x:Static app:UiStrings.DebuggerBreakpointConditionWatermark}"
+                                         PlaceholderText="{app:Loc DebuggerBreakpointConditionWatermark}"
                                          FontSize="{DynamicResource Text.Compact.Size}" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
                                          VerticalContentAlignment="Center" />
                                 <ComboBox Grid.Column="2" ItemsSource="{Binding HitCountKinds}"
                                           SelectedIndex="{Binding HitCountKindIndex, Mode=TwoWay}"
                                           FontSize="{DynamicResource Text.Compact.Size}" Width="96" Margin="6,0,0,0"
-                                          ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakpointHitsLabel}" />
+                                          ToolTip.Tip="{app:Loc DebuggerBreakpointHitsLabel}" />
                                 <NumericUpDown Grid.Column="3" Value="{Binding HitCountValue, Mode=TwoWay}"
                                                IsEnabled="{Binding IsHitCountValueEnabled}"
                                                Minimum="1" FormatString="0" Width="96" FontSize="{DynamicResource Text.Compact.Size}" Margin="4,0,0,0" />
                                 <Button Grid.Column="4" Classes="icon" Width="18" Height="18" Padding="0"
                                         VerticalAlignment="Center" Margin="4,0,0,0"
-                                        ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakpointRemoveTooltip}"
+                                        ToolTip.Tip="{app:Loc DebuggerBreakpointRemoveTooltip}"
                                         Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).RemoveBreakpointCommand}"
                                         CommandParameter="{Binding}">
                                   <controls:SvgIcon Data="{StaticResource Icon.X}"
@@ -851,7 +851,7 @@
 
                       <!-- Data breakpoints -->
                       <StackPanel Spacing="2" IsVisible="{Binding HasDataBreakpoints}">
-                        <TextBlock Text="{x:Static app:UiStrings.DebuggerBreakpointsDataHeader}" Classes="field-label" />
+                        <TextBlock Text="{app:Loc DebuggerBreakpointsDataHeader}" Classes="field-label" />
                         <ItemsControl ItemsSource="{Binding DataBreakpointRows}">
                           <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:DataBreakpointRowViewModel">
@@ -861,7 +861,7 @@
                                            FontFamily="Cascadia Code,Consolas,Menlo,monospace" />
                                 <Button Grid.Column="1" Classes="icon" Width="18" Height="18" Padding="0"
                                         VerticalAlignment="Center"
-                                        ToolTip.Tip="{x:Static app:UiStrings.DebuggerBreakpointRemoveTooltip}"
+                                        ToolTip.Tip="{app:Loc DebuggerBreakpointRemoveTooltip}"
                                         Command="{Binding #RootControl.((vm:DebuggerTabViewModel)DataContext).RemoveDataBreakpointCommand}"
                                         CommandParameter="{Binding}">
                                   <controls:SvgIcon Data="{StaticResource Icon.X}"
@@ -882,10 +882,10 @@
                    (collected by Run to next SUSPEND, or any run that passes a SUSPEND). A pure view of
                    DebugSession.EmittedRows; columns are built in code-behind from SuspendColumns (dynamic,
                    like the SQL editor's result grid), rows bind to SuspendRows. -->
-              <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.DebuggerBottomTabResults}">
+              <TabItem Classes="bottom-tab" Header="{app:Loc DebuggerBottomTabResults}">
                 <Grid IsVisible="{Binding !IsBottomPanelCollapsed}" Margin="0,2,0,0">
                   <TextBlock Margin="10,6"
-                             Text="{x:Static app:UiStrings.DebuggerResultsEmpty}"
+                             Text="{app:Loc DebuggerResultsEmpty}"
                              Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}" TextWrapping="Wrap"
                              IsVisible="{Binding !HasSuspendRows}" />
                   <DataGrid x:Name="SuspendGrid"

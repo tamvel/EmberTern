@@ -1,3 +1,4 @@
+using EmberTern.Core.Localization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,7 +76,7 @@ public class QuickInfoEngineTests
     // Offset inside the first occurrence of `needle`.
     private static int In(string sql, string needle) => sql.IndexOf(needle, StringComparison.Ordinal) + 1;
 
-    private static string? Fact(QuickInfo qi, string label)
+    private static string? Fact(QuickInfo qi, MessageKey label)
         => qi.Facts.FirstOrDefault(f => f.Label == label)?.Value;
 
     // ── Columns — the headline case ────────────────────────────────────────────────────────────
@@ -99,10 +100,10 @@ public class QuickInfoEngineTests
         Assert.Equal(SymbolKind.Column, qi!.Kind);
         Assert.Equal("NAZWA : VARCHAR(50)", qi.Header);
         Assert.Equal("Customer name", qi.Description);
-        Assert.Equal("KONTRAHENT", Fact(qi, "Table"));
-        Assert.Equal("T_NAME", Fact(qi, "Domain"));
-        Assert.Equal("NOT NULL", Fact(qi, "Nullability"));
-        Assert.Equal("''", Fact(qi, "Default"));
+        Assert.Equal("KONTRAHENT", Fact(qi, QuickInfoMessages.Table));
+        Assert.Equal("T_NAME", Fact(qi, QuickInfoMessages.Domain));
+        Assert.Equal("NOT NULL", Fact(qi, QuickInfoMessages.Nullability));
+        Assert.Equal("''", Fact(qi, QuickInfoMessages.Default));
     }
 
     // P3: Ctrl+Space on a FULLY-TYPED identifier shows its facts. The caret sits at the exact END
@@ -120,7 +121,7 @@ public class QuickInfoEngineTests
         Assert.NotNull(qi);
         Assert.Equal(SymbolKind.Column, qi!.Kind);
         Assert.Equal("NAZWA : VARCHAR(50)", qi.Header);
-        Assert.Equal("T_NAME", Fact(qi, "Domain"));
+        Assert.Equal("T_NAME", Fact(qi, QuickInfoMessages.Domain));
     }
 
     [Fact]
@@ -130,7 +131,7 @@ public class QuickInfoEngineTests
             .Col("KONTRAHENT", new ColumnMetadata("ID", "INTEGER") { IsPrimaryKey = true, Nullable = false });
         const string sql = "select k.id from kontrahent k";
         var qi = At(sql, In(sql, "id"), meta);
-        Assert.Equal("PRIMARY KEY", Fact(qi!, "Key"));
+        Assert.Equal("PRIMARY KEY", Fact(qi!, QuickInfoMessages.Key));
     }
 
     [Fact]
@@ -144,7 +145,7 @@ public class QuickInfoEngineTests
             });
         const string sql = "select o.id_kontrahent from orders o";
         var qi = At(sql, In(sql, "id_kontrahent"), meta);
-        Assert.Equal("FOREIGN KEY → KONTRAHENT", Fact(qi!, "Key"));
+        Assert.Equal("FOREIGN KEY → KONTRAHENT", Fact(qi!, QuickInfoMessages.Key));
     }
 
     [Fact]
@@ -154,8 +155,8 @@ public class QuickInfoEngineTests
             .Col("T", new ColumnMetadata("C1", "INTEGER") { IsComputed = true })
             .Col("T", new ColumnMetadata("C2", "INTEGER") { Identity = IdentityKind.ByDefault });
         const string sql = "select t.c1, t.c2 from t";
-        Assert.Equal("Computed", Fact(At(sql, In(sql, "c1"), meta)!, "Generated"));
-        Assert.Equal("Identity", Fact(At(sql, In(sql, "c2"), meta)!, "Generated"));
+        Assert.Equal("Computed", Fact(At(sql, In(sql, "c1"), meta)!, QuickInfoMessages.Generated));
+        Assert.Equal("Identity", Fact(At(sql, In(sql, "c2"), meta)!, QuickInfoMessages.Generated));
     }
 
     [Fact]
@@ -183,7 +184,7 @@ public class QuickInfoEngineTests
         Assert.Equal(SymbolKind.Table, qi!.Kind);
         Assert.Equal("KONTRAHENT", qi.Header);
         Assert.Equal("Customers", qi.Description);
-        Assert.Equal("SYSDBA", Fact(qi, "Owner"));
+        Assert.Equal("SYSDBA", Fact(qi, QuickInfoMessages.Owner));
         Assert.Equal(2, qi.Members.Count);
         Assert.All(qi.Members, m => Assert.Equal(QuickInfoMemberGroup.Column, m.Group));
         Assert.Contains(qi.Members, m => m.Text == "ID INTEGER");
@@ -232,10 +233,10 @@ public class QuickInfoEngineTests
         var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Table, "KONTRAHENT"), meta);
 
         Assert.Equal("Customers", qi.Description);
-        Assert.Equal("SYSDBA", Fact(qi, "Owner"));
-        Assert.Equal("3", Fact(qi, "Columns"));
-        Assert.Equal("1 column", Fact(qi, "Primary key"));
-        Assert.Equal("1", Fact(qi, "Foreign keys"));
+        Assert.Equal("SYSDBA", Fact(qi, QuickInfoMessages.Owner));
+        Assert.Equal("3", Fact(qi, QuickInfoMessages.Columns));
+        Assert.Equal("1 column", Fact(qi, QuickInfoMessages.PrimaryKey));
+        Assert.Equal("1", Fact(qi, QuickInfoMessages.ForeignKeys));
     }
 
     [Fact]
@@ -244,7 +245,7 @@ public class QuickInfoEngineTests
         // Columns not loaded yet → no misleading "0 columns".
         var meta = new FakeMetadata().Rich(new ObjectMetadata("T", SymbolKind.Table));
         var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Table, "T"), meta);
-        Assert.Null(Fact(qi, "Columns"));
+        Assert.Null(Fact(qi, QuickInfoMessages.Columns));
     }
 
     [Fact]
@@ -257,8 +258,8 @@ public class QuickInfoEngineTests
         var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Function, "CALC"), meta);
 
         Assert.Equal("Computes a value", qi.Description);
-        Assert.Equal("NUMERIC(15,2)", Fact(qi, "Returns"));
-        Assert.Equal("2", Fact(qi, "Parameters"));
+        Assert.Equal("NUMERIC(15,2)", Fact(qi, QuickInfoMessages.Returns));
+        Assert.Equal("2", Fact(qi, QuickInfoMessages.Parameters));
     }
 
     [Fact]
@@ -269,7 +270,7 @@ public class QuickInfoEngineTests
             .Param("ADD_ORDER", new RoutineParameterMetadata("ID_K", "INTEGER", ParameterDirection.Input))
             .Param("ADD_ORDER", new RoutineParameterMetadata("ID_O", "INTEGER", ParameterDirection.Output));
         var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Procedure, "ADD_ORDER"), meta);
-        Assert.Equal("1 in, 1 out", Fact(qi, "Parameters"));
+        Assert.Equal("1 in, 1 out", Fact(qi, QuickInfoMessages.Parameters));
     }
 
     [Fact]
@@ -283,10 +284,10 @@ public class QuickInfoEngineTests
 
         Assert.Equal(SymbolKind.Trigger, qi.Kind);
         Assert.Equal("Audit trail", qi.Description);
-        Assert.Equal("KONTRAHENT", Fact(qi, "Table"));
-        Assert.Equal("BEFORE INSERT OR UPDATE", Fact(qi, "Fires"));
-        Assert.Equal("5", Fact(qi, "Position"));
-        Assert.Equal("Active", Fact(qi, "State"));
+        Assert.Equal("KONTRAHENT", Fact(qi, QuickInfoMessages.Table));
+        Assert.Equal("BEFORE INSERT OR UPDATE", Fact(qi, QuickInfoMessages.Fires));
+        Assert.Equal("5", Fact(qi, QuickInfoMessages.Position));
+        Assert.Equal("Active", Fact(qi, QuickInfoMessages.State));
     }
 
     [Fact]
@@ -297,8 +298,8 @@ public class QuickInfoEngineTests
             Trigger = new TriggerDetail("T", IsBefore: false, FiresInsert: false, FiresUpdate: false, FiresDelete: true, Position: 0, Active: false),
         });
         var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Trigger, "TR_X"), meta);
-        Assert.Equal("AFTER DELETE", Fact(qi, "Fires"));
-        Assert.Equal("Inactive", Fact(qi, "State"));
+        Assert.Equal("AFTER DELETE", Fact(qi, QuickInfoMessages.Fires));
+        Assert.Equal("Inactive", Fact(qi, QuickInfoMessages.State));
     }
 
     [Fact]
@@ -312,8 +313,8 @@ public class QuickInfoEngineTests
 
         Assert.Equal(SymbolKind.Sequence, qi.Kind);
         Assert.Equal("Order numbers", qi.Description);
-        Assert.Equal("10", Fact(qi, "Increment"));
-        Assert.Equal("1000", Fact(qi, "Start"));
+        Assert.Equal("10", Fact(qi, QuickInfoMessages.Increment));
+        Assert.Equal("1000", Fact(qi, QuickInfoMessages.Start));
     }
 
     [Fact]
@@ -326,8 +327,8 @@ public class QuickInfoEngineTests
         });
         var qi = QuickInfoEngine.ForSymbol(new SchemaObjectSymbol(SymbolKind.Sequence, "GEN_X"), meta);
         Assert.Equal("A counter", qi.Description);
-        Assert.Null(Fact(qi, "Increment"));
-        Assert.Null(Fact(qi, "Start"));
+        Assert.Null(Fact(qi, QuickInfoMessages.Increment));
+        Assert.Null(Fact(qi, QuickInfoMessages.Start));
     }
 
     // ── Generic objects (domain/exception/generator) — kind + description, no members ──────────
@@ -361,7 +362,10 @@ public class QuickInfoEngineTests
         Assert.NotNull(qi);
         Assert.Equal(SymbolKind.TableReference, qi!.Kind);
         Assert.Equal("K → KONTRAHENT", qi.Header);
-        Assert.Equal("Table", Fact(qi, "Kind"));
+        // ⚠ "Table" here is the fact's VALUE (the target's kind), not its label — fact values stay verbatim
+        // in C2. See QuickInfoFact's remarks: naming a SymbolKind is vocabulary the App already localizes,
+        // so the open question is whether Core should stop producing the word, not which key it gets.
+        Assert.Equal("Table", Fact(qi, QuickInfoMessages.Kind));
         Assert.Contains(qi.Members, m => m.Text == "ID INTEGER");
     }
 
@@ -421,7 +425,7 @@ public class QuickInfoEngineTests
         var pqi = At(sql, In(sql, "= id") + 2, null);
         Assert.NotNull(pqi);
         Assert.Equal(SymbolKind.Parameter, pqi!.Kind);
-        Assert.Equal("Input parameter", Fact(pqi, "Kind"));
+        Assert.Equal("Input parameter", Fact(pqi, QuickInfoMessages.Kind));
 
         var vqi = At(sql, In(sql, "total = id"), null);
         Assert.NotNull(vqi);

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using EmberTern.App.Localization;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -191,6 +192,25 @@ public partial class MainWindowViewModel : ViewModelBase
         // co przy motywie: jedno miejsce zamienia preferencję na skutek. ⚠ Serwis żyje tak długo jak ten
         // VM (oba są własnością okna głównego), więc wypisanie się nie ma czego chronić.
         _preferences.Changed += (_, _) => RaiseTabStripPreferencesChanged();
+        // ⭐ THE SEAM FOR EVERYTHING A LOCALIZATION BINDING CANNOT REACH.
+        //
+        // `{app:Loc}` keeps XAML text live by itself, and `UiStrings` members are properties, so any C# read
+        // that happens AFTER a language change already returns the new language. What neither helps is text a
+        // view model COMPUTED ONCE and published as a property value — a tab header, a status line, a
+        // composed summary. Nothing re-reads those, so without this they would keep the previous language
+        // until something unrelated happened to touch them.
+        //
+        // ⚠ An empty property name is the framework's "every property changed" signal, and using it here is
+        // deliberate rather than lazy: the alternative is enumerating which of this view model's ~200
+        // properties happen to contain localized text, which is a list that would be wrong the first time
+        // someone added a property and forgot. The cost is one re-read of the bound properties, once, on an
+        // action the user takes at most a handful of times in a session.
+        //
+        // ⚠ It reaches the open TABS too, because each tab view model publishes its own header and status.
+        // ⛔ It does NOT reach text captured into a non-observable structure (a DataGrid column built in
+        // code-behind, a completion row already materialized). Those are listed in localization.md §7 as the
+        // remaining work; this seam is what they will subscribe to.
+        Loc.LanguageChanged += OnLanguageChanged;
         // Settings export / import (etap 5b). Same settings.dat + protector again, and the app version comes from
         // AppInfo because Core cannot see it and must not be able to branch on it (§15.3a). AfterImport is this
         // view model's own refresh: the import rewrites the file several in-memory holders were loaded from.
@@ -313,6 +333,55 @@ public partial class MainWindowViewModel : ViewModelBase
     internal ParameterHistoryStore ParameterHistory => _parameterHistory;
 
     public ObservableCollection<QueryMessageViewModel> Messages { get; }
+    /// <summary>
+    /// Re-publishes every bound property after a language change, for this view model and each open tab.
+    /// See the subscription in the constructor for why it is an empty property name.
+    /// </summary>
+    private void OnLanguageChanged(object? sender, System.EventArgs e)
+    {
+        OnPropertyChanged(string.Empty);
+
+        // ⚠ A stored [ObservableProperty] is not re-read by the line above — its VALUE has to be rebuilt.
+        // The settings-health banner is the one such text on this view model that survives a language change
+        // on screen (gotcha #353).
+        ComposeSettingsHealthMessage();
+        ComposeExecutionStatus();
+
+        // ⚠ C7: the SQL Editor's Performance panel is a CHILD view model, so the line above does not reach
+        // it — and its findings, grade line and lead are all stored values. Each Procedure / Function tab
+        // owns its own panel and forwards to it from its own RefreshLocalizedText.
+        Performance.RefreshLocalizedText();
+
+        // ⚠ PL QA: the sidebar is held by the WINDOW, not by a tab, so the loop below never reached it —
+        // the filter placeholder and every category name ("Tables", "Views", …) stayed in the previous
+        // language until a restart. EveryWindowChildThatCanRefreshItsText_IsForwarded pins this line.
+        Metadata.RefreshLocalizedText();
+
+        foreach (var tab in WorkspaceTabs)
+        {
+            tab.RaiseAllPropertiesChanged();
+        }
+    }
+
+    /// <summary>
+    /// Re-renders the SQL Editor's execution status line in the current language (etap C6).
+    ///
+    /// <para>⭐ It recomposes from the kept <see cref="ExecutionSummary"/> rather than editing the text,
+    /// because the text is a composition of up to five sentences and a separator — there is nothing in it to
+    /// translate after the fact. This is the shape <c>ComposeSettingsHealthMessage</c> established in C4a.</para>
+    ///
+    /// <para>⚠ A null summary means the status line is showing something else (a row count, a cancellation,
+    /// an empty state) or nothing at all, and is left exactly as it is. ⛔ Widening this to those texts would
+    /// reach outside C6 — they are App strings with their own migration state.</para>
+    /// </summary>
+    private void ComposeExecutionStatus()
+    {
+        if (_lastExecutionSummary is { } summary)
+        {
+            QueryStatsText = summary.BuildMessage(Loc.Format);
+        }
+    }
+
     public ObservableCollection<WorkspaceTabViewModel> WorkspaceTabs { get; }
     public ObservableCollection<SavedQueryViewModel> SavedQueries { get; }
     public MetadataExplorerViewModel Metadata { get; }
@@ -2086,7 +2155,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public FolderEntry CreateFolder(string name)
     {
         var trimmed = (name ?? string.Empty).Trim();
-        if (string.IsNullOrEmpty(trimmed)) trimmed = "New folder";
+        if (string.IsNullOrEmpty(trimmed)) trimmed = UiStrings.FolderDefaultName;
 
         var nextSort = 0;
         foreach (var f in _folderState.Folders)
@@ -2955,6 +3024,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ClearMessagesCommand.NotifyCanExecuteChanged();
 
         QueryStatsText = string.Empty;
+        _lastExecutionSummary = null;
 
         // Drop the SQL Editor's last profiled run so its Performance panel doesn't show a stale
         // report from a previous connection. (Procedure/Function contexts are discarded when
@@ -3000,7 +3070,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             // Faza 2 ani 3 już nie nastąpią, więc to jedyne miejsce, które może tu zgasić pasek.
             IsConnecting = false;
-            SetError(ex.Message);
+            SetError(Loc.Format(ex.Localized));
         }
     }
 
@@ -3058,7 +3128,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var clone = new ConnectionProfile
         {
             Id = Guid.NewGuid().ToString("N"),
-            Name = profile.Name + " (Copy)",
+            Name = profile.Name + UiStrings.ConnectionCopySuffix,
             Host = profile.Host,
             Port = profile.Port,
             DatabasePath = profile.DatabasePath,
@@ -5010,7 +5080,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (ConnectionFailedException ex)
         {
-            SetError(ex.Message);
+            SetError(Loc.Format(ex.Localized));
             return;
         }
 
@@ -5177,7 +5247,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var flat = System.Text.RegularExpressions.Regex.Replace(sql.Trim(), @"\s+", " ");
         if (flat.Length > 40) flat = flat[..40] + "…";
-        return "Trace: " + flat;
+        return UiStrings.StatusTracePrefix + flat;
     }
 
     public bool CanOpenSecurityManager => _service.IsConnected;
@@ -5359,7 +5429,7 @@ public partial class MainWindowViewModel : ViewModelBase
             var domains = await _metadataReader.ListDomainsAsync().ConfigureAwait(true);
             detail.SetAvailableDomains(domains);
         }
-        catch (MetadataReadException) { /* best effort — combo just has "(none)" */ }
+        catch (MetadataReadException) { /* best effort — combo just has UiStrings.ValueNone */ }
         try
         {
             var tables = await _metadataReader.ListAsync(MetadataObjectKind.Table).ConfigureAwait(true);
@@ -6214,7 +6284,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task<BatchPlan> BuildTriggerBulkPlanAsync(TriggerBulkRequest req, BatchResultsViewModel vm, CancellationToken ct)
     {
-        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, "triggers"));
+        vm.ReportPreparation(UiStrings.BatchPreparingListTriggers);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var triggers = await _metadataReader.ListAsync(MetadataObjectKind.Trigger, ct).ConfigureAwait(true);
         BatchTrace.LogListEnumerate("Trigger", triggers.Count, sw.ElapsedMilliseconds);
@@ -6270,20 +6340,33 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task<(List<(string, string, string)> Steps, List<BatchOperationResult> PreFailures)>
         BuildRecompileStepsAsync(MetadataObjectKind kind, BatchResultsViewModel vm, CancellationToken ct)
     {
-        var noun = KindNoun(kind) + "s";
-        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, noun));
+        var texts = RecompileGroupTexts(kind);
+        vm.ReportPreparation(texts.ListText);
         var listSw = System.Diagnostics.Stopwatch.StartNew();
         var objs = await _metadataReader.ListAsync(kind, ct).ConfigureAwait(true);
         BatchTrace.LogListEnumerate(kind.ToString(), objs.Count, listSw.ElapsedMilliseconds);
-        return await BuildRecompileStepsForObjectsAsync(objs, noun, vm, ct).ConfigureAwait(true);
+        return await BuildRecompileStepsForObjectsAsync(
+            objs, texts.LoadFormat, kind.ToString(), vm, ct).ConfigureAwait(true);
     }
 
     // Builds recompile steps for a SPECIFIC set of objects, fetching each by ITS OWN kind —
     // reused by "Recompile all/group" (a uniform-kind list) and "Recompile dependents" (a
     // mixed-kind list). Per-object source-fetch failures become failed rows; Package emits two
     // steps (header + body).
+    //
+    // ⭐ <paramref name="progressFormat"/> is a WHOLE localized sentence taking {0} = index and
+    // {1} = total — not a noun this method slots into a sentence of its own. The caller owns the
+    // choice because it is the only side that knows the group: a uniform-kind list resolves it
+    // through RecompileGroupTexts, "Recompile dependents" is a mixed-kind list and has its own key.
+    //
+    // ⚠ <paramref name="traceKind"/> is SEPARATE and deliberately NOT localized: it is the class-E
+    // trace label (%TEMP% log), and translating a developer log makes a user's report HARDER to read,
+    // not easier (the C3 ruling). It used to share the display noun, so the log silently changed with
+    // the UI language while its sibling LogListEnumerate already logged the invariant enum name.
     private async Task<(List<(string, string, string)> Steps, List<BatchOperationResult> PreFailures)>
-        BuildRecompileStepsForObjectsAsync(IReadOnlyList<MetadataObject> objects, string noun, BatchResultsViewModel vm, CancellationToken ct)
+        BuildRecompileStepsForObjectsAsync(
+            IReadOnlyList<MetadataObject> objects, string progressFormat, string traceKind,
+            BatchResultsViewModel vm, CancellationToken ct)
     {
         var preFailures = new List<BatchOperationResult>();
         var op = UiStrings.BatchOpRecompile;
@@ -6295,7 +6378,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ct.ThrowIfCancellationRequested();
             i++;
             vm.ReportPreparation(i, objects.Count, string.Format(
-                CultureInfo.CurrentCulture, UiStrings.BatchPreparingLoadFormat, noun, i, objects.Count));
+                CultureInfo.CurrentCulture, progressFormat, i, objects.Count));
             try
             {
                 switch (o.Kind)
@@ -6323,7 +6406,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 preFailures.Add(new BatchOperationResult(o.Name, op, false, ex.Message));
             }
         }
-        BatchTrace.LogSourceFetch(noun, steps.Count, preFailures.Count, fetchSw.ElapsedMilliseconds);
+        BatchTrace.LogSourceFetch(traceKind, steps.Count, preFailures.Count, fetchSw.ElapsedMilliseconds);
         return (steps, preFailures);
     }
 
@@ -6371,7 +6454,9 @@ public partial class MainWindowViewModel : ViewModelBase
             string.Format(CultureInfo.CurrentCulture, UiStrings.RecompileDependentsBatchTitleFormat, compiled.Name),
             async (vm, ct) =>
             {
-                var (steps, pre) = await BuildRecompileStepsForObjectsAsync(result.Selected, "dependents", vm, ct).ConfigureAwait(true);
+                var (steps, pre) = await BuildRecompileStepsForObjectsAsync(
+                    result.Selected, UiStrings.BatchPreparingLoadDependentsFormat, "Dependents", vm, ct)
+                    .ConfigureAwait(true);
                 return new BatchPlan(steps, pre);
             },
             refreshAfter: false).ConfigureAwait(true);
@@ -6463,7 +6548,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task<BatchPlan> BuildRecomputeStatsPlanAsync(BatchResultsViewModel vm, CancellationToken ct)
     {
-        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, "indexes"));
+        vm.ReportPreparation(UiStrings.BatchPreparingListIndexes);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var indexes = await _metadataReader.ListAsync(MetadataObjectKind.Index, ct).ConfigureAwait(true);
         BatchTrace.LogListEnumerate("Index", indexes.Count, sw.ElapsedMilliseconds);
@@ -6503,7 +6588,8 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
             {
-                allPre.Add(new BatchOperationResult(KindNoun(kind) + "s", UiStrings.BatchOpRecompile, false, ex.Message));
+                allPre.Add(new BatchOperationResult(
+                    RecompileGroupTexts(kind).PluralNoun, UiStrings.BatchOpRecompile, false, ex.Message));
             }
         }
         return new BatchPlan(allSteps, allPre);
@@ -6512,21 +6598,66 @@ public partial class MainWindowViewModel : ViewModelBase
     // Singular lowercase noun for confirm/report messages.
     private static string KindNoun(MetadataObjectKind kind) => kind switch
     {
-        MetadataObjectKind.Table => "table",
-        MetadataObjectKind.View => "view",
-        MetadataObjectKind.Procedure => "procedure",
-        MetadataObjectKind.Trigger => "trigger",
-        MetadataObjectKind.Function => "function",
-        MetadataObjectKind.Generator => "generator",
-        MetadataObjectKind.Domain => "domain",
-        MetadataObjectKind.Package => "package",
-        MetadataObjectKind.Exception => "exception",
-        MetadataObjectKind.Role => "role",
-        MetadataObjectKind.User => "user",
-        MetadataObjectKind.Index => "index",
-        MetadataObjectKind.SystemTable => "system table",
+        MetadataObjectKind.Table => UiStrings.ObjectKindLowerTable,
+        MetadataObjectKind.View => UiStrings.ObjectKindLowerView,
+        MetadataObjectKind.Procedure => UiStrings.ObjectKindLowerProcedure,
+        MetadataObjectKind.Trigger => UiStrings.ObjectKindLowerTrigger,
+        MetadataObjectKind.Function => UiStrings.ObjectKindLowerFunction,
+        MetadataObjectKind.Generator => UiStrings.ObjectKindLowerGenerator,
+        MetadataObjectKind.Domain => UiStrings.ObjectKindLowerDomain,
+        MetadataObjectKind.Package => UiStrings.ObjectKindLowerPackage,
+        MetadataObjectKind.Exception => UiStrings.ObjectKindLowerException,
+        MetadataObjectKind.Role => UiStrings.ObjectKindLowerRole,
+        MetadataObjectKind.User => UiStrings.ObjectKindLowerUser,
+        MetadataObjectKind.Index => UiStrings.ObjectKindLowerIndex,
+        MetadataObjectKind.SystemTable => UiStrings.ObjectKindLowerSystemTable,
         _ => kind.ToString().ToLowerInvariant(),
     };
+
+    /// <summary>
+    /// The three group-scoped texts a recompile batch needs, chosen by a RULE over the kind.
+    ///
+    /// <para>⭐⭐ This exists because the previous shape composed the word instead of choosing it:
+    /// <c>KindNoun(kind) + "s"</c> glued an ENGLISH plural morpheme onto an already-localized noun and
+    /// handed the result to <c>"Loading {0}…"</c> as an argument. Both halves are wrong in an inflecting
+    /// language — the morpheme is not Polish's, and the case a sentence needs is not the nominative a
+    /// standalone noun carries ("Ładowanie procedur…", not "Ładowanie procedury…"). It is the same defect
+    /// C7 removed with <c>PerformanceContext.OutputVerb</c>, and the same answer: the producer picks a
+    /// KEY, never assembles a word.</para>
+    ///
+    /// <para>⭐ ONE table rather than three parallel switches, so a kind cannot be half-added — the failure
+    /// mode of three tables is one label silently left in the other language (#337's shape: an absent row
+    /// reads as compliance).</para>
+    ///
+    /// <para>⚠ The default arm throws rather than guessing, and that is safe because the set is CLOSED:
+    /// the tree gates the command on <c>MetadataNodeViewModel.IsRecompilableGroup</c> and
+    /// <see cref="BuildRecompileAllPlanAsync"/> iterates a fixed array of the same four kinds. ⛔ Do not
+    /// replace it with a plausible fallback — an invented plural is exactly what this method removes.
+    /// The premise is pinned by <c>RecompileGroupTexts_CoverExactlyTheRecompilableKinds</c>, so the day a
+    /// fifth kind becomes recompilable the test goes red instead of the label going English.</para>
+    /// </summary>
+    internal static (string ListText, string LoadFormat, string PluralNoun) RecompileGroupTexts(MetadataObjectKind kind)
+        => kind switch
+        {
+            MetadataObjectKind.Procedure => (
+                UiStrings.BatchPreparingListProcedures,
+                UiStrings.BatchPreparingLoadProceduresFormat,
+                UiStrings.ObjectKindPluralProcedure),
+            MetadataObjectKind.Function => (
+                UiStrings.BatchPreparingListFunctions,
+                UiStrings.BatchPreparingLoadFunctionsFormat,
+                UiStrings.ObjectKindPluralFunction),
+            MetadataObjectKind.Trigger => (
+                UiStrings.BatchPreparingListTriggers,
+                UiStrings.BatchPreparingLoadTriggersFormat,
+                UiStrings.ObjectKindPluralTrigger),
+            MetadataObjectKind.Package => (
+                UiStrings.BatchPreparingListPackages,
+                UiStrings.BatchPreparingLoadPackagesFormat,
+                UiStrings.ObjectKindPluralPackage),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(kind), kind, "Not a recompilable group; see MetadataNodeViewModel.IsRecompilableGroup."),
+        };
 
     /// <summary>
     /// The single authority for closing every workspace tab that represents a given
@@ -7050,6 +7181,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // Tutaj CZYŚCIMY wynik poprzedniego wykonania — zostawiony wisiałby jako „143 rows in 46 ms"
         // obok paska mówiącego, że trwa coś innego, czyli kłamałby o bieżącej chwili.
         QueryStatsText = string.Empty;
+        _lastExecutionSummary = null;
         ClearError();
         _executionCts = new CancellationTokenSource();
 
@@ -7106,8 +7238,14 @@ public partial class MainWindowViewModel : ViewModelBase
                 // Status bar stays the concise aggregate; the Messages entry adds the SAME
                 // per-table breakdown the Procedure/Function panels show (one shared model —
                 // ExecutionActivity), so the detail level is consistent wherever a run is launched.
-                QueryStatsText = BuildExecutionSummary(result, reads).BuildMessage();
-                var perTable = ExecutionActivity.BuildLogLines(reads);
+                // ⭐ C6: the summary is KEPT, not just rendered — a language change has to recompose this
+                // line, and the only way to recompose it is from the data it was composed from.
+                _lastExecutionSummary = BuildExecutionSummary(result, reads);
+                QueryStatsText = _lastExecutionSummary.BuildMessage(Loc.Format);
+                // ⛔ The Messages entry is deliberately NOT recomposed on a language change: it is a
+                // timestamped record of what was said at that moment, and rewriting history is worse than
+                // leaving one line in the previous language (the same call as "Query N" in §5.2).
+                var perTable = ExecutionActivity.BuildLogLines(reads, Loc.Format);
                 var messageText = perTable.Count > 0
                     ? QueryStatsText + "\n" + string.Join("\n", perTable)
                     : QueryStatsText;
@@ -7245,6 +7383,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ClearError();
         _executionCts = new CancellationTokenSource();
         QueryStatsText = string.Empty;   // wynik poprzedniego wykonania — patrz komentarz w ExecuteQueryAsync
+        _lastExecutionSummary = null;
         try
         {
             var (result, reads) = await ExecuteWithMetricsAsync(
@@ -7931,7 +8070,13 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             // Parse trailing digits off "Query N" — anything renamed by the user is
             // skipped, so the next number is "max-existing-Query-N + 1".
-            const string prefix = "Query ";
+            // ⚠ `var`, not `const`: a localized string is resolved at read time and cannot be a constant.
+            // ⚠⚠ And this is the one place where that matters for BEHAVIOUR, not just for compilation — the
+            // prefix is used to PARSE names the app generated earlier ("Query 3"). A saved query named in
+            // English keeps its English name, so after a language change the numbering restarts rather than
+            // continuing. That is the correct trade: renaming the user's saved queries behind their back
+            // would be worse, and rule #11 forbids rewriting what the user named.
+            var prefix = UiStrings.StatusQueryPrefix;
             if (sq.Name.StartsWith(prefix, StringComparison.Ordinal)
                 && int.TryParse(sq.Name.AsSpan(prefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
                 && n > max)
@@ -8401,12 +8546,33 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (!health.NeedsAttention) return;
 
+        // ⚠ Kept so the banner can be re-composed after a language change. The store's diagnostic is a
+        // LocalizableMessage (D‑3); resolving it once here would freeze THIS sentence in the startup language
+        // while every label around it followed — the shape gotcha #353 describes.
+        _settingsHealthPath = store.FilePath;
+        _settingsHealthDiagnostic = store.SettingsMessage;
+        ComposeSettingsHealthMessage();
+        ShowSettingsHealthWarning = true;
+    }
+
+    private string? _settingsHealthPath;
+    private Core.Localization.LocalizableMessage? _settingsHealthDiagnostic;
+
+    // ⚠ Etap C6, same reasoning one module along: the execution status line is a COMPOSITION of localized
+    // sentences, so re-rendering it after a language change needs the data, not the text. Null whenever the
+    // status line is showing anything else — see ComposeExecutionStatus.
+    private ExecutionSummary? _lastExecutionSummary;
+
+    // ONE composer, read at capture time and again on every language change.
+    private void ComposeSettingsHealthMessage()
+    {
+        if (_settingsHealthPath is null) return;
+
         SettingsHealthMessage = string.Format(
             CultureInfo.CurrentCulture,
             UiStrings.SettingsUnreadableWarningFormat,
-            store.FilePath,
-            health.Diagnostic ?? string.Empty);
-        ShowSettingsHealthWarning = true;
+            _settingsHealthPath,
+            _settingsHealthDiagnostic is { } m ? Loc.Format(m) : string.Empty);
     }
 
     // ⚠ Nie pisze już żadnego tekstu — sekcja 1 czyta stan wprost z serwisu. Zadaniem tej metody jest

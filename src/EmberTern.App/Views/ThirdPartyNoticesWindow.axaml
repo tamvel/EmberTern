@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         x:Class="EmberTern.App.Views.ThirdPartyNoticesWindow"
-        Title="{x:Static app:UiStrings.ThirdPartyNoticesTitle}"
+        Title="{app:Loc ThirdPartyNoticesTitle}"
         Width="760" Height="600"
         MinWidth="480" MinHeight="320"
         ShowInTaskbar="False"
@@ -42,7 +42,7 @@
             BorderThickness="0,1,0,0"
             Padding="20,12">
       <Button Classes="flat"
-              Content="{x:Static app:UiStrings.AboutClose}"
+              Content="{app:Loc AboutClose}"
               Click="OnCloseClick"
               IsDefault="True"
               IsCancel="True"

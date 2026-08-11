@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Localization;
 using EmberTern.Core.Diagnostics;
 using EmberTern.Firebird;
 
@@ -109,8 +110,25 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     [ObservableProperty] private double _gapFillWidth;               // fill px = lag / danger budget
     [ObservableProperty] private string _gapValueText = "0";         // the gap count (severity-coloured)
     [ObservableProperty] private string _gapSeverityBrushKey = "SubtleForegroundBrush";
-    [ObservableProperty] private string _gapStatusText = string.Empty; // plain-language "what it means"
-    [ObservableProperty] private string _gapScaleMaxText = "0";      // right-hand scale label (the danger line)
+    [ObservableProperty] private string _gapStatusText = string.Empty; // plain-language UiStrings.SessionManagerWhatItMeans
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GapScaleMaxLabel))]
+    private string _gapScaleMaxText = "0";      // right-hand scale label (the danger line)
+
+    /// <summary>
+    /// The right-hand scale label as the user reads it — the whole sentence, not the number.
+    ///
+    /// <para>⚠⚠ The view used to write it as <c>StringFormat='GC risk near {0}'</c>, i.e. a user-visible
+    /// English sentence living in XAML where no localization guard could see it: the hardcoded-string guard
+    /// skips any value starting with <c>{</c>, because that is normally a binding. Meanwhile
+    /// <c>SessionManagerGapScaleMaxFormat</c> — the catalog entry for this exact sentence — sat ORPHANED,
+    /// which is gotcha #346's shape: the string nothing reads is the one that keeps the defect alive.</para>
+    ///
+    /// <para>⭐ Computed rather than stored, so <see cref="RefreshLocalizedText"/>'s blanket notification
+    /// already re-renders it on a language change.</para>
+    /// </summary>
+    public string GapScaleMaxLabel =>
+        string.Format(CultureInfo.CurrentCulture, UiStrings.SessionManagerGapScaleMaxFormat, GapScaleMaxText);
 
     // --- Session Details: plain-language "why it matters" ---
     [ObservableProperty] private string _selectedSessionWhyItMatters = string.Empty;
@@ -335,19 +353,14 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
         }
 
         // verdict + counters
-        GradeText = report.Verdict.Grade switch
-        {
-            HealthGrade.Healthy => UiStrings.SessionManagerGradeHealthy,
-            HealthGrade.Watch => UiStrings.SessionManagerGradeWatch,
-            _ => UiStrings.SessionManagerGradeAtRisk,
-        };
+        GradeText = GradeTextFor(report.Verdict.Grade);
         GradeBrushKey = report.Verdict.Grade switch
         {
             HealthGrade.Healthy => "SuccessIconBrush",
             HealthGrade.Watch => "WarningBrush",
             _ => "DangerIconBrush",
         };
-        Headline = report.Verdict.Headline;
+        Headline = Loc.Format(report.Verdict.Headline);
         SessionCount = report.Counters.Sessions;
         TransactionCount = report.Counters.Transactions;
         LongTransactionCount = report.Counters.LongTransactions;
@@ -435,6 +448,59 @@ public sealed partial class SessionManagerTabViewModel : ViewModelBase, IAsyncDi
     // workflow produces a tiny lag (e.g. 59) that is nowhere near the 10,000-transaction danger
     // line, so it renders as a barely-there calm sliver — consistent with the "Healthy / GC Risk 0"
     // verdict. Colour only escalates (grey → orange → red) as the lag approaches / crosses the line.
+    // One owner for the grade wording — read both when a report arrives and when the language changes.
+    private static string GradeTextFor(HealthGrade grade) => grade switch
+    {
+        HealthGrade.Healthy => UiStrings.SessionManagerGradeHealthy,
+        HealthGrade.Watch => UiStrings.SessionManagerGradeWatch,
+        _ => UiStrings.SessionManagerGradeAtRisk,
+    };
+
+    /// <summary>
+    /// Re-derives every piece of displayed text that was resolved once and stored, after the language
+    /// changed. Called through <c>WorkspaceTabViewModel.RaiseAllPropertiesChanged</c>, which is the app's one
+    /// language-change entry point.
+    ///
+    /// <para>⭐ <b>Why the warning cards are REBUILT rather than notified.</b> A card's evidence rows are
+    /// bound with <c>Text="{Binding}"</c> — the bound object <i>is</i> the string, so there is no property on
+    /// it to re-read and no notification that could reach it. Replacing the view models replaces the bound
+    /// objects, which is the same reasoning that made a binding beat a subscription elsewhere in this stage:
+    /// nothing to unregister, no ordering, and no per-row subscription to leak.</para>
+    ///
+    /// <para>⚠ The transient status lines (last refresh, "session N disconnected") are deliberately NOT
+    /// re-derived: each describes a past event, and re-rendering one would need that event's data, not the
+    /// current state. They correct themselves on the next action.</para>
+    /// </summary>
+    internal void RefreshLocalizedText()
+    {
+        // Computed properties (SessionFilterText and friends) only need a nudge.
+        OnPropertyChanged(string.Empty);
+
+        if (_report is null)
+        {
+            return;
+        }
+
+        GradeText = GradeTextFor(_report.Verdict.Grade);
+
+        // ⚠ A stored value, so the blanket notification above cannot fix it — the text itself has to be
+        // re-composed (#353). It stayed English on a Polish screen for a simpler reason than the others,
+        // though: until this round the verdict headline was not localized AT ALL (the C1 deferral), so there
+        // was nothing to re-render. Both halves had to land together.
+        Headline = Loc.Format(_report.Verdict.Headline);
+
+        BuildGapBar(_report.Database);
+
+        Warnings.Clear();
+        foreach (var f in _report.Findings)
+        {
+            Warnings.Add(new SessionWarningViewModel(f));
+        }
+        OnPropertyChanged(nameof(HasWarnings));
+
+        RebuildSelectedSessionDetail();
+    }
+
     private void BuildGapBar(DatabaseTransactionState db)
     {
         HasGap = db.OldestTransaction > 0 && db.NextTransaction > 0

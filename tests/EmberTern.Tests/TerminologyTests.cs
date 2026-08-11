@@ -195,8 +195,17 @@ public class TerminologyTests
         return false;
     }
 
+    // ⚠ PROPERTIES, not fields. The localization stage turned every user-visible member into a property that
+    // resolves through the resource catalog at read time; enumerating fields now finds nothing, and this
+    // guard would have gone silently green over the whole vocabulary it exists to police (#333).
     private static IEnumerable<(string Name, string Value)> Strings()
     {
+        foreach (var p in typeof(UiStrings).GetProperties(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (p.PropertyType != typeof(string)) continue;
+            if (p.GetValue(null) is string v) yield return (p.Name, v);
+        }
+
         foreach (var f in typeof(UiStrings).GetFields(BindingFlags.Public | BindingFlags.Static))
         {
             if (f.FieldType != typeof(string)) continue;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Core.Performance.Rules;
 
@@ -66,19 +67,23 @@ public sealed class LowSelectivityIndexRule : IPerformanceRule
                 Confidence = FindingConfidence.Medium,
                 RuleId = Id,
                 Table = table.Table,
-                Title = string.Format(CultureInfo.CurrentCulture,
-                    "Index {0} on {1} has low selectivity", culprit.Name, table.Table),
-                Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "Likely cause: {0} was read through index {1}, but that index has low selectivity ({2}), "
-                    + "so it read {3} index entries to {5} {4} rows — a low-selectivity index reads many rows "
-                    + "the query then discards. Investigate whether a more selective access path fits this query.",
-                    table.Table, culprit.Name, Sel(culprit.Selectivity), N(table.IndexReads), N(context.OutputRows), context.OutputVerb),
+                Title = LocalizableMessage.Of(
+                    PerfMessages.LowSelectivityTitle, culprit.Name, table.Table),
+                Explanation = LocalizableMessage.Of(
+                    context.HasResultSet
+                        ? PerfMessages.LowSelectivityExplanationSelect
+                        : PerfMessages.LowSelectivityExplanationChange,
+                    table.IndexReads, table.Table, culprit.Name, Sel(culprit.Selectivity), context.OutputRows),
                 Evidence = new List<FindingEvidence>
                 {
-                    new("Index reads", N(table.IndexReads)),
-                    new(context.OutputRowsLabel, N(context.OutputRows)),
-                    new("Index amplification", idxAmplification.ToString("0.#", CultureInfo.CurrentCulture) + "×"),
-                    new("Index selectivity", Sel(culprit.Selectivity)),
+                    new(PerfMessages.EvidenceIndexReads, N(table.IndexReads)),
+                    new(context.HasResultSet
+                            ? PerfMessages.EvidenceRowsReturned
+                            : PerfMessages.EvidenceRowsChanged,
+                        N(context.OutputRows)),
+                    new(PerfMessages.EvidenceIndexAmplification,
+                        idxAmplification.ToString("0.#", CultureInfo.CurrentCulture) + "×"),
+                    new(PerfMessages.EvidenceIndexSelectivity, Sel(culprit.Selectivity)),
                 },
             });
         }
@@ -86,6 +91,15 @@ public sealed class LowSelectivityIndexRule : IPerformanceRule
         return findings;
     }
 
+    /// <summary>
+    /// ⛔ <b>The <c>"n/a"</c> arm is UNREACHABLE, and that is measured rather than assumed — which is why it
+    /// is not a message key.</b> <c>culprit</c> is only ever assigned inside
+    /// <c>ix?.Selectivity is { } sel &amp;&amp; sel &gt;= PoorSelectivity</c>, so every call below passes a
+    /// non-null selectivity. Keying an English abbreviation nobody can see would be localizing dead text.
+    /// <para>⭐ Named exemption with a PINNED premise, the C4b/C5 shape:
+    /// <c>TheSelectivityFallback_IsStillUnreachable</c> asserts that this rule never produces a finding whose
+    /// index has no selectivity, so the day the gate changes the test fails and asks for a key (#322).</para>
+    /// </summary>
     private static string Sel(double? s) => s?.ToString("0.####", CultureInfo.CurrentCulture) ?? "n/a";
     private static string N(long value) => value.ToString("N0", CultureInfo.CurrentCulture);
 }

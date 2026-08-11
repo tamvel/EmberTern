@@ -1,16 +1,28 @@
 using System.Collections.Generic;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Sql.Language.Semantics;
 
 namespace EmberTern.Core.Sql.Language.QuickInfo;
 
 /// <summary>
 /// One structured "label : value" fact in a <see cref="QuickInfo"/> — e.g.
-/// <c>("Table", "KONTRAHENT")</c>, <c>("Nullability", "NOT NULL")</c>,
-/// <c>("Key", "PRIMARY KEY")</c>. Both parts are non-empty; the App renders them however it
-/// likes (a compact "· value" chip for the hover tooltip, a two-column list for a detail pane).
-/// Pure value — no Avalonia.
+/// <c>(QuickInfoMessages.Table, "KONTRAHENT")</c>, <c>(QuickInfoMessages.Nullability, "NOT NULL")</c>,
+/// <c>(QuickInfoMessages.Key, "PRIMARY KEY")</c>. The App renders them however it likes (a compact
+/// "· value" chip for the hover tooltip, a two-column list for a detail pane). Pure value — no Avalonia.
+///
+/// <para>⭐ <b>The two halves have different owners, which is why they have different types (D‑3).</b> The
+/// <paramref name="Label"/> is EmberTern speaking, so it is a <see cref="MessageKey"/> the App resolves in
+/// the reader's language. The <paramref name="Value"/> is a <c>string</c> because it is almost always
+/// <i>Firebird</i> speaking — <c>NOT NULL</c>, <c>PRIMARY KEY</c>, <c>BEFORE INSERT</c>, a domain, a type,
+/// a count — and that vocabulary must match the DDL the card describes.</para>
+///
+/// <para>⚠ A handful of values are EmberTern's own words rather than Firebird's (<c>Active</c>,
+/// <c>Identity</c>, the object-kind names). They are knowingly left verbatim for now: naming a
+/// <see cref="SymbolKind"/> is a vocabulary the App already owns and localizes, so the fix is to stop
+/// producing the words here rather than to add a second copy of them to the catalog. ⛔ Do not "complete"
+/// this by declaring kind keys in Core — that is the duplication the App stage removed elsewhere.</para>
 /// </summary>
-public sealed record QuickInfoFact(string Label, string Value);
+public sealed record QuickInfoFact(MessageKey Label, string Value);
 
 /// <summary>The group a <see cref="QuickInfo"/> member belongs to — lets the App label/section
 /// the member list ("Columns" for a table, "Parameters"/"Returns" for a routine).</summary>

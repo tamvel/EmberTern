@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:app="using:EmberTern.App"
              xmlns:vm="using:EmberTern.App.ViewModels"
@@ -76,7 +76,7 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <StackPanel IsVisible="{Binding HasWhatToCheck}" Margin="0,3,0,0" Spacing="1">
-            <TextBlock Text="{x:Static app:UiStrings.SessionManagerWarningWhatToCheck}"
+            <TextBlock Text="{app:Loc SessionManagerWarningWhatToCheck}"
                        FontSize="{DynamicResource Text.SectionHeader.Size}" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
             <ItemsControl ItemsSource="{Binding WhatToCheck}">
               <ItemsControl.ItemTemplate>
@@ -97,11 +97,11 @@
     <Border Classes="chrome" Grid.Row="0" Background="{DynamicResource ChromeStrongBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
       <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-        <Button Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerRefreshTip}">
+        <Button Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="{app:Loc SessionManagerRefreshTip}">
           <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" />
         </Button>
         <ComboBox ItemsSource="{Binding RefreshOptions}" SelectedItem="{Binding SelectedRefreshOption}"
-                  Width="74" VerticalAlignment="Center" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerAutoRefreshTip}">
+                  Width="74" VerticalAlignment="Center" ToolTip.Tip="{app:Loc SessionManagerAutoRefreshTip}">
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="vm:SessionRefreshOption">
               <TextBlock Text="{Binding Label}" />
@@ -112,24 +112,24 @@
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <Button Classes="icon" Command="{Binding DisconnectCommand}"
-                ToolTip.Tip="{x:Static app:UiStrings.SessionManagerDisconnectTip}">
+                ToolTip.Tip="{app:Loc SessionManagerDisconnectTip}">
           <controls:SvgIcon Data="{StaticResource Icon.Unplug}" Foreground="{DynamicResource DangerIconBrush}" />
         </Button>
 
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
-        <Button Classes="icon" Command="{Binding CopyCommand}" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerCopyTip}">
+        <Button Classes="icon" Command="{Binding CopyCommand}" ToolTip.Tip="{app:Loc SessionManagerCopyTip}">
           <controls:SvgIcon Data="{StaticResource Icon.Copy}" />
         </Button>
 
         <Border Width="1" Margin="4,2" Background="{DynamicResource BorderBrush}" />
 
         <ToggleButton Classes="icon" IsChecked="{Binding HideSelfActivity}"
-                      ToolTip.Tip="{x:Static app:UiStrings.SessionManagerHideSelfTip}">
+                      ToolTip.Tip="{app:Loc SessionManagerHideSelfTip}">
           <controls:SvgIcon Data="{StaticResource Icon.EyeOff}" />
         </ToggleButton>
 
-        <TextBox Width="150" PlaceholderText="{x:Static app:UiStrings.SessionManagerFilterWatermark}"
+        <TextBox Width="150" PlaceholderText="{app:Loc SessionManagerFilterWatermark}"
                  Text="{Binding FilterText}" Margin="4,0,0,0" />
 
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
@@ -164,11 +164,11 @@
 
           <!-- informational counts -->
           <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-            <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountSessions}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+            <TextBlock Text="{app:Loc SessionManagerCountSessions}" Foreground="{DynamicResource SubtleForegroundBrush}" />
             <TextBlock Text="{Binding SessionCount}" FontWeight="SemiBold" />
           </StackPanel>
           <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-            <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountTransactions}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+            <TextBlock Text="{app:Loc SessionManagerCountTransactions}" Foreground="{DynamicResource SubtleForegroundBrush}" />
             <TextBlock Text="{Binding TransactionCount}" FontWeight="SemiBold" />
           </StackPanel>
 
@@ -185,18 +185,18 @@
             <StackPanel Orientation="Horizontal">
               <Button Classes="seg" Classes.active="{Binding IsFilterAll}" Command="{Binding FilterAllCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="4">
-                  <TextBlock Text="All" />
+                  <TextBlock Text="{app:Loc SessionManagerFilterAll}" />
                 </StackPanel>
               </Button>
               <Button Classes="seg" Classes.active="{Binding IsFilterLongTx}" Command="{Binding FilterLongTxCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="4">
-                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountLongTx}" />
+                  <TextBlock Text="{app:Loc SessionManagerCountLongTx}" />
                   <TextBlock Text="{Binding LongTransactionCount}" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}" />
                 </StackPanel>
               </Button>
               <Button Classes="seg" Classes.active="{Binding IsFilterGcRisk}" Command="{Binding FilterGcRiskCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="4">
-                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountGcRisk}" />
+                  <TextBlock Text="{app:Loc SessionManagerCountGcRisk}" />
                   <TextBlock Text="{Binding GcRiskCount}" FontWeight="SemiBold" Foreground="{DynamicResource DangerIconBrush}" />
                 </StackPanel>
               </Button>
@@ -206,14 +206,14 @@
           <Border Width="1" Margin="6,1" Background="{DynamicResource BorderBrush}" />
 
           <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
-                      ToolTip.Tip="Transaction gap — how far the oldest active transaction is behind the newest (the number of transactions' record versions pinned from garbage collection)">
-            <TextBlock Text="{x:Static app:UiStrings.SessionManagerCountOatLag}" Foreground="{DynamicResource SubtleForegroundBrush}" />
+                      ToolTip.Tip="{app:Loc SessionManagerTxGapTooltip}">
+            <TextBlock Text="{app:Loc SessionManagerCountOatLag}" Foreground="{DynamicResource SubtleForegroundBrush}" />
             <TextBlock Text="{Binding OldestActiveLagText}" FontWeight="SemiBold" />
           </StackPanel>
         </StackPanel>
 
         <!-- privilege banner (only when we can see just our own sessions) -->
-        <TextBlock Text="{x:Static app:UiStrings.SessionManagerPrivilegeBanner}" FontSize="{DynamicResource Text.Compact.Size}"
+        <TextBlock Text="{app:Loc SessionManagerPrivilegeBanner}" FontSize="{DynamicResource Text.Compact.Size}"
                    Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"
                    IsVisible="{Binding ShowPrivilegeBanner}" />
       </StackPanel>
@@ -230,20 +230,20 @@
                 ColumnWidth="Auto" GridLinesVisibility="Horizontal" FontSize="{DynamicResource Text.Grid.Size}">
         <DataGrid.ContextMenu>
           <ContextMenu>
-            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuDisconnect}" Icon="{app:MenuIcon Icon.Unplug, Brush=DangerIconBrush}" Command="{Binding DisconnectCommand}" />
+            <MenuItem Header="{app:Loc SessionManagerMenuDisconnect}" Icon="{app:MenuIcon Icon.Unplug, Brush=DangerIconBrush}" Command="{Binding DisconnectCommand}" />
             <Separator />
             <!-- These two act on the SELECTED session's statement and were reachable only from the detail
                  pane's buttons, while Disconnect and Copy sat in both places — the same surface offering a
                  different set depending on where the user looked. Same commands, same icons as those buttons. -->
-            <MenuItem Header="{x:Static app:UiStrings.SessionManagerOpenInEditor}" Icon="{app:MenuIcon Icon.Query}" Command="{Binding OpenInEditorCommand}" />
-            <MenuItem Header="{x:Static app:UiStrings.SessionManagerAnalyze}" Icon="{app:MenuIcon Icon.Activity}" Command="{Binding AnalyzeInPerformanceCommand}" />
+            <MenuItem Header="{app:Loc SessionManagerOpenInEditor}" Icon="{app:MenuIcon Icon.Query}" Command="{Binding OpenInEditorCommand}" />
+            <MenuItem Header="{app:Loc SessionManagerAnalyze}" Icon="{app:MenuIcon Icon.Activity}" Command="{Binding AnalyzeInPerformanceCommand}" />
             <Separator />
-            <MenuItem Header="{x:Static app:UiStrings.SessionManagerMenuCopy}" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
+            <MenuItem Header="{app:Loc SessionManagerMenuCopy}" Icon="{app:MenuIcon Icon.Copy}" Command="{Binding CopyCommand}" />
           </ContextMenu>
         </DataGrid.ContextMenu>
         <DataGrid.Columns>
           <!-- Health: an always-on status dot (never blank), tooltip explains the state -->
-          <DataGridTemplateColumn Header="{x:Static app:UiStrings.SessionColHealth}" MinWidth="58"
+          <DataGridTemplateColumn Header="{app:Loc SessionColHealth}" MinWidth="58"
                                   CanUserResize="False" CanUserReorder="False" CanUserSort="False">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:SessionRowViewModel">
@@ -265,22 +265,22 @@
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
 
-          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColId}" Binding="{Binding IdText}"
+          <DataGridTextColumn Header="{app:Loc SessionColId}" Binding="{Binding IdText}"
                               SortMemberPath="AttachmentId" MinWidth="60" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColUser}" Binding="{Binding User}"
+          <DataGridTextColumn Header="{app:Loc SessionColUser}" Binding="{Binding User}"
                               SortMemberPath="User" MinWidth="90" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColApplication}" Binding="{Binding Application}"
+          <DataGridTextColumn Header="{app:Loc SessionColApplication}" Binding="{Binding Application}"
                               SortMemberPath="Application" MinWidth="130" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColHost}" Binding="{Binding Host}"
+          <DataGridTextColumn Header="{app:Loc SessionColHost}" Binding="{Binding Host}"
                               SortMemberPath="Host" MinWidth="110" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColState}" Binding="{Binding StateText}"
+          <DataGridTextColumn Header="{app:Loc SessionColState}" Binding="{Binding StateText}"
                               SortMemberPath="StateText" MinWidth="70" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColTx}" Binding="{Binding ActiveTxText}"
+          <DataGridTextColumn Header="{app:Loc SessionColTx}" Binding="{Binding ActiveTxText}"
                               SortMemberPath="ActiveTxValue" MinWidth="50" />
-          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColOldestTx}" Binding="{Binding OldestTxText}"
+          <DataGridTextColumn Header="{app:Loc SessionColOldestTx}" Binding="{Binding OldestTxText}"
                               SortMemberPath="OldestTxValue" MinWidth="90" />
           <!-- Load: cumulative records touched since connect (a lifetime total, sortable) -->
-          <DataGridTextColumn Header="{x:Static app:UiStrings.SessionColLoad}" Binding="{Binding LoadText}"
+          <DataGridTextColumn Header="{app:Loc SessionColLoad}" Binding="{Binding LoadText}"
                               SortMemberPath="LoadValue" MinWidth="90" />
         </DataGrid.Columns>
       </DataGrid>
@@ -292,7 +292,7 @@
            ten sam `Margin`, to samo centrowanie), więc to była JEDNA decyzja na dwa ekrany, nie dwie —
            i pilnuje tego test relacyjny `BothEmptyStates_ShareOneTextRole` (#335: ta sama kontrolka na
            dwóch ekranach musi zgadzać się sama ze sobą). -->
-      <TextBlock IsVisible="{Binding ShowSessionsEmpty}" Text="{x:Static app:UiStrings.SessionsEmpty}"
+      <TextBlock IsVisible="{Binding ShowSessionsEmpty}" Text="{app:Loc SessionsEmpty}"
                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
                  Foreground="{DynamicResource SubtleForegroundBrush}" FontSize="{DynamicResource Text.Application.Size}" />
     </Panel>
@@ -305,17 +305,17 @@
     <!-- ④ Bottom tabs (Transactions / Session Details / Warnings) -->
     <Panel Grid.Row="4">
       <TabControl>
-        <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabTransactions}">
+        <TabItem Classes="bottom-tab" Header="{app:Loc SessionManagerTabTransactions}">
           <Grid RowDefinitions="Auto,Auto,*">
             <!-- Transaction-gap GAUGE: the OAT lag measured against the GC-danger budget, so a
                  small/normal gap is a calm sliver and only a materially large one turns orange/red
                  (scale-before-alarm — the gauge and the Health Bar can't contradict). -->
             <Border Grid.Row="0" Background="{DynamicResource PanelBrush}" IsVisible="{Binding HasGap}"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,5"
-                    ToolTip.Tip="{x:Static app:UiStrings.SessionManagerGapExplain}">
+                    ToolTip.Tip="{app:Loc SessionManagerGapExplain}">
               <StackPanel Spacing="3">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                  <TextBlock Text="{x:Static app:UiStrings.SessionManagerGapCaption}" FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" />
+                  <TextBlock Text="{app:Loc SessionManagerGapCaption}" FontWeight="SemiBold" FontSize="{DynamicResource Text.Compact.Size}" />
                   <!-- value coloured by severity (grey when healthy — no permanent orange) -->
                   <TextBlock Text="{Binding GapValueText}" FontSize="{DynamicResource Text.Compact.Size}" FontWeight="SemiBold">
                     <TextBlock.Foreground>
@@ -351,11 +351,11 @@
                        zostawać przy wartości, której katalog nie zna. -->
                   <TextBlock HorizontalAlignment="Left" FontSize="{DynamicResource Text.Caption.Size}"
                              Foreground="{DynamicResource SubtleForegroundBrush}"
-                             Text="{x:Static app:UiStrings.SessionManagerGapScaleMin}" />
+                             Text="{app:Loc SessionManagerGapScaleMin}" />
                   <!-- ⭐ Q3/B ZAMKNIĘTE (M4.3): jak wyżej — `Text.Caption` (9 → 10). -->
                   <TextBlock HorizontalAlignment="Right" FontSize="{DynamicResource Text.Caption.Size}"
                              Foreground="{DynamicResource SubtleForegroundBrush}"
-                             Text="{Binding GapScaleMaxText, StringFormat='GC risk near {0}'}" />
+                             Text="{Binding GapScaleMaxLabel}" />
                 </Grid>
               </StackPanel>
             </Border>
@@ -388,7 +388,7 @@
               <DataGrid.Columns>
                 <!-- Health: an always-on status dot (never blank), tooltip explains the state —
                      mirrors the Sessions grid so both grids read the same way -->
-                <DataGridTemplateColumn Header="{x:Static app:UiStrings.SessionColHealth}" MinWidth="58"
+                <DataGridTemplateColumn Header="{app:Loc SessionColHealth}" MinWidth="58"
                                         CanUserResize="False" CanUserReorder="False" CanUserSort="False">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="vm:TransactionRowViewModel">
@@ -409,19 +409,19 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColId}" Binding="{Binding TransactionIdText}"
+                <DataGridTextColumn Header="{app:Loc TxColId}" Binding="{Binding TransactionIdText}"
                                     SortMemberPath="TransactionId" MinWidth="80" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColSession}" Binding="{Binding SessionLabel}"
+                <DataGridTextColumn Header="{app:Loc TxColSession}" Binding="{Binding SessionLabel}"
                                     SortMemberPath="SessionLabel" MinWidth="120" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColState}" Binding="{Binding StateText}"
+                <DataGridTextColumn Header="{app:Loc TxColState}" Binding="{Binding StateText}"
                                     SortMemberPath="StateText" MinWidth="70" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColAge}" Binding="{Binding AgeText}"
+                <DataGridTextColumn Header="{app:Loc TxColAge}" Binding="{Binding AgeText}"
                                     SortMemberPath="AgeValue" MinWidth="80" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColIsolation}" Binding="{Binding IsolationText}"
+                <DataGridTextColumn Header="{app:Loc TxColIsolation}" Binding="{Binding IsolationText}"
                                     SortMemberPath="IsolationText" MinWidth="120" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColReadOnly}" Binding="{Binding ReadOnlyText}"
+                <DataGridTextColumn Header="{app:Loc TxColReadOnly}" Binding="{Binding ReadOnlyText}"
                                     SortMemberPath="ReadOnlyText" MinWidth="80" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TxColGcImpact}" Binding="{Binding GcImpactText}"
+                <DataGridTextColumn Header="{app:Loc TxColGcImpact}" Binding="{Binding GcImpactText}"
                                     SortMemberPath="GcImpactValue" MinWidth="90" />
               </DataGrid.Columns>
             </DataGrid>
@@ -429,9 +429,9 @@
         </TabItem>
 
         <!-- Session Details — General / Why it matters / Statement (+bridges) / Activity / Transactions / Warnings -->
-        <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabDetails}">
+        <TabItem Classes="bottom-tab" Header="{app:Loc SessionManagerTabDetails}">
           <Panel>
-            <TextBlock Text="{x:Static app:UiStrings.SessionManagerDetailsNoSelection}"
+            <TextBlock Text="{app:Loc SessionManagerDetailsNoSelection}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        IsVisible="{Binding !HasSelectedSession}" />
@@ -441,7 +441,7 @@
 
                 <!-- General + one-line session verdict -->
                 <StackPanel Spacing="4">
-                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerGeneralHeader}" />
+                  <TextBlock Classes="section" Text="{app:Loc SessionManagerGeneralHeader}" />
                   <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <!-- ⚠ Promień zostaje lokalnie, ŚWIADOMIE (M2c iteracja 6, §18.6): to GEOMETRIA. Koła
                          (`10×10` r=5, `9×9` r=4.5) i kapsuły (`Height=10` r=5) mają promień równy POŁOWIE BOKU.
@@ -459,26 +459,26 @@
                     <TextBlock Text="{Binding SelectedSession.RiskText}" FontSize="{DynamicResource Text.Application.Size}" VerticalAlignment="Center" />
                   </StackPanel>
                   <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColId}" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="kv" Text="{app:Loc SessionColId}" />
                     <TextBlock Grid.Row="0" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.IdText}" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColUser}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="kv" Text="{app:Loc SessionColUser}" />
                     <TextBlock Grid.Row="1" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.User}" />
-                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerRoleLabel}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="kv" Text="{app:Loc SessionManagerRoleLabel}" />
                     <TextBlock Grid.Row="2" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.Role}" />
-                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColApplication}" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="kv" Text="{app:Loc SessionColApplication}" />
                     <TextBlock Grid.Row="3" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.Application}" />
-                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColHost}" />
+                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="kv" Text="{app:Loc SessionColHost}" />
                     <TextBlock Grid.Row="4" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.Host}" />
-                    <TextBlock Grid.Row="5" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionColState}" />
+                    <TextBlock Grid.Row="5" Grid.Column="0" Classes="kv" Text="{app:Loc SessionColState}" />
                     <TextBlock Grid.Row="5" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.StateText}" />
-                    <TextBlock Grid.Row="6" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerConnectedLabel}" />
+                    <TextBlock Grid.Row="6" Grid.Column="0" Classes="kv" Text="{app:Loc SessionManagerConnectedLabel}" />
                     <TextBlock Grid.Row="6" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.ConnectedText}" />
                   </Grid>
                 </StackPanel>
 
                 <!-- Why it matters (plain-language) -->
                 <StackPanel Spacing="3" IsVisible="{Binding HasSelectedSessionWhyItMatters}">
-                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerWhyHeader}" />
+                  <TextBlock Classes="section" Text="{app:Loc SessionManagerWhyHeader}" />
                   <TextBlock Text="{Binding SelectedSessionWhyItMatters}" TextWrapping="Wrap" FontSize="{DynamicResource Text.Compact.Size}" />
                 </StackPanel>
 
@@ -486,13 +486,13 @@
                 <StackPanel Spacing="3" IsVisible="{Binding SelectedSession.HasStatement}">
                   <Grid ColumnDefinitions="*,Auto,Auto">
                     <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
-                               Text="{x:Static app:UiStrings.SessionManagerCurrentStatementHeader}" />
+                               Text="{app:Loc SessionManagerCurrentStatementHeader}" />
                     <Button Grid.Column="1" Classes="icon" Command="{Binding OpenInEditorCommand}"
-                            ToolTip.Tip="{x:Static app:UiStrings.SessionManagerOpenInEditorTip}">
+                            ToolTip.Tip="{app:Loc SessionManagerOpenInEditorTip}">
                       <controls:SvgIcon Data="{StaticResource Icon.Query}" />
                     </Button>
                     <Button Grid.Column="2" Classes="icon" Command="{Binding AnalyzeInPerformanceCommand}"
-                            ToolTip.Tip="{x:Static app:UiStrings.SessionManagerAnalyzeTip}">
+                            ToolTip.Tip="{app:Loc SessionManagerAnalyzeTip}">
                       <controls:SvgIcon Data="{StaticResource Icon.Activity}" />
                     </Button>
                   </Grid>
@@ -503,24 +503,24 @@
 
                 <!-- Activity (lifetime totals) -->
                 <StackPanel Spacing="3">
-                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerActivityHeader}" />
+                  <TextBlock Classes="section" Text="{app:Loc SessionManagerActivityHeader}" />
                   <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivitySeqReads}" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="kv" Text="{app:Loc SessionManagerActivitySeqReads}" />
                     <TextBlock Grid.Row="0" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.SequentialReadsText}" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivityIdxReads}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="kv" Text="{app:Loc SessionManagerActivityIdxReads}" />
                     <TextBlock Grid.Row="1" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.IndexedReadsText}" />
-                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivityInserts}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="kv" Text="{app:Loc SessionManagerActivityInserts}" />
                     <TextBlock Grid.Row="2" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.InsertsText}" />
-                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivityUpdates}" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="kv" Text="{app:Loc SessionManagerActivityUpdates}" />
                     <TextBlock Grid.Row="3" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.UpdatesText}" />
-                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="kv" Text="{x:Static app:UiStrings.SessionManagerActivityDeletes}" />
+                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="kv" Text="{app:Loc SessionManagerActivityDeletes}" />
                     <TextBlock Grid.Row="4" Grid.Column="1" Classes="kvv" Text="{Binding SelectedSession.DeletesText}" />
                   </Grid>
                 </StackPanel>
 
                 <!-- This session's transactions (compact; the full grid is the Transactions tab) -->
                 <StackPanel Spacing="3" IsVisible="{Binding IsSessionFilterActive}">
-                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerTabTransactions}" />
+                  <TextBlock Classes="section" Text="{app:Loc SessionManagerTabTransactions}" />
                   <ItemsControl ItemsSource="{Binding Transactions}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TransactionRowViewModel">
@@ -539,7 +539,7 @@
 
                 <!-- Warnings scoped to this session (shared card) -->
                 <StackPanel Spacing="3" IsVisible="{Binding HasSelectedSessionWarnings}">
-                  <TextBlock Classes="section" Text="{x:Static app:UiStrings.SessionManagerTabWarnings}" />
+                  <TextBlock Classes="section" Text="{app:Loc SessionManagerTabWarnings}" />
                   <ItemsControl ItemsSource="{Binding SelectedSessionWarnings}"
                                 ItemTemplate="{StaticResource SessionWarningCard}" />
                 </StackPanel>
@@ -550,14 +550,14 @@
         </TabItem>
 
         <!-- Warnings — same card shape as the Performance findings -->
-        <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.SessionManagerTabWarnings}">
+        <TabItem Classes="bottom-tab" Header="{app:Loc SessionManagerTabWarnings}">
           <Panel>
             <!-- clean state -->
             <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center"
                         IsVisible="{Binding !HasWarnings}">
               <controls:SvgIcon Width="15" Height="15" Data="{StaticResource Icon.Check}"
                                 Foreground="{DynamicResource SuccessIconBrush}" />
-              <TextBlock Text="{x:Static app:UiStrings.SessionManagerNoWarnings}"
+              <TextBlock Text="{app:Loc SessionManagerNoWarnings}"
                          Foreground="{DynamicResource SubtleForegroundBrush}" VerticalAlignment="Center" />
             </StackPanel>
 
@@ -571,7 +571,7 @@
         </TabItem>
       </TabControl>
 
-      <Button Classes="icon" Click="OnToggleBottomMaximizeClick" ToolTip.Tip="{x:Static app:UiStrings.SessionManagerMaximizeTip}"
+      <Button Classes="icon" Click="OnToggleBottomMaximizeClick" ToolTip.Tip="{app:Loc SessionManagerMaximizeTip}"
               HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,6,0">
         <Panel>
           <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" IsVisible="{Binding !IsDetailMaximized}" />

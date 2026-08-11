@@ -22,7 +22,7 @@
       <!-- Package — editable CREATE OR ALTER PACKAGE header (declarations). Compile /
            Revert / Format / Comment live in the main app toolbar (gated on
            IsPackageDetailTabActive). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PackageDetailTabPackage}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc PackageDetailTabPackage}">
         <ae:TextEditor x:Name="PackageHeaderEditor"
                        ShowLineNumbers="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
@@ -34,7 +34,7 @@
       </TabItem>
 
       <!-- Body — editable RECREATE PACKAGE BODY (implementation). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PackageDetailTabBody}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc PackageDetailTabBody}">
         <ae:TextEditor x:Name="PackageBodyEditor"
                        ShowLineNumbers="True"
                        FontFamily="Cascadia Code,Consolas,Menlo,monospace"
@@ -47,9 +47,9 @@
 
       <!-- Members — read-only grouped tree (Functions / Procedures), built from the
            catalog. Double-click a member to jump to it in the Package or Body editor. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PackageDetailTabMembers}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc PackageDetailTabMembers}">
         <Grid>
-          <TextBlock Text="{x:Static app:UiStrings.PackageDetailMembersEmpty}"
+          <TextBlock Text="{app:Loc PackageDetailMembersEmpty}"
                      Classes="subtle"
                      Margin="10,8"
                      FontSize="{DynamicResource Text.Compact.Size}"
@@ -89,14 +89,14 @@
                       <!-- The debugger's own identity mark, the same composite the sidebar's Debug items and
                            the editors' Debug buttons use. It briefly had Icon.Crosshair here, which made one
                            operation carry two different icons depending on where the user found it. -->
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugProcedure}"
+                      <MenuItem Header="{app:Loc MetadataContextDebugProcedure}"
                                 Click="OnMemberDebugClick"
                                 IsVisible="{Binding IsProcedure}">
                         <MenuItem.Icon>
                           <controls:DebuggerIcon Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
                         </MenuItem.Icon>
                       </MenuItem>
-                      <MenuItem Header="{x:Static app:UiStrings.MetadataContextDebugFunction}"
+                      <MenuItem Header="{app:Loc MetadataContextDebugFunction}"
                                 Click="OnMemberDebugClick"
                                 IsVisible="{Binding IsFunction}">
                         <MenuItem.Icon>
@@ -126,22 +126,22 @@
       </TabItem>
 
       <!-- Description — editable COMMENT ON PACKAGE (same workflow as table/view). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PackageDetailTabDescription}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc PackageDetailTabDescription}">
         <Grid RowDefinitions="Auto,*" Background="{DynamicResource BackgroundBrush}">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
                       IsVisible="{Binding CanEditDescription}">
-            <TextBlock Text="{x:Static app:UiStrings.PackageDescriptionEditLabel}"
+            <TextBlock Text="{app:Loc PackageDescriptionEditLabel}"
                        Classes="subtle"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" />
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
+                    ToolTip.Tip="{app:Loc TableDescriptionSave}"
                     Command="{Binding SaveDescriptionCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.Save}" />
             </Button>
             <Button Classes="flat"
                     Padding="8,2"
-                    Content="{x:Static app:UiStrings.TableDescriptionClear}"
+                    Content="{app:Loc TableDescriptionClear}"
                     Command="{Binding ClearDescriptionCommand}" />
           </StackPanel>
           <TextBox Grid.Row="1"
@@ -156,11 +156,11 @@
       </TabItem>
 
       <!-- Dependencies — same dual-tree layout + templates as TableDetail/ViewDetail. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PackageDetailTabDependencies}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc PackageDetailTabDependencies}">
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.PackageDetailDependedOnByHeader}"
+                       Text="{app:Loc PackageDetailDependedOnByHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -175,7 +175,7 @@
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.PackageDetailDependsOnHeader}"
+                       Text="{app:Loc PackageDetailDependsOnHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -185,7 +185,7 @@
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE PACKAGE + RECREATE PACKAGE BODY. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.PackageDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc PackageDetailTabDdl}">
         <ae:TextEditor x:Name="PackageDdlEditor"
                        ShowLineNumbers="True"
                        IsReadOnly="True"
@@ -202,7 +202,7 @@
            rule — see DiagnosticsPanelHost): the header or body editor, whichever was last edited.
            Appended LAST so the persisted ActiveSubTabIndex and the PackageSubTabIndex /
            BodySubTabIndex constants never shift. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.BottomTabDiagnostics}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc BottomTabDiagnostics}">
         <views:DiagnosticsPanelView x:Name="PackageDiagnosticsPanel"
                                     DataContext="{Binding DiagnosticsPanel}" />
       </TabItem>
@@ -210,7 +210,7 @@
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">
-      <TextBlock Text="{x:Static app:UiStrings.PackageDetailLoadingHint}"
+      <TextBlock Text="{app:Loc PackageDetailLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
                  FontSize="{DynamicResource Text.Compact.Size}"

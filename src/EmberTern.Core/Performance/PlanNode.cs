@@ -37,4 +37,14 @@ public sealed record PlanNode
     /// <summary>True for a full/sequential table scan (NATURAL). The single most
     /// diagnostic node kind — flagged in the plan tree.</summary>
     public bool IsSequentialScan => Method == AccessMethod.FullScan;
+
+    /// <summary>True for a sub-query root — the "cost is spread, not concentrated" signal.
+    ///
+    /// <para>⛔⛔ <b>The literal is FIREBIRD's word and must never become a catalog entry (#356).</b> Until
+    /// etap C7 this predicate existed twice: correctly here in Core as a literal, and incorrectly in the App
+    /// as <c>UiStrings.PlanInsightSubquery</c> — a translatable resource matched against the engine's plan
+    /// text. Translating that entry would have switched the App's sub-query summary off silently, invisibly in
+    /// English, i.e. invisibly today. One owner now; both callers read this property.</para></summary>
+    public bool IsSubqueryRoot
+        => RawText.StartsWith("Sub-query", System.StringComparison.OrdinalIgnoreCase);
 }

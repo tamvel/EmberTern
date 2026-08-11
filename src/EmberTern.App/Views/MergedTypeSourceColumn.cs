@@ -1,3 +1,4 @@
+﻿using EmberTern.App.Localization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -21,30 +22,32 @@ namespace EmberTern.App.Views;
 /// </summary>
 internal static class MergedTypeSourceColumn
 {
-    public static DataGridTemplateColumn Build(string header, int minWidth)
-        => new()
+    public static DataGridTemplateColumn Build(string headerKey, int minWidth)
+        => EmberTern.App.Localization.LocalizedColumn.Header(new DataGridTemplateColumn
         {
-            Header = header,
             MinWidth = minWidth,
             IsReadOnly = true,
             CellTemplate = new FuncDataTemplate<object>((_, _) => BuildCell()),
-        };
+        }, headerKey);
 
     private static Control BuildCell()
     {
         var domainSection = new SearchableComboBoxSection
         {
-            Header = UiStrings.FieldTypeSourceDomainTab,
             DisplayMemberPath = nameof(DomainSpec.Name),
             ItemTemplate = PickerTemplate("DomainRowTemplate"),
             HeaderTemplate = PickerTemplate("DomainHeaderTemplate"),
         };
+        domainSection.Bind(SearchableComboBoxSection.HeaderProperty,
+            new LocExtension(nameof(UiStrings.FieldTypeSourceDomainTab)).ProvideValue());
         var tablePicker = new TableColumnPicker();
         var columnSection = new SearchableComboBoxSection
         {
-            Header = UiStrings.FieldTypeSourceColumnTab,
             Content = tablePicker,
         };
+
+        columnSection.Bind(SearchableComboBoxSection.HeaderProperty,
+            new LocExtension(nameof(UiStrings.FieldTypeSourceColumnTab)).ProvideValue());
 
         var picker = new SearchableComboBox
         {

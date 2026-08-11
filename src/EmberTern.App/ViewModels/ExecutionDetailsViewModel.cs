@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using EmberTern.Core.Performance;
 
@@ -28,12 +28,12 @@ public sealed class ExecutionDetailsViewModel
             var sb = new StringBuilder();
             if (t.Prepare is { } prep)
             {
-                sb.Append("prepare ").Append(Ms(prep.TotalMilliseconds)).Append(" · ");
+                sb.Append(UiStrings.ExecutionTimingsPrepare).Append(Ms(prep.TotalMilliseconds)).Append(" · ");
             }
-            sb.Append("execute ").Append(Ms(t.Execute.TotalMilliseconds));
+            sb.Append(UiStrings.ExecutionTimingsExecute).Append(Ms(t.Execute.TotalMilliseconds));
             if (t.Fetch is { } fetch)
             {
-                sb.Append(" · fetch ").Append(Ms(fetch.TotalMilliseconds));
+                sb.Append(UiStrings.ExecutionTimingsFetch).Append(Ms(fetch.TotalMilliseconds));
             }
             return sb.ToString();
         }
@@ -45,17 +45,17 @@ public sealed class ExecutionDetailsViewModel
 
     public string CaptureMethodText => Details.Method switch
     {
-        CaptureMethod.PlanOnly => "Plan + timings",
-        CaptureMethod.MonAttachmentDelta => "MON$ (attachment delta)",
-        CaptureMethod.MonStatement => "MON$ (statement)",
-        CaptureMethod.Trace => "Trace",
+        CaptureMethod.PlanOnly => UiStrings.ExecutionCapturePlanOnly,
+        CaptureMethod.MonAttachmentDelta => UiStrings.ExecutionCaptureMonAttachment,
+        CaptureMethod.MonStatement => UiStrings.ExecutionCaptureMonStatement,
+        CaptureMethod.Trace => UiStrings.ExecutionCaptureTrace,
         _ => "—",
     };
 
     public string PlanDialectText => Details.PlanDialect switch
     {
-        PlanDialect.Explain => "Explain",
-        PlanDialect.Legacy => "Legacy",
+        PlanDialect.Explain => UiStrings.ExecutionPlanDialectExplain,
+        PlanDialect.Legacy => UiStrings.ExecutionPlanDialectLegacy,
         _ => "—",
     };
 
@@ -65,11 +65,11 @@ public sealed class ExecutionDetailsViewModel
         get
         {
             var sb = new StringBuilder();
-            sb.Append("Timings: ").AppendLine(TimingsText);
-            sb.Append("Capture: ").AppendLine(CaptureMethodText);
+            sb.Append(UiStrings.ExecutionCopyTimingsLabel).AppendLine(TimingsText);
+            sb.Append(UiStrings.ExecutionCopyCaptureLabel).AppendLine(CaptureMethodText);
             if (HasPlanText)
             {
-                sb.Append("Plan (").Append(PlanDialectText).AppendLine("):");
+                sb.AppendLine(string.Format(CultureInfo.CurrentCulture, UiStrings.ExecutionCopyPlanLabelFormat, PlanDialectText));
                 sb.AppendLine(RawPlanText);
             }
             return sb.ToString();

@@ -182,8 +182,13 @@ public class FirebirdGrammarCorpusTests
         var found = DiagnosticsEngine.Analyze(SemanticModel.Build(
             "create procedure p as begin v_total = v_amonut + 1; end"));
 
+        // ⭐ Asserts the ARGUMENT, not the rendered sentence: since C5 the name travels as data beside the key,
+        // and an assertion on the datum is both stronger and language-independent (localization.md §4.2).
         Assert.Contains(found, d => d.Code == "ET0003" &&
-                                    d.Message.Contains("v_amonut", StringComparison.OrdinalIgnoreCase));
+                                    d.Message.Arguments.Count == 1 &&
+                                    string.Equals(
+                                        d.Message.Arguments[0] as string, "v_amonut",
+                                        StringComparison.OrdinalIgnoreCase));
     }
 
     private static string Excerpt(string sql, Diagnostic d)

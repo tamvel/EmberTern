@@ -1,3 +1,4 @@
+using EmberTern.App.Localization;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -21,16 +22,22 @@ public sealed partial class PreferenceOptionViewModel : ObservableObject
 {
     private readonly PreferenceSettingViewModel _owner;
 
-    internal PreferenceOptionViewModel(PreferenceSettingViewModel owner, string key, string label)
+    internal PreferenceOptionViewModel(PreferenceSettingViewModel owner, string key)
     {
         _owner = owner;
         Key = key;
-        Label = label;
     }
 
     public string Key { get; }
 
-    public string Label { get; }
+    /// <summary>
+    /// ⚠ Computed from the owner's descriptor rather than captured, for the same reason every other settings
+    /// text is: an option label is a word, and a word moves with the language. "Dark"/"Light" are as visible
+    /// on the General page as the row that offers them.
+    /// </summary>
+    public string Label => _owner.LabelFor(Key);
+
+    internal void RefreshLocalizedText() => OnPropertyChanged(nameof(Label));
 
     /// <summary>Two-way for a <c>RadioButton</c>. ⚠ Only a transition to <c>true</c> is a user decision: a
     /// radio group unchecks its siblings, so acting on <c>false</c> as well would fight the group.</summary>
@@ -59,35 +66,62 @@ public abstract partial class SettingRowViewModel : ObservableObject
     {
         Id = descriptor.Id;
         CategoryId = descriptor.CategoryId;
-        Label = descriptor.Label;
-
-        // ⭐ Applied HERE, in the one place every row's description passes through, so it covers the texts that
-        // exist and the ones nobody has written yet — a description with a grouped number cannot wrap in the
-        // middle of it. See ProseNumbers: a space between two digits is a separator, never a word gap.
-        Description = ProseNumbers.KeepNumbersWhole(descriptor.Description);
-
-        // Searching matches what is DISPLAYED plus the keywords that lead to it — and the category's own
-        // title, so typing "general" keeps the whole page rather than emptying it.
-        // ⚠ Built from the RAW description on purpose: the displayed one carries non-breaking spaces, so a
-        // user typing "1 000 000" with ordinary spaces would stop matching a row that plainly contains it.
-        Haystack = string.Join('\n',
-            Label, descriptor.Description, categoryTitle, string.Join(' ', descriptor.Keywords));
     }
 
     public string Id { get; }
 
     public string CategoryId { get; }
 
-    public string Label { get; }
+    /// <summary>
+    /// This row's own descriptor, in the language being rendered right now.
+    ///
+    /// <para>⚠⚠ <b>Resolved on every read, never captured.</b> The three texts below used to be assigned in the
+    /// constructor, which froze this window's whole vocabulary at the language in force when it opened — and,
+    /// because the catalog behind it froze at type-init, closing and reopening the window did not help either.
+    /// The user saw it as a General page whose heading said "Ogólne" while every row under it stayed
+    /// English.</para>
+    /// </summary>
+    private SettingDescriptor Descriptor => SettingsCatalog.Descriptor(Id);
 
-    public string Description { get; }
+    public string Label => Descriptor.Label;
+
+    /// <summary>
+    /// ⭐ <c>KeepNumbersWhole</c> is applied HERE, in the one place every row's description passes through, so
+    /// it covers the texts that exist and the ones nobody has written yet — a description with a grouped number
+    /// cannot wrap in the middle of it. See <c>ProseNumbers</c>: a space between two digits is a separator,
+    /// never a word gap.
+    /// </summary>
+    public string Description => ProseNumbers.KeepNumbersWhole(Descriptor.Description);
 
     /// <summary>Hidden by a search that does not match it. The row stays in place; only its visibility
     /// changes, so nothing is rebuilt while the user types.</summary>
     [ObservableProperty]
     private bool _isVisible = true;
 
-    internal string Haystack { get; }
+    /// <summary>
+    /// Searching matches what is DISPLAYED plus the keywords that lead to it — and the category's own title,
+    /// so typing "general" keeps the whole page rather than emptying it.
+    ///
+    /// <para>⚠ Built from the RAW description on purpose: the displayed one carries non-breaking spaces, so a
+    /// user typing "1 000 000" with ordinary spaces would stop matching a row that plainly contains it.</para>
+    /// </summary>
+    internal string Haystack
+    {
+        get
+        {
+            var descriptor = Descriptor;
+            return string.Join('\n',
+                descriptor.Label,
+                descriptor.Description,
+                SettingsCatalog.Category(CategoryId).Title,
+                string.Join(' ', descriptor.Keywords));
+        }
+    }
+
+    /// <summary>Tells the row's bindings to re-read after a language change. Every text it shows is computed,
+    /// so a blanket notification is the whole of it — except for a row that owns child view models of its own
+    /// (see <see cref="PreferenceSettingViewModel"/>).</summary>
+    internal virtual void RefreshLocalizedText() => OnPropertyChanged(string.Empty);
 }
 
 /// <summary>
@@ -319,11 +353,11 @@ public sealed partial class PreferenceSettingViewModel : SettingRowViewModel
     internal PreferenceSettingViewModel(SettingDescriptor descriptor, string categoryTitle, string value)
         : base(descriptor, categoryTitle)
     {
-        if (descriptor.Options is { } options && descriptor.OptionLabels is { } labels)
+        if (descriptor.Options is { } options)
         {
             foreach (var key in options.Values)
             {
-                _options.Add(new PreferenceOptionViewModel(this, key, labels[key]));
+                _options.Add(new PreferenceOptionViewModel(this, key));
             }
         }
 
@@ -331,6 +365,21 @@ public sealed partial class PreferenceSettingViewModel : SettingRowViewModel
     }
 
     public IReadOnlyList<PreferenceOptionViewModel> Options => _options;
+
+    /// <summary>The label this row's catalog entry gives an option key, in the current language.</summary>
+    internal string LabelFor(string optionKey)
+        => SettingsCatalog.Descriptor(Id).OptionLabels?[optionKey] ?? optionKey;
+
+    /// <summary>⚠ The options are separate view models, so the base's blanket notification cannot reach them —
+    /// their labels are what the user actually clicks ("Dark" / "Light", "lower case" / "UPPER CASE").</summary>
+    internal override void RefreshLocalizedText()
+    {
+        base.RefreshLocalizedText();
+        foreach (var option in _options)
+        {
+            option.RefreshLocalizedText();
+        }
+    }
 
     /// <summary>The stored key of the current value. Setting it is what "apply on change" means for a
     /// discrete control: the user selected, so the value is settled.</summary>
@@ -388,23 +437,31 @@ public sealed partial class PreferenceSettingViewModel : SettingRowViewModel
     }
 }
 
-/// <summary>One entry in the category list.</summary>
-public sealed class SettingsCategoryViewModel
+/// <summary>
+/// One entry in the category list.
+///
+/// <para>⚠⚠ <b>Observable, and <see cref="Title"/> is computed</b> — this list is the exact place the frozen
+/// language showed itself: the page heading beside it is a live <c>{app:Loc}</c> binding and said "Ogólne"
+/// while the list item, bound to a captured <c>Title</c>, still said "General".</para>
+/// </summary>
+public sealed partial class SettingsCategoryViewModel : ObservableObject
 {
     internal SettingsCategoryViewModel(SettingsCategoryDescriptor descriptor)
     {
         Id = descriptor.Id;
-        Title = descriptor.Title;
         IconKey = descriptor.IconKey;
     }
 
     public string Id { get; }
 
-    public string Title { get; }
+    public string Title => SettingsCatalog.Category(Id).Title;
 
     /// <summary>The category's icon as a geometry KEY — a string, never a <c>Geometry</c> or a brush
-    /// (architecture rule #1). Resolved in the view by <c>IconGeometryConverter</c>.</summary>
+    /// (architecture rule #1). Resolved in the view by <c>IconGeometryConverter</c>. ⚠ Captured deliberately:
+    /// an icon key is not a word and does not move with the language.</summary>
     public string IconKey { get; }
+
+    internal void RefreshLocalizedText() => OnPropertyChanged(nameof(Title));
 }
 
 /// <summary>
@@ -483,6 +540,49 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
 
         Categories = new ObservableCollection<SettingsCategoryViewModel>(_allCategories);
         SelectedCategory = Categories.FirstOrDefault();
+
+        // ⚠ This window is where the language is CHANGED, so it is the one surface guaranteed to be on screen
+        // when the change happens. Everything it shows is computed now, so the handler only has to say
+        // "re-read" — see RefreshLocalizedText.
+        Localization.Loc.LanguageChanged += OnLanguageChanged;
+    }
+
+    /// <summary>
+    /// ⚠⚠ <b>Unsubscribes from the static <see cref="Localization.Loc.LanguageChanged"/>.</b> Unlike
+    /// <c>MainWindowViewModel</c>, which lives as long as the process and may simply subscribe, this view model
+    /// is created per window opening — an unremoved handler would keep every previously closed Settings window's
+    /// view model alive for the rest of the session, and each would answer the next language change.
+    /// </summary>
+    public void Dispose() => Localization.Loc.LanguageChanged -= OnLanguageChanged;
+
+    private void OnLanguageChanged(object? sender, EventArgs e) => RefreshLocalizedText();
+
+    /// <summary>
+    /// Re-renders every caption this window owns in the current language.
+    ///
+    /// <para>⭐ Three groups, because they are three kinds of holder: what this view model computes, the
+    /// category LIST (its own view models), and the ROWS (theirs, plus each option row's children). None of
+    /// them stores text any more, so each only needs telling to ask again.</para>
+    ///
+    /// <para>⚠ The filter is re-applied last, and that is not tidiness: <c>Haystack</c> is now in the new
+    /// language, so leaving the previous language's match results in place would show rows the current search
+    /// term no longer matches — and hide ones it does.</para>
+    /// </summary>
+    internal void RefreshLocalizedText()
+    {
+        OnPropertyChanged(string.Empty);
+
+        foreach (var category in _allCategories)
+        {
+            category.RefreshLocalizedText();
+        }
+
+        foreach (var row in _settings.Values)
+        {
+            row.RefreshLocalizedText();
+        }
+
+        ApplyFilter(SearchText);
     }
 
     // One subscription point for all three value-carrying row kinds, so "a settled value persists" is stated
@@ -801,6 +901,9 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
             : string.Format(
                 CultureInfo.CurrentCulture,
                 UiStrings.SettingsSaveRefusedFormat,
-                _preferences.LastSaveDiagnostic ?? string.Empty);
+                // ⭐ Composed AFTER PreferencesService.Apply raised Changed, which is what applies a new language —
+                // so this line already renders in the language the user just chose. Pinned by a test, because the
+                // ordering is what makes it correct and a refactor could reverse it silently.
+                _preferences.LastSaveMessage is { } m ? Loc.Format(m) : string.Empty);
     }
 }

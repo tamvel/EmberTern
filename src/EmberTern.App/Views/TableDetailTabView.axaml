@@ -88,7 +88,7 @@
                 SelectedIndex="{Binding ActiveSubTabIndex, Mode=TwoWay}"
                 Padding="0">
 
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabFields}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc TableDetailTabFields}">
         <!-- Pola sub-tab: FieldsGrid up top, GridSplitter, then the
              field-dependencies panel. Default panel height is 180 px;
              GridSplitter lets the user resize. The panel binds to
@@ -125,15 +125,15 @@
                  Item-level IsVisible guarantees the hide; the ContextMenu-level IsVisible
                  suppresses the (otherwise empty) popup where the framework honors it. -->
             <ContextMenu IsVisible="{Binding CanAddField}">
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuAdd}" Icon="{app:MenuIcon Icon.Plus}"
+              <MenuItem Header="{app:Loc FieldsContextMenuAdd}" Icon="{app:MenuIcon Icon.Plus}"
                         Command="{Binding AddFieldCommand}"
                         InputGesture="{app:CommandGesture CollectionAdd}"
                         IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuEdit}" Icon="{app:MenuIcon Icon.Pencil}"
+              <MenuItem Header="{app:Loc FieldsContextMenuEdit}" Icon="{app:MenuIcon Icon.Pencil}"
                         Command="{Binding EditFieldCommand}"
                         InputGesture="{app:CommandGesture CollectionEdit}"
                         IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDrop}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+              <MenuItem Header="{app:Loc FieldsContextMenuDrop}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                         Command="{Binding DropFieldCommand}"
                         InputGesture="{app:CommandGesture CollectionRemove}"
                         IsVisible="{Binding CanAddField}" />
@@ -141,17 +141,17 @@
               <!-- Reorder was on the toolbar and missing here, so the same surface offered a different set of
                    operations depending on how the user reached it. Firebird can reposition a column, so these
                    belong in both places. -->
-              <MenuItem Header="{x:Static app:UiStrings.CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}"
+              <MenuItem Header="{app:Loc CollectionMoveUpTooltip}" Icon="{app:MenuIcon Icon.ArrowUp}"
                         Command="{Binding MoveFieldUpCommand}"
                         IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}"
+              <MenuItem Header="{app:Loc CollectionMoveDownTooltip}" Icon="{app:MenuIcon Icon.ArrowDown}"
                         Command="{Binding MoveFieldDownCommand}"
                         IsVisible="{Binding CanAddField}" />
               <Separator IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuCreateForeignKey}" Icon="{app:MenuIcon Icon.Index}"
+              <MenuItem Header="{app:Loc FieldsContextMenuCreateForeignKey}" Icon="{app:MenuIcon Icon.Index}"
                         Command="{Binding CreateForeignKeyCommand}"
                         IsVisible="{Binding CanAddField}" />
-              <MenuItem Header="{x:Static app:UiStrings.FieldsContextMenuDropForeignKey}" Icon="{app:MenuIcon Icon.ListX}"
+              <MenuItem Header="{app:Loc FieldsContextMenuDropForeignKey}" Icon="{app:MenuIcon Icon.ListX}"
                         Command="{Binding DropFieldForeignKeyCommand}"
                         IsVisible="{Binding CanAddField}" />
             </ContextMenu>
@@ -187,13 +187,13 @@
                  truncated even when the column's content is empty (which would
                  otherwise let DataGridLength.Auto collapse the column to a
                  narrow content-only width on the first measure pass). -->
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnPosition}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnPosition}"
                                 Binding="{Binding DisplayPosition}"
                                 SortMemberPath="DisplayPosition"
                                 MinWidth="32"
                                 IsReadOnly="True" />
 
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnPrimaryKey}"
+            <DataGridTemplateColumn Header="{app:Loc TableDetailColumnPrimaryKey}"
                                     Width="Auto"
                                     MinWidth="60"
                                     SortMemberPath="IsPrimaryKey"
@@ -211,7 +211,7 @@
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
 
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnForeignKey}"
+            <DataGridTemplateColumn Header="{app:Loc TableDetailColumnForeignKey}"
                                     Width="Auto"
                                     MinWidth="60"
                                     SortMemberPath="IsForeignKey"
@@ -229,7 +229,7 @@
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
 
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnUnique}"
+            <DataGridTemplateColumn Header="{app:Loc TableDetailColumnUnique}"
                                     Width="Auto"
                                     MinWidth="60"
                                     SortMemberPath="IsUnique"
@@ -248,7 +248,7 @@
             </DataGridTemplateColumn>
 
             <!-- Editable: Name (rename, gated by deps in EnqueueRowEdits). -->
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnName}"
                                 Binding="{Binding Name, Mode=TwoWay}"
                                 SortMemberPath="Name"
                                 MinWidth="100" />
@@ -257,7 +257,7 @@
                  path causes a focus race where the dropdown opens then immediately
                  closes, and the cell-edit cycle can hang on rapid clicks. The
                  IsEnabled binding gates interaction by the owner's edit-mode toggle. -->
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnType}"
+            <DataGridTemplateColumn Header="{app:Loc TableDetailColumnType}"
                                     SortMemberPath="TypeText"
                                     MinWidth="100"
                                     IsReadOnly="True">
@@ -279,26 +279,26 @@
                  (IsReadOnly={IsFieldsReadOnly}). EnqueueRowEdits rebuilds the type via
                  the same DdlGenerator pipeline the Edit-Field dialog uses, so changing
                  these here generates the identical ALTER COLUMN TYPE statement. -->
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnSize}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnSize}"
                                 Binding="{Binding Size, Mode=TwoWay}"
                                 SortMemberPath="Size"
                                 MinWidth="50" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnScale}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnScale}"
                                 Binding="{Binding Scale, Mode=TwoWay}"
                                 SortMemberPath="Scale"
                                 MinWidth="50" />
             <!-- Editable: NotNull (CheckBox). -->
-            <DataGridCheckBoxColumn Header="{x:Static app:UiStrings.TableDetailColumnNotNull}"
+            <DataGridCheckBoxColumn Header="{app:Loc TableDetailColumnNotNull}"
                                     Binding="{Binding NotNull, Mode=TwoWay}"
                                     SortMemberPath="NotNull"
                                     MinWidth="70" />
             <!-- Editable: Default. -->
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDefault}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnDefault}"
                                 Binding="{Binding DefaultValue, Mode=TwoWay}"
                                 SortMemberPath="DefaultValue"
                                 MinWidth="80" />
             <!-- Editable: Description (COMMENT ON COLUMN). -->
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnDescription}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnDescription}"
                                 Binding="{Binding Description, Mode=TwoWay}"
                                 SortMemberPath="Description"
                                 MinWidth="100" />
@@ -306,7 +306,7 @@
                  reasoning as the Type column — avoids the Avalonia 12 CellEditingTemplate
                  focus race). User picks a domain → ALTER COLUMN TYPE <DOMAIN_NAME>
                  queued (same dep gate as plain type). -->
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnDomain}"
+            <DataGridTemplateColumn Header="{app:Loc TableDetailColumnDomain}"
                                     SortMemberPath="DomainName"
                                     MinWidth="100"
                                     IsReadOnly="True">
@@ -326,12 +326,12 @@
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnForeignKeyTable}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnForeignKeyTable}"
                                 Binding="{Binding ForeignKeyTable}"
                                 SortMemberPath="ForeignKeyTable"
                                 MinWidth="100"
                                 IsReadOnly="True" />
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailColumnComputed}"
+            <DataGridTemplateColumn Header="{app:Loc TableDetailColumnComputed}"
                                     SortMemberPath="ComputedSource"
                                     MinWidth="90"
                                     IsReadOnly="True">
@@ -345,12 +345,12 @@
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnCharset}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnCharset}"
                                 Binding="{Binding Charset}"
                                 SortMemberPath="Charset"
                                 MinWidth="70"
                                 IsReadOnly="True" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnAutoIncrement}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnAutoIncrement}"
                                 Binding="{Binding IsAutoIncrement, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsAutoIncrement"
                                 MinWidth="40"
@@ -379,14 +379,14 @@
                     Padding="8,4"
                     BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="0,0,0,1">
-              <TextBlock Text="{x:Static app:UiStrings.FieldDependenciesHeader}"
+              <TextBlock Text="{app:Loc FieldDependenciesHeader}"
                          FontSize="{DynamicResource Text.Compact.Size}"
                          FontWeight="SemiBold" />
             </Border>
 
             <!-- No-selection state. -->
             <TextBlock Grid.Row="1"
-                       Text="{x:Static app:UiStrings.FieldDependenciesNoSelection}"
+                       Text="{app:Loc FieldDependenciesNoSelection}"
                        Classes="subtle"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        HorizontalAlignment="Center"
@@ -395,7 +395,7 @@
 
             <!-- Field selected, no dependencies. -->
             <TextBlock Grid.Row="1"
-                       Text="{x:Static app:UiStrings.FieldDependenciesEmpty}"
+                       Text="{app:Loc FieldDependenciesEmpty}"
                        Classes="subtle"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        HorizontalAlignment="Center"
@@ -431,7 +431,7 @@
                 <!-- Type column carries the same unicode glyph + per-kind
                      color as the metadata tree (via IconBrushConverter +
                      ActualThemeVariant). Glyph empty for non-openable kinds. -->
-                <DataGridTemplateColumn Header="{x:Static app:UiStrings.FieldDependenciesColumnType}"
+                <DataGridTemplateColumn Header="{app:Loc FieldDependenciesColumnType}"
                                         SortMemberPath="ObjectType"
                                         MinWidth="110">
                   <DataGridTemplateColumn.CellTemplate>
@@ -453,18 +453,18 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="{x:Static app:UiStrings.FieldDependenciesColumnName}"
+                <DataGridTextColumn Header="{app:Loc FieldDependenciesColumnName}"
                                     Binding="{Binding ObjectName}"
                                     SortMemberPath="ObjectName"
                                     MinWidth="160" />
                 <!-- Insert / Update — ✓ for triggers that fire on that DML op,
                      blank for procedures / views / etc. (no per-field op
                      semantics in the catalog). -->
-                <DataGridTextColumn Header="{x:Static app:UiStrings.FieldDependenciesColumnInsert}"
+                <DataGridTextColumn Header="{app:Loc FieldDependenciesColumnInsert}"
                                     Binding="{Binding InsertMark}"
                                     SortMemberPath="InsertMark"
                                     MinWidth="60" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.FieldDependenciesColumnUpdate}"
+                <DataGridTextColumn Header="{app:Loc FieldDependenciesColumnUpdate}"
                                     Binding="{Binding UpdateMark}"
                                     SortMemberPath="UpdateMark"
                                     MinWidth="60" />
@@ -475,7 +475,7 @@
         </Grid>
       </TabItem>
 
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabConstraints}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc TableDetailTabConstraints}">
         <TabControl Padding="0"
                     SelectedIndex="{Binding ConstraintsActiveSubTabIndex, Mode=TwoWay}">
 
@@ -501,25 +501,25 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu IsVisible="{Binding CanManageConstraints}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddPrimaryKey}" Icon="{app:MenuIcon Icon.Plus}"
+                  <MenuItem Header="{app:Loc ConstraintMenuAddPrimaryKey}" Icon="{app:MenuIcon Icon.Plus}"
                             Command="{Binding AddPrimaryKeyCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropPrimaryKey}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                  <MenuItem Header="{app:Loc ConstraintMenuDropPrimaryKey}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                             Command="{Binding DropConstraintCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+                <DataGridTextColumn Header="{app:Loc TableDetailColumnName}"
                                     Binding="{Binding Name}"
                                     SortMemberPath="Name" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintFields}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintFields}"
                                     Binding="{Binding Fields}"
                                     SortMemberPath="Fields" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintIndexName}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintIndexName}"
                                     Binding="{Binding IndexName}"
                                     SortMemberPath="IndexName" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintSort}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintSort}"
                                     Binding="{Binding IsDescending, Converter={x:Static conv:BoolToSortOrderConverter.Instance}}"
                                     SortMemberPath="IsDescending" />
               </DataGrid.Columns>
@@ -548,34 +548,34 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu IsVisible="{Binding CanManageConstraints}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddForeignKey}" Icon="{app:MenuIcon Icon.Plus}"
+                  <MenuItem Header="{app:Loc ConstraintMenuAddForeignKey}" Icon="{app:MenuIcon Icon.Plus}"
                             Command="{Binding CreateForeignKeyCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropForeignKey}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                  <MenuItem Header="{app:Loc ConstraintMenuDropForeignKey}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                             Command="{Binding DropConstraintCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+                <DataGridTextColumn Header="{app:Loc TableDetailColumnName}"
                                     Binding="{Binding Name}"
                                     SortMemberPath="Name" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintFields}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintFields}"
                                     Binding="{Binding Fields}"
                                     SortMemberPath="Fields" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintRefTable}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintRefTable}"
                                     Binding="{Binding RefTable}"
                                     SortMemberPath="RefTable" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintRefFields}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintRefFields}"
                                     Binding="{Binding RefFields}"
                                     SortMemberPath="RefFields" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintUpdateRule}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintUpdateRule}"
                                     Binding="{Binding UpdateRule}"
                                     SortMemberPath="UpdateRule" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintDeleteRule}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintDeleteRule}"
                                     Binding="{Binding DeleteRule}"
                                     SortMemberPath="DeleteRule" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintSort}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintSort}"
                                     Binding="{Binding IsDescending, Converter={x:Static conv:BoolToSortOrderConverter.Instance}}"
                                     SortMemberPath="IsDescending" />
               </DataGrid.Columns>
@@ -604,19 +604,19 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu IsVisible="{Binding CanManageConstraints}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddCheck}" Icon="{app:MenuIcon Icon.Plus}"
+                  <MenuItem Header="{app:Loc ConstraintMenuAddCheck}" Icon="{app:MenuIcon Icon.Plus}"
                             Command="{Binding AddCheckCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropCheck}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                  <MenuItem Header="{app:Loc ConstraintMenuDropCheck}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                             Command="{Binding DropConstraintCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+                <DataGridTextColumn Header="{app:Loc TableDetailColumnName}"
                                     Binding="{Binding Name}"
                                     SortMemberPath="Name" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintSource}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintSource}"
                                     Binding="{Binding CheckClause}"
                                     SortMemberPath="CheckClause"
                                     Width="*" />
@@ -646,25 +646,25 @@
                       Background="{DynamicResource BackgroundBrush}">
               <DataGrid.ContextMenu>
                 <ContextMenu IsVisible="{Binding CanManageConstraints}">
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuAddUnique}" Icon="{app:MenuIcon Icon.Plus}"
+                  <MenuItem Header="{app:Loc ConstraintMenuAddUnique}" Icon="{app:MenuIcon Icon.Plus}"
                             Command="{Binding AddUniqueCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
-                  <MenuItem Header="{x:Static app:UiStrings.ConstraintMenuDropUnique}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+                  <MenuItem Header="{app:Loc ConstraintMenuDropUnique}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                             Command="{Binding DropConstraintCommand}"
                             IsVisible="{Binding CanManageConstraints}" />
                 </ContextMenu>
               </DataGrid.ContextMenu>
               <DataGrid.Columns>
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+                <DataGridTextColumn Header="{app:Loc TableDetailColumnName}"
                                     Binding="{Binding Name}"
                                     SortMemberPath="Name" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintFields}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintFields}"
                                     Binding="{Binding Fields}"
                                     SortMemberPath="Fields" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintIndexName}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintIndexName}"
                                     Binding="{Binding IndexName}"
                                     SortMemberPath="IndexName" />
-                <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailConstraintSort}"
+                <DataGridTextColumn Header="{app:Loc TableDetailConstraintSort}"
                                     Binding="{Binding IsDescending, Converter={x:Static conv:BoolToSortOrderConverter.Instance}}"
                                     SortMemberPath="IsDescending" />
               </DataGrid.Columns>
@@ -674,7 +674,7 @@
         </TabControl>
       </TabItem>
 
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabIndexes}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc TableDetailTabIndexes}">
         <DataGrid x:Name="IndexesGrid"
                   behaviors:GridLayoutBehavior.GridId="TableDetail.Indexes"
                   ItemsSource="{Binding Indexes}"
@@ -694,23 +694,23 @@
                   Background="{DynamicResource BackgroundBrush}">
           <DataGrid.ContextMenu>
             <ContextMenu IsVisible="{Binding CanManageIndexes}">
-              <MenuItem Header="{x:Static app:UiStrings.IndexMenuAdd}" Icon="{app:MenuIcon Icon.Plus}"
+              <MenuItem Header="{app:Loc IndexMenuAdd}" Icon="{app:MenuIcon Icon.Plus}"
                         Command="{Binding AddIndexCommand}"
                         IsVisible="{Binding CanManageIndexes}" />
-              <MenuItem Header="{x:Static app:UiStrings.IndexMenuDrop}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
+              <MenuItem Header="{app:Loc IndexMenuDrop}" Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                         Command="{Binding DropIndexCommand}"
                         IsVisible="{Binding CanManageIndexes}" />
               <Separator IsVisible="{Binding CanManageIndexes}" />
-              <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeStatistics}" Icon="{app:MenuIcon Icon.Sigma}"
+              <MenuItem Header="{app:Loc IndexMenuRecomputeStatistics}" Icon="{app:MenuIcon Icon.Sigma}"
                         Command="{Binding RecomputeIndexStatisticsCommand}"
                         IsVisible="{Binding CanManageIndexes}" />
-              <MenuItem Header="{x:Static app:UiStrings.IndexMenuRecomputeAllStatistics}" Icon="{app:MenuIcon Icon.Sigma}"
+              <MenuItem Header="{app:Loc IndexMenuRecomputeAllStatistics}" Icon="{app:MenuIcon Icon.Sigma}"
                         Command="{Binding RecomputeAllIndexStatisticsCommand}"
                         IsVisible="{Binding CanManageIndexes}" />
             </ContextMenu>
           </DataGrid.ContextMenu>
           <DataGrid.Columns>
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailIndexType}"
+            <DataGridTemplateColumn Header="{app:Loc TableDetailIndexType}"
                                     Width="30"
                                     SortMemberPath="IndexType">
               <DataGridTemplateColumn.CellTemplate>
@@ -737,35 +737,35 @@
             <!-- Replaced fixed Width with MinWidth so the grid-level
                  ColumnWidth="Auto" can grow each column to fit the larger of
                  header / content text without truncating either. -->
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailColumnName}"
+            <DataGridTextColumn Header="{app:Loc TableDetailColumnName}"
                                 Binding="{Binding Name}"
                                 SortMemberPath="Name"
                                 MinWidth="160" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexFields}"
+            <DataGridTextColumn Header="{app:Loc TableDetailIndexFields}"
                                 Binding="{Binding Fields}"
                                 SortMemberPath="Fields"
                                 MinWidth="120" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexExpression}"
+            <DataGridTextColumn Header="{app:Loc TableDetailIndexExpression}"
                                 Binding="{Binding Expression}"
                                 SortMemberPath="Expression"
                                 MinWidth="100" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexUnique}"
+            <DataGridTextColumn Header="{app:Loc TableDetailIndexUnique}"
                                 Binding="{Binding IsUnique, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsUnique"
                                 MinWidth="70" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexDescending}"
+            <DataGridTextColumn Header="{app:Loc TableDetailIndexDescending}"
                                 Binding="{Binding IsDescending, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsDescending"
                                 MinWidth="90" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexPrimary}"
+            <DataGridTextColumn Header="{app:Loc TableDetailIndexPrimary}"
                                 Binding="{Binding IsPrimary, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsPrimary"
                                 MinWidth="60" />
-            <DataGridTextColumn Header="{x:Static app:UiStrings.TableDetailIndexActive}"
+            <DataGridTextColumn Header="{app:Loc TableDetailIndexActive}"
                                 Binding="{Binding IsActive, Converter={x:Static conv:BoolToCheckmarkConverter.Instance}}"
                                 SortMemberPath="IsActive"
                                 MinWidth="60" />
-            <DataGridTemplateColumn Header="{x:Static app:UiStrings.TableDetailIndexStatistics}"
+            <DataGridTemplateColumn Header="{app:Loc TableDetailIndexStatistics}"
                                     MinWidth="90"
                                     SortMemberPath="Statistics">
               <DataGridTemplateColumn.CellTemplate>
@@ -781,11 +781,11 @@
         </DataGrid>
       </TabItem>
 
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabDependencies}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc TableDetailTabDependencies}">
         <Grid ColumnDefinitions="*,4,*">
           <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.TableDetailDependedOnByHeader}"
+                       Text="{app:Loc TableDetailDependedOnByHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -802,7 +802,7 @@
 
           <Grid Grid.Column="2" RowDefinitions="Auto,*">
             <TextBlock Grid.Row="0"
-                       Text="{x:Static app:UiStrings.TableDetailDependsOnHeader}"
+                       Text="{app:Loc TableDetailDependsOnHeader}"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        Foreground="{DynamicResource SubtleForegroundBrush}"
                        Margin="{DynamicResource Margin.PanelCaption}" />
@@ -814,7 +814,7 @@
         </Grid>
       </TabItem>
 
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabData}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc TableDetailTabData}">
         <!-- Rows: hint+filter/agg toggles · edit status · pagination-hint+record ·
              filter panel · aggregation bar · error+grid. -->
         <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*">
@@ -826,22 +826,22 @@
                       Spacing="4"
                       Margin="8,4">
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationFirstTooltip}"
+                    ToolTip.Tip="{app:Loc TableDetailPaginationFirstTooltip}"
                     Command="{Binding GoToFirstPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronFirst}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationPreviousTooltip}"
+                    ToolTip.Tip="{app:Loc TableDetailPaginationPreviousTooltip}"
                     Command="{Binding GoToPreviousPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronLeft}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationNextTooltip}"
+                    ToolTip.Tip="{app:Loc TableDetailPaginationNextTooltip}"
                     Command="{Binding GoToNextPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronRight}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDetailPaginationLastTooltip}"
+                    ToolTip.Tip="{app:Loc TableDetailPaginationLastTooltip}"
                     Command="{Binding GoToLastPageCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.ChevronLast}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
@@ -850,7 +850,7 @@
             <TextBlock Text="{Binding DataRecordInfo}" Classes="subtle" FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" Margin="12,0,0,0" />
             <ToggleButton Classes="icon" Margin="12,0,0,0"
-                          ToolTip.Tip="{x:Static app:UiStrings.FilterToggleTooltip}"
+                          ToolTip.Tip="{app:Loc FilterToggleTooltip}"
                           IsChecked="{Binding DataFilterPanel.IsPanelOpen, Mode=TwoWay}">
               <Panel>
                 <controls:SvgIcon Data="{StaticResource Icon.Filter}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
@@ -858,21 +858,21 @@
               </Panel>
             </ToggleButton>
             <ToggleButton Classes="icon"
-                          ToolTip.Tip="{x:Static app:UiStrings.AggregationToggleTooltip}"
+                          ToolTip.Tip="{app:Loc AggregationToggleTooltip}"
                           IsChecked="{Binding DataAggregationBar.IsBarOpen, Mode=TwoWay}">
               <controls:SvgIcon Data="{StaticResource Icon.Sigma}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </ToggleButton>
             <!-- Refresh is a data-reload action, not navigation → at the end of the row,
                  flush with the filter/aggregation toggles (same icon group). -->
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.ToolbarRefreshDataTooltip}"
+                    ToolTip.Tip="{app:Loc ToolbarRefreshDataTooltip}"
                     Command="{Binding RefreshDataPreviewCommand}">
               <!-- Rola R‑7 (K6) — patrz komentarz przy odświeżaniu drzewa metadanych w MainWindow. -->
               <controls:SvgIcon Data="{StaticResource Icon.RefreshCw}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
             <!-- Export the table data via the shared Export Framework (default = the whole table). -->
             <Button Classes="icon" Click="OnDataExportClick" IsEnabled="{Binding CanExportData}"
-                    ToolTip.Tip="{x:Static app:UiStrings.ExportResultsTooltip}">
+                    ToolTip.Tip="{app:Loc ExportResultsTooltip}">
               <controls:SvgIcon Data="{StaticResource Icon.Download}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
             </Button>
           </StackPanel>
@@ -924,19 +924,19 @@
                 <!-- New / Delete row were toolbar-only while every other collection surface offered them in
                      both places. Same commands the toolbar's + / − route to, with the gestures the catalog
                      declares for a grid. -->
-                <MenuItem Header="{x:Static app:UiStrings.DataEditNewRow}"
+                <MenuItem Header="{app:Loc DataEditNewRow}"
                           Icon="{app:MenuIcon Icon.Plus}"
                           InputGesture="{app:CommandGesture CollectionAdd}"
                           Command="{Binding AddRowCommand}"
                           IsVisible="{Binding CanEditData}" />
-                <MenuItem Header="{x:Static app:UiStrings.DataEditDeleteRow}"
+                <MenuItem Header="{app:Loc DataEditDeleteRow}"
                           Icon="{app:MenuIcon Icon.Trash, Brush=DangerIconBrush}"
                           InputGesture="{app:CommandGesture CollectionRemove}"
                           Command="{Binding DeleteRowCommand}"
                           IsVisible="{Binding CanEditData}" />
                 <Separator IsVisible="{Binding CanEditData}" />
                 <MenuItem x:Name="SetNullMenuItem"
-                          Header="{x:Static app:UiStrings.DataEditSetNull}"
+                          Header="{app:Loc DataEditSetNull}"
                           Icon="{app:MenuIcon Icon.Eraser}"
                           Click="OnSetCellNullClick"
                           IsVisible="{Binding CanEditData}" />
@@ -945,36 +945,36 @@
                      same order (user request, 2026-08-07): the same operations reached the same way in every
                      data grid, with only the module's own actions differing — those are the edit group above,
                      which is why they sit at the top rather than interleaved. -->
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyCellClick" />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyRowClick" />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyRowWithHeadersClick" />
+                <MenuItem Header="{app:Loc GridCopyCell}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyCellClick" />
+                <MenuItem Header="{app:Loc GridCopyRow}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyRowClick" />
+                <MenuItem Header="{app:Loc GridCopyRowWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyRowWithHeadersClick" />
                 <Separator />
                 <!-- Copy the right-clicked row as runnable DML. Disabled-with-a-reason: the tooltip is
                      bound unconditionally and is empty when the action is available, so a greyed item
                      always says WHY (design §5/§6). SqlCopy is null on a read-only table → both stay off. -->
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyAsInsert}" Icon="{app:MenuIcon Icon.Query}"
+                <MenuItem Header="{app:Loc GridCopyAsInsert}" Icon="{app:MenuIcon Icon.Query}"
                           Click="OnDataCopyAsInsertClick"
                           IsEnabled="{Binding SqlCopy.CanCopyAsInsert}"
                           ToolTip.Tip="{Binding SqlCopy.CopyAsInsertTooltip}" />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyAsUpdate}" Icon="{app:MenuIcon Icon.Query}"
+                <MenuItem Header="{app:Loc GridCopyAsUpdate}" Icon="{app:MenuIcon Icon.Query}"
                           Click="OnDataCopyAsUpdateClick"
                           IsEnabled="{Binding SqlCopy.CanCopyAsUpdate}"
                           ToolTip.Tip="{Binding SqlCopy.CopyAsUpdateTooltip}" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyAllWithHeadersClick" />
-                <MenuItem Header="{x:Static app:UiStrings.ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnDataExportClick" />
+                <MenuItem Header="{app:Loc GridCopyAllWithHeaders}" Icon="{app:MenuIcon Icon.Copy}" Click="OnDataCopyAllWithHeadersClick" />
+                <MenuItem Header="{app:Loc ExportResultsMenuItem}" Icon="{app:MenuIcon Icon.Download}" Click="OnDataExportClick" />
                 <Separator />
-                <MenuItem Header="{x:Static app:UiStrings.FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnDataFilterByValueClick" />
-                <MenuItem Header="{x:Static app:UiStrings.FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnDataExcludeValueClick" />
+                <MenuItem Header="{app:Loc FilterByValue}" Icon="{app:MenuIcon Icon.Filter}" Click="OnDataFilterByValueClick" />
+                <MenuItem Header="{app:Loc FilterExcludeValue}" Icon="{app:MenuIcon Icon.ListX}" Click="OnDataExcludeValueClick" />
                 <MenuItem x:Name="DataFilterContainsItem"
-                          Header="{x:Static app:UiStrings.FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnDataFilterContainsClick" />
+                          Header="{app:Loc FilterContainsValue}" Icon="{app:MenuIcon Icon.Search}" Click="OnDataFilterContainsClick" />
               </ContextMenu>
             </DataGrid.ContextMenu>
           </DataGrid>
         </Grid>
       </TabItem>
 
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabDescription}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc TableDetailTabDescription}">
         <!-- Editable table description (COMMENT ON TABLE). Save/Clear run in the
              working transaction via the same RefreshStructureAsync path as other
              structural edits. Buttons disabled when no DDL executor is wired. -->
@@ -983,18 +983,18 @@
                (read-only system tables) — the description TextBox below stays for viewing. -->
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="8,6,8,4"
                       IsVisible="{Binding CanEditDescription}">
-            <TextBlock Text="{x:Static app:UiStrings.TableDescriptionEditLabel}"
+            <TextBlock Text="{app:Loc TableDescriptionEditLabel}"
                        Classes="subtle"
                        FontSize="{DynamicResource Text.Compact.Size}"
                        VerticalAlignment="Center" />
             <Button Classes="icon"
-                    ToolTip.Tip="{x:Static app:UiStrings.TableDescriptionSave}"
+                    ToolTip.Tip="{app:Loc TableDescriptionSave}"
                     Command="{Binding SaveDescriptionCommand}">
               <controls:SvgIcon Data="{StaticResource Icon.Save}" />
             </Button>
             <Button Classes="flat"
                     Padding="8,2"
-                    Content="{x:Static app:UiStrings.TableDescriptionClear}"
+                    Content="{app:Loc TableDescriptionClear}"
                     Command="{Binding ClearDescriptionCommand}" />
           </StackPanel>
           <TextBox Grid.Row="1"
@@ -1008,7 +1008,7 @@
         </Grid>
       </TabItem>
 
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.TableDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc TableDetailTabDdl}">
         <ae:TextEditor x:Name="TableDetailDdlEditor"
                        ShowLineNumbers="True"
                        IsReadOnly="True"
@@ -1023,7 +1023,7 @@
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">
-      <TextBlock Text="{x:Static app:UiStrings.TableDetailLoadingHint}"
+      <TextBlock Text="{app:Loc TableDetailLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
                  FontSize="{DynamicResource Text.Compact.Size}"

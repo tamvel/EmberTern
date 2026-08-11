@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Core.Connections;
@@ -20,7 +20,7 @@ public partial class ConnectionListItemViewModel : ViewModelBase
     public string Name => Profile.Name;
     public string Endpoint => $"{Profile.Host}:{Profile.Port}";
     public string DatabaseLabel => string.IsNullOrWhiteSpace(Profile.DatabasePath)
-        ? "(no path)"
+        ? UiStrings.ConnectionNoPath
         : System.IO.Path.GetFileName(Profile.DatabasePath);
 
     [ObservableProperty]

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EmberTern.App.Localization;
 using EmberTern.Core.Sql.Language;
 
 namespace EmberTern.App.ViewModels;
@@ -21,6 +22,33 @@ public sealed partial class DiagnosticsPanelViewModel : ViewModelBase
 {
     /// <summary>The current document's diagnostics, in <see cref="DiagnosticsEngine"/> order.</summary>
     public ObservableCollection<DiagnosticRowViewModel> Diagnostics { get; } = new();
+
+    /// <summary>
+    /// ⭐⭐ <b>The panel's ONE language subscription (ratified W3, etap C5), and every clause of it is
+    /// load-bearing.</b> Core hands up a key plus data, so a row's text only exists once resolved — and a row is
+    /// resolved when its <c>Message</c> is read, which after a language change nothing does on its own (#353).
+    ///
+    /// <para>⛔ <b>The obvious repair — rebuild the rows and republish — cannot work here, and that is the trap
+    /// worth knowing:</b> <see cref="Update"/> no-ops when <see cref="Unchanged"/> says the findings are the
+    /// same, which after a mere language change they are. The optimisation that protects the user's selection
+    /// would swallow the refresh. So this hook does not touch the collection at all: it asks each existing row to
+    /// re-read its own text. No rebuild, no <c>CollectionChanged</c>, no lost selection.</para>
+    ///
+    /// <para>⭐ One subscription for the whole panel rather than one per row: a row-level subscription would be a
+    /// leak per finding, and a large script has many. The rows stay ignorant of the language on purpose.</para>
+    /// </summary>
+    public DiagnosticsPanelViewModel()
+    {
+        Loc.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.EventArgs e)
+    {
+        foreach (var row in Diagnostics)
+        {
+            row.RaiseMessageChanged();
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyState))]

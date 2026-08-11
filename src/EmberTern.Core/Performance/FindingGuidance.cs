@@ -1,13 +1,22 @@
 using System;
 using System.Collections.Generic;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Core.Performance;
 
 /// <summary>A concise "what to investigate next" block attached to a finding — a few
-/// investigation-oriented bullets, no prescription. Phase 4 (guidance) layer.</summary>
-public sealed record FindingGuidance(string Heading, IReadOnlyList<string> Items)
+/// investigation-oriented bullets, no prescription. Phase 4 (guidance) layer.
+///
+/// <para>⭐ Etap C7: heading and items are <see cref="MessageKey"/>s. They carry no arguments at all, which is
+/// why this group has the cleanest possible proof of zero text change — the 18 old literals and the 18 new
+/// resource values are compared byte for byte (the C2 shape).</para></summary>
+public sealed record FindingGuidance(MessageKey Heading, IReadOnlyList<MessageKey> Items)
 {
-    public static readonly FindingGuidance None = new(string.Empty, Array.Empty<string>());
+    /// <summary>⚠ The heading is a real key rather than an empty one: <see cref="MessageKey"/> refuses an
+    /// empty token, and nothing reads the heading of a guidance block with no items — <see cref="HasItems"/>
+    /// is the only gate, and it behaves exactly as before.</summary>
+    public static readonly FindingGuidance None =
+        new(PerfMessages.GuidanceHeading, Array.Empty<MessageKey>());
 
     public bool HasItems => Items.Count > 0;
 }
@@ -17,52 +26,55 @@ public sealed record FindingGuidance(string Heading, IReadOnlyList<string> Items
 /// shape, and the guidance a finding shows always matches its kind. Language is strictly
 /// investigation-oriented (Review / Check / Consider / Verify) — no imperatives, no DDL, no
 /// "create/add index/fix/execute". Guidance inherits the originating finding's confidence
-/// (it renders on the same confidence-labelled card).</summary>
+/// (it renders on the same confidence-labelled card).
+///
+/// <para>⚠ That "no imperatives, no DDL" rule is a product decision this module has always carried, and until
+/// C7 it was checked on exactly one finding by two assertions in <c>PerformanceMissingIndexTests</c>. It is
+/// now checked across every Performance sentence in the catalog by
+/// <c>NoPerfSentence_UsesImperativeOrDdlVocabulary</c>.</para></summary>
 public static class FindingGuidanceCatalog
 {
-    private const string Heading = "What to investigate";
-
     public static FindingGuidance For(FindingKind kind) => kind switch
     {
-        FindingKind.CostlyFullScan => new FindingGuidance(Heading, new[]
+        FindingKind.CostlyFullScan => new FindingGuidance(PerfMessages.GuidanceHeading, new[]
         {
-            "Check the filter's selectivity — how many rows it actually keeps.",
-            "Check whether a suitable index exists on the filtered column(s).",
-            "Review the table size and the query's access pattern.",
+            PerfMessages.CostlyFullScanGuidance1,
+            PerfMessages.CostlyFullScanGuidance2,
+            PerfMessages.CostlyFullScanGuidance3,
         }),
 
-        FindingKind.MissingIndexCandidate => new FindingGuidance(Heading, new[]
+        FindingKind.MissingIndexCandidate => new FindingGuidance(PerfMessages.GuidanceHeading, new[]
         {
-            "Review the filtered columns and the order they're used in.",
-            "Review existing index coverage for those columns.",
-            "Verify the query runs often enough to justify a new index.",
+            PerfMessages.MissingIndexGuidance1,
+            PerfMessages.MissingIndexGuidance2,
+            PerfMessages.MissingIndexGuidance3,
         }),
 
-        FindingKind.NonSargablePredicate => new FindingGuidance(Heading, new[]
+        FindingKind.NonSargablePredicate => new FindingGuidance(PerfMessages.GuidanceHeading, new[]
         {
-            "Review the expression applied to the indexed column.",
-            "Check whether the condition can reference the column directly.",
-            "Consider whether a computed (expression) index would be appropriate.",
+            PerfMessages.NonSargableGuidance1,
+            PerfMessages.NonSargableGuidance2,
+            PerfMessages.NonSargableGuidance3,
         }),
 
-        FindingKind.LowSelectivityIndex => new FindingGuidance(Heading, new[]
+        FindingKind.LowSelectivityIndex => new FindingGuidance(PerfMessages.GuidanceHeading, new[]
         {
-            "Review the column's value distribution (how many distinct values).",
-            "Review composite-index opportunities with a more selective leading column.",
-            "Check whether a different access path suits this query.",
+            PerfMessages.LowSelectivityGuidance1,
+            PerfMessages.LowSelectivityGuidance2,
+            PerfMessages.LowSelectivityGuidance3,
         }),
 
-        FindingKind.StaleStatistics => new FindingGuidance(Heading, new[]
+        FindingKind.StaleStatistics => new FindingGuidance(PerfMessages.GuidanceHeading, new[]
         {
-            "Review the index statistics for this table.",
-            "Verify whether the statistics are up to date.",
+            PerfMessages.StaleStatisticsGuidance1,
+            PerfMessages.StaleStatisticsGuidance2,
         }),
 
-        FindingKind.HighReadAmplification => new FindingGuidance(Heading, new[]
+        FindingKind.HighReadAmplification => new FindingGuidance(PerfMessages.GuidanceHeading, new[]
         {
-            "Review the join breadth — how many rows the joins expand to.",
-            "Review the sub-queries the plan evaluates.",
-            "Review the filtering effectiveness — where rows are read but discarded.",
+            PerfMessages.HighAmplificationGuidance1,
+            PerfMessages.HighAmplificationGuidance2,
+            PerfMessages.HighAmplificationGuidance3,
         }),
 
         _ => FindingGuidance.None,

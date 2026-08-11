@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Security.Cryptography;
 using System.Text;
 using EmberTern.Core.Security;
@@ -36,7 +36,7 @@ public static class DpapiSecretProtector
 
         if (!OperatingSystem.IsWindows())
         {
-            throw new PlatformNotSupportedException("DPAPI secret protection is only available on Windows.");
+            throw new PlatformNotSupportedException(UiStrings.DpapiWindowsOnly);
         }
 
         var bytes = Encoding.UTF8.GetBytes(plaintext);
@@ -53,7 +53,7 @@ public static class DpapiSecretProtector
 
         if (!OperatingSystem.IsWindows())
         {
-            throw new PlatformNotSupportedException("DPAPI secret protection is only available on Windows.");
+            throw new PlatformNotSupportedException(UiStrings.DpapiWindowsOnly);
         }
 
         var encrypted = Convert.FromBase64String(stored);

@@ -18,10 +18,42 @@ internal sealed partial class SemanticBinder
         int hi = t.Count;
         if (hi == 0) return;
 
-        var span = TextSpan.FromBounds(t[0].Start, t[hi - 1].End);
-        var scope = _root.NewChild(ScopeKind.Dml, span, stmt);
+        var scope = NewDmlScope(stmt, _root);
+        var skip = BindDmlTablesAndQueries(stmt, scope);
 
-        // Query/subquery spans bound below and therefore skipped by the flat column-reference walk.
+        BindExpressionReferences(t, 0, hi, scope, stmt, skip);
+    }
+
+    /// <summary>The scope a DML statement's own tables live in — a child of <paramref name="parent"/>, so
+    /// the target alias is visible to that statement and to nothing else. <c>_root</c> for a top-level
+    /// statement; the enclosing routine-body scope for a DML leaf inside a PSQL body (which is what keeps
+    /// <c>:variables</c> resolving through the chain).</summary>
+    private Scope NewDmlScope(SqlStatement stmt, Scope parent)
+    {
+        var t = stmt.Tokens;
+        var span = TextSpan.FromBounds(t[0].Start, t[t.Count - 1].End);
+        return parent.NewChild(ScopeKind.Dml, span, stmt);
+    }
+
+    // ⭐⭐ THE ONE OWNER of "which tables a DML statement brings into scope" — its TARGET (and a MERGE's
+    // USING source), plus its embedded queries/subqueries. Returns the nodes the caller's expression walk
+    // must skip (they were bound in their own scopes).
+    //
+    // ⚠ It is shared with the PSQL body binder ON PURPOSE, and that is a FIX, not a tidy-up: until
+    // 2026-08-10 BindBodyStatement was a second, parallel dispatch over the same five statement kinds that
+    // bound the embedded subqueries and then simply NEVER DECLARED THE TARGET. So every UPDATE / INSERT /
+    // DELETE / UPDATE OR INSERT / MERGE written inside a procedure, trigger or EXECUTE BLOCK — i.e. most of
+    // an ERP codebase — resolved NO table at all, while the identical statement at the top level resolved
+    // fine. The visible half was a table name with no colour; the invisible half is worse and is the reason
+    // this must stay ONE method: with the alias undeclared, BindDottedReference records nothing for
+    // `alias.column` (it deliberately stays silent on an unresolved qualifier), so the whole statement's
+    // columns had no hover, no Ctrl+Click, no find-references and no unknown-column check either.
+    private List<SqlNode> BindDmlTablesAndQueries(SqlStatement stmt, Scope scope)
+    {
+        var t = stmt.Tokens;
+        int hi = t.Count;
+
+        // Query/subquery spans bound here and therefore skipped by the caller's flat reference walk.
         var skip = new List<SqlNode>();
 
         switch (stmt)
@@ -60,7 +92,7 @@ internal sealed partial class SemanticBinder
                 break;
         }
 
-        BindExpressionReferences(t, 0, hi, scope, stmt, skip);
+        return skip;
     }
 
     // Binds a DML statement's embedded expressions: a subquery expression → its own correlated scope

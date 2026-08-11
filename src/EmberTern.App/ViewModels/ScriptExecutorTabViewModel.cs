@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -500,8 +500,8 @@ public partial class ScriptExecutorTabViewModel : ViewModelBase
 
     internal static string FormatDuration(TimeSpan elapsed)
         => elapsed.TotalMilliseconds < 1000
-            ? string.Format(CultureInfo.CurrentCulture, "{0:0} ms", elapsed.TotalMilliseconds)
-            : string.Format(CultureInfo.CurrentCulture, "{0:0.00} s", elapsed.TotalSeconds);
+            ? string.Format(CultureInfo.CurrentCulture, UiStrings.DurationMsFormat, elapsed.TotalMilliseconds)
+            : string.Format(CultureInfo.CurrentCulture, UiStrings.ScriptDurationSecondsFormat, elapsed.TotalSeconds);
 
     // Pure Run gate: returns null when a script may run, else the message explaining which
     // open transaction must be settled first — distinguishing this tab's own leftover

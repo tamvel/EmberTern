@@ -1,8 +1,10 @@
+﻿using System.Globalization;
 using System;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -126,18 +128,77 @@ internal sealed class ParameterHelper
         if (sig is not null && sig.Parameters.Count > 0) ShowCard(sig);
     }
 
-    /// <summary>Removes the card from the overlay (Escape / completion-list opening / a lost context).</summary>
+    /// <summary>Removes the card from the overlay (Escape / completion-list opening / a lost context /
+    /// the editor leaving the screen).</summary>
     public void Hide()
     {
         if (_card is { } card)
         {
-            // ⚠ The panel that HOLDS it, not the one the editor would resolve to now: after a tab switch the
-            // editor is detached, GetOverlayLayer answers null, Remove does nothing and the card is stranded in
-            // the window's overlay — where it survives every later tab change. Same rule as
+            // ⚠ The panel that HOLDS it, not the one the editor would resolve to now — the defensive form,
+            // kept for a host that really does detach its editor. Same rule as
             // NavigationController.HideBulb / HideHover.
+            //
+            // ⚠⚠ CORRECTED 2026-08-10: this comment used to state that "after a tab switch the editor is
+            // detached, GetOverlayLayer answers null and the card is stranded". MEASURED FALSE for
+            // MainWindow — its workspace tabs are co-existing views gated on IsVisible, so on a tab switch
+            // the editor stays in the visual tree, DetachedFromVisualTree never fires and GetOverlayLayer
+            // still resolves. Hide() was never the broken half; nothing was ASKING it to run. See
+            // DismissIfEditorLeftTheScreen.
             (card.Parent as Panel)?.Children.Remove(card);
             _card = null;
+            UnsubscribeScreenWatch();
         }
+    }
+
+    // ── "A card must never outlive its editor's visibility" ──────────────────────────────────────
+    //
+    // ⭐⭐ Reported 2026-08-10: the card stayed on screen after switching to another tab, over another
+    // tab's content. The lifetime above is CARET-driven (gotcha #210) and a tab switch moves no caret, so
+    // no rule ever fired. The hover card only appeared immune because moving the pointer away to click the
+    // tab strip raises PointerExited — a gesture this card has no equivalent of.
+    //
+    // ⚠ MEASURED, because the obvious signals are unavailable here (ParameterHelperScreenWatchTests pins
+    // the set): all tab views share ONE window overlay layer, so the card is genuinely over the new tab ·
+    // Visual has no IsEffectivelyVisibleProperty to observe in Avalonia 12.1.1 · DetachedFromVisualTree does
+    // not fire, because MainWindow's tabs are IsVisible-gated siblings rather than swapped content. What DOES
+    // fire is LayoutUpdated and LostFocus — the latter raised BY the visibility change itself (hiding an
+    // ancestor takes focus off the element), so the signal does not depend on the tab strip being focusable.
+    // ⚠ EffectiveViewportChanged is NOT part of this reasoning either way: its first delivery is async and
+    // the harness could not measure it stably, so it is neither used nor claimed.
+    //
+    // ⭐ So there are two independent TRIGGERS and exactly ONE DECISION — the invariant itself. Neither
+    // trigger is trusted to mean "hidden": both ask. That keeps the change strictly about the reported
+    // defect (focus merely moving to another control on the SAME visible tab leaves the card alone) and
+    // survives one trigger going quiet in a future framework version.
+    //
+    // ⚠ Subscribed only while a card is open, so LayoutUpdated — a firehose — costs nothing at rest.
+    private bool _screenWatched;
+
+    private void SubscribeScreenWatch()
+    {
+        if (_screenWatched || _detached) return;
+        _screenWatched = true;
+        _editor.LayoutUpdated += OnEditorLayoutUpdated;
+        _editor.TextArea.LostFocus += OnEditorLostFocus;
+    }
+
+    private void UnsubscribeScreenWatch()
+    {
+        if (!_screenWatched) return;
+        _screenWatched = false;
+        _editor.LayoutUpdated -= OnEditorLayoutUpdated;
+        _editor.TextArea.LostFocus -= OnEditorLostFocus;
+    }
+
+    private void OnEditorLayoutUpdated(object? sender, EventArgs e) => DismissIfEditorLeftTheScreen();
+
+    private void OnEditorLostFocus(object? sender, RoutedEventArgs e) => DismissIfEditorLeftTheScreen();
+
+    /// <summary>The ONE decision behind both triggers: an open card whose editor is no longer on screen
+    /// must go. Deliberately the invariant and not a proxy for it — a trigger only prompts the question.</summary>
+    private void DismissIfEditorLeftTheScreen()
+    {
+        if (_card is not null && !_editor.IsEffectivelyVisible) Hide();
     }
 
     // Context-driven lifetime (gotcha #210): on any caret move, re-query the engine and keep the card
@@ -170,6 +231,10 @@ internal sealed class ParameterHelper
     {
         var overlay = OverlayLayer.GetOverlayLayer(_editor);
         if (overlay is null) return;
+        // ⚠ The same invariant on the way IN, because ShowAt has an ASYNC path: WarmAndShowAsync resumes
+        // after a metadata warm, by which time the user may already have switched tabs — and the overlay it
+        // would add to is the new tab's overlay too (they are the same one).
+        if (!_editor.IsEffectivelyVisible) return;
 
         _kind = sig.Kind;
         _target = sig.Label;
@@ -195,6 +260,7 @@ internal sealed class ParameterHelper
         Canvas.SetTop(card, top);
         overlay.Children.Add(card);
         _card = card;
+        SubscribeScreenWatch();
 
         Dispatcher.UIThread.Post(() =>
         {
@@ -231,7 +297,7 @@ internal sealed class ParameterHelper
         {
             var p = sig.Parameters[i];
             bool active = i == sig.ActiveParameter;
-            var text = string.IsNullOrEmpty(p.Type) ? p.Name : $"{p.Name} : {p.Type}";
+            var text = string.IsNullOrEmpty(p.Type) ? p.Name : string.Format(CultureInfo.CurrentCulture, UiStrings.ParameterHelperMemberFormat, p.Name, p.Type);
 
             var inner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             inner.Children.Add(new TextBlock
@@ -300,8 +366,8 @@ internal sealed class ParameterHelper
     {
         SignatureKind.Insert => $"INSERT INTO {sig.Label}",
         SignatureKind.Update => $"UPDATE {sig.Label}",
-        SignatureKind.Procedure => $"{sig.Label} (procedure)",
-        SignatureKind.Function => $"{sig.Label} (function)",
+        SignatureKind.Procedure => string.Format(CultureInfo.CurrentCulture, UiStrings.ParameterHelperProcedureSuffix, sig.Label),
+        SignatureKind.Function => string.Format(CultureInfo.CurrentCulture, UiStrings.ParameterHelperFunctionSuffix, sig.Label),
         _ => sig.Label,
     };
 

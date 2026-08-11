@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using EmberTern.App;
@@ -283,6 +284,125 @@ public class MetadataTreeContextMenuTests
         using var h = new Harness();
         var group = MetadataNodeViewModel.CreateGroup(h.Main.Metadata, kind);
         Assert.Equal(expected, group.IsRecompilableGroup);
+    }
+
+    // ─── Recompile-group texts: a whole sentence per group, never a composed plural ──────────
+
+    /// <summary>
+    /// ⭐⭐ <b>Zero text change, proved against the composition it replaced.</b> The old code rendered
+    /// <c>string.Format("Loading {0}…", KindNoun(kind) + "s")</c>; each new key must reproduce exactly
+    /// that, character for character. ⚠ The progress line is compared RENDERED rather than as a format
+    /// string, because the placeholders were renumbered ({0} was the noun and is now the index) — a
+    /// comparison of the templates would be a comparison of two different things that happen to look
+    /// alike, while what the user reads is the rendered line.
+    /// </summary>
+    [Theory]
+    [InlineData(MetadataObjectKind.Procedure, "procedure")]
+    [InlineData(MetadataObjectKind.Function, "function")]
+    [InlineData(MetadataObjectKind.Trigger, "trigger")]
+    [InlineData(MetadataObjectKind.Package, "package")]
+    public void EveryRecompileGroupText_ReproducesTheCompositionItReplaced(MetadataObjectKind kind, string singular)
+    {
+        var plural = singular + "s";                       // the morpheme the producer used to glue on
+        var texts = MainWindowViewModel.RecompileGroupTexts(kind);
+
+        Assert.Equal(
+            string.Format(CultureInfo.InvariantCulture, "Loading {0}…", plural),
+            texts.ListText);
+        Assert.Equal(
+            string.Format(CultureInfo.InvariantCulture, "Loading {0} {1} / {2}", plural, 143, 1965),
+            string.Format(CultureInfo.InvariantCulture, texts.LoadFormat, 143, 1965));
+        Assert.Equal(plural, texts.PluralNoun);
+    }
+
+    /// <summary>
+    /// The three fixed-group sentences that never went through <c>KindNoun</c> — two literal English
+    /// nouns ("triggers", "indexes") and the mixed-kind dependents list. Same zero-change proof.
+    /// </summary>
+    [Fact]
+    public void EveryFixedGroupText_ReproducesTheCompositionItReplaced()
+    {
+        Assert.Equal(
+            string.Format(CultureInfo.InvariantCulture, "Loading {0}…", "triggers"),
+            UiStrings.BatchPreparingListTriggers);
+        Assert.Equal(
+            string.Format(CultureInfo.InvariantCulture, "Loading {0}…", "indexes"),
+            UiStrings.BatchPreparingListIndexes);
+        Assert.Equal(
+            string.Format(CultureInfo.InvariantCulture, "Loading {0} {1} / {2}", "dependents", 3, 7),
+            string.Format(CultureInfo.InvariantCulture, UiStrings.BatchPreparingLoadDependentsFormat, 3, 7));
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>Pins the PREMISE, not the policy (#322).</b> <see cref="MainWindowViewModel.RecompileGroupTexts"/>
+    /// throws for any other kind, and that is only safe because the set is closed by
+    /// <c>IsRecompilableGroup</c> — a fact that lives in a DIFFERENT class. So the guard walks every
+    /// <see cref="MetadataObjectKind"/> and requires the two answers to agree in BOTH directions: a kind
+    /// the tree offers must resolve, and a kind it does not offer must throw. The day a fifth kind becomes
+    /// recompilable this goes red, instead of the label silently staying English.
+    /// </summary>
+    [Fact]
+    public void RecompileGroupTexts_CoverExactlyTheRecompilableKinds()
+    {
+        using var h = new Harness();
+
+        foreach (var kind in Enum.GetValues<MetadataObjectKind>())
+        {
+            var offered = MetadataNodeViewModel.CreateGroup(h.Main.Metadata, kind).IsRecompilableGroup;
+            if (offered)
+            {
+                var texts = MainWindowViewModel.RecompileGroupTexts(kind);
+                Assert.False(string.IsNullOrWhiteSpace(texts.ListText), $"{kind}: no list sentence");
+                Assert.False(string.IsNullOrWhiteSpace(texts.LoadFormat), $"{kind}: no progress sentence");
+                Assert.False(string.IsNullOrWhiteSpace(texts.PluralNoun), $"{kind}: no plural noun");
+            }
+            else
+            {
+                Assert.Throws<ArgumentOutOfRangeException>(() => MainWindowViewModel.RecompileGroupTexts(kind));
+            }
+        }
+    }
+
+    /// <summary>
+    /// ⭐ <b>Nothing in the app composes an English plural any more.</b> The defect was not one bad call
+    /// site but a SHAPE — a localized noun with <c>+ "s"</c> glued on — and the shape is what a future
+    /// author would reach for again. ⚠ Comment lines are skipped deliberately: three of them quote the
+    /// withdrawn <c>KindNoun(kind) + "s"</c> precisely so the reason survives, and a comment composes
+    /// nothing at run time (the C7 lesson, resolved by keeping the guard and rewording — here there is
+    /// nothing to reword, because documentation is the point).
+    /// </summary>
+    [Fact]
+    public void NoAppCode_GluesAnEnglishPluralMorpheme()
+    {
+        var offenders = new List<string>();
+        var root = Path.Combine(RepositoryRoot(), "src", "EmberTern.App");
+
+        foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i].TrimStart();
+                if (line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("*", StringComparison.Ordinal)) continue;
+                if (System.Text.RegularExpressions.Regex.IsMatch(lines[i], @"\+\s*""s""|""s""\s*\+"))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}  {line}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These build an English plural in code, so the result cannot be translated — give the group its "
+            + "own key instead (MainWindowViewModel.RecompileGroupTexts):" + Environment.NewLine
+            + string.Join(Environment.NewLine, offenders));
+    }
+
+    private static string RepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "EmberTern.slnx"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Repository root not found.");
     }
 
     [Fact]

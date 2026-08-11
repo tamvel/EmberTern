@@ -95,6 +95,10 @@ public sealed class PreferencesStore
     /// </summary>
     public string? LastSaveDiagnostic => _settings.LastSaveDiagnostic;
 
+    /// <summary>The same refusal as a <see cref="Localization.LocalizableMessage"/> (D‑3). Forwarded, never
+    /// re-derived.</summary>
+    public Localization.LocalizableMessage? LastSaveMessage => _settings.LastSaveMessage;
+
     /// <summary>
     /// The stored preferences, normalized — <b>never null, and every field valid</b>, whatever was on disk.
     /// <para>

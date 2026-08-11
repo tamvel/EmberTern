@@ -1,3 +1,5 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using EmberTern.App.Localization;
 using EmberTern.Core.Sql.Language;
 
 namespace EmberTern.App.ViewModels;
@@ -13,7 +15,7 @@ namespace EmberTern.App.ViewModels;
 /// layer, which owns the document and is the only place that can map an offset to a caret position.
 /// </para>
 /// </summary>
-public sealed class DiagnosticRowViewModel
+public sealed class DiagnosticRowViewModel : ObservableObject
 {
     /// <param name="diagnostic">The engine's finding — kept verbatim, so a later milestone (S5
     /// navigation) can jump to <see cref="Diagnostic.Start"/> without a second projection.</param>
@@ -33,7 +35,22 @@ public sealed class DiagnosticRowViewModel
     /// <summary>The stable short code (<c>ET0001</c>, …).</summary>
     public string Code => Diagnostic.Code;
 
-    public string Message => Diagnostic.Message;
+    /// <summary>
+    /// Core's finding in the reader's language, resolved <b>at the moment of display</b> (D‑3) — never captured.
+    ///
+    /// <para>⭐ This row is an <see cref="ObservableObject"/> for this one property, and it deliberately does
+    /// <b>not</b> subscribe to <c>Loc.LanguageChanged</c> itself: the panel owns exactly one subscription and
+    /// calls <see cref="RaiseMessageChanged"/> on its rows (ratified W3). A subscription per row would be one
+    /// leak per finding, and a large script has many.</para>
+    /// </summary>
+    public string Message => Loc.Format(Diagnostic.Message);
+
+    /// <summary>
+    /// Re-reads <see cref="Message"/> in the current language. ⛔ Called only by
+    /// <see cref="DiagnosticsPanelViewModel"/>'s single language hook — the row never decides when to do this,
+    /// because the row does not know when the language changed and must not find out.
+    /// </summary>
+    internal void RaiseMessageChanged() => OnPropertyChanged(nameof(Message));
 
     public int Line { get; }
 

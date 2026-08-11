@@ -95,7 +95,14 @@ public class SessionHealthAnalyzerTests
         Assert.Equal(SessionHealthSeverity.Critical, gc.Severity);
         Assert.Equal(23, gc.AttachmentId);
         Assert.Equal(79195, gc.TransactionId);
-        Assert.Contains("48,102", gc.Impact); // the honest blocked-GC count
+        // ⭐ The honest blocked-GC count, asserted as the DATUM rather than as rendered text. Since the
+        // message became a key plus arguments (D‑3), Core no longer produces "48,102" — it produces the
+        // number, and the App decides the grouping from the reader's culture. Asserting the argument is
+        // therefore both the only thing Core still owns and the stronger check: it cannot pass for a value
+        // that merely formats to a similar-looking string, and it does not fail on a machine whose number
+        // separator differs.
+        Assert.Equal(SessionHealthMessages.GcBlockedImpact, gc.Impact!.Key);
+        Assert.Equal(127_297L - 79_195L, Assert.Single(gc.Impact.Arguments));
 
         Assert.Equal(1, report.Counters.GcRisks);
         Assert.Equal(SessionRisk.GcBlocker, report.EntryFor(23).Risk);

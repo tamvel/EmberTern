@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Sql.Language;
 using EmberTern.Core.Sql.Language.CodeActions;
 using EmberTern.Core.Sql.Language.Semantics;
@@ -170,7 +171,8 @@ public class QuickFixEngineTests
         var model = SemanticModel.Build(
             "select nazwa from kontrahent k join towar t on t.id = k.id", TwoTablesSharingNazwa());
         var stale = new Diagnostic(
-            3, 5, DiagnosticSeverity.Warning, "Ambiguous column 'nazwa'.", "ET0005",
+            3, 5, DiagnosticSeverity.Warning,
+            LocalizableMessage.Of(DiagnosticsMessages.AmbiguousColumn, "nazwa"), "ET0005",
             DiagnosticCategory.AmbiguousColumn);
 
         Assert.Empty(QuickFixEngine.GetFixes(model, stale));

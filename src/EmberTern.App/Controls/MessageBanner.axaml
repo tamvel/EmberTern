@@ -73,24 +73,24 @@
                 VerticalAlignment="Center" Margin="0,0,4,0">
       <Button Classes="icon" Padding="4" Click="OnCopyClick"
               IsVisible="{Binding #Root.ShowCopy}"
-              ToolTip.Tip="{x:Static app:UiStrings.MessageBannerCopyTooltip}">
+              ToolTip.Tip="{app:Loc MessageBannerCopyTooltip}">
         <controls:SvgIcon Data="{StaticResource Icon.Copy}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
       </Button>
       <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding #Root.ShowExpand}">
         <Button Classes="icon" Padding="4" Click="OnToggleExpandClick"
                 IsVisible="{Binding !#Root.IsExpanded}"
-                ToolTip.Tip="{x:Static app:UiStrings.MessageBannerExpandTooltip}">
+                ToolTip.Tip="{app:Loc MessageBannerExpandTooltip}">
           <controls:SvgIcon Data="{StaticResource Icon.ChevronsDown}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
         </Button>
         <Button Classes="icon" Padding="4" Click="OnToggleExpandClick"
                 IsVisible="{Binding #Root.IsExpanded}"
-                ToolTip.Tip="{x:Static app:UiStrings.MessageBannerCollapseTooltip}">
+                ToolTip.Tip="{app:Loc MessageBannerCollapseTooltip}">
           <controls:SvgIcon Data="{StaticResource Icon.ChevronsUp}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
         </Button>
       </StackPanel>
       <Button Classes="icon" Padding="4" Command="{Binding #Root.DismissCommand}"
               IsVisible="{Binding #Root.ShowDismiss}"
-              ToolTip.Tip="{x:Static app:UiStrings.MessageBannerDismissTooltip}">
+              ToolTip.Tip="{app:Loc MessageBannerDismissTooltip}">
         <controls:SvgIcon Data="{StaticResource Icon.X}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
       </Button>
     </StackPanel>

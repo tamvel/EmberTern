@@ -61,6 +61,16 @@ public sealed class ConnectionProfileStore
     /// </summary>
     public SettingsLoadResult CheckSettingsHealth() => _settings.LoadWithStatus();
 
+    /// <summary>
+    /// The last load diagnostic as a <see cref="Localization.LocalizableMessage"/> (D‑3), for the banner that
+    /// shows it. ⚠ Read AFTER <see cref="CheckSettingsHealth"/> — it describes that call's outcome.
+    ///
+    /// <para>⛔ Deliberately not a member of <see cref="SettingsLoadResult"/>: that type is a
+    /// <c>readonly record struct</c> whose value equality would degrade to a reference comparison of the
+    /// message's argument list, which is the trap the C0 audit measured on <c>Diagnostic</c>.</para>
+    /// </summary>
+    public Localization.LocalizableMessage? SettingsMessage => _settings.LastLoadMessage;
+
     public IReadOnlyList<ConnectionProfile> LoadAll()
         => _settings.Load()?.Connections ?? new List<ConnectionProfile>();
 

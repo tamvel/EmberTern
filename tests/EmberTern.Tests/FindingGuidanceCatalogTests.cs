@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using EmberTern.App.Localization;
 using EmberTern.App.ViewModels;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Performance;
 using Xunit;
 
@@ -8,6 +10,11 @@ namespace EmberTern.Tests;
 
 public class FindingGuidanceCatalogTests
 {
+    // ⚠ C7: a finding's title is a LocalizableMessage now. The fixture uses a real key with real arguments so
+    // that anything resolving it renders a sentence rather than throwing on a missing placeholder.
+    private static LocalizableMessage AnyTitle =>
+        LocalizableMessage.Of(PerfMessages.MissingIndexTitle, "T", "COL");
+
     [Fact]
     public void FindingViewModel_ExposesGuidanceForItsKind()
     {
@@ -15,7 +22,7 @@ public class FindingGuidanceCatalogTests
         {
             Kind = FindingKind.CostlyFullScan,
             Severity = FindingSeverity.High,
-            Title = "x",
+            Title = AnyTitle,
         });
         Assert.True(vm.HasGuidance);
         Assert.Equal("What to investigate", vm.GuidanceHeading);
@@ -34,8 +41,15 @@ public class FindingGuidanceCatalogTests
     {
         var g = FindingGuidanceCatalog.For(kind);
         Assert.True(g.HasItems);
-        Assert.Equal("What to investigate", g.Heading);
-        Assert.All(g.Items, item => Assert.False(string.IsNullOrWhiteSpace(item)));
+        Assert.Equal("What to investigate", Loc.Text(g.Heading));
+        // ⭐ Resolving each item is what makes this an assertion about the SCREEN. A key that resolves to
+        // itself (no catalog entry) would be a non-empty string too — so the resolution must not be the key.
+        Assert.All(g.Items, item =>
+        {
+            var text = Loc.Text(item);
+            Assert.False(string.IsNullOrWhiteSpace(text));
+            Assert.NotEqual(item.Value, text);
+        });
     }
 
     [Fact]
@@ -47,10 +61,11 @@ public class FindingGuidanceCatalogTests
         {
             foreach (var item in FindingGuidanceCatalog.For(kind).Items)
             {
-                var upper = item.ToUpperInvariant();
+                var text = Loc.Text(item);
+                var upper = text.ToUpperInvariant();
                 foreach (var b in banned)
                 {
-                    Assert.False(upper.Contains(b), $"'{item}' contains banned phrase '{b}'");
+                    Assert.False(upper.Contains(b), $"'{text}' contains banned phrase '{b}'");
                 }
             }
         }

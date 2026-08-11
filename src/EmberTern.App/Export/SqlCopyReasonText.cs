@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Linq;
 using EmberTern.Core.Export.Sql;
@@ -83,11 +83,11 @@ public static class SqlCopyReasonText
 
     private static string KindWord(SymbolKind? kind) => kind switch
     {
-        SymbolKind.Procedure => "procedure",
-        SymbolKind.View => "view",
-        SymbolKind.Function => "function",
-        SymbolKind.SystemTable => "system table",
-        _ => "not a table",
+        SymbolKind.Procedure => UiStrings.SqlCopyKindProcedure,
+        SymbolKind.View => UiStrings.SqlCopyKindView,
+        SymbolKind.Function => UiStrings.SqlCopyKindFunction,
+        SymbolKind.SystemTable => UiStrings.SqlCopyKindSystemTable,
+        _ => UiStrings.SqlCopyKindNotATable,
     };
 
     private static string Fmt(string format, params object[] args)

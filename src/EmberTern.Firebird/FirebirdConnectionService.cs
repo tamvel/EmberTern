@@ -1,3 +1,4 @@
+using EmberTern.Core.Localization;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -145,7 +146,7 @@ public sealed class FirebirdConnectionService : IDisposable
         catch (Exception ex)
         {
             await connection.DisposeAsync().ConfigureAwait(false);
-            throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+            throw new ConnectionFailedException(MapError(ex, profile), MapErrorMessage(ex, profile), ex);
         }
 
         // FB3+ precondition gate (decision 8 / spec §1.3) — refuse a pre-FB3 server the moment the FIRST
@@ -157,7 +158,7 @@ public sealed class FirebirdConnectionService : IDisposable
         {
             var serverVersion = connection.ServerVersion;
             await CloseAndDisposeAsync(connection).ConfigureAwait(false);
-            throw new ConnectionFailedException(UnsupportedServerMessage(serverVersion));
+            throw new ConnectionFailedException(UnsupportedServer(serverVersion), UnsupportedServerMessage(serverVersion));
         }
 
         _activeConnection = connection;
@@ -225,7 +226,7 @@ public sealed class FirebirdConnectionService : IDisposable
         catch (Exception ex)
         {
             await connection.DisposeAsync().ConfigureAwait(false);
-            throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+            throw new ConnectionFailedException(MapError(ex, profile), MapErrorMessage(ex, profile), ex);
         }
 
         var session = new DebugSessionConnection(connection, isolation, this);
@@ -274,7 +275,7 @@ public sealed class FirebirdConnectionService : IDisposable
         catch (Exception ex)
         {
             await connection.DisposeAsync().ConfigureAwait(false);
-            throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+            throw new ConnectionFailedException(MapError(ex, profile), MapErrorMessage(ex, profile), ex);
         }
 
         var session = new ImportSessionConnection(connection, this);
@@ -358,7 +359,7 @@ public sealed class FirebirdConnectionService : IDisposable
         }
         catch (Exception ex)
         {
-            throw new ConnectionFailedException(MapErrorMessage(ex, profile), ex);
+            throw new ConnectionFailedException(MapError(ex, profile), MapErrorMessage(ex, profile), ex);
         }
 
         // Same FB3+ precondition as ConnectAsync (spec §1.3) — a Test against a pre-FB3 server refuses
@@ -369,7 +370,7 @@ public sealed class FirebirdConnectionService : IDisposable
         await connection.CloseAsync().ConfigureAwait(false);
         if (!supported)
         {
-            throw new ConnectionFailedException(UnsupportedServerMessage(serverVersion));
+            throw new ConnectionFailedException(UnsupportedServer(serverVersion), UnsupportedServerMessage(serverVersion));
         }
     }
 
@@ -725,10 +726,18 @@ public sealed class FirebirdConnectionService : IDisposable
     // this (Firebird) layer beside MapErrorMessage, the established home for connection-failure messages;
     // EmberTern.App.UiStrings is unreachable here (App references Firebird, never the reverse).
     internal static string UnsupportedServerMessage(string? serverVersion)
-    {
-        var v = string.IsNullOrWhiteSpace(serverVersion) ? "unknown" : serverVersion.Trim();
-        return $"Unsupported Firebird server ({v}). EmberTern requires Firebird 3.0 or later.";
-    }
+        => HasVersion(serverVersion)
+            ? $"Unsupported Firebird server ({serverVersion!.Trim()}). EmberTern requires Firebird 3.0 or later."
+            : "Unsupported Firebird server (unknown). EmberTern requires Firebird 3.0 or later.";
+
+    // The localizable twin of UnsupportedServerMessage — the same two sentences, named rather than spelled
+    // (D‑3). ⚠ Two keys, not one with the word "unknown" as an argument: see FirebirdConnectionMessages.
+    internal static LocalizableMessage UnsupportedServer(string? serverVersion)
+        => HasVersion(serverVersion)
+            ? LocalizableMessage.Of(FirebirdConnectionMessages.UnsupportedServer, serverVersion!.Trim())
+            : LocalizableMessage.Of(FirebirdConnectionMessages.UnsupportedServerUnknownVersion);
+
+    private static bool HasVersion(string? serverVersion) => !string.IsNullOrWhiteSpace(serverVersion);
 
     /// <summary>
     /// The <c>Legacy_Auth</c> refusal, rewritten — the ONE exception to "show the raw message".
@@ -757,15 +766,40 @@ public sealed class FirebirdConnectionService : IDisposable
         // Surface the server's own message verbatim. We deliberately do not interpret or categorize error
         // causes (wrong password, missing user, host down, …) — the raw server text is authoritative and the
         // user or admin can read it directly. No hints, no chain scanning.
-        var endpoint = $"{profile.Host}:{profile.Port}";
+        var endpoint = Endpoint(profile);
 
         // ⚠ The single, ratified exception. See SrpAuthenticationMessage for why this one is replaced rather
         // than passed through, and why it may be recognised by text when nothing else may.
-        if (ex.Message.Contains("Legacy_Auth", StringComparison.OrdinalIgnoreCase))
+        if (IsLegacyAuthRefusal(ex))
         {
             return $"Could not connect to {endpoint}: {SrpAuthenticationMessage}";
         }
 
         return $"Could not connect to {endpoint}: {ex.Message}";
     }
+
+    /// <summary>
+    /// The localizable twin of <see cref="MapErrorMessage"/> (D‑3): the same two sentences, named rather than
+    /// spelled, with the endpoint and — for the pass-through case — <b>the server's own message</b> as
+    /// arguments.
+    ///
+    /// <para>⭐ That is the whole boundary in one line: <c>{1}</c> is Firebird speaking and travels as DATA, so
+    /// it reaches the user exactly as the engine wrote it, in any language EmberTern is running in.</para>
+    /// </summary>
+    internal static LocalizableMessage MapError(Exception ex, ConnectionProfile profile)
+        => IsLegacyAuthRefusal(ex)
+            ? LocalizableMessage.Of(FirebirdConnectionMessages.SrpAuthentication, Endpoint(profile))
+            : LocalizableMessage.Of(FirebirdConnectionMessages.Failed, Endpoint(profile), ex.Message);
+
+    /// <summary>
+    /// ⛔⛔ <b>Recognition reads the SERVER's raw text and must never read ours.</b> The refusal arrives with
+    /// no SQLSTATE and no GDS code (measured), so its text is the only signal there is — but that text is the
+    /// engine's, and the engine does not speak the user's language. Matching against a resolved EmberTern
+    /// message would compare English to a translation and stop firing the day a second language ships:
+    /// invisible in English, and a silent loss of the one hint this codebase allows itself.
+    /// </summary>
+    private static bool IsLegacyAuthRefusal(Exception ex)
+        => ex.Message.Contains("Legacy_Auth", StringComparison.OrdinalIgnoreCase);
+
+    private static string Endpoint(ConnectionProfile profile) => $"{profile.Host}:{profile.Port}";
 }

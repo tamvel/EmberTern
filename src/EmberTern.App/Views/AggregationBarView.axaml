@@ -25,14 +25,14 @@
       <StackPanel Orientation="Horizontal" Spacing="4">
         <TextBlock Classes="field-label" VerticalAlignment="Center"
                    Margin="0,0,8,0"
-                   Text="{x:Static app:UiStrings.AggregationBarTitle}" />
+                   Text="{app:Loc AggregationBarTitle}" />
         <ComboBox Width="150" VerticalAlignment="Center"
                   IsEnabled="{Binding HasColumns}"
                   ItemsSource="{Binding Columns}"
                   SelectedItem="{Binding SelectedMenuColumn, Mode=TwoWay}" />
         <ComboBox Width="170" VerticalAlignment="Center"
                   IsEnabled="{Binding HasColumns}"
-                  PlaceholderText="{x:Static app:UiStrings.AggregationFunctionPlaceholder}"
+                  PlaceholderText="{app:Loc AggregationFunctionPlaceholder}"
                   ItemsSource="{Binding MenuFunctions}"
                   SelectedItem="{Binding SelectedMenuFunction, Mode=TwoWay}">
           <ComboBox.ItemTemplate>
@@ -65,7 +65,7 @@
                            FontWeight="SemiBold" />
                 <Button Classes="icon" Padding="2" VerticalAlignment="Center"
                         Command="{Binding RemoveCommand}"
-                        ToolTip.Tip="{x:Static app:UiStrings.AggregationRemoveLineTooltip}">
+                        ToolTip.Tip="{app:Loc AggregationRemoveLineTooltip}">
                   <controls:SvgIcon Data="{StaticResource Icon.X}" Width="10" Height="10" />
                 </Button>
               </StackPanel>
@@ -78,7 +78,7 @@
       <TextBlock IsVisible="{Binding ShowEmptyHint}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
                  FontStyle="Italic"
-                 Text="{x:Static app:UiStrings.AggregationEmptyHint}" />
+                 Text="{app:Loc AggregationEmptyHint}" />
 
     </StackPanel>
   </Border>

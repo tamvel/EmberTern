@@ -2,22 +2,40 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Performance;
 
 namespace EmberTern.Core.Query;
 
 /// <summary>One row change against a table in the Execution Summary — an insert, an update, or a
 /// delete, with its row count. Modelled as a small type hierarchy so the view can pick a
-/// per-kind icon + colour via type-based DataTemplates (no converter). Pure — the display verb
-/// is fixed English text.</summary>
+/// per-kind icon + colour via type-based DataTemplates (no converter).
+///
+/// <para>⭐ <b>Etap C6.</b> <see cref="TermKey"/> and <see cref="TableKey"/> are what a localized surface
+/// renders; <see cref="Verb"/>, <see cref="LogPhrase"/> and <see cref="Text"/> are the English half of the
+/// dual form and stay exactly as they were, so the existing tests keep proving the wording.</para>
+///
+/// <para>⚠ <b><see cref="Verb"/> is no longer bound in XAML, and must not be again.</b> It used to be — two
+/// views drew the count and the verb as separate, differently coloured runs, which silently pinned English
+/// word order into the LAYOUT: Polish puts the count after the verb. The card now renders one localized
+/// sentence and colours the number inside it, so the order belongs to the translator.</para>
+/// </summary>
 public abstract record TableChange(long Count)
 {
-    /// <summary>"inserted" / "updated" / "deleted".</summary>
+    /// <summary>"inserted" / "updated" / "deleted". ⚠ English half of the dual form — see the type remarks.</summary>
     public abstract string Verb { get; }
 
     /// <summary>The grammatical phrase joining a count to a table for a one-line log entry —
-    /// "inserted into" / "updated in" / "deleted from" (IBExpert-style).</summary>
+    /// "inserted into" / "updated in" / "deleted from" (IBExpert-style). ⚠ English half of the dual form.
+    /// ⛔ Not decomposable: the preposition is chosen by the verb and governs a noun that inflects.</summary>
     public abstract string LogPhrase { get; }
+
+    /// <summary>The whole "{count} inserted" sentence, count as <c>{0}</c>. The card and the collapsed
+    /// exec-info header render this.</summary>
+    public abstract MessageKey TermKey { get; }
+
+    /// <summary>The whole "{count} inserted into {table}" sentence — count <c>{0}</c>, table <c>{1}</c>.</summary>
+    public abstract MessageKey TableKey { get; }
 
     /// <summary>"14 inserted" — count + verb, for tests and any single-line rendering.</summary>
     public string Text => string.Format(CultureInfo.InvariantCulture, "{0} {1}", Count, Verb);
@@ -27,18 +45,24 @@ public sealed record InsertChange(long Count) : TableChange(Count)
 {
     public override string Verb => "inserted";
     public override string LogPhrase => "inserted into";
+    public override MessageKey TermKey => QueryExecutionMessages.TermInserted;
+    public override MessageKey TableKey => QueryExecutionMessages.TableInserted;
 }
 
 public sealed record UpdateChange(long Count) : TableChange(Count)
 {
     public override string Verb => "updated";
     public override string LogPhrase => "updated in";
+    public override MessageKey TermKey => QueryExecutionMessages.TermUpdated;
+    public override MessageKey TableKey => QueryExecutionMessages.TableUpdated;
 }
 
 public sealed record DeleteChange(long Count) : TableChange(Count)
 {
     public override string Verb => "deleted";
     public override string LogPhrase => "deleted from";
+    public override MessageKey TermKey => QueryExecutionMessages.TermDeleted;
+    public override MessageKey TableKey => QueryExecutionMessages.TableDeleted;
 }
 
 /// <summary>One table's changes in the Execution Summary: the table name plus the insert /
@@ -86,14 +110,24 @@ public static class ExecutionActivity
     /// so the SQL Editor shows the same detail as the Procedure/Function panels from the same
     /// data. Empty when nothing was changed / no per-table delta was captured.</summary>
     public static IReadOnlyList<string> BuildLogLines(IReadOnlyList<PerTableReadRow>? reads)
+        => BuildLogLines(reads, ExecutionEnglish.Resolve);
+
+    /// <inheritdoc cref="BuildLogLines(IReadOnlyList{PerTableReadRow})"/>
+    /// <param name="reads">The per-table MON$ delta.</param>
+    /// <param name="resolve">Turns a message into text in the reader's language.</param>
+    public static IReadOnlyList<string> BuildLogLines(
+        IReadOnlyList<PerTableReadRow>? reads, Func<LocalizableMessage, string> resolve)
     {
+        ArgumentNullException.ThrowIfNull(resolve);
+
         var lines = new List<string>();
         foreach (var table in Build(reads))
         {
             foreach (var change in table.Changes)
             {
-                lines.Add(string.Format(
-                    CultureInfo.InvariantCulture, "{0} {1} {2}", change.Count, change.LogPhrase, table.Table));
+                // ⚠ Count first (R3), table second — the whole line is one key, so a language that puts the
+                // table before the count simply writes it that way.
+                lines.Add(resolve(LocalizableMessage.Of(change.TableKey, change.Count, table.Table)));
             }
         }
         return lines;

@@ -5,7 +5,7 @@
         xmlns:controls="using:EmberTern.App.Controls"
         x:Class="EmberTern.App.Views.DatabasePropertiesDialog"
         x:DataType="vm:DatabasePropertiesViewModel"
-        Title="{x:Static app:UiStrings.DatabasePropertiesTitle}"
+        Title="{app:Loc DatabasePropertiesTitle}"
         Width="560"
         SizeToContent="Height"
         CanResize="False"
@@ -30,7 +30,7 @@
             BorderThickness="{DynamicResource Border.Bottom}"
             Padding="{DynamicResource Pad.Dialog}">
       <StackPanel Spacing="{DynamicResource Space.Hair}">
-        <TextBlock Text="{x:Static app:UiStrings.DatabasePropertiesTitle}" Classes="h1" />
+        <TextBlock Text="{app:Loc DatabasePropertiesTitle}" Classes="h1" />
         <TextBlock Text="{Binding ConnectionName}" Classes="field-label" />
       </StackPanel>
     </Border>
@@ -54,24 +54,24 @@
       <!-- ── Informacja ─────────────────────────────────────────────────────────────────────────── -->
       <Border Classes="settings-group">
         <StackPanel>
-          <TextBlock Classes="group-header" Text="{x:Static app:UiStrings.DatabasePropertiesGroupIdentity}" />
+          <TextBlock Classes="group-header" Text="{app:Loc DatabasePropertiesGroupIdentity}" />
           <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesDatabase}" />
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesDatabase}" />
             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DatabasePath}" TextWrapping="Wrap" />
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesOwner}" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesOwner}" />
             <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Owner}" />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesEngine}" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesEngine}" />
             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EngineVersion}" />
 
-            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesOds}" />
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesOds}" />
             <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Ods}" />
 
-            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesDialect}" />
+            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesDialect}" />
             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Dialect}" />
 
-            <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesCharset}" />
+            <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesCharset}" />
             <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Charset}" />
           </Grid>
         </StackPanel>
@@ -79,31 +79,31 @@
 
       <Border Classes="settings-group">
         <StackPanel>
-          <TextBlock Classes="group-header" Text="{x:Static app:UiStrings.DatabasePropertiesGroupStorage}" />
+          <TextBlock Classes="group-header" Text="{app:Loc DatabasePropertiesGroupStorage}" />
           <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesCreated}" />
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesCreated}" />
             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CreatedAt}" />
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesPageSize}" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesPageSize}" />
             <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PageSize}" />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesPages}" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesPages}" />
             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Pages}" />
 
-            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesSize}" />
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesSize}" />
             <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Size}" />
 
-            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesLinger}" />
+            <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesLinger}" />
             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Linger}" />
 
             <!-- ⚠ Page buffers jest INFORMACJĄ (ratyfikowane): MON$ raportuje cache DZIAŁAJĄCEJ instancji,
                  a „dziedziczone 51200" i „jawnie ustawione 51200" są przez katalog nierozróżnialne. Nota
                  mówi to wprost, żeby liczba nie czytała się jak ustawienie tej bazy. -->
-            <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" Text="{x:Static app:UiStrings.DatabasePropertiesPageBuffers}" />
+            <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" Text="{app:Loc DatabasePropertiesPageBuffers}" />
             <StackPanel Grid.Row="5" Grid.Column="1">
               <TextBlock Text="{Binding PageBuffers}" />
               <TextBlock Classes="field-label"
-                         Text="{x:Static app:UiStrings.DatabasePropertiesPageBuffersNote}"
+                         Text="{app:Loc DatabasePropertiesPageBuffersNote}"
                          TextWrapping="Wrap" />
             </StackPanel>
           </Grid>
@@ -113,7 +113,7 @@
       <!-- ── Jedyna sekcja z polami ─────────────────────────────────────────────────────────────── -->
       <Border Classes="settings-group">
         <StackPanel>
-          <TextBlock Classes="group-header" Text="{x:Static app:UiStrings.DatabasePropertiesGroupConfiguration}" />
+          <TextBlock Classes="group-header" Text="{app:Loc DatabasePropertiesGroupConfiguration}" />
 
           <!-- Powód niedostępności stoi PRZY kontrolkach, nie w banerze: wyłączone pole bez powodu jest
                defektem UX, a ten powód jest znany z góry (profil bez hasła), więc nie ma na co czekać. -->
@@ -130,7 +130,7 @@
                ⛔ Zero nowych tokenów, zero zmian w globalnych wysokościach kontrolek i w `settings-group`. -->
           <Grid ColumnDefinitions="150,*" Margin="{DynamicResource Margin.FieldGap}">
             <TextBlock Grid.Column="0" Classes="field-label"
-                       Text="{x:Static app:UiStrings.DatabasePropertiesSweepInterval}"
+                       Text="{app:Loc DatabasePropertiesSweepInterval}"
                        VerticalAlignment="Center" />
             <TextBox Grid.Column="1"
                      x:Name="SweepIntervalBox"
@@ -142,12 +142,12 @@
 
           <StackPanel Spacing="{DynamicResource Space.Sm}">
             <CheckBox x:Name="ForcedWritesCheck"
-                      Content="{x:Static app:UiStrings.DatabasePropertiesForcedWrites}"
+                      Content="{app:Loc DatabasePropertiesForcedWrites}"
                       IsChecked="{Binding ForcedWrites, Mode=TwoWay}"
                       IsEnabled="{Binding CanAttemptWrite}" />
 
             <CheckBox x:Name="ReserveSpaceCheck"
-                      Content="{x:Static app:UiStrings.DatabasePropertiesReserveSpace}"
+                      Content="{app:Loc DatabasePropertiesReserveSpace}"
                       IsChecked="{Binding ReserveSpace, Mode=TwoWay}"
                       IsEnabled="{Binding CanAttemptWrite}" />
           </StackPanel>
@@ -178,14 +178,14 @@
             Padding="{DynamicResource Pad.Dialog}">
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{DynamicResource Space.Md}">
         <Button Classes="flat"
-                Content="{x:Static app:UiStrings.DatabasePropertiesClose}"
+                Content="{app:Loc DatabasePropertiesClose}"
                 Click="OnCloseClick"
                 IsCancel="True" />
         <!-- ⚠ Jawny Apply, świadomie ODWROTNIE niż ratyfikowany apply-on-change w Settings Center:
              tam zapisujemy lokalny plik, tutaj współdzieloną bazę produkcyjną, bezpowrotnie. -->
         <Button x:Name="ApplyButton"
                 Classes="primary"
-                Content="{x:Static app:UiStrings.DatabasePropertiesApply}"
+                Content="{app:Loc DatabasePropertiesApply}"
                 Command="{Binding ApplyCommand}"
                 IsDefault="True" />
       </StackPanel>

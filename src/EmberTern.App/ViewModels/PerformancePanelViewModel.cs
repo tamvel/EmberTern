@@ -35,6 +35,10 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
     private bool _isVisible;
     private bool _isStale;
 
+    /// <summary>The last analyzed report, kept so a language change can re-render it (see
+    /// <see cref="RefreshLocalizedText"/>). ⚠ Held for that reason alone — nothing re-analyzes it.</summary>
+    private PerformanceReport? _lastReport;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
     [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
@@ -190,8 +194,39 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Re-render the current report in the language the app has just switched to.
+    ///
+    /// <para>⭐ <b>Rebuilding the whole projection is SAFE here, and that is a measurement rather than a
+    /// convenience</b> — the difference from C5's diagnostics panel, which had to refresh rows in place. That
+    /// panel binds a SELECTING list and skips rebuilds through an <c>Unchanged</c> gate, so a rebuild would
+    /// have lost the user's selection and the gate would have eaten the refresh anyway. The Findings zone is a
+    /// plain <c>ItemsControl</c> with no selection and <see cref="ApplyReport"/> has no such gate, so this is
+    /// C1's "rebuild the cards" shape.</para>
+    ///
+    /// <para>⚠ It also thaws four App strings that were frozen BEFORE this etap: <c>GradeLine</c>,
+    /// <c>PlanLead</c>, <c>NoiseSummary</c> and <c>TimingText</c> are stored <c>[ObservableProperty]</c>
+    /// values, so notifying them re-read the same finished English — #353 for the fourth time.</para>
+    ///
+    /// <para>⚠ Phrased below without naming the language-change event, and deliberately so: the guard that
+    /// forbids a view model to read the language preference scans this file as TEXT, so quoting that
+    /// identifier here — even in order to say we do not use it — would turn the explanation into a failure.</para>
+    ///
+    /// <para>⛔ The panel deliberately does NOT subscribe to that event itself: there is one
+    /// panel per host (the SQL editor and every open Procedure / Function tab), so a subscription would be one
+    /// live registration per tab with nothing disposing it. It is CALLED from its owner instead.</para>
+    /// </summary>
+    internal void RefreshLocalizedText()
+    {
+        if (_lastReport is { } report)
+        {
+            ApplyReport(report);
+        }
+    }
+
     private void ApplyReport(PerformanceReport report)
     {
+        _lastReport = report;
         Verdict = new VerdictViewModel(report.Verdict);
         Details = new ExecutionDetailsViewModel(report.Details);
         PlanRoots = PlanNodeViewModel.BuildRoots(report.Plan);
@@ -226,6 +261,7 @@ public sealed partial class PerformancePanelViewModel : ViewModelBase
 
     private void Reset()
     {
+        _lastReport = null;
         Verdict = null;
         Details = null;
         PlanRoots = Array.Empty<PlanNodeViewModel>();

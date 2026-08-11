@@ -677,8 +677,16 @@ public partial class DebuggerTabView : UserControl
 
     private TabItem BuildHarnessLogTab()
     {
-        var header = new TextBlock { Text = UiStrings.DebuggerBottomTabHarnessLog };
-        ToolTip.SetTip(header, UiStrings.DebuggerHarnessLogDescription);
+        // ⚠ Bound, not assigned — see SubtleLocalized. The header is the tab's own caption, so an assignment
+        // here is what kept "Harness Log" and its two explanatory lines in the language the tab was built in.
+        var header = new TextBlock();
+        header.Bind(TextBlock.TextProperty,
+            new LocExtension(nameof(UiStrings.DebuggerBottomTabHarnessLog)).ProvideValue());
+
+        var headerTip = new ToolTip();
+        headerTip.Bind(ContentControl.ContentProperty,
+            new LocExtension(nameof(UiStrings.DebuggerHarnessLogDescription)).ProvideValue());
+        ToolTip.SetTip(header, headerTip);
 
         var tab = new TabItem { Header = header };
         tab.Classes.Add("bottom-tab");
@@ -691,12 +699,13 @@ public partial class DebuggerTabView : UserControl
         content.Bind(Visual.IsVisibleProperty, new Binding("IsBottomPanelCollapsed") { Converter = BoolConverters.Not });
 
         // Always-visible purpose line, so the tab explains itself the moment it is opened (Task 3).
-        var description = Subtle(UiStrings.DebuggerHarnessLogDescription, new Thickness(10, 6, 10, 4));
+        var description = SubtleLocalized(
+            nameof(UiStrings.DebuggerHarnessLogDescription), new Thickness(10, 6, 10, 4));
         Grid.SetRow(description, 0);
         content.Children.Add(description);
 
         // Empty-state hint (no harnesses generated yet in this session).
-        var empty = Subtle(UiStrings.DebuggerHarnessLogEmpty, new Thickness(10, 2, 10, 6));
+        var empty = SubtleLocalized(nameof(UiStrings.DebuggerHarnessLogEmpty), new Thickness(10, 2, 10, 6));
         empty.Bind(Visual.IsVisibleProperty, new Binding("HasExecutedSql") { Converter = BoolConverters.Not });
         Grid.SetRow(empty, 1);
         content.Children.Add(empty);
@@ -777,6 +786,32 @@ public partial class DebuggerTabView : UserControl
         var tb = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = margin };
         BindFontSize(tb, "Text.Compact.Size");
         BindBrush(tb, TextBlock.ForegroundProperty, "SubtleForegroundBrush");
+        return tb;
+    }
+
+    /// <summary>
+    /// The same subdued line, but with its text BOUND to a resource key instead of assigned.
+    ///
+    /// <para>⭐⭐ <b>A binding, not a <c>Loc.LanguageChanged</c> subscription — this is the answer the App stage
+    /// ratified for controls built in code</b> (the same one <c>LocalizedColumn.Header</c> uses for
+    /// <c>DataGrid</c> columns). A subscription would have to be created, remembered and released per control;
+    /// a binding is live by construction and costs nothing to unwind.</para>
+    ///
+    /// <para>⚠ The Harness Log tab is built in code-behind (it is DEBUG-only, so it is not in the XAML at all),
+    /// and its chrome was therefore assigned once at construction — which is why it alone kept the previous
+    /// language while the rest of the debugger followed. ⛔ The ROWS are deliberately untouched: they are a
+    /// timestamped record of what was said at the time, and the log is not rewritten in hindsight (the ratified
+    /// C6/R7 rule, shared with the SQL editor's Messages log).</para>
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Built on <see cref="Subtle"/> rather than beside it: restating the wrapping, the font role and the
+    /// brush would be a second description of the same subdued line, and the seeded empty text is overwritten
+    /// by the binding on the next statement.
+    /// </remarks>
+    private TextBlock SubtleLocalized(string key, Thickness margin)
+    {
+        var tb = Subtle(string.Empty, margin);
+        tb.Bind(TextBlock.TextProperty, new LocExtension(key).ProvideValue());
         return tb;
     }
 

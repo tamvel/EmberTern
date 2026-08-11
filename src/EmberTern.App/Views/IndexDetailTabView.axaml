@@ -21,26 +21,26 @@
       <!-- Index — the properties form. Only Active (plain indexes) and Description are
            editable; everything structural is read-only (Firebird has no ALTER for it).
            Compile / Revert / Recompute / Delete live in the main app toolbar. -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.IndexDetailTabIndex}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc IndexDetailTabIndex}">
         <ScrollViewer>
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"
                 Margin="12" VerticalAlignment="Top">
 
             <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.IndexNameHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc IndexNameHeader}" />
             <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"
                      Text="{Binding IndexName}" IsReadOnly="True" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.IndexTableHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc IndexTableHeader}" />
             <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
                      Text="{Binding Table}" IsReadOnly="True" />
 
             <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.IndexConstraintTypeHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc IndexConstraintTypeHeader}" />
             <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Vertical" Spacing="2" Margin="0,0,0,8">
               <TextBox Text="{Binding ConstraintType}" IsReadOnly="True"
-                       PlaceholderText="{x:Static app:UiStrings.IndexConstraintTypeNoneWatermark}" />
+                       PlaceholderText="{app:Loc IndexConstraintTypeNoneWatermark}" />
               <!-- Constraint-backed note: makes it immediately obvious WHY Active / Drop
                    are disabled (Firebird manages the index through its constraint). -->
               <TextBlock Text="{Binding ConstraintBackedNote}"
@@ -51,7 +51,7 @@
             </StackPanel>
 
             <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.IndexFieldsHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc IndexFieldsHeader}" />
             <TextBox Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"
                      Text="{Binding Fields}" IsReadOnly="True"
                      IsVisible="{Binding Expression, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
@@ -60,29 +60,29 @@
                      IsVisible="{Binding Expression, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
             <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.IndexUniqueHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc IndexUniqueHeader}" />
             <CheckBox Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"
                       IsChecked="{Binding IsUnique}" IsEnabled="False" IsHitTestVisible="False" />
 
             <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.IndexSortDirectionHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc IndexSortDirectionHeader}" />
             <TextBox Grid.Row="5" Grid.Column="1" Margin="0,0,0,8"
                      Text="{Binding SortDirectionText}" IsReadOnly="True" />
 
             <TextBlock Grid.Row="6" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.IndexStatisticsHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc IndexStatisticsHeader}" />
             <TextBox Grid.Row="6" Grid.Column="1" Margin="0,0,0,8"
                      Text="{Binding Statistics, StringFormat=F6}" IsReadOnly="True"
-                     PlaceholderText="{x:Static app:UiStrings.IndexStatisticsNoneWatermark}" />
+                     PlaceholderText="{app:Loc IndexStatisticsNoneWatermark}" />
 
             <TextBlock Grid.Row="7" Grid.Column="0" Classes="field-label" VerticalAlignment="Center"
-                       Margin="0,0,12,8" Text="{x:Static app:UiStrings.IndexActiveHeader}" />
+                       Margin="0,0,12,8" Text="{app:Loc IndexActiveHeader}" />
             <CheckBox Grid.Row="7" Grid.Column="1" Margin="0,0,0,8"
                       IsChecked="{Binding IsActive, Mode=TwoWay}"
                       IsEnabled="{Binding IsActiveEditable}" />
 
             <TextBlock Grid.Row="8" Grid.Column="0" Classes="field-label"
-                       Margin="0,0,12,0" Text="{x:Static app:UiStrings.IndexDescriptionHeader}" />
+                       Margin="0,0,12,0" Text="{app:Loc IndexDescriptionHeader}" />
             <TextBox Grid.Row="8" Grid.Column="1"
                      Text="{Binding EditableDescription, Mode=TwoWay}"
                      AcceptsReturn="True" TextWrapping="Wrap"
@@ -93,7 +93,7 @@
       </TabItem>
 
       <!-- DDL — read-only reconstructed CREATE INDEX (reflects pending edits). -->
-      <TabItem Classes="bottom-tab" Header="{x:Static app:UiStrings.IndexDetailTabDdl}">
+      <TabItem Classes="bottom-tab" Header="{app:Loc IndexDetailTabDdl}">
         <ae:TextEditor x:Name="IndexDdlEditor"
                        ShowLineNumbers="True"
                        IsReadOnly="True"
@@ -108,7 +108,7 @@
     </TabControl>
 
     <StackPanel Grid.Row="1" Orientation="Vertical">
-      <TextBlock Text="{x:Static app:UiStrings.IndexLoadingHint}"
+      <TextBlock Text="{app:Loc IndexLoadingHint}"
                  Classes="subtle"
                  Margin="10,4"
                  FontSize="{DynamicResource Text.Compact.Size}"

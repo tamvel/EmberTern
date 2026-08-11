@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -103,6 +103,18 @@ public partial class MainWindow : Window
     // their parent grids (a ColumnDefinition isn't a Control). Width/height + the
     // collapsed flag persist in WorkspaceState, the same way WindowBounds does.
     private ColumnDefinition? _sidebarColumn;
+
+    // The saved-queries panel's column, plus the width to restore it to. ⚠ The width is remembered rather
+    // than re-read, because collapsing sets it to 0 — reading it back would restore 0 for ever.
+    //
+    // ⭐ The resize BOUNDS are captured from the XAML column once, for the same reason and one step further:
+    // collapsing has to force Min/Max to 0 (see ApplyQueryPanelColumn), so they cannot be re-read afterwards
+    // either. Capturing beats declaring them as constants here — the sidebar does declare its own, which
+    // makes MinWidth/MaxWidth exist twice and free to drift from the markup they mirror.
+    private ColumnDefinition? _queryPanelColumn;
+    private double _queryPanelWidth = 200;
+    private double _queryPanelMinWidth;
+    private double _queryPanelMaxWidth = double.PositiveInfinity;
     private RowDefinition? _editorRow;
     private RowDefinition? _resultsRow;
     private Border? _sidebarPanel;
@@ -204,6 +216,14 @@ public partial class MainWindow : Window
         if (mainBody is not null && mainBody.ColumnDefinitions.Count > 0)
         {
             _sidebarColumn = mainBody.ColumnDefinitions[0];
+        }
+        var editorArea = this.FindControl<Grid>("EditorAreaGrid");
+        if (editorArea is not null && editorArea.ColumnDefinitions.Count >= 3)
+        {
+            _queryPanelColumn = editorArea.ColumnDefinitions[2];
+            _queryPanelWidth = _queryPanelColumn.Width.Value;
+            _queryPanelMinWidth = _queryPanelColumn.MinWidth;
+            _queryPanelMaxWidth = _queryPanelColumn.MaxWidth;
         }
         var workspace = this.FindControl<Grid>("WorkspaceGrid");
         if (workspace is not null && workspace.RowDefinitions.Count >= 3)
@@ -788,6 +808,10 @@ public partial class MainWindow : Window
             // (OnVmPropertyChanged). Jedno miejsce, w którym preferencja staje się układem.
             ApplyTabStripMode();
 
+            // The saved-queries column starts collapsed unless a Query tab is already active — the panel is
+            // hidden then, and a pixel column would otherwise hold its 200 px open behind nothing.
+            ApplyQueryPanelColumn();
+
             // ⭐ „Pokaż w Metadata Explorer" — VM ustala WIERSZ, widok go pokazuje. Przewinięcie jest
             //   sprawą kontrolki (lista wirtualizuje), a samo zaznaczenie poza ekranem byłoby
             //   nieodróżnialne od braku reakcji.
@@ -916,8 +940,8 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("CSV / TXT") { Patterns = new[] { "*.csv", "*.txt", "*.tsv" } },
-                new FilePickerFileType("Excel") { Patterns = new[] { "*.xlsx", "*.xls" } },
+                new FilePickerFileType(UiStrings.FilePickerCsvTxt) { Patterns = new[] { "*.csv", "*.txt", "*.tsv" } },
+                new FilePickerFileType(UiStrings.FilePickerExcel) { Patterns = new[] { "*.xlsx", "*.xls" } },
                 FilePickerFileTypes.All,
             },
         });
@@ -1421,6 +1445,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.PropertyName == nameof(MainWindowViewModel.ShowQueryPanel))
+        {
+            ApplyQueryPanelColumn();
+            return;
+        }
+
         if (e.PropertyName == nameof(MainWindowViewModel.CurrentResultVersionTag)
             || e.PropertyName == nameof(MainWindowViewModel.ResultPageVersionTag))
         {
@@ -1787,6 +1817,52 @@ public partial class MainWindow : Window
     // ⚠ `MaxHeight` liczy się tutaj, a nie w XAML, bo jest ILOCZYNEM roli i preferencji
     // (`Size.Row.Tab` × wiersze), a `{DynamicResource}` nie mnoży. ⛔ Nie zakładać trzeciej warstwy
     // katalogu z gotowymi wysokościami — byłaby drugą reprezentacją tej samej liczby (§19.1.4).
+    /// <summary>
+    /// Gives the saved-queries panel its column back, or takes it away.
+    ///
+    /// <para>⭐ It exists because the panel became RESIZABLE (PL QA point 2): a resizable panel lives in a
+    /// pixel column driven by a <c>GridSplitter</c>, and a pixel column does not collapse by itself the way
+    /// the old <c>Auto</c> column did when the Border hid. Same trade the sidebar made in V1, same shape.</para>
+    ///
+    /// <para>⚠ The user's chosen width is carried across a hide/show, so toggling the panel off and on does
+    /// not silently reset it to the default.</para>
+    ///
+    /// <para>⚠⚠ <b><c>Width = 0</c> ALONE DOES NOT COLLAPSE A BOUNDED COLUMN, and the first cut of this method
+    /// proved it on screen.</b> A <c>ColumnDefinition</c> clamps its width to <c>[MinWidth, MaxWidth]</c>, so
+    /// <c>MinWidth="160"</c> kept 160 px reserved on every DDL / TableDetail / tool tab — the Border was
+    /// correctly hidden and what showed through was <c>EditorAreaGrid</c>'s own background, i.e. an empty dark
+    /// strip. ⭐ <see cref="CollapseSidebar"/> has carried the answer since V1 and says so in its own comment:
+    /// force <b>Min and Max to 0</b> so 0 becomes the only legal width, then restore both when the panel comes
+    /// back. Copying the sidebar's LAYOUT without its COLLAPSE is what reproduced a solved defect one panel
+    /// over.</para>
+    /// </summary>
+    private void ApplyQueryPanelColumn()
+    {
+        if (_queryPanelColumn is null || _currentVm is null)
+        {
+            return;
+        }
+
+        if (_currentVm.ShowQueryPanel)
+        {
+            // Order mirrors ExpandSidebar: lift the clamp first, or the width below is clamped back to 0.
+            _queryPanelColumn.MaxWidth = _queryPanelMaxWidth;
+            _queryPanelColumn.MinWidth = _queryPanelMinWidth;
+            _queryPanelColumn.Width = new GridLength(
+                Math.Clamp(_queryPanelWidth, _queryPanelMinWidth, _queryPanelMaxWidth), GridUnitType.Pixel);
+            return;
+        }
+
+        if (_queryPanelColumn.Width.IsAbsolute && _queryPanelColumn.Width.Value > 0)
+        {
+            _queryPanelWidth = _queryPanelColumn.Width.Value;
+        }
+
+        _queryPanelColumn.MinWidth = 0;
+        _queryPanelColumn.MaxWidth = 0;
+        _queryPanelColumn.Width = new GridLength(0, GridUnitType.Pixel);
+    }
+
     private void ApplyTabStripMode()
     {
         if (_currentVm is null) return;

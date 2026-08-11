@@ -33,17 +33,17 @@
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid Margin="8,3" HorizontalAlignment="Stretch"
             ColumnDefinitions="*,110,55,55,60,90">
-        <TextBlock Grid.Column="0" Text="{x:Static app:UiStrings.TableDetailColumnName}"
+        <TextBlock Grid.Column="0" Text="{app:Loc TableDetailColumnName}"
                    FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,0,8,0" />
-        <TextBlock Grid.Column="1" Text="{x:Static app:UiStrings.TableDetailColumnType}"
+        <TextBlock Grid.Column="1" Text="{app:Loc TableDetailColumnType}"
                    FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
-        <TextBlock Grid.Column="2" Text="{x:Static app:UiStrings.TableDetailColumnSize}"
+        <TextBlock Grid.Column="2" Text="{app:Loc TableDetailColumnSize}"
                    FontSize="10" FontWeight="SemiBold" TextAlignment="Right" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,0,8,0" />
-        <TextBlock Grid.Column="3" Text="{x:Static app:UiStrings.TableDetailColumnScale}"
+        <TextBlock Grid.Column="3" Text="{app:Loc TableDetailColumnScale}"
                    FontSize="10" FontWeight="SemiBold" TextAlignment="Right" Foreground="{DynamicResource SubtleForegroundBrush}" Margin="0,0,8,0" />
-        <TextBlock Grid.Column="4" Text="{x:Static app:UiStrings.TableDetailColumnNotNull}"
+        <TextBlock Grid.Column="4" Text="{app:Loc TableDetailColumnNotNull}"
                    FontSize="10" FontWeight="SemiBold" TextAlignment="Center" Foreground="{DynamicResource SubtleForegroundBrush}" />
-        <TextBlock Grid.Column="5" Text="{x:Static app:UiStrings.ProcedureFieldCharset}"
+        <TextBlock Grid.Column="5" Text="{app:Loc ProcedureFieldCharset}"
                    FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SubtleForegroundBrush}" />
       </Grid>
     </Border>

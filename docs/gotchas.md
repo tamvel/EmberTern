@@ -905,6 +905,85 @@ every emit path to be individually perfect.**
 187. **A button/command gated on a COLLECTION-derived value (`Count`, `Any()`, `_items.Count > 0`, …) must have EVERY mutation path raise the matching `OnPropertyChanged`/`NotifyCanExecuteChanged` — correctly computing the property is not enough; the UI won't re-query it on its own.** This bit the Export button in FOUR places (Table Data, View Data, Activity Monitor, and each was the same shape): the `CanExport*` getter was right, but `IsEnabled="{Binding CanExport}"` (or a command `CanExecute`) is evaluated ONCE and only re-evaluated when a `PropertyChanged` for that name fires — so with no notification the button latches at its ctor-time value (usually `false`) forever. Two correct patterns: (a) if the gate derives from an `[ObservableProperty]` (e.g. `_dataResult`, `_currentResultVersionTag`, `_execResult`), put `[NotifyPropertyChangedFor(nameof(CanX))]` (+ `[NotifyCanExecuteChangedFor(nameof(XCommand))]` for a command) on that FIELD; (b) if the gate derives from a plain mutable collection (`_all.Count`), raise `OnPropertyChanged(nameof(CanX))` in the single choke point that already notifies the collection's other derived props (there was already a `TotalCount` raise sitting right next to the missing `CanExport` — co-locate them so the next collection-derived prop can't be forgotten). Treat this as a standing MVVM rule for all future modules: **any collection mutation → notify every state (property + command CanExecute) that reads that collection.** Diagnostic tell: "the feature works but the button is stuck disabled" ⇒ a missing notification, not broken logic.
 
 
+353. **A broadcast that reaches a CONTAINER does not reach the view models hanging off it — and when the
+     payload is language, the failure renders perfectly until someone switches.** The app has one
+     language-change subscription: `Loc.LanguageChanged` → `MainWindowViewModel` → for each tab,
+     `RaiseAllPropertiesChanged()`. That looked complete, and the design doc described it as *"each open
+     tab"*. But a tab is a `WorkspaceTabViewModel` whose real content is a **separate** per-kind view model
+     (`SessionManager`, `Debugger`, …) exposed as a property; raising `PropertyChanged(string.Empty)` on the
+     tab re-reads *the tab's* members and the child **reference**, while every binding inside the child is on
+     the child OBJECT and hears nothing. Measured consequence, present before the migration that exposed it:
+     `SessionManagerTabViewModel.GradeText` and `GapStatusText` — both ordinary `UiStrings`, both migrated in
+     the App stage and both apparently fine — were frozen in whatever language the session started in.
+     ⭐ **The tell is that the defect is invisible in the shipped configuration**: with one language a frozen
+     property and a live one render the same characters, so neither the suite nor a screenshot can show it;
+     it only appears the first time someone changes language, which is also the first time anyone would look.
+     ⚠ The fix is a forward from the container (`SessionManager?.RefreshLocalizedText()`), in the shape of the
+     existing per-kind family (`UnsavedWork` / `SavableEditor` / `ResolveCommand`) — so it **grows one line
+     per module** and the next author must add theirs. ⭐ Its sharper half is about which mechanism to reach
+     for: a child whose bindings are `Text="{Binding}"` over a list of **strings** cannot be notified at all,
+     because the bound object *is* the string and has no property to re-read — such a surface must have its
+     items **rebuilt**, not signalled. **General rule: before trusting a notification chain, follow it to the
+     object the BINDING is attached to, not to the object that owns the state.**
+     (Localization / Core stage C1, `docs/history/28-localization-core-stage.md`.)
+
+354. **Routing a message through a shared resolver re-decides its FORMATTING culture as a side effect — a
+     change no diff shows and every consumer of that resolver inherits.** `SessionHealthAnalyzer` built its
+     impact line with `string.Format(CultureInfo.InvariantCulture, "…~{0:N0} later transactions…", lag)`.
+     Migrating it onto the localization seam (D‑3) moved the substitution into `Loc.Format`, which formats
+     under **`CurrentCulture`** — deliberately, and its own doc says why (*words follow the language, numbers
+     follow the reader's machine*). So the rendered count went `48,102` → `48 102` on a Polish machine, with
+     **zero characters changed** in either the code or the resource value: the number's grouping is decided by
+     the resolver, not by the text. ⭐ It surfaced only because a test asserted the rendered string; had the
+     assertion been on the datum from the start, the change would have shipped unremarked. 🔒 Here it was
+     ratified as expected behaviour and is the correct convention — the entry is not "this was a bug", it is
+     **"a formatting decision moved owners and nobody would have noticed"**. ⚠ The transferable rule:
+     when a call site is migrated onto a shared formatter, the *culture* is part of what you are migrating —
+     check it explicitly, decide it deliberately, and write the decision down, because the next reader will
+     otherwise report the new rendering as a regression. ⚠⚠ And prefer to assert the **argument** rather than
+     the rendered string: a test pinned to `"48,102"` is pinned to the machine it was written on.
+     (Localization / Core stage C1; the ratified decision lives in `docs/design/localization.md` §4.1.)
+
+
+355. **Changing a member's type from `string` to a struct does NOT break the call sites that concatenate it —
+     string concatenation accepts anything with a `ToString()`, so the compiler stays silent and the product
+     starts displaying the type's debug form.** `QuickInfoFact.Label` became a `MessageKey` (a
+     `readonly record struct` whose `ToString()` returns the key). The renderer's
+     `new Run(fact.Label + "  ")` kept compiling with **zero errors and zero warnings**, and would have put
+     `QuickInfo.Fact.Nullability` on the hover card where the word *Nullability* belongs. ⭐ The general shape
+     is worth more than the instance: **a type change is only as safe as the strictness of its call sites**,
+     and `+` on a string is the least strict context in C# — every other use of the member (assignment,
+     comparison, method argument) failed to compile and was found immediately, which is precisely what made
+     the one silent site easy to miss among them. ⚠⚠ Its second half is about which guard can see it: every
+     key-based test resolves the key **itself** (`Loc.Text(fact.Label)`), so all of them pass while the screen
+     is wrong — they test the catalog, not the surface. Only a guard that reads the **realized control** and
+     asserts the rendered runs catches it; planting the old line back reproduces exactly that signature
+     (build green, four of five tests green, the render guard red). ⭐ Practical rule when retyping a member
+     that reaches the UI: grep the call sites for `+` and interpolation **before** trusting the build, and
+     pin the rendered output rather than the lookup.
+     (Localization / Core stage C2, `docs/history/28-localization-core-stage.md`.)
+
+
+356. **Localizing a wrapper message silently endangers every piece of code that RECOGNISES an error by
+     matching on text — because after the change there are two texts, and only one of them is still the
+     foreign system's.** ⚠ Recorded as a hazard that was identified and guarded, not one that bit: the
+     migration of `FirebirdConnectionService` onto D‑3 turned *"Could not connect to {endpoint}: {message}"*
+     into a translatable sentence, while `MapErrorMessage`'s one sanctioned branch keys on
+     `ex.Message.Contains("Legacy_Auth")`. Those are **different strings after the change** — one is
+     Firebird's, still English forever, the other is EmberTern's and becomes Polish. Pointing the match at the
+     wrong one compiles, passes every English test, and **stops firing on the day a second language ships**.
+     ⭐ The general shape is what makes it worth an entry: **a text match is a contract with whoever wrote the
+     text**, so when a sentence changes owner (ours ⇄ theirs) every matcher on it has to be re-read — and the
+     dangerous direction is the invisible one, because a codebase with one shipped language cannot tell the
+     two texts apart by observation. ⚠⚠ The corresponding test must therefore run **under a language switch**;
+     asserting the recognition in English proves nothing, since that is precisely the configuration in which
+     both candidates agree. Planting the wrong source (`SrpAuthenticationMessage.Contains(...)` in place of
+     `ex.Message.Contains(...)`) builds with **0 errors** and turns three tests red — all three only because
+     one of them exercises it in another language. ⭐ Related but distinct from #352, which is about whether a
+     hint may *assert* a cause; this is about which party's words the recognition reads.
+     (Localization / Core stage C3, `docs/history/28-localization-core-stage.md`.)
+
+
 ## Settings, security & persistence
 
 87. **Whole-file DPAPI encryption changes the failure mode from "lose the password" to "lose everything".** With per-field encryption a bad decrypt degraded only that field; with the whole file encrypted, an undecryptable `settings.dat` (e.g. copied to another Windows account/machine) yields **no settings at all**. `ApplicationSettingsStore.Load` returns null and **never overwrites** the unreadable file (it may decrypt on the right machine). This is the intended stronger "nothing leaks cross-machine" posture, but it means the store degrades to a fresh/empty state rather than a partial one — design every consumer's null-handling accordingly.
@@ -1733,3 +1812,145 @@ every emit path to be individually perfect.**
      there is nothing else to key on. That is tolerable *only* because a false positive costs guidance that
      remains true; ⛔ it is not a licence to classify by text where codes exist.
      (Post-M5 UX package, `docs/history/27-post-m5-ux-package.md` §11.7b.)
+
+357. **A guard that compares TWO REPRESENTATIONS of one sentence is only as portable as the FORMATTING of its
+     arguments — and the plausible story about how that breaks was wrong, which is the more useful half.** The
+     dual-form localization pattern (C3/C4a/C4b) keeps a message twice: an English literal built by the
+     producer, and a key + arguments resolved through `Loc.Format`. Its guard asserts the two render
+     identically in English, which is simultaneously the anti-drift check and the zero-text-change proof.
+     ⭐ **That equality has an unstated precondition: both halves must format each argument the same way.** The
+     reasoning written down going into C4b was that `Loc.Format`'s `CurrentCulture` would group a large numeric
+     argument (`2000000000`) while the English literal stayed invariant, so the guard would be red on a Polish
+     machine and green on an English one. ⚠⚠ **It is false, and planting the numeric argument proved it: all
+     nine guards stayed green.** A bare `{0}` does not apply group separators to an `int` — culture governs the
+     decimal separator and the negative sign, not the grouping of a `G`-formatted integer. ⭐ The real lever is
+     a **format specifier inside the resource value** (`{0:N0}`), which is where gotcha #354's `48 102` actually
+     came from (`SessionHealth.Evidence.Gap` = `OAT lag {0:N0} · OST {1:N0} · Next {2:N0}`). ⭐⭐ **That relocates
+     the hazard from the machine to the TRANSLATOR:** the English half is a literal in the producer, the
+     localized half is a resource value someone will edit in another language, and putting `:N0` on a nine-digit
+     count is a reasonable thing for a translator to do — at which point the halves diverge for a reason that
+     has nothing to do with the sentence. The fix is to hand the value over **already formatted, as a string**,
+     which makes any specifier inert; it is also the right answer on its own terms wherever the number is an
+     ECHO of a technical field (a declared version, a KDF iteration count) rather than a quantity the reader
+     counts. ⛔ Do not read this as a reversal of #354 — a session count still follows the reader's culture.
+     ⚠⚠ **The transferable lesson is about the test, not the number: a guard written to catch a hazard you have
+     not reproduced may be measuring nothing.** `TheEnglishAndLocalizedForms_AgreeOnAnyCulture` looked rigorous
+     (four cultures, every message) and is green whether the argument is a string or an `int`; only a plant
+     revealed that, and the replacement had to measure the MECHANISM — serve a deliberately hostile `{0:N0}`
+     template and require the argument to survive verbatim — rather than restate the rule. ⭐ Same shape as
+     **#342**, where a plant that did not fire disproved the premise scoping a whole iteration; and the
+     companion to **#333**, since the tempting alternative (a table of expected sentences) would have been a
+     second copy of the catalog.
+     (Localization C4b, `docs/history/28-localization-core-stage.md` §C4b.)
+
+358. **A record's synthesized equality compares a COLLECTION member by reference, so a type that looks
+     value-equal stops being value-equal the moment it holds a list — and the damage lands not on the type but
+     on whatever VALUE TYPE embeds it later.** `LocalizableMessage` is a positional `record` over
+     `(MessageKey, IReadOnlyList<object?>)`; the compiler compares each member with
+     `EqualityComparer<T>.Default`, which for the list resolves to the backing `object?[]`'s reference equality.
+     Two messages built from the same key and the same data were therefore unequal — **harmless for four etaps,
+     because nothing compared them.** ⛔ It became a defect the moment one was to be embedded in
+     `Diagnostic`, a `readonly record struct` whose value equality `DiagnosticsPanelViewModel.Update` uses to
+     skip rebuilding its `ObservableCollection` and so keep the user's selection: the panel would have churned
+     on **every debounce tick**, dropping the selection, with a green build and no failing test. ⭐⭐ The lesson
+     that generalises is about WHERE to fix it: the tempting repair is to contort the consumer (a fixed-arity
+     `string? Arg0, Arg1` on the struct), and the right one is to give the CARRIER structural equality — one
+     change, at the type that owns the property, serving every future embedder instead of an arity ceiling that
+     is a defect scheduled for later. ⚠ What made that safe was a measurement, not confidence: a grep for
+     equality consumers of the carrier found **zero**, so the change could only make more things equal, never
+     fewer. ⚠⚠ **And structural equality has a precondition worth guarding rather than assuming: every element
+     must itself be value-equatable.** A `byte[]`/`char[]` argument silently restores reference comparison and
+     re-opens the identical defect one layer down, so a guard reflects over every produced argument and requires
+     a type that both declares its own `Equals(object)` and behaves that way against an independently rebuilt
+     value. ⭐ Companion to **#320** (a value whose equality is not what its shape suggests) and the reason
+     C0's audit listed this as one of four constraints before the migration began — the contract was proposed
+     and ratified *before* any code, which is what kept it from being discovered in production.
+     (Localization C5, `docs/history/28-localization-core-stage.md` §C5.)
+
+359. **A formatter that DROPS a lexeme does not present as a formatting bug — §0's safety net reverts the
+     statement, so the feature simply appears to do nothing, and every lexeme-preservation test stays green
+     while it is broken.** Reported as *"the autoformatter cannot cope with this procedure"*: a 30-line
+     routine would not reformat at all. Measured cause — `EmitSelectQuery` renders a query from its
+     **clauses**, and a comment is materialised by `Flatten` from the **leading trivia of the token it
+     precedes**, so a clause renders every comment that precedes one of *its* tokens, while a comment sitting
+     between the last clause and whatever **closes** the query (a `;`, an `INTO`, a `DO`) precedes a token no
+     clause owns and was rendered by nobody. §0 caught the loss and kept the statement verbatim — correct
+     behaviour, and exactly what hid it: nothing was corrupted, nothing was lost, and `SqlFormatterSafetyTests`
+     + `SqlFormatterInvariantsTests` (whose whole subject is lexeme preservation) were green throughout the
+     defect's life, because *reverting to verbatim preserves every lexeme perfectly*. ⭐ **The assertion that
+     can fail is "the net did NOT fire"** — feed a non-canonical input and require the output to have
+     **changed**; the same reasoning as `SqlFormatterCasingTests`' *"actually re-case, and do not trip the
+     safety net"*. ⚠ A second reason it survived: the shared `SqlTestCorpus` had **almost no comments**, so no
+     round-trip theory ever placed one in that position — a corpus is only as strong as the shapes in it, and
+     "we have 2 000 corpus-driven assertions" says nothing about a shape absent from the corpus. ⚠⚠ And the
+     first fix attempt aimed at the wrong layer: the natural hypothesis ("`EmitQuery` drops comments") was
+     **refuted** by measuring — comments inside a clause were preserved all along, so the bug was at the
+     boundary, not in the renderer. ⭐ The general shape: **when a safety net converts a defect into a no-op,
+     the defect's own symptom is silence — so measure the output BEFORE the net** (here by reflecting on the
+     private `FormatStatement`, which is a pure function precisely so it can be measured).
+     (2026-08-10, `SqlFormatterCommentPlacementTests`, `docs/history/29-formatter-and-psql-dml-binding-fix.md`.)
+
+360. **A consistency suite that varies ONE dimension while holding another fixed reads as exhaustive and is
+     not — and the gap hides best when the suite was written for exactly the symptom that comes back.**
+     `SemanticHighlightConsistencyTests` exists for the report *"an object is coloured in FROM but not in
+     UPDATE"* and pins all five DML kinds — **at the top level only**; the routine-body rows beside them pin a
+     **query** (`FOR SELECT`, a scalar subquery). Two independent axes — statement KIND × whether it stands in
+     a PSQL **body** — each varied only while the other was held fixed, so the crossing was never tested, and
+     that is precisely where the defect lived: the PSQL body binder was a **second dispatch** over the same
+     five kinds that bound their embedded subqueries and **never declared the statement's TARGET**, so
+     `update t` resolved in a script and resolved *nothing* in a procedure — i.e. most of an ERP codebase.
+     ⚠ The class doc promised *"regardless of the statement kind or position"*, and **"position" had silently
+     come to mean "clause position", never "nesting"** — the prose was true of what the suite tested and false
+     of what it claimed. ⭐ The visible half was one uncoloured table name; the half worth testing is the
+     **consequence**: with the alias undeclared, `BindDottedReference` deliberately stays silent on an
+     unresolved qualifier, so the whole statement's `alias.column` pairs had no reference either — no hover, no
+     Ctrl+Click, no find-references and no unknown-column check. So **assert the dependent fact, not the
+     headline one**: a test on the table name alone would have passed the day someone declared the table
+     without its alias. ⛔ And the fix belongs at the ONE owner (`BindDmlTablesAndQueries`, shared by both
+     callers), never as the missing half re-added to the second copy — the target's position (`UPDATE t` /
+     `INSERT INTO t` / `DELETE FROM t` / `MERGE INTO t USING src`) is one rule, and two copies of it drift with
+     only one of them tested. ⭐ Companion to **#340** (custody split between a document and the source) and
+     **#337** (a counter keyed to how a thing is built cannot see the same thing built another way).
+     (2026-08-10, `docs/history/29-formatter-and-psql-dml-binding-fix.md`.)
+
+361. **A dismissal rule needs a TRIGGER, and the comment explaining why the removal is written defensively
+     can quietly stand in for the trigger that was never wired.** The Parameter Helper card stayed on screen
+     after switching workspace tabs, floating over the next tab's content. Its `Hide()` already carried a
+     careful comment — *"remove from the panel that HOLDS it, not the one the editor would resolve to now:
+     after a tab switch the editor is detached, GetOverlayLayer answers null and the card is stranded"* —
+     which reads exactly like a fixed bug. **Measured: every clause of it is false for this app.** MainWindow
+     hosts workspace tabs as **co-existing views gated on `IsVisible`**, so on a switch the editor stays in the
+     visual tree, `DetachedFromVisualTree` never fires and `GetOverlayLayer` still resolves — and all tabs
+     share **one** window overlay layer, so the card is genuinely over the new tab. `Hide()` was never the
+     broken half; **nothing was asking it to run**, because the card's lifetime is CARET-driven (#210) and a
+     tab switch moves no caret. ⭐ The sibling hover card only *looked* immune: it is dismissed by
+     `PointerExited`, which fires because you move the mouse away to click the tab strip — a gesture the
+     caret-driven card has no equivalent of, so "the same fix is already there" was true of the removal and
+     meaningless about the trigger. ⚠⚠ Then three obvious signals fell to measurement in a row:
+     `Visual` exposes **no `IsEffectivelyVisibleProperty`** to observe in Avalonia 12.1.1,
+     `DetachedFromVisualTree` does not fire, and `EffectiveViewportChanged` could not be measured **stably**
+     (0× while probing, 1× in the first test, because its first delivery after subscribing is async) — so it
+     is neither used nor claimed, rather than tuned until it passed. What survives is `LayoutUpdated` plus
+     `LostFocus`, the latter raised **by the visibility change itself** (hiding an ancestor takes focus off the
+     element), which is what makes it independent of whether the tab strip is focusable. ⭐ Shape of the fix
+     worth copying: **two independent triggers, ONE decision, and the decision is the invariant**
+     (`card is open && !editor.IsEffectivelyVisible`) rather than a proxy — so a trigger going quiet in a
+     future framework version degrades instead of breaking, and focus merely moving to another control on the
+     same visible tab does not close the card. ⚠ And the same invariant is needed on the way IN: the show path
+     has an async metadata warm that can resume after the switch. ⭐ Companion to **#322** (guard the premise,
+     not the policy) and **#348** (a missing registration fails as silently as a missing resource).
+     (2026-08-10, `ParameterHelperScreenWatchTests`, `docs/history/29-formatter-and-psql-dml-binding-fix.md` §6.)
+
+362. **A sentence assembled from fragments encodes the assembler's word order, and a translation of the fragments cannot undo it.** `ExecutionSummary` built `"{n} {row|rows} {inserted}"` and `ExecutionActivity` built `"{n} {inserted into} {table}"`. Keying `"row"`, `"rows"` and `"inserted"` separately looks like the obvious migration and is a defect: Polish says *„wstawiono 14 wierszy"* — verb first, count in the middle, noun inflected by the count — so no assignment of words to those three slots produces a correct line. ⭐ **The fix is not a mechanism, it is a RESOLUTION: one whole sentence, one key, data as arguments.** The translator then owns the order, and the producer says nothing about grammar. ⚠⚠ **And the same defect can live in the LAYOUT, where no amount of catalog work reaches it:** the per-table card drew `Count` and `Verb` as two adjacent, differently coloured bindings, so English word order was written into the XAML. Splitting the resolved sentence around its number (`Loc.FormatParts`) is what let the accent survive translation. ⭐ Practical tell: **if you are about to key a word rather than a sentence, ask what the sentence around it looks like in an inflecting language** — if you cannot say, the cut is too small. *(Localization C6.)*
+
+363. **Whether a sentence needs plural forms is a property of the LANGUAGE, not of the data — so the producer must not be the one to declare it.** The tempting shape is a flag or a `Count` member on the message: *"this one is plural, resolve variants."* It is wrong twice over. It makes a language-unaware layer assert a fact about grammar it cannot know, and it freezes ENGLISH's two-way singular/plural split into the contract, so a language with three categories (Polish: 1 / 2–4 / 5+, minus the teens 12–14) cannot be served without changing the producer. ⭐ **The workable shape: the producer hands up a key and a count; the CATALOG of the language being rendered declares which variants exist.** English can keep one flat entry for a key Polish answers with three — neither side knows what the other did, and adding a language touches no code. ⚠ The rule-set name must describe the GRAMMAR (`one-few-many`), never a language: several languages share one shape, so a name like `polish` is false at its second consumer and re-creates the per-language branch one layer out from where a guard against it can see. ⛔ Do NOT put the rule itself in the resource as a parsed expression — that is a mini-language evaluated on a rendering path that must not throw, and this repository already paid for one (see the `TreeDiagnostics` entry). ⚠ The honest limit, worth writing down rather than glossing: *a new language needs no code* holds for a grammar already modelled; a genuinely new plural algorithm IS code, because a new algorithm is not a translation. *(Localization C6.)*
+
+364. **An array member makes ANY containing type compare by reference — this is not a record-specific trap, and it is easy to re-commit while writing the guard that watches for it.** #358 recorded it for a positional record's synthesized `Equals`. C6 hit it again in a TEST, in a plain `ValueTuple`: `Assert.Equal` over `List<(string Key, object?[] Args)>` failed with *"Collections differ"* while printing two visually identical lines, because the tuple's array member compared by reference. ⭐ The general statement is about the MEMBER, not the container: `EqualityComparer<T>.Default` on an array is reference equality wherever that array appears — record, tuple, anonymous type, struct. ⚠ The failure is maximally confusing precisely because the diagnostic output looks equal; if a collection comparison reports a difference it cannot show you, look for a member with no value equality before you look at the values. ⭐ Cheapest fix in a test: flatten to a string. *(Localization C6, inside the guard written to watch #358's seam.)*
+
+365. **`git checkout` cannot restore an untracked file, so a REVERTIBLE experiment on new code is not revertible.** #350 recorded this as a cleanup destroying accepted work. C6 met it in a smaller but more frequent shape: planting a violation into a brand-new file and reverting with `git checkout -- <path>` fails with *"pathspec did not match any file(s) known to git"* — and the plant is still in the tree. ⭐ Whenever a stage's new files are uncommitted, plants must be reverted by **inverse patch**, and the untracked set copied aside first. ⚠⚠ Its companion, which cost a corrupted file: **a revert whose replacement string is EMPTY re-inserts at position 0** — `text.replace("", line)` puts the line above the file's first `using`. Patch by marker, never by an empty anchor. *(Localization C6.)*
+
+366. **`sed -i` in Git Bash rewrites CRLF → LF across the WHOLE file, and a repository that normalises line endings hides it from `git diff`.** A one-token substitution across a 2 581-line C# file also converted every line ending; `git diff --stat` reported only the intended *39 insertions, 13 deletions*, because git stores LF in the index and hands CRLF back to the working tree — so **git masked a whole-file rewrite**. The damage is invisible in review and shows up later, as the next tool to touch the file flips every line back. ⚠⚠ **Its nastier half: `sed` cannot be used to VERIFY the repair either** — reading a CRLF file and writing it out drops CR the same way, so `diff <(sed …) backup` reports every line as different and tells you nothing about your actual change. Verify with `tr -d '\r'` on **both** sides plus a separate count that the working file is fully CRLF (`grep -c $'\r$' f` == `wc -l < f`). ⭐ Same family as the App stage's Python damage (`\r\n` → `\r\r\n`, likewise invisible in the source diff): **a text tool that "only changes one token" is making a claim about bytes it did not read.** Prefer the editing tools that preserve the file's endings; reach for `sed -i` only on files you have confirmed are LF. ⚠⚠ **Second half, met while writing this entry's own commit, and it shows how long such damage survives unnoticed.** Staging a 76-line insertion into `CLAUDE.md` produced a **whole-file diff — 6 957 insertions / 6 704 deletions**. The cause was not the insertion: tracing the stored blobs (`git cat-file -p <rev>:CLAUDE.md | tr -cd '\r' | wc -c`) showed the file was stored **LF** at `bd79bc3`, **CRLF** from `8f861ce` (the App stage) onward, and normalised back to **LF** on this add. So an earlier session had flipped the file's line endings, `.gitattributes`'s `* text=auto` had been quietly violated for three commits, and the next edit paid for it in one lump. ⛔ **Do not "fix" that by forcing CRLF back** (`-c core.autocrlf=false` cannot beat `text=auto` anyway) — the renormalisation is the repository's declared policy reasserting itself. ⭐ **The tells, in order:** an insertion-sized edit whose `--stat` reports the file's whole length is a line-ending event; `git diff --cached --ignore-cr-at-eol --numstat` then gives the real content delta (here 89/8) and belongs in the commit message, because otherwise the change is unreviewable. *(Localization C8.)*
+
+367. **A guard whose scope is a LIST OF ASSEMBLIES fails asymmetrically, and the half that stays green is the half whose failure is silent.** `DeclaredCoreMessageKeys()` fed three localization guards and scanned Core + Firebird only. Measured by planting the omission: `EveryCoreShapedEntry_IsDeclaredByCore` and `EveryLocalizedMember_MatchesItsEnglishEntry` go **red** (the new assembly's resource entries become orphans in both partitions), while **`EveryCoreMessageKey_HasAnEnglishEntry` stays green** — because a guard that has stopped looking reports nothing. That green one is the one that matters: a declared key with no English entry resolves to itself and puts a raw identifier on screen. ⛔ **The trap is the plausible fix.** Two red tests will demand attention, and the obvious repair is to exempt them, which closes the symptom, leaves the silent guard blind, and produces a state that looks resolved. ⭐ The rule: **when a guard's reach is a set, adding a member of that set is part of the change that creates the member** — and reference the assembly by a `typeof(...)` inside it, so the list cannot point at something that no longer exists. Second occurrence of the same defect (C0 §4 found it for Firebird; C8 for Office). *(Localization C8.)*
+
+368. **While only ONE language ships, a localization test that compares a surface against `Loc.Format(...)` is green whether or not the surface resolves anything.** The dual-form pattern guarantees `ex.Message` renders exactly what the key resolves to in English — so a test asserting *"the banner equals the resolved sentence"* passes identically for a consumer that resolves the key and for one that prints the English fallback. Measured, not reasoned: reverting the consumer to `SetStatus(ex.Message, …)` left all nine tests **green**. ⭐ **The only instrument that separates them is a SWAPPED CATALOG** — install one whose answer no producer's literal can match (`Loc.UseCatalogForVerification`, undone in `finally`), and the assertion becomes *"the App went through the catalog"* instead of *"these two strings happen to agree"*. ⚠ Consequence for placement: such a test mutates process-global state and therefore belongs in `HeadlessCollection` — membership that is precautionary for a read-only test becomes load-bearing here. Same shape as **#357** (a guard that restates a rule instead of measuring its mechanism) and C6's `SwitchingLanguage_…` (green for two reasons, pinning neither). ⭐ General form: **a test whose subject is "did layer X do the translation" must make untranslated output distinguishable, or it is testing string equality with itself.** *(Localization C8.)*

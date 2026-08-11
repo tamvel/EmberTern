@@ -21,13 +21,13 @@
       <!-- Header: title · AND/OR · Apply / Clear -->
       <DockPanel>
         <TextBlock DockPanel.Dock="Left" Classes="field-label" VerticalAlignment="Center"
-                   Text="{x:Static app:UiStrings.FilterPanelTitle}" />
+                   Text="{app:Loc FilterPanelTitle}" />
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
           <Button Classes="flat" Command="{Binding ApplyCommand}"
-                  Content="{x:Static app:UiStrings.FilterApply}" />
+                  Content="{app:Loc FilterApply}" />
           <Button Classes="flat" Command="{Binding ClearCommand}"
-                  Content="{x:Static app:UiStrings.FilterClear}" />
+                  Content="{app:Loc FilterClear}" />
         </StackPanel>
 
         <!-- Single CheckBox (not two grouped RadioButtons): a shared RadioButton
@@ -35,7 +35,7 @@
              would fight the group manager in an infinite binding loop. Unchecked =
              match all (AND); checked = match any (OR). -->
         <CheckBox Margin="16,0,0,0" VerticalAlignment="Center"
-                  Content="{x:Static app:UiStrings.FilterMatchAny}"
+                  Content="{app:Loc FilterMatchAny}"
                   IsChecked="{Binding MatchAny, Mode=TwoWay}" />
       </DockPanel>
 
@@ -60,7 +60,7 @@
                        Text="{Binding Value, Mode=TwoWay}"
                        IsVisible="{Binding ShowValueEditor}" />
               <Button Grid.Column="3" Classes="icon" Command="{Binding RemoveCommand}"
-                      ToolTip.Tip="{x:Static app:UiStrings.FilterRemoveConditionTooltip}">
+                      ToolTip.Tip="{app:Loc FilterRemoveConditionTooltip}">
                 <controls:SvgIcon Data="{StaticResource Icon.X}" />
               </Button>
             </Grid>
@@ -72,13 +72,13 @@
       <TextBlock IsVisible="{Binding ShowEmptyHint}"
                  Foreground="{DynamicResource SubtleForegroundBrush}"
                  FontStyle="Italic"
-                 Text="{x:Static app:UiStrings.FilterEmptyHint}" />
+                 Text="{app:Loc FilterEmptyHint}" />
 
       <!-- Add condition -->
       <Button Classes="flat" HorizontalAlignment="Left" Command="{Binding AddConditionCommand}">
         <StackPanel Orientation="Horizontal" Spacing="4">
           <controls:SvgIcon Data="{StaticResource Icon.Plus}" Width="{DynamicResource Size.Icon}" Height="{DynamicResource Size.Icon}" />
-          <TextBlock Text="{x:Static app:UiStrings.FilterAddCondition}" />
+          <TextBlock Text="{app:Loc FilterAddCondition}" />
         </StackPanel>
       </Button>
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmberTern.Core.Localization;
 using EmberTern.Core.Sql;
 
 namespace EmberTern.Core.Performance.Rules;
@@ -54,9 +55,12 @@ public sealed class NonSargablePredicateRule : IPerformanceRule
                 continue;
             }
 
-            string issue = verdict.Issue == SargabilityIssue.LeadingWildcardLike
-                ? "a leading-wildcard LIKE can't seek an index"
-                : "the column is wrapped in a function/expression, so a plain index can't be used";
+            // ⭐ The issue used to be a CLAUSE substituted into the front of the sentence. Two whole-sentence
+            // keys instead, chosen by the closed `SargabilityIssue` enum — the ratified enum→key shape. A
+            // fragment glued to a fixed frame cannot be translated into a language that inflects.
+            var explanationKey = verdict.Issue == SargabilityIssue.LeadingWildcardLike
+                ? PerfMessages.NonSargableExplanationLeadingWildcardLike
+                : PerfMessages.NonSargableExplanationFunctionOnColumn;
 
             findings.Add(new Finding
             {
@@ -66,18 +70,16 @@ public sealed class NonSargablePredicateRule : IPerformanceRule
                 RuleId = Id,
                 Table = p.Table,
                 Column = p.Column,
-                Title = string.Format(CultureInfo.CurrentCulture,
-                    "Condition on {0}.{1} can't use index {2}", p.Table, p.Column, index.Name),
-                Explanation = string.Format(CultureInfo.CurrentCulture,
-                    "Potential contributor: {0}. Index {1} on {2} exists but the condition ({3}) prevents its "
-                    + "use, and {4} was read sequentially ({5} rows). Investigate rewriting the condition to "
-                    + "reference {2} directly.",
-                    issue, index.Name, p.Column, Condition(p), p.Table, N(access.SequentialReads)),
+                Title = LocalizableMessage.Of(
+                    PerfMessages.NonSargableTitle, p.Table, p.Column, index.Name),
+                Explanation = LocalizableMessage.Of(
+                    explanationKey,
+                    access.SequentialReads, index.Name, p.Column, Condition(p), p.Table),
                 Evidence = new List<FindingEvidence>
                 {
-                    new("Condition", Condition(p)),
-                    new("Existing index", index.Name),
-                    new("Sequential reads", N(access.SequentialReads)),
+                    new(PerfMessages.EvidenceCondition, Condition(p)),
+                    new(PerfMessages.EvidenceExistingIndex, index.Name),
+                    new(PerfMessages.EvidenceSequentialReads, N(access.SequentialReads)),
                 },
             });
         }

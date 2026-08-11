@@ -10,6 +10,7 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using EmberTern.Core.Import;
+using EmberTern.Core.Localization;
 
 namespace EmberTern.Office;
 
@@ -227,7 +228,13 @@ public sealed class XlsxImportProvider : IImportProvider
         }
         catch (Exception ex) when (ex is FileFormatException or OpenXmlPackageException or InvalidDataException)
         {
-            throw new InvalidDataException(
+            // ⭐ Etap C8 (D‑3): the sentence became a KEY plus its data, and the English form beside it is what
+            // any catch-all reading `ex.Message` still gets. ⚠ The literal below is byte-identical to the one
+            // this method threw before the migration, and the resource entry must render it exactly —
+            // `ImportSourceLocalizationTests` compares the two on the real thrown exception, which is the only
+            // machine check these words have.
+            throw new ImportSourceException(
+                LocalizableMessage.Of(ImportSourceMessages.NotReadableXlsx, source.DisplayName),
                 $"'{source.DisplayName}' is not a readable .xlsx workbook. A file saved in the older Excel " +
                 "format keeps working under an .xlsx name, but it cannot be read as one — rename it to .xls, " +
                 "which EmberTern imports, or open it in Excel and use Save As.",

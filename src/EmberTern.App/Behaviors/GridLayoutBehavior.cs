@@ -1,3 +1,4 @@
+﻿using EmberTern.App.Localization;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -342,10 +343,11 @@ public static class GridLayoutBehavior
 
             _autoFitItem = new MenuItem
             {
-                Header = UiStrings.GridAutoFitColumns,
                 ToggleType = MenuItemToggleType.CheckBox,
                 IsChecked = LoadProfile().AutoFitColumns,
             };
+            _autoFitItem.Bind(MenuItem.HeaderProperty,
+                new LocExtension(nameof(UiStrings.GridAutoFitColumns)).ProvideValue());
             _autoFitItem.Click += (_, _) => ToggleAutoFit();
             menu.Items.Add(_autoFitItem);
             _menuAdded = true;

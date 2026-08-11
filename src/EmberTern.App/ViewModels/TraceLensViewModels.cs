@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using EmberTern.Core.Trace;
 
@@ -28,9 +28,9 @@ internal static class TraceFormat
     public static string Ms(TimeSpan t)
     {
         var ms = t.TotalMilliseconds;
-        if (ms < 1000) return $"{(long)ms} ms";
-        if (ms < 60_000) return (ms / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " s";
-        return (ms / 60_000).ToString("0.0", CultureInfo.InvariantCulture) + " min";
+        if (ms < 1000) return string.Format(CultureInfo.CurrentCulture, UiStrings.TraceFormatMsFormat, (long)ms);
+        if (ms < 60_000) return string.Format(CultureInfo.CurrentCulture, UiStrings.TraceFormatSecondsFormat, (ms / 1000).ToString("0.0", CultureInfo.InvariantCulture));
+        return string.Format(CultureInfo.CurrentCulture, UiStrings.TraceFormatMinutesFormat, (ms / 60_000).ToString("0.0", CultureInfo.InvariantCulture));
     }
 }
 
@@ -44,8 +44,8 @@ public sealed class TraceTransactionLensItem
         EventCount = group.EventCount;
         StatementCount = group.StatementCount;
         Label = BuildLabel(group);
-        SubText = string.Format(CultureInfo.InvariantCulture, "{0} · {1} stmt · {2}",
-            TransactionId is { } tx ? "TRA " + tx : "no tx",
+        SubText = string.Format(CultureInfo.InvariantCulture, UiStrings.TraceLensTransactionSummaryFormat,
+            TransactionId is { } tx ? "TRA " + tx : UiStrings.TraceLensNoTransaction,
             StatementCount,
             TraceFormat.Ms(group.TotalDuration));
     }
@@ -65,7 +65,7 @@ public sealed class TraceTransactionLensItem
         foreach (var e in g.Events)
             if (!string.IsNullOrWhiteSpace(e.ObjectName))
                 return e.ObjectName!;
-        return g.TransactionId is { } tx ? "Transaction " + tx : "System events";
+        return g.TransactionId is { } tx ? UiStrings.TraceLensTransactionPrefix + tx : UiStrings.TraceLensSystemEvents;
     }
 }
 
@@ -79,7 +79,7 @@ public sealed class TraceFingerprintLensItem
         Sql = TraceEventRowViewModel.Elide(group.RepresentativeSql);
         Count = group.Count;
         CountText = "×" + Count.ToString(CultureInfo.InvariantCulture);
-        MetricsText = string.Format(CultureInfo.InvariantCulture, "{0} total · {1} avg · {2} max",
+        MetricsText = string.Format(CultureInfo.InvariantCulture, UiStrings.TraceLensDurationSummaryFormat,
             TraceFormat.Ms(group.TotalDuration),
             TraceFormat.Ms(group.AverageDuration),
             TraceFormat.Ms(group.MaxDuration));

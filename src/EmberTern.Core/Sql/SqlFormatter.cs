@@ -166,9 +166,9 @@ public static class SqlFormatter
         // it regardless).
         SelectStatement { Query: WithQuery wq } => FormatWithClause(style, wq),
         // A plain (non-WITH) query is laid out by the AST-walking core: clauses per line, nested queries
-        // as expanded-paren blocks, CASE laid out. The query node excludes the statement terminator ';',
-        // so re-attach it (glued) when the statement carried one.
-        SelectStatement { Query: { } q } => WithSemicolon(EmitQuery(style, q), stmt),
+        // as expanded-paren blocks, CASE laid out. The query node excludes the statement terminator ';'
+        // (and any comment standing before it), so the tail is rendered by the shared EmitQueryTail.
+        SelectStatement { Query: { } q } => EmitQueryTail(style, EmitQuery(style, q), Flatten(stmt.Tokens), q.End),
         SelectStatement => Emit(style, Flatten(stmt.Tokens)),
 
         // Everything else — all DML plus non-PSQL DDL, COMMENT, SET, GRANT/REVOKE, DECLARE,
@@ -177,17 +177,38 @@ public static class SqlFormatter
         _ => Emit(style, Flatten(stmt.Tokens)),
     };
 
-    // Re-attaches the statement terminator ';' (glued) to a query rendered from its QueryNode, which
-    // excludes the terminator. A trailing PLAN/ROWS/… lives inside the query node's tokens, so only ';'
-    // is handled here.
-    private static string WithSemicolon(string queryText, SqlStatement stmt)
+    // ⭐⭐ THE TAIL RULE, and the reason it exists is worth reading before touching any AST-rendered query.
+    //
+    // EmitSelectQuery renders a query from its CLAUSES. A comment is materialised by Flatten from the
+    // LEADING trivia of the token it precedes, so a clause renders every comment that precedes one of ITS
+    // tokens — but a comment sitting between the last clause and whatever CLOSES the query (the ';' here,
+    // an INTO elsewhere) precedes a token no clause owns, and was therefore rendered by NOBODY.
+    //
+    // ⚠ The symptom was not a missing comment: §0's lexeme net saw the loss and reverted the WHOLE
+    // statement to verbatim, so a procedure carrying one `--` comment in that position silently "could not
+    // be formatted at all" (measured 2026-08-10 on a user's routine — one comment before `into` froze a
+    // 30-line procedure). A dropped lexeme is never a cosmetic bug here; it disables the feature.
+    //
+    // So: render everything past the query node, and put a leading comment on its own line — a ';' glued
+    // after `--c` would be commented out, which is the loss the net would (correctly) catch again.
+    private static string EmitQueryTail(FormatterStyle style, string head, List<FToken> stmt, int queryEnd)
     {
-        for (int k = stmt.Tokens.Count - 1; k >= 0; k--)
-        {
-            if (stmt.Tokens[k].Kind == TokenKind.EndOfFile) continue;
-            return stmt.Tokens[k].Kind == TokenKind.Semicolon ? queryText + ";" : queryText;
-        }
-        return queryText;
+        int k = 0;
+        while (k < stmt.Count && stmt[k].Start < queryEnd) k++;
+        if (k >= stmt.Count) return head;
+
+        var tail = Emit(style, stmt.GetRange(k, stmt.Count - k));
+        return stmt[k].IsComment ? head + "\n" + tail : head + tail;
+    }
+
+    // The run of comment tokens immediately before <paramref name="idx"/>. They precede the token at idx
+    // (a tail keyword such as INTO / DO), so they belong to ITS line — never to the construct that ends
+    // before them, which is rendered from the AST and would drop them. Returns idx when there is none.
+    private static int StartOfCommentRunBefore(List<FToken> sig, int idx)
+    {
+        int k = idx;
+        while (k > 0 && sig[k - 1].IsComment) k--;
+        return k;
     }
 
     // Verbatim source span, prefixed by any leading comments (which live in the first token's trivia
@@ -264,7 +285,8 @@ public static class SqlFormatter
         var headerToks = new List<SqlToken>();
         foreach (var t in stmt.Tokens) if (t.Start < query.Start) headerToks.Add(t);
         if (headerToks.Count == 0) return Emit(style, Flatten(stmt.Tokens)); // defensive — no header
-        return WithSemicolon(Emit(style, Flatten(headerToks)) + "\n" + EmitQuery(style, query), stmt);
+        var head = Emit(style, Flatten(headerToks)) + "\n" + EmitQuery(style, query);
+        return EmitQueryTail(style, head, Flatten(stmt.Tokens), query.End);
     }
 
     // EXECUTE BLOCK: lay out the header — "execute block ( params )" (adaptive list) then
@@ -1811,7 +1833,13 @@ public static class SqlFormatter
             return;
         }
 
-        int queryEnd = intoIdx >= 0 ? intoIdx : doIdx;
+        // ⚠ A comment at the end of the cursor query's last line (typically after WHERE, before INTO) is an
+        // FToken in the CURSOR range — but the AST path below renders the query from its NODE, whose clauses
+        // do not cover it, so it would be dropped and §0 would revert the whole routine to verbatim. Hold
+        // it back from the cursor range and emit it between the query and the INTO/DO line, where it
+        // belongs. This was the single reason a real procedure "would not format at all" (2026-08-10).
+        int boundary = intoIdx >= 0 ? intoIdx : doIdx;
+        int queryEnd = StartOfCommentRunBefore(sig, boundary);
         var query = sig.GetRange(i + 1, queryEnd - (i + 1));
         // "for" glued to the cursor query as one construct: prefix "for " to the query's first line, whole
         // thing at the loop indent. The cursor query is laid out by the AST-walking core when the parser
@@ -1824,6 +1852,8 @@ public static class SqlFormatter
         else cursor = Emit(style, query).TrimEnd('\n');
         string forQuery = query.Count > 0 ? Kw("for", style) + " " + cursor : Kw("for", style);
         EmitPsqlLines(lines, indent, forQuery);
+
+        for (int k = queryEnd; k < boundary; k++) AddPsqlLine(lines, indent, sig[k].Text);
 
         if (intoIdx >= 0)
         {
@@ -1959,11 +1989,20 @@ public static class SqlFormatter
         // from the comment-free token list, and an INTERNAL subquery comment is emitted once (its enclosing
         // Emit skips the spliced node's tokens).
         string head = StripLeadingLeafComments(EmitQuery(style, query), query.Tokens);
-        if (into > 0) return head + "\n" + FormatIntoClause(style, stmt.GetRange(into, stmt.Count - into));
-        // No INTO — glue any trailing tokens after the query (the terminating ';').
-        int qEnd = stmt.Count;
-        for (int k = 0; k < stmt.Count; k++) { if (stmt[k].Start >= query.End) { qEnd = k; break; } }
-        return qEnd >= stmt.Count ? head : head + Emit(style, stmt.GetRange(qEnd, stmt.Count - qEnd));
+        if (into > 0)
+        {
+            // ⚠ A comment before INTO is INSIDE this query node's tokens (measured: the node's span
+            // swallows the INTO while its clauses stop at WHERE — the same asymmetry the binder records in
+            // SemanticBinder.Psql's SELECT arm), so no clause rendered it and the INTO range starts after
+            // it. Emit those comments on their own lines between the two, keeping FormatIntoClause's input
+            // a clean INTO range so the adaptive list layout still applies.
+            int intoHead = StartOfCommentRunBefore(stmt, into);
+            var sb = new StringBuilder(head);
+            for (int k = intoHead; k < into; k++) sb.Append('\n').Append(stmt[k].Text);
+            return sb.Append('\n').Append(FormatIntoClause(style, stmt.GetRange(into, stmt.Count - into))).ToString();
+        }
+        // No INTO — the tail is the terminating ';' (and any comment before it).
+        return EmitQueryTail(style, head, stmt, query.End);
     }
 
     // Removes, from the start of a rendered leaf, exactly the leading comments that live on the leaf's

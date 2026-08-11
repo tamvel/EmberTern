@@ -554,17 +554,28 @@ internal sealed partial class SemanticBinder
                 // is bound in its own scope and its parens/EXISTS carry nothing.
                 foreach (var clause in s.Query.Children) skip.Add(clause);
                 break;
-            case InsertStatement i:
-                if (i.SourceQuery is { } isrc) { BindQueryNode(isrc, scope, stmt); skip.Add(isrc); }
-                BindEmbedded(i.Subqueries, scope, stmt, skip);
-                break;
-            case MergeStatement m:
-                if (m.SourceQuery is { } msrc) { BindQueryNode(msrc, scope, stmt); skip.Add(msrc); }
-                BindEmbedded(m.Subqueries, scope, stmt, skip);
-                break;
-            case UpdateStatement u: BindEmbedded(u.Subqueries, scope, stmt, skip); break;
-            case UpdateOrInsertStatement uoi: BindEmbedded(uoi.Subqueries, scope, stmt, skip); break;
-            case DeleteStatement d: BindEmbedded(d.Subqueries, scope, stmt, skip); break;
+            // ⭐⭐ Every DML kind goes through the SAME structural binder a top-level statement uses
+            // (BindDmlTablesAndQueries) — see its ⚠ note. What used to stand here was a parallel dispatch
+            // over these five kinds that bound the embedded subqueries and never declared the TARGET, so a
+            // DML statement in a routine body resolved no table at all. ⛔ Do not re-add per-kind arms
+            // here: the target's position (UPDATE `t` / INSERT INTO `t` / DELETE FROM `t` / MERGE INTO `t`
+            // USING `src`) must have one owner, or the two copies drift and only one of them is tested.
+            //
+            // ⚠ The statement gets its OWN child scope, not the body scope: the target alias must not leak
+            // to sibling statements (two UPDATEs in a row may reuse the alias for different tables), while
+            // its parent chain is what keeps :variables and parameters resolving.
+            //
+            // ⚠ The expression walk stays the PSQL one — BindPsqlExpression, not the DSQL
+            // BindExpressionReferences — because a bare name inside a routine body has PSQL-specific
+            // resolution (locals) and its ET0003 conservatism is deliberate. Only the STRUCTURE is shared.
+            case InsertStatement or UpdateStatement or UpdateOrInsertStatement
+                 or DeleteStatement or MergeStatement when dsql.Tokens.Count > 0:
+            {
+                var dmlScope = NewDmlScope(dsql, scope);
+                var dmlSkip = BindDmlTablesAndQueries(dsql, dmlScope);
+                BindPsqlExpression(dsql.Tokens, 0, dsql.Tokens.Count, dmlScope, stmt, dmlSkip);
+                return;
+            }
         }
         BindPsqlExpression(dsql.Tokens, 0, dsql.Tokens.Count, scope, stmt, skip);
     }

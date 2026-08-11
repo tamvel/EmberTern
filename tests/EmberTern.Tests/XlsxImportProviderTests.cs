@@ -188,6 +188,35 @@ public class XlsxImportProviderTests : IDisposable
         Assert.Equal(new[] { 3, 4, 5 }, records.Select(r => r.SourceRowNumber).ToArray());
     }
 
+    // ── The refusal (§0: an honest "no", never a pretence) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐ <b>Added in etap C8, and its absence was itself a finding.</b> The <c>.xls</c> provider's mirror of
+    /// this refusal has been pinned since I10; this one — the case I0 §3.5 found on the machine's REAL
+    /// spreadsheets, an old BIFF workbook still carrying an <c>.xlsx</c> name — had no test at all. So of the
+    /// two sentences C8 migrated, one had a pin and one had none, and the asymmetry sat in the more common
+    /// case.
+    ///
+    /// <para>⚠ Why it matters beyond symmetry: the library's own answer here is
+    /// <c>File contains corrupted data</c>, which is not merely unhelpful but <b>false</b> — the file is
+    /// intact. This test is what stops that answer reaching the user again.</para>
+    /// </summary>
+    [Fact]
+    public async Task ABiffFileUnderAnXlsxName_IsRefusedWithAnActionableMessage()
+    {
+        var path = Path.Combine(_directory, "przebrany.xlsx");
+        // The OLE2 compound-document signature every BIFF workbook starts with — i.e. a real .xls.
+        await File.WriteAllBytesAsync(
+            path, new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 });
+
+        var error = await Assert.ThrowsAsync<ImportSourceException>(
+            () => new XlsxImportProvider().ReadSchemaAsync(
+                new FileImportSource(path), SpreadsheetConfiguration(), CancellationToken.None));
+
+        Assert.Contains("przebrany.xlsx", error.Message, StringComparison.Ordinal);
+        Assert.Contains(".xls", error.Message, StringComparison.Ordinal);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────────
 
     private static ColumnSpec TextColumn() => new("UWAGA", "VARCHAR(100)");
