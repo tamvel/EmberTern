@@ -204,18 +204,24 @@ public static class PreferenceOptions
     // Polish is one row HERE plus its own localization milestone; no window change, no view-model change,
     // no binding change.
     //
-    // ⚠ EmberTern is NOT prepared for localization, measured: 1 815 `public const string` members in
-    // UiStrings (a const is inlined by the compiler, so there is no field left at runtime to reassign),
-    // 42 .axaml files on {x:Static}, zero .resx. So this catalog is deliberately storage-and-validation
-    // ONLY. Do not "prepare" by introducing a CultureInfo, a resource lookup for a handful of strings, or
-    // a localization markup extension used in one window — that leaves the app with two string mechanisms
-    // and 1 815 consts still inlined, which is the worst of both and exactly the parallel implementation
-    // the reuse rules forbid.
+    // ⚠ HISTORICAL, and the note below is what the row was built against: at the time EmberTern was NOT
+    // prepared for localization — 1 815 `public const string` members in UiStrings (a const is inlined by
+    // the compiler, so there is no field left at runtime to reassign), 42 .axaml files on {x:Static}, zero
+    // .resx — so this catalog was deliberately storage-and-validation ONLY. The App stage (2026-08-09) built
+    // the mechanism and the prohibition is spent; the shape it protected is not, so it still holds: there is
+    // exactly ONE string mechanism (`Loc` over `Strings[.culture].resx`), and nothing may introduce a second.
+    //
+    // ⭐ A KEY IS A CULTURE NAME, and that is the whole reason adding a language costs three data edits:
+    // this row, its label in `SettingsCatalog`, and the satellite `Strings.<key>.resx`.
+    // `LanguagePreference.CultureFor` reads the key straight through to `CultureInfo.GetCultureInfo`, so
+    // there is no per-language branch anywhere — pinned by `EveryLanguageInTheCatalog_ResolvesToItsOwnCulture…`.
+    // ⛔ Do not invent a key that is not a culture name.
 
     public const string LanguageEnglish = "en";
+    public const string LanguagePolish = "pl";
 
     public static PreferenceOptionSet Language { get; } =
-        new(new[] { LanguageEnglish }, @default: LanguageEnglish);
+        new(new[] { LanguageEnglish, LanguagePolish }, @default: LanguageEnglish);
 
     // ---- Formatter casing ------------------------------------------------------------------------------
     //

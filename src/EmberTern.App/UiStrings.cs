@@ -1202,6 +1202,9 @@ internal static class UiStrings
     public static string SettingsLanguageDescription => Loc.Text(nameof(SettingsLanguageDescription));
     public static string SettingsLanguageKeywords => Loc.Text(nameof(SettingsLanguageKeywords));
     public static string SettingsLanguageEnglish => Loc.Text(nameof(SettingsLanguageEnglish));
+    // ⚠ A language's own name is written in THAT language in both catalogs ("Polski", never "Polish"):
+    // the picker must be readable to someone who cannot read the language currently on screen.
+    public static string SettingsLanguagePolish => Loc.Text(nameof(SettingsLanguagePolish));
 
     // ⚠ The description says "open tabs" and "saved queries stay" because the setting is narrower than its name
     // suggests, and the narrower half is the important one: a connection's saved queries live in the same stored

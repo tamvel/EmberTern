@@ -992,4 +992,69 @@ public sealed class LocalizationMechanismTests
 
         return dir?.FullName ?? throw new InvalidOperationException("Repository root not found.");
     }
+
+    // ── The shipped Polish translation ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>Nothing renders as its own key in Polish.</b> <c>Loc.Text</c> deliberately returns the key when
+    /// a lookup finds nothing, so a missing entry is diagnosable rather than blank — which also means a
+    /// translation gap is <i>invisible to every other guard here</i> and shows up only as
+    /// <c>Import.Source.NotReadableXlsx</c> on screen. This is the check that would catch it.
+    ///
+    /// <para>⚠ An English value under <c>pl</c> is NOT a failure: <see cref="ResourceManager"/> falls back to
+    /// the neutral set, which is the correct behaviour for the twelve <c>.other</c> variants Polish replaces
+    /// with <c>.few</c>/<c>.many</c>. The assertion is the raw key, not the language.</para>
+    /// </summary>
+    [Fact]
+    public void PolishResolvesEveryKey_WithoutFallingBackToTheKeyItself()
+    {
+        var previous = Loc.Culture;
+        try
+        {
+            Loc.Apply(PreferenceOptions.LanguagePolish);
+            Assert.Equal("pl", Loc.Culture.Name);
+
+            var raw = EnglishKeys().Where(k => Loc.Text(k) == k).ToList();
+            Assert.True(raw.Count == 0,
+                "These keys render as their own identifier under Polish: " + string.Join(", ", raw));
+        }
+        finally
+        {
+            Loc.Apply(previous.Name.Length == 0 ? PreferenceOptions.LanguageEnglish : previous.Name);
+        }
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The Polish three-form rule, checked on the numbers that actually distinguish the bands</b> —
+    /// including the teen band, which is the one a two-form language has no reason to have and a translator
+    /// has no way to test by eye.
+    ///
+    /// <para>⚠ This drives the real pipeline (<c>Loc.Format</c> over a <c>LocalizableMessage</c> Core would
+    /// hand up), not <c>PluralRules</c> in isolation: the rule set is DATA the culture declares, so a correct
+    /// algorithm plus a missing or misspelt <c>Localization.PluralRuleSet</c> in the satellite still renders
+    /// every counted sentence in the wrong form.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(1, "wstawiono 1 wiersz")]
+    [InlineData(2, "wstawiono 2 wiersze")]
+    [InlineData(5, "wstawiono 5 wierszy")]
+    [InlineData(12, "wstawiono 12 wierszy")]   // the teen band the "few" rule excludes …
+    [InlineData(22, "wstawiono 22 wiersze")]   // … and the band it does not
+    [InlineData(25, "wstawiono 25 wierszy")]
+    public void PolishPlural_PicksTheBandTheNumberBelongsTo(long count, string expected)
+    {
+        var previous = Loc.Culture;
+        try
+        {
+            Loc.Apply(PreferenceOptions.LanguagePolish);
+            var message = Core.Localization.LocalizableMessage.Of(
+                Core.Query.QueryExecutionMessages.RowsInserted, count);
+
+            Assert.Equal(expected, Loc.Format(message));
+        }
+        finally
+        {
+            Loc.Apply(previous.Name.Length == 0 ? PreferenceOptions.LanguageEnglish : previous.Name);
+        }
+    }
 }

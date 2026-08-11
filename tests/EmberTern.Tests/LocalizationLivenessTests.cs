@@ -3,6 +3,7 @@ using System.Resources;
 using Avalonia.Controls;
 using EmberTern.App;
 using EmberTern.App.Localization;
+using EmberTern.Core.Settings;
 using Xunit;
 
 namespace EmberTern.Tests;
@@ -61,6 +62,51 @@ public sealed class LocalizationLivenessTests
         finally
         {
             Loc.UseCatalogForVerification(null, null);
+        }
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The same claim, now against the SHIPPED Polish instead of a substitute catalog</b> — a real
+    /// <c>TextBlock</c>, the real <c>{app:Loc}</c> binding, and the production entry point
+    /// (<c>Loc.Apply</c>, which is what <c>App</c> calls when the language preference changes). Until the PL
+    /// stage this could not exist: with one shipped language a live binding and a frozen one render the same
+    /// text, which is why the substitute catalog above was built in the first place.
+    ///
+    /// <para>⚠ The expected values are READ from the two resource sets, never typed here. Transcribing
+    /// "Anuluj" would make this a test of today's wording — it would go red the day a translator improves a
+    /// label, for a reason that has nothing to do with the mechanism it is named after (#333).</para>
+    /// </summary>
+    [Fact]
+    public void ABoundString_SwitchesToTheShippedPolish_AndBack()
+    {
+        const string ProbeKey = nameof(UiStrings.DialogCancel);
+        var catalog = new ResourceManager("EmberTern.App.Localization.Strings", typeof(UiStrings).Assembly);
+        var english = catalog.GetString(ProbeKey, CultureInfo.InvariantCulture);
+        var polish = catalog.GetString(ProbeKey, CultureInfo.GetCultureInfo("pl"));
+
+        // If these ever coincide the test proves nothing — say so rather than passing vacuously.
+        Assert.False(string.IsNullOrEmpty(polish), $"{ProbeKey} has no Polish entry.");
+        Assert.NotEqual(english, polish);
+
+        var previous = Loc.Culture;
+        try
+        {
+            Loc.Apply(PreferenceOptions.LanguageEnglish);
+
+            var block = new TextBlock();
+            block.Bind(TextBlock.TextProperty, new LocExtension(ProbeKey).ProvideValue());
+            Assert.Equal(english, block.Text);
+
+            Loc.Apply(PreferenceOptions.LanguagePolish);
+            Assert.Equal(polish, block.Text);
+
+            // Back again — a one-way switch would still satisfy the assertion above.
+            Loc.Apply(PreferenceOptions.LanguageEnglish);
+            Assert.Equal(english, block.Text);
+        }
+        finally
+        {
+            Loc.Apply(previous.Name.Length == 0 ? PreferenceOptions.LanguageEnglish : previous.Name);
         }
     }
 

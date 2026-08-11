@@ -98,12 +98,21 @@ public class PreferencesTests
         Assert.Throws<ArgumentException>(() => new PreferenceOptionSet(Array.Empty<string>(), @default: "A"));
     }
 
-    /// <summary>⭐ The language catalog: one row today, and adding Polish must be one row here — not a window
-    /// change, a view-model change or a binding change.</summary>
+    /// <summary>
+    /// ⭐ The language catalog. It was written when the only row was English, to pin that adding Polish would
+    /// be ONE row here — not a window change, a view-model change or a binding change. Polish arrived in the
+    /// PL stage and that prediction held, so the test now pins what it was really protecting.
+    ///
+    /// <para>⚠ <b>The DEFAULT is the load-bearing half.</b> A catalog row is additive, but the default decides
+    /// what every existing installation renders in: `Preferences.Language`'s initializer reads
+    /// <c>Language.Default</c>, so moving it would silently switch the UI language of every user who never
+    /// chose one. The set of values is checked as a superset-with-exact-membership rather than by count, so a
+    /// third language is one row plus one line here.</para>
+    /// </summary>
     [Fact]
-    public void LanguageCatalog_HasExactlyEnglish_AndDefaultsToIt()
+    public void LanguageCatalog_CarriesEnglishAndPolish_AndDefaultsToEnglish()
     {
-        Assert.Equal(new[] { "en" }, PreferenceOptions.Language.Values);
+        Assert.Equal(new[] { "en", "pl" }, PreferenceOptions.Language.Values);
         Assert.Equal("en", PreferenceOptions.Language.Default);
     }
 
@@ -211,14 +220,19 @@ public class PreferencesTests
     }
 
     /// <summary>
-    /// ⭐ <b>Language is validated from day one, although nothing consumes it.</b> It is precisely because it
-    /// has no reader that it is the property most likely to be left unvalidated "until it matters", and the
-    /// localization milestone is far enough away that a bad value would be thoroughly entrenched by then.
+    /// ⭐ <b>Language is validated, and now it has a second legal value to prove it does not over-normalize.</b>
+    /// The original version fed <c>"pl"</c> as the UNRECOGNISED case, because at the time it was one — so the
+    /// fixture stopped meaning what it said the moment Polish shipped. It reads a genuinely unknown code now.
+    ///
+    /// <para>⚠ The <c>"pl"</c> row is the half worth having: normalization is silent and total, so a catalog
+    /// row that got lost would not throw — every Polish installation would simply come back in English at the
+    /// next load, which is precisely the failure the language preference exists to prevent.</para>
     /// </summary>
     [Fact]
-    public void Validate_NormalizesLanguage_EvenThoughNothingReadsItYet()
+    public void Validate_NormalizesLanguage_ButKeepsEveryLanguageTheCatalogKnows()
     {
-        Assert.Equal("en", PreferencesStore.Validate(new Preferences { Language = "pl" }).Language);
+        Assert.Equal("pl", PreferencesStore.Validate(new Preferences { Language = "pl" }).Language);
+        Assert.Equal("en", PreferencesStore.Validate(new Preferences { Language = "kl" }).Language);
         Assert.Equal("en", PreferencesStore.Validate(new Preferences { Language = "" }).Language);
     }
 

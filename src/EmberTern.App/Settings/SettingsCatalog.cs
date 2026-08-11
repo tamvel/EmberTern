@@ -264,6 +264,7 @@ public static class SettingsCatalog
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [PreferenceOptions.LanguageEnglish] = UiStrings.SettingsLanguageEnglish,
+                    [PreferenceOptions.LanguagePolish] = UiStrings.SettingsLanguagePolish,
                 }),
 
             // §7.5. ⚠ Gates RESTORE, never CAPTURE — the workspace keeps being saved either way, so turning
