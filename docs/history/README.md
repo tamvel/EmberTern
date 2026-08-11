@@ -2,17 +2,16 @@
 
 This folder holds the **full narrative history** of EmberTern's development: every milestone,
 session, bugfix investigation, and design decision, in the words they were originally written
-in. It was split out of `CLAUDE.md` during the **Documentation Cleanup Sprint (2026-07-11)**,
-whose goal was to shrink the cost of starting a new Claude Code session without losing any
-project knowledge — see `docs/DOCUMENTATION-MAP.md` for the full rationale and the resulting
-structure.
+in. It was split out of `CLAUDE.md` during the **Documentation Cleanup Sprint (2026-07-11)**, and
+restored by a **second one (2026-08-11)** after `CLAUDE.md` regrew from 472 to 6 849 lines. The goal
+both times was to shrink the cost of starting a new Claude Code session without losing any project
+knowledge — see `CLAUDE.md` § "Documentation map" for the rationale and the resulting structure.
 
 **Nothing here is loaded automatically at the start of a session.** Read a file only when you
 need the backstory on a specific feature or bug — e.g. "why does the metadata reader capture
 the command lock exactly once?" or "what did we try before the FlatTree sidebar migration?".
-For **current** rules, architecture, and state, read `CLAUDE.md` and
-`docs/design/editor-architecture.md` instead — those are kept current and are what every new
-session actually needs.
+For **current rules and architecture** read `CLAUDE.md`; for **current status** read
+`docs/current-state.md` — those are kept current and are what every new session actually needs.
 
 Every file below is a **verbatim extract** — copied byte-for-byte out of the original
 `CLAUDE.md`/design-doc text, with only a small provenance header added. No content was
@@ -64,9 +63,16 @@ file is the fast lookup.
 
 | [29-formatter-and-psql-dml-binding-fix.md](29-formatter-and-psql-dml-binding-fix.md) | **Dwa defekty z jednego zgłoszenia użytkownika** („autoformater sobie nie radzi" + „jedna `zasobtechcrp` nie ma koloru"), oba **szersze niż zgłoszenie**. ⭐⭐ Czytaj dla **#359**: *formater, który gubi leksem, nie objawia się jako błąd formatowania* — siatka §0 cofa instrukcję do wersji dosłownej, więc funkcja wygląda na bezczynną, a **każdy test zachowania leksemów jest zielony przez całe życie defektu**, bo cofnięcie do dosłownej zachowuje leksemy idealnie; asercją, która potrafi zapalić, jest *„siatka NIE zadziałała"*. Przyczyna: `EmitSelectQuery` renderuje zapytanie z KLAUZUL, a komentarz materializuje się z triwii tokenu, który poprzedza — więc komentarz między ostatnią klauzulą a tym, co zapytanie ZAMYKA (`;` / `INTO` / `DO`), nie należał do nikogo. ⚠ Pierwsza hipoteza („`EmitQuery` gubi komentarze") została **obalona pomiarem** — komentarz wewnątrz klauzuli zawsze przechodził; trzeba było odczytać wyjście PRZED siatką. ⚠ Drugi powód przeżycia: wspólny korpus **nie miał prawie żadnych komentarzy**. ⭐⭐ I **#360**: *suita spójności zmieniająca JEDEN wymiar przy ustalonym drugim czyta się jako wyczerpująca i nie jest* — `SemanticHighlightConsistencyTests` istnieje dokładnie dla objawu „obiekt kolorowany w FROM, ale nie w UPDATE" i pilnuje wszystkich pięciu rodzajów DML **tylko na top-level**, a wiersze dla ciała procedury pilnują ZAPYTANIA; skrzyżowania nigdy nie było — i tam mieszkał defekt: binder PSQL był **drugą ścieżką**, która wiązała podzapytania i **nigdy nie deklarowała CELU**, więc `update t` wiązał się w skrypcie i **nie wiązał niczego** w procedurze. ⭐ Widoczna połowa to jedna niepokolorowana nazwa; gorsza połowa to KONSEKWENCJA — bez zadeklarowanego aliasu cała instrukcja traci referencje `alias.kolumna`. Plus nota procesowa: pierwszy pełny przebieg dał **13 niepowodzeń, żadne moje** — ręcznie przepisany filtr partycji miał 12 nazw klas headless przy 18 w kodzie. | 2026-08-10 |
 
+| [30-claude-md-current-state-archive.md](30-claude-md-current-state-archive.md) | **`CLAUDE.md` § "Current state" — verbatim archive (2026-07-12 → 2026-08-10).** The status diary as it stood at `00931a2`, moved out by the second Documentation Cleanup Sprint: **5 956 lines / 83 % of `CLAUDE.md`**, 78 entries, nearly all marked `ZAMKNIĘTY`/`CLOSED`/`DONE`. ⭐ Read it as a **dated record**, never as current state — several of its claims were already false when it was archived (the localization branch described as unmerged when it *was* merged; the test count in four layered corrections; a headless-partition figure that had gone stale a third time). ⚠ It is a **second copy**, not the only record: the file's own header maps every stage it describes to the kept-current document that owns it. **For status read `docs/current-state.md`.** | archived 2026-08-11 |
+| [handovers/](handovers/) | 🔒 **Closed stage-handover and "next session" prompts** — Product Polish M2a → M5, Localization App + Core. Moved out of `docs/design/` on 2026-08-11, because a "next session" prompt for a finished stage reads as instructions. ⛔ **Do not plan from them**; several premises were refuted by measurement, which is the most valuable thing in them. ⭐ `product-polish-m3-handover.md` still holds rules **R1–R18** and the **21 traps** that future UI work inherits, and `product-polish-m5-next-session.md` holds the already-done measurement for the spacing stage. | 2026-08-11 |
+
 ## Where the gotchas went
 
-Every numbered gotcha (`#1`–`#202`) that was embedded in this narrative is also collected,
-de-duplicated, and organized **thematically** (not chronologically) in
-[`docs/gotchas.md`](../gotchas.md) at the repo root's `docs/` folder. That file is the one to
+Every numbered gotcha embedded in this narrative is also collected, de-duplicated, and organized
+**thematically** (not chronologically) in [`docs/gotchas.md`](../gotchas.md). That file is the one to
 search when you hit a familiar-looking bug — this history archive is for the deeper "why".
+
+⛔ **Do not quote a gotcha count from memory or from prose** — three separate counters have carried it
+and all three disagreed while every one was wrong. Measure:
+`grep -cE "^[0-9]+\. \*\*" docs/gotchas.md` (2026-08-11: **357 entry lines over 355 distinct numbers**,
+max **#368**; ⚠ numbers **303 and 304 are each used twice**, so a bare "#303" is ambiguous).

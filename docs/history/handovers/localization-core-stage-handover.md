@@ -555,8 +555,8 @@ Katalog: **345 wpisów, #1–#358.**
 | Dokument | Rola |
 |---|---|
 | ⭐⭐ **ten plik** | punkt startowy nowej sesji |
-| ⭐ **[../history/28-localization-core-stage.md](../history/28-localization-core-stage.md)** | **narracja etapu, etap po etapie: C0, C1, C2, C3, C4a, C4b, C5** — czytaj dla „dlaczego" |
-| [localization.md](localization.md) | architektura mechanizmu: §2.1 (martwy indekser) · §4.0 (równość strukturalna nośnika) · §4.1 (dwaj właściciele katalogu) · §4.2 + §4.2a (liczby wg kultury vs echo) · §7 (co otwarte) |
+| ⭐ **[../history/28-localization-core-stage.md](../28-localization-core-stage.md)** | **narracja etapu, etap po etapie: C0, C1, C2, C3, C4a, C4b, C5** — czytaj dla „dlaczego" |
+| [localization.md](../../design/localization.md) | architektura mechanizmu: §2.1 (martwy indekser) · §4.0 (równość strukturalna nośnika) · §4.1 (dwaj właściciele katalogu) · §4.2 + §4.2a (liczby wg kultury vs echo) · §7 (co otwarte) |
 | [localization-app-stage-handover.md](localization-app-stage-handover.md) | etap **App**; ⚠ §C.1 obalone pomiarem — nie planuj z niego |
 | `CLAUDE.md` → „Current state" | skrót stanu; ⚠ licznik testów w prozie starzeje się co etap — **mierz, nie cytuj** |
 | `docs/gotchas.md` | **#353–#358** z tego etapu |

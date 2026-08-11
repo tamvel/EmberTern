@@ -79,7 +79,7 @@
 > ⚠ **Granica pomiaru zapisana:** `ToolTip` i stany niewymuszone przez sondę są NIEZMIERZONE.
 >
 > ✅ **DPI 100–175 % — ZAMKNIĘTE (2026-08-10), ZERO ZMIAN PRODUKCYJNYCH.** Zapis: `product-polish.md`
-> **§19.49**; checklista + wynik QA: **[product-polish-m5-dpi-checklist.md](product-polish-m5-dpi-checklist.md)**.
+> **§19.49**; checklista + wynik QA: **[product-polish-m5-dpi-checklist.md](../../design/product-polish-m5-dpi-checklist.md)**.
 > **R‑6 spłacone.** 100 % i 125 % czyste; **przystanki 1–7, 9 i 10 przeszły bez uwag** — czyli **żadna zmiana
 > metryki z M4 ani M5 nie okazała się defektem DPI**, a to był właściwy przedmiot R‑6.
 > ⛔⛔ **Znalezisko przy 150 % / 175 %: Activity Monitor i Data Import nie mieszczą się w szerokości.**

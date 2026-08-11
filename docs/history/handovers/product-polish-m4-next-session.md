@@ -5,7 +5,7 @@
 >
 > ⭐⭐ **AKTUALIZACJA 2026-08-08 — M4 JEST ROZPOCZĘTY I MA ZA SOBĄ PIERWSZĄ POZYCJĘ.** Zgoda użytkownika
 > padła, **grupa gęstości jest zamknięta i odebrana** (A‑3 · B‑1 · C‑1 · D — `product-polish.md` §19.37,
-> materiał: [product-polish-m4-density-decision.md](product-polish-m4-density-decision.md)). ⛔ **§5 poniżej
+> materiał: [product-polish-m4-density-decision.md](../../design/product-polish-m4-density-decision.md)). ⛔ **§5 poniżej
 > czytaj jako ZAPIS ratyfikowanych decyzji kierunkowych, nie jako listę do wykonania** — D‑M4‑2 został
 > wykonany w całości, D‑M4‑1 wykonany w części (gęstość), D‑M4‑3 obowiązuje dalej.
 >
@@ -37,9 +37,9 @@ nic do domknięcia przed M4; czytaj tę listę jako stan wejściowy, nie jako za
 
 | sprint | data odbioru | co z niego zostaje dla M4 |
 |---|---|---|
-| **stabilizacyjny S‑1…S‑6** ([24](../history/24-stabilization-sprint.md)) | 2026-08-05 | rozjazd wysokości **wierszy** siatek definicji + szerokości pasków importu → **do puli gęstości** |
-| **spójności gridów** ([25](../history/25-grid-consistency-sprint.md)) | 2026-08-07 | wysokości wierszy **nietknięte** (to samo pytanie o gęstość); jeden formater kopiowania |
-| **zgodności z gramatyką Firebirda + QA** ([26](../history/26-firebird-language-completeness-sprint.md)) | 2026-08-08 | nic do M4; zamknięty w całości, łącznie z rundą QA |
+| **stabilizacyjny S‑1…S‑6** ([24](../24-stabilization-sprint.md)) | 2026-08-05 | rozjazd wysokości **wierszy** siatek definicji + szerokości pasków importu → **do puli gęstości** |
+| **spójności gridów** ([25](../25-grid-consistency-sprint.md)) | 2026-08-07 | wysokości wierszy **nietknięte** (to samo pytanie o gęstość); jeden formater kopiowania |
+| **zgodności z gramatyką Firebirda + QA** ([26](../26-firebird-language-completeness-sprint.md)) | 2026-08-08 | nic do M4; zamknięty w całości, łącznie z rundą QA |
 
 * ⭐ **Rozjazd wysokości WIERSZY siatek definicji (Table Fields 34 · Table Data 32 ·
   Procedure/Function/Trigger 30 · Indeksy/Ograniczenia 22) został ZMIERZONY i świadomie ODDANY DO M4** —

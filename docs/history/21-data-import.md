@@ -470,7 +470,7 @@ zaakceptowany i scalony do `master` (2026-07-27)**, a końcowy zestaw testów to
   **✅ I5 — CLOSED, user-confirmed after two visual reviews that produced U1–U12.** The reviews are the
   project's QA rule proving itself: build, green tests and a clean smoke had found **none** of it, because
   every finding is about **proportion and space**, not state. All twelve are settled and recorded in
-  [data-import.md §3.8](docs/design/data-import.md); **ten shipped in one closing seam**, two stay
+  [data-import.md §3.8](../design/data-import.md); **ten shipped in one closing seam**, two stay
   deliberately open (**U4** global density → the app-wide UX sprint below; **U5** responsiveness →
   re-checked during I6, when Target and Mapping actually occupy space).
   **⭐ The layout was revised and carried into §3.1 in place — the single change that matters is that the
@@ -501,7 +501,7 @@ zaakceptowany i scalony do `master` (2026-07-27)**, a końcowy zestaw testów to
   sprint). Suite **5568 green** at that point, build 0/0. **The I6 opening prompt said "insert into the
   finished frame, don't rebuild it" — and that is what it did.** A new tool tab (toolbar, beside
   the Script Executor) that imports Clipboard / TXT / CSV / XLSX into an existing or a newly created table.
-  **Read [docs/design/data-import.md](docs/design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
+  **Read [docs/design/data-import.md](../design/data-import.md) — its „📍 STAN IMPLEMENTACJI" block is the
   handover, and the architecture is 🔒 FROZEN: from etap I1 on it is implementation only, and an
   implementation discovery that genuinely undermines the design means STOP THE ETAP AND REPORT, never a quiet
   redesign.** Shape worth knowing before touching it: **one working surface with collapsible sections, NOT a
@@ -1119,7 +1119,7 @@ dopiero po ręcznym odświeżeniu. **Przyczyna, bez zagadki:** `CREATE TABLE` le
 zawiadamiał drzewa**; pozostałe ścieżki DDL robią to jawnie (20 wywołań `Metadata.RefreshAsync()`).
 
 ⭐ **Dlaczego nie dopisano dwudziestego pierwszego.** Użytkownik zlecił wcześniej analizę mechanizmu
-metadanych ([metadata-refresh-analysis.md](metadata-refresh-analysis.md)) i pomiar pokazał, że pełne
+metadanych ([metadata-refresh-analysis.md](../design/metadata-refresh-analysis.md)) i pomiar pokazał, że pełne
 odświeżenie kosztuje **13 zapytań do katalogu (~164 ms) plus ponad sekundę na wątku UI**, gdy jakaś
 kategoria jest rozwinięta. Moduł importu **zna nazwę tabeli, którą właśnie utworzył**, więc mówi to
 wprost — `DataImportEnvironment.TableCreated` / `TableDropped` — a `MetadataExplorerViewModel` wstawia
@@ -1140,7 +1140,7 @@ po nieudanym imporcie zgłasza usunięcie, żeby drzewo nie oferowało obiektu, 
 
 **Przy okazji tej samej sesji weszła Warstwa 1 z raportu** (blokada `BeginUpdate/EndUpdate` na ścieżce
 ładowania): projekcja pełnego odświeżenia **1 424 ms → 2 ms** przy jednej rozwiniętej kategorii. Szczegóły
-i pełne pomiary — [metadata-refresh-analysis.md §7](metadata-refresh-analysis.md).
+i pełne pomiary — [metadata-refresh-analysis.md §7](../design/metadata-refresh-analysis.md).
 
 ### ⭐ I10 as-built — pięć rzeczy wartych zapamiętania
 

@@ -101,7 +101,7 @@ debounced `EditorLanguageService`.
 > **STATUS: DONE.** This section is the original ready-to-start scope, kept for the record;
 > the as-built result is in §18.
 
-> **Read first:** [etap1-tokenization-audit.md](etap1-tokenization-audit.md) — the code-grounded
+> **Read first:** [etap1-tokenization-audit.md](../design/etap1-tokenization-audit.md) — the code-grounded
 > audit of every current tokenizer / scanner / keyword list / highlighting asset, the dependency
 > map, and the REPLACE/KEEP/ADAPTER/DEFER disposition per component. Its §4 scanner-scope
 > decision is **APPROVED (2026-07-09)**: Etap 1 folds outliers **O2/O3/O4** + creates the lexer +

@@ -7,7 +7,7 @@
 > **C0 (audyt), C1 (`SessionHealthAnalyzer`), C2 (`QuickInfoEngine`) C3 (`FirebirdConnectionService`) i **C4a** (`ApplicationSettingsStore`) są odebrane.** ⛔ Nie powtarzaj audytu
 > i nie projektuj od nowa kolejności migracji — jedno i drugie jest ratyfikowane.
 > Bieżący stan, klasyfikacja A–F, zmierzony zakres i as-built:
-> **[../history/28-localization-core-stage.md](../history/28-localization-core-stage.md)**.
+> **[../history/28-localization-core-stage.md](../28-localization-core-stage.md)**.
 > ⭐ Najważniejsza korekta do §C.1 tego dokumentu: **inwentarz „≈280" był zawyżony i w trzech pozycjach
 > nieprawdziwy** (`CharsetCatalog` 8→0, Data Import ~20→0, `FirebirdDiagnostics` 24→0). Realny zakres to
 > **~170–190**. ⛔ Nie planuj z tabeli §C.1 — planuj z pliku historii.
@@ -57,7 +57,7 @@ globalny katalog `Loc` równolegle z testami czytającymi `UiStrings`, co daje r
 
 ## B. Co zostało zamknięte
 
-Pełny opis architektury: **[localization.md](localization.md)**. Tu tylko to, co musisz wiedzieć, żeby
+Pełny opis architektury: **[localization.md](../../design/localization.md)**. Tu tylko to, co musisz wiedzieć, żeby
 kontynuować.
 
 ### B.1 Ratyfikowane decyzje

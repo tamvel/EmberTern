@@ -4040,7 +4040,7 @@ Zapisane wprost, bo inaczej następny czytelnik uzna korektę za cofniętą.
 
 ## §19 As-built — M3 (powierzchnie trwałe)
 
-> **Punkt wejścia do etapu:** [`product-polish-m3-handover.md`](product-polish-m3-handover.md) —
+> **Punkt wejścia do etapu:** [`product-polish-m3-handover.md`](../history/handovers/product-polish-m3-handover.md) —
 > samowystarczalny: stan, reguły, procedura, pułapki, plan 18 iteracji.
 >
 > **Zakres M3, ratyfikowany przez użytkownika 2026-08-02:** M3.1 Status Bar 2.0 · M3.2 Toolbar ·
@@ -4232,7 +4232,7 @@ jedyna z trzech, która ma i `IProgress`, i próg miękki, i anulowanie), **M3b 
 **Zero zmian w kodzie produkcyjnym.** Build **0/0** · suite **7088** · smoke czysty — wszystkie trzy
 niezmienione względem `8567ebc`, bo iteracja 0 dotknęła wyłącznie dokumentacji.
 
-**Powstało:** [`product-polish-m3-handover.md`](product-polish-m3-handover.md) (samowystarczalny punkt
+**Powstało:** [`product-polish-m3-handover.md`](../history/handovers/product-polish-m3-handover.md) (samowystarczalny punkt
 wejścia: stan · zakres · reguły R1–R12 · procedura · 13 pułapek · plan 18 iteracji) oraz ta sekcja.
 
 ⭐ **Podsumowanie jednym zdaniem: M2c udowodnił, że wartość lokalna blokuje system; iteracja 0 M3

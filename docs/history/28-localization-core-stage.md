@@ -5,7 +5,7 @@ layer migrated). Its subject is the messages that live **outside** App: the ones
 the App merely displays.
 
 Architecture: [../design/localization.md](../design/localization.md). Entry point of the stage:
-[../design/localization-app-stage-handover.md](../design/localization-app-stage-handover.md).
+[../design/localization-app-stage-handover.md](handovers/localization-app-stage-handover.md).
 
 Etaps are numbered **C0** (audit) and **C1, C2, …** (one producer module each).
 
