@@ -261,11 +261,35 @@
   <data name="BatchPreparingBuildList" xml:space="preserve">
     <value>Building operation list…</value>
   </data>
-  <data name="BatchPreparingListFormat" xml:space="preserve">
-    <value>Loading {0}…</value>
+  <data name="BatchPreparingListFunctions" xml:space="preserve">
+    <value>Loading functions…</value>
   </data>
-  <data name="BatchPreparingLoadFormat" xml:space="preserve">
-    <value>Loading {0} {1} / {2}</value>
+  <data name="BatchPreparingListIndexes" xml:space="preserve">
+    <value>Loading indexes…</value>
+  </data>
+  <data name="BatchPreparingListPackages" xml:space="preserve">
+    <value>Loading packages…</value>
+  </data>
+  <data name="BatchPreparingListProcedures" xml:space="preserve">
+    <value>Loading procedures…</value>
+  </data>
+  <data name="BatchPreparingListTriggers" xml:space="preserve">
+    <value>Loading triggers…</value>
+  </data>
+  <data name="BatchPreparingLoadDependentsFormat" xml:space="preserve">
+    <value>Loading dependents {0} / {1}</value>
+  </data>
+  <data name="BatchPreparingLoadFunctionsFormat" xml:space="preserve">
+    <value>Loading functions {0} / {1}</value>
+  </data>
+  <data name="BatchPreparingLoadPackagesFormat" xml:space="preserve">
+    <value>Loading packages {0} / {1}</value>
+  </data>
+  <data name="BatchPreparingLoadProceduresFormat" xml:space="preserve">
+    <value>Loading procedures {0} / {1}</value>
+  </data>
+  <data name="BatchPreparingLoadTriggersFormat" xml:space="preserve">
+    <value>Loading triggers {0} / {1}</value>
   </data>
   <data name="BatchResultFailed" xml:space="preserve">
     <value>Failed</value>
@@ -3981,6 +4005,18 @@ The table was committed when it was created, so this is the only way to remove i
   </data>
   <data name="ObjectKindParameter" xml:space="preserve">
     <value>Parameter</value>
+  </data>
+  <data name="ObjectKindPluralFunction" xml:space="preserve">
+    <value>functions</value>
+  </data>
+  <data name="ObjectKindPluralPackage" xml:space="preserve">
+    <value>packages</value>
+  </data>
+  <data name="ObjectKindPluralProcedure" xml:space="preserve">
+    <value>procedures</value>
+  </data>
+  <data name="ObjectKindPluralTrigger" xml:space="preserve">
+    <value>triggers</value>
   </data>
   <data name="ObjectKindProcedure" xml:space="preserve">
     <value>Procedure</value>

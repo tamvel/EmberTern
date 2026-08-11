@@ -53,6 +53,16 @@ internal static class UiStrings
     public static string ObjectKindLowerTrigger => Loc.Text(nameof(ObjectKindLowerTrigger));
     public static string ObjectKindLowerUser => Loc.Text(nameof(ObjectKindLowerUser));
     public static string ObjectKindLowerView => Loc.Text(nameof(ObjectKindLowerView));
+    // ⭐ Lowercase PLURAL nouns, and they exist as their own entries rather than as
+    // `ObjectKindLower* + "s"`: a plural morpheme is a fact about ENGLISH, so composing one in code
+    // makes the result untranslatable (Polish "procedura" → "procedur", not "procedura"+"s").
+    // ⛔ Only the four kinds `MetadataNodeViewModel.IsRecompilableGroup` admits — a key with no
+    // producer is dead weight (#233), and the set is pinned by
+    // `RecompileGroupTexts_CoverExactlyTheRecompilableKinds`.
+    public static string ObjectKindPluralFunction => Loc.Text(nameof(ObjectKindPluralFunction));
+    public static string ObjectKindPluralPackage => Loc.Text(nameof(ObjectKindPluralPackage));
+    public static string ObjectKindPluralProcedure => Loc.Text(nameof(ObjectKindPluralProcedure));
+    public static string ObjectKindPluralTrigger => Loc.Text(nameof(ObjectKindPluralTrigger));
     public static string ParameterHelperMemberFormat => Loc.Text(nameof(ParameterHelperMemberFormat));
     public static string PeekHeaderFormat => Loc.Text(nameof(PeekHeaderFormat));
     public static string SecurityRolesEmptyFormat => Loc.Text(nameof(SecurityRolesEmptyFormat));
@@ -884,8 +894,24 @@ internal static class UiStrings
     // the object list + per-object SQL are still being built (Batch Operations UX sprint).
     public static string BatchPreparing => Loc.Text(nameof(BatchPreparing));
     public static string BatchPreparingBuildList => Loc.Text(nameof(BatchPreparingBuildList));
-    public static string BatchPreparingListFormat => Loc.Text(nameof(BatchPreparingListFormat));          // {0} = plural noun, count unknown
-    public static string BatchPreparingLoadFormat => Loc.Text(nameof(BatchPreparingLoadFormat));  // e.g. "Loading procedures 143 / 1965"
+    // ⭐⭐ ONE WHOLE SENTENCE PER GROUP, never "Loading {0}…" with the noun as an argument.
+    // The earlier pair (`BatchPreparingListFormat` / `BatchPreparingLoadFormat`) took the noun as {0},
+    // which forced the producer to BUILD an English plural (`KindNoun(kind) + "s"`, plus two literal
+    // "triggers"/"indexes"/"dependents"). That is the shape C7 removed with `PerformanceContext.OutputVerb`,
+    // for the same reason: an inflecting language cannot slot a nominative noun into an arbitrary sentence
+    // ("Ładowanie procedur…", genitive), and no translator can repair it from the catalog because the word
+    // does not live in a key. The rule that picks the key is `RecompileGroupTexts`.
+    public static string BatchPreparingListFunctions => Loc.Text(nameof(BatchPreparingListFunctions));
+    public static string BatchPreparingListIndexes => Loc.Text(nameof(BatchPreparingListIndexes));
+    public static string BatchPreparingListPackages => Loc.Text(nameof(BatchPreparingListPackages));
+    public static string BatchPreparingListProcedures => Loc.Text(nameof(BatchPreparingListProcedures));
+    public static string BatchPreparingListTriggers => Loc.Text(nameof(BatchPreparingListTriggers));
+    // {0} = index of the object being fetched, {1} = total. e.g. "Loading procedures 143 / 1965".
+    public static string BatchPreparingLoadDependentsFormat => Loc.Text(nameof(BatchPreparingLoadDependentsFormat));
+    public static string BatchPreparingLoadFunctionsFormat => Loc.Text(nameof(BatchPreparingLoadFunctionsFormat));
+    public static string BatchPreparingLoadPackagesFormat => Loc.Text(nameof(BatchPreparingLoadPackagesFormat));
+    public static string BatchPreparingLoadProceduresFormat => Loc.Text(nameof(BatchPreparingLoadProceduresFormat));
+    public static string BatchPreparingLoadTriggersFormat => Loc.Text(nameof(BatchPreparingLoadTriggersFormat));
     public static string TabCloseTooltip => Loc.Text(nameof(TabCloseTooltip));
 
     public static string ConnectionConnect => Loc.Text(nameof(ConnectionConnect));

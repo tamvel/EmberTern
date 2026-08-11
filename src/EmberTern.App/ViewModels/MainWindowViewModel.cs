@@ -6279,7 +6279,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task<BatchPlan> BuildTriggerBulkPlanAsync(TriggerBulkRequest req, BatchResultsViewModel vm, CancellationToken ct)
     {
-        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, "triggers"));
+        vm.ReportPreparation(UiStrings.BatchPreparingListTriggers);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var triggers = await _metadataReader.ListAsync(MetadataObjectKind.Trigger, ct).ConfigureAwait(true);
         BatchTrace.LogListEnumerate("Trigger", triggers.Count, sw.ElapsedMilliseconds);
@@ -6335,20 +6335,33 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task<(List<(string, string, string)> Steps, List<BatchOperationResult> PreFailures)>
         BuildRecompileStepsAsync(MetadataObjectKind kind, BatchResultsViewModel vm, CancellationToken ct)
     {
-        var noun = KindNoun(kind) + "s";
-        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, noun));
+        var texts = RecompileGroupTexts(kind);
+        vm.ReportPreparation(texts.ListText);
         var listSw = System.Diagnostics.Stopwatch.StartNew();
         var objs = await _metadataReader.ListAsync(kind, ct).ConfigureAwait(true);
         BatchTrace.LogListEnumerate(kind.ToString(), objs.Count, listSw.ElapsedMilliseconds);
-        return await BuildRecompileStepsForObjectsAsync(objs, noun, vm, ct).ConfigureAwait(true);
+        return await BuildRecompileStepsForObjectsAsync(
+            objs, texts.LoadFormat, kind.ToString(), vm, ct).ConfigureAwait(true);
     }
 
     // Builds recompile steps for a SPECIFIC set of objects, fetching each by ITS OWN kind —
     // reused by "Recompile all/group" (a uniform-kind list) and "Recompile dependents" (a
     // mixed-kind list). Per-object source-fetch failures become failed rows; Package emits two
     // steps (header + body).
+    //
+    // ⭐ <paramref name="progressFormat"/> is a WHOLE localized sentence taking {0} = index and
+    // {1} = total — not a noun this method slots into a sentence of its own. The caller owns the
+    // choice because it is the only side that knows the group: a uniform-kind list resolves it
+    // through RecompileGroupTexts, "Recompile dependents" is a mixed-kind list and has its own key.
+    //
+    // ⚠ <paramref name="traceKind"/> is SEPARATE and deliberately NOT localized: it is the class-E
+    // trace label (%TEMP% log), and translating a developer log makes a user's report HARDER to read,
+    // not easier (the C3 ruling). It used to share the display noun, so the log silently changed with
+    // the UI language while its sibling LogListEnumerate already logged the invariant enum name.
     private async Task<(List<(string, string, string)> Steps, List<BatchOperationResult> PreFailures)>
-        BuildRecompileStepsForObjectsAsync(IReadOnlyList<MetadataObject> objects, string noun, BatchResultsViewModel vm, CancellationToken ct)
+        BuildRecompileStepsForObjectsAsync(
+            IReadOnlyList<MetadataObject> objects, string progressFormat, string traceKind,
+            BatchResultsViewModel vm, CancellationToken ct)
     {
         var preFailures = new List<BatchOperationResult>();
         var op = UiStrings.BatchOpRecompile;
@@ -6360,7 +6373,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ct.ThrowIfCancellationRequested();
             i++;
             vm.ReportPreparation(i, objects.Count, string.Format(
-                CultureInfo.CurrentCulture, UiStrings.BatchPreparingLoadFormat, noun, i, objects.Count));
+                CultureInfo.CurrentCulture, progressFormat, i, objects.Count));
             try
             {
                 switch (o.Kind)
@@ -6388,7 +6401,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 preFailures.Add(new BatchOperationResult(o.Name, op, false, ex.Message));
             }
         }
-        BatchTrace.LogSourceFetch(noun, steps.Count, preFailures.Count, fetchSw.ElapsedMilliseconds);
+        BatchTrace.LogSourceFetch(traceKind, steps.Count, preFailures.Count, fetchSw.ElapsedMilliseconds);
         return (steps, preFailures);
     }
 
@@ -6436,7 +6449,9 @@ public partial class MainWindowViewModel : ViewModelBase
             string.Format(CultureInfo.CurrentCulture, UiStrings.RecompileDependentsBatchTitleFormat, compiled.Name),
             async (vm, ct) =>
             {
-                var (steps, pre) = await BuildRecompileStepsForObjectsAsync(result.Selected, "dependents", vm, ct).ConfigureAwait(true);
+                var (steps, pre) = await BuildRecompileStepsForObjectsAsync(
+                    result.Selected, UiStrings.BatchPreparingLoadDependentsFormat, "Dependents", vm, ct)
+                    .ConfigureAwait(true);
                 return new BatchPlan(steps, pre);
             },
             refreshAfter: false).ConfigureAwait(true);
@@ -6528,7 +6543,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task<BatchPlan> BuildRecomputeStatsPlanAsync(BatchResultsViewModel vm, CancellationToken ct)
     {
-        vm.ReportPreparation(string.Format(CultureInfo.CurrentCulture, UiStrings.BatchPreparingListFormat, "indexes"));
+        vm.ReportPreparation(UiStrings.BatchPreparingListIndexes);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var indexes = await _metadataReader.ListAsync(MetadataObjectKind.Index, ct).ConfigureAwait(true);
         BatchTrace.LogListEnumerate("Index", indexes.Count, sw.ElapsedMilliseconds);
@@ -6568,7 +6583,8 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex) when (ex is MetadataReadException or InvalidOperationException)
             {
-                allPre.Add(new BatchOperationResult(KindNoun(kind) + "s", UiStrings.BatchOpRecompile, false, ex.Message));
+                allPre.Add(new BatchOperationResult(
+                    RecompileGroupTexts(kind).PluralNoun, UiStrings.BatchOpRecompile, false, ex.Message));
             }
         }
         return new BatchPlan(allSteps, allPre);
@@ -6592,6 +6608,51 @@ public partial class MainWindowViewModel : ViewModelBase
         MetadataObjectKind.SystemTable => UiStrings.ObjectKindLowerSystemTable,
         _ => kind.ToString().ToLowerInvariant(),
     };
+
+    /// <summary>
+    /// The three group-scoped texts a recompile batch needs, chosen by a RULE over the kind.
+    ///
+    /// <para>⭐⭐ This exists because the previous shape composed the word instead of choosing it:
+    /// <c>KindNoun(kind) + "s"</c> glued an ENGLISH plural morpheme onto an already-localized noun and
+    /// handed the result to <c>"Loading {0}…"</c> as an argument. Both halves are wrong in an inflecting
+    /// language — the morpheme is not Polish's, and the case a sentence needs is not the nominative a
+    /// standalone noun carries ("Ładowanie procedur…", not "Ładowanie procedury…"). It is the same defect
+    /// C7 removed with <c>PerformanceContext.OutputVerb</c>, and the same answer: the producer picks a
+    /// KEY, never assembles a word.</para>
+    ///
+    /// <para>⭐ ONE table rather than three parallel switches, so a kind cannot be half-added — the failure
+    /// mode of three tables is one label silently left in the other language (#337's shape: an absent row
+    /// reads as compliance).</para>
+    ///
+    /// <para>⚠ The default arm throws rather than guessing, and that is safe because the set is CLOSED:
+    /// the tree gates the command on <c>MetadataNodeViewModel.IsRecompilableGroup</c> and
+    /// <see cref="BuildRecompileAllPlanAsync"/> iterates a fixed array of the same four kinds. ⛔ Do not
+    /// replace it with a plausible fallback — an invented plural is exactly what this method removes.
+    /// The premise is pinned by <c>RecompileGroupTexts_CoverExactlyTheRecompilableKinds</c>, so the day a
+    /// fifth kind becomes recompilable the test goes red instead of the label going English.</para>
+    /// </summary>
+    internal static (string ListText, string LoadFormat, string PluralNoun) RecompileGroupTexts(MetadataObjectKind kind)
+        => kind switch
+        {
+            MetadataObjectKind.Procedure => (
+                UiStrings.BatchPreparingListProcedures,
+                UiStrings.BatchPreparingLoadProceduresFormat,
+                UiStrings.ObjectKindPluralProcedure),
+            MetadataObjectKind.Function => (
+                UiStrings.BatchPreparingListFunctions,
+                UiStrings.BatchPreparingLoadFunctionsFormat,
+                UiStrings.ObjectKindPluralFunction),
+            MetadataObjectKind.Trigger => (
+                UiStrings.BatchPreparingListTriggers,
+                UiStrings.BatchPreparingLoadTriggersFormat,
+                UiStrings.ObjectKindPluralTrigger),
+            MetadataObjectKind.Package => (
+                UiStrings.BatchPreparingListPackages,
+                UiStrings.BatchPreparingLoadPackagesFormat,
+                UiStrings.ObjectKindPluralPackage),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(kind), kind, "Not a recompilable group; see MetadataNodeViewModel.IsRecompilableGroup."),
+        };
 
     /// <summary>
     /// The single authority for closing every workspace tab that represents a given
