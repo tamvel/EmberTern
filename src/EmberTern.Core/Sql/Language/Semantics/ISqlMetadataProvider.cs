@@ -59,6 +59,23 @@ public interface ISqlMetadataProvider
     /// (inputs and outputs; direction is on each row). Empty when unknown.</summary>
     IReadOnlyList<RoutineParameterMetadata> GetRoutineParameters(string routine);
 
+    /// <summary>
+    /// Whether this snapshot <b>knows</b> the parameter list of <paramref name="routine"/> — the exact
+    /// counterpart of <see cref="KnowsColumns"/>, and it exists for the same reason and by the same argument.
+    /// <para>
+    /// ⭐ It became load-bearing when a selectable procedure's <b>output parameters</b> became the column set
+    /// of a <c>FROM MY_PROC(…) alias</c> entry (2026-08-12). Routine parameters are warmed lazily exactly like
+    /// columns, so an empty <see cref="GetRoutineParameters"/> is the same undecidable signal — and without
+    /// this, every <c>alias.column</c> over a selectable procedure would be reported unknown until the warm
+    /// pass finished, which is S-2's "everything is underlined for a moment" reproduced verbatim one object
+    /// kind further along.
+    /// </para>
+    /// <para>⚠ The default is <c>true</c> for the same reason <see cref="KnowsColumns"/>'s is: a provider must
+    /// opt IN to reporting ignorance, because a diagnostic that never fires is indistinguishable from one that
+    /// does not exist.</para>
+    /// </summary>
+    bool KnowsRoutineParameters(string routine) => true;
+
     /// <summary>Every schema object the snapshot knows about — the material for baseline
     /// completion ("list all tables/views/procedures/…"). Point lookups (<see cref="FindObject"/>)
     /// serve the binder; this enumeration serves the completion engine (Etap 5). Returns an empty

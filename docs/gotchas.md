@@ -533,6 +533,51 @@ catalog's order — a lookup, not a fact about the text), a length mismatch (Fir
 pairing the prefix types values whose column is undecided), a predicate (`WHERE col = :p` is a token fragment at
 structural depth), and a value that is not the whole placeholder (`:a + 1`).
 
+369. **THE CONSTANT RULE — an AST-driven clause emitter that rebuilds its keyword from a CONSTANT never renders
+the tokens that constant replaces, so every comment carried as those tokens' leading trivia is rendered by
+NOBODY.** A comment is attached as the LEADING TRIVIA of the token it precedes. `EmitProjection` writes
+`Kw("select")`, `EmitFromClause` writes `Kw("from")`, `FormatWithClause` writes `Kw("with")` / the CTE name /
+`"as ("` / `")"` / `","`, `EmitSetOperation` writes the operator — none of them emit the *token* those constants
+stand for, so a comment sitting on it silently disappeared from the output. ⚠⚠ **The symptom is not a missing
+comment: §0's lexeme net catches the loss and reverts the whole statement to verbatim, so the formatter appears
+to DO NOTHING** — a user reported "autoformat does not work for this procedure", and deleting the routine's
+header comment fixed it (2026-08-12). ⭐ `EmitProjection` was worse than lossy: it also indexed the flattened
+clause at **0** to find the SELECT keyword, so with a leading comment present the real keyword fell into the
+COLUMN list and `select` was emitted **twice** — an *added* lexeme, which the net rejects just as hard.
+⭐⭐ **And the net compares the lexeme SEQUENCE, so recovering a comment on the wrong SIDE of a token is exactly
+as fatal as dropping it**: hoisting a comment that stood after a CTE body's `)` to above it kept the count right,
+kept the order wrong, and the net fired all the same. Hence the fix's two primitives — `CommentsIn`/`CommentsOn`
+for the run a constant replaces, and **`SplitCommentsAt`, which returns what stood BEFORE the run's first token
+and what stood AFTER it** — plus `TakeLeadingComments` for callers already on the flattened stream. **The rule:
+whatever a constant replaces, hand its comments back at the position they held, never at the top of the
+statement.** ⚠ This is [THE TAIL RULE](#) (#360-family, the `EmitQueryTail` comment) arriving from the other side:
+there a comment preceded a token no clause **owned**; here it precedes a token no clause **renders**. Measured
+scope when found: **9 of the first 13 shapes tried, across four emitters** — the report named one.
+*(`SqlFormatter.EmitProjection` / `EmitFromClause` / `FormatWithClause` / `EmitSetOperation`; guard
+`SqlFormatterCommentConstantRuleTests`, 17 of its 18 cases red before the fix)*
+
+371. **A selectable procedure's COLUMNS are its OUTPUT PARAMETERS — and the language layer asked the wrong
+catalog table, so every `alias.column` over `FROM MY_PROC(:a) y` came back unresolved.** Firebird lets a
+procedure stand where a table stands; the routine's `RETURNS` list then *is* the alias's column set. But
+`SemanticBinder.ResolveColumn` asked `ISqlMetadataProvider.GetColumns`, which for a procedure is legitimately
+empty, so a routine that **compiles** reported a false `ET0002 "unknown column"` on every one of its columns
+(user report 2026-08-12). ⭐⭐ **The quiet half was worse, and it decided where the fix goes: completion after
+`y.` offered ZERO items**, and Quick Info / navigation had nothing either. Patching the diagnostics engine
+would have silenced the squiggle and left three features broken — **a false positive and a missing feature can
+be the same bug seen from two sides, so locate the fix at the RESOLUTION step, not at the reporting step.**
+⭐ One owner: four call sites had independently asked "the columns of X" (`ResolveColumn`, completion's dot
+path, completion's implicit-single-table path, and the diagnostics engine's readiness check) and now all route
+through `FromSourceColumns`. ⚠⚠ **Two traps inside the fix.** (a) It keys on the **resolved catalog target
+symbol**, NOT on the AST's `RoutineTableReference` — which was the tempting structural signal and would have
+missed `FROM MY_NOARG_PROC` with no parentheses, a shape that parses as a plain `TableReference` and is
+indistinguishable from a table in the text (that node's own docstring says so). The catalog knows; the text does
+not. (b) It needed a `KnowsRoutineParameters` companion to `KnowsColumns` (#S-2's rule) because parameters are
+warmed **lazily like columns** — without it the fix would have reproduced *"everything is underlined for a
+moment, then the errors disappear"* one object kind further along. ⛔ Only OUTPUT parameters: an input parameter
+is an argument of the invocation, and offering it as a column would be a wrong answer rather than a noisy one.
+*(guard `SelectableProcedureColumnsTests` — 6 of its 9 cases red before the fix; its four negative cases are what
+keep it a fix rather than a mute button)*
+
 ## Avalonia UI: controls, XAML binding & templates
 
 1. **Avalonia color hex is ARGB, not RGBA.** `#FFFFFF12` parses as `A=FF, R=FF, G=FF, B=12` — an opaque pale-yellow brush. We wrote that for `HoverOverlayColor` meaning "7% white overlay", and it was always opaque yellow. Correct form is `#12FFFFFF` (alpha-first). Spent three iterations chasing this through Style selectors before realizing the hex itself was wrong. **Rule**: any `#XXXXXXXX` literal in `Colors.axaml` is ARGB; if you mean N% opacity, write `N×255/100` in the leading byte. Three-pair `#RRGGBB` is implicitly `A=FF`.
@@ -893,6 +938,22 @@ every emit path to be individually perfect.**
 303. **A text control's BOX is not its INK, and vertical centring aligns the box — so a row of "centred" elements can still read as misaligned, and the mismatch grows with how little of the line height the glyphs actually use.** A `TextBlock`'s height is the **line height**: ascent + descent. EmberTern's status bar puts `Szkoleniowa · localhost:3050` beside a 7px status dot, and the text is **descender-free**, so the bottom ~4 px of its 16 px box is empty — the ink sits high in the ascent and therefore **low in the box**. Measured: the ink's mass centre lands near **9.0** while the dot — whose ink *is* its box — sits at **8.0**, a visible offset the user reported twice. ⚠⚠ **The first fix aligned the box centres, measured perfectly equal, and the screen was still wrong**; only the second, an explicit **optical** correction, closed it. **Three rules.** **(a) When aligning text against a non-text element, reason about the ink** (baseline, cap height, x-height), never the box — box centring is correct only for elements that *are* their own ink. **(b) Apply the correction with a `RenderTransform`, not a margin**: it does not participate in layout, so it cannot interact with per-element pixel snapping or shift the neighbours; keep the value **integral** or the glyphs blur. **(c) `UseLayoutRounding="False"` is a tool for an element that IS its own ink** — a circle, a filled background. Placed on a control with text inside it, it makes things *worse*: the DEV MODE badge holds caps with padding, so its ink already sits high in its box, and the downward snap that "broke" the geometry was in fact compensating for that; removing the snap moved the badge half a pixel out of line. ⚠ Adjacent trap, paid for in the same session: the spot carried an emphatic older comment (*"⛔⛔ do not try to centre this vertically"*) backed by three measurements — true, but about a **different question** (two `Run`s inside one `TextBlock`, not the block versus its neighbour). **Read what a prior measurement was measuring before using it as an answer; the more emphatic it is, the stronger the pull to treat it as closed.** *(Product Polish M3, 2026-08-03; `product-polish.md` §19.19)*
 
 304. **A guard whose criterion is not the acceptance criterion is worse than no guard: it goes green on a bad result and closes the question.** The alignment fix above shipped with a test asserting that the dot, the text and the badge had equal box centres. It passed, and the screen was still visibly wrong — so the test did not merely fail to help, it **certified the defect** and made "measured, verified, done" the honest-looking summary. ⭐ The user's framing is the rule: *"potraktuj pomiary jako narzędzie diagnostyczne, a nie kryterium zakończenia zadania"* — a measurement is how you find the cause, not how you decide you are finished. **The repair is to NARROW the test to what the machine can actually judge, never to strengthen it**: here only the dot survives as an assertion (box == ink for a circle), and the text's optical offset is documented as a visual-QA matter with a `⛔ do not "strengthen" this back` note beside it. ⚠ The tell is specific and worth memorising: **you have a green test and a user still reporting the original symptom.** At that moment the test is a suspect, not evidence — and adding *more* assertions of the same kind makes the trap deeper. Generalises past pixels to anything judged by a human: readability, wording, latency "feel", audio levels. Related in spirit to R8 (a measurement is a tool, not a closing argument) and to #299 (run the instrument against a known-good artefact before believing it). *(Product Polish M3, 2026-08-03; `StatusBarConnectionDot_SitsOnTheRowAxis`)*
+
+370. **`x:DataType` on a `DataTemplate` is also the MATCHING type — so a stale one does not produce a binding
+error, it makes the template stop matching and the host silently falls back to `ToString()`.** The Execution
+Summary's per-table cards were re-based onto an App row view model (`ExecActivityLineViewModel`) while the
+`DataTemplate` kept declaring Core's `TableActivityLine`. Both types expose the bound members (`Table`,
+`Changes`), so nothing looked wrong in the markup — but the `ItemsControl` no longer selected the template and
+rendered the item with the default presenter, printing the literal text
+`EmberTern.App.ViewModels.ExecActivityLineViewModel` where the cards belonged (user report 2026-08-12).
+⛔ Do not think of `x:DataType` as a compile-time hint only; on a `DataTemplate` it carries `DataType` too.
+⚠⚠ **The reason this shipped is the more useful half: BOTH views carried a comment claiming
+"`ExecActivityCardTests` reads the realized text back", and no such class existed.** A named test in a comment
+is an assertion about the repository, and nothing checks it — so it reads as coverage while providing none. Two
+rules: **when you cite a guard by name, the citation is only as good as the guard — grep for it**; and **guard a
+template by asserting the REALIZED output** (`template.Match(item)`, or the text the tree actually renders), not
+by asserting what the XAML spells, because a type mismatch is only one of the ways this breaks. *(`ProcedureDetailTabView.axaml`
+/ `FunctionDetailTabView.axaml`; guard `ExecActivityCardTests`, red on the old markup)*
 
 ## MVVM / CommunityToolkit patterns
 

@@ -220,12 +220,36 @@ public static class SqlFormatter
         return comments.Length == 0 ? verbatim : comments + "\n" + verbatim;
     }
 
+    // ⭐⭐ THE CONSTANT RULE — read this before adding or editing an AST-driven clause emitter.
+    //
+    // An emitter that rebuilds its clause from a keyword CONSTANT — Kw("select"), Kw("from"), Kw("with"),
+    // Kw("as"), a set operator — never renders the TOKENS that constant replaces. A comment is carried as
+    // the LEADING TRIVIA of the token it precedes, so every comment attached to a replaced token is
+    // rendered by NOBODY.
+    //
+    // ⚠ The symptom is not a missing comment. §0's lexeme net sees the loss and reverts the whole
+    // statement to verbatim, so the formatter silently DOES NOTHING for that statement — measured
+    // 2026-08-12 across FOUR emitters (projection, FROM, WITH, set operation): a user's procedure whose
+    // body opened with one header comment could not be formatted at all, and deleting the comment fixed it.
+    // This is THE TAIL RULE above arriving from the other side: there a comment preceded a token no clause
+    // OWNED; here it precedes a token no clause RENDERS.
+    //
+    // The rule: whatever a constant replaces, ask CommentsIn for the comments in that token run and hand
+    // them to CommentsAbove, which puts them on their own line(s) immediately above the line the constant
+    // lands on. ⛔ Never hoist them to the top of the statement — a comment stays with the construct it
+    // annotated. Callers working on the FLATTENED stream (where Flatten has already materialised the
+    // comments as FTokens ahead of the keyword) use TakeLeadingComments instead, which also yields the
+    // index of the real keyword.
+
     // Renders the leading comments of a statement's first token, each on its own line, or "".
     private static string LeadingComments(SqlStatement stmt)
+        => stmt.Tokens.Count == 0 ? string.Empty : CommentsOn(stmt.Tokens[0]);
+
+    // The comments carried as leading trivia by one token, each on its own line, or "".
+    private static string CommentsOn(SqlToken token)
     {
-        if (stmt.Tokens.Count == 0) return string.Empty;
         StringBuilder? sb = null;
-        foreach (var tr in stmt.Tokens[0].LeadingTrivia)
+        foreach (var tr in token.LeadingTrivia)
         {
             if (tr.Kind is TriviaKind.LineComment or TriviaKind.BlockComment)
             {
@@ -235,6 +259,64 @@ public static class SqlFormatter
             }
         }
         return sb?.ToString() ?? string.Empty;
+    }
+
+    // The comments carried by the tokens of <paramref name="tokens"/> whose start lies in [lo, hi) — the
+    // token run an emitter is about to replace with a keyword constant. See THE CONSTANT RULE above.
+    private static string CommentsIn(IReadOnlyList<SqlToken> tokens, int lo, int hi)
+    {
+        StringBuilder? sb = null;
+        foreach (var t in tokens)
+        {
+            if (t.Start < lo || t.Start >= hi) continue;
+            var c = CommentsOn(t);
+            if (c.Length == 0) continue;
+            sb ??= new StringBuilder();
+            if (sb.Length > 0) sb.Append('\n');
+            sb.Append(c);
+        }
+        return sb?.ToString() ?? string.Empty;
+    }
+
+    // Peels the leading comment run off a FLATTENED clause, returning it as its own line(s) and advancing
+    // <paramref name="i"/> to the first significant token. See THE CONSTANT RULE above.
+    private static string TakeLeadingComments(List<FToken> f, ref int i)
+    {
+        StringBuilder? sb = null;
+        while (i < f.Count && f[i].IsComment)
+        {
+            sb ??= new StringBuilder();
+            if (sb.Length > 0) sb.Append('\n');
+            sb.Append(f[i].Text);
+            i++;
+        }
+        return sb?.ToString() ?? string.Empty;
+    }
+
+    // Puts a recovered comment block on its own line(s) above <paramref name="rendered"/>. "" ⇒ unchanged.
+    private static string CommentsAbove(string comments, string rendered)
+        => comments.Length == 0 ? rendered : comments + "\n" + rendered;
+
+    // Two recovered comment blocks, in source order, one per line. Either may be "".
+    private static string Join(string first, string second)
+        => first.Length == 0 ? second : second.Length == 0 ? first : first + "\n" + second;
+
+    // Splits the comments of a replaced token run around its FIRST token — what stood before that token,
+    // and what stood after it inside the run.
+    //
+    // ⚠⚠ The reason this returns TWO blocks and not one: §0's net compares the lexeme SEQUENCE, so a
+    // recovered comment emitted on the wrong SIDE of a token is exactly as fatal as a dropped one — the
+    // statement still reverts to verbatim and the formatter still appears to do nothing. Measured while
+    // fixing THE CONSTANT RULE: hoisting a comment that stood after ")" to above it left the lexeme count
+    // correct and the order wrong, and the net fired all the same.
+    private static (string Before, string After) SplitCommentsAt(IReadOnlyList<SqlToken> tokens, int lo, int hi)
+    {
+        foreach (var t in tokens)
+        {
+            if (t.Start < lo || t.Start >= hi) continue;
+            return (CommentsOn(t), CommentsIn(tokens, t.Start + 1, hi));
+        }
+        return (string.Empty, string.Empty);
     }
 
     private static void AppendTrailingComments(SqlScript root, List<string> parts)
@@ -329,14 +411,7 @@ public static class SqlFormatter
     private static string? TryFormatExecuteBlockHeader(FormatterStyle style, List<FToken> h)
     {
         int p = 0;
-        StringBuilder? commentPrefix = null;
-        while (p < h.Count && h[p].IsComment)
-        {
-            commentPrefix ??= new StringBuilder();
-            if (commentPrefix.Length > 0) commentPrefix.Append('\n');
-            commentPrefix.Append(h[p].Text);
-            p++;
-        }
+        var commentPrefix = TakeLeadingComments(h, ref p);
 
         if (p + 1 >= h.Count || !IsWordTok(h[p], "EXECUTE") || !IsWordTok(h[p + 1], "BLOCK"))
             return null;
@@ -372,7 +447,7 @@ public static class SqlFormatter
         if (j != h.Count) return null;
 
         sb.Append('\n').Append(Kw("as", style));
-        return commentPrefix is null ? sb.ToString() : commentPrefix + "\n" + sb;
+        return CommentsAbove(commentPrefix, sb.ToString());
     }
 
     private static int FindTopLevelAs(IReadOnlyList<SqlToken> tokens)
@@ -1343,8 +1418,12 @@ public static class SqlFormatter
     {
         var sb = new StringBuilder();
         sb.Append(EmitQuery(style, so.Left));
-        sb.Append('\n').Append(SetOperatorText(style, so.Operator));
-        if (so.All) sb.Append(' ').Append(Kw("all", style));
+        // THE CONSTANT RULE: the operator run between the two operands is replaced by constants. A comment
+        // before UNION / INTERSECT / EXCEPT goes above the operator; one standing between it and ALL must
+        // stay between them (order — see SplitCommentsAt).
+        var (opLead, beforeAll) = SplitCommentsAt(so.Tokens, so.Left.End, so.Right.Start);
+        sb.Append('\n').Append(CommentsAbove(opLead, SetOperatorText(style, so.Operator)));
+        if (so.All) sb.Append(beforeAll.Length == 0 ? " " : "\n" + beforeAll + "\n").Append(Kw("all", style));
         sb.Append('\n').Append(EmitQuery(style, so.Right));
         if (so.OrderBy is not null) sb.Append('\n').Append(Emit(style, Flatten(so.OrderBy.Tokens), so.OrderBy.Children));
         return sb.ToString();
@@ -1367,15 +1446,21 @@ public static class SqlFormatter
         if (sc.Children.Count == 0) return Emit(style, Flatten(sc.Tokens));
 
         var f = Flatten(sc.Tokens);
+        // ⚠ THE CONSTANT RULE: the SELECT keyword is NOT at index 0 when the clause carries a leading
+        // comment — Flatten materialises those comments as FTokens AHEAD of it. Anchoring the header at 0
+        // was measured to emit "select" TWICE (the real keyword fell into the item list) and to drop the
+        // comment, i.e. it broke the formatter for any routine opening with a header comment.
+        int kwIndex = 0;
+        var lead = TakeLeadingComments(f, ref kwIndex);
         // Header = "select" + a leading DISTINCT/ALL run (FIRST n / SKIP n stay with the first item — the
         // pre-convergence behaviour); items start after it.
-        int h = 1;
+        int h = kwIndex + 1;
         while (h < f.Count && f[h].Kind == FKind.Word
                && (f[h].Text.Equals("DISTINCT", StringComparison.OrdinalIgnoreCase)
                    || f[h].Text.Equals("ALL", StringComparison.OrdinalIgnoreCase)))
             h++;
         var header = new StringBuilder(Kw("select", style));
-        for (int k = 1; k < h; k++) header.Append(' ').Append(Cased(f[k], style));
+        for (int k = kwIndex + 1; k < h; k++) header.Append(' ').Append(Cased(f[k], style));
 
         var items = SplitTopLevelCommas(f, h, f.Count);
         var rendered = new List<string>(items.Count);
@@ -1390,11 +1475,11 @@ public static class SqlFormatter
 
         int projCol = header.Length + 1; // where the first item sits (after "select [mods] ")
         if (!anyBlock)
-            return header + " " + JoinAdaptive(rendered, projCol);
+            return CommentsAbove(lead, header + " " + JoinAdaptive(rendered, projCol));
 
         // Block mode: "select [mods]" on its own line, items at projCol; a block item on its own line(s),
         // single-line items packed adaptively.
-        return header + "\n" + PackProjectionItems(rendered, projCol);
+        return CommentsAbove(lead, header + "\n" + PackProjectionItems(rendered, projCol));
     }
 
     // The structural children (subquery / CASE) whose span falls inside a projection item's token range.
@@ -1477,13 +1562,19 @@ public static class SqlFormatter
             if (n is DerivedTable or SubqueryExpression or CaseExpression) { structural = true; break; }
         if (!structural) return Emit(style, Flatten(fc.Tokens));
 
+        // THE CONSTANT RULE: this path replaces the FROM keyword with a constant, so the comments that
+        // keyword carries are rendered by nobody. An ITEM's comments need no recovery — every item renders
+        // from its own tokens (a derived table whose leading token is a comment falls back to the token
+        // layout, which materialises it).
+        var lead = fc.Tokens.Count > 0 ? CommentsOn(fc.Tokens[0]) : string.Empty;
+
         var sb = new StringBuilder(Kw("from", style) + " ");
         for (int i = 0; i < fc.Items.Count; i++)
         {
             if (i > 0) sb.Append(", ");
             sb.Append(EmitFromItem(style, fc.Items[i]));
         }
-        return sb.ToString();
+        return CommentsAbove(lead, sb.ToString());
     }
 
     private static string EmitFromItem(FormatterStyle style, FromItem item) => item switch
@@ -1583,35 +1674,61 @@ public static class SqlFormatter
     // the lexeme net is the backstop regardless).
     private static string FormatWithClause(FormatterStyle style, WithQuery wq)
     {
+        var ctes = wq.With.Ctes;
+
+        // THE CONSTANT RULE — this layout is built almost entirely from constants ("with", "recursive", the
+        // CTE name, "as (", ")", ","), so each replaced token run must hand its comments back. Only the
+        // column list renders from tokens (via Flatten), so its own comments need no recovery.
         var sb = new StringBuilder(Kw("with", style));
+        var lead = ctes.Count > 0 ? CommentsIn(wq.Tokens, wq.Start, ctes[0].Start) : CommentsOn(wq.Tokens[0]);
         if (wq.With.IsRecursive) sb.Append(' ').Append(Kw("recursive", style));
 
-        var ctes = wq.With.Ctes;
         for (int c = 0; c < ctes.Count; c++)
         {
             var cte = ctes[c];
             var nameLine = new StringBuilder(Cased(cte.NameToken, style));
+            var nameLead = CommentsOn(cte.NameToken);
 
+            // Everything between the name and the body is constants: the optional "( cols )" parens and
+            // "as (". Each replaced position hands its comments back at ITS OWN place — a comment never
+            // crosses a token it stood after (order; see SplitCommentsAt). Only the column list itself
+            // renders from tokens, so its interior comments need no recovery.
+            int asFrom = cte.NameToken.End;
             if (cte.ColumnTokens is { Count: > 0 } colTokens)
             {
                 var flat = Flatten(colTokens);
                 var cols = SplitTopLevelCommas(flat, 0, flat.Count);
-                nameLine.Append(' ');
-                nameLine.Append(FormatAdaptiveList(style, cols, nameLine.Length + (c == 0 ? 5 : 0)));
+                var list = FormatAdaptiveList(style, cols, nameLine.Length + 1 + (c == 0 ? 5 : 0));
+                var preCols = CommentsIn(wq.Tokens, asFrom, colTokens[0].Start);
+                nameLine.Append(preCols.Length == 0 ? " " : "\n" + preCols + "\n").Append(list);
+                asFrom = colTokens[colTokens.Count - 1].End;
             }
+            var (asLead, beforeOpen) = SplitCommentsAt(wq.Tokens, asFrom, cte.Body.Start);
 
             string body = IndentBlock(EmitQuery(style, cte.Body), CteBodyIndent);
+            // The closing ")" and the "," to the next CTE are constants too, and they are two DIFFERENT
+            // positions: a comment before the ")" goes above it, one between ")" and "," goes after it.
+            int nextStart = c + 1 < ctes.Count ? ctes[c + 1].Start : wq.Query.Start;
+            var (closeLead, beforeComma) = SplitCommentsAt(wq.Tokens, cte.Body.End, nextStart);
 
-            sb.Append(c == 0 ? ' ' : '\n').Append(nameLine);
-            sb.Append('\n').Append(Kw("as", style)).Append(" (");
+            // The FIRST CTE's name shares the "with" line. A comment between "with" and the name therefore
+            // has no line to sit above — so when there is one, the name takes its own line rather than the
+            // comment jumping ahead of "with" (which preserved the comment but not its ORDER, and the net
+            // fired anyway).
+            if (c == 0) sb.Append(nameLead.Length == 0 ? " " + nameLine : "\n" + nameLead + "\n" + nameLine);
+            else sb.Append('\n').Append(CommentsAbove(nameLead, nameLine.ToString()));
+            sb.Append('\n').Append(CommentsAbove(
+                asLead, Kw("as", style) + (beforeOpen.Length == 0 ? " (" : "\n" + beforeOpen + "\n(")));
             sb.Append('\n').Append(body);
-            sb.Append('\n').Append(')');
-            if (c < ctes.Count - 1) sb.Append(',');
+            sb.Append('\n').Append(CommentsAbove(closeLead, ")"));
+            if (beforeComma.Length > 0) sb.Append('\n').Append(beforeComma);
+            // ⚠ A "," glued after a recovered LINE comment would be commented out — own line when needed.
+            if (c < ctes.Count - 1) sb.Append(beforeComma.Length > 0 ? "\n," : ",");
         }
 
         // Main query directly on the next line — a CTE query is ONE statement, not two.
         sb.Append('\n').Append(EmitQuery(style, wq.Query));
-        return sb.ToString();
+        return CommentsAbove(lead, sb.ToString());
     }
 
     // Prefixes every non-empty line of <paramref name="text"/> with <paramref name="indent"/>. Used to

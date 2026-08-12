@@ -77,7 +77,9 @@ public static class CompletionEngine
         result = CompletionResult.Empty;
         if (!TryResolveDotQualifier(model.Syntax.Tokens, offset, out var qualifier)) return false;
 
-        var table = ResolveDotTable(model, model.ScopeAt(offset), qualifier);
+        var source = ResolveDotSource(model, model.ScopeAt(offset), qualifier);
+        var table = source?.Name;
+        var target = source?.Target;
         if (table is null)
         {
             // Dot context, but the qualifier didn't resolve — return an empty *dot* result so the
@@ -86,7 +88,10 @@ public static class CompletionEngine
             return true;
         }
 
-        var cols = model.Metadata.GetColumns(table);
+        // ⭐ Not GetColumns: a selectable procedure in FROM contributes its OUTPUT parameters, and asking the
+        // catalog for its columns returned an empty list — so `y.` after `FROM MY_PROC(:a) y` offered NOTHING
+        // (measured 2026-08-12, the quiet half of the false-ET0002 report). One owner: FromSourceColumns.
+        var cols = FromSourceColumns.Of(model.Metadata, table, target);
         var items = new List<CompletionItem>(cols.Count);
         foreach (var c in cols)
         {
@@ -169,24 +174,29 @@ public static class CompletionEngine
         return qualifier.Length > 0;
     }
 
-    // Resolves the qualifier before the dot to a table/view name: a FROM/JOIN alias or table name,
+    // Resolves the qualifier before the dot to the SOURCE it names: a FROM/JOIN alias or table name,
     // a NEW/OLD trigger record, a DDL-introduced object in scope, or (fallback) a catalog object
     // referenced directly. Mirrors the App's prior SqlAliasResolver-based logic conceptually.
-    private static string? ResolveDotTable(SemanticModel model, Scope scope, string qualifier)
+    //
+    // ⚠ Returns the resolved TARGET SYMBOL alongside the name, because the name alone does not say where the
+    // column set lives — a selectable procedure's is its RETURNS list (FromSourceColumns). Returning only a
+    // string is what made this path unable to answer for `FROM MY_PROC(:a) y`.
+    private static (string? Name, Symbol? Target)? ResolveDotSource(SemanticModel model, Scope scope, string qualifier)
     {
         switch (scope.Resolve(qualifier))
         {
             case TableReferenceSymbol tref:
-                return tref.Target?.Name ?? tref.TargetName; // null for a derived table (no catalog columns)
+                // null Name for a derived table (its columns come from the subquery, not the catalog).
+                return (tref.Target?.Name ?? tref.TargetName, tref.Target);
             case RecordAliasSymbol rec:
-                return rec.TargetTable;
+                return (rec.TargetTable, null); // a NEW/OLD record is always a relation
             case SchemaObjectSymbol so when IsTableLike(so.Kind):
-                return so.Name;
+                return (so.Name, null);
         }
 
         // Not aliased in this scope — the qualifier may be a catalog table/view referenced directly.
         var obj = model.Metadata.FindObject(qualifier);
-        return obj is not null && IsTableLike(obj.Kind) ? obj.Name : null;
+        return obj is not null && IsTableLike(obj.Kind) ? (obj.Name, null) : null;
     }
 
     private static bool IsTableLike(SymbolKind kind)
@@ -235,15 +245,18 @@ public static class CompletionEngine
         // last token, where ScopeAt falls back to the script scope and loses the FROM tables. The
         // anchor token is always inside the statement span, so it names the right query scope.
         string? table = null;
+        Symbol? tableTarget = null;
         foreach (var sym in model.SymbolsInScope(prev.Start))
         {
-            if (sym is not TableReferenceSymbol { IsDerived: false, TargetName: { Length: > 0 } target }) continue;
-            if (table is null) { table = target; continue; }
+            if (sym is not TableReferenceSymbol { IsDerived: false, TargetName: { Length: > 0 } target } tsym) continue;
+            if (table is null) { table = target; tableTarget = tsym.Target; continue; }
             if (!string.Equals(table, target, StringComparison.OrdinalIgnoreCase)) return; // 2+ tables → require qualification
         }
         if (table is null) return;
 
-        foreach (var c in model.Metadata.GetColumns(table))
+        // Same one-owner rule as the dot path: the single in-scope source may be a selectable procedure, whose
+        // columns are its output parameters (`FROM MY_PROC(:a) WHERE |` must offer them, like any table).
+        foreach (var c in FromSourceColumns.Of(model.Metadata, table, tableTarget))
         {
             if (string.IsNullOrEmpty(c.Name)) continue;
             if (!seen.Add((c.Name, CompletionItemKind.Column))) continue;

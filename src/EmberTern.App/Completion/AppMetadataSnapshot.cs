@@ -134,6 +134,19 @@ internal sealed class AppMetadataSnapshot : ISqlMetadataProvider
             ? p
             : NoParameters;
 
+    /// <summary>
+    /// ⭐ The same honest "not loaded yet" the column cache can give, for parameters — and it became
+    /// load-bearing when a selectable procedure's OUTPUT parameters became the column set of a
+    /// <c>FROM MY_PROC(…) alias</c> entry (2026-08-12). The DICTIONARY distinguishes a missing key from a
+    /// present-but-empty entry; <see cref="GetRoutineParameters"/> collapses both, exactly as
+    /// <see cref="GetColumns"/> does.
+    /// <para>⚠ A present-but-EMPTY entry counts as KNOWN, for the same reason as columns: the warm pass caches
+    /// what it read, so a routine with no parameters has been answered and must not silence a genuine typo
+    /// forever.</para>
+    /// </summary>
+    public bool KnowsRoutineParameters(string routine)
+        => routine is not null && _routineParameters.ContainsKey(routine);
+
     public IReadOnlyList<ObjectMetadata> AllObjects() => _allObjects;
 }
 

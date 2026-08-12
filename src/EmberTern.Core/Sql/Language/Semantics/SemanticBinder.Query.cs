@@ -499,15 +499,20 @@ internal sealed partial class SemanticBinder
                 // A CTE-backed reference resolves against the CTE's OWN projection (its output columns),
                 // never the metadata catalog (which has no CTE) — that was the source of the false
                 // "unknown column" on cte.col. A catalog table/view still resolves through ResolveColumn.
+                // ⭐ Three sources, not two: a CTE resolves against its OWN projection, a SELECTABLE
+                // PROCEDURE against its OUTPUT parameters (FromSourceColumns), and a catalog table/view
+                // against its columns. The middle one was missing, so every `y.col` over
+                // `FROM MY_PROC(:a) y` came back unresolved — a false ET0002 plus an empty completion list.
                 var col = tref.Target is CteSymbol cte
                     ? ResolveCteColumn(cte, FoldedName(member))
-                    : ResolveColumn(tref.TargetName, FoldedName(member));
+                    : ResolveColumn(tref.TargetName, FoldedName(member), tref.Target);
                 AddReference(member, col, ReferenceRole.Column);
                 break;
 
             case RecordAliasSymbol rec:
                 AddReference(qualifier, rec, ReferenceRole.RecordAlias);
-                AddReference(member, ResolveColumn(rec.TargetTable, FoldedName(member)), ReferenceRole.Column);
+                // A NEW/OLD record alias is always a RELATION — never a routine — so no target is passed.
+                AddReference(member, ResolveColumn(rec.TargetTable, FoldedName(member), null), ReferenceRole.Column);
                 break;
 
             // Qualifier is not a known table/record alias (e.g. a package.function call, or an
@@ -542,9 +547,9 @@ internal sealed partial class SemanticBinder
         int matches = 0;
         foreach (var sym in scope.VisibleSymbols())
         {
-            if (sym is TableReferenceSymbol { TargetName: { } table })
+            if (sym is TableReferenceSymbol { TargetName: { } table } tsym)
             {
-                var col = ResolveColumn(table, name);
+                var col = ResolveColumn(table, name, tsym.Target);
                 if (col is not null)
                 {
                     matches++;
@@ -589,7 +594,11 @@ internal sealed partial class SemanticBinder
 
     private readonly Dictionary<string, ColumnSymbol?> _columnCache = new(StringComparer.OrdinalIgnoreCase);
 
-    private ColumnSymbol? ResolveColumn(string? table, string? column)
+    // <paramref name="target"/> is the FROM entry's RESOLVED target symbol, which decides WHERE the column
+    // set comes from (a relation's columns vs a selectable procedure's output parameters — FromSourceColumns).
+    // ⚠ It is deliberately absent from the cache key: the key is (name, column), and a name resolves to one
+    // kind for the whole model, so two entries over the same name always want the same answer.
+    private ColumnSymbol? ResolveColumn(string? table, string? column, Symbol? target)
     {
         if (string.IsNullOrEmpty(table) || string.IsNullOrEmpty(column)) return null;
         // Composite cache key: table + a NUL separator + column (NUL cannot occur in an identifier, so
@@ -598,7 +607,7 @@ internal sealed partial class SemanticBinder
         if (_columnCache.TryGetValue(key, out var cached)) return cached;
 
         ColumnSymbol? sym = null;
-        foreach (var c in _metadata.GetColumns(table!))
+        foreach (var c in FromSourceColumns.Of(_metadata, table!, target))
         {
             if (string.Equals(c.Name, column, StringComparison.OrdinalIgnoreCase))
             {

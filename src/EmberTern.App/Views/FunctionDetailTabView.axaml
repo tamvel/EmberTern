@@ -426,9 +426,13 @@
                          Foreground="{DynamicResource SubtleForegroundBrush}"
                          FontSize="{DynamicResource Text.Caption.Size}" FontWeight="SemiBold" />
               <!-- What was CHANGED, one distinct card per table (reads live in Performance). -->
-              <ItemsControl ItemsSource="{Binding ExecTableActivity}" IsVisible="{Binding HasExecTableActivity}">
+              <ItemsControl x:Name="ExecActivityCards"
+                            ItemsSource="{Binding ExecTableActivity}" IsVisible="{Binding HasExecTableActivity}">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="core:TableActivityLine">
+                  <!-- ⚠ The DataType MUST be the App row VM, not Core's TableActivityLine — see the same
+                       template in ProcedureDetailTabView: a stale x:DataType made the ItemsControl fall back
+                       to ToString() and print the VM's type name (user report 2026-08-12). -->
+                  <DataTemplate x:DataType="vm:ExecActivityLineViewModel">
                     <!-- ⭐ B2 ZAMKNIĘTE (M4.2, decyzja użytkownika na renderze): karta bierze `Radius.Surface` (3).
                          M2c iteracja 4 zostawiła tu literał 4 i oddała decyzję „karta: 3 czy 4" bramie §13.3 —
                          ⚠ która NIGDY jej nie podjęła (Z‑1…Z‑6 tego nie dotyczą), więc pozycja wypadła między

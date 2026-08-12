@@ -434,9 +434,15 @@
                          Foreground="{DynamicResource SubtleForegroundBrush}"
                          FontSize="{DynamicResource Text.Caption.Size}" FontWeight="SemiBold" />
               <!-- What was CHANGED, one distinct card per table (reads live in Performance). -->
-              <ItemsControl ItemsSource="{Binding ExecTableActivity}" IsVisible="{Binding HasExecTableActivity}">
+              <ItemsControl x:Name="ExecActivityCards"
+                            ItemsSource="{Binding ExecTableActivity}" IsVisible="{Binding HasExecTableActivity}">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="core:TableActivityLine">
+                  <!-- ⚠ The DataType MUST be the App row VM, not Core's TableActivityLine. C6 replaced the
+                       bound items with ExecActivityLineViewModel but left this type behind: on a DataTemplate
+                       x:DataType is also the MATCHING type, so the template stopped matching and the
+                       ItemsControl fell back to ToString() — the card area rendered the literal text
+                       "EmberTern.App.ViewModels.ExecActivityLineViewModel" (user report 2026-08-12). -->
+                  <DataTemplate x:DataType="vm:ExecActivityLineViewModel">
                     <!-- ⭐ B2 ZAMKNIĘTE (M4.2, decyzja użytkownika na renderze): karta bierze `Radius.Surface` (3).
                          M2c iteracja 4 zostawiła tu literał 4 i oddała decyzję „karta: 3 czy 4" bramie §13.3 —
                          ⚠ która NIGDY jej nie podjęła (Z‑1…Z‑6 tego nie dotyczą), więc pozycja wypadła między
