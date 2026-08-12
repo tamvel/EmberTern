@@ -18,7 +18,7 @@
 | | |
 |---|---|
 | Branch | **`master`** — current, clean working tree |
-| HEAD | `00931a2` *merge(localization): scalenie zamknietego etapu Localization* |
+| HEAD | `2ce68fe` *merge(fix): trzy defekty z jednego zgloszenia uzytkownika (2026-08-12)* |
 | Build | **0 warnings / 0 errors** (`TreatWarningsAsErrors=true`) |
 | Tests | **8 799 / 8 799 green** |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |

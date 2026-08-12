@@ -396,7 +396,7 @@ reasoning lives in the referenced document.
 It is the ONE place that answers *"what is done, what is open, what are we working on"*, and it is
 kept between 100 and 300 lines on purpose.
 
-At a glance, verified 2026-08-11: branch **`master`**, HEAD `00931a2`, build **0/0**, tests
+At a glance, verified 2026-08-12: branch **`master`**, HEAD `2ce68fe`, build **0/0**, tests
 **8 799 green**, version **0.5.0**. Both long-running feature branches (`feat/product-polish`,
 `feat/localization`) are **merged into `master`**, so a new session starts from `master`.
 **No stage is in progress — the next topic is a user decision.**
