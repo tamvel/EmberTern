@@ -66,6 +66,7 @@ that used to live here still exists verbatim in `docs/history/`.
 | `design/keyboard-manager.md` | Before touching `App/Commands`, a shortcut, a gesture tooltip, or a context menu. |
 | `design/hamburger-navigation.md` | Application menu, About, Keyboard Shortcuts, third-party notices. |
 | `design/settings-center.md` | Before touching `Core/Settings`, the theme, formatter casing, or settings export. |
+| `design/find-replace-panel.md` | 📋 Ratified-not-started: our own Find/Replace panel over AvaloniaEdit's search engine. Holds the measurements (why no cheaper seam exists) and the 3 unknowns to measure first. |
 | `design/localization.md` | **Before any localization work.** Ratified D‑1/D‑2/D‑3; §2.1 records why the indexer binding is dead. |
 | `design/avalonia-12.1.1-update.md` | Before changing an Avalonia package version. Records the two deliberate version mismatches. |
 
@@ -396,7 +397,7 @@ It is the ONE place that answers *"what is done, what is open, what are we worki
 kept between 100 and 300 lines on purpose.
 
 At a glance, verified 2026-08-11: branch **`master`**, HEAD `00931a2`, build **0/0**, tests
-**8 768 green**, version **0.5.0**. Both long-running feature branches (`feat/product-polish`,
+**8 799 green**, version **0.5.0**. Both long-running feature branches (`feat/product-polish`,
 `feat/localization`) are **merged into `master`**, so a new session starts from `master`.
 **No stage is in progress — the next topic is a user decision.**
 
@@ -538,7 +539,7 @@ reference for the full explanation and the failure it prevents.
 
 ⛔ **The entry count is deliberately NOT written down here.** Three separate counters used to carry it
 and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-11:
-**357 entry lines over 355 distinct numbers, max #368**):
+**360 entry lines over 358 distinct numbers, max #371**):
 
 ```bash
 grep -cE "^[0-9]+\. \*\*" docs/gotchas.md
@@ -616,6 +617,12 @@ sections, so a bare "#303" is ambiguous.
   `CanExecute`) needs an explicit `NotifyPropertyChangedFor`/`OnPropertyChanged` on **every**
   mutation path — correctly computing the value isn't enough if nothing tells the binding to
   re-query it (symptom: "the feature works but the button stays disabled"). *(#179, #187)*
+- **`x:DataType` on a `DataTemplate` is also the MATCHING type**, so a stale one produces no binding
+  error — the template stops matching and the host silently renders the item's `ToString()`, i.e. a
+  type name on screen where the content belonged. ⚠ Guard a template by asserting the **realized**
+  output (`template.Match(item)` / the text the tree renders), never by what the XAML spells; and
+  when a comment cites a test by name, **grep for it** — a named guard that does not exist reads as
+  coverage while providing none. *(#370)*
 
 **Editor language front-end (the current, active work)**
 - The AST round-trips the source byte-for-byte via the retained token stream — this is
@@ -625,6 +632,20 @@ sections, so a bare "#303" is ambiguous.
 - No transitional class names (`V2`, `NewX`, `Temp`, `Parser2`, …) are left in the codebase once
   a migration completes — consolidate to the plain responsibility name the moment the old
   implementation is deleted. *(#195)*
+- **THE CONSTANT RULE.** An AST-driven clause emitter that rebuilds its keyword from a **constant**
+  (`Kw("select")`, `Kw("from")`, `Kw("with")`, a set operator) never renders the tokens that constant
+  replaces — so a comment carried as those tokens' leading trivia is rendered by nobody, §0's net
+  reverts the statement, and the formatter silently **does nothing**. Hand the comments back at the
+  position they held (`CommentsIn` / `SplitCommentsAt` / `TakeLeadingComments`); ⛔ never hoist them to
+  the top. ⚠ The net compares the lexeme **sequence**, so a recovered comment on the wrong side of a
+  token is as fatal as a dropped one. *(#369; the mirror of THE TAIL RULE in `SqlFormatter`)*
+- **A false positive and a missing feature can be the same bug** — so fix it at the **resolution** step,
+  never at the reporting step. A selectable procedure's columns are its **output parameters**; the binder
+  asked `GetColumns` (empty for a procedure), which surfaced as a false `ET0002` *and* as completion
+  offering nothing after `alias.`. ⛔ Do not key such a decision on the AST node (`RoutineTableReference`
+  misses paren-less `FROM MY_NOARG_PROC`) — key it on the **resolved catalog target**; and give every new
+  lazily-warmed fact a `Knows…` readiness answer, or S-2's "everything underlined for a moment" returns.
+  *(#371)*
 - Any offset→scope/reference lookup driving an editor feature (completion, Quick Info, go-to-def)
   must be **inclusive at the end of a span** — the caret sitting at the exact end of a
   statement/identifier is the single most common position, and a half-open range silently

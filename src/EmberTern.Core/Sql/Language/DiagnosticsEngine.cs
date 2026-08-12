@@ -221,10 +221,19 @@ public static class DiagnosticsEngine
     /// a name that is not a catalog object would silence every CTE typo.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// ⚠ The table arm asks <see cref="FromSourceColumns.AreKnown"/> rather than
+    /// <see cref="ISqlMetadataProvider.KnowsColumns"/> directly, because the readiness question has the same
+    /// two answers as the column question itself: a selectable procedure's columns are its OUTPUT parameters,
+    /// which are warmed on their own schedule. Asking about columns there would report "known" while the
+    /// parameters were still unwarmed — reproducing S-2's "everything underlined for a moment" for exactly
+    /// the object kind the fix was about (2026-08-12).
+    /// </remarks>
     private static bool ColumnsAreKnown(SymbolReference qualifier, ISqlMetadataProvider metadata) => qualifier.Symbol switch
     {
         TableReferenceSymbol { Target: CteSymbol } => true,
-        TableReferenceSymbol { TargetName: { Length: > 0 } table } => metadata.KnowsColumns(table),
+        TableReferenceSymbol { TargetName: { Length: > 0 } table } t
+            => FromSourceColumns.AreKnown(metadata, table, t.Target),
         RecordAliasSymbol { TargetTable: { Length: > 0 } recordTable } => metadata.KnowsColumns(recordTable),
         _ => true,
     };
