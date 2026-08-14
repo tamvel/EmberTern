@@ -102,18 +102,20 @@ public sealed class ImportProfileStore
     {
         if (string.IsNullOrEmpty(connectionId)) return;
 
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        var list = settings.UserSettings.ImportProfiles;
-        var entry = list.FirstOrDefault(p => IsImplicitFor(p, connectionId));
-        if (entry is null)
+        // ⚠ Through Update — see ApplicationSettingsStore.Update.
+        _settings.Update(settings =>
         {
-            entry = new ImportProfile { Name = string.Empty, ConnectionId = connectionId };
-            list.Add(entry);
-        }
+            var list = settings.UserSettings.ImportProfiles;
+            var entry = list.FirstOrDefault(p => IsImplicitFor(p, connectionId));
+            if (entry is null)
+            {
+                entry = new ImportProfile { Name = string.Empty, ConnectionId = connectionId };
+                list.Add(entry);
+            }
 
-        entry.Configuration = configuration;
-        entry.LastUsedUtc = DateTime.UtcNow;
-        _settings.Save(settings);
+            entry.Configuration = configuration;
+            entry.LastUsedUtc = DateTime.UtcNow;
+        });
     }
 
     /// <summary>Forgets the implicit entry for this connection — the „Wyczyść" affordance beside the
@@ -122,15 +124,17 @@ public sealed class ImportProfileStore
     {
         if (string.IsNullOrEmpty(connectionId)) return;
 
-        var settings = _settings.Load();
-        if (settings is null) return;
-
-        var list = settings.UserSettings.ImportProfiles;
-        var entry = list.FirstOrDefault(p => IsImplicitFor(p, connectionId));
-        if (entry is null) return;
-
-        list.Remove(entry);
-        _settings.Save(settings);
+        // ⚠ Through Update (class B): this already declined to fabricate defaults, but its read still happened
+        // outside the write lock, so it could act on a stale list. One locked operation now.
+        _settings.Update(settings =>
+        {
+            var list = settings.UserSettings.ImportProfiles;
+            var entry = list.FirstOrDefault(p => IsImplicitFor(p, connectionId));
+            if (entry is not null)
+            {
+                list.Remove(entry);
+            }
+        });
     }
 
     // ── Named profiles (etap I11) ───────────────────────────────────────────────────────────────────────
@@ -192,23 +196,38 @@ public sealed class ImportProfileStore
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
 
         var trimmed = name.Trim();
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        var list = settings.UserSettings.ImportProfiles;
 
-        var entry = list.FirstOrDefault(p => !p.IsImplicit
-                                             && IsVisibleTo(p, connectionId)
-                                             && NameMatches(p, trimmed));
-        if (entry is null)
+        // ⚠ Through Update — see ApplicationSettingsStore.Update. The entry is built inside the locked section
+        // and handed back out, so the caller still receives the profile it asked for.
+        ImportProfile? saved = null;
+        _settings.Update(settings =>
         {
-            entry = new ImportProfile { Name = trimmed, ConnectionId = connectionId };
-            list.Add(entry);
-        }
+            var list = settings.UserSettings.ImportProfiles;
 
-        entry.Name = trimmed;
-        entry.Configuration = configuration;
-        entry.LastUsedUtc = DateTime.UtcNow;
-        _settings.Save(settings);
-        return entry;
+            var entry = list.FirstOrDefault(p => !p.IsImplicit
+                                                 && IsVisibleTo(p, connectionId)
+                                                 && NameMatches(p, trimmed));
+            if (entry is null)
+            {
+                entry = new ImportProfile { Name = trimmed, ConnectionId = connectionId };
+                list.Add(entry);
+            }
+
+            entry.Name = trimmed;
+            entry.Configuration = configuration;
+            entry.LastUsedUtc = DateTime.UtcNow;
+            saved = entry;
+        });
+
+        // ⚠ A refused write (unreadable settings.dat) still owes the caller a profile object — the same shape
+        // it always returned — but nothing was persisted; LastSaveDiagnostic on the store carries the reason.
+        return saved ?? new ImportProfile
+        {
+            Name = trimmed,
+            ConnectionId = connectionId,
+            Configuration = configuration,
+            LastUsedUtc = DateTime.UtcNow,
+        };
     }
 
     /// <summary>True when a profile of this name already exists in the same scope — what turns "Save as…" into
@@ -235,22 +254,27 @@ public sealed class ImportProfileStore
         if (string.IsNullOrEmpty(id) || string.IsNullOrWhiteSpace(newName)) return false;
 
         var trimmed = newName.Trim();
-        var settings = _settings.Load();
-        if (settings is null) return false;
 
-        var list = settings.UserSettings.ImportProfiles;
-        var entry = list.FirstOrDefault(p => !p.IsImplicit && string.Equals(p.Id, id, StringComparison.Ordinal));
-        if (entry is null) return false;
+        // ⚠ Through Update (class B). "Renamed" now means "renamed AND persisted": the check and the write are
+        // one locked operation, so a name cannot be taken between deciding it was free and storing it.
+        var renamed = false;
+        var persisted = _settings.Update(settings =>
+        {
+            var list = settings.UserSettings.ImportProfiles;
+            var entry = list.FirstOrDefault(p => !p.IsImplicit && string.Equals(p.Id, id, StringComparison.Ordinal));
+            if (entry is null) return;
 
-        var taken = list.Any(p => !p.IsImplicit
-                                  && !ReferenceEquals(p, entry)
-                                  && IsVisibleTo(p, entry.ConnectionId)
-                                  && NameMatches(p, trimmed));
-        if (taken) return false;
+            var taken = list.Any(p => !p.IsImplicit
+                                      && !ReferenceEquals(p, entry)
+                                      && IsVisibleTo(p, entry.ConnectionId)
+                                      && NameMatches(p, trimmed));
+            if (taken) return;
 
-        entry.Name = trimmed;
-        _settings.Save(settings);
-        return true;
+            entry.Name = trimmed;
+            renamed = true;
+        });
+
+        return renamed && persisted;
     }
 
     /// <summary>Removes a named profile. Destructive, so the caller confirms first (§0).</summary>
@@ -258,16 +282,19 @@ public sealed class ImportProfileStore
     {
         if (string.IsNullOrEmpty(id)) return false;
 
-        var settings = _settings.Load();
-        if (settings is null) return false;
+        // ⚠ Through Update (class B). Same shape as Rename: true means the profile is gone FROM THE FILE.
+        var removed = false;
+        var persisted = _settings.Update(settings =>
+        {
+            var list = settings.UserSettings.ImportProfiles;
+            var entry = list.FirstOrDefault(p => !p.IsImplicit && string.Equals(p.Id, id, StringComparison.Ordinal));
+            if (entry is null) return;
 
-        var list = settings.UserSettings.ImportProfiles;
-        var entry = list.FirstOrDefault(p => !p.IsImplicit && string.Equals(p.Id, id, StringComparison.Ordinal));
-        if (entry is null) return false;
+            list.Remove(entry);
+            removed = true;
+        });
 
-        list.Remove(entry);
-        _settings.Save(settings);
-        return true;
+        return removed && persisted;
     }
 
     // ⚠ There is deliberately NO "mark this profile as used" here. ImportProfile.LastUsedUtc exists and is

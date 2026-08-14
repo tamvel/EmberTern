@@ -59,28 +59,29 @@ public sealed class WatchStore
             return;
         }
 
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        var list = settings.UserSettings.DebugWatches;
-        var entry = list.FirstOrDefault(e => Matches(e, connectionId, objectName));
-
-        if (expressions.Count == 0)
+        // ⚠ Through Update — see ApplicationSettingsStore.Update.
+        _settings.Update(settings =>
         {
-            if (entry is not null)
-            {
-                list.Remove(entry);
-            }
-        }
-        else
-        {
-            if (entry is null)
-            {
-                entry = new DebugWatchEntry { ConnectionId = connectionId, ObjectName = objectName };
-                list.Add(entry);
-            }
-            entry.Expressions = expressions.ToList();
-        }
+            var list = settings.UserSettings.DebugWatches;
+            var entry = list.FirstOrDefault(e => Matches(e, connectionId, objectName));
 
-        _settings.Save(settings);
+            if (expressions.Count == 0)
+            {
+                if (entry is not null)
+                {
+                    list.Remove(entry);
+                }
+            }
+            else
+            {
+                if (entry is null)
+                {
+                    entry = new DebugWatchEntry { ConnectionId = connectionId, ObjectName = objectName };
+                    list.Add(entry);
+                }
+                entry.Expressions = expressions.ToList();
+            }
+        });
     }
 
     private static bool Matches(DebugWatchEntry e, string connectionId, string objectName)

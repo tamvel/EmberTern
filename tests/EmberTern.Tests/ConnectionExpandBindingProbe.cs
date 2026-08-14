@@ -74,27 +74,23 @@ public sealed class HeadlessSessionFixture : IDisposable
 {
     public HeadlessUnitTestSession Session { get; } = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
 
-    /// <summary>
-    /// ⭐⭐ <b>Warms the session up ONCE, here, instead of letting the first test trigger it.</b>
-    ///
-    /// <para><c>HeadlessUnitTestSession</c> builds its isolated Avalonia application LAZILY, inside the first
-    /// <c>Dispatch</c> — <c>EnsureIsolatedApplication</c> → <c>AvaloniaHeadlessPlatform.Initialize</c> →
-    /// <c>Compositor</c> → <c>DefaultRenderLoop.Add</c> → <c>Dispatcher.VerifyAccess()</c>. That makes
-    /// first-use timing part of the test run, and it is not private to this collection: xunit runs other
-    /// collections in PARALLEL with it, so whichever test dispatched first raced with whatever else was
-    /// touching Avalonia at that moment. Measured on the full single-command run: <c>BrandingPresentationTests</c>
-    /// died in <c>EnsureIsolatedApplication</c> with "the calling thread cannot access this object" in <b>2 of
-    /// 4</b> runs, while passing every time the suite was split into partitions — i.e. the hand-maintained
-    /// partitioning had been hiding this too.</para>
-    ///
-    /// <para>⭐ One empty dispatch in the constructor moves the whole platform setup to a single known moment,
-    /// on the session's own thread, before any test runs. ⛔ Do not make it conditional or lazy again "because
-    /// it costs a few milliseconds" — the cost is paid once per process and it is what makes the run
-    /// repeatable.</para>
-    /// </summary>
-    public HeadlessSessionFixture()
-        => Session.Dispatch(static () => { }, CancellationToken.None).GetAwaiter().GetResult();
-
+    // ⛔⛔ DO NOT ADD A CONSTRUCTOR THAT "WARMS THE SESSION UP". It was tried, measured, and reverted.
+    //
+    // HeadlessUnitTestSession builds its isolated Avalonia application LAZILY, inside the first Dispatch:
+    // EnsureIsolatedApplication → AvaloniaHeadlessPlatform.Initialize → Compositor → DefaultRenderLoop.Add →
+    // Dispatcher.VerifyAccess(). That last call intermittently throws "the calling thread cannot access this
+    // object". It is a real, still-open infrastructure defect (#94 / #226 / #286) — whichever headless test
+    // dispatches FIRST is the one that dies, which is why the failing test name changes every run.
+    //
+    // ⚠⚠ Adding `Session.Dispatch(() => { })` here looks like the obvious fix — one known moment, before any
+    // test. It does not touch the race; it only moves it into FIXTURE CONSTRUCTION, and a collection fixture
+    // that throws fails EVERY test in the collection. Measured on the full single-command run: with the
+    // warm-up a bad run lost 375 tests, without it the same bad run loses 1, and the failure RATE was
+    // indistinguishable (~2 in 5 either way). It bought nothing and multiplied the damage 375×.
+    //
+    // ⭐ The general lesson: making a flaky lazy initialisation EAGER does not make it reliable, it makes it
+    // load-bearing earlier. The real fix needs Avalonia's headless dispatcher/scope question answered — its own
+    // task, recorded in docs/current-state.md.
     public void Dispose() => Session.Dispose();
 
     private static class HeadlessAppEntry

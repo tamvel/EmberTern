@@ -225,9 +225,10 @@ public static class SettingsImportApplier
                 Array.Empty<string>());
         }
 
-        var current = store.Load() ?? new ApplicationSettings();
-        Merge(current, content, effective);
-        store.Save(current);
+        // ⚠ Through Update — see ApplicationSettingsStore.Update. An import MERGES, so the loaded file is the
+        // merge base: `Load() ?? new ApplicationSettings()` would have merged into DEFAULTS after a transient
+        // read failure and written that, dropping every section the import did not carry.
+        store.Update(current => Merge(current, content, effective));
 
         if (store.LastSaveDiagnostic is { } diagnostic)
         {

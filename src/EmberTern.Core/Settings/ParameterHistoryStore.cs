@@ -69,45 +69,46 @@ public sealed class ParameterHistoryStore
             return;
         }
 
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        var list = settings.UserSettings.ParameterHistory;
-        var entry = list.FirstOrDefault(e => Matches(e, connectionId, objectKind, objectName));
-        if (entry is null)
+        // ⚠ Through Update — see ApplicationSettingsStore.Update.
+        _settings.Update(settings =>
         {
-            entry = new ParameterHistoryEntry
+            var list = settings.UserSettings.ParameterHistory;
+            var entry = list.FirstOrDefault(e => Matches(e, connectionId, objectKind, objectName));
+            if (entry is null)
             {
-                ConnectionId = connectionId,
-                ObjectKind = objectKind,
-                ObjectName = objectName,
-            };
-            list.Add(entry);
-        }
-
-        var stamped = new ParameterSet
-        {
-            ExecutedAt = DateTime.Now,
-            // TypeText is carried like every other field: dropping it here would store a value whose
-            // compatibility can never again be proven, which is exactly what the restore rule needs it for.
-            Values = values
-                .Select(v => new ParameterValue { Name = v.Name, IsNull = v.IsNull, Text = v.Text, TypeText = v.TypeText })
-                .ToList(),
-        };
-
-        if (entry.Executions.Count > 0 && ValuesEqual(entry.Executions[0].Values, stamped.Values))
-        {
-            // Same as the most recent run — just refresh its timestamp.
-            entry.Executions[0].ExecutedAt = stamped.ExecutedAt;
-        }
-        else
-        {
-            entry.Executions.Insert(0, stamped);
-            if (entry.Executions.Count > MaxSets)
-            {
-                entry.Executions.RemoveRange(MaxSets, entry.Executions.Count - MaxSets);
+                entry = new ParameterHistoryEntry
+                {
+                    ConnectionId = connectionId,
+                    ObjectKind = objectKind,
+                    ObjectName = objectName,
+                };
+                list.Add(entry);
             }
-        }
 
-        _settings.Save(settings);
+            var stamped = new ParameterSet
+            {
+                ExecutedAt = DateTime.Now,
+                // TypeText is carried like every other field: dropping it here would store a value whose
+                // compatibility can never again be proven, which is exactly what the restore rule needs it for.
+                Values = values
+                    .Select(v => new ParameterValue { Name = v.Name, IsNull = v.IsNull, Text = v.Text, TypeText = v.TypeText })
+                    .ToList(),
+            };
+
+            if (entry.Executions.Count > 0 && ValuesEqual(entry.Executions[0].Values, stamped.Values))
+            {
+                // Same as the most recent run — just refresh its timestamp.
+                entry.Executions[0].ExecutedAt = stamped.ExecutedAt;
+            }
+            else
+            {
+                entry.Executions.Insert(0, stamped);
+                if (entry.Executions.Count > MaxSets)
+                {
+                    entry.Executions.RemoveRange(MaxSets, entry.Executions.Count - MaxSets);
+                }
+            }
+        });
     }
 
     private static bool Matches(ParameterHistoryEntry e, string connectionId, string objectKind, string objectName)

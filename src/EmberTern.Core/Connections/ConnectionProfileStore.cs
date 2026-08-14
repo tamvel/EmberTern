@@ -74,32 +74,27 @@ public sealed class ConnectionProfileStore
     public IReadOnlyList<ConnectionProfile> LoadAll()
         => _settings.Load()?.Connections ?? new List<ConnectionProfile>();
 
+    // ⚠ These three read, change one section and write. They go through ApplicationSettingsStore.Update so the
+    // read and the write are one locked operation: `Load() ?? new ApplicationSettings()` turned a transient
+    // read failure into DEFAULTS, and saving those replaced every profile and password in the file.
     public void SaveAll(IEnumerable<ConnectionProfile> profiles)
-    {
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        settings.Connections = profiles.ToList();
-        _settings.Save(settings);
-    }
+        => _settings.Update(settings => settings.Connections = profiles.ToList());
 
     public void Upsert(ConnectionProfile profile)
-    {
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        var existing = settings.Connections.FindIndex(p => p.Id == profile.Id);
-        if (existing >= 0)
+        => _settings.Update(settings =>
         {
-            settings.Connections[existing] = profile;
-        }
-        else
-        {
-            settings.Connections.Add(profile);
-        }
-        _settings.Save(settings);
-    }
+            var existing = settings.Connections.FindIndex(p => p.Id == profile.Id);
+            if (existing >= 0)
+            {
+                settings.Connections[existing] = profile;
+            }
+            else
+            {
+                settings.Connections.Add(profile);
+            }
+        });
 
     public void Delete(string id)
-    {
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        settings.Connections = settings.Connections.Where(p => p.Id != id).ToList();
-        _settings.Save(settings);
-    }
+        => _settings.Update(
+            settings => settings.Connections = settings.Connections.Where(p => p.Id != id).ToList());
 }

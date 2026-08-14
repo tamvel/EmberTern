@@ -370,6 +370,100 @@ public sealed class ApplicationSettingsStore
             return;
         }
 
+        SaveCore(settings);
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>Reads the current settings, lets the caller change one section, and writes the result — all
+    /// inside ONE hold of the cross-process lock.</b> The safe replacement for the
+    /// <c>Load() ?? new ApplicationSettings()</c> → mutate → <see cref="Save"/> sequence every section facade
+    /// used to perform.
+    ///
+    /// <para>⚠⚠ <b>Why the old sequence was a data-loss bug, measured rather than reasoned.</b>
+    /// <see cref="Load"/> collapses every failure to <c>null</c> — a missing file and a file that merely could
+    /// not be read at that instant are indistinguishable to a caller — and <c>?? new ApplicationSettings()</c>
+    /// then turns a transient read failure into DEFAULTS. <see cref="Save"/>'s A-03 guard does not catch it:
+    /// that guard judges the file at WRITE time, while the damage was decided by a READ that had already
+    /// failed, and by then the file is readable again and perfectly writable. Measured against a concurrent
+    /// publisher: <b>182 failed reads, 89 of which wrote defaults, ending with 0 of 5 connection profiles
+    /// surviving</b> — profiles and their passwords, silently, with nothing thrown and nothing logged.</para>
+    ///
+    /// <para>⭐ <b>The fix is the lock's SCOPE, not a retry.</b> A read taken while holding this lock cannot
+    /// collide with another EmberTern instance's publish step, because <see cref="TryAtomicWrite"/> runs inside
+    /// the very same lock. The race window is not narrowed, it stops existing. A failure that survives the lock
+    /// is therefore a real one (antivirus, backup agent, network path) and is answered the way A-03 answers
+    /// every unreadable file: refuse, change nothing, report.</para>
+    ///
+    /// <para>⭐⭐ <b><see cref="SettingsLoadStatus.Missing"/> is the ONLY status that may produce a default
+    /// aggregate, and this is the ONLY place in the codebase that may produce one.</b> <c>Unreadable</c>,
+    /// <c>Corrupt</c> and <c>FutureVersion</c> all end the operation with the file untouched.
+    /// <c>NoSectionFacade_TurnsAFailedReadIntoDefaults</c> keeps it that way.</para>
+    ///
+    /// <para>⛔ It must not call the public <see cref="Save"/>: that would take the lock a second time. Both are
+    /// thin wrappers over <c>SaveCore</c>, which assumes the lock is already held.</para>
+    /// </summary>
+    /// <param name="mutate">Applies the caller's change to the aggregate. Runs while the lock is held, so it
+    /// must not perform I/O of its own or call back into this store.</param>
+    /// <returns>True when the change reached the file; false when it did not, with the reason in
+    /// <see cref="LastSaveDiagnostic"/> — and, when false, <b>the file on disk is unchanged</b>.</returns>
+    public bool Update(Action<ApplicationSettings> mutate)
+    {
+        ArgumentNullException.ThrowIfNull(mutate);
+        LastSaveDiagnostic = null;
+        LastSaveMessage = null;
+
+        using var fileLock = TryAcquireFileLock(out var lockDiagnostic, out var lockMessage);
+        if (fileLock is null)
+        {
+            LastSaveDiagnostic = lockDiagnostic;
+            LastSaveMessage = lockMessage;
+            return false;
+        }
+
+        var result = LoadWithStatus();
+        if (result.Status is not (SettingsLoadStatus.Loaded or SettingsLoadStatus.Missing))
+        {
+            // ⭐ The refusal is worded by the SAME judgement Save uses, not by a second opinion invented here.
+            // Reaching for ExistingFileBlocksSave costs one extra read of a file we have already decided not to
+            // write, and buys the property that matters: every refusal the user or a caller can see says
+            // "Refusing to overwrite settings.dat: …". Two tests read exactly that phrase
+            // (PreferencesStoreTests.Save_ReportsRefusal_OverAFileItCannotRead and
+            // SettingsCenterVmTests.ARefusedSave_IsSaidOutLoud…), and they were right to: reporting only the
+            // load's own "could not be decrypted" would have told the user what went wrong while dropping the
+            // part they actually need — that nothing was saved.
+            if (ExistingFileBlocksSave(out var blockedDiagnostic, out var blockedMessage))
+            {
+                LastSaveDiagnostic = blockedDiagnostic;
+                LastSaveMessage = blockedMessage;
+            }
+            else
+            {
+                // The two judgements read the same file through the same ladder, so this is not expected to be
+                // reachable — but a disagreement must still refuse, never fall through to a write.
+                LastSaveDiagnostic = UnreadableRefusalDiagnostic;
+                LastSaveMessage = LastLoadMessage;
+            }
+
+            return false;
+        }
+
+        var settings = result.Settings ?? new ApplicationSettings();
+        mutate(settings);
+        SaveCore(settings);
+        return LastSaveDiagnostic is null;
+    }
+
+    private const string UnreadableRefusalDiagnostic =
+        "Refusing to change settings.dat: its current contents could not be read, so saving would replace "
+        + "them with defaults. Nothing was written and the previous file is unchanged.";
+
+    /// <summary>
+    /// The write half of <see cref="Save"/> and <see cref="Update"/>, performed with the cross-process lock
+    /// ALREADY held. ⛔ Never call it without the lock — the A-03 judgement below and the write must be one
+    /// operation, which is the whole point of <see cref="TryAcquireFileLock"/>.
+    /// </summary>
+    private void SaveCore(ApplicationSettings settings)
+    {
         // Never clobber a settings.dat this build could not interpret — whether because a NEWER build wrote it
         // (downgrade protection) or because it could not be decrypted or parsed (audit A-03).
         if (ExistingFileBlocksSave(out var diagnostic, out var blockedMessage))
