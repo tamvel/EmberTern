@@ -69,6 +69,7 @@ that used to live here still exists verbatim in `docs/history/`.
 | `design/find-replace-panel.md` | 📋 Ratified-not-started: our own Find/Replace panel over AvaloniaEdit's search engine. Holds the measurements (why no cheaper seam exists) and the 3 unknowns to measure first. |
 | `design/localization.md` | **Before any localization work.** Ratified D‑1/D‑2/D‑3; §2.1 records why the indexer binding is dead. |
 | `design/avalonia-12.1.1-update.md` | Before changing an Avalonia package version. Records the two deliberate version mismatches. |
+| `avalonia-headless-session-race.md` | When a full run loses exactly one headless test. The upstream race, its deterministic reproduction, and the five repairs already measured and rejected. |
 
 ### Modules
 
@@ -126,26 +127,43 @@ dependencies (transitive ones only surface in an explicit scan; gotcha #278).
 ⛔ **Never chain build and test** (`dotnet build && dotnet test`) — they deadlock and the run has to
 be interrupted. Two separate calls.
 
-### The test-suite partition (read this before running tests)
+### Running the suite (read this before running tests)
 
-Headless-Avalonia tests must share **one** `HeadlessUnitTestSession` per process (#94/#226/#286), and
-a long full run intermittently hangs *after* the tests pass. The working answer is **three
-partitions**: everything else · the grouped headless classes · two isolated ones
-(`ConnectionExpandBindingProbe`, `BrandingPresentationTests`).
+⭐ **The suite runs as ONE command.** The old three-partition split is gone (2026-08-14): its real
+purpose was to keep the global-`Loc` race apart, and that race is fixed at the source — headless tests
+now get a clean subscriber list automatically (`IsolatesGlobalLanguageState` on `HeadlessCollection`).
+⛔ Do not reintroduce partitions; they hid two defects for months.
 
-⛔⛔ **The class list is a list of NAMES and it rots silently — DERIVE it, never transcribe it.**
-A *missing* exclusion is invisible (the class simply runs in the wrong partition and hits the global
-`Loc`-catalog race); a *surplus* one matches nothing and is harmless. So the list only ever rots
-toward false red — measured cost of ignoring this: **13 failures, none of them the session's change.**
-
-```bash
-grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs | xargs -n1 basename | sed 's/\.cs$//'
-```
+Headless-Avalonia tests still share **one** `HeadlessUnitTestSession` per process (#94/#226/#286) — any
+new headless test joins `HeadlessCollection`, never its own `IClassFixture`.
 
 ⚠ **The acceptance criterion is the TOTAL, not "0 failures".** Measured: a broken headless state
 reported *"0 niepowodzeń, łącznie 7232"* while **128 tests silently never started**. A run is green
-only when the total matches. ⚠ Use `--blame-hang --blame-hang-timeout 120s` — it turns an infinite
-wait into a named failure. Current expected total is in `docs/current-state.md`.
+only when the total matches. Current expected total is in `docs/current-state.md`.
+
+#### ⚠⚠ The ONE known false failure — recognise it before blaming your change
+
+Roughly **1 full run in 8** loses **exactly one** test to an Avalonia infrastructure race. It is **not**
+a product regression and **not** yours. Identify it by this signature — all three parts must match:
+
+- **one** failed test, everything else green;
+- the failing test's **NAME CHANGES BETWEEN RUNS** (it is whichever headless test dispatched first —
+  `BrandingPresentationTests`, `BreadcrumbNameTests`, a `ConnectionExpandBindingProbe` case, …);
+- this stack:
+
+```text
+System.InvalidOperationException : The calling thread cannot access this object because a different thread owns it.
+   at Avalonia.Rendering.DefaultRenderLoop.Add(IRenderLoopTask i)          ← Dispatcher.VerifyAccess()
+   at Avalonia.Headless.AvaloniaHeadlessPlatform.Initialize(...)
+   at Avalonia.Headless.HeadlessUnitTestSession.EnsureIsolatedApplication()
+```
+
+**Re-run once.** If it does not recur, or recurs under a *different* test name, it is this. If the same
+test fails twice in a row, it is a real defect.
+
+⛔ **Do not try to fix it again — five approaches were measured and rejected**, including the two that
+look obvious (a warm-up dispatch, and serialising every Avalonia-touching test). Cause, evidence, the
+rejected list and the ready-to-file upstream report: [`docs/avalonia-headless-session-race.md`](docs/avalonia-headless-session-race.md).
 
 ## Git remotes & push workflow (user directive)
 
