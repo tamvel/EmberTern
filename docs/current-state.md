@@ -9,7 +9,22 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-12.**
+**Last verified: 2026-08-14.**
+
+---
+
+## 0. ⏭ HANDOFF — read this first
+
+> **Current milestone:** Audit follow-up — **Phase 4 accepted** (user-verified in the running app).
+> **Next task:** **Phase 5 — charset guard.** ⛔ Not started. Do not start it without the user asking.
+>
+> **Work lives on the branch `fix/audit-followup-2026-08`, NOT on `master`, and is NOT pushed.**
+> Five commits, `440c0ce` → `1852611`. Pushing happens after the user accepts the whole etap
+> (both remotes), which has not happened yet.
+
+Remaining order, unchanged and untouched: **Phase 5 (charset guard)** → NuGet audit (stable versions
+only) → `ARCHITECTURE.md` "as built" → final verification. ⛔ Licensing, Firebase, License Manager and
+the installer are **out of scope** and belong to a later, separate etap.
 
 ---
 
@@ -17,25 +32,18 @@
 
 | | |
 |---|---|
-| Branch | **`master`** — current, clean working tree |
-| HEAD | `2ce68fe` *merge(fix): trzy defekty z jednego zgloszenia uzytkownika (2026-08-12)* |
-| Build | **0 warnings / 0 errors** (`TreatWarningsAsErrors=true`) |
-| Tests | **8 799 / 8 799 green** |
+| Branch | **`fix/audit-followup-2026-08`** (cut from `master`) — clean working tree, **not pushed** |
+| HEAD | `1852611` *fix(ui): etykieta "nie pokazuj ponownie" w calosci czytelna w kazdym jezyku* |
+| Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`** (`TreatWarningsAsErrors=true`) |
+| Tests | **8 813**; last series **6 / 6 fully green** |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | `origin` (company Gitea) + `private` (GitHub) — **both** receive every accepted stage |
 
-⚠ **Both long-running feature branches are now merged into `master`.** `feat/product-polish` and
-`feat/localization` still exist on both remotes by earlier instruction, but `master` is an ancestor-
-superset of both, so **a new session starts from `master`**. (Older notes telling you to start from
-`feat/product-polish` are stale — that decision was about timing and its moment has passed.)
+⚠⚠ **Build BOTH configurations before asking for a visual check.** `CLAUDE.md` runs the app from
+`bin\Debug\`, and an etap built only in `Release` left the user verifying a binary that predated the
+feature — reported as three UI defects that did not exist. Measured cost: one full review cycle.
 
-⚠ **Test-count and partition figures go stale every stage. Measure, do not quote.** The headless
-partition filter is a list of class names and must be **derived**, never transcribed — a missing
-exclusion fails silently (the class runs in the wrong partition and hits the global-`Loc` race):
-
-```bash
-grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs | xargs -n1 basename | sed 's/\.cs$//'
-```
+⚠ **Test counts go stale every stage. Measure, do not quote.**
 
 ---
 
@@ -74,13 +82,82 @@ reasoning lives.
 | **Product Polish M0–M5** (tokens, base controls, colour, density, typography, final polish) | 2026-08-10 | `design/product-polish.md` §19 |
 | Post-M5 UX package (points 1–6, incl. Database Properties) | 2026-08-10 | `history/27` |
 | **Localization** — App + Core/Firebird (C0–C8) + full Polish translation | 2026-08-11 | `design/localization.md`, `history/28` |
+| **Audit follow-up — test isolation** (global `Loc` state) | 2026-08-14 | commit `440c0ce` |
+| **Audit follow-up — E: locked read-modify-write for settings** | 2026-08-14 | commit `972426e` |
+| **Audit follow-up — Avalonia headless race: diagnosed, closed on our side** | 2026-08-14 | `avalonia-headless-session-race.md`, commit `b6f9e6b` |
+| **Audit follow-up — Phase 4: debugger irreversible-effects warning** ✅ user-verified | 2026-08-14 | commits `1130e3d`, `1852611` |
+
+---
+
+## 2a. The audit follow-up etap — as accepted
+
+⚠ Delivered on `fix/audit-followup-2026-08`, **not yet merged and not pushed.**
+
+**Test isolation (`440c0ce`).** The full suite failed 45 tests deterministically because
+`Loc.LanguageChanged` is `static`: every view model any earlier test built stayed subscribed, and the
+next test to swap the catalog broadcast into all of them. Fixed at the source —
+`Loc.IsolateSubscribersForVerification()` plus `IsolatesGlobalLanguageState` on `HeadlessCollection`, so
+each headless test gets a clean subscriber list **automatically**. ⛔ The old three-partition manual
+split is gone and must not return; it hid this for months. `DiagnosticsPanelViewModel` stopped
+subscribing to the static event (it leaked one live VM per editor tab) and became an ordinary child of
+the app's single long-lived subscriber. Two source guards keep both rules armed.
+
+**E — settings read-modify-write (`972426e`).** Measured data loss: a facade doing
+`Load() ?? new ApplicationSettings()` → mutate → `Save()` turned a *transient* read failure into
+DEFAULTS and wrote them. Against a concurrent publisher: **182 failed reads, 89 of which wrote
+defaults, ending with 0 of 5 connection profiles surviving** — profiles and passwords, silently.
+`ApplicationSettingsStore.Update()` now takes the cross-process lock, reads **under it**, mutates and
+writes via `SaveCore`. `Missing` is the ONLY status that may produce a default aggregate and this is
+the only place that may; `Unreadable` / `Corrupt` / `FutureVersion` end the operation untouched.
+15 call sites migrated. ⛔ Not a retry — the lock's scope removes the window.
+
+**Phase 4 — debugger irreversible-effects warning (`1130e3d`, `1852611`), ✅ user-verified in the app:**
+
+- detection of `IN AUTONOMOUS TRANSACTION` / `GEN_ID` / `NEXT VALUE FOR` reuses the existing
+  `DebugPreflight`; `Scan` gained `out bool irreversible`, so **one scan** answers both the launch
+  panel's sentences and the running view's bar and they cannot disagree;
+- a **one-time modal** before launching risky code, with **"Nie pokazuj tego ostrzeżenia ponownie"**;
+  Cancel really stops the launch;
+- a **dismissible bar** at the foot of the debug view (shared `MessageBanner`, `Classes="docked"`) —
+  the launch panel disappears when a session starts, so that is where the warning was missing;
+- `BuildPreflight` runs on every Launch **and** Restart, so re-arming is automatic; dismissing is per
+  run;
+- ⭐ the preference silences the **modal only, never the bar** — pinned by a test;
+- ⛔ **no safe mode and no blocking of valid SQL**: suppressing a generator or an autonomous
+  transaction would mean refusing to execute correct SQL, against the debugger's fidelity law (§F).
+
+**UX fix (`1852611`).** The suppress checkbox was clipped (*"Nie pokazuj tego ostrzeż…"*). Measured:
+the label needs **358 px in English and 435 px in Polish** against ~380 px of content width — so a row
+of its own is necessary and **still not sufficient**, hence the label also wraps. ⛔ The shared dialog
+width (420, also `TextPromptDialog`) and the font size were **not** touched, and the wording stays as
+accepted — the layout absorbs longer localizations instead. `ConfirmDialogLayoutTests` measures the
+property ("nothing is cut"), verified red in both broken shapes before being accepted green.
 
 ---
 
 ## 3. Open work
 
-⏭ **There is no stage in progress. The next topic is a user decision.** The ratified localization
-order (C0) is exhausted, Product Polish §13 has no item after M5, and the debugger is closed.
+⏭ **Next task: Phase 5 — charset guard.** Not started.
+
+### Phase 5 — charset guard (the immediate next task)
+
+**Measured on live Firebird 5**, with `WIN1250` as EmberTern's **default** connection charset
+(`CharsetCatalog.Default`, `ConnectionProfile.Charset`): a character outside the connection charset is
+stored as `?` **with no error at all**, even into a `UTF8` column. Confirmed on **all three** paths:
+
+| Path | WIN1250 | UTF8 |
+|---|---|---|
+| bound parameter | `AB??CD` | OK |
+| SQL literal in statement text (the F5 path) | `AB??CD` | OK |
+| **DDL text → `RDB$PROCEDURE_SOURCE`** | `AB??CD` | OK |
+
+⭐ The third line is why this outranks the rest of the backlog: EmberTern can **silently corrupt the
+user's own source code**, which is architecture rule #11 — the project's paramount rule.
+⛔ **Design ONE shared mechanism** (natural home `CharsetCatalog`, direction `EncoderExceptionFallback`)
+covering all three paths — **not three independent patches**. Regression tests must exercise the real
+paths, not only a helper.
+
+### Ratified but not started — each with a measured scope
 
 ### Ratified but not started — each with a measured scope
 
@@ -107,8 +184,8 @@ order (C0) is exhausted, Product Polish §13 has no item after M5, and the debug
 |---|---|
 | **`PreferencesService` holds a failed read for the whole session** | ⚠ **Found while implementing E (2026-08-14); deliberately left out of E's scope.** `PreferencesService` reads `_current = store.Load()` **once**, and `PreferencesStore.Load` turns any failure into validated DEFAULTS. If that one read fails transiently, the service serves default preferences for the rest of the session, and the next `Apply` persists them as if the user had chosen them. ⛔ `Update` does **not** catch this: by then the in-memory value is already wrong, so the write is entirely legitimate. Same shape as the defect E fixed, far narrower blast radius (the `Preferences` section only — never profiles, passwords or workspace). Needs `PreferencesService` to be able to tell "no preferences yet" from "could not read them". |
 | **`SettingsPortability.ExportTo` can export defaults** | ⚠ Same 2026-08-14 finding, other direction. It is **read-only** (correctly classified out of E's Class A), but `_store.Load() ?? new ApplicationSettings()` means a failed read produces an **empty export file** while the user believes they took a backup. Not a `settings.dat` corruption, so not rule #11 — but it is a backup that silently isn't one. |
-| **Charset silent data loss** | Measured on live FB5: a character outside the **connection** charset stores as `?` with **no error**, even into a UTF8 column, and `WIN1250` is the default. Needs ONE shared guard (natural home `CharsetCatalog`, `EncoderExceptionFallback`). ⚠ The statement-**text** path (`FirebirdDdlExecutor`) is **unmeasured** — measure it first; if confirmed it could corrupt user source code. Own architectural audit. |
-| **Headless session init race** *(upstream — closed on our side)* | ⭐ **Root cause established 2026-08-14 and reproduced deterministically.** `EnsureIsolatedApplication` calls the process-wide `Dispatcher.ResetBeforeUnitTests()` on **every** `Dispatch`; a parallel thread constructing any Avalonia object claims `Dispatcher.UIThread` in that window and the session's `Compositor` then fails `VerifyAccess()`. Probe: **149/150 dispatches fail** with 4 noise threads, **0/150** without. Cost here: **1 test in ~1 run of 8**, name changing every run. ⛔ **Five repairs measured and rejected** — do not attempt a sixth. Full evidence, the ready-to-file report and the recognition signature: [`docs/avalonia-headless-session-race.md`](avalonia-headless-session-race.md); the "re-run once" rule is in `CLAUDE.md`. |
+| ~~Charset silent data loss~~ | ⏭ **Promoted out of the backlog — it is now Phase 5, the next task.** The formerly unmeasured DDL/source path was measured and IS vulnerable. See §3 "Phase 5". |
+| **Headless session init race** *(upstream — closed on our side)* | ⭐ **Root cause established 2026-08-14 and reproduced deterministically.** `EnsureIsolatedApplication` calls the process-wide `Dispatcher.ResetBeforeUnitTests()` on **every** `Dispatch`; a parallel thread constructing any Avalonia object claims `Dispatcher.UIThread` in that window and the session's `Compositor` then fails `VerifyAccess()`. Probe: **149/150 dispatches fail** with 4 noise threads, **0/150** without. Cost here: **1 test in ~1 run of 3–8**. ⭐ **It is NOT an EmberTern defect** and is identified by the STACK, not the test name. ⛔ **Five repairs measured and rejected** — no warm-up, no `Delay`, no retry, no global parallelism switch-off; do not attempt a sixth. Full evidence, the ready-to-file upstream report and the recognition signature: [`docs/avalonia-headless-session-race.md`](avalonia-headless-session-race.md); the "re-run once" rule is in `CLAUDE.md`. |
 | Activity Monitor / Data Import width at 150 %/175 % DPI | Ratified as debt: both command bars are bare horizontal `StackPanel`s (~1130 DIP) with **no** `ScrollViewer`, so they clip rather than compress. Not a DPI defect — they do not fit at 100 % on 1366×768 either. |
 | **B1** — `TableDetailTabView` private icons | PK/FK/Unique drawn with a raw `<Path>` over locally declared geometries on a **14**-unit grid, invisible to three mechanisms at once. Prepared and measured; appearance deliberately unresolved. |
 | **Z‑3** — Table Data row height | A density question; cause must be found first (a taller row may be a deliberate readability decision). |

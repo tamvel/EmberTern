@@ -127,6 +127,10 @@ dependencies (transitive ones only surface in an explicit scan; gotcha #278).
 ⛔ **Never chain build and test** (`dotnet build && dotnet test`) — they deadlock and the run has to
 be interrupted. Two separate calls.
 
+⚠⚠ **Before asking the user to verify a UI change, build BOTH configurations.** The run command above
+uses `bin\Debug\`, so an etap built only in `-c Release` leaves them looking at a binary that predates
+the feature — measured: three UI defects reported that did not exist, one review cycle lost.
+
 ### Running the suite (read this before running tests)
 
 ⭐ **The suite runs as ONE command.** The old three-partition split is gone (2026-08-14): its real
@@ -143,17 +147,10 @@ only when the total matches. Current expected total is in `docs/current-state.md
 
 #### ⚠⚠ The ONE known false failure — recognise it before blaming your change
 
-Roughly **1 full run in 3–8** loses **exactly one** test to an Avalonia infrastructure race. It is **not**
-a product regression and **not** yours.
-
-⭐ **The STACK is what identifies it** — `EnsureIsolatedApplication` is the decisive frame and nothing else
-in the product reaches it. ⚠ Do **not** key on the test name in either direction: the victim is whichever
-headless test dispatched first, so it is usually the *same* name run after run (today
-`BrandingPresentationTests`) and changes only when the set of running tests changes. An earlier version of
-this note said the name always changes — measured wrong, corrected 2026-08-14.
-
-- **one** failed test, everything else green;
-- this stack:
+Roughly **1 full run in 3–8** loses **exactly one** test to an Avalonia infrastructure race — **not** a
+product regression and **not** yours. ⭐ **The STACK identifies it**, never the test name: the victim is
+whichever headless test dispatched first, so it is usually the *same* name run after run. Look for **one**
+failed test, everything else green, and:
 
 ```text
 System.InvalidOperationException : The calling thread cannot access this object because a different thread owns it.
@@ -418,20 +415,16 @@ reasoning lives in the referenced document.
 It is the ONE place that answers *"what is done, what is open, what are we working on"*, and it is
 kept between 100 and 300 lines on purpose.
 
-At a glance, verified 2026-08-12: branch **`master`**, HEAD `2ce68fe`, build **0/0**, tests
-**8 799 green**, version **0.5.0**. Both long-running feature branches (`feat/product-polish`,
-`feat/localization`) are **merged into `master`**, so a new session starts from `master`.
-**No stage is in progress — the next topic is a user decision.**
+At a glance, verified 2026-08-14: branch **`fix/audit-followup-2026-08`** (cut from `master`, **not
+pushed**), HEAD `1852611`, build **0/0 in both Release and Debug**, tests **8 813**, last series **6/6
+fully green**, version **0.5.0**. ⏭ **Milestone: audit follow-up, Phase 4 accepted. Next: Phase 5 —
+charset guard, NOT started.** Read `docs/current-state.md` §0 + §3 first.
 
 ⚠⚠ **Do not restore a status diary here.** This section was **5 956 lines (83 % of CLAUDE.md)** until
-2026-08-11 and is archived verbatim in
-[`docs/history/30-claude-md-current-state-archive.md`](docs/history/30-claude-md-current-state-archive.md).
-⭐ That regrowth is worth one sentence of your attention, because it has now happened **twice**: the
-2026-07-11 cleanup cut this file 4 495 → **472** lines, and by 2026-08-10 it was back to **6 849** —
-~210 lines/day of appended narrative. The mechanism is always the same and always looks harmless: a
-finished stage gets "just one more" paragraph describing what shipped. **A shipped stage's narrative
-belongs in `docs/history/`; its rule belongs in the relevant section of this file; its status belongs
-in one line of `docs/current-state.md`.** See § "Working style — session protocol" for the checklist.
+2026-08-11, archived verbatim in
+[`history/30-claude-md-current-state-archive.md`](docs/history/30-claude-md-current-state-archive.md).
+It has regrown twice, always the same harmless-looking way — see § "The tripwire" for the mechanism and
+the checklist.
 
 ## Editor Architecture — current direction
 
