@@ -3075,6 +3075,14 @@ internal static class UiStrings
     // blocking = octagon / ErrorBrush), so there is no header/clean string here anymore.
     public static string DebuggerPreflightAutonomousTx => Loc.Text(nameof(DebuggerPreflightAutonomousTx));
     public static string DebuggerPreflightGenerator => Loc.Text(nameof(DebuggerPreflightGenerator));
+
+    // The one-time modal + the discreet bar for effects a debug rollback cannot undo (§4.6).
+    public static string DebuggerIrreversibleTitle => Loc.Text(nameof(DebuggerIrreversibleTitle));
+    public static string DebuggerIrreversibleMessage => Loc.Text(nameof(DebuggerIrreversibleMessage));
+    public static string DebuggerIrreversibleContinue => Loc.Text(nameof(DebuggerIrreversibleContinue));
+    public static string DebuggerIrreversibleCancel => Loc.Text(nameof(DebuggerIrreversibleCancel));
+    public static string DebuggerIrreversibleDoNotAskAgain => Loc.Text(nameof(DebuggerIrreversibleDoNotAskAgain));
+    public static string DebuggerIrreversibleBar => Loc.Text(nameof(DebuggerIrreversibleBar));
     public static string DebuggerPreflightUnsteppable => Loc.Text(nameof(DebuggerPreflightUnsteppable));
     // Toolbar / commands. Every gesture below comes from CommandCatalog — the debugger's stepping keys are
     // declared there as CommandDispatch.Reserved (dispatched by DebuggerTabView, which owns the caret), and

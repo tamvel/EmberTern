@@ -40,21 +40,34 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0"
             Padding="20,12">
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Right"
-                  Spacing="8">
-        <!-- ⭐ An ACKNOWLEDGEMENT has nothing to cancel. Hiding the button on an empty CancelLabel turns the
-             one shared dialog into an info dialog too, instead of adding a second dialog that would then be
-             free to drift from this one's chrome. -->
-        <Button Classes="flat"
-                Content="{Binding CancelLabel}"
-                IsVisible="{Binding HasCancel}"
-                Command="{Binding CancelCommand}" />
-        <Button Classes="primary"
-                Content="{Binding ConfirmLabel}"
-                Command="{Binding ConfirmCommand}"
-                IsDefault="True" />
-      </StackPanel>
+      <Grid ColumnDefinitions="*,Auto">
+        <!-- ⭐ The optional "do not ask again" box shares the footer with the buttons rather than sitting in the
+             message area: it is a decision about the dialog, not part of what the dialog says. Absent unless
+             the caller supplies a label, so every existing consumer renders exactly as before. -->
+        <CheckBox Grid.Column="0"
+                  Content="{Binding SuppressLabel}"
+                  IsChecked="{Binding SuppressChecked, Mode=TwoWay}"
+                  IsVisible="{Binding HasSuppress}"
+                  VerticalAlignment="Center"
+                  FontSize="{DynamicResource Text.Compact.Size}" />
+
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="8">
+          <!-- ⭐ An ACKNOWLEDGEMENT has nothing to cancel. Hiding the button on an empty CancelLabel turns the
+               one shared dialog into an info dialog too, instead of adding a second dialog that would then be
+               free to drift from this one's chrome. -->
+          <Button Classes="flat"
+                  Content="{Binding CancelLabel}"
+                  IsVisible="{Binding HasCancel}"
+                  Command="{Binding CancelCommand}" />
+          <Button Classes="primary"
+                  Content="{Binding ConfirmLabel}"
+                  Command="{Binding ConfirmCommand}"
+                  IsDefault="True" />
+        </StackPanel>
+      </Grid>
     </Border>
 
   </Grid>

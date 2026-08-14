@@ -130,5 +130,8 @@ convert a visible, recognisable false failure into an invisible one.
 ## 3. Living with it
 
 The signature and the "re-run once" rule are in `CLAUDE.md` § "Running the suite". The short version:
-**one** failed test, a **different name each run**, and the stack above ⇒ this defect, re-run. The same
-test failing twice in a row ⇒ a real defect.
+**one** failed test plus `EnsureIsolatedApplication` in the stack ⇒ this defect, re-run.
+
+⚠ **The stack is the identifier, not the test name.** The victim is whichever headless test dispatched
+first, so it is usually the *same* name run after run and changes only when the set of running tests
+changes — an earlier version of this note claimed the opposite and was measured wrong (2026-08-14).

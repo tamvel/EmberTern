@@ -6041,6 +6041,9 @@ public partial class MainWindowViewModel : ViewModelBase
         // executor and the SAME confirmation dialog every object editor uses; no second save mechanism.
         debugger.DdlExecutor = _ddlExecutor;
         debugger.ConfirmationRequested += RequestConfirmAsync;
+        // The ONE preferences owner, so the "do not show again" tick on the irreversible-effects warning is
+        // remembered where every other preference lives — not in a second store.
+        debugger.Preferences = _preferences;
 
         var tab = WorkspaceTabViewModel.CreateDebugger(this, debugger, name, _service.ActiveProfile?.Id, kind);
         WorkspaceTabs.Add(tab);
@@ -6082,6 +6085,12 @@ public partial class MainWindowViewModel : ViewModelBase
         // standalone CREATE PROCEDURE/FUNCTION so the engine can frame it — compiling that text would create
         // a standalone routine instead of altering the package. Editing a package member stays the Package
         // editor's job; the VM refuses to save a package tab regardless, this just never offers it.
+        //
+        // ⚠ The confirmation seam and the preferences owner ARE wired: a package member can hold an autonomous
+        // transaction or a generator exactly like a standalone routine, so it gets the same one-time warning.
+        debugger.ConfirmationRequested += RequestConfirmAsync;
+        debugger.Preferences = _preferences;
+
         var title = string.Format(CultureInfo.CurrentCulture, "{0}.{1}", packageName, memberName);
         var tab = WorkspaceTabViewModel.CreateDebugger(
             this, debugger, title, _service.ActiveProfile?.Id,

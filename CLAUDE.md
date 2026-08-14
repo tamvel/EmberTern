@@ -143,12 +143,16 @@ only when the total matches. Current expected total is in `docs/current-state.md
 
 #### ⚠⚠ The ONE known false failure — recognise it before blaming your change
 
-Roughly **1 full run in 8** loses **exactly one** test to an Avalonia infrastructure race. It is **not**
-a product regression and **not** yours. Identify it by this signature — all three parts must match:
+Roughly **1 full run in 3–8** loses **exactly one** test to an Avalonia infrastructure race. It is **not**
+a product regression and **not** yours.
+
+⭐ **The STACK is what identifies it** — `EnsureIsolatedApplication` is the decisive frame and nothing else
+in the product reaches it. ⚠ Do **not** key on the test name in either direction: the victim is whichever
+headless test dispatched first, so it is usually the *same* name run after run (today
+`BrandingPresentationTests`) and changes only when the set of running tests changes. An earlier version of
+this note said the name always changes — measured wrong, corrected 2026-08-14.
 
 - **one** failed test, everything else green;
-- the failing test's **NAME CHANGES BETWEEN RUNS** (it is whichever headless test dispatched first —
-  `BrandingPresentationTests`, `BreadcrumbNameTests`, a `ConnectionExpandBindingProbe` case, …);
 - this stack:
 
 ```text
@@ -158,8 +162,8 @@ System.InvalidOperationException : The calling thread cannot access this object 
    at Avalonia.Headless.HeadlessUnitTestSession.EnsureIsolatedApplication()
 ```
 
-**Re-run once.** If it does not recur, or recurs under a *different* test name, it is this. If the same
-test fails twice in a row, it is a real defect.
+**Re-run once.** A run that goes green with no change confirms it. ⛔ A failure WITHOUT that stack is a real
+defect, however familiar the test name looks.
 
 ⛔ **Do not try to fix it again — five approaches were measured and rejected**, including the two that
 look obvious (a warm-up dispatch, and serialising every Avalonia-touching test). Cause, evidence, the

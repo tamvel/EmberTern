@@ -177,9 +177,16 @@ public class FormatterStylePreferenceTests
     [Fact]
     public void EveryPreference_IsRenderedOrRecordedAsHidden()
     {
-        // A preference deliberately without a Settings Center row, and the reason. Empty today — every one of
-        // the four is rendered. An entry here is a decision, not a TODO.
-        var deliberatelyHidden = new Dictionary<string, string>(StringComparer.Ordinal);
+        // A preference deliberately without a Settings Center row, and the reason. An entry here is a decision,
+        // not a TODO.
+        var deliberatelyHidden = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [nameof(Preferences.DebuggerIrreversibleWarningAcknowledged)] =
+                "Set by ticking 'do not show again' on the warning itself, which is where the user actually "
+                + "makes the decision. A Settings Center row would offer to silence a data-safety warning from "
+                + "a screen where the risk is not in front of the user — and it would need a way to say 'no, "
+                + "ask me again' that the checkbox already gives for free by simply not being ticked.",
+        };
 
         // ⚠ Only PREFERENCE rows map to a property. An ACTION row (etap 5b's Import / export) is a command with
         // nothing stored, and filtering it out here is what keeps PreferencePropertyFor a total function over the

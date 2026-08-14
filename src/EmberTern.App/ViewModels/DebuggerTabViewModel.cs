@@ -1055,11 +1055,83 @@ public sealed partial class DebuggerTabViewModel
     private void BuildPreflight(bool hasStepPoints)
     {
         Preflight.Clear();
-        foreach (var item in DebugPreflight.Scan(_model!, _editBuffer, hasStepPoints))
+        var items = DebugPreflight.Scan(_model!, _editBuffer, hasStepPoints, out var irreversible);
+        foreach (var item in items)
         {
             Preflight.Add(item);
         }
         LaunchBlocked = Preflight.Any(i => i.IsBlocking);
+
+        // ⭐ The bar's state is rebuilt from the CURRENT buffer here, and nowhere else. This method already runs
+        // on every Launch and every Restart, and an edit during a session ends the session (OnSourceChanged), so
+        // "what the bar says" and "what is about to run" cannot drift apart — no watcher, no second scan.
+        // ⚠ Dismissal is deliberately reset: dismissing means "I have read this about THIS run", not "never
+        // again". Relaunching still-risky code says so again; that is the point of the ✕ being cheap.
+        _irreversibleRisk = irreversible;
+        IsIrreversibleAlertVisible = irreversible;
+    }
+
+    /// <summary>The app's ONE preferences owner, wired by <c>MainWindowViewModel</c>. Null in tests — then the
+    /// acknowledgement is simply never remembered, which errs toward showing the warning.</summary>
+    internal Settings.PreferencesService? Preferences { get; set; }
+
+    /// <summary>True when the code about to run carries an effect a debug rollback cannot undo (§4.6).</summary>
+    private bool _irreversibleRisk;
+
+    /// <summary>
+    /// The discreet bar at the foot of the debug view. Visible while the current code carries a §4.6 boundary
+    /// and the user has not dismissed it for this run.
+    /// <para>⛔ It is NOT gated on the acknowledgement preference: acknowledging silences the MODAL, not the
+    /// statement of what the code does.</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _isIrreversibleAlertVisible;
+
+    [RelayCommand]
+    private void DismissIrreversibleAlert() => IsIrreversibleAlertVisible = false;
+
+    /// <summary>
+    /// The ONE-TIME modal: the first time a launch would run code whose effects a debug rollback cannot undo,
+    /// say so and let the user decide. Returns false only when the user cancels.
+    ///
+    /// <para>⭐ <b>Once acknowledged, never asked again</b> — the checkbox writes
+    /// <c>Preferences.DebuggerIrreversibleWarningAcknowledged</c>, and from then on the discreet bar carries the
+    /// same information without interrupting anything. A developer tool that asks the same question at every
+    /// launch trains the user to dismiss it unread, which is worse than not asking.</para>
+    ///
+    /// <para>⛔ It never refuses a launch on its own, and there is no "safe mode" behind it: blocking a generator
+    /// or an autonomous transaction would mean declining to execute correct SQL, and the debugger's whole
+    /// fidelity claim (§F) is that every semantic comes from the server.</para>
+    ///
+    /// <para>⚠ With no confirmation handler (tests) <c>RequestConfirmAsync</c> answers true, so this is a no-op
+    /// there rather than a silent block.</para>
+    /// </summary>
+    private async Task<bool> ConfirmIrreversibleEffectsAsync()
+    {
+        if (!_irreversibleRisk) return true;
+        if (Preferences?.Current.DebuggerIrreversibleWarningAcknowledged == true) return true;
+
+        var request = new ConfirmRequest
+        {
+            Title = UiStrings.DebuggerIrreversibleTitle,
+            Message = UiStrings.DebuggerIrreversibleMessage,
+            ConfirmLabel = UiStrings.DebuggerIrreversibleContinue,
+            CancelLabel = UiStrings.DebuggerIrreversibleCancel,
+            SuppressLabel = UiStrings.DebuggerIrreversibleDoNotAskAgain,
+        };
+
+        if (!await RequestConfirmAsync(request).ConfigureAwait(true)) return false;
+
+        // ⚠ Only after a CONFIRM — ConfirmRequest leaves SuppressChecked false on cancel, so a ticked box on a
+        // refusal cannot silence a warning the user never accepted.
+        if (request.SuppressChecked && Preferences is { } preferences)
+        {
+            var updated = preferences.Current;
+            updated.DebuggerIrreversibleWarningAcknowledged = true;
+            preferences.Apply(updated);
+        }
+
+        return true;
     }
 
     private void FailPreparation(string status)
@@ -1104,6 +1176,8 @@ public sealed partial class DebuggerTabViewModel
     {
         EnsureProgramCurrent(); // the session is built from what the editor shows, so parse it first
         if (_body is null || _model is null) return;
+
+        if (!await ConfirmIrreversibleEffectsAsync().ConfigureAwait(true)) return;
 
         // Collect the root-frame seed + (for a trigger) its context. A trigger uses the NEW/OLD editors; a
         // procedure/function uses the plain parameter grid. Either path returns null on a validation error, so

@@ -404,7 +404,7 @@
       </ScrollViewer>
 
       <!-- ── Debug view — editor + Variables (right), collapsible tabbed bottom panel ─── -->
-      <Grid x:Name="DebugLayout" IsVisible="{Binding IsDebugViewVisible}" RowDefinitions="*,4,220">
+      <Grid x:Name="DebugLayout" IsVisible="{Binding IsDebugViewVisible}" RowDefinitions="*,4,220,Auto">
 
         <!-- Top: source editor | splitter | Variables (right, tall — the primary inspection surface) -->
         <Grid Grid.Row="0" ColumnDefinitions="*,4,300">
@@ -907,6 +907,21 @@
             </TabControl>
           </Grid>
         </Border>
+
+        <!-- ⚠ The §4.6 warning, in the place the launch panel cannot reach: the launch panel disappears the
+             moment a session starts, so until now the user was told about irreversible effects only on the
+             screen they had already left. This bar lives at the foot of the RUNNING view.
+             ⭐ The shared MessageBanner, docked, with its own ✕ (ShowDismiss + DismissCommand) — no new control
+             and no new chrome. Its Auto row costs nothing while hidden.
+             ⚠ Dismissal is per-run: BuildPreflight re-arms it on every Launch and Restart, so still-risky code
+             says so again rather than staying quiet because it was silenced once. -->
+        <controls:MessageBanner Grid.Row="3"
+                                Classes="docked"
+                                Severity="Warning"
+                                Message="{app:Loc DebuggerIrreversibleBar}"
+                                IsVisible="{Binding IsIrreversibleAlertVisible}"
+                                ShowDismiss="True"
+                                DismissCommand="{Binding DismissIrreversibleAlertCommand}" />
       </Grid>
     </Panel>
   </Grid>

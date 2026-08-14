@@ -1056,6 +1056,24 @@ Closing this tab discards these changes.</value>
   <data name="DebuggerPreflightAutonomousTx" xml:space="preserve">
     <value>Contains IN AUTONOMOUS TRANSACTION — work committed there is permanent and survives the debug rollback.</value>
   </data>
+  <data name="DebuggerIrreversibleTitle" xml:space="preserve">
+    <value>Debugging can change the database</value>
+  </data>
+  <data name="DebuggerIrreversibleMessage" xml:space="preserve">
+    <value>This code contains operations whose effects cannot be undone by the debug session's rollback — for example IN AUTONOMOUS TRANSACTION, or generator use. Debugging will run them for real.</value>
+  </data>
+  <data name="DebuggerIrreversibleContinue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="DebuggerIrreversibleCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="DebuggerIrreversibleDoNotAskAgain" xml:space="preserve">
+    <value>Do not show this warning again</value>
+  </data>
+  <data name="DebuggerIrreversibleBar" xml:space="preserve">
+    <value>Possible irreversible effects</value>
+  </data>
   <data name="DebuggerPreflightGenerator" xml:space="preserve">
     <value>Uses a generator/sequence (GEN_ID / NEXT VALUE FOR) — generator values are consumed permanently and are not restored on rollback.</value>
   </data>
