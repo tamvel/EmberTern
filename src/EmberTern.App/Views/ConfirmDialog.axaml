@@ -40,18 +40,30 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0"
             Padding="20,12">
-      <Grid ColumnDefinitions="*,Auto">
-        <!-- ⭐ The optional "do not ask again" box shares the footer with the buttons rather than sitting in the
-             message area: it is a decision about the dialog, not part of what the dialog says. Absent unless
-             the caller supplies a label, so every existing consumer renders exactly as before. -->
-        <CheckBox Grid.Column="0"
-                  Content="{Binding SuppressLabel}"
+      <Grid RowDefinitions="Auto,Auto">
+        <!-- ⭐ The optional "do not ask again" box lives in the footer — it is a decision about the dialog, not
+             part of what the dialog says — on its OWN ROW, with a WRAPPING label.
+             ⚠⚠ Both halves are load-bearing, and measurement is what says so. It first shared a row with the
+             buttons and the label was cut to "Nie pokazuj tego ostrzeż…". Giving it a full row is still not
+             enough: measured at the shared Width=420 (≈380 px of content), the label wants 358 px in English
+             but 435 px in Polish. A CheckBox neither wraps nor ellipsizes by itself, so the only way to render
+             every shipped language in full — and any future one — is to let the label wrap.
+             ⛔ Do not "fix" a future clip by shrinking the font, widening this window (420 is the shared dialog
+             width, TextPromptDialog included, so it moves every confirmation in the app) or trimming the
+             sentence. TheSuppressCheckbox_IsFullyReadable_InEveryShippedLanguage measures this with the engine
+             the product lays out with.
+             ⚠ Hidden, the CheckBox has no desired size, so its Auto row collapses to zero and its margin with
+             it — a dialog without a suppress option renders exactly as it always did. -->
+        <CheckBox Grid.Row="0"
                   IsChecked="{Binding SuppressChecked, Mode=TwoWay}"
                   IsVisible="{Binding HasSuppress}"
-                  VerticalAlignment="Center"
-                  FontSize="{DynamicResource Text.Compact.Size}" />
+                  Margin="{DynamicResource Margin.FieldGap}">
+          <TextBlock Text="{Binding SuppressLabel}"
+                     TextWrapping="Wrap"
+                     FontSize="{DynamicResource Text.Compact.Size}" />
+        </CheckBox>
 
-        <StackPanel Grid.Column="1"
+        <StackPanel Grid.Row="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Spacing="8">
