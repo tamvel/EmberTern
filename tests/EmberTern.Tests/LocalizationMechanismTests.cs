@@ -1059,6 +1059,110 @@ public sealed class LocalizationMechanismTests
         return dir?.FullName ?? throw new InvalidOperationException("Repository root not found.");
     }
 
+    // ── Who may subscribe to the process-global language event (audit follow-up) ──────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b><c>Loc.LanguageChanged</c> is <c>static</c>, so subscribing to it is a decision about the
+    /// PROCESS, and only two types are entitled to make it.</b>
+    ///
+    /// <para>A static event's subscriber list is a GC root that lives as long as the process. That is harmless
+    /// for a type there is exactly one of and which is meant to live that long — <c>MainWindowViewModel</c>
+    /// (one window, app lifetime; it forwards to every child, which is why children need no subscription of
+    /// their own) — and it is harmless for a type that <c>Dispose</c>s — <c>SettingsCenterViewModel</c>, created
+    /// per window opening, which unsubscribes. It is a leak for anything else.</para>
+    ///
+    /// <para>⚠⚠ <b>The measurement that produced this guard.</b> <c>DiagnosticsPanelViewModel</c> subscribed in
+    /// its constructor, and a panel exists per <c>MainWindowViewModel</c> and per Package / View / Procedure /
+    /// Function tab — so every editor tab ever opened stayed alive for the whole session and answered every
+    /// later language change. In the test process the same fact cost <b>45 deterministic failures out of
+    /// 8 799</b>, none of them about the code under test.</para>
+    ///
+    /// <para>⭐ It keys on the SOURCE (the <c>+=</c> itself), not on a type list computed at runtime, because a
+    /// subscription is a statement and there is nothing on the object to reflect over — the same reason the
+    /// forwarding guards above read source. A new subscriber therefore fails the build rather than being
+    /// discovered by a future audit.</para>
+    /// </summary>
+    [Fact]
+    public void NoViewModelOtherThanTheKnownOwners_SubscribesToTheStaticLanguageEvent()
+    {
+        // The two entitled owners, each with its reason recorded above. ⛔ Adding a name here is a decision
+        // about process lifetime — it needs an owner for the unsubscribe, or a proof that one instance exists.
+        var entitled = new[] { "MainWindowViewModel.cs", "SettingsCenterViewModel.cs" };
+
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(RepositoryRoot(), "src", "EmberTern.App"), "*.cs", SearchOption.AllDirectories))
+        {
+            if (entitled.Contains(Path.GetFileName(file), StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            var source = File.ReadAllText(file);
+            if (Regex.IsMatch(source, @"Loc\.LanguageChanged\s*\+="))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These types subscribe to the static Loc.LanguageChanged and so can never be collected: "
+            + string.Join(", ", offenders)
+            + ". A view model created per tab or per window must instead expose RefreshLocalizedText() and be "
+            + "forwarded to by its owner — see DiagnosticsPanelViewModel.");
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>A test that swaps the global localization catalog must run under the isolation that empties the
+    /// global subscriber list.</b>
+    ///
+    /// <para><c>Loc.UseCatalogForVerification</c> and <c>Loc.Apply</c> mutate process-global state and broadcast
+    /// to every subscriber alive in the process — including view models built by earlier, unrelated tests.
+    /// <see cref="IsolatesGlobalLanguageStateAttribute"/> is applied to <see cref="HeadlessCollection"/>, so
+    /// joining that collection is what buys a test a clean subscriber list.</para>
+    ///
+    /// <para>⚠ <b>Before this guard the containment was accidental.</b> All eleven localization test classes
+    /// happened to be in the collection; nothing said they had to be, and a new one placed outside it would
+    /// have re-created the exact failure the audit found — silently, because the damage lands on OTHER tests.
+    /// ⛔ The fix for a failure here is to join the collection, never to remove the assertion.</para>
+    /// </summary>
+    [Fact]
+    public void EveryTestThatTouchesTheGlobalLanguageState_IsIsolated()
+    {
+        var marker = $"[Collection({nameof(HeadlessCollection)}.Name)]";
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(RepositoryRoot(), "tests", "EmberTern.Tests"), "*.cs", SearchOption.AllDirectories))
+        {
+            var source = File.ReadAllText(file);
+
+            // The two seams that mutate the process-global language state. ⚠ `Loc.Apply` is matched with its
+            // opening paren so `Loc.ApplySomethingElse` cannot satisfy it by accident.
+            if (!source.Contains("Loc.UseCatalogForVerification", StringComparison.Ordinal)
+                && !Regex.IsMatch(source, @"Loc\.Apply\s*\("))
+            {
+                continue;
+            }
+
+            // The definition of the collection itself legitimately names the seam without being a test.
+            if (Path.GetFileName(file) == "ConnectionExpandBindingProbe.cs")
+            {
+                continue;
+            }
+
+            if (!source.Contains(marker, StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These test classes mutate the process-global localization state without joining "
+            + $"{nameof(HeadlessCollection)}, so they broadcast into view models leaked by earlier tests: "
+            + string.Join(", ", offenders) + $". Add {marker} to the class.");
+    }
+
     // ── The XAML side of the catalog ─────────────────────────────────────────────────────────────────────
 
     /// <summary>

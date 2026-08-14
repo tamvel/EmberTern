@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using Avalonia;
@@ -19,6 +20,7 @@ using EmberTern.App;
 using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Controls;
+using EmberTern.App.Localization;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
@@ -31,6 +33,7 @@ using System.Text.RegularExpressions;
 using Avalonia.Controls.Presenters;
 using Xunit;
 using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace EmberTern.Tests;
 
@@ -71,6 +74,27 @@ public sealed class HeadlessSessionFixture : IDisposable
 {
     public HeadlessUnitTestSession Session { get; } = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
 
+    /// <summary>
+    /// ⭐⭐ <b>Warms the session up ONCE, here, instead of letting the first test trigger it.</b>
+    ///
+    /// <para><c>HeadlessUnitTestSession</c> builds its isolated Avalonia application LAZILY, inside the first
+    /// <c>Dispatch</c> — <c>EnsureIsolatedApplication</c> → <c>AvaloniaHeadlessPlatform.Initialize</c> →
+    /// <c>Compositor</c> → <c>DefaultRenderLoop.Add</c> → <c>Dispatcher.VerifyAccess()</c>. That makes
+    /// first-use timing part of the test run, and it is not private to this collection: xunit runs other
+    /// collections in PARALLEL with it, so whichever test dispatched first raced with whatever else was
+    /// touching Avalonia at that moment. Measured on the full single-command run: <c>BrandingPresentationTests</c>
+    /// died in <c>EnsureIsolatedApplication</c> with "the calling thread cannot access this object" in <b>2 of
+    /// 4</b> runs, while passing every time the suite was split into partitions — i.e. the hand-maintained
+    /// partitioning had been hiding this too.</para>
+    ///
+    /// <para>⭐ One empty dispatch in the constructor moves the whole platform setup to a single known moment,
+    /// on the session's own thread, before any test runs. ⛔ Do not make it conditional or lazy again "because
+    /// it costs a few milliseconds" — the cost is paid once per process and it is what makes the run
+    /// repeatable.</para>
+    /// </summary>
+    public HeadlessSessionFixture()
+        => Session.Dispatch(static () => { }, CancellationToken.None).GetAwaiter().GetResult();
+
     public void Dispose() => Session.Dispose();
 
     private static class HeadlessAppEntry
@@ -81,10 +105,48 @@ public sealed class HeadlessSessionFixture : IDisposable
 }
 
 /// <summary>
+/// ⚠⚠ <b>Empties the process-global <c>Loc.LanguageChanged</c> subscriber list around every test it covers.</b>
+///
+/// <para>⭐ <b>This attribute is the automated isolation that replaced running the suite in hand-maintained
+/// partitions.</b> A static event's subscriber list is process-wide, so every view model any earlier test built
+/// stayed subscribed; the next test to swap the localization catalog then broadcast into all of them. Measured
+/// on this repository: <b>45 deterministic failures out of 8 799</b>, identical across two full runs, none of
+/// them about the code under test. Splitting the run into three partitions only moved the leaking test away
+/// from the observing one — the view models still outlived their tests, so the defect was hidden rather than
+/// fixed.</para>
+///
+/// <para>⚠ It is applied to the COLLECTION DEFINITION, so xunit runs it for every test in
+/// <see cref="HeadlessCollection"/> automatically — a new headless test cannot forget it, which is the property
+/// a per-class opt-in would not have. The tests in this collection are serialised by xunit (one session, one UI
+/// thread), so the single attribute instance is never entered concurrently; healthy tests outside the
+/// collection keep running in parallel and are untouched.</para>
+///
+/// <para>⛔ It is NOT a licence to leak. The one product leak this investigation surfaced —
+/// <c>DiagnosticsPanelViewModel</c> subscribing per Package tab — was fixed at the source, by making the panel
+/// an ordinary child of the app's single long-lived subscriber. What remains subscribed for the process is
+/// <c>MainWindowViewModel</c>, and that is a recorded decision (one window, app lifetime), not an oversight.</para>
+/// </summary>
+public sealed class IsolatesGlobalLanguageStateAttribute : BeforeAfterTestAttribute
+{
+    private IDisposable? _scope;
+
+    public override void Before(MethodInfo methodUnderTest) => _scope = Loc.IsolateSubscribersForVerification();
+
+    public override void After(MethodInfo methodUnderTest)
+    {
+        _scope?.Dispose();
+        _scope = null;
+    }
+}
+
+/// <summary>
 /// The one collection every headless-UI test class belongs to, so they share a single
-/// <see cref="HeadlessSessionFixture"/> — one session, one UI thread, for the whole process.
+/// <see cref="HeadlessSessionFixture"/> — one session, one UI thread, for the whole process — and, since the
+/// audit follow-up, a clean global localization state per test (see
+/// <see cref="IsolatesGlobalLanguageStateAttribute"/>).
 /// </summary>
 [CollectionDefinition(Name)]
+[IsolatesGlobalLanguageState]
 public sealed class HeadlessCollection : ICollectionFixture<HeadlessSessionFixture>
 {
     public const string Name = "headless-avalonia";

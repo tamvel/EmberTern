@@ -50,6 +50,9 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
     /// nothing.</summary>
     public DiagnosticsPanelViewModel DiagnosticsPanel { get; } = new();
 
+    /// <inheritdoc cref="PackageDetailTabViewModel.RefreshLocalizedText"/>
+    internal void RefreshLocalizedText() => DiagnosticsPanel.RefreshLocalizedText();
+
     // Default CREATE VIEW template for the New View flow. The user edits the SQL
     // directly — no visual designer (per milestone scope).
     public const string NewViewTemplate =

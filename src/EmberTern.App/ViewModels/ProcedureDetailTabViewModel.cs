@@ -753,6 +753,10 @@ public partial class ProcedureDetailTabViewModel : SourceObjectDetailTabViewMode
     {
         OnPropertyChanged(string.Empty);
 
+        // The Diagnostics sub-tab's rows resolve their text once, and the line above reaches this editor's own
+        // properties only — the panel is a child object (#353).
+        DiagnosticsPanel.RefreshLocalizedText();
+
         if (_lastExecOutcome is { } outcome)
         {
             ExecInfo = BuildExecInfo(outcome);

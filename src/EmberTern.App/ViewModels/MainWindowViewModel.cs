@@ -357,6 +357,11 @@ public partial class MainWindowViewModel : ViewModelBase
         // language until a restart. EveryWindowChildThatCanRefreshItsText_IsForwarded pins this line.
         Metadata.RefreshLocalizedText();
 
+        // ⚠ The SQL Editor's Diagnostics panel used to subscribe to Loc.LanguageChanged itself. It was the one
+        // child that did, and because a panel also exists per Package tab, the static event kept every closed
+        // Package tab alive for the session. It is now an ordinary child of this one long-lived subscriber.
+        DiagnosticsPanel.RefreshLocalizedText();
+
         foreach (var tab in WorkspaceTabs)
         {
             tab.RaiseAllPropertiesChanged();

@@ -42,6 +42,19 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
     /// nothing.</summary>
     public DiagnosticsPanelViewModel DiagnosticsPanel { get; } = new();
 
+    /// <summary>
+    /// Re-reads the text this editor resolved once, after a language change. Called by
+    /// <c>WorkspaceTabViewModel.RaiseAllPropertiesChanged</c>, which is called by the app's ONE
+    /// <c>Loc.LanguageChanged</c> subscriber.
+    /// <para>⚠ The panel used to subscribe to the static event itself, which leaked one live view model per
+    /// Package tab ever opened. It is a plain child now (#353).</para>
+    /// <para>⛔ It deliberately does NOT raise <c>OnPropertyChanged(string.Empty)</c>: the tab already does that
+    /// for itself, and this editor's own text is bound through <c>{app:Loc}</c>. Measured — adding it here made
+    /// a language change re-enter <c>MainWindowViewModel.RefreshToolbarSections</c> and touch Avalonia
+    /// <c>Button.Command</c>, which is work a language change has no business doing.</para>
+    /// </summary>
+    internal void RefreshLocalizedText() => DiagnosticsPanel.RefreshLocalizedText();
+
     // Templates for the New Package flow (the user edits the SQL directly).
     public const string NewPackageHeaderTemplate =
         "CREATE OR ALTER PACKAGE NEW_PACKAGE\nAS\nBEGIN\n  /* PROCEDURE / FUNCTION declarations */\nEND";

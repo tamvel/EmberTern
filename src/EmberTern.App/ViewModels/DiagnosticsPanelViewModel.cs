@@ -24,9 +24,9 @@ public sealed partial class DiagnosticsPanelViewModel : ViewModelBase
     public ObservableCollection<DiagnosticRowViewModel> Diagnostics { get; } = new();
 
     /// <summary>
-    /// ⭐⭐ <b>The panel's ONE language subscription (ratified W3, etap C5), and every clause of it is
-    /// load-bearing.</b> Core hands up a key plus data, so a row's text only exists once resolved — and a row is
-    /// resolved when its <c>Message</c> is read, which after a language change nothing does on its own (#353).
+    /// ⭐⭐ <b>Re-reads every row's text after a language change (ratified W3, etap C5), and every clause of it
+    /// is load-bearing.</b> Core hands up a key plus data, so a row's text only exists once resolved — and a row
+    /// is resolved when its <c>Message</c> is read, which after a language change nothing does on its own (#353).
     ///
     /// <para>⛔ <b>The obvious repair — rebuild the rows and republish — cannot work here, and that is the trap
     /// worth knowing:</b> <see cref="Update"/> no-ops when <see cref="Unchanged"/> says the findings are the
@@ -34,15 +34,19 @@ public sealed partial class DiagnosticsPanelViewModel : ViewModelBase
     /// would swallow the refresh. So this hook does not touch the collection at all: it asks each existing row to
     /// re-read its own text. No rebuild, no <c>CollectionChanged</c>, no lost selection.</para>
     ///
-    /// <para>⭐ One subscription for the whole panel rather than one per row: a row-level subscription would be a
-    /// leak per finding, and a large script has many. The rows stay ignorant of the language on purpose.</para>
+    /// <para>⭐ One refresh for the whole panel rather than one per row: the rows stay ignorant of the language
+    /// on purpose.</para>
+    ///
+    /// <para>⚠⚠ <b>This used to be a direct <c>Loc.LanguageChanged</c> subscription taken in the constructor,
+    /// and that was the outlier that broke the app's own rule.</b> A panel is created per <c>MainWindowViewModel</c>
+    /// AND per Package tab, while the static event is a GC root — so every Package tab ever opened stayed alive
+    /// for the rest of the session and answered every later language change. The app already has exactly one
+    /// long-lived subscriber, <c>MainWindowViewModel</c>, which forwards to its children
+    /// (<c>Performance</c>, <c>Metadata</c>, every tab); this panel is now one more of those children, so it
+    /// needs no lifetime of its own and there is nothing to unsubscribe. ⛔ Do not re-add a subscription here —
+    /// <c>NoViewModelOtherThanTheKnownOwners_SubscribesToTheStaticLanguageEvent</c> fails the build if you do.</para>
     /// </summary>
-    public DiagnosticsPanelViewModel()
-    {
-        Loc.LanguageChanged += OnLanguageChanged;
-    }
-
-    private void OnLanguageChanged(object? sender, System.EventArgs e)
+    public void RefreshLocalizedText()
     {
         foreach (var row in Diagnostics)
         {

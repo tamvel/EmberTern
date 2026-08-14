@@ -51,6 +51,10 @@ public partial class WorkspaceTabViewModel : ViewModelBase
         SessionManager?.RefreshLocalizedText();
         ProcedureDetail?.RefreshLocalizedText();
         FunctionDetail?.RefreshLocalizedText();
+        // ⚠ These two carry a Diagnostics panel and nothing else language-bearing. They joined the family when
+        // the panel stopped subscribing to Loc.LanguageChanged on its own — see DiagnosticsPanelViewModel.
+        ViewDetail?.RefreshLocalizedText();
+        PackageDetail?.RefreshLocalizedText();
     }
 
     private readonly MainWindowViewModel _owner;

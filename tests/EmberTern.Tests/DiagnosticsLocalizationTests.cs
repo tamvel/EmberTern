@@ -208,12 +208,26 @@ public sealed class DiagnosticsLocalizationTests
     // ── Live switching (ratified W3) ─────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// ⭐⭐ <b>W3 as built: the panel owns ONE subscription, and a language change refreshes the rows' text
-    /// without touching the collection or the selection.</b>
+    /// ⭐⭐ <b>W3 as built: a language change refreshes the rows' text without touching the collection or the
+    /// selection.</b>
     ///
     /// <para>⛔ The trap this pins: the obvious repair — rebuild the rows and republish — is swallowed by
     /// <c>Update</c>'s unchanged-check, because after a mere language change the findings ARE the same. So the
     /// hook must not go through <c>Update</c> at all.</para>
+    ///
+    /// <para>⚠⚠ <b>What changed in the audit follow-up, and why this is not a weaker test.</b> The panel used to
+    /// take its OWN <c>Loc.LanguageChanged</c> subscription, so this test could swap the catalog and watch a
+    /// bare panel react. That subscription was a leak: a panel exists per <c>MainWindowViewModel</c> AND per
+    /// Package / View / routine editor tab, while the static event is a GC root — so every tab ever opened
+    /// stayed alive for the session and answered every later language change. The panel is now an ordinary
+    /// child of the app's single long-lived subscriber, which is the pattern every other refreshable view model
+    /// here already follows.</para>
+    ///
+    /// <para>⭐ The claim is therefore split, and the two halves together are STRONGER than the one they
+    /// replace: this test keeps the whole behavioural half (notified, not rebuilt, selection kept, new catalog
+    /// read), and the wiring half — that every owner actually calls it — is carried by the three self-arming
+    /// guards in <c>LocalizationMechanismTests</c>, which began covering this type automatically the moment it
+    /// declared <c>RefreshLocalizedText</c>. ⛔ Do not "restore" the subscription to make this test shorter.</para>
     /// </summary>
     [Fact]
     public void ALanguageChange_RefreshesTheRowsText_WithoutRebuildingOrLosingTheSelection()
@@ -238,8 +252,11 @@ public sealed class DiagnosticsLocalizationTests
 
         try
         {
-            // The same switch the Settings Center Language row performs.
+            // The same switch the Settings Center Language row performs, followed by the same forward the
+            // owner performs — MainWindowViewModel.OnLanguageChanged for the SQL Editor's panel, and each
+            // editor tab's RefreshLocalizedText for its own.
             Loc.UseCatalogForVerification(new PassThroughCatalog(), CultureInfo.InvariantCulture);
+            panel.RefreshLocalizedText();
 
             Assert.True(messageNotifications > 0, "the row was never told its text changed");
             Assert.Equal(0, collectionEvents);           // no rebuild
