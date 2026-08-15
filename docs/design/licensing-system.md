@@ -1704,3 +1704,86 @@ still an `int` bound to text.
   omissions.
 - ⏭ **Where the two files live has no surface yet.** Removed from first run (§36.5) and not replaced: it
   belongs on an administrative surface — an "Open data folder" action or a storage section — which is L5.
+
+---
+
+## 37. L4a — as built (2026-08-15)
+
+✅ **The mechanism, with no UI.** `src/EmberTern.App/Licensing/` — 5 files. Builds **0/0 in Debug and
+Release, both solutions**. Suite: EmberTern **9 029** (was 8 979; **+50**), License Manager **102**
+(untouched). ⭐ The **`Release` run is part of the acceptance, not hygiene** — it is the only thing that can
+prove the gate's `Release` arm, and a `Debug`-only run never can.
+
+**Surface:** `LicensingPolicy` · `LicenseLocation` · `LicenseStore` · `LicenseService`
+(`LicenseInstallOutcome` / `LicenseInstallResult`) · `LicenseText`. Plus
+`UserSettings.LicenseClockHighWater` in Core, `EmberTern.App` → `EmberTern.Licensing`, and 18 EN + 18 PL
+resource entries.
+
+### 37.1 The three decisions the user ratified before implementation
+
+| Decision | As built |
+|---|---|
+| **Option A** — no development key | `TrustedKeys.Production` stays empty until L7. ⭐ `LicenseService` takes a `TrustedKeyTable` parameter defaulting to it, so the app always uses production while tests prove the whole chain. ⛔ No second key to maintain in the client |
+| **`Expired` blocks every attachment opener**, Test connection included | `AllowsNewDatabaseConnections` is one predicate over the whole domain. ⚠ Measured and recorded: `CreateDebugSessionAsync` and `CreateImportSessionAsync` both hard-require `IsConnected`, so gating the connect path genuinely closes the domain rather than the reported cases. ⏭ Wiring the call sites is L4b |
+| **Debug marker in About** | Recorded; About is a UI surface, so it lands in L4b with the rest of them |
+
+### 37.2 ⚠⚠ The same trap fired THREE times in one session — it is a pattern, not an accident
+
+**A guard that matches source TEXT fires on the prose that documents its own rule.**
+
+1. `LicensingPolicy.cs` documents *"not a setting, not an environment variable, not a command-line
+   argument"* — and the guard forbidding runtime inputs matched its own doc comment.
+2. `EmberTern.App.csproj` explains that the **issuer** is deliberately absent — and L2's ratified
+   `NoProjectInTheEmberTernSolutionReferencesIssuing` matched the sentence naming it.
+3. L3 hit the identical thing in `LicenseManagerThemeTests` (§36.5).
+
+⭐ **The fix is always to strip comments, never to reword the documentation** — a guard that fires on its
+own rule is one that gets suppressed, and a suppressed guard reads as coverage while providing none.
+⚠ Loosening a rule #11-class guard demanded proof it still bites: a real `ProjectReference` to Issuing was
+injected and the guard fired naming the project, before the change was accepted.
+
+### 37.3 Two guards that proved nothing until they were made to fail
+
+- ⚠ **`AnAlteredLicenceIsRefused` first tampered by a text `Replace` of the licensee's name** — which
+  appears nowhere in the file, because the payload is base64url. It mutated nothing, the licence verified
+  perfectly, and the test reported the absence of a failure as a success. Now `LicenseFixtures.Tamper`
+  edits the **encoding**. ⭐ Identical in shape to the keystore finding in L2 (§35.3): editing an encoded
+  artifact as text silently edits nothing.
+- ⚠ **The runtime-input guard was a false positive on `LicenseService.cs`**, whose offence was reading
+  `_settings.Load()` for the clock high-water twenty lines from an unrelated use of the gate. ⭐ A rule
+  bounded by *"appears in the same FILE"* is not bounded by anything; it was restated positively — the
+  policy file has exactly one input. ⚠ It had been failing unnoticed because the test filter used
+  (`~License`) never matches `Licensing…`.
+
+### 37.4 Decisions taken during implementation
+
+1. ⭐ **`LicenseStore.Install` takes the verifier as a parameter and returns the verdict it read BACK FROM
+   DISK.** The re-read is not something a caller can forget, because there is no way to write without it.
+   Design §5 calls this Architecture rule 11 rather than paranoia: a half-succeeded write must be found
+   *now*, with the file still on the user's desktop.
+2. ⭐ **`NotYetValid` and `Expired` are accepted for storage**, only unusable artifacts are rejected.
+   Refusing to store a post-dated renewal would make renewing early impossible — which is exactly when a
+   well-organised customer renews.
+3. **`AppInfo.ReleaseDate` is a `DateOnly`**, widened at UTC midnight for the `maint` comparison, so a
+   licence whose `maint` falls on the release date covers that build rather than missing it by hours.
+4. ⭐ **`RecordClock` goes through `ApplicationSettingsStore.Update`**, which takes the cross-process lock
+   and reads under it — ⛔ never `Load()` → mutate → `Save()`, the shape that was measured turning a
+   transient read failure into 89 writes of DEFAULTS.
+5. **A failed settings read yields no high-water mark rather than a default one.** The guard is then merely
+   absent for that session, which is the safe direction: the alternative is inventing an instant and
+   enforcing it.
+6. ⭐ **The verdict maps to words in ONE place (`LicenseText`), and every value is pinned in BOTH
+   languages** through the path the UI will use. The eleven `LicenseFailure` values collapse onto four
+   answers, because what the user needs is *"wrong kind of file"* vs *"this was altered"* vs *"this build
+   cannot read it"* vs *"wrong product"* — eleven sentences would be eleven ways of saying those four.
+
+### 37.5 ⏭ What L4a deliberately did NOT do
+
+⛔ No UI: no Activation window, no Settings ▸ License, no About line, no banner — all L4b. ⛔ The connection
+gate is a **predicate**, not yet wired into the call sites, because refusing a connection needs the sentence
+that explains why. ⛔ No network code, no `iid`, no fingerprint, no `seats` enforcement, no production
+ceremony.
+
+⚠ **A real licence file verifies as `Invalid / UnknownKey` in every configuration today** — `TrustedKeys.Production`
+is empty until L7. That is correct and deliberate, and `ALicenceSignedByAKeyThisBuildDoesNotKnowIsRefused`
+records it so the next reader does not diagnose it as a defect.

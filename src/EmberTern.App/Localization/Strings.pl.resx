@@ -45,6 +45,60 @@
   <data name="AboutVersionFormat" xml:space="preserve">
     <value>Wersja {0}</value>
   </data>
+  <data name="LicenseStatusValid" xml:space="preserve">
+    <value>Licencja aktywna</value>
+  </data>
+  <data name="LicenseStatusGrace" xml:space="preserve">
+    <value>Licencja wygasła — okres karencji</value>
+  </data>
+  <data name="LicenseStatusExpired" xml:space="preserve">
+    <value>Licencja wygasła</value>
+  </data>
+  <data name="LicenseStatusNotYetValid" xml:space="preserve">
+    <value>Licencja jeszcze nieaktywna</value>
+  </data>
+  <data name="LicenseStatusVersionNotCovered" xml:space="preserve">
+    <value>Wersja nieobjęta licencją</value>
+  </data>
+  <data name="LicenseStatusUnlicensed" xml:space="preserve">
+    <value>Brak licencji</value>
+  </data>
+  <data name="LicenseStatusInvalid" xml:space="preserve">
+    <value>Nie można odczytać licencji</value>
+  </data>
+  <data name="LicenseExplainValid" xml:space="preserve">
+    <value>Licencja dla {0}, ważna do {1}.</value>
+  </data>
+  <data name="LicenseExplainGrace" xml:space="preserve">
+    <value>Ta licencja wygasła {0}. EmberTern działa jeszcze przez krótki okres karencji — zainstaluj odnowiony plik licencji.</value>
+  </data>
+  <data name="LicenseExplainExpired" xml:space="preserve">
+    <value>Ta licencja wygasła {0}. Twoja praca, pliki i eksporty pozostają dostępne, ale do czasu odnowienia licencji EmberTern nie otworzy nowych połączeń z bazą danych.</value>
+  </data>
+  <data name="LicenseExplainNotYetValid" xml:space="preserve">
+    <value>Ta licencja zaczyna obowiązywać {0}. Do tego czasu EmberTern nie może z niej korzystać — sprawdź datę lub skontaktuj się z nami, jeśli wygląda błędnie.</value>
+  </data>
+  <data name="LicenseExplainVersionNotCovered" xml:space="preserve">
+    <value>Ta licencja obejmuje wersje wydane do {0}, a ta kompilacja jest nowsza. Zainstaluj wersję z tego okresu albo odnów opiekę serwisową, aby objęła również tę.</value>
+  </data>
+  <data name="LicenseExplainUnlicensed" xml:space="preserve">
+    <value>EmberTern nie został jeszcze aktywowany na tym komputerze. Użyj pliku licencji, który od nas otrzymałeś — przeciągnij go tutaj, wskaż przyciskiem Przeglądaj albo wklej jego zawartość.</value>
+  </data>
+  <data name="LicenseExplainNotALicense" xml:space="preserve">
+    <value>Ten plik nie jest licencją EmberTern albo uległ uszkodzeniu po drodze. Upewnij się, że używasz załącznika EmberTern.etlic dokładnie w takiej postaci, w jakiej go otrzymałeś, bez edytowania.</value>
+  </data>
+  <data name="LicenseExplainUnsupportedVersion" xml:space="preserve">
+    <value>Ta licencja została wystawiona dla nowszej wersji EmberTern niż ta. Zaktualizuj EmberTern i spróbuj ponownie.</value>
+  </data>
+  <data name="LicenseExplainUnknownKey" xml:space="preserve">
+    <value>Ta kompilacja nie potrafi sprawdzić, kto wystawił tę licencję. Mogła zostać wystawiona dla innej edycji EmberTern — prześlij nam szczegóły, a wystawimy ją ponownie.</value>
+  </data>
+  <data name="LicenseExplainSignatureInvalid" xml:space="preserve">
+    <value>Ta licencja nie zgadza się ze swoim podpisem, co oznacza, że została zmieniona po wystawieniu. Użyj oryginalnego pliku dokładnie w otrzymanej postaci albo poproś nas o nową kopię.</value>
+  </data>
+  <data name="LicenseExplainWrongProduct" xml:space="preserve">
+    <value>Ta licencja została wystawiona dla innego produktu, więc EmberTern nie może jej użyć. Sprawdź, czy załączyłeś właściwy plik, lub skontaktuj się z nami.</value>
+  </data>
   <data name="AddFieldAutoincExisting" xml:space="preserve">
     <value>Użyj istniejącego generatora</value>
   </data>

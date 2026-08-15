@@ -1141,6 +1141,31 @@ internal static class UiStrings
     // single source is <Version> in Directory.Build.props.
     public static string AboutTitle => Loc.Text(nameof(AboutTitle));
     public static string AboutVersionFormat => Loc.Text(nameof(AboutVersionFormat));
+
+    // ── LICENSING (L4) ───────────────────────────────────────────────────────────────────────────────
+    //
+    // ⭐ Resolved at DISPLAY time through LicenseText, never captured. A licence problem is the whole of
+    //    someone's support experience, so every failure sentence answers three questions: what happened,
+    //    why, and what to do now. ⛔ Never "License validation failed (code 7)".
+    // ⚠ Dates and names arrive as ARGUMENTS into a whole sentence — word order belongs to the translator.
+    public static string LicenseStatusValid => Loc.Text(nameof(LicenseStatusValid));
+    public static string LicenseStatusGrace => Loc.Text(nameof(LicenseStatusGrace));
+    public static string LicenseStatusExpired => Loc.Text(nameof(LicenseStatusExpired));
+    public static string LicenseStatusNotYetValid => Loc.Text(nameof(LicenseStatusNotYetValid));
+    public static string LicenseStatusVersionNotCovered => Loc.Text(nameof(LicenseStatusVersionNotCovered));
+    public static string LicenseStatusUnlicensed => Loc.Text(nameof(LicenseStatusUnlicensed));
+    public static string LicenseStatusInvalid => Loc.Text(nameof(LicenseStatusInvalid));
+    public static string LicenseExplainValid => Loc.Text(nameof(LicenseExplainValid));
+    public static string LicenseExplainGrace => Loc.Text(nameof(LicenseExplainGrace));
+    public static string LicenseExplainExpired => Loc.Text(nameof(LicenseExplainExpired));
+    public static string LicenseExplainNotYetValid => Loc.Text(nameof(LicenseExplainNotYetValid));
+    public static string LicenseExplainVersionNotCovered => Loc.Text(nameof(LicenseExplainVersionNotCovered));
+    public static string LicenseExplainUnlicensed => Loc.Text(nameof(LicenseExplainUnlicensed));
+    public static string LicenseExplainNotALicense => Loc.Text(nameof(LicenseExplainNotALicense));
+    public static string LicenseExplainUnsupportedVersion => Loc.Text(nameof(LicenseExplainUnsupportedVersion));
+    public static string LicenseExplainUnknownKey => Loc.Text(nameof(LicenseExplainUnknownKey));
+    public static string LicenseExplainSignatureInvalid => Loc.Text(nameof(LicenseExplainSignatureInvalid));
+    public static string LicenseExplainWrongProduct => Loc.Text(nameof(LicenseExplainWrongProduct));
     // Released on its own line under the version. The date is assembly metadata fed by <ReleaseDate> in
     // Directory.Build.props — same single source as the version, so it is never a date typed into a view.
     public static string AboutReleasedFormat => Loc.Text(nameof(AboutReleasedFormat));

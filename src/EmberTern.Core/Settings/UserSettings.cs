@@ -35,4 +35,24 @@ public sealed class UserSettings
     // ImportProfiles above): an older settings.dat has no Preferences key and deserializes to a default
     // instance, whereas a version bump would make an older build refuse the WHOLE file.
     public Preferences Preferences { get; set; } = new();
+
+    // ⭐ The licence clock high-water mark (licensing design §16.3). The highest system time this
+    // installation has ever seen; every start uses `max(systemNow, highWater)` as the effective moment.
+    //
+    // ⭐⭐ WHY IT EXISTS AT ALL: in V1 the expiry date is the ENTIRE enforcement mechanism, so leaving the
+    // clock unguarded would make it a no-op — set the machine back a year and the licence lives again.
+    // ⛔ It WARNS, it never blocks: a user legitimately correcting a badly wrong clock must not be locked
+    // out of their tool (Architecture rule 11 governs licensing exactly as it governs the formatter), and
+    // the tolerance is 48 h because time zones, DST, VM suspends, dead CMOS batteries and travelling
+    // laptops are all normal.
+    //
+    // ⚠ It lives HERE rather than beside the licence file on purpose: this value is OURS, not the
+    // customer's. The licence itself is deliberately outside settings.dat so it survives a settings reset
+    // and can be copied by support; the high-water mark is the opposite — it should be as awkward to edit
+    // as the rest of settings.dat already is (DPAPI, per user).
+    //
+    // ❌ It NEVER travels in a settings export — see SettingsExportContentTests. It is machine state, and
+    // carrying it to another machine would import a stranger's clock. Nullable so that "never recorded"
+    // stays distinguishable from "recorded as the epoch".
+    public System.DateTimeOffset? LicenseClockHighWater { get; set; }
 }

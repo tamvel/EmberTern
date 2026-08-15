@@ -73,6 +73,22 @@ public sealed class PrivateKeyNeverShipsTests
         Assert.DoesNotContain(IssuingAssembly, solution, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Project XML with <c>&lt;!-- … --&gt;</c> comments removed.
+    ///
+    /// <para>⚠⚠ <b>Added in L4, after this guard fired on a comment that DOCUMENTS the rule it enforces.</b>
+    /// <c>EmberTern.App.csproj</c> gained a reference to the licence *verifier*, and the note beside it
+    /// explains that the *issuer* is deliberately absent — naming it, which a plain text match cannot tell
+    /// from a reference. ⭐ A guard that fires on the documentation of its own rule is a guard that gets
+    /// suppressed, and a suppressed guard reads as coverage while providing none.</para>
+    ///
+    /// <para>⭐ The strength is unchanged: it still matches ANY markup mention, not merely a
+    /// <c>ProjectReference</c>, so a <c>PackageReference</c> or an <c>Import</c> would be caught exactly as
+    /// before. Only prose stops counting — and prose cannot reference an assembly.</para>
+    /// </summary>
+    private static string WithoutComments(string projectXml) =>
+        Regex.Replace(projectXml, @"<!--.*?-->", string.Empty, RegexOptions.Singleline);
+
     [Fact]
     public void NoProjectInTheEmberTernSolutionReferencesIssuing()
     {
@@ -84,7 +100,7 @@ public sealed class PrivateKeyNeverShipsTests
         {
             var projectPath = Path.Combine(root, match.Groups[1].Value.Replace('/', Path.DirectorySeparatorChar));
             if (File.Exists(projectPath) &&
-                File.ReadAllText(projectPath).Contains(IssuingAssembly, StringComparison.Ordinal))
+                WithoutComments(File.ReadAllText(projectPath)).Contains(IssuingAssembly, StringComparison.Ordinal))
             {
                 offenders.Add(Path.GetRelativePath(root, projectPath));
             }
