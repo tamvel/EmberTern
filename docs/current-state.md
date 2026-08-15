@@ -15,17 +15,16 @@
 
 ## 0. ⏭ HANDOFF — read this first
 
-> **Current milestone:** Audit follow-up — **Phase 6 (NuGet update) ✅ DONE**, awaiting the user's review.
-> Phases 4 and 5 are closed and accepted.
-> **Next task:** ⏭ **Phase 7 — `ARCHITECTURE.md` "as built". ⛔ NOT started.**
+> **Current milestone:** Audit follow-up — **Phase 7 (`ARCHITECTURE.md` as-built) ✅ DONE**, awaiting the
+> user's review. Phases 4, 5 and 6 are closed.
+> **Next task:** ⏭ **Final verification of the whole etap, then the push to both remotes. ⛔ NOT started.**
 >
 > **Work lives on the branch `fix/audit-followup-2026-08`, NOT on `master`, and is NOT pushed.**
-> Eight commits. Pushing happens after the user accepts the whole etap (both remotes), which has not
-> happened yet.
+> Nine commits. ⭐ The push (origin + private) is what closes the etap, and it happens only after the user
+> accepts it as a whole.
 
-Remaining order: **`ARCHITECTURE.md` "as built"** → final verification. ⛔ Licensing, Firebase, License
-Manager and the installer are **out of scope** and belong to a later, separate etap — ⚠ but Phase 6 put
-**two concrete licensing items on that etap's desk**, see §3.
+⛔ Licensing, Firebase, License Manager and the installer remain **out of scope** — but Phase 6 put **two
+concrete licensing items** on that etap's desk (NPOI's OSMF EULA, ImageSharp's Split Licence), see §3.
 
 ---
 
@@ -89,6 +88,7 @@ reasoning lives.
 | **Audit follow-up — Phase 4: debugger irreversible-effects warning** ✅ user-verified | 2026-08-14 | commits `1130e3d`, `1852611` |
 | **Audit follow-up — Phase 5: charset guard** ✅ user-verified | 2026-08-15 | gotchas #372/#373, `tools/probes/CharsetProbe`, rule 12 in `CLAUDE.md` |
 | **Audit follow-up — Phase 6: NuGet to latest stable** | 2026-08-15 | §3 below — 8 packages raised, 2 held for a stated reason |
+| **Audit follow-up — Phase 7: `ARCHITECTURE.md` as-built** | 2026-08-15 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
 
 ---
 
@@ -140,53 +140,66 @@ property ("nothing is cut"), verified red in both broken shapes before being acc
 
 ## 3. Open work
 
-⏭ **Next task: Phase 7 — `ARCHITECTURE.md` "as built". ⛔ Not started.**
+⏭ **Next task: final verification of the etap, then the push to both remotes. ⛔ Not started.**
+
+### Phase 7 — `ARCHITECTURE.md` "as built" ✅ DONE
+
+Rewritten from scratch against the code. ⚠ The previous file dated from **2026-06-02** (the V1 era) and had
+gone silently stale in the most misleading way: it described `EmberTern.Core` as **17 files** against a real
+**304**, Firebird 12 against 42, App 30 against 274 — i.e. it read as a plausible document while describing a
+different product.
+
+**Scope:** solution shape and the one-way dependency graph · the three connection lanes as the central domain
+boundary · F5 end-to-end · inter-layer communication · shell/theming/commands · the SQL/PSQL front-end and its
+three safety properties · metadata + DDL change safety · debugger and the Fidelity Law · charset guard ·
+`ApplicationSettingsStore` guarantees · localization incl. `ErrorText` · modules · test infrastructure incl. the
+upstream headless race and the guard tests · architectural invariants · deliberate limits.
+
+**Validation:** every cited type name checked to exist in `src/`/`tests/` (the only three that do not resolve
+are `IDbProvider` and `IMessenger`, cited precisely as things the project does **not** have, plus
+`tools/probes/CharsetProbe` which is outside `src/`); every referenced document path checked to exist; the file
+counts, the six `IPerformanceRule` implementations and the ten per-object editors re-counted from the tree.
+
+**Discrepancies found while documenting — recorded, not fixed** (documentation phase, no code touched):
+
+- ⚠ **`MessageBanner` is used by 21 views**, where prior prose said "23".
+- ⚠ **Naming trap around "breadcrumbs".** `CLAUDE.md` lists Breadcrumbs as deliberately unbuilt — true of
+  *editor* breadcrumbs — but `Controls/BreadcrumbBar` **does exist** as the debugger's call-stack breadcrumb.
+  A reader grepping the word finds a real control and concludes the docs are wrong. Written down explicitly in
+  `ARCHITECTURE.md` §16. Editor folding, by contrast, has genuinely zero occurrences.
+- ⚠ **`SourceObjectDetailTabViewModel` is an abstract base**, not an eleventh editor — the "ten per-object
+  editors" count is correct, but a file listing suggests eleven.
 
 ### Phase 6 — NuGet update to latest stable ✅ DONE
 
-**Method:** target versions established from nuget.org (`dotnet list package --outdated` + the flat-container
-API per package), then updated in ONE pass — ⛔ no version hopping, ⛔ nothing pre-release.
+Target versions taken from nuget.org (`--outdated` + the flat-container API per package), applied in ONE pass;
+nothing pre-release. Full reasoning in commit `8ba4215`.
 
-⭐ **The headline finding: the packages that were expected to be the hard part were already current.**
-`Avalonia` + `Desktop`/`Themes.Fluent`/`Fonts.Inter`/`Headless` **12.1.1**, `Avalonia.AvaloniaEdit` **12.0.0**,
-`Avalonia.Controls.DataGrid` **12.1.2**, `FirebirdSql.Data.FirebirdClient` **10.3.4**, `CommunityToolkit.Mvvm`
-**8.4.2**, `AvaloniaUI.DiagnosticsSupport` **2.2.3** — every one of them verified as **the newest stable that
-exists**. ⭐ So the two "deliberate mismatches" are **not pins at all**: no 12.1.x AvaloniaEdit and no 12.1.1
-DataGrid were ever published. The mismatch is a publishing fact about three independent release cycles, and it
-resolves itself only when upstream ships.
+⭐ **The packages expected to be hard were already current** — `Avalonia` (+Desktop/Themes.Fluent/Fonts.Inter/
+Headless) 12.1.1, `Avalonia.AvaloniaEdit` 12.0.0, `Avalonia.Controls.DataGrid` 12.1.2,
+`FirebirdSql.Data.FirebirdClient` 10.3.4, `CommunityToolkit.Mvvm` 8.4.2, `AvaloniaUI.DiagnosticsSupport` 2.2.3
+are each **the newest stable that exists**. So the two "deliberate mismatches" are **not pins**: no 12.1.x
+AvaloniaEdit and no 12.1.1 DataGrid were ever published.
 
-**Raised (8):**
+**Raised (9):** `System.Security.Cryptography.ProtectedData` 9.0.0→10.0.11 (⭐ rule #11 path — closed with 215
+targeted settings/crypto tests; the old "our TFM is net9.0" objection was measured false, 10.0.11 ships a real
+`lib/net9.0`), `System.IO.Packaging` 9.0.18→10.0.11, `System.Security.Cryptography.Xml` 8.0.4→10.0.11,
+`DocumentFormat.OpenXml` 3.1.0→3.5.1, `ExcelDataReader` 3.7.0→3.9.0, `Microsoft.NET.Test.Sdk` 17.11.1→18.9.0,
+`xunit` 2.9.2→2.9.3, `xunit.runner.visualstudio` 2.8.2→4.0.0, `SixLabors.ImageSharp` 2.1.11→2.1.13.
 
-| Package | From → To | Note |
-|---|---|---|
-| `System.Security.Cryptography.ProtectedData` | 9.0.0 → **10.0.11** | ⭐ rule #11 path (DPAPI over `settings.dat`) — closed with 215 targeted settings/crypto tests, not just a green build. The old comment held it back on "our TFM is net9.0, so the 9.0.x band"; **measured false** — 10.0.11 ships a real `lib/net9.0` asset. |
-| `System.IO.Packaging` | 9.0.18 → **10.0.11** | real `lib/net9.0` asset |
-| `System.Security.Cryptography.Xml` | 8.0.4 → **10.0.11** | security override for an NPOI transitive pin |
-| `DocumentFormat.OpenXml` | 3.1.0 → **3.5.1** | ⚠ the only source change in the phase — see below |
-| `ExcelDataReader` | 3.7.0 → **3.9.0** | no adaptation needed |
-| `Microsoft.NET.Test.Sdk` | 17.11.1 → **18.9.0** | major; discovery and run unaffected |
-| `xunit` | 2.9.2 → **2.9.3** | `xunit.v3` is a different package id, not an update of this one |
-| `xunit.runner.visualstudio` | 2.8.2 → **4.0.0** | major; still supports xunit v2 (verified before updating) |
+**The one breaking change reaching our code:** OpenXml 3.5.1 annotates `WorkbookPart.Workbook` and
+`WorksheetPart.Worksheet` as nullable, so `XlsxExporterTests`' read-back helpers failed `CS8602`. Adapted, not
+suppressed — ⛔ no `#pragma`, no `NoWarn`. Product code needed no change.
 
-**The one breaking change that reached our code.** `DocumentFormat.OpenXml` 3.5.1 annotates
-`WorkbookPart.Workbook` and `WorksheetPart.Worksheet` as **nullable** — previously unannotated, so the
-dereferences in `XlsxExporterTests`' read-back helpers compiled silently and now fail `CS8602` under
-`TreatWarningsAsErrors`. The annotations are *more accurate* (a part can exist without its root element), so the
-helpers were adapted rather than suppressed. ⛔ No `#pragma`, no `<NoWarn>`; the product code needed no change.
+⛔ **Two held back, both TEST-ONLY and both LICENSING — for the licensing etap, not technical limits:**
+**NPOI** stays 2.7.2 (2.7.2 is `Apache-2.0`; **2.8.0 is `OSMFEULA.txt`** and adds a build gate demanding
+`<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>` — accepting terms on the owner's behalf).
+**SixLabors.ImageSharp** raised only within the 2.x line NPOI supports; 3.0+ moved to the Six Labors Split
+Licence. ⭐ If NPOI ever reaches 2.8.0+, the ImageSharp override disappears entirely — 2.8.0 renders through
+SkiaSharp.
 
-### ⛔ Held back, with the reason — both TEST-ONLY, both LICENSING
-
-⚠⚠ **Neither is a technical limit, and neither is mine to decide.** Both belong to the licensing etap.
-
-| Package | Held at | Newest | Why |
-|---|---|---|---|
-| **NPOI** | 2.7.2 | 2.8.0 | ⛔ **Licence change.** 2.7.2 declares `Apache-2.0`; **2.8.0 declares `OSMFEULA.txt`** (Open Source Maintenance Fee) and adds a build-time gate demanding `<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>` in the project file. That is accepting licence terms on the product owner's behalf. ⭐ Test-only (nothing in `src/` references it; it authors `.xls`/`.xlsx` fixtures), so the shipped product is not exposed. |
-| **SixLabors.ImageSharp** | 2.1.11 → **2.1.13** | 4.1.0 | Raised to the newest patch **inside the 2.x line**. It is not our dependency — only a security override for what NPOI pulls in, so it is bound to NPOI's line. 3.0+ also moved from Apache-2.0 to the **Six Labors Split Licence**. ⭐ If NPOI ever goes to 2.8.0+, this override disappears entirely: 2.8.0 renders through SkiaSharp and drops ImageSharp. |
-
-**Verification:** Debug and Release **0 warnings / 0 errors**; full suite **8 853 / 8 853** green (same total as
-before, so nothing was lost from discovery); targeted runs before it — **38** Office/OpenXml/ExcelDataReader and
-**215** settings/DPAPI round-trip; `--vulnerable --include-transitive` **zero** across all five projects;
-`--outdated` now reports **only** the two held packages above; app launches.
+**Verified:** Debug + Release 0/0; full suite **8 853/8 853** (total unchanged, so nothing left discovery);
+`--vulnerable --include-transitive` zero across all five projects; `--outdated` now lists only the two held.
 
 ### Phase 5 — charset guard ✅ CLOSED (implemented, tested, user-verified)
 
