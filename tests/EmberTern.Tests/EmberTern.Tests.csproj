@@ -60,6 +60,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <!-- ⚠ A DIRECT reference, not one inherited through EmberTern.App — and it stays direct after L4
+         wires licensing into the app. The licensing tests must be able to fail on their own terms:
+         if this reference were transitive, removing App's reference (or App failing to build) would
+         silently take the whole tamper corpus out of the run rather than turning it red. -->
+    <ProjectReference Include="..\..\src\EmberTern.Licensing\EmberTern.Licensing.csproj" />
     <ProjectReference Include="..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
     <ProjectReference Include="..\..\src\EmberTern.App\EmberTern.App.csproj" />
   </ItemGroup>

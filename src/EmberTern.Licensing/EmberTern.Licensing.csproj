@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ⭐ DELIBERATELY EMPTY, exactly like EmberTern.Core's project file.
+
+       This assembly is the licence VERIFIER and nothing else. It has:
+         · no PackageReference   — no third-party code on the verification path, for a decade
+                                   (see docs/design/licensing-system.md §15.1: with
+                                   TreatWarningsAsErrors escalating NU1902/NU1903, a CVE in a
+                                   crypto package here would FAIL EMBERTERN'S BUILD)
+         · no ProjectReference   — not even EmberTern.Core, because this assembly is shared with a
+                                   SECOND application (EmberTern License Manager) that has its own
+                                   resource catalog; see §9.1 for why the verdict travels as a
+                                   closed enum rather than Core's MessageKey
+         · no I/O, no System.Net — asserted by LicensingMakesNoNetworkCallsTests, which is the
+                                   machine-checkable form of the offline-first decision D1
+
+       ⛔ Do not add a reference here without re-reading those three lines. Every one of them is a
+       decision with a written reason, not an omission. -->
+
+</Project>

@@ -1,7 +1,8 @@
 # EmberTern Licensing System — design document
 
-**📋 STATUS: DESIGN — V1 RATIFIED BY THE USER 2026-08-15, NOT YET IMPLEMENTED.** Branch
-`feat/licensing-system`, cut from `master` at `2c3da45`. No production code has been touched.
+**🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ⭐ STAGE L1 DELIVERED — awaits the
+user's confirmation. Next: L2.** Branch `feat/licensing-system`, cut from `master` at `2c3da45`.
+As built: **§34**.
 
 **This document has two parts and they have different authority:**
 
@@ -40,6 +41,8 @@ V1 is designed so that V2 attaches to it, but ⛔ **V1 contains no code that onl
 | D12 | **V2 is the planned next stage**: one-time activation codes, activation, technical seat enforcement, code-reuse protection, activation management. ⛔ **No mandatory user accounts / login** — EmberTern is not SaaS. Firebase Authentication only ever as an auxiliary option, never the basis. | Part II |
 | D13 | Cloudflare **Worker + D1** stays in the document as a recommended V2 option. ⛔ Not implemented now. | §22 |
 | D14 | ⛔ **Do not over-engineer V1** to save hypothetical migration hours later. | §3 |
+| D15 | ⭐ **NEW: a license is never required in a `Debug` build.** `Debug` ⇒ the gate is off; `Release` ⇒ full verification. ⛔ Not via `Debugger.IsAttached` — it must follow from the **build configuration**. ⛔ `Release` must carry no simple configuration switch that turns licensing off. Guard test required. | §16.5 |
+| D16 | Open items O1–O6 resolved as recommended (§33): `maint` kept · 14-day grace · `Expired` blocks new database connections only · default seats 1 · license id in the e-mail body · delivered filename always `EmberTern.etlic`. | §33 |
 
 ---
 
@@ -372,18 +375,30 @@ sealed record LicensePayload(int Lv, string Kid, string Lid, string Prod,
                              DateTimeOffset IssuedAt, DateTimeOffset NotBefore,
                              DateTimeOffset ExpiresAt, DateTimeOffset? MaintenanceUntil);
 
-sealed record TrustedKey(string Kid, SignatureAlgorithm Alg, byte[] PublicKey, bool Revoked);
+sealed record TrustedKey(string Kid, SignatureAlgorithm Algorithm, byte[] PublicKey, bool Revoked);
 
-enum LicenseStatus { Unlicensed, Invalid, NotYetValid, Valid, Grace, Expired, VersionNotCovered }
+enum LicenseStatus  { Unlicensed, Invalid, NotYetValid, Valid, Grace, Expired, VersionNotCovered }
+enum LicenseFailure { None, FileMissing, NotALicense, MalformedArmor, MalformedEnvelope,
+                      MalformedPayload, UnsupportedVersion, UnknownKey, RevokedKey,
+                      AlgorithmMismatch, SignatureInvalid, WrongProduct }
 
-sealed record LicenseVerdict(LicenseStatus Status, LicensePayload? Payload,
-                             MessageKey Reason, object[] ReasonArgs);
+sealed record LicenseVerdict(LicenseStatus Status, LicenseFailure Failure,
+                             LicensePayload? Payload, string? Detail);
 
-static class LicenseVerifier { static LicenseVerdict Verify(ReadOnlySpan<byte> file, …); } // ⭐ ONE entry point
+static class LicenseVerifier { static LicenseVerdict Verify(string text, in LicenseVerificationContext c); }
+                                                                        // ⭐ ONE entry point
 ```
 
-⭐ `MessageKey` + arguments resolved by App is the **existing** Core↔App localization contract (D‑3), not
-a new one. Architecture rule 12 applies in full — see §17.3 for the specific trap.
+⚠ **Why a closed `LicenseFailure` enum and not `MessageKey`, which is this project's ratified D‑3
+currency.** `MessageKey` exists so that Core and Firebird can name a message without owning the words, and
+it presumes **one** resource catalog — App's. ⭐ **A licensing verdict is rendered by two applications with
+two independent catalogs** (EmberTern and the License Manager), so a key string would have to resolve in
+both, and a key present in one and missing in the other fails silently — exactly the Phase-5 defect shape.
+An enum is a closed set both applications map on their own terms, and the compiler can see every value.
+`Detail` carries a technical token for `[Copy details]` (an unknown `kid`, a parse offset) and is ⛔ **never
+rendered as prose**.
+
+⭐ Architecture rule 12 still applies in full at the two display sites — see §17.3 for the specific trap.
 
 ---
 
@@ -613,9 +628,18 @@ token        = signingInput ‖ ASCII(".") ‖ base64url(signature)
 ```
 
 - The magic is **inside** the signing input, so a token can never be replayed under a future envelope.
-- The signature covers the **encoded** payload segment. ⭐ **Verify first, parse second.** No canonical
-  JSON, no key ordering, no risk that a parse/re-serialise round-trip changes the bytes.
-- base64url is unpadded — `System.Buffers.Text.Base64Url` is in the .NET 9 BCL.
+- The signature covers the **encoded** payload segment. ⚠ *Corrected in L1, because the original wording
+  here — "verify first, parse second" — is not implementable:* the `kid` that selects the key lives
+  **inside** the payload, so the payload must be read before anything can be verified. That is true of
+  every signed-token format. ⭐ **The rule is therefore: never TRUST and never RE-SERIALISE.** Only `kid`
+  and `lv` are consulted beforehand, and only to pick a key or refuse outright; the signature is computed
+  over the segment exactly as it arrived; no field is acted on until it verifies. No canonical JSON, no
+  key ordering, no risk that a parse/re-serialise round-trip changes the bytes — the corpus case
+  `payload-reserialised-with-spaces` is what holds that shut.
+- base64url is unpadded, and its decoder is **strict**: ⛔ no whitespace, no padding, no standard-base64
+  `+`/`/`, and no length that is `1 mod 4`. ⚠ *Written by hand rather than calling the BCL helper, on
+  purpose* — a lenient decoder lets two different texts decode to the same bytes, which is the ambiguity
+  that produces signature-confusion bugs.
 
 ### 13.4 Forward-compatibility rules (binding)
 
@@ -844,6 +868,55 @@ Install the incoming license ONLY IF:
 downgrade. The explicit-confirmation branch exists because moving a machine to a different license is
 legitimate.
 
+### 16.5 ⭐ The Debug / Release gate (D15)
+
+**⭐ The rule, stated precisely: `Debug` disables the *block*, not the *licensing*.** Verification runs
+identically in both configurations, the verdict is computed, displayed and logged the same way; the only
+difference is whether an absent or invalid verdict prevents the application from being used.
+
+```csharp
+// EmberTern.App/Licensing/LicensingPolicy.cs  —  the ONLY place this distinction exists
+internal static class LicensingPolicy
+{
+#if DEBUG
+    internal const bool GateEnabled = false;
+#else
+    internal const bool GateEnabled = true;
+#endif
+}
+```
+
+| Property | How it is achieved |
+|---|---|
+| Follows the build configuration, not the debugger | `DEBUG` is a compile-time symbol the SDK defines for the `Debug` configuration only. ⛔ `Debugger.IsAttached` is never consulted — it is a *runtime* fact an attacker controls, and it would also make a `Release` build behave differently under a profiler |
+| ⭐ **No bypass code exists in a `Release` binary** | `GateEnabled` is a `const`, so the compiler folds `if (LicensingPolicy.GateEnabled)` and eliminates the dead arm. There is nothing to patch back on, because there is nothing there |
+| ⛔ No configuration switch in `Release` | No setting, no environment variable, no command-line argument, no file influences it. The only input is which configuration was compiled |
+| ⭐ **The bypass is in the gate, never in the verifier** | `EmberTern.Licensing` tells the truth in every configuration. ⚠ **This is load-bearing:** the suite runs in `Debug`, so a bypass inside the verifier would make the entire tamper corpus vacuous — every licensing test would pass while proving nothing |
+
+**Guard tests (land in L4, with the gate):**
+
+1. **Runtime pair** — `#if DEBUG` asserts `GateEnabled == false`, `#else` asserts `true`. Running the
+   suite in `Release` therefore proves the `Release` arm, which a `Debug`-only run never can.
+2. **Source structure** — `LicensingPolicy.cs` contains exactly one `#if DEBUG` / `#else` / `#endif`, the
+   `#else` arm is `true`, and nothing else in the file writes `GateEnabled`.
+3. **No runtime switch** — no file under `src/EmberTern.App` mentions `GateEnabled` alongside an
+   environment variable, a preference, a settings read or a command-line argument.
+4. ⭐ **No `DefineConstants` smuggling** — neither `Directory.Build.props` nor any `.csproj` adds `DEBUG`
+   to a non-`Debug` configuration. Without this one, all three tests above stay green while the bypass
+   ships; it is the cheapest and least obvious of the four.
+
+⚠ **Consequence for L4's acceptance:** the gated states (`Unlicensed`, `Invalid`, `Expired`) can only be
+seen blocking in a **`Release`** build. `CLAUDE.md` already requires building both configurations before
+asking for a visual check; here it becomes a verification requirement, not just hygiene. ⭐ The licensing
+*screens* remain reachable in `Debug` from Settings ▸ License, showing the real verdict, so the flow
+itself is developable without switching configuration — only the blocking behaviour needs `Release`.
+
+⚠ **One Debug-only marker is proposed for L4**: the About window appends *"Debug build — licensing gate
+off"* to the version line. Rationale: without it, a developer seeing EmberTern start without a license
+cannot tell whether the gate is off by design or broken. ⭐ It is developer-facing text that can never
+reach a user (users receive `Release` builds), in the same class as `%TEMP%\EmberTern-debug.log`, so
+Architecture rule 12 is not engaged. Flagged here so it can be overruled.
+
 ---
 
 ## 17. UX
@@ -903,6 +976,7 @@ initiated explicitly by the admin.
 ✅ `lv` gate · `kid` → key + algorithm · append-only `TrustedKeys`
 ✅ Local verification: signature · product · `nbf` / `exp` · `maint` (reserved) · clock high-water
 ✅ Eight-state licensing state machine, 14-day grace, EN + PL
+✅ ⭐ `Debug` disables the block but not the licensing; `Release` has no bypass code at all (§16.5)
 ✅ Activation by file drop, Browse or paste; atomic write; re-verify from disk
 ✅ `%APPDATA%` + `%PROGRAMDATA%` resolution order
 ✅ Licensee name displayed in About and Settings ▸ License
@@ -1268,7 +1342,7 @@ user confirmation"*, never *"fixed"*, until it has been seen in the running app.
 | **L1** | `EmberTern.Licensing` — armor, ETL1 envelope, payload, `TrustedKeys`, `LicenseVerifier`, `lv` gate. Pure, zero dependencies | build 0/0; **tamper corpus** (≥ 40 mutated artifacts, each refused for the *right* reason); `LicensingMakesNoNetworkCallsTests`; round-trip tests |
 | **L2** | `EmberTern.Licensing.Issuing` — `KeyStore`, `LicenseIssuer`, `KeyCeremony`. ⭐ `PrivateKeyNeverShipsTests` lands here | a ceremony performed with a **test** key; sign → verify across the assembly boundary; guard tests green |
 | **L3** | License Manager: skeleton (Avalonia/MVVM/DI, linked themes), SQLite + migrations, customers, licenses, issue, **save `EmberTern.etlic`** | a license issued end to end; `audit_log` immutability trigger proven; UI passes the `CLAUDE.md` UI Review Checklist in **both** themes |
-| **L4** | ⭐ **EmberTern integration** — `LicenseService`, the §4 state machine, Activation window, Settings ▸ License, About line, banners, **EN + PL** | all eight states reachable and verified **in the running app**, Polish included; startup budget measured; the loop closes end to end |
+| **L4** | ⭐ **EmberTern integration** — `LicenseService`, the §4 state machine, `LicensingPolicy` (§16.5), Activation window, Settings ▸ License, About line, banners, **EN + PL** | all eight states reachable and verified **in the running app**, Polish included; ⚠ the gated states verified in a **`Release`** build (§16.5); the four Debug-gate guard tests green; startup budget measured; the loop closes end to end |
 | **L5** | License Manager depth: search, filters, **group extend**, re-issue, artifact preview, history view, encrypted backup + JSONL | extend 20 licenses in one operation; restore from backup on a second machine |
 | **L6** | ⭐ **E-mail**: `ILicenseEmailSender`, SMTP + `.eml`, DPAPI settings store, HTML + text template (localizable), preview, explicit confirm, send audit | ⚠ **measure the SMTP auth question first** (risk #3); a real message delivered and read on a real client |
 | **L7** | Hardening and closing: clock high-water, `%PROGRAMDATA%` fallback, `maint` gate, real key ceremony, public key shipped, documentation | full suite green (**total re-measured**); `docs/history/` entry, gotchas, one line in `docs/current-state.md`; both remotes pushed after acceptance |
@@ -1279,16 +1353,54 @@ user confirmation"*, never *"fixed"*, until it has been seen in the running app.
 loop (issue → deliver → activate → run) is provable at the earliest possible moment, and everything after
 it is refinement of something already known to work.
 
-## 33. Decisions still open
+## 33. Resolved minor decisions (D16)
 
-| # | Question | Recommendation |
+🔒 All closed as recommended, on the user's instruction to decide anything that is purely implementational
+under the principle of minimal complexity. None of the six changes the security posture, the UX shape or
+V2's feasibility; had one done so, it would have been referred back rather than decided here.
+
+| # | Question | 🔒 Decided |
 |---|---|---|
-| **O1** | Keep `maint` in V1 (the one unused field, §3 / §13.5) or drop it for zero unused code? | **Keep** — it cannot be retrofitted onto clients already in the field. Overrule freely |
-| **O2** | Grace period: 14 days? | **14 days** (§7) |
-| **O3** | `Expired` blocks new database connections only, leaving editor/files/exports usable? | **Yes** — Architecture rule 11 |
-| **O4** | Default `seats` for a new license in the License Manager UI? | **1**, explicit, never blank |
-| **O5** | Does the e-mail include the license id in the body (helps support, slightly more to leak)? | **Yes** — it is already in the attachment |
-| **O6** | Delivered filename: always `EmberTern.etlic`, or `EmberTern-<Customer>.etlic`? | **`EmberTern.etlic`** — matches D4 and avoids encoding a customer name into a filename |
+| **O1** | Keep `maint` in V1 (the one unused field, §3 / §13.5)? | **Kept** — it cannot be retrofitted onto clients already in the field, and it costs one optional field plus one comparison |
+| **O2** | Grace period | **14 days** (§7) |
+| **O3** | What `Expired` blocks | **New database connections only** — editor, files, exports and settings stay usable (Architecture rule 11) |
+| **O4** | Default `seats` for a new license | **1**, explicit, never blank |
+| **O5** | License id in the e-mail body | **Yes** — it is already inside the attachment, and support asks for it first |
+| **O6** | Delivered filename | **Always `EmberTern.etlic`** — matches D4 and keeps a customer name out of a filename that travels by e-mail |
+
+---
+
+## 34. L1 — as built (2026-08-15)
+
+✅ **Delivered and green.** `src/EmberTern.Licensing` — 9 files, **zero package references, zero project
+references**. Build **0/0 in both Debug and Release**; suite **8 972** (was 8 853; +119, and the arithmetic
+matches exactly, so nothing dropped out of discovery). Tamper corpus: **59 cases**, requirement was ≥ 40.
+
+**Surface:** `LicenseArmor` · `LicenseEnvelope` · `LicensePayload` · `Base64Url` (internal) ·
+`SignatureAlgorithm` / `SignatureAlgorithmIds` · `TrustedKey` / `TrustedKeyTable` / `TrustedKeys` ·
+`LicenseStatus` / `LicenseFailure` / `LicenseVerdict` / `LicenseVerificationContext` · `LicenseVerifier` ·
+`LicenseConstants`.
+
+**Six decisions taken during implementation, none of which change the design:**
+
+1. ⭐ **`LicenseFailure` lost three members** (`NotYetValid`, `Expired`, `VersionNotCovered`). Those states
+   are fully described by `LicenseStatus`, and carrying them twice would have created two sources for one
+   fact. `Failure` is now non-`None` only for `Invalid` and `Unlicensed`.
+2. ⚠ **§13.3's "verify first, parse second" was wrong and is corrected in place** — see the amended bullet.
+3. **`Base64Url` is hand-written** for strictness (§13.3), not for want of a BCL helper.
+4. **`TrustedKeyTable` validates every key at construction** and throws. A malformed entry is a bug in
+   *our* table, and reporting it to a user as an invalid licence would send them chasing a good file.
+5. **`LicensePayload.WriteJson` lives in the shared assembly** although only the issuer calls it — so
+   field names and the timestamp shape have one definition shared by EmberTern, the License Manager and
+   the tests. ⛔ The verifier never calls it.
+6. **Two guard tests beyond the brief**: the licensing assembly references no other EmberTern assembly,
+   and no third-party assembly at all. The second is what decision D10 actually bought, so it is worth a
+   test rather than a comment.
+
+⚠ **One thing to know before L2:** `TrustedKeys.Production` is **empty**, so a build today refuses every
+licence with `UnknownKey`. That is correct for L1 and is asserted by
+`LicenseVerifierTests.TheShippedTrustedKeyTableIsStillEmptyAtThisStage` — a test written as a **reminder**,
+to be rewritten (⛔ not deleted) when L2's ceremony produces `R1`.
 
 ---
 
