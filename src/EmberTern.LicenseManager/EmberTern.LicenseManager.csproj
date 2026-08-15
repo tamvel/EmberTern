@@ -5,6 +5,10 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>EmberTern.LicenseManager</RootNamespace>
     <AssemblyName>EmberTern.LicenseManager</AssemblyName>
+    <!-- ⭐ The OS icon of the executable — EmberTern's own .ico, referenced across the project
+         boundary rather than copied. Same file, same brand, one master. This is what puts the icon
+         in Explorer, in the EXE properties and on the taskbar button. -->
+    <ApplicationIcon>..\EmberTern.App\Assets\Branding\EmberTern.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- ⭐⭐ THE TOKEN LAYER IS LINKED FROM EmberTern.App, NOT COPIED.
@@ -36,6 +40,15 @@
     <!-- ⚠ Only the LINKED files are listed. The Avalonia SDK already includes every .axaml under this
          project directory, so naming App.axaml, Views\**\*.axaml or the local Themes file here produces
          AVLN2002 "duplicate x:Class" rather than the belt-and-braces it looks like. -->
+
+    <!-- ⭐ THE WINDOW ICON — the same file as ApplicationIcon above, linked so that Avalonia can resolve
+         it as avares://EmberTern.LicenseManager/Assets/Branding/EmberTern.ico. ⛔ It is NOT copied into
+         this project: one master, two applications, exactly as with the token layer. The two references
+         answer different questions — ApplicationIcon is a Win32 resource compiled into the EXE (Explorer,
+         file properties, the taskbar button), this one is the icon Avalonia paints in the window's own
+         title bar and hands to Alt+Tab. Both are needed; neither replaces the other. -->
+    <AvaloniaResource Include="..\EmberTern.App\Assets\Branding\EmberTern.ico"
+                      Link="Assets\Branding\EmberTern.ico" />
   </ItemGroup>
 
   <ItemGroup>

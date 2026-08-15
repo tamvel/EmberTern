@@ -224,6 +224,158 @@ public sealed class LicenseManagerThemeTests
         }
     }
 
+    [Fact]
+    public void ActionGeometryIsDeclaredOnceForBOTHVariants()
+    {
+        // ⭐⭐ Copied from EmberTern together with its reason: `Button.primary` and `Button.flat` take
+        //    their height, width floor and padding from ONE style, so a primary and a secondary action
+        //    standing side by side cannot drift apart. Two separate declarations is not a duplicate to
+        //    tidy — it is the drift, already written down.
+        //
+        // ⚠⚠ And the height must be the ACTION role, not the field role. Tokens.axaml records these as
+        //    two independent ladders: `Size.Control` (24) is a control standing in a SERIES, where
+        //    alignment decides; `Size.ControlProminent` (28) is a control standing ALONE that the user
+        //    aims at — the dialog footer button by name. L3 shipped the dialog action on the field
+        //    height, and that is what the user's review called a broken vertical rhythm.
+        var styles = ReadMarkup(Path.Combine(AppFolder, "Themes", "LicenseManagerStyles.axaml"));
+
+        var shared = Regex.Match(
+            styles,
+            @"<Style Selector=""Button\.primary,\s*Button\.flat"">(.*?)</Style>",
+            RegexOptions.Singleline);
+
+        Assert.True(shared.Success,
+            "The shared action geometry style is gone. Height, width floor and padding for "
+            + "Button.primary and Button.flat belong in ONE style — see EmberTern's ControlStyles.axaml.");
+        Assert.Contains("Size.ControlProminent", shared.Groups[1].Value, StringComparison.Ordinal);
+        Assert.Contains("Size.ActionMinWidth", shared.Groups[1].Value, StringComparison.Ordinal);
+
+        foreach (var variant in new[] { "Button.primary", "Button.flat" })
+        {
+            var own = Regex.Match(
+                styles, $@"<Style Selector=""{Regex.Escape(variant)}"">(.*?)</Style>",
+                RegexOptions.Singleline);
+
+            Assert.True(own.Success, $"The {variant} style has gone missing.");
+            Assert.DoesNotContain("MinHeight", own.Groups[1].Value, StringComparison.Ordinal);
+            Assert.DoesNotContain("MinWidth", own.Groups[1].Value, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void EveryTypographyRoleIsConsumedCompleteWithItsLineHeight()
+    {
+        // ⭐⭐ Typography.axaml states it in its own header: a role is family + size + weight + LINE
+        //    HEIGHT, and every role carries a `.LineHeight` for that reason. L3 consumed size and weight
+        //    and left line height to the font default, so each text block sat on its own baseline grid —
+        //    which is what a ragged vertical rhythm IS, and it is invisible in a screenshot of one label.
+        //
+        // ⚠ The guard keys on the SIZE token, because that is what a new role always brings with it: if
+        //    a style reaches for `Text.X.Size`, it must also reach for `Text.X.LineHeight`.
+        //
+        // ⚠⚠ SCOPED TO `TextBlock` SELECTORS, and the scope is a fact about Avalonia rather than a
+        //    convenience: `LineHeight` is a `TextBlock` property. `Button` and `TextBox` legitimately set
+        //    a role's FontSize and have nowhere to put its line height — EmberTern's own base `Button`
+        //    style does exactly that. Written as "everything except…" this guard fired on two styles that
+        //    could not possibly comply, and a guard that demands the impossible is one that gets deleted.
+        var styles = ReadMarkup(Path.Combine(AppFolder, "Themes", "LicenseManagerStyles.axaml"));
+        var offenders = new List<string>();
+
+        foreach (Match block in Regex.Matches(
+                     styles, @"<Style Selector=""TextBlock[^""]*"">(.*?)</Style>", RegexOptions.Singleline))
+        {
+            var body = block.Groups[1].Value;
+            foreach (Match size in Regex.Matches(body, @"Text\.(\w+)\.Size"))
+            {
+                var role = size.Groups[1].Value;
+
+                // Code is the one role with no line height IN THE CATALOG — the editor owns its own
+                // line spacing, and Typography.axaml says so where the role is defined.
+                if (role == "Code" || body.Contains($"Text.{role}.LineHeight", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                offenders.Add($"Text.{role}.Size without Text.{role}.LineHeight");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "A typography role consumed without its line height: " + string.Join("; ", offenders));
+    }
+
+    [Fact]
+    public void TheApplicationIconIsEmberTernsOwnAndIsLinkedNotCopied()
+    {
+        // ⭐ The License Manager is the same product's admin side, not a second brand. It reaches for
+        //    EmberTern's existing .ico across the project boundary; ⛔ it does not copy it and it does
+        //    not carry artwork of its own. A copy is how two icons start diverging.
+        var project = File.ReadAllText(Path.Combine(AppFolder, "EmberTern.LicenseManager.csproj"));
+
+        // The Win32 icon compiled into the EXE — Explorer, file properties, taskbar button.
+        Assert.Contains(
+            @"<ApplicationIcon>..\EmberTern.App\Assets\Branding\EmberTern.ico</ApplicationIcon>",
+            project, StringComparison.Ordinal);
+
+        // The avares resource — the icon Avalonia paints in the title bar and hands to Alt+Tab.
+        Assert.Contains(
+            @"..\EmberTern.App\Assets\Branding\EmberTern.ico", project, StringComparison.Ordinal);
+        Assert.Contains(@"Link=""Assets\Branding\EmberTern.ico""", project, StringComparison.Ordinal);
+
+        var copied = Directory.EnumerateFiles(AppFolder, "*.ico", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                StringComparison.Ordinal)
+                && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(copied.Count == 0,
+            "Icon artwork has been COPIED into the License Manager: " + string.Join("; ", copied));
+    }
+
+    [Fact]
+    public void TheWindowIconComesFromExactlyOneSetterAndNoWindowOverridesIt()
+    {
+        // ⭐ `CLAUDE.md` states this for EmberTern as a rule with a reason: a window that sets its own
+        //    icon is the window that will one day be the only one without it.
+        var styles = ReadMarkup(Path.Combine(AppFolder, "Themes", "LicenseManagerStyles.axaml"));
+
+        Assert.Single(Regex.Matches(styles, @"Property=""Icon"""));
+        Assert.Contains(
+            "avares://EmberTern.LicenseManager/Assets/Branding/EmberTern.ico",
+            styles, StringComparison.Ordinal);
+
+        foreach (var file in Markup().Where(f => f.Contains(
+                     $"{Path.DirectorySeparatorChar}Views{Path.DirectorySeparatorChar}",
+                     StringComparison.Ordinal)))
+        {
+            Assert.DoesNotContain("Icon=", ReadMarkup(file), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void TheFirstRunScreenShowsNoStorageLocation()
+    {
+        // ⭐⭐ A REGRESSION GUARD FOR A DEFECT A HUMAN FOUND, WRITTEN SO A HUMAN NEVER HAS TO FIND IT
+        //    AGAIN (user review, 2026-08-15). The first-run window displayed
+        //    `%APPDATA%\EmberTern License Manager` under the passphrase field. It is infrastructure: it
+        //    does not help anyone perform the one action the window exists for, and a path on a setup
+        //    screen reads as something the operator is meant to act on.
+        //
+        // ⚠ The guard covers the VIEW MODEL too, not just the markup. Leaving the property behind would
+        //    leave the next person one binding away from putting it back, and dead code is exactly how a
+        //    removed decision comes back as an accident.
+        var window = ReadMarkup(Path.Combine(AppFolder, "Views", "UnlockWindow.axaml"));
+        var viewModel = ReadCode(Path.Combine(AppFolder, "ViewModels", "UnlockViewModel.cs"));
+
+        // ⚠ Matched precisely, not by the bare word: `WindowStartupLocation` contains "Location" and is
+        //    unrelated. A guard that fires on an innocent attribute is a guard that gets loosened.
+        Assert.DoesNotContain("Binding Location", window, StringComparison.Ordinal);
+        Assert.DoesNotContain("Files:", window, StringComparison.Ordinal);
+        Assert.DoesNotContain("_paths.Root", viewModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("public string Location", viewModel, StringComparison.Ordinal);
+    }
+
     // "0", "0,0", "0 0 0 0" — an absence expressed in the only way the markup can express it.
     private static bool IsNothing(string value) =>
         value.All(c => c is '0' or ',' or ' ' or '.');

@@ -555,8 +555,8 @@ by keyword the moment a bug "feels familiar". Each line is a one-sentence summar
 reference for the full explanation and the failure it prevents.
 
 ⛔ **The entry count is deliberately NOT written down here.** Three separate counters used to carry it
-and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-11:
-**360 entry lines over 358 distinct numbers, max #371**):
+and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-15:
+**363 entry lines, max #374**):
 
 ```bash
 grep -cE "^[0-9]+\. \*\*" docs/gotchas.md
@@ -688,6 +688,10 @@ sections, so a bare "#303" is ambiguous.
   *"the calling thread cannot access this object"* — no injection style avoids it. **It is shared through an
   `ICollectionFixture` (`HeadlessCollection`), NOT `IClassFixture`** — the latter creates one per test *class*,
   so a second consumer silently gets a second session; join the collection instead. *(#94, #226, #286)*
+- ⭐⭐ **Every headless test RETURNS its `Task`.** `Dispatch` returns one, and the expression-bodied `void`
+  form compiles while discarding it — so xUnit never awaits, and **no assertion in the body can fail the
+  test**. Five such tests shipped in the License Manager and one stage's UI claims rested on them. Prove a
+  headless file is alive by injecting `Assert.Fail` into one body. *(#374)*
 - **A derived value that is typed by hand goes stale SILENTLY, and the guard against it must key on the
   value's SOURCE, not on the value.** A shortcut written into a string (`"Format SQL · Alt+F"`) survived the
   gesture being re-bound with a green build and green tests — a tooltip teaching a key that no longer existed.

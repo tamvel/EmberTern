@@ -46,8 +46,22 @@ public sealed partial class UnlockViewModel : MessageHostViewModel
     [ObservableProperty]
     private string _passphraseConfirmation = string.Empty;
 
-    /// <summary>Where the two files live, shown so the operator knows what to back up.</summary>
-    public string Location => _paths.Root;
+    /// <summary>
+    /// What this window is asking for, as its heading.
+    ///
+    /// <para>⭐ The heading names the TASK. The product is named by the title bar and its icon, so
+    /// spending the window's largest type on the application name said nothing the window had not
+    /// already said, and left the operator to work out which of the two modes they were in from the
+    /// body text.</para>
+    /// </summary>
+    public string Headline => HasKeyStore ? "Unlock the keystore" : "Create the signing key";
+
+    // ⛔ There is deliberately no `Location` property and the storage path is NOT shown on this screen
+    //    (user review, 2026-08-15). It is infrastructure: it does not help anyone perform the one
+    //    action this window exists for, and a path is the kind of detail that reads as something the
+    //    operator is supposed to do something about. Where the files live is an administrative
+    //    question, and it belongs to an administrative surface — an "Open data folder" action or a
+    //    storage section — not to first run. Recorded as an L5 item in the design document.
 
     /// <summary>Opens an existing keystore.</summary>
     [RelayCommand]

@@ -4,54 +4,85 @@
         x:Class="EmberTern.LicenseManager.Views.UnlockWindow"
         x:DataType="vm:UnlockViewModel"
         Title="EmberTern License Manager"
-        Width="560" SizeToContent="Height"
+        Width="460" SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
         CanResize="False"
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource ForegroundBrush}">
 
-  <StackPanel Margin="{DynamicResource Pad.Dialog}" Spacing="{DynamicResource Space.Md}">
+  <!-- ⭐ The banded dialog skeleton EmberTern uses for every window that asks the user for something
+       (TextPromptDialog, ConfirmDialog): header · body · footer, one gutter, actions in the footer.
+       ⛔ No StackPanel `Spacing` anywhere in the form — a uniform spacing puts the same distance between
+       a caption and its field as between two fields, which is exactly the grouping the eye must NOT
+       read. Every gap here is owned by the element ABOVE it, through a role. -->
+  <Grid RowDefinitions="Auto,Auto,Auto">
 
-    <TextBlock Classes="h1" Text="EmberTern License Manager" />
-
-    <!-- Ceremony ─────────────────────────────────────────────────────────────────────────────── -->
-    <StackPanel IsVisible="{Binding !HasKeyStore}" Spacing="{DynamicResource Space.Sm}">
-      <TextBlock Text="No signing key was found. Create one to start issuing licences." />
-      <Border Classes="message warning">
-        <TextBlock Text="The passphrase cannot be reset. If it is lost, no licence can ever be renewed — back up the keystore to two offline media and verify the restore from each." />
-      </Border>
-
-      <TextBlock Classes="field-label" Text="Key id" />
-      <TextBox Classes="mono" Text="{Binding KeyId}" />
-
-      <TextBlock Classes="field-label" Text="Passphrase" />
-      <TextBox PasswordChar="•" Text="{Binding Passphrase}" />
-
-      <TextBlock Classes="field-label" Text="Passphrase again" />
-      <TextBox PasswordChar="•" Text="{Binding PassphraseConfirmation}" />
-
-      <Button Classes="primary" Content="Create signing key"
-              HorizontalAlignment="Right" Command="{Binding CreateKeyCommand}" />
-    </StackPanel>
-
-    <!-- Unlock ───────────────────────────────────────────────────────────────────────────────── -->
-    <StackPanel IsVisible="{Binding HasKeyStore}" Spacing="{DynamicResource Space.Sm}">
-      <TextBlock Text="Unlock the keystore to issue licences." />
-
-      <TextBlock Classes="field-label" Text="Passphrase" />
-      <TextBox Name="PassphraseBox" PasswordChar="•" Text="{Binding Passphrase}" />
-
-      <Button Classes="primary" Content="Unlock" IsDefault="True"
-              HorizontalAlignment="Right" Command="{Binding UnlockCommand}" />
-    </StackPanel>
-
-    <Border Classes="message" Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
-            Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
-            IsVisible="{Binding HasMessage}">
-      <TextBlock Text="{Binding MessageText}" />
+    <!-- Header ─────────────────────────────────────────────────────────────────────────────────── -->
+    <Border Grid.Row="0" Classes="dialog-header">
+      <!-- ⭐ The h1 states the TASK, not the product. Product identity is carried by the title bar —
+           its text and, since this pass, the EmberTern icon beside it — so repeating the application
+           name here spent the largest type in the window on something the window already said. -->
+      <TextBlock Classes="h1" Text="{Binding Headline}" />
     </Border>
 
-    <TextBlock Classes="hint" Text="{Binding Location, StringFormat='Files: {0}'}" />
+    <!-- Body ───────────────────────────────────────────────────────────────────────────────────── -->
+    <Border Grid.Row="1" Classes="dialog-body">
+      <StackPanel>
 
-  </StackPanel>
+        <!-- Ceremony ─────────────────────────────────────────────────────────────────────────── -->
+        <StackPanel IsVisible="{Binding !HasKeyStore}">
+          <TextBlock Margin="{DynamicResource Margin.FieldGap}"
+                     Text="No signing key was found. Create one to start issuing licences." />
+
+          <Border Classes="message warning" Margin="{DynamicResource Margin.SectionGap}">
+            <TextBlock Text="The passphrase cannot be reset. If it is lost, no licence can ever be renewed — back up the keystore to two offline media and verify the restore from each." />
+          </Border>
+
+          <TextBlock Classes="field-label" Text="Key id" />
+          <TextBox Classes="mono" Text="{Binding KeyId}" />
+
+          <TextBlock Classes="field-label" Text="Passphrase" />
+          <TextBox PasswordChar="•" Text="{Binding Passphrase}" />
+
+          <TextBlock Classes="field-label" Text="Passphrase again" />
+          <TextBox PasswordChar="•" Text="{Binding PassphraseConfirmation}" />
+        </StackPanel>
+
+        <!-- Unlock ───────────────────────────────────────────────────────────────────────────── -->
+        <StackPanel IsVisible="{Binding HasKeyStore}">
+          <TextBlock Margin="{DynamicResource Margin.FieldGap}"
+                     Text="Unlock the keystore to issue licences." />
+
+          <TextBlock Classes="field-label" Text="Passphrase" />
+          <TextBox Name="PassphraseBox" PasswordChar="•" Text="{Binding Passphrase}" />
+        </StackPanel>
+
+        <!-- ⭐ The message is the LAST child and carries no bottom margin of its own: the body band's
+             padding is what separates it from the footer. The field above it already owns the gap. -->
+        <Border Classes="message" Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
+                Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
+                IsVisible="{Binding HasMessage}">
+          <TextBlock Text="{Binding MessageText}" />
+        </Border>
+
+      </StackPanel>
+    </Border>
+
+    <!-- Footer ─────────────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⭐ ONE footer for both modes rather than a button inside each branch, so the action cannot sit
+         at a different height or a different distance from the form depending on which mode ran. -->
+    <Border Grid.Row="2" Classes="dialog-footer">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                  Spacing="{DynamicResource Space.Md}">
+        <!-- ⚠ `IsDefault` is BOUND, not literal, on both. Two buttons literally marked default in one
+             window both answer Enter regardless of visibility, and which one wins is not something the
+             markup states. Tying it to the same condition as the visibility leaves exactly one. -->
+        <Button Classes="primary" Content="Create signing key" IsDefault="{Binding !HasKeyStore}"
+                IsVisible="{Binding !HasKeyStore}" Command="{Binding CreateKeyCommand}" />
+        <Button Classes="primary" Content="Unlock" IsDefault="{Binding HasKeyStore}"
+                IsVisible="{Binding HasKeyStore}" Command="{Binding UnlockCommand}" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
 </Window>

@@ -1,8 +1,7 @@
 # EmberTern Licensing System — design document
 
 **🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ✅ L1 ACCEPTED. ✅ L2 ACCEPTED.
-⭐ STAGE L3 DELIVERED — awaits the user's confirmation, which for L3 means **seeing the two windows in
-both themes** (the four checklist items no test can reach — §36.3). Next: L4.** Branch
+✅ L3 ACCEPTED (2026-08-15, after a two-round UI review — §36.5). Next: L4.** Branch
 `feat/licensing-system`, cut from `master` at `2c3da45`. As built: **§34** (L1), **§35** (L2), **§36** (L3).
 
 **This document has two parts and they have different authority:**
@@ -1516,10 +1515,15 @@ key through five more stages of development for no benefit.
 
 ## 36. L3 — as built (2026-08-15)
 
-✅ **Delivered and green.** `src/EmberTern.LicenseManager` — 17 files (4 view models, 2 windows, 3
-services, 2 data files, 1 style file, the app and its entry point). Builds **0/0 in Debug and Release,
-both solutions**. Suites: License Manager **87** (was 46; +41), EmberTern **8 979** (was 8 978; +1 — the
-new charset-domain guard, and the arithmetic matches exactly, so nothing left discovery).
+✅ **Delivered, reviewed by the user over two rounds, and accepted 2026-08-15.**
+`src/EmberTern.LicenseManager` — 17 files (4 view models, 2 windows, 3 services, 2 data files, 1 style
+file, the app and its entry point). Builds **0/0 in Debug and Release, both solutions**. Suites: License
+Manager **102** (was 46 at L2; +56), EmberTern **8 979** (was 8 978; +1 — the new charset-domain guard,
+and the arithmetic matches exactly, so nothing left discovery).
+
+⚠ **The suite grew by 15 during the UI review, and five of those are not new coverage — they are five
+tests that already existed and did not work** (§36.5, the discarded `Task`). The honest reading of
+87 → 102 is *+10 new guards, +5 resurrected*.
 
 **Exit criteria, each met and each pinned by a test rather than by this paragraph:**
 
@@ -1527,7 +1531,7 @@ new charset-domain guard, and the arithmetic matches exactly, so nothing left di
 |---|---|
 | a licence issued end to end | `IssuingWorkflowTests` — ceremony → keystore → register → issue → `EmberTern.etlic` on disk → read back → **verified by `EmberTern.Licensing`, the assembly the customer runs** |
 | `audit_log` immutability trigger proven | `LicenseRegisterTests.TheHistoryCannotBeRewritten` + `AnIssuedArtifactCannotBeEditedOrDeleted` — both reach **past** the register's own API, because a trigger only the register's methods respect is a convention, not a trigger |
-| UI passes the `CLAUDE.md` UI Review Checklist in both themes | 7 of 11 items in `LicenseManagerThemeTests`, 2 more in `LicenseManagerWindowTests`; ⏭ the remaining **4 are judgements and belong to the user in front of the running application** |
+| UI passes the `CLAUDE.md` UI Review Checklist in both themes | 12 items in `LicenseManagerThemeTests`, 9 in `LicenseManagerWindowTests`; ✅ the judgement items were reviewed by the user in the running application over two rounds (§36.5) and accepted |
 
 ### 36.1 The measured correction the stage produced
 
@@ -1566,12 +1570,18 @@ define a single colour, and `LicenseManagerThemeTests` fails the build if it eve
    `MessageBanner` lives in `EmberTern.App.Controls` and cannot be referenced from here; the *rule* it
    embodies — a message is never a loose coloured `TextBlock` — is carried over intact.
 
-### 36.3 ⏭ What the user has to look at, and why a test cannot
+### 36.3 ✅ What only the user could judge — done, twice
 
 Four UI Review Checklist items are judgements: the complete set of states (normal · hover · active ·
 disabled · focus), and whether the two windows actually *read* correctly in Light and in Dark. The
-title-bar **Light / Dark** button switches live, which is what makes that a one-click check rather than
-something a screenshot has to promise.
+title-bar **Light / Dark** button switches live, which is what makes that a one-click check in the main
+window rather than something a screenshot has to promise.
+
+⭐⭐ **This is the part that earned its place.** The judgement items were not a formality: the user's first
+look produced §36.5's list, and the second look produced the one defect the first had missed — every
+field's content pinned to the top of its box. Neither was reachable by any test that existed, and the
+second one was invisible to the first guard written for it. ⛔ The lesson is not "write more tests" — it is
+that a stage with a UI is not finished until a person has looked at it.
 
 ```powershell
 src\EmberTern.LicenseManager\bin\Debug\net9.0\EmberTern.LicenseManager.exe
@@ -1579,6 +1589,104 @@ src\EmberTern.LicenseManager\bin\Debug\net9.0\EmberTern.LicenseManager.exe
 
 ⚠ First run performs the **ceremony** (a test passphrase is fine — this is not the production key, §35.4)
 and writes `%APPDATA%\EmberTern License Manager\`.
+
+### 36.5 ⭐⭐ The first-run screen — user review, and what it found (2026-08-15)
+
+The user rejected the L3 UI after looking at the first-run window, and asked for a full manual review of
+it. **The review found more than the report did**, including one defect that made every headless test in
+this suite worthless.
+
+⭐⭐ **THE ONE THAT MATTERS MOST: all five L3 headless tests were vacuous.**
+`HeadlessUnitTestSession.Dispatch` returns a `Task`. Written as `public void X() => _session.Dispatch(…)`
+— which compiles, because a method call is a statement expression — **the `Task` is discarded, xUnit never
+awaits it, and no assertion inside the lambda can fail the test.** So the L3 claim *"2 checklist items
+proved headless"* was false: those two items were never checked. ⭐ Caught by injecting `Assert.Fail` into
+a headless body and watching the run report success; EmberTern's own headless tests `await` correctly.
+⛔ Never write one of these as `void`. Every guard below was then verified **red** before being accepted.
+
+**What the user reported, and what each turned out to be:**
+
+| Report | Cause |
+|---|---|
+| the form has no coherent vertical rhythm | THREE independent causes, below |
+| "Create signing key" is not aligned to the form | it stood on `Size.Control` (24) — the **field** height — instead of `Size.ControlProminent` (28), the height Tokens.axaml names for a dialog-footer action. Fields and actions are two independent ladders, and the action was on the wrong one |
+| the storage path must not be on this screen | agreed and removed, view **and** view model (§36.4) |
+
+**The three causes of the broken rhythm, each a wrong or missing role rather than a wrong number:**
+
+1. ⭐⭐ **The proximity rule was inverted.** The form used a uniform `StackPanel Spacing`, which
+   *cannot* express it: it puts the same gap between a caption and its field as between two fields. With
+   `Margin.LabelGap` also applying, caption→field measured **8** and field→next-caption **6** — so the eye
+   attached every caption to the field **above** it. `Margin.LabelGap`'s own comment in Tokens.axaml
+   states the rule and records the identical user report from Product Polish M2b.
+2. ⭐ **Typography roles were consumed without their line height.** A role is family + size + weight +
+   **line height**; L3 took two thirds of each, leaving every text block on the font default. That *is*
+   what a ragged baseline grid is, and it is invisible in a screenshot of one label.
+3. ⭐ **`field-label` was on `Text.Caption` (10 px)** — the smallest grade in the product, reserved for a
+   shortcut chip — instead of `Text.Application` (12 px), which is what EmberTern's own `field-label`
+   uses. Two grades below the value it names made the whole form read as fine print.
+
+⭐⭐ **A SECOND REVIEW ROUND FOUND THE ONE THE FIRST ROUND MISSED: every field's text and password dots
+were pinned to the TOP of the box.** `Pad.Control` is `8,0` — the vertical padding is deliberately zero,
+because a single-line field takes its height from `Size.Control` and one thing must own a size. ⚠ But zero
+padding only *centres* if something says where the content goes, and the framework default is `Stretch`.
+L3 copied the padding token and left `VerticalContentAlignment` behind; EmberTern's own base `TextBox`
+style carries it, for exactly this reason. Measured: presenter **22 px tall around 14.17 px of text** with
+the setter absent, **15 px** with it present, sitting 5 above / 4 below in a 24 px field.
+
+⚠ The multi-line variant needs `Top` **the moment the base style centres**, or the fix reintroduces
+EmberTern's own §18.11 defect (a short note hanging in the middle of a fifteen-line box) in the main
+window's three multi-line fields.
+
+⚠⚠ **The first version of the guard for this measured the wrong box and passed with the defect in place.**
+Under `Stretch` the presenter *fills* the field, so "is the presenter centred?" answered yes while the
+glyphs sat on its top edge. The presenter has to be shown to be sized to its **text** before its position
+means anything. ⭐ Twice in this review a plausible measurement proved nothing — the discipline that caught
+both was injecting the defect and requiring the guard to go red.
+
+**Also found, none of it reported:**
+
+- ⚠ **A dark label on the accent fill** whenever a primary button carries an explicit `<TextBlock>` child
+  — the shape *every* EmberTern primary button takes (icon + label + shortcut chip). Measured: `#1B1D1F`
+  on blue in Light, `#D4D4D4` in Dark. ⚠⚠ The first version of this finding was **wrong** and the
+  injection caught it: with a *string* `Content` the ContentPresenter sets Foreground as a **local value**,
+  which outranks every style setter, so the window as it ships was never affected. The style is right, the
+  first explanation of it was not.
+- **No focus state at all**, in either variant, and no `:pressed`. The passphrase field is reached by Tab.
+- **The action geometry was declared twice**, once per variant — the drift EmberTern's single
+  `Button.primary, Button.flat` style exists to prevent, already written down.
+- **`VerticalContentAlignment` was missing** on the base `Button`, while `Pad.Button` is `12,0` — the zero
+  is deliberate because height comes from `MinHeight`, which makes the centring load-bearing.
+- **`Button.flat` used `ControlOutlineBrush`**, a token whose own comment names its two consumers
+  (CheckBox, RadioButton) and the contrast measurement it exists for. A button takes `BorderBrush`.
+- **The width floor reached chrome**, which `Size.ActionMinWidth` explicitly forbids — 100 px buttons for
+  a two-word label in the title strip.
+- **Two buttons literally marked `IsDefault`**; both answer Enter regardless of visibility.
+- **The window had no icon.** Now EmberTern's own `.ico`, **linked not copied**, through `ApplicationIcon`
+  (the Win32 resource: Explorer, file properties, taskbar) *and* one `<Style Selector="Window">` setter
+  (title bar, Alt+Tab) — the same one-setter rule `CLAUDE.md` states for EmberTern. ⛔ No new artwork.
+
+**Structure.** The window is now the **banded dialog skeleton** EmberTern uses for every window that asks
+the user for something (`TextPromptDialog`, `ConfirmDialog`): a `PanelBrush` header carrying the `h1`, a
+body carrying the form, a `PanelBrush` footer carrying the action, one gutter (`Pad.Dialog`) through all
+three so the heading, the fields and the button stand on one left edge. ⭐ The `h1` now states the **task**
+("Create the signing key" / "Unlock the keystore") — product identity is carried by the title bar and, as
+of this pass, by the icon beside it.
+
+⚠ **One path deliberately stays on screen:** the keystore filename inside the *error* message for a
+damaged or foreign file. That is a diagnostic naming the offending file, not ambient infrastructure.
+
+⭐ **RATIFIED LIMIT (user, 2026-08-15): the first-run screen is Dark-only, and that does not block L3.**
+`App.axaml` bootstraps `Dark` exactly as EmberTern does, and the theme toggle lives in the main window's
+chrome — which is reachable only after unlocking. So a real operator never sees first run in Light. ⛔ The
+bootstrap value was **not** to be flipped just to obtain a screenshot of that one state. Both themes are
+covered headlessly; a stored theme preference for the License Manager is an L5 question, if it is one at
+all.
+
+⏭ **Not this screen, found while reviewing it — the main window owes its own pass:** `Border.rail` takes
+`Border.Rail`, which is the **status-bar rail** role (a 2 px TOP edge as a state signal), not a side
+separator; the chrome buttons are `.flat` where EmberTern would use `Button.icon`; and the Seats box is
+still an `int` bound to text.
 
 ### 36.4 Known limits, deliberately left to a later stage
 
@@ -1594,3 +1702,5 @@ and writes `%APPDATA%\EmberTern License Manager\`.
   than read stale data if that changed. Worth knowing before L5 adds bulk operations.
 - **Search, filters, group extend, re-issue, artifact preview, backup, e-mail** are L5/L6 by plan, not
   omissions.
+- ⏭ **Where the two files live has no surface yet.** Removed from first run (§36.5) and not replaced: it
+  belongs on an administrative surface — an "Open data folder" action or a storage section — which is L5.

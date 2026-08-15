@@ -19,11 +19,32 @@
        variants and on the containers that declare what their children may be.
        ============================================================================================ -->
 
+  <!-- ── Identity ────────────────────────────────────────────────────────────────────────────── -->
+
+  <!-- ⭐⭐ THE OS ICON EVERY WINDOW CARRIES COMES FROM **ONE** SETTER — the same rule, and the same
+       shape of rule, that `CLAUDE.md` states for EmberTern ("⛔ do not set `Icon` per window"). A window
+       that sets its own icon is a window that will one day be the only one without it.
+
+       ⭐ It is EmberTern's OWN icon, linked from `EmberTern.App/Assets/Branding/` rather than copied
+       (see the csproj): the License Manager is the same product's admin side, not a second brand, and
+       nothing here designs an alternative mark. The .ico is multi-resolution, so Windows picks the size
+       it needs for the title bar, for Alt+Tab and for the taskbar; it is theme-independent by nature —
+       an .ico carries its own artwork and is not repainted by our palette, in either theme. -->
+  <Style Selector="Window">
+    <Setter Property="Icon" Value="avares://EmberTern.LicenseManager/Assets/Branding/EmberTern.ico" />
+  </Style>
+
   <!-- ── Text roles ──────────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ A TYPOGRAPHY ROLE IS SIZE + WEIGHT + **LINE HEIGHT**, and the third one is the vertical
+       rhythm. Typography.axaml states it in its header ("rola to nie rozmiar pisma — to komplet") and
+       gives every role a `.LineHeight` on purpose. L3 consumed two thirds of each role and left line
+       height to Avalonia's per-font default, which is where the ragged vertical rhythm in the first
+       user review came from: every text block sat on a slightly different baseline grid. -->
 
   <Style Selector="TextBlock">
     <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Application.LineHeight}" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
@@ -31,23 +52,35 @@
   <Style Selector="TextBlock.h1">
     <Setter Property="FontSize" Value="{DynamicResource Text.DialogHeader.Size}" />
     <Setter Property="FontWeight" Value="{DynamicResource Text.DialogHeader.Weight}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.DialogHeader.LineHeight}" />
   </Style>
 
   <Style Selector="TextBlock.section">
     <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
     <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.SectionHeader.LineHeight}" />
   </Style>
 
-  <!-- A form caption. Subtle on purpose: the VALUE is the content, the caption is the scaffolding. -->
+  <!-- A form caption. Subtle on purpose: the VALUE is the content, the caption is the scaffolding.
+       ⚠⚠ `Text.Application`, NOT `Text.Caption` — this mirrors EmberTern's own `TextBlock.field-label`
+       setter for setter. L3 shipped it on `Text.Caption` (10 px), which is the smallest grade in the
+       product and is reserved for a shortcut chip and a secondary hint. Two grades below the value it
+       names made the whole form read as fine print, and it is the second half of the rhythm complaint.
+       ⭐ The caption is separated from its own field by `Margin.LabelGap` (2) while fields are separated
+       from each other by `Margin.FieldGap` (8): that inequality IS the proximity rule — if the two are
+       equal or inverted, the eye attaches the caption to the field ABOVE it. -->
   <Style Selector="TextBlock.field-label">
-    <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
-    <Setter Property="FontWeight" Value="{DynamicResource Text.Caption.Weight}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Application.LineHeight}" />
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
     <Setter Property="Margin" Value="{DynamicResource Margin.LabelGap}" />
   </Style>
 
+  <!-- A secondary hint. ⭐ THIS is what `Text.Caption` is for — the smallest grade, carrying something
+       the operator may read rather than must. -->
   <Style Selector="TextBlock.hint">
     <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Caption.LineHeight}" />
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
@@ -78,6 +111,43 @@
     <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
     <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
     <Setter Property="Padding" Value="{DynamicResource Pad.Group}" />
+  </Style>
+
+  <!-- ── The dialog skeleton ─────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ EmberTern's dialogs are BANDED, and that band structure IS the product's visual language for
+       a window that asks the user for something: a PanelBrush header carrying the h1 and separated by a
+       hairline, a Background body carrying the form, a PanelBrush footer carrying the actions. Read
+       `EmberTern.App/Views/TextPromptDialog.axaml` and `ConfirmDialog.axaml` — both are exactly this.
+       ⚠ L3's Unlock window was a flat StackPanel with a uniform `Spacing`, which is why it did not read
+       as an EmberTern dialog even though every colour in it was correct.
+       ⭐ Here the three bands are CLASSES rather than the literal 20,16 / 20,18 / 20,12 those two views
+       still spell out by hand — the horizontal gutter is one role (`Pad.Dialog`) in all three, so the
+       h1, the fields and the buttons stand on one left edge. -->
+
+  <Style Selector="Border.dialog-header">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Bottom}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Dialog}" />
+  </Style>
+
+  <Style Selector="Border.dialog-body">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Dialog}" />
+  </Style>
+
+  <Style Selector="Border.dialog-footer">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Top}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Dialog}" />
+  </Style>
+
+  <!-- ⭐ The two vertical gaps a form is built from, as roles rather than as a StackPanel `Spacing`.
+       A uniform `Spacing` cannot express the proximity rule at all: it puts the SAME distance between a
+       caption and its field as between two fields, so the grouping the eye reads is arbitrary. -->
+  <Style Selector="Border.dialog-body TextBox">
+    <Setter Property="Margin" Value="{DynamicResource Margin.FieldGap}" />
   </Style>
 
   <!-- ── Message strip ───────────────────────────────────────────────────────────────────────── -->
@@ -130,18 +200,38 @@
        named resources onto our palette — the pattern CLAUDE.md §16 requires instead of rewriting
        templates. -->
 
+  <!-- ⭐⭐ `VerticalContentAlignment` IS NOT OPTIONAL HERE — IT IS THE OTHER HALF OF `Pad.Control`.
+       That token is `8,0`: the vertical padding is deliberately ZERO, because a single-line field takes
+       its height from `Size.Control` and Tokens.axaml states the rule that ONE thing must own a size
+       ("padding pionowy w polu tekstowym walczy z wysokością kontrolki i wygrywa ten, który jest
+       większy"). ⚠⚠ But zero padding only centres the text if something else says where the content
+       goes, and the framework default is `Stretch` — which lets the presenter fill the field and puts
+       the text against its TOP edge. L3 copied `Pad.Control` and left this setter behind, so every field
+       in the application had its text and its password dots stuck to the top of the box (user review,
+       2026-08-15, seen in the running application — no test had ever asked).
+       ⭐ EmberTern's own base `TextBox` style carries exactly this setter, for exactly this reason. -->
   <Style Selector="TextBox">
     <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
     <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
     <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
+  <!-- ⭐ …AND A MULTI-LINE FIELD STARTS ITS TEXT AT THE TOP, which is why this setter has to be here the
+       moment the one above exists. Centring is correct for a one-line field and wrong for a box of
+       fifteen lines: it hangs a short note in the middle of the frame, where a text editor is expected.
+       ⚠ EmberTern learned this the same way — its `TextBox[AcceptsReturn=True]` style carries the same
+       two setters, added after a user reported it at the M2c acceptance (§18.11). `Pad.ControlMultiline`
+       has a NON-zero vertical for the matching reason: here the box owns its own height, so the padding
+       is not competing with anything. -->
   <Style Selector="TextBox.multiline">
     <Setter Property="Padding" Value="{DynamicResource Pad.ControlMultiline}" />
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="AcceptsReturn" Value="True" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
   </Style>
 
   <Style Selector="TextBox.mono">
@@ -156,25 +246,72 @@
   </Style>
 
   <!-- ── Buttons ─────────────────────────────────────────────────────────────────────────────── -->
-  <!-- ⛔ No MinHeight / MinWidth on the base Button style — CLAUDE.md's UI rule 10. The variants carry
-       size because the variants are what a layout places deliberately. -->
+  <!-- ⛔ No MinHeight / MinWidth on the base Button style — CLAUDE.md's UI rule 10. -->
 
   <Style Selector="Button">
-    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
     <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <!-- ⚠ BOTH alignments, and the vertical one is load-bearing: `Pad.Button` is `12,0`, i.e. the
+         vertical padding is deliberately ZERO because the height comes from `MinHeight`. Without
+         `VerticalContentAlignment=Center` the label is not centred in that height — it sits wherever
+         the content presenter's default puts it. L3 set only the horizontal one. -->
+    <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
   </Style>
 
-  <Style Selector="Button.primary">
-    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+  <!-- ⭐⭐ ACTION GEOMETRY — ONE style for BOTH variants, copied from EmberTern's own
+       `<Style Selector="Button.primary, Button.flat">` including its reason: so that a primary and a
+       secondary action standing side by side cannot drift apart.
+
+       ⚠⚠ `Size.ControlProminent` (28), NOT `Size.Control` (24) — this is the single biggest cause of
+       the rhythm the user rejected. Tokens.axaml records the distinction explicitly: **fields and
+       actions are TWO INDEPENDENT LADDERS.** `Size.Control` is a control standing in a SERIES, where
+       alignment and density decide; `Size.ControlProminent` is a control standing ALONE that the user
+       aims at deliberately — "przycisk stopki dialogu (Close, Cancel, OK)". L3 gave the dialog action
+       the height of a form field, so it read as one more row of the form rather than as its conclusion.
+
+       ⚠ `Size.ActionMinWidth` is a FLOOR, not a width: it exists because otherwise the label decides
+       the size, and a short label yields a smaller button than a long one — size carrying information
+       that colour already carries. -->
+  <Style Selector="Button.primary, Button.flat">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
     <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.primary">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
-    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- ⭐ A LABEL WRITTEN AS AN EXPLICIT `<TextBlock>` CHILD READS ON THE ACCENT FILL, NOT ON THE
+       DOCUMENT. EmberTern carries the identical style, recorded there as a Light-theme defect report:
+       the implicit `Style Selector="TextBlock"` at the top of this file paints `ForegroundBrush`, and a
+       style setter outranks the Foreground a Button hands down by inheritance — so a dark label lands on
+       the blue fill.
+
+       ⚠⚠ MEASURED, AND THE FIRST VERSION OF THIS COMMENT WAS WRONG. It claimed the defect was live in
+       this window. It is not: both actions here use a STRING `Content`, and for those the
+       ContentPresenter sets Foreground as a LOCAL VALUE on the TextBlock it creates — and a local value
+       beats every style setter. Removing this style and re-running the theme tests changed nothing,
+       which is how the error was caught.
+       ⭐ So the style is here for the shape EmberTern's own buttons take — icon + label + shortcut chip
+       as explicit children, which is what every primary button in the product looks like and what the
+       first `Button.primary` in this application with an icon will look like. `AnExplicitLabelInside…`
+       pins exactly that case, and was verified red with this style removed. -->
+  <Style Selector="Button.primary TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
 
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
@@ -185,12 +322,12 @@
   </Style>
 
   <Style Selector="Button.flat">
-    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
-    <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource ControlOutlineBrush}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <!-- ⚠ `BorderBrush`, not `ControlOutlineBrush`. The outline token names its own two consumers in
+         Colors.axaml — CheckBox and RadioButton — and exists because an unchecked box has to be findable
+         with nothing inside it. A button already reads as a button; it takes the structural role. -->
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
   </Style>
 
   <Style Selector="Button.flat:pointerover /template/ ContentPresenter">
@@ -198,9 +335,32 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
   </Style>
 
+  <Style Selector="Button.flat:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat:disabled /template/ ContentPresenter">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <!-- ⭐ FOCUS — the state L3 had no answer for at all, in either variant. A keyboard user who cannot
+       see where focus is cannot use this window, and the passphrase field is reached by Tab. -->
+  <Style Selector="Button.primary:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
   <!-- A toolbar-height variant: the strip declares what its children may be, not the variant. -->
   <Style Selector="Border.chrome Button">
     <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <!-- ⛔ …and it drops the width FLOOR, because `Size.ActionMinWidth` says in its own comment that
+         chrome does not take it: in a strip the width is the content. Keeping it made the title-strip
+         buttons 100 px wide for a two-word label. `0` is "no floor", not a measurement. -->
+    <Setter Property="MinWidth" Value="0" />
   </Style>
 
   <!-- ── Lists ───────────────────────────────────────────────────────────────────────────────── -->

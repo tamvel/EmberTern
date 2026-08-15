@@ -15,10 +15,10 @@
 
 ## 0. ⏭ HANDOFF — read this first
 
-> **Current milestone:** **Licensing system V1** — ✅ L1 and L2 accepted, ⭐ **L3 (License Manager
-> skeleton · SQLite register · customers · licences · issue · save `EmberTern.etlic`) DELIVERED**.
-> **Next task:** ⏭ the user sees the two License Manager windows in **both themes** (the four UI checklist
-> items no test can reach), then **L4 — EmberTern integration**. ⛔ L4 NOT started.
+> **Current milestone:** **Licensing system V1** — ✅ L1, L2 and **L3 accepted** (L3 after a two-round UI
+> review of the running application, 2026-08-15).
+> **Next task:** ⏭ **L4 — EmberTern integration** (`LicenseService`, the §4 state machine, the
+> Debug/Release gate, Activation window, EN + PL). ⛔ NOT started, and it starts on the user's word.
 >
 > **Work lives on the branch `feat/licensing-system`**, cut from `master` at `2c3da45`, **not pushed**.
 > ⭐ The push (origin + private) closes the etap and happens only after the user accepts it.
@@ -39,7 +39,7 @@ Split Licence — are now this etap's, see §3.
 | Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`) — **not pushed** |
 | HEAD | the L3 closing commit on `feat/licensing-system` |
 | Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`**, in **both solutions** (`TreatWarningsAsErrors=true`) |
-| Tests | EmberTern **8 979** · License Manager **87** — measured 2026-08-15 |
+| Tests | EmberTern **8 979** · License Manager **102** — measured 2026-08-15 |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ They are separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | `origin` (company Gitea) + `private` (GitHub) — **both** receive every accepted stage |
@@ -117,7 +117,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 |---|---|
 | **L1** — `EmberTern.Licensing`: the ETL1 format and the verifier | ✅ accepted (`83d05a8`) — §34 |
 | **L2** — `EmberTern.Licensing.Issuing`: keystore, issuer, key ceremony | ✅ accepted (`644f644`) — §35 |
-| **L3** — License Manager: skeleton, SQLite register, customers, licences, issue, save | ⭐ **DELIVERED, awaiting the user's look at both themes** — §36 |
+| **L3** — License Manager: skeleton, SQLite register, customers, licences, issue, save | ✅ **accepted** — §36; ⚠ read §36.5 before any UI work here |
 | **L4** — EmberTern integration: `LicenseService`, the state machine, the Debug/Release gate, EN + PL | ⏳ next, ⛔ not started |
 | **L5** · **L6** · **L7** — Manager depth · e-mail · hardening and closing | ⏳ not started |
 
