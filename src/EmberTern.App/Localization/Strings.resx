@@ -7320,4 +7320,124 @@ Save them before closing?</value>
   <data name="Charset.Unrepresentable.Parameter" xml:space="preserve">
     <value>Parameter {0} contains the character '{1}' ({2}) at position {3}, which the connection character set {4} cannot represent. Sending it would have changed it silently, so nothing was sent. Use a UTF8 connection character set, or remove the character.</value>
   </data>
+  <data name="LicenseActivationTitle" xml:space="preserve">
+    <value>Activate EmberTern</value>
+  </data>
+  <data name="LicenseActivationIntro" xml:space="preserve">
+    <value>EmberTern needs the licence file we sent you. It is called EmberTern.etlic.</value>
+  </data>
+  <data name="LicenseActivationDropHint" xml:space="preserve">
+    <value>Drop your licence file here</value>
+  </data>
+  <data name="LicenseActivationOr" xml:space="preserve">
+    <value>or</value>
+  </data>
+  <data name="LicenseActivationBrowse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="LicenseActivationPasteLabel" xml:space="preserve">
+    <value>Or paste the licence text</value>
+  </data>
+  <data name="LicenseActivationPastePlaceholder" xml:space="preserve">
+    <value>Paste the whole licence here, including its first and last line</value>
+  </data>
+  <data name="LicenseActivationActivate" xml:space="preserve">
+    <value>Activate</value>
+  </data>
+  <data name="LicenseActivationReplace" xml:space="preserve">
+    <value>Replace</value>
+  </data>
+  <data name="LicenseActivationClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="LicenseActivationPickerTitle" xml:space="preserve">
+    <value>Select a licence file</value>
+  </data>
+  <data name="LicenseActivationFileTypeName" xml:space="preserve">
+    <value>EmberTern licence</value>
+  </data>
+  <data name="LicenseActivationNothing" xml:space="preserve">
+    <value>There is nothing to activate yet. Drop the licence file here, choose it with Browse, or paste its contents.</value>
+  </data>
+  <data name="LicenseActivationUnreadableFormat" xml:space="preserve">
+    <value>'{0}' could not be read. Check that the file is still there and is not open in another program.</value>
+  </data>
+  <data name="LicenseActivationNotNewer" xml:space="preserve">
+    <value>This licence is not newer than the one already installed, so nothing was changed. If you are renewing, use the most recent file we sent you.</value>
+  </data>
+  <data name="LicenseActivationDifferentLicense" xml:space="preserve">
+    <value>This file belongs to a different licence than the one installed on this computer. Choose Replace if you meant to move this computer onto it.</value>
+  </data>
+  <data name="LicenseActivationNotStoredFormat" xml:space="preserve">
+    <value>The licence is genuine, but it could not be saved to '{0}'. Check that the folder can be written to, then try again — keep the file you received.</value>
+  </data>
+  <data name="SettingsCategoryLicense" xml:space="preserve">
+    <value>Licence</value>
+  </data>
+  <data name="SettingsLicenseStatusLabel" xml:space="preserve">
+    <value>Licence status</value>
+  </data>
+  <data name="SettingsLicenseStatusDescription" xml:space="preserve">
+    <value>What EmberTern makes of the licence file it found on this computer.</value>
+  </data>
+  <data name="SettingsLicenseStatusKeywords" xml:space="preserve">
+    <value>licence license activation expiry expires licensee seats</value>
+  </data>
+  <data name="SettingsLicenseActionsLabel" xml:space="preserve">
+    <value>Licence file</value>
+  </data>
+  <data name="SettingsLicenseActionsDescription" xml:space="preserve">
+    <value>Import a renewed or replacement licence, or copy the details we ask for when you write to us.</value>
+  </data>
+  <data name="SettingsLicenseActionsKeywords" xml:space="preserve">
+    <value>licence license update renew import activate copy details</value>
+  </data>
+  <data name="SettingsLicenseLicenseeLabel" xml:space="preserve">
+    <value>Licensed to</value>
+  </data>
+  <data name="SettingsLicenseSeatsLabel" xml:space="preserve">
+    <value>Seats</value>
+  </data>
+  <data name="SettingsLicenseValidFromLabel" xml:space="preserve">
+    <value>Valid from</value>
+  </data>
+  <data name="SettingsLicenseValidUntilLabel" xml:space="preserve">
+    <value>Valid until</value>
+  </data>
+  <data name="SettingsLicenseIdLabel" xml:space="preserve">
+    <value>Licence id</value>
+  </data>
+  <data name="SettingsLicenseFileLabel" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="SettingsLicenseUpdateButton" xml:space="preserve">
+    <value>Update licence…</value>
+  </data>
+  <data name="SettingsLicenseCopyIdButton" xml:space="preserve">
+    <value>Copy licence id</value>
+  </data>
+  <data name="SettingsLicenseCopyDetailsButton" xml:space="preserve">
+    <value>Copy details</value>
+  </data>
+  <data name="SettingsLicenseSeatsNote" xml:space="preserve">
+    <value>Seats are what you agreed with us, and EmberTern does not enforce them.</value>
+  </data>
+  <data name="AboutLicensedToFormat" xml:space="preserve">
+    <value>Licensed to {0}</value>
+  </data>
+  <data name="LicenseRefusedUnlicensed" xml:space="preserve">
+    <value>EmberTern is not activated. Activate the application to open connections.</value>
+  </data>
+  <data name="LicenseRefusedExpired" xml:space="preserve">
+    <value>The licence has expired. Renew it to open connections.</value>
+  </data>
+  <data name="LicenseRefusedInvalid" xml:space="preserve">
+    <value>The licence cannot be read. Import a valid file to open connections.</value>
+  </data>
+  <data name="LicenseRefusedNotYetValid" xml:space="preserve">
+    <value>The licence is not in force yet, so connections cannot be opened.</value>
+  </data>
+  <data name="LicenseRefusedVersionNotCovered" xml:space="preserve">
+    <value>This version is not covered by the licence. Renew maintenance.</value>
+  </data>
 </root>

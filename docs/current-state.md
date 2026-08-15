@@ -15,18 +15,24 @@
 
 ## 0. ⏭ HANDOFF — read this first
 
-> **Current milestone:** **Licensing system V1** — ✅ L1, L2 and **L3 accepted** (L3 after a two-round UI
-> review of the running application, 2026-08-15).
-> **Next task:** ⏭ **L4b — the licensing surfaces** (Activation window, Settings ▸ License, About line,
-> expiry banner, wiring the connection gate, EN + PL seen rendered). ⛔ NOT started.
-> ⭐ **L4a — the mechanism — is delivered** (§37): policy, location, store, service, text, clock high-water,
-> freshness rule and the four gate guards, with no UI.
+> **Current milestone:** **Licensing system V1** — ✅ L1, L2, L3, L4a and **L4b accepted** (2026-08-15).
+> ⭐ **EmberTern now licenses itself end to end**: verdict at startup, activation window, Settings ▸ Licence,
+> About line, expiry banner, and every path that opens a database attachment gated through ONE seam, EN + PL.
+> **Next task:** ⏭ **L5 — License Manager depth** (search, filters, group extend, re-issue, artifact preview,
+> history view, encrypted backup + JSONL). ⛔ NOT started.
 >
-> **Work lives on the branch `feat/licensing-system`**, cut from `master` at `2c3da45`, **not pushed**.
-> ⭐ The push (origin + private) closes the etap and happens only after the user accepts it.
+> ⚠ **L7 still owns the production key ceremony** — and until it runs, `TrustedKeys.Production` is empty and
+> no real licence verifies as usable in any build. That is deliberate, and `Valid` / `Grace` are therefore
+> proven by tests rather than by hand (§38.6).
+>
+> **Work lives on the branch `feat/licensing-system`**, cut from `master` at `2c3da45`.
+> ⚠ **On this machine the remotes differ from the CLAUDE.md table and that is deliberate** (user, 2026-08-15):
+> this clone is from the personal GitHub and has ONE remote, `origin` → `github.com/tamvel/EmberTern`. There is
+> no `private` here. ⛔ Do not add one and do not rename `origin`. The company Gitea is synced from the work
+> machine, by hand, later.
 >
 > Authority for every licensing decision: [`design/licensing-system.md`](design/licensing-system.md) — §0
-> (ratified D1–D16), §32 (the L1–L7 plan), §34/§35/§36 (as built).
+> (ratified D1–D16), §32 (the L1–L7 plan), §34–§38 (as built).
 
 ⭐ The **audit follow-up** etap that this file used to hand off is **closed, merged to `master` and pushed
 to both remotes** (`2c3da45`). Its two licensing-flavoured leftovers — NPOI's OSMF EULA and ImageSharp's
@@ -38,10 +44,10 @@ Split Licence — are now this etap's, see §3.
 
 | | |
 |---|---|
-| Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`) — **not pushed** |
-| HEAD | the L3 closing commit on `feat/licensing-system` |
+| Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` through L4b |
+| HEAD | the **L4b closing commit** on `feat/licensing-system`, pushed to `origin` |
 | Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`**, in **both solutions** (`TreatWarningsAsErrors=true`) |
-| Tests | EmberTern **9 029** · License Manager **102** — measured 2026-08-15 |
+| Tests | EmberTern **9 081** · License Manager **102** — measured 2026-08-15, Debug and Release |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ They are separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | `origin` (company Gitea) + `private` (GitHub) — **both** receive every accepted stage |
@@ -121,8 +127,10 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L2** — `EmberTern.Licensing.Issuing`: keystore, issuer, key ceremony | ✅ accepted (`644f644`) — §35 |
 | **L3** — License Manager: skeleton, SQLite register, customers, licences, issue, save | ✅ **accepted** — §36; ⚠ read §36.5 before any UI work here |
 | **L4a** — mechanism: policy, location, store, service, text, clock, freshness, 4 gate guards | ⭐ **delivered, no UI** — §37 |
-| **L4b** — surfaces: Activation window, Settings ▸ License, About, banner, connection gate wiring, EN + PL | ⏳ next, ⛔ not started |
-| **L5** · **L6** · **L7** — Manager depth · e-mail · hardening and closing | ⏳ not started |
+| **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
+| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⏭ **next**, ⛔ not started |
+| **L6** — e-mail: `ILicenseEmailSender`, SMTP + `.eml`, DPAPI settings, template, send audit | ⏳ not started |
+| **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started |
 
 ⚠ **`TrustedKeys.Production` is empty and the REAL key ceremony has not been performed** — deliberately
 **L7**, so no production private key is carried through five stages of development. A `Release` build

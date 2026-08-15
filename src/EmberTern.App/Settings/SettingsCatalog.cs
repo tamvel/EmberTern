@@ -189,6 +189,7 @@ public static class SettingsCatalog
     public const string CategoryTabs = "tabs";
     public const string CategoryDebugger = "debugger";
     public const string CategoryFormatter = "formatter";
+    public const string CategoryLicense = "license";
 
     public const string SettingTheme = "general.theme";
     public const string SettingLanguage = "general.language";
@@ -207,6 +208,8 @@ public static class SettingsCatalog
     public const string SettingDebuggerIsolation = "debugger.isolation";
     public const string SettingFormatterKeywordCase = "formatter.keywordCase";
     public const string SettingFormatterIdentifierCase = "formatter.identifierCase";
+    public const string SettingLicenseStatus = "license.status";
+    public const string SettingLicenseActions = "license.actions";
 
     // ⭐ Klucze geometrii ikon kategorii — nazwane TU, obok id kategorii, i z tego samego powodu: tablica
     //   w konstruktorze statycznym nie nazywa własnych ciągów (`TheCatalogTableContainsNoStringLiterals`).
@@ -220,6 +223,7 @@ public static class SettingsCatalog
     private const string IconTabs = "Icon.PanelLeft";
     private const string IconDebugger = "Icon.Crosshair";
     private const string IconFormatter = "Icon.PencilRuler";
+    private const string IconLicense = "Icon.FileText";
 
     // ── The tables, and why they are REBUILT rather than built once ────────────────────────────────────────
     //
@@ -285,6 +289,7 @@ public static class SettingsCatalog
             new SettingsCategoryDescriptor(CategoryTabs, UiStrings.SettingsCategoryTabs, IconTabs),
             new SettingsCategoryDescriptor(CategoryDebugger, UiStrings.SettingsCategoryDebugger, IconDebugger),
             new SettingsCategoryDescriptor(CategoryFormatter, UiStrings.SettingsCategoryFormatter, IconFormatter),
+            new SettingsCategoryDescriptor(CategoryLicense, UiStrings.SettingsCategoryLicense, IconLicense),
         ];
 
         _settings =
@@ -492,6 +497,26 @@ public static class SettingsCatalog
                 UiStrings.SettingsFormatterIdentifierCaseKeywords,
                 PreferenceOptions.Casing,
                 casingLabels),
+
+            // ⚠ Two ACTION rows, not preferences: a licence is not a value the user picks, and there is
+            // nothing here to apply on change. They are in this table anyway because SEARCH reads this table
+            // (design §5.4) — typing "licence", "expiry" or "renew" has to land on this page, and a row
+            // outside the catalog is invisible to it. Same reasoning as Import / export in etap 5b.
+            new SettingDescriptor(
+                SettingLicenseStatus,
+                CategoryLicense,
+                UiStrings.SettingsLicenseStatusLabel,
+                UiStrings.SettingsLicenseStatusDescription,
+                UiStrings.SettingsLicenseStatusKeywords,
+                kind: SettingKind.Action),
+
+            new SettingDescriptor(
+                SettingLicenseActions,
+                CategoryLicense,
+                UiStrings.SettingsLicenseActionsLabel,
+                UiStrings.SettingsLicenseActionsDescription,
+                UiStrings.SettingsLicenseActionsKeywords,
+                kind: SettingKind.Action),
         ];
 
         _byId = _settings.ToDictionary(s => s.Id, StringComparer.Ordinal);

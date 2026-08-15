@@ -64,9 +64,33 @@ public partial class SettingsWindow : Window
     /// </param>
     public SettingsWindow(
         PreferencesService preferences, SettingsPortability portability, string? initialCategoryId = null)
+        : this(preferences, portability, license: null, initialCategoryId)
+    {
+    }
+
+    /// <param name="license">
+    /// ⭐ The application's one <c>LicenseService</c>, so Settings ▸ Licence describes the same verdict the
+    /// rest of the app does. ⚠ <see langword="null"/> only where licensing is not wired up.
+    /// </param>
+    internal SettingsWindow(
+        PreferencesService preferences,
+        SettingsPortability portability,
+        Licensing.LicenseService? license,
+        string? initialCategoryId = null)
         : this()
     {
-        var vm = new SettingsCenterViewModel(preferences, portability);
+        var vm = new SettingsCenterViewModel(preferences, portability, license);
+
+        // ⭐ Update licence opens the SAME activation window first run uses — one flow, one verification path
+        //   (design §5: "the full §4 verification chain, identical code").
+        // ⚠ Guarded on a licence being present: with none there is nothing to activate INTO, and offering the
+        //   window would be offering a dialog that cannot write anywhere.
+        if (license is not null)
+        {
+            vm.LicensePage.RequestUpdate = () => new LicenseActivationWindow(license).ShowDialog(this);
+        }
+
+        vm.LicensePage.RequestCopy = text => GridClipboard.WriteAsync(this, text);
 
         if (!string.IsNullOrEmpty(initialCategoryId)
             && vm.Categories.FirstOrDefault(

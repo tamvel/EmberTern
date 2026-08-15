@@ -11,10 +11,18 @@ namespace EmberTern.App.Views;
 /// </summary>
 public partial class AboutWindow : Window
 {
+    /// <summary>⚠ For Avalonia's runtime XAML loader / previewer. Shows no licence line.</summary>
     public AboutWindow()
     {
         InitializeComponent();
         DataContext = new AboutViewModel();
+    }
+
+    /// <param name="license">The application's one licence service, so About names the licensee (design §17.2).</param>
+    internal AboutWindow(EmberTern.App.Licensing.LicenseService? license)
+    {
+        InitializeComponent();
+        DataContext = new AboutViewModel(license);
     }
 
     private async void OnThirdPartyNoticesClick(object? sender, RoutedEventArgs e)

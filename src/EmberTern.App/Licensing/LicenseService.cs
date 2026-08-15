@@ -85,6 +85,9 @@ internal sealed class LicenseService
     /// <summary>Which file the verdict came from, or <see langword="null"/> when there is none. Support asks this first.</summary>
     internal string? SourcePath { get; private set; }
 
+    /// <summary>⭐ Where activation writes — the per-user file, and the only one EmberTern ever writes (§8).</summary>
+    internal string InstallPath => _location.UserPath;
+
     /// <summary>
     /// ⭐ True when the system clock is more than <see cref="ClockTolerance"/> BEHIND the high-water mark.
     /// ⛔ Advisory only — it never blocks anything.
@@ -116,6 +119,19 @@ internal sealed class LicenseService
     internal bool IsBlocked => LicensingPolicy.GateEnabled && Verdict.Status is
         LicenseStatus.Unlicensed or LicenseStatus.Invalid or
         LicenseStatus.NotYetValid or LicenseStatus.VersionNotCovered;
+
+    /// <summary>
+    /// ⭐⭐ <b>The ONE question <see cref="LicensedConnections"/> asks before opening an attachment.</b>
+    ///
+    /// <para>It is the conjunction of the two rules design §7 states separately, and the conjunction is
+    /// read off that table rather than invented: <c>Expired</c> denies new connections while the rest of the
+    /// application keeps working, and the four <see cref="IsBlocked"/> states are <i>gated</i> — a stronger
+    /// condition that necessarily includes not opening databases. Stated once here so a caller cannot
+    /// satisfy one half and miss the other.</para>
+    ///
+    /// <para>⛔ Always true in a <c>Debug</c> build — both halves fold away with the gate (§16.5).</para>
+    /// </summary>
+    internal bool AllowsConnecting => AllowsNewDatabaseConnections && !IsBlocked;
 
     /// <summary>
     /// ⭐ True when a valid licence is within <see cref="LicenseConstants.ExpiryWarningWindow"/> of expiry.

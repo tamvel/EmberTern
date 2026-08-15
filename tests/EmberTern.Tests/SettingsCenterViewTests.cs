@@ -210,7 +210,12 @@ public sealed class SettingsCenterViewTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var banner = window.GetVisualDescendants().OfType<MessageBanner>().Single();
+                // ⚠ Selected BY NAME, not by being the only one: the window has carried a second
+                //   MessageBanner since L4b (Settings ▸ Licence shows the licence verdict in one), and a
+                //   `.Single()` here would fail for a reason that has nothing to do with what this test is
+                //   about. The subject is the SAVE-REFUSAL banner specifically.
+                var banner = window.GetVisualDescendants().OfType<MessageBanner>()
+                    .Single(b => b.Name == "SaveRefusalBanner");
                 Assert.False(banner.IsVisible);
 
                 var light = window.GetVisualDescendants().OfType<RadioButton>()

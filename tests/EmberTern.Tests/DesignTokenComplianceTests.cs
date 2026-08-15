@@ -453,7 +453,14 @@ public class DesignTokenComplianceTests
         ["Views/ExceptionDetailTabView.axaml"] = 7,
         ["Views/SettingsImportDialog.axaml"] = 9,
         ["Views/TriggerDetailTabView.axaml"] = 6,
-        ["Views/AboutWindow.axaml"] = 7,
+        // ⚠ 7 → 9 w L4b, ŚWIADOMIE (§11.1: „nazwij, którą z dwóch rzeczy robisz"). About jest opisanym
+        //   jednorazowym układem — „deliberately NOT the app's usual dialog skeleton" — w którym KAŻDE
+        //   dziecko niesie własny odstęp pionowy, bo katalog nie ma roli na „odstęp od góry" i wymyślanie
+        //   jej dla jednego okna byłoby początkiem drugiego katalogu. Dwa nowe wystąpienia to wiersz
+        //   licencjobiorcy i debugowy znacznik bramki (projekt §17.2 / §16.5), w tym samym idiomie co
+        //   pozostałe siedem. ⭐ §11.1 wprost dopuszcza tę drogę dla `Margin`: „są zbyt kontekstowe —
+        //   rozmieszczenie w układzie to odpowiedzialność hosta".
+        ["Views/AboutWindow.axaml"] = 9,
         ["Views/ExecuteProcedureDialog.axaml"] = 7,
         ["Views/PackageDetailTabView.axaml"] = 4,
         ["Views/TableDetailTabView.axaml.cs"] = 6,

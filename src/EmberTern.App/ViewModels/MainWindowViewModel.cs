@@ -28,6 +28,7 @@ using EmberTern.Core.Security;
 using EmberTern.Core.Settings;
 using EmberTern.Core.Sql;
 using EmberTern.Core.Sql.Language.Semantics;
+using EmberTern.Licensing;
 using EmberTern.Core.Sql.Templates;
 using EmberTern.Core.Workspace;
 using EmberTern.Firebird;
@@ -45,6 +46,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly EmberTern.Core.Import.ImportProfileStore _importProfiles;
     private readonly PreferencesService _preferences;
     private readonly SettingsPortability _portability;
+    private readonly Licensing.LicenseService? _license;
+    private readonly Licensing.LicensedConnections _connections;
 
     // ⭐ The ONE owner of "does the application hold anything uncommitted". Before I7.5 that question had a
     // single answer (the console transaction) and the guards asked it directly; Data Import's own
@@ -167,6 +170,39 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public MainWindowViewModel(ConnectionProfileStore store, FirebirdConnectionService service, TransactionService transactionService, FolderStore folderStore)
+        : this(store, service, transactionService, folderStore, license: null)
+    {
+    }
+
+    /// <summary>
+    /// ⭐ The constructor <see cref="App"/> uses: everything the three-argument overload builds, plus the
+    /// application's one <see cref="Licensing.LicenseService"/>.
+    /// </summary>
+    internal MainWindowViewModel(
+        ConnectionProfileStore store,
+        FirebirdConnectionService service,
+        TransactionService transactionService,
+        Licensing.LicenseService? license)
+        : this(store, service, transactionService,
+               new FolderStore(System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector), license)
+    {
+    }
+
+    /// <param name="license">
+    /// ⭐ The application's ONE <see cref="Licensing.LicenseService"/>, created and refreshed by <see cref="App"/>
+    /// exactly as <c>PreferencesService</c> is — one owner of the state, handed to whoever needs it (ratified
+    /// with the user 2026-08-15).
+    ///
+    /// <para>⚠ <see langword="null"/> means "licensing is not wired up", which is what a designer and most unit
+    /// tests are. It permits everything; the gate's real off-switch is the compile-time
+    /// <c>LicensingPolicy.GateEnabled</c>, not this parameter.</para>
+    /// </param>
+    internal MainWindowViewModel(
+        ConnectionProfileStore store,
+        FirebirdConnectionService service,
+        TransactionService transactionService,
+        FolderStore folderStore,
+        Licensing.LicenseService? license)
     {
         _store = store;
         _folderStore = folderStore;
@@ -226,6 +262,10 @@ public partial class MainWindowViewModel : ViewModelBase
         // session writes, so what the user is told reflects the file they actually arrived with.
         CaptureSettingsHealth(store);
         _service = service;
+        _license = license;
+        // ⭐ THE seam. Every path in this application that opens a new attachment goes through it, so the
+        //   licence question is asked once rather than at four call sites that can each forget.
+        _connections = new Licensing.LicensedConnections(service, license);
         _transactionService = transactionService;
         // Catalog reads run on the read-only metadata attachment with implicit per-command
         // transactions, so browsing never pins objects in — or is blocked by — the user's
@@ -329,6 +369,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     internal ConnectionProfileStore Store => _store;
     internal FirebirdConnectionService Service => _service;
+
+    /// <summary>⭐ The ONE way this application opens a database attachment. See <see cref="Licensing.LicensedConnections"/>.</summary>
+    internal Licensing.LicensedConnections Connections => _connections;
+
+    /// <summary>The licence state, or <see langword="null"/> when licensing is not wired up (designer, tests).</summary>
+    internal Licensing.LicenseService? License => _license;
     internal TransactionService TransactionService => _transactionService;
     internal ParameterHistoryStore ParameterHistory => _parameterHistory;
 
@@ -3069,13 +3115,20 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             ClearError();
             IsConnecting = true;
-            await _service.ConnectAsync(profile).ConfigureAwait(true);
+            await _connections.OpenAsync(profile).ConfigureAwait(true);
         }
         catch (ConnectionFailedException ex)
         {
             // Faza 2 ani 3 już nie nastąpią, więc to jedyne miejsce, które może tu zgasić pasek.
             IsConnecting = false;
             SetError(Loc.Format(ex.Localized));
+        }
+        catch (Licensing.LicenseBlockedException ex)
+        {
+            // ⚠⚠ The words come from the VERDICT, never from `ex.Message` — that one is a developer
+            //    breadcrumb and is not translated. This is the Phase-5 shape design §17.3 warns about.
+            IsConnecting = false;
+            SetError(Licensing.LicenseText.ConnectionRefused(ex.Verdict));
         }
     }
 
@@ -5081,11 +5134,16 @@ public partial class MainWindowViewModel : ViewModelBase
         ImportSessionConnection importSession;
         try
         {
-            importSession = await _service.CreateImportSessionAsync().ConfigureAwait(true);
+            importSession = await _connections.OpenImportSessionAsync().ConfigureAwait(true);
         }
         catch (ConnectionFailedException ex)
         {
             SetError(Loc.Format(ex.Localized));
+            return;
+        }
+        catch (Licensing.LicenseBlockedException ex)
+        {
+            SetError(Licensing.LicenseText.ConnectionRefused(ex.Verdict));
             return;
         }
 
@@ -6024,7 +6082,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
+        var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_connections);
         var debugger = new DebuggerTabViewModel(
             name,
             ct => FetchObjectDefinitionAsync(name, kind),
@@ -6067,7 +6125,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_service);
+        var launcher = new EmberTern.App.Debugging.FirebirdDebugSessionLauncher(_connections);
         var debugger = new DebuggerTabViewModel(
             memberName,
             ct => FetchPackageMemberSourceAsync(packageName, memberName, isFunction, ct),
@@ -8542,6 +8600,69 @@ public partial class MainWindowViewModel : ViewModelBase
     /// is not nagged.</summary>
     [RelayCommand]
     private void DismissSettingsHealthWarning() => ShowSettingsHealthWarning = false;
+
+    // ─── Licence banner (L4b, design §7 / §17.2) ─────────────────────────────────────────────────
+    //
+    // ⭐ Every text here is COMPUTED rather than stored, so the blanket notification a language change raises
+    // (OnLanguageChanged) is the whole of the refresh — there is no ComposeXxx to remember, which is the
+    // shape the settings-health banner needed and gotcha #353 is about.
+    //
+    // ⛔ No state on this banner ever prevents saving or exporting work that is already open (Architecture
+    // rule 11 governs licensing exactly as it governs the formatter). It says something; it stops nothing.
+
+    private bool _licenseBannerDismissed;
+
+    /// <summary>
+    /// True while the licence needs saying something about: anything other than a comfortably valid licence.
+    ///
+    /// <para>⚠ A plain <c>Valid</c> licence shows NOTHING — no startup modal, no nag, no "you are licensed"
+    /// confirmation. Design §17.1: after activation the customer's relationship with licensing is silence for
+    /// a year, then one unobtrusive banner.</para>
+    /// </summary>
+    public bool ShowLicenseBanner
+        => _license is { } license
+           && !_licenseBannerDismissed
+           && (license.Verdict.Status != LicenseStatus.Valid || license.IsExpiringSoon);
+
+    /// <summary>The verdict's own sentence: what happened, why, and what to do now.</summary>
+    public string LicenseBannerMessage
+        => _license is { } license ? Licensing.LicenseText.Explain(license.Verdict) : string.Empty;
+
+    /// <summary>⭐ The shared §7 tone mapping, so this banner and Settings ▸ Licence never disagree.</summary>
+    public Controls.MessageSeverity LicenseBannerSeverity
+        => _license is { } license
+            ? Licensing.LicenseText.SeverityOf(license.Verdict, license.IsExpiringSoon)
+            : Controls.MessageSeverity.Info;
+
+    /// <summary>
+    /// ⭐ Only the 30-days-to-expiry notice can be dismissed (§7). Grace is a persistent warning and an expired
+    /// licence a persistent error — both describe something the user has to act on, and a dismissible banner
+    /// for those would be a banner nobody sees the second time.
+    /// </summary>
+    public bool LicenseBannerIsDismissible
+        => LicenseBannerSeverity == Controls.MessageSeverity.Info;
+
+    [RelayCommand]
+    private void DismissLicenseBanner()
+    {
+        _licenseBannerDismissed = true;
+        OnPropertyChanged(nameof(ShowLicenseBanner));
+    }
+
+    /// <summary>
+    /// Re-reads the banner after the licence may have changed — i.e. after the activation window closed.
+    ///
+    /// <para>⭐ It also clears the dismissal: the user has just acted on the licence, so whatever they
+    /// dismissed was about the previous one.</para>
+    /// </summary>
+    internal void RefreshLicenseBanner()
+    {
+        _licenseBannerDismissed = false;
+        OnPropertyChanged(nameof(ShowLicenseBanner));
+        OnPropertyChanged(nameof(LicenseBannerMessage));
+        OnPropertyChanged(nameof(LicenseBannerSeverity));
+        OnPropertyChanged(nameof(LicenseBannerIsDismissible));
+    }
 
     private void CaptureSettingsHealth(ConnectionProfileStore store)
     {

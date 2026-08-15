@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using EmberTern.App.Controls;
 using EmberTern.Licensing;
 
 namespace EmberTern.App.Licensing;
@@ -110,6 +111,68 @@ internal static class LicenseText
 
         _ => UiStrings.LicenseExplainNotALicense,
     };
+
+    /// <summary>
+    /// ⭐⭐ <b>The sentence a user reads when a database connection is refused — ONE short sentence, chosen by
+    /// state.</b>
+    ///
+    /// <para>⚠⚠ <b>Shortened after the user saw L4b running (2026-08-15), and the reason is worth keeping.</b>
+    /// This used to return <see cref="Explain"/> plus a second sentence repeating what to do — about 250
+    /// characters, landing in the STATUS BAR. It ellipsised, it read as a technical dump stretched across the
+    /// window, and it repeated word for word what the banner above it and the activation window were already
+    /// saying. ⭐ <b>Each surface now has one job:</b> the status bar says WHAT IS BLOCKED, the banner and the
+    /// activation window say WHAT TO DO. ⛔ Do not re-compose this from <see cref="Explain"/>.</para>
+    ///
+    /// <para>⚠ One sentence per state rather than one generic line: an expired licence and a licence this
+    /// build cannot read call for different actions, and a single sentence covering both would say neither.
+    /// The switch mirrors <see cref="Headline"/>'s exactly, including the <c>_</c> arm — an unusable verdict
+    /// that is none of the named states is, for the user, a licence that cannot be read.</para>
+    ///
+    /// <para>⚠⚠ <b>This is the member every refusal site must call, and the reason is the Phase-5 defect</b>
+    /// (design §17.3): <see cref="LicenseBlockedException"/> carries the VERDICT precisely so that no display
+    /// site is tempted to render <c>ex.Message</c>, which would be an untranslated developer breadcrumb.
+    /// <c>LicenseSurfaceLocalizationTests</c> resolves this in both languages, and measures that it fits the
+    /// status bar with the engine the product lays out with.</para>
+    /// </summary>
+    internal static string ConnectionRefused(LicenseVerdict verdict)
+    {
+        ArgumentNullException.ThrowIfNull(verdict);
+
+        return verdict.Status switch
+        {
+            LicenseStatus.Expired => UiStrings.LicenseRefusedExpired,
+            LicenseStatus.NotYetValid => UiStrings.LicenseRefusedNotYetValid,
+            LicenseStatus.VersionNotCovered => UiStrings.LicenseRefusedVersionNotCovered,
+            LicenseStatus.Unlicensed => UiStrings.LicenseRefusedUnlicensed,
+            _ => UiStrings.LicenseRefusedInvalid,
+        };
+    }
+
+    /// <summary>
+    /// ⭐ <b>The ONE mapping from a licence verdict to the tone it is shown in.</b>
+    ///
+    /// <para>Read straight off design §7: a valid licence within 30 days of expiry is <c>Info</c> and
+    /// dismissible, the grace period is a persistent <c>Warning</c>, and an expired or unreadable licence is
+    /// an <c>Error</c>. ⚠ It lives here rather than in each host because two hosts choosing their own tone is
+    /// how the same state comes to look routine in one place and alarming in another.</para>
+    /// </summary>
+    /// <param name="expiringSoon">Whether a still-valid licence is inside the expiry warning window.</param>
+    internal static MessageSeverity SeverityOf(LicenseVerdict verdict, bool expiringSoon)
+    {
+        ArgumentNullException.ThrowIfNull(verdict);
+
+        return verdict.Status switch
+        {
+            LicenseStatus.Valid => expiringSoon ? MessageSeverity.Info : MessageSeverity.Success,
+            LicenseStatus.Grace => MessageSeverity.Warning,
+            LicenseStatus.NotYetValid => MessageSeverity.Warning,
+            LicenseStatus.Unlicensed => MessageSeverity.Warning,
+            _ => MessageSeverity.Error,
+        };
+    }
+
+    /// <summary>A date as the user's culture writes it — the one date format every licence surface uses.</summary>
+    internal static string Day(DateTimeOffset value) => Date(value);
 
     /// <summary>
     /// The technical token for <c>[Copy details]</c> — an unknown <c>kid</c>, a parse offset.

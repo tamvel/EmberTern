@@ -370,13 +370,32 @@
          Severity / Message / IsVisible / Classes — never its own Background, BorderBrush or BorderThickness,
          which would outrank the shared style. Dismissible, because a user who has read it and chosen to work
          on unsaved settings should not be nagged for the rest of the session. -->
-    <controls:MessageBanner Grid.Row="1"
-                            Classes="docked"
-                            Severity="Warning"
-                            Message="{Binding SettingsHealthMessage}"
-                            IsVisible="{Binding ShowSettingsHealthWarning}"
-                            ShowDismiss="True"
-                            DismissCommand="{Binding DismissSettingsHealthWarningCommand}" />
+    <!-- ⚠ A STACK, not two elements in one Auto row: both banners can be up at once (an unreadable
+         settings.dat and an expired licence are independent facts), and two children of the same Grid cell
+         would simply overlap. Row 1 stays "Auto", so the strip takes exactly the height of whatever is
+         showing — and no height at all when neither is. -->
+    <StackPanel Grid.Row="1">
+
+      <controls:MessageBanner Classes="docked"
+                              Severity="Warning"
+                              Message="{Binding SettingsHealthMessage}"
+                              IsVisible="{Binding ShowSettingsHealthWarning}"
+                              ShowDismiss="True"
+                              DismissCommand="{Binding DismissSettingsHealthWarningCommand}" />
+
+      <!-- Licence (L4b, design §7 / §17.2). The shared MessageBanner again, by the same rule: the host sets
+           only Severity / Message / IsVisible / Classes.
+
+           ⭐ A comfortably valid licence shows NOTHING — no startup modal, no nag, no "you are licensed"
+           confirmation (§17.1). Only the 30-days notice is dismissible; grace and expiry describe something
+           the user has to act on, and a banner they can dismiss is one they do not see the second time. -->
+      <controls:MessageBanner Classes="docked"
+                              Severity="{Binding LicenseBannerSeverity}"
+                              Message="{Binding LicenseBannerMessage}"
+                              IsVisible="{Binding ShowLicenseBanner}"
+                              ShowDismiss="{Binding LicenseBannerIsDismissible}"
+                              DismissCommand="{Binding DismissLicenseBannerCommand}" />
+    </StackPanel>
 
     <!-- Main 3-zone body: sidebar | splitter | workspace+bottom.
          SidebarColumn width + the collapsed state persist in WorkspaceState; the

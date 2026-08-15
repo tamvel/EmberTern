@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using EmberTern.App.Licensing;
 using EmberTern.Core.Sql.Debugging;
 using EmberTern.Firebird;
 
@@ -17,24 +18,30 @@ namespace EmberTern.App.Debugging;
 /// </summary>
 internal sealed class FirebirdDebugSessionLauncher : IDebugSessionLauncher
 {
-    private readonly FirebirdConnectionService _service;
+    private readonly LicensedConnections _connections;
 
-    public FirebirdDebugSessionLauncher(FirebirdConnectionService service)
-        => _service = service ?? throw new ArgumentNullException(nameof(service));
+    /// <param name="connections">
+    /// ⭐ The licensing seam, not the raw service: a debug session opens its OWN attachment, which is the same
+    /// act as Connect and is gated by the same predicate (design §7). In practice this refusal is unreachable —
+    /// <c>CreateDebugSessionAsync</c> hard-requires <c>IsConnected</c>, and a licence that forbids connecting
+    /// never lets the user get connected — so it is defence in depth rather than a path the user meets.
+    /// </param>
+    public FirebirdDebugSessionLauncher(LicensedConnections connections)
+        => _connections = connections ?? throw new ArgumentNullException(nameof(connections));
 
     public async Task<DebugRunHandle> LaunchAsync(
         DebugLaunchSpec spec, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
-        var connection = await _service
-            .CreateDebugSessionAsync(spec.Isolation, cancellationToken)
+        var connection = await _connections
+            .OpenDebugSessionAsync(spec.Isolation, cancellationToken)
             .ConfigureAwait(false);
         try
         {
             // The source-blob decode fallback (UTF-8-first, then the connection charset) for reconstructing a
             // stepped-into callee's source (D8) — the same resolution the metadata readers use.
-            var fallback = EmberTern.Core.Connections.CharsetCatalog.Resolve(_service.ActiveProfile?.Charset);
+            var fallback = EmberTern.Core.Connections.CharsetCatalog.Resolve(_connections.ActiveProfile?.Charset);
             var executor = await FirebirdDebugExecutor
                 .CreateAsync(connection, spec.RoutineName, spec.Source, spec.Body, spec.Model, fallback, spec.Trigger, cancellationToken, spec.PackageName, spec.IsFunction)
                 .ConfigureAwait(false);

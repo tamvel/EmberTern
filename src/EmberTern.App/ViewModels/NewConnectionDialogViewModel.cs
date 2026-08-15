@@ -18,12 +18,18 @@ public enum TestConnectionStatus
 
 public partial class NewConnectionDialogViewModel : ViewModelBase
 {
-    private readonly FirebirdConnectionService _service;
+    private readonly Licensing.LicensedConnections _connections;
     private string? _editingProfileId;
 
-    public NewConnectionDialogViewModel(FirebirdConnectionService service)
+    /// <param name="connections">
+    /// ⭐ The licensing seam, not the raw service. <b>Test connection opens a real attachment</b>, so it is the
+    /// same act as Connect and carries the same gate — ratified with the user 2026-08-15, and stated as a
+    /// prohibition because it is the exception someone would otherwise be tempted to make: a working Test
+    /// connection on an expired licence is most of what a developer needs a connection for.
+    /// </param>
+    internal NewConnectionDialogViewModel(Licensing.LicensedConnections connections)
     {
-        _service = service;
+        _connections = connections ?? throw new System.ArgumentNullException(nameof(connections));
     }
 
     // SQL Dialect is no longer exposed in the UI (Dialect 3 is universal); the value is
@@ -117,7 +123,7 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
 
         try
         {
-            await _service.TestConnectionAsync(profile).ConfigureAwait(true);
+            await _connections.TestAsync(profile).ConfigureAwait(true);
             TestStatus = TestConnectionStatus.Success;
             TestMessage = UiStrings.TestSuccess;
         }
@@ -125,6 +131,12 @@ public partial class NewConnectionDialogViewModel : ViewModelBase
         {
             TestStatus = TestConnectionStatus.Failure;
             TestMessage = Loc.Format(ex.Localized);
+        }
+        catch (Licensing.LicenseBlockedException ex)
+        {
+            // ⚠⚠ Resolved from the VERDICT at display time, never `ex.Message` (design §17.3).
+            TestStatus = TestConnectionStatus.Failure;
+            TestMessage = Licensing.LicenseText.ConnectionRefused(ex.Verdict);
         }
     }
 

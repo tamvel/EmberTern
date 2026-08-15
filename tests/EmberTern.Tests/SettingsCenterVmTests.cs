@@ -671,6 +671,7 @@ public class SettingsCenterVmTests
                 () => vm.IsTabsPageVisible,
                 () => vm.IsDebuggerPageVisible,
                 () => vm.IsFormatterPageVisible,
+                () => vm.IsLicensePageVisible,
             };
 
             Assert.Equal(SettingsCatalog.Categories.Count, visibilities.Length);

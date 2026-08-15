@@ -1,8 +1,10 @@
 # EmberTern Licensing System — design document
 
 **🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ✅ L1 ACCEPTED. ✅ L2 ACCEPTED.
-✅ L3 ACCEPTED (2026-08-15, after a two-round UI review — §36.5). Next: L4.** Branch
-`feat/licensing-system`, cut from `master` at `2c3da45`. As built: **§34** (L1), **§35** (L2), **§36** (L3).
+✅ L3 ACCEPTED (2026-08-15, after a two-round UI review — §36.5). ✅ L4a ACCEPTED. ✅ **L4b ACCEPTED**
+(2026-08-15, after a UI review that produced the status-bar correction — §38.5). ⏭ **Next: L5.** Branch
+`feat/licensing-system`, cut from `master` at `2c3da45`.
+As built: **§34** (L1), **§35** (L2), **§36** (L3), **§37** (L4a), **§38** (L4b).
 
 **This document has two parts and they have different authority:**
 
@@ -1787,3 +1789,158 @@ ceremony.
 ⚠ **A real licence file verifies as `Invalid / UnknownKey` in every configuration today** — `TrustedKeys.Production`
 is empty until L7. That is correct and deliberate, and `ALicenceSignedByAKeyThisBuildDoesNotKnowIsRefused`
 records it so the next reader does not diagnose it as a defect.
+
+---
+
+## 38. L4b — as built (2026-08-15)
+
+✅ **The surfaces, and the gate wired to them.** Builds **0/0 in Debug and Release, both solutions**. Suite:
+EmberTern **9 081** (was 9 029; **+52**), License Manager **102** (untouched). ⭐ The **`Release` run is again
+part of the acceptance**: it is the only thing that can prove the refusals, because the gate is a compile-time
+`const` — and it earned its place immediately, by rejecting four `Assert.Throws` calls that compiled fine in
+`Debug`.
+
+**New surface:** `LicensedConnections` · `LicenseBlockedException` · `LicenseActivationWindow` (+ view model) ·
+`LicenseSettingsViewModel` + the Settings ▸ Licence page · the About licence line and Debug marker · the
+main-window licence banner. Plus `LicenseService.AllowsConnecting` / `InstallPath`,
+`LicenseText.ConnectionRefused` / `SeverityOf` / `Day`, a `license` category in `SettingsCatalog`, and **40 EN
++ 40 PL** resource entries.
+
+**Tests: +52**, in five files — `LicensingConnectionSeamTests` (the seam guard), `LicenseGateTests` (what the
+licence prevents, with `#if DEBUG` pairs), `LicenseActivationTests` (the §5 flow), `LicenseSurfaceLocalizationTests`
+(rule 12 through the bound properties, EN + PL) and `LicenseSurfaceViewTests` (the surfaces as they render,
+every `Dispatch` awaited).
+
+### 38.1 ⭐⭐ The decision that shaped the stage: a SEAM, not four checks
+
+The gate could have been four `if`s at the four call sites. It is instead one file every opener goes through,
+guarded by `LicensingConnectionSeamTests`, for the reason the charset guard exists: **a check written at each
+call site is a check the fifth call site forgets, silently, with a green build.**
+
+- ⛔ **Never call `ConnectAsync` / `TestConnectionAsync` / `CreateDebugSessionAsync` /
+  `CreateImportSessionAsync` outside `src/EmberTern.App/Licensing/LicensedConnections.cs`.** Use
+  `OpenAsync` / `TestAsync` / `OpenDebugSessionAsync` / `OpenImportSessionAsync`.
+- ⭐ The seam **throws** rather than returning false: every opener returns something the caller uses, so a
+  `false` would need four return shapes and the one a caller ignored would open the attachment anyway.
+- ⚠ **The guard's bound is written down rather than overclaimed.** Three members have names nothing else uses
+  and are matched outright; `ConnectAsync` is not unique (`MainWindowViewModel.ConnectAsync` legitimately
+  forwards the user's gesture), so it is matched on a receiver ending in `service`. A future receiver named
+  otherwise would slip past — the three unique members are what actually close the domain.
+- ⭐ **Verified RED four ways** before being accepted green: a probe calling all four openers from
+  `MainWindowViewModel` (each pattern named its own line), a `Guard()` deleted from `TestAsync`, an
+  `ex.Message` reintroduced at a refusal site, and an `Assert.Fail` injected into a headless body.
+
+### 38.2 `AllowsConnecting` — read off §7, not invented
+
+`Expired` denies new connections while everything else keeps working; the four `IsBlocked` states are *gated*,
+which is strictly stronger and therefore also denies them. Stated once as
+`AllowsConnecting => AllowsNewDatabaseConnections && !IsBlocked` so a caller cannot satisfy one half and miss
+the other. ⛔ L4a's two predicates are unchanged.
+
+### 38.3 ⚠⚠ The Phase-5 shape, closed at the source
+
+`LicenseBlockedException` deliberately carries the **verdict**, and its own `Message` is an untranslated
+developer breadcrumb. Every refusal site renders `LicenseText.ConnectionRefused(ex.Verdict)` at display time.
+
+⭐ **`NoRefusalSite_RendersTheExceptionMessageInsteadOfTheVerdict` is the guard §17.3 asked for**, and it
+carries an **anti-vacuity assertion** (`sites >= 3`): a regex that silently matched nothing would report
+perfect compliance forever — the exact shape of L4a's finding where a tampering test mutated nothing and
+reported the absence of a failure as a success (§37.3).
+
+⭐ The refusal is **one short whole sentence per state** from the catalog — see §38.5 for why it is not the
+long composition it started as.
+
+### 38.4 Decisions taken during implementation
+
+1. **British *licence* throughout the English catalog.** The 18 entries L4a shipped spell it that way;
+   consistency inside the product outranks the US spelling used in this document's headings.
+2. ⭐ **The activation window's three gestures feed ONE buffer.** A drop and a Browse read the file into the
+   paste box, so `Activate` has exactly one thing to act on and the user can see what they are installing.
+   Three sources feeding three code paths is how a paste comes to be verified by different code from a drop.
+3. **The window closes on `IsActivated`, not on the button press** — closing on the press would hide a failed
+   write behind a dismissed dialog.
+4. ⭐ **Settings ▸ Licence is reachable in every state, including the blocked ones**, and two tests say so. It
+   is the way *out* of `Expired` and `Unlicensed`; a gate that also hid the screen for fixing the licence
+   would be a trap.
+5. **Only the 30-days notice is dismissible.** Grace and expiry describe something the user must act on, and a
+   banner they can dismiss is one they do not see the second time.
+6. ⚠ **A comfortably valid licence shows nothing at all** — no startup modal, no nag, no "you are licensed"
+   confirmation (§17.1).
+7. **The blocked states open the activation window over the main window; `Expired` does not.** A modal there
+   would take away the editing, saving and exporting §7 guarantees.
+8. ⚠ **The two main-window banners share row 1 through a `StackPanel`.** An unreadable `settings.dat` and an
+   expired licence are independent facts and can both be up; two children of one `Auto` grid cell would simply
+   overlap.
+9. ⚠ **`AboutWindow`'s `Margin` baseline went 7 → 9, deliberately** (`product-polish.md` §11.1: *"nazwij,
+   którą z dwóch rzeczy robisz"*). About is a documented one-off composition where every child carries its own
+   vertical gap, the catalog has no "gap above" role, and §11.1 states outright that `Margin` is too contextual
+   to be a role. The two new occurrences are the licensee line and the Debug marker, in the same idiom as the
+   other seven.
+10. **The activation window is a growing dialog** — measured, not assumed: the banner appears on the first
+    failed attempt and Replace appears when a different `lid` is offered. `ScrollViewer` first, then
+    `GrowingDialogBehavior.Attach`.
+
+### 38.5 ⚠⚠ The status-bar correction — and a measurement that proved nothing
+
+**User review of the running app, 2026-08-15.** `ConnectionRefused` originally returned the verdict's full
+`Explain` plus a second sentence repeating what to do — **~250 characters landing in the STATUS BAR**. Seen
+running it was a technical dump stretched across the window, and it repeated word for word what the banner
+above it and the activation window were already saying.
+
+⭐ **The fix is a division of labour, not a shorter string:** the **status bar says what is BLOCKED**; the
+**banner and the activation window say what to DO**. `ConnectionRefused` now returns one short sentence chosen
+by state, in a switch mirroring `Headline`'s exactly. ⛔ Do not re-compose it from `Explain`.
+
+⚠ **One sentence per state, not one generic line.** An expired licence and one this build cannot read call
+for different actions; a single sentence covering both would say neither.
+
+#### ⚠⚠ The first version of the fit test passed on the very sentence the user had just reported as cut
+
+It compared the label's `Bounds.Width` against its own `DesiredSize.Width` — and **a horizontal `StackPanel`
+hands its children their full desired width unconditionally**, so those two numbers are equal by construction,
+for any text of any length. The overflow does not shrink the label; it runs off the end of the flexible
+column, which is why the screenshot showed text cut at the window edge rather than ellipsised, despite
+`TextTrimming="CharacterEllipsis"` being set.
+
+⭐ **The property that decides what the user sees is the width of column 1 of the status-bar grid**, so that
+is what the test compares against now. Verified RED on the reported sentence: it needs **2 854 px** against
+**1 081 px** of column at a 1280 px window — 2.6× over. The shipped sentences measure **841 px (EN)** and
+**874 px (PL)**, leaving ~200 px of headroom, which is roughly 35 characters of connection name in column 0
+before it starts to bite.
+
+⭐ **Generalises past licensing:** *a "does it fit" test must measure against the container that constrains
+the element, never against the element's own bounds — a child of a horizontal `StackPanel`, a `ScrollViewer`
+or any unconstrained panel always "fits" itself.* Same family as the L2/L4a findings where editing an encoded
+artifact as text mutated nothing and the test reported the absence of a failure as a success.
+
+### 38.6 ⚠ What the acceptance actually rested on — stated so nobody over-reads it
+
+§32's exit criterion for L4 reads *"all eight states reachable and verified in the running app"*. What
+happened is worth recording precisely, because it is not the same sentence:
+
+- ⭐ **The user ran the application and reviewed it**, in both configurations. That review is what found the
+  status-bar defect (§38.5) — a defect no test in this stage had any chance of catching, because every one of
+  them was about *what the text says*, not *how much room it has*.
+- ⚠ **The states seen by hand were the unlicensed / gated ones.** `Valid`, `Grace` and `ExpiringSoon` were
+  **not** walked in the running app, and they cannot be: `TrustedKeys.Production` is empty until L7, so no
+  licence anyone can produce today verifies as usable in a shipped build. They are proven by tests against the
+  fixture's own key table, end to end through the real `LicenseVerifier`.
+- ⏭ **So one line of §32's criterion is deferred to L7, deliberately**, and it is the line that needs the real
+  key ceremony to be true at all: *seeing* a valid licence run. ⛔ Do not record L4b as having verified it.
+
+### 38.7 ⏭ What L4b deliberately did NOT do
+
+⛔ **The clock-rollback warning has no surface.** `ClockLooksRolledBack` is computed and used by
+`EffectiveNow`, exactly as L4a built it, but §7's banner table lists only the expiry states and this stage did
+not invent a ninth. ⛔ No network code, no `iid`, no fingerprint, no seats enforcement, no production ceremony.
+⛔ The License Manager's own main-window review stays where L3 left it.
+
+⚠ **A real licence still verifies as `Invalid / UnknownKey` in every configuration** — `TrustedKeys.Production`
+is empty until L7. Correct, deliberate, and unchanged by this stage.
+
+### 38.8 ⏭ Owed to `CLAUDE.md` at the cleanup
+
+The seam rule in §38.1 is the same class as the charset seam's (*"never create a command outside
+`FirebirdCommandGuard`"*), which lives in `CLAUDE.md`'s driver-gotchas section. It is **not** written there yet:
+`CLAUDE.md` stands at ~813 lines against its own ~800 threshold, and the user ratified that its cleanup is a
+separate task which L4b must not expand. ⏭ Add one line for it when that cleanup runs.

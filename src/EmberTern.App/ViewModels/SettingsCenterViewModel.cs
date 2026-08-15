@@ -491,7 +491,19 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     private readonly Dictionary<string, SettingRowViewModel> _settings = new(StringComparer.Ordinal);
 
     public SettingsCenterViewModel(PreferencesService preferences, SettingsPortability portability)
+        : this(preferences, portability, license: null)
     {
+    }
+
+    /// <param name="license">
+    /// ⭐ The application's one <c>LicenseService</c>, for the Licence page. ⚠ <see langword="null"/> means
+    /// licensing is not wired up (designer, most unit tests); the page then reads as <c>Unlicensed</c>,
+    /// which is the honest answer rather than a hidden category.
+    /// </param>
+    internal SettingsCenterViewModel(
+        PreferencesService preferences, SettingsPortability portability, Licensing.LicenseService? license)
+    {
+        LicensePage = new LicenseSettingsViewModel(license);
         _preferences = preferences;
         _portability = portability;
         var current = preferences.Current;
@@ -582,6 +594,11 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
             row.RefreshLocalizedText();
         }
 
+        // ⚠ The Licence page is a CHILD view model, so the blanket notification above does not reach it — the
+        //   same shape gotcha #353 describes, and the reason Performance and Metadata are forwarded by hand
+        //   from MainWindowViewModel.
+        LicensePage.RefreshLocalizedText();
+
         ApplyFilter(SearchText);
     }
 
@@ -620,6 +637,7 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsTabsPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsDebuggerPageVisible))]
     [NotifyPropertyChangedFor(nameof(IsFormatterPageVisible))]
+    [NotifyPropertyChangedFor(nameof(IsLicensePageVisible))]
     private SettingsCategoryViewModel? _selectedCategory;
 
     /// <summary>Live filter over every setting's label, sentence, keywords and category title.</summary>
@@ -768,6 +786,24 @@ public sealed partial class SettingsCenterViewModel : ObservableObject
     /// <inheritdoc cref="IsGeneralPageVisible"/>
     public bool IsFormatterPageVisible
         => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryFormatter, StringComparison.Ordinal);
+
+    /// <inheritdoc cref="IsGeneralPageVisible"/>
+    public bool IsLicensePageVisible
+        => string.Equals(SelectedCategory?.Id, SettingsCatalog.CategoryLicense, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Settings ▸ Licence. ⭐ Always present, in every licence state — this page is the way OUT of a blocked
+    /// one, so a gate that hid it would be a trap (design §7).
+    /// </summary>
+    public LicenseSettingsViewModel LicensePage { get; }
+
+    /// <summary>The Licence status row — an action row, so it carries words and visibility but no value.</summary>
+    public SettingActionViewModel LicenseStatus
+        => (SettingActionViewModel)_settings[SettingsCatalog.SettingLicenseStatus];
+
+    /// <summary>The Licence file row — Update licence / Copy licence id / Copy details.</summary>
+    public SettingActionViewModel LicenseActions
+        => (SettingActionViewModel)_settings[SettingsCatalog.SettingLicenseActions];
 
     /// <summary>False when the search matches nothing — the cue for an explained empty state rather than an
     /// empty window.</summary>

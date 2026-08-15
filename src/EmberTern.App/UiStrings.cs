@@ -1166,6 +1166,66 @@ internal static class UiStrings
     public static string LicenseExplainUnknownKey => Loc.Text(nameof(LicenseExplainUnknownKey));
     public static string LicenseExplainSignatureInvalid => Loc.Text(nameof(LicenseExplainSignatureInvalid));
     public static string LicenseExplainWrongProduct => Loc.Text(nameof(LicenseExplainWrongProduct));
+
+    // ── LICENSING SURFACES (L4b) ─────────────────────────────────────────────────────────────────────
+    //
+    // ⭐⭐ The refusal a blocked connection shows — ONE short sentence per state, and short is the point.
+    //
+    // ⚠⚠ CORRECTED after the user saw L4b running (2026-08-15). This used to be the verdict's full Explain
+    //    plus a second sentence repeating what to do — ~250 characters in the STATUS BAR, which ellipsised,
+    //    read as a technical dump stretched across the window, and repeated word for word what the banner
+    //    above it and the activation window were already saying. ⭐ The division of labour is now explicit:
+    //    the status bar states WHAT IS BLOCKED, the banner and the activation window say WHAT TO DO.
+    // ⚠ One per state rather than one generic sentence: "the licence expired" and "this build cannot read
+    //   the licence" call for different actions, and a single sentence covering both would say neither.
+    public static string LicenseRefusedUnlicensed => Loc.Text(nameof(LicenseRefusedUnlicensed));
+    public static string LicenseRefusedExpired => Loc.Text(nameof(LicenseRefusedExpired));
+    public static string LicenseRefusedInvalid => Loc.Text(nameof(LicenseRefusedInvalid));
+    public static string LicenseRefusedNotYetValid => Loc.Text(nameof(LicenseRefusedNotYetValid));
+    public static string LicenseRefusedVersionNotCovered => Loc.Text(nameof(LicenseRefusedVersionNotCovered));
+
+    // The activation window (design §5). ⭐ Every failure names what happened, why, and what to do now.
+    public static string LicenseActivationTitle => Loc.Text(nameof(LicenseActivationTitle));
+    public static string LicenseActivationIntro => Loc.Text(nameof(LicenseActivationIntro));
+    public static string LicenseActivationDropHint => Loc.Text(nameof(LicenseActivationDropHint));
+    public static string LicenseActivationOr => Loc.Text(nameof(LicenseActivationOr));
+    public static string LicenseActivationBrowse => Loc.Text(nameof(LicenseActivationBrowse));
+    public static string LicenseActivationPasteLabel => Loc.Text(nameof(LicenseActivationPasteLabel));
+    public static string LicenseActivationPastePlaceholder => Loc.Text(nameof(LicenseActivationPastePlaceholder));
+    public static string LicenseActivationActivate => Loc.Text(nameof(LicenseActivationActivate));
+    public static string LicenseActivationReplace => Loc.Text(nameof(LicenseActivationReplace));
+    public static string LicenseActivationClose => Loc.Text(nameof(LicenseActivationClose));
+    public static string LicenseActivationPickerTitle => Loc.Text(nameof(LicenseActivationPickerTitle));
+    public static string LicenseActivationFileTypeName => Loc.Text(nameof(LicenseActivationFileTypeName));
+    public static string LicenseActivationNothing => Loc.Text(nameof(LicenseActivationNothing));
+    public static string LicenseActivationUnreadableFormat => Loc.Text(nameof(LicenseActivationUnreadableFormat));
+    public static string LicenseActivationNotNewer => Loc.Text(nameof(LicenseActivationNotNewer));
+    public static string LicenseActivationDifferentLicense => Loc.Text(nameof(LicenseActivationDifferentLicense));
+    public static string LicenseActivationNotStoredFormat => Loc.Text(nameof(LicenseActivationNotStoredFormat));
+
+    // Settings ▸ Licence (design §17.2). ⚠ The category TITLE is read through SettingsCatalog like every
+    // other one, so it rebuilds on a language change instead of freezing at type-init.
+    public static string SettingsCategoryLicense => Loc.Text(nameof(SettingsCategoryLicense));
+    public static string SettingsLicenseStatusLabel => Loc.Text(nameof(SettingsLicenseStatusLabel));
+    public static string SettingsLicenseStatusDescription => Loc.Text(nameof(SettingsLicenseStatusDescription));
+    public static string SettingsLicenseStatusKeywords => Loc.Text(nameof(SettingsLicenseStatusKeywords));
+    public static string SettingsLicenseActionsLabel => Loc.Text(nameof(SettingsLicenseActionsLabel));
+    public static string SettingsLicenseActionsDescription => Loc.Text(nameof(SettingsLicenseActionsDescription));
+    public static string SettingsLicenseActionsKeywords => Loc.Text(nameof(SettingsLicenseActionsKeywords));
+    public static string SettingsLicenseLicenseeLabel => Loc.Text(nameof(SettingsLicenseLicenseeLabel));
+    public static string SettingsLicenseSeatsLabel => Loc.Text(nameof(SettingsLicenseSeatsLabel));
+    public static string SettingsLicenseValidFromLabel => Loc.Text(nameof(SettingsLicenseValidFromLabel));
+    public static string SettingsLicenseValidUntilLabel => Loc.Text(nameof(SettingsLicenseValidUntilLabel));
+    public static string SettingsLicenseIdLabel => Loc.Text(nameof(SettingsLicenseIdLabel));
+    public static string SettingsLicenseFileLabel => Loc.Text(nameof(SettingsLicenseFileLabel));
+    public static string SettingsLicenseUpdateButton => Loc.Text(nameof(SettingsLicenseUpdateButton));
+    public static string SettingsLicenseCopyIdButton => Loc.Text(nameof(SettingsLicenseCopyIdButton));
+    public static string SettingsLicenseCopyDetailsButton => Loc.Text(nameof(SettingsLicenseCopyDetailsButton));
+    public static string SettingsLicenseSeatsNote => Loc.Text(nameof(SettingsLicenseSeatsNote));
+
+    // About's licence line (design §17.2). Hidden entirely when there is no payload — a label with nothing
+    // after it is worse than no line.
+    public static string AboutLicensedToFormat => Loc.Text(nameof(AboutLicensedToFormat));
     // Released on its own line under the version. The date is assembly metadata fed by <ReleaseDate> in
     // Directory.Build.props — same single source as the version, so it is never a date typed into a view.
     public static string AboutReleasedFormat => Loc.Text(nameof(AboutReleasedFormat));

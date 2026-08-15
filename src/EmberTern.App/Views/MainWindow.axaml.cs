@@ -337,6 +337,22 @@ public partial class MainWindow : Window
 
     private void OnWindowOpened(object? sender, EventArgs e)
     {
+        // ⭐⭐ The gated states (design §7): Unlicensed, Invalid, NotYetValid and VersionNotCovered open the
+        //    activation window over the main one. ⛔ Expired does NOT — it keeps the application usable and
+        //    only refuses new database connections, so a modal there would take away the editing, saving and
+        //    exporting §7 guarantees.
+        //
+        // ⚠ Posted rather than called inline: showing a modal from inside the Opened handler races the very
+        //   layout pass that is raising it, and the owner window must exist before it can own a dialog.
+        //
+        // ⛔ In a Debug build this never fires — IsBlocked folds to false with the gate (§16.5). That is why
+        //    the licensing SCREENS stay reachable from Settings ▸ Licence: the flow is developable in Debug,
+        //    and only the blocking behaviour needs a Release build to be seen.
+        if (_currentVm?.License is { IsBlocked: true })
+        {
+            Dispatcher.UIThread.Post(ShowActivationWindowAsync, DispatcherPriority.Background);
+        }
+
         // Scroll diagnostics (opt-in via EMBERTERN_SCROLL_DIAG). The sidebar ScrollViewer is a
         // template part of SidebarList, present after the template applies — post at
         // Background so layout has settled. Idempotent (guards on already-hooked).
@@ -698,10 +714,28 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.Post(() => list.ScrollIntoView(row), DispatcherPriority.Background);
     }
 
+    /// <summary>
+    /// Opens the activation window for a blocked licence, then re-reads the banner.
+    ///
+    /// <para>⚠ The banner is refreshed whether or not the user activated anything: closing the window without
+    /// a licence has to leave the main surface saying so, and the refresh is what asks the service again.</para>
+    /// </summary>
+    private async void ShowActivationWindowAsync()
+    {
+        if (_currentVm?.License is not { } license) return;
+
+        await new LicenseActivationWindow(license).ShowDialog(this);
+        _currentVm.RefreshLicenseBanner();
+    }
+
     private async void OnSettingsRequested(string categoryId)
     {
         if (_currentVm is null) return;
-        await new SettingsWindow(_currentVm.Preferences, _currentVm.Portability, categoryId).ShowDialog(this);
+        await new SettingsWindow(_currentVm.Preferences, _currentVm.Portability, _currentVm.License, categoryId).ShowDialog(this);
+
+        // ⭐ Settings ▸ Licence can install a licence, so the banner may be describing a verdict that no longer
+        //   exists. Everything it shows is computed — asking again is the whole of the refresh.
+        _currentVm.RefreshLicenseBanner();
     }
 
     private async void OnAppMenuSettingsClick(object? sender, RoutedEventArgs e)
@@ -709,14 +743,15 @@ public partial class MainWindow : Window
         if (_currentVm is null) return;
         // Portability comes from the same view model for the same reason: it owns the store, the app version, and
         // the refresh an import makes necessary (SettingsPortability.AfterImport).
-        await new SettingsWindow(_currentVm.Preferences, _currentVm.Portability).ShowDialog(this);
+        await new SettingsWindow(_currentVm.Preferences, _currentVm.Portability, _currentVm.License).ShowDialog(this);
+        _currentVm.RefreshLicenseBanner();
     }
 
     private async void OnAppMenuKeyboardShortcutsClick(object? sender, RoutedEventArgs e)
         => await new KeyboardShortcutsWindow().ShowDialog(this);
 
     private async void OnAppMenuAboutClick(object? sender, RoutedEventArgs e)
-        => await new AboutWindow().ShowDialog(this);
+        => await new AboutWindow(_currentVm?.License).ShowDialog(this);
 
     // Exit deliberately calls the very same Close() the titlebar's ✕ does, so it goes through
     // OnWindowClosing → TryCloseApplicationAsync: the unsaved-work guard (Save / Discard / Cancel) and the
@@ -1423,7 +1458,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var dialogVm = new NewConnectionDialogViewModel(_currentVm.Service);
+        var dialogVm = new NewConnectionDialogViewModel(_currentVm.Connections);
         dialogVm.LoadFromProfile(profile);
         var dialog = new NewConnectionDialog { DataContext = dialogVm };
         var updated = await dialog.ShowDialog<EmberTern.Core.Connections.ConnectionProfile?>(this);
@@ -2332,7 +2367,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is not MainWindowViewModel vm) return;
 
-        var dialogVm = new NewConnectionDialogViewModel(vm.Service);
+        var dialogVm = new NewConnectionDialogViewModel(vm.Connections);
         var dialog = new NewConnectionDialog { DataContext = dialogVm };
         var profile = await dialog.ShowDialog<EmberTern.Core.Connections.ConnectionProfile?>(this);
         if (profile is null) return;
