@@ -1,8 +1,9 @@
 # EmberTern Licensing System — design document
 
-**🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ✅ L1 ACCEPTED. ⭐ STAGE L2
-DELIVERED — awaits the user's confirmation. Next: L3.** Branch `feat/licensing-system`, cut from `master`
-at `2c3da45`. As built: **§34** (L1), **§35** (L2).
+**🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ✅ L1 ACCEPTED. ✅ L2 ACCEPTED.
+⭐ STAGE L3 DELIVERED — awaits the user's confirmation, which for L3 means **seeing the two windows in
+both themes** (the four checklist items no test can reach — §36.3). Next: L4.** Branch
+`feat/licensing-system`, cut from `master` at `2c3da45`. As built: **§34** (L1), **§35** (L2), **§36** (L3).
 
 **This document has two parts and they have different authority:**
 
@@ -492,11 +493,26 @@ dotnet test EmberTern.LicenseManager.slnx
 hid two defects for months. It does not speak to a second product, and ⛔ it must not be used as an
 argument for pulling the issuer back into the client's solution.
 
-⭐ **Theme sharing by file link, not by moving files.**
-`<AvaloniaResource Include="..\EmberTern.App\Themes\*.axaml" Link="Themes\%(Filename)%(Extension)" />`
-gives one source of truth at **zero risk to EmberTern** — moving those files into a shared library would
-break every `avares://EmberTern/Themes/…` URI in the app. All `CLAUDE.md` UI rules apply unchanged to
-the License Manager: no hardcoded colours, tokens only, both themes, `ControlStyles.axaml` classes.
+⭐ **Theme sharing by file link, not by moving files.** One source of truth at **zero risk to EmberTern**
+— moving those files into a shared library would break every `avares://EmberTern/Themes/…` URI in the app.
+
+⚠⚠ **MEASURED CORRECTION (L3). This paragraph originally said "link `Themes/*.axaml`". Only FOUR of the
+nine are linkable**, and the boundary is not a matter of taste — the others bind to types the License
+Manager does not have and must not acquire:
+
+| File | Linked? | Why |
+|---|---|---|
+| `Colors` · `Tokens` · `Typography` · `FluentBridge` | ✅ | pure resource dictionaries, zero type references |
+| `IconGeometries.axaml` | ❌ | `ControlTheme`s for `controls:SvgIcon` / `DebuggerIcon` / `CreateIcon` |
+| `ControlThemes.axaml` | ❌ | the `CheckBox` template instantiates `controls:SvgIcon` |
+| `SearchableComboBox.axaml` · `PickerTemplates.axaml` | ❌ | `EmberTern.App` + `EmberTern.Core.Metadata` |
+| `ControlStyles.axaml` | ❌ | all of the above, plus AvaloniaEdit, plus DataGrid, plus `avares://EmberTern/Assets/…` |
+
+⭐ **So the License Manager brings its own `Themes/LicenseManagerStyles.axaml`, and the split is "one
+palette, two style layers" rather than "two palettes".** ⛔ That file may not define a single colour —
+every brush it paints with is a `{DynamicResource}` into the linked `Colors.axaml`, and
+`LicenseManagerThemeTests` fails the build otherwise. That test is what keeps the distinction real rather
+than aspirational; every other `CLAUDE.md` UI rule applies unchanged.
 
 ⚠ Adding tests to `EmberTern.Tests` changes the suite total, which `CLAUDE.md` treats as an acceptance
 criterion. **Re-measure it; do not carry the old number forward.**
@@ -1492,6 +1508,89 @@ key through five more stages of development for no benefit.
 
 | kid | Algorithm | Public key (SPKI, base64url) | Ceremony date | Revoked |
 |---|---|---|---|---|
-| `R1` | ECDSA-P256-SHA256 | *(pending L2)* | — | — |
+| `R1` | ECDSA-P256-SHA256 | *(pending the real ceremony — L7)* | — | — |
 
 ⛔ Entries are appended and flagged, never removed or edited (§15.3).
+
+---
+
+## 36. L3 — as built (2026-08-15)
+
+✅ **Delivered and green.** `src/EmberTern.LicenseManager` — 17 files (4 view models, 2 windows, 3
+services, 2 data files, 1 style file, the app and its entry point). Builds **0/0 in Debug and Release,
+both solutions**. Suites: License Manager **87** (was 46; +41), EmberTern **8 979** (was 8 978; +1 — the
+new charset-domain guard, and the arithmetic matches exactly, so nothing left discovery).
+
+**Exit criteria, each met and each pinned by a test rather than by this paragraph:**
+
+| L3 criterion | Where it is proved |
+|---|---|
+| a licence issued end to end | `IssuingWorkflowTests` — ceremony → keystore → register → issue → `EmberTern.etlic` on disk → read back → **verified by `EmberTern.Licensing`, the assembly the customer runs** |
+| `audit_log` immutability trigger proven | `LicenseRegisterTests.TheHistoryCannotBeRewritten` + `AnIssuedArtifactCannotBeEditedOrDeleted` — both reach **past** the register's own API, because a trigger only the register's methods respect is a convention, not a trigger |
+| UI passes the `CLAUDE.md` UI Review Checklist in both themes | 7 of 11 items in `LicenseManagerThemeTests`, 2 more in `LicenseManagerWindowTests`; ⏭ the remaining **4 are judgements and belong to the user in front of the running application** |
+
+### 36.1 The measured correction the stage produced
+
+⚠⚠ **§12.1 said "link `Themes/*.axaml`". Only FOUR of the nine are linkable** — the table is in §12.1,
+amended in place. The other five bind to types the License Manager does not have and must not acquire
+(`SvgIcon`, AvaloniaEdit, DataGrid, `EmberTern.Core.Metadata`, `avares://EmberTern/Assets/…`). ⭐ So the
+shape is **one palette, two style layers**, not two palettes: `Themes/LicenseManagerStyles.axaml` may not
+define a single colour, and `LicenseManagerThemeTests` fails the build if it ever does.
+
+### 36.2 Six decisions taken during implementation
+
+1. ⭐⭐ **The charset seam guard was narrowed by DOMAIN, not by an exception list.** `CharsetGuardSeamTests`
+   forbade `CreateCommand()` / `CommandText =` / `AddWithValue` anywhere under `src/` — which was the right
+   rule while "everything under `src/`" and "code that can reach the Firebird driver" were the same set.
+   They stopped being the same set: the License Manager talks to SQLite, whose provider transliterates
+   nothing. ⭐ **What makes this a boundary rather than a loophole is that the precondition is re-checked
+   mechanically on every run** — `TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` walks each
+   excluded project's `ProjectReference` graph and fails if any of them ever gains a path to Firebird.
+   ⚠ Verified by injection: a `ProjectReference` to `EmberTern.Firebird` added to the License Manager
+   makes it fail naming both hops, and removing it makes it green again.
+2. **Dependency injection by constructor, no container.** Every collaborator is passed in, which is what
+   makes the view models testable without a window. A container would add a package, a registration list
+   and an indirection to build four objects that are trivial to build. ⚠ Flagged for the user's override,
+   since the brief listed "DI" as a technology — this *is* dependency injection, the wiring rather than
+   the framework.
+3. **Dates are typed as ISO text, not picked from a calendar.** A date picker is a templated control with
+   a flyout, i.e. the largest theming surface in the application, introduced in the first stage that has
+   any UI at all. `2027-08-15` is unambiguous and is what an administrator reads off a purchase order. A
+   picker is an L5 refinement, not a correctness gap.
+4. ⭐ **The expiry the operator types runs to the END of that day** (`23:59:59`), not to its midnight.
+   Storing midnight expires a licence at the start of the day the invoice says the customer owns.
+5. ⭐ **Recording happens BEFORE the file is saved, and a cancelled Save-As leaves the artifact recorded.**
+   A signed licence the register does not know about is the one state from which it can no longer answer
+   *"what did we send this customer?"* — and the file is always re-exportable from the stored token.
+6. **The register's own message surface is `MessageHostViewModel` + `Border.message`.** EmberTern's
+   `MessageBanner` lives in `EmberTern.App.Controls` and cannot be referenced from here; the *rule* it
+   embodies — a message is never a loose coloured `TextBlock` — is carried over intact.
+
+### 36.3 ⏭ What the user has to look at, and why a test cannot
+
+Four UI Review Checklist items are judgements: the complete set of states (normal · hover · active ·
+disabled · focus), and whether the two windows actually *read* correctly in Light and in Dark. The
+title-bar **Light / Dark** button switches live, which is what makes that a one-click check rather than
+something a screenshot has to promise.
+
+```powershell
+src\EmberTern.LicenseManager\bin\Debug\net9.0\EmberTern.LicenseManager.exe
+```
+
+⚠ First run performs the **ceremony** (a test passphrase is fine — this is not the production key, §35.4)
+and writes `%APPDATA%\EmberTern License Manager\`.
+
+### 36.4 Known limits, deliberately left to a later stage
+
+- **Only `active` is ever written.** `LicenseStatuses` carries `superseded` and `blocked`, and nothing in
+  L3 sets either — superseding is what L5's re-issue does, and `blocked` is bookkeeping in V1 anyway
+  (§26.2). ⛔ Recorded rather than removed: the values are persisted verbatim, so the vocabulary is
+  append-only.
+- **The Seats box is an `int` bound to text**, so a non-numeric keystroke leaves the previous valid value
+  in place with nothing said. Bounded — the value can never *become* garbage — but it is silent, and a
+  validated numeric field is an L5 item alongside the date picker.
+- ⚠ **`LicenseRegister.Read` / `ReadOne` always run outside a transaction.** Nothing in L3 reads inside
+  one (every read happens before its `BeginTransaction`), and `Microsoft.Data.Sqlite` would throw rather
+  than read stale data if that changed. Worth knowing before L5 adds bulk operations.
+- **Search, filters, group extend, re-issue, artifact preview, backup, e-mail** are L5/L6 by plan, not
+  omissions.

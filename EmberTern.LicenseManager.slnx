@@ -18,6 +18,7 @@
   <Folder Name="/src/">
     <Project Path="src/EmberTern.Licensing/EmberTern.Licensing.csproj" />
     <Project Path="src/EmberTern.Licensing.Issuing/EmberTern.Licensing.Issuing.csproj" />
+    <Project Path="src/EmberTern.LicenseManager/EmberTern.LicenseManager.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EmberTern.LicenseManager.Tests/EmberTern.LicenseManager.Tests.csproj" />

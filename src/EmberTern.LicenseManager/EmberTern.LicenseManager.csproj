@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <RootNamespace>EmberTern.LicenseManager</RootNamespace>
+    <AssemblyName>EmberTern.LicenseManager</AssemblyName>
+  </PropertyGroup>
+
+  <!-- ⭐⭐ THE TOKEN LAYER IS LINKED FROM EmberTern.App, NOT COPIED.
+
+       One source of every colour and every metric, for two applications. A copy would drift on the
+       first palette change, and the drift would be invisible until someone put the two windows side
+       by side.
+
+       ⚠⚠ MEASURED CORRECTION TO THE DESIGN (docs/design/licensing-system.md §12.1 said "link
+       Themes/*.axaml"). Only these FOUR files are linkable. The rest of EmberTern's theme layer binds
+       to types this application does not have and must not acquire:
+
+         IconGeometries.axaml     → ControlTheme for controls:SvgIcon / DebuggerIcon / CreateIcon
+         ControlThemes.axaml      → the CheckBox template instantiates controls:SvgIcon
+         SearchableComboBox.axaml → controls:
+         PickerTemplates.axaml    → EmberTern.App + EmberTern.Core.Metadata
+         ControlStyles.axaml      → all of the above, plus AvaloniaEdit, plus DataGrid, plus
+                                    avares://EmberTern/Assets/Branding/EmberTern.ico
+
+       So the License Manager brings its own Themes/LicenseManagerStyles.axaml — small, and allowed to
+       contain STRUCTURE and METRICS only. ⛔ It may not define a single colour: every brush it paints
+       with comes from the linked Colors.axaml. LicenseManagerThemeTests fails the build otherwise,
+       which is what keeps "two style files" from becoming "two palettes". -->
+  <ItemGroup>
+    <AvaloniaResource Include="..\EmberTern.App\Themes\Colors.axaml" Link="Themes\Colors.axaml" />
+    <AvaloniaResource Include="..\EmberTern.App\Themes\Tokens.axaml" Link="Themes\Tokens.axaml" />
+    <AvaloniaResource Include="..\EmberTern.App\Themes\Typography.axaml" Link="Themes\Typography.axaml" />
+    <AvaloniaResource Include="..\EmberTern.App\Themes\FluentBridge.axaml" Link="Themes\FluentBridge.axaml" />
+    <!-- ⚠ Only the LINKED files are listed. The Avalonia SDK already includes every .axaml under this
+         project directory, so naming App.axaml, Views\**\*.axaml or the local Themes file here produces
+         AVLN2002 "duplicate x:Class" rather than the belt-and-braces it looks like. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Versions pinned to EmberTern.App's, deliberately. Two Avalonia versions in one repository is a
+         maintenance trap, and this repository already carries two documented version mismatches it did
+         not choose (docs/design/avalonia-12.1.1-update.md). -->
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- The register of record (§18.1). First-party, one package, one file on disk. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EmberTern.Licensing\EmberTern.Licensing.csproj" />
+    <ProjectReference Include="..\EmberTern.Licensing.Issuing\EmberTern.Licensing.Issuing.csproj" />
+  </ItemGroup>
+
+</Project>

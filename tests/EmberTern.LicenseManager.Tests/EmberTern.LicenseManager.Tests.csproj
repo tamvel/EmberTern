@@ -15,11 +15,16 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <!-- ⚠ MUST match the Avalonia core version in EmberTern.LicenseManager — Avalonia.Headless depends
+         hard on Avalonia in ITS own number, so a mismatch either raises the core transitively or gives
+         NU1605. Same constraint EmberTern.Tests records. -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\EmberTern.Licensing\EmberTern.Licensing.csproj" />
     <ProjectReference Include="..\..\src\EmberTern.Licensing.Issuing\EmberTern.Licensing.Issuing.csproj" />
+    <ProjectReference Include="..\..\src\EmberTern.LicenseManager\EmberTern.LicenseManager.csproj" />
   </ItemGroup>
 
 </Project>

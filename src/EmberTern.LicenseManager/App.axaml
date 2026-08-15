@@ -1,0 +1,31 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="EmberTern.LicenseManager.App"
+             RequestedThemeVariant="Dark">
+
+  <!-- ⚠ Dark is the BOOTSTRAP value, exactly as in EmberTern.App: the alternative, ThemeVariant.Default,
+       follows the operating system, which is a different behaviour rather than an absent one. The
+       License Manager has no stored preference yet, so this is also the effective default; the title-bar
+       toggle switches it live, which is how both themes get checked. -->
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- ⭐ THE SAME FILES EmberTern loads — linked, not copied (see the csproj). Order matches
+             EmberTern.App/App.axaml deliberately: metric and typography first, then colour, then the
+             Fluent bridge, which maps FluentTheme's own named resources onto our colours and therefore
+             needs them loaded. -->
+        <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/Tokens.axaml" />
+        <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/Typography.axaml" />
+        <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/Colors.axaml" />
+        <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/FluentBridge.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://EmberTern.LicenseManager/Themes/LicenseManagerStyles.axaml" />
+  </Application.Styles>
+
+</Application>

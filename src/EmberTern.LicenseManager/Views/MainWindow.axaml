@@ -1,0 +1,178 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
+        xmlns:data="using:EmberTern.LicenseManager.Data"
+        x:Class="EmberTern.LicenseManager.Views.MainWindow"
+        x:DataType="vm:ShellViewModel"
+        Title="EmberTern License Manager"
+        Width="1080" Height="720" MinWidth="880" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <DockPanel>
+
+    <!-- Title strip ──────────────────────────────────────────────────────────────────────────── -->
+    <Border Classes="chrome" DockPanel.Dock="Top">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
+                   Text="EmberTern License Manager" />
+        <TextBlock Grid.Column="1" Classes="hint" VerticalAlignment="Center"
+                   Margin="{DynamicResource Margin.InlineGap}"
+                   Text="{Binding SigningKeyId, StringFormat='Signing key: {0}'}" />
+        <Button Grid.Column="2" Classes="flat" Name="ThemeToggle" Content="Light / Dark"
+                Click="OnToggleTheme" />
+      </Grid>
+    </Border>
+
+    <!-- Message strip ────────────────────────────────────────────────────────────────────────── -->
+    <Border DockPanel.Dock="Bottom" Classes="message"
+            Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
+            Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
+            IsVisible="{Binding HasMessage}"
+            Margin="{DynamicResource Margin.SectionGap}">
+      <TextBlock Text="{Binding MessageText}" />
+    </Border>
+
+    <Grid ColumnDefinitions="300,*">
+
+      <!-- Customers rail ─────────────────────────────────────────────────────────────────────── -->
+      <Border Grid.Column="0" Classes="rail">
+        <DockPanel Margin="{DynamicResource Pad.Panel}">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto"
+                Margin="{DynamicResource Margin.PanelCaption}">
+            <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="Customers" />
+            <Button Grid.Column="1" Classes="flat" Content="New"
+                    Command="{Binding NewCustomerCommand}" />
+          </Grid>
+
+          <ListBox ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedCustomer}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="data:CustomerRecord">
+                <StackPanel>
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Classes="hint" Text="{Binding CustomerId}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <!-- Detail ─────────────────────────────────────────────────────────────────────────────── -->
+      <ScrollViewer Grid.Column="1" Padding="{DynamicResource Pad.Panel}">
+        <StackPanel Spacing="{DynamicResource Space.Lg}">
+
+          <!-- Customer ───────────────────────────────────────────────────────────────────────── -->
+          <Border Classes="card">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <TextBlock Classes="section" Text="Customer" />
+
+              <Grid ColumnDefinitions="*,Auto" >
+                <StackPanel Grid.Column="0">
+                  <TextBlock Classes="field-label" Text="Name — required, and this is what gets signed" />
+                  <TextBox Text="{Binding CustomerName}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="{DynamicResource Margin.InlineGap}">
+                  <TextBlock Classes="field-label" Text="Identifier" />
+                  <!-- ⛔ Read-only, exactly like the licence id below, and for a stronger reason: the
+                       identifier is the PRIMARY KEY the save writes against. Editing it and saving
+                       would not rename this customer, it would silently create a second one and leave
+                       the licences attached to the first. Generated, never chosen. -->
+                  <TextBox Classes="mono" Width="120" IsReadOnly="True" Text="{Binding CustomerId}" />
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Classes="field-label" Text="Address" />
+              <TextBox Classes="multiline" Text="{Binding CustomerAddress}" />
+
+              <Grid ColumnDefinitions="*,*,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Classes="field-label" Text="First name" />
+                  <TextBox Text="{Binding CustomerFirstName}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="{DynamicResource Margin.InlineGap}">
+                  <TextBlock Classes="field-label" Text="Last name" />
+                  <TextBox Text="{Binding CustomerLastName}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Classes="field-label" Text="E-mail" />
+                  <TextBox Text="{Binding CustomerEmail}" />
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Classes="field-label" Text="Notes — administrative only, never travel in a licence" />
+              <TextBox Classes="multiline" Text="{Binding CustomerNotes}" />
+
+              <Button Classes="primary" Content="Save customer" HorizontalAlignment="Right"
+                      Command="{Binding SaveCustomerCommand}" />
+            </StackPanel>
+          </Border>
+
+          <!-- Licences ───────────────────────────────────────────────────────────────────────── -->
+          <Border Classes="card" IsVisible="{Binding SelectedCustomer, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="Licences" />
+                <Button Grid.Column="1" Classes="flat" Content="New licence"
+                        Command="{Binding NewLicenseCommand}" />
+              </Grid>
+
+              <ListBox MaxHeight="180" ItemsSource="{Binding Licenses}"
+                       SelectedItem="{Binding SelectedLicense}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="data:LicenseRecord">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <TextBlock Grid.Column="0" Classes="mono"
+                                 Text="{Binding LicenseId, StringFormat='{}{0}'}" Width="150"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding Seats, StringFormat='{}{0} seat(s)'}" />
+                      <TextBlock Grid.Column="2"
+                                 Text="{Binding ExpiresAt, StringFormat='until {0:yyyy-MM-dd}'}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <Grid ColumnDefinitions="Auto,*,*">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Classes="field-label" Text="Seats" />
+                  <TextBox Width="80" Text="{Binding LicenseSeats}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="{DynamicResource Margin.InlineGap}">
+                  <TextBlock Classes="field-label" Text="Valid from (yyyy-mm-dd)" />
+                  <TextBox Classes="mono" Text="{Binding LicenseNotBefore}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Classes="field-label" Text="Valid until (yyyy-mm-dd, inclusive)" />
+                  <TextBox Classes="mono" Text="{Binding LicenseExpiresAt}" />
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Classes="field-label" Text="Licence id" />
+              <TextBox Classes="mono" IsReadOnly="True" Text="{Binding LicenseId}" />
+
+              <TextBlock Classes="field-label" Text="Notes — administrative only" />
+              <TextBox Classes="multiline" Text="{Binding LicenseNotes}" />
+
+              <TextBlock Classes="hint" Text="{Binding LicenseHistory}" />
+
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                          Spacing="{DynamicResource Space.Sm}">
+                <Button Classes="flat" Content="Inspect latest"
+                        Command="{Binding InspectLatestCommand}" />
+                <Button Classes="flat" Content="Export latest…"
+                        Command="{Binding ExportLatestCommand}" />
+                <Button Classes="flat" Content="Save terms" Command="{Binding SaveLicenseCommand}" />
+                <Button Classes="primary" Content="Issue and save…"
+                        Command="{Binding IssueAndSaveCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>

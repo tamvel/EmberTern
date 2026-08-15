@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
+        x:Class="EmberTern.LicenseManager.Views.UnlockWindow"
+        x:DataType="vm:UnlockViewModel"
+        Title="EmberTern License Manager"
+        Width="560" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <StackPanel Margin="{DynamicResource Pad.Dialog}" Spacing="{DynamicResource Space.Md}">
+
+    <TextBlock Classes="h1" Text="EmberTern License Manager" />
+
+    <!-- Ceremony ─────────────────────────────────────────────────────────────────────────────── -->
+    <StackPanel IsVisible="{Binding !HasKeyStore}" Spacing="{DynamicResource Space.Sm}">
+      <TextBlock Text="No signing key was found. Create one to start issuing licences." />
+      <Border Classes="message warning">
+        <TextBlock Text="The passphrase cannot be reset. If it is lost, no licence can ever be renewed — back up the keystore to two offline media and verify the restore from each." />
+      </Border>
+
+      <TextBlock Classes="field-label" Text="Key id" />
+      <TextBox Classes="mono" Text="{Binding KeyId}" />
+
+      <TextBlock Classes="field-label" Text="Passphrase" />
+      <TextBox PasswordChar="•" Text="{Binding Passphrase}" />
+
+      <TextBlock Classes="field-label" Text="Passphrase again" />
+      <TextBox PasswordChar="•" Text="{Binding PassphraseConfirmation}" />
+
+      <Button Classes="primary" Content="Create signing key"
+              HorizontalAlignment="Right" Command="{Binding CreateKeyCommand}" />
+    </StackPanel>
+
+    <!-- Unlock ───────────────────────────────────────────────────────────────────────────────── -->
+    <StackPanel IsVisible="{Binding HasKeyStore}" Spacing="{DynamicResource Space.Sm}">
+      <TextBlock Text="Unlock the keystore to issue licences." />
+
+      <TextBlock Classes="field-label" Text="Passphrase" />
+      <TextBox Name="PassphraseBox" PasswordChar="•" Text="{Binding Passphrase}" />
+
+      <Button Classes="primary" Content="Unlock" IsDefault="True"
+              HorizontalAlignment="Right" Command="{Binding UnlockCommand}" />
+    </StackPanel>
+
+    <Border Classes="message" Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
+            Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
+            IsVisible="{Binding HasMessage}">
+      <TextBlock Text="{Binding MessageText}" />
+    </Border>
+
+    <TextBlock Classes="hint" Text="{Binding Location, StringFormat='Files: {0}'}" />
+
+  </StackPanel>
+</Window>

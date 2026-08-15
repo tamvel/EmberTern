@@ -1,0 +1,237 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ============================================================================================
+       The License Manager's own style layer.
+
+       ⛔⛔ IT MAY NOT DEFINE A SINGLE COLOUR. Not a hex literal, not a named colour, not a local
+       <SolidColorBrush>. Every brush painted here is a {DynamicResource} into the linked
+       Colors.axaml, which is EmberTern's own palette — that is the entire reason the token files are
+       linked rather than copied, and LicenseManagerThemeTests fails the build if it stops being true.
+
+       ⚠ WHY THIS FILE EXISTS AT ALL, given that EmberTern already has ControlStyles.axaml: that file
+       cannot be linked. It binds to EmberTern.App.Controls, AvaloniaEdit and DataGrid (see the
+       csproj). So the split is not "two palettes", it is "one palette, two style layers" — and the
+       rule above is what keeps the distinction real rather than aspirational.
+
+       ⭐ RULE 10 FROM CLAUDE.md APPLIES HERE TOO: a control's size comes from its CONTEXT, never from
+       its variant. There is deliberately NO MinHeight on the base Button style; heights live on the
+       variants and on the containers that declare what their children may be.
+       ============================================================================================ -->
+
+  <!-- ── Text roles ──────────────────────────────────────────────────────────────────────────── -->
+
+  <Style Selector="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="{DynamicResource Text.DialogHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.DialogHeader.Weight}" />
+  </Style>
+
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />
+  </Style>
+
+  <!-- A form caption. Subtle on purpose: the VALUE is the content, the caption is the scaffolding. -->
+  <Style Selector="TextBlock.field-label">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Caption.Weight}" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    <Setter Property="Margin" Value="{DynamicResource Margin.LabelGap}" />
+  </Style>
+
+  <Style Selector="TextBlock.hint">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Code}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Code.Size}" />
+  </Style>
+
+  <!-- ── Surfaces ────────────────────────────────────────────────────────────────────────────── -->
+
+  <!-- A side rail: the panel colour, separated from the document by ONE rail border. -->
+  <Style Selector="Border.rail">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Rail}" />
+  </Style>
+
+  <Style Selector="Border.chrome">
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Bottom}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Panel}" />
+  </Style>
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Group}" />
+  </Style>
+
+  <!-- ── Message strip ───────────────────────────────────────────────────────────────────────── -->
+  <!-- ⚠ Not EmberTern's MessageBanner: that control lives in EmberTern.App.Controls and cannot be
+       referenced from here. Same JOB, same severities, same rule that a message is never a loose
+       coloured TextBlock — this is the License Manager's ONE message surface. -->
+
+  <Style Selector="Border.message">
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Group}" />
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.info">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.success">
+    <Setter Property="BorderBrush" Value="{DynamicResource ConnectedBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.warning">
+    <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.error">
+    <Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.info TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.success TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ConnectedBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.warning TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.error TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+
+  <!-- ── Inputs ──────────────────────────────────────────────────────────────────────────────── -->
+  <!-- Metrics only. Colours reach these controls through FluentBridge, which repins FluentTheme's own
+       named resources onto our palette — the pattern CLAUDE.md §16 requires instead of rewriting
+       templates. -->
+
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+  </Style>
+
+  <Style Selector="TextBox.multiline">
+    <Setter Property="Padding" Value="{DynamicResource Pad.ControlMultiline}" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="AcceptsReturn" Value="True" />
+  </Style>
+
+  <Style Selector="TextBox.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Code}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Code.Size}" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+  </Style>
+
+  <!-- ── Buttons ─────────────────────────────────────────────────────────────────────────────── -->
+  <!-- ⛔ No MinHeight / MinWidth on the base Button style — CLAUDE.md's UI rule 10. The variants carry
+       size because the variants are what a layout places deliberately. -->
+
+  <Style Selector="Button">
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.primary">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentDisabledBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentSubtleBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ControlOutlineBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+  </Style>
+
+  <Style Selector="Button.flat:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <!-- A toolbar-height variant: the strip declares what its children may be, not the variant. -->
+  <Style Selector="Border.chrome Button">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+  </Style>
+
+  <!-- ── Lists ───────────────────────────────────────────────────────────────────────────────── -->
+
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ListBoxItem">
+    <Setter Property="Padding" Value="{DynamicResource Pad.Cell}" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Tree}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+  </Style>
+
+  <!-- ⛔ FluentTheme paints selection from SystemAccentColor — brown/orange on a default Windows
+       install, which is not this palette. Repinned here rather than re-solved with a literal. -->
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+</Styles>
