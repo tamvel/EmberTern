@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Localization;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Sql;
 using EmberTern.Firebird;
@@ -372,7 +373,7 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)
@@ -526,7 +527,7 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.PackageCompileHeaderFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.PackageCompileHeaderFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)
@@ -544,7 +545,7 @@ public partial class PackageDetailTabViewModel : ViewModelBase, IUnsavedWorkSour
             }
             catch (DdlExecutionException ex)
             {
-                ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.PackageCompileBodyFailedFormat, ex.Message);
+                ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.PackageCompileBodyFailedFormat, ErrorText.Of(ex));
                 return;
             }
             catch (InvalidOperationException ex)

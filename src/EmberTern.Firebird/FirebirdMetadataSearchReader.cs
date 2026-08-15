@@ -101,11 +101,10 @@ public sealed class FirebirdMetadataSearchReader
     private async Task RunSourceAsync(
         List<MetadataSearchHit> hits, FbConnection connection, MetadataObjectKind kind, string sql, string term, CancellationToken ct)
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
+        await using var cmd = connection.CreateGuardedCommand(sql);
         cmd.CommandTimeout = 0;
         cmd.Transaction = _lane.TransactionForCommand;
-        cmd.Parameters.AddWithValue("@term", term);
+        cmd.AddGuardedParameter("@term", term);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -121,11 +120,10 @@ public sealed class FirebirdMetadataSearchReader
 
     private async Task RunPackageSourceAsync(List<MetadataSearchHit> hits, FbConnection connection, string term, CancellationToken ct)
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = PackageSourceSql;
+        await using var cmd = connection.CreateGuardedCommand(PackageSourceSql);
         cmd.CommandTimeout = 0;
         cmd.Transaction = _lane.TransactionForCommand;
-        cmd.Parameters.AddWithValue("@term", term);
+        cmd.AddGuardedParameter("@term", term);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -143,11 +141,10 @@ public sealed class FirebirdMetadataSearchReader
 
     private async Task RunMessageAsync(List<MetadataSearchHit> hits, FbConnection connection, string term, CancellationToken ct)
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = ExceptionMessageSql;
+        await using var cmd = connection.CreateGuardedCommand(ExceptionMessageSql);
         cmd.CommandTimeout = 0;
         cmd.Transaction = _lane.TransactionForCommand;
-        cmd.Parameters.AddWithValue("@term", term);
+        cmd.AddGuardedParameter("@term", term);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -163,11 +160,10 @@ public sealed class FirebirdMetadataSearchReader
 
     private async Task RunFieldsAsync(List<MetadataSearchHit> hits, FbConnection connection, string term, CancellationToken ct)
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = TableFieldSql;
+        await using var cmd = connection.CreateGuardedCommand(TableFieldSql);
         cmd.CommandTimeout = 0;
         cmd.Transaction = _lane.TransactionForCommand;
-        cmd.Parameters.AddWithValue("@term", term);
+        cmd.AddGuardedParameter("@term", term);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))

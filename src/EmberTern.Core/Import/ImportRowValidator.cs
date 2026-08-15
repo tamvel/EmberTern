@@ -19,48 +19,39 @@ namespace EmberTern.Core.Import;
 /// exception fallback is the single line that turns "we will damage it" into "we will detect it".
 /// </para>
 /// <para>
-/// <b>Scope note:</b> the same silent substitution reaches other parts of EmberTern (table-data edit, SQL
-/// parameters, and possibly the statement-text path). That is a separate, ratified platform-wide audit, whose
-/// natural home is <c>CharsetCatalog</c>. This guard is deliberately kept inside the import module rather than
-/// pre-empting that decision — if the audit promotes a shared guard, this becomes a call to it.
+/// ⭐ <b>The scope note this used to carry is RESOLVED (Phase 5, 2026-08-15).</b> It read: <i>"the same silent
+/// substitution reaches other parts of EmberTern … if the audit promotes a shared guard, this becomes a call to
+/// it."</i> The audit did, and this is now exactly that — a thin forwarder onto
+/// <see cref="CharsetRepresentation"/>, the one owner of "can this connection carry this text". ⛔ Do not
+/// re-implement the check here; two copies is how the two answers drift.
+/// </para>
+/// <para>
+/// ⚠⚠ <b>Forwarding fixed a live defect, so this is not a cosmetic re-point.</b> The old body resolved through
+/// <c>CharsetCatalog.Resolve</c>, whose <c>_ =&gt; Encoding.UTF8</c> branch swallows <c>NONE</c> — a charset the
+/// connection dialog offers. UTF-8 short-circuits the check, so <b>an import over a <c>NONE</c> connection was
+/// told every value fits while the driver silently rewrote them</b> (the driver's <c>NONE</c> is the process
+/// culture's ANSI code page — single-byte and lossy). The shared oracle asks
+/// <see cref="CharsetCatalog.ResolveWireEncoding"/> instead, which answers that question correctly.
+/// </para>
+/// <para>
+/// ⚠ The module's CONTRACT is unchanged: an unrepresentable value is still one failed row carrying
+/// <see cref="ImportDiagnosticCode.NotRepresentableInConnectionCharset"/> and its source row number, never an
+/// aborted run.
 /// </para>
 /// </summary>
 public static class ImportCharsetGuard
 {
     /// <summary>
     /// The connection's charset as an encoding that THROWS on an unrepresentable character instead of
-    /// substituting one. Resolution goes through <see cref="CharsetCatalog"/>, the codebase's one owner of
-    /// "charset name → Encoding".
+    /// substituting one. Forwards to <see cref="CharsetRepresentation.Strict"/>.
     /// </summary>
     public static Encoding Strict(string? firebirdCharset)
-    {
-        var encoding = CharsetCatalog.Resolve(firebirdCharset);
-
-        // UTF-8 represents every character, so the check can never fire — return it as-is and let
-        // CanRepresent take its fast path.
-        if (encoding.CodePage == Encoding.UTF8.CodePage) return encoding;
-
-        return Encoding.GetEncoding(
-            encoding.CodePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
-    }
+        => CharsetRepresentation.Strict(firebirdCharset);
 
     /// <summary>True when every character of <paramref name="text"/> survives <paramref name="encoding"/>
-    /// unchanged.</summary>
+    /// unchanged. Forwards to <see cref="CharsetRepresentation.CanRepresent"/>.</summary>
     public static bool CanRepresent(string? text, Encoding? encoding)
-    {
-        if (string.IsNullOrEmpty(text) || encoding is null) return true;
-        if (encoding.CodePage == Encoding.UTF8.CodePage) return true;
-
-        try
-        {
-            encoding.GetByteCount(text);
-            return true;
-        }
-        catch (EncoderFallbackException)
-        {
-            return false;
-        }
-    }
+        => CharsetRepresentation.CanRepresent(text, encoding);
 
     /// <summary>Counts the values in <paramref name="samples"/> that the connection charset would damage.
     /// Feeds the readiness strip's warning (<see cref="ImportDiagnosticCode.NotRepresentableInConnectionCharset"/>)

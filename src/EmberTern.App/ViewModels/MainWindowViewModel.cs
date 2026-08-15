@@ -1,4 +1,3 @@
-﻿using EmberTern.App.Localization;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -15,6 +14,7 @@ using EmberTern.App.Completion;
 using EmberTern.App.Controls;
 using EmberTern.App.Diagnostics;
 using EmberTern.App.Export;
+using EmberTern.App.Localization;
 using EmberTern.App.Security;
 using EmberTern.App.Settings;
 using EmberTern.App.Sql;
@@ -3547,7 +3547,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (DdlExecutionException ex)
         {
-            newTable.ValidationMessage = ex.Message;
+            newTable.ValidationMessage = ErrorText.Of(ex);
         }
         catch (InvalidOperationException ex)
         {
@@ -4730,7 +4730,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (DdlExecutionException ex)
         {
-            AddMessage(MessageSeverity.Error, ex.Message);
+            AddMessage(MessageSeverity.Error, ErrorText.Of(ex));
             SelectedBottomTabIndex = 1;
             return;
         }
@@ -4765,7 +4765,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (DdlExecutionException ex)
         {
-            AddMessage(MessageSeverity.Error, ex.Message);
+            AddMessage(MessageSeverity.Error, ErrorText.Of(ex));
             SelectedBottomTabIndex = 1;
             return;
         }
@@ -4827,7 +4827,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (DdlExecutionException ex)
         {
-            AddMessage(MessageSeverity.Error, ex.Message);
+            AddMessage(MessageSeverity.Error, ErrorText.Of(ex));
             SelectedBottomTabIndex = 1;
             return;
         }
@@ -4873,7 +4873,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (DdlExecutionException ex)
         {
-            AddMessage(MessageSeverity.Error, ex.Message);
+            AddMessage(MessageSeverity.Error, ErrorText.Of(ex));
             SelectedBottomTabIndex = 1;
             return;
         }
@@ -5321,7 +5321,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (DdlExecutionException ex)
         {
-            AddMessage(MessageSeverity.Error, ex.Message);
+            AddMessage(MessageSeverity.Error, ErrorText.Of(ex));
             SelectedBottomTabIndex = 1;
         }
         catch (InvalidOperationException ex)
@@ -5339,7 +5339,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (DdlExecutionException ex)
         {
-            AddMessage(MessageSeverity.Error, ex.Message);
+            AddMessage(MessageSeverity.Error, ErrorText.Of(ex));
             SelectedBottomTabIndex = 1;
             return;
         }
@@ -5515,7 +5515,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (QueryExecutionException ex)
         {
-            return new ProcedureExecOutcome(null, ex.Message);
+            return new ProcedureExecOutcome(null, ErrorText.Of(ex));
         }
         catch (InvalidOperationException ex)
         {
@@ -7276,7 +7276,7 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (QueryExecutionException ex)
         {
             QueryStatsText = string.Empty;
-            AddMessage(MessageSeverity.Error, ex.Message);
+            AddMessage(MessageSeverity.Error, ErrorText.Of(ex));
             SelectedBottomTabIndex = 1;
         }
         finally
@@ -7427,7 +7427,7 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (QueryExecutionException ex)
         {
             QueryStatsText = string.Empty;
-            AddMessage(MessageSeverity.Error, ex.Message);
+            AddMessage(MessageSeverity.Error, ErrorText.Of(ex));
             SelectedBottomTabIndex = 1;
         }
         finally

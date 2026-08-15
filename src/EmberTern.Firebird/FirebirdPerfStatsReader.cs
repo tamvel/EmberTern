@@ -59,8 +59,7 @@ public sealed class FirebirdPerfStatsReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT CURRENT_CONNECTION FROM RDB$DATABASE";
+            await using var cmd = connection.CreateGuardedCommand("SELECT CURRENT_CONNECTION FROM RDB$DATABASE");
             cmd.CommandTimeout = 0;
             if (_dataTransactionService?.ActiveTransaction is { } tx)
             {
@@ -89,8 +88,7 @@ public sealed class FirebirdPerfStatsReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = SnapshotSql;
+            await using var cmd = connection.CreateGuardedCommand(SnapshotSql);
             cmd.CommandTimeout = 0;
             // Attach to the metadata working tx if one is active; otherwise the driver runs
             // this read in a fresh implicit tx — which gives the fresh MON$ snapshot we need.
@@ -98,7 +96,7 @@ public sealed class FirebirdPerfStatsReader
             {
                 cmd.Transaction = tx;
             }
-            cmd.Parameters.AddWithValue("@att", attachmentId);
+            cmd.AddGuardedParameter("@att", attachmentId);
 
             var rows = new List<PerTableReadRow>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

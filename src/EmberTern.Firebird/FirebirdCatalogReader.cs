@@ -113,11 +113,10 @@ public sealed class FirebirdCatalogReader
         FbConnection connection, string table, CancellationToken cancellationToken)
     {
         var byIndex = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = SegmentsSql;
+        await using var cmd = connection.CreateGuardedCommand(SegmentsSql);
         cmd.CommandTimeout = 0;
         cmd.Transaction = MetaTx;
-        cmd.Parameters.AddWithValue("@tableName", table);
+        cmd.AddGuardedParameter("@tableName", table);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -142,11 +141,10 @@ public sealed class FirebirdCatalogReader
         Dictionary<string, List<string>> segments, CancellationToken cancellationToken)
     {
         var indexes = new List<IndexModel>();
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = headerSql;
+        await using var cmd = connection.CreateGuardedCommand(headerSql);
         cmd.CommandTimeout = 0;
         cmd.Transaction = MetaTx;
-        cmd.Parameters.AddWithValue("@tableName", table);
+        cmd.AddGuardedParameter("@tableName", table);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {

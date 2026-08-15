@@ -7311,4 +7311,10 @@ Zapisać je przed zamknięciem?</value>
   <data name="WorkspaceTabUntitled" xml:space="preserve">
     <value>Edytor SQL</value>
   </data>
+  <data name="Charset.Unrepresentable.Statement" xml:space="preserve">
+    <value>Instrukcja zawiera znak '{0}' ({1}) na pozycji {2}, którego nie da się zapisać w zestawie znaków połączenia {3}. Wysłanie zmieniłoby go po cichu, więc nic nie zostało wysłane. Użyj zestawu znaków UTF8 albo usuń ten znak.</value>
+  </data>
+  <data name="Charset.Unrepresentable.Parameter" xml:space="preserve">
+    <value>Parametr {0} zawiera znak '{1}' ({2}) na pozycji {3}, którego nie da się zapisać w zestawie znaków połączenia {4}. Wysłanie zmieniłoby go po cichu, więc nic nie zostało wysłane. Użyj zestawu znaków UTF8 albo usuń ten znak.</value>
+  </data>
 </root>

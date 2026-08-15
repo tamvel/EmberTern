@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Export;
+using EmberTern.App.Localization;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
@@ -454,7 +455,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)
@@ -794,7 +795,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.ViewCompileFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.ViewCompileFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)

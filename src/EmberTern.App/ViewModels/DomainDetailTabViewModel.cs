@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Localization;
 using EmberTern.Core.Connections;
 using EmberTern.Core.Metadata;
 using EmberTern.Firebird;
@@ -305,7 +306,7 @@ public partial class DomainDetailTabViewModel : ViewModelBase, IUnsavedWorkSourc
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.DomainCompileFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.DomainCompileFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)

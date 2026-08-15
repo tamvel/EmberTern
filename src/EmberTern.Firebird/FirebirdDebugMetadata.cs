@@ -279,11 +279,10 @@ internal static class FirebirdDebugMetadata
         await session.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = session.Connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = session.Connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = session.Transaction;
-            cmd.Parameters.Add(new FbParameter("@t", targetTable.ToUpperInvariant()));
+            cmd.AddGuardedParameter("@t", targetTable.ToUpperInvariant());
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -325,12 +324,11 @@ internal static class FirebirdDebugMetadata
         await session.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = session.Connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = session.Connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = session.Transaction;
-            cmd.Parameters.Add(new FbParameter("@proc", routineName.ToUpperInvariant()));
-            if (packageName is not null) cmd.Parameters.Add(new FbParameter("@pkg", packageName.ToUpperInvariant()));
+            cmd.AddGuardedParameter("@proc", routineName.ToUpperInvariant());
+            if (packageName is not null) cmd.AddGuardedParameter("@pkg", packageName.ToUpperInvariant());
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -383,12 +381,11 @@ internal static class FirebirdDebugMetadata
         await session.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = session.Connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = session.Connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = session.Transaction;
-            cmd.Parameters.Add(new FbParameter("@fn", functionName.ToUpperInvariant()));
-            if (packageName is not null) cmd.Parameters.Add(new FbParameter("@pkg", packageName.ToUpperInvariant()));
+            cmd.AddGuardedParameter("@fn", functionName.ToUpperInvariant());
+            if (packageName is not null) cmd.AddGuardedParameter("@pkg", packageName.ToUpperInvariant());
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -457,11 +454,10 @@ internal static class FirebirdDebugMetadata
         await session.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = session.Connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = session.Connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = session.Transaction;
-            cmd.Parameters.Add(new FbParameter("@n", domainName.ToUpperInvariant()));
+            cmd.AddGuardedParameter("@n", domainName.ToUpperInvariant());
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {

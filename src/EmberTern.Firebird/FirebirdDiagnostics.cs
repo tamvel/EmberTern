@@ -50,8 +50,7 @@ public sealed class FirebirdDiagnostics
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT CURRENT_TRANSACTION FROM RDB$DATABASE";
+            await using var cmd = connection.CreateGuardedCommand("SELECT CURRENT_TRANSACTION FROM RDB$DATABASE");
             cmd.CommandTimeout = 0;
             cmd.Transaction = _transactionService?.ActiveTransaction;
             var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -81,8 +80,7 @@ public sealed class FirebirdDiagnostics
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = CurrentTransactionSql;
+            await using var cmd = connection.CreateGuardedCommand(CurrentTransactionSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _transactionService?.ActiveTransaction;
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -120,8 +118,7 @@ public sealed class FirebirdDiagnostics
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = TransactionsSql;
+            await using var cmd = connection.CreateGuardedCommand(TransactionsSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _transactionService?.ActiveTransaction;
             var results = new List<MonTransactionInfo>();
@@ -161,8 +158,7 @@ public sealed class FirebirdDiagnostics
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = AttachmentsSql;
+            await using var cmd = connection.CreateGuardedCommand(AttachmentsSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _transactionService?.ActiveTransaction;
             var results = new List<MonAttachmentInfo>();

@@ -97,8 +97,16 @@ public sealed class FirebirdImportWriter : IImportWriter
         var parameters = batch.AddBatchParameters();
         for (var i = 0; i < row.Values.Length; i++)
         {
-            parameters.AddWithValue(
-                "@v" + i.ToString(CultureInfo.InvariantCulture), row.Values[i] ?? DBNull.Value);
+            var name = "@v" + i.ToString(CultureInfo.InvariantCulture);
+
+            // A batch parameter collection has no command to reach the connection through, so the shared check
+            // is invoked explicitly here. ⚠ It is a BACKSTOP, not the module's validation: the pipeline already
+            // refused an unrepresentable value at ImportRowValidator and reported the source row number, which
+            // is the error the user should ever see. This one only guarantees that a value which somehow
+            // reached the writer cannot be silently rewritten on its way to the driver.
+            FirebirdCommandGuard.VerifyBatchValue(_session.Connection, name, row.Values[i]);
+
+            parameters.AddWithValue(name, row.Values[i] ?? DBNull.Value);
         }
         _queued++;
 
@@ -172,11 +180,10 @@ public sealed class FirebirdImportWriter : IImportWriter
         if (_batch is not null) return _batch;
 
         var connection = _session.Connection;
-        _batch = new FbBatchCommand(_insertSql, connection, _session.Transaction)
-        {
-            // The measured 1:1 mapping onto the user's chosen policy (I0 §2.3).
-            MultiError = MultiErrorFor(_errorPolicy),
-        };
+        _batch = connection.CreateGuardedBatchCommand(_insertSql, _session.Transaction);
+
+        // The measured 1:1 mapping onto the user's chosen policy (I0 §2.3).
+        _batch.MultiError = MultiErrorFor(_errorPolicy);
         return _batch;
     }
 

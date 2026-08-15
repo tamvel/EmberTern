@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Localization;
 using EmberTern.Core.Scripting;
 using EmberTern.Core.Sql;
 using EmberTern.Firebird;
@@ -698,7 +699,11 @@ public sealed partial class ScriptResultRowViewModel : ObservableObject
         Result = result.Success ? UiStrings.BatchResultOk : UiStrings.BatchResultFailed;
         RowsText = FormatRows(result);
         Duration = ScriptExecutorTabViewModel.FormatDuration(result.Elapsed);
-        Error = result.Error ?? string.Empty;
+        // EmberTern's own failures arrive as a key + data and are resolved in the reader's language; a
+        // Firebird failure has no localized form and stays the server's own words (decision D‑3).
+        Error = result.LocalizedError is { } localized
+            ? Loc.Format(localized)
+            : result.Error ?? string.Empty;
         SourceOffset = sourceOffset;
         SourceLength = sourceLength;
     }

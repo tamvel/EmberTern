@@ -334,8 +334,7 @@ public sealed class FirebirdScriptExecutor
         var sw = Stopwatch.StartNew();
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = statement.Text;
+            await using var cmd = connection.CreateGuardedCommand(statement.Text);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _transactionService.ActiveTransaction;
 
@@ -377,6 +376,21 @@ public sealed class FirebirdScriptExecutor
             return new ScriptStatementResult(
                 index, statement.Text, statement.Kind, Success: false,
                 RecordsAffected: null, RowCount: null, sw.Elapsed, Error: ex.Message);
+        }
+        catch (CharsetRepresentationException ex)
+        {
+            // Reported as this statement's own failure, so the script's per-statement result grid shows it in
+            // place — and the transaction handling that follows is exactly the one a server error gets.
+            //
+            // ⭐ Both descriptions travel: Error keeps the English sentence for logs and for any consumer that
+            // reads it directly, LocalizedError carries the key+data the results grid resolves in the user's
+            // language. This is OUR sentence, not the server's, so it is the one case here that may be
+            // translated at all.
+            sw.Stop();
+            return new ScriptStatementResult(
+                index, statement.Text, statement.Kind, Success: false,
+                RecordsAffected: null, RowCount: null, sw.Elapsed, Error: ex.Message,
+                LocalizedError: ex.Localized);
         }
     }
 

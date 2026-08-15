@@ -9,22 +9,30 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-14.**
+**Last verified: 2026-08-15.**
 
 ---
 
 ## 0. ⏭ HANDOFF — read this first
 
-> **Current milestone:** Audit follow-up — **Phase 4 accepted** (user-verified in the running app).
-> **Next task:** **Phase 5 — charset guard.** ⛔ Not started. Do not start it without the user asking.
+> **Current milestone:** Audit follow-up — **Phase 5 (charset guard) ✅ ACCEPTED**, user-verified in the
+> running app (both the refusal and its Polish wording). Phases 4 and 5 are closed.
+> **Next task:** ⏭ **Phase 6 — NuGet update to the latest STABLE versions. ⛔ NOT started.**
+>
+> **Phase 6, as agreed — do not skip a step:** stable only, ⛔ **no preview / alpha / beta / RC**;
+> **first** an inventory of current packages and the stable updates available, **then** an assessment of
+> breaking changes and dependency constraints, **then** a plan — and only then any edit.
+> ⛔ **Never update a package blind.** ⚠ Two version mismatches are DELIBERATE and carry their reason at the
+> `PackageReference` (`Avalonia.AvaloniaEdit` behind, `Avalonia.Controls.DataGrid` ahead) — see
+> `design/avalonia-12.1.1-update.md` + gotcha #321 before touching either.
 >
 > **Work lives on the branch `fix/audit-followup-2026-08`, NOT on `master`, and is NOT pushed.**
-> Five commits, `440c0ce` → `1852611`. Pushing happens after the user accepts the whole etap
-> (both remotes), which has not happened yet.
+> Seven commits through Phase 5. Pushing happens after the user accepts the whole etap (both remotes),
+> which has not happened yet.
 
-Remaining order, unchanged and untouched: **Phase 5 (charset guard)** → NuGet audit (stable versions
-only) → `ARCHITECTURE.md` "as built" → final verification. ⛔ Licensing, Firebase, License Manager and
-the installer are **out of scope** and belong to a later, separate etap.
+Remaining order: **Phase 6 — NuGet (stable only)** → `ARCHITECTURE.md` "as built" → final verification.
+⛔ Licensing, Firebase, License Manager and the installer are **out of scope** and belong to a later,
+separate etap.
 
 ---
 
@@ -33,9 +41,9 @@ the installer are **out of scope** and belong to a later, separate etap.
 | | |
 |---|---|
 | Branch | **`fix/audit-followup-2026-08`** (cut from `master`) — clean working tree, **not pushed** |
-| HEAD | `1852611` *fix(ui): etykieta "nie pokazuj ponownie" w calosci czytelna w kazdym jezyku* |
+| HEAD | Phase 5 closing commit on `fix/audit-followup-2026-08` |
 | Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`** (`TreatWarningsAsErrors=true`) |
-| Tests | **8 813**; last series **6 / 6 fully green** |
+| Tests | **8 853** (8 813 + 31 guard + 9 localization) — ⛔ measured, not re-run at closure |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | `origin` (company Gitea) + `private` (GitHub) — **both** receive every accepted stage |
 
@@ -86,6 +94,7 @@ reasoning lives.
 | **Audit follow-up — E: locked read-modify-write for settings** | 2026-08-14 | commit `972426e` |
 | **Audit follow-up — Avalonia headless race: diagnosed, closed on our side** | 2026-08-14 | `avalonia-headless-session-race.md`, commit `b6f9e6b` |
 | **Audit follow-up — Phase 4: debugger irreversible-effects warning** ✅ user-verified | 2026-08-14 | commits `1130e3d`, `1852611` |
+| **Audit follow-up — Phase 5: charset guard** ✅ user-verified | 2026-08-15 | gotchas #372/#373, `tools/probes/CharsetProbe`, rule 12 in `CLAUDE.md` |
 
 ---
 
@@ -137,25 +146,56 @@ property ("nothing is cut"), verified red in both broken shapes before being acc
 
 ## 3. Open work
 
-⏭ **Next task: Phase 5 — charset guard.** Not started.
+⏭ **Next task: Phase 6 — NuGet update (stable versions only). ⛔ Not started** — see §0 for the agreed
+order of steps.
 
-### Phase 5 — charset guard (the immediate next task)
+### Phase 5 — charset guard ✅ CLOSED (implemented, tested, user-verified)
 
-**Measured on live Firebird 5**, with `WIN1250` as EmberTern's **default** connection charset
-(`CharsetCatalog.Default`, `ConnectionProfile.Charset`): a character outside the connection charset is
-stored as `?` **with no error at all**, even into a `UTF8` column. Confirmed on **all three** paths:
+**Root cause (measured, `tools/probes/CharsetProbe`):** the loss is **client-side, in the driver's encoder,
+before the server sees anything** — so the server cannot help and never errors. ⚠ The audit's "turns into `?`"
+was **incomplete**: WIN1250's `InternalEncoderBestFitFallback` turns **330** characters into a *plausible
+different* one (`£`→`L`, `¼`→`1`, `À`→`A`), so `R = 'Cena £100 ¼ À'` was stored as `R = 'Cena L100 1 A'` —
+valid PSQL, wrong number. ⭐ Reads were found **already safe** (the server refuses to transliterate, loudly),
+so this is write-side only.
 
-| Path | WIN1250 | UTF8 |
-|---|---|---|
-| bound parameter | `AB??CD` | OK |
-| SQL literal in statement text (the F5 path) | `AB??CD` | OK |
-| **DDL text → `RDB$PROCEDURE_SOURCE`** | `AB??CD` | OK |
+**Built:** ONE seam — `EmberTern.Firebird/FirebirdCommandGuard.cs` — that every command creation and parameter
+bind goes through (96 sites + 1 batch), refusing **before** the driver encodes. Core owns the oracle
+(`CharsetRepresentation`) and the new wire question (`CharsetCatalog.ResolveWireEncoding`); ⛔
+`CharsetCatalog.Resolve` was **deliberately left untouched** (it answers a different question — decoding).
+`ImportCharsetGuard` now forwards to the shared oracle, which **closed a live defect**: on a `NONE` connection
+it used to declare every value representable while the driver rewrote them.
 
-⭐ The third line is why this outranks the rest of the backlog: EmberTern can **silently corrupt the
-user's own source code**, which is architecture rule #11 — the project's paramount rule.
-⛔ **Design ONE shared mechanism** (natural home `CharsetCatalog`, direction `EncoderExceptionFallback`)
-covering all three paths — **not three independent patches**. Regression tests must exercise the real
-paths, not only a helper.
+**Verified live on Firebird 5, 15/15:** parameter · SQL/F5 · **DDL/source (stored source proven
+BYTE-IDENTICAL after refusal)** · import · debugger (a draft with an unrepresentable character cannot start a
+session; representable code still runs to completion). ⭐ Three `CharsetGuardSeamTests` fail the build if a raw
+`CreateCommand` / `CommandText =` / `AddWithValue` reappears — verified red, then green.
+
+**Localization follow-up (after the user's manual verification).** The refusal reached the SQL editor in
+**English on a Polish UI** — both resource entries were correct and *nothing read them*: the refusal is
+**wrapped** into `QueryExecutionException` on the way out and the display site read `ex.Message`. Fixed with one
+resolver, `App/Localization/ErrorText.cs`, which walks the `InnerException` chain; wired at **27** display sites
+plus the Script Executor (which flattens to a string in the Firebird layer, so `ScriptStatementResult` gained an
+optional `LocalizedError`). ⭐ This produced **architecture rule 12** in `CLAUDE.md` — the failure mode is not a
+missing entry, it is a perfect entry nothing resolves.
+
+**Results as measured (⛔ not re-run since — these are the numbers the acceptance rests on):**
+**8 844 / 8 844** after the guard (8 813 + 31), **8 853** after the localization fix (+9, one draft test
+dropped as redundant); Debug and Release both **0 warnings / 0 errors**; live probe **15/15**. ⚠ Across the
+final series one run in ~3–6 lost exactly ONE test to the **known upstream Avalonia headless race** —
+identified by its STACK (`DefaultRenderLoop.Add` → `Dispatcher.VerifyAccess` →
+`AvaloniaHeadlessPlatform.Initialize`), not by the test name, and **not a product defect**. See
+`avalonia-headless-session-race.md`; the rule is "re-run once".
+
+⚠ **A flake this stage MANUFACTURED and then removed, worth remembering:** the first two drafts of the
+localization tests mutated process-global language state (`Loc.Apply`, then the catalog seam). Both raced with
+`UiStrings`-reading tests outside `HeadlessCollection` and produced **2–3 failures in unrelated classes, ~1 run
+in 3**. The accepted version touches no global state at all — wording is asserted against the resource sets
+directly, and the resolution mechanism is proved by giving the wrapper a message that DIFFERS from the refusal's.
+
+⛔ **Explicitly OUT of Phase 5, by decision, and still open:** the UX of the read-side "cannot transliterate"
+message (a legitimate procedure whose source the connection charset cannot decode fails with the server's bare
+wording), and the product decision whether `NONE` should stay in `CharsetCatalog.Supported` (it is lossy and
+machine-dependent — gotcha #373).
 
 ### Ratified but not started — each with a measured scope
 

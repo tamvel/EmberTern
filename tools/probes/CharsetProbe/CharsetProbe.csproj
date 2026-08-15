@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    Phase 5 (charset guard) — the §DOWÓD gate. The hermetic suite proves the ORACLE is right; only this proves
+    the guard is actually WIRED into the paths that were measured losing data. It drives the real shipped
+    classes (FirebirdConnectionService / FirebirdQueryExecutor / FirebirdDdlExecutor / FirebirdImportWriter /
+    FirebirdDebugExecutor + DebugSession) against a live Firebird 5, and for the DDL path it does the thing a
+    unit test cannot: reads the object's source back from the server afterwards and proves it is BYTE-IDENTICAL
+    — i.e. that the refusal happened before anything was written, not after.
+
+    Deliberately NOT in EmberTern.slnx (explicit Project entries, no globs): it needs a live server and a
+    password, which the hermetic test suite must never need.
+
+    Run: set ET_LAB_PWD to the local dev SYSDBA password, then run this project with "dotnet run".
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Core\EmberTern.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\EmberTern.Firebird\EmberTern.Firebird.csproj" />
+  </ItemGroup>
+
+</Project>

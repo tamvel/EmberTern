@@ -99,6 +99,13 @@ public sealed class FirebirdDdlExecutor
         {
             throw new DdlExecutionException(ex.Message, ex);
         }
+        catch (CharsetRepresentationException ex)
+        {
+            // Translated into this module's own exception so every existing Compile error surface keeps
+            // working unchanged. ⚠ The original stays as InnerException, so its localized form is still
+            // reachable — see CharsetRepresentationException.
+            throw new DdlExecutionException(ex.Message, ex);
+        }
     }
 
     /// <summary>Lock timeout for Developer Mode — DDL waits this long for an object another

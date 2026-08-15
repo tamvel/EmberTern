@@ -135,8 +135,7 @@ public sealed class FirebirdSessionConnection : IAsyncDisposable
         await _commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = tx;
             await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);

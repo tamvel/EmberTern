@@ -69,8 +69,7 @@ public sealed class FirebirdSecurityReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = UsersSql;
+            await using var cmd = connection.CreateGuardedCommand(UsersSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = LaneTx;
 
@@ -112,8 +111,7 @@ public sealed class FirebirdSecurityReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = RolesSql;
+            await using var cmd = connection.CreateGuardedCommand(RolesSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = LaneTx;
 
@@ -155,11 +153,10 @@ public sealed class FirebirdSecurityReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = ObjectPrivilegesSql;
+            await using var cmd = connection.CreateGuardedCommand(ObjectPrivilegesSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = LaneTx;
-            cmd.Parameters.AddWithValue("@grantee", grantee.Name.Trim());
+            cmd.AddGuardedParameter("@grantee", grantee.Name.Trim());
 
             var rows = new List<PrivilegeInfo>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -203,8 +200,7 @@ public sealed class FirebirdSecurityReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = MembershipSql;
+            await using var cmd = connection.CreateGuardedCommand(MembershipSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = LaneTx;
 

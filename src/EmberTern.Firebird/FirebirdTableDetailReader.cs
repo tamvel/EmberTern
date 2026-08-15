@@ -74,11 +74,10 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = FieldsSql;
+            await using var cmd = connection.CreateGuardedCommand(FieldsSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@tableName", tableName);
+            cmd.AddGuardedParameter("@tableName", tableName);
 
             var results = new List<FieldInfo>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -152,11 +151,10 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = IndexesSql;
+            await using var cmd = connection.CreateGuardedCommand(IndexesSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@tableName", tableName);
+            cmd.AddGuardedParameter("@tableName", tableName);
 
             var results = new List<IndexInfo>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -214,11 +212,10 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = IndexDetailSql;
+            await using var cmd = connection.CreateGuardedCommand(IndexDetailSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", indexName);
+            cmd.AddGuardedParameter("@name", indexName);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return null;
@@ -276,11 +273,10 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = ConstraintsSql;
+            await using var cmd = connection.CreateGuardedCommand(ConstraintsSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@tableName", tableName);
+            cmd.AddGuardedParameter("@tableName", tableName);
 
             var results = new List<ConstraintInfo>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -327,12 +323,11 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT RDB$DESCRIPTION FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = @tableName";
+            await using var cmd = connection.CreateGuardedCommand(
+                "SELECT RDB$DESCRIPTION FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = @tableName");
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@tableName", tableName);
+            cmd.AddGuardedParameter("@tableName", tableName);
 
             string? description = null;
             await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
@@ -379,13 +374,12 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
+            await using var cmd = connection.CreateGuardedCommand(
                 "SELECT RDB$DESCRIPTION FROM RDB$PROCEDURES WHERE RDB$PROCEDURE_NAME = @name" +
-                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion));
+                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion)));
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", procedureName);
+            cmd.AddGuardedParameter("@name", procedureName);
 
             string? description = null;
             await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
@@ -430,16 +424,15 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
+            await using var cmd = connection.CreateGuardedCommand(FirebirdDdlReader.InsertBeforeOrderBy(
+                ProcedureParametersSql,
+                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion), "pp.")));
             // Exclude a packaged namesake on FB3+ (else its params merge with the
             // standalone procedure's → doubled "MSG, MSG" grid — see StandalonePackageFilter).
-            cmd.CommandText = FirebirdDdlReader.InsertBeforeOrderBy(
-                ProcedureParametersSql,
-                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion), "pp."));
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", procedureName);
-            cmd.Parameters.AddWithValue("@pt", (short)paramType);
+            cmd.AddGuardedParameter("@name", procedureName);
+            cmd.AddGuardedParameter("@pt", (short)paramType);
 
             var results = new List<ProcedureParameterInfo>();
             int position = 0;
@@ -501,12 +494,11 @@ public sealed class FirebirdTableDetailReader
         try
         {
             var dependsOn = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(ProcedureDependsOnSql))
             {
-                cmd.CommandText = ProcedureDependsOnSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", procedureName);
+                cmd.AddGuardedParameter("@name", procedureName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -520,12 +512,11 @@ public sealed class FirebirdTableDetailReader
             }
 
             var dependedOnBy = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(ProcedureDependedOnBySql))
             {
-                cmd.CommandText = ProcedureDependedOnBySql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", procedureName);
+                cmd.AddGuardedParameter("@name", procedureName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -633,11 +624,10 @@ public sealed class FirebirdTableDetailReader
         FbConnection connection, string sql, string packageName, PackageMemberKind kind,
         List<PackageMember> sink, CancellationToken ct)
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
+        await using var cmd = connection.CreateGuardedCommand(sql);
         cmd.CommandTimeout = 0;
         cmd.Transaction = MetaTx;
-        cmd.Parameters.AddWithValue("@name", packageName);
+        cmd.AddGuardedParameter("@name", packageName);
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
@@ -658,12 +648,11 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT RDB$DESCRIPTION FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name";
+            await using var cmd = connection.CreateGuardedCommand(
+                "SELECT RDB$DESCRIPTION FROM RDB$PACKAGES WHERE RDB$PACKAGE_NAME = @name");
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", packageName);
+            cmd.AddGuardedParameter("@name", packageName);
 
             string? description = null;
             await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
@@ -701,12 +690,11 @@ public sealed class FirebirdTableDetailReader
         try
         {
             var dependsOn = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(PackageDependsOnSql))
             {
-                cmd.CommandText = PackageDependsOnSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", packageName);
+                cmd.AddGuardedParameter("@name", packageName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -720,12 +708,11 @@ public sealed class FirebirdTableDetailReader
             }
 
             var dependedOnBy = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(PackageDependedOnBySql))
             {
-                cmd.CommandText = PackageDependedOnBySql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", packageName);
+                cmd.AddGuardedParameter("@name", packageName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -791,13 +778,12 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
+            await using var cmd = connection.CreateGuardedCommand(
                 "SELECT RDB$DESCRIPTION FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name" +
-                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion));
+                FirebirdDdlReader.StandalonePackageFilter(FirebirdDdlReader.ParseServerMajor(connection.ServerVersion)));
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", functionName);
+            cmd.AddGuardedParameter("@name", functionName);
 
             string? description = null;
             await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
@@ -843,12 +829,12 @@ public sealed class FirebirdTableDetailReader
 
             int returnArgPos = 0;
             bool deterministic = false;
-            await using (var infoCmd = connection.CreateCommand())
+            await using (var infoCmd = connection.CreateGuardedCommand(
+                FirebirdDdlReader.InsertBeforeOrderBy(FunctionInfoSql, infoFilter)))
             {
-                infoCmd.CommandText = FirebirdDdlReader.InsertBeforeOrderBy(FunctionInfoSql, infoFilter);
                 infoCmd.CommandTimeout = 0;
                 infoCmd.Transaction = MetaTx;
-                infoCmd.Parameters.AddWithValue("@name", functionName);
+                infoCmd.AddGuardedParameter("@name", functionName);
                 await using var r = await infoCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -860,12 +846,12 @@ public sealed class FirebirdTableDetailReader
             var arguments = new List<ProcedureParameterInfo>();
             var returnType = string.Empty;
             string? returnDomain = null;
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(
+                FirebirdDdlReader.InsertBeforeOrderBy(FunctionArgumentsSql, pkgFilter)))
             {
-                cmd.CommandText = FirebirdDdlReader.InsertBeforeOrderBy(FunctionArgumentsSql, pkgFilter);
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", functionName);
+                cmd.AddGuardedParameter("@name", functionName);
                 int displayPosition = 0;
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -938,12 +924,11 @@ public sealed class FirebirdTableDetailReader
         try
         {
             var dependsOn = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(FunctionDependsOnSql))
             {
-                cmd.CommandText = FunctionDependsOnSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", functionName);
+                cmd.AddGuardedParameter("@name", functionName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -957,12 +942,11 @@ public sealed class FirebirdTableDetailReader
             }
 
             var dependedOnBy = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(FunctionDependedOnBySql))
             {
-                cmd.CommandText = FunctionDependedOnBySql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", functionName);
+                cmd.AddGuardedParameter("@name", functionName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1055,15 +1039,14 @@ public sealed class FirebirdTableDetailReader
 
             // FB3+ exposes RDB$INITIAL_VALUE / RDB$GENERATOR_INCREMENT; older catalogs
             // only have the description column.
-            await using (var cmd = connection.CreateCommand())
-            {
-                cmd.CommandText = serverMajor >= 3
+            await using (var cmd = connection.CreateGuardedCommand(serverMajor >= 3
                     ? "SELECT RDB$INITIAL_VALUE, RDB$GENERATOR_INCREMENT, RDB$DESCRIPTION " +
                       "FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = @name"
-                    : "SELECT RDB$DESCRIPTION FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = @name";
+                    : "SELECT RDB$DESCRIPTION FROM RDB$GENERATORS WHERE RDB$GENERATOR_NAME = @name"))
+            {
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", generatorName);
+                cmd.AddGuardedParameter("@name", generatorName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1085,8 +1068,8 @@ public sealed class FirebirdTableDetailReader
             // some FB versions/permissions block GEN_ID on system sequences.
             try
             {
-                await using var cmd = connection.CreateCommand();
-                cmd.CommandText = $"SELECT GEN_ID({DdlGenerator.Quote(generatorName)}, 0) FROM RDB$DATABASE";
+                await using var cmd = connection.CreateGuardedCommand(
+                    $"SELECT GEN_ID({DdlGenerator.Quote(generatorName)}, 0) FROM RDB$DATABASE");
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
                 var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -1134,8 +1117,8 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"SELECT GEN_ID({DdlGenerator.Quote(generatorName)}, 0) FROM RDB$DATABASE";
+            await using var cmd = connection.CreateGuardedCommand(
+                $"SELECT GEN_ID({DdlGenerator.Quote(generatorName)}, 0) FROM RDB$DATABASE");
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
             var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
@@ -1168,12 +1151,11 @@ public sealed class FirebirdTableDetailReader
         try
         {
             var dependsOn = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(GeneratorDependsOnSql))
             {
-                cmd.CommandText = GeneratorDependsOnSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", generatorName);
+                cmd.AddGuardedParameter("@name", generatorName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1187,12 +1169,11 @@ public sealed class FirebirdTableDetailReader
             }
 
             var dependedOnBy = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(GeneratorDependedOnBySql))
             {
-                cmd.CommandText = GeneratorDependedOnBySql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", generatorName);
+                cmd.AddGuardedParameter("@name", generatorName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1253,11 +1234,10 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = DomainInfoSql;
+            await using var cmd = connection.CreateGuardedCommand(DomainInfoSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", domainName);
+            cmd.AddGuardedParameter("@name", domainName);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -1309,12 +1289,11 @@ public sealed class FirebirdTableDetailReader
             var usage = new List<DependencyInfo>();
 
             // Table / view columns built on the domain.
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(DomainUsageColumnsSql))
             {
-                cmd.CommandText = DomainUsageColumnsSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", domainName);
+                cmd.AddGuardedParameter("@name", domainName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1328,12 +1307,11 @@ public sealed class FirebirdTableDetailReader
             }
 
             // PSQL objects (procedures/triggers/computed fields/…) referencing the domain.
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(DomainUsageDependenciesSql))
             {
-                cmd.CommandText = DomainUsageDependenciesSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", domainName);
+                cmd.AddGuardedParameter("@name", domainName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1437,12 +1415,11 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT RDB$MESSAGE, RDB$DESCRIPTION FROM RDB$EXCEPTIONS WHERE RDB$EXCEPTION_NAME = @name";
+            await using var cmd = connection.CreateGuardedCommand(
+                "SELECT RDB$MESSAGE, RDB$DESCRIPTION FROM RDB$EXCEPTIONS WHERE RDB$EXCEPTION_NAME = @name");
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", exceptionName);
+            cmd.AddGuardedParameter("@name", exceptionName);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -1487,12 +1464,11 @@ public sealed class FirebirdTableDetailReader
         try
         {
             var dependsOn = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(ExceptionDependsOnSql))
             {
-                cmd.CommandText = ExceptionDependsOnSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", exceptionName);
+                cmd.AddGuardedParameter("@name", exceptionName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1506,12 +1482,11 @@ public sealed class FirebirdTableDetailReader
             }
 
             var dependedOnBy = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(ExceptionDependedOnBySql))
             {
-                cmd.CommandText = ExceptionDependedOnBySql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", exceptionName);
+                cmd.AddGuardedParameter("@name", exceptionName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1579,13 +1554,12 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
+            await using var cmd = connection.CreateGuardedCommand(
                 "SELECT TRIM(RDB$RELATION_NAME), RDB$TRIGGER_TYPE, RDB$TRIGGER_SEQUENCE, RDB$TRIGGER_INACTIVE " +
-                "FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name";
+                "FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name");
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", triggerName);
+            cmd.AddGuardedParameter("@name", triggerName);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -1646,12 +1620,11 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
-                "SELECT RDB$DESCRIPTION FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name";
+            await using var cmd = connection.CreateGuardedCommand(
+                "SELECT RDB$DESCRIPTION FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name");
             cmd.CommandTimeout = 0;
             cmd.Transaction = MetaTx;
-            cmd.Parameters.AddWithValue("@name", triggerName);
+            cmd.AddGuardedParameter("@name", triggerName);
 
             string? description = null;
             await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
@@ -1706,12 +1679,11 @@ public sealed class FirebirdTableDetailReader
         try
         {
             var dependsOn = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(TriggerDependsOnSql))
             {
-                cmd.CommandText = TriggerDependsOnSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", triggerName);
+                cmd.AddGuardedParameter("@name", triggerName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1725,12 +1697,11 @@ public sealed class FirebirdTableDetailReader
             }
 
             var dependedOnBy = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(TriggerDependedOnBySql))
             {
-                cmd.CommandText = TriggerDependedOnBySql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@name", triggerName);
+                cmd.AddGuardedParameter("@name", triggerName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1775,17 +1746,16 @@ public sealed class FirebirdTableDetailReader
         try
         {
             var dependsOn = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(DependsOnSql))
             {
-                cmd.CommandText = DependsOnSql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
                 // Bind each distinct parameter name — see DependsOnSql comment
                 // for why we don't reuse @tableName across branches.
-                cmd.Parameters.AddWithValue("@tableName", tableName);
-                cmd.Parameters.AddWithValue("@t2", tableName);
-                cmd.Parameters.AddWithValue("@t3", tableName);
-                cmd.Parameters.AddWithValue("@t4", tableName);
+                cmd.AddGuardedParameter("@tableName", tableName);
+                cmd.AddGuardedParameter("@t2", tableName);
+                cmd.AddGuardedParameter("@t3", tableName);
+                cmd.AddGuardedParameter("@t4", tableName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1800,13 +1770,12 @@ public sealed class FirebirdTableDetailReader
             }
 
             var dependedOnBy = new List<DependencyInfo>();
-            await using (var cmd = connection.CreateCommand())
+            await using (var cmd = connection.CreateGuardedCommand(DependedOnBySql))
             {
-                cmd.CommandText = DependedOnBySql;
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = MetaTx;
-                cmd.Parameters.AddWithValue("@tableName", tableName);
-                cmd.Parameters.AddWithValue("@t2", tableName);
+                cmd.AddGuardedParameter("@tableName", tableName);
+                cmd.AddGuardedParameter("@t2", tableName);
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
@@ -1899,8 +1868,8 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = BuildDataPreviewSql(tableName, startRow, endRow, orderBy, filter?.WhereClause);
+            await using var cmd = connection.CreateGuardedCommand(
+                BuildDataPreviewSql(tableName, startRow, endRow, orderBy, filter?.WhereClause));
             AddFilterParameters(cmd, filter);
             cmd.CommandTimeout = 0;
             cmd.Transaction = DataTx;
@@ -1987,9 +1956,9 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
             var quoted = tableName.Replace("\"", "\"\"");
-            cmd.CommandText = string.Format(CultureInfo.InvariantCulture, "SELECT * FROM \"{0}\"", quoted);
+            await using var cmd = connection.CreateGuardedCommand(
+                string.Format(CultureInfo.InvariantCulture, "SELECT * FROM \"{0}\"", quoted));
             cmd.Transaction = DataTx;
 
             await using var reader = await cmd.ExecuteReaderAsync(
@@ -2040,8 +2009,8 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = BuildRowCountSql(tableName, cap, filter?.WhereClause);
+            await using var cmd = connection.CreateGuardedCommand(
+                BuildRowCountSql(tableName, cap, filter?.WhereClause));
             AddFilterParameters(cmd, filter);
             cmd.CommandTimeout = 0;
             cmd.Transaction = DataTx;
@@ -2083,8 +2052,8 @@ public sealed class FirebirdTableDetailReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = BuildAggregateSql(tableName, columnName, aggregate, filter?.WhereClause);
+            await using var cmd = connection.CreateGuardedCommand(
+                BuildAggregateSql(tableName, columnName, aggregate, filter?.WhereClause));
             AddFilterParameters(cmd, filter);
             cmd.CommandTimeout = 0;
             cmd.Transaction = DataTx;
@@ -2106,7 +2075,7 @@ public sealed class FirebirdTableDetailReader
         if (filter is null) return;
         foreach (var p in filter.Parameters)
         {
-            cmd.Parameters.AddWithValue(p.Name, p.Value);
+            cmd.AddGuardedParameter(p.Name, p.Value);
         }
     }
 
@@ -2128,11 +2097,10 @@ public sealed class FirebirdTableDetailReader
         List<DependencyInfo> target,
         CancellationToken cancellationToken)
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
+        await using var cmd = connection.CreateGuardedCommand(sql);
         cmd.CommandTimeout = 0;
         cmd.Transaction = MetaTx;
-        cmd.Parameters.AddWithValue("@tableName", tableName);
+        cmd.AddGuardedParameter("@tableName", tableName);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {

@@ -510,11 +510,10 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         FbCommand? cmd = null;
         try
         {
-            cmd = _session.Connection.CreateCommand();
-            cmd.CommandText = plan.Sql;
+            cmd = _session.Connection.CreateGuardedCommand(plan.Sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _session.Transaction;
-            foreach (var v in values) cmd.Parameters.Add(new FbParameter { Value = v ?? DBNull.Value });
+            foreach (var v in values) cmd.AddGuardedParameter(v);
             var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             return new CursorHandle(_session, cmd, reader, plan.IntoTargets);
         }
@@ -1018,13 +1017,12 @@ public sealed class FirebirdDebugExecutor : IDebugExecutor
         await _session.CommandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = _session.Connection.CreateCommand();
-            cmd.CommandText = harness.Sql;
+            await using var cmd = _session.Connection.CreateGuardedCommand(harness.Sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _session.Transaction;
             foreach (var value in harness.Parameters)
             {
-                cmd.Parameters.Add(new FbParameter { Value = value ?? DBNull.Value });
+                cmd.AddGuardedParameter(value);
             }
 
             if (!selectable)

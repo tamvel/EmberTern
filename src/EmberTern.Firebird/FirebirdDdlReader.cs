@@ -95,11 +95,10 @@ public sealed class FirebirdDdlReader
         sb.Append("CREATE TABLE ").Append(Quote(name)).AppendLine(" (");
 
         bool first = true;
-        await using (var cmd = connection.CreateCommand())
+        await using (var cmd = connection.CreateGuardedCommand(SqlForTableColumns))
         {
             cmd.Transaction = tx;
-            cmd.CommandText = SqlForTableColumns;
-            cmd.Parameters.AddWithValue("@name", name);
+            cmd.AddGuardedParameter("@name", name);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -261,13 +260,11 @@ public sealed class FirebirdDdlReader
 
         var columns = new StringBuilder();
         bool firstCol = true;
-        await using (var cmd = connection.CreateCommand())
+        await using (var cmd = connection.CreateGuardedCommand("SELECT TRIM(RDB$FIELD_NAME) FROM RDB$RELATION_FIELDS " +
+                "WHERE RDB$RELATION_NAME = @name ORDER BY RDB$FIELD_POSITION"))
         {
             cmd.Transaction = tx;
-            cmd.CommandText =
-                "SELECT TRIM(RDB$FIELD_NAME) FROM RDB$RELATION_FIELDS " +
-                "WHERE RDB$RELATION_NAME = @name ORDER BY RDB$FIELD_POSITION";
-            cmd.Parameters.AddWithValue("@name", name);
+            cmd.AddGuardedParameter("@name", name);
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
@@ -639,13 +636,12 @@ public sealed class FirebirdDdlReader
         short? sequence = null;
         short? inactive = null;
 
-        await using (var cmd = connection.CreateCommand())
+        await using (var cmd = connection.CreateGuardedCommand(
+            "SELECT TRIM(RDB$RELATION_NAME), RDB$TRIGGER_TYPE, RDB$TRIGGER_SEQUENCE, RDB$TRIGGER_INACTIVE " +
+            "FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name"))
         {
             cmd.Transaction = tx;
-            cmd.CommandText =
-                "SELECT TRIM(RDB$RELATION_NAME), RDB$TRIGGER_TYPE, RDB$TRIGGER_SEQUENCE, RDB$TRIGGER_INACTIVE " +
-                "FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = @name";
-            cmd.Parameters.AddWithValue("@name", name);
+            cmd.AddGuardedParameter("@name", name);
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             if (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
@@ -788,13 +784,13 @@ public sealed class FirebirdDdlReader
         // DETERMINISTIC keyword.
         int returnArgPos = 0;
         bool deterministic = false;
-        await using (var cmd = connection.CreateCommand())
+        await using (var cmd = connection.CreateGuardedCommand(
+            "SELECT RDB$RETURN_ARGUMENT, RDB$DETERMINISTIC_FLAG FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name" +
+            StandalonePackageFilter(serverMajor)))
         {
             cmd.Transaction = tx;
-            cmd.CommandText = "SELECT RDB$RETURN_ARGUMENT, RDB$DETERMINISTIC_FLAG FROM RDB$FUNCTIONS WHERE RDB$FUNCTION_NAME = @name" +
-                StandalonePackageFilter(serverMajor);
             cmd.CommandTimeout = 0;
-            cmd.Parameters.AddWithValue("@name", name);
+            cmd.AddGuardedParameter("@name", name);
             await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             if (await r.ReadAsync(ct).ConfigureAwait(false))
             {
@@ -843,10 +839,10 @@ public sealed class FirebirdDdlReader
     {
         var inputs = new System.Collections.Generic.List<string>();
         var returnType = string.Empty;
-        await using var cmd = connection.CreateCommand();
+        await using var cmd = connection.CreateGuardedCommand(
+            InsertBeforeOrderBy(SqlForFunctionArgs, StandalonePackageFilter(serverMajor, "fa.")));
         cmd.Transaction = tx;
-        cmd.CommandText = InsertBeforeOrderBy(SqlForFunctionArgs, StandalonePackageFilter(serverMajor, "fa."));
-        cmd.Parameters.AddWithValue("@name", funcName);
+        cmd.AddGuardedParameter("@name", funcName);
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
@@ -888,9 +884,8 @@ public sealed class FirebirdDdlReader
         // just degrades to a CREATE-only snippet.
         try
         {
-            await using var cmd = connection.CreateCommand();
+            await using var cmd = connection.CreateGuardedCommand($"SELECT GEN_ID({Quote(name)}, 0) FROM RDB$DATABASE");
             cmd.Transaction = tx;
-            cmd.CommandText = $"SELECT GEN_ID({Quote(name)}, 0) FROM RDB$DATABASE";
             cmd.CommandTimeout = 0;
             var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
             if (result is not null && result != DBNull.Value)
@@ -917,11 +912,11 @@ public sealed class FirebirdDdlReader
     private static async Task<string> BuildExceptionDdlAsync(FbConnection connection, FbTransaction? tx, string name, Encoding fallback, CancellationToken ct)
     {
         string? message = null;
-        await using (var cmd = connection.CreateCommand())
+        await using (var cmd = connection.CreateGuardedCommand(
+            "SELECT RDB$MESSAGE FROM RDB$EXCEPTIONS WHERE RDB$EXCEPTION_NAME = @name"))
         {
             cmd.Transaction = tx;
-            cmd.CommandText = "SELECT RDB$MESSAGE FROM RDB$EXCEPTIONS WHERE RDB$EXCEPTION_NAME = @name";
-            cmd.Parameters.AddWithValue("@name", name);
+            cmd.AddGuardedParameter("@name", name);
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             if (await reader.ReadAsync(ct).ConfigureAwait(false) && !reader.IsDBNull(0))
             {
@@ -1146,11 +1141,10 @@ public sealed class FirebirdDdlReader
 
     private static async Task<string?> ReadBlobAsync(FbConnection connection, FbTransaction? tx, string sql, string nameParam, Encoding fallback, CancellationToken ct)
     {
-        await using var cmd = connection.CreateCommand();
+        await using var cmd = connection.CreateGuardedCommand(sql);
         cmd.Transaction = tx;
-        cmd.CommandText = sql;
         cmd.CommandTimeout = 0;
-        cmd.Parameters.AddWithValue("@name", nameParam);
+        cmd.AddGuardedParameter("@name", nameParam);
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false) || reader.IsDBNull(0))
         {
@@ -1237,17 +1231,16 @@ public sealed class FirebirdDdlReader
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
         var pairs = new System.Collections.Generic.List<(string Name, string Col, short Pos)>();
-        await using (var cmd = connection.CreateCommand())
+        await using (var cmd = connection.CreateGuardedCommand(
+            "SELECT TRIM(rc.RDB$CONSTRAINT_NAME), TRIM(s.RDB$FIELD_NAME), s.RDB$FIELD_POSITION " +
+            "FROM RDB$RELATION_CONSTRAINTS rc " +
+            "JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = rc.RDB$INDEX_NAME " +
+            "WHERE rc.RDB$RELATION_NAME = @rel AND rc.RDB$CONSTRAINT_TYPE = @ct " +
+            "ORDER BY rc.RDB$CONSTRAINT_NAME, s.RDB$FIELD_POSITION"))
         {
             cmd.Transaction = tx;
-            cmd.CommandText =
-                "SELECT TRIM(rc.RDB$CONSTRAINT_NAME), TRIM(s.RDB$FIELD_NAME), s.RDB$FIELD_POSITION " +
-                "FROM RDB$RELATION_CONSTRAINTS rc " +
-                "JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = rc.RDB$INDEX_NAME " +
-                "WHERE rc.RDB$RELATION_NAME = @rel AND rc.RDB$CONSTRAINT_TYPE = @ct " +
-                "ORDER BY rc.RDB$CONSTRAINT_NAME, s.RDB$FIELD_POSITION";
-            cmd.Parameters.AddWithValue("@rel", relation);
-            cmd.Parameters.AddWithValue("@ct", type);
+            cmd.AddGuardedParameter("@rel", relation);
+            cmd.AddGuardedParameter("@ct", type);
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
@@ -1270,22 +1263,21 @@ public sealed class FirebirdDdlReader
         // FK metadata is spread across three system tables: RDB$RELATION_CONSTRAINTS (FK side),
         // RDB$REF_CONSTRAINTS (rules + parent constraint pointer), and RDB$INDEX_SEGMENTS (columns).
         var pairs = new System.Collections.Generic.List<(string Name, string Col, short Pos, string RefTable, string RefCol, string UpdRule, string DelRule)>();
-        await using (var cmd = connection.CreateCommand())
+        await using (var cmd = connection.CreateGuardedCommand(
+            "SELECT TRIM(rc.RDB$CONSTRAINT_NAME), TRIM(s.RDB$FIELD_NAME), s.RDB$FIELD_POSITION, " +
+            "       TRIM(rc2.RDB$RELATION_NAME), TRIM(s2.RDB$FIELD_NAME), " +
+            "       TRIM(refc.RDB$UPDATE_RULE), TRIM(refc.RDB$DELETE_RULE) " +
+            "FROM RDB$RELATION_CONSTRAINTS rc " +
+            "JOIN RDB$REF_CONSTRAINTS refc ON refc.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
+            "JOIN RDB$RELATION_CONSTRAINTS rc2 ON rc2.RDB$CONSTRAINT_NAME = refc.RDB$CONST_NAME_UQ " +
+            "JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = rc.RDB$INDEX_NAME " +
+            "JOIN RDB$INDEX_SEGMENTS s2 ON s2.RDB$INDEX_NAME = rc2.RDB$INDEX_NAME " +
+            "                          AND s2.RDB$FIELD_POSITION = s.RDB$FIELD_POSITION " +
+            "WHERE rc.RDB$RELATION_NAME = @rel AND rc.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY' " +
+            "ORDER BY rc.RDB$CONSTRAINT_NAME, s.RDB$FIELD_POSITION"))
         {
             cmd.Transaction = tx;
-            cmd.CommandText =
-                "SELECT TRIM(rc.RDB$CONSTRAINT_NAME), TRIM(s.RDB$FIELD_NAME), s.RDB$FIELD_POSITION, " +
-                "       TRIM(rc2.RDB$RELATION_NAME), TRIM(s2.RDB$FIELD_NAME), " +
-                "       TRIM(refc.RDB$UPDATE_RULE), TRIM(refc.RDB$DELETE_RULE) " +
-                "FROM RDB$RELATION_CONSTRAINTS rc " +
-                "JOIN RDB$REF_CONSTRAINTS refc ON refc.RDB$CONSTRAINT_NAME = rc.RDB$CONSTRAINT_NAME " +
-                "JOIN RDB$RELATION_CONSTRAINTS rc2 ON rc2.RDB$CONSTRAINT_NAME = refc.RDB$CONST_NAME_UQ " +
-                "JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = rc.RDB$INDEX_NAME " +
-                "JOIN RDB$INDEX_SEGMENTS s2 ON s2.RDB$INDEX_NAME = rc2.RDB$INDEX_NAME " +
-                "                          AND s2.RDB$FIELD_POSITION = s.RDB$FIELD_POSITION " +
-                "WHERE rc.RDB$RELATION_NAME = @rel AND rc.RDB$CONSTRAINT_TYPE = 'FOREIGN KEY' " +
-                "ORDER BY rc.RDB$CONSTRAINT_NAME, s.RDB$FIELD_POSITION";
-            cmd.Parameters.AddWithValue("@rel", relation);
+            cmd.AddGuardedParameter("@rel", relation);
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
@@ -1322,22 +1314,21 @@ public sealed class FirebirdDdlReader
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
         var pairs = new System.Collections.Generic.List<(string Name, string Col, short Pos, bool Unique, bool Desc)>();
-        await using (var cmd = connection.CreateCommand())
+        await using (var cmd = connection.CreateGuardedCommand(
+            "SELECT TRIM(i.RDB$INDEX_NAME), TRIM(s.RDB$FIELD_NAME), s.RDB$FIELD_POSITION, " +
+            "       COALESCE(i.RDB$UNIQUE_FLAG, 0), COALESCE(i.RDB$INDEX_TYPE, 0) " +
+            "FROM RDB$INDICES i " +
+            "JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = i.RDB$INDEX_NAME " +
+            "WHERE i.RDB$RELATION_NAME = @rel " +
+            "  AND COALESCE(i.RDB$SYSTEM_FLAG, 0) = 0 " +
+            "  AND NOT EXISTS (SELECT 1 FROM RDB$RELATION_CONSTRAINTS rc WHERE rc.RDB$INDEX_NAME = i.RDB$INDEX_NAME) " +
+            "ORDER BY i.RDB$INDEX_NAME, s.RDB$FIELD_POSITION"))
         {
             cmd.Transaction = tx;
             // RDB$INDICES.RDB$INDEX_TYPE = 1 → descending; UNIQUE_FLAG = 1 → unique.
             // Skip indexes that back a constraint (RDB$RELATION_CONSTRAINTS.RDB$INDEX_NAME) —
             // those are emitted as ALTER TABLE ADD CONSTRAINT above.
-            cmd.CommandText =
-                "SELECT TRIM(i.RDB$INDEX_NAME), TRIM(s.RDB$FIELD_NAME), s.RDB$FIELD_POSITION, " +
-                "       COALESCE(i.RDB$UNIQUE_FLAG, 0), COALESCE(i.RDB$INDEX_TYPE, 0) " +
-                "FROM RDB$INDICES i " +
-                "JOIN RDB$INDEX_SEGMENTS s ON s.RDB$INDEX_NAME = i.RDB$INDEX_NAME " +
-                "WHERE i.RDB$RELATION_NAME = @rel " +
-                "  AND COALESCE(i.RDB$SYSTEM_FLAG, 0) = 0 " +
-                "  AND NOT EXISTS (SELECT 1 FROM RDB$RELATION_CONSTRAINTS rc WHERE rc.RDB$INDEX_NAME = i.RDB$INDEX_NAME) " +
-                "ORDER BY i.RDB$INDEX_NAME, s.RDB$FIELD_POSITION";
-            cmd.Parameters.AddWithValue("@rel", relation);
+            cmd.AddGuardedParameter("@rel", relation);
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
             {
@@ -1368,11 +1359,11 @@ public sealed class FirebirdDdlReader
         FbConnection connection, FbTransaction? tx, string procName, short paramType, int serverMajor, CancellationToken ct)
     {
         var rows = new System.Collections.Generic.List<string>();
-        await using var cmd = connection.CreateCommand();
+        await using var cmd = connection.CreateGuardedCommand(
+            InsertBeforeOrderBy(SqlForProcedureParams, StandalonePackageFilter(serverMajor, "pp.")));
         cmd.Transaction = tx;
-        cmd.CommandText = InsertBeforeOrderBy(SqlForProcedureParams, StandalonePackageFilter(serverMajor, "pp."));
-        cmd.Parameters.AddWithValue("@name", procName);
-        cmd.Parameters.AddWithValue("@pt", paramType);
+        cmd.AddGuardedParameter("@name", procName);
+        cmd.AddGuardedParameter("@pt", paramType);
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
