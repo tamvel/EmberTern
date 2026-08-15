@@ -5,32 +5,52 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <!-- TEST-ONLY, and only ever a WRITER: it authors the BIFF8 fixtures XlsImportProviderTests reads back
          through the production provider, exactly as those tests' .xlsx counterparts author theirs with
          DocumentFormat.OpenXml. Nothing in src/ references it — the product reads .xls with ExcelDataReader. -->
+    <!-- ⛔⛔ ZOSTAJE NA 2.7.2 — i to NIE jest zaniedbanie aktualizacji (Faza 6, zweryfikowane
+         2026-08-15). Najnowsza stabilna to 2.8.0 i została ODRZUCONA z powodu LICENCJI, nie techniki:
+         NPOI 2.7.2 ma w nuspec `Apache-2.0`, a 2.8.0 ma `OSMFEULA.txt` (Open Source Maintenance Fee) i
+         dokłada bramkę build-time, która żąda wpisania `<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>`
+         do pliku projektu. To jest AKCEPTACJA WARUNKÓW LICENCYJNYCH w imieniu właściciela produktu —
+         decyzja licencyjna, jawnie poza zakresem tego etapu, a nie podbicie numerka.
+         ⚠ NPOI jest zależnością WYŁĄCZNIE testową (IsPackable=false, nic w src/ go nie dotyka) — służy do
+         generowania fixture'ów .xls/.xlsx dla testów importu — więc produkt nie jest na to eksponowany
+         w dystrybucji. To ogranicza pilność, ale nie zmienia charakteru decyzji.
+         ⭐ Skutek uboczny, o którym trzeba wiedzieć przy powrocie do tematu: 2.8.0 porzuca ImageSharp na
+         rzecz SkiaSharp, więc przejście na 2.8.0 pozwoliłoby USUNĄĆ poniższy override ImageSharp. -->
     <PackageReference Include="NPOI" Version="2.7.2" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
     <!-- ⚠ MUSI iść w tej samej wersji co core w EmberTern.App — Avalonia.Headless twardo zależy od
          Avalonia / Avalonia.Fonts.Inter / Avalonia.HarfBuzz w SWOIM numerze (>= 12.1.1), więc rozjazd
          albo podnosi core przez zależność przechodnią, albo daje NU1605. Bump core = bump tutaj. -->
     <PackageReference Include="Avalonia.Headless" Version="12.1.1" />
-    <!-- SECURITY OVERRIDES for NPOI's transitive pins. Neither ships (this project is
-         IsPackable=false and nothing in src/ references NPOI), so the product is not exposed
-         either way; they are raised so the vulnerable-transitive scan is GREEN across the whole
-         solution and a future CI gate has no pre-existing failures to be waived past. Both stay
-         inside NPOI's own major line, so its API surface is unaffected:
-         SixLabors.ImageSharp 2.1.9 to 2.1.11 (GHSA-2cmq-823j-5qj8 out-of-bounds write in the GIF
-         decoder, and GHSA-rxmq-m78w-7wmc / CVE-2025-54575, whose 2.x fix is 2.1.11 — 2.1.10 is
-         NOT enough) and System.Security.Cryptography.Xml 8.0.2 to 8.0.4 (seven advisories, denial
-         of service in XML encryption).
-         ⚠ Worth knowing: promoting these to DIRECT references also puts them under NuGet's NU1902
-         and TreatWarningsAsErrors=true, so from now on a newly-disclosed advisory against either
-         one FAILS THE BUILD rather than being a scan footnote. That is the desired behaviour; it
-         is also why the version must be the genuinely patched one and not merely a newer one. -->
-    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.11" />
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.4" />
+    <!-- SECURITY OVERRIDE for an NPOI transitive pin. It does not ship (this project is
+         IsPackable=false and nothing in src/ references NPOI); it is raised so the
+         vulnerable-transitive scan is GREEN across the whole solution and a future CI gate has no
+         pre-existing failures to be waived past. NPOI asks for System.Security.Cryptography.Xml
+         8.0.2, which carries seven advisories (denial of service in XML encryption).
+         ⭐ FAZA 6: 8.0.4 → 10.0.11, the newest stable and the most patched; it ships a real
+         `lib/net9.0` asset, so this is not a netstandard fallback.
+         ⚠ Worth knowing: a DIRECT reference puts it under NuGet's NU1902/NU1903 with
+         TreatWarningsAsErrors=true, so a newly-disclosed advisory FAILS THE BUILD rather than being
+         a scan footnote. That is the desired behaviour, and it is why the version must be the
+         genuinely patched one rather than merely a newer one.
+
+         SixLabors.ImageSharp is the second override, for the same reason: NPOI 2.7.2 pulls it in and the
+         2.x line carries GHSA-2cmq-823j-5qj8 (out-of-bounds write in the GIF decoder) and
+         GHSA-rxmq-m78w-7wmc / CVE-2025-54575, whose 2.x fix is 2.1.11 — 2.1.10 is NOT enough.
+         ⭐ FAZA 6: 2.1.11 → 2.1.13, the newest patch INSIDE the 2.x line NPOI supports.
+         ⛔ NOT 4.1.0, the newest overall, and the reason is not timidity: (a) NPOI 2.7.2 is built against
+         ImageSharp 2.x, so a major-version override would be an unverifiable runtime gamble in exactly the
+         fixtures the import tests depend on; (b) ImageSharp 3.0+ changed licence from Apache-2.0 to the Six
+         Labors Split Licence, which for a commercial product is a licensing decision rather than a version
+         bump. ⚠ If NPOI ever moves to 2.8.0+ this override disappears entirely — 2.8.0 renders through
+         SkiaSharp and no longer depends on ImageSharp at all. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup>

@@ -15,24 +15,17 @@
 
 ## 0. ⏭ HANDOFF — read this first
 
-> **Current milestone:** Audit follow-up — **Phase 5 (charset guard) ✅ ACCEPTED**, user-verified in the
-> running app (both the refusal and its Polish wording). Phases 4 and 5 are closed.
-> **Next task:** ⏭ **Phase 6 — NuGet update to the latest STABLE versions. ⛔ NOT started.**
->
-> **Phase 6, as agreed — do not skip a step:** stable only, ⛔ **no preview / alpha / beta / RC**;
-> **first** an inventory of current packages and the stable updates available, **then** an assessment of
-> breaking changes and dependency constraints, **then** a plan — and only then any edit.
-> ⛔ **Never update a package blind.** ⚠ Two version mismatches are DELIBERATE and carry their reason at the
-> `PackageReference` (`Avalonia.AvaloniaEdit` behind, `Avalonia.Controls.DataGrid` ahead) — see
-> `design/avalonia-12.1.1-update.md` + gotcha #321 before touching either.
+> **Current milestone:** Audit follow-up — **Phase 6 (NuGet update) ✅ DONE**, awaiting the user's review.
+> Phases 4 and 5 are closed and accepted.
+> **Next task:** ⏭ **Phase 7 — `ARCHITECTURE.md` "as built". ⛔ NOT started.**
 >
 > **Work lives on the branch `fix/audit-followup-2026-08`, NOT on `master`, and is NOT pushed.**
-> Seven commits through Phase 5. Pushing happens after the user accepts the whole etap (both remotes),
-> which has not happened yet.
+> Eight commits. Pushing happens after the user accepts the whole etap (both remotes), which has not
+> happened yet.
 
-Remaining order: **Phase 6 — NuGet (stable only)** → `ARCHITECTURE.md` "as built" → final verification.
-⛔ Licensing, Firebase, License Manager and the installer are **out of scope** and belong to a later,
-separate etap.
+Remaining order: **`ARCHITECTURE.md` "as built"** → final verification. ⛔ Licensing, Firebase, License
+Manager and the installer are **out of scope** and belong to a later, separate etap — ⚠ but Phase 6 put
+**two concrete licensing items on that etap's desk**, see §3.
 
 ---
 
@@ -95,6 +88,7 @@ reasoning lives.
 | **Audit follow-up — Avalonia headless race: diagnosed, closed on our side** | 2026-08-14 | `avalonia-headless-session-race.md`, commit `b6f9e6b` |
 | **Audit follow-up — Phase 4: debugger irreversible-effects warning** ✅ user-verified | 2026-08-14 | commits `1130e3d`, `1852611` |
 | **Audit follow-up — Phase 5: charset guard** ✅ user-verified | 2026-08-15 | gotchas #372/#373, `tools/probes/CharsetProbe`, rule 12 in `CLAUDE.md` |
+| **Audit follow-up — Phase 6: NuGet to latest stable** | 2026-08-15 | §3 below — 8 packages raised, 2 held for a stated reason |
 
 ---
 
@@ -146,56 +140,78 @@ property ("nothing is cut"), verified red in both broken shapes before being acc
 
 ## 3. Open work
 
-⏭ **Next task: Phase 6 — NuGet update (stable versions only). ⛔ Not started** — see §0 for the agreed
-order of steps.
+⏭ **Next task: Phase 7 — `ARCHITECTURE.md` "as built". ⛔ Not started.**
+
+### Phase 6 — NuGet update to latest stable ✅ DONE
+
+**Method:** target versions established from nuget.org (`dotnet list package --outdated` + the flat-container
+API per package), then updated in ONE pass — ⛔ no version hopping, ⛔ nothing pre-release.
+
+⭐ **The headline finding: the packages that were expected to be the hard part were already current.**
+`Avalonia` + `Desktop`/`Themes.Fluent`/`Fonts.Inter`/`Headless` **12.1.1**, `Avalonia.AvaloniaEdit` **12.0.0**,
+`Avalonia.Controls.DataGrid` **12.1.2**, `FirebirdSql.Data.FirebirdClient` **10.3.4**, `CommunityToolkit.Mvvm`
+**8.4.2**, `AvaloniaUI.DiagnosticsSupport` **2.2.3** — every one of them verified as **the newest stable that
+exists**. ⭐ So the two "deliberate mismatches" are **not pins at all**: no 12.1.x AvaloniaEdit and no 12.1.1
+DataGrid were ever published. The mismatch is a publishing fact about three independent release cycles, and it
+resolves itself only when upstream ships.
+
+**Raised (8):**
+
+| Package | From → To | Note |
+|---|---|---|
+| `System.Security.Cryptography.ProtectedData` | 9.0.0 → **10.0.11** | ⭐ rule #11 path (DPAPI over `settings.dat`) — closed with 215 targeted settings/crypto tests, not just a green build. The old comment held it back on "our TFM is net9.0, so the 9.0.x band"; **measured false** — 10.0.11 ships a real `lib/net9.0` asset. |
+| `System.IO.Packaging` | 9.0.18 → **10.0.11** | real `lib/net9.0` asset |
+| `System.Security.Cryptography.Xml` | 8.0.4 → **10.0.11** | security override for an NPOI transitive pin |
+| `DocumentFormat.OpenXml` | 3.1.0 → **3.5.1** | ⚠ the only source change in the phase — see below |
+| `ExcelDataReader` | 3.7.0 → **3.9.0** | no adaptation needed |
+| `Microsoft.NET.Test.Sdk` | 17.11.1 → **18.9.0** | major; discovery and run unaffected |
+| `xunit` | 2.9.2 → **2.9.3** | `xunit.v3` is a different package id, not an update of this one |
+| `xunit.runner.visualstudio` | 2.8.2 → **4.0.0** | major; still supports xunit v2 (verified before updating) |
+
+**The one breaking change that reached our code.** `DocumentFormat.OpenXml` 3.5.1 annotates
+`WorkbookPart.Workbook` and `WorksheetPart.Worksheet` as **nullable** — previously unannotated, so the
+dereferences in `XlsxExporterTests`' read-back helpers compiled silently and now fail `CS8602` under
+`TreatWarningsAsErrors`. The annotations are *more accurate* (a part can exist without its root element), so the
+helpers were adapted rather than suppressed. ⛔ No `#pragma`, no `<NoWarn>`; the product code needed no change.
+
+### ⛔ Held back, with the reason — both TEST-ONLY, both LICENSING
+
+⚠⚠ **Neither is a technical limit, and neither is mine to decide.** Both belong to the licensing etap.
+
+| Package | Held at | Newest | Why |
+|---|---|---|---|
+| **NPOI** | 2.7.2 | 2.8.0 | ⛔ **Licence change.** 2.7.2 declares `Apache-2.0`; **2.8.0 declares `OSMFEULA.txt`** (Open Source Maintenance Fee) and adds a build-time gate demanding `<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>` in the project file. That is accepting licence terms on the product owner's behalf. ⭐ Test-only (nothing in `src/` references it; it authors `.xls`/`.xlsx` fixtures), so the shipped product is not exposed. |
+| **SixLabors.ImageSharp** | 2.1.11 → **2.1.13** | 4.1.0 | Raised to the newest patch **inside the 2.x line**. It is not our dependency — only a security override for what NPOI pulls in, so it is bound to NPOI's line. 3.0+ also moved from Apache-2.0 to the **Six Labors Split Licence**. ⭐ If NPOI ever goes to 2.8.0+, this override disappears entirely: 2.8.0 renders through SkiaSharp and drops ImageSharp. |
+
+**Verification:** Debug and Release **0 warnings / 0 errors**; full suite **8 853 / 8 853** green (same total as
+before, so nothing was lost from discovery); targeted runs before it — **38** Office/OpenXml/ExcelDataReader and
+**215** settings/DPAPI round-trip; `--vulnerable --include-transitive` **zero** across all five projects;
+`--outdated` now reports **only** the two held packages above; app launches.
 
 ### Phase 5 — charset guard ✅ CLOSED (implemented, tested, user-verified)
 
-**Root cause (measured, `tools/probes/CharsetProbe`):** the loss is **client-side, in the driver's encoder,
-before the server sees anything** — so the server cannot help and never errors. ⚠ The audit's "turns into `?`"
-was **incomplete**: WIN1250's `InternalEncoderBestFitFallback` turns **330** characters into a *plausible
-different* one (`£`→`L`, `¼`→`1`, `À`→`A`), so `R = 'Cena £100 ¼ À'` was stored as `R = 'Cena L100 1 A'` —
-valid PSQL, wrong number. ⭐ Reads were found **already safe** (the server refuses to transliterate, loudly),
-so this is write-side only.
+Full narrative is in commit `aa12d9a` and gotchas **#372/#373**; the rule it produced is **architecture rule 12**
+in `CLAUDE.md`. In one paragraph: a character the CONNECTION charset cannot hold was destroyed **client-side, in
+the driver's encoder, before the server saw it** — no exception, no server error. ⚠ The audit's "becomes `?`" was
+incomplete: **330** characters become a *plausible different* one (`£`→`L`, `¼`→`1`, `À`→`A`), so a procedure body
+sent as `R = 'Cena £100 ¼ À'` was stored as `R = 'Cena L100 1 A'` — valid PSQL, wrong number. Reads were already
+safe (the server refuses transliteration loudly), so this was write-side only.
 
-**Built:** ONE seam — `EmberTern.Firebird/FirebirdCommandGuard.cs` — that every command creation and parameter
-bind goes through (96 sites + 1 batch), refusing **before** the driver encodes. Core owns the oracle
-(`CharsetRepresentation`) and the new wire question (`CharsetCatalog.ResolveWireEncoding`); ⛔
-`CharsetCatalog.Resolve` was **deliberately left untouched** (it answers a different question — decoding).
-`ImportCharsetGuard` now forwards to the shared oracle, which **closed a live defect**: on a `NONE` connection
-it used to declare every value representable while the driver rewrote them.
+Built as **ONE seam**, `FirebirdCommandGuard`, which every command creation and parameter bind goes through (96
+sites + the import batch), refusing **before** the driver encodes; DDL validates the whole batch **before a
+transaction opens**, so refused source never reaches the server at all. Core owns the oracle
+(`CharsetRepresentation`) and the wire question (`CharsetCatalog.ResolveWireEncoding`); ⛔ `CharsetCatalog.Resolve`
+was deliberately left untouched — it answers a *different* question, and merging them was the live `NONE` defect
+this closed in the shipped import guard. Messages go through localization in both languages, which needed
+`App/Localization/ErrorText.cs` (a refusal is *wrapped*, so the display site was reading the English `Message`).
 
-**Verified live on Firebird 5, 15/15:** parameter · SQL/F5 · **DDL/source (stored source proven
-BYTE-IDENTICAL after refusal)** · import · debugger (a draft with an unrepresentable character cannot start a
-session; representable code still runs to completion). ⭐ Three `CharsetGuardSeamTests` fail the build if a raw
-`CreateCommand` / `CommandText =` / `AddWithValue` reappears — verified red, then green.
+**Measured:** 8 844/8 844 after the guard, **8 853** after the localization fix; Debug and Release 0/0; live probe
+`tools/probes/CharsetProbe` **15/15** across parameter · F5 · DDL (stored source proven byte-identical after a
+refusal) · import · debugger. Three `CharsetGuardSeamTests` fail the build if a raw `CreateCommand` /
+`CommandText =` / `AddWithValue` reappears — verified red, then green.
 
-**Localization follow-up (after the user's manual verification).** The refusal reached the SQL editor in
-**English on a Polish UI** — both resource entries were correct and *nothing read them*: the refusal is
-**wrapped** into `QueryExecutionException` on the way out and the display site read `ex.Message`. Fixed with one
-resolver, `App/Localization/ErrorText.cs`, which walks the `InnerException` chain; wired at **27** display sites
-plus the Script Executor (which flattens to a string in the Firebird layer, so `ScriptStatementResult` gained an
-optional `LocalizedError`). ⭐ This produced **architecture rule 12** in `CLAUDE.md` — the failure mode is not a
-missing entry, it is a perfect entry nothing resolves.
-
-**Results as measured (⛔ not re-run since — these are the numbers the acceptance rests on):**
-**8 844 / 8 844** after the guard (8 813 + 31), **8 853** after the localization fix (+9, one draft test
-dropped as redundant); Debug and Release both **0 warnings / 0 errors**; live probe **15/15**. ⚠ Across the
-final series one run in ~3–6 lost exactly ONE test to the **known upstream Avalonia headless race** —
-identified by its STACK (`DefaultRenderLoop.Add` → `Dispatcher.VerifyAccess` →
-`AvaloniaHeadlessPlatform.Initialize`), not by the test name, and **not a product defect**. See
-`avalonia-headless-session-race.md`; the rule is "re-run once".
-
-⚠ **A flake this stage MANUFACTURED and then removed, worth remembering:** the first two drafts of the
-localization tests mutated process-global language state (`Loc.Apply`, then the catalog seam). Both raced with
-`UiStrings`-reading tests outside `HeadlessCollection` and produced **2–3 failures in unrelated classes, ~1 run
-in 3**. The accepted version touches no global state at all — wording is asserted against the resource sets
-directly, and the resolution mechanism is proved by giving the wrapper a message that DIFFERS from the refusal's.
-
-⛔ **Explicitly OUT of Phase 5, by decision, and still open:** the UX of the read-side "cannot transliterate"
-message (a legitimate procedure whose source the connection charset cannot decode fails with the server's bare
-wording), and the product decision whether `NONE` should stay in `CharsetCatalog.Supported` (it is lossy and
-machine-dependent — gotcha #373).
+⛔ **Still open, deliberately out of Phase 5:** the UX of the read-side "cannot transliterate" message, and whether
+`NONE` should stay in `CharsetCatalog.Supported` (lossy and machine-dependent — gotcha #373).
 
 ### Ratified but not started — each with a measured scope
 
