@@ -268,6 +268,161 @@ public class DebuggerTabVmTests
 
         Assert.Contains(vm.Preflight, i => i.Message == EmberTern.App.UiStrings.DebuggerPreflightGenerator);
         Assert.Contains(vm.Preflight, i => i.Message == EmberTern.App.UiStrings.DebuggerPreflightAutonomousTx);
+
+        // The same scan arms the bar in the DEBUG view — one scan, two consumers, so the launch panel's
+        // sentences and the running view's bar can never disagree about the same code.
+        Assert.True(vm.IsIrreversibleAlertVisible);
+    }
+
+    // ── The §4.6 irreversible-effects warning (Faza 4) ───────────────────────────────────────────────
+
+    private const string SideEffectSql = """
+        create procedure sp_side as
+        declare v integer;
+        begin
+          v = gen_id(g_seq, 1);
+        end
+        """;
+
+    private const string CleanSql = """
+        create procedure sp_clean as
+        declare v integer;
+        begin
+          v = 1;
+        end
+        """;
+
+    /// <summary>Code with no §4.6 boundary must say nothing at all — the bar is not decoration.</summary>
+    [Fact]
+    public async Task CleanCode_ShowsNoIrreversibleAlert()
+    {
+        var vm = new DebuggerTabViewModel("SP_CLEAN", _ => Task.FromResult<string?>(CleanSql),
+            new FakeLauncher(new FakeExecutor()));
+        await vm.PrepareAsync();
+
+        Assert.False(vm.IsIrreversibleAlertVisible);
+    }
+
+    /// <summary>
+    /// ⭐ Dismissing is per RUN, not for ever: the ✕ hides the bar, and the next Prepare — which is what Launch
+    /// and Restart both go through — re-arms it while the code is still risky. That is the whole reason the ✕ is
+    /// allowed to be cheap.
+    /// </summary>
+    [Fact]
+    public async Task DismissingTheAlert_HidesIt_AndTheNextPrepareBringsItBack()
+    {
+        var vm = new DebuggerTabViewModel("SP_SIDE", _ => Task.FromResult<string?>(SideEffectSql),
+            new FakeLauncher(new FakeExecutor()));
+        await vm.PrepareAsync();
+        Assert.True(vm.IsIrreversibleAlertVisible);
+
+        vm.DismissIrreversibleAlertCommand.Execute(null);
+        Assert.False(vm.IsIrreversibleAlertVisible);
+
+        await vm.PrepareAsync();
+        Assert.True(vm.IsIrreversibleAlertVisible);
+    }
+
+    /// <summary>
+    /// ⭐⭐ The modal is asked ONCE per launch of risky code, it is a real gate (Cancel stops the launch), and it
+    /// never appears for clean code.
+    /// </summary>
+    [Fact]
+    public async Task TheModal_AsksOnlyForRiskyCode_AndCancelStopsTheLaunch()
+    {
+        var asked = 0;
+        var vm = new DebuggerTabViewModel("SP_SIDE", _ => Task.FromResult<string?>(SideEffectSql),
+            new FakeLauncher(new FakeExecutor()));
+        vm.ConfirmationRequested += _ => { asked++; return Task.FromResult(false); };
+        await vm.PrepareAsync();
+
+        await vm.LaunchCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, asked);
+        // Cancelled: the launch never started, so the tab is still sitting on its launch panel.
+        Assert.Equal(DebuggerPhase.ReadyToLaunch, vm.Phase);
+
+        var clean = new DebuggerTabViewModel("SP_CLEAN", _ => Task.FromResult<string?>(CleanSql),
+            new FakeLauncher(new FakeExecutor()));
+        var askedForClean = 0;
+        clean.ConfirmationRequested += _ => { askedForClean++; return Task.FromResult(true); };
+        await clean.PrepareAsync();
+        await clean.LaunchCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, askedForClean);
+    }
+
+    /// <summary>
+    /// ⭐⭐ "Do not show again" silences the MODAL and nothing else: the preference is stored, the second launch
+    /// asks nothing — and the bar still says what the code does. ⛔ If this ever starts asserting that the bar
+    /// disappears too, the warning has been turned into a mute button.
+    /// </summary>
+    [Fact]
+    public async Task AcknowledgingTheModal_StopsAskingButKeepsTheBar()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ember-dbg-ack-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var preferences = new EmberTern.App.Settings.PreferencesService(new PreferencesStore(dir));
+            var vm = new DebuggerTabViewModel("SP_SIDE", _ => Task.FromResult<string?>(SideEffectSql),
+                new FakeLauncher(new FakeExecutor())) { Preferences = preferences };
+
+            var asked = 0;
+            vm.ConfirmationRequested += request =>
+            {
+                asked++;
+                request.SuppressChecked = true;      // the user ticks the box…
+                return Task.FromResult(true);        // …and continues
+            };
+
+            await vm.PrepareAsync();
+            await vm.LaunchCommand.ExecuteAsync(null);
+            Assert.Equal(1, asked);
+            Assert.True(preferences.Current.DebuggerIrreversibleWarningAcknowledged);
+
+            await vm.PrepareAsync();
+            await vm.LaunchCommand.ExecuteAsync(null);
+
+            Assert.Equal(1, asked);                  // never asked again…
+            Assert.True(vm.IsIrreversibleAlertVisible); // …but still told
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// ⚠ A ticked box on a CANCELLED dialog decides nothing. Cancelling means the user did not accept the risk,
+    /// so it must not silence the next warning.
+    /// </summary>
+    [Fact]
+    public async Task TickingTheBoxThenCancelling_DoesNotSilenceTheWarning()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ember-dbg-ack2-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var preferences = new EmberTern.App.Settings.PreferencesService(new PreferencesStore(dir));
+            var vm = new DebuggerTabViewModel("SP_SIDE", _ => Task.FromResult<string?>(SideEffectSql),
+                new FakeLauncher(new FakeExecutor())) { Preferences = preferences };
+
+            vm.ConfirmationRequested += request =>
+            {
+                request.SuppressChecked = true;
+                return Task.FromResult(false);       // …then cancels
+            };
+
+            await vm.PrepareAsync();
+            await vm.LaunchCommand.ExecuteAsync(null);
+
+            Assert.False(preferences.Current.DebuggerIrreversibleWarningAcknowledged);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+        }
     }
 
     [Fact]

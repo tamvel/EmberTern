@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!--
     EmberTern — English base (neutral) resources. GENERATED from UiStrings during the localization stage and
@@ -1055,6 +1055,24 @@ Closing this tab discards these changes.</value>
   </data>
   <data name="DebuggerPreflightAutonomousTx" xml:space="preserve">
     <value>Contains IN AUTONOMOUS TRANSACTION — work committed there is permanent and survives the debug rollback.</value>
+  </data>
+  <data name="DebuggerIrreversibleTitle" xml:space="preserve">
+    <value>Debugging can change the database</value>
+  </data>
+  <data name="DebuggerIrreversibleMessage" xml:space="preserve">
+    <value>This code contains operations whose effects cannot be undone by the debug session's rollback — for example IN AUTONOMOUS TRANSACTION, or generator use. Debugging will run them for real.</value>
+  </data>
+  <data name="DebuggerIrreversibleContinue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="DebuggerIrreversibleCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="DebuggerIrreversibleDoNotAskAgain" xml:space="preserve">
+    <value>Do not show this warning again</value>
+  </data>
+  <data name="DebuggerIrreversibleBar" xml:space="preserve">
+    <value>Possible irreversible effects</value>
   </data>
   <data name="DebuggerPreflightGenerator" xml:space="preserve">
     <value>Uses a generator/sequence (GEN_ID / NEXT VALUE FOR) — generator values are consumed permanently and are not restored on rollback.</value>
@@ -7241,5 +7259,11 @@ Save them before closing?</value>
   </data>
   <data name="Import.Source.NotReadableXls" xml:space="preserve">
     <value>'{0}' is not a readable .xls workbook. A file saved in the newer Excel format keeps working under an .xls name, but it cannot be read as one — rename it to .xlsx, or open it in Excel and use Save As.</value>
+  </data>
+  <data name="Charset.Unrepresentable.Statement" xml:space="preserve">
+    <value>The statement contains the character '{0}' ({1}) at position {2}, which the connection character set {3} cannot represent. Sending it would have changed it silently, so nothing was sent. Use a UTF8 connection character set, or remove the character.</value>
+  </data>
+  <data name="Charset.Unrepresentable.Parameter" xml:space="preserve">
+    <value>Parameter {0} contains the character '{1}' ({2}) at position {3}, which the connection character set {4} cannot represent. Sending it would have changed it silently, so nothing was sent. Use a UTF8 connection character set, or remove the character.</value>
   </data>
 </root>

@@ -127,12 +127,9 @@ public sealed class PreferencesStore
     /// </para>
     /// </returns>
     public bool Save(Preferences preferences)
-    {
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        settings.UserSettings.Preferences = Validate(preferences);
-        _settings.Save(settings);
-        return _settings.LastSaveDiagnostic is null;
-    }
+        // ⚠ Through Update — see ApplicationSettingsStore.Update. Update already returns "did it reach the
+        // file", which is exactly the answer this method's contract promises.
+        => _settings.Update(settings => settings.UserSettings.Preferences = Validate(preferences));
 
     /// <summary>
     /// Normalizes a <see cref="Preferences"/> read from (or bound for) the file: each enumerated property is

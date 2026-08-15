@@ -268,4 +268,42 @@ internal static class Loc
         LocalizationSource.InvalidateAll();
         LanguageChanged?.Invoke(null, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// ⚠⚠ <b>Verification seam — empties the process-global subscriber list for the duration of one test, then
+    /// puts back exactly what was there.</b> Nothing in the product calls it.
+    ///
+    /// <para>⭐ <b>Why a test seam has to exist at all, stated honestly.</b> <see cref="LanguageChanged"/> is
+    /// <c>static</c>, so its subscriber list is process-wide and lives as long as the process. In the running
+    /// app that is not a leak — there is exactly one <c>MainWindowViewModel</c> and it is meant to live as long
+    /// as the app (the Settings Center, which is created per window opening, correspondingly
+    /// <c>Dispose</c>s). In a TEST PROCESS the same fact is fatal: dozens of test classes each build a view
+    /// model, every one of them stays subscribed, and the next test that swaps the catalog broadcasts into all
+    /// of them at once. Measured: 45 failures out of 8 799, deterministic, none of them about the code under
+    /// test — a leaked view model bound to a headless window answered on the wrong thread
+    /// (<c>InvalidOperationException: the calling thread cannot access this object</c>), and two more resolved a
+    /// message against a catalog that was never theirs (<c>FormatException</c>).</para>
+    ///
+    /// <para>⭐ <b>It isolates rather than serialises, which is the whole point.</b> Splitting the run into
+    /// hand-maintained partitions only separated the leaking test from the observing one; it did not stop a view
+    /// model from outliving the test that made it. Emptying the list makes each test observe exactly the
+    /// subjects IT created, so <c>dotnet test EmberTern.slnx</c> is one green command and the healthy tests stay
+    /// parallel.</para>
+    ///
+    /// <para>⚠ Restoring the SAVED delegate deliberately drops whatever subscribed during the test — that is
+    /// test garbage by definition, and dropping it is what stops the list growing across a run. ⛔ Do not make
+    /// this public and do not reach for it from a test that is not swapping the catalog; the guard
+    /// <c>EveryTestThatTouchesTheGlobalLanguageState_IsIsolated</c> states who may.</para>
+    /// </summary>
+    internal static IDisposable IsolateSubscribersForVerification()
+    {
+        var saved = LanguageChanged;
+        LanguageChanged = null;
+        return new SubscriberScope(saved);
+    }
+
+    private sealed class SubscriberScope(EventHandler? saved) : IDisposable
+    {
+        public void Dispose() => LanguageChanged = saved;
+    }
 }

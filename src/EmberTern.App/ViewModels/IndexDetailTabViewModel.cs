@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.App.Localization;
 using EmberTern.Core.Metadata;
 using EmberTern.Firebird;
 
@@ -204,7 +205,7 @@ public partial class IndexDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.IndexCompileFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.IndexCompileFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)
@@ -257,7 +258,7 @@ public partial class IndexDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.IndexCompileFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.IndexCompileFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)

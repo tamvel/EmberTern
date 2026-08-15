@@ -84,23 +84,17 @@
          wystąpień w AXAML, więc migracja jest osobną decyzją produktową — NIE tematem aktualizacji
          frameworka i NIE tematem M4. Zapis: docs/design/avalonia-12.1.1-update.md §3 R4. -->
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
-    <!-- DPAPI (ProtectedData) for encrypting connection passwords at rest. Not part
-         of the BCL on .NET Core+; this Microsoft-owned package supplies it.
-         ⚠ ZOSTAJE NA 9.0.0 — decyzja, nie zaniedbanie (2026-08-05). `dotnet list package` z flagą
-         `outdated` raportuje 10.0.10, ale: (a) nasz TFM to **net9.0**, więc pasujące pasmo to 9.0.x, nie
-         10.0.x; (b) skan z flagami `vulnerable` + `include-transitive` daje ZERO podatnych pakietów, więc
-         przejście nie wnosi korzyści bezpieczeństwa (a jako referencja BEZPOŚREDNIA pakiet jest pod
-         NU1902/NU1903 przy TreatWarningsAsErrors, czyli nowe ostrzeżenie i tak zerwałoby build);
-         (c) ⭐ ten pakiet leży na ścieżce reguły #11 — wykonuje `Protect`/`Unprotect` na `settings.dat`,
-         czyli na profilach połączeń i hasłach. Podmiana biblioteki kryptograficznej bez zmierzonej
-         korzyści jest dokładnie tym, czego reguła #11 zabrania.
-         ⚠⚠ TRZECIA OPCJA, KTÓRĄ NARZĘDZIE UKRYWA: istnieje **9.0.18** (2026-07-14) — servicing w naszym
-         pasmie — a raport „outdated" pokazuje tylko najnowszą wersję OGÓLNIE, więc aktualizacja w pasmie jest
-         niewidoczna, gdy istnieje nowsze pasmo. Decyzja wygląda przez to na „wszystko albo nic", choć
-         nie jest. ⭐ Repo ma już precedens w tym pasmie: `System.IO.Packaging` w EmberTern.Office stoi
-         na 9.0.18. Podniesienie do 9.0.18 to osobny krok z własną weryfikacją round-tripu `settings.dat`
-         — nie „przy okazji" sprintu Avalonii. Zapis: docs/design/avalonia-12.1.1-update.md §10. -->
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
+    <!-- DPAPI (ProtectedData) for encrypting connection passwords at rest. Not part of the BCL on
+         .NET Core+; this Microsoft-owned package supplies it.
+         ⭐ FAZA 6 (2026-08-15): 9.0.0 → 10.0.11, najnowsza stabilna. Poprzedni komentarz trzymał to na
+         9.0.0 głównie argumentem „nasz TFM to net9.0, więc pasmo 9.0.x" — ten argument został ZMIERZONY
+         i jest nieprawdziwy dla 10.0.11: pakiet zawiera realny asset `lib/net9.0`, więc na net9.0
+         dostajemy binarkę celowaną w net9.0, a nie fallback na netstandard2.0. Zostaje natomiast w mocy
+         powód, dla którego ten pakiet w ogóle wymaga uwagi: ⭐ leży na ścieżce reguły #11 — wykonuje
+         `Protect`/`Unprotect` na `settings.dat`, czyli na profilach połączeń i hasłach. Dlatego
+         aktualizacja jest domknięta CELOWANĄ weryfikacją round-tripu szyfrowania (testy magazynu
+         ustawień i profili), a nie samym zielonym buildem. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup>

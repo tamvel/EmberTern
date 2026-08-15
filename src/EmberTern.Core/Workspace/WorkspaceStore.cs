@@ -44,10 +44,7 @@ public sealed class WorkspaceStore
     public WorkspaceState? Load()
         => _settings.Load()?.Workspace;
 
+    // ⚠ Through Update — see ApplicationSettingsStore.Update for the measured reason.
     public void Save(WorkspaceState state)
-    {
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        settings.Workspace = state;
-        _settings.Save(settings);
-    }
+        => _settings.Update(settings => settings.Workspace = state);
 }

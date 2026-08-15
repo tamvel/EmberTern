@@ -9,7 +9,22 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-12.**
+**Last verified: 2026-08-15.**
+
+---
+
+## 0. ⏭ HANDOFF — read this first
+
+> **Current milestone:** Audit follow-up — **Phase 7 (`ARCHITECTURE.md` as-built) ✅ DONE**, awaiting the
+> user's review. Phases 4, 5 and 6 are closed.
+> **Next task:** ⏭ **Final verification of the whole etap, then the push to both remotes. ⛔ NOT started.**
+>
+> **Work lives on the branch `fix/audit-followup-2026-08`, NOT on `master`, and is NOT pushed.**
+> Nine commits. ⭐ The push (origin + private) is what closes the etap, and it happens only after the user
+> accepts it as a whole.
+
+⛔ Licensing, Firebase, License Manager and the installer remain **out of scope** — but Phase 6 put **two
+concrete licensing items** on that etap's desk (NPOI's OSMF EULA, ImageSharp's Split Licence), see §3.
 
 ---
 
@@ -17,25 +32,18 @@
 
 | | |
 |---|---|
-| Branch | **`master`** — current, clean working tree |
-| HEAD | `2ce68fe` *merge(fix): trzy defekty z jednego zgloszenia uzytkownika (2026-08-12)* |
-| Build | **0 warnings / 0 errors** (`TreatWarningsAsErrors=true`) |
-| Tests | **8 799 / 8 799 green** |
+| Branch | **`fix/audit-followup-2026-08`** (cut from `master`) — clean working tree, **not pushed** |
+| HEAD | Phase 5 closing commit on `fix/audit-followup-2026-08` |
+| Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`** (`TreatWarningsAsErrors=true`) |
+| Tests | **8 853** (8 813 + 31 guard + 9 localization) — ⛔ measured, not re-run at closure |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | `origin` (company Gitea) + `private` (GitHub) — **both** receive every accepted stage |
 
-⚠ **Both long-running feature branches are now merged into `master`.** `feat/product-polish` and
-`feat/localization` still exist on both remotes by earlier instruction, but `master` is an ancestor-
-superset of both, so **a new session starts from `master`**. (Older notes telling you to start from
-`feat/product-polish` are stale — that decision was about timing and its moment has passed.)
+⚠⚠ **Build BOTH configurations before asking for a visual check.** `CLAUDE.md` runs the app from
+`bin\Debug\`, and an etap built only in `Release` left the user verifying a binary that predated the
+feature — reported as three UI defects that did not exist. Measured cost: one full review cycle.
 
-⚠ **Test-count and partition figures go stale every stage. Measure, do not quote.** The headless
-partition filter is a list of class names and must be **derived**, never transcribed — a missing
-exclusion fails silently (the class runs in the wrong partition and hits the global-`Loc` race):
-
-```bash
-grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs | xargs -n1 basename | sed 's/\.cs$//'
-```
+⚠ **Test counts go stale every stage. Measure, do not quote.**
 
 ---
 
@@ -74,13 +82,151 @@ reasoning lives.
 | **Product Polish M0–M5** (tokens, base controls, colour, density, typography, final polish) | 2026-08-10 | `design/product-polish.md` §19 |
 | Post-M5 UX package (points 1–6, incl. Database Properties) | 2026-08-10 | `history/27` |
 | **Localization** — App + Core/Firebird (C0–C8) + full Polish translation | 2026-08-11 | `design/localization.md`, `history/28` |
+| **Audit follow-up — test isolation** (global `Loc` state) | 2026-08-14 | commit `440c0ce` |
+| **Audit follow-up — E: locked read-modify-write for settings** | 2026-08-14 | commit `972426e` |
+| **Audit follow-up — Avalonia headless race: diagnosed, closed on our side** | 2026-08-14 | `avalonia-headless-session-race.md`, commit `b6f9e6b` |
+| **Audit follow-up — Phase 4: debugger irreversible-effects warning** ✅ user-verified | 2026-08-14 | commits `1130e3d`, `1852611` |
+| **Audit follow-up — Phase 5: charset guard** ✅ user-verified | 2026-08-15 | gotchas #372/#373, `tools/probes/CharsetProbe`, rule 12 in `CLAUDE.md` |
+| **Audit follow-up — Phase 6: NuGet to latest stable** | 2026-08-15 | §3 below — 8 packages raised, 2 held for a stated reason |
+| **Audit follow-up — Phase 7: `ARCHITECTURE.md` as-built** | 2026-08-15 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
+
+---
+
+## 2a. The audit follow-up etap — as accepted
+
+⚠ Delivered on `fix/audit-followup-2026-08`, **not yet merged and not pushed.**
+
+**Test isolation (`440c0ce`).** The full suite failed 45 tests deterministically because
+`Loc.LanguageChanged` is `static`: every view model any earlier test built stayed subscribed, and the
+next test to swap the catalog broadcast into all of them. Fixed at the source —
+`Loc.IsolateSubscribersForVerification()` plus `IsolatesGlobalLanguageState` on `HeadlessCollection`, so
+each headless test gets a clean subscriber list **automatically**. ⛔ The old three-partition manual
+split is gone and must not return; it hid this for months. `DiagnosticsPanelViewModel` stopped
+subscribing to the static event (it leaked one live VM per editor tab) and became an ordinary child of
+the app's single long-lived subscriber. Two source guards keep both rules armed.
+
+**E — settings read-modify-write (`972426e`).** Measured data loss: a facade doing
+`Load() ?? new ApplicationSettings()` → mutate → `Save()` turned a *transient* read failure into
+DEFAULTS and wrote them. Against a concurrent publisher: **182 failed reads, 89 of which wrote
+defaults, ending with 0 of 5 connection profiles surviving** — profiles and passwords, silently.
+`ApplicationSettingsStore.Update()` now takes the cross-process lock, reads **under it**, mutates and
+writes via `SaveCore`. `Missing` is the ONLY status that may produce a default aggregate and this is
+the only place that may; `Unreadable` / `Corrupt` / `FutureVersion` end the operation untouched.
+15 call sites migrated. ⛔ Not a retry — the lock's scope removes the window.
+
+**Phase 4 — debugger irreversible-effects warning (`1130e3d`, `1852611`), ✅ user-verified in the app:**
+
+- detection of `IN AUTONOMOUS TRANSACTION` / `GEN_ID` / `NEXT VALUE FOR` reuses the existing
+  `DebugPreflight`; `Scan` gained `out bool irreversible`, so **one scan** answers both the launch
+  panel's sentences and the running view's bar and they cannot disagree;
+- a **one-time modal** before launching risky code, with **"Nie pokazuj tego ostrzeżenia ponownie"**;
+  Cancel really stops the launch;
+- a **dismissible bar** at the foot of the debug view (shared `MessageBanner`, `Classes="docked"`) —
+  the launch panel disappears when a session starts, so that is where the warning was missing;
+- `BuildPreflight` runs on every Launch **and** Restart, so re-arming is automatic; dismissing is per
+  run;
+- ⭐ the preference silences the **modal only, never the bar** — pinned by a test;
+- ⛔ **no safe mode and no blocking of valid SQL**: suppressing a generator or an autonomous
+  transaction would mean refusing to execute correct SQL, against the debugger's fidelity law (§F).
+
+**UX fix (`1852611`).** The suppress checkbox was clipped (*"Nie pokazuj tego ostrzeż…"*). Measured:
+the label needs **358 px in English and 435 px in Polish** against ~380 px of content width — so a row
+of its own is necessary and **still not sufficient**, hence the label also wraps. ⛔ The shared dialog
+width (420, also `TextPromptDialog`) and the font size were **not** touched, and the wording stays as
+accepted — the layout absorbs longer localizations instead. `ConfirmDialogLayoutTests` measures the
+property ("nothing is cut"), verified red in both broken shapes before being accepted green.
 
 ---
 
 ## 3. Open work
 
-⏭ **There is no stage in progress. The next topic is a user decision.** The ratified localization
-order (C0) is exhausted, Product Polish §13 has no item after M5, and the debugger is closed.
+⏭ **Next task: final verification of the etap, then the push to both remotes. ⛔ Not started.**
+
+### Phase 7 — `ARCHITECTURE.md` "as built" ✅ DONE
+
+Rewritten from scratch against the code. ⚠ The previous file dated from **2026-06-02** (the V1 era) and had
+gone silently stale in the most misleading way: it described `EmberTern.Core` as **17 files** against a real
+**304**, Firebird 12 against 42, App 30 against 274 — i.e. it read as a plausible document while describing a
+different product.
+
+**Scope:** solution shape and the one-way dependency graph · the three connection lanes as the central domain
+boundary · F5 end-to-end · inter-layer communication · shell/theming/commands · the SQL/PSQL front-end and its
+three safety properties · metadata + DDL change safety · debugger and the Fidelity Law · charset guard ·
+`ApplicationSettingsStore` guarantees · localization incl. `ErrorText` · modules · test infrastructure incl. the
+upstream headless race and the guard tests · architectural invariants · deliberate limits.
+
+**Validation:** every cited type name checked to exist in `src/`/`tests/` (the only three that do not resolve
+are `IDbProvider` and `IMessenger`, cited precisely as things the project does **not** have, plus
+`tools/probes/CharsetProbe` which is outside `src/`); every referenced document path checked to exist; the file
+counts, the six `IPerformanceRule` implementations and the ten per-object editors re-counted from the tree.
+
+**Discrepancies found while documenting — recorded, not fixed** (documentation phase, no code touched):
+
+- ⚠ **`MessageBanner` is used by 21 views**, where prior prose said "23".
+- ⚠ **Naming trap around "breadcrumbs".** `CLAUDE.md` lists Breadcrumbs as deliberately unbuilt — true of
+  *editor* breadcrumbs — but `Controls/BreadcrumbBar` **does exist** as the debugger's call-stack breadcrumb.
+  A reader grepping the word finds a real control and concludes the docs are wrong. Written down explicitly in
+  `ARCHITECTURE.md` §16. Editor folding, by contrast, has genuinely zero occurrences.
+- ⚠ **`SourceObjectDetailTabViewModel` is an abstract base**, not an eleventh editor — the "ten per-object
+  editors" count is correct, but a file listing suggests eleven.
+
+### Phase 6 — NuGet update to latest stable ✅ DONE
+
+Target versions taken from nuget.org (`--outdated` + the flat-container API per package), applied in ONE pass;
+nothing pre-release. Full reasoning in commit `8ba4215`.
+
+⭐ **The packages expected to be hard were already current** — `Avalonia` (+Desktop/Themes.Fluent/Fonts.Inter/
+Headless) 12.1.1, `Avalonia.AvaloniaEdit` 12.0.0, `Avalonia.Controls.DataGrid` 12.1.2,
+`FirebirdSql.Data.FirebirdClient` 10.3.4, `CommunityToolkit.Mvvm` 8.4.2, `AvaloniaUI.DiagnosticsSupport` 2.2.3
+are each **the newest stable that exists**. So the two "deliberate mismatches" are **not pins**: no 12.1.x
+AvaloniaEdit and no 12.1.1 DataGrid were ever published.
+
+**Raised (9):** `System.Security.Cryptography.ProtectedData` 9.0.0→10.0.11 (⭐ rule #11 path — closed with 215
+targeted settings/crypto tests; the old "our TFM is net9.0" objection was measured false, 10.0.11 ships a real
+`lib/net9.0`), `System.IO.Packaging` 9.0.18→10.0.11, `System.Security.Cryptography.Xml` 8.0.4→10.0.11,
+`DocumentFormat.OpenXml` 3.1.0→3.5.1, `ExcelDataReader` 3.7.0→3.9.0, `Microsoft.NET.Test.Sdk` 17.11.1→18.9.0,
+`xunit` 2.9.2→2.9.3, `xunit.runner.visualstudio` 2.8.2→4.0.0, `SixLabors.ImageSharp` 2.1.11→2.1.13.
+
+**The one breaking change reaching our code:** OpenXml 3.5.1 annotates `WorkbookPart.Workbook` and
+`WorksheetPart.Worksheet` as nullable, so `XlsxExporterTests`' read-back helpers failed `CS8602`. Adapted, not
+suppressed — ⛔ no `#pragma`, no `NoWarn`. Product code needed no change.
+
+⛔ **Two held back, both TEST-ONLY and both LICENSING — for the licensing etap, not technical limits:**
+**NPOI** stays 2.7.2 (2.7.2 is `Apache-2.0`; **2.8.0 is `OSMFEULA.txt`** and adds a build gate demanding
+`<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>` — accepting terms on the owner's behalf).
+**SixLabors.ImageSharp** raised only within the 2.x line NPOI supports; 3.0+ moved to the Six Labors Split
+Licence. ⭐ If NPOI ever reaches 2.8.0+, the ImageSharp override disappears entirely — 2.8.0 renders through
+SkiaSharp.
+
+**Verified:** Debug + Release 0/0; full suite **8 853/8 853** (total unchanged, so nothing left discovery);
+`--vulnerable --include-transitive` zero across all five projects; `--outdated` now lists only the two held.
+
+### Phase 5 — charset guard ✅ CLOSED (implemented, tested, user-verified)
+
+Full narrative is in commit `aa12d9a` and gotchas **#372/#373**; the rule it produced is **architecture rule 12**
+in `CLAUDE.md`. In one paragraph: a character the CONNECTION charset cannot hold was destroyed **client-side, in
+the driver's encoder, before the server saw it** — no exception, no server error. ⚠ The audit's "becomes `?`" was
+incomplete: **330** characters become a *plausible different* one (`£`→`L`, `¼`→`1`, `À`→`A`), so a procedure body
+sent as `R = 'Cena £100 ¼ À'` was stored as `R = 'Cena L100 1 A'` — valid PSQL, wrong number. Reads were already
+safe (the server refuses transliteration loudly), so this was write-side only.
+
+Built as **ONE seam**, `FirebirdCommandGuard`, which every command creation and parameter bind goes through (96
+sites + the import batch), refusing **before** the driver encodes; DDL validates the whole batch **before a
+transaction opens**, so refused source never reaches the server at all. Core owns the oracle
+(`CharsetRepresentation`) and the wire question (`CharsetCatalog.ResolveWireEncoding`); ⛔ `CharsetCatalog.Resolve`
+was deliberately left untouched — it answers a *different* question, and merging them was the live `NONE` defect
+this closed in the shipped import guard. Messages go through localization in both languages, which needed
+`App/Localization/ErrorText.cs` (a refusal is *wrapped*, so the display site was reading the English `Message`).
+
+**Measured:** 8 844/8 844 after the guard, **8 853** after the localization fix; Debug and Release 0/0; live probe
+`tools/probes/CharsetProbe` **15/15** across parameter · F5 · DDL (stored source proven byte-identical after a
+refusal) · import · debugger. Three `CharsetGuardSeamTests` fail the build if a raw `CreateCommand` /
+`CommandText =` / `AddWithValue` reappears — verified red, then green.
+
+⛔ **Still open, deliberately out of Phase 5:** the UX of the read-side "cannot transliterate" message, and whether
+`NONE` should stay in `CharsetCatalog.Supported` (lossy and machine-dependent — gotcha #373).
+
+### Ratified but not started — each with a measured scope
 
 ### Ratified but not started — each with a measured scope
 
@@ -105,8 +251,10 @@ order (C0) is exhausted, Product Polish §13 has no item after M5, and the debug
 
 | Item | Note |
 |---|---|
-| **Charset silent data loss** | Measured on live FB5: a character outside the **connection** charset stores as `?` with **no error**, even into a UTF8 column, and `WIN1250` is the default. Needs ONE shared guard (natural home `CharsetCatalog`, `EncoderExceptionFallback`). ⚠ The statement-**text** path (`FirebirdDdlExecutor`) is **unmeasured** — measure it first; if confirmed it could corrupt user source code. Own architectural audit. |
-| **Full-suite hang** | Intermittent, in the headless partition (#94/#226/#261). Three candidate causes, none proven; the run is split into three partitions as the working answer. ⛔ Its own infrastructure task — never detour a stage into it. |
+| **`PreferencesService` holds a failed read for the whole session** | ⚠ **Found while implementing E (2026-08-14); deliberately left out of E's scope.** `PreferencesService` reads `_current = store.Load()` **once**, and `PreferencesStore.Load` turns any failure into validated DEFAULTS. If that one read fails transiently, the service serves default preferences for the rest of the session, and the next `Apply` persists them as if the user had chosen them. ⛔ `Update` does **not** catch this: by then the in-memory value is already wrong, so the write is entirely legitimate. Same shape as the defect E fixed, far narrower blast radius (the `Preferences` section only — never profiles, passwords or workspace). Needs `PreferencesService` to be able to tell "no preferences yet" from "could not read them". |
+| **`SettingsPortability.ExportTo` can export defaults** | ⚠ Same 2026-08-14 finding, other direction. It is **read-only** (correctly classified out of E's Class A), but `_store.Load() ?? new ApplicationSettings()` means a failed read produces an **empty export file** while the user believes they took a backup. Not a `settings.dat` corruption, so not rule #11 — but it is a backup that silently isn't one. |
+| ~~Charset silent data loss~~ | ⏭ **Promoted out of the backlog — it is now Phase 5, the next task.** The formerly unmeasured DDL/source path was measured and IS vulnerable. See §3 "Phase 5". |
+| **Headless session init race** *(upstream — closed on our side)* | ⭐ **Root cause established 2026-08-14 and reproduced deterministically.** `EnsureIsolatedApplication` calls the process-wide `Dispatcher.ResetBeforeUnitTests()` on **every** `Dispatch`; a parallel thread constructing any Avalonia object claims `Dispatcher.UIThread` in that window and the session's `Compositor` then fails `VerifyAccess()`. Probe: **149/150 dispatches fail** with 4 noise threads, **0/150** without. Cost here: **1 test in ~1 run of 3–8**. ⭐ **It is NOT an EmberTern defect** and is identified by the STACK, not the test name. ⛔ **Five repairs measured and rejected** — no warm-up, no `Delay`, no retry, no global parallelism switch-off; do not attempt a sixth. Full evidence, the ready-to-file upstream report and the recognition signature: [`docs/avalonia-headless-session-race.md`](avalonia-headless-session-race.md); the "re-run once" rule is in `CLAUDE.md`. |
 | Activity Monitor / Data Import width at 150 %/175 % DPI | Ratified as debt: both command bars are bare horizontal `StackPanel`s (~1130 DIP) with **no** `ScrollViewer`, so they clip rather than compress. Not a DPI defect — they do not fit at 100 % on 1366×768 either. |
 | **B1** — `TableDetailTabView` private icons | PK/FK/Unique drawn with a raw `<Path>` over locally declared geometries on a **14**-unit grid, invisible to three mechanisms at once. Prepared and measured; appearance deliberately unresolved. |
 | **Z‑3** — Table Data row height | A density question; cause must be found first (a taller row may be a deliberate readability decision). |

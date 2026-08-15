@@ -84,8 +84,7 @@ public sealed class FirebirdImportTargetPreparer
         long result;
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _session.Transaction;
             result = await run(cmd).ConfigureAwait(false);

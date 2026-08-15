@@ -42,8 +42,7 @@ public sealed class FirebirdPlanReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             // Readers never open their own transaction: attach to the user's working tx
             // when active, else the managed driver prepares under an implicit tx.

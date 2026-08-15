@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EmberTern.App.Localization;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Security;
 using EmberTern.Firebird;
@@ -156,7 +157,7 @@ public partial class SecurityManagerTabViewModel : ViewModelBase
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = ex.Message;
+            ErrorMessage = ErrorText.Of(ex);
             return false;
         }
         catch (InvalidOperationException ex)

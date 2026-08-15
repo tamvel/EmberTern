@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using Avalonia;
@@ -19,6 +20,7 @@ using EmberTern.App;
 using EmberTern.App.Commands;
 using EmberTern.App.Completion;
 using EmberTern.App.Controls;
+using EmberTern.App.Localization;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
@@ -31,6 +33,7 @@ using System.Text.RegularExpressions;
 using Avalonia.Controls.Presenters;
 using Xunit;
 using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace EmberTern.Tests;
 
@@ -71,6 +74,23 @@ public sealed class HeadlessSessionFixture : IDisposable
 {
     public HeadlessUnitTestSession Session { get; } = HeadlessUnitTestSession.StartNew(typeof(HeadlessAppEntry));
 
+    // ⛔⛔ DO NOT ADD A CONSTRUCTOR THAT "WARMS THE SESSION UP". It was tried, measured, and reverted.
+    //
+    // HeadlessUnitTestSession builds its isolated Avalonia application LAZILY, inside the first Dispatch:
+    // EnsureIsolatedApplication → AvaloniaHeadlessPlatform.Initialize → Compositor → DefaultRenderLoop.Add →
+    // Dispatcher.VerifyAccess(). That last call intermittently throws "the calling thread cannot access this
+    // object". It is a real, still-open infrastructure defect (#94 / #226 / #286) — whichever headless test
+    // dispatches FIRST is the one that dies, which is why the failing test name changes every run.
+    //
+    // ⚠⚠ Adding `Session.Dispatch(() => { })` here looks like the obvious fix — one known moment, before any
+    // test. It does not touch the race; it only moves it into FIXTURE CONSTRUCTION, and a collection fixture
+    // that throws fails EVERY test in the collection. Measured on the full single-command run: with the
+    // warm-up a bad run lost 375 tests, without it the same bad run loses 1, and the failure RATE was
+    // indistinguishable (~2 in 5 either way). It bought nothing and multiplied the damage 375×.
+    //
+    // ⭐ The general lesson: making a flaky lazy initialisation EAGER does not make it reliable, it makes it
+    // load-bearing earlier. The real fix needs Avalonia's headless dispatcher/scope question answered — its own
+    // task, recorded in docs/current-state.md.
     public void Dispose() => Session.Dispose();
 
     private static class HeadlessAppEntry
@@ -81,10 +101,48 @@ public sealed class HeadlessSessionFixture : IDisposable
 }
 
 /// <summary>
+/// ⚠⚠ <b>Empties the process-global <c>Loc.LanguageChanged</c> subscriber list around every test it covers.</b>
+///
+/// <para>⭐ <b>This attribute is the automated isolation that replaced running the suite in hand-maintained
+/// partitions.</b> A static event's subscriber list is process-wide, so every view model any earlier test built
+/// stayed subscribed; the next test to swap the localization catalog then broadcast into all of them. Measured
+/// on this repository: <b>45 deterministic failures out of 8 799</b>, identical across two full runs, none of
+/// them about the code under test. Splitting the run into three partitions only moved the leaking test away
+/// from the observing one — the view models still outlived their tests, so the defect was hidden rather than
+/// fixed.</para>
+///
+/// <para>⚠ It is applied to the COLLECTION DEFINITION, so xunit runs it for every test in
+/// <see cref="HeadlessCollection"/> automatically — a new headless test cannot forget it, which is the property
+/// a per-class opt-in would not have. The tests in this collection are serialised by xunit (one session, one UI
+/// thread), so the single attribute instance is never entered concurrently; healthy tests outside the
+/// collection keep running in parallel and are untouched.</para>
+///
+/// <para>⛔ It is NOT a licence to leak. The one product leak this investigation surfaced —
+/// <c>DiagnosticsPanelViewModel</c> subscribing per Package tab — was fixed at the source, by making the panel
+/// an ordinary child of the app's single long-lived subscriber. What remains subscribed for the process is
+/// <c>MainWindowViewModel</c>, and that is a recorded decision (one window, app lifetime), not an oversight.</para>
+/// </summary>
+public sealed class IsolatesGlobalLanguageStateAttribute : BeforeAfterTestAttribute
+{
+    private IDisposable? _scope;
+
+    public override void Before(MethodInfo methodUnderTest) => _scope = Loc.IsolateSubscribersForVerification();
+
+    public override void After(MethodInfo methodUnderTest)
+    {
+        _scope?.Dispose();
+        _scope = null;
+    }
+}
+
+/// <summary>
 /// The one collection every headless-UI test class belongs to, so they share a single
-/// <see cref="HeadlessSessionFixture"/> — one session, one UI thread, for the whole process.
+/// <see cref="HeadlessSessionFixture"/> — one session, one UI thread, for the whole process — and, since the
+/// audit follow-up, a clean global localization state per test (see
+/// <see cref="IsolatesGlobalLanguageStateAttribute"/>).
 /// </summary>
 [CollectionDefinition(Name)]
+[IsolatesGlobalLanguageState]
 public sealed class HeadlessCollection : ICollectionFixture<HeadlessSessionFixture>
 {
     public const string Name = "headless-avalonia";

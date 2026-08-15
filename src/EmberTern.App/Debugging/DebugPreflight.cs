@@ -41,9 +41,19 @@ public sealed record DebugPreflightItem(DebugPreflightSeverity Severity, string 
 /// </summary>
 internal static class DebugPreflight
 {
-    public static IReadOnlyList<DebugPreflightItem> Scan(SemanticModel model, string source, bool hasStepPoints)
+    /// <param name="irreversible">
+    /// ⭐ True when the source carries a §4.6 boundary — <c>IN AUTONOMOUS TRANSACTION</c> or generator use —
+    /// i.e. an effect the debug session's rollback cannot undo.
+    /// <para>It is an <c>out</c> of the SAME scan that produces the items, deliberately: the launch panel needs
+    /// the sentences and the debug view needs the yes/no, and answering them from two scans would let the bar
+    /// and the pre-flight list disagree about the very same code. ⛔ Do not re-derive this by looking for the
+    /// warning TEXT in <paramref name="items"/> — that keys a data-safety decision on a localized string.</para>
+    /// </param>
+    public static IReadOnlyList<DebugPreflightItem> Scan(
+        SemanticModel model, string source, bool hasStepPoints, out bool irreversible)
     {
         var items = new List<DebugPreflightItem>();
+        irreversible = false;
 
         if (!hasStepPoints)
         {
@@ -71,6 +81,8 @@ internal static class DebugPreflight
         }
 
         var boundaries = ScanBoundaries(source);
+        irreversible = boundaries.autonomous || boundaries.generator;
+
         if (boundaries.autonomous)
         {
             items.Add(new DebugPreflightItem(DebugPreflightSeverity.Warning, UiStrings.DebuggerPreflightAutonomousTx));

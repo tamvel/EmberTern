@@ -1056,6 +1056,24 @@ Zamknięcie tej zakładki odrzuci te zmiany.</value>
   <data name="DebuggerPreflightAutonomousTx" xml:space="preserve">
     <value>Zawiera IN AUTONOMOUS TRANSACTION — praca zatwierdzona w takiej transakcji jest trwała i przetrwa wycofanie sesji debugowania.</value>
   </data>
+  <data name="DebuggerIrreversibleTitle" xml:space="preserve">
+    <value>Debugowanie może zmienić stan bazy danych</value>
+  </data>
+  <data name="DebuggerIrreversibleMessage" xml:space="preserve">
+    <value>Kod zawiera operacje, których skutków nie można cofnąć przez standardowy rollback sesji debugowania — na przykład IN AUTONOMOUS TRANSACTION lub operacje na generatorach. Debugowanie wykona je naprawdę.</value>
+  </data>
+  <data name="DebuggerIrreversibleContinue" xml:space="preserve">
+    <value>Kontynuuj</value>
+  </data>
+  <data name="DebuggerIrreversibleCancel" xml:space="preserve">
+    <value>Anuluj</value>
+  </data>
+  <data name="DebuggerIrreversibleDoNotAskAgain" xml:space="preserve">
+    <value>Nie pokazuj tego ostrzeżenia ponownie</value>
+  </data>
+  <data name="DebuggerIrreversibleBar" xml:space="preserve">
+    <value>Możliwe skutki nieodwracalne</value>
+  </data>
   <data name="DebuggerPreflightGenerator" xml:space="preserve">
     <value>Używa generatora/sekwencji (GEN_ID / NEXT VALUE FOR) — wartości generatora są zużywane trwale i nie wracają przy wycofaniu.</value>
   </data>
@@ -7292,5 +7310,11 @@ Zapisać je przed zamknięciem?</value>
   </data>
   <data name="WorkspaceTabUntitled" xml:space="preserve">
     <value>Edytor SQL</value>
+  </data>
+  <data name="Charset.Unrepresentable.Statement" xml:space="preserve">
+    <value>Instrukcja zawiera znak '{0}' ({1}) na pozycji {2}, którego nie da się zapisać w zestawie znaków połączenia {3}. Wysłanie zmieniłoby go po cichu, więc nic nie zostało wysłane. Użyj zestawu znaków UTF8 albo usuń ten znak.</value>
+  </data>
+  <data name="Charset.Unrepresentable.Parameter" xml:space="preserve">
+    <value>Parametr {0} zawiera znak '{1}' ({2}) na pozycji {3}, którego nie da się zapisać w zestawie znaków połączenia {4}. Wysłanie zmieniłoby go po cichu, więc nic nie zostało wysłane. Użyj zestawu znaków UTF8 albo usuń ten znak.</value>
   </data>
 </root>

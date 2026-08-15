@@ -47,10 +47,10 @@ public sealed class FirebirdDataEditor
         await EnsureTransactionAsync().ConfigureAwait(true);
         await ExecuteAsync(sql, cmd =>
         {
-            cmd.Parameters.AddWithValue("@newValue", newValue ?? DBNull.Value);
+            cmd.AddGuardedParameter("@newValue", newValue ?? DBNull.Value);
             for (int i = 0; i < primaryKey.Count; i++)
             {
-                cmd.Parameters.AddWithValue("@pk" + i.ToString(CultureInfo.InvariantCulture), primaryKey[i].Value ?? DBNull.Value);
+                cmd.AddGuardedParameter("@pk" + i.ToString(CultureInfo.InvariantCulture), primaryKey[i].Value ?? DBNull.Value);
             }
         }, cancellationToken).ConfigureAwait(true);
     }
@@ -70,7 +70,7 @@ public sealed class FirebirdDataEditor
         {
             for (int i = 0; i < values.Count; i++)
             {
-                cmd.Parameters.AddWithValue("@v" + i.ToString(CultureInfo.InvariantCulture), values[i].Value ?? DBNull.Value);
+                cmd.AddGuardedParameter("@v" + i.ToString(CultureInfo.InvariantCulture), values[i].Value ?? DBNull.Value);
             }
         }, cancellationToken).ConfigureAwait(true);
     }
@@ -90,7 +90,7 @@ public sealed class FirebirdDataEditor
         {
             for (int i = 0; i < primaryKey.Count; i++)
             {
-                cmd.Parameters.AddWithValue("@pk" + i.ToString(CultureInfo.InvariantCulture), primaryKey[i].Value ?? DBNull.Value);
+                cmd.AddGuardedParameter("@pk" + i.ToString(CultureInfo.InvariantCulture), primaryKey[i].Value ?? DBNull.Value);
             }
         }, cancellationToken).ConfigureAwait(true);
     }
@@ -117,8 +117,7 @@ public sealed class FirebirdDataEditor
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _transactionService.ActiveTransaction;
             bindParameters(cmd);
@@ -126,6 +125,11 @@ public sealed class FirebirdDataEditor
         }
         catch (FbException ex)
         {
+            throw new DataEditException(ex.Message, ex);
+        }
+        catch (CharsetRepresentationException ex)
+        {
+            // An inline grid edit whose text this connection cannot carry: refused, nothing written.
             throw new DataEditException(ex.Message, ex);
         }
         finally

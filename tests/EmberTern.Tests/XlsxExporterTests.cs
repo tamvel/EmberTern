@@ -172,20 +172,27 @@ public class XlsxExporterTests
         finally { TryDelete(path); }
     }
 
+    // ⚠ DocumentFormat.OpenXml 3.5.1 (Faza 6) annotates `WorkbookPart.Workbook` and
+    // `WorksheetPart.Worksheet` as NULLABLE — they were unannotated before, so these dereferences
+    // compiled silently. The annotations are more accurate than the old ones (a part CAN exist without
+    // its root element), and the `!`s below say what these helpers already relied on: the file was
+    // written by the exporter two lines earlier in the test, so both roots are present. ⛔ Not a
+    // suppression of a real risk — a missing root here means the exporter is broken, and the resulting
+    // NullReferenceException is exactly the failure the test should report.
     private static List<List<Cell>> ReadFirstSheetRows(string path)
     {
         using var doc = SpreadsheetDocument.Open(path, false);
         var wbPart = doc.WorkbookPart!;
-        var firstSheet = wbPart.Workbook.Sheets!.Elements<Sheet>().First();
+        var firstSheet = wbPart.Workbook!.Sheets!.Elements<Sheet>().First();
         var wsPart = (WorksheetPart)wbPart.GetPartById(firstSheet.Id!);
-        var sheetData = wsPart.Worksheet.GetFirstChild<SheetData>()!;
+        var sheetData = wsPart.Worksheet!.GetFirstChild<SheetData>()!;
         return sheetData.Elements<Row>().Select(r => r.Elements<Cell>().ToList()).ToList();
     }
 
     private static int ReadSheetCount(string path)
     {
         using var doc = SpreadsheetDocument.Open(path, false);
-        return doc.WorkbookPart!.Workbook.Sheets!.Elements<Sheet>().Count();
+        return doc.WorkbookPart!.Workbook!.Sheets!.Elements<Sheet>().Count();
     }
 
     private static async IAsyncEnumerable<object?[]> ToAsync(IReadOnlyList<object?[]> rows)

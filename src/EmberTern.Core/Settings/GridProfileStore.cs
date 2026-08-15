@@ -43,19 +43,20 @@ public sealed class GridProfileStore
     public GridProfile? Get(string gridId)
         => _settings.Load()?.UserSettings.GridProfiles.FirstOrDefault(p => p.GridId == gridId);
 
+    // ⚠ Through Update — see ApplicationSettingsStore.Update. This one is the sharpest illustration of why:
+    // it is called when a user merely resizes a grid column, a "write" nobody thinks of as one.
     public void Save(GridProfile profile)
-    {
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        var list = settings.UserSettings.GridProfiles;
-        var index = list.FindIndex(p => p.GridId == profile.GridId);
-        if (index >= 0)
+        => _settings.Update(settings =>
         {
-            list[index] = profile;
-        }
-        else
-        {
-            list.Add(profile);
-        }
-        _settings.Save(settings);
-    }
+            var list = settings.UserSettings.GridProfiles;
+            var index = list.FindIndex(p => p.GridId == profile.GridId);
+            if (index >= 0)
+            {
+                list[index] = profile;
+            }
+            else
+            {
+                list.Add(profile);
+            }
+        });
 }

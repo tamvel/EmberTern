@@ -77,16 +77,15 @@ public sealed class FirebirdImportTargetReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText =
+            await using var cmd = connection.CreateGuardedCommand(
                 "SELECT TRIM(RDB$TRIGGER_NAME), RDB$TRIGGER_TYPE FROM RDB$TRIGGERS " +
                 "WHERE RDB$RELATION_NAME = @name " +
                 "  AND COALESCE(RDB$TRIGGER_INACTIVE, 0) = 0 " +
                 "  AND COALESCE(RDB$SYSTEM_FLAG, 0) = 0 " +
-                "ORDER BY RDB$TRIGGER_SEQUENCE, RDB$TRIGGER_NAME";
+                "ORDER BY RDB$TRIGGER_SEQUENCE, RDB$TRIGGER_NAME");
             cmd.CommandTimeout = 0;
             cmd.Transaction = _lane.TransactionForCommand;
-            cmd.Parameters.AddWithValue("@name", tableName);
+            cmd.AddGuardedParameter("@name", tableName);
 
             var triggers = new List<string>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

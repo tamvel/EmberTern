@@ -48,6 +48,20 @@ public sealed record ScriptStatement(string Text, ScriptStatementKind Kind, int 
 }
 
 /// <summary>Outcome of running a single script statement — one row in the results grid.</summary>
+/// <param name="Error">
+/// What went wrong, in English. ⚠ For a FIREBIRD failure this is the server's own message and must stay
+/// exactly that (decision D‑3: the server's words are the server's, in the server's language).
+/// </param>
+/// <param name="LocalizedError">
+/// ⭐ Present only when the failure is <b>EmberTern's own sentence</b> rather than the server's — today, the
+/// charset guard's refusal. The results grid resolves this in preference to <paramref name="Error"/>.
+/// <para>
+/// It exists because this record flattens the failure to a <c>string</c> in the Firebird layer, which cannot
+/// reach the App's catalog: without it, EmberTern's own wording would be frozen in English here while the same
+/// refusal reads Polish everywhere else. ⛔ Do NOT populate it from a server message — that would translate
+/// Firebird's words, which the boundary forbids.
+/// </para>
+/// </param>
 public sealed record ScriptStatementResult(
     int Index,
     string Text,
@@ -56,7 +70,8 @@ public sealed record ScriptStatementResult(
     int? RecordsAffected,
     int? RowCount,
     TimeSpan Elapsed,
-    string? Error);
+    string? Error,
+    EmberTern.Core.Localization.LocalizableMessage? LocalizedError = null);
 
 /// <summary>How the Script Executor finalizes its single transaction.</summary>
 public enum ScriptTransactionMode

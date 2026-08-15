@@ -276,6 +276,7 @@ public class PreferencesTests
         [nameof(Preferences.TriggerEasyModeDefault)] = null,
         [nameof(Preferences.FunctionEasyModeDefault)] = null,
         [nameof(Preferences.GridAutoFitColumns)] = null,
+        [nameof(Preferences.DebuggerIrreversibleWarningAcknowledged)] = null,
     };
 
     [Fact]

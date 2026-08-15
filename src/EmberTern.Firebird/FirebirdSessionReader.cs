@@ -111,8 +111,7 @@ public sealed class FirebirdSessionReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = SessionsSql;
+            await using var cmd = connection.CreateGuardedCommand(SessionsSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = TxFor(ConnectionRole.Metadata); // null in the norm → fresh MON$ snapshot
 
@@ -164,8 +163,7 @@ public sealed class FirebirdSessionReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = TransactionsSql;
+            await using var cmd = connection.CreateGuardedCommand(TransactionsSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = TxFor(ConnectionRole.Metadata);
 
@@ -209,8 +207,7 @@ public sealed class FirebirdSessionReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = DatabaseStateSql;
+            await using var cmd = connection.CreateGuardedCommand(DatabaseStateSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = TxFor(ConnectionRole.Metadata);
 
@@ -276,8 +273,7 @@ public sealed class FirebirdSessionReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = StatementsSql;
+            await using var cmd = connection.CreateGuardedCommand(StatementsSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = TxFor(ConnectionRole.Metadata);
 
@@ -313,8 +309,7 @@ public sealed class FirebirdSessionReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT CURRENT_CONNECTION FROM RDB$DATABASE";
+            await using var cmd = connection.CreateGuardedCommand("SELECT CURRENT_CONNECTION FROM RDB$DATABASE");
             cmd.CommandTimeout = 0;
             cmd.Transaction = TxFor(role); // attach to the lane's pending working tx (data lane after an execute) — the id is tx-invariant
             var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);

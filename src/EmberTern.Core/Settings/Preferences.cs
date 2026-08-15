@@ -159,6 +159,23 @@ public sealed record Preferences
     public string DebuggerIsolation { get; set; } = PreferenceOptions.DebuggerIsolation.Default;
 
     /// <summary>
+    /// Whether the user has acknowledged, once, that debugging can change the database in ways a debug-session
+    /// rollback cannot undo (<c>IN AUTONOMOUS TRANSACTION</c>, generator use).
+    ///
+    /// <para>⭐ <b>It silences the MODAL only, never the warning.</b> Once acknowledged the debugger still shows
+    /// a dismissible bar whenever the code being launched carries such an operation — the point is to stop
+    /// asking the same question at every launch, not to stop telling the user what their code does. ⛔ There is
+    /// deliberately no "safe mode" behind this flag: suppressing a generator or an autonomous transaction would
+    /// mean refusing to execute correct SQL, which contradicts the debugger's own fidelity law (§F — every
+    /// semantic comes from the server).</para>
+    ///
+    /// <para>⚠ No Settings Center row: it is set by ticking a box on the warning itself, which is where the
+    /// decision is actually made. That absence is a recorded decision, not an oversight —
+    /// <c>EverySetting_RendersAndMapsToItsPreference</c> holds the record.</para>
+    /// </summary>
+    public bool DebuggerIrreversibleWarningAcknowledged { get; set; }
+
+    /// <summary>
     /// How the workspace tab strip lays its tabs out — <c>MultiRow</c> (the default) or <c>SingleRow</c>
     /// (product-polish §8.2, ratified D5/D7).
     /// </summary>

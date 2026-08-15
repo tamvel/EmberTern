@@ -277,20 +277,28 @@ public class SettingsLoadHealthTests
 
     /// <summary>
     /// The invariant the fix exists to protect, exercised the way it actually breaks: many writers, one file.
-    /// Two <see cref="ApplicationSettingsStore"/> instances stand in for two processes — the cross-process lock is
-    /// an OS mutex, which contends between threads of one process exactly as it does between processes, so this
-    /// genuinely exercises it.
-    /// <para>⚠ Asserted after every write, not once at the end: the failure being guarded is a file that is briefly
-    /// wrong, and a single check at the end would pass straight through it.</para>
-    /// <para>⚠⚠ <b>And this test does NOT catch the bug it describes — measured, not assumed.</b> Re-run against the
-    /// pre-fix shared temp filename it still passes, while
-    /// <see cref="Save_DoesNotWriteThroughAShared_TempFileName"/> fails on the exact assertion. Keep it anyway (it
-    /// is the invariant, and it would catch a future lock defect that the deterministic test cannot), but do not
-    /// mistake it for the guard: <b>a race is the wrong instrument for pinning a race</b> — the window is
-    /// microseconds wide and no amount of iterations makes hitting it a fact rather than a hope.</para>
+    /// Several <see cref="ApplicationSettingsStore"/> instances stand in for several processes — the cross-process
+    /// lock is an OS mutex, which contends between threads of one process exactly as it does between processes, so
+    /// this genuinely exercises it.
+    ///
+    /// <para>⚠⚠ <b>This test used to assert something the architecture never promised, and it was RIGHT to fail.</b>
+    /// It read the file after every write and demanded <see cref="SettingsLoadStatus.Loaded"/> each time. But reads
+    /// deliberately take no lock, and <c>File.Replace</c> makes the path briefly unopenable and even briefly absent
+    /// — so a concurrent reader legitimately sees <c>Unreadable</c>. Measured directly: <b>844 transient
+    /// <c>Unreadable</c> reads out of 2 270</b>, every one of them an <c>IOException</c> ("used by another
+    /// process" / "could not find file"), and <b>not one</b> <c>Corrupt</c>. Demanding otherwise made the suite fail
+    /// in roughly 1 run in 9 while the data was never in danger.</para>
+    ///
+    /// <para>⭐ <b>So it now asserts the guarantee that IS real and IS worth protecting:</b> when the concurrent
+    /// writing stops, the file is complete and readable, the backup generation is a valid settings file, no temp
+    /// file is orphaned, and — the part that matters most — <b>no write was lost</b>. The transient-read half of the
+    /// story has its own, deterministic guard in
+    /// <see cref="ATransientReadFailure_NeverWritesDefaults"/>, which pins the thing that genuinely could destroy
+    /// data. ⛔ Do not restore the per-read <c>Loaded</c> assertion: it is a race used as an instrument for a race,
+    /// and it measures the scheduler rather than the product.</para>
     /// </summary>
     [Fact]
-    public void ConcurrentSaves_NeverLeaveSettingsUnreadable()
+    public void ConcurrentSaves_LeaveTheFileIntact()
     {
         InTempDir(dir =>
         {
@@ -299,36 +307,231 @@ public class SettingsLoadHealthTests
                 Connections = { new ConnectionProfile { Name = "SEED" } },
             });
 
-            var failures = new System.Collections.Concurrent.ConcurrentBag<string>();
-
             System.Threading.Tasks.Parallel.For(0, 4, worker =>
             {
                 var store = new ApplicationSettingsStore(dir);
-                var reader = new ApplicationSettingsStore(dir);
                 for (int i = 0; i < 15; i++)
                 {
-                    store.Save(new ApplicationSettings
-                    {
-                        Connections = { new ConnectionProfile { Name = $"W{worker}-{i}" } },
-                    });
-
-                    var result = reader.LoadWithStatus();
-                    if (result.Status != SettingsLoadStatus.Loaded)
-                    {
-                        failures.Add($"worker {worker}, write {i}: status was {result.Status}");
-                    }
-                    else if (result.Settings!.Connections.Count == 0)
-                    {
-                        failures.Add($"worker {worker}, write {i}: loaded but held no connections");
-                    }
+                    store.Update(s => s.Connections.Add(new ConnectionProfile { Name = $"W{worker}-{i}" }));
                 }
             });
 
-            Assert.Empty(failures);
+            // ⭐ THE GUARANTEE, asserted where it actually holds: once the writers are done, the file is a
+            // complete, readable settings.dat — and every profile written through the locked read-modify-write
+            // is still in it. Nothing was lost to interleaving.
+            var final = new ApplicationSettingsStore(dir).LoadWithStatus();
+            Assert.Equal(SettingsLoadStatus.Loaded, final.Status);
+            Assert.Equal(1 + (4 * 15), final.Settings!.Connections.Count);
+            Assert.Contains(final.Settings.Connections, c => c.Name == "SEED");
+
+            // The single backup generation must also be a real settings file, not a half-written one.
+            var backup = new ApplicationSettingsStore(dir).FilePath + ".bak";
+            if (File.Exists(backup))
+            {
+                var bakDir = Path.Combine(dir, "bak");
+                Directory.CreateDirectory(bakDir);
+                File.Copy(backup, new ApplicationSettingsStore(bakDir).FilePath, overwrite: true);
+                Assert.Equal(SettingsLoadStatus.Loaded, new ApplicationSettingsStore(bakDir).LoadWithStatus().Status);
+            }
 
             // No orphaned temp files: a per-write name is only an improvement if the writes clean up after
             // themselves, otherwise the settings folder fills with files nobody can identify.
             Assert.Empty(Directory.GetFiles(dir, "*.tmp"));
+        });
+    }
+
+    // ─── Update: the locked read-modify-write (E) ───────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>No section facade may turn a failed read into defaults and then write them.</b>
+    ///
+    /// <para>The banned shape is <c>Load() ?? new ApplicationSettings()</c> in a type that also writes. It reads
+    /// as harmless — it is the obvious way to say "or start fresh" — and it was the mechanism of a measured
+    /// data-loss defect: <c>Load()</c> returns <c>null</c> for a MISSING file and for a file that merely could
+    /// not be read at that instant, and the caller cannot tell which. <see cref="ApplicationSettingsStore.Update"/>
+    /// is the replacement, and it is the ONE place allowed to create a default aggregate.</para>
+    ///
+    /// <para>⚠ It keys on the SOURCE, not on behaviour, for the reason gotcha #284 gives: a correctly-written
+    /// facade and a dangerous one behave identically until the moment a read fails, which is exactly when no
+    /// test is watching. ⭐ It fires only when the same file also WRITES — a read-only consumer that degrades to
+    /// an empty aggregate is doing the right thing and needs no exemption entry, which keeps this guard free of
+    /// an allowlist to maintain.</para>
+    /// </summary>
+    [Fact]
+    public void NoSectionFacade_TurnsAFailedReadIntoDefaults()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "EmberTern.slnx")))
+        {
+            root = root.Parent;
+        }
+        Assert.NotNull(root);
+
+        var banned = new System.Text.RegularExpressions.Regex(@"Load\(\)\s*\?\?\s*new ApplicationSettings\(\)");
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(
+                     Path.Combine(root!.FullName, "src"), "*.cs", SearchOption.AllDirectories))
+        {
+            // The store itself owns the one legal creation point, inside Update.
+            if (Path.GetFileName(file) == "ApplicationSettingsStore.cs") continue;
+
+            var source = File.ReadAllText(file);
+
+            // ⚠ COMMENTS ARE STRIPPED FIRST, and that is not tidiness — it is the guard's own correctness.
+            // Measured while writing this: the migration left explanatory comments QUOTING the banned shape
+            // ("`Load() ?? new ApplicationSettings()` turned a transient read failure into DEFAULTS"), and the
+            // guard reported the two files that document the fix as the two files that still had the bug.
+            // A rule that a comment can violate teaches the next author to stop writing comments.
+            var code = string.Join(
+                '\n',
+                source.Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+            if (!banned.IsMatch(code)) continue;
+
+            // Only a file that also WRITES can lose data this way.
+            if (code.Contains(".Save(", StringComparison.Ordinal)
+                || code.Contains(".Update(", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These types substitute defaults for a settings read that may merely have FAILED, then write them — "
+            + "the shape that silently replaced connection profiles and passwords: " + string.Join(", ", offenders)
+            + ". Use ApplicationSettingsStore.Update instead, which creates defaults only for a genuinely "
+            + "missing file and refuses for every other status.");
+    }
+
+    /// <summary>
+    /// <see cref="SettingsLoadStatus.Missing"/> is the ONE status that may produce a default aggregate, and it
+    /// still does — a fresh install must not be refused.
+    /// </summary>
+    [Fact]
+    public void Update_OnMissingFile_CreatesDefaults()
+    {
+        InTempDir(dir =>
+        {
+            var store = new ApplicationSettingsStore(dir);
+            Assert.Equal(SettingsLoadStatus.Missing, store.LoadWithStatus().Status);
+
+            var ok = store.Update(s => s.Connections.Add(new ConnectionProfile { Name = "FIRST" }));
+
+            Assert.True(ok);
+            Assert.Null(store.LastSaveDiagnostic);
+            Assert.Equal("FIRST", Assert.Single(store.Load()!.Connections).Name);
+        });
+    }
+
+    /// <summary>
+    /// ⭐⭐ The heart of E: a file that cannot be read is never turned into defaults and written back. This is the
+    /// A-03 refusal moved one step earlier — to the READ, where the damage is actually decided.
+    /// </summary>
+    [Fact]
+    public void Update_OnUnreadableFile_RefusesAndLeavesTheFileIntact()
+    {
+        InTempDir(dir =>
+        {
+            // A real user's settings, written where they can be read…
+            new ApplicationSettingsStore(dir, FakeProtector()).Save(new ApplicationSettings
+            {
+                Connections = { new ConnectionProfile { Name = "PROD", Password = "secret" } },
+            });
+            var original = File.ReadAllText(Path.Combine(dir, "settings.dat"));
+
+            // …and now opened where decryption fails, exactly as on a copied Windows profile.
+            var store = new ApplicationSettingsStore(dir, UndecryptableProtector());
+            Assert.Equal(SettingsLoadStatus.Unreadable, store.LoadWithStatus().Status);
+
+            var ok = store.Update(s => s.Connections.Add(new ConnectionProfile { Name = "WOULD-DESTROY" }));
+
+            Assert.False(ok);
+            Assert.NotNull(store.LastSaveDiagnostic);
+            Assert.Equal(original, File.ReadAllText(Path.Combine(dir, "settings.dat")));
+
+            // And the data really is still there for whoever can decrypt it.
+            var recovered = new ApplicationSettingsStore(dir, FakeProtector()).Load();
+            Assert.Equal("PROD", Assert.Single(recovered!.Connections).Name);
+            Assert.Equal("secret", recovered.Connections[0].Password);
+        });
+    }
+
+    /// <summary>
+    /// Rule #11 in the small: a facade changes its own section and every other section survives byte-for-byte.
+    /// This is what the whole read-modify-write shape exists for.
+    /// </summary>
+    [Fact]
+    public void Update_PreservesEverySectionItDidNotTouch()
+    {
+        InTempDir(dir =>
+        {
+            var store = new ApplicationSettingsStore(dir);
+            store.Save(new ApplicationSettings
+            {
+                Connections = { new ConnectionProfile { Name = "PROD", Password = "secret" } },
+                Folders = { Folders = { new FolderEntry { Id = "f1", Name = "Klienci" } } },
+            });
+
+            // A different facade's write — the grid-column-resize kind nobody thinks of as a write.
+            new GridProfileStore(dir).Save(new GridProfile { GridId = "results" });
+
+            var after = new ApplicationSettingsStore(dir).Load()!;
+            Assert.Equal("PROD", Assert.Single(after.Connections).Name);
+            Assert.Equal("secret", after.Connections[0].Password);
+            Assert.Equal("Klienci", Assert.Single(after.Folders.Folders).Name);
+            Assert.Equal("results", Assert.Single(after.UserSettings.GridProfiles).GridId);
+        });
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The regression guard for the measured data-loss defect, and it is deterministic — no race is used
+    /// to pin a race.</b>
+    ///
+    /// <para>The defect: <c>Load()</c> collapses every failure to <c>null</c>, so a facade doing
+    /// <c>Load() ?? new ApplicationSettings()</c> could not tell "no file yet" from "could not read it just
+    /// now", substituted DEFAULTS, and saved them over intact settings. <c>Save</c>'s A-03 guard did not stop
+    /// it, because that guard judges the file at WRITE time and by then the transient condition has cleared.
+    /// Measured against a concurrent publisher before the fix: <b>182 failed reads, 89 of which wrote defaults,
+    /// ending with 0 of 5 profiles surviving.</b></para>
+    ///
+    /// <para>⭐ Determinism comes from making the read fail for a REASON THAT PERSISTS — a protector that cannot
+    /// decrypt — instead of trying to hit a microsecond window. The class of failure is the same one the race
+    /// produces (<c>Unreadable</c>, file intact); only the trigger is reliable. ⛔ Do not rewrite this as a
+    /// timing loop.</para>
+    /// </summary>
+    [Fact]
+    public void ATransientReadFailure_NeverWritesDefaults()
+    {
+        InTempDir(dir =>
+        {
+            new ApplicationSettingsStore(dir, FakeProtector()).Save(new ApplicationSettings
+            {
+                Connections =
+                {
+                    new ConnectionProfile { Name = "PROD", Password = "secret" },
+                    new ConnectionProfile { Name = "TEST" },
+                },
+            });
+            var original = File.ReadAllText(Path.Combine(dir, "settings.dat"));
+
+            // Every section facade, pointed at a file it cannot decrypt. Not one of them may write.
+            new ConnectionProfileStore(dir, UndecryptableProtector()).Upsert(new ConnectionProfile { Name = "NEW" });
+            new ConnectionProfileStore(dir, UndecryptableProtector()).Delete("whatever");
+            new FolderStore(dir, UndecryptableProtector()).Save(new FolderState());
+            new GridProfileStore(dir, UndecryptableProtector()).Save(new GridProfile { GridId = "g" });
+            new EmberTern.Core.Workspace.WorkspaceStore(dir, UndecryptableProtector())
+                .Save(new EmberTern.Core.Workspace.WorkspaceState());
+            new WatchStore(dir, UndecryptableProtector()).Save("c", "o", new[] { "x" });
+            new PreferencesStore(dir, UndecryptableProtector()).Save(new Preferences());
+            new EmberTern.Core.Import.ImportProfileStore(dir, UndecryptableProtector())
+                .SaveLastUsed("c", new EmberTern.Core.Import.ImportConfiguration());
+
+            // The file is untouched, and the user's data is still recoverable by whoever can decrypt it.
+            Assert.Equal(original, File.ReadAllText(Path.Combine(dir, "settings.dat")));
+            var recovered = new ApplicationSettingsStore(dir, FakeProtector()).Load();
+            Assert.Equal(2, recovered!.Connections.Count);
+            Assert.Equal("secret", recovered.Connections.Single(c => c.Name == "PROD").Password);
         });
     }
 

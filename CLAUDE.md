@@ -69,6 +69,7 @@ that used to live here still exists verbatim in `docs/history/`.
 | `design/find-replace-panel.md` | 📋 Ratified-not-started: our own Find/Replace panel over AvaloniaEdit's search engine. Holds the measurements (why no cheaper seam exists) and the 3 unknowns to measure first. |
 | `design/localization.md` | **Before any localization work.** Ratified D‑1/D‑2/D‑3; §2.1 records why the indexer binding is dead. |
 | `design/avalonia-12.1.1-update.md` | Before changing an Avalonia package version. Records the two deliberate version mismatches. |
+| `avalonia-headless-session-race.md` | When a full run loses exactly one headless test. The upstream race, its deterministic reproduction, and the five repairs already measured and rejected. |
 
 ### Modules
 
@@ -126,26 +127,44 @@ dependencies (transitive ones only surface in an explicit scan; gotcha #278).
 ⛔ **Never chain build and test** (`dotnet build && dotnet test`) — they deadlock and the run has to
 be interrupted. Two separate calls.
 
-### The test-suite partition (read this before running tests)
+⚠⚠ **Before asking the user to verify a UI change, build BOTH configurations.** The run command above
+uses `bin\Debug\`, so an etap built only in `-c Release` leaves them looking at a binary that predates
+the feature — measured: three UI defects reported that did not exist, one review cycle lost.
 
-Headless-Avalonia tests must share **one** `HeadlessUnitTestSession` per process (#94/#226/#286), and
-a long full run intermittently hangs *after* the tests pass. The working answer is **three
-partitions**: everything else · the grouped headless classes · two isolated ones
-(`ConnectionExpandBindingProbe`, `BrandingPresentationTests`).
+### Running the suite (read this before running tests)
 
-⛔⛔ **The class list is a list of NAMES and it rots silently — DERIVE it, never transcribe it.**
-A *missing* exclusion is invisible (the class simply runs in the wrong partition and hits the global
-`Loc`-catalog race); a *surplus* one matches nothing and is harmless. So the list only ever rots
-toward false red — measured cost of ignoring this: **13 failures, none of them the session's change.**
+⭐ **The suite runs as ONE command.** The old three-partition split is gone (2026-08-14): its real
+purpose was to keep the global-`Loc` race apart, and that race is fixed at the source — headless tests
+now get a clean subscriber list automatically (`IsolatesGlobalLanguageState` on `HeadlessCollection`).
+⛔ Do not reintroduce partitions; they hid two defects for months.
 
-```bash
-grep -rln HeadlessCollection tests/EmberTern.Tests/*.cs | xargs -n1 basename | sed 's/\.cs$//'
-```
+Headless-Avalonia tests still share **one** `HeadlessUnitTestSession` per process (#94/#226/#286) — any
+new headless test joins `HeadlessCollection`, never its own `IClassFixture`.
 
 ⚠ **The acceptance criterion is the TOTAL, not "0 failures".** Measured: a broken headless state
 reported *"0 niepowodzeń, łącznie 7232"* while **128 tests silently never started**. A run is green
-only when the total matches. ⚠ Use `--blame-hang --blame-hang-timeout 120s` — it turns an infinite
-wait into a named failure. Current expected total is in `docs/current-state.md`.
+only when the total matches. Current expected total is in `docs/current-state.md`.
+
+#### ⚠⚠ The ONE known false failure — recognise it before blaming your change
+
+Roughly **1 full run in 3–8** loses **exactly one** test to an Avalonia infrastructure race — **not** a
+product regression and **not** yours. ⭐ **The STACK identifies it**, never the test name: the victim is
+whichever headless test dispatched first, so it is usually the *same* name run after run. Look for **one**
+failed test, everything else green, and:
+
+```text
+System.InvalidOperationException : The calling thread cannot access this object because a different thread owns it.
+   at Avalonia.Rendering.DefaultRenderLoop.Add(IRenderLoopTask i)          ← Dispatcher.VerifyAccess()
+   at Avalonia.Headless.AvaloniaHeadlessPlatform.Initialize(...)
+   at Avalonia.Headless.HeadlessUnitTestSession.EnsureIsolatedApplication()
+```
+
+**Re-run once.** A run that goes green with no change confirms it. ⛔ A failure WITHOUT that stack is a real
+defect, however familiar the test name looks.
+
+⛔ **Do not try to fix it again — five approaches were measured and rejected**, including the two that
+look obvious (a warm-up dispatch, and serialising every Avalonia-touching test). Cause, evidence, the
+rejected list and the ready-to-file upstream report: [`docs/avalonia-headless-session-race.md`](docs/avalonia-headless-session-race.md).
 
 ## Git remotes & push workflow (user directive)
 
@@ -396,20 +415,16 @@ reasoning lives in the referenced document.
 It is the ONE place that answers *"what is done, what is open, what are we working on"*, and it is
 kept between 100 and 300 lines on purpose.
 
-At a glance, verified 2026-08-12: branch **`master`**, HEAD `2ce68fe`, build **0/0**, tests
-**8 799 green**, version **0.5.0**. Both long-running feature branches (`feat/product-polish`,
-`feat/localization`) are **merged into `master`**, so a new session starts from `master`.
-**No stage is in progress — the next topic is a user decision.**
+At a glance, verified 2026-08-14: branch **`fix/audit-followup-2026-08`** (cut from `master`, **not
+pushed**), HEAD `1852611`, build **0/0 in both Release and Debug**, tests **8 813**, last series **6/6
+fully green**, version **0.5.0**. ⏭ **Milestone: audit follow-up, Phase 4 accepted. Next: Phase 5 —
+charset guard, NOT started.** Read `docs/current-state.md` §0 + §3 first.
 
 ⚠⚠ **Do not restore a status diary here.** This section was **5 956 lines (83 % of CLAUDE.md)** until
-2026-08-11 and is archived verbatim in
-[`docs/history/30-claude-md-current-state-archive.md`](docs/history/30-claude-md-current-state-archive.md).
-⭐ That regrowth is worth one sentence of your attention, because it has now happened **twice**: the
-2026-07-11 cleanup cut this file 4 495 → **472** lines, and by 2026-08-10 it was back to **6 849** —
-~210 lines/day of appended narrative. The mechanism is always the same and always looks harmless: a
-finished stage gets "just one more" paragraph describing what shipped. **A shipped stage's narrative
-belongs in `docs/history/`; its rule belongs in the relevant section of this file; its status belongs
-in one line of `docs/current-state.md`.** See § "Working style — session protocol" for the checklist.
+2026-08-11, archived verbatim in
+[`history/30-claude-md-current-state-archive.md`](docs/history/30-claude-md-current-state-archive.md).
+It has regrown twice, always the same harmless-looking way — see § "The tripwire" for the mechanism and
+the checklist.
 
 ## Editor Architecture — current direction
 
@@ -467,6 +482,8 @@ long ago — the surviving, still-true boundary is kept below):
 9. **Dark + Light from day one.** Every new color → both dictionaries in `Themes/Colors.axaml`. Zero hardcoded colors in views — only `{DynamicResource}`.
 10. **No plugin system, no debugger, no schema compare, no docking.** (Workspace persistence — the one item on this list that was originally "V1-only" — shipped in V1.1 and is now core; see "What's built" above. AI is separately addressed by the editor-architecture decision "kept AI-ready, nothing designed solely for AI".) The UI mockup shows aspirations; build only what's actually planned, not the whole vision at once.
 11. **Never lose information / never corrupt user code or metadata (Critical / Data-Loss class — the project's #1 rule, above every feature).** Any feature that generates DDL or modifies user code or DB objects — formatter, recompile, refactor, Quick Fix, Rename, snippet expansion, future AI — MUST preserve every fragment it does not fully understand, **verbatim 1:1**. **If EmberTern is not 100% certain it can reproduce an object identically, it MUST NOT modify it automatically** (uncertainty ⇒ do nothing or ask). Correctness of generated code outranks aesthetics. Origin: a group procedure recompile once stripped input-parameter defaults and broke system mechanisms (gotcha #175) — that class of bug is unacceptable. In the editor front-end this is realized by an error-tolerant parser + `RawStatement` verbatim round-trip. See the "Editor Architecture — current direction" section above + [docs/design/editor-architecture.md](docs/design/editor-architecture.md) §0.
+
+12. ⭐⭐ **EVERY new user-visible text goes through the localization mechanism, in EVERY supported language — no exceptions, and "it's just an error message" is not one.** A label, a button, a tooltip, a dialog, a status line, a validation message, a warning, an **exception the user will read** — if a human sees it, it is a `MessageKey`/`UiStrings` member with an entry in **`Strings.resx` AND `Strings.pl.resx`**, and it is resolved with `Loc` **at the moment of display**. ⛔ **Never hardcode a user-facing sentence**, and ⛔ never ship half a sentence from the catalog with a fragment concatenated in code — the whole sentence must come from the catalog, because word order is the translator's decision, not English's. Dynamic values (a name, a count, a character, a server message) travel as **arguments**, never baked into the text; a raw Firebird message stays the server's own words as an argument (D‑3). ⚠⚠ **The failure mode is silent and has bitten this project: it is not a missing entry, it is a PERFECT entry that nothing reads.** Phase 5 shipped correct Polish and English for the charset guard and still showed a Polish user a fully English paragraph, because the exception was *wrapped* on its way out and the display site read `ex.Message` — green build, 8 844 green tests, translated resource nobody resolved. So a new message is finished only when it has been **seen rendered in Polish**, or pinned by a test that resolves it through the path the UI actually uses (`ErrorText` for exceptions; see `CharsetGuardLocalizationTests`). Rule 6 says where the words live; this says that no user-visible text may live anywhere else. Read [docs/design/localization.md](docs/design/localization.md).
 
 ## UI styling rules — theme discipline (enforce on every new window / dialog / control)
 
@@ -687,6 +704,7 @@ sections, so a bare "#303" is ambiguous.
 - **`FbServerType` is `Default` or `Embedded`.** `Default` is pure managed wire — `fbclient.dll` is **not loaded** on this code path, and the driver consults its `ClientLibrary` only in Embedded mode, which EmberTern never selects. ⚠⚠ **This line used to end "`ClientLibraryPath` only matters in Embedded mode (kept in the UI but harmless when unused)" — and that parenthesis was wrong, which is why the field is GONE (S-5, 2026-08-05).** It was not harmless: it offered the user a decision that could have no effect, and the user found it by pointing it at a completely invalid DLL and connecting successfully. ⛔ Do not re-add a client-library setting without the Embedded mode that would make it work; two guards in `ConnectionProfileStoreTests` say so, and the second keys on the **assignment** `ServerType = FbServerType.Embedded`, not on a mention.
 - **Firebird 3 "Install incomplete... CREATE USER" error**: caused by SYSDBA living only in the legacy password file. Fix is **server-side**, not client-side: `CREATE USER SYSDBA PASSWORD '…' USING PLUGIN Srp;` against any database on the instance (security3.fdb is instance-wide). IBExpert works because it uses native fbclient with Legacy_Auth support; managed .NET driver can't. See `memory/feedback_firebird_multiversion.md`.
 - **WIN1250 / WIN1252 / ISO8859_2**: register `CodePagesEncodingProvider.Instance` before any `OpenAsync` (done in `FirebirdConnectionService` static ctor). See `memory/feedback_firebird_codepages.md`.
+- ⭐⭐ **The driver DESTROYS text the connection charset cannot hold — client-side, silently, before the server sees it. ONE seam guards it: `FirebirdCommandGuard`.** ⛔ **Never call `connection.CreateCommand()`, `new FbCommand` or `new FbBatchCommand` anywhere but that file, and never assign `CommandText` or `Parameters.AddWithValue` yourself** — use `CreateGuardedCommand(sql)` / `AddGuardedParameter(...)` / `CreateGuardedBatchCommand(...)`; three `CharsetGuardSeamTests` fail the build otherwise. The check is applied **uniformly** (constant ASCII catalog SQL costs ~1.8 µs) precisely so nobody has to judge which call sites are "risky". ⚠ The symptom is **not** `?`: 330 characters become a plausible different one (`£`→`L`, `¼`→`1`, `À`→`A`), so `R = 'Cena £100'` silently became `R = 'Cena L100'` in `RDB$PROCEDURE_SOURCE` — rule #11. ⭐ Reads are already safe (the server refuses to transliterate, loudly); this is a **write-side** problem only. ⛔ **Refuse, never repair.** ⚠ A representability question resolves through `CharsetCatalog.ResolveWireEncoding`, **never** `Resolve` — the latter answers `NONE` as UTF-8, which switches the guard off. Gotchas #372/#373; probe `tools/probes/CharsetProbe`.
 - **Connection errors show the raw server message.** `MapErrorMessage` always returns `"Could not connect to {endpoint}: {ex.Message}"` — nothing else. Do not add hints or interpret error causes (wrong password, missing user, plugin mismatch, host down, …); the server message is authoritative and the user or admin can read it directly. Earlier builds tried to categorize errors and surface a `CREATE USER … USING PLUGIN Srp` hint for Legacy_Auth; that was removed because it misfired on unrelated failures (the driver concatenates the whole GDS error vector, so wrong-password / missing-user errors often carried `"plugin"`/`"Legacy_Auth"` text and got mis-hinted).
 - **Connection-attempt debug log**: every Connect/Test appends a timestamped, password-masked connection string to `%TEMP%\EmberTern-debug.log` (`LogConnectionAttempt` in `FirebirdConnectionService`). Useful for triaging "EmberTern says X, IBExpert says Y" reports — but remember they take entirely different protocol paths.
 

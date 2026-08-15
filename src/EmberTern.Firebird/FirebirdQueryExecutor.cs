@@ -73,8 +73,7 @@ public sealed class FirebirdQueryExecutor
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             if (_transactionService?.ActiveTransaction is { } tx) cmd.Transaction = tx;
 
             await using var reader = await cmd.ExecuteReaderAsync(
@@ -173,20 +172,35 @@ public sealed class FirebirdQueryExecutor
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = request.Sql;
-            cmd.CommandTimeout = 0;
-            if (_transactionService?.ActiveTransaction is { } tx)
+            // The charset guard can refuse both the statement text and any bound parameter, before the driver
+            // encodes anything. `yield` forbids a try-with-catch around the enumeration itself, so the
+            // translation is done here, around just the part that can raise it.
+            //
+            // ⚠ NO Release() in the catch: the outer `finally` below owns this lock. Releasing in both places
+            // over-releases the semaphore, which leaks a permit for the rest of the process (gotcha #98/#120).
+            FbCommand cmd;
+            try
             {
-                cmd.Transaction = tx;
-            }
-            if (request.Parameters is { Count: > 0 })
-            {
-                foreach (var p in request.Parameters)
+                cmd = connection.CreateGuardedCommand(request.Sql);
+                cmd.CommandTimeout = 0;
+                if (_transactionService?.ActiveTransaction is { } tx)
                 {
-                    cmd.Parameters.AddWithValue(p.Name, p.Value ?? DBNull.Value);
+                    cmd.Transaction = tx;
+                }
+                if (request.Parameters is { Count: > 0 })
+                {
+                    foreach (var p in request.Parameters)
+                    {
+                        cmd.AddGuardedParameter(p.Name, p.Value ?? DBNull.Value);
+                    }
                 }
             }
+            catch (CharsetRepresentationException ex)
+            {
+                throw new QueryExecutionException(ex.Message, ex);
+            }
+
+            await using var cmdScope = cmd.ConfigureAwait(false);
 
             // Cancellation must reach the SERVER, not just this task. A CancellationToken alone
             // cannot interrupt a round-trip that is blocked while Firebird computes (a heavy
@@ -288,8 +302,7 @@ public sealed class FirebirdQueryExecutor
             // autocomplete column fetch, TableDetail load). FbConnection is single-threaded.
             await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             lockHeld = true;
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             if (_transactionService?.ActiveTransaction is { } tx)
             {
@@ -299,7 +312,7 @@ public sealed class FirebirdQueryExecutor
             {
                 foreach (var p in parameters)
                 {
-                    cmd.Parameters.AddWithValue(p.Name, p.Value ?? DBNull.Value);
+                    cmd.AddGuardedParameter(p.Name, p.Value ?? DBNull.Value);
                 }
             }
 
@@ -401,6 +414,12 @@ public sealed class FirebirdQueryExecutor
         catch (FbException ex)
         {
             throw new QueryExecutionException(FormatFbError(ex), ex);
+        }
+        catch (CharsetRepresentationException ex)
+        {
+            // Refused before the driver encoded anything — reported through this module's own exception so
+            // every existing execution-error surface keeps working. Original preserved as InnerException.
+            throw new QueryExecutionException(ex.Message, ex);
         }
         catch (InvalidOperationException ex)
         {

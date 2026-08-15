@@ -55,8 +55,7 @@ public sealed class FirebirdMetadataReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _lane.TransactionForCommand;
 
@@ -127,8 +126,7 @@ public sealed class FirebirdMetadataReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _lane.TransactionForCommand;
 
@@ -262,11 +260,10 @@ public sealed class FirebirdMetadataReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = sql;
+            await using var cmd = connection.CreateGuardedCommand(sql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _lane.TransactionForCommand;
-            cmd.Parameters.AddWithValue("@name", tableName);
+            cmd.AddGuardedParameter("@name", tableName);
 
             var columns = new List<ColumnSpec>();
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -345,8 +342,7 @@ public sealed class FirebirdMetadataReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = DomainsSql;
+            await using var cmd = connection.CreateGuardedCommand(DomainsSql);
             cmd.CommandTimeout = 0;
             cmd.Transaction = _lane.TransactionForCommand;
 

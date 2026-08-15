@@ -427,8 +427,7 @@ public sealed class FirebirdConnectionService : IDisposable
                 tx = (FbTransaction)(options is null
                     ? await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false)
                     : await connection.BeginTransactionAsync(options).ConfigureAwait(false));
-                await using var cmd = connection.CreateCommand();
-                cmd.CommandText = statements[i];
+                await using var cmd = connection.CreateGuardedCommand(statements[i]);
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = tx;
                 await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -437,6 +436,17 @@ public sealed class FirebirdConnectionService : IDisposable
             }
             catch (FbException ex)
             {
+                results[i] = ex.Message;
+                if (tx is not null)
+                {
+                    try { await tx.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { /* best-effort */ }
+                }
+            }
+            catch (CharsetRepresentationException ex)
+            {
+                // Reported like any other per-statement failure, so the batch-results dialog shows it beside
+                // the statement it belongs to instead of aborting the whole run. Nothing was sent for THIS
+                // statement; the ones before it stand, exactly as for a server-side failure here.
                 results[i] = ex.Message;
                 if (tx is not null)
                 {
@@ -486,6 +496,11 @@ public sealed class FirebirdConnectionService : IDisposable
         var connection = RequireOpenConnection(ConnectionRole.Ddl);
         var commandLock = GetCommandLock(ConnectionRole.Ddl);
 
+        // ⭐ Charset check FIRST — before the lock, before the transaction, before any statement runs. A DDL
+        // batch carrying a character this connection would silently rewrite must never touch the server at
+        // all: "we never did it" rather than "we rolled it back" (rule #11). See FirebirdCommandGuard.
+        FirebirdCommandGuard.VerifyStatements(connection, statements);
+
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         FbTransaction? tx = null;
         try
@@ -494,8 +509,7 @@ public sealed class FirebirdConnectionService : IDisposable
             foreach (var statement in statements)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                await using var cmd = connection.CreateCommand();
-                cmd.CommandText = statement;
+                await using var cmd = connection.CreateGuardedCommand(statement);
                 cmd.CommandTimeout = 0;
                 cmd.Transaction = tx;
                 await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -549,14 +563,13 @@ public sealed class FirebirdConnectionService : IDisposable
             await using var dtx = (FbTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await using (var cmd = connection.CreateCommand())
+                await using (var cmd = connection.CreateGuardedCommand(
+                    "SELECT t.MON$TRANSACTION_ID, t.MON$ATTACHMENT_ID, t.MON$STATE, t.MON$ISOLATION_MODE, " +
+                    "a.MON$USER, a.MON$REMOTE_PROCESS " +
+                    "FROM MON$TRANSACTIONS t LEFT JOIN MON$ATTACHMENTS a ON a.MON$ATTACHMENT_ID = t.MON$ATTACHMENT_ID " +
+                    "ORDER BY t.MON$TRANSACTION_ID"))
                 {
                     cmd.Transaction = dtx;
-                    cmd.CommandText =
-                        "SELECT t.MON$TRANSACTION_ID, t.MON$ATTACHMENT_ID, t.MON$STATE, t.MON$ISOLATION_MODE, " +
-                        "a.MON$USER, a.MON$REMOTE_PROCESS " +
-                        "FROM MON$TRANSACTIONS t LEFT JOIN MON$ATTACHMENTS a ON a.MON$ATTACHMENT_ID = t.MON$ATTACHMENT_ID " +
-                        "ORDER BY t.MON$TRANSACTION_ID";
                     await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                     while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     {

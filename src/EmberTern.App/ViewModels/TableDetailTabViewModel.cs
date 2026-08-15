@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Export;
+using EmberTern.App.Localization;
 using EmberTern.Core.Export;
 using EmberTern.Core.Export.Sql;
 using EmberTern.Core.Metadata;
@@ -1137,7 +1138,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         }
         catch (DataEditException ex)
         {
-            EditStatusMessage = ex.Message;
+            EditStatusMessage = ErrorText.Of(ex);
             OnPropertyChanged(nameof(HasEditStatusMessage));
             return;
         }
@@ -1217,7 +1218,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         {
             row[columnIndex] = oldValue;
             ReplaceRowInGrid(row);
-            EditStatusMessage = ex.Message;
+            EditStatusMessage = ErrorText.Of(ex);
             OnPropertyChanged(nameof(HasEditStatusMessage));
             return;
         }
@@ -1353,7 +1354,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         }
         catch (DataEditException ex)
         {
-            EditStatusMessage = ex.Message;
+            EditStatusMessage = ErrorText.Of(ex);
             OnPropertyChanged(nameof(HasEditStatusMessage));
             return;
         }
@@ -3175,7 +3176,7 @@ public partial class TableDetailTabViewModel : ViewModelBase, IUnsavedWorkSource
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ex.Message);
+            ErrorMessage = string.Format(System.Globalization.CultureInfo.CurrentCulture, UiStrings.FieldEditCompileFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)

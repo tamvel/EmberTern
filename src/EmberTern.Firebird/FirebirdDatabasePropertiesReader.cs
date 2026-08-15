@@ -53,8 +53,7 @@ public sealed class FirebirdDatabasePropertiesReader
         await commandLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var cmd = connection.CreateCommand();
-            cmd.CommandText = PropertiesSql;
+            await using var cmd = connection.CreateGuardedCommand(PropertiesSql);
             cmd.CommandTimeout = 0;
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

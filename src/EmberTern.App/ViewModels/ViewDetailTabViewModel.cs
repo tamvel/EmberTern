@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.App.Export;
+using EmberTern.App.Localization;
 using EmberTern.Core.Export;
 using EmberTern.Core.Metadata;
 using EmberTern.Core.Query;
@@ -49,6 +50,9 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
     /// <c>DiagnosticsPanelHost</c> from the active SQL document's cached diagnostics; this VM computes
     /// nothing.</summary>
     public DiagnosticsPanelViewModel DiagnosticsPanel { get; } = new();
+
+    /// <inheritdoc cref="PackageDetailTabViewModel.RefreshLocalizedText"/>
+    internal void RefreshLocalizedText() => DiagnosticsPanel.RefreshLocalizedText();
 
     // Default CREATE VIEW template for the New View flow. The user edits the SQL
     // directly — no visual designer (per milestone scope).
@@ -451,7 +455,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.TableDescriptionSaveFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)
@@ -791,7 +795,7 @@ public partial class ViewDetailTabViewModel : ViewModelBase, IUnsavedWorkSource,
         }
         catch (DdlExecutionException ex)
         {
-            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.ViewCompileFailedFormat, ex.Message);
+            ErrorMessage = string.Format(CultureInfo.CurrentCulture, UiStrings.ViewCompileFailedFormat, ErrorText.Of(ex));
             return;
         }
         catch (InvalidOperationException ex)

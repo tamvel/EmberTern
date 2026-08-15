@@ -69,10 +69,8 @@ public sealed class FolderStore
     public FolderState Load()
         => _settings.Load()?.Folders ?? new FolderState();
 
+    // ⚠ Through Update, so a transient read failure cannot substitute defaults for the rest of the aggregate
+    // (connection profiles, passwords, workspace) and write them over the file.
     public void Save(FolderState state)
-    {
-        var settings = _settings.Load() ?? new ApplicationSettings();
-        settings.Folders = state;
-        _settings.Save(settings);
-    }
+        => _settings.Update(settings => settings.Folders = state);
 }

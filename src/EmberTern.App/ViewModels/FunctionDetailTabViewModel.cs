@@ -673,6 +673,9 @@ public partial class FunctionDetailTabViewModel : SourceObjectDetailTabViewModel
     {
         OnPropertyChanged(string.Empty);
 
+        // See ProcedureDetailTabViewModel.RefreshLocalizedText — the Diagnostics panel is a child object.
+        DiagnosticsPanel.RefreshLocalizedText();
+
         if (_lastExecOutcome is { } outcome)
         {
             ExecInfo = BuildExecInfo(outcome);
