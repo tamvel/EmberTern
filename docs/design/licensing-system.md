@@ -1,8 +1,8 @@
 # EmberTern Licensing System — design document
 
-**🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ⭐ STAGE L1 DELIVERED — awaits the
-user's confirmation. Next: L2.** Branch `feat/licensing-system`, cut from `master` at `2c3da45`.
-As built: **§34**.
+**🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ✅ L1 ACCEPTED. ⭐ STAGE L2
+DELIVERED — awaits the user's confirmation. Next: L3.** Branch `feat/licensing-system`, cut from `master`
+at `2c3da45`. As built: **§34** (L1), **§35** (L2).
 
 **This document has two parts and they have different authority:**
 
@@ -469,6 +469,28 @@ tests/
 EmberTern.slnx                    gains src/EmberTern.Licensing
 EmberTern.LicenseManager.slnx     new: Licensing + Issuing + LicenseManager + its tests
 ```
+
+⭐⭐ **`EmberTern.Licensing.Issuing` is NOT in `EmberTern.slnx`, and `EmberTern.Tests` does not reference
+it.** This was strengthened during L2 from "App must not reference it" to "the client's solution must not
+contain it", and the difference is worth stating: with the issuer absent from that solution, its assembly
+is absent from the folder `EmberTern.dll` is built into — so *"it does not ship"* stops being a claim
+about intent and becomes an observable fact about a directory. `EmberTern.Licensing` is in both solutions
+on purpose: sharing the format by project rather than by a package is what stops the verifier and the
+issuer from ever disagreeing about what an ETL1 artifact is.
+
+⚠ **Consequence: there are two test commands from L2 on**, and this is inherent to shipping two
+applications, not a partitioning of one suite:
+
+```bash
+dotnet test EmberTern.slnx
+```
+```bash
+dotnet test EmberTern.LicenseManager.slnx
+```
+
+`CLAUDE.md`'s *"the suite runs as ONE command"* rule exists because partitioning **EmberTern's own** suite
+hid two defects for months. It does not speak to a second product, and ⛔ it must not be used as an
+argument for pulling the issuer back into the client's solution.
 
 ⭐ **Theme sharing by file link, not by moving files.**
 `<AvaloniaResource Include="..\EmberTern.App\Themes\*.axaml" Link="Themes\%(Filename)%(Extension)" />`
@@ -1402,9 +1424,71 @@ licence with `UnknownKey`. That is correct for L1 and is asserted by
 `LicenseVerifierTests.TheShippedTrustedKeyTableIsStillEmptyAtThisStage` — a test written as a **reminder**,
 to be rewritten (⛔ not deleted) when L2's ceremony produces `R1`.
 
----
+## 35. L2 — as built (2026-08-15)
 
-## Appendix A — key register (filled by the key ceremony, §24.1)
+✅ **Delivered and green.** `src/EmberTern.Licensing.Issuing` — 6 files, zero package references, one
+project reference (the shared format). New `EmberTern.LicenseManager.slnx` and
+`tests/EmberTern.LicenseManager.Tests`. Builds **0/0 in Debug and Release, both solutions**.
+Suites: EmberTern **8 978** (was 8 972; +6 guards), License Manager **46**.
+
+**Surface:** `KeyStore` · `KeyStoreEntry` · `KeyStoreFailure` / `KeyStoreException` · `IssuingKey` ·
+`LicenseTerms` / `IssuedLicense` / `LicenseIssuer` · `KeyCeremony` (`CeremonyResult`,
+`RestoreVerification`).
+
+### 35.1 ⭐ The guards were proved by watching each one fail
+
+⭐⭐ **A green guard nobody has seen go red is not evidence.** Each of the six
+`PrivateKeyNeverShipsTests` was verified by injecting the violation it exists to catch, observing the
+failure, and reverting:
+
+| Injected violation | Test that fired |
+|---|---|
+| Issuing added to `EmberTern.slnx` | `TheEmberTernSolutionDoesNotContainTheIssuingProject` |
+| `ProjectReference` from `EmberTern.App` to Issuing | `NoProjectInTheEmberTernSolutionReferencesIssuing` |
+| …and the resulting assembly in the output | `TheShippedOutputContainsNoIssuingAssembly` |
+| `SignData` written into a shipped source file | `NoShippedSourceUsesAPrivateKeyOrSigningApi` |
+| a `.pem` dropped into the build output | `TheShippedOutputContainsNoKeyMaterial` |
+| a public `ECDsa`-returning member on `EmberTern.Licensing` | `ThePublicApiOfTheVerifierCannotSign` |
+
+⭐ Six tests, six *different* violations — none of them catches another's. That redundancy is the design:
+the private key is the one asset whose compromise is unrecoverable (§25.1).
+
+### 35.2 Five decisions taken during implementation
+
+1. ⭐ **`IssuingKey.Sign` is `internal`.** The only way to obtain a signature is to ask
+   `LicenseIssuer.Issue` for a licence, so every signature the system emits has passed the same validation
+   and self-check. A public `Sign(byte[])` would be a signing oracle wearing a helpful name.
+2. ⭐⭐ **`LicenseIssuer.Issue` verifies its own output** through the real `LicenseVerifier` against the
+   key's own public half, and throws rather than returning an artifact it cannot prove is good.
+   Architecture rule 11 at the source: the alternative to catching a key or format fault here is catching
+   it in a customer's inbox. ⚠ It asserts the artifact *authenticates*, **not** that it is currently
+   `Valid` — demanding `Valid` would make a post-dated licence unissuable.
+3. ⭐ **`KeyCeremony.VerifyRestore` takes the *expected* public key.** Without it the operation would only
+   prove a backup holds **a** working key, and a backup of the **wrong** key passes that check while being
+   exactly as useless as no backup. It returns a report and never throws — a failed restore verification
+   is a finding to act on, not a crash.
+4. **`KeyStore` works on bytes, never on a path.** Whose disk and which folder is the License Manager's
+   business; keeping I/O out makes every failure state reachable in a test.
+5. **`KeyCeremony.FormatTrustedKeyEntry` generates the paste-ready C#.** Transcription is where a ceremony
+   goes wrong: a public key is 120-odd base64 characters nobody proof-reads, and one altered character
+   produces a build that refuses every licence forever.
+
+### 35.3 One finding owed to `docs/gotchas.md` at L7
+
+⚠ **`Utf8JsonWriter`'s default encoder escapes `+` as `+`**, so a base64 value read back with
+`GetString()` does **not** appear verbatim in the file text. Two keystore tests did a text `Replace` on
+that value, matched nothing, mutated nothing — and reported *"no exception was thrown"*. ⭐ **The failure
+mode is the dangerous one: a correct product wearing a red test, which invites "fixing" the product.**
+The rule: edit JSON as JSON (`JsonNode`), never as text. Record it at L7 with the rest of the
+documentation closure.
+
+### 35.4 Still open going into L3
+
+⚠ **`TrustedKeys.Production` is still empty and the REAL ceremony has not been performed.** L2's exit
+criterion was a ceremony with a *test* key, which the tests perform on every run. The real one — a real
+passphrase, two offline backups, a verified restore from each, and the public key pasted into
+`TrustedKeys.Production` — is **L7**, deliberately: doing it now would mean carrying a production private
+key through five more stages of development for no benefit.
 
 | kid | Algorithm | Public key (SPKI, base64url) | Ceremony date | Revoked |
 |---|---|---|---|---|

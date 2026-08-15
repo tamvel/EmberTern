@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ⛔⛔ THIS ASSEMBLY CAN SIGN. IT MUST NEVER REACH A CUSTOMER MACHINE.
+
+       ⭐ The isolation is STRUCTURAL, not a convention:
+
+         · This project is NOT in EmberTern.slnx. It lives only in
+           EmberTern.LicenseManager.slnx. A developer working on EmberTern cannot add a
+           reference to it without first adding the project to the solution, which is a
+           deliberate act rather than an autocomplete.
+         · EmberTern.Tests does not reference it either — so it is absent from the folder
+           EmberTern.dll is built into, and PrivateKeyNeverShipsTests asserts exactly that.
+           An assembly that is not in the output cannot ship, whatever anyone intended.
+
+       ⚠ Do NOT add this project to EmberTern.slnx "for convenience". Four guard tests fail
+       if you do, and each of them fails for a different reason — that redundancy is the
+       point (docs/design/licensing-system.md §16.1, §19.4). -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\EmberTern.Licensing\EmberTern.Licensing.csproj" />
+  </ItemGroup>
+
+  <!-- No PackageReference. Signing is ECDSA P-256 from the BCL (decision D10) and the keystore is
+       AES-256-GCM + PBKDF2, also BCL. The issuer has no third-party code either — for the same
+       reason the verifier does not: this is the code that can mint licences. -->
+
+</Project>
