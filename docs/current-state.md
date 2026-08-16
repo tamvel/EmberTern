@@ -128,7 +128,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L3** — License Manager: skeleton, SQLite register, customers, licences, issue, save | ✅ **accepted** — §36; ⚠ read §36.5 before any UI work here |
 | **L4a** — mechanism: policy, location, store, service, text, clock, freshness, 4 gate guards | ⭐ **delivered, no UI** — §37 |
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
-| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⏭ **next**, ⛔ not started |
+| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⭐ **in progress** — split into two sessions (L5.0–L5.2 read side, L5.3–L5.6 mutations + backup). **L5.0 delivered, awaiting acceptance**: schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch — §39. ⛔ No UI yet, nothing committed |
 | **L6** — e-mail: `ILicenseEmailSender`, SMTP + `.eml`, DPAPI settings, template, send audit | ⏳ not started |
 | **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started |
 

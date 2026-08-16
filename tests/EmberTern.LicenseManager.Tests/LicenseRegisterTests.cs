@@ -178,7 +178,12 @@ public sealed class LicenseRegisterTests : IDisposable
         _register.SaveLicense(Licence());
 
         _register.AppendArtifact(Artifact(IssueReasons.Initial));
-        _register.AppendArtifact(Artifact(IssueReasons.Renewal, "ETL1.second.sig"));
+
+        // ⚠ A LATER iat, and that is not decoration. L3 wrote this test with two artifacts stamped at the
+        //    same instant, and L5's freshness guard rejects it — correctly: EmberTern installs a
+        //    replacement only when incoming.iat > local.iat (§16.4), so the second file would have been
+        //    recorded as delivered and then silently declined by every client that received it.
+        _register.AppendArtifact(Artifact(IssueReasons.Renewal, "ETL1.second.sig", Now.AddSeconds(1)));
 
         var artifacts = _register.GetArtifacts("lid-1");
 
@@ -224,11 +229,13 @@ public sealed class LicenseRegisterTests : IDisposable
     }
 
     private static IssuedArtifactRecord Artifact(
-        string reason = IssueReasons.Initial, string token = "ETL1.payload.signature") => new()
+        string reason = IssueReasons.Initial,
+        string token = "ETL1.payload.signature",
+        DateTimeOffset? issuedAt = null) => new()
     {
         LicenseId = "lid-1",
         KeyId = "R1",
-        IssuedAt = Now,
+        IssuedAt = issuedAt ?? Now,
         PayloadJson = """{"lv":1}""",
         Token = token,
         Reason = reason,

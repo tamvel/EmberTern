@@ -61,7 +61,7 @@ public sealed record LicenseRecord
     public DateTimeOffset? MaintenanceUntil { get; init; }
 
     /// <summary>
-    /// <c>active</c> · <c>superseded</c> · <c>blocked</c>. ⚠ <c>blocked</c> is bookkeeping in V1 — a
+    /// <c>active</c> · <c>blocked</c>. ⚠ <c>blocked</c> is bookkeeping in V1 — a
     /// licence already in the field keeps working until it expires (§26.2), and pretending otherwise in
     /// the UI would be the one lie this register must not tell.
     /// </summary>
@@ -106,6 +106,17 @@ public sealed record IssuedArtifactRecord
 
     /// <summary><c>initial</c> · <c>renewal</c> · <c>terms-change</c> · <c>reissue-lost</c>.</summary>
     public required string Reason { get; init; }
+
+    /// <summary>
+    /// ⭐ <c>current</c> or <c>superseded</c> — see <see cref="ArtifactStatuses"/>.
+    ///
+    /// <para>⚠ <b>Projected on read, never stored on this row.</b> The row is immutable by database
+    /// trigger; the pointer that decides which artifact is current lives in
+    /// <c>license_current_artifact</c> and is rewritten in the same transaction that appends a newer
+    /// artifact. <see langword="null"/> means "not read from the register" — the shape of a record built
+    /// in memory on its way to being appended, which has no position in a history it is not in yet.</para>
+    /// </summary>
+    public string? Status { get; init; }
 }
 
 /// <summary>One line of history. ⛔ Append-only, enforced by a database trigger.</summary>
@@ -155,14 +166,20 @@ public static class IssueReasons
     public const string ReissueLost = "reissue-lost";
 }
 
-/// <summary>Licence statuses. Persisted verbatim, so append-only.</summary>
+/// <summary>
+/// Licence statuses. Persisted verbatim, so append-only.
+///
+/// <para>⭐⭐ <b><c>superseded</c> was here in L3 and is gone as of L5, deliberately.</b> It could never
+/// be written: a re-issue keeps the same <c>lid</c>, so the licence ROW is never replaced — only its
+/// newest artifact is. The value described something that happens one level down, where it now lives as
+/// <see cref="ArtifactStatuses.Superseded"/>, projected from <c>license_current_artifact</c>. ⚠ Removing
+/// it does not breach the append-only vocabulary rule: nothing ever persisted it, so no stored row can
+/// carry it and no reader can encounter it.</para>
+/// </summary>
 public static class LicenseStatuses
 {
     /// <summary>Current.</summary>
     public const string Active = "active";
-
-    /// <summary>Replaced by a later artifact with the same <c>lid</c>.</summary>
-    public const string Superseded = "superseded";
 
     /// <summary>⚠ Bookkeeping in V1 — see <see cref="LicenseRecord.Status"/>.</summary>
     public const string Blocked = "blocked";

@@ -1944,3 +1944,93 @@ The seam rule in §38.1 is the same class as the charset seam's (*"never create 
 `FirebirdCommandGuard`"*), which lives in `CLAUDE.md`'s driver-gotchas section. It is **not** written there yet:
 `CLAUDE.md` stands at ~813 lines against its own ~800 threshold, and the user ratified that its cleanup is a
 separate task which L4b must not expand. ⏭ Add one line for it when that cleanup runs.
+
+---
+
+## 39. L5.0 — as built (2026-08-16)
+
+⭐ **The data layer only — no UI, by instruction.** `EmberTern.LicenseManager` gains schema **v2**, a
+cross-customer licence query, history by subject, an integrity check, and the atomic issuing batch.
+Builds **0/0 in Debug and Release, both solutions**. License Manager suite **139** (was 102: **+37**).
+
+### 39.1 ⭐⭐ R1/R2 — how a batch cannot leave a signed artifact unrecorded
+
+The stage existed to answer one question: *how do twenty signatures and twenty rows commit so that a
+failure anywhere leaves neither half a batch nor an artifact the register does not know about?*
+
+**The resolution is that signing is not a side effect.** `LicenseIssuer.Issue` is a pure function of key,
+terms and clock — it writes no file and no row. What is irreversible is not the signature, it is the
+**moment an artifact leaves the process**. So the invariant is stated as: *no artifact may be delivered
+until its row is committed*, and the operation is ordered to make the alternative unreachable:
+
+| Phase | Where | Property |
+|---|---|---|
+| 1 — sign everything | `IssuingWorkflow.IssueBatch` | pure; a throw leaves the register untouched and produces nothing anyone can hold |
+| 2 — record everything | `LicenseRegister.ApplyIssueBatch` | ONE SQLite transaction: terms, artifacts, pointers, history, batch line — all or none |
+| 3 — deliver | `IssuingWorkflow.SaveArtifact`, later and separately | reads the **stored** token, so every delivery path starts at a committed row |
+
+⛔ The naive shape — sign-and-record one licence at a time — was rejected: it is forty transactions, and
+an interruption at ten leaves ten customers extended, ten not, and no way to tell which half is which.
+
+⚠ **Both halves were proved by injected defect, not by reasoning.** Per-unit transactions instead of one
+turned **3** tests red including `AFaultInTheMiddleOfABatchLeavesTheRegisterExactlyAsItWas`; recording
+inside the signing loop turned **2** red including `AFailedSIGNATUREInTheMiddleOfABatchRecordsNothingAtAll`.
+Both were then restored and re-verified green.
+
+### 39.2 ⭐⭐ D‑A resolved: `superseded` lives on the artifact, but not as a column
+
+The user ratified that `current` / `superseded` is a fact about **`issued_artifacts`**. It cannot be a
+column there: that table aborts every `UPDATE` and every `DELETE` by trigger, and L3 proved it by reaching
+past the register's own API. A mutable status column would have meant relaxing a rule-#11-class guarantee
+to hold bookkeeping.
+
+⭐ **So the two facts are separated by their lifetimes.** The bytes are written once
+(`issued_artifacts`, untouched); *which* artifact is current is rewritten on every re-issue
+(`license_current_artifact`, one row per `lid`, updated in the same transaction that appends). The status
+is **projected** from the join, and the **`artifact_status` view** exposes the same projection to any SQL
+tool — §29's recovery row promises the register stays readable when this application will not start, and
+a projection only our C# knows how to compute would have broken that promise quietly.
+
+⛔ **`LicenseStatuses.Superseded` was removed.** It could never be written — a re-issue keeps the same
+`lid`, so the licence *row* is never replaced. ⚠ This does not breach the append-only vocabulary rule:
+nothing ever persisted it, so no stored row can carry it.
+
+### 39.3 The freshness guard, and the L3 test it caught
+
+`RefuseAnArtifactThatIsNotFresher` rejects an artifact whose `iat` does not come after the current one's.
+⭐ EmberTern installs a replacement only when `incoming.iat > local.iat` (§16.4) and the issuer truncates
+`iat` to whole seconds — so a double-click, or a batch retried at once, would otherwise be **recorded as
+delivered** while every client silently declines the file.
+
+⚠⚠ **It immediately failed a test L3 shipped green.** `ArtifactsAccumulateNewestFirstAndAreAudited`
+appended two artifacts stamped at the same instant — a state no client would accept. The test was
+corrected, not the guard. ⭐ A guard added after the fact is worth most exactly when it contradicts
+existing green tests; the reflex to "fix the guard so the suite passes again" is what would have kept the
+defect.
+
+### 39.4 Decisions taken during implementation
+
+1. **The free-text match runs in memory, the structured filters run in SQL.** ⚠ Measured, not stylistic:
+   SQLite's `LIKE` and `lower()` are case-insensitive for **ASCII only**, by documented design — so
+   `łódzka` would not find `Łódzka` in a register whose customers are Polish companies. .NET's
+   `OrdinalIgnoreCase` applies Unicode case folding and does. ⭐ `ThePlainSqlEquivalentWouldHaveMissedIt`
+   pins the *premise* rather than our code, so if SQLite ever changes, someone is told.
+2. **Timestamps are compared as text, and that is sound rather than lucky** — every stamp is written
+   through `LicensePayload`'s fixed-width UTC format, so lexicographic and chronological order coincide.
+3. **`CheckIntegrity` reports, never repairs, and never throws.** The caller decides what a problem means:
+   a list view warns, ⏭ a restore (L5.5) refuses. ⛔ A register that quietly fixes its own history is one
+   whose history cannot be trusted. Its three corruption tests **inject** the damage past the API — a
+   check proved only against states its own writer can produce is a check of the writer.
+4. **`SaveLicenseCore` / `AppendArtifactCore` are the single owners of a write**, shared by the single
+   issue and every batch unit, so the two can never disagree about what a licence update means.
+5. **Reads are threaded with their transaction.** §36.4 recorded this as *"worth knowing before L5 adds
+   bulk operations"*; it is now load-bearing — `Microsoft.Data.Sqlite` **throws** rather than reading
+   stale data when a command's transaction does not match the connection's active one.
+6. **The v1 → v2 upgrade is tested against the schema L3 actually shipped**, read off the `SchemaV1`
+   constant by reflection rather than retyped, and backfills each licence's newest artifact as current.
+
+### 39.5 ⏭ What L5.0 deliberately did NOT do
+
+⛔ No UI of any kind — search, filters, the licences view, group extend and re-issue are L5.1–L5.4.
+⛔ No backup, no JSONL, no restore (L5.5). ⛔ No date picker, no Seats validation, no data-folder surface
+(L5.1+). ⛔ Nothing was committed — L5.0 awaits the user's acceptance.

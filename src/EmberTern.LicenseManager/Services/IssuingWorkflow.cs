@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using EmberTern.Licensing;
 using EmberTern.Licensing.Issuing;
@@ -10,6 +11,31 @@ namespace EmberTern.LicenseManager.Services;
 /// <param name="Artifact">The register row, with its identity.</param>
 /// <param name="Issued">The signed licence in every form.</param>
 public sealed record IssueResult(IssuedArtifactRecord Artifact, IssuedLicense Issued);
+
+/// <summary>
+/// One licence's place in an issuing operation: whose it is, on what terms, and why.
+/// </summary>
+public sealed record IssueRequest
+{
+    /// <summary>
+    /// ⭐ The terms to SIGN. For a renewal these are the new terms, expiry already moved — the artifact
+    /// and the register row must never be built from two different readings of what was agreed.
+    /// </summary>
+    public required LicenseRecord License { get; init; }
+
+    /// <summary>Whose licence it is. ⭐ The name is read fresh and signed into the artifact (D6).</summary>
+    public required CustomerRecord Customer { get; init; }
+
+    /// <summary>One of <see cref="IssueReasons"/>. ⛔ Chosen by the operator, never inferred from a diff.</summary>
+    public required string Reason { get; init; }
+
+    /// <summary>
+    /// <see langword="true"/> when this operation changed the terms and they must be stored alongside the
+    /// artifact — a renewal. <see langword="false"/> for a re-issue of terms that are already recorded, so
+    /// the history does not gain a line claiming a change that did not happen.
+    /// </summary>
+    public bool TermsChanged { get; init; }
+}
 
 /// <summary>
 /// Sign, record, and hand back — in that order, and never in another.
@@ -43,6 +69,68 @@ public sealed class IssuingWorkflow
         ArgumentNullException.ThrowIfNull(license);
         ArgumentNullException.ThrowIfNull(customer);
 
+        var (record, issued) = Sign(session, license, customer, reason);
+
+        var artifact = _register.AppendArtifact(
+            record,
+            note: $"Licensed to {customer.Name}, {license.Seats} seat(s), until {license.ExpiresAt:yyyy-MM-dd}.");
+
+        return new IssueResult(artifact, issued);
+    }
+
+    /// <summary>
+    /// ⭐⭐ Issues a whole operation — one licence or twenty — so that a failure anywhere leaves either
+    /// everything recorded or nothing at all.
+    ///
+    /// <para><b>Phase 1, here: sign everything.</b> Signing is a pure function of key, terms and clock. It
+    /// writes no file and no row, so if the tenth signature throws, the first nine are values in memory
+    /// that nobody has seen and nothing refers to — the register is exactly as it was, and the correct
+    /// response is to try again.</para>
+    ///
+    /// <para><b>Phase 2, in the register:</b> every term change, artifact, current-artifact pointer and
+    /// history line commits as ONE transaction, or none of it does.</para>
+    ///
+    /// <para><b>Phase 3, afterwards and elsewhere:</b> <see cref="SaveArtifact"/> writes files, from the
+    /// STORED token. ⭐ That ordering is the whole guarantee — the only route by which an artifact can
+    /// reach a customer starts at a committed row, so "signed but unrecorded" is unreachable rather than
+    /// merely unlikely.</para>
+    /// </summary>
+    /// <param name="session">The unlocked key.</param>
+    /// <param name="requests">What to issue. ⚠ Each licence may appear at most once.</param>
+    /// <param name="note">A remark stored on the batch's own history line.</param>
+    public IssueBatchResult IssueBatch(
+        SigningSession session, IReadOnlyList<IssueRequest> requests, string? note = null)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(requests);
+
+        if (requests.Count == 0)
+        {
+            throw new ArgumentException("A batch must contain at least one licence.", nameof(requests));
+        }
+
+        // ── Phase 1 — sign. Pure: no file, no row, nothing anyone can hold if this throws. ──────────
+        var units = new List<LicenseIssueUnit>(requests.Count);
+        foreach (var request in requests)
+        {
+            var (record, _) = Sign(session, request.License, request.Customer, request.Reason);
+
+            units.Add(new LicenseIssueUnit
+            {
+                Artifact = record,
+                UpdatedTerms = request.TermsChanged ? request.License : null,
+            });
+        }
+
+        // ── Phase 2 — record, atomically. ───────────────────────────────────────────────────────────
+        return _register.ApplyIssueBatch(units, note);
+    }
+
+    // ⭐ The ONE place a licence becomes a signature, used by both the single issue and every unit of a
+    //    batch — so the two can never disagree about what gets signed.
+    private (IssuedArtifactRecord Record, IssuedLicense Issued) Sign(
+        SigningSession session, LicenseRecord license, CustomerRecord customer, string reason)
+    {
         var issued = session.Issuer.Issue(
             new LicenseTerms
             {
@@ -59,19 +147,17 @@ public sealed class IssuingWorkflow
             },
             _clock());
 
-        var artifact = _register.AppendArtifact(
-            new IssuedArtifactRecord
-            {
-                LicenseId = issued.Payload.LicenseId,
-                KeyId = issued.Payload.KeyId,
-                IssuedAt = issued.Payload.IssuedAt,
-                PayloadJson = System.Text.Encoding.UTF8.GetString(issued.PayloadJson),
-                Token = issued.Token,
-                Reason = reason,
-            },
-            note: $"Licensed to {customer.Name}, {license.Seats} seat(s), until {license.ExpiresAt:yyyy-MM-dd}.");
+        var record = new IssuedArtifactRecord
+        {
+            LicenseId = issued.Payload.LicenseId,
+            KeyId = issued.Payload.KeyId,
+            IssuedAt = issued.Payload.IssuedAt,
+            PayloadJson = System.Text.Encoding.UTF8.GetString(issued.PayloadJson),
+            Token = issued.Token,
+            Reason = reason,
+        };
 
-        return new IssueResult(artifact, issued);
+        return (record, issued);
     }
 
     /// <summary>
