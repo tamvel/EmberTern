@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace EmberTern.LicenseManager.Data;
@@ -95,6 +95,18 @@ public sealed record LicenseSummary
 
     /// <summary>The customer's contact address, when there is one. ⏭ L6 sends here.</summary>
     public string? CustomerEmail { get; init; }
+
+    /// <summary>The contact person's first name, when recorded.</summary>
+    public string? CustomerFirstName { get; init; }
+
+    /// <summary>
+    /// The contact person's last name, when recorded.
+    ///
+    /// <para>⭐ Carried on the SUMMARY, not fetched per row: an operator looking for "the licence
+    /// Kowalski called about" has a person, not a company, and a list that cannot answer that sends them
+    /// to the customers view to translate the name first.</para>
+    /// </summary>
+    public string? CustomerLastName { get; init; }
 
     /// <summary>How many artifacts have ever been signed for this licence.</summary>
     public required int ArtifactCount { get; init; }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -137,7 +137,18 @@ public sealed class LicenseManagerThemeTests
     public void EveryResourceKeyUsedIsDefinedSomewhereInTheLinkedTokenLayer()
     {
         var defined = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var file in new[] { "Colors.axaml", "Tokens.axaml", "Typography.axaml", "FluentBridge.axaml" })
+
+        // ⭐ IconGeometries.axaml joined the linked layer in the L5.1 QA pass, when EmberTern's dictionary
+        //   was split so its 86 pure geometries became linkable (the three ControlThemes that bound it to
+        //   EmberTern.App's controls moved to IconControlThemes.axaml, which this project must NOT link).
+        //   ⚠ Adding it here is not a widening of the rule — the rule is "every key comes from the linked
+        //   layer", and the linked layer is what grew. Guarded from the other side by
+        //   IconGeometriesSplitTests in EmberTern.Tests, which fails if that file stops being pure.
+        foreach (var file in new[]
+                 {
+                     "Colors.axaml", "Tokens.axaml", "Typography.axaml", "FluentBridge.axaml",
+                     "IconGeometries.axaml",
+                 })
         {
             foreach (Match match in Regex.Matches(
                          File.ReadAllText(Path.Combine(ThemeFolder, file)), @"x:Key=""([^""]+)"""))

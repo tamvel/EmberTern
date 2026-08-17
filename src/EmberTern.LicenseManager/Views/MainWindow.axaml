@@ -1,45 +1,185 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
         xmlns:data="using:EmberTern.LicenseManager.Data"
+        xmlns:lm="using:EmberTern.LicenseManager"
         x:Class="EmberTern.LicenseManager.Views.MainWindow"
+        Name="RootWindow"
         x:DataType="vm:ShellViewModel"
         Title="EmberTern License Manager"
         Width="1080" Height="720" MinWidth="880" MinHeight="560"
         WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        WindowDecorations="BorderOnly"
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ══ P1-a · THE HORIZONTAL RHYTHM, AND WHO OWNS IT ═══════════════════════════════════════════
+       ⭐⭐ A GAP BELONGS TO THE CONTAINER THAT CREATES IT, never to one of the two things it separates.
+       In this window that means `ColumnSpacing` / `RowSpacing` on the Grid, and it is the shape
+       `SettingsWindow.axaml` already uses in the product ("Gaps come from RowSpacing / ColumnSpacing, so
+       no cell carries a margin of its own").
+
+       Three spacings, and each says something different — the value is read from the existing scale, so
+       no token was added and `Tokens.axaml` (shared with the product) was not touched:
+
+         `Space.Md` (8)  two INDEPENDENT things side by side — field ↔ field, caption ↔ action,
+                         column ↔ column. The default; reach for it unless one of the two below applies.
+         `Space.Sm` (6)  parts of ONE compound element — the severity glyph and its message.
+         `Space.Xs` (4)  a value and an affordance that acts on THAT value — an id and its Copy button.
+                         They are one object, and 8 would read as two.
+
+       ⚠⚠ WHAT THIS REPLACED, because the failure is worth recognising rather than just fixing:
+       every row here used to hang `Margin.InlineGap` on its SECOND column. That token is `0,0,8,0` and
+       Tokens.axaml states its contract in its own comment — "jej właścicielem jest element PO LEWEJ".
+       Hung on the element to the RIGHT of the gap, it puts the 8 px after the pair instead of between
+       it. Measured before the fix: Name│Identifier 0, First│Last 0, Seats│Valid-from 0, value│Copy 0,
+       Search│Status 0 — and then 8 between the NEXT pair, in every one of them. ⛔ So the defect was
+       never "a missing margin somewhere"; it was one rule applied to the wrong owner, five times. -->
+
+  <Window.Resources>
+    <!-- ⭐ ONE template for all three filter dropdowns, keyed on the shared FilterOption base record.
+         Three copies of `<TextBlock Text="{Binding Label}" />` is how three dropdowns start looking
+         slightly different from each other. -->
+    <DataTemplate x:Key="FilterOptionTemplate" x:DataType="vm:FilterOption">
+      <TextBlock Text="{Binding Label}" />
+    </DataTemplate>
+  </Window.Resources>
 
   <DockPanel>
 
     <!-- Title strip ──────────────────────────────────────────────────────────────────────────── -->
-    <Border Classes="chrome" DockPanel.Dock="Top">
-      <Grid ColumnDefinitions="*,Auto,Auto">
+    <!-- ⭐⭐ THE APPLICATION'S OWN TITLE BAR — the same pattern EmberTern uses. Windows no longer draws
+         one of its own, so the duplicated "EmberTern License Manager" is gone; dragging, double-tap to
+         maximise and the three caption buttons are ours. -->
+    <Border Classes="chrome" DockPanel.Dock="Top" Height="{DynamicResource Size.TitleBar}"
+            Padding="0"
+            PointerPressed="OnTitleBarPointerPressed" DoubleTapped="OnTitleBarDoubleTapped">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
         <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
+                   Margin="{DynamicResource Pad.Panel}"
                    Text="EmberTern License Manager" />
-        <TextBlock Grid.Column="1" Classes="hint" VerticalAlignment="Center"
-                   Margin="{DynamicResource Margin.InlineGap}"
+        <!-- ⭐ The signing key is PROVENANCE, not an action: it tells the operator which key is about to
+             sign, and it is the one thing here that must never be mistaken for a control. `hint` is the
+             smallest grade in the catalogue, which is exactly its standing. -->
+        <TextBlock Grid.Column="2" Classes="hint" VerticalAlignment="Center"
                    Text="{Binding SigningKeyId, StringFormat='Signing key: {0}'}" />
-        <Button Grid.Column="2" Classes="flat" Name="ThemeToggle" Content="Light / Dark"
-                Click="OnToggleTheme" />
+        <!-- ⭐⭐ THE SAME THEME TOGGLE EMBERTERN HAS: an icon showing the ACTION — Sun while Dark is
+             active (click goes to Light), Moon while Light is. The glyphs are EmberTern's own, linked
+             rather than copied; only the twenty-line converter is mirrored, because it lives in an
+             assembly this solution must not reference. -->
+        <Button Grid.Column="3" Classes="icon" Name="ThemeToggle" Click="OnToggleTheme"
+                VerticalAlignment="Center" ToolTip.Tip="Switch between the light and dark theme">
+          <Viewbox Classes="icon">
+            <Canvas Width="24" Height="24">
+              <Path Data="{Binding ActualThemeVariant, ElementName=RootWindow,
+                           Converter={x:Static lm:ThemeToggleIconConverter.Instance}}" />
+            </Canvas>
+          </Viewbox>
+        </Button>
+
+        <!-- Window controls -->
+        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch"
+>
+          <Button Classes="caption" Name="MinimizeButton" Click="OnMinimizeClick"
+                  ToolTip.Tip="Minimise">
+            <Viewbox Classes="icon">
+              <Canvas Width="24" Height="24">
+                <Path Data="{DynamicResource Icon.WindowMinimize}" />
+              </Canvas>
+            </Viewbox>
+          </Button>
+          <Button Classes="caption" Name="MaxRestoreButton" Click="OnMaxRestoreClick"
+                  ToolTip.Tip="Maximise or restore">
+            <Viewbox Classes="icon">
+              <Canvas Width="24" Height="24">
+                <Path Name="MaxRestoreGlyph" Data="{DynamicResource Icon.WindowMaximize}" />
+              </Canvas>
+            </Viewbox>
+          </Button>
+          <Button Classes="caption close" Name="CloseButton" Click="OnCloseClick" ToolTip.Tip="Close">
+            <Viewbox Classes="icon">
+              <Canvas Width="24" Height="24">
+                <Path Data="{DynamicResource Icon.WindowClose}" />
+              </Canvas>
+            </Viewbox>
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 
+    <!-- View switch ──────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⭐ Two views, because they answer two different questions: "what does THIS customer have?" and
+         "who lapses next month?". The second one has no customer to start from. -->
+    <Border Classes="view-switch" DockPanel.Dock="Top">
+      <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
+        <Button Classes="view-tab" Name="CustomersTab" Content="Customers"
+                Classes.active="{Binding IsCustomersView}"
+                Command="{Binding ShowCustomersCommand}" />
+        <Button Classes="view-tab" Name="LicensesTab" Content="Licences"
+                Classes.active="{Binding IsLicensesView}"
+                Command="{Binding ShowLicensesCommand}" />
+      </StackPanel>
+    </Border>
+
     <!-- Message strip ────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⚠⚠ NO MARGIN. It used to carry `Margin.SectionGap`, which is `0,0,0,16` — a BOTTOM margin. On a
+         strip docked to the bottom edge that put 16 px of window background UNDER the message, which is
+         the empty band the user reported. The token means "the gap below a section that has something
+         beneath it"; here there is nothing beneath it. -->
     <Border DockPanel.Dock="Bottom" Classes="message"
             Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
             Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
-            IsVisible="{Binding HasMessage}"
-            Margin="{DynamicResource Margin.SectionGap}">
-      <TextBlock Text="{Binding MessageText}" />
+            IsVisible="{Binding HasMessage}">
+      <!-- ⭐⭐ EMBERTERN'S OWN MESSAGE RECIPE: a thin severity STRIPE plus a severity ICON, on a calm
+           panel background — `MessageBanner` is built exactly this way (`ColumnDefinitions="3,Auto,*,…"`).
+           ⚠ The License Manager previously signalled severity with the BORDER COLOUR alone, and in Light
+           that is nearly invisible: `PanelBrush` sits very close to `BackgroundBrush` there, so all that
+           remained of a warning was a hairline. ⛔ The fix is deliberately not a loud tinted fill — the
+           stripe and the glyph carry the state, and the strip stays quiet. -->
+      <Grid ColumnDefinitions="3,*">
+        <Border Grid.Column="0" Classes="severity-stripe" />
+        <!-- P1-a. The stripe has to reach three edges, so the strip's Padding stays 0 - which means the
+             CONTENT needs its own inset, and it is ONE inset owned by ONE container rather than a margin
+             on the glyph plus another on the text. That was the measured defect: the glyph sat flush
+             against the stripe (0 px) while glyph-to-text came to 16, because two owners each gave 8.
+             `Pad.Cell` is the inset, `Space.Sm` is the gap - the same 8 / 6 rhythm EmberTern's own
+             MessageBanner spells out by hand. -->
+        <Grid Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Space.Sm}"
+              Margin="{DynamicResource Pad.Cell}">
+          <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center">
+            <Canvas Width="24" Height="24">
+              <Path Data="{Binding MessageIconKey,
+                           Converter={x:Static lm:IconGeometryConverter.Instance}}" />
+            </Canvas>
+          </Viewbox>
+          <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding MessageText}" />
+        </Grid>
+      </Grid>
     </Border>
 
-    <Grid ColumnDefinitions="300,*">
+    <!-- ⚠ The two views overlap in ONE cell and take turns being visible, rather than docking beside
+         each other. A DockPanel gives its fill slot to the last child only, and two fill children is
+         how a layout silently loses one of them. -->
+    <Grid>
+
+    <Grid IsVisible="{Binding IsCustomersView}">
+      <!-- QA-3. A resizable rail — the same shape EmberTern uses in Global Search, the debugger and its
+           own main window: an explicit splitter column, Width 4, painted BorderBrush so the handle IS
+           the separator rather than an extra line beside one.
+           MinWidth/MaxWidth are not decoration: below ~200 a customer name stops fitting beside its
+           identifier, and above ~480 the detail form starts wrapping its three-column contact row. -->
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="280" MinWidth="200" MaxWidth="480" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
 
       <!-- Customers rail ─────────────────────────────────────────────────────────────────────── -->
       <Border Grid.Column="0" Classes="rail">
         <DockPanel Margin="{DynamicResource Pad.Panel}">
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto"
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
                 Margin="{DynamicResource Margin.PanelCaption}">
             <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="Customers" />
             <Button Grid.Column="1" Classes="flat" Content="New"
@@ -60,7 +200,10 @@
       </Border>
 
       <!-- Detail ─────────────────────────────────────────────────────────────────────────────── -->
-      <ScrollViewer Grid.Column="1" Padding="{DynamicResource Pad.Panel}">
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns"
+                    Background="{DynamicResource BorderBrush}" Width="4" />
+
+      <ScrollViewer Grid.Column="2" Padding="{DynamicResource Pad.Panel}">
         <StackPanel Spacing="{DynamicResource Space.Lg}">
 
           <!-- Customer ───────────────────────────────────────────────────────────────────────── -->
@@ -68,30 +211,44 @@
             <StackPanel Spacing="{DynamicResource Space.Sm}">
               <TextBlock Classes="section" Text="Customer" />
 
-              <Grid ColumnDefinitions="*,Auto" >
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
                 <StackPanel Grid.Column="0">
                   <TextBlock Classes="field-label" Text="Name — required, and this is what gets signed" />
                   <TextBox Text="{Binding CustomerName}" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" Margin="{DynamicResource Margin.InlineGap}">
+                <StackPanel Grid.Column="1">
                   <TextBlock Classes="field-label" Text="Identifier" />
                   <!-- ⛔ Read-only, exactly like the licence id below, and for a stronger reason: the
                        identifier is the PRIMARY KEY the save writes against. Editing it and saving
                        would not rename this customer, it would silently create a second one and leave
                        the licences attached to the first. Generated, never chosen. -->
-                  <TextBox Classes="mono" Width="120" IsReadOnly="True" Text="{Binding CustomerId}" />
+                  <!-- QA-2. It used to be a read-only TextBox — which is a field with its editing
+                       quietly disabled: the box, the border and the caret target all say "type here"
+                       while the control refuses. A VALUE with a copy action says what it is. -->
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
+                    <SelectableTextBlock Grid.Column="0" Classes="mono value"
+                                         Text="{Binding CustomerId}" />
+                    <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
+                            Tag="{Binding CustomerId}" ToolTip.Tip="Copy the identifier">
+                      <Viewbox Classes="icon">
+                        <Canvas Width="24" Height="24">
+                          <Path Data="{DynamicResource Icon.Copy}" />
+                        </Canvas>
+                      </Viewbox>
+                    </Button>
+                  </Grid>
                 </StackPanel>
               </Grid>
 
               <TextBlock Classes="field-label" Text="Address" />
               <TextBox Classes="multiline" Text="{Binding CustomerAddress}" />
 
-              <Grid ColumnDefinitions="*,*,*">
+              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{DynamicResource Space.Md}">
                 <StackPanel Grid.Column="0">
                   <TextBlock Classes="field-label" Text="First name" />
                   <TextBox Text="{Binding CustomerFirstName}" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" Margin="{DynamicResource Margin.InlineGap}">
+                <StackPanel Grid.Column="1">
                   <TextBlock Classes="field-label" Text="Last name" />
                   <TextBox Text="{Binding CustomerLastName}" />
                 </StackPanel>
@@ -112,17 +269,23 @@
           <!-- Licences ───────────────────────────────────────────────────────────────────────── -->
           <Border Classes="card" IsVisible="{Binding SelectedCustomer, Converter={x:Static ObjectConverters.IsNotNull}}">
             <StackPanel Spacing="{DynamicResource Space.Sm}">
-              <Grid ColumnDefinitions="*,Auto">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
                 <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="Licences" />
                 <Button Grid.Column="1" Classes="flat" Content="New licence"
                         Command="{Binding NewLicenseCommand}" />
               </Grid>
 
+              <!-- P1-c. Double-click a row to preview its newest artifact. ⭐ The gesture runs the very
+                   same `InspectLatestCommand` the button below runs — the work here is the GESTURE, not a
+                   second way of inspecting; ⛔ a parallel implementation is what makes "never issued"
+                   explain itself on one path and fall silent on the other. -->
               <ListBox MaxHeight="180" ItemsSource="{Binding Licenses}"
+                       Name="CustomerLicenses"
+                       DoubleTapped="OnLicenseDoubleTapped"
                        SelectedItem="{Binding SelectedLicense}">
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="data:LicenseRecord">
-                    <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
                       <TextBlock Grid.Column="0" Classes="mono"
                                  Text="{Binding LicenseId, StringFormat='{}{0}'}" Width="150"
                                  TextTrimming="CharacterEllipsis" />
@@ -135,23 +298,44 @@
                 </ListBox.ItemTemplate>
               </ListBox>
 
-              <Grid ColumnDefinitions="Auto,*,*">
+              <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{DynamicResource Space.Md}">
                 <StackPanel Grid.Column="0">
                   <TextBlock Classes="field-label" Text="Seats" />
                   <TextBox Width="80" Text="{Binding LicenseSeats}" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" Margin="{DynamicResource Margin.InlineGap}">
-                  <TextBlock Classes="field-label" Text="Valid from (yyyy-mm-dd)" />
-                  <TextBox Classes="mono" Text="{Binding LicenseNotBefore}" />
+                <StackPanel Grid.Column="1">
+                  <!-- QA-6. Pick from the calendar or type — the caption no longer spends half its
+                       words teaching a format. CustomDateFormatString keeps the DISPLAY unambiguous
+                       (yyyy-MM-dd reads the same in every locale) while the control still accepts what
+                       the operator's own culture types.
+                       Known and accepted: the calendar FLYOUT is not repinned to our palette, because
+                       FluentBridge carries no Calendar* keys — EmberTern's own two date pickers have
+                       the same gap. Recorded as its own design-system item; not fixed here. -->
+                  <TextBlock Classes="field-label" Text="Valid from" />
+                  <CalendarDatePicker SelectedDate="{Binding LicenseNotBefore}"
+                                      SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd"
+                                      HorizontalAlignment="Stretch" />
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                  <TextBlock Classes="field-label" Text="Valid until (yyyy-mm-dd, inclusive)" />
-                  <TextBox Classes="mono" Text="{Binding LicenseExpiresAt}" />
+                  <TextBlock Classes="field-label" Text="Valid until (inclusive)" />
+                  <CalendarDatePicker SelectedDate="{Binding LicenseExpiresAt}"
+                                      SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd"
+                                      HorizontalAlignment="Stretch" />
                 </StackPanel>
               </Grid>
 
               <TextBlock Classes="field-label" Text="Licence id" />
-              <TextBox Classes="mono" IsReadOnly="True" Text="{Binding LicenseId}" />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
+                <SelectableTextBlock Grid.Column="0" Classes="mono value" Text="{Binding LicenseId}" />
+                <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
+                        Tag="{Binding LicenseId}" ToolTip.Tip="Copy the licence id">
+                  <Viewbox Classes="icon">
+                    <Canvas Width="24" Height="24">
+                      <Path Data="{DynamicResource Icon.Copy}" />
+                    </Canvas>
+                  </Viewbox>
+                </Button>
+              </Grid>
 
               <TextBlock Classes="field-label" Text="Notes — administrative only" />
               <TextBox Classes="multiline" Text="{Binding LicenseNotes}" />
@@ -173,6 +357,103 @@
 
         </StackPanel>
       </ScrollViewer>
+    </Grid>
+
+    <!-- Licences — every licence in the register, across every customer ─────────────────────── -->
+    <DockPanel IsVisible="{Binding IsLicensesView}" Margin="{DynamicResource Pad.Panel}">
+
+      <!-- Filters ────────────────────────────────────────────────────────────────────────────── -->
+      <Border DockPanel.Dock="Top" Classes="card">
+        <StackPanel Spacing="{DynamicResource Space.Sm}">
+          <TextBlock Classes="section" Text="Find a licence" />
+
+          <Grid ColumnDefinitions="2*,*,*,*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+            <StackPanel Grid.Column="0">
+              <TextBlock Classes="field-label" Text="Search" />
+              <TextBox Text="{Binding Browser.SearchText}"
+                       PlaceholderText="Customer, e-mail, identifier, licence id or notes" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1">
+              <TextBlock Classes="field-label" Text="Status" />
+              <ComboBox HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Browser.StatusFilters}"
+                        SelectedItem="{Binding Browser.SelectedStatus}"
+                        ItemTemplate="{StaticResource FilterOptionTemplate}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+              <TextBlock Classes="field-label" Text="Expiry" />
+              <ComboBox HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Browser.ExpiryFilters}"
+                        SelectedItem="{Binding Browser.SelectedExpiry}"
+                        ItemTemplate="{StaticResource FilterOptionTemplate}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3">
+              <TextBlock Classes="field-label" Text="Issuing" />
+              <!-- ⚠ A dropdown rather than a checkbox, and that is a theming decision with a reason:
+                   `ControlThemes.axaml` — which carries EmberTern's hand-written CheckBox template — is
+                   not linkable, so a checkbox here would fall back to Fluent's own. Three uniform
+                   dropdowns also let this filter say "issued at least once", which a checkbox cannot. -->
+              <ComboBox HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Browser.IssuingFilters}"
+                        SelectedItem="{Binding Browser.SelectedIssuing}"
+                        ItemTemplate="{StaticResource FilterOptionTemplate}" />
+            </StackPanel>
+
+            <Button Grid.Column="4" Classes="flat" Content="Clear" VerticalAlignment="Bottom"
+                    Command="{Binding Browser.ClearFiltersCommand}" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding Browser.ResultSummary}" />
+        </StackPanel>
+      </Border>
+
+      <!-- The selection, and the way back to it ──────────────────────────────────────────────── -->
+      <Border DockPanel.Dock="Bottom" Classes="card" IsVisible="{Binding Browser.HasSelection}"
+              Margin="{DynamicResource Margin.SectionGap}">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+          <StackPanel Grid.Column="0">
+            <TextBlock Text="{Binding Browser.SelectedDetail}" />
+            <TextBlock Classes="mono" Text="{Binding Browser.SelectedLicenseId}" />
+          </StackPanel>
+          <!-- ⭐ Without this, search is a dead end: the operator finds the licence that lapses on
+               Friday and has nowhere to go with it. -->
+          <Button Grid.Column="1" Classes="primary" Content="Open in Customers"
+                  VerticalAlignment="Center"
+                  Command="{Binding OpenSelectedLicenseCommand}" />
+        </Grid>
+      </Border>
+
+      <!-- Results ────────────────────────────────────────────────────────────────────────────── -->
+      <Border Classes="card" Margin="{DynamicResource Margin.SectionGap}">
+        <ListBox ItemsSource="{Binding Browser.Results}"
+                 SelectedItem="{Binding Browser.SelectedLicense}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:LicenseListItem">
+              <Grid ColumnDefinitions="*,150,Auto,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <TextBlock Grid.Column="0" Text="{Binding CustomerName}"
+                           TextTrimming="CharacterEllipsis" />
+                <!-- ⭐ QA-5. The contact person: an operator looking for "the licence Kowalski called
+                     about" has a person, not a company. Searchable too. -->
+                <TextBlock Grid.Column="1" Classes="hint" VerticalAlignment="Center"
+                           Text="{Binding Contact}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="2" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                <TextBlock Grid.Column="3" Width="80" Text="{Binding Seats}" />
+                <!-- ⛔ The REGISTER's status, presented — never a verdict this view computed. The client
+                     verdict (Valid / Grace / Expired …) comes from LicenseVerifier and stays on the
+                     selection, where Inspect latest runs it for real. -->
+                <TextBlock Grid.Column="4" Width="90" Text="{Binding Status}" />
+                <TextBlock Grid.Column="5" Width="170" Text="{Binding Standing}" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Border>
+
+    </DockPanel>
+
     </Grid>
   </DockPanel>
 </Window>

@@ -19,6 +19,11 @@
         <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/Typography.axaml" />
         <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/Colors.axaml" />
         <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/FluentBridge.axaml" />
+        <!-- ⭐ EmberTern's own 86 icon geometries, LINKED (see the csproj) rather than copied. ⛔ The
+             three ControlThemes that used to sit at the end of that file are NOT here: they bind to
+             EmberTern.App's controls, which this application does not have. Icons are drawn with a
+             Viewbox + Path — the `icon` style in LicenseManagerStyles.axaml. -->
+        <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/IconGeometries.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

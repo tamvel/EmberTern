@@ -20,6 +20,7 @@ public abstract partial class MessageHostViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSuccess))]
     [NotifyPropertyChangedFor(nameof(IsWarning))]
     [NotifyPropertyChangedFor(nameof(IsError))]
+    [NotifyPropertyChangedFor(nameof(MessageIconKey))]
     private StatusMessage? _message;
 
     /// <summary>Whether the strip is shown at all.</summary>
@@ -39,4 +40,22 @@ public abstract partial class MessageHostViewModel : ObservableObject
 
     /// <summary>Something failed.</summary>
     public bool IsError => Message?.Severity == MessageSeverity.Error;
+
+    /// <summary>
+    /// Which glyph the message wears — the other half of the "how bad is this" signal, beside the
+    /// severity stripe.
+    ///
+    /// <para>⭐ A KEY, not a <c>Geometry</c>: an Avalonia type here would breach Architecture rule 1, and
+    /// EmberTern solves the identical problem the identical way (<c>IconResourceKey</c> +
+    /// <c>IconGeometryConverter</c>). ⚠ The four keys mirror <c>MessageBanner.GeometryKeyFor</c> exactly
+    /// — stop octagon · alert triangle · check · note — so a warning in this application wears the same
+    /// mark as a warning in the product.</para>
+    /// </summary>
+    public string MessageIconKey => Message?.Severity switch
+    {
+        MessageSeverity.Error => "Icon.BreakException",
+        MessageSeverity.Warning => "Icon.AlertTriangle",
+        MessageSeverity.Success => "Icon.Check",
+        _ => "Icon.Comment",
+    };
 }

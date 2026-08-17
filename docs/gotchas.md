@@ -1,4 +1,4 @@
-# EmberTern — Gotcha Catalog
+﻿# EmberTern — Gotcha Catalog
 
 > Full reference of every architectural lesson learned during development, organized
 > **thematically** (not chronologically). Extracted verbatim from `CLAUDE.md` and
@@ -29,18 +29,30 @@
 
 ## Table of contents
 
-*(Counts + ranges recomputed from the file 2026-07-25; a range is first–last number in that
-section, not a contiguous run.)*
+*(Counts + ranges **recomputed from the file 2026-08-17**, by counting `^\d+\. \*\*` per section rather
+than by carrying the previous figures forward; a range is first–last number in that section, not a
+contiguous run. **365 entries, max #376.**)*
 
-- [Never lose information / correctness-over-convenience](#never-lose-information--correctness-over-convenience) — 13 entries (#37–#194)
+⚠⚠ **Every one of these numbers was wrong before that recount, and all of them in the same direction.**
+The block was last recomputed 2026-07-25 and then maintained by hand, so it drifted with each entry
+added: "General engineering" read **44** against a true **133**, "SQL lexing" **8** against **22**,
+"Avalonia UI" **84** against **93**. ⭐ Exactly the failure `CLAUDE.md` warns about where it refuses to
+write the total down — *"three separate counters used to carry it and all three disagreed while every one
+of them was wrong"*. ⛔ **Do not edit a figure here by adding one to it.** Re-derive the block:
+
+```bash
+grep -cE "^[0-9]+\. \*\*" docs/gotchas.md
+```
+
+- [Never lose information / correctness-over-convenience](#never-lose-information--correctness-over-convenience) — 15 entries (#37–#373)
 - [Firebird transactions, connections & locking](#firebird-transactions-connections--locking) — 39 entries (#10–#237)
 - [Firebird catalog, DDL generation & metadata reading](#firebird-catalog-ddl-generation--metadata-reading) — 47 entries (#29–#185)
-- [SQL lexing, parsing, formatting & scanning](#sql-lexing-parsing-formatting--scanning) — 8 entries (#7–#202)
-- [Avalonia UI: controls, XAML binding & templates](#avalonia-ui-controls-xaml-binding--templates) — 84 entries (#1–#235)
-- [MVVM / CommunityToolkit patterns](#mvvm--communitytoolkit-patterns) — 4 entries (#11–#187)
+- [SQL lexing, parsing, formatting & scanning](#sql-lexing-parsing-formatting--scanning) — 22 entries (#7–#371)
+- [Avalonia UI: controls, XAML binding & templates](#avalonia-ui-controls-xaml-binding--templates) — 93 entries (#1–#376)
+- [MVVM / CommunityToolkit patterns](#mvvm--communitytoolkit-patterns) — 8 entries (#11–#356)
 - [Settings, security & persistence](#settings-security--persistence) — 4 entries (#87–#163)
-- [Testing, tooling & build discipline](#testing-tooling--build-discipline) — 2 entries (#67, #255)
-- [General engineering discipline & miscellaneous](#general-engineering-discipline--miscellaneous) — 44 entries (#5–#258)
+- [Testing, tooling & build discipline](#testing-tooling--build-discipline) — 4 entries (#67–#374)
+- [General engineering discipline & miscellaneous](#general-engineering-discipline--miscellaneous) — 133 entries (#5–#368)
 
 ---
 
@@ -959,6 +971,46 @@ rules: **when you cite a guard by name, the citation is only as good as the guar
 template by asserting the REALIZED output** (`template.Match(item)`, or the text the tree actually renders), not
 by asserting what the XAML spells, because a type mismatch is only one of the ways this breaks. *(`ProcedureDetailTabView.axaml`
 / `FunctionDetailTabView.axaml`; guard `ExecActivityCardTests`, red on the old markup)*
+
+375. **A DIRECTIONAL spacing token has an OWNER, and hanging it on the other side of the gap produces
+ZERO while everything looks set.** `Tokens.axaml` states the contract for its own roles —
+`Margin.InlineGap` is `0,0,8,0` because *"jej właścicielem jest element PO LEWEJ"*, and `Margin.FieldGap`
+/ `Margin.SectionGap` are bottom-only for the same one-owner reason. The License Manager hung `InlineGap`
+on the **second** column of every multi-column row, i.e. on the element to the **RIGHT** of the gap, so
+the 8 px landed *after* the pair instead of *between* it. Measured on a laid-out window before anything
+was changed: Name│Identifier **0**, First│Last **0**, Seats│Valid-from **0**, value│Copy **0**,
+Search│Status **0** — and 8 between the NEXT pair, in every one of them. ⚠⚠ **The failure mode is the
+point: green build, green tests, the token present in the markup, and the two controls touching.** A
+directional margin cannot be validated by reading the XAML — the markup of the correct and the incorrect
+placement are the same three words on a different element. ⭐ **Two rules.** **(a) Prefer the container:**
+`Grid.ColumnSpacing` / `RowSpacing` (Avalonia 11+) puts the gap on the thing that CREATES it, so there is
+no owner to get wrong — the shape `SettingsWindow.axaml` already uses ("Gaps come from RowSpacing /
+ColumnSpacing, so no cell carries a margin of its own"). **(b) Assert the REALISED distance**, not the
+property: `next.Bounds.X - previous.Bounds.Right` on a laid-out window, measured against the sibling that
+actually positions it — never against the element's own `DesiredSize`, which always agrees with itself.
+⚠ When such a sweep is written, state its exception positively rather than as a list: a `GridSplitter`
+legitimately measures 0 to both panes, because a separator that does not touch what it separates is a
+line floating in a gutter — so the rule is "the distance is between two pieces of CONTENT", and a
+splitter is not content. *(License Manager L5.1 QA P1-a, 2026-08-17; `LicenseSpacingTests`,
+`licensing-system.md` §43.1)*
+
+376. **A base `TextBlock` style with `TextWrapping="Wrap"` reaches INSIDE control templates, where a value
+that does not fit grows a second line and takes its whole row with it — and the symptom is a NEIGHBOUR'S
+height, not the text.** Right for a caption, a hint and a message; wrong the moment the same implicit
+style reaches a `ComboBox`'s content presenter, a button's label, or any data template rendering a
+control's value. Measured: the "Issuing" filter stood at **34 px** beside two identical dropdowns at 24,
+and the inner `TextBlock` had rendered `Issued or not` on two lines (17 + 17). ⚠⚠ **Nothing about the
+dropdown was wrong**, which is why looking at the control that reported the bad height finds nothing —
+inspect the realised text element inside it. ⭐ The rule is about what the text IS: a control's VALUE
+trims (`TextTrimming="CharacterEllipsis"`, `TextWrapping="NoWrap"`), only PROSE wraps; scope the fix by
+that distinction (`ComboBox TextBlock, ComboBoxItem TextBlock`) rather than by the one dropdown that was
+seen, or the next narrow column reopens it. ⚠ **Found by a rule bounded by the DOMAIN, not by a report** —
+a sweep asserting that no two inputs in one row differ in height, which is also the guard that survives.
+An enumeration of the rows a user happened to photograph would have missed it entirely. ⚠ And when a
+layout change lands near such a finding, A/B it before assigning blame: the columns had just been
+narrowed by 8 px and were the obvious suspect, but with the row reverted to its exact previous shape the
+label still wrapped — the defect pre-dated the change, and "not mine" would have left it live.
+*(License Manager L5.1 QA P1-b, 2026-08-17; `LicenseControlSizeTests`, `licensing-system.md` §43.3)*
 
 ## MVVM / CommunityToolkit patterns
 

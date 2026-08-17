@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
@@ -316,6 +316,27 @@ public sealed class LicenseRegister : IDisposable
         SqliteTransaction transaction, LicenseRecord license, DateTimeOffset now, string? note = null)
     {
         var existing = GetLicense(license.LicenseId, transaction);
+
+        // ⭐⭐ A LICENCE'S CUSTOMER IS PART OF ITS IDENTITY, AND THE REGISTER REFUSES TO CHANGE IT.
+        //
+        //    Every artifact ever signed for this licence carries that customer's NAME (D6) — so moving the
+        //    row to another customer would make the register disagree with the files it has already sent,
+        //    and it would do so silently. Architecture rule 11 on the administrative side.
+        //
+        //    ⚠ Not hypothetical: it is exactly what the reported "the Licences view only shows the last
+        //    customer's licence" turned out to be. The licence FORM kept the previous customer's licence
+        //    id when a new customer was started, so the next Save addressed that row — one licence where
+        //    there should have been two, and the first customer quietly lost theirs. The form is cleared
+        //    now too, but a form is a habit and this is the guarantee.
+        if (existing is not null &&
+            !string.Equals(existing.CustomerId, license.CustomerId, StringComparison.Ordinal))
+        {
+            throw new RegisterIntegrityException(
+                $"Licence {license.LicenseId} belongs to customer {existing.CustomerId} and cannot be " +
+                $"moved to {license.CustomerId}. Artifacts already issued for it carry the original " +
+                "customer's name, so the register would stop agreeing with what was delivered.");
+        }
+
         var saved = license with
         {
             CreatedAt = existing?.CreatedAt ?? now,
@@ -638,6 +659,8 @@ public sealed class LicenseRegister : IDisposable
             static (row, text) =>
                 Contains(row.CustomerName, text) ||
                 Contains(row.CustomerEmail, text) ||
+                Contains(row.CustomerFirstName, text) ||
+                Contains(row.CustomerLastName, text) ||
                 Contains(row.License.CustomerId, text) ||
                 Contains(row.License.LicenseId, text) ||
                 Contains(row.License.Notes, text));
@@ -694,6 +717,7 @@ public sealed class LicenseRegister : IDisposable
 
     private const string LicenseSummarySelect = """
         SELECT l.*, c.name AS customer_name, c.email AS customer_email,
+               c.first_name AS customer_first_name, c.last_name AS customer_last_name,
                (SELECT COUNT(*)          FROM issued_artifacts a WHERE a.lid = l.lid) AS artifact_count,
                (SELECT MAX(a.issued_at)  FROM issued_artifacts a WHERE a.lid = l.lid) AS last_issued_at,
                cur.artifact_id AS current_artifact_id
@@ -707,6 +731,8 @@ public sealed class LicenseRegister : IDisposable
         License = ReadLicense(reader),
         CustomerName = reader.GetString(reader.GetOrdinal("customer_name")),
         CustomerEmail = Text(reader, "customer_email"),
+        CustomerFirstName = Text(reader, "customer_first_name"),
+        CustomerLastName = Text(reader, "customer_last_name"),
         ArtifactCount = reader.GetInt32(reader.GetOrdinal("artifact_count")),
         LastIssuedAt = Text(reader, "last_issued_at") is { } issued ? Parse(issued) : null,
         CurrentArtifactId = reader.IsDBNull(reader.GetOrdinal("current_artifact_id"))

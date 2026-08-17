@@ -37,6 +37,16 @@
     <AvaloniaResource Include="..\EmberTern.App\Themes\Tokens.axaml" Link="Themes\Tokens.axaml" />
     <AvaloniaResource Include="..\EmberTern.App\Themes\Typography.axaml" Link="Themes\Typography.axaml" />
     <AvaloniaResource Include="..\EmberTern.App\Themes\FluentBridge.axaml" Link="Themes\FluentBridge.axaml" />
+    <!-- ⭐⭐ THE ICON GEOMETRIES — linkable since the 2026-08-16 split, and that split existed for this.
+         The file used to end with three ControlThemes bound to controls:SvgIcon / DebuggerIcon /
+         CreateIcon; those 164 lines were the ONLY type reference in an otherwise pure catalogue of 86
+         <StreamGeometry> resources, and they were what made the whole dictionary unusable here. They now
+         live in EmberTern.App/Themes/IconControlThemes.axaml, which this project deliberately does NOT
+         link — it has no such controls and must not acquire them.
+         ⛔ Do not copy a geometry into this project. One source of every icon, two applications;
+         IconGeometriesSplitTests (in EmberTern.Tests) fails the build if the file stops being pure. -->
+    <AvaloniaResource Include="..\EmberTern.App\Themes\IconGeometries.axaml"
+                      Link="Themes\IconGeometries.axaml" />
     <!-- ⚠ Only the LINKED files are listed. The Avalonia SDK already includes every .axaml under this
          project directory, so naming App.axaml, Views\**\*.axaml or the local Themes file here produces
          AVLN2002 "duplicate x:Class" rather than the belt-and-braces it looks like. -->

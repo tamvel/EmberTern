@@ -2034,3 +2034,421 @@ defect.
 ⛔ No UI of any kind — search, filters, the licences view, group extend and re-issue are L5.1–L5.4.
 ⛔ No backup, no JSONL, no restore (L5.5). ⛔ No date picker, no Seats validation, no data-folder surface
 (L5.1+). ⛔ Nothing was committed — L5.0 awaits the user's acceptance.
+
+---
+
+## 40. L5.1 — as built (2026-08-16)
+
+⭐ **Search and filters, as a second VIEW.** The main window gains a **Licences** view listing every
+licence across every customer, narrowed by free text and three filters, with a way back to the customer
+that owns the row. Builds **0/0 in Debug and Release, both solutions**. License Manager suite **171**
+(was 139: **+32**). ⏭ **Implementation done — awaits the user's visual confirmation**, per the standing
+directive: nothing with a UI is "fixed" until it has been seen in the running application.
+
+### 40.1 ⭐ Two views, because there are two questions
+
+The customer panel L3 built answers *"what does THIS customer have?"* — the operator arrives with a
+name. The question this stage serves is *"who lapses next month?"*, which has no customer to start
+from. ⛔ Per the user's ratified decision, licence filters were **not** folded into the customer detail
+panel: at fifty customers a panel organised around one name cannot answer a question about all of them.
+
+`LicenseBrowserViewModel` is a **separate** view model for the same reason, not for size. Two organising
+principles in one class is how a view model becomes the place every later feature is added.
+
+### 40.2 ⭐⭐ The view switch is two buttons, not a `TabControl`
+
+⚠ **The same reasoning L3 used to decline a date picker.** `ControlStyles.axaml` — where EmberTern's own
+`TabItem.bottom-tab` and `TabItem.sub-tab` live — **is not linkable** (it binds to AvaloniaEdit, DataGrid
+and `EmberTern.App.Controls`; §12.1). A `TabControl` here would fall back to Fluent's own `TabItem`, i.e.
+a fresh set of normal / hover / selected / disabled / focus decisions to repin, taken on for a two-item
+switch.
+
+⭐ It still **reads** as tabs because it consumes the tab vocabulary the token layer already carries —
+`Size.Row.Tab`, `Pad.Tab`, `Radius.Tab` — so it moves with EmberTern's real tabs instead of drifting from
+them. The current tab is painted `SurfaceRaisedBrush`, which the token cheat-sheet names for exactly this
+consumer: a current tab **floats** above its strip, which is a different job from a row being selected in
+a list (and in Light the two are opposites).
+
+⚠ The strip is its own container and deliberately **not** nested inside `Border.chrome`: that context
+style already declares a toolbar height for its children, and two context styles racing over one button
+is settled by declaration order rather than by intent.
+
+### 40.3 Decisions taken during implementation
+
+1. **The "Issuing" filter is a dropdown, not a checkbox** — `ControlThemes.axaml`, which carries
+   EmberTern's hand-written `CheckBox` template, is not linkable either, so a checkbox here would be
+   Fluent's. ⭐ It also buys an option a checkbox cannot express: *"issued at least once"*.
+2. ⭐ **A filter's narrowing is DATA, not a delegate** (`FilterOption` and its three subtypes), so
+   `BuildQuery` is public and a test asserts that *"Expiring within 30 days"* produces the query it
+   claims to — rather than inferring it from what came back.
+3. ⭐⭐ **"Expiring within 30 days" sets `ExpiresFrom` as well as `ExpiresBefore`.** Without the lower
+   bound the renewal list silently includes everyone who lapsed last year — a list an operator stops
+   trusting after one phone call. Pinned by `ExpiringWithinThirtyDaysDoesNotIncludeWhatAlreadyLapsed`.
+4. **The selection survives a keystroke.** The list is rebuilt on every filter change, so the selected
+   object is a different instance; without re-finding it by `lid`, typing one more character clears the
+   detail strip the operator is reading.
+5. **The browser re-reads on entering the view**, not on every mutation — in L5.1 the view is read-only
+   and unreachable while editing, so "fresh whenever it is looked at" is both sufficient and the only
+   rule that cannot fall out of step with a mutation added later.
+6. **"Never issued" outranks the expiry date** in a row's standing: saying *"expires in 300 days"* about
+   a file that was never sent is the more misleading of the two true statements.
+7. ⭐ **`HeadlessTheme` was extracted** when a second headless class was about to make a second copy of
+   *"how you switch the theme in a test"*. Two copies of a one-line helper is how two classes end up
+   testing two different things while appearing to test one.
+8. ⚠ **`TextBox.Watermark` is obsolete in Avalonia 12.1** — it is `PlaceholderText`. Caught by the build,
+   which is what `TreatWarningsAsErrors` is for; `FluentBridge` repins the placeholder brush in both
+   dictionaries, so it is themed without further work.
+
+### 40.4 ⚠ The guards were proved by injected defect, four of them
+
+| Injection | Went red |
+|---|---|
+| the shared `ItemTemplate` removed from one dropdown | `AFilterDropdownShowsItsLabelAndNotTheShapeOfItsRecord` — and the failure printed `StatusFilter { Label = Any status, Status =  }`, i.e. **gotcha #370 exactly**: a template that stops matching raises no binding error, it silently renders `ToString()` |
+| `Button.view-tab.active` paint removed | `TheCurrentTabIsPaintedAsRaisedAndTheOtherIsNot` (both themes) — the class was still set and still meant nothing |
+| selection preservation removed from `Refresh` | `TheSelectionSurvivesTheNextKeystroke` |
+| `ExpiresFrom` dropped from the forward window | `ExpiringWithinThirtyDaysDoesNotIncludeWhatAlreadyLapsed` + `TheExpiryFilterIsReadableAsAQueryBeforeItRuns` |
+
+⭐ The tab test asserts the **realised brush**, not the class: a class that is set and painted by nobody
+looks exactly like a class that works, in every test that checks the class.
+
+### 40.5 ⚠ A divergence worth stating: the License Manager is English-only
+
+`CLAUDE.md` architecture rule 12 requires every user-visible string to go through the localization
+mechanism in every supported language. **The License Manager has no such mechanism** — L3 shipped it with
+English literals, and L5.1 followed that convention rather than inventing a second catalog mid-stage.
+⏭ Whether this single-operator admin tool is ever localized is the user's decision, not a defect this
+stage should have fixed silently.
+
+### 40.6 ⏭ What L5.1 deliberately did NOT do
+
+⛔ No bulk selection and no bulk action — L5.4. ⛔ No artifact preview or history view — L5.2. ⛔ No
+re-issue — L5.3. ⛔ No date picker, no Seats validation, no data-folder surface: the user placed all three
+in L5, and they belong with the licence FORM (L5.3) and with backup (L5.5) rather than with a read-only
+search. ⛔ Nothing committed — L5.1 awaits acceptance.
+
+---
+
+## 41. L5.1 — the QA pass (2026-08-16)
+
+⭐ Six points raised by the user after looking at the running application, plus the enabling change they
+all turned out to depend on. Builds **0/0 in Debug and Release, both solutions**. License Manager suite
+**195** (was 171: **+24**); EmberTern **9 087** (was 9 081: **+6**). ⏭ **Awaits the user's visual
+confirmation** — nothing with a UI is finished until a person has looked at it.
+
+### 41.1 ⭐⭐ The enabler: `IconGeometries.axaml` was split so the icons could be SHARED
+
+Three of the six points (the top bar, the copy action, the message strip) needed EmberTern's icons, and
+the dictionary could not be linked: it ended with three `ControlTheme`s bound to `controls:SvgIcon`,
+`DebuggerIcon` and `CreateIcon`. **Those 164 lines were the only type reference in an otherwise pure
+catalogue of 86 `StreamGeometry` resources.**
+
+They moved to `EmberTern.App/Themes/IconControlThemes.axaml`; the geometry half is now linked into the
+License Manager. ⛔ **No geometry was copied**, and the License Manager still does not — and must not —
+reference `EmberTern.App`. What it reproduces instead is the *render path* (Viewbox → 24×24 Canvas →
+stroked Path), as STRUCTURE, which its style layer is allowed to hold. ⚠ Stroke, not fill: the glyphs are
+Lucide, and Avalonia's built-in `PathIcon` fills its data.
+
+⚠ **The split created an ordering dependency that compiles perfectly when reversed** — `CreateIcon`'s
+theme resolves `{StaticResource Icon.Play}`, and `StaticResource` sees only what is already merged. Three
+new guards in `IconGeometriesSplitTests` hold it: the geometry file stays type-free, the merge order is
+declared, and **every `Icon.*` key the application references resolves in the live resource system**.
+
+### 41.2 ⚠⚠ Two findings the new guard produced, both pre-existing
+
+1. **The guard's first version covered markup only, and missed C#.** Renaming `Icon.Sun` out of the
+   dictionary did NOT turn it red, because the theme toggle resolves its glyph from a string literal in
+   `ThemeToggleIconConverter`. Dozens of keys are referenced that way. ⭐ Found by injection, not by
+   review — a markup-only scan was covering roughly half the real surface while reading as complete.
+2. ⭐ **`Icon.Name` does not exist.** `SqlCompletionData.cs` asks for it for `SqlCompletionKind.Column`
+   and for locals; the only occurrence of that key in the dictionary is inside the header COMMENT showing
+   how to add a geometry. So column and local completion items render with no icon. ⛔ Not fixed here —
+   choosing a glyph is a design decision — and recorded in `docs/current-state.md` as the guard's single
+   `KnownMissing` entry, with a note that a second entry would mean the rule is wrong.
+
+### 41.3 The six points, as resolved
+
+| # | Point | Resolution |
+|---|---|---|
+| QA‑1 | The top bar did not read as EmberTern | `Size.TitleBar` strip; the signing key demoted to `hint` (provenance, not a control); the theme toggle is now the **same icon EmberTern uses**, showing the ACTION — Sun while Dark is active, Moon while Light |
+| QA‑2 | `Identifier` and `Licence id` looked editable | Both are now a `SelectableTextBlock` value plus a copy action. ⭐ A read-only `TextBox` states "generated" by refusing input, which is the one way of saying it that still invites the input |
+| QA‑3 | The customer rail had a fixed width | `GridSplitter`, EmberTern's own shape (`Width="4"`, painted `BorderBrush`), bounded 200–480 |
+| QA‑4 | The message strip was weak in Light, with an empty band beneath | ⭐ **Measured cause of the band: `Margin.SectionGap` is `0,0,0,16`** — a BOTTOM margin on a strip docked to the bottom edge. Removed. Severity now travels on a **stripe + glyph + text** (EmberTern's `MessageBanner` recipe) instead of the border colour alone, which in Light is a hairline against a nearly-document-coloured panel |
+| QA‑5 | The licences list was thin | Contact person (searchable) and the **register's own** status |
+| QA‑6 | Dates demanded a format | `CalendarDatePicker` — pick or type |
+
+### 41.4 ⛔ Two vocabularies of status, kept apart
+
+`LicenseStatus` in `EmberTern.Licensing` is the CLIENT'S VERDICT about an artifact (Valid · Grace ·
+Expired · NotYetValid · Invalid · VersionNotCovered), produced by `LicenseVerifier` and by nothing else.
+`LicenseStatuses` in the register is administrative bookkeeping about a licence ROW (active · blocked).
+
+⭐ **The list column shows the register's stored value; the client verdict stays on the SELECTION**, where
+"Inspect latest" already runs the real verifier. Ratified by the user, and it is a cost decision as well
+as a principled one: a verdict per row is an ECDSA verification per row, i.e. hundreds of signature checks
+on every keystroke. ⛔ Nothing in the UI invents a licensing state — what it computes for itself is
+arithmetic on a date.
+
+### 41.5 The domain did not move with the date picker
+
+⭐ A chosen day is still read as a **UTC calendar day**, and the expiry still runs to the **end** of it.
+`LicenseTermsDateTests` pins both, plus the case that proves the second rule is load-bearing: a licence
+starting and ending on the same day is legal precisely because the expiry runs to 23:59:59 — under
+midnight-to-midnight it would be an empty interval and get refused.
+
+⚠ Empty is now the only date fault reachable in the view model: text that does not parse never becomes a
+`SelectedDate`. It is refused rather than defaulted — a licence quietly starting today because a field was
+blank is a term nobody agreed to.
+
+### 41.6 ⏭ Recorded, not fixed
+
+- ⚠ **The calendar flyout is not repinned to our palette**: `FluentBridge.axaml` carries **zero**
+  `Calendar*` keys, so `CalendarDatePicker`'s popup shows Fluent's own accent — the brown/orange this
+  project fights everywhere else. ⭐ **EmberTern has the identical gap** in `DebuggerTabView` and
+  `ExecuteProcedureDialog`, so adopting the control makes the License Manager consistent with the product
+  *including this blemish*. Ratified by the user as its own design-system item; ⛔ deliberately out of
+  this pass, because repinning `Calendar*` is work in the product's bridge, for both applications at once.
+- ⚠ **The License Manager is English-only** (§40.5) — unchanged by this pass.
+- ⚠ **`DatePresentationTests` gained a third recorded category**, `DeliberateIsoDisplayPaths`. The guard
+  scans all of `src/`, so it reaches the License Manager, where ISO is the ratified date form (§36.2) and
+  matches what the register stores. ⛔ Recorded WITH ITS REASON rather than excluded — the guard's whole
+  point is that an author must say which side of the line a date is on. ⚠⚠ This also exposed a process
+  error: **L5.1 was reported without running the EmberTern suite**, on the reasoning that no changed file
+  belonged to that solution. The reasoning was wrong — several EmberTern guards scan the whole tree.
+
+---
+
+## 42. L5.1 QA follow-up — done, and what remains (2026-08-16)
+
+⭐ A second visual QA round. **P0 closed, P1 not started.** Builds **0/0 in Debug and Release, both
+solutions**. License Manager **206** (was 195: **+11**); EmberTern **9 087**, unchanged (this round
+touched no product file). ⛔ **Nothing committed.**
+
+### 42.1 ⭐⭐ P0.1 — the "Licences view shows only the last customer's licence" defect: ROOT CAUSE FOUND
+
+**It was not a query defect, and not a filter leaking from the customers view.** Both hypotheses are now
+refuted by tests that stay in the suite. The register's cross-customer query was always right.
+
+⭐ **The licence FORM was not cleared when a new customer was started.** `NewCustomer` emptied the
+customer fields, the licence LIST and the selection — but left `LicenseId` sitting in the form. So an
+operator who added a second customer and pressed **Save terms** without first pressing **New licence**
+wrote *the previous customer's licence id* with the new `customer_id`: the row was **re-parented**, not
+created. One licence where there should have been two, and the first customer silently lost theirs.
+
+⚠ That is a rule-#11-class defect — data moved, quietly, with no error. Fixed on both levels:
+
+1. **The register refuses it outright.** `SaveLicenseCore` now throws `RegisterIntegrityException` if a
+   save would change an existing licence's `customer_id`. ⭐ A licence's customer is part of its identity:
+   every artifact ever signed for it carries that customer's NAME (D6), so re-parenting the row would make
+   the register stop agreeing with the files it has already delivered.
+2. **`ClearLicenseForm()`** — one owner for "what a blank licence form looks like", called by
+   `NewCustomer`. Clearing a form is a habit; refusing the write is the guarantee.
+
+`SecondCustomerRegressionTests` reproduces the operator's exact click order and pins six properties,
+including the two hypotheses that turned out to be wrong (so nobody re-investigates them).
+
+### 42.2 ⭐ P0.2 — the License Manager draws its own window
+
+Windows drew a title bar reading *"EmberTern License Manager"* and the application drew a second bar
+reading the same thing directly beneath it — two bars that looked like two different programs. The window
+now extends its client area exactly as EmberTern has since M3.1: `ExtendClientAreaToDecorationsHint`,
+`ExtendClientAreaTitleBarHeightHint="-1"`, `WindowDecorations="BorderOnly"`, drag by the bar, double-tap
+to maximise (with the guard that keeps a double-click on a BUTTON from also maximising), and three
+caption buttons wearing EmberTern's own `Icon.Window*` glyphs through the shared dictionary.
+
+⭐ The maximise glyph shows what the click will DO and is driven by `WindowState` itself, so it is correct
+however the state changed — including a Windows snap gesture the application never saw as a click.
+
+### 42.3 ⚠⚠ NOT DONE — the exact remaining scope for the next session
+
+⛔ **Do not re-do the recon; it is all here.**
+
+| # | Item | State | Notes for whoever picks it up |
+|---|---|---|---|
+| **P1‑a** | **Spacing rhythm** — `Identifier` + value + copy icon, `Seats` + `Valid from`, `First name` + `Last name`, the banner glyph + its text, and other neighbours that touch | ⛔ **not started** | ⚠ The user's instruction is explicit: ⛔ no ad-hoc `Margin="…"` on individual controls. First check the roles that already exist (`Space.*`, `Margin.FieldGap`, `Margin.LabelGap`, `Margin.InlineGap`, `Margin.SectionGap`, `Pad.*`); if a role is genuinely missing, ADD the role rather than scattering numbers. ⚠ New roles would go in `EmberTern.App/Themes/Tokens.axaml`, which is SHARED with the product — that needs the user's agreement, exactly as the icon split did |
+| **P1‑b** | **Uniform control sizes** — `Seats` is visually shorter than the date pickers; neighbours in one row differ in height; actions in one row differ without a reason | ⛔ **not started** | ⚠ Fix in the BASE STYLE, never per control. Suspected cause: `CalendarDatePicker` carries its own Fluent `MinHeight` of 32 while `TextBox` sits on `Size.Control` (24) — EmberTern records this exact conflict in `ControlStyles.axaml` around its `DataGridCell CalendarDatePicker` style and deliberately leaves FORM pickers alone. So the decision is: give the License Manager a `CalendarDatePicker` metric style on `Size.Control`, and MEASURE whether the setter actually beats the template's own value (§16's "a setter cannot beat a local value" trap) |
+| **P1‑c** | **Double-click a licence → Inspect** in the customers view | ⛔ **not started** | Single click already selects. Wire `DoubleTapped` on the licences `ListBox` to the existing `InspectLatestCommand` — ⛔ no new screen. ⚠ A licence with no artifact must explain WHY the preview is unavailable; `InspectLatest` already warns *"This licence has never been issued."*, so the work is the gesture, not the message. Testable headlessly through the command |
+| **P2** | Remaining cosmetics | ⛔ not started | ⛔ Do not start before P1 is closed (user's instruction) |
+
+### 42.4 Standing facts the next session should not rediscover
+
+- ⚠ **The calendar flyout is not repinned** — `FluentBridge` has zero `Calendar*` keys, and EmberTern has
+  the same gap in its own two pickers. Ratified as a separate design-system item, in the product.
+- ⚠ **`Icon.Name` does not exist**, so column/local completion items in EmberTern render with no icon.
+  Recorded in `docs/current-state.md`; the guard holds it as its single `KnownMissing` entry.
+- ⚠ **`TabStripPresentationTests` loses to the documented Avalonia headless race** on a full parallel run
+  on this machine — measured this session: identical stack, fails identically with the new test class
+  REMOVED, and **9 087/9 087 green with collection parallelism off**. ⛔ Parallelism-off is a diagnostic
+  only; as a fix it was already measured and rejected.
+- ⚠ **Every EmberTern guard scans the whole `src/` tree**, the License Manager included. ⛔ Never report a
+  License Manager stage without running the EmberTern suite — that error was made once already (§41.6).
+
+---
+
+## 43. L5.1 QA follow-up — P1 as built (2026-08-17)
+
+⭐ **P1 closed: spacing, uniform control sizes, double-click to Inspect.** Builds **0/0 in Debug and
+Release, both solutions**. License Manager **223** (was 206: **+17**); EmberTern **9 087**, unchanged
+(this round touched no product file). ✅ **Accepted by the user 2026-08-17 after looking at the running
+application** — *"elementy są już prawidłowo rozstawione"*. Committed together with P0 as one logical
+commit; ⛔ **not pushed** — the user holds the push.
+
+⭐⭐ **No token was added and `Tokens.axaml` was not touched.** Both P1‑a and P1‑b turned out to be
+misapplications of roles that already exist, not gaps in the catalogue — so the shared file the user
+asked to be warned about never came into it.
+
+### 43.1 ⭐⭐ P1‑a — the gaps were not missing; ONE rule was applied to the wrong owner, five times
+
+**Measured first, on a laid-out window, before anything was changed.** Every multi-column row reported
+`ColumnSpacing = 0` and this pattern of realised distances:
+
+| Row | 0→1 | 1→2 |
+|---|---|---|
+| Name │ Identifier | **0** | — |
+| First name │ Last name │ E-mail | **0** | 8 |
+| Seats │ Valid from │ Valid until | **0** | 8 |
+| value │ Copy | **0** | — |
+| stripe │ glyph │ message | **0** | **16** |
+| Search │ Status │ Expiry │ Issuing │ Clear | **0** | 8 / **0** / 8 |
+| licences list row (6 columns) | **0** everywhere | |
+
+⭐ **The cause is a single sentence.** `Margin.InlineGap` is `0,0,8,0`, and `Tokens.axaml` states its
+contract in its own comment — *"jej właścicielem jest element PO LEWEJ"*. The License Manager hung it on
+the **second** column of every row, i.e. on the element to the **right** of the gap, so the 8 px landed
+*after* the pair instead of *between* it. Hence the alternating 0 / 8 rhythm, and hence the 16 in the
+message strip, where the glyph's right margin and the text's own left margin both paid into the same gap
+while the one that was missing had no owner at all.
+
+⛔ **So "add a margin here and there" would have been wrong twice over** — it would have added a second
+owner to gaps that already had one, and left the rule that produced all of them intact.
+
+**The fix is that the gap belongs to the container.** `ColumnSpacing` / `RowSpacing`, which the product
+already does this way (`SettingsWindow.axaml`: *"Gaps come from RowSpacing / ColumnSpacing, so no cell
+carries a margin of its own"*). All seven `Margin.InlineGap` uses are gone; the window now has **15**
+spaced grids and **three** spacings, each meaning something different and each read off the existing
+scale:
+
+| Role | Token | What it separates |
+|---|---|---|
+| the default | `Space.Md` (8) | two INDEPENDENT things — field ↔ field, caption ↔ action, column ↔ column |
+| compound | `Space.Sm` (6) | parts of ONE element — the severity glyph and its message |
+| attached | `Space.Xs` (4) | a value and an affordance that acts on THAT value — an id and its Copy button |
+
+⚠ The message strip was restructured rather than re-margined: the stripe still reaches three edges
+(`Padding` stays 0) and a **content grid inside it** carries one `Pad.Cell` inset plus the glyph→text
+gap. The `Border.message TextBlock` margin was **deleted** — a second owner is what produced the
+reported spacing in the first place.
+
+### 43.2 ⭐ P1‑b — the setter DOES beat Fluent here, and it was measured before it was written
+
+`GetDiagnostic(MinHeightProperty)` reported the picker's **32** arriving at priority **`Style`** —
+Fluent's own setter, **not** a template-local value. That is the whole question §16 poses, and the answer
+here is the favourable one: our style layer merges into `Application.Styles` after `FluentTheme`, so a
+peer setter wins. ⭐ The proof was already standing next to it — the base `TextBox` style beats Fluent's
+32 by exactly this mechanism, which is why `Seats` measured 24.
+
+⚠⚠ **But the outer setter alone produced 26, not 24** — the case the user asked to be stopped and shown.
+It did not need a decision, because measurement found the cause: the base `TextBox` style also reaches
+`PART_TextBox` **inside** the template and hands it `MinHeight` 24, which the template then insets by its
+own 1 px margin. One more setter — the inner box gives up its own floor — and the row measures **24 / 24
+/ 24**.
+
+⚠⚠ **§16's trap did appear, just not where it was expected.** The first version of that inner style also
+set `Padding` and `BorderThickness` to 0. **Both were measured to change nothing**: Fluent hands
+PART_TextBox those two as template-bound LOCAL values. They were removed rather than left in looking
+effective — three of four setters on that element are silently inert, and a dead setter reads exactly
+like a live one.
+
+⛔ The hybrid is untouched: pick from the calendar, type by hand, empty/unparseable refused (§41.5).
+
+### 43.3 ⭐⭐ A defect the domain rule found that the user's list did not contain
+
+The height sweep reported the **"Issuing" filter at 34 px** beside two identical dropdowns at 24. The
+cause was not the dropdown: its `<TextBlock>` had rendered the label on **two lines** (17 + 17). The base
+`TextBlock` style sets `TextWrapping="Wrap"` — correct for a caption, a hint and a message, and wrong the
+moment it reaches a control's content presenter, where a value that does not fit must lose its tail
+rather than gain a row and push its neighbours out of line.
+
+⚠ **A/B'd before it was written up**, because P1‑a had just narrowed those columns by 8 px and was the
+obvious suspect: with the filter row reverted to its exact pre-P1‑a shape the label still wrapped and the
+dropdown still measured 34. ⭐ **The defect pre-dates P1‑a.** Narrowing the column would have made it
+worse, and hiding behind that would have left a live defect labelled "not mine".
+
+⛔ Fixed by what the text IS, not by which dropdown was seen: `ComboBox TextBlock, ComboBoxItem TextBlock`
+trims. Fixing the three filters would have been an exception list with a defect waiting behind it.
+
+### 43.4 P1‑c — the gesture, and only the gesture
+
+`DoubleTapped` on the customer view's licences list runs **`InspectLatestCommand`** — the same command
+the button runs. ⛔ No second Inspect, no new screen. ⚠ Guarded on the ROW rather than on the list:
+`DoubleTapped` bubbles from the empty space below the last item too, and re-opening the previously
+selected licence because the operator double-clicked past the end is a preview nobody asked for.
+
+⭐ The never-issued case is the one the test leans on: a gesture wired to "open the preview" instead of to
+the command would have to answer it itself, and the honest failure mode of a copy is silence.
+
+### 43.5 ⚠⚠ Every guard was proved by injected defect — five injections, five reds
+
+⛔ Nothing in these three files asserts that a property was SET. The P1‑a defect would have passed such a
+test perfectly: `Margin.InlineGap` **was** set, on every row, and produced a gap of zero.
+
+| Injection | Went red | Reported |
+|---|---|---|
+| the Seats row reverted to its pre-P1‑a shape | `SeatsDoesNotRunIntoTheFirstDateField` + the sweep | `0 px`, the original symptom |
+| the inner `PART_TextBox` `MinHeight` setter removed | 4 tests, incl. the mechanism test | `26` |
+| the dropdown trimming style removed | `ADropdownLabelTooLongForItsBox…` + the sweep | `34` |
+| the outer `CalendarDatePicker` `MinHeight` removed | 3 tests | `32` |
+| `DoubleTapped` unwired / the row guard removed | 2 and 1 respectively | — |
+
+⭐ **Two of the three new files carry a rule bounded by the DOMAIN, not by the six rows the user
+photographed**: `NoTwoNeighboursInAnyRowOfThisWindowTouch` and
+`NoNeighbourInAFormRowIsTallerThanAnyOtherByMoreThanTheLadderGap`. The second one is what found §43.3 —
+an exception list would not have.
+
+⚠ **The sweep also produced a finding that had to be JUDGED rather than fixed**: it reported the customer
+rail and the detail pane each 0 px from the `GridSplitter`. That zero is correct — a separator that does
+not touch what it separates is a line floating in a gutter — so the rule is stated positively (the
+distance is between two pieces of **content**; a splitter is not content) rather than as an exception.
+
+### 43.6 What was measured and deliberately NOT changed
+
+- ⭐ **The four licence actions are already uniform at 28 px.** The reported "różne wymiary" is *width*
+  — 146 / 194 / 194 / 206 — and that is `Size.ActionMinWidth` being a **floor** above which the label
+  decides. A recorded product decision, not drift. The test asserts height and deliberately does not
+  assert width.
+- ⚠ `Seats` carries a literal `Width="80"`. A content-driven width has no token role, and inventing one
+  for a single field is the kind of role that lies. ⏭ Left as it is, recorded here.
+- ⚠ The calendar FLYOUT is still not repinned (§41.6, §42.4) — product work, both applications at once.
+
+### 43.7 ✅ Two gotchas filed (on acceptance, 2026-08-17)
+
+Both went into the **Avalonia UI** section of `docs/gotchas.md` as **#375** and **#376**: the directional
+spacing token hung on the wrong owner, and the base `TextBlock` `Wrap` reaching inside control templates.
+⛔ Neither was promoted into `CLAUDE.md`'s short "Live gotchas" list — that list's bar is *"would bite
+almost any session"*, and these two bite a session doing UI work. Keeping them out is the tripwire
+working, not an omission.
+
+⚠⚠ **Filing them exposed a third thing, and it was not in the plan.** The gotchas TOC carried per-section
+counts *"recomputed 2026-07-25"* and then hand-maintained — so **every figure in it was wrong, all of them
+low**: "General engineering" read 44 against a true **133**, "SQL lexing" 8 against **22**, "Avalonia UI"
+84 against **93**. ⭐ Precisely the failure `CLAUDE.md` describes where it refuses to write the total down.
+The block was **re-derived** rather than incremented, and now carries the command that re-derives it plus
+a ⛔ against adding one to a figure. `CLAUDE.md`'s own measured line moved 363/#374 → **365/#376**.
+
+### 43.8 ⏭ What remains, and where the branch stands
+
+⛔ **P2 NOT started, by instruction, and it must not start before the user accepts it in a new session.**
+⛔ L5.2 (artifact preview / history surface), L5.3 (re-issue), L5.4 (bulk), L5.5 (backup) all unchanged
+and unstarted.
+
+⭐ **P0 and P1 are ONE commit**, and deliberately so: P1 is a QA pass over the surfaces P0 built, and P0
+alone never stood as an accepted state — the two were reviewed together and are indivisible as a unit of
+history. The commit also carries the L5.1 work and its first QA round (§40–§42), which had likewise never
+been committed.
+
+⛔ **Not pushed.** The user holds the push; `origin` is the only remote on this clone and it was not
+touched. ⏭ On the work machine the company Gitea is synced by hand, later (§0 of
+`docs/current-state.md`).
+
+⚠ Carried forward unresolved, all recorded rather than fixed: the `Calendar*` flyout is still not repinned
+in `FluentBridge` (product work, both applications at once); `Icon.Name` still does not exist; the
+License Manager is still English-only (§40.5); `Seats` still carries a literal `Width="80"`.

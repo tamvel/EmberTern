@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -88,7 +88,7 @@ public sealed class LicenseManagerWindowTests
     public Task TheUnlockWindowBuildsInBothThemes(string theme) =>
 _session.Dispatch(() =>
     {
-        UseTheme(theme);
+        HeadlessTheme.UseTheme(theme);
 
         using var manager = new ManagerFixture();
         var window = new UnlockWindow { DataContext = new UnlockViewModel(manager.Paths) };
@@ -104,7 +104,7 @@ _session.Dispatch(() =>
     public Task TheMainWindowBuildsInBothThemes(string theme) =>
 _session.Dispatch(() =>
     {
-        UseTheme(theme);
+        HeadlessTheme.UseTheme(theme);
 
         using var manager = new ManagerFixture();
         var customer = manager.SaveCustomer();
@@ -126,11 +126,11 @@ _session.Dispatch(() =>
         // ⭐⭐ THE test that makes "renders correctly in both themes" mean something. If the linked
         //     Colors.axaml were not being found, both lookups would return the same fallback and every
         //     other test in this file would still pass.
-        UseTheme("Dark");
-        var dark = Brush("BackgroundBrush");
+        HeadlessTheme.UseTheme("Dark");
+        var dark = HeadlessTheme.Brush("BackgroundBrush");
 
-        UseTheme("Light");
-        var light = Brush("BackgroundBrush");
+        HeadlessTheme.UseTheme("Light");
+        var light = HeadlessTheme.Brush("BackgroundBrush");
 
         Assert.NotNull(dark);
         Assert.NotNull(light);
@@ -141,7 +141,7 @@ _session.Dispatch(() =>
     public Task TheWindowChromeIsPaintedFromTokensRatherThanDefaults() =>
 _session.Dispatch(() =>
     {
-        UseTheme("Dark");
+        HeadlessTheme.UseTheme("Dark");
 
         using var manager = new ManagerFixture();
         var window = new MainWindow
@@ -150,8 +150,8 @@ _session.Dispatch(() =>
         };
         window.Show();
 
-        Assert.Equal(Brush("BackgroundBrush")!.Color, ((ISolidColorBrush)window.Background!).Color);
-        Assert.Equal(Brush("ForegroundBrush")!.Color, ((ISolidColorBrush)window.Foreground!).Color);
+        Assert.Equal(HeadlessTheme.Brush("BackgroundBrush")!.Color, ((ISolidColorBrush)window.Background!).Color);
+        Assert.Equal(HeadlessTheme.Brush("ForegroundBrush")!.Color, ((ISolidColorBrush)window.Foreground!).Color);
     }, default);
 
     [Fact]
@@ -190,14 +190,14 @@ _session.Dispatch(() =>
         {
             // The property that matters, asserted on the REALISED brush of the window as it ships. ⚠ It
             // does NOT distinguish which mechanism delivers it — see the test below for that.
-            UseTheme(theme);
+            HeadlessTheme.UseTheme(theme);
 
             using var manager = new ManagerFixture();
             var window = new UnlockWindow { DataContext = new UnlockViewModel(manager.Paths) };
             window.Show();
 
             Assert.Equal(
-                Brush("OnAccentBrush")!.Color,
+                HeadlessTheme.Brush("OnAccentBrush")!.Color,
                 ((ISolidColorBrush)PrimaryActionLabel(window).Foreground!).Color);
         }, default);
 
@@ -219,7 +219,7 @@ _session.Dispatch(() =>
             //    is the shape the first icon-bearing button here will take too.
             //
             // ⚠ Verified RED with the style removed, in both themes, before being accepted green.
-            UseTheme(theme);
+            HeadlessTheme.UseTheme(theme);
 
             var button = new Button { Classes = { "primary" }, Content = new TextBlock { Text = "Issue" } };
             var window = new Window { Content = button };
@@ -228,7 +228,7 @@ _session.Dispatch(() =>
             var label = button.GetVisualDescendants().OfType<TextBlock>().First();
 
             Assert.Equal(
-                Brush("OnAccentBrush")!.Color,
+                HeadlessTheme.Brush("OnAccentBrush")!.Color,
                 ((ISolidColorBrush)label.Foreground!).Color);
         }, default);
 
@@ -239,7 +239,7 @@ _session.Dispatch(() =>
         // ⭐ Tokens.axaml keeps fields and actions on two independent ladders on purpose: a field stands
         //    in a SERIES (alignment decides), an action stands ALONE and is aimed at. The realised
         //    heights must therefore DIFFER — and the action must be the taller of the two.
-        UseTheme("Dark");
+        HeadlessTheme.UseTheme("Dark");
 
         using var manager = new ManagerFixture();
         var window = new UnlockWindow { DataContext = new UnlockViewModel(manager.Paths) };
@@ -266,7 +266,7 @@ _session.Dispatch(() =>
         // ⚠ Measured on realised controls, so a `Spacing` reintroduced on any ancestor breaks it: spacing
         //    is added BETWEEN children, on top of these margins, which is exactly how the inequality was
         //    lost the first time.
-        UseTheme("Dark");
+        HeadlessTheme.UseTheme("Dark");
 
         using var manager = new ManagerFixture();
         var window = new UnlockWindow { DataContext = new UnlockViewModel(manager.Paths) };
@@ -297,7 +297,7 @@ _session.Dispatch(() =>
         // ⭐ From ONE style setter, so no window can be the one that forgot. ⚠ An .ico carries its own
         //    artwork and is not repainted by the palette — asserting it in both themes records that as a
         //    fact rather than leaving the next reader to wonder whether it needs a per-theme variant.
-        UseTheme(theme);
+        HeadlessTheme.UseTheme(theme);
 
         using var manager = new ManagerFixture();
 
@@ -325,7 +325,7 @@ _session.Dispatch(() =>
         // ⚠ Asserted as a MEASUREMENT of the realised presenter, not as "the setter is present". The
         //    setter being written down is what was true of `Pad.Control` too, and the field still looked
         //    wrong; the property that matters is where the glyphs actually land.
-        UseTheme("Dark");
+        HeadlessTheme.UseTheme("Dark");
 
         // ⚠ BOTH branches, and the counts are how the test proves it looked at the right one. A
         //   ManagerFixture performs a REAL ceremony in its constructor, so its paths always HAVE a
@@ -392,7 +392,7 @@ _session.Dispatch(() =>
             //   centring hangs a short note in the middle of the frame. EmberTern added that setter after
             //   a user reported it at the M2c acceptance; inheriting the centring without it would have
             //   reintroduced the same defect in the main window's three multi-line fields.
-            UseTheme("Dark");
+            HeadlessTheme.UseTheme("Dark");
 
             var plain = new TextBox();
             var password = new TextBox { PasswordChar = '•' };
@@ -415,16 +415,4 @@ _session.Dispatch(() =>
             .SelectMany(b => b.GetVisualDescendants().OfType<TextBlock>())
             .First();
 
-    private static void UseTheme(string theme) =>
-        Application.Current!.RequestedThemeVariant =
-            theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
-
-    private static ISolidColorBrush? Brush(string key)
-    {
-        var application = Application.Current!;
-        return application.TryFindResource(key, application.ActualThemeVariant, out var value) &&
-               value is ISolidColorBrush brush
-            ? brush
-            : null;
-    }
 }

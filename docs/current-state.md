@@ -1,4 +1,4 @@
-# EmberTern — current state
+﻿# EmberTern — current state
 
 > **This is the ONE place that answers *"what is done, and what are we working on"*.**
 > `CLAUDE.md` holds the rules and the architecture; `docs/history/` holds the narrative of how we
@@ -9,7 +9,7 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-15.**
+**Last verified: 2026-08-17.**
 
 ---
 
@@ -18,8 +18,11 @@
 > **Current milestone:** **Licensing system V1** — ✅ L1, L2, L3, L4a and **L4b accepted** (2026-08-15).
 > ⭐ **EmberTern now licenses itself end to end**: verdict at startup, activation window, Settings ▸ Licence,
 > About line, expiry banner, and every path that opens a database attachment gated through ONE seam, EN + PL.
-> **Next task:** ⏭ **L5 — License Manager depth** (search, filters, group extend, re-issue, artifact preview,
-> history view, encrypted backup + JSONL). ⛔ NOT started.
+> ⭐ **L5.0 + L5.1 + both QA rounds accepted 2026-08-17** and committed as one logical commit on
+> `feat/licensing-system`. ⛔ **NOT pushed — the user holds the push.**
+> **Next task:** ⏭ **L5 QA P2** (remaining cosmetics), then **L5.2** (artifact preview + history surface).
+> ⛔ **P2 NOT started and must not start without the user's go-ahead in a NEW session.** Scope and the
+> standing facts a next session must not rediscover: `design/licensing-system.md` §43.8 + §42.4.
 >
 > ⚠ **L7 still owns the production key ceremony** — and until it runs, `TrustedKeys.Production` is empty and
 > no real licence verifies as usable in any build. That is deliberate, and `Valid` / `Grace` are therefore
@@ -45,12 +48,12 @@ Split Licence — are now this etap's, see §3.
 | | |
 |---|---|
 | Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` through L4b |
-| HEAD | the **L4b closing commit** on `feat/licensing-system`, pushed to `origin` |
+| HEAD | the **L5.0–L5.1 + QA closing commit** on `feat/licensing-system` — ⛔ **local only, not pushed** |
 | Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`**, in **both solutions** (`TreatWarningsAsErrors=true`) |
-| Tests | EmberTern **9 081** · License Manager **102** — measured 2026-08-15, Debug and Release |
+| Tests | EmberTern **9 087** · License Manager **223** — measured 2026-08-17, Debug and Release, both suites |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ They are separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
-| Remotes | `origin` (company Gitea) + `private` (GitHub) — **both** receive every accepted stage |
+| Remotes | ⚠ **On THIS clone there is ONE remote**, `origin` → personal GitHub (see §0). The CLAUDE.md two-remote table describes the work machine; ⛔ do not add a remote here |
 
 ⚠⚠ **Build BOTH configurations before asking for a visual check.** `CLAUDE.md` runs the app from
 `bin\Debug\`, and an etap built only in `Release` left the user verifying a binary that predated the
@@ -128,7 +131,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L3** — License Manager: skeleton, SQLite register, customers, licences, issue, save | ✅ **accepted** — §36; ⚠ read §36.5 before any UI work here |
 | **L4a** — mechanism: policy, location, store, service, text, clock, freshness, 4 gate guards | ⭐ **delivered, no UI** — §37 |
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
-| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⭐ **in progress** — split into two sessions (L5.0–L5.2 read side, L5.3–L5.6 mutations + backup). **L5.0 delivered, awaiting acceptance**: schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch — §39. ⛔ No UI yet, nothing committed |
+| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⭐ **in progress** — split into two sessions (L5.0–L5.2 read side, L5.3–L5.6 mutations + backup). **L5.0 accepted** (`efbe180`): schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch — §39. **L5.1 + QA rounds 1 and 2 accepted 2026-08-17, committed, not pushed**: Licences view with search and three filters (§40); QA-1 — own top bar, icon theme toggle, generated ids as values with copy, resizable rail, message stripe, contact + status columns, date pickers (§41); QA-2 P0 — the licence **re-parenting** defect (the form was not cleared, so a Save moved the previous customer's row) and the application's own AppBar (§42); QA-2 P1 — spacing (`Margin.InlineGap` is right-handed and was hung on the wrong side in five rows; the gap now belongs to the Grid), uniform control heights (24/24/24), double-click → the existing `InspectLatestCommand`, plus a dropdown-wrap defect the domain sweep found (§43). ⭐ No token added, `Tokens.axaml` untouched. ⭐ Enabler: `IconGeometries.axaml` split so its 86 geometries are SHARED. ⏭ **P2 NOT started** |
 | **L6** — e-mail: `ILicenseEmailSender`, SMTP + `.eml`, DPAPI settings, template, send audit | ⏳ not started |
 | **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started |
 
@@ -178,6 +181,8 @@ whether `NONE` should stay in `CharsetCatalog.Supported` (lossy and machine-depe
 | ~~Charset silent data loss~~ | ⏭ **Promoted out of the backlog — it is now Phase 5, the next task.** The formerly unmeasured DDL/source path was measured and IS vulnerable. See §3 "Phase 5". |
 | **Headless session init race** *(upstream — closed on our side)* | ⭐ **Root cause established 2026-08-14 and reproduced deterministically.** `EnsureIsolatedApplication` calls the process-wide `Dispatcher.ResetBeforeUnitTests()` on **every** `Dispatch`; a parallel thread constructing any Avalonia object claims `Dispatcher.UIThread` in that window and the session's `Compositor` then fails `VerifyAccess()`. Probe: **149/150 dispatches fail** with 4 noise threads, **0/150** without. Cost here: **1 test in ~1 run of 3–8**. ⭐ **It is NOT an EmberTern defect** and is identified by the STACK, not the test name. ⛔ **Five repairs measured and rejected** — no warm-up, no `Delay`, no retry, no global parallelism switch-off; do not attempt a sixth. Full evidence, the ready-to-file upstream report and the recognition signature: [`docs/avalonia-headless-session-race.md`](avalonia-headless-session-race.md); the "re-run once" rule is in `CLAUDE.md`. |
 | Activity Monitor / Data Import width at 150 %/175 % DPI | Ratified as debt: both command bars are bare horizontal `StackPanel`s (~1130 DIP) with **no** `ScrollViewer`, so they clip rather than compress. Not a DPI defect — they do not fit at 100 % on 1366×768 either. |
+| **`Icon.Name` nie istnieje — kolumny i zmienne lokalne w completion są bez ikony** | ⚠ **Znalezione 2026-08-16 przez nowy `IconGeometriesSplitTests`, nie spowodowane przez ten etap.** `SqlCompletionData.cs:283,286` prosi o `"Icon.Name"` dla `SqlCompletionKind.Column` i dla lokalnych; jedyne wystąpienie tego klucza w `IconGeometries.axaml` jest **wewnątrz komentarza** pokazującego, jak dodać geometrię. Zmierzone przez odpytanie żywego systemu zasobów, nie przez czytanie pliku. ⛔ Nie naprawione tutaj: wybór glifu dla kolumny to decyzja projektowa do przeglądu użytkownika. Strażnik trzyma to jako **jedyny** wpis `KnownMissing`, z komentarzem, że drugi wpis oznacza błędną regułę, a nie kolejny wyjątek. |
+| **`Calendar*` is not repinned in `FluentBridge`** | ⚠ Measured 2026-08-16: the bridge carries **zero** `Calendar*` keys, so every `CalendarDatePicker` popup in the product shows Fluent's own `SystemAccentColor` — the brown/orange the palette fights everywhere else. Affects EmberTern (`DebuggerTabView`, `ExecuteProcedureDialog`) and, since the L5.1 QA pass, the License Manager. ⛔ Not a License Manager defect and not fixable there: it is work in the product's bridge, for both applications at once. Ratified by the user as its own design-system item. |
 | **B1** — `TableDetailTabView` private icons | PK/FK/Unique drawn with a raw `<Path>` over locally declared geometries on a **14**-unit grid, invisible to three mechanisms at once. Prepared and measured; appearance deliberately unresolved. |
 | **Z‑3** — Table Data row height | A density question; cause must be found first (a taller row may be a deliberate readability decision). |
 | Icon literal tail 10/11/13/15 | A question about roles, not a sweep. |

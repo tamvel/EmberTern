@@ -1,11 +1,14 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using EmberTern.Licensing;
 using EmberTern.LicenseManager.ViewModels;
 
@@ -55,6 +58,127 @@ public sealed partial class MainWindow : Window
         }).ConfigureAwait(true);
 
         return file?.TryGetLocalPath();
+    }
+
+    /// <summary>
+    /// Copies a generated value — a customer identifier, a licence id — to the clipboard.
+    ///
+    /// <para>⭐ Code-behind for the same reason the theme toggle is: the clipboard is pure platform, and
+    /// routing a string through a view model would buy nothing. The value travels on the button's
+    /// <see cref="Control.Tag"/>, so ONE handler serves every such action and a new one is a button
+    /// rather than a method.</para>
+    /// </summary>
+    private async void OnCopyValueClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string value } || string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(value).ConfigureAwait(true);
+        }
+
+        if (DataContext is ShellViewModel shell)
+        {
+            shell.Message = StatusMessage.Success($"Copied {value} to the clipboard.");
+        }
+    }
+
+    /// <summary>
+    /// Dragging the window by its own title bar.
+    ///
+    /// <para>⚠ Buttons consume their own clicks, so this only fires on the bar's background.</para>
+    /// </summary>
+    private void OnTitleBarPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            BeginMoveDrag(e);
+        }
+    }
+
+    /// <summary>
+    /// Double-tapping the bar maximises or restores.
+    ///
+    /// <para>⚠ The theme toggle and the caption buttons live INSIDE the bar, so the event bubbles up from
+    /// them too — double-clicking the theme icon must not also maximise the window. EmberTern's own
+    /// titlebar carries the identical guard for the identical reason.</para>
+    /// </summary>
+    private void OnTitleBarDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (e.Source is Visual source &&
+            source.FindAncestorOfType<Button>(includeSelf: true) is not null)
+        {
+            return;
+        }
+
+        ToggleMaximised();
+    }
+
+    private void OnMinimizeClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        WindowState = WindowState.Minimized;
+
+    private void OnMaxRestoreClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        ToggleMaximised();
+
+    private void OnCloseClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close();
+
+    private void ToggleMaximised() =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    /// <summary>
+    /// ⭐ The maximise glyph shows what the click will DO, so it becomes "restore" once the window is
+    /// maximised — the same rule the theme toggle follows. ⚠ Driven by the window's own state rather than
+    /// by the click, so it is right however the state changed (a system menu, a Windows snap gesture).
+    /// </summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property != WindowStateProperty)
+        {
+            return;
+        }
+
+        if (this.FindControl<Avalonia.Controls.Shapes.Path>("MaxRestoreGlyph") is { } glyph &&
+            Application.Current?.Resources.TryGetResource(
+                WindowState == WindowState.Maximized ? "Icon.WindowRestore" : "Icon.WindowMaximize",
+                null,
+                out var geometry) == true &&
+            geometry is Geometry data)
+        {
+            glyph.Data = data;
+        }
+    }
+
+    /// <summary>
+    /// P1-c · double-clicking a licence opens the preview of its newest artifact.
+    ///
+    /// <para>⭐⭐ It runs <see cref="ShellViewModel.InspectLatestCommand"/> — the SAME command the
+    /// "Inspect latest" button runs, not a second path to the same screen. So a licence that was never
+    /// issued still explains itself ("This licence has never been issued."), and anything that command
+    /// learns later, the gesture learns with it. ⛔ There is no second implementation of Inspect, and
+    /// there must not be one.</para>
+    ///
+    /// <para>⚠ Guarded on the row rather than on the list: <c>DoubleTapped</c> bubbles from the empty
+    /// space below the last item as well, and a double-click on nothing opening the previously selected
+    /// licence is a preview the operator did not ask for.</para>
+    /// </summary>
+    private void OnLicenseDoubleTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (e.Source is not Visual source ||
+            source.FindAncestorOfType<ListBoxItem>(includeSelf: true) is null)
+        {
+            return;
+        }
+
+        if (DataContext is ShellViewModel { InspectLatestCommand: { } inspect } &&
+            inspect.CanExecute(null))
+        {
+            inspect.Execute(null);
+        }
     }
 
     private void OnToggleTheme(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

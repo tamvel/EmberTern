@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -18,11 +18,11 @@ namespace EmberTern.LicenseManager.ViewModels;
 /// Save-As dialog — arrives as <see cref="SaveFilePicker"/>, a delegate the view assigns. That keeps the
 /// whole issuing path testable without a window.</para>
 ///
-/// <para>⭐ <b>Dates are typed as ISO text rather than picked from a calendar, and that is a deliberate
-/// L3 decision.</b> A picker is a templated control with a flyout, i.e. the largest theming surface in
-/// the application, introduced in the first stage that has any UI at all. <c>2027-08-15</c> is
-/// unambiguous, verifiable, and what an administrator reads off a purchase order anyway. A picker is an
-/// L5 refinement, not a correctness gap.</para>
+/// <para>⭐ <b>Dates are picked from a calendar OR typed, since the L5.1 QA pass.</b> L3 held them as ISO
+/// text and taught the operator the format in the field's own caption — a deliberate deferral, because a
+/// picker is a templated control with a flyout, i.e. the largest theming surface in the application, and
+/// L3 was the first stage with any UI at all. ⚠ The DOMAIN did not move with the control: a chosen day is
+/// still read as a UTC calendar day, and the expiry still runs to the END of it.</para>
 /// </summary>
 public sealed partial class ShellViewModel : MessageHostViewModel
 {
@@ -47,9 +47,80 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _workflow = new IssuingWorkflow(register, _clock);
+        Browser = new LicenseBrowserViewModel(register, _clock);
 
         ReloadCustomers();
         Message = StatusMessage.Info($"Signing with key {session.KeyId}.");
+    }
+
+    // ── Views ───────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The licences view: every licence in the register, across every customer.
+    ///
+    /// <para>⭐ A second VIEW rather than more filters on the customer panel, ratified by the user. The
+    /// customer panel answers <i>"what does THIS customer have?"</i>; the operator arriving with
+    /// <i>"who lapses next month?"</i> has no customer to start from, and folding that question into a
+    /// panel organised around one name is what makes an administrative tool unusable at fifty
+    /// customers.</para>
+    /// </summary>
+    public LicenseBrowserViewModel Browser { get; }
+
+    /// <summary>Which of the two views is showing.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCustomersView))]
+    private bool _isLicensesView;
+
+    /// <summary>The customer-centric view — the one L3 built, unchanged.</summary>
+    public bool IsCustomersView => !IsLicensesView;
+
+    /// <summary>Shows customers.</summary>
+    [RelayCommand]
+    private void ShowCustomers() => IsLicensesView = false;
+
+    /// <summary>
+    /// Shows the licences view, re-reading the register first.
+    ///
+    /// <para>⚠ The refresh is here rather than on every mutation because in L5.1 this view is read-only
+    /// and unreachable while the operator edits — so "fresh whenever it is looked at" is both sufficient
+    /// and the only rule that cannot fall out of step with a mutation somebody adds later.</para>
+    /// </summary>
+    [RelayCommand]
+    private void ShowLicenses()
+    {
+        Browser.Refresh();
+        IsLicensesView = true;
+    }
+
+    /// <summary>
+    /// Takes the licence selected in the browser back to the customer view, with its customer and the
+    /// licence itself selected.
+    ///
+    /// <para>⭐ Without it, search is a dead end: the operator finds the licence that lapses on Friday
+    /// and has no way to act on it. ⚠ Navigation only — L5.1 changes nothing.</para>
+    /// </summary>
+    [RelayCommand]
+    private void OpenSelectedLicense()
+    {
+        if (Browser.SelectedLicense?.Summary is not { } summary)
+        {
+            Message = StatusMessage.Warning("Select a licence in the list first.");
+            return;
+        }
+
+        var customer = Customers.FirstOrDefaultById(summary.License.CustomerId);
+        if (customer is null)
+        {
+            // Unreachable while the register is sound; CheckIntegrity reports exactly this shape.
+            Message = StatusMessage.Error(
+                $"Licence {summary.License.LicenseId} names customer {summary.License.CustomerId}, " +
+                "which is not in the register.");
+            return;
+        }
+
+        IsLicensesView = false;
+        SelectedCustomer = customer;
+        SelectedLicense = Licenses.FirstOrDefaultById(summary.License.LicenseId);
     }
 
     // ── Customers ───────────────────────────────────────────────────────────────────────────────────
@@ -121,6 +192,13 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         CustomerNotes = string.Empty;
         Licenses.Clear();
         SelectedLicense = null;
+
+        // ⭐⭐ THE LICENCE FORM BELONGS TO A CUSTOMER, so starting a new customer must empty it. Clearing
+        //    the LIST and the SELECTION was not enough: the licence ID stayed behind, and the next "Save
+        //    terms" addressed the previous customer's row. That is the reported defect — see
+        //    SecondCustomerRegressionTests.
+        ClearLicenseForm();
+
         Message = StatusMessage.Info("New customer. The name is required — it is what gets signed.");
     }
 
@@ -187,13 +265,21 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     [ObservableProperty]
     private int _licenseSeats = 1;
 
-    /// <summary>Start of validity, ISO.</summary>
+    /// <summary>
+    /// Start of validity — a DATE, not text.
+    ///
+    /// <para>⭐ L3 held these as ISO strings and told the operator the format in the field's own caption,
+    /// because a date picker was judged too large a theming surface for the first stage that had any UI.
+    /// The picker is here now: the operator picks from a calendar or types, and nobody has to be taught
+    /// <c>yyyy-MM-dd</c>. ⚠ The DOMAIN is unchanged — the date is read as a UTC calendar day, and the
+    /// expiry still runs to the END of the day the operator chose (see <see cref="TryReadTerms"/>).</para>
+    /// </summary>
     [ObservableProperty]
-    private string _licenseNotBefore = string.Empty;
+    private DateTime? _licenseNotBefore;
 
-    /// <summary>End of validity, ISO.</summary>
+    /// <summary>End of validity, inclusive. ⭐ Stored as running to 23:59:59 of this day.</summary>
     [ObservableProperty]
-    private string _licenseExpiresAt = string.Empty;
+    private DateTime? _licenseExpiresAt;
 
     /// <summary>⛔ Administrative only.</summary>
     [ObservableProperty]
@@ -213,8 +299,8 @@ public sealed partial class ShellViewModel : MessageHostViewModel
 
         LicenseId = value.LicenseId;
         LicenseSeats = value.Seats;
-        LicenseNotBefore = value.NotBefore.ToString(DateFormat, CultureInfo.InvariantCulture);
-        LicenseExpiresAt = value.ExpiresAt.ToString(DateFormat, CultureInfo.InvariantCulture);
+        LicenseNotBefore = value.NotBefore.UtcDateTime.Date;
+        LicenseExpiresAt = value.ExpiresAt.UtcDateTime.Date;
         LicenseNotes = value.Notes ?? string.Empty;
 
         var artifacts = _register.GetArtifacts(value.LicenseId);
@@ -240,8 +326,8 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         SelectedLicense = null;
         LicenseId = LicenseIssuer.NewLicenseId();
         LicenseSeats = 1;                                   // decision O4 — explicit, never blank
-        LicenseNotBefore = today.ToString(DateFormat, CultureInfo.InvariantCulture);
-        LicenseExpiresAt = today.AddYears(1).ToString(DateFormat, CultureInfo.InvariantCulture);
+        LicenseNotBefore = today;
+        LicenseExpiresAt = today.AddYears(1);
         LicenseNotes = string.Empty;
         LicenseHistory = "Never issued.";
         Message = StatusMessage.Info("New licence. Save the terms, then issue.");
@@ -282,6 +368,20 @@ public sealed partial class ShellViewModel : MessageHostViewModel
 
         ReloadLicenses(saved.LicenseId);
         Message = StatusMessage.Success($"Saved licence {saved.LicenseId[..8]}….");
+    }
+
+    /// <summary>
+    /// Empties the licence form. ⭐ ONE place, so "what a blank licence form looks like" cannot drift
+    /// between the two callers that need it.
+    /// </summary>
+    private void ClearLicenseForm()
+    {
+        LicenseId = string.Empty;
+        LicenseSeats = 1;
+        LicenseNotBefore = null;
+        LicenseExpiresAt = null;
+        LicenseNotes = string.Empty;
+        LicenseHistory = string.Empty;
     }
 
     private void ReloadLicenses(string? selectId = null)
@@ -452,17 +552,26 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             return false;
         }
 
-        if (!TryReadDate(LicenseNotBefore, out notBefore))
+        // ⚠ The picker can be EMPTY — cleared by hand, or never filled on a licence whose terms were
+        //   only half entered. Empty is a different fault from malformed, and it is now the only one that
+        //   can reach here: text that does not parse never becomes a SelectedDate at all.
+        if (LicenseNotBefore is not { } startDate)
         {
-            problem = $"The start date must be written as {DateFormat}, for example 2026-08-15.";
+            problem = "A start date is required. Pick one from the calendar, or type it into the field.";
             return false;
         }
 
-        if (!TryReadDate(LicenseExpiresAt, out expiresAt))
+        if (LicenseExpiresAt is not { } endDate)
         {
-            problem = $"The expiry date must be written as {DateFormat}, for example 2027-08-15.";
+            problem = "An expiry date is required. Pick one from the calendar, or type it into the field.";
             return false;
         }
+
+        // ⭐ The chosen calendar day is read as a UTC day. The picker hands back a local DateTime whose
+        //   Kind is Unspecified; taking .Date and pinning the offset to zero is what keeps a licence
+        //   issued in Warsaw and one issued in London meaning the same thing.
+        notBefore = new DateTimeOffset(startDate.Date, TimeSpan.Zero);
+        expiresAt = new DateTimeOffset(endDate.Date, TimeSpan.Zero);
 
         // ⭐ The expiry runs to the END of the day the operator typed. Storing midnight would expire a
         //    licence at the start of the day it says it is valid until, which is an off-by-one nobody
@@ -478,11 +587,6 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         problem = string.Empty;
         return true;
     }
-
-    private static bool TryReadDate(string text, out DateTimeOffset value) =>
-        DateTimeOffset.TryParseExact(
-            text?.Trim(), DateFormat, CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out value);
 
     private static string? Blank(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
