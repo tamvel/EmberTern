@@ -103,6 +103,36 @@
     <Setter Property="TextWrapping" Value="NoWrap" />
   </Style>
 
+  <!-- ⭐⭐ L5.2 · THE "CURRENT" MARK ON AN ISSUING HISTORY — and the reason it is a mark on ONE row
+       rather than a treatment of the others.
+
+       The operator's question behind the whole history panel is *"did re-issuing overwrite what I sent
+       them before?"*, and the answer is no — `issued_artifacts` refuses UPDATE and DELETE at the database
+       (§39.2). ⛔⛔ So an earlier issue MUST NOT be presented as removed, greyed out, struck through or
+       disabled: it was really delivered, to a real customer who may still be running it, and the
+       append-only guarantee exists precisely so the register can still answer for it.
+
+       ⭐ Hence the asymmetry is ADDITIVE: the current artifact gains a chip; every other row keeps the
+       full-strength `ForegroundBrush` its content would have had anyway, and says the word "superseded"
+       in the same subtle grade any secondary fact uses. Nothing is taken away from a superseded row.
+       `ArtifactHistoryTests` measures exactly that — the earlier row's content brush equals the current
+       row's, and its opacity is 1.
+
+       ⚠ `ConnectedBrush`, not `AccentBrush`: this is a state ("this is the live one"), which is the role
+       Colors.axaml names that token for, and it keeps the chip from competing with the primary action. -->
+  <Style Selector="Border.current-chip">
+    <Setter Property="Background" Value="{DynamicResource ConnectedBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Chip}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellCompact}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.current-chip TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Caption.LineHeight}" />
+  </Style>
+
   <!-- ── Surfaces ────────────────────────────────────────────────────────────────────────────── -->
 
   <!-- A side rail: the panel colour, separated from the document by ONE rail border. -->

@@ -29,9 +29,9 @@
 
 ## Table of contents
 
-*(Counts + ranges **recomputed from the file 2026-08-17**, by counting `^\d+\. \*\*` per section rather
+*(Counts + ranges **recomputed from the file 2026-08-17** (again after L5.2), by counting `^\d+\. \*\*` per section rather
 than by carrying the previous figures forward; a range is first–last number in that section, not a
-contiguous run. **365 entries, max #376.**)*
+contiguous run. **367 entries, max #378.**)*
 
 ⚠⚠ **Every one of these numbers was wrong before that recount, and all of them in the same direction.**
 The block was last recomputed 2026-07-25 and then maintained by hand, so it drifted with each entry
@@ -48,7 +48,7 @@ grep -cE "^[0-9]+\. \*\*" docs/gotchas.md
 - [Firebird transactions, connections & locking](#firebird-transactions-connections--locking) — 39 entries (#10–#237)
 - [Firebird catalog, DDL generation & metadata reading](#firebird-catalog-ddl-generation--metadata-reading) — 47 entries (#29–#185)
 - [SQL lexing, parsing, formatting & scanning](#sql-lexing-parsing-formatting--scanning) — 22 entries (#7–#371)
-- [Avalonia UI: controls, XAML binding & templates](#avalonia-ui-controls-xaml-binding--templates) — 93 entries (#1–#376)
+- [Avalonia UI: controls, XAML binding & templates](#avalonia-ui-controls-xaml-binding--templates) — 95 entries (#1–#378)
 - [MVVM / CommunityToolkit patterns](#mvvm--communitytoolkit-patterns) — 8 entries (#11–#356)
 - [Settings, security & persistence](#settings-security--persistence) — 4 entries (#87–#163)
 - [Testing, tooling & build discipline](#testing-tooling--build-discipline) — 4 entries (#67–#374)
@@ -1011,6 +1011,39 @@ layout change lands near such a finding, A/B it before assigning blame: the colu
 narrowed by 8 px and were the obvious suspect, but with the row reverted to its exact previous shape the
 label still wrapped — the defect pre-dated the change, and "not mine" would have left it live.
 *(License Manager L5.1 QA P1-b, 2026-08-17; `LicenseControlSizeTests`, `licensing-system.md` §43.3)*
+
+377. **A VIRTUALIZING list in a headless test realises LAZILY, and the numbers that would tell you so
+look correct.** Measured on the L5.2 issuing history: after `Show` + `UpdateLayout` the `ListBox` reported
+`ItemCount` **3**, a viewport of **74 px** and an extent of **74 px** — layout had accounted for all three
+rows — while `ContainerFromIndex` answered non-null for **index 0 only** and the tree held **one**
+`ListBoxItem`. ⚠⚠ So the usual diagnosis is wrong twice over: the list is not mis-sized and it is not
+off-screen, and a second `UpdateLayout()` changes nothing. ⭐ **The fix is `ScrollIntoView(ItemCount - 1)`
+followed by one more layout pass**, which realises every container. ⛔ Do not reach for
+`window.Height = …` first — that was the obvious hypothesis here (three stacked cards inside a
+`ScrollViewer`), it was tried, and it was measured to change nothing: a headless window ignores a `Height`
+assigned after `Show`, and the extent already proved the list was sized correctly. ⚠ **The dangerous
+version of this bug is the silent one**: a test that iterates the realised rows and happens to assert
+something true of the first one passes while measuring a third of what it claims to. Every such test
+should assert the expected row COUNT before it asserts anything about the rows.
+*(License Manager L5.2, 2026-08-17; `ArtifactHistoryPresentationTests.Realize`)*
+
+378. **An injected defect that stays GREEN can mean the guard is weak rather than the code correct — and
+the usual cause is two implementations that agree in every state the public API can build.** L5.2's
+history marks one artifact "current". The correct source is the register's `license_current_artifact`
+pointer; the plausible wrong one is *"the newest row wins"*. Replacing the first with the second turned
+**nothing** red, because a re-issue always appends an artifact and moves the pointer in the same
+transaction — so in every scenario a test can construct through the API the two answers are the same row.
+⭐ **The repair is to construct the unreachable state**, injecting the divergence past the API exactly as
+§39.4's corruption tests do: repoint `license_current_artifact` at the oldest artifact with raw SQL, and
+the two implementations finally disagree. ⚠⚠ The general rule is uncomfortable and worth stating plainly:
+**"I injected the defect and the suite went red" proves a guard; "I injected the defect and it stayed
+green" proves nothing at all** — it is the start of an investigation, not a clean bill of health, and the
+first question is whether the wrong implementation is actually distinguishable in any reachable state. ⛔
+Do not conclude "the injection was unrealistic" and move on; that is how a claim about correctness ends up
+resting on a test that could never have failed. Related to #304 (a guard whose criterion is not the
+acceptance criterion certifies the defect) — this is its mirror: a guard whose SCENARIO cannot separate
+right from wrong. *(License Manager L5.2, 2026-08-17;
+`ArtifactHistoryTests.TheCurrentMarkFollowsThePointerEvenWhenItIsNotTheNEWESTArtifact`)*
 
 ## MVVM / CommunityToolkit patterns
 

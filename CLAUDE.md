@@ -1,4 +1,4 @@
-# EmberTern — Claude Code Context
+﻿# EmberTern — Claude Code Context
 
 A modern desktop developer workbench for Firebird database developers, built with **.NET 9 + Avalonia
 12.1.1**. Target users: ERP and backend devs who work daily with SQL, procedures, triggers, metadata
@@ -556,7 +556,7 @@ reference for the full explanation and the failure it prevents.
 
 ⛔ **The entry count is deliberately NOT written down here.** Three separate counters used to carry it
 and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-17:
-**365 entry lines, max #376**):
+**367 entry lines, max #378**):
 
 ```bash
 grep -cE "^[0-9]+\. \*\*" docs/gotchas.md

@@ -1,4 +1,4 @@
-# EmberTern Licensing System — design document
+﻿# EmberTern Licensing System — design document
 
 **🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ✅ L1 ACCEPTED. ✅ L2 ACCEPTED.
 ✅ L3 ACCEPTED (2026-08-15, after a two-round UI review — §36.5). ✅ L4a ACCEPTED. ✅ **L4b ACCEPTED**
@@ -2452,3 +2452,138 @@ touched. ⏭ On the work machine the company Gitea is synced by hand, later (§0
 ⚠ Carried forward unresolved, all recorded rather than fixed: the `Calendar*` flyout is still not repinned
 in `FluentBridge` (product work, both applications at once); `Icon.Name` still does not exist; the
 License Manager is still English-only (§40.5); `Seats` still carries a literal `Width="80"`.
+
+---
+
+## 44. L5.2 — as built (2026-08-17)
+
+⭐ **The issuing history and the artifact preview.** A licence's every issue is listed, chronologically,
+with the current one unmistakable and the earlier ones intact; selecting one shows what was signed into it
+and what EmberTern would say about it today. Builds **0/0 in Debug and Release, both solutions**. License
+Manager **249** (was 223: **+26**); EmberTern **9 087**, unchanged. ✅ **Accepted by the user 2026-08-17
+after looking at the running application** — the history, the current-issue mark and the preview all
+confirmed in both themes. Committed on `feat/licensing-system`; ⛔ **not pushed** — the user holds the
+push.
+
+⭐⭐ **No schema change, no new model, no new register method.** L5.0 had already built everything the data
+side needed — `issued_artifacts` append-only, `license_current_artifact` as the pointer, the `status`
+projection, `GetArtifacts` newest-first, `GetCurrentArtifact`, and an `IssuingWorkflow.Inspect` /
+`SaveArtifact` pair that both already take **any** artifact rather than only the newest. L5.2 is a
+surface over facts that were already true, which is what the L5.0/L5.1 split was for.
+
+### 44.1 The two sources, and why neither could do the other's job
+
+| Shown | Source | Why not the other one |
+|---|---|---|
+| Licensee · seats · validity · product · algorithm | `LicensePayload.TryParse` over the **stored payload** | These are what was SIGNED, which is not what the licence row says today — the difference is the whole reason a support call happens. And the parse works even for an artifact the verifier refuses, which is exactly the artifact being asked about |
+| "What EmberTern would say about it today" | the real `LicenseVerifier`, through `IssuingWorkflow.Inspect` | ⛔ Never recomputed from the dates above. An administrative tool that answers *"would this be accepted?"* with its own arithmetic will eventually disagree with the product, in front of a customer (§41.4) |
+| current / superseded | the register's projection over `license_current_artifact` | ⛔ Never "the newest row". §44.4 records what happened when that was tested |
+
+⚠ Re-encoding the stored payload string to bytes for the parser is **lossless rather than lucky**: the
+register holds `Encoding.UTF8.GetString(issued.PayloadJson)`, a decode of the exact signed bytes.
+
+### 44.2 ⭐⭐ The presentation rule: the mark is ADDITIVE
+
+The operator's real question is *"did re-issuing overwrite what I sent them before?"*, and the answer is a
+property of the schema. So the panel says it twice — once in words (*"3 issues on record, all kept … earlier
+ones were superseded, never overwritten or deleted"*) and once in its shape.
+
+⛔ **An earlier issue must not be dimmed, struck through, greyed or otherwise shown as removed.** It was
+really delivered, to a customer who may still be running it, and the append-only trigger exists so the
+register can still answer for it. ⭐ Hence the asymmetry only ever ADDS: the current artifact gains a chip
+(`ConnectedBrush` — a state, not an accent, so it does not compete with the primary action); every other
+row keeps full-strength content and simply says "superseded" in the subtle grade any secondary fact uses.
+
+⚠ Pinned as pixels, in both themes: the earlier row's content brush, font size and effective opacity are
+asserted **equal to the current row's**, and its text asserted not struck. A claim about how something
+looks cannot be held by a test that reads a property.
+
+### 44.3 Decisions taken during implementation
+
+1. **A third view model** (`ArtifactHistoryViewModel`), for §40.1's reason rather than for size: the
+   licence card is a FORM over terms — singular, editable — and this is a LEDGER of artifacts — plural,
+   ordered, immutable. Two organising principles in one class is how a view model becomes the place every
+   later feature is added, and L5.3 will build on this one.
+2. ⭐ **`VerdictText` extracted** the moment the detail pane became a second consumer of a mapping that
+   lived inside `InspectLatest`. Two switches over one enum is how a message strip and a detail panel end
+   up describing one artifact two different ways, with no way to tell which is the application's opinion.
+3. ⭐ **`InspectLatest` gained a second half rather than a sibling command**: it now selects the artifact
+   it is describing. So the message and the panel always name the same release, and P1-c's double-click
+   still runs the one Inspect — no parallel path that would have to re-answer "never issued" itself.
+4. **"Export latest…" is untouched.** The new "Export this issue…" answers a different question —
+   *"send them THIS one"* versus *"send them their file"* — and collapsing them would make the common
+   case depend on a selection the operator did not make. ⛔ Both go through `IssuingWorkflow.SaveArtifact`,
+   so there is one writer, one `licence.exported` audit action, and one guarantee that a re-export never
+   becomes a re-issue with a new `iat` (§16.4).
+5. ⛔ **No delete and no edit, and that is asserted** — `issued_artifacts` aborts UPDATE and DELETE by
+   trigger, so a command offering either would be an invitation to a stack trace. A test walks the view
+   model's generated commands and fails if one appears.
+6. **The panel is visible even when the licence was never issued.** A surface that disappears cannot say
+   *"nothing was ever sent"*, and that is the state an operator most needs told.
+7. ⭐ **`LicenseHistory` was DELETED from `ShellViewModel`.** Once the history card carried the summary,
+   the licence card was rendering the identical sentence from a second property. One owner.
+8. **The token is shown as one trimmed line plus its delivered size, with the whole of it on the copy
+   action.** ⚠ The size is measured over `LicenseArmor.Wrap(token)` — the armored form that is actually
+   written to the file — not the raw token's length.
+
+### 44.4 ⚠⚠ An injected defect that stayed GREEN, and what it exposed
+
+⭐⭐ **The most useful thing this stage measured.** The claim *"current comes from the register's pointer,
+never from the ordering"* was covered by a test comparing the marked row against `GetCurrentArtifact`.
+Replacing the projection with *"the newest row wins"* turned **nothing** red.
+
+The reason is structural: a re-issue appends an artifact and moves the pointer **in one transaction**, so
+in every scenario reachable through the API the two answers are the same row. The test could not have
+failed. ⭐ The repair was to build the unreachable state — repoint `license_current_artifact` at the
+**oldest** artifact with raw SQL, exactly as §39.4's corruption tests inject damage past the API — after
+which the injection goes red properly.
+
+⚠⚠ **The general lesson is now gotcha #378:** *"I injected the defect and it went red"* proves a guard;
+*"I injected the defect and it stayed green"* proves nothing, and the first question is whether the wrong
+implementation is distinguishable in any reachable state at all.
+
+A second injection failed the same way for a different reason: dimming the row with `Opacity="0.5"` inside
+the `DataTemplate` left the opacity assertion green, because it measured **upward from the row container**
+while the dimming sat below it. Effective opacity is a product along the whole chain, so the measurement
+now starts at the ink. ⛔ Not filed as its own gotcha — it is an instance of the standing QA rule about
+measuring against the thing that actually governs the element, and the test carries the note.
+
+### 44.5 The guards, and the injections that proved them
+
+| Injection | Went red |
+|---|---|
+| `current` decided by the newest row instead of the pointer | `TheCurrentMarkFollowsThePointerEvenWhenItIsNotTheNEWESTArtifact` — ⚠ only after the guard was rewritten; see §44.4 |
+| `Opacity="0.5"` on the row template | `AnEarlierIssueIsNotDimmedStruckThroughOrOtherwiseShownAsRemoved` (both themes) — ⚠ only after the measurement moved to the ink |
+| the chip repainted `PanelBrush` instead of `ConnectedBrush` | `TheCurrentIssueWearsTheChipAndTheEarlierOnesDoNot` (both themes) |
+| export writing `Artifacts[0]` instead of the selection | `ExportingTheSELECTEDIssueWritesThatIssueAndNotTheNewestOne` |
+| `InspectLatest` no longer selecting the current artifact | `InspectLatestOpensTheArtifactItIsTalkingAbout` + the double-click test |
+| the history not clearing its selection on load | `ReloadingKeepsTheOperatorLookingAtTheIssueTheyHadOpen` |
+
+⚠ A test-authoring defect was also found and fixed on the way: the export assertion compared the written
+file against the **raw** token, which is never a contiguous substring of it — `LicenseArmor.Wrap` breaks
+the token into 64-character lines. It now compares against the armored form, which is what the customer
+receives.
+
+### 44.6 ⏭ What L5.2 deliberately did NOT do
+
+⛔ No re-issue (L5.3), no bulk selection or batch renewal (L5.4), no backup / JSONL / restore (L5.5).
+⛔ `FluentBridge`'s missing `Calendar*` keys untouched — product work, both applications at once.
+⛔ `Icon.Name` untouched. ⛔ No new control type: the panel is the existing `Border.card` + `ListBox` +
+`field-label` + `SelectableTextBlock.value` + Copy vocabulary, on the P1 spacing rhythm, with the AppBar
+and both themes unchanged.
+
+### 44.7 ⏭ Where the branch stands after L5.2
+
+⭐ **L5.2 is its own commit**, unlike P0+P1: those were one unit because P1 was a QA pass over the surfaces
+P0 had just built and neither had ever stood as an accepted state on its own. L5.2 was accepted in its own
+right, on top of an accepted and pushed `2531576`, so it commits alone.
+
+⛔ **Not pushed.** `origin` is the only remote on this clone and it was not touched. ⏭ The company Gitea is
+synced by hand from the work machine, later (§0 of `docs/current-state.md`).
+
+⏭ **Next: L5 QA P2** (remaining cosmetics), then **L5.3** (re-issue), which is the first consumer of
+`ArtifactHistoryViewModel` beyond reading. ⛔ Neither starts without the user's go-ahead.
+
+⚠ Carried forward unresolved, all recorded rather than fixed and all unchanged by this stage: the
+`Calendar*` flyout is not repinned in `FluentBridge`; `Icon.Name` does not exist; the License Manager is
+English-only (§40.5); `Seats` carries a literal `Width="80"`.

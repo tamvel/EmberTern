@@ -340,8 +340,6 @@
               <TextBlock Classes="field-label" Text="Notes — administrative only" />
               <TextBox Classes="multiline" Text="{Binding LicenseNotes}" />
 
-              <TextBlock Classes="hint" Text="{Binding LicenseHistory}" />
-
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                           Spacing="{DynamicResource Space.Sm}">
                 <Button Classes="flat" Content="Inspect latest"
@@ -351,6 +349,139 @@
                 <Button Classes="flat" Content="Save terms" Command="{Binding SaveLicenseCommand}" />
                 <Button Classes="primary" Content="Issue and save…"
                         Command="{Binding IssueAndSaveCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- Issuing history ────────────────────────────────────────────────────────────────── -->
+          <!-- ⭐⭐ L5.2. A THIRD CARD, not a section inside the licence card, and the split follows the
+               question rather than the screen: the card above is a FORM over terms that can be edited,
+               this is a LEDGER of artifacts that cannot. ⛔ There is deliberately no delete and no edit
+               here — `issued_artifacts` aborts UPDATE and DELETE by trigger (§39.2), so an action offering
+               either would be an invitation to a stack trace, and the append-only guarantee is the whole
+               reason this panel can be trusted.
+               ⚠ Visible whenever a licence is selected, INCLUDING when it has never been issued: a panel
+               that disappears cannot say "nothing was ever sent", and that is the state an operator most
+               needs told. -->
+          <Border Classes="card"
+                  IsVisible="{Binding SelectedLicense, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
+                           Text="Issuing history" />
+                <Button Grid.Column="1" Classes="flat" Content="Export this issue…"
+                        Command="{Binding ExportSelectedArtifactCommand}" />
+              </Grid>
+
+              <!-- ⭐ The summary states the append-only guarantee in words. The operator's real question
+                   is "did this overwrite what I sent before?", and that is a property of the schema — so
+                   it is said, not left to be inferred from a list of rows. -->
+              <TextBlock Classes="hint" Text="{Binding History.Summary}" />
+
+              <ListBox MaxHeight="180" Name="ArtifactHistory"
+                       IsVisible="{Binding History.HasArtifacts}"
+                       ItemsSource="{Binding History.Artifacts}"
+                       SelectedItem="{Binding History.SelectedArtifact}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ArtifactListItem">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto"
+                          ColumnSpacing="{DynamicResource Space.Md}">
+                      <TextBlock Grid.Column="0" Classes="mono" Text="{Binding Ordinal}" Width="50" />
+                      <TextBlock Grid.Column="1" Classes="mono" Text="{Binding IssuedAt}" />
+                      <TextBlock Grid.Column="2" Text="{Binding Reason}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="3" Classes="mono hint" VerticalAlignment="Center"
+                                 Text="{Binding KeyId}" />
+                      <!-- ⛔⛔ ADDITIVE, never subtractive. The current issue GAINS a chip; a superseded
+                           one keeps its content at full strength and simply says so. Dimming or striking
+                           an earlier issue would tell the operator it was replaced or removed, which is
+                           the one thing this register guarantees did NOT happen. -->
+                      <Border Grid.Column="4" Classes="current-chip"
+                              IsVisible="{Binding IsCurrent}">
+                        <TextBlock Text="{Binding Standing}" />
+                      </Border>
+                      <TextBlock Grid.Column="4" Classes="hint" VerticalAlignment="Center"
+                                 Text="{Binding Standing}" IsVisible="{Binding !IsCurrent}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <!-- The selected issue, in detail ─────────────────────────────────────────────── -->
+              <StackPanel IsVisible="{Binding History.HasSelection}"
+                          Spacing="{DynamicResource Space.Sm}">
+
+                <!-- ⭐⭐ THE PRODUCT'S OWN OPINION, not ours. This sentence comes from the real
+                     `LicenseVerifier` through `IssuingWorkflow.Inspect`, via the ONE description mapping
+                     `VerdictText` — the same one the message strip uses when "Inspect latest" runs, so
+                     the strip and this panel can never describe one artifact two different ways.
+                     ⛔ Nothing here recomputes a verdict from the dates below (§41.4). -->
+                <TextBlock Classes="field-label" Text="What EmberTern would say about it today" />
+                <TextBlock Text="{Binding History.Verdict}" />
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource Space.Md}">
+                  <StackPanel Grid.Column="0">
+                    <!-- ⭐ The name SIGNED into this artifact, which is not necessarily the customer's
+                         name today — that difference is exactly what a support call is about. -->
+                    <TextBlock Classes="field-label" Text="Licensed to" />
+                    <SelectableTextBlock Classes="value" Text="{Binding History.Licensee}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="field-label" Text="Seats" />
+                    <SelectableTextBlock Classes="value" Text="{Binding History.Seats}" />
+                  </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource Space.Md}">
+                  <StackPanel Grid.Column="0">
+                    <TextBlock Classes="field-label" Text="Valid" />
+                    <SelectableTextBlock Classes="mono value" Text="{Binding History.Validity}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="field-label" Text="Product" />
+                    <SelectableTextBlock Classes="value" Text="{Binding History.Product}" />
+                  </StackPanel>
+                </Grid>
+
+                <TextBlock Classes="field-label" Text="Signed with" />
+                <SelectableTextBlock Classes="mono value" Text="{Binding History.SignedWith}" />
+
+                <!-- ⚠ The token is the licence itself and is long. Shown as ONE trimmed line plus its
+                     delivered size, with the whole of it on the copy action — a 700-character blob
+                     rendered in full is not "readable", it is just present. -->
+                <TextBlock Classes="field-label" Text="Token" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
+                  <SelectableTextBlock Grid.Column="0" Classes="mono value"
+                                       Text="{Binding History.Token}"
+                                       TextTrimming="CharacterEllipsis" />
+                  <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
+                          Tag="{Binding History.Token}" ToolTip.Tip="Copy the whole token">
+                    <Viewbox Classes="icon">
+                      <Canvas Width="24" Height="24">
+                        <Path Data="{DynamicResource Icon.Copy}" />
+                      </Canvas>
+                    </Viewbox>
+                  </Button>
+                </Grid>
+                <TextBlock Classes="hint" Text="{Binding History.TokenSize}" />
+
+                <!-- ⭐ The exact JSON that was signed, as stored. The labelled fields above are the
+                     readable form; this is the authoritative one, and support asks for it verbatim. -->
+                <TextBlock Classes="field-label" Text="Signed payload" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
+                  <SelectableTextBlock Grid.Column="0" Classes="mono value"
+                                       Text="{Binding History.PayloadJson}"
+                                       TextWrapping="Wrap" />
+                  <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
+                          VerticalAlignment="Top"
+                          Tag="{Binding History.PayloadJson}" ToolTip.Tip="Copy the signed payload">
+                    <Viewbox Classes="icon">
+                      <Canvas Width="24" Height="24">
+                        <Path Data="{DynamicResource Icon.Copy}" />
+                      </Canvas>
+                    </Viewbox>
+                  </Button>
+                </Grid>
               </StackPanel>
             </StackPanel>
           </Border>

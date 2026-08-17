@@ -20,9 +20,11 @@
 > About line, expiry banner, and every path that opens a database attachment gated through ONE seam, EN + PL.
 > ⭐ **L5.0 + L5.1 + both QA rounds accepted 2026-08-17** and committed as one logical commit on
 > `feat/licensing-system`. ⛔ **NOT pushed — the user holds the push.**
-> **Next task:** ⏭ **L5 QA P2** (remaining cosmetics), then **L5.2** (artifact preview + history surface).
-> ⛔ **P2 NOT started and must not start without the user's go-ahead in a NEW session.** Scope and the
-> standing facts a next session must not rediscover: `design/licensing-system.md` §43.8 + §42.4.
+> ⭐ **L5.2 accepted 2026-08-17** (issuing history + artifact preview) and committed on the branch;
+> ⛔ **not pushed — the user holds the push.** **Next task:** ⏭ **L5 QA P2** (remaining cosmetics),
+> then **L5.3** (re-issue).
+> ⛔ **P2 NOT started and must not start without the user's go-ahead.** Scope and the standing facts a
+> next session must not rediscover: `design/licensing-system.md` §43.8 + §42.4 + §44.6.
 >
 > ⚠ **L7 still owns the production key ceremony** — and until it runs, `TrustedKeys.Production` is empty and
 > no real licence verifies as usable in any build. That is deliberate, and `Valid` / `Grace` are therefore
@@ -48,9 +50,9 @@ Split Licence — are now this etap's, see §3.
 | | |
 |---|---|
 | Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` through L4b |
-| HEAD | the **L5.0–L5.1 + QA closing commit** on `feat/licensing-system` — ⛔ **local only, not pushed** |
+| HEAD | the **L5.2 closing commit** on `feat/licensing-system` — ⛔ **local only, not pushed**. Below it `2531576` (L5.0–L5.1 + QA) is on `origin` |
 | Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`**, in **both solutions** (`TreatWarningsAsErrors=true`) |
-| Tests | EmberTern **9 087** · License Manager **223** — measured 2026-08-17, Debug and Release, both suites |
+| Tests | EmberTern **9 087** · License Manager **249** — measured 2026-08-17, Debug and Release, both suites |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ They are separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | ⚠ **On THIS clone there is ONE remote**, `origin` → personal GitHub (see §0). The CLAUDE.md two-remote table describes the work machine; ⛔ do not add a remote here |
@@ -131,7 +133,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L3** — License Manager: skeleton, SQLite register, customers, licences, issue, save | ✅ **accepted** — §36; ⚠ read §36.5 before any UI work here |
 | **L4a** — mechanism: policy, location, store, service, text, clock, freshness, 4 gate guards | ⭐ **delivered, no UI** — §37 |
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
-| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⭐ **in progress** — split into two sessions (L5.0–L5.2 read side, L5.3–L5.6 mutations + backup). **L5.0 accepted** (`efbe180`): schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch — §39. **L5.1 + QA rounds 1 and 2 accepted 2026-08-17, committed, not pushed**: Licences view with search and three filters (§40); QA-1 — own top bar, icon theme toggle, generated ids as values with copy, resizable rail, message stripe, contact + status columns, date pickers (§41); QA-2 P0 — the licence **re-parenting** defect (the form was not cleared, so a Save moved the previous customer's row) and the application's own AppBar (§42); QA-2 P1 — spacing (`Margin.InlineGap` is right-handed and was hung on the wrong side in five rows; the gap now belongs to the Grid), uniform control heights (24/24/24), double-click → the existing `InspectLatestCommand`, plus a dropdown-wrap defect the domain sweep found (§43). ⭐ No token added, `Tokens.axaml` untouched. ⭐ Enabler: `IconGeometries.axaml` split so its 86 geometries are SHARED. ⏭ **P2 NOT started** |
+| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⭐ **in progress** — split into two sessions (L5.0–L5.2 read side, L5.3–L5.6 mutations + backup). **L5.0 accepted** (`efbe180`): schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch — §39. **L5.1 + QA rounds 1 and 2 accepted 2026-08-17, committed, not pushed**: Licences view with search and three filters (§40); QA-1 — own top bar, icon theme toggle, generated ids as values with copy, resizable rail, message stripe, contact + status columns, date pickers (§41); QA-2 P0 — the licence **re-parenting** defect (the form was not cleared, so a Save moved the previous customer's row) and the application's own AppBar (§42); QA-2 P1 — spacing (`Margin.InlineGap` is right-handed and was hung on the wrong side in five rows; the gap now belongs to the Grid), uniform control heights (24/24/24), double-click → the existing `InspectLatestCommand`, plus a dropdown-wrap defect the domain sweep found (§43). ⭐ No token added, `Tokens.axaml` untouched. **L5.2 accepted 2026-08-17, committed, not pushed**: the issuing history — every issue listed chronologically, the current one marked from the register's POINTER (never from the ordering), earlier ones intact and never shown as deleted; the artifact preview reading its fields from the stored payload and its verdict from the real `LicenseVerifier`; export of the SELECTED issue through the one existing writer — §44. ⭐ No schema change and no new register method: L5.0 had already built the data side. ⭐ Enabler: `IconGeometries.axaml` split so its 86 geometries are SHARED. ⏭ **P2 and L5.3 NOT started** |
 | **L6** — e-mail: `ILicenseEmailSender`, SMTP + `.eml`, DPAPI settings, template, send audit | ⏳ not started |
 | **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started |
 

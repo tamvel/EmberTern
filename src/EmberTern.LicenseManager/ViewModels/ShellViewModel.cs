@@ -48,6 +48,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _workflow = new IssuingWorkflow(register, _clock);
         Browser = new LicenseBrowserViewModel(register, _clock);
+        History = new ArtifactHistoryViewModel(register, _workflow, session);
 
         ReloadCustomers();
         Message = StatusMessage.Info($"Signing with key {session.KeyId}.");
@@ -65,6 +66,16 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     /// customers.</para>
     /// </summary>
     public LicenseBrowserViewModel Browser { get; }
+
+    /// <summary>
+    /// Every artifact ever issued for the selected licence, and the detail of the one being looked at.
+    ///
+    /// <para>⭐ A third organising principle, split out for the reason §40.1 gave for the browser: the
+    /// licence FORM is about terms — singular, editable, the state of an agreement — while this is about
+    /// artifacts, which are plural, ordered and immutable. ⛔ Read-only over the history by design, not by
+    /// stage boundary: <c>issued_artifacts</c> refuses UPDATE and DELETE at the database.</para>
+    /// </summary>
+    public ArtifactHistoryViewModel History { get; }
 
     /// <summary>Which of the two views is showing.</summary>
     [ObservableProperty]
@@ -285,15 +296,11 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     [ObservableProperty]
     private string _licenseNotes = string.Empty;
 
-    /// <summary>How many artifacts have been signed for this licence.</summary>
-    [ObservableProperty]
-    private string _licenseHistory = string.Empty;
-
     partial void OnSelectedLicenseChanged(LicenseRecord? value)
     {
         if (value is null)
         {
-            LicenseHistory = string.Empty;
+            History.Load(null);
             return;
         }
 
@@ -303,12 +310,10 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         LicenseExpiresAt = value.ExpiresAt.UtcDateTime.Date;
         LicenseNotes = value.Notes ?? string.Empty;
 
-        var artifacts = _register.GetArtifacts(value.LicenseId);
-        LicenseHistory = artifacts.Count == 0
-            ? "Never issued."
-            : $"{artifacts.Count} issued; last on " +
-              $"{artifacts[0].IssuedAt.ToString(DateFormat, CultureInfo.InvariantCulture)} " +
-              $"with key {artifacts[0].KeyId}.";
+        // ⭐ ONE read of the history, handed to the panel that owns it. The one-line summary the form
+        //    used to compute for itself now comes from the same load, so the line and the list can never
+        //    report different counts.
+        History.Load(value.LicenseId);
     }
 
     /// <summary>Starts a blank licence for the selected customer.</summary>
@@ -329,7 +334,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         LicenseNotBefore = today;
         LicenseExpiresAt = today.AddYears(1);
         LicenseNotes = string.Empty;
-        LicenseHistory = "Never issued.";
+        History.Load(null);
         Message = StatusMessage.Info("New licence. Save the terms, then issue.");
     }
 
@@ -381,7 +386,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         LicenseNotBefore = null;
         LicenseExpiresAt = null;
         LicenseNotes = string.Empty;
-        LicenseHistory = string.Empty;
+        History.Load(null);
     }
 
     private void ReloadLicenses(string? selectId = null)
@@ -501,7 +506,17 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         Message = StatusMessage.Success($"Exported the stored artifact to {path}.");
     }
 
-    /// <summary>Shows what EmberTern would say about the newest artifact today.</summary>
+    /// <summary>
+    /// Shows what EmberTern would say about the CURRENT artifact today, and opens it in the history.
+    ///
+    /// <para>⭐ L5.2 gave this command a second half rather than a second command: it now selects the
+    /// artifact it is describing, so the message strip and the detail panel are always talking about the
+    /// same release. ⛔ Still the only Inspect — the double-click gesture (P1-c) runs this, and there is
+    /// no parallel path that would have to re-answer "never issued" on its own.</para>
+    ///
+    /// <para>⚠ It selects the artifact the REGISTER marks current, not <c>Artifacts[0]</c>. Those are the
+    /// same row today and the pointer is the authority (§39.2).</para>
+    /// </summary>
     [RelayCommand]
     private void InspectLatest()
     {
@@ -511,26 +526,58 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             return;
         }
 
-        var artifacts = _register.GetArtifacts(SelectedLicense.LicenseId);
-        if (artifacts.Count == 0)
+        var current = _register.GetCurrentArtifact(SelectedLicense.LicenseId);
+        if (current is null)
         {
             Message = StatusMessage.Warning("This licence has never been issued.");
             return;
         }
 
-        var verdict = _workflow.Inspect(_session, artifacts[0]);
-        Message = verdict.Status switch
+        History.SelectCurrent();
+        Message = VerdictText.Describe(_workflow.Inspect(_session, current));
+    }
+
+    /// <summary>
+    /// Re-exports the artifact the operator selected in the history, byte-for-byte.
+    ///
+    /// <para>⭐ The natural extension of "Export latest…", and deliberately the SAME writer:
+    /// <c>IssuingWorkflow.SaveArtifact</c> from the STORED token, which is what keeps a re-export from
+    /// becoming a re-issue with a new <c>iat</c> the client would treat as a replacement (§16.4). ⛔ No
+    /// second copy of the save logic, no second audit action — the export is recorded by the workflow
+    /// exactly as the other one is.</para>
+    ///
+    /// <para>⚠ "Export latest…" keeps its own meaning untouched. The two answer different questions —
+    /// <i>"send them their file"</i> versus <i>"send them THIS one"</i> — and collapsing them would make
+    /// the common case depend on a selection the operator did not make.</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportSelectedArtifactAsync()
+    {
+        if (History.SelectedArtifact is not { } selected)
         {
-            LicenseStatus.Valid => StatusMessage.Success(
-                $"EmberTern would accept it: valid until " +
-                $"{verdict.Payload!.ExpiresAt.ToString(DateFormat, CultureInfo.InvariantCulture)}, " +
-                $"licensed to {verdict.Payload.Licensee}."),
-            LicenseStatus.Grace => StatusMessage.Warning(
-                "EmberTern would accept it, but it is past its expiry and inside the grace period."),
-            LicenseStatus.Expired => StatusMessage.Warning("EmberTern would report it as expired."),
-            LicenseStatus.NotYetValid => StatusMessage.Info("EmberTern would report it as not yet valid."),
-            _ => StatusMessage.Error($"EmberTern would refuse it ({verdict.Failure})."),
-        };
+            Message = StatusMessage.Warning("Select an issue from the history first.");
+            return;
+        }
+
+        var path = SaveFilePicker is null
+            ? null
+            : await SaveFilePicker(LicenseConstants.DeliveredFileName).ConfigureAwait(true);
+
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _workflow.SaveArtifact(selected.Artifact, path);
+            Message = StatusMessage.Success(
+                $"Exported issue {selected.Ordinal} of {selected.IssuedAt} to {path}.");
+        }
+        catch (System.IO.IOException e)
+        {
+            Message = StatusMessage.Warning($"The file could not be written: {e.Message}");
+        }
     }
 
     // ── Chrome ──────────────────────────────────────────────────────────────────────────────────────
