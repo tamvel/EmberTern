@@ -2587,3 +2587,203 @@ synced by hand from the work machine, later (§0 of `docs/current-state.md`).
 ⚠ Carried forward unresolved, all recorded rather than fixed and all unchanged by this stage: the
 `Calendar*` flyout is not repinned in `FluentBridge`; `Icon.Name` does not exist; the License Manager is
 English-only (§40.5); `Seats` carries a literal `Width="80"`.
+
+---
+
+## 45. L5.3 — as built (2026-08-17)
+
+⭐ **Re-issue of a single licence, with an explicit reason.** The first stage in which the License Manager
+changes a licence's standing rather than reading it — and it does so without touching one byte of what was
+already issued. Builds **0/0 in Debug and Release, both solutions**. License Manager **279** (was 249:
+**+30**); EmberTern **9 087**, unchanged. ✅ **Accepted by the user 2026-08-17 after looking at the running
+application** — the reason picker, the re-issue steer, the note field, the reasons in words on the history
+and the re-sized `Seats` field, in both themes.
+
+⭐ **Committed on `feat/licensing-system` as its own commit**, on top of an accepted `e3c746c` (L5.2).
+⛔ **Not pushed** — the user holds the push; `origin` is the only remote on this clone and it was not
+touched. ⏭ The company Gitea is synced by hand from the work machine, later (§0 of
+`docs/current-state.md`).
+
+⭐⭐ **No schema change, no register change, no second signing path.** `issued_artifacts` is untouched and
+still append-only; `license_current_artifact` still moves in the same transaction that appends;
+`LicenseIssuer` is still the only thing that signs. L5.0 had already built every mutation this stage needed.
+
+### 45.1 ⭐⭐ The stage began as a feature and turned out to be a REPAIR
+
+The plan was "add re-issue and a reason dictionary". Reading the code first found that
+`IssueRequest.Reason` already carried the contract in a comment —
+
+> *One of `IssueReasons`. ⛔ Chosen by the operator, never inferred from a diff.*
+
+— while the only production path did exactly the opposite:
+
+```csharp
+var reason = _register.GetArtifacts(SelectedLicense.LicenseId).Count == 0
+    ? IssueReasons.Initial
+    : IssueReasons.Renewal;                    // ShellViewModel, before L5.3
+```
+
+⚠ **Two of the four vocabulary values were unreachable by any code path.** `terms-change` and
+`reissue-lost` were declared, documented and never written — a `grep` for `IssueReasons.` found them only
+in tests. Every re-issue was filed as a *renewal* whether or not an expiry had ever moved, and
+`issued_artifacts.reason` is append-only, so every one of those rows is wrong permanently.
+
+⭐ That reframes the stage: the reason picker is not a convenience, it is what makes the column mean
+anything. It also explains why the picker could not simply default to something sensible — a default
+reproduces the inference with a control in front of it (§45.6 records the injection that proved this).
+
+### 45.2 ⭐⭐ The governing rule: refuse what can be DISPROVED, never what cannot be judged
+
+The four reasons are not alike, and treating them alike was the trap to avoid.
+
+| Reason | What it asserts | Can the register check it? | So |
+|---|---|---|---|
+| `initial` | there is no earlier artifact | **yes**, exactly | not offered at all after the first issue; not a choice before it (D‑2) |
+| `renewal` | the expiry moved | **yes** — against the signed payload | refused when the expiry is provably unchanged |
+| `terms-change` | something other than the expiry moved | **yes** | refused when nothing else provably differs |
+| `reissue-lost` | the customer lost their file | **no. Never.** | ⛔ never refused — only steered (D‑6) |
+
+⛔ **A rule that refused `reissue-lost` would be guessing about a person**, which is the habit this stage
+exists to remove. ⭐ The boundary is therefore stated positively (`CLAUDE.md` UI rule 11): a reason is
+refused **only** when the register can produce the artifact that contradicts it.
+
+⚠⚠ **The corollary that is easy to get backwards: `CanCompare == false` means UNKNOWN, not UNCHANGED.**
+When the stored payload will not parse, every refusal is switched off rather than on. A payload the parser
+refuses is precisely the artifact a support call is about, and blocking a re-issue there would turn a
+display problem into an operational one on the day the operator can least afford it.
+
+### 45.3 ⭐ Where the judgement lives, and where it deliberately does not
+
+`IssueReasonPolicy` (App-side service), consuming `IssueChange` (pure comparison).
+
+- ⛔ **Not in `LicenseRegister`.** The register records what it is told, verbatim and append-only. Teaching
+  the one component whose job is *"never lose what happened"* to also hold an opinion about it is how a
+  history stops being a history. It would also have meant parsing a previous payload inside the writer.
+- ⛔ **Not in `IssuingWorkflow`.** The workflow signs and records; tests legitimately issue with arbitrary
+  reason text to exercise storage, and several existing ones do. The judgement belongs where the
+  operator's choice is made.
+- ⭐ **`IssueChange` compares on the SIGNED WIRE FORM**, through `LicensePayload.FormatTimestamp` — the same
+  function the issuer's truncation and the register's storage already go through. Two values that render
+  to the same timestamp produce byte-identical payloads, so a sub-second difference is not a change any
+  artifact could ever show. ⛔ A second rounding rule here is how the two would drift.
+- ⭐ **The diff is taken against `GetCurrentArtifact` — the POINTER, never `Artifacts[0]`.** §39.2's
+  authority, and §44.4's lesson about what that costs to prove (see §45.6).
+
+⭐ **The licensee counts as a term.** It is signed into the artifact (D6), so a re-issue after a company is
+renamed genuinely changes what the customer holds, though no date and no number moved.
+
+### 45.4 D‑6 — the steer away from a re-issue nobody needs
+
+Choosing *"Re-issue — lost file"* reveals a card naming **"Export this issue…"**, the action that re-sends
+the delivered artifact byte for byte without a new `iat`. ⛔ **Advice, not a block:** the Issue action stays
+enabled and a chosen re-issue is recorded normally. A test asserts both halves — that the advice appears and
+names the cheaper action, and that it never takes the decision away.
+
+### 45.5 Decisions taken during implementation
+
+1. **The optional note (D‑4) rides on `audit_log.note`, appended to the generated summary.** No column, no
+   model, nothing extra to back up or migrate. ⚠ Appended rather than instead of: the summary is what lets
+   the audit answer *"on what terms?"* without joining anything. It is cleared after each issue — a remark
+   is about ONE artifact, and carrying it forward would attach last week's ticket number to this week's row.
+2. **`ReasonText`, shaped exactly like `VerdictText`** — one mapping, two consumers (the picker and the
+   history). ⭐ An unrecognised value is shown **verbatim**, not as "unknown": the column can only grow, so a
+   register written by a later version must stay readable here, and the raw value is always more
+   informative than our word for not recognising it.
+3. **`IssueReasonOption` keeps the persisted value and the label as separate fields**, so a reworded caption
+   can never start writing a fifth value into an append-only column.
+4. ⭐ **The picker is refreshed on the same path as the history** (`OnSelectedLicenseChanged`), so
+   *"this licence has been issued"* cannot be true for one and false for the other.
+5. ⚠ **The diff is measured again at the moment of issuing**, not reused from when the choices were built —
+   the operator presses **Save terms** in between, which is exactly what a renewal requires.
+6. **D‑8 — `Seats` lost its literal `Width="80"` and gained NO number in its place.** `Tokens.axaml` has no
+   width role for a small numeric input and one was not invented for a single field, so the three form
+   fields became equal columns and the control takes its width from its context (`CLAUDE.md` UI rule 10).
+   ⏭ The **other** `Width="80"`, on the licences-list Seats column, is deliberately left: it is one of five
+   sibling literal column widths (130 / 80 / 90 / 170 / 150) and changing one alone would make the row
+   inconsistent. That set is a column-width question of its own, not this stage's.
+
+### 45.6 ⚠⚠ Every guard proved by injected defect — 23 injections, 23 reds, and TWO of them found real holes
+
+A harness applied each defect, built, ran the specific guard, and reverted. ⭐ It was worth writing: two
+guards that looked fine **stayed green under their own injection**, which proves nothing at all (#378).
+
+| The hole | Why it was vacuous | Repair |
+|---|---|---|
+| *"issuing without choosing a reason is refused"* | The injection hard-coded `renewal`, which the **policy** then refused — so the test was passing on a different guard's behaviour, and a default would have shipped undetected | A second test injects `reissue-lost`, the one reason the policy never refuses. Now nothing but the absence of a default can keep it green |
+| *"the diff follows the pointer, not the newest row"* | It called `IssueChange.Between` with an artifact **it had fetched itself**, so repointing the shell's own lookup could not affect it — the same shape §44.4 recorded, one layer out | Rewritten to drive the **shell**, which is the code that has to choose the artifact |
+
+⚠ A third injection could not be run as written: swapping the picker template's `x:DataType` was rejected at
+**compile** time, because Avalonia's compiled bindings resolve `{Binding Label}` against the declared type.
+⭐ That is a stronger outcome than a red test — the #370 shape cannot ship in a compiled template — but it
+is not a proof of the guard, so the guard was proved with an injection that compiles (binding `Value`, the
+persisted vocabulary, instead of `Label`). Filed as gotcha #380.
+
+Injections that went red as intended, in one line: a supplied default reason · the operator's choice
+ignored · renewal not required to be a renewal · terms-change not required to change terms · reissue-lost
+refused · an unreadable payload read as "unchanged" · licensee dropped from the diff · seats dropped from
+the diff · the diff taken against the newest row · timestamps compared raw · the note not reaching the
+workflow · the note replacing the summary · the note surviving into the next issue · the history showing
+the raw value (twice: view model and realised row) · a fifth vocabulary value · a reason losing its
+explanation · an unknown reason mapped to "Unknown" · the picker rendering the persisted value · the picker
+enabled before the first issue · the advice never appearing · the advice not naming the export · `Seats`
+getting its literal width back.
+
+### 45.7 ⚠ Two test-infrastructure findings, both pre-existing, both now gotchas
+
+1. **#379 — `LicensesViewTests` identified its subjects as "the first `ComboBox` in the window".** Adding a
+   dropdown to the CUSTOMERS view failed two tests in the LICENCES view, neither of them about the new
+   control. The three filter dropdowns are now **named** and selected by name, exactly as
+   `CustomerLicenses` and `ArtifactHistory` already were. ⛔ Not a weakening: the guard keeps its full
+   strength and stops depending on the window's inventory.
+2. **#380 — a `ComboBox` popup is not a descendant of its window in a headless test**, so an assertion over
+   the opened dropdown's items sweeps zero elements and passes vacuously. The picker guard reads the
+   selection box instead, one choice at a time, which exercises the same `ItemTemplate`.
+
+⚠ A third, smaller one, recorded in the test rather than as a gotcha: `ManagerFixture.SaveLicense` stores
+`NotBefore` at 09:00 while the FORM stores a whole UTC day, so a fixture-built licence differs from its own
+form round-trip in the start date. A diff test read that as a terms change it had not set up. Every diff
+test now normalises through **Save terms** once, which is also what an operator's licence always went
+through.
+
+### 45.8 ⚠ The Release run and the documented race — what was and was not proved
+
+The full `EmberTern` suite in **Release** failed **`TabStripPresentationTests`** twice, then went green
+**9 087/9 087 with no change**. Alongside: it passes in isolation, and Debug ran 9 087/9 087 green
+throughout. §42.4 records this exact test as this machine's usual victim of the documented Avalonia
+headless session race.
+
+⚠⚠ **Stated honestly: the STACK was not captured** — the failure did not recur once output was being
+written to a file. `CLAUDE.md` identifies that race by its stack and not by the test's name, so the
+attribution here rests on the surrounding evidence (green in isolation, green in Debug, green on re-run
+without a change, and §42.4's prior measurement of the same test) rather than on the signature itself.
+⛔ Nothing in this stage touches a product file.
+
+### 45.9 ⏭ What L5.3 deliberately did NOT do
+
+⛔ No bulk selection and no batch renewal (L5.4). ⛔ No backup / JSONL / restore (L5.5). ⛔ No e-mail (L6).
+⛔ No production key ceremony (L7). ⛔ `FluentBridge`'s missing `Calendar*` keys untouched — product work,
+both applications at once. ⛔ `Icon.Name` untouched. ⛔ The License Manager is still English-only (§40.5);
+the reason vocabulary went through the existing text mechanism and started no localization stage. ⛔ No new
+control type and no new token: the picker is a `ComboBox` on the existing `field-label` rhythm, and
+`Tokens.axaml` was not touched.
+
+⚠ Carried forward unresolved and unchanged: the `Calendar*` flyout is not repinned in `FluentBridge`;
+`Icon.Name` does not exist; the License Manager is English-only; the licences-list `Seats` column still
+carries a literal width, as one of five siblings (§45.5 point 6).
+
+### 45.10 ⏭ Where the branch stands after L5.3
+
+`feat/licensing-system` now carries, in order: `efbe180` (L5.0) · `2531576` (L5.1 + both QA rounds) ·
+`e3c746c` (L5.2) · the L5.3 closing commit. ⭐ **`origin` is at `2531576`**, so the last two commits are
+local only — the user holds the push and it covers both at once.
+
+⏭ **Next: L5.4** (bulk selection and batch renewal), which is the first consumer of `IssueBatch` from a
+surface, then **L5.5** (backup / JSONL / restore). ⛔ Neither starts without the user's go-ahead, and L5.4
+begins in a NEW session (one milestone per session).
+
+⭐ **What L5.4 inherits and must not rebuild:** `IssuingWorkflow.IssueBatch` already signs everything before
+recording anything and commits the whole operation as ONE transaction (§39.1); `IssueRequest` already
+carries `Reason` **and** `TermsChanged`, both of which L5.3 has now given real meaning on the single path.
+⚠ `IssueReasonPolicy` was written against ONE licence — a batch asks the same question per licence, so the
+open design question for L5.4 is whether one reason covers a whole batch or each licence answers for
+itself. ⛔ Do not decide it by making the policy lenient.

@@ -21,10 +21,19 @@
 > ⭐ **L5.0 + L5.1 + both QA rounds accepted 2026-08-17** and committed as one logical commit on
 > `feat/licensing-system`. ⛔ **NOT pushed — the user holds the push.**
 > ⭐ **L5.2 accepted 2026-08-17** (issuing history + artifact preview) and committed on the branch;
-> ⛔ **not pushed — the user holds the push.** **Next task:** ⏭ **L5 QA P2** (remaining cosmetics),
-> then **L5.3** (re-issue).
-> ⛔ **P2 NOT started and must not start without the user's go-ahead.** Scope and the standing facts a
-> next session must not rediscover: `design/licensing-system.md` §43.8 + §42.4 + §44.6.
+> ⛔ **not pushed — the user holds the push.**
+> ⭐ **L5.3 accepted 2026-08-17** and committed on the branch; ⛔ **not pushed — the user holds the push.**
+> Re-issue of a single licence with an EXPLICIT reason (D‑1…D‑8 ratified by the user before implementation).
+> ⭐⭐ It turned out to be a **repair**: the reason was being inferred from the artifact count, contradicting
+> `IssueRequest.Reason`'s own contract, and two of the four append-only vocabulary values had never been
+> written by any code path. Details: `design/licensing-system.md` §45.
+> ⛔ **"P2" was dropped as a stage, on measurement**: it was never enumerated anywhere, and of the four
+> carried-forward items three are explicitly NOT License Manager work (`Calendar*` and `Icon.Name` are
+> product-level; English-only is a stage of its own). The one real cosmetic — the `Seats` field's literal
+> width — was folded into L5.3, which was already editing that form (§45.5 point 6).
+> **Next task:** ⏭ **L5.4** (bulk selection / batch renewal), then **L5.5** (backup). ⛔ Neither starts
+> without the user's go-ahead, and **L5.4 begins in a NEW session**. Standing facts a next session must not
+> rediscover, and what L5.4 inherits rather than rebuilds: §42.4 + §45.9 + §45.10.
 >
 > ⚠ **L7 still owns the production key ceremony** — and until it runs, `TrustedKeys.Production` is empty and
 > no real licence verifies as usable in any build. That is deliberate, and `Valid` / `Grace` are therefore
@@ -50,9 +59,9 @@ Split Licence — are now this etap's, see §3.
 | | |
 |---|---|
 | Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` through L4b |
-| HEAD | the **L5.2 closing commit** on `feat/licensing-system` — ⛔ **local only, not pushed**. Below it `2531576` (L5.0–L5.1 + QA) is on `origin` |
+| HEAD | the **L5.3 closing commit** on `feat/licensing-system` — ⛔ **local only**. Below it `e3c746c` (L5.2), also unpushed; `origin` is at `2531576` (L5.0–L5.1 + QA), so **two commits are ahead** |
 | Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`**, in **both solutions** (`TreatWarningsAsErrors=true`) |
-| Tests | EmberTern **9 087** · License Manager **249** — measured 2026-08-17, Debug and Release, both suites |
+| Tests | EmberTern **9 087** · License Manager **279** — measured 2026-08-17 at the L5.3 close, Debug and Release, both suites. ⚠ One Release run lost `TabStripPresentationTests` to the documented headless race and went green on re-run with no change (§45.8) |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ They are separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | ⚠ **On THIS clone there is ONE remote**, `origin` → personal GitHub (see §0). The CLAUDE.md two-remote table describes the work machine; ⛔ do not add a remote here |
@@ -133,7 +142,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L3** — License Manager: skeleton, SQLite register, customers, licences, issue, save | ✅ **accepted** — §36; ⚠ read §36.5 before any UI work here |
 | **L4a** — mechanism: policy, location, store, service, text, clock, freshness, 4 gate guards | ⭐ **delivered, no UI** — §37 |
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
-| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⭐ **in progress** — split into two sessions (L5.0–L5.2 read side, L5.3–L5.6 mutations + backup). **L5.0 accepted** (`efbe180`): schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch — §39. **L5.1 + QA rounds 1 and 2 accepted 2026-08-17, committed, not pushed**: Licences view with search and three filters (§40); QA-1 — own top bar, icon theme toggle, generated ids as values with copy, resizable rail, message stripe, contact + status columns, date pickers (§41); QA-2 P0 — the licence **re-parenting** defect (the form was not cleared, so a Save moved the previous customer's row) and the application's own AppBar (§42); QA-2 P1 — spacing (`Margin.InlineGap` is right-handed and was hung on the wrong side in five rows; the gap now belongs to the Grid), uniform control heights (24/24/24), double-click → the existing `InspectLatestCommand`, plus a dropdown-wrap defect the domain sweep found (§43). ⭐ No token added, `Tokens.axaml` untouched. **L5.2 accepted 2026-08-17, committed, not pushed**: the issuing history — every issue listed chronologically, the current one marked from the register's POINTER (never from the ordering), earlier ones intact and never shown as deleted; the artifact preview reading its fields from the stored payload and its verdict from the real `LicenseVerifier`; export of the SELECTED issue through the one existing writer — §44. ⭐ No schema change and no new register method: L5.0 had already built the data side. ⭐ Enabler: `IconGeometries.axaml` split so its 86 geometries are SHARED. ⏭ **P2 and L5.3 NOT started** |
+| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ⭐ **in progress** — split into two sessions (L5.0–L5.2 read side, L5.3–L5.6 mutations + backup). **L5.0 accepted** (`efbe180`): schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch — §39. **L5.1 + QA rounds 1 and 2 accepted 2026-08-17, committed, not pushed**: Licences view with search and three filters (§40); QA-1 — own top bar, icon theme toggle, generated ids as values with copy, resizable rail, message stripe, contact + status columns, date pickers (§41); QA-2 P0 — the licence **re-parenting** defect (the form was not cleared, so a Save moved the previous customer's row) and the application's own AppBar (§42); QA-2 P1 — spacing (`Margin.InlineGap` is right-handed and was hung on the wrong side in five rows; the gap now belongs to the Grid), uniform control heights (24/24/24), double-click → the existing `InspectLatestCommand`, plus a dropdown-wrap defect the domain sweep found (§43). ⭐ No token added, `Tokens.axaml` untouched. **L5.2 accepted 2026-08-17, committed, not pushed**: the issuing history — every issue listed chronologically, the current one marked from the register's POINTER (never from the ordering), earlier ones intact and never shown as deleted; the artifact preview reading its fields from the stored payload and its verdict from the real `LicenseVerifier`; export of the SELECTED issue through the one existing writer — §44. ⭐ No schema change and no new register method: L5.0 had already built the data side. ⭐ Enabler: `IconGeometries.axaml` split so its 86 geometries are SHARED. **L5.3 accepted 2026-08-17, committed, not pushed**: one issuing action with an explicit operator-chosen reason, a reason validated against a measured diff of the SIGNED payload (refuse what the register can disprove, never what it cannot judge), the D‑6 steer toward re-exporting rather than re-signing for a lost file, an optional note on the existing `audit_log.note`, and the `Seats` literal width removed — §45. ⭐ No schema change, no register change, no second signing path. ⏭ **L5.4 and L5.5 NOT started; "P2" dropped as a stage (§0)** |
 | **L6** — e-mail: `ILicenseEmailSender`, SMTP + `.eml`, DPAPI settings, template, send audit | ⏳ not started |
 | **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started |
 

@@ -62,8 +62,23 @@ public sealed class IssuingWorkflow
     /// Signs a licence for the terms recorded against <paramref name="license"/>, records the artifact,
     /// and returns it.
     /// </summary>
+    /// <param name="session">The unlocked key.</param>
+    /// <param name="license">The terms to sign.</param>
+    /// <param name="customer">Whose licence it is.</param>
+    /// <param name="reason">One of <see cref="IssueReasons"/>.</param>
+    /// <param name="note">
+    /// ⭐ An OPTIONAL remark from the operator — a ticket number, who asked, why now. It rides on the
+    /// existing <c>audit_log.note</c> rather than on a new column: the audit line already exists for every
+    /// issue, it is already append-only, and a second place to write a remark would be a second thing to
+    /// back up, migrate and reconcile. ⚠ It is APPENDED to the generated summary, never instead of it —
+    /// the summary is what lets the audit answer "what were the terms?" without joining anything.
+    /// </param>
     public IssueResult Issue(
-        SigningSession session, LicenseRecord license, CustomerRecord customer, string reason)
+        SigningSession session,
+        LicenseRecord license,
+        CustomerRecord customer,
+        string reason,
+        string? note = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(license);
@@ -71,9 +86,12 @@ public sealed class IssuingWorkflow
 
         var (record, issued) = Sign(session, license, customer, reason);
 
+        var summary =
+            $"Licensed to {customer.Name}, {license.Seats} seat(s), until {license.ExpiresAt:yyyy-MM-dd}.";
+
         var artifact = _register.AppendArtifact(
             record,
-            note: $"Licensed to {customer.Name}, {license.Seats} seat(s), until {license.ExpiresAt:yyyy-MM-dd}.");
+            note: string.IsNullOrWhiteSpace(note) ? summary : $"{summary} {note.Trim()}");
 
         return new IssueResult(artifact, issued);
     }

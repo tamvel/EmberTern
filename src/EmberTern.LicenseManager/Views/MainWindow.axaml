@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
         xmlns:data="using:EmberTern.LicenseManager.Data"
@@ -298,10 +298,16 @@
                 </ListBox.ItemTemplate>
               </ListBox>
 
-              <Grid ColumnDefinitions="Auto,*,*" ColumnSpacing="{DynamicResource Space.Md}">
+              <!-- ⭐ D-8. The three fields are equal columns and each control stretches into its own.
+                   The literal Width="80" that used to sit on Seats is gone: a control's size comes from
+                   its CONTEXT, never from the control (CLAUDE.md UI rule 10), and Tokens.axaml has no
+                   width role for a small numeric input — inventing one for a single field is exactly the
+                   growth the token catalogue is meant to prevent. The Auto column went with it, because
+                   an Auto column plus a stretching child is a control with no width at all. -->
+              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{DynamicResource Space.Md}">
                 <StackPanel Grid.Column="0">
                   <TextBlock Classes="field-label" Text="Seats" />
-                  <TextBox Width="80" Text="{Binding LicenseSeats}" />
+                  <TextBox Text="{Binding LicenseSeats}" HorizontalAlignment="Stretch" />
                 </StackPanel>
                 <StackPanel Grid.Column="1">
                   <!-- QA-6. Pick from the calendar or type — the caption no longer spends half its
@@ -339,6 +345,45 @@
 
               <TextBlock Classes="field-label" Text="Notes — administrative only" />
               <TextBox Classes="multiline" Text="{Binding LicenseNotes}" />
+
+              <!-- ⭐⭐ L5.3. WHY THIS ARTIFACT IS BEING ISSUED — chosen, never inferred.
+                   Until this stage the reason was computed from the artifact count, which recorded every
+                   re-issue as a "renewal" whether or not an expiry had moved, in a column that is
+                   append-only and therefore uncorrectable. The four values are fixed (D-3) and the picker
+                   offers only the ones that could be TRUE right now: before the first issue there is
+                   exactly one, so the field states it instead of asking. -->
+              <TextBlock Classes="field-label" Text="Reason for this issue" />
+              <ComboBox Name="IssueReason" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding IssueReasonChoices}"
+                        SelectedItem="{Binding SelectedIssueReason}"
+                        IsEnabled="{Binding CanChooseIssueReason}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:IssueReasonOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="{Binding IssueReasonExplanation}" />
+
+              <!-- ⭐ D-6. The one reason whose right answer is usually NOT to issue.
+                   A new artifact carries a new `iat`, which EmberTern installs as a replacement (§16.4) —
+                   so re-sending the stored file is both cheaper and more faithful to what the customer
+                   already bought. ⛔ Advice, not a block: an operator who has read this and still chooses
+                   it is making a decision, and the application does not overrule it. -->
+              <Border Name="ReissueLostAdvice" Classes="card"
+                      IsVisible="{Binding IsReissueLostSelected}">
+                <TextBlock Classes="hint" TextWrapping="Wrap"
+                           Text="The customer already has this exact file. Prefer “Export this issue…” in
+                                 the issuing history below — it re-sends the artifact that was delivered,
+                                 byte for byte, without signing a new one. Issue only if they need a
+                                 freshly signed replacement." />
+              </Border>
+
+              <!-- ⭐ D-4. Optional, and it rides on the audit line that is written for every issue
+                   anyway — no new column, no new model, nothing extra to back up or migrate. -->
+              <TextBlock Classes="field-label" Text="Issue note — optional, recorded in the audit log" />
+              <TextBox Text="{Binding IssueNote}" />
 
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                           Spacing="{DynamicResource Space.Sm}">
@@ -507,7 +552,7 @@
 
             <StackPanel Grid.Column="1">
               <TextBlock Classes="field-label" Text="Status" />
-              <ComboBox HorizontalAlignment="Stretch"
+              <ComboBox Name="StatusFilter" HorizontalAlignment="Stretch"
                         ItemsSource="{Binding Browser.StatusFilters}"
                         SelectedItem="{Binding Browser.SelectedStatus}"
                         ItemTemplate="{StaticResource FilterOptionTemplate}" />
@@ -515,7 +560,7 @@
 
             <StackPanel Grid.Column="2">
               <TextBlock Classes="field-label" Text="Expiry" />
-              <ComboBox HorizontalAlignment="Stretch"
+              <ComboBox Name="ExpiryFilter" HorizontalAlignment="Stretch"
                         ItemsSource="{Binding Browser.ExpiryFilters}"
                         SelectedItem="{Binding Browser.SelectedExpiry}"
                         ItemTemplate="{StaticResource FilterOptionTemplate}" />
@@ -527,7 +572,7 @@
                    `ControlThemes.axaml` — which carries EmberTern's hand-written CheckBox template — is
                    not linkable, so a checkbox here would fall back to Fluent's own. Three uniform
                    dropdowns also let this filter say "issued at least once", which a checkbox cannot. -->
-              <ComboBox HorizontalAlignment="Stretch"
+              <ComboBox Name="IssuingFilter" HorizontalAlignment="Stretch"
                         ItemsSource="{Binding Browser.IssuingFilters}"
                         SelectedItem="{Binding Browser.SelectedIssuing}"
                         ItemTemplate="{StaticResource FilterOptionTemplate}" />

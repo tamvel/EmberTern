@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -276,12 +276,23 @@ public sealed class LicensesViewTests
     private static Border CustomerRail(Window window) =>
         window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("rail"));
 
-    // The filter card is the first card inside the licences view; the customers view has cards too, so
-    // it is identified by what only it contains — the three filter dropdowns.
+    // The filter card is identified by what only it contains — the three filter dropdowns.
     private static Control FilterCard(Window window) =>
-        Dropdowns(window).First().GetVisualAncestors().OfType<Border>()
+        Dropdown(window, "StatusFilter").GetVisualAncestors().OfType<Border>()
             .First(b => b.Classes.Contains("card"));
 
+    /// <summary>
+    /// The three FILTER dropdowns, in the order they are laid out.
+    ///
+    /// <para>⚠⚠ Named, not swept. This used to be "every <c>ComboBox</c> in the window", which was true
+    /// only for as long as the licences view owned the only dropdowns — L5.3's reason picker in the
+    /// CUSTOMERS view broke both consumers at once, and the first symptom was a filter guard reporting an
+    /// empty label for a control it was never meant to look at. ⛔ Never identify a surface by "the first
+    /// one of its type": name it, exactly as the licence list and the artifact history already are.</para>
+    /// </summary>
     private static ComboBox[] Dropdowns(Window window) =>
-        [.. window.GetVisualDescendants().OfType<ComboBox>()];
+        [Dropdown(window, "StatusFilter"), Dropdown(window, "ExpiryFilter"), Dropdown(window, "IssuingFilter")];
+
+    private static ComboBox Dropdown(Window window, string name) =>
+        window.GetVisualDescendants().OfType<ComboBox>().First(c => c.Name == name);
 }

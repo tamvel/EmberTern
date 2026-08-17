@@ -301,6 +301,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         if (value is null)
         {
             History.Load(null);
+            RefreshIssueReasons();
             return;
         }
 
@@ -314,6 +315,11 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         //    used to compute for itself now comes from the same load, so the line and the list can never
         //    report different counts.
         History.Load(value.LicenseId);
+
+        // ⭐ The reason choices follow the SAME path as the history, so "this licence has been issued" can
+        //    never be true for one of them and false for the other. Issuing re-enters here (the command
+        //    calls OnSelectedLicenseChanged), which is what turns `initial` into a real choice afterwards.
+        RefreshIssueReasons();
     }
 
     /// <summary>Starts a blank licence for the selected customer.</summary>
@@ -335,6 +341,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         LicenseExpiresAt = today.AddYears(1);
         LicenseNotes = string.Empty;
         History.Load(null);
+        RefreshIssueReasons();
         Message = StatusMessage.Info("New licence. Save the terms, then issue.");
     }
 
@@ -387,6 +394,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         LicenseExpiresAt = null;
         LicenseNotes = string.Empty;
         History.Load(null);
+        RefreshIssueReasons();
     }
 
     private void ReloadLicenses(string? selectId = null)
@@ -411,6 +419,106 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     // ── Issuing ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Why the next artifact would be issued — the choices the operator may truthfully pick from.
+    ///
+    /// <para>⭐⭐ <b>L5.3 replaced an INFERENCE with a choice.</b> Until this stage the reason was computed
+    /// as <c>artifacts.Count == 0 ? initial : renewal</c>, which contradicted the contract stated on
+    /// <see cref="IssueRequest.Reason"/> — <i>chosen by the operator, never inferred from a diff</i> — and
+    /// left two of the four vocabulary values (<c>terms-change</c>, <c>reissue-lost</c>) unreachable by any
+    /// code path. Every re-issue was recorded as a renewal whether or not an expiry had ever moved, in a
+    /// column that cannot be corrected.</para>
+    /// </summary>
+    public ObservableCollection<IssueReasonOption> IssueReasonChoices { get; } = [];
+
+    /// <summary>The reason the operator picked for the next issue.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IssueReasonExplanation))]
+    [NotifyPropertyChangedFor(nameof(IsReissueLostSelected))]
+    private IssueReasonOption? _selectedIssueReason;
+
+    /// <summary>What the selected reason means, so the choice is made on meaning rather than on a label.</summary>
+    public string IssueReasonExplanation => SelectedIssueReason?.Explanation ?? string.Empty;
+
+    /// <summary>
+    /// ⭐ <b>D‑6.</b> Whether the operator is about to sign a NEW artifact because a customer lost a file
+    /// they were already sent — the one reason whose correct answer is usually not to issue at all.
+    ///
+    /// <para>⚠ It gates advice, never the action. A new <c>iat</c> makes EmberTern treat the file as a
+    /// replacement (§16.4), so re-exporting the stored artifact is both cheaper and more faithful — but an
+    /// operator who has read that and still chooses this is making a decision, and the application does
+    /// not overrule it.</para>
+    /// </summary>
+    public bool IsReissueLostSelected =>
+        SelectedIssueReason is { } option &&
+        string.Equals(option.Value, IssueReasons.ReissueLost, StringComparison.Ordinal);
+
+    /// <summary>
+    /// ⭐ <b>D‑4.</b> An optional remark recorded with the issue — a ticket number, who asked, why now.
+    ///
+    /// <para>It travels on the existing <c>audit_log.note</c> and adds no column and no model: the audit
+    /// line is written for every issue anyway, and is already append-only. ⚠ Optional means optional —
+    /// nothing here refuses an issue for want of a remark.</para>
+    /// </summary>
+    [ObservableProperty]
+    private string _issueNote = string.Empty;
+
+    /// <summary>
+    /// Whether the operator is choosing between reasons, or the answer is already fixed.
+    ///
+    /// <para>⭐ <b>D‑2.</b> Before the first issue there is exactly one truthful value, so the picker is a
+    /// statement rather than a question. Offering a list there would invite the operator to record an
+    /// untruth about an artifact that does not exist yet.</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _canChooseIssueReason;
+
+    /// <summary>
+    /// Rebuilds the reason choices for whichever licence is selected.
+    ///
+    /// <para>⚠ Called on every selection change and after every issue: an issue turns a never-issued
+    /// licence into an issued one, which changes what may truthfully be recorded next.</para>
+    /// </summary>
+    private void RefreshIssueReasons()
+    {
+        var change = MeasureChange();
+
+        IssueReasonChoices.Clear();
+        foreach (var reason in IssueReasonPolicy.Offer(change))
+        {
+            IssueReasonChoices.Add(new IssueReasonOption(
+                reason, ReasonText.Describe(reason), ReasonText.Explain(reason)));
+        }
+
+        CanChooseIssueReason = change.HasPrevious;
+
+        // The single offered value is selected for the operator; a real choice starts unmade, so that
+        // issuing without deciding is not something a default can do on their behalf.
+        SelectedIssueReason = IssueReasonChoices.Count == 1 ? IssueReasonChoices[0] : null;
+        IssueNote = string.Empty;
+    }
+
+    /// <summary>
+    /// Measures the selected licence's saved terms against the artifact the customer is currently holding.
+    ///
+    /// <para>⚠⚠ <b>Measured afresh at every use, never cached.</b> The operator can press <b>Save terms</b>
+    /// between choosing a reason and issuing — which is exactly the sequence a renewal requires — so a
+    /// stored answer would judge the reason against terms that are no longer the ones being signed.</para>
+    ///
+    /// <para>⭐ Compared against <see cref="LicenseRegister.GetCurrentArtifact"/>, the register's POINTER,
+    /// not the newest row. The pointer is the authority on which release the customer holds (§39.2).</para>
+    /// </summary>
+    private IssueChange MeasureChange()
+    {
+        if (SelectedLicense is not { } licence || SelectedCustomer is not { } customer)
+        {
+            return IssueChange.NeverIssued;
+        }
+
+        return IssueChange.Between(
+            _register.GetCurrentArtifact(licence.LicenseId), licence, customer.Name);
+    }
+
+    /// <summary>
     /// Signs the selected licence, records the artifact, and offers to save
     /// <c>EmberTern.etlic</c>.
     ///
@@ -428,14 +536,33 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             return;
         }
 
+        // ⭐⭐ THE REASON IS THE OPERATOR'S, AND IT IS CHECKED AGAINST WHAT ACTUALLY CHANGED.
+        //    `issued_artifacts.reason` is append-only: a value written here is in the register forever and
+        //    no later screen can correct it. So a claim the register can DISPROVE — "renewal" against an
+        //    expiry that never moved — is refused before it becomes a row, while a claim it cannot judge
+        //    ("the customer lost their file") is the operator's to make. See IssueReasonPolicy.
+        // ⚠ Measured again HERE rather than reused from RefreshIssueReasons: Save terms may have run since.
+        var change = MeasureChange();
+        var reason = change.HasPrevious ? SelectedIssueReason?.Value : IssueReasons.Initial;
+
+        if (reason is null)
+        {
+            Message = StatusMessage.Warning(
+                "Choose why this licence is being issued again before signing a new artifact.");
+            return;
+        }
+
+        if (IssueReasonPolicy.Refuse(reason, change) is { } refusal)
+        {
+            Message = StatusMessage.Warning(refusal);
+            return;
+        }
+
         IssueResult result;
         try
         {
-            var reason = _register.GetArtifacts(SelectedLicense.LicenseId).Count == 0
-                ? IssueReasons.Initial
-                : IssueReasons.Renewal;
-
-            result = _workflow.Issue(_session, SelectedLicense, SelectedCustomer, reason);
+            result = _workflow.Issue(
+                _session, SelectedLicense, SelectedCustomer, reason, Blank(IssueNote));
         }
         catch (ArgumentException e)
         {

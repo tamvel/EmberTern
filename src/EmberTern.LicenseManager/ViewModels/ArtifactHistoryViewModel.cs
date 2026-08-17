@@ -26,7 +26,13 @@ public sealed record ArtifactListItem
     /// <summary>When it was signed, to the second — the <c>iat</c> the artifact itself carries.</summary>
     public required string IssuedAt { get; init; }
 
-    /// <summary>Why it was issued: <c>initial</c> · <c>renewal</c> · <c>terms-change</c> · <c>reissue-lost</c>.</summary>
+    /// <summary>
+    /// Why it was issued, in words — <see cref="ReasonText.Describe"/> over the stored value.
+    ///
+    /// <para>⚠ The RAW value stays available on <see cref="Artifact"/>; this is the presentation of it and
+    /// nothing else. ⛔ Never computed from the payload: the reason is the operator's recorded statement of
+    /// intent, and a display that derived it would be reporting our arithmetic as their words.</para>
+    /// </summary>
     public required string Reason { get; init; }
 
     /// <summary>Which key signed it.</summary>
@@ -225,7 +231,7 @@ public sealed partial class ArtifactHistoryViewModel : ObservableObject
         {
             Artifact = artifact,
             IssuedAt = artifact.IssuedAt.ToString(StampFormat, CultureInfo.InvariantCulture),
-            Reason = artifact.Reason,
+            Reason = ReasonText.Describe(artifact.Reason),
             KeyId = artifact.KeyId,
             Ordinal = "#" + artifact.ArtifactId.ToString(CultureInfo.InvariantCulture),
             IsCurrent = isCurrent,
