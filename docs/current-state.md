@@ -9,7 +9,7 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-17.**
+**Last verified: 2026-08-18.**
 
 ---
 
@@ -31,9 +31,14 @@
 > carried-forward items three are explicitly NOT License Manager work (`Calendar*` and `Icon.Name` are
 > product-level; English-only is a stage of its own). The one real cosmetic — the `Seats` field's literal
 > width — was folded into L5.3, which was already editing that form (§45.5 point 6).
-> **Next task:** ⏭ **L5.4** (bulk selection / batch renewal), then **L5.5** (backup). ⛔ Neither starts
-> without the user's go-ahead, and **L5.4 begins in a NEW session**. Standing facts a next session must not
-> rediscover, and what L5.4 inherits rather than rebuilds: §42.4 + §45.9 + §45.10.
+> ⭐ **L5.4 accepted 2026-08-18** (user-verified visually in Debug, both themes) and committed on the branch;
+> ⛔ **not pushed — the user holds the push.** Bulk selection + batch renewal (D‑1…D‑5 ratified before
+> implementation), **and** the licences list rebuilt as EmberTern's own grid. Details: §46.
+> ⭐⭐ The grid is not a lookalike: EmberTern's grid standard was **split out** of `ControlStyles.axaml`
+> into `Themes/DataGridStyles.axaml` and is now **LINKED** into the License Manager, the same move as the
+> `IconGeometries.axaml` split. One grid appearance, two applications (§46.6).
+> **Next task:** ⏭ **L5.5** (backup / JSONL / restore). ⛔ It does not start without the user's go-ahead,
+> and it begins in a NEW session. Standing facts a next session must not rediscover: §42.4 + §46.11.
 >
 > ⚠ **L7 still owns the production key ceremony** — and until it runs, `TrustedKeys.Production` is empty and
 > no real licence verifies as usable in any build. That is deliberate, and `Valid` / `Grace` are therefore
@@ -59,9 +64,9 @@ Split Licence — are now this etap's, see §3.
 | | |
 |---|---|
 | Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` through L4b |
-| HEAD | the **L5.3 closing commit** on `feat/licensing-system` — ⛔ **local only**. Below it `e3c746c` (L5.2), also unpushed; `origin` is at `2531576` (L5.0–L5.1 + QA), so **two commits are ahead** |
+| HEAD | the **L5.4 closing commit** on `feat/licensing-system` — ⛔ **local only**. Below it `df02aab` (L5.3) and `e3c746c` (L5.2), also unpushed; `origin` is at `2531576` (L5.0–L5.1 + QA), so **three commits are ahead** |
 | Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`**, in **both solutions** (`TreatWarningsAsErrors=true`) |
-| Tests | EmberTern **9 087** · License Manager **279** — measured 2026-08-17 at the L5.3 close, Debug and Release, both suites. ⚠ One Release run lost `TabStripPresentationTests` to the documented headless race and went green on re-run with no change (§45.8) |
+| Tests | EmberTern **9 092** · License Manager **340** — measured 2026-08-18 at the L5.4 close, Debug and Release, both suites. ⚠ One Release run lost `TabStripPresentationTests` to the documented headless race and went green on re-run with no change; the stack was again not captured (§46.10) |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ They are separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | ⚠ **On THIS clone there is ONE remote**, `origin` → personal GitHub (see §0). The CLAUDE.md two-remote table describes the work machine; ⛔ do not add a remote here |
@@ -116,6 +121,7 @@ reasoning lives.
 | **Audit follow-up — Phase 5: charset guard** ✅ user-verified | 2026-08-15 | gotchas #372/#373, `tools/probes/CharsetProbe`, rule 12 in `CLAUDE.md` |
 | **Audit follow-up — Phase 6: NuGet to latest stable** | 2026-08-15 | §3 below — 8 packages raised, 2 held for a stated reason |
 | **Audit follow-up — Phase 7: `ARCHITECTURE.md` as-built** | 2026-08-15 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
+| **Licensing L5.4** — bulk selection + batch renewal, licences list as EmberTern's grid ✅ user-verified | 2026-08-18 | `design/licensing-system.md` §46; gotchas #381–#383 |
 
 ---
 

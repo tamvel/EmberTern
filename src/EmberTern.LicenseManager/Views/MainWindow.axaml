@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
         xmlns:data="using:EmberTern.LicenseManager.Data"
@@ -318,13 +318,13 @@
                        FluentBridge carries no Calendar* keys — EmberTern's own two date pickers have
                        the same gap. Recorded as its own design-system item; not fixed here. -->
                   <TextBlock Classes="field-label" Text="Valid from" />
-                  <CalendarDatePicker SelectedDate="{Binding LicenseNotBefore}"
+                  <CalendarDatePicker Name="LicenseNotBefore" SelectedDate="{Binding LicenseNotBefore}"
                                       SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd"
                                       HorizontalAlignment="Stretch" />
                 </StackPanel>
                 <StackPanel Grid.Column="2">
                   <TextBlock Classes="field-label" Text="Valid until (inclusive)" />
-                  <CalendarDatePicker SelectedDate="{Binding LicenseExpiresAt}"
+                  <CalendarDatePicker Name="LicenseExpiresAt" SelectedDate="{Binding LicenseExpiresAt}"
                                       SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd"
                                       HorizontalAlignment="Stretch" />
                 </StackPanel>
@@ -539,7 +539,10 @@
     <DockPanel IsVisible="{Binding IsLicensesView}" Margin="{DynamicResource Pad.Panel}">
 
       <!-- Filters ────────────────────────────────────────────────────────────────────────────── -->
-      <Border DockPanel.Dock="Top" Classes="card">
+      <!-- ⚠ The bottom gap belongs to THIS card, the element above the gap (gotcha #375). It was not
+           needed while the filters were followed directly by the results list; the batch card now sits
+           between them. -->
+      <Border DockPanel.Dock="Top" Classes="card" Margin="{DynamicResource Margin.SectionGap}">
         <StackPanel Spacing="{DynamicResource Space.Sm}">
           <TextBlock Classes="section" Text="Find a licence" />
 
@@ -568,10 +571,13 @@
 
             <StackPanel Grid.Column="3">
               <TextBlock Classes="field-label" Text="Issuing" />
-              <!-- ⚠ A dropdown rather than a checkbox, and that is a theming decision with a reason:
-                   `ControlThemes.axaml` — which carries EmberTern's hand-written CheckBox template — is
-                   not linkable, so a checkbox here would fall back to Fluent's own. Three uniform
-                   dropdowns also let this filter say "issued at least once", which a checkbox cannot. -->
+              <!-- ⚠ A dropdown rather than a checkbox, and the reason has CHANGED — the surviving half is
+                   the one that was always the stronger. It used to read "a checkbox here would fall back
+                   to Fluent's own, because ControlThemes.axaml is not linkable"; that is no longer true
+                   (the licences grid needed a small checkbox, so this application now has its own template
+                   in `Themes/LicenseManagerControlThemes.axaml`). What stands on its own: three uniform
+                   dropdowns let this filter say "issued at least once" as well as "never issued", and a
+                   checkbox has no third state to say it with. -->
               <ComboBox Name="IssuingFilter" HorizontalAlignment="Stretch"
                         ItemsSource="{Binding Browser.IssuingFilters}"
                         SelectedItem="{Binding Browser.SelectedIssuing}"
@@ -583,6 +589,100 @@
           </Grid>
 
           <TextBlock Classes="hint" Text="{Binding Browser.ResultSummary}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Extend many licences to one date — L5.4 ────────────────────────────────────────────── -->
+      <!-- ⭐⭐ The preview is not a courtesy, it is the CONTRACT: what it lists as qualifying is exactly
+           what runs. The action re-plans and refuses if anything moved since this was drawn, so there is
+           no reading of the screen from which "20 selected, 19 done" follows.
+           ⛔ No file is written here (D‑4). A batch ends at a committed register; delivery stays the
+           existing export action, from the stored token. -->
+      <Border DockPanel.Dock="Top" Classes="card" Name="BatchRenewalCard"
+              Margin="{DynamicResource Margin.SectionGap}">
+        <StackPanel Spacing="{DynamicResource Space.Sm}">
+          <TextBlock Classes="section" Text="Extend selected licences" />
+
+          <!-- ⭐ `command-row` is what makes every control here stand at one height — see the style's
+               own comment in LicenseManagerStyles.axaml for why this row is the ACTION ladder. -->
+          <Grid Classes="command-row" ColumnDefinitions="Auto,Auto,Auto,*,Auto"
+                ColumnSpacing="{DynamicResource Space.Md}">
+            <StackPanel Grid.Column="0">
+              <TextBlock Classes="field-label" Text="Extend to (inclusive)" />
+              <!-- ⚠ Read as a UTC calendar day running to the END of it, through the same LicenseDay
+                   owner the licence form uses — so the two surfaces cannot differ by a day. -->
+              <CalendarDatePicker Name="BatchTargetDate" Width="150"
+                                  SelectedDate="{Binding BatchRenewal.TargetDate}"
+                                  SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+              <Button Classes="flat" Name="SelectAllShown" Content="Select all shown"
+                      Command="{Binding Browser.CheckAllShownCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+              <Button Classes="flat" Name="ClearSelection" Content="Clear selection"
+                      Command="{Binding Browser.ClearChecksCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3">
+              <TextBlock Classes="field-label" Text="Note (optional)" />
+              <TextBox Text="{Binding BatchRenewal.Note}"
+                       PlaceholderText="Ticket, who asked, why now — stored on the batch's audit line" />
+            </StackPanel>
+
+            <!-- ⭐ D‑3: gated by the command's own CanExecute, which is false while ANY selected licence
+                 is blocked — including when the other nineteen are fine. -->
+            <Button Grid.Column="4" Classes="primary" Name="ExtendSelected" VerticalAlignment="Bottom"
+                    Content="Extend and issue"
+                    Command="{Binding BatchRenewal.ExtendCommand}" />
+          </Grid>
+
+          <!-- ⭐ D‑1: the reason is STATED, not picked. An extension has exactly one truthful reason for
+               a licence that has one before it, and `initial` is what the register proves about one that
+               does not — so a list of four here would invite an untruth, which is the trap L5.3 closed. -->
+          <TextBlock Classes="hint"
+                     Text="Recorded as Renewal — or as Initial issue for a licence that has never been issued." />
+
+          <TextBlock Classes="hint" Name="BatchSelectionSummary" Text="{Binding Browser.CheckSummary}" />
+          <TextBlock Name="BatchPreviewSummary" TextWrapping="Wrap"
+                     Text="{Binding BatchRenewal.PreviewSummary}" />
+
+          <!-- ⭐ D‑3 made visible: the blockers are named, and the operation is held rather than trimmed. -->
+          <Border Classes="card" Name="BatchBlockerBox" IsVisible="{Binding BatchRenewal.HasBlockers}">
+            <StackPanel Spacing="{DynamicResource Space.Xs}">
+              <TextBlock Classes="section" Text="Held" />
+              <TextBlock Name="BatchBlockerSummary" TextWrapping="Wrap"
+                         Text="{Binding BatchRenewal.BlockerSummary}" />
+            </StackPanel>
+          </Border>
+
+          <ListBox MaxHeight="180" Name="BatchPreview"
+                   IsVisible="{Binding BatchRenewal.HasPreview}"
+                   ItemsSource="{Binding BatchRenewal.Rows}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:BatchRenewalRow">
+                <StackPanel Spacing="{DynamicResource Space.Xs}">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                    <TextBlock Grid.Column="0" Text="{Binding CustomerName}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                    <TextBlock Grid.Column="2" Classes="mono" Width="200" Text="{Binding Change}" />
+                    <TextBlock Grid.Column="3" Width="90" Text="{Binding ReasonLabel}" />
+                  </Grid>
+                  <!-- ⚠ Never blank on a blocked row: it is the only thing telling the operator what to
+                       do about the nineteen licences they cannot issue. -->
+                  <TextBlock Classes="hint" TextWrapping="Wrap"
+                             IsVisible="{Binding IsBlocked}" Text="{Binding Blocker}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <TextBlock Name="BatchLastResult" TextWrapping="Wrap"
+                     IsVisible="{Binding BatchRenewal.HasResult}"
+                     Text="{Binding BatchRenewal.LastResult}" />
         </StackPanel>
       </Border>
 
@@ -602,30 +702,102 @@
         </Grid>
       </Border>
 
-      <!-- Results ────────────────────────────────────────────────────────────────────────────── -->
+      <!-- Results — the licence grid ────────────────────────────────────────────────────────────── -->
+      <!-- ⭐⭐ THIS IS EMBERTERN'S GRID, NOT A LOOKALIKE. Row height, header height, cell padding, zebra
+           striping, selection-over-zebra, hover, header chrome and the cell focus ring all come from
+           `Themes/DataGridStyles.axaml` — EmberTern.App's own file, LINKED (see the csproj) and shared by
+           both applications. ⛔ Nothing about the grid's appearance is set here; a local value would be
+           this window quietly leaving the standard, which is exactly the divergence the link prevents.
+           The closest sibling in EmberTern is the Session Manager's session grid: a flat, read-only,
+           sortable, resizable list of records, one row per entity.
+
+           ⭐⭐ THE BATCH TICK AND THE ROW SELECTION ARE TWO DIFFERENT THINGS, AND THEY STAY APART.
+           `SelectedItem` answers "which licence am I looking at?" — it drives the detail strip, and it
+           changes on every click. The CHECKBOX answers "which licences am I about to change?", and a bulk
+           operation cannot have a stray click on row four throw away nineteen decisions. So the grid keeps
+           `SelectionMode="Single"` and the tick lives on the row.
+           ⛔ Do not add `SelectionMode="Extended"` and read the selection as the batch: with the two
+           joined, an ordinary click IS "select only this one" and the batch selection collapses to it.
+
+           ⭐ SORTING IS A PROJECTION AND NOTHING MORE. The tick set is keyed by `LicenseId` in the view
+           model, so re-ordering the rows cannot touch it — and every sortable column sorts on the value it
+           MEANS rather than on the text it shows (`SeatsValue`, `LicenseId`, `ExpiresAtValue`). -->
       <Border Classes="card" Margin="{DynamicResource Margin.SectionGap}">
-        <ListBox ItemsSource="{Binding Browser.Results}"
-                 SelectedItem="{Binding Browser.SelectedLicense}">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:LicenseListItem">
-              <Grid ColumnDefinitions="*,150,Auto,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
-                <TextBlock Grid.Column="0" Text="{Binding CustomerName}"
-                           TextTrimming="CharacterEllipsis" />
-                <!-- ⭐ QA-5. The contact person: an operator looking for "the licence Kowalski called
-                     about" has a person, not a company. Searchable too. -->
-                <TextBlock Grid.Column="1" Classes="hint" VerticalAlignment="Center"
-                           Text="{Binding Contact}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="2" Classes="mono" Width="130" Text="{Binding ShortId}" />
-                <TextBlock Grid.Column="3" Width="80" Text="{Binding Seats}" />
-                <!-- ⛔ The REGISTER's status, presented — never a verdict this view computed. The client
-                     verdict (Valid / Grace / Expired …) comes from LicenseVerifier and stays on the
-                     selection, where Inspect latest runs it for real. -->
-                <TextBlock Grid.Column="4" Width="90" Text="{Binding Status}" />
-                <TextBlock Grid.Column="5" Width="170" Text="{Binding Standing}" />
-              </Grid>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
+        <DataGrid Name="LicenceResults"
+                  ItemsSource="{Binding Browser.Results}"
+                  SelectedItem="{Binding Browser.SelectedLicense}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  SelectionMode="Single"
+                  HeadersVisibility="Column"
+                  CanUserResizeColumns="True"
+                  CanUserSortColumns="True"
+                  CanUserReorderColumns="True"
+                  GridLinesVisibility="Horizontal">
+          <DataGrid.Columns>
+
+            <!-- ⭐ The batch tick. Fixed, unsortable, unmovable — it is a control, not a value, and there
+                 is nothing about it to order a list by. ⚠ The header is deliberately BLANK rather than a
+                 select-all box: "Select all shown" and "Clear selection" are already the two actions this
+                 card offers, and a third mechanism saying almost the same thing is how a bulk surface
+                 becomes ambiguous about what it covers.
+                 ⚠ `ClickMode` is left alone deliberately: the checkbox handles its own click and the row
+                 beneath still takes the selection, so the two mechanisms coexist. -->
+            <DataGridTemplateColumn Header="" Width="34"
+                                    CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="vm:LicenseListItem">
+                  <CheckBox Name="RowTick" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                            ToolTip.Tip="Include this licence in a batch operation" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
+            <!-- ⚠ The two wide columns are the only STAR ones, and both are capped. A star column with no
+                 ceiling is a column that eats a wide window; a fixed one is a column that cannot use it.
+                 The floors keep a narrow window from squeezing a name down to two characters. -->
+            <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}"
+                                SortMemberPath="CustomerName"
+                                Width="2*" MinWidth="140" MaxWidth="440" />
+
+            <!-- ⭐ QA-5. The contact person: an operator looking for "the licence Kowalski called about"
+                 has a person, not a company. Searchable too. -->
+            <DataGridTextColumn Header="Contact" Binding="{Binding Contact}"
+                                SortMemberPath="Contact"
+                                Width="*" MinWidth="110" MaxWidth="300" />
+
+            <!-- ⚠ Sorts on the FULL id, shows the short one — see `LicenseListItem.LicenseId`. -->
+            <DataGridTextColumn Header="Licence id" Binding="{Binding ShortId}"
+                                SortMemberPath="LicenseId"
+                                FontFamily="{DynamicResource Font.Code}"
+                                Width="140" MinWidth="110" />
+
+            <!-- ⚠ Sorts on the COUNT, not on the sentence: as text, "10 seats" comes before "3 seats". -->
+            <DataGridTextColumn Header="Seats" Binding="{Binding Seats}"
+                                SortMemberPath="SeatsValue"
+                                Width="80" MinWidth="64" />
+
+            <!-- ⛔ The REGISTER's status, presented — never a verdict this view computed. The client
+                 verdict (Valid / Grace / Expired …) comes from LicenseVerifier and stays on the selection,
+                 where Inspect latest runs it for real. -->
+            <DataGridTextColumn Header="Status" Binding="{Binding Status}"
+                                SortMemberPath="Status"
+                                Width="90" MinWidth="72" />
+
+            <DataGridTextColumn Header="Expiry" Binding="{Binding Expiry}"
+                                SortMemberPath="ExpiresAtValue"
+                                Width="110" MinWidth="92" />
+
+            <!-- ⛔ NOT SORTABLE, and that is a decision rather than an omission. `Standing` is a SENTENCE
+                 about the expiry date ("Expires in 12 days", "Never issued"): sorted as text it would
+                 order by the letter E, and sorted by date it would be a second Expiry column wearing a
+                 different name. The operator who wants that order has the Expiry column beside it. -->
+            <DataGridTextColumn Header="Standing" Binding="{Binding Standing}"
+                                CanUserSort="False"
+                                Width="170" MinWidth="130" />
+          </DataGrid.Columns>
+        </DataGrid>
       </Border>
 
     </DockPanel>

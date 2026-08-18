@@ -37,6 +37,17 @@
     <AvaloniaResource Include="..\EmberTern.App\Themes\Tokens.axaml" Link="Themes\Tokens.axaml" />
     <AvaloniaResource Include="..\EmberTern.App\Themes\Typography.axaml" Link="Themes\Typography.axaml" />
     <AvaloniaResource Include="..\EmberTern.App\Themes\FluentBridge.axaml" Link="Themes\FluentBridge.axaml" />
+    <!-- ⭐⭐ THE DATAGRID STANDARD — linkable since the 2026-08-18 split, and that split existed for this.
+         Row height, header height, cell padding, zebra striping, selection-over-zebra, hover, the column
+         header's chrome and the cell focus ring: EmberTern's ONE grid appearance, in a file that binds to
+         nothing but the tokens above it. It used to sit inside `ControlStyles.axaml`, which is unlinkable
+         for the reasons listed below, so the licences list here would otherwise have been a lookalike
+         maintained twice.
+         ⛔ Do not copy a grid metric into this project. `DataGridStylesSplitTests` (in EmberTern.Tests)
+         fails the build if that file stops being portable, and `LicenseManagerThemeTests` if it is copied
+         here rather than linked. -->
+    <AvaloniaResource Include="..\EmberTern.App\Themes\DataGridStyles.axaml"
+                      Link="Themes\DataGridStyles.axaml" />
     <!-- ⭐⭐ THE ICON GEOMETRIES — linkable since the 2026-08-16 split, and that split existed for this.
          The file used to end with three ControlThemes bound to controls:SvgIcon / DebuggerIcon /
          CreateIcon; those 164 lines were the ONLY type reference in an otherwise pure catalogue of 86
@@ -70,6 +81,13 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- ⚠ NUMER NIE ZGADZA SIĘ Z COREM CELOWO, dokładnie jak w EmberTern.App: DataGrid ma własne repo i
+         własny cykl wydań — przy corze 12.1.1 najnowszy DataGrid to 12.1.2, a wydania 12.1.1 nie ma.
+         ⛔ Wersja MUSI być ta sama co w EmberTern.App: obie aplikacje dzielą jeden plik stylu siatki
+         (`Themes/DataGridStyles.axaml`, linkowany wyżej), a ten styl celuje w NAZWANE części szablonu
+         Fluenta (`Rectangle#BackgroundRectangle`, `Grid#PART_ColumnHeaderRoot`). Dwie wersje pakietu to
+         dwa szablony i cicha rozbieżność wyglądu, bez żadnego błędu. -->
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <!-- The register of record (§18.1). First-party, one package, one file on disk. -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
   </ItemGroup>

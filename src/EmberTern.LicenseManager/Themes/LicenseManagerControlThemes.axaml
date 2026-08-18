@@ -1,0 +1,141 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ================================================================================================
+       License Manager control themes — STRUCTURE, the way `LicenseManagerStyles.axaml` holds style.
+
+       ⚠ Same split EmberTern makes between `Themes/ControlThemes.axaml` (templates + their states) and
+       `Themes/ControlStyles.axaml` (class variants and setters on finished templates). ⛔ A template is
+       written ONLY where Fluent leaves no other way — every one of them is code to maintain across an
+       Avalonia update.
+
+       ⛔ NOT A COLOUR IN THIS FILE. Every brush below comes from the linked `Colors.axaml`, exactly as in
+       the styles file; `LicenseManagerThemeTests` fails the build otherwise.
+       ================================================================================================ -->
+
+  <!-- ================================================================================================
+       ⭐⭐ CheckBox — the batch tick in the licences grid, and the reason this file exists.
+
+       ⚠ MEASURED, NOT ASSUMED (2026-08-18, headless probe on the licences list before the change):
+       Fluent's own CheckBox realises at **28 × 32 px** and forced the licence row to **40 px**. The grid
+       standard asks for a 22 px row (`Size.Row.Grid`), so the control alone was worth eighteen pixels per
+       row — on the one surface an operator scans a hundred rows at a time.
+
+       ⭐ THIS IS THE SAME PROBLEM EMBERTERN ALREADY SOLVED, and its answer is Release Blocker RB‑2 in
+       `Themes/ControlThemes.axaml`. ⛔ That file is NOT linkable (its template instantiates
+       `controls:SvgIcon`, which lives in `EmberTern.App.Controls` and this application must never
+       acquire — `docs/design/licensing-system.md` §12.1). So what is reproduced here is the minimum that
+       carries the DECISION across, and nothing else:
+
+         · the box takes `Size.Checkbox` (14), the same catalogue role EmberTern's does;
+         · ⛔ NO `MinHeight` on the control — a selection control has no height of its own to impose, it
+           has to fit the row it stands in. That single omission IS RB‑2;
+         · the hit target is widened HORIZONTALLY only, to 20 px, by a transparent Panel. ⚠⚠ The asymmetry
+           is arithmetic, not taste: a 22 px row less `Pad.Cell` (3+3) leaves 16 px, so a 20 px VERTICAL
+           target would push the row back to 26 and undo the repair. Horizontally nothing is constrained.
+
+       ⚠ The glyph is a `Viewbox → 24×24 Canvas → stroked Path`, not `controls:SvgIcon` — the same render
+       path `LicenseManagerStyles.axaml` already reproduces for every other icon in this application, and
+       for the same reason. The GEOMETRY is EmberTern's own `Icon.Check`, linked, never copied.
+
+       ⛔ What was deliberately NOT reproduced: the indeterminate state. Nothing in this application has a
+       third checkbox state, and a state no surface can reach is a template branch nobody maintains. Add
+       it here, next to its sibling, on the day something needs it.
+       ================================================================================================ -->
+  <ControlTheme x:Key="{x:Type CheckBox}" TargetType="CheckBox">
+    <Setter Property="Background" Value="Transparent" />
+    <!-- ⭐ `ControlOutlineBrush`, not `BorderBrush` — a separate role precisely so that an UNCHECKED box
+         stays findable. EmberTern measured the shared token at 1.35:1 in Light, i.e. practically
+         invisible in the control's DEFAULT state. The reasoning lives on the token in Colors.axaml. -->
+    <Setter Property="BorderBrush" Value="{DynamicResource ControlOutlineBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- ⚠ Deliberately WITHOUT MinHeight. See the header — this omission is the whole repair. -->
+
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="Auto,*">
+
+          <!-- The hit target: transparent, but hit-testable. Wider than the mark, never taller. -->
+          <Panel Name="PART_MarkArea"
+                 Background="Transparent"
+                 MinWidth="20"
+                 VerticalAlignment="Center">
+
+            <Border Name="NormalRectangle"
+                    Width="{DynamicResource Size.Checkbox}"
+                    Height="{DynamicResource Size.Checkbox}"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{DynamicResource Radius.Surface}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+
+              <!-- `Size.Icon.Sm` (12) fills the inside of the box exactly: 14 less the 1 px border on
+                   each side. The stroke itself is smaller again, because a Lucide geometry carries its
+                   own margin inside the 24 grid — which is why no extra padding is needed here. -->
+              <Viewbox Name="CheckGlyph"
+                       Width="{DynamicResource Size.Icon.Sm}"
+                       Height="{DynamicResource Size.Icon.Sm}"
+                       Stretch="Uniform"
+                       Opacity="0">
+                <Canvas Width="24" Height="24">
+                  <Path Name="CheckStroke"
+                        Data="{DynamicResource Icon.Check}"
+                        Stroke="{DynamicResource OnAccentBrush}"
+                        StrokeThickness="2"
+                        StrokeLineCap="Round"
+                        StrokeJoin="Round" />
+                </Canvas>
+              </Viewbox>
+            </Border>
+          </Panel>
+
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Grid.Column="1"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Margin="{DynamicResource Margin.MarkGap}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            RecognizesAccessKey="True" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+
+    <!-- ── States. Declaration order matters: a later selector of equal specificity wins. ──────────── -->
+
+    <!-- Hover on an UNCHECKED box: the outline only, never a fill. A fill would read as "already
+         ticked", which is the one piece of information this control carries. -->
+    <Style Selector="^:pointerover /template/ Border#NormalRectangle">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentMutedBrush}" />
+    </Style>
+
+    <Style Selector="^:checked /template/ Border#NormalRectangle">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ Viewbox#CheckGlyph">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="^:pressed /template/ Border#NormalRectangle">
+      <Setter Property="Opacity" Value="0.75" />
+    </Style>
+
+    <!-- The focus ring goes on the BOX, not around the whole control: a long label makes an outline
+         around everything stop saying what actually holds focus. -->
+    <Style Selector="^:focus-visible /template/ Border#NormalRectangle">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+    </Style>
+
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

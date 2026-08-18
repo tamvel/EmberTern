@@ -168,6 +168,24 @@ public sealed record LicenseIssueUnit
     /// <c>licence.updated</c> history line that says nothing changed.
     /// </summary>
     public LicenseRecord? UpdatedTerms { get; init; }
+
+    /// <summary>
+    /// ⭐ The terms in one sentence — <i>"Licensed to ACME, 5 seat(s), until 2028-01-01."</i> — written
+    /// onto this licence's own <c>licence.issued</c> audit line.
+    ///
+    /// <para>⭐⭐ <b>It is required because a batch used to be a second-class citizen of the audit.</b>
+    /// The single issuing path has always written this sentence; a batch wrote only <c>"batch &lt;id&gt;"</c>,
+    /// so the one thing the summary exists for — letting the audit answer <i>"on what terms?"</i> without
+    /// joining anything — was exactly the thing twenty licences at a time lost. Making it required rather
+    /// than optional is deliberate: an optional field is one a later caller omits, and the gap returns
+    /// silently.</para>
+    ///
+    /// <para>⚠ The sentence is composed by <see cref="IssuingWorkflow"/>, which knows the customer;
+    /// <see cref="LicenseRegister"/> appends the batch marker to it and never invents it. ⛔ The register
+    /// must not derive it from the payload — that would make the component whose job is "record what you
+    /// are told" start paraphrasing.</para>
+    /// </summary>
+    public required string Summary { get; init; }
 }
 
 /// <summary>What a batch actually did, once it is committed and therefore true.</summary>

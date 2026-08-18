@@ -2787,3 +2787,217 @@ carries `Reason` **and** `TermsChanged`, both of which L5.3 has now given real m
 ⚠ `IssueReasonPolicy` was written against ONE licence — a batch asks the same question per licence, so the
 open design question for L5.4 is whether one reason covers a whole batch or each licence answers for
 itself. ⛔ Do not decide it by making the policy lenient.
+
+---
+
+## 46. L5.4 — as built (2026-08-18)
+
+**Bulk selection and batch renewal, and — in the same round — the licences list rebuilt as EmberTern's own
+grid.** Both are below because they shipped together and were accepted together; they are otherwise
+independent, and §46.6 onwards is purely presentation.
+
+### 46.1 What it does
+
+The operator ticks licences in the **Licences** view, picks one target date, and extends every ticked
+licence to it — signing an artifact for each and committing the whole operation as ONE transaction.
+
+⭐ **Nothing about `IssueBatch` was rebuilt.** §39.1's guarantee — everything signed before anything is
+recorded, one transaction — is what this stage consumes. What L5.4 adds above it is a **plan**, a
+**preview**, and the rule that ties them together.
+
+### 46.2 The ratified decisions (D‑1 … D‑5)
+
+| | Decision | Where it lives |
+|---|---|---|
+| **D‑1** | **The reason is STATED, not picked.** An extension has exactly one truthful reason. ⛔ A dropdown of four here would invite an untruth — which is the trap L5.3 closed | `BatchRenewalViewModel`, and the hint under the action |
+| **D‑2** | `initial` is **not a choice**: it is what the register PROVES about a licence with no earlier artifact, and `IssueReasonPolicy.Offer` already answers exactly that. ⚠ Distinct from the inference L5.3 REMOVED — that one guessed `renewal` from a row count; this reads a fact the policy computes anyway. The first-issue count is shown | `BatchRenewalPlanner.Judge`, `PreviewSummary` |
+| **D‑3** | **One blocker holds the WHOLE operation.** There is no partial batch and no trimming. Blocked licences are named, never hidden | `BatchRenewalPlan.CanExecute`, the *Held* box |
+| **D‑4** | **No file is written.** A batch ends at a committed register; delivery stays the existing export action, from the stored token. An optional note is stored on the batch's audit line | `BatchRenewalViewModel`, the Note field |
+| **D‑5** | The **tick is not the selection** — see §46.4 | `LicenseBrowserViewModel`, the grid |
+
+### 46.3 ⭐⭐ The preview is the CONTRACT, not a courtesy
+
+The user's requirement was semantic atomicity as well as technical: *what the preview lists as qualifying
+is exactly what runs*. So the execution **does not derive a list of its own** — it re-plans from the same
+inputs and **refuses** if the fresh plan is not the one that was on screen (`BatchRenewalPlan.Matches`).
+⭐ *"20 selected, 19 done"* is therefore **unreachable**, not merely unlikely, and there is no reading of
+the screen from which it could follow.
+
+⭐ **`BatchRenewalPlanner` re-uses the register's own comparison** (`IssueChange.Between`) against the
+**pointer** `license_current_artifact`, never the newest row (§39.2) — the same measurement the single
+re-issue path makes. ⛔ Not re-implemented.
+
+**Three blockers, in the order they are checked**, each for a different reason:
+
+1. *target ≤ `NotBefore`* — a fault in the terms themselves. The licence FORM already refuses a licence
+   that ends before it begins, and a batch that could write one would be a second door into a state the
+   single path forbids.
+2. *target ≤ current expiry* — ⭐⭐ **this is where the word "extend" is enforced.** ⛔ It is deliberately
+   NOT a licensing rule: nothing in the register forbids moving an expiry backwards, and the single path
+   lets an operator do it with their eyes on one licence. What it forbids is doing it to twenty at once
+   under a button that says *extend*, because silently SHORTENING a customer's licence is the batch
+   mistake with no undo — the previous artifact stays valid in the field while the register now disagrees
+   with it.
+3. `IssueReasonPolicy.Refuse` — the UNCHANGED policy, once per licence, on the same terms the single path
+   uses. ⚠ `CanCompare == false` means UNKNOWN, and the policy already treats that as "cannot judge".
+
+### 46.4 ⭐⭐ The tick and the row selection are two different things
+
+`SelectedItem` answers *"which licence am I looking at?"* and changes on every click. The **checkbox**
+answers *"which licences am I about to change?"*. ⛔ Joined into one mechanism, an ordinary click would
+mean *select only this one* and nineteen decisions would vanish with no warning and no undo. So the list
+keeps a **single** selection and the tick lives on the row.
+
+⭐ **The authority is a set of licence IDS in `LicenseBrowserViewModel`, not the rows.** `Refresh()` runs on
+every keystroke in the search box and REBUILDS the rows; a tick that lived only on the row would be thrown
+away by one more typed character. ⚠ The consequence is stated rather than hidden: a licence can be ticked
+and not currently listed, so `CheckSummary` puts that on screen in words and the preview names every
+ticked licence.
+
+⭐ Ids rather than stored rows, because a row is a SNAPSHOT taken at tick time — a consumer planning from
+it would plan against whatever the register held then, and could never notice that anything had changed.
+
+### 46.5 Two things the stage had to unify rather than add
+
+- **`LicenseDay`** — the ONE place a chosen calendar day becomes an instant. The licence form has always
+  read a day as a UTC day running to the END of it; a batch asks the same question, and a second copy of
+  the rule is how two surfaces come to disagree **by a day**, silently, for one path only. ⚠ Not cosmetic:
+  storing midnight expires a licence at the START of the day it says it is valid until.
+- **The batch audit line.** ⚠ A batch used to be second-class in the audit: the single path has always
+  written *"Licensed to ACME, 5 seat(s), until 2028-01-01."* while a batch wrote only `"batch <id>"`.
+  `LicenseIssueUnit.Summary` is now **required**, composed by `IssuingWorkflow` (which knows the customer)
+  and marked by `LicenseRegister`, which appends and never invents.
+
+---
+
+### 46.6 ⭐⭐ The licences list became EmberTern's grid — linked, not reproduced
+
+The list was a `ListBox` whose rows were a hand-built `Grid` of fixed-width `TextBlock`s: no headers, no
+resizing, no sorting, no zebra, and a Fluent checkbox that on its own forced a **40 px** row.
+
+**The pattern was located before anything was designed**: the **Session Manager's session grid**
+(`SessionManagerTabView.axaml`) — flat, read-only, one row per entity, sortable, resizable. Its three
+layers separate cleanly: the `DataGrid` control is the framework's, the *appearance* is ours
+(`ControlStyles.axaml` 1426–1536), and the per-column `MinWidth` / `SortMemberPath` discipline is
+EmberTern's own convention.
+
+⭐⭐ **So the appearance was LINKED rather than copied.** The grid standard moved out of
+`ControlStyles.axaml` into **`Themes/DataGridStyles.axaml`**, with a `<StyleInclude>` at the exact
+position the block occupied — EmberTern's cascade is unchanged — and the License Manager links that file
+in its `.csproj`, exactly as it already links `Colors` / `Tokens` / `Typography` / `FluentBridge` /
+`IconGeometries`. Same move and same reason as the `IconGeometries.axaml` split: `ControlStyles.axaml`
+cannot travel (it binds to `EmberTern.App.Controls`, AvaloniaEdit and `avares://EmberTern/`), the grid
+standard binds to nothing but tokens. ⛔ The EDITING styles stayed behind — they describe EmberTern's
+editable grids and this list is read-only. `DataGridStylesSplitTests` (in `EmberTern.Tests`) fails the
+build if the file stops being portable, drops out of the cascade, or gets copied instead of linked.
+
+**Only one thing had to be REPRODUCED: the CheckBox** (`Themes/LicenseManagerControlThemes.axaml`).
+EmberTern's `ControlThemes.axaml` is unlinkable because its template instantiates `controls:SvgIcon`. What
+crossed is the minimum that carries **Release Blocker RB‑2**: the box takes `Size.Checkbox` (14), the
+control declares **no `MinHeight`** (that omission *is* the repair), and the hit target widens
+**horizontally only** to 20 px — the asymmetry is arithmetic, not taste, since a 22 px row less `Pad.Cell`
+leaves 16 px and a 20 px vertical target would push the row back to 26. ⛔ The indeterminate state was not
+reproduced: no surface in this application can reach it.
+
+**The grid, as built** — 8 columns: tick · Customer · Contact · Licence id · Seats · Status · Expiry ·
+Standing. **Expiry is new** (the date was in the model and the view never showed it); **Standing stayed**
+because it carries *"Never issued"*, which nothing else says, and is deliberately **not sortable** — it is
+a sentence about the expiry date, so sorted as text it orders by the letter E and sorted by date it is a
+second Expiry column under another name.
+
+⭐ **Every sortable column sorts on the value it MEANS, not on the text it shows**: `SeatsValue` (as text,
+*"10 seats"* precedes *"3 seats"*), the FULL `LicenseId` (the column shows a truncation), `ExpiresAtValue`.
+⭐ Sorting is a **projection**; the tick set is keyed by `LicenseId`, so re-ordering cannot touch it.
+⭐ Customer and Contact are the only STAR columns and both are capped: a star column with no ceiling eats a
+wide window, a fixed one cannot use it.
+
+**Measured, before → after:** row **40 → 22 px** (`Size.Row.Grid`) · header none → **24 px**
+(`Size.Row.Header`) · checkbox **28×32 → 18×14**, box 14×14 · columns 7 fixed → 8 with floors and
+ceilings, verified at window widths 760 / 1280 / 1920.
+
+⚠⚠ **The defect found on the way looked like something else entirely.** After the swap, rows measured
+**57 px** — *taller* than the `ListBox` they replaced. Cause: this application's implicit `TextBlock` style
+sets `TextWrapping="Wrap"`, so a customer name wrapped to three lines inside a 140 px column and
+`Licence id` wrapped inside its own header, stretching every header to match. The cell's *desired* size was
+correct (20) while its *arranged* size was 57. ⭐ Gotcha **#376 predicted this in writing** — *"or the next
+narrow column reopens it"* — and it was extended rather than duplicated; the fix is its own prescription
+scoped to `DataGridCell TextBlock, DataGridColumnHeader TextBlock`. ⚠ EmberTern needs neither setter and
+never showed this: it has no application-wide wrap.
+
+### 46.7 ⚠ Two findings about the grid standard itself
+
+1. **#381 — the declared row floor has never worked, in EITHER application.** Avalonia's `DataGrid` writes
+   `MinHeight = 0` onto every `DataGridRow` as a **local value**, which outranks a style setter
+   (`CLAUDE.md` UI rule §16's third route, arriving from the framework instead of a template). Probed:
+   priority `LocalValue`, value 0. The neighbouring setters DO apply — cell padding, cell font size,
+   header `MinHeight` 24 — so the standard looks like it is working. ⭐ A row's height therefore comes
+   entirely from its CELL, which is why completing the `Text.Grid` role with its `LineHeight` (15) is what
+   actually produced 22 px here, and why EmberTern's own rows sit at 18 rather than the catalogued 22.
+   ⛔ **Not repaired**: rows are compact either way and a fix would move every grid in the product.
+2. **#382 — a `DataGrid` recycles row containers across a re-sort**, so reading the displayed order off
+   realised `DataGridRow` visuals returns stale rows (a customer held once appeared twice). The projection
+   `DataGrid.CollectionView` is the answer. ⛔ The gesture is still a real click on a real header; only the
+   READ moved.
+
+### 46.8 ⚠⚠ Every guard proved by injected defect — 24 injections, 24 reds, and one real hole
+
+A harness applied each defect, built, ran the specific guard and reverted. **One injection initially stayed
+GREEN**, which proves nothing (#378): pointing `Licence id` at `ShortId` — the **truncated** value the
+column displays — left the whole suite green, because a 12-character prefix orders almost identically to
+the full identifier. ⭐ The behavioural tests **cannot** see that defect, so the repair is an explicitly
+labelled DECLARATION guard over the three columns that show a rendering of something
+(`SortMemberPath` for `Licence id` / `Seats` / `Expiry`), written as one rather than dressed up as
+behaviour.
+
+Reds, in one line: a renamed header · grid lines off · resizing off · sorting off · `SelectionMode`
+widened to `Extended` · Seats sorted as text · Standing made sortable · Customer without its ceiling ·
+without its floor · Licence id sorted on the truncation · the checkbox theme not merged · the box grown to
+24 · the checkbox given its own `MinHeight` · cells wrapping again · headers wrapping again · the grid role
+without its line height · cells no longer centred · zebra removed · **selection losing to zebra** · the
+header without its height role · the grid standard made type-bound · the standard dropped from the cascade
+· zebra drifting back into `ControlStyles.axaml` · the License Manager no longer linking the file.
+
+### 46.9 ⛔⛔ One incident, closed — the harness destroyed uncommitted work
+
+**Recorded because the process failed, not the code.** The first version of the injection harness restored
+patched files with `git checkout -- <path>` whenever it had no snapshot of them. Applied to
+`MainWindow.axaml` — a TRACKED file carrying this entire unaccepted stage — it reverted the file to `HEAD`
+and deleted L5.4's uncommitted markup along with the injected defect. ⚠ **The symptom was not an error**:
+the following injections reported *"anchor not found"*, which reads as a scripting bug.
+
+⭐ **Recovered in full** from `obj/Debug/net9.0/Avalonia/resources`, which holds the raw source text of
+every XAML file from the last build — 807 lines back, verified by an immediately following green suite
+(339/339). ⛔ That outcome was luck about *when* the build last ran, not a property of the process.
+
+The harness now snapshots each file immediately before patching it, restores from that snapshot, asserts
+byte-identity afterwards, and **contains no version-control call at all**. ⚠ Second-order finding from the
+same hour: two injection batches must never run concurrently — a second batch patched a different file
+mid-flight, so the first batch's remaining results were measured against a broken application and had to be
+discarded and re-run. Both halves are gotcha **#383**.
+
+### 46.10 Verification
+
+License Manager **340 / 340** and EmberTern **9 092 / 9 092**, each in **Debug and Release**; builds
+**0 / 0** in both configurations of both solutions. ✅ **User-verified visually in Debug, in both themes,
+2026-08-18.**
+
+⚠ One `EmberTern` Release run lost `TabStripPresentationTests` and went green **9 092 / 9 092 on re-run
+with no change** — this machine's usual victim of the documented headless race, exactly as §45.8 records.
+⚠⚠ **Stated honestly: the stack was again NOT captured** — the failure did not recur once output was going
+to a file. `CLAUDE.md` identifies that race by its stack, so the attribution rests on the surrounding
+evidence (green in isolation, green in Debug, green on re-run) rather than on the signature.
+
+### 46.11 ⏭ What L5.4 deliberately did NOT do
+
+⛔ No backup / JSONL / restore (L5.5). ⛔ No e-mail (L6). ⛔ No production key ceremony (L7). ⛔ No
+`.etlic` written by a batch (D‑4). ⛔ No partial batch (D‑3). ⛔ `SelectedItems` was **not** made the batch
+mechanism (§46.4). ⛔ `Tokens.axaml`, `Typography.axaml` and `Colors.axaml` untouched — zero new tokens,
+zero new colours. ⛔ `FluentBridge`'s missing `Calendar*` keys and `Icon.Name` still untouched — product
+work, both applications at once. ⛔ The License Manager is still English-only (§40.5).
+
+**Candidates recorded rather than fixed** (⛔ none to be picked up without the user's go-ahead):
+`DataGridRow.MinHeight` is inert product-wide (#381) · `CLAUDE.md` stands at ~814 lines against a ~700
+budget and an 800 tripwire · a select-all checkbox in the tick column's header, deliberately left blank so
+that "Select all shown" and "Clear selection" stay the only two bulk mechanisms · double-click → Inspect in
+the Licences view, which that list has never had · column-width memory in the License Manager (EmberTern's
+`GridLayoutBehavior` needs a settings store this application does not have).

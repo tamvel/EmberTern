@@ -11,6 +11,7 @@ using EmberTern.LicenseManager.Data;
 using EmberTern.LicenseManager.ViewModels;
 using EmberTern.LicenseManager.Views;
 using Xunit;
+using static EmberTern.LicenseManager.Tests.ViewProbe;
 
 namespace EmberTern.LicenseManager.Tests;
 
@@ -381,8 +382,8 @@ public sealed class LicenseManagerQaTests
             shell.SelectedLicense = shell.Licenses[0];
             window.UpdateLayout();
 
-            var pickers = window.GetVisualDescendants().OfType<CalendarDatePicker>().ToArray();
-            Assert.Equal(2, pickers.Length);
+            var pickers = FormPickers(window);
+            Assert.Equal(2, pickers.Count);
 
             // ⭐ Bound both ways, and displaying the day the register holds.
             Assert.Equal(licence.NotBefore.UtcDateTime.Date, pickers[0].SelectedDate);

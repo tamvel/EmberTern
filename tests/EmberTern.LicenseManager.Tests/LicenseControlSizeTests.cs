@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using EmberTern.LicenseManager.ViewModels;
 using EmberTern.LicenseManager.Views;
 using Xunit;
+using static EmberTern.LicenseManager.Tests.ViewProbe;
 
 namespace EmberTern.LicenseManager.Tests;
 
@@ -48,7 +49,7 @@ public sealed class LicenseControlSizeTests
             var window = Show(out _);
 
             var seats = Seats(window);
-            var pickers = window.GetVisualDescendants().OfType<CalendarDatePicker>().ToList();
+            var pickers = FormPickers(window);
 
             Assert.Equal(2, pickers.Count);
             foreach (var picker in pickers)
@@ -68,7 +69,7 @@ public sealed class LicenseControlSizeTests
 
             Assert.Equal(Field, Seats(window).Bounds.Height, precision: 3);
 
-            foreach (var picker in window.GetVisualDescendants().OfType<CalendarDatePicker>())
+            foreach (var picker in FormPickers(window))
             {
                 Assert.Equal(Field, picker.Bounds.Height, precision: 3);
             }
@@ -86,7 +87,7 @@ public sealed class LicenseControlSizeTests
             //   above failing with no clue why.
             var window = Show(out _);
 
-            var inner = window.GetVisualDescendants().OfType<CalendarDatePicker>()
+            var inner = FormPickers(window)
                 .Select(p => p.GetVisualDescendants().OfType<TextBox>().First())
                 .ToList();
 

@@ -24,12 +24,25 @@
              EmberTern.App's controls, which this application does not have. Icons are drawn with a
              Viewbox + Path — the `icon` style in LicenseManagerStyles.axaml. -->
         <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/IconGeometries.axaml" />
+        <!-- ⚠ AFTER IconGeometries, and that ordering is load-bearing rather than tidy: the CheckBox
+             template resolves its tick mark from `Icon.Check`. Reversed, this loads without a word and
+             the box simply never shows a mark. EmberTern's App.axaml carries the identical note over its
+             own ControlThemes.axaml, and IconGeometriesSplitTests guards it there. -->
+        <ResourceInclude Source="avares://EmberTern.LicenseManager/Themes/LicenseManagerControlThemes.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>
 
   <Application.Styles>
     <FluentTheme />
+    <!-- ⚠ The DataGrid ships its own Fluent theme in its own package, exactly as in EmberTern.App. -->
+    <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+    <!-- ⭐⭐ EmberTern's OWN grid standard, LINKED (see the csproj) rather than reproduced: row height,
+         header height, cell padding, zebra rows, selection over zebra, hover, header chrome, focus ring.
+         ⚠ AFTER the Fluent theme above — every selector in it repins something that theme paints, so the
+         reverse order loads silently and leaves Fluent's own metrics in place. Guarded from EmberTern's
+         side by DataGridStylesSplitTests. -->
+    <StyleInclude Source="avares://EmberTern.LicenseManager/Themes/DataGridStyles.axaml" />
     <StyleInclude Source="avares://EmberTern.LicenseManager/Themes/LicenseManagerStyles.axaml" />
   </Application.Styles>
 

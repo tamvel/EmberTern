@@ -86,8 +86,7 @@ public sealed class IssuingWorkflow
 
         var (record, issued) = Sign(session, license, customer, reason);
 
-        var summary =
-            $"Licensed to {customer.Name}, {license.Seats} seat(s), until {license.ExpiresAt:yyyy-MM-dd}.";
+        var summary = Summarise(customer, license);
 
         var artifact = _register.AppendArtifact(
             record,
@@ -137,12 +136,26 @@ public sealed class IssuingWorkflow
             {
                 Artifact = record,
                 UpdatedTerms = request.TermsChanged ? request.License : null,
+
+                // ⭐ Composed HERE, through the same function the single path uses, because this is the
+                //    only layer that holds the customer. The register writes what it is handed.
+                Summary = Summarise(request.Customer, request.License),
             });
         }
 
         // ── Phase 2 — record, atomically. ───────────────────────────────────────────────────────────
         return _register.ApplyIssueBatch(units, note);
     }
+
+    /// <summary>
+    /// ⭐ The ONE place the terms become a sentence, used by the single issue and by every unit of a
+    /// batch — so an audit line written twenty at a time says exactly what one written alone says.
+    ///
+    /// <para>⚠ It lives here rather than in the register because it needs the CUSTOMER, and the register
+    /// deliberately does not go looking for one: it records what it is told.</para>
+    /// </summary>
+    public static string Summarise(CustomerRecord customer, LicenseRecord license) =>
+        $"Licensed to {customer.Name}, {license.Seats} seat(s), until {license.ExpiresAt:yyyy-MM-dd}.";
 
     // ⭐ The ONE place a licence becomes a signature, used by both the single issue and every unit of a
     //    batch — so the two can never disagree about what gets signed.

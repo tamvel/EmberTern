@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -9,6 +9,7 @@ using EmberTern.LicenseManager.Data;
 using EmberTern.LicenseManager.ViewModels;
 using EmberTern.LicenseManager.Views;
 using Xunit;
+using static EmberTern.LicenseManager.Tests.ViewProbe;
 
 namespace EmberTern.LicenseManager.Tests;
 
@@ -168,7 +169,7 @@ public sealed class IssueReasonUiTests
             var (window, _) = Show(manager);
 
             var seats = Seats(window);
-            var pickers = window.GetVisualDescendants().OfType<CalendarDatePicker>().ToList();
+            var pickers = FormPickers(window);
 
             Assert.True(double.IsNaN(seats.Width), "Seats must carry no explicit Width.");
             Assert.Equal(2, pickers.Count);

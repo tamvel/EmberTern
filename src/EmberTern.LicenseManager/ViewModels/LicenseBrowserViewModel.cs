@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -48,14 +49,32 @@ public sealed record IssuingFilter(string Label, bool? NeverIssued) : FilterOpti
 ///
 /// <para>⭐ The formatting lives here rather than in the view because "expires in 12 days" is a
 /// judgement about a date, not a layout decision — and a judgement is worth a test. ⚠ No Avalonia types
-/// (Architecture rule 1); everything below is a string.</para>
+/// (Architecture rule 1); everything below is a string or a bool.</para>
+///
+/// <para>⚠⚠ <b>An observable CLASS rather than a record, since L5.4, and only because of
+/// <see cref="IsChecked"/>.</b> A batch tick is state the ROW carries and the operator toggles, so it has
+/// to notify; every other member here is still an immutable projection of what the register said.</para>
 /// </summary>
-public sealed record LicenseListItem
+public sealed partial class LicenseListItem : ObservableObject
 {
     private const string DateFormat = "yyyy-MM-dd";
 
     /// <summary>What the register answered.</summary>
     public required LicenseSummary Summary { get; init; }
+
+    /// <summary>
+    /// ⭐⭐ Whether this licence is ticked for a batch operation.
+    ///
+    /// <para><b>Deliberately independent of the list's own selection.</b> Row selection answers "which
+    /// licence am I looking at?" and changes on every click; a batch tick answers "which licences am I
+    /// about to change?" and must survive one. Tying the two together would mean a stray click on row
+    /// four throws away nineteen decisions — which is the one failure a bulk operation cannot have.</para>
+    ///
+    /// <para>⚠ The row is rebuilt on every <see cref="LicenseBrowserViewModel.Refresh"/>, so this value
+    /// is RESTORED from the browser's id set rather than being the authority for it.</para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _isChecked;
 
     /// <summary>⭐ The name signed into every artifact for this licence.</summary>
     public required string CustomerName { get; init; }
@@ -63,8 +82,35 @@ public sealed record LicenseListItem
     /// <summary>The licence id, shortened for a list. The full one is on the detail strip.</summary>
     public required string ShortId { get; init; }
 
+    /// <summary>
+    /// ⭐ The FULL licence id, for the grid to sort on.
+    ///
+    /// <para>⚠ Not the same value the column shows. <see cref="ShortId"/> is truncated for width, and
+    /// sorting a list on a truncated key is a list that orders two licences by where the ellipsis fell.
+    /// The identity is what sorts; the abbreviation is what is read.</para>
+    /// </summary>
+    public string LicenseId => Summary.License.LicenseId;
+
     /// <summary>Contractual seats (D2) — displayed, never enforced.</summary>
     public required string Seats { get; init; }
+
+    /// <summary>
+    /// ⭐⭐ The seat count as a NUMBER, for the grid to sort on.
+    ///
+    /// <para>⚠ <see cref="Seats"/> is a sentence ("5 seats"), and text order is not seat order: sorted as
+    /// text, "10 seats" lands before "3 seats". A column that shows a count and sorts it alphabetically
+    /// is worse than a column that does not sort at all — it answers the operator's question with a
+    /// confident wrong answer.</para>
+    /// </summary>
+    public int SeatsValue => Summary.License.Seats;
+
+    /// <summary>
+    /// The expiry as a DATE, for the grid to sort on.
+    ///
+    /// <para>⚠ <see cref="Expiry"/> happens to sort correctly as text because it is ISO — which is luck
+    /// rather than design, and luck that ends the day the format is localised.</para>
+    /// </summary>
+    public DateTimeOffset ExpiresAtValue => Summary.License.ExpiresAt;
 
     /// <summary>The contact person, or an em dash when the customer has none recorded.</summary>
     public required string Contact { get; init; }
@@ -196,6 +242,158 @@ public sealed partial class LicenseBrowserViewModel : ObservableObject
     /// <summary>What the list currently shows.</summary>
     public ObservableCollection<LicenseListItem> Results { get; } = [];
 
+    // ── Batch ticks (L5.4) ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Raised whenever the ticked set changes — what the batch preview rebuilds on.</summary>
+    public event EventHandler? CheckedChanged;
+
+    /// <summary>
+    /// ⭐⭐ <b>The ticked set survives a filter change, and that is deliberate.</b>
+    ///
+    /// <para><see cref="Refresh"/> runs on EVERY keystroke in the search box, and it REBUILDS the rows.
+    /// If the tick lived only on the row, one more character typed after ticking twenty licences would
+    /// silently throw all twenty away. So the authority is a set of licence IDS held here, and every
+    /// rebuilt row has its checkbox restored from it.</para>
+    ///
+    /// <para>⚠ The consequence is stated rather than hidden: a licence can be ticked and not currently
+    /// listed. <see cref="CheckedNotShown"/> puts that on screen in words, and the batch preview lists
+    /// every ticked licence by name — so "what will run" is never narrower or wider than what the operator
+    /// can read.</para>
+    /// </summary>
+    private readonly Dictionary<string, LicenseSummary> _checked = new(StringComparer.Ordinal);
+
+    // ⚠ Set while this view model is the one writing IsChecked onto rows, so a restore is not read back
+    //   as an operator's decision — and so one command raises ONE change notification, not twenty.
+    private bool _syncingChecks;
+
+    /// <summary>
+    /// The IDS of every ticked licence.
+    ///
+    /// <para>⭐⭐ <b>Ids, not the rows.</b> The rows here are a SNAPSHOT taken when the licence was ticked,
+    /// and a consumer that planned an operation from them would be planning against whatever the register
+    /// held at that moment. Handing out identities instead forces the consumer to read the register when
+    /// it acts — which is also what makes <c>BatchRenewalPlan.Matches</c> able to notice that something
+    /// changed, rather than comparing one cached reading against itself.</para>
+    /// </summary>
+    public IReadOnlyCollection<string> CheckedIds => _checked.Keys;
+
+    /// <summary>How many licences are ticked.</summary>
+    public int CheckedCount => _checked.Count;
+
+    /// <summary>⚠ How many ticked licences the current filters are hiding. Shown, never silently dropped.</summary>
+    public int CheckedNotShown
+    {
+        get
+        {
+            var shown = 0;
+            foreach (var item in Results)
+            {
+                if (_checked.ContainsKey(item.Summary.License.LicenseId))
+                {
+                    shown++;
+                }
+            }
+
+            return _checked.Count - shown;
+        }
+    }
+
+    /// <summary>Whether anything is ticked.</summary>
+    public bool HasChecked => _checked.Count > 0;
+
+    /// <summary>The ticked set in one line, including what the filters are hiding.</summary>
+    public string CheckSummary
+    {
+        get
+        {
+            if (_checked.Count == 0)
+            {
+                return "No licence selected.";
+            }
+
+            var selected = _checked.Count == 1 ? "1 licence selected" : $"{_checked.Count} licences selected";
+            var hidden = CheckedNotShown;
+
+            return hidden == 0
+                ? selected + "."
+                : $"{selected} — {hidden} of them not shown by the current filters.";
+        }
+    }
+
+    /// <summary>Ticks every licence the filters currently show.</summary>
+    [RelayCommand]
+    private void CheckAllShown()
+    {
+        foreach (var item in Results)
+        {
+            _checked[item.Summary.License.LicenseId] = item.Summary;
+        }
+
+        RestoreChecks();
+        RaiseCheckedChanged();
+    }
+
+    /// <summary>Unticks everything, including licences the filters are hiding.</summary>
+    [RelayCommand]
+    private void ClearChecks()
+    {
+        _checked.Clear();
+        RestoreChecks();
+        RaiseCheckedChanged();
+    }
+
+    // ⭐ One row's checkbox, toggled by the operator. A row the filters hide has no checkbox to click, so
+    //    its tick is left exactly as it was — which is what makes the set survive a keystroke.
+    private void OnRowCheckedChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_syncingChecks ||
+            !string.Equals(e.PropertyName, nameof(LicenseListItem.IsChecked), StringComparison.Ordinal) ||
+            sender is not LicenseListItem item)
+        {
+            return;
+        }
+
+        var id = item.Summary.License.LicenseId;
+
+        if (item.IsChecked)
+        {
+            _checked[id] = item.Summary;
+        }
+        else
+        {
+            _checked.Remove(id);
+        }
+
+        RaiseCheckedChanged();
+    }
+
+    // ⚠ Rows are rebuilt on every Refresh, so their checkboxes start false and have to be told again.
+    private void RestoreChecks()
+    {
+        _syncingChecks = true;
+        try
+        {
+            foreach (var item in Results)
+            {
+                item.IsChecked = _checked.ContainsKey(item.Summary.License.LicenseId);
+            }
+        }
+        finally
+        {
+            _syncingChecks = false;
+        }
+    }
+
+    private void RaiseCheckedChanged()
+    {
+        OnPropertyChanged(nameof(CheckedCount));
+        OnPropertyChanged(nameof(CheckedNotShown));
+        OnPropertyChanged(nameof(HasChecked));
+        OnPropertyChanged(nameof(CheckSummary));
+        OnPropertyChanged(nameof(CheckedIds));
+        CheckedChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>⛔ <c>superseded</c> is not here — it is a fact about an artifact, not about a licence row.</summary>
     public IReadOnlyList<StatusFilter> StatusFilters { get; } =
     [
@@ -300,19 +498,31 @@ public sealed partial class LicenseBrowserViewModel : ObservableObject
 
         var rows = _register.QueryLicenses(BuildQuery(now));
 
+        foreach (var stale in Results)
+        {
+            stale.PropertyChanged -= OnRowCheckedChanged;
+        }
+
         Results.Clear();
         foreach (var row in rows)
         {
-            Results.Add(LicenseListItem.From(row, now));
+            var item = LicenseListItem.From(row, now);
+            item.PropertyChanged += OnRowCheckedChanged;
+            Results.Add(item);
         }
 
         // ⭐ Selection survives a keystroke. Without this, typing one more character into the search box
         //    clears the detail strip the operator is reading.
         SelectedLicense = keep is null ? null : FindById(keep);
 
+        // ⭐ And so do the TICKS — restored from the id set onto the freshly built rows, so a narrowed
+        //    filter hides rows without unticking them (see the `_checked` remarks).
+        RestoreChecks();
+
         HasResults = Results.Count > 0;
         ResultSummary = Describe(Results.Count);
         OnPropertyChanged(nameof(IsFiltered));
+        RaiseCheckedChanged();
     }
 
     /// <summary>Builds the query the current filters stand for. ⭐ Public so a test can read it.</summary>

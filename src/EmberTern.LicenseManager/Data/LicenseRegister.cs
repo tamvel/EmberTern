@@ -568,6 +568,17 @@ public sealed class LicenseRegister : IDisposable
                 throw new RegisterIntegrityException(
                     $"A batch unit pairs the terms of licence {terms.LicenseId} with an artifact for {lid}.");
             }
+
+            // ⭐ A batch may not be worse to audit than a single issue. The summary is the sentence that
+            //    lets `licence.issued` answer "on what terms?" without joining anything, and a blank one
+            //    would put the gap back while every test stayed green.
+            if (string.IsNullOrWhiteSpace(unit.Summary))
+            {
+                throw new ArgumentException(
+                    $"The batch unit for licence {lid} carries no terms summary, so its audit line could " +
+                    "not say what was issued.",
+                    nameof(units));
+            }
         }
 
         var now = _clock();
@@ -584,7 +595,12 @@ public sealed class LicenseRegister : IDisposable
                 SaveLicenseCore(transaction, terms, now, batchNote);
             }
 
-            stored.Add(AppendArtifactCore(transaction, unit.Artifact, now, batchNote));
+            // ⭐ The SAME sentence the single issuing path writes, plus the marker that says this one was
+            //    part of an operation. ⚠ Appended rather than instead of, exactly as the operator's own
+            //    note is on the single path: the summary is the terms, the marker is the correlation, and
+            //    dropping either leaves a question the audit can no longer answer on its own.
+            stored.Add(AppendArtifactCore(
+                transaction, unit.Artifact, now, $"{unit.Summary.Trim()} ({batchNote})"));
         }
 
         // ⭐ One line that says the operation happened as one act. Without it the history shows forty

@@ -49,6 +49,8 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         _workflow = new IssuingWorkflow(register, _clock);
         Browser = new LicenseBrowserViewModel(register, _clock);
         History = new ArtifactHistoryViewModel(register, _workflow, session);
+        BatchRenewal = new BatchRenewalViewModel(
+            register, _workflow, session, Browser, message => Message = message);
 
         ReloadCustomers();
         Message = StatusMessage.Info($"Signing with key {session.KeyId}.");
@@ -76,6 +78,15 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     /// stage boundary: <c>issued_artifacts</c> refuses UPDATE and DELETE at the database.</para>
     /// </summary>
     public ArtifactHistoryViewModel History { get; }
+
+    /// <summary>
+    /// Extending many licences to one date, as one act — the licences view's bulk operation.
+    ///
+    /// <para>⭐ It reads the browser's ticked set rather than owning a selection of its own, so there is
+    /// exactly one answer to <i>"which licences is this about?"</i> ⛔ It writes no file (D‑4): a batch
+    /// ends at a committed register, and delivery stays the separate export action.</para>
+    /// </summary>
+    public BatchRenewalViewModel BatchRenewal { get; }
 
     /// <summary>Which of the two views is showing.</summary>
     [ObservableProperty]
@@ -741,16 +752,12 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             return false;
         }
 
-        // ⭐ The chosen calendar day is read as a UTC day. The picker hands back a local DateTime whose
-        //   Kind is Unspecified; taking .Date and pinning the offset to zero is what keeps a licence
-        //   issued in Warsaw and one issued in London meaning the same thing.
-        notBefore = new DateTimeOffset(startDate.Date, TimeSpan.Zero);
-        expiresAt = new DateTimeOffset(endDate.Date, TimeSpan.Zero);
-
-        // ⭐ The expiry runs to the END of the day the operator typed. Storing midnight would expire a
-        //    licence at the start of the day it says it is valid until, which is an off-by-one nobody
-        //    reads as a bug until a customer is locked out on a date their invoice says they own.
-        expiresAt = expiresAt.AddDays(1).AddSeconds(-1);
+        // ⭐ Both conversions go through LicenseDay, which is the ONE owner of "a chosen day as a UTC
+        //   day" and of "the expiry runs to the END of it". ⚠ The batch renewal picks a date too, and a
+        //   second copy of that arithmetic here is exactly how the two surfaces would come to differ by
+        //   a day for licences that happened to go through the other one.
+        notBefore = LicenseDay.StartOf(startDate);
+        expiresAt = LicenseDay.EndOf(endDate);
 
         if (expiresAt <= notBefore)
         {

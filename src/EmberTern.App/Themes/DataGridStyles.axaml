@@ -1,0 +1,140 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ================================================================================================
+       ⭐⭐ THE DATAGRID STANDARD — one grid appearance, for every grid in every EmberTern application.
+
+       ⚠ SPLIT OUT OF `ControlStyles.axaml` (2026-08-18), and for exactly the reason `IconGeometries.axaml`
+       was split before it: `ControlStyles.axaml` is NOT linkable from EmberTern.LicenseManager — it binds
+       to `EmberTern.App.Controls`, to AvaloniaEdit and to `avares://EmberTern/...`, none of which that
+       application has or may acquire (`EmberTern.LicenseManager.csproj` records the full list). These
+       styles bind to NOTHING but theme tokens, so they can be — and are — LINKED into the License
+       Manager instead of copied. ⛔ A copy would drift on the first metric change, and the drift would be
+       invisible until someone put the two windows side by side.
+
+       ⛔ NOTHING TYPE-BOUND MAY BE ADDED HERE. No `controls:`, no AvaloniaEdit, no `avares://EmberTern/`,
+       no class selector that only one application defines. The EDITING styles deliberately stayed behind
+       in `ControlStyles.axaml` (`DataGridCell TextBox`, `DataGrid.field-grid`, `DataGridCell Button`,
+       `DataGridCell CalendarDatePicker`): they describe EmberTern's editable grids, and the License
+       Manager's licence list is read-only. `DataGridStylesSplitTests` fails the build if this file stops
+       being portable.
+
+       ⚠ ORDER: this file must be included AFTER `avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml`
+       — every selector below repins something that theme paints. `ControlStyles.axaml` includes it at the
+       position the block used to occupy, so EmberTern's cascade is unchanged; the License Manager
+       includes it directly (see its `App.axaml`).
+       ================================================================================================ -->
+
+  <!-- DataGrid: selection / hover wired through SelectionBrush + HoverOverlayBrush
+       so colors match the TreeView. FluentTheme's DataGridRow template names the
+       background as Rectangle#BackgroundRectangle. -->
+  <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="DataGridRow:selected:pointerover /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <!-- ================================================================================================
+       ⭐ DATAGRID STANDARD — §8.4 specyfikacji, Product Polish M2b krok 7 (ostatni krok etapu).
+
+       Specyfikacja żąda JEDNEGO standardu dla wszystkich siatek i wylicza, co ma definiować:
+       wysokość nagłówków · wysokość wierszy · wysokość edytorów · wysokość checkboxów ·
+       wyrównanie tekstu · odstępy · zaznaczenie aktywnego wiersza · zachowanie podczas edycji.
+
+       ⚠ TEN KROK NIE JEST PRZEBUDOWĄ — jest DOMKNIĘCIEM. Sześć z ośmiu punktów było już zrobionych,
+       tylko rozproszonych po etapie i wyrażonych LICZBAMI zamiast rolami:
+         · wysokość checkboxów  → krok 1 (własny szablon, `Size.Checkbox`)
+         · wysokość edytorów    → kroki 5.2 i 5.4 (`DataGridCell TextBox` / `Button`)
+         · zaznaczenie wiersza  → istniejące `SelectionBrush` na `Rectangle#BackgroundRectangle`
+         · zachowanie w edycji  → konsekwencja dwóch powyższych: edytor bierze wysokość WIERSZA,
+                                   więc wejście w edycję nie rusza układu (Zero Layout Shift)
+       Brakowało dwóch: **zadeklarowanej wysokości wiersza i nagłówka**. Reszta to zamiana liczb
+       (11 · `8,3` · `8,4` · `SemiBold`) na role, które i tak niosły dokładnie te wartości.
+
+       ⚠ `MinHeight` wiersza to PODŁOGA, nie sztywna wysokość — wyższa zawartość nadal rozpycha
+       wiersz. Dotąd stało tu `0`, czyli „siatka nie ma standardu, ma wynik pomiaru zawartości":
+       identyczne dane dawały identyczne wiersze przypadkiem, a nie z decyzji.
+       ================================================================================================ -->
+  <Style Selector="DataGridCell">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Grid.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Grid.Weight}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Cell}" />
+    <!-- ⚠ Komórka nie ma własnej wysokości — daje ją WIERSZ. Dwa źródła wysokości w jednym miejscu
+         zawsze wygrywa większe, więc jedno z nich musi być zerowe (ta sama reguła co `Pad.Control`
+         z zerowym pionem w kroku 5.2). -->
+    <Setter Property="MinHeight" Value="0" />
+    <!-- „Wyrównanie tekstu" z §8.4: przy podłodze wiersza wyższej niż zawartość tekst bez
+         wyśrodkowania osiadłby przy górnej krawędzi komórki. -->
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="DataGridRow">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Grid}" />
+  </Style>
+
+  <!-- Zebra stripes: tint every other row. Avalonia 12's DataGrid doesn't expose
+       AlternatingRowBackground as an attached/regular property in the version we
+       pull, so we drive it via :nth-child on the row's BackgroundRectangle part. -->
+  <Style Selector="DataGridRow:nth-child(2n) /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource RowAlternateBrush}" />
+  </Style>
+
+  <!-- Selection must win over zebra stripe regardless of row parity. Without these,
+       the :nth-child(2n) rule above re-fills the BackgroundRectangle of every even
+       selected row with RowAlternateBrush — and selection silently disappears on
+       half the rows. Higher specificity (extra :selected token) wins the cascade. -->
+  <Style Selector="DataGridRow:nth-child(2n):selected /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="DataGridRow:nth-child(2n):selected:pointerover /template/ Rectangle#BackgroundRectangle">
+    <Setter Property="Fill" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <!-- Column headers consistent with the rest of the UI: elevated panel background,
+       subtle border, themed foreground. Default FluentTheme picks SystemAccent for
+       hover/press which clashes with the dark blue accent. -->
+  <!-- ⚠ Nagłówek jest o stopień WYŻSZY od wiersza (`Size.Row.Header` 24 vs `Size.Row.Grid` 22) i to
+       jest cała jego rama: czyta się jako nagłówek bez potrzeby ramki, kreski ani innego tła
+       niż chroma. Dwie role wysokości, jedna decyzja (§5). -->
+  <Style Selector="DataGridColumnHeader">
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Header}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.GridHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.GridHeader.Weight}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Cell}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="SeparatorBrush" Value="{DynamicResource BorderBrush}" />
+  </Style>
+
+  <Style Selector="DataGridColumnHeader:pointerover /template/ Grid#PART_ColumnHeaderRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="DataGridColumnHeader:pressed /template/ Grid#PART_ColumnHeaderRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <!-- DataGridCell focus visual. FluentTheme's template inserts a focus
+       Rectangle inside the cell border with a small inset margin; on some
+       systems the bottom edge gets clipped because the rectangle's bounds
+       end exactly at the cell's bottom padding edge. Pulling the margin in
+       by 1 px on every side and dropping stroke thickness to 1 keeps the
+       full rectangle inside the cell at every zoom level. The stroke uses
+       FocusBorderBrush (blue) — paired with the resource-key override on
+       DataGridCellFocusVisualPrimaryBrush in Colors.axaml so any other
+       FluentTheme code paths painting "focus visual" also pick our blue. -->
+  <Style Selector="DataGridCell /template/ Rectangle#FocusVisual">
+    <Setter Property="Margin" Value="1" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="Stroke" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+</Styles>

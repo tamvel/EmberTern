@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using EmberTern.Licensing;
@@ -63,9 +63,9 @@ public sealed class IssueBatchTests : IDisposable
 
         var thrown = Assert.ThrowsAny<SqliteException>(() => _register.ApplyIssueBatch(
         [
-            new LicenseIssueUnit { Artifact = Artifact("lid-1"), UpdatedTerms = extended },
-            new LicenseIssueUnit { Artifact = Artifact("lid-2"), UpdatedTerms = ExtendedTerms("lid-2", Now.AddYears(3)) },
-            new LicenseIssueUnit { Artifact = Artifact("ghost") },
+            new LicenseIssueUnit { Artifact = Artifact("lid-1"), UpdatedTerms = extended, Summary = Summary("lid-1") },
+            new LicenseIssueUnit { Artifact = Artifact("lid-2"), UpdatedTerms = ExtendedTerms("lid-2", Now.AddYears(3)), Summary = Summary("lid-2") },
+            new LicenseIssueUnit { Artifact = Artifact("ghost"), Summary = Summary("ghost") },
         ]));
 
         Assert.Contains("FOREIGN KEY", thrown.Message, StringComparison.OrdinalIgnoreCase);
@@ -110,6 +110,7 @@ public sealed class IssueBatchTests : IDisposable
             {
                 Artifact = Artifact($"lid-{i}"),
                 UpdatedTerms = ExtendedTerms($"lid-{i}", Now.AddYears(2)),
+                Summary = Summary($"lid-{i}"),
             })
             .ToArray();
 
@@ -153,8 +154,8 @@ public sealed class IssueBatchTests : IDisposable
 
         _register.ApplyIssueBatch(
         [
-            new LicenseIssueUnit { Artifact = Artifact("lid-1"), UpdatedTerms = ExtendedTerms("lid-1", Now.AddYears(5)) },
-            new LicenseIssueUnit { Artifact = Artifact("lid-2") },
+            new LicenseIssueUnit { Artifact = Artifact("lid-1"), UpdatedTerms = ExtendedTerms("lid-1", Now.AddYears(5)), Summary = Summary("lid-1") },
+            new LicenseIssueUnit { Artifact = Artifact("lid-2"), Summary = Summary("lid-2") },
         ]);
 
         Assert.Equal(Now.AddYears(5), _register.GetLicense("lid-1")!.ExpiresAt);
@@ -188,10 +189,28 @@ public sealed class IssueBatchTests : IDisposable
 
         Assert.Throws<RegisterIntegrityException>(() => _register.ApplyIssueBatch(
         [
-            new LicenseIssueUnit { Artifact = Artifact("lid-1"), UpdatedTerms = ExtendedTerms("lid-2", Now.AddYears(3)) },
+            new LicenseIssueUnit { Artifact = Artifact("lid-1"), UpdatedTerms = ExtendedTerms("lid-2", Now.AddYears(3)), Summary = Summary("lid-1") },
         ]));
 
         Assert.Equal(Now.AddYears(1), _register.GetLicense("lid-2")!.ExpiresAt);
+    }
+
+    [Fact]
+    public void ABatchUnitWithNoTermsSummaryIsRefusedBeforeAnythingIsOpened()
+    {
+        // ⭐⭐ D‑5. A batch may not be worse to audit than a single issue. The summary is what lets
+        //     `licence.issued` answer "on what terms?" without joining anything, and a blank one would put
+        //     that gap back while every other test stayed green.
+        SeedThree();
+
+        Assert.Throws<ArgumentException>(() => _register.ApplyIssueBatch(
+        [
+            new LicenseIssueUnit { Artifact = Artifact("lid-1"), Summary = Summary("lid-1") },
+            new LicenseIssueUnit { Artifact = Artifact("lid-2"), Summary = "   " },
+        ]));
+
+        // ⚠ Refused BEFORE the transaction opens, so the first unit left no trace either.
+        Assert.Empty(_register.GetArtifacts("lid-1"));
     }
 
     [Fact]
@@ -312,7 +331,13 @@ public sealed class IssueBatchTests : IDisposable
     private LicenseRecord ExtendedTerms(string licenseId, DateTimeOffset expiresAt) =>
         _register.GetLicense(licenseId)! with { ExpiresAt = expiresAt };
 
-    private static LicenseIssueUnit Unit(string licenseId) => new() { Artifact = Artifact(licenseId) };
+    private static LicenseIssueUnit Unit(string licenseId) =>
+        new() { Artifact = Artifact(licenseId), Summary = Summary(licenseId) };
+
+    // ⭐ The sentence a real batch carries — composed by IssuingWorkflow.Summarise there, stood in for
+    //    here. ⚠ Required rather than optional on purpose: a batch may not be worse to audit than a
+    //    single issue, and an optional field is one a caller omits.
+    private static string Summary(string licenseId) => $"Licensed to {licenseId}, 5 seat(s), until 2029-01-01.";
 
     private static IssuedArtifactRecord Artifact(string licenseId, DateTimeOffset? issuedAt = null) => new()
     {

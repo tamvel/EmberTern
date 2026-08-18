@@ -157,6 +157,41 @@
     <Setter Property="Padding" Value="{DynamicResource Pad.Group}" />
   </Style>
 
+  <!-- ── A command row ───────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ EVERY CONTROL IN A COMMAND ROW STANDS ON THE ACTION LADDER, and that follows the tokens'
+       own written contract rather than overriding it.
+
+       `Tokens.axaml` keeps TWO independent ladders and says what separates them: `Size.Control` (24)
+       describes a control standing in a SERIES, "gdzie liczy się wyrównanie i gęstość" — the filter
+       card's four fields, the licence form's Seats and two dates. `Size.ControlProminent` (28)
+       describes one standing ALONE, "w którą użytkownik celuje świadomie i często", and its own
+       comment records a button AND a text field as the two consumers known when it was added.
+
+       The batch card's row is not a series: a date and a note stand alone beside three buttons, each
+       one a target the operator aims at on purpose. Measured before this style: picker 24, note 24,
+       three buttons 28 — one row, two ladders, which is what the QA report showed.
+
+       ⛔ Scoped to the ROW, never to `CalendarDatePicker`: the licence form's two pickers ARE a series
+       and stay at 24, which `LicenseControlSizeTests` measures on exactly those two. Injecting the
+       GLOBAL change — the existing `CalendarDatePicker` setter moved to 28 — turns those tests red, which
+       is what proves the rule is load-bearing rather than decorative.
+
+       ⚠ One injection that did NOT prove it, recorded so nobody repeats it and draws the wrong
+       conclusion: rewriting the selector below as a bare `CalendarDatePicker` left every test GREEN. Not
+       because the scoping is unnecessary — because a second GENERIC rule declared here, ABOVE the
+       `CalendarDatePicker` style further down this file, simply loses to it. A vacuous injection says
+       something about the injection, not about the code (#378).
+       ⛔ DIRECT children only. A descendant selector would also reach `PART_TextBox` inside the
+       picker's own template, whose `MinHeight` is deliberately 0 so the picker can own its height —
+       and undoing that is measured to leave the field rendering 26 while asking for 24. -->
+  <Style Selector="Grid.command-row > StackPanel > CalendarDatePicker">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+  </Style>
+
+  <Style Selector="Grid.command-row > StackPanel > TextBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+  </Style>
+
   <!-- ── The dialog skeleton ─────────────────────────────────────────────────────────────────── -->
   <!-- ⭐⭐ EmberTern's dialogs are BANDED, and that band structure IS the product's visual language for
        a window that asks the user for something: a PanelBrush header carrying the h1 and separated by a
@@ -648,6 +683,60 @@
   <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <!-- ── Grids ───────────────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ EVERYTHING ABOUT HOW THE GRID LOOKS COMES FROM `Themes/DataGridStyles.axaml` — EmberTern.App's
+       own file, LINKED rather than copied (see the csproj and App.axaml). Row height, header height, cell
+       padding, zebra rows, selection over zebra, hover, header chrome and the focus ring are all defined
+       exactly once, for both applications. ⛔ Do not restate any of them here: a local value would make
+       this window drift from EmberTern's grids silently, which is the one thing the link exists to stop.
+
+       ⚠ The two setters below are not appearance, they are CONTAINMENT — the grid stands inside a
+       `Border.card`, which already draws the surface and the frame. Left at Fluent's defaults the card
+       would show a second background inside its own and a second border just inside its own.
+       ⭐ Both values are ZERO / Transparent, i.e. "none": the same standing `Transparent` has among
+       colours, and neither is a metric a token names. -->
+  <Style Selector="DataGrid">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- ⚠⚠ A GRID CELL IS ONE LINE, AND THIS APPLICATION HAS TO SAY SO — measured, not assumed.
+       The implicit `TextBlock` style at the top of this file sets `TextWrapping="Wrap"`, which is right
+       for a form and catastrophic in a grid: a customer name in a 140 px column wrapped to three lines,
+       every cell measured 57 px instead of 20, and the licence rows came out TALLER than the ListBox they
+       replaced. ⚠ Nothing about it looked like a wrapping bug — the row was simply the wrong height.
+
+       ⭐ So the rule is stated POSITIVELY (rule 11): a cell shows ONE line, and a value too wide for its
+       column loses its TAIL rather than its meaning. Ellipsis rather than a hard clip, because a name cut
+       mid-glyph reads as a shorter, different, wholly plausible name.
+       ⚠ EmberTern needs neither setter: it has no application-wide wrap, so its cells are single-line by
+       default. This is not a second standard — it is this application undoing its own form default at the
+       one place a form default does not belong. -->
+  <!-- ⚠ BOTH halves of the grid, and the second was found by measurement rather than by reasoning: with
+       the cells fixed the ROW came out right and the HEADER was still 57 px, because "Licence id" wrapped
+       inside its own 140 px column and every other header was stretched to match it. A header that wraps
+       is the same defect one line higher up. -->
+  <Style Selector="DataGridCell TextBlock">
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <!-- ⭐ COMPLETING THE ROLE THE SHARED FILE STARTS. `DataGridStyles.axaml` puts `Text.Grid.Size` and
+         `Text.Grid.Weight` on the cell, and the cell inherits both down to this TextBlock — but
+         `LineHeight` is a TextBlock property, so it cannot travel that way, and left unset the block
+         falls back to `Text.Application.LineHeight` from the implicit style at the top of this file. That
+         is the FORM's line height inside a grid: measured, it is the difference between a 24 px row and
+         the 21 px the grid role actually asks for. A role is family + size + weight + line height, or it
+         is not the role (Typography.axaml says so in its own header). -->
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Grid.LineHeight}" />
+  </Style>
+
+  <Style Selector="DataGridColumnHeader TextBlock">
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <!-- ⚠ The HEADER's own role, not the cell's — they are two roles in the catalog even where the
+         numbers currently agree, and `Text.GridHeader` is the one that carries SemiBold. -->
+    <Setter Property="LineHeight" Value="{DynamicResource Text.GridHeader.LineHeight}" />
   </Style>
 
   <!-- ── Message severity ────────────────────────────────────────────────────────────────────── -->
