@@ -24,6 +24,7 @@ public sealed partial class App : Application
 {
     private LicenseRegister? _register;
     private SigningSession? _session;
+    private ManagerPaths? _paths;
 
     /// <inheritdoc />
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
@@ -36,6 +37,7 @@ public sealed partial class App : Application
             var paths = ManagerPaths.Default;
             paths.EnsureFolder();
 
+            _paths = paths;
             _register = LicenseRegister.Open(paths.Register);
 
             var unlock = new UnlockViewModel(paths);
@@ -56,7 +58,9 @@ public sealed partial class App : Application
         var shell = new MainWindow
         {
             DataContext = new ShellViewModel(
-                _register ?? throw new InvalidOperationException("The register is not open."), session),
+                _register ?? throw new InvalidOperationException("The register is not open."),
+                session,
+                _paths ?? throw new InvalidOperationException("The paths are not resolved.")),
         };
 
         // ⚠ Order matters: the new window becomes MainWindow BEFORE the old one closes. Closing the
@@ -65,6 +69,32 @@ public sealed partial class App : Application
         desktop.MainWindow = shell;
         shell.Show();
         previous?.Close();
+    }
+
+    /// <summary>
+    /// Closes the active register and releases its file, reporting whether it let go.
+    ///
+    /// <para>⭐ The one operation that needs this is replacing the active register (D‑6): SQLite holds the
+    /// file while the register is open, so it cannot be moved aside until this has run. ⛔ It does NOT
+    /// reopen anything — after it, this application has no register and is on its way to shutting down.
+    /// Re-pointing the running view models at a different register is a separate stage.</para>
+    ///
+    /// <para>⚠ The restore still PROVES the file is free by opening it exclusively rather than trusting
+    /// the <see langword="true"/> this returns. A caller that believes a claim about the one fact that
+    /// must hold before anything is moved is a caller that finds out half way through.</para>
+    /// </summary>
+    internal bool ReleaseRegister()
+    {
+        try
+        {
+            _register?.Dispose();
+            _register = null;
+            return true;
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.Data.Common.DbException)
+        {
+            return false;
+        }
     }
 
     private void Release()

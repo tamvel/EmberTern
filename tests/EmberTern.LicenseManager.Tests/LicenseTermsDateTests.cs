@@ -24,7 +24,7 @@ public sealed class LicenseTermsDateTests : IDisposable
 
     private ShellViewModel NewShell()
     {
-        var shell = new ShellViewModel(_manager.Register, _manager.Session, () => Now);
+        var shell = new ShellViewModel(_manager.Register, _manager.Session, _manager.Paths, () => Now);
         shell.NewCustomerCommand.Execute(null);
         shell.CustomerName = "ACME Sp. z o.o.";
         shell.SaveCustomerCommand.Execute(null);

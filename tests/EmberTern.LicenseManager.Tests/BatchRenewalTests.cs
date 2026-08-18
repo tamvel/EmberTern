@@ -297,7 +297,7 @@ public sealed class BatchRenewalTests
 
     private static (ShellViewModel Shell, BatchRenewalViewModel Batch) Attach(ManagerFixture manager)
     {
-        var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         return (shell, shell.BatchRenewal);
     }
 

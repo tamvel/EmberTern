@@ -84,7 +84,16 @@
     <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
   </Style>
 
-  <Style Selector="TextBlock.mono">
+  <!-- ⚠⚠ `:is(TextBlock)` so the role also reaches `SelectableTextBlock`, which derives from it.
+       Avalonia's type selectors match the EXACT type, so plain `TextBlock.mono` silently missed every
+       generated identifier in this application — the customer id, the licence id, the validity, the
+       signing key, the token and the payload preview are all `SelectableTextBlock Classes="mono value"`,
+       and all eight have been rendering in the UI font since L5.1. ⭐ The failure is completely silent:
+       the class is accepted, nothing warns, and only reading `FontFamily` back off the realised control
+       shows it. EmberTern's own `ControlStyles.axaml` already carries this fix, with this reason, on
+       `.subtle` and `.error`; this file had not inherited it.
+       ⛔ Pinned by `StorageWindowTests.TheStoredPathsActuallyRenderInTheCodeFont`. -->
+  <Style Selector=":is(TextBlock).mono">
     <Setter Property="FontFamily" Value="{DynamicResource Font.Code}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Code.Size}" />
   </Style>

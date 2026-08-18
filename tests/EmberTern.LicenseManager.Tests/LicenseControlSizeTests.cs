@@ -207,7 +207,7 @@ public sealed class LicenseControlSizeTests
         var customer = manager.SaveCustomer();
         manager.SaveLicense(customer);
 
-        shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         var window = new MainWindow { DataContext = shell };
         window.Show();
 

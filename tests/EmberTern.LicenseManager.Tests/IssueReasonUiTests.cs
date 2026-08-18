@@ -218,7 +218,7 @@ public sealed class IssueReasonUiTests
         var customer = manager.SaveCustomer();
         manager.SaveLicense(customer);
 
-        var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         var window = new MainWindow { DataContext = shell };
         window.Show();
 

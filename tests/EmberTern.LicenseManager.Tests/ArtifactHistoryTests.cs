@@ -246,7 +246,7 @@ public sealed class ArtifactHistoryTests
         manager.SaveLicense(customer);
         manager.Workflow.Issue(manager.Session, first, customer, "initial");
 
-        var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now)
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now)
         {
             SelectedCustomer = null,
         };
@@ -438,7 +438,7 @@ public sealed class ArtifactHistoryTests
         var customer = manager.SaveCustomer();
         var licence = manager.SaveLicense(customer, seats);
 
-        var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         shell.SelectedCustomer = shell.Customers.First();
         return (shell, licence);
     }

@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
+using System.IO;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
@@ -506,6 +508,40 @@ public sealed class LicenseRegister : IDisposable
         Status = reader.GetString(reader.GetOrdinal("status")),
     };
 
+    // ── Whole-register reads ──────────────────────────────────────────────────────────
+
+    // ⭐ The three reads below exist for the JSONL export, and they are deliberately NOT the list-view
+    //    queries. A list view is allowed to be a projection — LicenseSummary drops maint_until and both
+    //    timestamps, GetAudit stops at 200 rows — because a list is a summary. An export that quietly
+    //    dropped a column or truncated a history would be a file the operator believes is their register.
+    //    ⚠ They are also unlimited on purpose: a LIMIT here is the shape of a silent partial export.
+
+    /// <summary>Every licence in the register, in a stable order. ⚠ No limit — this is for export.</summary>
+    public IReadOnlyList<LicenseRecord> GetAllLicenses() => Read(
+        "SELECT * FROM licenses ORDER BY lid;", ReadLicense);
+
+    /// <summary>Every artifact ever issued, oldest first, each carrying its projected status.</summary>
+    public IReadOnlyList<IssuedArtifactRecord> GetAllArtifacts() => Read(
+        ArtifactSelect + " ORDER BY a.artifact_id;", ReadArtifact);
+
+    /// <summary>
+    /// Every current-artifact pointer, as stored.
+    ///
+    /// <para>⭐ The POINTER, not the artifact it names. <see cref="GetCurrentArtifact"/> answers "which
+    /// artifact should this customer be holding?" and resolves the join; this answers "what does the
+    /// register actually record?", <c>set_at</c> included. An export that carried only the resolved
+    /// artifact would lose when the pointer was moved — and the pointer's own history is the difference
+    /// between a renewal and a re-export.</para>
+    /// </summary>
+    public IReadOnlyList<CurrentArtifactPointer> GetCurrentArtifactPointers() => Read(
+        "SELECT * FROM license_current_artifact ORDER BY lid;",
+        static reader => new CurrentArtifactPointer
+        {
+            LicenseId = reader.GetString(reader.GetOrdinal("lid")),
+            ArtifactId = reader.GetInt64(reader.GetOrdinal("artifact_id")),
+            SetAt = Parse(reader.GetString(reader.GetOrdinal("set_at"))),
+        });
+
     // ── Batches ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -820,6 +856,103 @@ public sealed class LicenseRegister : IDisposable
         return problems;
     }
 
+    // ── Snapshot ────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A consistent copy of the whole register, as the bytes of a SQLite file.
+    ///
+    /// <para>⭐ <b>It is <c>VACUUM INTO</c>, not <c>File.Copy</c>.</b> The register is open — a raw copy of
+    /// a live database file can catch it mid-transaction, and the resulting file is not a register, it is
+    /// a plausible-looking one. <c>VACUUM INTO</c> is SQLite's own consistent-snapshot operation and reads
+    /// through the same connection, so what it writes is the register as of one instant.</para>
+    ///
+    /// <para>⚠⚠ <b>The snapshot is NOT byte-identical to <c>licenses.db</c>, and that is ratified rather
+    /// than overlooked</b> (D‑3): <c>VACUUM</c> defragments, so pages move and the file size changes. What
+    /// is promised is the CONTENT — every row of every table, <c>issued_artifacts.artifact_id</c> and the
+    /// <c>license_current_artifact</c> pointers included. ⛔ Never assert a backup by hashing the file;
+    /// assert it with <see cref="DumpContent"/>.</para>
+    /// </summary>
+    public byte[] CreateSnapshot()
+    {
+        // ⚠ VACUUM INTO refuses a destination that already exists, and it cannot run inside a
+        //    transaction. A fresh name in the temp folder satisfies both without a policy.
+        var scratch = Path.Combine(
+            Path.GetTempPath(), "etlm-snapshot-" + Guid.NewGuid().ToString("N") + ".db");
+
+        try
+        {
+            Execute("VACUUM INTO $target;", null, ("$target", scratch));
+            return File.ReadAllBytes(scratch);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(scratch);
+            }
+            catch (IOException)
+            {
+                // ⚠ A leftover scratch file must not turn a good backup into a failed one. It is in the
+                //    OS temp folder, it holds the same data the operator just chose to export, and the
+                //    alternative — failing here — would discard a snapshot that already succeeded.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every row of every table, rendered as one comparable line each, sorted.
+    ///
+    /// <para>⭐⭐ <b>This is the fidelity oracle for backup and restore, and it is deliberately driven by
+    /// the SCHEMA rather than by our record types.</b> Columns come from the reader's own metadata, so a
+    /// column added to a table is covered the day it is added — where a hand-written projection would
+    /// keep passing while silently dropping it. ⛔ Do not reimplement this on top of the JSONL export:
+    /// an oracle that shares a mapping with the thing it checks agrees with it about what it forgot.</para>
+    ///
+    /// <para>⚠ <c>sqlite_sequence</c> is included ON PURPOSE. It carries the AUTOINCREMENT high-water
+    /// mark for <c>issued_artifacts</c>, so losing it would let a restored register re-use an
+    /// <c>artifact_id</c> that history already spent. It is the one <c>sqlite_</c> table that is data.</para>
+    ///
+    /// <para>⚠ Rows are sorted here rather than in SQL because <c>VACUUM</c> may renumber the hidden
+    /// <c>rowid</c> of a table whose primary key is not an INTEGER — <c>customers</c> and <c>licenses</c>
+    /// both qualify — so "the order the file stores them in" is not a property worth comparing. Every
+    /// value that IS data is a column, and every column is compared.</para>
+    /// </summary>
+    public IReadOnlyList<string> DumpContent()
+    {
+        var tables = Read(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND (name NOT LIKE 'sqlite_%' OR name = 'sqlite_sequence');
+            """,
+            static reader => reader.GetString(0));
+
+        var lines = new List<string>();
+
+        foreach (var table in tables)
+        {
+            // ⚠ The table name is an identifier, so it cannot be a parameter. It comes from
+            //    sqlite_master rather than from a caller, which is what makes the interpolation safe.
+            lines.AddRange(Read(
+                $"SELECT * FROM \"{table}\";",
+                reader =>
+                {
+                    var builder = new StringBuilder(table);
+                    for (var i = 0; i < reader.FieldCount; i++)
+                    {
+                        builder.Append('\u001F').Append(reader.GetName(i)).Append('=');
+                        builder.Append(reader.IsDBNull(i)
+                            ? "null"
+                            : JsonSerializer.Serialize(reader.GetValue(i)));
+                    }
+
+                    return builder.ToString();
+                }));
+        }
+
+        lines.Sort(StringComparer.Ordinal);
+        return lines;
+    }
+
     // ── History ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>The history, newest first, optionally narrowed to one subject.</summary>
@@ -1029,10 +1162,24 @@ public sealed class LicenseRegister : IDisposable
         return command;
     }
 
-    /// <summary>Closes the register.</summary>
+    /// <summary>
+    /// Closes the register and RELEASES THE FILE.
+    ///
+    /// <para>⚠⚠ <c>Close</c> and <c>Dispose</c> are not enough, and the difference is invisible until
+    /// something tries to move the file. <c>Microsoft.Data.Sqlite</c> POOLS connections by path: disposing
+    /// one returns it to the pool with the operating-system handle still open, so on Windows the next
+    /// <c>File.Move</c>, <c>File.Delete</c> or <c>File.ReadAllBytes</c> fails with <i>"used by another
+    /// process"</i> against a register the caller believes it has closed.</para>
+    ///
+    /// <para>⭐ Measured while building L5.5: the restore path stages a register in a temporary folder,
+    /// opens it to check its integrity, closes it and then materialises the target — and that last step is
+    /// exactly the operation pooling breaks. <c>ManagerFixture</c> had been swallowing the same
+    /// <c>IOException</c> in its cleanup since L3.</para>
+    /// </summary>
     public void Dispose()
     {
         _connection.Close();
+        SqliteConnection.ClearPool(_connection);
         _connection.Dispose();
     }
 }

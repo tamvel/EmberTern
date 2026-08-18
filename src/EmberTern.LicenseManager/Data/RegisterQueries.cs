@@ -220,3 +220,23 @@ public sealed class RegisterIntegrityException : Exception
     {
     }
 }
+
+/// <summary>
+/// The stored pointer that decides which artifact a licence's customer should be holding.
+///
+/// <para>⭐ One row per <c>lid</c> in <c>license_current_artifact</c>, rewritten in the same transaction
+/// that appends a newer artifact. ⚠ This is the record as STORED — <see cref="SetAt"/> is when the
+/// pointer last moved, which is a different fact from the artifact's own <c>iat</c> and is the one an
+/// export would otherwise lose.</para>
+/// </summary>
+public sealed record CurrentArtifactPointer
+{
+    /// <summary>Which licence.</summary>
+    public required string LicenseId { get; init; }
+
+    /// <summary>Which artifact is current. ⭐ References <c>issued_artifacts.artifact_id</c>.</summary>
+    public required long ArtifactId { get; init; }
+
+    /// <summary>When the pointer was last moved here.</summary>
+    public required DateTimeOffset SetAt { get; init; }
+}

@@ -288,7 +288,7 @@ public sealed class ArtifactHistoryPresentationTests
 
     private static MainWindow Show(ManagerFixture manager, out ShellViewModel shell)
     {
-        shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         var window = new MainWindow { DataContext = shell };
         window.Show();
         shell.SelectedCustomer = shell.Customers.First();

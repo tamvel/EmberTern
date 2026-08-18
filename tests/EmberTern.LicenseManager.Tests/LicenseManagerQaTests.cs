@@ -168,7 +168,7 @@ public sealed class LicenseManagerQaTests
             var customer = manager.SaveCustomer("ACME");
             manager.SaveLicense(customer);
 
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Show(shell);
             shell.SelectedCustomer = shell.Customers[0];
             shell.SelectedLicense = shell.Licenses[0];
@@ -244,7 +244,7 @@ public sealed class LicenseManagerQaTests
             HeadlessTheme.UseTheme(theme);
 
             using var manager = new ManagerFixture();
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Show(shell);
 
             foreach (var (message, key) in new (StatusMessage Message, string Key)[]
@@ -272,7 +272,7 @@ public sealed class LicenseManagerQaTests
         _session.Dispatch(() =>
         {
             using var manager = new ManagerFixture();
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Show(shell);
 
             foreach (var (message, key) in new (StatusMessage Message, string Key)[]
@@ -305,7 +305,7 @@ public sealed class LicenseManagerQaTests
             });
             manager.SaveLicense(customer);
 
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Show(shell);
             shell.ShowLicensesCommand.Execute(null);
             window.UpdateLayout();
@@ -326,7 +326,7 @@ public sealed class LicenseManagerQaTests
             var customer = manager.SaveCustomer("ACME");
             manager.SaveLicense(customer);
 
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Show(shell);
             shell.ShowLicensesCommand.Execute(null);
             window.UpdateLayout();
@@ -353,7 +353,7 @@ public sealed class LicenseManagerQaTests
             manager.SaveLicense(acme);
             manager.SaveLicense(beta);
 
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Show(shell);
             shell.ShowLicensesCommand.Execute(null);
             shell.Browser.SearchText = "kowalski";
@@ -376,7 +376,7 @@ public sealed class LicenseManagerQaTests
             var customer = manager.SaveCustomer("ACME");
             var licence = manager.SaveLicense(customer);
 
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Show(shell);
             shell.SelectedCustomer = shell.Customers[0];
             shell.SelectedLicense = shell.Licenses[0];
@@ -409,7 +409,7 @@ public sealed class LicenseManagerQaTests
     {
         var customer = manager.SaveCustomer();
         manager.SaveLicense(customer);
-        return Show(new ShellViewModel(manager.Register, manager.Session, () => manager.Now));
+        return Show(new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now));
     }
 
     private static MainWindow Show(ShellViewModel shell)

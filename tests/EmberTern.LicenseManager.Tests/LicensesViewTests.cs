@@ -187,7 +187,7 @@ public sealed class LicensesViewTests
             manager.SaveLicense(acme);
             var target = manager.SaveLicense(beta);
 
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Show(shell);
 
             shell.ShowLicensesCommand.Execute(null);
@@ -252,7 +252,7 @@ public sealed class LicensesViewTests
             manager.SaveLicense(customer);
         }
 
-        return new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        return new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
     }
 
     private static MainWindow Show(ShellViewModel shell)

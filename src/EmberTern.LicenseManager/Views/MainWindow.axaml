@@ -56,7 +56,7 @@
     <Border Classes="chrome" DockPanel.Dock="Top" Height="{DynamicResource Size.TitleBar}"
             Padding="0"
             PointerPressed="OnTitleBarPointerPressed" DoubleTapped="OnTitleBarDoubleTapped">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
         <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
                    Margin="{DynamicResource Pad.Panel}"
                    Text="EmberTern License Manager" />
@@ -69,7 +69,22 @@
              active (click goes to Light), Moon while Light is. The glyphs are EmberTern's own, linked
              rather than copied; only the twenty-line converter is mirrored, because it lives in an
              assembly this solution must not reference. -->
-        <Button Grid.Column="3" Classes="icon" Name="ThemeToggle" Click="OnToggleTheme"
+        <!-- ⭐⭐ STORAGE — backup, restore, the JSONL escape hatch and the data folder, in a window of
+             their own (D‑4). ⛔ Deliberately NOT a third view tab: the two tabs answer two questions
+             about LICENCES, and where the files live is not a third one of those. ⚠ The separation is
+             also a safety property — restore is the most consequential action this application has, and
+             it should take a deliberate step to reach rather than sit beside the daily work. -->
+        <Button Grid.Column="3" Classes="icon" Name="StorageButton" Click="OnOpenStorage"
+                VerticalAlignment="Center"
+                ToolTip.Tip="Storage — backup, restore, JSONL export and the data folder">
+          <Viewbox Classes="icon">
+            <Canvas Width="24" Height="24">
+              <Path Data="{DynamicResource Icon.Folder}" />
+            </Canvas>
+          </Viewbox>
+        </Button>
+
+        <Button Grid.Column="4" Classes="icon" Name="ThemeToggle" Click="OnToggleTheme"
                 VerticalAlignment="Center" ToolTip.Tip="Switch between the light and dark theme">
           <Viewbox Classes="icon">
             <Canvas Width="24" Height="24">
@@ -80,7 +95,7 @@
         </Button>
 
         <!-- Window controls -->
-        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch"
+        <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Stretch"
 >
           <Button Classes="caption" Name="MinimizeButton" Click="OnMinimizeClick"
                   ToolTip.Tip="Minimise">

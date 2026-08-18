@@ -105,7 +105,7 @@ public sealed class LicenseSpacingTests
             //   plus the text's own left margin, two owners paying into one gap and neither paying into
             //   the one that was missing.
             using var manager = new ManagerFixture();
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now)
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now)
             {
                 Message = StatusMessage.Warning("careful"),
             };
@@ -241,7 +241,7 @@ public sealed class LicenseSpacingTests
         var customer = manager.SaveCustomer();
         manager.SaveLicense(customer);
 
-        shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         var window = Show(shell);
 
         shell.SelectedCustomer = shell.Customers.First();

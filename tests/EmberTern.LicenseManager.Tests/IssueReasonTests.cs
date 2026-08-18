@@ -80,7 +80,7 @@ public sealed class IssueReasonTests : IDisposable
         var licence = _manager.SaveLicense(customer);
         _manager.Workflow.Issue(_manager.Session, licence, customer, "some-future-reason");
 
-        var shell = new ShellViewModel(_manager.Register, _manager.Session, () => _manager.Now);
+        var shell = new ShellViewModel(_manager.Register, _manager.Session, _manager.Paths, () => _manager.Now);
         shell.SelectedCustomer = shell.Customers.First(c => c.CustomerId == customer.CustomerId);
         shell.SelectedLicense = shell.Licenses.First(l => l.LicenseId == licence.LicenseId);
 
@@ -462,7 +462,7 @@ public sealed class IssueReasonTests : IDisposable
         var customer = _manager.SaveCustomer();
         _manager.SaveLicense(customer);
 
-        var shell = new ShellViewModel(_manager.Register, _manager.Session, () => _manager.Now);
+        var shell = new ShellViewModel(_manager.Register, _manager.Session, _manager.Paths, () => _manager.Now);
         SelectFirstLicence(shell);
         shell.SaveLicenseCommand.Execute(null);
         return shell;

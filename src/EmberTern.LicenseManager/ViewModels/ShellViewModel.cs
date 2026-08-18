@@ -40,17 +40,30 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     public Func<string, Task<string?>>? SaveFilePicker { get; set; }
 
     /// <summary>Creates the shell.</summary>
+    /// <param name="register">The register of record.</param>
+    /// <param name="session">The unlocked signing key.</param>
+    /// <param name="paths">
+    /// ⭐ Where the two files live. Required rather than optional, and defaulted nowhere: a default of
+    /// <see cref="ManagerPaths.Default"/> would point a test at the operator's real
+    /// <c>%APPDATA%</c> folder, which is the one place a test must never reach.
+    /// </param>
+    /// <param name="clock">The clock.</param>
     public ShellViewModel(
-        LicenseRegister register, SigningSession session, Func<DateTimeOffset>? clock = null)
+        LicenseRegister register,
+        SigningSession session,
+        ManagerPaths paths,
+        Func<DateTimeOffset>? clock = null)
     {
         _register = register ?? throw new ArgumentNullException(nameof(register));
         _session = session ?? throw new ArgumentNullException(nameof(session));
+        ArgumentNullException.ThrowIfNull(paths);
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _workflow = new IssuingWorkflow(register, _clock);
         Browser = new LicenseBrowserViewModel(register, _clock);
         History = new ArtifactHistoryViewModel(register, _workflow, session);
         BatchRenewal = new BatchRenewalViewModel(
             register, _workflow, session, Browser, message => Message = message);
+        Storage = new StorageViewModel(register, paths, _clock);
 
         ReloadCustomers();
         Message = StatusMessage.Info($"Signing with key {session.KeyId}.");
@@ -87,6 +100,16 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     /// ends at a committed register, and delivery stays the separate export action.</para>
     /// </summary>
     public BatchRenewalViewModel BatchRenewal { get; }
+
+    /// <summary>
+    /// Backup, restore, the JSONL escape hatch and the data folder.
+    ///
+    /// <para>⭐ It is opened as its OWN WINDOW (D‑4), not shown as a third view. The two view tabs answer
+    /// two questions about licences; file operations are not a third one of those. ⚠ The separation is
+    /// also a safety property — restore is the most consequential action in this application, and it
+    /// should take a deliberate step to reach.</para>
+    /// </summary>
+    public StorageViewModel Storage { get; }
 
     /// <summary>Which of the two views is showing.</summary>
     [ObservableProperty]

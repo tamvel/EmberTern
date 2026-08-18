@@ -110,7 +110,7 @@ _session.Dispatch(() =>
         var customer = manager.SaveCustomer();
         manager.SaveLicense(customer);
 
-        var shell = new ShellViewModel(manager.Register, manager.Session);
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths);
         var window = new MainWindow { DataContext = shell };
         window.Show();
 
@@ -146,7 +146,7 @@ _session.Dispatch(() =>
         using var manager = new ManagerFixture();
         var window = new MainWindow
         {
-            DataContext = new ShellViewModel(manager.Register, manager.Session),
+            DataContext = new ShellViewModel(manager.Register, manager.Session, manager.Paths),
         };
         window.Show();
 
@@ -160,7 +160,7 @@ _session.Dispatch(() =>
     {
         // The whole L3 loop driven the way a person drives it: pick a customer, save terms, issue.
         using var manager = new ManagerFixture();
-        var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
 
         shell.NewCustomerCommand.Execute(null);
         shell.CustomerName = "ACME Sp. z o.o.";
@@ -306,7 +306,7 @@ _session.Dispatch(() =>
 
         var shell = new MainWindow
         {
-            DataContext = new ShellViewModel(manager.Register, manager.Session),
+            DataContext = new ShellViewModel(manager.Register, manager.Session, manager.Paths),
         };
         shell.Show();
 

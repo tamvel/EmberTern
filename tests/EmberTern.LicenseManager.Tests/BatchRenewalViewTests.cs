@@ -200,7 +200,7 @@ public sealed class BatchRenewalViewTests
             manager.Register.SaveLicense(
                 manager.SaveLicense(customer) with { ExpiresAt = LicenseDay.EndOf(new DateTime(2035, 1, 1)) });
 
-            var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+            var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
             var window = Open(shell);
 
             shell.Browser.CheckAllShownCommand.Execute(null);
@@ -252,7 +252,7 @@ public sealed class BatchRenewalViewTests
             manager.SaveLicense(customer);
         }
 
-        var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         return (shell, Open(shell));
     }
 

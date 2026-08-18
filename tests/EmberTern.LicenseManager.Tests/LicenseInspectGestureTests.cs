@@ -134,7 +134,7 @@ public sealed class LicenseInspectGestureTests
 
     private static (MainWindow Window, ShellViewModel Shell) Show(ManagerFixture manager)
     {
-        var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         var window = new MainWindow { DataContext = shell };
         window.Show();
 

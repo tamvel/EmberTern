@@ -3001,3 +3001,180 @@ budget and an 800 tripwire · a select-all checkbox in the tick column's header,
 that "Select all shown" and "Clear selection" stay the only two bulk mechanisms · double-click → Inspect in
 the Licences view, which that list has never had · column-width memory in the License Manager (EmberTern's
 `GridLayoutBehavior` needs a settings store this application does not have).
+
+---
+
+## 47. L5.5 — as built (2026-08-18)
+
+⭐ **Backup, restore and the JSONL escape hatch — the last stage of L5.** `EmberTern.LicenseManager` gains
+a consistent register snapshot, an encrypted backup with its own passphrase, two explicit restore modes, a
+five-type JSONL export and a Storage window. Builds **0/0 in Debug and Release**. ✅ **User-verified
+visually in Debug, 2026-08-18**, over three review rounds — two of which found real defects (§47.4).
+
+### 47.1 The ratified decisions (D‑1 … D‑7)
+
+All seven were put to the user **before** implementation, or before the change that needed them; ⛔ none
+was decided "on the fly".
+
+| # | Question | 🔒 Decided |
+|---|---|---|
+| **D‑1** | What protects a backup? | Its **own** passphrase and its own mechanism, fully separated from the keystore's. ⛔ No code path reaches the keystore secret; a shared passphrase is the operator's choice, never a coupling |
+| **D‑2** | What does JSONL carry? | **Five** record types — `customer`, `license`, `artifact`, `current-artifact`, `audit`. ⛔ No header record, no further extension |
+| **D‑3** | What does a backup promise? | A **consistent SQLite snapshot**, with fidelity proved by comparing CONTENT row by row. ⛔ Not byte identity of the file, and no separate content hash — GCM already carries integrity |
+| **D‑4** | Where does this live? | Its **own Storage window**. ⛔ Not a third view tab, ⛔ not a card in Customers |
+| **D‑5** | Who writes to the audit log? | Backup and JSONL **yes**; restore **nothing** — and it gets no write path to the active register at all |
+| **D‑6** | How does replacing the active register end? | Replace, then **close the application**. ⛔ No hot swap, ⛔ no pending-restore-at-startup mechanism |
+| **D‑7** | How many preserved copies survive? | **All of them**, timestamped, append-only. ⛔ Never automatically deleted or overwritten; tidying up is the operator's decision through *Open data folder* |
+
+⚠ **D‑6 and D‑7 arrived mid-stage**, when the user replaced the original restore model. That is recorded
+rather than smoothed over: the first implementation shipped "never restore in place" as an architectural
+absolute, and the user then asked for an explicit in-place mode. ⭐ **It is not a regression of the earlier
+rule.** What §4 of the original brief forbade was *"Restore → overwrite `licenses.db`"* guarded by a
+warning in a dialog. What D‑6/D‑7 build is guarded by preservation, a second verification after the write,
+and a roll-back — the operator cannot end a failed replace without a working register.
+
+### 47.2 ⭐⭐ What a backup actually is, and the measurement that decided it
+
+The plan said *"backup is a file copy"* (§12.4). It cannot be:
+
+- ⛔ **While the register is open, Windows will not hand out a read handle at all** — `File.ReadAllBytes`
+  on the live `licenses.db` throws. So `VACUUM INTO` is not the safer of two routes; it is the **only**
+  route that does not first close the database out from under the running application.
+- ⚠ **`VACUUM INTO` defragments**, so the snapshot is **not byte-identical** to the source. D‑3 accepts
+  that deliberately: the promise is the CONTENT.
+
+⭐ **The fidelity oracle is `LicenseRegister.DumpContent`, and it is driven by the SCHEMA rather than by
+our record types** — columns come from the reader's own metadata, so a column added tomorrow is compared
+the day it is added. ⛔ It is deliberately **not** built on the JSONL export: an oracle that shares a
+mapping with the thing it checks agrees with it about what it forgot.
+
+⚠ `sqlite_sequence` is included on purpose — it carries the AUTOINCREMENT high-water mark, and losing it
+would let a restored register re-spend an `artifact_id` history already used. Proved by **appending** to a
+restored register, not by reading a table.
+
+⚠ A second half of the same measurement became gotcha **#384**: `Microsoft.Data.Sqlite` pools connections,
+so `Close()` + `Dispose()` leaves the file held. The restore path is built entirely on moving a staged
+register, so this was load-bearing rather than tidy — and the test fixture had been swallowing that exact
+`IOException` in its cleanup since L3.
+
+### 47.3 ⭐ One restore core, two endings
+
+`Stage()` does everything both modes share — read the header, decrypt, build the register in a private
+temporary folder, run `CheckIntegrity` over it. ⛔ **Nothing on the operator's disk is touched until that
+passes.** A second restore path would be a second place for that gate to be forgotten, so the branch comes
+as late as it possibly can.
+
+| | `Restore` — another location | `RestoreOverActiveRegister` — replace |
+|---|---|---|
+| Target gate | refuses the active folder by identity, refuses a non-empty folder, takes a **directory** never a file path | proves the file is **released** by opening it exclusively |
+| Materialisation | create the folder only after the gate passes | preserve → move in → **verify again** → roll back on failure |
+| Active register | untouched, not even a history line | preserved as `licenses.db.replaced-<stamp>`, never deleted |
+
+⭐ The final verification does **not** stop at `CheckIntegrity`: the register now on disk must reproduce
+the staged content **row for row**. An integrity check answers *"is this self-consistent?"*, not *"is this
+the register we just approved?"*
+
+⛔ **D‑5 stayed structural through the rewrite**: `RestoreWorkflow` holds no `LicenseRegister` in either
+mode. Closing is done by the composition root; the workflow **measures** that the file is free rather than
+believing a caller who says it closed it — a caller that is believed finds out half way through, with the
+previous register already moved aside. ⭐ The reflection guard that pins this carries a **positive
+control**: the same query must find a register in `BackupWorkflow`, or the absence it asserts would be an
+absence of the query rather than of the field.
+
+### 47.4 ⚠⚠ Three defects found by user review, not by tests
+
+**Two review rounds each found something the suite did not**, and the pattern is the same in both: a
+declared value and a realised one are different facts.
+
+1. **`Backup…` was invisible.** Five buttons in one `Auto,*,Auto,Auto,Auto,Auto` row inside a
+   fixed-width, non-resizable window; the `Auto` columns overflowed, the star column collapsed, and the
+   primary action was laid out past the right edge and clipped. The button was present, named, bound and
+   working. Gotcha **#386** — and the geometric guard written for it immediately found a **second**
+   instance the screenshot had not shown.
+2. **Eight `SelectableTextBlock`s had never been monospace.** `Selector="TextBlock.mono"` matches the
+   exact type, so it never reached the subclass — since L5.1, in an application built around generated
+   identifiers. Gotcha **#385**. ⚠ EmberTern's own `ControlStyles.axaml` already carried the `:is()` fix
+   with this exact reason; the License Manager's local style file had not inherited it.
+3. **Backup and Restore shared one form.** Resolved on the user's instruction: two tabs on the existing
+   `view-switch` / `view-tab` pattern, tool actions in the header, one primary action per task.
+
+⚠ Writing the guard for (1) then produced gotcha **#387** — `IsVisible` is a control's own declared value,
+so every child of a collapsed panel still reports `true`; `IsEffectivelyVisible` is the realised answer.
+The first version of that guard found three visible text boxes on a tab that shows two.
+
+### 47.5 Decisions taken during implementation
+
+1. **The backup container is the keystore's construction with ONE deliberate difference.** Same reviewed
+   numbers (600 000 PBKDF2-SHA256 iterations, 32-byte salt, GCM 96-bit nonce / 128-bit tag), own magic,
+   own failure vocabulary — and the cleartext header is bound in as **GCM associated data**. The
+   keystore's header makes no claims about its contents; this one states when the backup was taken and
+   which schema is inside, and the restore surface shows both before a passphrase is typed.
+   Unauthenticated, that is a sentence the file could lie about. `RegisterBackupTests` pins the shared
+   parameters equal to `KeyStore`'s so the two cannot drift.
+2. **A backup is VERIFIED before it is written**, by opening the snapshot and comparing it with the live
+   register. §24.1 already says it of the keystore — *a backup that has never been restored is a
+   hypothesis* — and this is the same rule at the only moment it costs nothing.
+3. **A backup refuses an inconsistent register.** The same `CheckIntegrity` a restore refuses on, never a
+   second checker. Carrying a corrupt state forward under a name that promises safety is worse than
+   refusing, because it is discovered later.
+4. **The backup's own audit line is written AFTER the snapshot**, so it is never inside the backup that
+   describes it. Recording first would claim a backup that had not been verified yet.
+5. **JSONL is an EXPORT and there is no import** (§29.1). ⛔ A JSONL restore would be exactly the
+   uncontrolled second write path into a register that the backup design exists to prevent.
+6. **The signed payload is carried verbatim, escapes included.** `payloadJson` holds the customer name as
+   escape sequences because that is what the issuer serialised and therefore what was **signed**;
+   re-encoding it into readable characters would produce prettier text and a payload whose signature no
+   longer verifies (rule #11). ⭐ So the file is readable where the register's own fields are, and
+   byte-exact where a signature depends on it.
+7. **The register defends its current-artifact pointer with a real FOREIGN KEY** — found when an injected
+   `artifact_id = 999999` was rejected by the database. The reachable corruption is a pointer at a real
+   but no-longer-newest artifact, which is what `CheckIntegrity`'s third check exists for.
+8. **The Storage window is two tabs on `view-switch` / `view-tab`, not a `TabControl`** — the same reason
+   §40.2 records for the main window: `ControlStyles.axaml`, where EmberTern's real `TabItem` variants
+   live, is not linkable into this application, so a `TabControl` would fall back to Fluent's own
+   `TabItem` and a full set of state decisions to repin, for a two-item switch.
+9. **The restore mode is a picker, not two buttons**, so there is ONE Restore action and one paragraph
+   describing what will actually happen. Two buttons force the text to explain both at once, which is how
+   the previous layout let the consequential one go unread. ⭐ It defaults to the **safe** mode.
+
+### 47.6 ⛔ Verification — stated exactly
+
+⚠ **Read this literally rather than as a green tick.** The user directed, on measured grounds, that the
+fault-injection harness and the full-suite ceremony stop being run per stage (see #383 as amended).
+
+- ✅ Builds **0 warnings / 0 errors in Debug and Release**, License Manager solution, after every change.
+- ✅ Targeted suites, all green: `RegisterSnapshotTests` 7 · `RegisterBackupTests` 20 ·
+  `BackupWorkflowTests` 18 (+ the `VerifySnapshot` seam test) · `RestoreWorkflowTests` 30 ·
+  `StorageWindowTests` 21.
+- ✅ Full License Manager suite **424/424**, measured mid-stage — ⚠ **before** the tabbed Storage rewrite
+  and the two-mode restore. It was **not** re-run afterwards, by instruction.
+- ⛔ **The EmberTern suite was not run in this session at all.** §42.4's rule — *never report a License
+  Manager stage without running the EmberTern suite* — is therefore **not** satisfied for L5.5, and that
+  is stated rather than implied. What was done instead: the only EmberTern-side guards that reach this
+  application concern the linked theme files, and the sole one L5.5 touched is
+  `LicenseManagerStyles.axaml`, whose guard (`LicenseManagerThemeTests`) lives in the License Manager
+  suite and is green; and every fragile locator in the other License Manager test files was inspected by
+  hand after the title-bar button was added.
+- ⛔ **No fault injection was run for L5.5.** The safety rules are covered by ordinary tests that each
+  assert the refusal **and** that the active register is untouched.
+
+### 47.7 ⏭ Known limits, deliberately accepted
+
+- ✅ **`BackupWorkflow.VerifySnapshot` IS tested, through a seam** — `InternalsVisibleTo`, the same
+  arrangement `EmberTern.Firebird` uses. It was first recorded as an accepted testability limit (no public
+  API can produce a wrong snapshot, so with a correct one the guard never fires and deleting it would
+  leave the suite green); closing it took a seam rather than a contrivance, and the test drives both
+  failure shapes — a snapshot with a row missing and one whose row count matches while a value differs —
+  plus a positive control proving the guard is not simply refusing everything.
+- ⚠ **The restore roll-back path keeps that limit** — a final-verification failure is not reachable
+  through the public API, and no seam was added for it. Stated rather than implied.
+- ⛔ **No retention policy for preserved copies** (D‑7). They accumulate, deliberately; tidying up is the
+  operator's decision through *Open data folder*. A policy is a later decision, not an omission.
+
+### 47.8 ⏭ What L5.5 deliberately did NOT do
+
+⛔ No e-mail (L6). ⛔ No production key ceremony (L7). ⛔ No JSONL import. ⛔ No hot swap of the active
+register and no pending-restore mechanism (D‑6). ⛔ No keystore backup — that stays the separate operation
+§12.3 and §24.2 describe. ⛔ `Tokens.axaml`, `Typography.axaml` and `Colors.axaml` untouched — zero new
+tokens, zero new colours. ⛔ The License Manager is still English-only (§40.5). ⛔ `FluentBridge`'s missing
+`Calendar*` keys and `Icon.Name` still untouched — product work, for both applications at once.

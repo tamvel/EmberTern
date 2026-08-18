@@ -21,7 +21,7 @@ public sealed class SecondCustomerRegressionTests : IDisposable
     private readonly ManagerFixture _manager = new(Now);
 
     private ShellViewModel NewShell() =>
-        new(_manager.Register, _manager.Session, () => Now);
+        new(_manager.Register, _manager.Session, _manager.Paths, () => Now);
 
     private static void AddCustomerWithLicence(ShellViewModel shell, string name)
     {

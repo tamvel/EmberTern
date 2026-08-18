@@ -612,7 +612,7 @@ public sealed class LicenceGridTests
     {
         seed(manager);
 
-        var shell = new ShellViewModel(manager.Register, manager.Session, () => manager.Now);
+        var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now);
         var window = new MainWindow { DataContext = shell, Width = width, Height = 900 };
         window.Show();
         window.UpdateLayout();

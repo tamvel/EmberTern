@@ -93,6 +93,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- ⭐ Same arrangement EmberTern.Firebird already uses. It exists for exactly one reason here:
+         BackupWorkflow's snapshot VERIFICATION only fires when a snapshot fails to reproduce the register,
+         and that state cannot be reached through the public API — so without a seam the guard has nothing
+         watching it and deleting it would leave every test green.
+         ⚠ Provenance, stated accurately: the gap was identified by reading the code during L5.5 and
+         reported to the user as a known testability limit; it was NOT established by a fault-injection
+         run. The L5.5 injection campaign was interrupted before it produced any result and was then
+         retired by user directive (gotcha #383 as amended). -->
+    <InternalsVisibleTo Include="EmberTern.LicenseManager.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\EmberTern.Licensing\EmberTern.Licensing.csproj" />
     <ProjectReference Include="..\EmberTern.Licensing.Issuing\EmberTern.Licensing.Issuing.csproj" />
   </ItemGroup>

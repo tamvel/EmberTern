@@ -181,6 +181,33 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Opens the Storage window.
+    ///
+    /// <para>⭐ A window rather than a view (D‑4), owned by this one so it stays in front and closes with
+    /// it. ⚠ Only one is ever open: a second Storage window would mean two views of the same folder and
+    /// two half-typed passphrases.</para>
+    /// </summary>
+    private void OnOpenStorage(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel shell)
+        {
+            return;
+        }
+
+        if (_storage is { } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        _storage = new StorageWindow { DataContext = shell.Storage };
+        _storage.Closed += (_, _) => _storage = null;
+        _storage.Show(this);
+    }
+
+    private StorageWindow? _storage;
+
     private void OnToggleTheme(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         // ⭐ A single button switching one value, with nothing to route through a view model — and it is
