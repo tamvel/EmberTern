@@ -108,7 +108,7 @@ Split Licence — are now this etap's, see §3.
 | | |
 |---|---|
 | Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` **through L6** |
-| HEAD | **`__HEAD__`** — *chore(licensing-system): L8.0/prep*. ⚠ **Not pushed yet.** The previous commit `94ff665` closed L6 and is on `origin` |
+| Stage commit | **`133ab73`** — *feat(licensing): L8.0/prep — option identity, language catalogs, terminology* (13 files, +958 / −76), with this file's checkpoint refresh committed on top of it. ⚠ **Neither is pushed.** `94ff665` closed L6 and is on `origin`. ⛔ A commit cannot name its own hash, which is why this row names the STAGE commit rather than HEAD |
 | Working tree | ✅ **CLEAN** as of the L8.0/prep commit |
 | Build | **0 warnings / 0 errors** — License Manager **Debug** and **Release**. ⚠ EmberTern not rebuilt in this stage; it is untouched |
 | Tests | ⭐ **License Manager: 632 / 632** (0 failed, 0 skipped — 619 before L8.0/prep). ⛔ **The EmberTern suite was NOT run**: L8 has touched no file of the product. Its two pre-existing failures (§49.9) are unchanged |
