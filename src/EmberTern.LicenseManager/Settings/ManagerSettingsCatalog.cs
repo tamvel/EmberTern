@@ -1,6 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using EmberTern.LicenseManager.Email;
+using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.Settings;
 
@@ -12,11 +13,16 @@ public sealed record SettingsCategory(string Id, string IconKey);
 /// <summary>
 /// Every word the Settings window says, in ONE place.
 ///
-/// <para>⭐⭐ <b>This is the whole of L6.1a's preparation for L8, and it is deliberately not a
-/// mechanism.</b> Forty lines of properties, no resource files, no <c>ResourceManager</c>, no culture
-/// plumbing. What it buys is that the day the License Manager is localized, the words are already
-/// gathered: each property body changes from a literal to a resolved lookup and ⛔ not one view, view
-/// model or binding has to change.</para>
+/// <para>⭐⭐ <b>L8.1 cashed in what L6.1a prepared, and the prediction held exactly.</b> That stage
+/// gathered these words as properties and wrote: <i>"the day the License Manager is localized, each
+/// property body changes from a literal to a resolved lookup and not one view, view model or binding has
+/// to change."</i> That is what happened — every body below now reads <see cref="Loc"/>, and no view, view
+/// model or binding was touched. ⭐ It is also the FIRST catalog on the mechanism, which is why it is the
+/// one that proves the pipeline is real rather than merely present.</para>
+///
+/// <para>⚠⚠ <b>Not one word changed.</b> The values in <c>Strings.resx</c> are the strings this window
+/// already showed, character for character — L8.1–L8.4 build the mechanism and migrate the existing
+/// English; L8.5 is the stage that introduces Polish.</para>
 ///
 /// <para>⚠⚠ <b>PROPERTIES, never <c>const</c> and never <c>static readonly</c> — and never a table built
 /// in a static constructor.</b> This is the single most expensive lesson EmberTern's own settings carry:
@@ -29,8 +35,23 @@ public sealed record SettingsCategory(string Id, string IconKey);
 /// <para>⚠ The category IDs and icon keys are the exception and are captured as constants on purpose: an
 /// identifier is not a word, and an icon key is not a word — neither moves with the language.</para>
 /// </summary>
+[StringCatalog(KeyPrefix)]
 public static class ManagerSettingsCatalog
 {
+    /// <summary>The prefix every key in this catalog carries.</summary>
+    /// <remarks>
+    /// ⭐ The catalog is split by theme (L8 decision D‑5), so a key is <c>Prefix + MemberName</c> — two
+    /// areas may each want a <c>WindowTitle</c> and must not collide.
+    /// </remarks>
+    internal const string KeyPrefix = "Settings.";
+
+    /// <summary>Resolves one of this catalog's own members.</summary>
+    /// <remarks>
+    /// ⚠ The argument is always <c>nameof(TheMember)</c>, never a typed-out string: the member name IS the
+    /// key, so there is one owner and nothing to keep in step.
+    /// </remarks>
+    private static string Word(string member) => Loc.Text(KeyPrefix + member);
+
     /// <summary>The General page — application-wide preferences.</summary>
     public const string CategoryGeneral = "general";
 
@@ -66,44 +87,41 @@ public static class ManagerSettingsCatalog
     };
 
     // ── The words ───────────────────────────────────────────────────────────────────────────────────
-    // ⚠ Properties, for the reason in the class comment. In L8 each body becomes a lookup.
+    // ⚠ Properties, for the reason in the class comment: a property resolves at every read, which is what
+    //   makes a live language change reach a C# consumer. ⛔ Never a `const` (inlined — nothing left to
+    //   resolve) and never a `static readonly` (resolved once, then frozen in the first language).
 
     /// <summary>The window's own title.</summary>
-    public static string WindowTitle => "Settings";
+    public static string WindowTitle => Word(nameof(WindowTitle));
 
     /// <summary>The General page.</summary>
-    public static string General => "General";
+    public static string General => Word(nameof(General));
 
     /// <summary>The E-mail page.</summary>
-    public static string Email => "E-mail";
+    public static string Email => Word(nameof(Email));
 
     /// <summary>The interface-language row's caption.</summary>
-    public static string ApplicationLanguage => "Application language";
+    public static string ApplicationLanguage => Word(nameof(ApplicationLanguage));
 
     /// <summary>
     /// ⭐ Why the interface-language row is disabled. Decision D‑8: the control is SHOWN so the structure
     /// is real and L8 has a place to land, but it stores nothing — a preference that changes nothing is
     /// the defect that removed <c>ClientLibraryPath</c> from EmberTern's connection dialog.
     /// </summary>
-    public static string ApplicationLanguageUnavailable =>
-        "The License Manager is English-only in this version. Translating its interface is planned as a " +
-        "later stage; until then this choice is shown but not stored, because a preference that changes " +
-        "nothing is worse than one that is honestly unavailable.";
+    public static string ApplicationLanguageUnavailable => Word(nameof(ApplicationLanguageUnavailable));
 
     /// <summary>The message-language row's caption.</summary>
-    public static string MessageLanguage => "Message language";
+    public static string MessageLanguage => Word(nameof(MessageLanguage));
 
     /// <summary>
     /// ⚠ Says the two independences out loud, because the pairing is the surprising part: the interface
     /// and the message do not have to be in the same language, and the message language is global rather
     /// than per-customer.
     /// </summary>
-    public static string MessageLanguageDescription =>
-        "The language a licence e-mail is written in. It is independent of the interface language, and it " +
-        "applies to every customer — switch it before sending to a customer who reads the other language.";
+    public static string MessageLanguageDescription => Word(nameof(MessageLanguageDescription));
 
     /// <summary>The SMTP group's caption on the E-mail page.</summary>
-    public static string SmtpSettings => "SMTP settings";
+    public static string SmtpSettings => Word(nameof(SmtpSettings));
 
     /// <summary>How a language code is offered to a human.</summary>
     /// <remarks>
@@ -134,7 +152,7 @@ public static class ManagerSettingsCatalog
     /// <remarks>⚠ A property-shaped body, like every word above it — in L8 it becomes a lookup.</remarks>
     public static string SecurityLabel(SmtpSecurity security) => security switch
     {
-        SmtpSecurity.None => "No encryption — internal relay only",
-        _ => "STARTTLS (recommended)",
+        SmtpSecurity.None => Word("SecurityNone"),
+        _ => Word("SecurityStartTls"),
     };
 }

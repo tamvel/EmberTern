@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 
 namespace EmberTern.LicenseManager.Services;
@@ -30,6 +30,9 @@ public sealed class ManagerPaths
     /// <summary>The e-mail settings file name.</summary>
     public const string SmtpSettingsFileName = "smtp.dat";
 
+    /// <summary>The interface preferences file name.</summary>
+    public const string PreferencesFileName = "ui.json";
+
     /// <summary>Creates a set of paths rooted at <paramref name="root"/>.</summary>
     public ManagerPaths(string root)
     {
@@ -58,6 +61,23 @@ public sealed class ManagerPaths
     /// settings window rather than left for the operator to discover.</para>
     /// </summary>
     public string SmtpSettings => Path.Combine(Root, SmtpSettingsFileName);
+
+    /// <summary>
+    /// The interface preferences — today, the application language and nothing else (L8 decision D‑4).
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>A FOURTH file, on the same principle as the other three, and it belongs to none of
+    /// them.</b> It is not the register (a preference must not travel in a backup, nor follow a restore
+    /// onto another machine), it is not the keystore, and ⛔ it is deliberately not <c>smtp.dat</c>: that
+    /// file has ONE Save covering a whole coherent configuration, so applying a language on selection
+    /// through it would mean a read-modify-write on every pick — persisting half-typed SMTP edits the
+    /// operator had not committed, or re-reading the file underneath them and losing those edits (§49.3,
+    /// and the audit follow-up's item E is this repository's own scar from that shape).</para>
+    ///
+    /// <para>⚠ Four files, four protections, four decisions. This one carries no secret, is plain text on
+    /// purpose, and losing it costs one click.</para>
+    /// </remarks>
+    public string Preferences => Path.Combine(Root, PreferencesFileName);
 
     /// <summary>True when a keystore already exists — i.e. the ceremony has been performed.</summary>
     public bool HasKeyStore => File.Exists(KeyStore);

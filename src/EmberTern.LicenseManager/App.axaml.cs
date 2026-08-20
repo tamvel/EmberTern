@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using EmberTern.LicenseManager.Data;
+using EmberTern.LicenseManager.Localization;
 using EmberTern.LicenseManager.Services;
+using EmberTern.LicenseManager.Settings;
 using EmberTern.LicenseManager.ViewModels;
 using EmberTern.LicenseManager.Views;
 
@@ -26,6 +28,7 @@ public sealed partial class App : Application
     private SigningSession? _session;
     private ManagerPaths? _paths;
 
+
     /// <inheritdoc />
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -36,6 +39,25 @@ public sealed partial class App : Application
         {
             var paths = ManagerPaths.Default;
             paths.EnsureFolder();
+
+            // ⭐⭐ THE ONE PLACE A LANGUAGE IS APPLIED, for the whole application. Every other surface only
+            //    WRITES the preference; this is what makes it take effect. Two apply sites would be two
+            //    answers to "what does Polski mean", and the divergence shows up as an interface that
+            //    changes from one window and not from another.
+            //
+            // ⭐ Applied before the first window is built, so the first frame is already in the chosen
+            //    language — there is no English flash to hide. ⚠ And it is NOT an ordering hazard: `Loc`
+            //    starts on the invariant culture, which resolves to the neutral (English) set, so anything
+            //    rendered before this line would simply re-read afterwards.
+            //
+            // ⛔ The value comes from the preference file and from nowhere else — never CurrentUICulture,
+            //    never an environment variable, never the operating system's language.
+            // ⛔ The composition root reads this and nothing else does: no view and no view model touches
+            //    the language preference. They receive WORDS, already resolved, and the language reaches
+            //    them only through `Loc`. ⭐ The WRITER arrives in L8.5, when the picker stops being a
+            //    placeholder — ⛔ enabling it before there is Polish to show would recreate the very defect
+            //    decision D‑8 exists to prevent (a preference the operator can set that changes nothing).
+            Loc.Apply(ManagerPreferencesStore.At(paths).Load().Language);
 
             _paths = paths;
             _register = LicenseRegister.Open(paths.Register);

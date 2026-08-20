@@ -1,0 +1,71 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    EmberTern License Manager — English base (neutral) resources.
+
+    ⭐ THIS FILE IS THE BASE LANGUAGE, and "base" is technical rather than a preference: a satellite
+       culture (Strings.<culture>.resx) may TRANSLATE entries, never introduce them. ResourceManager falls
+       back neutral-ward automatically, so an entry a translation has not covered renders in English
+       instead of breaking — which is why English must stay COMPLETE.
+
+    ⭐ THE KEY IS "<CatalogPrefix><MemberName>". Each catalog class carries [StringCatalog("Prefix.")] and
+       resolves its own members by name, so there is one owner of a key and no lookup table in between.
+       The prefix exists because the catalog is split by theme (L8 decision D‑5): without it two areas
+       could each declare a `WindowTitle`.
+
+    ⚠⚠ VALUES ARE THE STRINGS THE APPLICATION ALREADY SHIPPED, character for character. L8.1–L8.4 change
+       no user-visible word: the mechanism is built and the existing ENGLISH text is migrated onto it.
+       L8.5 is the stage that introduces Polish and is the only one where wording is a decision.
+
+    ⚠ `Localization.PluralRuleSet` is METADATA, not a sentence: it names the GRAMMAR this culture uses
+       (see PluralRules), never the language. ⛔ Do not translate it, and ⛔ do not name a rule set after
+       a language.
+  -->
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Localization.PluralRuleSet" xml:space="preserve">
+    <value>one-other</value>
+  </data>
+
+  <data name="Settings.WindowTitle" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Settings.General" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Settings.Email" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Settings.ApplicationLanguage" xml:space="preserve">
+    <value>Application language</value>
+  </data>
+  <data name="Settings.ApplicationLanguageUnavailable" xml:space="preserve">
+    <value>The License Manager is English-only in this version. Translating its interface is planned as a later stage; until then this choice is shown but not stored, because a preference that changes nothing is worse than one that is honestly unavailable.</value>
+  </data>
+  <data name="Settings.MessageLanguage" xml:space="preserve">
+    <value>Message language</value>
+  </data>
+  <data name="Settings.MessageLanguageDescription" xml:space="preserve">
+    <value>The language a licence e-mail is written in. It is independent of the interface language, and it applies to every customer — switch it before sending to a customer who reads the other language.</value>
+  </data>
+  <data name="Settings.SmtpSettings" xml:space="preserve">
+    <value>SMTP settings</value>
+  </data>
+  <data name="Settings.SecurityStartTls" xml:space="preserve">
+    <value>STARTTLS (recommended)</value>
+  </data>
+  <data name="Settings.SecurityNone" xml:space="preserve">
+    <value>No encryption — internal relay only</value>
+  </data>
+</root>

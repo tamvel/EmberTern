@@ -18,61 +18,75 @@
 > ⭐⭐ **L8 IS THE ACTIVE STAGE, AND IT RUNS BEFORE L7 — 🔒 the user's decision (2026-08-20).** L8 localizes
 > the License Manager's interface (English + Polski, chosen under ☰ → Settings → General, live). The reason
 > is sequencing, not priority: localization touches many surfaces and is a UX change, so it is closed
-> before L7, which is a security and production-finalisation stage. ⛔ **Do not start L7**, and ⛔ do not
-> prepare the key ceremony.
+> before L7, which is a security and production-finalisation stage. ⛔ **L7 is NOT STARTED and must not be
+> started**, and ⛔ do not prepare the key ceremony.
 >
-> ⭐ **L8.0 / prep is DONE and accepted** — §53. Two language-independent defects repaired (seven option
-> records took their identity back from their labels; the interface and message languages got separate
-> catalogs), 13 guards, and the ratified EN → PL vocabulary in `design/terminology.md` §4. ⛔ Not one
-> user-visible word changed.
+> ## ⏭ START HERE: **L8.2 — `StatusMessage` as key + arguments.** NOT STARTED.
 >
-> ⏭ **Next: L8.1 — the mechanism** (`Loc`, `LocalizationSource`, `{lm:Loc}`, `Strings.resx`, `ui.json`),
-> and ⛔ **no text migration in it**. Sub-stages and their order: §53 + the plan below.
+> ⭐ Begin with the CONTRACT, not a migration: `StatusMessage` becomes key + arguments resolved at display
+> time (ratified **D‑2 = B**), so a standing message follows a language change instead of freezing.
+> **Measured scope: 104 `StatusMessage.*` call sites in 8 files · ⚠⚠ 23 sites that show `ex.Message` ·
+> 3 `ConfirmRequest`.** ⭐ The 23 exception sites are the point — the Phase‑5 shape (§17.3): a perfect
+> catalog entry nothing reads because the display site prints `ex.Message`. The raw text travels as an
+> ARGUMENT. ⚠ Fix `ConfirmRequest(…, string CancelLabel = "Cancel")` while there: a default parameter value
+> is copied into every caller at compile time, exactly like a `const`. **Full brief: §54.11.**
 >
-> ⭐⭐ **The rule that shapes L8.1 → L8.4: NOT ONE user-visible word changes.** The mechanism is built and
+> ⭐⭐ **THE RULE THAT GOVERNS L8.1 → L8.4: NOT ONE USER-VISIBLE WORD CHANGES.** The mechanism is built and
 > the existing ENGLISH text is migrated onto it; the application must look identical throughout. If L8.4
-> changes what the operator reads, something is wrong. **L8.5 is the editorial stage** — the Polish, and
-> the only stage where wording is a decision.
+> changes what the operator reads, something is wrong. **L8.5 is the editorial stage** — the Polish, and the
+> only sub-stage where wording is a decision. **L8.6** is visual QA in EN/PL × Dark/Light.
 >
-> ⚠ The seven ratified decisions D‑1 … D‑7 (mechanism location, `StatusMessage` shape, default language,
-> `ui.json` scope, catalog split, terminology, tone) are in §53.0. ⚠ `terminology.md` §4 is a **BASE**, not
-> a closure: a term that reads badly in the real window may still be corrected in L8.6 — by the user.
+> ### Done so far in L8
 >
-> ⭐⭐ **L6 IS CLOSED (2026-08-19).** A licence now reaches a
-> customer by e-mail, from the artifact the register already holds. All five sub-stages are user-accepted:
-> **L6.1** SMTP settings + DPAPI secret · **L6.1a** hamburger, Settings Center, Customer/Licences split ·
-> **L6.2** message composition · **L6.3** two senders, the send window, `licence.sent` /
-> `licence.send-failed`, and **Send test email…** · **L6.3a** the message the customer actually reads.
-> **Authority: `design/licensing-system.md` §48–§52; §52 is the closure.**
+> ✅ **L8.0 / prep — CLOSED, committed and PUSHED** (`133ab73` + `56ad35d`, both on `origin`). §53. Seven
+> option records took their identity back from their labels (gotcha #394); `ApplicationLanguages` was split
+> from `MessageLanguages`; 13 guards; and the EN → PL vocabulary was ratified into `design/terminology.md`
+> §4, with `Issue` added to the action norm (§1, §1.1a).
 >
-> ✅ **§32's exit criterion is SATISFIED for the first time**: the user ran the whole loop against a real
-> Gmail account — the configuration test arrived, then a real licence arrived with `EmberTern.etlic`
-> attached, and the audit log carried the send. PL and EN both accepted in the mailbox.
+> ✅ **L8.1 — IMPLEMENTED and COMMITTED. ⛔ NOT "L8 closed".** §54. `Loc` as the ONE resolver ·
+> `{lm:Loc Key}` returning a real `Binding` · `LocalizationSource` notifying **per key** (⛔ never an
+> indexer) · `LanguagePreference` · `PluralRules` (grammar-named: `one-other` / `one-few-many`) ·
+> `StringCatalogAttribute` so guards DISCOVER catalogs · `Settings/ManagerPreferences` + **`ui.json`, the
+> FOURTH preferences file** · `Localization/Strings.resx` as the English **base/neutral** set.
+> ⭐ `ManagerSettingsCatalog`'s **10 strings migrated BYTE-IDENTICALLY** (10/10 measured) so no guard is
+> vacuous. ⭐⭐ **6 defect injections, 6 reds, all reverted.** ⭐ L8.1 needs no visual QA — its visible effect
+> is deliberately zero.
 >
-> ⭐ **The four properties L6 must not lose** (§52.2): the attachment is the STORED artifact byte for byte
-> and sending signs nothing · the preview IS the message · every attempt is recorded, failures included ·
-> every fact comes from the SIGNED payload, and ⛔ no language may inflect such a value (gotcha #393).
+> ⚠⚠ **Two real findings in L8.1, both worth not rediscovering:** a UTF-8 **BOM** in `ui.json` made
+> `System.Text.Json` throw, and the forgiving `catch` served DEFAULTS — the operator edits the file and
+> nothing says why (gotcha **#395**; it also made two tests pass for the wrong reason). And a guard went red
+> against **its own documentation** — every text-scanning guard now reads `CodeOf(file)` (gotcha **#396**;
+> second occurrence in this repository).
 >
-> ⚠ **Two seams touched existing code and are the first things to review in the diff**:
-> `IssuingWorkflow.ArtifactBytes` (§50.2) and the licence action row becoming a `WrapPanel` after a fifth
-> button clipped it (§51.4).
+> ### ⛔ Standing constraints for the rest of L8
 >
-> ⏭ **Bulk sending is ratified as its OWN stage** (user, at closure) — ⛔ deliberately not built in L6.
-> §14.1 already holds its design: the full recipient list plus one explicit confirmation, never a silent
-> bulk send.
+> - ⛔ **The Application-language picker stays DISABLED**, decision D‑8 stands, and it is enabled **in
+>   L8.5** — not before. Enabling it earlier recreates the exact defect D‑8 exists to prevent: a preference
+>   the operator can set that changes nothing, because there is no Polish to show. `ui.json` is live on the
+>   READ side today; its WRITER arrives with the picker.
+> - ⛔ **`ApplicationLanguages` and `MessageLanguages` are INDEPENDENT catalogs** and must never be merged.
+>   The interface language is a fact about the OPERATOR; the message language a fact about the CUSTOMER.
+>   Defaults differ on purpose: **English** for the interface (D‑3), **Polish** for the message (D‑9).
+> - ⛔ **Nothing is localized that is a technical contract**: persisted values, audit actions AND audit
+>   notes, file names, ISO dates, branding. `design/terminology.md` §4.4 is the list.
+> - ⛔ **Nothing in `EmberTern.App` or the product** — L8 has touched no product file, which is why the
+>   EmberTern suite is not run in these sub-stages.
 >
-> ⚠⚠ **The company mailbox is STILL UNMEASURED** — everything above was proved on a **Gmail** account with
-> an app password (§48.1). If the production tenant refuses basic auth, that is a NEW CLASS behind
-> `ILicenseEmailSender`, not a rebuild, and the `.eml` route works either way. ⛔ Not a reason to hold L6
-> open, and ⛔ not a defect.
+> ---
 >
-> ⚠ **Two RED tests in `EmberTern.Tests` are pre-existing and were deliberately NOT touched** — they are
-> **not** L6 regressions. Both surfaced on the first run of those guards since L5.5, which is the gap
-> §47.6 recorded. Details and proof of provenance: §49.9.
-> · `CharsetGuardSeamTests.TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` — matches a COMMENT
-> in the License Manager csproj; present at `702ffae` before L6.1. ⚠ Its own remedy text is wrong here.
-> · `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly` — `RestoreWorkflow.cs:352`, an
-> L5.5 machine-readable timestamp; that file has no diff in this work.
+> ### Earlier milestones — closed, and their detail lives in the design doc
+>
+> ⭐ **L6 CLOSED (2026-08-19)** — a licence reaches a customer by e-mail, proved end to end against a real
+> Gmail account in both languages. §48–§52; **§52.2 holds the four properties L6 must not lose.**
+> ⚠⚠ **The company mailbox is still UNMEASURED** — proved on Gmail with an app password (§48.1); a tenant
+> refusing basic auth is a NEW CLASS behind `ILicenseEmailSender`, ⛔ not a defect. ⏭ **Bulk sending is its
+> OWN stage** (§14.1). **L1–L4b**: the offline loop end to end (§34–§38). **L5 CLOSED 2026-08-18**
+> (§39–§47).
+>
+> ⚠ **Two RED tests in `EmberTern.Tests` are PRE-EXISTING and are not L8's** (nor L6's) — §49.9.
+> `CharsetGuardSeamTests.TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` (matches a COMMENT in
+> the License Manager csproj — see gotcha #396) and
+> `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly` (`RestoreWorkflow.cs:352`).
 >
 > **Standing facts a next session must not rediscover:** §42.4, §46.11, §47.6, and now §48.1 (the Gmail /
 > company distinction), §49.4 (`WithCulture="false"`) and §49.9 (the two reds).
@@ -95,10 +109,6 @@
 > Authority for every licensing decision: [`design/licensing-system.md`](design/licensing-system.md) — §0
 > (ratified D1–D16), §32 (the L1–L7 plan), §34–§52 (as built; §52 closes L6).
 
-⭐ The **audit follow-up** etap that this file used to hand off is **closed, merged to `master` and pushed
-to both remotes** (`2c3da45`). Its two licensing-flavoured leftovers — NPOI's OSMF EULA and ImageSharp's
-Split Licence — are now this etap's, see §3.
-
 ---
 
 ## 1. Entry state
@@ -108,10 +118,11 @@ Split Licence — are now this etap's, see §3.
 | | |
 |---|---|
 | Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` **through L6** |
-| Stage commit | **`133ab73`** — *feat(licensing): L8.0/prep — option identity, language catalogs, terminology* (13 files, +958 / −76), with this file's checkpoint refresh committed on top of it. ⚠ **Neither is pushed.** `94ff665` closed L6 and is on `origin`. ⛔ A commit cannot name its own hash, which is why this row names the STAGE commit rather than HEAD |
-| Working tree | ✅ **CLEAN** as of the L8.0/prep commit |
-| Build | **0 warnings / 0 errors** — License Manager **Debug** and **Release**. ⚠ EmberTern not rebuilt in this stage; it is untouched |
-| Tests | ⭐ **License Manager: 632 / 632** (0 failed, 0 skipped — 619 before L8.0/prep). ⛔ **The EmberTern suite was NOT run**: L8 has touched no file of the product. Its two pre-existing failures (§49.9) are unchanged |
+| HEAD | *feat(licensing): L8.1 localization mechanism* — L8.1 in ONE commit (code + tests + docs). ⛔ A commit cannot name its own hash, so this row names it by SUBJECT; `git log -1` gives the SHA. Beneath it: **`56ad35d`** + **`133ab73`** *L8.0/prep*, **`94ff665`** *L6 closed* |
+| Sync | ⭐ **HEAD == `origin/feat/licensing-system`** — everything above is pushed |
+| Working tree | ✅ **CLEAN**, and HEAD == `origin/feat/licensing-system` |
+| Build | **0 warnings / 0 errors** — License Manager **Debug** and **Release**. ⛔ EmberTern not rebuilt: L8 has touched no product file |
+| Tests | ⭐ **License Manager: 685 / 685** (0 failed, 0 skipped — 632 after L8.0/prep, 619 before it). ⛔ **The EmberTern suite was NOT run**: L8 has touched no file of the product. Its two pre-existing failures (§49.9) are unchanged |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ Separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | ⚠ **On THIS clone there is ONE remote**, `origin` → personal GitHub (see §0). ⛔ Do not add a remote here |
@@ -198,7 +209,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
 | **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ✅ **CLOSED 2026-08-18**, all six sub-stages accepted and pushed. **L5.0** data layer — schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch (§39). **L5.1 + two QA rounds** — Licences view, search, three filters, own AppBar and title bar, the licence re-parenting defect, spacing and uniform control heights (§40–§43). **L5.2** — issuing history and artifact preview, current marked from the register's POINTER never from the ordering (§44). **L5.3** — re-issue with an operator-chosen reason, validated against a measured diff of the SIGNED payload (§45). **L5.4** — bulk selection and batch renewal, and the licences list rebuilt as EmberTern's own grid, LINKED rather than reproduced (§46). **L5.5** — encrypted verified backup with its own passphrase, two explicit restore modes with the previous register always preserved, the five-type JSONL escape hatch, and the Storage window (§47). ⚠ Read §47.6 before quoting L5.5's verification: it is deliberately narrower than earlier stages' |
 | **L6** — e-mail | ✅ **CLOSED 2026-08-19**, all five sub-stages accepted. Delivery end to end: the SMTP settings and their own-entropy DPAPI secret with four load states (§48); the Settings Center, message language and Customer/Licences split (§49); a pure composer whose attachment is byte-identical to `SaveArtifact` (§50); `ILicenseEmailSender` with an SMTP and an `.eml` sender, the Send licence window whose preview IS the message, `licence.sent` / `licence.send-failed`, and **Send test email…** (§51); and the message the customer reads (§51.9). ⭐ **Proved against a real Gmail account** — §32's exit criterion satisfied. ⚠ The COMPANY mailbox is still unmeasured (§48.1) — a NEW CLASS behind the sender contract if it refuses basic auth, not a rebuild. ⛔ Bulk sending was deliberately NOT built; it is its own stage below. Closure: §52 |
-| ⭐ **L8** — **localization of the License Manager's interface (EN + PL)** — 🔒 runs BEFORE L7, by the user's decision | 🚧 **IN PROGRESS.** **L8.0/prep ✅ accepted** — seven option records took their identity back from their labels (gotcha #394), the interface and message languages got separate catalogs, 13 guards each proved by injection, and the EN → PL vocabulary was ratified into `design/terminology.md` §4 (`Issue` added to §1). ⏭ **L8.1 mechanism** → **L8.2** `StatusMessage` as key + arguments → **L8.3** 146 XAML literals → **L8.4** ≈300 C# texts, plurals, and the two obligations in §53.6 → **L8.5** the Polish → **L8.6** QA in 4 combinations. ⛔ **L8.1–L8.4 change no user-visible word.** Authority: §53 |
+| ⭐ **L8** — **localization of the License Manager's interface (EN + PL)** — 🔒 runs BEFORE L7, by the user's decision | 🚧 **IN PROGRESS. ⏭ Next: L8.2, NOT STARTED** (§54.11). **L8.1 ✅ implemented and committed** (§54): the mechanism, 6 injections / 6 reds, one catalog migrated byte-identically, ⛔ zero visible change. **L8.0/prep ✅ accepted** — seven option records took their identity back from their labels (gotcha #394), the interface and message languages got separate catalogs, 13 guards each proved by injection, and the EN → PL vocabulary was ratified into `design/terminology.md` §4 (`Issue` added to §1). ⏭ **L8.1 mechanism** → **L8.2** `StatusMessage` as key + arguments → **L8.3** 146 XAML literals → **L8.4** ≈300 C# texts, plurals, and the two obligations in §53.6 → **L8.5** the Polish → **L8.6** QA in 4 combinations. ⛔ **L8.1–L8.4 change no user-visible word.** Authority: §53 |
 | **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started — ⛔ **and deliberately after L8** |
 
 ⚠ **`TrustedKeys.Production` is empty and the REAL key ceremony has not been performed** — deliberately

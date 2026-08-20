@@ -4058,3 +4058,169 @@ EmberTern suite was not run because no product file was touched. ⛔ L7 untouche
 - ✅ **632 / 632** — 0 failed, 0 skipped (619 before, +13 new guards).
 - ✅ Three defect injections, three reds, all reverted and re-verified green.
 - ⛔ The EmberTern suite was not run: no file of the product was touched.
+
+---
+
+## 54. L8.1 — the localization mechanism, as built (2026-08-20)
+
+> **State: IMPLEMENTED and COMMITTED. ⛔ L8 as a whole is NOT closed** — L8.2 … L8.6 remain.
+> ⭐ L8.1 carries no outstanding visual QA **by design**: its visible effect is deliberately zero, so there
+> is nothing to look at. Visual QA in all four combinations is L8.6 and is not meaningful before a
+> translation exists (user's decision, 2026-08-20).
+
+⭐ **The mechanism, and deliberately almost no text.** L8.1 builds the elements localization needs, proves
+the one claim the whole design rests on, and migrates exactly ONE catalog so that no guard is vacuous.
+⛔ **Not one user-visible word changed** — that rule governs L8.1 through L8.4; L8.5 is the editorial stage.
+
+### 54.1 The elements
+
+| File | Role |
+|---|---|
+| `Localization/Loc.cs` | ⭐ **The ONE resolver.** `Text` / `Format` / `FormatCount` resolve at the moment of the call; `Apply` is the only entry point and compares the resolved culture first, so an unrelated write raises nothing |
+| `Localization/LocalizationSource.cs` | One small notifying object **per key**. ⛔ NOT an indexer — §54.3 |
+| `LocMarkup.cs` → `{lm:Loc Key}` | Returns a **`Binding`**, never a string. ⛔ `{x:Static}` never re-evaluates |
+| `Localization/LanguagePreference.cs` | Code → `CultureInfo`, with no per-language branch anywhere |
+| `Localization/PluralRules.cs` | `one-other` / `one-few-many`, named by GRAMMAR and never by a language |
+| `Localization/StringCatalogAttribute.cs` | Marks a catalog and declares its key prefix, so the guards DISCOVER catalogs instead of listing them (D‑5's thematic split) |
+| `Settings/ManagerPreferences.cs` + `ui.json` | The stored choice. ⭐ The FOURTH file — §54.4 |
+| `Localization/Strings.resx` | The English **base / neutral** set. 11 entries |
+
+⭐ **The composition root applies the language in exactly one place** — `App.OnFrameworkInitializationCompleted`,
+before the first window exists — and `TheLanguage_IsAppliedInExactlyOnePlace` says so. ⛔ No view and no view
+model reads the preference; they receive resolved words.
+
+⚠ **There is no ordering hazard, and that is a property of reading LIVE.** `Loc` starts on the invariant
+culture, which resolves to the neutral (English) set, so anything rendered before the apply simply re-reads
+afterwards. The restart-only design EmberTern started from had to settle the language before the UI
+framework started; this one does not.
+
+### 54.2 ⭐ What was migrated, and why exactly that
+
+`ManagerSettingsCatalog` — **10 strings**. L6.1a wrote that *"the day the License Manager is localized, each
+property body changes from a literal to a resolved lookup and not one view, view model or binding has to
+change"*, and that is exactly what happened. ⭐ It is also what stops every guard here from being vacuous: a
+mechanism with no consumer passes its own tests trivially.
+
+⚠ **Byte-identity measured, not assumed**: the ten values in `Strings.resx` were compared against the
+literals in the committed `ManagerSettingsCatalog` at `56ad35d` — **10 checked, 0 differ**. ⭐ Corroborated
+by tests nobody touched: `SettingsWindowTests` asserts `"E-mail"` and `"later stage"` on realised controls,
+and both stayed green.
+
+⛔ `LanguageLabel` stays a literal map (`"English"` / `"Polski"`): a language is named IN ITSELF, which is
+not a translation — the one person who cannot read the current interface is exactly the one reaching for
+that picker.
+
+### 54.3 ⛔ Why the notifying object is per key and not an indexer
+
+The obvious design is one object with `this[key]`. EmberTern built that first and **measured that it does
+not work**: the initial value binds correctly and the control keeps the OLD text afterwards — neither WPF's
+`"Item[]"` convention nor `string.Empty` reaches a binding over an indexer in Avalonia 12.1.1. ⛔ Do not
+"simplify" it back; the broken version renders correctly on first load, which is what makes it hard to see.
+
+### 54.4 ⭐ `ui.json` — the fourth file, and the three it is not
+
+⛔ **Not the register** (a preference must not travel in a backup nor follow a restore onto another machine
+— `ThePreferencesFile_IsNotPartOfABackup` checks the real snapshot). ⛔ **Not the keystore.**
+⛔ **Not `smtp.dat`**: that file has ONE Save over a whole coherent configuration, so applying a language on
+selection through it would mean a read-modify-write on every pick — persisting half-typed SMTP edits or
+losing them (§49.3; the audit follow-up's item E is this repository's own scar from that shape).
+
+⚠ It reads forgivingly in both directions — a damaged file, an unknown code, and a file from a NEWER build
+all resolve rather than refuse. ⭐ That is the OPPOSITE call from `smtp.dat`, and deliberately: there a
+half-understood configuration could send mail the operator did not intend; here the worst case is an
+interface in the wrong language.
+
+### 54.5 ⚠⚠ A real defect the new guards found: a BOM silently reverted the language
+
+`System.Text.Json` **refuses a leading UTF-8 byte-order mark** — it is not whitespace to the reader — so a
+`ui.json` saved by Notepad threw, was caught, and served DEFAULTS. ⭐ The symptom is the dangerous kind: the
+operator edits the file, the application starts in the old language, and nothing anywhere says why. ⚠ It
+matters in this one file because `ui.json` is plain text a person may reasonably open — and **until L8.5
+enables the picker, hand-editing is the only way to set the language at all**. Same family as gotcha #178,
+one direction reversed: there a BOM we wrote broke someone else's parser; here a BOM someone else wrote
+broke ours.
+
+⚠⚠ **Two tests were passing for the WRONG reason** before it was found: they wrote with `Encoding.UTF8`,
+which emits a BOM, so they measured the BOM rather than the case they named. Repaired with an explicit
+`NoBom` encoding, plus a test for each direction of the BOM question.
+
+### 54.6 ⚠ A second finding: a guard read its own documentation
+
+`TheLanguage_ComesOnlyFromThePreference` went red against a **comment** saying the language never comes from
+`CurrentUICulture`. ⭐ Same shape as `CharsetGuardSeamTests`, which matches a comment in a csproj (§49.9).
+Every text-scanning guard now reads `CodeOf(file)` — whole-line comments removed and ⛔ nothing else, so the
+error it can make is a **false positive** (loud) rather than a false negative (silent).
+
+### 54.7 The guards — six injections, six reds, all reverted
+
+| Injection | Red |
+|---|---|
+| ⭐⭐ `LocalizedString.Value` cached in a field — notification still fires, value frozen | **`ABoundString_RereadsWhenTheLanguageChanges`** |
+| `WindowTitle` made `static readonly` | `ACatalogMember_ReadsTheCurrentLanguage` + `NoCatalogWord_IsAField` |
+| a key deleted from `Strings.resx` | `EveryCatalogMember_ResolvesToRealText` |
+| `Loc.Culture.Name == "pl"` in a view model | `NoCode_BranchesOnAParticularLanguage` |
+| a typo in `Loc`'s manifest name | `TheEnglishResourceSet_Loads` (after §54.8) + `EveryCatalogMember_ResolvesToRealText` |
+
+⚠⚠ **The first injection is the one worth remembering**: the notification fired, the binding re-read, and
+the value was still stale. That is the `static readonly` failure one level in — invisible on screen until
+somebody switches languages.
+
+### 54.8 ⭐ A guard strengthened because an injection did NOT fire it
+
+Injecting a typo into `Loc`'s manifest name left `TheEnglishResourceSet_Loads` **green**: the test carried
+its own copy of the name and asserted the resource was embedded, which it still was. ⭐ It now also asserts
+that **`Loc` resolves a known key**, tying the two claims together — the #284 shape, where a derived fact
+kept in a second place goes stale silently.
+
+### 54.9 ⛔ What L8.1 deliberately did NOT do
+
+⛔ **The Application-language picker stays DISABLED and decision D‑8 stands.** Enabling it now would
+recreate the exact defect D‑8 exists to prevent — a preference the operator can set that changes nothing —
+because there is no Polish to show until L8.5. ⭐ So `ui.json` is live on the READ side from today, and its
+WRITER arrives with the picker. ⚠ `SettingsWindowTests`' two D‑8 guards are untouched and green.
+
+⛔ No `StatusMessage` change (D‑2 is L8.2). ⛔ No XAML migration (L8.3). ⛔ No text migration beyond the one
+catalog. ⛔ No `Strings.pl.resx` — L8.5. ⛔ Nothing in `EmberTern.App`; the product's suite was not run
+because no product file was touched. ⛔ L7 untouched.
+
+### 54.10 Verification
+
+- ✅ Build **0 warnings / 0 errors** — **Debug** and **Release**.
+- ✅ **685 / 685** — 0 failed, 0 skipped (632 before L8.1, **+53**).
+- ✅ Six defect injections, six reds, all reverted and re-verified green.
+- ✅ **10 / 10 migrated strings byte-identical** to the committed literals.
+- ⛔ The EmberTern suite was not run: no file of the product was touched.
+- ⚠ **Not seen in the running application, and that is correct for this sub-stage**: L8.1's visible effect
+  is deliberately *nothing*, so there is nothing to look at. The liveness claim is measured on a realised
+  control instead, and visual QA in all four combinations is L8.6 — ⛔ it is not meaningful before a
+  translation exists.
+
+### 54.11 ⏭ Hand-off to L8.2 — start here
+
+⭐ **L8.2 begins with the contract, not with a migration.** `StatusMessage` becomes **key + arguments**
+resolved at display time (ratified decision **D‑2 = B**, §53.0), so a standing message follows a language
+change instead of freezing in the language it was raised in.
+
+**Measured scope, from the reconnaissance:**
+
+| | |
+|---|---|
+| `StatusMessage.Info/Success/Warning/Error(…)` call sites | **104**, in 8 files |
+| ⚠⚠ sites that put `ex.Message` on the strip | **23**, in 6 view models |
+| `new ConfirmRequest(…)` | **3** (title + sentence + action label each) |
+
+⭐ **The 23 exception sites are the point, not a side effect.** They are the Phase‑5 shape §17.3 warned
+about — a perfect catalog entry that nothing reads, because the message is wrapped on its way out and the
+display site prints `ex.Message`. Under D‑2 the raw text travels as an **argument** (the D‑3 pattern
+`FirebirdConnectionService` already uses: our sentence is the key, the foreign message is the argument).
+
+⚠ **A fourth member shape to fix while there**: `ConfirmRequest(…, string CancelLabel = "Cancel")`. A
+default parameter value is copied into every CALLER at compile time, exactly like a `const`, so no lookup
+can ever reach it — and all three call sites rely on the default.
+
+⛔ **L8.2 still changes no user-visible word.** The English text moves onto the mechanism unchanged; the
+proof of zero change is the existing assertions staying green, not a re-reading of them.
+
+⏭ Then **L8.3** (146 XAML literals), **L8.4** (≈300 C# texts, the nine counted sentences, and §53.6's two
+obligations), **L8.5** (the Polish, and the moment the Application-language picker is enabled), **L8.6**
+(QA in EN/PL × Dark/Light).
