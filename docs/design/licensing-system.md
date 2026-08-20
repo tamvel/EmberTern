@@ -3948,3 +3948,113 @@ way. ⛔ Not a defect, not a rebuild, and not a reason to hold L6 open.
 
 ⏭ **Next: L7** — the production key ceremony, the shipped public key, and the closing documentation. ⚠ Until
 it runs, `TrustedKeys.Production` is empty and no real licence verifies as usable in a Release build.
+
+---
+
+## 53. L8.0 / prep — as built (2026-08-20)
+
+⭐ **Preparation for L8, taken BEFORE the localization mechanism exists and on the user's instruction.**
+Two defects that exist independently of any language, plus the ratified EN → PL vocabulary. ⛔ Not a
+localization stage: not one user-visible word changed, and no resource file was created.
+
+### 53.0 The stage decisions (D‑1 … D‑7), ratified before any code
+
+| # | Decision | Ratified |
+|---|---|---|
+| **D‑1** | **The mechanism is LOCAL to the License Manager**, mirrored from EmberTern's with drift guards — ⛔ not a project reference, ⛔ not a new shared assembly | A. Same call as D‑7 = B in §49.1: `EmberTern.App` stays closed |
+| **D‑2** | ⭐⭐ **`StatusMessage` becomes KEY + ARGUMENTS**, resolved at display time, so a standing message follows a language change | B. ⭐ It also settles the 23 sites that show `ex.Message` — they become arguments, the D‑3 shape from `FirebirdConnectionService` |
+| **D‑3** | **English is the default application language** | ⚠ Deliberately different from `MessageLanguages.Default` = `pl`: the customers are Polish, the neutral resource set is English, and English is the only default that cannot render half-translated |
+| **D‑4** | `ui.json` stores **the language and nothing else** | ⛔ The theme stays out of L8 — it is not persisted at all today, so adding it would be a new feature inside a localization stage |
+| **D‑5** | The string catalog is **split thematically**, over ONE mechanism | ⛔ Not one 450-property class; ⛔ not a second mechanism |
+| **D‑6** | **The terminology norm gains the License Manager** and its own guards | `terminology.md` §4, and `Issue` added to §1 |
+| **D‑7** | The Polish is **natural**, not word-for-word | ⭐ And §4's table is a BASE: a term that reads badly in the real window may still be corrected in L8.6, by the user's decision |
+
+### 53.1 ⭐⭐ Seven option records, not four — and the count is the finding
+
+The reconnaissance reported four `record` types carrying their own label. A reflection sweep found
+**seven**: the three filters of the licences view share `FilterOption(string Label)`, which the prose
+inventory catalogued as strings without noticing the shape. ⭐ **That is why the guard discovers its
+subject rather than listing it** — an option type is one a view model both LISTS and holds a SELECTED
+value of, which is exactly the shape `ComboBox.SelectedItem` equality depends on.
+
+Every one now takes its identity from the code and computes its label: `SmtpSecurityOption(SmtpSecurity)`,
+`LanguageOption(string Code)`, `RestoreModeOption(bool)`, `IssueReasonOption(string Value)`,
+`StatusFilter(string?)`, `ExpiryFilter(int?, bool)`, `IssuingFilter(bool?)`.
+
+⚠⚠ **The worst instance had nothing to do with language**, and it is the reason this was worth doing
+before translating anything: `StorageViewModel` built its DEFAULT restore mode as a second, independent
+`new(false, "Restore to another location")` instead of taking `RestoreModes[0]`. The safe default was the
+offered option only for as long as two literals stayed byte-identical. Gotcha **#394**.
+
+⭐ **Two repairs came free.** `IssueReasonOption` stopped copying `ReasonText.Describe` / `.Explain`, so
+the picker and the history list now read ONE mapping instead of two snapshots of it; and
+`SettingsViewModel.ApplicationLanguage` stopped reading `ApplicationLanguageOptions[1]` — an index that
+meant "English" only because the MESSAGE catalog happens to list Polish first.
+
+### 53.2 ⭐ Two language catalogs, and the order is what makes the guard real
+
+`Settings/ApplicationLanguages.cs` is new: `en` / `pl`, default **English**, same shape as
+`Email/MessageLanguages.cs`. `LanguageOption.All()` split into `ForMessages()` and `ForApplication()`.
+
+⚠ Until this split, **both pickers were built from `MessageLanguages.All`**. Harmless only while the
+interface picker was a disabled placeholder (§49.2, D‑8) — the moment it becomes real, adding a language
+for a CUSTOMER would silently add an interface language for the OPERATOR, with no translation behind it.
+
+⭐⭐ **`TheApplicationAndMessageLanguages_ComeFromTheirOwnCatalogs` can genuinely fail today**, and that is
+not luck: the two catalogs hold the same two codes in the **opposite order**, because each leads with its
+own default. A sequence comparison therefore discriminates where a set comparison would be a tautology —
+and a separate assertion pins that premise, so a future change making the orders identical fails there,
+with a reason, rather than quietly hollowing the guard out.
+
+### 53.3 The guards — each proved by injecting the defect it claims to catch
+
+`OptionIdentityTests`, 13 tests. Three injections, three reds, all reverted:
+
+| Injection | Red |
+|---|---|
+| `string Label` back into `RestoreModeOption`'s primary constructor | `NoOptionRecord_CarriesAWordInItsIdentity` |
+| the duplicate `new(false, "Restore elsewhere")` default | `EveryDefaultSelection_IsOneOfTheOfferedOptions` |
+| `ForApplication()` back onto `MessageLanguages.All` | `TheApplicationAndMessageLanguages_ComeFromTheirOwnCatalogs` |
+
+⭐ Plus `TheOptionTypes_AreActuallyFound` (an empty sweep must not pass for the wrong reason) and
+`EveryExemption_NamesADiscoveredType` (a stale exemption reads as coverage — the `MenuStyleDriftTests`
+pattern).
+
+### 53.4 ⛔ Three types the sweep finds and deliberately does NOT judge
+
+Each carries its reason in `RowsNotJudgedHere`. ⚠ All three are records built from
+`required … { get; init; }` rather than from a primary constructor, so the parameter check says nothing
+about them — a **silent** pass, which is why they are named exemptions rather than filtered out.
+
+- **`CustomerRecord`, `LicenseRecord`** — the register's own DTOs. ⛔ Their equality is a data fact and
+  carries none of our vocabulary.
+- ⚠ **`ArtifactListItem`** — the issuing-history row. It DOES hold words in its identity (`Reason`,
+  `Ordinal`, `Standing`). ⭐ Safe today for a different reason: `ArtifactHistoryViewModel` re-selects by
+  `Artifact.ArtifactId`, never by object equality. 🔒 **User's decision: leave it untouched in prep** —
+  see §53.6 for the L8.4 obligation it creates.
+
+### 53.5 ⛔ What L8.0/prep deliberately did NOT do
+
+⛔ No `Loc`, no `.resx`, no `LocMarkup`, no `ui.json` — all L8.1. ⛔ No change to `StatusMessage` (D‑2 is
+L8.2). ⛔ Not one user-visible word altered, in either direction. ⛔ Nothing in `EmberTern.App`, and the
+EmberTern suite was not run because no product file was touched. ⛔ L7 untouched.
+
+### 53.6 ⏭ Two obligations this stage hands to L8.4
+
+🔒 Both named by the user at acceptance. ⛔ Neither is optional.
+
+1. ⭐ **A test that the SELECTED ARTIFACT survives a language change.** After the language switches and
+   the issuing history is rebuilt, the currently selected artifact must still be selected. ⚠ This is the
+   behavioural half of §53.4's exemption: the re-selection by `ArtifactId` is what must keep it true.
+2. ⛔ **`LicenseListItem.Status = Capitalise(summary.License.Status)` must go.** The Status column is
+   produced by upper-casing the PERSISTED value, so Polish would need a lookup that capitalisation cannot
+   provide — and the defect is the silent kind: a Polish UI would render `Active` / `Blocked` with a green
+   build. ⭐ The status must be localized **from the code**, and ⛔ the persisted value stays exactly as it
+   is.
+
+### 53.7 Verification
+
+- ✅ Build **0 warnings / 0 errors** — License Manager **Debug** and **Release**.
+- ✅ **632 / 632** — 0 failed, 0 skipped (619 before, +13 new guards).
+- ✅ Three defect injections, three reds, all reverted and re-verified green.
+- ⛔ The EmberTern suite was not run: no file of the product was touched.

@@ -110,10 +110,31 @@ public static class ManagerSettingsCatalog
     /// ⭐ Each language is named IN ITSELF — "Polski", not "Polish" — which is what a language picker owes
     /// its reader: the one person who cannot read the current interface language is exactly the person
     /// using it. ⛔ So these two do NOT become lookups in L8; they stay as they are.
+    ///
+    /// <para>⚠ It answers for BOTH pickers — the message language and the interface language — because a
+    /// language's own name is the same fact in both places. ⛔ That is the ONLY thing the two share: the
+    /// LISTS are <see cref="Email.MessageLanguages"/> and <see cref="ApplicationLanguages"/>, and they are
+    /// deliberately separate. The codes are culture names in both, so one map serves them.</para>
     /// </remarks>
     public static string LanguageLabel(string code) => code switch
     {
         MessageLanguages.English => "English",
         _ => "Polski",
+    };
+
+    /// <summary>
+    /// How a transport choice is offered to a human.
+    ///
+    /// <para>⭐⭐ It lives HERE rather than inside <c>SmtpSecurityOption</c> for the reason every word on
+    /// this window does: the option record is the VALUE the picker stores, and a value that carries its
+    /// own label carries the current language inside its identity. Two options built in two languages
+    /// then compare unequal, and the picker silently loses its selection the moment the list is rebuilt.
+    /// ⛔ Do not move a label back into an option record.</para>
+    /// </summary>
+    /// <remarks>⚠ A property-shaped body, like every word above it — in L8 it becomes a lookup.</remarks>
+    public static string SecurityLabel(SmtpSecurity security) => security switch
+    {
+        SmtpSecurity.None => "No encryption — internal relay only",
+        _ => "STARTTLS (recommended)",
     };
 }

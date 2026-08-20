@@ -23,6 +23,7 @@
 | **Execute** | wykonanie **SQL, procedury lub komendy** | Execute · Execute query · Execute procedure · Execute (skrypt) |
 | **Compile** | zapis **definicji obiektu** do bazy | Compile (edytory obiektów) |
 | **Save** | zapis **pliku, profilu lub opisu** | Save script · Save as… (profil importu) · Save (opis obiektu) |
+| **Issue** | ⭐ **podpisanie kluczem prywatnym i zapisanie artefaktu licencji** do rejestru | Issue and save… · Extend and issue · Export this issue… *(License Manager)* |
 | **Rollback** | wycofanie transakcji — ⚠ **zawsze jedno słowo** | Rollback · Rollback transaction |
 
 ### §1.1 ⭐⭐ Dlaczego `Drop` NIE zostało sprowadzone do `Delete`
@@ -37,6 +38,20 @@ czasownika **skasowałoby tę informację** — i to jest cena, której ten prod
 
 ⚠ **Reguła istniała w produkcie utajona i była łamana mniej więcej w połowie przypadków.** M‑4 nie wprowadziło
 jej z zewnątrz — **dokończyło ją**.
+
+### §1.1a ⭐⭐ Dlaczego `Issue` NIE zostało sprowadzone do `Save` ani `Compile`
+
+🔒 **Decyzja użytkownika (2026-08-20, L8.0/prep).** `Issue` opisuje operację, której żaden istniejący
+czasownik nie obejmuje: **podpisanie danych kluczem prywatnym** i zapisanie powstałego artefaktu do
+append-only kolumny rejestru. `Compile` znaczy „zapis definicji obiektu **do bazy Firebirda**", `Save`
+„zapis pliku, profilu lub opisu" — a tu nie chodzi ani o obiekt bazy, ani o plik: chodzi o **wytworzenie
+dowodu**, którego nie da się cofnąć ani poprawić.
+
+⭐ To jest dokładnie sytuacja, o której mówi ostrzeżenie na górze §1 — *„jeżeli żaden czasownik nie pasuje,
+operacja jest inna, niż myślisz"*. Słownik został **rozszerzony**, a nie nagięty.
+
+⚠ Zasięg: **wyłącznie License Manager.** Produkt nie wystawia licencji i nie ma powierzchni, na której ten
+czasownik mógłby się pojawić.
 
 ### §1.2 `Run` — dozwolone wyłącznie w innym znaczeniu
 
@@ -119,3 +134,115 @@ została na nim oparta**, zanim pomiar ją obalił.
 ⭐ To ten sam kształt co #335 i §19.47.7: **uogólnienie z tego, co się akurat wydrukowało.** Praktyczny
 wniosek: przy inwentaryzacji słownictwa **licz wystąpienia per moduł**, zanim nazwiesz coś wyjątkiem —
 „wyjątek" jest twierdzeniem o rozkładzie, a nie o pojedynczym napisie.
+
+---
+
+## §4 License Manager — słownik EN → PL
+
+> **🔒 Ratyfikowany przez użytkownika 2026-08-20 (L8.0/prep), jako BAZA etapu L8.**
+> ⚠⚠ **Baza, nie zamknięcie.** Użytkownik zastrzegł wprost: *„jeśli podczas L8.6 okaże się, że konkretny
+> termin źle brzmi w realnym UI, możemy go jeszcze skorygować"*. ⛔ Korekta wymaga jego decyzji i wpisu
+> tutaj — ⛔ nie wolno jej zrobić po cichu przy tłumaczeniu.
+>
+> ⚠ Zasięg: **License Manager**. `TerminologyTests` żyje w `EmberTern.Tests`, czyli w innym rozwiązaniu, i
+> tej sekcji dziś nie widzi — strażnik po stronie Managera jest pozycją L8.5.
+
+### §4.1 ⛔⛔ Odziedziczone z produktu — NIE do wymyślania na nowo
+
+⭐⭐ **Zmierzone, nie wybrane.** EmberTern ma już ratyfikowaną polszczyznę dla niemal całego słownictwa
+licencyjnego (`src/EmberTern.App/Localization/Strings.pl.resx`), a License Manager opisuje **te same fakty
+o tych samych licencjach**. ⛔ Każde inne słowo tutaj znaczyłoby, że ten sam fakt nazywa się inaczej po
+stronie wystawcy i po stronie klienta.
+
+| EN | PL | klucz w produkcie |
+|---|---|---|
+| Licensed to | **Licencjobiorca** | `SettingsLicenseLicenseeLabel` |
+| Licence id | **Identyfikator licencji** | `SettingsLicenseIdLabel` |
+| Seats | ⚠ **Stanowiska** *(⛔ nie „Miejsca")* | `SettingsLicenseSeatsLabel` |
+| Valid from | **Ważna od** | `SettingsLicenseValidFromLabel` |
+| Valid until (inclusive) | **Ważna do (włącznie)** | `SettingsLicenseValidUntilLabel` |
+| Licence status | **Stan licencji** | `SettingsLicenseStatusLabel` |
+| EmberTern licence *(typ pliku)* | **Licencja EmberTern** | `LicenseActivationFileTypeName` |
+| Update licence… | **Aktualizuj licencję…** | `SettingsLicenseUpdateButton` |
+| Save · Cancel · Close · Clear · Export · Settings · Language · Password | **Zapisz · Anuluj · Zamknij · Wyczyść · Eksportuj · Ustawienia · Język · Hasło** | katalog produktu |
+
+⭐⭐ **`VerdictText` — pięć werdyktów musi brzmieć DOKŁADNIE tak, jak powie EmberTern klientowi.** Ta kolumna
+odpowiada na pytanie *„co EmberTern powiedziałby o tym dzisiaj"*, więc każde inne słowo jest tam nieprawdą.
+
+| `LicenseStatus` | PL | klucz w produkcie |
+|---|---|---|
+| `Valid` | **Licencja aktywna** | `LicenseStatusValid` |
+| `Grace` | **Licencja wygasła — okres karencji** | `LicenseStatusGrace` |
+| `Expired` | **Licencja wygasła** | `LicenseStatusExpired` |
+| `NotYetValid` | **Licencja jeszcze nieaktywna** | `LicenseStatusNotYetValid` |
+| *(odmowa)* | **Nie można odczytać licencji** | `LicenseStatusInvalid` |
+
+### §4.2 Czasowniki akcji — nad słownikiem §1
+
+| EN | PL |
+|---|---|
+| Save customer · Save terms | **Zapisz klienta · Zapisz warunki** |
+| New · New licence | **Nowy · Nowa licencja** |
+| Issue and save… | **Wystaw i zapisz…** *(§1 `Issue`)* |
+| Extend and issue | **Przedłuż i wystaw** |
+| Export this issue… · Export latest… | **Eksportuj to wydanie… · Eksportuj najnowsze…** |
+| Send licence… · Send · Send test email… | **Wyślij licencję… · Wyślij · Wyślij wiadomość testową…** |
+| Inspect latest | **Sprawdź najnowsze** |
+| Backup… | 🔒 **Utwórz kopię zapasową…** *(D‑2)* |
+| Restore… · Restore | **Przywróć… · Przywróć** |
+| Revert | **Przywróć zapisane** — ⛔ nie „Cofnij": to nie undo, to ponowny odczyt pliku |
+| Forget settings | 🔒 **Usuń zapisane ustawienia** *(D‑3)* — §1 `Delete`, nie idiom „zapomnij" |
+| Clear selection · Select all shown | **Wyczyść zaznaczenie · Zaznacz wszystkie widoczne** |
+| Unlock · Create signing key | **Odblokuj · Utwórz klucz podpisujący** |
+| Open data folder | **Otwórz folder danych** |
+
+### §4.3 Rzeczowniki własne License Managera
+
+| EN | PL |
+|---|---|
+| Customer · Customers | **Klient · Klienci** |
+| Licence · Licences | **Licencja · Licencje** |
+| Identifier | **Identyfikator** |
+| Contact | **Kontakt** |
+| Notes | **Notatki** |
+| Product | **Produkt** |
+| Expiry *(kolumna)* | **Wygasa** |
+| Status *(kolumna)* | **Stan** |
+| Standing *(kolumna)* | 🔒 **Termin** *(D‑4)* |
+| Issuing · Issuing history | **Wystawianie · Historia wystawień** |
+| Artifact | 🔒 **Artefakt** *(D‑5)* |
+| Reason for this issue | **Powód wystawienia** |
+| Initial issue · Renewal · Terms change · Re-issue — lost file | **Pierwsze wystawienie · Odnowienie · Zmiana warunków · Ponowne wystawienie — utracony plik** |
+| current · superseded *(prezentacja)* | **bieżący · zastąpiony** |
+| Register of record | **Rejestr wzorcowy** |
+| Encrypted backup | **Zaszyfrowana kopia zapasowa** |
+| Signing keystore | **Magazyn kluczy podpisujących** |
+| Passphrase | 🔒 **Hasło dostępu** *(D‑6)* |
+| Sender · Sign-in · Transport security | **Nadawca · Logowanie · Zabezpieczenie połączenia** |
+| Message language · Application language | **Język wiadomości · Język aplikacji** |
+| Attached | **Załącznik** |
+
+⭐ **`Passphrase` ≠ `Password`, i rozróżnienia nie wolno zgubić** (D‑6). Aplikacja rozróżnia je celowo: hasło
+skrzynki SMTP to `Password` / **Hasło**, sekret magazynu kluczy i kopii zapasowej to `Passphrase` /
+**Hasło dostępu** — a komunikat o nim mówi *„sześć wygenerowanych słów"*, co nie jest tym samym rodzajem
+rzeczy co hasło do poczty.
+
+### §4.4 ⛔⛔ Czego NIE tłumaczymy — kontrakt techniczny
+
+⚠ Sprawdzone w kodzie, nie założone. Lokalizacja nie może dotknąć ani jednej z tych wartości.
+
+- **wartości persystowane**: `IssueReasons.*` (`initial`, `renewal`, `terms-change`, `reissue-lost`),
+  `LicenseStatuses.*` (`active`, `blocked`), `RegisterQueries.Current` / `.Superseded`, typy JSONL
+  (`customer`, `license`, `artifact`, `current-artifact`, `audit`);
+- **akcje audytu**: `licence.sent`, `licence.send-failed`, `licence.exported`, `register.backed-up`,
+  `register.exported`;
+- ⭐⭐ **notatki audytu** — `LicenceDelivery` zapisuje angielskie zdania **do rejestru**. ⛔ Zostają
+  angielskie i invariantne: log audytu, którego język zależy od tego, kiedy powstał wiersz, przestaje być
+  jednym dokumentem;
+- **nazwy plików i rozszerzenia**: `EmberTern.etlic`, `.etlmbak`, `.jsonl`, `.eml`, `licenses.db`,
+  `keystore.etkeys`, `smtp.dat`;
+- ⭐ **daty** — ISO `yyyy-MM-dd`, invariantnie, w 7 miejscach. Ta decyzja zostaje, a `DatePresentationTests`
+  jej pilnuje;
+- **branding**: `EmberTern`, `EmberTern License Manager`;
+- ⭐ **nazwy języków w pickerze** — `English` / `Polski`, każdy nazwany W SOBIE. Jedyna osoba, która nie
+  potrafi przeczytać bieżącego języka interfejsu, to dokładnie ta, która sięga po ten picker.

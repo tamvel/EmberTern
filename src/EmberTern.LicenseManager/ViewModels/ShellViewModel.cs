@@ -588,8 +588,9 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         IssueReasonChoices.Clear();
         foreach (var reason in IssueReasonPolicy.Offer(change))
         {
-            IssueReasonChoices.Add(new IssueReasonOption(
-                reason, ReasonText.Describe(reason), ReasonText.Explain(reason)));
+            // ⭐ The stored value only. The option resolves its own words through ReasonText, so the
+            //   picker and the history list read one mapping rather than two copies of it.
+            IssueReasonChoices.Add(new IssueReasonOption(reason));
         }
 
         CanChooseIssueReason = change.HasPrevious;

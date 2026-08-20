@@ -415,10 +415,12 @@ reasoning lives in the referenced document.
 It is the ONE place that answers *"what is done, what is open, what are we working on"*, and it is
 kept between 100 and 300 lines on purpose.
 
-At a glance, verified 2026-08-14: branch **`fix/audit-followup-2026-08`** (cut from `master`, **not
-pushed**), HEAD `1852611`, build **0/0 in both Release and Debug**, tests **8 813**, last series **6/6
-fully green**, version **0.5.0**. ⏭ **Milestone: audit follow-up, Phase 4 accepted. Next: Phase 5 —
-charset guard, NOT started.** Read `docs/current-state.md` §0 + §3 first.
+At a glance, verified 2026-08-20: branch **`feat/licensing-system`** (cut from `master` at `2c3da45`),
+version **0.5.0**. ⏭ **Milestone: the licensing system. L6 (e-mail delivery) CLOSED; L8 — localization of
+the License Manager — is the ACTIVE stage and 🔒 runs BEFORE L7 by the user's decision.** L8.0/prep is
+accepted; L8.1 is next. ⛔ **Do not start L7 and do not prepare the key ceremony.**
+⚠ There are TWO suites here — `dotnet test EmberTern.slnx` and `dotnet test EmberTern.LicenseManager.slnx`.
+Read `docs/current-state.md` §0 + §3 first, and **measure the counts** rather than quoting them.
 
 ⚠⚠ **Do not restore a status diary here.** This section was **5 956 lines (83 % of CLAUDE.md)** until
 2026-08-11, archived verbatim in
@@ -635,6 +637,11 @@ sections, so a bare "#303" is ambiguous.
   `CanExecute`) needs an explicit `NotifyPropertyChangedFor`/`OnPropertyChanged` on **every**
   mutation path — correctly computing the value isn't enough if nothing tells the binding to
   re-query it (symptom: "the feature works but the button stays disabled"). *(#179, #187)*
+- ⭐ **An option offered by a picker takes its identity from its CODE — a label held in a `record`'s
+  positional members puts the current language into that identity, and `SelectedItem` then matches nothing
+  once the list is rebuilt.** The label is a computed property resolved from one owner. Silent in both
+  directions: a blanked selection raises no binding error, and a second, independently constructed
+  "default" option is equal to the offered one only while two literals stay byte-identical. *(#394)*
 - **`x:DataType` on a `DataTemplate` is also the MATCHING type**, so a stale one produces no binding
   error — the template stops matching and the host silently renders the item's `ToString()`, i.e. a
   type name on screen where the content belonged. ⚠ Guard a template by asserting the **realized**

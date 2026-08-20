@@ -11,10 +11,21 @@ using EmberTern.LicenseManager.Settings;
 
 namespace EmberTern.LicenseManager.ViewModels;
 
-/// <summary>One transport choice, as the picker shows it.</summary>
-/// <param name="Value">What gets stored.</param>
-/// <param name="Label">What the operator reads.</param>
-public sealed record SmtpSecurityOption(SmtpSecurity Value, string Label);
+/// <summary>
+/// One transport choice, as the picker shows it.
+///
+/// <para>⭐⭐ <b>Its identity is the VALUE alone; the label is a projection.</b> A <c>record</c> compares
+/// by every positional member, so a label inside it would put the CURRENT LANGUAGE into the option's
+/// identity — and <c>ComboBox.SelectedItem</c> matches by equality. Rebuild the list in another language
+/// and the selected option equals nothing in it, so the picker silently blanks. ⛔ Do not add a label,
+/// a description or any other word as a member here.</para>
+/// </summary>
+/// <param name="Value">What gets stored, and what this option IS.</param>
+public sealed record SmtpSecurityOption(SmtpSecurity Value)
+{
+    /// <summary>What the operator reads. ⭐ Resolved at read time, from the one catalog that owns it.</summary>
+    public string Label => ManagerSettingsCatalog.SecurityLabel(Value);
+}
 
 /// <summary>
 /// Where the License Manager sends from — the whole of L6.1's surface.
@@ -47,8 +58,8 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
 
         SecurityOptions = new ReadOnlyCollection<SmtpSecurityOption>(
         [
-            new SmtpSecurityOption(SmtpSecurity.StartTls, "STARTTLS (recommended)"),
-            new SmtpSecurityOption(SmtpSecurity.None, "No encryption — internal relay only"),
+            new SmtpSecurityOption(SmtpSecurity.StartTls),
+            new SmtpSecurityOption(SmtpSecurity.None),
         ]);
 
         _selectedSecurity = SecurityOptions[0];
@@ -60,8 +71,13 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
             .AsReadOnly();
         _selectedPage = Pages[0];
 
-        MessageLanguageOptions = LanguageOption.All();
-        ApplicationLanguageOptions = LanguageOption.All();
+        // ⭐⭐ TWO CATALOGS, TWO CALLS. They are not the same list and must never become one: the message
+        //    language is a fact about the CUSTOMER who reads the e-mail, the application language a fact
+        //    about the OPERATOR. Until this line was split, both pickers were built from
+        //    MessageLanguages.All, so adding a message language would have silently added an interface
+        //    language with no translation behind it.
+        MessageLanguageOptions = LanguageOption.ForMessages();
+        ApplicationLanguageOptions = LanguageOption.ForApplication();
         _messageLanguage = MessageLanguageOptions[0];
 
         Reload();
@@ -111,8 +127,10 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
     /// nothing here is stored (decision D‑8).
     /// </summary>
     /// <remarks>
-    /// ⚠ The same two options as the message picker, and NOT the same objects: they answer different
-    /// questions and a shared instance would make a future binding mistake invisible.
+    /// ⭐ From <see cref="ApplicationLanguages.All"/> — its OWN catalog, not the message one. The two
+    /// happen to hold the same two codes today and they answer different questions; sharing the list
+    /// would mean a message language added tomorrow arrives here as an interface language with no
+    /// translation behind it.
     /// </remarks>
     public IReadOnlyList<LanguageOption> ApplicationLanguageOptions { get; }
 
@@ -122,8 +140,13 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
     /// <para>⛔ Read-only on purpose. The setter a picker would need does not exist, so there is no path —
     /// not even an accidental one — by which a choice made here could be persisted and then do nothing.
     /// ⚠ That is the whole of D‑8: the row is honest about being unavailable rather than pretending.</para>
+    ///
+    /// <para>⭐ Resolved by CODE from the catalog's default, never by an index into the list. An index is a
+    /// fact about the list's order, which is a presentation decision — and this one used to read
+    /// <c>[1]</c>, which meant English only because the MESSAGE catalog happens to list Polish first.</para>
     /// </summary>
-    public LanguageOption ApplicationLanguage => ApplicationLanguageOptions[1];
+    public LanguageOption ApplicationLanguage =>
+        ApplicationLanguageOptions.First(o => o.Code == ApplicationLanguages.Default);
 
     /// <summary>Why the interface-language picker is disabled, in words the operator can act on.</summary>
     public string ApplicationLanguageUnavailable =>
@@ -572,23 +595,43 @@ public sealed class SettingsPageViewModel
 
 /// <summary>
 /// One language, as a picker offers it.
+///
+/// <para>⭐⭐ <b>Its identity is the CODE alone.</b> A <c>record</c> compares by every positional member,
+/// and <c>ComboBox.SelectedItem</c> matches by equality — so a label held as a member would make the
+/// option's identity depend on the language it was built in, and rebuilding the list in another language
+/// would blank the picker. ⛔ Do not add the label back as a member.</para>
 /// </summary>
-/// <param name="Code">What gets stored — <see cref="MessageLanguages"/>.</param>
-/// <param name="Label">
-/// ⭐ The language named IN ITSELF ("Polski", not "Polish"). A language picker owes its reader that: the
-/// one person who cannot read the current interface language is exactly the person reaching for it.
-/// </param>
-public sealed record LanguageOption(string Code, string Label)
+/// <param name="Code">What gets stored, and what this option IS. ⭐ A culture name.</param>
+public sealed record LanguageOption(string Code)
 {
     /// <summary>
-    /// Every supported language, in the catalog's order.
+    /// The language named IN ITSELF ("Polski", not "Polish").
     ///
-    /// <para>⛔ Built from <see cref="MessageLanguages.All"/> — never listed again. A second list is how a
-    /// third language ships unreachable with a green build.</para>
+    /// <para>⭐ A language picker owes its reader that: the one person who cannot read the current
+    /// interface language is exactly the person reaching for it. ⛔ So this one stays a literal map in
+    /// <see cref="ManagerSettingsCatalog.LanguageLabel"/> even after L8 — it is not a translation.</para>
     /// </summary>
-    public static IReadOnlyList<LanguageOption> All() =>
-        MessageLanguages.All
-            .Select(code => new LanguageOption(code, ManagerSettingsCatalog.LanguageLabel(code)))
-            .ToList()
-            .AsReadOnly();
+    public string Label => ManagerSettingsCatalog.LanguageLabel(Code);
+
+    /// <summary>
+    /// The languages a licence e-mail can be written in — a fact about the CUSTOMER who reads it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ Built from <see cref="MessageLanguages.All"/> and never listed again. A second list is how a
+    /// third language ships unreachable with a green build.
+    /// </remarks>
+    public static IReadOnlyList<LanguageOption> ForMessages() => Over(MessageLanguages.All);
+
+    /// <summary>
+    /// The languages the INTERFACE can be shown in — a fact about the OPERATOR.
+    /// </summary>
+    /// <remarks>
+    /// ⭐⭐ A different catalog from <see cref="ForMessages"/>, deliberately. Both hold the same two codes
+    /// today, and they are still two questions: a message language added for a customer must not become
+    /// an interface language nobody has translated. ⛔ Do not collapse these two methods into one.
+    /// </remarks>
+    public static IReadOnlyList<LanguageOption> ForApplication() => Over(ApplicationLanguages.All);
+
+    private static IReadOnlyList<LanguageOption> Over(IReadOnlyList<string> codes) =>
+        codes.Select(code => new LanguageOption(code)).ToList().AsReadOnly();
 }

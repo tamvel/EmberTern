@@ -11,19 +11,40 @@ using EmberTern.LicenseManager.Data;
 namespace EmberTern.LicenseManager.ViewModels;
 
 /// <summary>
-/// One option in a filter dropdown: a label the operator reads, and the narrowing it stands for.
+/// One option in a filter dropdown: the narrowing it stands for, and the label the operator reads.
 ///
 /// <para>⭐ The narrowing is DATA, not a delegate, so a test can assert that "Expiring within 30 days"
 /// actually produces the query it claims to. A list of lambdas would be equally short and would move
 /// the interesting half of the decision somewhere no test can look at it.</para>
+///
+/// <para>⭐⭐ <b>The label is an abstract PROJECTION, never a member of the identity.</b> A
+/// <c>record</c> compares by every positional member, and <c>ComboBox.SelectedItem</c> matches by
+/// equality — so a label carried in the primary constructor would put the current language inside the
+/// option's identity. Rebuild these three lists in another language and each dropdown's selection equals
+/// nothing in its own list, so all three silently blank and the licences view reverts to unfiltered
+/// without saying so. ⛔ Do not move a word back into a positional parameter here.</para>
 /// </summary>
-/// <param name="Label">What the dropdown shows.</param>
-public abstract record FilterOption(string Label);
+public abstract record FilterOption
+{
+    /// <summary>What the dropdown shows. ⭐ Derived from the narrowing, resolved at read time.</summary>
+    public abstract string Label { get; }
+}
 
 /// <summary>Narrows by the licence row's own status.</summary>
-/// <param name="Label">What the dropdown shows.</param>
-/// <param name="Status">One of <see cref="LicenseStatuses"/>, or <see langword="null"/> for any.</param>
-public sealed record StatusFilter(string Label, string? Status) : FilterOption(Label);
+/// <param name="Status">
+/// One of <see cref="LicenseStatuses"/>, or <see langword="null"/> for any. ⭐ This IS the option.
+/// </param>
+public sealed record StatusFilter(string? Status) : FilterOption
+{
+    /// <inheritdoc />
+    /// <remarks>⚠ In L8 each arm becomes a lookup; nothing else about this type changes.</remarks>
+    public override string Label => Status switch
+    {
+        LicenseStatuses.Active => "Active",
+        LicenseStatuses.Blocked => "Blocked",
+        _ => "Any status",
+    };
+}
 
 /// <summary>
 /// Narrows by when the licence runs out.
@@ -33,16 +54,42 @@ public sealed record StatusFilter(string Label, string? Status) : FilterOption(L
 /// deliberately EXCLUDES the ones that already lapsed — otherwise the renewal list an operator works
 /// from silently mixes in customers who are already locked out.</para>
 /// </summary>
-/// <param name="Label">What the dropdown shows.</param>
 /// <param name="WithinDays">Length of the forward window, or <see langword="null"/>.</param>
 /// <param name="Expired">Only licences already past their expiry.</param>
-public sealed record ExpiryFilter(string Label, int? WithinDays = null, bool Expired = false)
-    : FilterOption(Label);
+public sealed record ExpiryFilter(int? WithinDays = null, bool Expired = false) : FilterOption
+{
+    /// <inheritdoc />
+    /// <remarks>
+    /// ⭐ Each offered option is a WHOLE sentence rather than "Expiring within " + a number: 365 is
+    /// already worded as "a year" rather than as its own digit count, so the set was never composable —
+    /// and a whole string is what a translator needs anyway, because word order is their decision.
+    /// ⚠ The composing default covers a window this list does not currently offer; it is a fallback, not
+    /// the pattern.
+    /// </remarks>
+    public override string Label => (WithinDays, Expired) switch
+    {
+        (null, true) => "Already expired",
+        (null, false) => "Any expiry",
+        (30, _) => "Expiring within 30 days",
+        (90, _) => "Expiring within 90 days",
+        (365, _) => "Expiring within a year",
+        var (days, _) => string.Create(
+            CultureInfo.InvariantCulture, $"Expiring within {days} days"),
+    };
+}
 
 /// <summary>Narrows by whether an artifact was ever produced.</summary>
-/// <param name="Label">What the dropdown shows.</param>
 /// <param name="NeverIssued">⭐ <see langword="true"/> finds the licence somebody saved and forgot to send.</param>
-public sealed record IssuingFilter(string Label, bool? NeverIssued) : FilterOption(Label);
+public sealed record IssuingFilter(bool? NeverIssued) : FilterOption
+{
+    /// <inheritdoc />
+    public override string Label => NeverIssued switch
+    {
+        true => "Never issued",
+        false => "Issued at least once",
+        _ => "Issued or not",
+    };
+}
 
 /// <summary>
 /// One row of the licences list, already in the words the operator reads.
@@ -397,27 +444,27 @@ public sealed partial class LicenseBrowserViewModel : ObservableObject
     /// <summary>⛔ <c>superseded</c> is not here — it is a fact about an artifact, not about a licence row.</summary>
     public IReadOnlyList<StatusFilter> StatusFilters { get; } =
     [
-        new("Any status", null),
-        new("Active", LicenseStatuses.Active),
-        new("Blocked", LicenseStatuses.Blocked),
+        new(null),
+        new(LicenseStatuses.Active),
+        new(LicenseStatuses.Blocked),
     ];
 
     /// <summary>The renewal windows an administrator actually works from.</summary>
     public IReadOnlyList<ExpiryFilter> ExpiryFilters { get; } =
     [
-        new("Any expiry"),
-        new("Already expired", Expired: true),
-        new("Expiring within 30 days", WithinDays: 30),
-        new("Expiring within 90 days", WithinDays: 90),
-        new("Expiring within a year", WithinDays: 365),
+        new(),
+        new(Expired: true),
+        new(WithinDays: 30),
+        new(WithinDays: 90),
+        new(WithinDays: 365),
     ];
 
     /// <summary>Whether an artifact was ever produced.</summary>
     public IReadOnlyList<IssuingFilter> IssuingFilters { get; } =
     [
-        new("Issued or not", null),
-        new("Issued at least once", false),
-        new("Never issued", true),
+        new(null),
+        new(false),
+        new(true),
     ];
 
     /// <summary>Free text over customer name, e-mail, identifier, licence id and licence notes.</summary>

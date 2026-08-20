@@ -48,6 +48,11 @@ public sealed partial class StorageViewModel : MessageHostViewModel
         //    all. That is D‑5 made structural rather than remembered — see RestoreWorkflow.
         _restores = new RestoreWorkflow(_paths.Root, _clock);
 
+        // ⭐ The safe mode, taken FROM the offered list rather than built again.
+        // ⚠ Safe by language rule, not by luck: every instance initializer — RestoreModes included — runs
+        //   before a constructor BODY, whatever order the members appear in the file.
+        _selectedRestoreMode = RestoreModes[0];
+
         Counts = SnapshotCounts.Read(register);
     }
 
@@ -262,18 +267,24 @@ public sealed partial class StorageViewModel : MessageHostViewModel
     /// </summary>
     public IReadOnlyList<RestoreModeOption> RestoreModes { get; } =
     [
-        new(false, "Restore to another location"),
-        new(true, "Replace active register"),
+        new(false),
+        new(true),
     ];
 
     /// <summary>
     /// Which mode the single Restore action will run. ⭐ Defaults to the SAFE one — the mode that cannot
     /// touch the working register is the one an operator should have to choose to leave.
     /// </summary>
+    /// <remarks>
+    /// ⭐⭐ Assigned in the constructor FROM <see cref="RestoreModes"/>, never constructed a second time.
+    /// It used to be its own <c>new(false, "Restore to another location")</c> — a duplicate of the list's
+    /// first entry, which meant the default selection and the offered option were two objects whose
+    /// equality depended on two literals staying identical.
+    /// </remarks>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RestoreConsequence))]
     [NotifyPropertyChangedFor(nameof(IsReplacingActiveRegister))]
-    private RestoreModeOption _selectedRestoreMode = new(false, "Restore to another location");
+    private RestoreModeOption _selectedRestoreMode = null!;
 
     /// <summary>True when the picked mode replaces the active register.</summary>
     public bool IsReplacingActiveRegister => SelectedRestoreMode?.ReplacesActiveRegister ?? false;
@@ -511,11 +522,29 @@ public sealed partial class StorageViewModel : MessageHostViewModel
 /// <summary>
 /// One of the two restore modes, as the picker offers it.
 ///
-/// <para>⭐ The flag and the label travel together, so the branch that runs is decided by the same object
-/// the operator picked — never by comparing the label's text.</para>
+/// <para>⭐ The branch that runs is decided by the object the operator picked — never by comparing the
+/// label's text.</para>
+///
+/// <para>⭐⭐ <b>And the label is therefore NOT a member.</b> A <c>record</c> compares by every positional
+/// member and <c>ComboBox.SelectedItem</c> matches by equality, so a label inside the identity would tie
+/// the selection to the language the option was built in. ⚠ This one carried the worst version of that
+/// problem: the default selection was a SECOND, independently constructed
+/// <c>new(false, "Restore to another location")</c>, so the same mode existed twice as two unequal values
+/// and the safe default depended on two literals agreeing. ⛔ Do not put a word back in here.</para>
 /// </summary>
 /// <param name="ReplacesActiveRegister">
 /// <see langword="true"/> for the mode that replaces the working register (preserving it first).
+/// ⭐ This flag IS the option's identity.
 /// </param>
-/// <param name="Label">What the picker shows.</param>
-public sealed record RestoreModeOption(bool ReplacesActiveRegister, string Label);
+public sealed record RestoreModeOption(bool ReplacesActiveRegister)
+{
+    /// <summary>What the picker shows. ⭐ Resolved at read time, from one place.</summary>
+    public string Label => LabelFor(ReplacesActiveRegister);
+
+    /// <summary>
+    /// The one place either mode is named.
+    /// </summary>
+    /// <remarks>⚠ A property-shaped body — in L8 it becomes a lookup, and nothing else changes.</remarks>
+    internal static string LabelFor(bool replacesActiveRegister) =>
+        replacesActiveRegister ? "Replace active register" : "Restore to another location";
+}
